@@ -1,6 +1,8 @@
 pub mod audio_folder;
 pub mod dynamic_media;
 pub mod fonts;
+pub mod gameplay_noteskin;
+pub mod gameplay_stage;
 pub mod language;
 pub mod media_cache;
 pub mod noteskin;
@@ -65,7 +67,8 @@ pub fn open_bundled_image(path: &str) -> image::ImageResult<image::DynamicImage>
     open_image_fallback(&resolve_asset_path(path))
 }
 
-/// Resolve the game's catalog before passing decode/upload work to the engine.
+/// Resolve the theme manifest and the game's discovered assets before passing
+/// decode/upload work to the engine.
 pub fn load_initial_assets<T>(
     assets: &mut deadlib_assets::AssetManager,
     backend: &mut deadlib_render::Backend,

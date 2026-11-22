@@ -151,7 +151,7 @@ impl TextureUploadState {
     fn blit(&mut self, queue: &CommandQueueRef) -> &BlitCommandEncoderRef {
         let (_, blit) = self.batch.get_or_insert_with(|| {
             let command = queue.new_command_buffer();
-            command.set_label("DeadSync native Metal texture uploads");
+            command.set_label("Metal texture uploads");
             let blit = command.new_blit_command_encoder().to_owned();
             (command.to_owned(), blit)
         });
@@ -346,7 +346,7 @@ pub fn init(
     let depth = create_depth_target(&device, size.width, size.height);
     let render_pass = create_render_pass(&depth);
     let queue = device.new_command_queue_with_max_command_buffer_count(FRAMES_IN_FLIGHT as u64);
-    queue.set_label("DeadSync native Metal queue");
+    queue.set_label("Metal render queue");
     let frames = std::array::from_fn(|_| FrameBuffers::new(&device));
 
     Ok(State {
@@ -668,7 +668,7 @@ fn draw_inner(
         frame.clear_color,
     );
     let command = state.queue.new_command_buffer();
-    command.set_label("DeadSync native Metal frame");
+    command.set_label("Metal frame");
     let mut offscreen_vertices = 0u32;
     for (index, target_frame) in frame.render_targets.iter().enumerate() {
         let target = &state.offscreen_targets[index];
@@ -687,7 +687,7 @@ fn draw_inner(
             if target_frame.alpha { 0.0 } else { 1.0 },
         ));
         let target_encoder = command.new_render_command_encoder(&target.pass.descriptor);
-        target_encoder.set_label("DeadSync native Metal offscreen pass");
+        target_encoder.set_label("Metal offscreen pass");
         target_encoder.set_front_facing_winding(MTLWinding::CounterClockwise);
         offscreen_vertices = offscreen_vertices.saturating_add(record_offscreen_pass(
             state,
@@ -702,7 +702,7 @@ fn draw_inner(
     }
     let encoder = command.new_render_command_encoder(&state.render_pass.descriptor);
     clear_render_target(&state.render_pass.color);
-    encoder.set_label("DeadSync native Metal render pass");
+    encoder.set_label("Metal render pass");
     encoder.set_front_facing_winding(MTLWinding::CounterClockwise);
     stats.backend_setup_us = elapsed_us(setup_started);
 

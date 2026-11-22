@@ -114,6 +114,13 @@ fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Binding>().unwrap().clone();
     data.requests.lock().unwrap().actor_names = Some(ActorNames);
     let catalog = table(call, call.captures()[2])?;
+    let helpers = table(call, call.captures()[1])?;
+    song_replay::raw_set(
+        call,
+        helpers,
+        live_feedback::NOTE_FIELD_CATALOG_KEY,
+        Value::Table(catalog),
+    )?;
     let slots = get_static(call, catalog, b"game_state_slots")?;
     let screen = table(call, call.captures()[3])?;
     transitions::bind_screen_completion(call, catalog, data.requests.clone())?;

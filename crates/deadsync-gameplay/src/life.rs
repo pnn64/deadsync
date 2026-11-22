@@ -14,6 +14,52 @@ pub enum CourseLifeConfig {
     },
 }
 
+/// Borrowed stage inputs used to select each player's course life configuration.
+#[derive(Clone, Copy, Debug)]
+pub struct CourseLifeStage<'a> {
+    pub song: &'a SongData,
+    pub steps_index: [usize; MAX_PLAYERS],
+    pub gain_lives: i32,
+    pub gain_seconds: f32,
+}
+
+#[must_use]
+pub fn course_life_config(
+    mode: deadsync_rules::course::CourseType,
+    lives: i32,
+    stage: Option<CourseLifeStage<'_>>,
+    chart_type: &str,
+) -> [CourseLifeConfig; MAX_PLAYERS] {
+    use deadsync_rules::course::CourseType;
+
+    let Some(stage) = stage else {
+        return [CourseLifeConfig::Bar; MAX_PLAYERS];
+    };
+    match mode {
+        CourseType::Nonstop | CourseType::Endless => [CourseLifeConfig::Bar; MAX_PLAYERS],
+        CourseType::Oni => {
+            let total_lives = u32::try_from(lives).unwrap_or(1).max(1);
+            std::array::from_fn(|player| {
+                let reward_lives = u32::try_from(stage.gain_lives).unwrap_or_else(|_| {
+                    stage
+                        .song
+                        .chart_for_steps_index(chart_type, stage.steps_index[player])
+                        .map_or(1, |chart| if chart.meter >= 8 { 2 } else { 1 })
+                });
+                CourseLifeConfig::Battery {
+                    total_lives,
+                    reward_lives,
+                }
+            })
+        }
+        CourseType::Survival => {
+            [CourseLifeConfig::Survival {
+                gain_seconds: stage.gain_seconds,
+            }; MAX_PLAYERS]
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum CourseLifeState {
     #[default]

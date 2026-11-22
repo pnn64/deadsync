@@ -5,8 +5,8 @@ use crate::transforms::{
 };
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
-    HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
-    MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest,
+    HoldEmitterState, HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
+    MineLayerRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest,
     NoteXParams, NotefieldCameraCache, NotefieldComposeRequest, NotefieldFeedbackFrameView,
     PreparedNotefield, PreparedNotefieldNotes, VisualEffectParams,
     appearance_note_alpha_glow_cached, compose_flat_mine_layers, compose_flat_note_layer,
@@ -30,10 +30,11 @@ use deadlib_present::anim::EffectState;
 use deadlib_render_core::BlendMode;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::{
-    AppearanceEffects, CompletedRowVisibility, VisualEffects, hold_head_render_flags,
+    AppearanceEffects, CompletedRowVisibility, GameplayProfileData, GameplayRuntimeState,
+    VisualEffects, hold_head_render_flags,
     song_lua_note_hidden,
 };
-use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot};
+use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinRuntime, NoteskinSlot};
 use deadsync_rules::note::HoldResult;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
@@ -42,12 +43,88 @@ use std::ops::Range;
 
 /// Borrowed runtime state needed by the canonical field presentation pass.
 ///
-/// The concrete theme resolves gameplay state into this fixed-size view;
-/// canonical notefield code owns all draw selection, placement, and ordering.
+/// Canonical notefield code owns all draw selection, placement, and ordering.
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldFieldFrameView<'a> {
     pub feedback: NotefieldFeedbackFrameView<'a>,
     pub completed_rows: CompletedRowVisibility<'a>,
+}
+
+/// Reusable notefield drawing state for one player, retained for the stage.
+pub struct NotefieldFieldScratch {
+    model_cache: ModelMeshCache,
+    hold_mesh: HoldMeshScratch,
+    capture: CapturedActorScratch,
+    hold_emitters: [HoldEmitterState; MAX_COLS],
+}
+
+impl NotefieldFieldScratch {
+    pub fn new<S: NoteskinSlot>(
+        columns: usize,
+        [field_capacity, hud_capacity]: [usize; 2],
+        skins: [Option<&NoteskinRuntime<S>>; 4],
+    ) -> Self {
+        Self {
+            model_cache: if columns == 0 || skins.iter().all(Option::is_none) {
+                ModelMeshCache::default()
+            } else {
+                ModelMeshCache::for_noteskins(skins)
+            },
+            hold_mesh: HoldMeshScratch::with_columns(columns),
+            capture: CapturedActorScratch::with_capacities(field_capacity, hud_capacity),
+            hold_emitters: [HoldEmitterState::default(); MAX_COLS],
+        }
+    }
+
+    pub fn hud_capture_scratch(&mut self) -> &mut CapturedActorScratch {
+        &mut self.capture
+    }
+
+    /// Sample the stage's feedback and render it with the same field and lane
+    /// geometry used for notes. Call after preparing the visible field.
+    pub fn compose<P, O, C, D, S, F>(
+        &mut self,
+        game: &GameplayRuntimeState<P, O, C, D>,
+        actors: &mut Vec<Actor>,
+        flat_draws: &mut Vec<FlatDraw>,
+        cue_hud_draws: &mut Vec<FlatDraw>,
+        camera_cache: &mut NotefieldCameraCache,
+        request: &NotefieldComposeRequest<'_, S>,
+        prepared: &PreparedNotefield<'_, S>,
+        countdown_font: &'static str,
+        countdown_text_slot: u8,
+        sprite_source: &F,
+    ) -> NotefieldFieldResult
+    where
+        P: GameplayProfileData,
+        S: NoteskinSlot,
+        F: Fn(&S) -> SpriteSource,
+    {
+        let frame = NotefieldFieldFrameView {
+            feedback: NotefieldFeedbackFrameView::from_gameplay(
+                game,
+                request,
+                prepared,
+                &mut self.hold_emitters,
+                countdown_font,
+                countdown_text_slot,
+            ),
+            completed_rows: game.completed_row_visibility(request.geometry.player_idx),
+        };
+        compose_notefield_field(
+            actors,
+            flat_draws,
+            cue_hud_draws,
+            &mut self.model_cache,
+            &mut self.hold_mesh,
+            &mut self.capture,
+            camera_cache,
+            request,
+            prepared,
+            &frame,
+            sprite_source,
+        )
+    }
 }
 
 /// Optional shared field capture produced while preserving the live actor tree.
@@ -206,7 +283,7 @@ fn compose_field_contents<S, F>(
     F: Fn(&S) -> SpriteSource,
 {
     let style = request.hud_style;
-    let options = &request.options;
+    let settings = &request.settings;
     let elapsed_screen = request.visual.elapsed_screen_s;
     let visual = request.visual.visual;
     let appearance = resolved_appearance(request, prepared);
@@ -391,7 +468,7 @@ fn compose_field_contents<S, F>(
         None
     };
     let cue_visible_row_range = measure_cue_range_search_enabled(
-        options.frame_features.measure_cues,
+        settings.measure_cues,
         scroll_speed,
         request.chart.displayed_beat_monotonic,
     )
@@ -402,17 +479,12 @@ fn compose_field_contents<S, F>(
     })
     .flatten();
 
-    let measure_line_mode = if request.view.edit_beat_bars {
-        MeasureLineMode::Edit
-    } else {
-        options.frame_features.measure_line_mode
-    };
     compose_measure_lines(
         actors,
         flat_draws,
         MeasureComposeRequest {
-            mode: measure_line_mode,
-            show_cues: options.frame_features.measure_cues,
+            mode: prepared.frame_plan.measure_line_mode,
+            show_cues: settings.measure_cues,
             hud_style: style,
             column_xs: &note_inputs.measure_column_xs,
             column_dirs: &column_dirs,
@@ -679,15 +751,18 @@ fn compose_field_contents<S, F>(
         let head_layers = hold_plan.head_layers;
         let head_slot = hold_plan.head_slot;
 
-        let note_hides = request.song_lua.note_hides;
-        let has_zoom_spline = note_hides.has_column_hides(local_col);
+        let note_hides = request
+            .song_lua
+            .note_hides
+            .filter(|hides| hides.has_column_hides(local_col));
+        let has_zoom_spline = note_hides.is_some();
         // NoteDisplay interpolates the beat along the body's original endpoints,
         // then samples only the spline's X scale for each strip vertex.
         let body_head_beat = if engaged { current_beat } else { note.beat };
         let body_zoom_offset_at_y = |y: f32| {
-            if !has_zoom_spline {
+            let Some(note_hides) = note_hides else {
                 return 0.0;
-            }
+            };
             let beat = if (y_tail - y_head).abs() <= f32::EPSILON {
                 body_head_beat
             } else {
@@ -705,11 +780,7 @@ fn compose_field_contents<S, F>(
                     head_anchor_adjusted_travel / field_zoom,
                     transform_cache,
                     1.0,
-                ) + if has_zoom_spline {
-                    note_hides.zoom_offset(local_col, note.beat)
-                } else {
-                    0.0
-                }),
+                ) + note_hides.map_or(0.0, |hides| hides.zoom_offset(local_col, note.beat))),
         );
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
@@ -1153,15 +1224,17 @@ fn compose_visible_notes<S, F>(
         let direction = prepared.field.column_dirs[local_col];
         let receptor_y = prepared.field.column_receptor_ys[local_col];
         let lane_offset = lane_offsets[local_col];
-        let lane_has_hides = request.song_lua.note_hides.has_column_hides(local_col);
+        let lane_hides = request
+            .song_lua
+            .note_hides
+            .filter(|hides| hides.has_column_hides(local_col));
         for_each_lane_index(
             request.chart.lane_note_rows(col),
             visible_note_bounds[local_col],
             |note_index| {
                 let note = &request.chart.notes[note_index];
                 if matches!(note.note_type, NoteType::Hold | NoteType::Roll)
-                    || (lane_has_hides
-                        && song_lua_note_hidden(request.song_lua.note_hides, local_col, note.beat))
+                    || lane_hides.is_some_and(|hides| song_lua_note_hidden(hides, local_col, note.beat))
                 {
                     return;
                 }
@@ -1267,7 +1340,7 @@ fn compose_visible_notes<S, F>(
                 let target_arrow_px = notes.target_arrow_px * effect_zoom;
                 let scale_mine_for_note = |slot: &S| -> [f32; 2] {
                     let size = scale_mine_slot(slot);
-                    let scale = field_zoom * effect_zoom * request.options.mine_size_scale;
+                    let scale = field_zoom * effect_zoom * request.settings.mine_size_scale;
                     [size[0] * scale, size[1] * scale]
                 };
                 let note_rotation_x = transform_cache.confusion_rotation_x_deg

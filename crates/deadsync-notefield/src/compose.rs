@@ -1,7 +1,7 @@
 use crate::{
     ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement, HudLayoutOffsets,
-    HudLayoutParams, LayoutMiniIndicatorPosition, NoteDepthFrameCache, NotePartPhaseCache,
-    NotefieldFrameFeatures, NotefieldFramePlan, NotefieldFramePlanRequest, ProxyCaptureRequests,
+    HudLayoutParams, LayoutMiniIndicatorPosition, MeasureLineMode, NoteDepthFrameCache,
+    NotePartPhaseCache, NotefieldFramePlan, NotefieldFramePlanRequest, ProxyCaptureRequests,
     ScrollTravel, ScrollTravelRequest, TornadoBounds, TornadoLaneCache, ViewOverride,
     ZmodLayoutParams, beat_factor, compute_active_note_geometry, compute_tornado_lane_caches,
     effective_mini_value, field_effect_height, field_layout, fill_lane_col_offsets,
@@ -10,9 +10,11 @@ use crate::{
 };
 use deadsync_core::{input::MAX_COLS, song_time::song_time_ns_invalid};
 use deadsync_gameplay::{
-    AccelEffects, AppearanceEffects, ChartNoteIndex, PerspectiveEffects, ScrollEffects,
-    SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindows, VisibilityEffects, VisualEffects,
-    song_lua_column_transforms,
+    AccelEffects, AppearanceEffects, ChartNoteIndex, GameplayProfileData, GameplayRuntimeState,
+    PerspectiveEffects, ScrollEffects, SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindows,
+    VisibilityEffects, VisualEffects,
+    draw_distance_after_targets, draw_distance_before_targets, song_lua_column_transforms,
+    spacing_multiplier_for_percent,
 };
 #[cfg(test)]
 use deadsync_gameplay::{SongLuaColumnTransformTarget, song_lua_column_offset_window_value};
@@ -69,6 +71,127 @@ pub struct NotefieldVisualState {
     pub spacing_multiplier: f32,
 }
 
+/// Resolve chart motion against the live or base player options. Layout may
+/// supply an explicit scroll mode for the Practice editor.
+#[inline]
+pub fn resolve_notefield_motion<P: GameplayProfileData, O, C, D>(
+    game: &GameplayRuntimeState<P, O, C, D>,
+    player: usize,
+    center_one_player: bool,
+    [screen_width, screen_height]: [f32; 2],
+    scroll_override: Option<ScrollEffects>,
+    apply_attacks: bool,
+) -> (NotefieldGeometry, NotefieldVisualState) {
+    let profile = &game.profiles()[player];
+    let visual_mask = profile.visual_mask_bits();
+    let mini_percent = if apply_attacks {
+        game.effective_mini_percent_for_player_with_base(player, profile.mini_percent())
+    } else {
+        profile.mini_percent()
+    };
+    let scroll = scroll_override.unwrap_or_else(|| {
+        let base = profile.scroll_effects();
+        if apply_attacks {
+            game.effective_scroll_effects_for_player_with_base(player, base)
+        } else {
+            base
+        }
+    });
+    let use_cached_scroll = apply_attacks && scroll_override.is_none();
+    let cols_per_player = game.cols_per_player();
+    let total_cols = game.num_cols();
+    let player_col_start = player.saturating_mul(cols_per_player);
+    let column_dirs = std::array::from_fn(|local_col| {
+        let col = player_col_start + local_col;
+        if local_col >= cols_per_player || col >= total_cols {
+            1.0
+        } else if use_cached_scroll {
+            game.notefield_column_scroll_dir(col)
+        } else {
+            scroll.reverse_scale_for_column(local_col, cols_per_player)
+        }
+    });
+    let play_style = game.setup.session.play_style;
+    let viewport_height = game.setup.viewport.height();
+    let geometry = NotefieldGeometry {
+        player_idx: player,
+        stage_seed: game.setup.song_seed as u32,
+        num_players: game.num_players(),
+        cols_per_player,
+        total_cols,
+        single_style: play_style.is_single(),
+        double_style: play_style.is_double(),
+        shared_sides: play_style.is_routine(),
+        center_one_player,
+        screen_width,
+        screen_height,
+        screen_center_x: 0.5 * screen_width,
+        screen_center_y: 0.5 * screen_height,
+        field_zoom: if apply_attacks {
+            game.field_zoom_for_player(player)
+        } else {
+            profile
+                .effective_mini_value_with_visual_mask(visual_mask, mini_percent)
+                .mul_add(-0.5, 1.0)
+        },
+        scroll_speed: if apply_attacks {
+            game.effective_scroll_speed_for_player(player)
+        } else {
+            game.scroll_speed_for_player(player)
+        },
+        draw_distance_before_targets: draw_distance_before_targets(viewport_height, 1.0),
+        draw_distance_after_targets: draw_distance_after_targets(viewport_height, 1.0, 0.0),
+        column_dirs,
+        reverse_scroll: if use_cached_scroll {
+            game.notefield_reverse_scroll(player)
+        } else {
+            scroll.reverse_percent_for_column(0, cols_per_player) > 0.5
+        },
+    };
+    let visual = NotefieldVisualState {
+        elapsed_screen_s: game.total_elapsed_in_screen(),
+        expand_seconds: game.mods.expand_seconds[player],
+        current_display_beat: game.current_beat_display(),
+        accel: if apply_attacks {
+            game.effective_accel_effects_for_player_with_mask(player, profile.accel_mask_bits())
+        } else {
+            AccelEffects::from_mask_bits(profile.accel_mask_bits())
+        },
+        scroll,
+        perspective: if apply_attacks {
+            game.effective_perspective_effects_for_player_with_base(
+                player,
+                profile.perspective_effects(),
+            )
+        } else {
+            profile.perspective_effects()
+        },
+        visual: if apply_attacks {
+            game.effective_visual_effects_for_player_with_mask(player, visual_mask)
+        } else {
+            profile.visual_effects()
+        },
+        appearance: if apply_attacks {
+            game.effective_appearance_effects_for_player(player)
+        } else {
+            profile.appearance_effects()
+        },
+        dynamic_sudden: profile.dynamic_sudden(),
+        visibility: if apply_attacks {
+            game.effective_visibility_effects_for_player(player)
+        } else {
+            VisibilityEffects::default()
+        },
+        mini_percent,
+        spacing_multiplier: if player < game.num_players() {
+            spacing_multiplier_for_percent(profile.spacing_percent())
+        } else {
+            1.0
+        },
+    };
+    (geometry, visual)
+}
+
 /// Borrowed timing and chart inputs used to plan the visible notefield.
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldChartView<'a> {
@@ -104,7 +227,55 @@ pub struct NotefieldChartView<'a> {
     pub displayed_beat_monotonic: bool,
 }
 
-impl NotefieldChartView<'_> {
+impl<'a> NotefieldChartView<'a> {
+    /// Borrow the active chart, its timing segments, and the stage's timing and
+    /// lane caches for this player.
+    #[inline]
+    pub fn from_gameplay<P: GameplayProfileData, O, C, D>(
+        game: &'a GameplayRuntimeState<P, O, C, D>,
+        player: usize,
+    ) -> Self {
+        let (time_signatures, bpms, stops, delays, scrolls) = game
+            .gameplay_chart(player)
+            .map(|chart| {
+                let timing = &chart.timing_segments;
+                (
+                    timing.time_signatures.as_slice(),
+                    timing.bpms.as_slice(),
+                    timing.stops.as_slice(),
+                    timing.delays.as_slice(),
+                    timing.scrolls.as_slice(),
+                )
+            })
+            .unwrap_or((&[], &[], &[], &[], &[]));
+        Self {
+            timing: game.timing_for_player(player),
+            notes: game.notes(),
+            note_range: game.note_range_for_player(player),
+            lane_note_row_indices: game.lane_note_row_index_lists(),
+            lane_hold_indices: game.lane_hold_index_lists(),
+            note_itg_rows: game.note_itg_rows(),
+            note_time_cache_ns: game.note_time_cache_ns(),
+            hold_end_time_cache_ns: game.hold_end_time_cache_ns(),
+            note_displayed_beat_cache: game.note_displayed_beat_cache(),
+            decaying_hold_indices: game.decaying_hold_indices(),
+            note_row_metadata: &game.chart_runtime.row_indices.note_row_entry_indices,
+            visible_music_time_ns: game.visible_music_time_ns(player),
+            visible_beat: game.visible_beat(player),
+            is_in_delay: game.is_in_delay(),
+            search_beat: game.notefield_search_beat(player),
+            scroll_reference_bpm: game.scroll_reference_bpm(),
+            music_rate: game.music_rate(),
+            note_count_stats: game.note_count_stats(player),
+            time_signatures,
+            bpms,
+            stops,
+            delays,
+            scrolls,
+            displayed_beat_monotonic: game.displayed_beat_monotonic(player),
+        }
+    }
+
     #[inline(always)]
     pub(crate) fn lane_note_rows(&self, col: usize) -> &[ChartNoteIndex] {
         self.lane_note_row_indices
@@ -162,7 +333,8 @@ pub struct NotefieldNoteskinView<'a, S> {
 /// Song Lua note visibility and per-column placement inputs for one player.
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldSongLuaView<'a> {
-    pub note_hides: &'a SongLuaNoteHideWindows,
+    /// Absent while the game suppresses song-authored visuals.
+    pub note_hides: Option<&'a SongLuaNoteHideWindows>,
     pub column_offsets: &'a [SongLuaColumnOffsetWindowRuntime],
     pub column_splines: &'a [deadsync_gameplay::SongLuaColumnSplineTrack],
     /// Local native Actor wrapper matrix, outside the NoteField's own tilt.
@@ -181,23 +353,56 @@ pub struct SongLuaPlayerPosition {
     pub y: f32,
 }
 
-/// Profile-derived behavior and resolved asset availability in canonical terms.
+/// The player's lane settings captured at the start of the stage.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NotefieldOptions {
+pub struct NotefieldSettings {
     pub mine_size_scale: f32,
-    pub frame_features: NotefieldFrameFeatures,
+    pub measure_line_mode: MeasureLineMode,
+    pub measure_cues: bool,
+    pub column_cues: bool,
+    pub crossover_cues: bool,
+    pub crossover_countdown: bool,
+    pub column_flash: bool,
     pub notefield_offset: [f32; 2],
+    pub fallback_mini_percent: f32,
+    pub hide_targets: bool,
+    pub hold_explosion_enabled: bool,
+    pub hide_tap_explosion_noteskin: bool,
+}
+
+impl Default for NotefieldSettings {
+    fn default() -> Self {
+        Self {
+            mine_size_scale: 1.0,
+            measure_line_mode: MeasureLineMode::Off,
+            measure_cues: false,
+            column_cues: false,
+            crossover_cues: false,
+            crossover_countdown: false,
+            column_flash: false,
+            notefield_offset: [0.0; 2],
+            fallback_mini_percent: 0.0,
+            hide_targets: false,
+            hold_explosion_enabled: false,
+            hide_tap_explosion_noteskin: false,
+        }
+    }
+}
+
+/// HUD presentation preferences and resolved asset availability.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct NotefieldOptions {
+    pub combo_visible: bool,
+    pub error_bar: bool,
+    pub error_bar_text: bool,
     pub judgment_offset: [f32; 2],
     pub combo_offset: [f32; 2],
     pub error_bar_offset: [f32; 2],
     pub zmod_layout: ZmodLayoutParams,
     pub has_judgment_texture: bool,
     pub error_bar_up: bool,
-    pub fallback_mini_percent: f32,
     pub column_flash_compact: bool,
     pub column_flash_dimmed: bool,
-    pub hide_targets: bool,
-    pub hold_explosion_enabled: bool,
     pub hide_combo_explosions: bool,
     pub judgment_back: bool,
     pub show_fa_plus_window: bool,
@@ -248,6 +453,7 @@ pub struct NotefieldComposeRequest<'a, S> {
     pub chart: NotefieldChartView<'a>,
     pub noteskin: NotefieldNoteskinView<'a, S>,
     pub song_lua: NotefieldSongLuaView<'a>,
+    pub settings: NotefieldSettings,
     pub options: NotefieldOptions,
     pub capture_requests: ProxyCaptureRequests,
     pub edit_measure_text_slot_base: u8,
@@ -528,13 +734,14 @@ impl<S> PreparedNotefield<'_, S> {
 pub fn prepare_notefield<'a, S>(
     request: &'a NotefieldComposeRequest<'a, S>,
 ) -> Option<PreparedNotefield<'a, S>> {
-    let features = resolved_frame_features(request.options.frame_features, request.view);
     let frame_plan = notefield_frame_plan(NotefieldFramePlanRequest {
         placement: request.placement,
         num_players: request.geometry.num_players,
         cols_per_player: request.geometry.cols_per_player,
         total_cols: request.geometry.total_cols,
-        features,
+        settings: request.settings,
+        view: request.view,
+        combo_visible: request.options.combo_visible,
     })?;
     if frame_plan.player_idx != request.geometry.player_idx {
         return None;
@@ -690,7 +897,7 @@ pub fn prepare_notefield<'a, S>(
     }
     let mini = effective_mini_value(
         request.visual.mini_percent,
-        request.options.fallback_mini_percent,
+        request.settings.fallback_mini_percent,
         request.visual.visual.big,
     );
     let effect_height = field_effect_height(
@@ -786,8 +993,8 @@ fn prepare_field<S>(
         screen_center_y: request.geometry.screen_center_y,
         num_cols,
         field_zoom,
-        notefield_offset_x: request.options.notefield_offset[0],
-        notefield_offset_y: request.options.notefield_offset[1],
+        notefield_offset_x: request.settings.notefield_offset[0],
+        notefield_offset_y: request.settings.notefield_offset[1],
         receptor_y_override: request.view.receptor_y,
         center_receptors_y: request.view.center_receptors_y,
         centered_scroll: request.visual.scroll.centered,
@@ -973,21 +1180,9 @@ fn column_reverse_percents(scroll: ScrollEffects, num_cols: usize) -> [f32; MAX_
     out
 }
 
-const fn resolved_frame_features(
-    mut features: NotefieldFrameFeatures,
-    view: ViewOverride,
-) -> NotefieldFrameFeatures {
-    if view.edit_beat_bars {
-        features.measure_line_mode = crate::MeasureLineMode::Edit;
-    }
-    features.combo_visible &= !view.hide_combo;
-    features
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::MeasureLineMode;
 
     #[test]
     fn mod_timer_matches_native_get_time_bits() {
@@ -1095,20 +1290,6 @@ mod tests {
         }
     }
 
-    fn features() -> NotefieldFrameFeatures {
-        NotefieldFrameFeatures {
-            measure_line_mode: MeasureLineMode::Quarter,
-            measure_cues: true,
-            column_cues: true,
-            crossover_cues: true,
-            crossover_countdown: true,
-            column_flash: true,
-            error_bar: true,
-            error_bar_text: true,
-            combo_visible: true,
-        }
-    }
-
     #[test]
     fn borrowed_lane_storage_preserves_lane_views() {
         let index = |value| ChartNoteIndex::try_from_usize(value).expect("test index fits u32");
@@ -1146,31 +1327,6 @@ mod tests {
         assert!(view.lane_note_rows(3).is_empty());
         assert_eq!(view.lane_holds(1), &[7, 11]);
         assert!(view.lane_holds(2).is_empty());
-    }
-
-    #[test]
-    fn view_overrides_resolve_inside_canonical_preparation() {
-        let resolved = resolved_frame_features(
-            features(),
-            ViewOverride {
-                edit_beat_bars: true,
-                hide_combo: true,
-                ..ViewOverride::default()
-            },
-        );
-
-        assert_eq!(resolved.measure_line_mode, MeasureLineMode::Edit);
-        assert!(!resolved.combo_visible);
-        assert!(resolved.measure_cues);
-        assert!(resolved.column_cues);
-    }
-
-    #[test]
-    fn default_view_preserves_profile_derived_features() {
-        assert_eq!(
-            resolved_frame_features(features(), ViewOverride::default()),
-            features()
-        );
     }
 
     #[test]

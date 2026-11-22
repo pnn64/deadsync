@@ -3,7 +3,7 @@ use super::*;
 
 impl SongLiveScene {
     /// Read the current screen's stored override. An empty override retains the
-    /// theme destination. Inspection must not invoke authored table getters.
+    /// default destination. Inspection must not invoke authored table getters.
     pub fn next_screen_name(&self) -> Result<Option<String>, Error> {
         let mut runtime = self.runtime.access();
         runtime.vm.with_native_stack(|stack| {

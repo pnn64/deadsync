@@ -1,7 +1,7 @@
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
 use crate::color;
-use crate::effects::sfx;
+use crate::effects::{sfx, sfx_then};
 use crate::fonts::machine_font_key;
 use crate::i18n;
 use crate::i18n::tr;
@@ -12,10 +12,11 @@ use crate::screens::components::{
     shared::{banner as shared_banner, mode_pads, timers, transitions, visual_style_bg},
 };
 use crate::screens::input as screen_input;
-use crate::views::{CourseStagePlan, SelectedCoursePlan};
+use crate::views::SelectedCoursePlan;
 use crate::views::{
     MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView, SelectCourseContextView,
-    SelectCourseInitView, SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView,
+    SelectCourseInitView, SelectCoursePresentationInitView, SelectCourseRuntimeView,
+    SelectCourseScoreRequest, SelectCourseScoreView,
     SelectFlowPlayerView,
 };
 use deadlib_assets::AssetManager;
@@ -25,41 +26,37 @@ use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
+use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan};
 use deadsync_chart::song::standard_difficulty_index;
-use deadsync_chart::{ChartData, SongData, SongPack};
+use deadsync_chart::{ChartData, SongData};
+use deadsync_gameplay::stage_launch::{StageLaunchPrompt, StageLaunchRequest};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score::default_scorebox_mode_text;
 use deadsync_simfile::course::{
-    self, COURSE_RATING_ORDER, CourseFile, CourseSong, CourseTotals, Difficulty, SongSort,
-    add_chart_totals, course_difficulty_from_meters, course_meter, nearest_filled_slot,
-    push_song_bpm_range, resolve_course_stage, song_unique_key,
+    self, COURSE_RATING_ORDER, CourseTotals, Difficulty, nearest_filled_slot,
+};
+pub use deadsync_simfile::course_selection::course_score_hash;
+use deadsync_simfile::course_selection::{
+    CourseChoice, EndlessCourseSource, PreparedCourseCatalog, course_song_stub,
 };
 use deadsync_theme::FontRole;
-use deadsync_theme::views::CourseTypeView;
-use rustc_hash::FxHashMap;
+use deadsync_theme::views::CoursePresentationView;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
-use twox_hash::XxHash64;
 
 use super::select_music::MusicWheelEntry;
 
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
-const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
 const ENTERING_OPTIONS_FADE_OUT_SECONDS: f32 = 0.125;
 const ENTERING_OPTIONS_HIBERNATE_SECONDS: f32 = 0.1;
 const ENTERING_OPTIONS_FADE_IN_SECONDS: f32 = 0.125;
 const ENTERING_OPTIONS_HOLD_SECONDS: f32 = 1.0;
-const ENTERING_OPTIONS_TOTAL_SECONDS: f32 = ENTERING_OPTIONS_FADE_OUT_SECONDS
-    + ENTERING_OPTIONS_HIBERNATE_SECONDS
-    + ENTERING_OPTIONS_FADE_IN_SECONDS
-    + ENTERING_OPTIONS_HOLD_SECONDS;
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
@@ -197,7 +194,6 @@ impl CourseSongEntry {
 
 #[derive(Clone, Debug)]
 struct CourseMeta {
-    source: CourseFile,
     path: PathBuf,
     score_hash: String,
     name: String,
@@ -211,8 +207,6 @@ struct CourseMeta {
     total_length_seconds: i32,
     has_random_entries: bool,
     has_most_played_entries: bool,
-    course_type: CourseTypeView,
-    lives: i32,
 }
 
 #[derive(Clone, Debug)]
@@ -222,13 +216,11 @@ struct CourseRatingMeta {
     stats_text: CourseStatsText,
     course_difficulty_name: String,
     course_stepchart_label: String,
-    course_meter: Option<u32>,
     course_meter_text: Arc<str>,
     entry_count_text: Arc<str>,
     min_bpm: Option<f64>,
     max_bpm: Option<f64>,
     total_length_seconds: i32,
-    runtime_stages: Vec<CourseStagePlan>,
 }
 
 /// Immutable actor-ready stat text compiled with each course rating.
@@ -434,30 +426,12 @@ struct InitData {
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
-    resolver: CourseResolver,
-}
-
-struct CourseResolver {
-    by_group_song: HashMap<(String, String), Arc<SongData>>,
-    by_song: HashMap<String, Arc<SongData>>,
-    songs_by_group: HashMap<String, Vec<Arc<SongData>>>,
-    all_songs: Vec<Arc<SongData>>,
-    song_play_counts: HashMap<String, u32>,
-    song_grade_counts: HashMap<String, course::CourseGradeCounts>,
-    target_chart_type: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum NavDirection {
     Left,
     Right,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum OutPromptState {
-    None,
-    PressStartForOptions { elapsed: f32 },
-    EnteringOptions { elapsed: f32 },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -515,7 +489,7 @@ pub struct State {
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
-    resolver: CourseResolver,
+    catalog: Arc<PreparedCourseCatalog>,
     bg: visual_style_bg::State,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
@@ -523,7 +497,7 @@ pub struct State {
     pub banner_high_quality_requested: bool,
     prev_selected_index: usize,
     time_since_selection_change: f32,
-    out_prompt: OutPromptState,
+    launch_prompt: StageLaunchPrompt,
     exit_prompt: ExitPromptState,
     selected_rating_index_by_path: HashMap<PathBuf, usize>,
     last_rating_nav_dir_p1: Option<PadDir>,
@@ -533,147 +507,6 @@ pub struct State {
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: i8,
     three_key_focus: ThreeKeyFocus,
-}
-
-#[inline(always)]
-fn song_dir_key(song: &SongData) -> Option<String> {
-    song.simfile_path
-        .parent()
-        .and_then(Path::file_name)
-        .and_then(|n| n.to_str())
-        .map(|s| s.trim().to_ascii_lowercase())
-}
-
-fn build_song_lookup(
-    song_packs: &[SongPack],
-    played_chart_counts: &[(String, u32)],
-) -> (
-    HashMap<(String, String), Arc<SongData>>,
-    HashMap<String, Arc<SongData>>,
-    HashMap<String, Vec<Arc<SongData>>>,
-    Vec<Arc<SongData>>,
-    HashMap<String, u32>,
-) {
-    let total_songs = song_packs.iter().map(|pack| pack.songs.len()).sum();
-    let mut by_group_song = HashMap::with_capacity(total_songs);
-    let mut by_song = HashMap::with_capacity(total_songs);
-    let mut songs_by_group: HashMap<String, Vec<Arc<SongData>>> =
-        HashMap::with_capacity(song_packs.len());
-    let mut all_songs = Vec::with_capacity(total_songs);
-
-    for pack in song_packs {
-        if pack.songs.is_empty() {
-            continue;
-        }
-        let group_name = pack.group_name.trim().to_string();
-        let group_key = group_name.to_ascii_lowercase();
-        let group_songs = songs_by_group.entry(group_name).or_default();
-        group_songs.reserve(pack.songs.len());
-        for song in &pack.songs {
-            all_songs.push(song.clone());
-            group_songs.push(song.clone());
-            let Some(song_key) = song_dir_key(song) else {
-                continue;
-            };
-            by_group_song.insert((group_key.clone(), song_key.clone()), song.clone());
-            by_song.entry(song_key).or_insert_with(|| song.clone());
-        }
-    }
-
-    let song_play_counts = build_song_play_counts(song_packs, played_chart_counts, total_songs);
-
-    (
-        by_group_song,
-        by_song,
-        songs_by_group,
-        all_songs,
-        song_play_counts,
-    )
-}
-
-fn build_song_play_counts(
-    song_packs: &[SongPack],
-    played_chart_counts: &[(String, u32)],
-    total_songs: usize,
-) -> HashMap<String, u32> {
-    if played_chart_counts.is_empty() {
-        return HashMap::new();
-    }
-
-    let mut plays_by_chart: FxHashMap<&str, u32> = FxHashMap::with_capacity_and_hasher(
-        played_chart_counts.len(),
-        rustc_hash::FxBuildHasher::default(),
-    );
-    for (chart_hash, plays) in played_chart_counts {
-        plays_by_chart
-            .entry(chart_hash.as_str())
-            .and_modify(|count| *count = count.saturating_add(*plays))
-            .or_insert(*plays);
-    }
-
-    let mut song_play_counts: HashMap<String, u32> =
-        HashMap::with_capacity(plays_by_chart.len().min(total_songs));
-    for pack in song_packs {
-        for song in &pack.songs {
-            let mut matched = false;
-            let mut song_plays = 0_u32;
-            for chart in &song.charts {
-                if let Some(plays) = plays_by_chart.remove(chart.short_hash.as_str()) {
-                    matched = true;
-                    song_plays = song_plays.saturating_add(plays);
-                }
-            }
-            if matched {
-                song_play_counts
-                    .entry(song_unique_key(song))
-                    .and_modify(|count| *count = count.saturating_add(song_plays))
-                    .or_insert(song_plays);
-            }
-            if plays_by_chart.is_empty() {
-                return song_play_counts;
-            }
-        }
-    }
-
-    song_play_counts
-}
-
-fn build_song_grade_counts(
-    song_packs: &[SongPack],
-    chart_grades: &[(String, u8)],
-    chart_type: &str,
-) -> HashMap<String, course::CourseGradeCounts> {
-    if chart_grades.is_empty() {
-        return HashMap::new();
-    }
-    let grades_by_chart: FxHashMap<&str, u8> = chart_grades
-        .iter()
-        .map(|(chart_hash, grade)| (chart_hash.as_str(), *grade))
-        .collect();
-    let mut song_grades = HashMap::new();
-    for pack in song_packs {
-        for song in &pack.songs {
-            let mut counts = course::CourseGradeCounts::default();
-            let mut has_grade = false;
-            for chart in &song.charts {
-                if !chart.chart_type.eq_ignore_ascii_case(chart_type) {
-                    continue;
-                }
-                let Some(grade) = grades_by_chart.get(chart.short_hash.as_str()).copied() else {
-                    continue;
-                };
-                let Some(count) = counts.get_mut(grade as usize) else {
-                    continue;
-                };
-                *count = count.saturating_add(1);
-                has_grade = true;
-            }
-            if has_grade {
-                song_grades.insert(song_unique_key(song), counts);
-            }
-        }
-    }
-    song_grades
 }
 
 #[inline(always)]
@@ -687,28 +520,15 @@ fn course_group_name(path: &Path) -> String {
 }
 
 #[inline(always)]
-fn course_name(path: &Path, course: &CourseFile) -> String {
-    if course.name.trim().is_empty() {
-        path.file_stem()
-            .and_then(|n| n.to_str())
-            .filter(|s| !s.trim().is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| tr("SelectCourse", "UntitledCourse").to_string())
+pub fn course_title(name: &str) -> std::borrow::Cow<'_, str> {
+    if name.is_empty() {
+        tr("SelectCourse", "UntitledCourse").to_string().into()
     } else {
-        course.name.clone()
+        std::borrow::Cow::Borrowed(name)
     }
 }
 
-#[inline(always)]
-#[must_use]
-pub fn course_score_hash(course_path: &Path) -> String {
-    let mut hasher = XxHash64::with_seed(0xC0_01_53_42_0A);
-    hasher.write(course_path.to_string_lossy().as_bytes());
-    format!("course-{:016x}", hasher.finish())
-}
-
-#[inline(always)]
-fn course_stepchart_label(difficulty_name: &str, meter: Option<u32>) -> String {
+pub fn course_stepchart_label(difficulty_name: &str, meter: Option<u32>) -> String {
     let idx = standard_difficulty_index(difficulty_name).unwrap_or(2);
     let display = color::DISPLAY_DIFFICULTY_NAMES[idx];
     if let Some(meter) = meter {
@@ -730,256 +550,69 @@ fn chart_step_artist(chart: &ChartData) -> String {
 }
 
 fn make_course_song(meta: &CourseMeta) -> SongData {
-    SongData {
-        simfile_path: meta.path.clone(),
-        title: meta.name.clone(),
-        subtitle: String::new(),
-        translit_title: meta.name.clone(),
-        translit_subtitle: String::new(),
-        artist: if meta.scripter.trim().is_empty() {
-            tr("SelectCourse", "CourseScripter").to_string()
-        } else {
-            meta.scripter.clone()
-        },
-        translit_artist: String::new(),
-        genre: String::new(),
-        banner_path: meta.banner_path.clone(),
-        background_path: None,
-        background_changes: Vec::new(),
-        background_layer2_changes: Vec::new(),
-        foreground_changes: Vec::new(),
-        background_lua_changes: Vec::new(),
-        foreground_lua_changes: Vec::new(),
-        has_lua: false,
-        cdtitle_path: None,
-        music_path: None,
-        display_bpm: String::new(),
-        offset: 0.0,
-        sample_start: None,
-        sample_length: None,
-        min_bpm: meta.min_bpm.unwrap_or(0.0),
-        max_bpm: meta.max_bpm.unwrap_or_else(|| meta.min_bpm.unwrap_or(0.0)),
-        normalized_bpms: String::new(),
-        song_timing: None,
-        music_length_seconds: meta.total_length_seconds.max(0) as f32,
-        first_second: 0.0,
-        total_length_seconds: meta.total_length_seconds.max(0),
-        precise_last_second_seconds: meta.total_length_seconds.max(0) as f32,
-        precise_note_first_second_seconds: None,
-        precise_note_last_second_seconds: Some(meta.total_length_seconds.max(0) as f32),
-        last_second_hint: 0.0,
-        charts: Vec::new(),
-    }
+    let default_artist = meta.scripter.trim().is_empty().then(|| tr("SelectCourse", "CourseScripter"));
+    course_song_stub(
+        &meta.path, &meta.name, default_artist.as_deref().unwrap_or(&meta.scripter), meta.banner_path.as_deref(),
+        meta.min_bpm, meta.max_bpm, meta.total_length_seconds,
+    )
 }
 
-fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
-    let translated_titles = init_view.translated_titles;
-    let target_chart_type = init_view.context.play_style.chart_type();
-    let (by_group_song, by_song, songs_by_group, all_songs, song_play_counts) =
-        build_song_lookup(&init_view.song_packs, &init_view.played_chart_counts);
-    let song_grade_counts = build_song_grade_counts(
-        &init_view.song_packs,
-        &init_view.chart_grades,
-        target_chart_type,
-    );
-
+fn build_init_data(
+    catalog: &PreparedCourseCatalog,
+    translated_titles: bool,
+) -> InitData {
     let mut grouped: HashMap<String, Vec<Arc<CourseMeta>>> = HashMap::new();
-    let mut course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>> = HashMap::new();
-
-    for (path, course) in &init_view.courses {
-        let course_type = course::course_type(course);
-        let mut has_random_entries = false;
-        let mut has_most_played_entries = false;
-        let random_seed = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0_u64, |d| d.as_nanos() as u64);
-        for entry in &course.entries {
-            if matches!(
-                &entry.song,
-                CourseSong::RandomAny
-                    | CourseSong::RandomWithinGroup { .. }
-                    | CourseSong::Select(_)
-            ) {
-                has_random_entries = true;
-            }
-            if matches!(
-                &entry.song,
-                CourseSong::SortPick {
-                    sort: SongSort::MostPlays,
-                    ..
-                }
-            ) || matches!(
-                &entry.song,
-                CourseSong::Select(select) if select.sort == Some(SongSort::MostPlays)
-            ) {
-                has_most_played_entries = true;
-            }
-        }
-
-        let preferred_default_idx = course_difficulty_from_meters(course)
-            .and_then(|(difficulty_name, _)| {
-                COURSE_RATING_ORDER.iter().position(|diff| {
-                    course::difficulty_label(*diff).eq_ignore_ascii_case(difficulty_name)
-                })
-            })
-            .unwrap_or(Difficulty::Medium as usize);
-        let preferred_default_diff = COURSE_RATING_ORDER[preferred_default_idx];
-        let mut available_course_diffs: Vec<Difficulty> = COURSE_RATING_ORDER
-            .iter()
-            .copied()
-            .filter(|diff| course_meter(course, *diff).is_some_and(|meter| meter >= 0))
-            .collect();
-        if has_random_entries && available_course_diffs.len() <= 1 {
-            available_course_diffs = COURSE_RATING_ORDER.to_vec();
-        }
-        if available_course_diffs.is_empty() {
-            available_course_diffs.push(preferred_default_diff);
-        }
-
-        let mut ratings: Vec<Option<CourseRatingMeta>> = vec![None; COURSE_RATING_ORDER.len()];
-        for course_diff in available_course_diffs {
-            let mut entries = Vec::with_capacity(course.entries.len());
-            let mut runtime_stages = Vec::with_capacity(course.entries.len());
-            let mut totals = CourseTotals::default();
-            let mut rated_entry_count = 0usize;
-            let mut meter_sum = 0u32;
-            let mut meter_count = 0usize;
-            let mut rating_song_keys = Vec::with_capacity(course.entries.len());
-            let mut rating_total_seconds = 0i32;
-            let mut rating_min_bpm = None;
-            let mut rating_max_bpm = None;
-
-            for (entry_idx, entry) in course.entries.iter().enumerate() {
-                let Some(stage) = resolve_course_stage(
-                    path,
-                    entry_idx,
-                    random_seed,
-                    entry,
-                    &by_group_song,
-                    &by_song,
-                    &all_songs,
-                    &songs_by_group,
-                    &song_play_counts,
-                    &song_grade_counts,
-                    course_type,
-                    &rating_song_keys,
-                    target_chart_type,
-                    course_diff,
-                ) else {
-                    continue;
-                };
-                let song_data = &stage.song;
-                let Some(chart) = song_data.charts.get(stage.chart_index) else {
-                    continue;
-                };
-                rating_song_keys.push(song_unique_key(song_data));
-                let len = if song_data.music_length_seconds > 0.0 {
-                    song_data.music_length_seconds.round() as i32
-                } else {
-                    song_data.total_length_seconds.max(0)
-                };
-                rating_total_seconds = rating_total_seconds.saturating_add(len.max(0));
-                push_song_bpm_range(&mut rating_min_bpm, &mut rating_max_bpm, song_data);
-                runtime_stages.push(CourseStagePlan {
-                    song: song_data.clone(),
-                    chart_hash: chart.short_hash.clone(),
-                    modifiers: stage.modifiers,
-                    gain_seconds: stage.gain_seconds,
-                    gain_lives: stage.gain_lives,
-                });
-                add_chart_totals(&mut totals, chart);
-                rated_entry_count = rated_entry_count.saturating_add(1);
-                meter_sum = meter_sum.saturating_add(chart.meter);
-                meter_count = meter_count.saturating_add(1);
-                let entry_index = entries.len();
-                entries.push(CourseSongEntry::new(
-                    song_data.display_full_title(translated_titles),
+    let mut course_meta_by_path = HashMap::with_capacity(catalog.courses().len());
+    for prepared in catalog.courses() {
+        let ratings: Vec<_> = prepared.ratings().iter().zip(COURSE_RATING_ORDER).map(|(rating, difficulty)| {
+            let rating = rating.as_ref()?;
+            let entries: Vec<_> = rating.charts().enumerate().map(|(index, (song, chart))| {
+                CourseSongEntry::new(
+                    song.display_full_title(translated_titles),
                     chart.difficulty.to_ascii_lowercase(),
                     chart.meter,
-                    entry_index,
+                    index,
                     chart_step_artist(chart),
-                ));
-            }
-
-            let explicit_meter = course_meter(course, course_diff)
-                .filter(|v| *v >= 0)
-                .map(|v| v as u32);
-            if rated_entry_count == 0
-                && explicit_meter.is_none()
-                && course_diff != Difficulty::Medium
-            {
-                continue;
-            }
-
-            let course_meter = explicit_meter.or_else(|| {
-                if meter_count > 0 {
-                    Some((meter_sum as f32 / meter_count as f32).round() as u32)
-                } else {
-                    None
-                }
-            });
-            let course_difficulty_name = course::difficulty_label(course_diff).to_string();
-            let course_stepchart_label =
-                course_stepchart_label(course_difficulty_name.as_str(), course_meter);
-            let course_meter_text =
-                course_meter.map_or_else(unknown_text, |meter| Arc::<str>::from(meter.to_string()));
-            let entry_count_text = Arc::<str>::from(entries.len().to_string());
-            let stats_text = CourseStatsText::new(&totals, rated_entry_count > 0);
-
-            ratings[course_diff as usize] = Some(CourseRatingMeta {
-                course_difficulty: course_diff,
+                )
+            }).collect();
+            let course_difficulty_name = course::difficulty_label(difficulty).to_owned();
+            let course_meter = rating.course_meter;
+            let course_stepchart_label = course_stepchart_label(&course_difficulty_name, course_meter);
+            let course_meter_text = course_meter.map_or_else(unknown_text, |meter| Arc::from(meter.to_string()));
+            let entry_count_text = Arc::from(entries.len().to_string());
+            let stats_text = CourseStatsText::new(&rating.totals, rating.rated_entry_count > 0);
+            Some(CourseRatingMeta {
+                course_difficulty: difficulty,
                 entries,
                 stats_text,
                 course_difficulty_name,
                 course_stepchart_label,
-                course_meter,
                 course_meter_text,
                 entry_count_text,
-                min_bpm: rating_min_bpm,
-                max_bpm: rating_max_bpm,
-                total_length_seconds: rating_total_seconds.max(0),
-                runtime_stages,
-            });
-        }
-
-        let group_name = course_group_name(path);
-        let default_rating_index =
-            nearest_filled_slot(&ratings, preferred_default_idx).unwrap_or(preferred_default_idx);
-        // Explicit nonnegative meters retain their rating even without charts;
-        // otherwise Medium is included and retained. A rating always exists.
+                min_bpm: rating.min_bpm,
+                max_bpm: rating.max_bpm,
+                total_length_seconds: rating.total_length_seconds,
+            })
+        }).collect();
+        let default_rating_index = prepared.default_rating_index();
         let default_rating = ratings[default_rating_index]
-            .as_ref()
-            .expect("every course retains at least one rating");
-        let (meta_min_bpm, meta_max_bpm, meta_total_length_seconds) = (
-            default_rating.min_bpm,
-            default_rating.max_bpm,
-            default_rating.total_length_seconds.max(0),
-        );
+            .as_ref().expect("every course retains at least one rating");
         let meta = Arc::new(CourseMeta {
-            source: course.clone(),
-            path: path.clone(),
-            score_hash: course_score_hash(path),
-            name: course_name(path, course),
-            scripter: course.scripter.clone(),
-            description: Arc::from(course.description.as_str()),
-            banner_path: course::resolve_course_banner_path(path, &course.banner),
-            ratings,
+            path: prepared.path().to_path_buf(),
+            score_hash: prepared.score_hash().to_owned(),
+            name: course_title(prepared.name()).into_owned(),
+            scripter: prepared.scripter().to_owned(),
+            description: Arc::from(prepared.description()),
+            banner_path: prepared.banner_path().map(Path::to_path_buf),
             default_rating_index,
-            min_bpm: meta_min_bpm,
-            max_bpm: meta_max_bpm,
-            total_length_seconds: meta_total_length_seconds,
-            has_random_entries,
-            has_most_played_entries,
-            course_type: match course_type {
-                course::CourseType::Nonstop => CourseTypeView::Nonstop,
-                course::CourseType::Oni => CourseTypeView::Oni,
-                course::CourseType::Endless => CourseTypeView::Endless,
-                course::CourseType::Survival => CourseTypeView::Survival,
-            },
-            lives: course.lives,
+            min_bpm: default_rating.min_bpm,
+            max_bpm: default_rating.max_bpm,
+            total_length_seconds: default_rating.total_length_seconds,
+            ratings,
+            has_random_entries: prepared.has_random_entries(),
+            has_most_played_entries: prepared.has_most_played_entries(),
         });
-
-        grouped.entry(group_name).or_default().push(meta.clone());
+        grouped.entry(course_group_name(&meta.path)).or_default().push(meta.clone());
         course_meta_by_path.insert(meta.path.clone(), meta);
     }
 
@@ -1003,15 +636,6 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
         all_entries,
         course_meta_by_path,
         course_text_color_overrides,
-        resolver: CourseResolver {
-            by_group_song,
-            by_song,
-            songs_by_group,
-            all_songs,
-            song_play_counts,
-            song_grade_counts,
-            target_chart_type: target_chart_type.to_string(),
-        },
     }
 }
 
@@ -1222,82 +846,62 @@ fn set_selected_course_rating_index(state: &mut State, idx: usize) {
     rebuild_course_summary(state);
 }
 
-pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
+/// Whether the selected rating contains stages that can start a course.
+pub fn has_selected_course(state: &State) -> bool {
+    selected_course_choice(state).is_some_and(|choice| state.catalog.can_start(choice))
+}
+
+pub fn selected_course_choice(state: &State) -> Option<CourseChoice<'_>> {
     let meta = selected_course_meta(state)?;
     let rating = selected_course_rating(state, meta)?;
-    if rating.runtime_stages.is_empty() {
-        return None;
-    }
-    Some(course_plan(meta, rating, rating.runtime_stages.clone()))
+    Some(CourseChoice { path: &meta.path, difficulty: rating.course_difficulty })
 }
 
-fn course_plan(
-    meta: &CourseMeta,
-    rating: &CourseRatingMeta,
-    stages: Vec<CourseStagePlan>,
-) -> SelectedCoursePlan {
-    SelectedCoursePlan {
-        path: meta.path.clone(),
+pub fn course_catalog(state: &State) -> &PreparedCourseCatalog {
+    &state.catalog
+}
+
+/// Game startup data and the legacy course presentation.
+pub fn selected_course_start(state: &State) -> Option<(CourseSessionPlan, CoursePresentationView)> {
+    let plan = state.catalog.selected_plan(selected_course_choice(state)?)?;
+    Some((plan, selected_course_presentation(state)?))
+}
+
+pub fn selected_course_start_with_cycles(
+    state: &State,
+) -> Option<(CourseSessionPlan, CoursePresentationView, Option<EndlessCourseSource>)> {
+    let start = state.catalog.start(selected_course_choice(state)?)?;
+    Some((start.plan, selected_course_presentation(state)?, start.endless_source))
+}
+
+fn selected_course_presentation(state: &State) -> Option<CoursePresentationView> {
+    let meta = selected_course_meta(state)?;
+    let rating = selected_course_rating(state, meta)?;
+    Some(CoursePresentationView {
         name: meta.name.clone(),
         banner_path: meta.banner_path.clone(),
-        score_hash: meta.score_hash.clone(),
         song_stub: Arc::new(make_course_song(meta)),
-        course_difficulty_name: rating.course_difficulty_name.clone(),
-        course_meter: rating.course_meter,
         course_stepchart_label: rating.course_stepchart_label.clone(),
-        course_type: meta.course_type,
-        lives: meta.lives,
-        stages,
-    }
+    })
 }
 
-fn fresh_course_seed() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0_u64, |duration| duration.as_nanos() as u64)
+pub fn selected_course_cycle(state: &State) -> Option<CourseCyclePlan> {
+    state.catalog.selected_cycle(selected_course_choice(state)?)
+}
+
+pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
+    let (plan, presentation) = selected_course_start(state)?;
+    Some(SelectedCoursePlan::from_parts(plan, presentation))
+}
+
+/// Fresh Endless stages without allocating course presentation metadata.
+pub fn reroll_selected_endless_cycle(state: &State) -> Option<CourseCyclePlan> {
+    state.catalog.reroll_cycle(selected_course_choice(state)?)
 }
 
 pub fn reroll_selected_endless_plan(state: &State) -> Option<SelectedCoursePlan> {
-    let meta = selected_course_meta(state)?;
-    if meta.course_type != CourseTypeView::Endless {
-        return None;
-    }
-    let rating = selected_course_rating(state, meta)?;
-    let mut selected_song_keys = Vec::with_capacity(meta.source.entries.len());
-    let mut stages = Vec::with_capacity(meta.source.entries.len());
-    let seed = fresh_course_seed();
-    for (entry_index, entry) in meta.source.entries.iter().enumerate() {
-        let Some(stage) = resolve_course_stage(
-            &meta.path,
-            entry_index,
-            seed,
-            entry,
-            &state.resolver.by_group_song,
-            &state.resolver.by_song,
-            &state.resolver.all_songs,
-            &state.resolver.songs_by_group,
-            &state.resolver.song_play_counts,
-            &state.resolver.song_grade_counts,
-            course::CourseType::Endless,
-            &selected_song_keys,
-            &state.resolver.target_chart_type,
-            rating.course_difficulty,
-        ) else {
-            continue;
-        };
-        let Some(chart) = stage.song.charts.get(stage.chart_index) else {
-            continue;
-        };
-        selected_song_keys.push(song_unique_key(&stage.song));
-        stages.push(CourseStagePlan {
-            song: stage.song.clone(),
-            chart_hash: chart.short_hash.clone(),
-            modifiers: stage.modifiers,
-            gain_seconds: stage.gain_seconds,
-            gain_lives: stage.gain_lives,
-        });
-    }
-    (!stages.is_empty()).then(|| course_plan(meta, rating, stages))
+    let plan = state.catalog.reroll_plan(selected_course_choice(state)?)?;
+    Some(SelectedCoursePlan::from_parts(plan, selected_course_presentation(state)?))
 }
 
 #[inline(always)]
@@ -1323,7 +927,7 @@ fn selected_banner_source(state: &State) -> Option<BannerSource> {
     }
 }
 
-fn restore_last_course(state: &mut State, init_view: &SelectCourseInitView) {
+fn restore_last_course(state: &mut State, init_view: &SelectCoursePresentationInitView) {
     let Some(path) = init_view.last_course_path.as_deref() else {
         return;
     };
@@ -1338,7 +942,23 @@ pub fn sync_session_elapsed(state: &mut State, session_elapsed: f32) {
 
 #[must_use]
 pub fn init(init_view: SelectCourseInitView) -> State {
-    let init = build_init_data(&init_view);
+    let catalog = PreparedCourseCatalog::new(
+        init_view.courses,
+        &init_view.song_packs,
+        &init_view.played_chart_counts,
+        &init_view.chart_grades,
+        init_view.context.play_style.chart_type(),
+    );
+    init_prepared(catalog, SelectCoursePresentationInitView {
+        translated_titles: init_view.translated_titles,
+        last_course_path: init_view.last_course_path,
+        last_course_difficulty: init_view.last_course_difficulty,
+        context: init_view.context,
+    })
+}
+
+pub fn init_prepared(catalog: PreparedCourseCatalog, init_view: SelectCoursePresentationInitView) -> State {
+    let init = build_init_data(&catalog, init_view.translated_titles);
     let score_view = SelectCourseScoreView::default();
     let score_text = CourseScoreText::new(&score_view);
     let mut state = State {
@@ -1362,7 +982,7 @@ pub fn init(init_view: SelectCourseInitView) -> State {
         all_entries: init.all_entries,
         course_meta_by_path: init.course_meta_by_path,
         course_text_color_overrides: init.course_text_color_overrides,
-        resolver: init.resolver,
+        catalog: Arc::new(catalog),
         bg: visual_style_bg::State::new(),
         nav_key_held_direction: None,
         nav_key_held_since: None,
@@ -1370,7 +990,7 @@ pub fn init(init_view: SelectCourseInitView) -> State {
         banner_high_quality_requested: false,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
-        out_prompt: OutPromptState::None,
+        launch_prompt: StageLaunchPrompt::Hidden,
         exit_prompt: ExitPromptState::None,
         selected_rating_index_by_path: HashMap::new(),
         last_rating_nav_dir_p1: None,
@@ -1617,7 +1237,7 @@ fn append_rating_cancel_sounds(effects: &mut Vec<ThemeEffect>, undo_sound: Optio
 }
 
 pub fn handle_confirm(state: &mut State) -> ThemeEffect {
-    if state.out_prompt != OutPromptState::None {
+    if state.launch_prompt != StageLaunchPrompt::Hidden {
         return ThemeEffect::None;
     }
     if state.entries.is_empty() {
@@ -1628,13 +1248,16 @@ pub fn handle_confirm(state: &mut State) -> ThemeEffect {
     state.menu_lr_undo = 0;
     state.three_key_focus = ThreeKeyFocus::Wheel;
 
-    match state.entries.get(state.selected_index) {
-        Some(MusicWheelEntry::Song(_)) => {
-            state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
-            sfx("assets/sounds/start.ogg")
-        }
-        _ => ThemeEffect::None,
-    }
+    let Some(selection) = selected_course_choice(state).and_then(|choice| state.catalog.confirm(choice))
+    else {
+        return ThemeEffect::None;
+    };
+    sfx_then(
+        "assets/sounds/start.ogg",
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::CourseLaunch(
+            StageLaunchRequest::Confirm(selection),
+        )),
+    )
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
@@ -1720,20 +1343,17 @@ fn handle_input_impl(
         return handle_exit_prompt_input(state, ev, effects);
     }
 
-    if state.out_prompt != OutPromptState::None {
+    if state.launch_prompt != StageLaunchPrompt::Hidden {
         let start_pressed = matches!(
             three_key_action,
             Some((_, screen_input::ThreeKeyMenuAction::Confirm))
         ) || (ev.pressed
             && matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start));
-        if start_pressed
-            && matches!(
-                state.out_prompt,
-                OutPromptState::PressStartForOptions { .. }
-            )
-        {
-            state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
-            return sfx("assets/sounds/start.ogg");
+        if start_pressed && state.launch_prompt == StageLaunchPrompt::OfferOptions {
+            effects.push(sfx("assets/sounds/start.ogg"));
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::CourseLaunch(
+                StageLaunchRequest::PlayerOptions,
+            ));
         }
         return ThemeEffect::None;
     }
@@ -1923,28 +1543,8 @@ fn update_impl(state: &mut State, dt: f32, effects: &mut Vec<ThemeEffect>) {
     state.labels.sync();
     let dt = dt.max(0.0);
 
-    match state.out_prompt {
-        OutPromptState::PressStartForOptions { elapsed } => {
-            let elapsed = elapsed + dt;
-            if elapsed >= SHOW_OPTIONS_MESSAGE_SECONDS {
-                state.out_prompt = OutPromptState::None;
-                effects.push(ThemeEffect::NavigateNoFade(Screen::Gameplay));
-                return;
-            }
-            state.out_prompt = OutPromptState::PressStartForOptions { elapsed };
-            return;
-        }
-        OutPromptState::EnteringOptions { elapsed } => {
-            let elapsed = elapsed + dt;
-            if elapsed >= ENTERING_OPTIONS_TOTAL_SECONDS {
-                state.out_prompt = OutPromptState::None;
-                effects.push(ThemeEffect::NavigateNoFade(Screen::PlayerOptions));
-                return;
-            }
-            state.out_prompt = OutPromptState::EnteringOptions { elapsed };
-            return;
-        }
-        OutPromptState::None => {}
+    if state.launch_prompt != StageLaunchPrompt::Hidden {
+        return;
     }
 
     if let ExitPromptState::Active {
@@ -2050,8 +1650,11 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.time_since_selection_change = BANNER_UPDATE_DELAY_SECONDS;
     state.last_requested_banner_source = None;
     state.banner_high_quality_requested = false;
-    state.out_prompt = OutPromptState::None;
     state.exit_prompt = ExitPromptState::None;
+}
+
+pub fn sync_stage_launch_prompt(state: &mut State, prompt: StageLaunchPrompt) {
+    state.launch_prompt = prompt;
 }
 
 #[inline(always)]
@@ -2695,7 +2298,7 @@ pub fn push_actors(
     }
 
     // Match ScreenSelectMusic out-prompt visual treatment.
-    if state.out_prompt != OutPromptState::None {
+    if state.launch_prompt != StageLaunchPrompt::Hidden {
         actors.push(act!(quad:
             align(0.0, 0.0): xy(0.0, 0.0):
             zoomto(screen_width(), screen_height()):
@@ -2706,8 +2309,8 @@ pub fn push_actors(
             linear(TRANSITION_OUT_DURATION): cropbottom(-0.5): alpha(1.0)
         ));
 
-        match state.out_prompt {
-            OutPromptState::PressStartForOptions { .. } => {
+        match state.launch_prompt {
+            StageLaunchPrompt::OfferOptions => {
                 actors.push(act!(text:
                     font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
                     settext(Arc::clone(&state.labels.options_prompt)):
@@ -2718,7 +2321,7 @@ pub fn push_actors(
                     z(1401)
                 ));
             }
-            OutPromptState::EnteringOptions { .. } => {
+            StageLaunchPrompt::EnteringOptions => {
                 actors.push(act!(text:
                     font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
                     settext(Arc::clone(&state.labels.options_prompt)):
@@ -2742,7 +2345,7 @@ pub fn push_actors(
                     sleep(ENTERING_OPTIONS_HOLD_SECONDS)
                 ));
             }
-            OutPromptState::None => {}
+            StageLaunchPrompt::Hidden => {}
         }
     }
 
@@ -2970,6 +2573,9 @@ fn handle_exit_prompt_input(
 }
 
 #[cfg(test)]
+mod course_plan_tests;
+
+#[cfg(test)]
 mod effect_buffer_tests {
     use super::*;
     use deadsync_core::input::InputSource;
@@ -3096,10 +2702,9 @@ mod effect_buffer_tests {
 }
 
 #[cfg(test)]
-mod song_lookup_tests {
+mod presentation_tests {
     use super::*;
     use deadlib_present::actors::TextContent;
-    use deadsync_chart::SyncPref;
 
     #[test]
     fn course_mode_label_uses_static_actor_text() {
@@ -3290,129 +2895,5 @@ mod song_lookup_tests {
         assert!(state.music_wheel.translated_titles);
         assert_eq!(state.score_view.player_initials, "AAA");
         assert_eq!(state.score_view.player_score_percent, Some(0.95));
-    }
-
-    fn chart(hash: &str) -> ChartData {
-        ChartData {
-            chart_type: "dance-single".to_owned(),
-            difficulty: "Hard".to_owned(),
-            description: String::new(),
-            chart_name: String::new(),
-            meter: 10,
-            step_artist: String::new(),
-            music_file: String::new(),
-            music_path: None,
-            short_hash: hash.to_owned(),
-            stats: deadsync_chart::ArrowStats::default(),
-            tech_counts: deadsync_chart::TechCounts::default(),
-            mines_nonfake: 0,
-            stamina_counts: deadsync_chart::StaminaCounts::default(),
-            total_streams: 0,
-            matrix_rating: 0.0,
-            matrix_profile: Box::default(),
-            max_nps: 0.0,
-            sn_detailed_breakdown: String::new(),
-            sn_partial_breakdown: String::new(),
-            sn_simple_breakdown: String::new(),
-            detailed_breakdown: String::new(),
-            partial_breakdown: String::new(),
-            simple_breakdown: String::new(),
-            total_measures: 0,
-            measure_nps_vec: Vec::new(),
-            measure_seconds_vec: Vec::new(),
-            first_second: 0.0,
-            has_note_data: true,
-            has_chart_attacks: false,
-            possible_grade_points: 0,
-            holds_total: 0,
-            rolls_total: 0,
-            mines_total: 0,
-            display_bpm: None,
-            min_bpm: 120.0,
-            max_bpm: 120.0,
-        }
-    }
-
-    fn song(path: &str, chart_hashes: &[&str]) -> Arc<SongData> {
-        Arc::new(SongData {
-            simfile_path: PathBuf::from(path),
-            title: String::new(),
-            subtitle: String::new(),
-            translit_title: String::new(),
-            translit_subtitle: String::new(),
-            artist: String::new(),
-            translit_artist: String::new(),
-            genre: String::new(),
-            banner_path: None,
-            background_path: None,
-            background_changes: Vec::new(),
-            background_layer2_changes: Vec::new(),
-            foreground_changes: Vec::new(),
-            background_lua_changes: Vec::new(),
-            foreground_lua_changes: Vec::new(),
-            has_lua: false,
-            cdtitle_path: None,
-            music_path: None,
-            display_bpm: String::new(),
-            offset: 0.0,
-            sample_start: None,
-            sample_length: None,
-            min_bpm: 0.0,
-            max_bpm: 0.0,
-            normalized_bpms: String::new(),
-            song_timing: None,
-            music_length_seconds: 0.0,
-            first_second: 0.0,
-            total_length_seconds: 0,
-            precise_last_second_seconds: 0.0,
-            precise_note_first_second_seconds: None,
-            precise_note_last_second_seconds: None,
-            last_second_hint: 0.0,
-            charts: chart_hashes.iter().map(|hash| chart(hash)).collect(),
-        })
-    }
-
-    fn pack(name: &str, songs: Vec<Arc<SongData>>) -> SongPack {
-        SongPack {
-            group_name: name.to_owned(),
-            name: name.to_owned(),
-            sort_title: String::new(),
-            translit_title: String::new(),
-            series: String::new(),
-            folder_series: String::new(),
-            year: 0,
-            sync_pref: SyncPref::Default,
-            directory: PathBuf::from("Songs").join(name),
-            banner_path: None,
-            songs,
-        }
-    }
-
-    #[test]
-    fn song_lookup_handles_sparse_duplicate_play_counts() {
-        let alpha = song("Songs/Pack A/Alpha/alpha.ssc", &["duplicate", "alpha"]);
-        let beta = song("Songs/Pack A/Beta/beta.ssc", &["beta"]);
-        let gamma = song("Songs/Pack B/Gamma/gamma.ssc", &["duplicate"]);
-        let packs = [
-            pack("Pack A", vec![alpha.clone(), beta.clone()]),
-            pack("Pack B", vec![gamma.clone()]),
-            pack("Empty Pack", Vec::new()),
-        ];
-        let played = vec![
-            ("duplicate".to_owned(), 5),
-            ("duplicate".to_owned(), 7),
-            ("alpha".to_owned(), u32::MAX),
-            ("beta".to_owned(), 3),
-            ("missing".to_owned(), 99),
-        ];
-
-        let (_, _, groups, all, counts) = build_song_lookup(&packs, &played);
-        assert_eq!(groups.len(), 2, "empty packs must not create lookup groups");
-        assert!(groups.contains_key("Pack A"));
-        assert!(!groups.contains_key("pack a"));
-        assert_eq!(all.len(), 3);
-        assert_eq!(counts.get(&song_unique_key(&alpha)), Some(&u32::MAX));
-        assert_eq!(counts.get(&song_unique_key(&beta)), Some(&3));
-        assert!(!counts.contains_key(&song_unique_key(&gamma)));
     }
 }

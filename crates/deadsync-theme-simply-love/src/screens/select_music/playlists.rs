@@ -1,8 +1,6 @@
 use super::{MusicWheelEntry, SelectMusicPlaylistView};
 use deadsync_chart::SongData;
-use deadsync_simfile::playlist::{
-    PlaylistEntry, PlaylistSongLookup, PlaylistSongSource, song_pack_and_dir_name,
-};
+use deadsync_simfile::playlist::{PlaylistEntry, PlaylistSongLookup, PlaylistSongSource};
 use std::{path::PathBuf, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -161,6 +159,5 @@ pub(super) fn build_playlist_library(
 }
 
 pub(super) fn lobby_song_path(song: &SongData, _song_scan_roots: &[PathBuf]) -> Option<String> {
-    let (pack, song) = song_pack_and_dir_name(song)?;
-    Some(format!("{pack}/{song}"))
+    deadsync_online::lobby_selection::song_path(song)
 }

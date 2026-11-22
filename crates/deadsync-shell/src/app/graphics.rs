@@ -1,14 +1,15 @@
 use super::App;
+use crate::{ActiveTheme, Command};
 use crate::graphics::{
     GraphicsChangeContext, GraphicsDisplaySync, GraphicsRuntimeSettings,
     GraphicsRuntimeUpdate as RuntimeUpdate, GraphicsWindowPlan, RendererStartupSettings,
-    RendererSwitchRequest, RendererSwitchResourceResetPlan, apply_display_aspect_ratio,
+    RendererSwitchRequest, apply_display_aspect_ratio,
     apply_graphics_runtime_settings, apply_recreate_display_change,
     apply_renderer_switch_restore_display, apply_runtime_display_mode, apply_runtime_resolution,
     available_monitor_specs, begin_renderer_switch, graphics_change_context, graphics_change_plan,
     graphics_runtime_updates, recreate_display_sync, refresh_present_config,
     renderer_startup_config, renderer_switch_begin_plan, renderer_switch_failure_plan,
-    renderer_switch_plan, renderer_switch_resource_reset_plan, renderer_switch_success_plan,
+    renderer_switch_plan, renderer_switch_success_plan,
     restore_display_sync, runtime_display_mode_sync, start_renderer_runtime, startup_display_sync,
     sync_renderer_window_size,
 };
@@ -19,12 +20,30 @@ use deadsync_config::app_config::DisplayMode;
 use deadsync_theme::views::{GraphicsMonitorView, GraphicsOptionsView, GraphicsVideoModeView};
 use deadsync_theme::{
     DisplayModeChoice, FullscreenChoice, GraphicsRequest, PresentPolicyChoice, RendererChoice,
+    ThemeResources,
 };
 use deadsync_theme_simply_love::screens::{options, select_music};
+use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
 use log::{debug, error, info};
 use std::error::Error;
 use std::time::Instant;
 use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop};
+
+fn renderer_switch_resource_reset_commands() -> Vec<Command> {
+    vec![
+        Command::SetBanner(None),
+        Command::SetCdTitle(None),
+        Command::SetDensityGraph {
+            slot: DensityGraphSlot::SelectMusicP1,
+            chart_opt: None,
+        },
+        Command::SetDensityGraph {
+            slot: DensityGraphSlot::SelectMusicP2,
+            chart_opt: None,
+        },
+        Command::SetDynamicBackground(None),
+    ]
+}
 
 #[inline(always)]
 const fn runtime_backend_type(choice: RendererChoice) -> BackendType {
@@ -272,6 +291,7 @@ impl App {
             startup_config,
             &mut self.asset_manager,
             &mut self.dynamic_media,
+            ActiveTheme::asset_manifest(),
             Instant::now(),
         )?;
         self.apply_graphics_display_sync(startup_display_sync(
@@ -360,10 +380,10 @@ impl App {
                     deadlib_present::runtime::clear_all();
                 }
                 if success.reset_dynamic_assets {
-                    self.reset_dynamic_assets_after_renderer_switch(
-                        renderer_switch_resource_reset_plan(),
-                        event_loop,
-                    )?;
+                    self.run_commands(renderer_switch_resource_reset_commands(), event_loop);
+                    select_music::trigger_immediate_refresh(
+                        &mut self.state.screens.select_music_state,
+                    );
                 }
                 if success.request_redraw
                     && let Some(window) = self.window.clone()
@@ -494,19 +514,6 @@ impl App {
         Ok(())
     }
 
-    fn reset_dynamic_assets_after_renderer_switch(
-        &mut self,
-        reset: RendererSwitchResourceResetPlan,
-        event_loop: &ActiveEventLoop,
-    ) -> Result<(), Box<dyn Error>> {
-        self.run_commands(reset.commands, event_loop);
-
-        if reset.refresh_select_music {
-            select_music::trigger_immediate_refresh(&mut self.state.screens.select_music_state);
-        }
-        Ok(())
-    }
-
     pub(super) fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
         options::update_monitor_specs(
             &mut self.state.screens.options_state,
@@ -608,6 +615,26 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn renderer_switch_resource_reset_commands_cover_dynamic_media() {
+        assert!(matches!(
+            renderer_switch_resource_reset_commands().as_slice(),
+            [
+                Command::SetBanner(None),
+                Command::SetCdTitle(None),
+                Command::SetDensityGraph {
+                    slot: DensityGraphSlot::SelectMusicP1,
+                    chart_opt: None,
+                },
+                Command::SetDensityGraph {
+                    slot: DensityGraphSlot::SelectMusicP2,
+                    chart_opt: None,
+                },
+                Command::SetDynamicBackground(None),
+            ]
+        ));
+    }
 
     #[test]
     fn neutral_graphics_choices_map_to_runtime_types() {

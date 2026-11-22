@@ -85,11 +85,13 @@ pub(super) fn begin(call: &mut HostCall<'_>, actor: TableId, preserve: bool) -> 
     {
         let owner = prior.owner;
         let color = prior.color;
+        let native_skipped = prior.native_skipped;
         capture.targets.push((pointer, prior));
         capture.context = Some(Context {
             owner,
             // Native BeginRenderingTo resets matrices, not Actor internal colors.
             color,
+            native_skipped,
             ..Context::default()
         });
     }
@@ -179,6 +181,15 @@ fn scoped_context(
     actor: TableId,
     prior: &Context,
 ) -> Result<Option<Context>, Error> {
+    scoped_context_for(call, actor, prior, false, false)
+}
+fn scoped_context_for(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    prior: &Context,
+    native: bool,
+    force_visible: bool,
+) -> Result<Option<Context>, Error> {
     let transition = get_static(call, actor, b"__songlua_transition_state")?;
     if transition != Value::Nil {
         let transition = sprites::number(call, transition)?.trunc();
@@ -193,6 +204,7 @@ fn scoped_context(
         return Ok(None);
     }
     let kind = assets::field(call, actor, b"__songlua_actor_type")?.unwrap_or_default();
+    let native = native || kind.eq_ignore_ascii_case("PlayerActor");
     if kind.eq_ignore_ascii_case("ActorFrameTexture") {
         let allocation = get_static(call, actor, b"__songlua_aft_allocation")?;
         if allocation == Value::Nil {
@@ -213,6 +225,7 @@ fn scoped_context(
     };
     let mut parents = Vec::with_capacity(prior.parents.len() + wrappers.len() + 1);
     parents.extend_from_slice(&prior.parents);
+    let mut native_skipped = prior.native_skipped;
     // Actor::Draw starts the outermost direct wrapper with fresh internal
     // colors, then replaces the owner's incoming tint with the inner result.
     let mut inherited_color = if wrappers.is_empty() {
@@ -223,17 +236,22 @@ fn scoped_context(
     for wrapper in wrappers.into_iter().rev() {
         let wrapper_state = state(call, wrapper)?;
         let (final_color, partially_opaque) = color(call, wrapper, wrapper_state, inherited_color);
-        if !wrapper_state.draw_visible() || (live && !partially_opaque) {
+        if !wrapper_state.draw_visible() || ((live || native) && !partially_opaque) {
             return Ok(None);
         }
+        native_skipped |= !partially_opaque;
         inherited_color = final_color;
         parents.push(wrapper_state);
     }
-    let state = state(call, actor)?;
+    let mut state = state(call, actor)?;
+    if force_visible {
+        state.visible = true;
+    }
     let (color, partially_opaque) = color(call, actor, state, inherited_color);
-    if !state.draw_visible() || (live && !partially_opaque) {
+    if !state.draw_visible() || ((live || native) && !partially_opaque) {
         return Ok(None);
     }
+    native_skipped |= !partially_opaque;
     parents.push(state);
     Ok(Some(Context {
         owner: prior.owner,
@@ -245,7 +263,74 @@ fn scoped_context(
         },
         color,
         inherited_color,
+        native_skipped,
     }))
+}
+
+fn native_player_boundary(call: &mut HostCall<'_>, root: TableId) -> Result<Option<usize>, Error> {
+    let globals = table(call, helper(call, 5)?)?;
+    let Value::Table(top) = get_static(call, globals, b"__songlua_top_screen")? else {
+        return Ok(None);
+    };
+    let store = call.store_ref();
+    Ok(store
+        .actors
+        .get(&top)
+        .and_then(|actor| store.scenes.get(&actor.scene))
+        .and_then(|scene| scene.song_session.as_ref())
+        .filter(|session| session.roots == root)
+        .map(|session| session.background_layer_count))
+}
+
+fn native_players(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let globals = table(call, helper(call, 5)?)?;
+    let Value::Table(top) = get_static(call, globals, b"__songlua_top_screen")? else {
+        return Ok(());
+    };
+    let Some(context) = scoped_context_for(call, top, &Context::default(), true, false)? else {
+        return Ok(());
+    };
+    for index in 0..crate::LUA_PLAYERS {
+        let Some(actor) = live_feedback::attached_player(call, top, index)? else {
+            continue;
+        };
+        if scoped_context_for(call, actor, &context, true, false)?.is_some() {
+            // Player's board pass owns the positioner even when NoteField itself
+            // is invisible. Player/wrapper early-abort guards still apply.
+            live_feedback::draw_note_field(call, actor)?;
+        }
+    }
+    Ok(())
+}
+
+fn native_player_proxy(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    prior: &Context,
+) -> Result<(), Error> {
+    if prior.native_skipped {
+        return Ok(());
+    }
+    let Value::Table(target) = get_static(call, actor, b"__songlua_proxy_target_actor")? else {
+        return Ok(());
+    };
+    if !assets::field(call, target, b"__songlua_actor_type")?
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
+    {
+        return Ok(());
+    }
+    // Keep generic preparation draw payloads, including transparent proxies.
+    // Native publication separately follows strict draw-entry guards, starting
+    // from the pre-proxy context so wrappers and colors are applied only once.
+    let Some(context) = scoped_context_for(call, actor, prior, true, false)? else {
+        return Ok(());
+    };
+    if scoped_context_for(call, target, &context, true, true)?.is_some() {
+        // ActorProxy temporarily forces only the target's own visibility. It
+        // leaves wrappers, alpha and hibernation intact, and submits it once.
+        live_feedback::draw_note_field(call, target)?;
+    }
+    Ok(())
 }
 fn children_each(
     call: &mut HostCall<'_>,
@@ -326,6 +411,9 @@ fn draw(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
                 screen.as_deref(),
                 Some("Underlay" | "Overlay" | "SongBackground" | "SongForeground" | "In")
             ) || matches!(player.as_deref(), Some("Judgment" | "Combo"));
+            if kind.eq_ignore_ascii_case("PlayerActor") && !context.native_skipped {
+                live_feedback::draw_note_field(call, actor)?;
+            }
             if kind.eq_ignore_ascii_case("Actor") {
                 return Ok(());
             }
@@ -354,6 +442,7 @@ fn draw(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
                     return Ok(());
                 }
                 table(call, target)?;
+                native_player_proxy(call, actor, &prior)?;
             }
             if !external
                 && (kind.eq_ignore_ascii_case("ActorFrame")
@@ -495,12 +584,35 @@ fn visit(call: &mut HostCall<'_>, actor: TableId, prior: &Context) -> Result<(),
                 ))
                 .0,
             inherited_color: prior.color,
+            native_skipped: prior.native_skipped,
         };
-        return children_each(call, actor, |call, child| visit(call, child, &context));
+        let boundary = native_player_boundary(call, actor)?;
+        let mut index = 0;
+        let mut positioned = false;
+        children_each(call, actor, |call, child| {
+            if !positioned && boundary.is_some_and(|boundary| index >= boundary) {
+                // ScreenGameplay draws song backgrounds, then Player boards,
+                // before drawing its foreground children.
+                native_players(call)?;
+                positioned = true;
+            }
+            visit(call, child, &context)?;
+            index += 1;
+            Ok(())
+        })?;
+        if boundary.is_some() && !positioned {
+            native_players(call)?;
+        }
+        return Ok(());
     }
     let Some(context) = scoped_context(call, actor, prior)? else {
         return Ok(());
     };
+    if assets::field(call, actor, b"__songlua_actor_type")?
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorProxy"))
+    {
+        native_player_proxy(call, actor, prior)?;
+    }
     children_each(call, actor, |call, child| visit(call, child, &context))
 }
 fn run(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
@@ -519,19 +631,35 @@ fn run(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
         capture.frame_ops = 0;
     }
     let globals = table(call, helper(call, 5)?)?;
-    if !truthy(get(call, globals, DRAW_INSTALLED_KEY.as_bytes())?) {
+    let helpers = table(call, call.captures()[1])?;
+    let custom = truthy(get(call, globals, DRAW_INSTALLED_KEY.as_bytes())?);
+    if !custom
+        && !truthy(get_static(
+            call,
+            helpers,
+            proxies::PLAYER_DRAW_KEY.as_bytes(),
+        )?)
+    {
+        if native_player_boundary(call, root)?.is_some() {
+            native_players(call)?;
+        }
         if let Some(capture) = &mut call.store().draw_capture {
             capture.frame_ops = 0;
         }
         return Ok(());
     }
     let screen = get_static(call, globals, b"__songlua_top_screen")?;
-    let (screen, color) = if screen == Value::Nil {
-        (None, Color::default())
+    let (screen, color, native_skipped) = if screen == Value::Nil {
+        (None, Color::default(), false)
     } else {
         let actor = table(call, screen)?;
         let state = state(call, actor)?;
-        (Some(state), color(call, actor, state, Color::default()).0)
+        let color = color(call, actor, state, Color::default()).0;
+        // Capture keeps its existing screen transform/color. Native side
+        // effects also obey ScreenGameplay's outer wrapper entry guards.
+        let native_skipped =
+            scoped_context_for(call, actor, &Context::default(), true, false)?.is_none();
+        (Some(state), color, native_skipped)
     };
     let parents = screen.as_ref().map_or_else(
         || Arc::from([]),
@@ -544,9 +672,13 @@ fn run(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
             parents,
             camera: screen.filter(|state| state.fov.is_some()),
             color,
+            native_skipped,
             ..Context::default()
         },
     );
+    if !custom {
+        return result;
+    }
     let second = second(call)?;
     if let Some(capture) = &mut call.store().draw_capture {
         let bytes = size_of::<RawFrame>() + capture.owners.len() * size_of::<usize>();

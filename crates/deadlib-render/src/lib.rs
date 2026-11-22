@@ -19,9 +19,10 @@ pub use deadlib_render_core::{
     SamplerFilter, SamplerWrap, SpriteInstanceRaw, SpriteRun, TMeshCacheKey, TextureHandle,
     TextureHandleMap, TexturedMeshBufferCache, TexturedMeshGeometry, TexturedMeshInstanceRaw,
     TexturedMeshRun, TexturedMeshSource, TexturedMeshUploads, TexturedMeshVertex,
-    TexturedMeshVertices, Yuv420Upload, draw_storage_stats, is_render_target_texture,
-    render_target_base_handle, render_target_sample_handle, render_target_texture_handle,
-    render_target_uses_nearest, resolve_textured_mesh_geometries, resolve_textured_meshes,
+    TexturedMeshVertices, VulkanInstanceNames, Yuv420Upload, draw_storage_stats,
+    is_render_target_texture, render_target_base_handle, render_target_sample_handle,
+    render_target_texture_handle, render_target_uses_nearest, resolve_textured_mesh_geometries,
+    resolve_textured_meshes,
 };
 use image::RgbaImage;
 use std::{error::Error, sync::Arc};
@@ -605,14 +606,55 @@ pub fn create_backend(
     gfx_debug_enabled: bool,
     high_dpi_enabled: bool,
 ) -> Result<Backend, Box<dyn Error>> {
+    create_backend_with_options(
+        backend_type,
+        window,
+        projection,
+        BackendOptions {
+            vsync_enabled,
+            present_mode_policy,
+            gfx_debug_enabled,
+            high_dpi_enabled,
+            vulkan_instance_names: VulkanInstanceNames::default(),
+        },
+    )
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BackendOptions<'a> {
+    pub vsync_enabled: bool,
+    pub present_mode_policy: PresentModePolicy,
+    pub gfx_debug_enabled: bool,
+    pub high_dpi_enabled: bool,
+    pub vulkan_instance_names: VulkanInstanceNames<'a>,
+}
+
+/// Creates a graphics backend with explicit initialization options.
+///
+/// # Errors
+/// Returns an error if the graphics device or surface cannot be initialized.
+pub fn create_backend_with_options(
+    backend_type: BackendType,
+    window: Arc<Window>,
+    projection: ProjectionMatrix,
+    options: BackendOptions<'_>,
+) -> Result<Backend, Box<dyn Error>> {
+    let BackendOptions {
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+        high_dpi_enabled,
+        ..
+    } = options;
     let backend_impl = match backend_type {
         #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-        BackendType::Vulkan => BackendImpl::Vulkan(Box::new(vulkan::init(
+        BackendType::Vulkan => BackendImpl::Vulkan(Box::new(vulkan::init_with_instance_names(
             &window,
             projection,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
+            options.vulkan_instance_names,
         )?)),
         #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
         BackendType::VulkanWgpu => BackendImpl::VulkanWgpu(Box::new(wgpu_core::init_vulkan(

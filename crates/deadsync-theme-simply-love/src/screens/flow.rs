@@ -1,5 +1,11 @@
 use deadsync_input::VirtualAction;
-use deadsync_profile::{PLAYER_SLOTS, PlayStyle, PlayerSide, player_side_index};
+use deadsync_profile::{
+    PLAYER_SLOTS, PlayStyle, PlayerSide, joined_player_mask, late_join_play_style,
+    player_side_index,
+};
+pub use deadsync_profile_gameplay::stage_charts::{
+    SelectMusicJoinContext, SelectMusicJoinPlan, select_music_join_plan,
+};
 
 /// Concrete screen identity for Simply Love.
 ///
@@ -145,31 +151,13 @@ pub struct LateJoinContext {
     pub joined: [bool; PLAYER_SLOTS],
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SelectMusicJoinContext {
-    pub active_side: PlayerSide,
-    pub join_side: PlayerSide,
-    pub selected_steps: usize,
-    pub preferred_difficulty: usize,
-    pub p1_profile_preferred: usize,
-    pub p2_profile_preferred: usize,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SelectMusicJoinPlan {
-    pub selected_steps: usize,
-    pub preferred_difficulty: usize,
-    pub p2_selected_steps: usize,
-    pub p2_preferred_difficulty: usize,
-}
-
 #[must_use]
 pub fn late_join_side(
     pressed: bool,
     action: VirtualAction,
     context: LateJoinContext,
 ) -> Option<PlayerSide> {
-    if !pressed || !context.screen_allows_join || context.play_style.is_double() {
+    if !pressed || !context.screen_allows_join {
         return None;
     }
     if !matches!(
@@ -187,154 +175,47 @@ pub fn late_join_side(
         VirtualAction::p2_start => PlayerSide::P2,
         _ => return None,
     };
-    let side_index = player_side_index(side);
-    let joined_count = context.joined.into_iter().filter(|joined| *joined).count();
-    (joined_count == 1 && !context.joined[side_index]).then_some(side)
-}
-
-#[must_use]
-pub const fn select_music_join_plan(context: SelectMusicJoinContext) -> SelectMusicJoinPlan {
-    if matches!(context.active_side, PlayerSide::P2) && matches!(context.join_side, PlayerSide::P1)
-    {
-        SelectMusicJoinPlan {
-            selected_steps: context.p1_profile_preferred,
-            preferred_difficulty: context.p1_profile_preferred,
-            p2_selected_steps: context.selected_steps,
-            p2_preferred_difficulty: context.preferred_difficulty,
-        }
-    } else {
-        SelectMusicJoinPlan {
-            selected_steps: context.selected_steps,
-            preferred_difficulty: context.preferred_difficulty,
-            p2_selected_steps: context.p2_profile_preferred,
-            p2_preferred_difficulty: context.p2_profile_preferred,
-        }
-    }
+    let joined_mask = joined_player_mask(context.joined[0], context.joined[1]);
+    late_join_play_style(context.play_style, joined_mask, side).map(|_| side)
 }
 
 #[must_use]
 pub fn profile_selection_plan(context: ProfileSelectionContext) -> ProfileSelectionPlan {
-    let preferred_active = context.preferred_difficulties[player_side_index(context.active_side)];
-    let navigation_target = if context.fast_switch {
-        (context.current_screen != SimplyLoveScreen::SelectMusic)
-            .then_some(SimplyLoveScreen::SelectMusic)
-    } else if context.show_groovestats_login {
-        Some(SimplyLoveScreen::GrooveStatsLogin)
-    } else if context.show_arrowcloud_login {
-        Some(SimplyLoveScreen::ArrowCloudLogin)
-    } else {
-        Some(SimplyLoveScreen::SelectColor)
-    };
-
     ProfileSelectionPlan {
-        preferred_active,
+        preferred_active: context.preferred_difficulties[player_side_index(context.active_side)],
         preferred_p2: context.preferred_difficulties[player_side_index(PlayerSide::P2)],
         refresh_select_music: context.fast_switch,
-        navigation_target,
+        navigation_target: profile_selection_target(
+            context.current_screen,
+            context.fast_switch,
+            context.show_groovestats_login,
+            context.show_arrowcloud_login,
+        ),
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SimplyLoveNavigationPlan {
-    pub target: SimplyLoveScreen,
-    pub pending_post_select_summary_exit: Option<bool>,
-    pub apply_preferred_style: bool,
-    pub apply_preferred_play_mode: bool,
-    pub initialize_session_side: bool,
+#[must_use]
+pub fn profile_selection_target(
+    current_screen: SimplyLoveScreen,
+    fast_switch: bool,
+    show_groovestats_login: bool,
+    show_arrowcloud_login: bool,
+) -> Option<SimplyLoveScreen> {
+    use deadsync_theme::ThemeSessionFlow;
+
+    deadsync_core::session_flow::profile_selection_target(
+        crate::SimplyLoveTheme::SESSION_SCREENS,
+        crate::SimplyLoveTheme::PROFILE_LOGIN_SCREENS,
+        current_screen,
+        fast_switch,
+        show_groovestats_login,
+        show_arrowcloud_login,
+    )
 }
 
-/// Shell-prepared visibility policy for Simply Love's optional flow screens.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SimplyLoveNavigationPolicy {
-    pub show_select_profile: bool,
-    pub show_select_color: bool,
-    pub show_select_style: bool,
-    pub show_select_play_mode: bool,
-    pub show_eval_summary: bool,
-    pub show_name_entry: bool,
-    pub show_gameover: bool,
-}
-
-impl Default for SimplyLoveNavigationPolicy {
-    fn default() -> Self {
-        Self {
-            show_select_profile: true,
-            show_select_color: true,
-            show_select_style: true,
-            show_select_play_mode: true,
-            show_eval_summary: true,
-            show_name_entry: true,
-            show_gameover: true,
-        }
-    }
-}
-
-#[inline(always)]
-const fn startup_screen_enabled(
-    policy: SimplyLoveNavigationPolicy,
-    screen: SimplyLoveScreen,
-) -> bool {
-    match screen {
-        SimplyLoveScreen::SelectProfile => policy.show_select_profile,
-        SimplyLoveScreen::SelectColor => policy.show_select_color,
-        SimplyLoveScreen::SelectStyle => policy.show_select_style,
-        SimplyLoveScreen::SelectPlayMode => policy.show_select_play_mode,
-        _ => true,
-    }
-}
-
-fn resolve_startup_target(
-    policy: SimplyLoveNavigationPolicy,
-    target: SimplyLoveScreen,
-) -> SimplyLoveScreen {
-    const ORDER: [SimplyLoveScreen; 4] = [
-        SimplyLoveScreen::SelectProfile,
-        SimplyLoveScreen::SelectColor,
-        SimplyLoveScreen::SelectStyle,
-        SimplyLoveScreen::SelectPlayMode,
-    ];
-    let Some(start_idx) = ORDER.iter().position(|screen| *screen == target) else {
-        return target;
-    };
-    ORDER
-        .iter()
-        .skip(start_idx)
-        .copied()
-        .find(|screen| startup_screen_enabled(policy, *screen))
-        .unwrap_or(SimplyLoveScreen::ProfileLoad)
-}
-
-#[inline(always)]
-const fn first_post_select_target(policy: SimplyLoveNavigationPolicy) -> SimplyLoveScreen {
-    if policy.show_eval_summary {
-        SimplyLoveScreen::EvaluationSummary
-    } else if policy.show_name_entry {
-        SimplyLoveScreen::Initials
-    } else if policy.show_gameover {
-        SimplyLoveScreen::GameOver
-    } else {
-        SimplyLoveScreen::Menu
-    }
-}
-
-#[inline(always)]
-const fn resolve_post_select_target(
-    policy: SimplyLoveNavigationPolicy,
-    target: SimplyLoveScreen,
-) -> SimplyLoveScreen {
-    match target {
-        SimplyLoveScreen::EvaluationSummary => first_post_select_target(policy),
-        SimplyLoveScreen::Initials if !policy.show_name_entry => {
-            if policy.show_gameover {
-                SimplyLoveScreen::GameOver
-            } else {
-                SimplyLoveScreen::Menu
-            }
-        }
-        SimplyLoveScreen::GameOver if !policy.show_gameover => SimplyLoveScreen::Menu,
-        _ => target,
-    }
-}
+pub type SimplyLoveNavigationPlan =
+    deadsync_core::session_flow::SessionNavigationPlan<SimplyLoveScreen>;
+pub use deadsync_core::session_flow::SessionNavigationPolicy as SimplyLoveNavigationPolicy;
 
 /// Resolve Simply Love's optional startup and post-play screens.
 #[must_use]
@@ -344,65 +225,15 @@ pub fn resolve_navigation(
     requested: SimplyLoveScreen,
     has_played_stages: bool,
 ) -> SimplyLoveNavigationPlan {
-    let mut target = requested;
-    let mut pending_post_select_summary_exit = None;
+    use deadsync_theme::ThemeSessionFlow;
 
-    if matches!(
+    deadsync_core::session_flow::resolve_navigation(
+        crate::SimplyLoveTheme::SESSION_SCREENS,
+        policy,
         from,
-        SimplyLoveScreen::SelectMusic | SimplyLoveScreen::SelectCourse
-    ) && target == SimplyLoveScreen::Menu
-        && has_played_stages
-    {
-        target = first_post_select_target(policy);
-        pending_post_select_summary_exit = Some(target == SimplyLoveScreen::EvaluationSummary);
-    } else if target == SimplyLoveScreen::EvaluationSummary {
-        pending_post_select_summary_exit = Some(false);
-    }
-
-    let startup_flow = matches!(
-        from,
-        SimplyLoveScreen::Menu
-            | SimplyLoveScreen::SelectProfile
-            | SimplyLoveScreen::SelectColor
-            | SimplyLoveScreen::SelectStyle
-            | SimplyLoveScreen::SelectPlayMode
-    ) && matches!(
-        target,
-        SimplyLoveScreen::SelectProfile
-            | SimplyLoveScreen::SelectColor
-            | SimplyLoveScreen::SelectStyle
-            | SimplyLoveScreen::SelectPlayMode
-            | SimplyLoveScreen::ProfileLoad
-    );
-    if startup_flow {
-        target = resolve_startup_target(policy, target);
-    }
-    target = resolve_post_select_target(policy, target);
-
-    SimplyLoveNavigationPlan {
-        target,
-        pending_post_select_summary_exit,
-        apply_preferred_style: startup_flow
-            && !policy.show_select_style
-            && matches!(
-                target,
-                SimplyLoveScreen::SelectPlayMode | SimplyLoveScreen::ProfileLoad
-            ),
-        apply_preferred_play_mode: startup_flow
-            && !policy.show_select_play_mode
-            && target == SimplyLoveScreen::ProfileLoad,
-        initialize_session_side: startup_flow
-            && from == SimplyLoveScreen::Menu
-            && target != SimplyLoveScreen::SelectProfile
-            && !policy.show_select_profile
-            && matches!(
-                target,
-                SimplyLoveScreen::SelectColor
-                    | SimplyLoveScreen::SelectStyle
-                    | SimplyLoveScreen::SelectPlayMode
-                    | SimplyLoveScreen::ProfileLoad
-            ),
-    }
+        requested,
+        has_played_stages,
+    )
 }
 
 #[inline(always)]

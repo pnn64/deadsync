@@ -306,6 +306,7 @@ pub struct GameplaySourceRuntimeState {
     pub song: Arc<SongData>,
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
+    pub song_backgrounds: crate::song_backgrounds::SongBackgroundTimeline,
 }
 
 #[inline(always)]

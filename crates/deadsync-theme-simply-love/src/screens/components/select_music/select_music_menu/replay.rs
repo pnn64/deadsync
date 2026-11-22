@@ -6,6 +6,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_config::theme::MachineFont;
 use deadsync_input::{InputEvent, VirtualAction};
+pub use deadsync_profile_gameplay::stage_replay::StageReplayRequest as ReplayStartPayload;
 use deadsync_score as score_data;
 use deadsync_theme::FontRole;
 use std::cell::RefCell;
@@ -68,14 +69,6 @@ pub enum ReplayInputOutcome {
     ChangedSelection,
     Closed,
     StartGameplay(ReplayStartPayload),
-}
-
-#[derive(Clone, Debug)]
-pub struct ReplayStartPayload {
-    pub replay: Vec<score_data::ReplayEdge>,
-    pub name: String,
-    pub score: f64,
-    pub replay_beat0_time_ns: i64,
 }
 
 const fn replay_total_items(state: &ReplayOverlayStateData) -> usize {
@@ -177,22 +170,9 @@ pub fn handle_replay_input(state: &mut ReplayOverlayState, ev: &InputEvent) -> R
                 *state = ReplayOverlayState::Hidden;
                 ReplayInputOutcome::Closed
             } else {
-                let (replay, name, score, replay_beat0_time_ns) = {
-                    let entry = &overlay.entries[selected];
-                    (
-                        entry.replay.clone(),
-                        entry.name.clone(),
-                        entry.score,
-                        entry.replay_beat0_time_ns,
-                    )
-                };
+                let entry = overlay.entries.swap_remove(selected);
                 *state = ReplayOverlayState::Hidden;
-                ReplayInputOutcome::StartGameplay(ReplayStartPayload {
-                    replay,
-                    name,
-                    score,
-                    replay_beat0_time_ns,
-                })
+                ReplayInputOutcome::StartGameplay(entry.into())
             }
         }
         VirtualAction::p1_back

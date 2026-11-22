@@ -1,8 +1,8 @@
+use deadsync_assets::gameplay_stage::ActiveGameplayStage;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::score_compat as scores;
 use deadsync_profile::player_side_index;
 use deadsync_score::{self as score_data, stage_stats::StageSummary};
-use deadsync_theme_simply_love::screens::gameplay;
 use deadsync_theme_simply_love::views::{EvaluationContextView, EvaluationInitView, ScoreInfo};
 use std::borrow::Cow;
 use std::ops::Range;
@@ -10,7 +10,7 @@ use std::ops::Range;
 /// Adapt an already authoritative result to the current theme's evaluation
 /// view. Artwork, labels and record highlighting do not feed back into it.
 pub(crate) fn evaluation_view(
-    gs: &gameplay::State,
+    gs: &ActiveGameplayStage,
     stage: &StageSummary,
     context: EvaluationContextView,
 ) -> EvaluationInitView {

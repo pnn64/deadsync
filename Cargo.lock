@@ -1441,7 +1441,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.6.0"
+version = "0.6.177"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -1492,7 +1492,13 @@ dependencies = [
  "deadlib-video",
  "deadsync-chart",
  "deadsync-config",
+ "deadsync-core",
+ "deadsync-gameplay",
+ "deadsync-notefield",
  "deadsync-noteskin",
+ "deadsync-profile",
+ "deadsync-profile-gameplay",
+ "deadsync-rules",
  "deadsync-song-lua",
  "image",
  "log",
@@ -1942,7 +1948,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.6.0"
+version = "0.6.177"
 dependencies = [
  "askama",
  "bitflags 2.13.2",
@@ -2012,7 +2018,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.6.0"
+version = "0.6.177"
 dependencies = [
  "log",
  "semver",

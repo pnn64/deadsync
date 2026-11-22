@@ -1,117 +1,11 @@
 use crate::Command;
-use deadsync_chart::{ChartData, GameplayChartData, SongData};
+use deadsync_chart::{ChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::stage_charts::GameplayChartEntryPlan;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
+pub use deadsync_profile_gameplay::stage_charts::apply_song_lua_reload;
 use log::warn;
 use std::sync::Arc;
-
-pub(crate) struct GameplayChartEntryPlan {
-    pub charts: [Arc<ChartData>; MAX_PLAYERS],
-    pub chart_indices: [usize; MAX_PLAYERS],
-    pub resolved_steps_index: [usize; MAX_PLAYERS],
-}
-
-fn chart_index(song: &SongData, chart: &ChartData) -> usize {
-    song.charts
-        .iter()
-        .position(|candidate| std::ptr::eq(candidate, chart))
-        .expect("resolved chart must belong to the selected song")
-}
-
-fn resolve_chart(
-    song: &SongData,
-    chart_type: &str,
-    requested_steps: usize,
-    preferred_steps: usize,
-) -> (usize, usize) {
-    if let Some(chart) = song.chart_for_steps_index(chart_type, requested_steps) {
-        return (requested_steps, chart_index(song, chart));
-    }
-
-    if let Some(fallback_steps) = song.best_steps_index(chart_type, preferred_steps)
-        && let Some(chart) = song.chart_for_steps_index(chart_type, fallback_steps)
-    {
-        warn!(
-            "Missing stepchart index {} for '{}'; using fallback index {}",
-            requested_steps, song.title, fallback_steps
-        );
-        return (fallback_steps, chart_index(song, chart));
-    }
-
-    let chart_index = song
-        .charts
-        .iter()
-        .position(|chart| chart.chart_type.eq_ignore_ascii_case(chart_type))
-        .or_else(|| (!song.charts.is_empty()).then_some(0))
-        .expect("player options song must contain at least one chart");
-    let chart = &song.charts[chart_index];
-    warn!(
-        "Missing indexed stepchart for '{}'; using raw chart fallback ({}/{})",
-        song.title, chart.chart_type, chart.difficulty
-    );
-    (requested_steps, chart_index)
-}
-
-pub(crate) fn gameplay_chart_entry_plan(
-    song: &Arc<SongData>,
-    requested_steps: [usize; MAX_PLAYERS],
-    preferred_steps: [usize; MAX_PLAYERS],
-    play_style: PlayStyle,
-    player_side: PlayerSide,
-) -> GameplayChartEntryPlan {
-    let chart_type = play_style.chart_type();
-    let mut resolved_steps_index = requested_steps;
-    let chart_indices = match play_style {
-        // Partner styles play one authored chart split between both participants.
-        PlayStyle::Couple | PlayStyle::PumpCouple | PlayStyle::Routine | PlayStyle::PumpRoutine => {
-            let resolved = resolve_chart(song, chart_type, requested_steps[0], preferred_steps[0]);
-            resolved_steps_index = [resolved.0; MAX_PLAYERS];
-            [resolved.1; MAX_PLAYERS]
-        }
-        PlayStyle::Versus | PlayStyle::PumpVersus => {
-            let p1 = resolve_chart(song, chart_type, requested_steps[0], preferred_steps[0]);
-            let p2 = resolve_chart(song, chart_type, requested_steps[1], preferred_steps[1]);
-            resolved_steps_index = [p1.0, p2.0];
-            [p1.1, p2.1]
-        }
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
-            let side = player_side_index(player_side);
-            let resolved = resolve_chart(
-                song,
-                chart_type,
-                requested_steps[side],
-                preferred_steps[side],
-            );
-            resolved_steps_index[side] = resolved.0;
-            [resolved.1; MAX_PLAYERS]
-        }
-    };
-    let first = Arc::new(song.charts[chart_indices[0]].clone());
-    let second = if chart_indices[0] == chart_indices[1] {
-        Arc::clone(&first)
-    } else {
-        Arc::new(song.charts[chart_indices[1]].clone())
-    };
-
-    GameplayChartEntryPlan {
-        charts: [first, second],
-        chart_indices,
-        resolved_steps_index,
-    }
-}
-
-pub(crate) fn take_player_charts(
-    loaded: Vec<GameplayChartData>,
-) -> [Arc<GameplayChartData>; MAX_PLAYERS] {
-    let mut loaded = loaded.into_iter();
-    std::array::from_fn(|_| {
-        Arc::new(
-            loaded
-                .next()
-                .expect("loaded payload contains both player charts"),
-        )
-    })
-}
 
 pub(crate) fn gameplay_last_played_commands(
     song: &SongData,
@@ -121,118 +15,30 @@ pub(crate) fn gameplay_last_played_commands(
     player_side: PlayerSide,
 ) -> Vec<Command> {
     let mut commands = Vec::with_capacity(MAX_PLAYERS);
-    match play_style {
-        PlayStyle::Versus
-        | PlayStyle::PumpVersus
-        | PlayStyle::Couple
-        | PlayStyle::PumpCouple
-        | PlayStyle::Routine
-        | PlayStyle::PumpRoutine => {
-            for (idx, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
-                commands.push(Command::UpdateLastPlayed {
-                    side,
-                    play_style,
-                    music_path: song.music_path.clone(),
-                    chart_hash: Some(plan.charts[idx].short_hash.clone()),
-                    difficulty_index: preferred_steps[idx],
-                });
-            }
-        }
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
-            let index = player_side_index(player_side);
+    if play_style.player_count() == MAX_PLAYERS {
+        for (idx, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
             commands.push(Command::UpdateLastPlayed {
-                side: player_side,
+                side,
                 play_style,
                 music_path: song.music_path.clone(),
-                chart_hash: Some(plan.charts[index].short_hash.clone()),
-                difficulty_index: preferred_steps[index],
+                chart_hash: Some(plan.charts[idx].short_hash.clone()),
+                difficulty_index: preferred_steps[idx],
             });
         }
+    } else {
+        let index = player_side_index(player_side);
+        commands.push(Command::UpdateLastPlayed {
+            side: player_side,
+            play_style,
+            music_path: song.music_path.clone(),
+            chart_hash: Some(plan.charts[index].short_hash.clone()),
+            difficulty_index: preferred_steps[index],
+        });
     }
     commands
 }
 
-pub type PreparedGameplaySongLua =
-    deadsync_song_lua::playback::PreparedGameplaySongLua<deadsync_assets::noteskin::SpriteSlot>;
-
-fn reload_chart_indices(
-    song: &SongData,
-    steps: [Option<usize>; MAX_PLAYERS],
-    session: &deadsync_gameplay::GameplaySession,
-) -> Result<[usize; MAX_PLAYERS], String> {
-    let mut indices = [0; MAX_PLAYERS];
-    for player in 0..session.play_style.player_count() {
-        let index = steps[player].ok_or_else(|| format!("Lua reload has no chart for player {}", player + 1))?;
-        let chart = song.charts.get(index)
-            .ok_or_else(|| format!("Lua reload selected missing chart {index}"))?;
-        let prefix = if session.play_style.is_pump() { "pump" } else { "dance" };
-        use deadsync_gameplay::GameplayInputPlayStyle as Style;
-        let suffix = match session.play_style {
-            Style::Couple | Style::PumpCouple => "couple",
-            Style::Routine | Style::PumpRoutine => "routine",
-            style if style.is_double() => "double",
-            _ => "single",
-        };
-        if chart.chart_type != format!("{prefix}-{suffix}") {
-            return Err(format!("Lua reload selected incompatible chart type {}", chart.chart_type));
-        }
-        indices[player] = index;
-    }
-    if !session.play_style.is_versus() {
-        // Lua P1 is the sole runtime player, including a cabinet P2 session.
-        indices[1] = indices[0];
-    }
-    Ok(indices)
-}
-
-/// Replace metadata and note payloads together before gameplay owns them.
-pub fn apply_song_lua_reload(
-    song: &SongData,
-    charts: &mut [Arc<ChartData>; MAX_PLAYERS],
-    payloads: &mut [Arc<GameplayChartData>; MAX_PLAYERS],
-    prepared: &PreparedGameplaySongLua,
-    session: &mut deadsync_gameplay::GameplaySession,
-    global_offset_seconds: f32,
-) -> Result<bool, String> {
-    let Some(steps) = prepared.loaded_steps() else { return Ok(false); };
-    let mut selected_session = session.clone();
-    if let Some(players) = prepared.loaded_players() {
-        selected_session.joined_sides = if session.p2_runtime_player() {
-            [players[1], players[0]]
-        } else { players };
-    }
-    if let Some(style) = prepared.loaded_style() {
-        use deadsync_gameplay::GameplayInputPlayStyle as Style;
-        selected_session.play_style = match (session.play_style.is_pump(), style) {
-            (false, "single") => Style::Single,
-            (false, "double") => Style::Double,
-            (false, "versus") => Style::Versus,
-            (false, "couple") => Style::Couple,
-            (false, "routine") => Style::Routine,
-            // Compiled scenes retain the game-qualified key so their column
-            // metadata survives projection; Lua styles also expose bare names.
-            (true, "single" | "pump-single") => Style::PumpSingle,
-            (true, "double" | "pump-double") => Style::PumpDouble,
-            (true, "versus" | "pump-versus") => Style::PumpVersus,
-            (true, "couple" | "pump-couple") => Style::PumpCouple,
-            (true, "routine" | "pump-routine") => Style::PumpRoutine,
-            _ => return Err(format!("Lua reload selected unsupported style {style}")),
-        };
-        // Authored JoinPlayer mutations belong to the retained
-        // session; validate the selected style against the newly loaded roster.
-        if selected_session.play_style.player_count() != selected_session.joined_sides.iter().filter(|joined| **joined).count() {
-            return Err(format!("Lua reload style {style} is incompatible with joined sides"));
-        }
-    }
-    let indices = reload_chart_indices(song, steps, &selected_session)?;
-    let loaded = deadsync_simfile::app_runtime::load_gameplay_charts(song, &indices, global_offset_seconds)?;
-    // Update only after both players loaded successfully. ChartData carries
-    // the selected chart's music path, which gameplay uses to start audio.
-    *payloads = take_player_charts(loaded);
-    *charts = std::array::from_fn(|player| Arc::new(song.charts[indices[player]].clone()));
-    *session = selected_session;
-    Ok(true)
-}
+pub use deadsync_assets::gameplay_stage::PreparedGameplaySongLua;
 
 /// Build production Lua host inputs, chart timings and initial resources.
 pub fn song_lua_context(
@@ -400,6 +206,9 @@ pub fn prepare_song_lua(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_gameplay::GameplayInputPlayStyle as Style;
+    use deadsync_gameplay::stage_charts::lua_reload_chart_indices;
+    use deadsync_profile_gameplay::stage_charts::gameplay_chart_entry_plan;
     use deadsync_chart::{ArrowStats, StaminaCounts, TechCounts};
     use std::path::PathBuf;
 
@@ -620,28 +429,26 @@ mod tests {
     }
 
     #[test]
-    fn reload_maps_lua_p1_to_single_p2_payloads() {
-        let session = deadsync_gameplay::GameplaySession {
-            player_side: deadsync_gameplay::GameplayInputPlayerSide::P2,
-            joined_sides: [false, true],
-            ..Default::default()
-        };
-        assert_eq!(reload_chart_indices(&song(), [Some(1), None], &session), Ok([1, 1]));
+    fn lua_reload_uses_the_same_chart_payload_for_a_solo_stage() {
+        assert_eq!(
+            lua_reload_chart_indices(&song(), [Some(1), None], Style::Single),
+            Ok([1, 1])
+        );
     }
 
     #[test]
     fn reload_keeps_versus_selections_and_rejects_missing_steps() {
-        let session = deadsync_gameplay::GameplaySession {
-            play_style: deadsync_gameplay::GameplayInputPlayStyle::Versus,
-            joined_sides: [true, true],
-            ..Default::default()
-        };
-        assert_eq!(reload_chart_indices(&song(), [Some(1), Some(0)], &session), Ok([1, 0]));
-        assert!(reload_chart_indices(&song(), [Some(1), None], &session).is_err());
-        assert!(reload_chart_indices(&song(), [Some(1), Some(7)], &session).is_err());
+        assert_eq!(
+            lua_reload_chart_indices(&song(), [Some(1), Some(0)], Style::Versus),
+            Ok([1, 0])
+        );
+        assert!(lua_reload_chart_indices(&song(), [Some(1), None], Style::Versus).is_err());
+        assert!(lua_reload_chart_indices(&song(), [Some(1), Some(7)], Style::Versus).is_err());
         let mut incompatible = song().as_ref().clone();
         incompatible.charts[1].chart_type = "dance-double".into();
-        assert!(reload_chart_indices(&incompatible, [Some(1), Some(0)], &session).is_err());
+        assert!(
+            lua_reload_chart_indices(&incompatible, [Some(1), Some(0)], Style::Versus).is_err()
+        );
     }
 
     #[test]
@@ -698,5 +505,25 @@ mod tests {
                 ..
             } if hash == "challenge"
         ));
+    }
+
+    #[test]
+    fn partner_styles_use_the_first_selection_for_both_players() {
+        for style in [
+            PlayStyle::Couple,
+            PlayStyle::Routine,
+            PlayStyle::PumpCouple,
+            PlayStyle::PumpRoutine,
+        ] {
+            let mut song = song();
+            for chart in &mut Arc::make_mut(&mut song).charts {
+                chart.chart_type = style.chart_type().into();
+            }
+            let plan = gameplay_chart_entry_plan(&song, [3, 4], [3, 4], style, PlayerSide::P2);
+            assert_eq!(plan.chart_indices, [0, 0]);
+            assert_eq!(plan.resolved_steps_index, [3, 3]);
+            assert_eq!(plan.charts[0].short_hash, "hard");
+            assert!(Arc::ptr_eq(&plan.charts[0], &plan.charts[1]));
+        }
     }
 }

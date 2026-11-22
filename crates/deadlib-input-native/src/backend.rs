@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+pub use deadlib_platform::input::{GpSystemEvent, PadBackend};
 use deadlib_platform::input::{PadDir, PadEvent, PadId};
 
 #[cfg(any(target_os = "linux", test))]
@@ -26,26 +27,6 @@ mod unix_time;
 pub mod w32_raw_input;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 pub mod wgi;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PadBackend {
-    #[cfg(windows)]
-    WindowsRawInput,
-    #[cfg(windows)]
-    WindowsWgi,
-    #[cfg(target_os = "linux")]
-    LinuxEvdev,
-    #[cfg(target_os = "freebsd")]
-    FreeBsdHidraw,
-    #[cfg(target_os = "freebsd")]
-    FreeBsdEvdev,
-    #[cfg(target_os = "macos")]
-    MacOsIohid,
-    /// `StepManiaX` pad via the `RustManiaX` SDK (all platforms).
-    Smx,
-    /// RE:Flex v2 vendor HID with host-side sensor detection.
-    Reflex,
-}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WindowsPadBackend {
@@ -98,8 +79,7 @@ impl std::str::FromStr for WindowsPadBackend {
     }
 }
 
-/// Input backends that persist a stable pad order. SMX is intentionally
-/// excluded because it has its own serial-based assignment.
+/// Native input backends that use stable pad slots.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PadOrderBackend {
     RawInput,
@@ -122,7 +102,7 @@ pub const PAD_ORDER_BACKENDS: [PadOrderBackend; 6] = [
 #[derive(Clone, Copy)]
 pub struct BackendHost {
     pad_index_for_uuid: fn(PadOrderBackend, [u8; 16]) -> u32,
-    native_smx_owns_device: fn(Option<u16>, Option<u16>) -> bool,
+    device_claimed: fn(Option<u16>, Option<u16>) -> bool,
     now_nanos: fn() -> u64,
     instant_nanos: fn(Instant) -> u64,
     qpc_ticks_to_nanos: fn(u64) -> Option<u64>,
@@ -134,7 +114,7 @@ impl BackendHost {
     #[inline(always)]
     pub const fn new(
         pad_index_for_uuid: fn(PadOrderBackend, [u8; 16]) -> u32,
-        native_smx_owns_device: fn(Option<u16>, Option<u16>) -> bool,
+        device_claimed: fn(Option<u16>, Option<u16>) -> bool,
         now_nanos: fn() -> u64,
         instant_nanos: fn(Instant) -> u64,
         qpc_ticks_to_nanos: fn(u64) -> Option<u64>,
@@ -142,7 +122,7 @@ impl BackendHost {
     ) -> Self {
         Self {
             pad_index_for_uuid,
-            native_smx_owns_device,
+            device_claimed,
             now_nanos,
             instant_nanos,
             qpc_ticks_to_nanos,
@@ -172,10 +152,11 @@ impl BackendHost {
         PadId((self.pad_index_for_uuid)(backend, uuid))
     }
 
+    /// Whether the host has assigned this device to another input provider.
     #[inline(always)]
     #[must_use]
-    pub fn native_smx_owns_device(self, vendor: Option<u16>, product: Option<u16>) -> bool {
-        (self.native_smx_owns_device)(vendor, product)
+    pub fn device_claimed(self, vendor: Option<u16>, product: Option<u16>) -> bool {
+        (self.device_claimed)(vendor, product)
     }
 
     #[inline(always)]
@@ -215,11 +196,11 @@ impl BackendHost {
 #[inline(always)]
 pub fn backend_host(
     pad_index_for_uuid: fn(PadOrderBackend, [u8; 16]) -> u32,
-    native_smx_owns_device: fn(Option<u16>, Option<u16>) -> bool,
+    device_claimed: fn(Option<u16>, Option<u16>) -> bool,
 ) -> BackendHost {
     BackendHost::new(
         pad_index_for_uuid,
-        native_smx_owns_device,
+        device_claimed,
         deadlib_platform::host_time::now_nanos,
         deadlib_platform::host_time::instant_nanos,
         qpc_ticks_to_nanos,
@@ -314,28 +295,6 @@ pub fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
 #[inline(always)]
 const fn noop_input_thread_policy(_token: usize) {}
 
-#[derive(Clone, Debug)]
-pub enum GpSystemEvent {
-    Connected {
-        name: String,
-        id: PadId,
-        vendor_id: Option<u16>,
-        product_id: Option<u16>,
-        backend: PadBackend,
-        /// True when this connection is part of startup enumeration.
-        initial: bool,
-    },
-    #[cfg_attr(target_os = "linux", allow(dead_code))]
-    Disconnected {
-        name: String,
-        id: PadId,
-        backend: PadBackend,
-        /// True when this disconnect is part of startup enumeration.
-        initial: bool,
-    },
-    StartupComplete,
-}
-
 const DIRS: [PadDir; 4] = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
 
 #[inline(always)]
@@ -409,7 +368,7 @@ mod tests {
         fn pad_idx(_: PadOrderBackend, _: [u8; 16]) -> u32 {
             0
         }
-        fn smx_owns(_: Option<u16>, _: Option<u16>) -> bool {
+        fn device_claimed(_: Option<u16>, _: Option<u16>) -> bool {
             false
         }
         fn now() -> u64 {
@@ -425,7 +384,7 @@ mod tests {
             InputThreadPolicy::none()
         }
 
-        let host = BackendHost::new(pad_idx, smx_owns, now, instant_nanos, qpc, boost);
+        let host = BackendHost::new(pad_idx, device_claimed, now, instant_nanos, qpc, boost);
         let before = Instant::now();
         let (timestamp, host_nanos) = host.sample_time();
         let after = Instant::now();

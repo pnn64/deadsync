@@ -4,12 +4,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use deadsync_config::frame_pacing::apply_tab_acceleration;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 use winit::keyboard::KeyCode;
 
 use crate::{
-    Command,
-    navigation::{TransitionState, menu_exit_uses_fade},
+    ActiveTheme, Command, ThemeScreen as Screen, TransitionState, navigation::menu_exit_uses_fade,
 };
 
 const MESSAGE_HOLD_SECONDS: f32 = 3.33;
@@ -181,7 +179,7 @@ impl ShellInteractionState {
         screen: Screen,
         transition: &TransitionState,
     ) -> ProcessExitPlan {
-        if menu_exit_uses_fade(screen, transition) {
+        if menu_exit_uses_fade::<ActiveTheme>(screen, transition) {
             self.exit_intent = match request {
                 ProcessExitRequest::Exit => ExitIntent::Exit,
                 ProcessExitRequest::Shutdown => ExitIntent::Shutdown,
@@ -248,7 +246,7 @@ mod tests {
         let plan = state.plan_process_exit(
             ProcessExitRequest::Shutdown,
             Screen::Menu,
-            &TransitionState::ActorsFadeIn { elapsed: 0.1 },
+            &TransitionState::ActorsFadeIn { elapsed: 0.1, duration: 0.65 },
         );
         assert!(matches!(plan, ProcessExitPlan::BeginFade));
         assert_eq!(state.exit_intent(), ExitIntent::Shutdown);

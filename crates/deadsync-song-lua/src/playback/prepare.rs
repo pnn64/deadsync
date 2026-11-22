@@ -1,8 +1,10 @@
 use super::*;
 
 #[cfg(test)]
-#[path = "prepare_tests.rs"]
-mod submission_tests;
+playback_fixture_tests! {
+    #[path = "prepare_tests.rs"]
+    mod submission_tests;
+}
 pub(crate) type SongLuaOverlayEaseWindowRuntime =
     deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaRuntimeOverlayStateDelta>;
 

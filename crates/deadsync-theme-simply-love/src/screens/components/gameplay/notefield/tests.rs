@@ -1,11 +1,10 @@
 use super::{
     JudgmentSpriteMetadata, ResolvedComboMilestoneAssets, ResolvedJudgmentAssets,
     combo_milestone_assets, error_bar_trim_max_window_ix, gameplay_notefield_plan,
-    hold_explosion_enabled, judgment_frame_size, prewarm_actor_resources,
+    judgment_frame_size,
 };
 use crate::notefield_style::notefield_style;
-use crate::screens::gameplay::GameplayNoteskinAssets;
-use deadlib_present::actors::{ActorResourceArena, SpriteSource};
+use deadlib_present::actors::SpriteSource;
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{ActiveHold, hold_explosion_active, hold_head_render_flags};
@@ -13,17 +12,13 @@ use deadsync_notefield::{error_bar_boundaries_s, offset_center};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
-use std::sync::Arc;
 
 #[test]
-fn song_plan_preserves_profile_derived_notefield_behavior() {
+fn song_plan_preserves_profile_derived_hud_appearance() {
     crate::tests::init_paths();
     let mut profile = profile_data::Profile::default();
-    profile.note_field_offset_x = 99;
-    profile.note_field_offset_y = -99;
     profile.judgment_offset_x = profile_data::HUD_OFFSET_MAX + 10;
     profile.combo_offset_y = profile_data::HUD_OFFSET_MIN - 10;
-    profile.measure_lines = profile_data::MeasureLines::Eighth;
     profile.hide_combo = true;
     profile.combo_font = profile_data::ComboFont::Unprofessional;
     profile.error_bar_active_mask =
@@ -38,7 +33,6 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
     );
 
     assert_eq!(plan.hud_style, notefield_style());
-    assert_eq!(plan.options.notefield_offset, [50.0, -50.0]);
     assert_eq!(
         plan.options.judgment_offset[0],
         profile_data::HUD_OFFSET_MAX as f32
@@ -47,21 +41,13 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
         plan.options.combo_offset[1],
         profile_data::HUD_OFFSET_MIN as f32
     );
-    assert_eq!(
-        plan.options.frame_features.measure_line_mode,
-        deadsync_notefield::MeasureLineMode::Eighth
-    );
-    assert!(!plan.options.frame_features.combo_visible);
+    assert!(!plan.options.combo_visible);
     assert!(plan.options.error_bar_modes.colorful);
-    assert!(plan.options.frame_features.error_bar_text);
+    assert!(plan.options.error_bar_text);
     assert!(plan.options.text_error_bar_centered);
     assert_eq!(plan.options.blue_fantastic_window_s, 0.012_345);
     assert_eq!(plan.small_combo_font, "combo_unprofessional");
     assert_eq!(plan.combo_font, Some("combo_unprofessional"));
-    assert_eq!(
-        plan.tap_explosion_noteskin_visible,
-        !profile.tap_explosion_noteskin_hidden()
-    );
 }
 
 #[test]
@@ -163,36 +149,6 @@ fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
 }
 
 #[test]
-fn actor_resource_prewarm_covers_every_noteskin_slot() {
-    crate::tests::init_paths();
-    let style = Style {
-        num_cols: 4,
-        num_players: 1,
-    };
-    let noteskin = Arc::new(
-        load_itg_skin(&style, "default").expect("dance/default should load from assets/noteskins"),
-    );
-    let assets = GameplayNoteskinAssets {
-        noteskin: [Some(Arc::clone(&noteskin)), None],
-        mine_noteskin: [Some(Arc::clone(&noteskin)), None],
-        receptor_noteskin: [Some(Arc::clone(&noteskin)), None],
-        tap_explosion_noteskin: [Some(Arc::clone(&noteskin)), None],
-    };
-    let profiles = std::array::from_fn(|_| profile_data::Profile::default());
-    let arena = ActorResourceArena::default();
-
-    prewarm_actor_resources(&arena, &assets, &profiles, 1);
-    let warmed = arena.stats();
-    noteskin.for_each_slot(|slot| {
-        let _ = slot.actor_texture_source(&arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
-    });
-
-    assert!(warmed.textures > 0);
-    assert_eq!(arena.stats().texture_misses, warmed.texture_misses);
-    assert_eq!(arena.stats().texture_saturated, 0);
-}
-
-#[test]
 fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
     crate::tests::init_paths();
     let active = ActiveHold {
@@ -255,29 +211,6 @@ fn hold_explosion_requires_live_hold_state() {
     assert!(!hold_explosion_active(Some(&exhausted), 100.0, 100.0));
     assert!(!hold_explosion_active(Some(&let_go), 100.0, 100.0));
     assert!(!hold_explosion_active(None, 100.0, 100.0));
-}
-
-#[test]
-fn hold_explosion_option_uses_holding_mask() {
-    crate::tests::init_paths();
-    let enabled = profile_data::Profile::default();
-    assert!(hold_explosion_enabled(&enabled));
-
-    let mut disabled = profile_data::Profile::default();
-    disabled
-        .tap_explosion_active_mask
-        .remove(profile_data::TapExplosionMask::HOLDING);
-
-    assert!(!hold_explosion_enabled(&disabled));
-
-    disabled
-        .tap_explosion_active_mask
-        .insert(profile_data::TapExplosionMask::HOLDING);
-    disabled
-        .tap_explosion_active_mask
-        .remove(profile_data::TapExplosionMask::HELD);
-
-    assert!(hold_explosion_enabled(&disabled));
 }
 
 #[test]

@@ -154,12 +154,14 @@ pub fn initial_texture_jobs(
 ) -> Vec<TextureDecodeJob> {
     // Installed noteskins stay on disk. Options loads bounded preview textures;
     // gameplay prewarms the selected skins before starting a song.
+    // Only explicit manifest entries use the theme's sampler policy.
     let textures = texture_assets
         .into_iter()
         .map(|asset| {
             (
                 asset.key.to_string(),
                 initial_texture_source_path(asset.path, |path| dirs.resolve_asset_path(path)),
+                needs_repeat(asset.key),
             )
         })
         .chain(INITIAL_GRAPHIC_TEXTURES.iter().flat_map(|spec| {
@@ -170,11 +172,11 @@ pub fn initial_texture_jobs(
                 spec.require_multiframe_hint,
             )
             .into_iter()
-            .map(|texture| (texture.key, texture.source_path))
+            .map(|texture| (texture.key, texture.source_path, false))
         }));
     textures
-        .map(|(key, path)| TextureDecodeJob {
-            sampler: initial_texture_sampler(&key, needs_repeat(&key)),
+        .map(|(key, path, repeat)| TextureDecodeJob {
+            sampler: initial_texture_sampler(&key, repeat),
             hints: decode_texture_hints(&key),
             key,
             path,
@@ -189,6 +191,15 @@ pub fn ensure_texture_for_key(
     needs_repeat: fn(&str) -> bool,
 ) {
     load_texture_key(assets, backend, texture_key, None, needs_repeat);
+}
+
+/// Load a game-owned sprite using its native filename sampling hints.
+pub fn ensure_native_texture_for_key(
+    assets: &mut AssetManager,
+    backend: &mut Backend,
+    texture_key: &str,
+) {
+    ensure_texture_for_key(assets, backend, texture_key, |_| false);
 }
 
 /// An explicit sampler forces replacement, even if this key is already loaded.
@@ -899,13 +910,16 @@ mod tests {
             fs::write(base.join("assets/noteskins/ignored.txt"), [0u8])
                 .expect("write non-image fixture");
         }
+        let judgment = dirs.data_dir.join("assets/graphics/judgements/Boundary 2x7.png");
+        fs::create_dir_all(judgment.parent().unwrap()).expect("create judgment fixture");
+        fs::write(&judgment, [0u8]).expect("write judgment fixture");
         let jobs = initial_texture_jobs(
             [
                 deadlib_assets::texture_asset("boundary (nearest).png"),
                 deadlib_assets::texture_asset(key),
             ],
             &dirs.asset_paths(None),
-            |key| key == "boundary (nearest).png",
+            |key| !key.starts_with("noteskins/"),
         );
         let skin_jobs = jobs.iter().filter(|job| job.key == key).collect::<Vec<_>>();
         assert_eq!(skin_jobs.len(), 1);
@@ -915,6 +929,8 @@ mod tests {
         assert_eq!(skin_jobs[0].hints.min_size, Some(8));
         assert_eq!(skin_jobs[0].hints.max_size, Some(2048));
         assert!(!jobs.iter().any(|job| job.key.ends_with("ignored.txt")));
+        let judgment_job = jobs.iter().find(|job| job.path == judgment).unwrap();
+        assert_eq!(judgment_job.sampler.wrap, SamplerWrap::Clamp);
         let manifest_job = &jobs[0];
         assert_eq!(manifest_job.key, "boundary (nearest).png");
         assert_eq!(manifest_job.sampler.wrap, SamplerWrap::Repeat);

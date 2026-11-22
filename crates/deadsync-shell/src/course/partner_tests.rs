@@ -1,7 +1,10 @@
 use super::*;
-use deadsync_simfile::cache::{
-    SerializableSongData, build_requested_gameplay_charts, build_song_meta,
-};
+use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan, CourseStagePlan};
+use deadsync_gameplay::CourseDisplayTotals;
+use deadsync_gameplay::CourseLifeConfig;
+use deadsync_gameplay::course_progress::{CourseProgress, CourseRenewal};
+use deadsync_rules::course::CourseType;
+use deadsync_simfile::cache::{SerializableSongData, build_requested_gameplay_charts, build_song_meta};
 use deadsync_simfile::song::{ParseSongOptions, parse_song_bytes};
 use std::path::Path;
 
@@ -44,48 +47,34 @@ fn partner_song(kind: &str) -> (Arc<SongData>, SerializableSongData) {
     (Arc::new(build_song_meta(parsed.clone(), 0.0)), parsed)
 }
 
-fn plan(song: &Arc<SongData>, count: usize) -> SelectedCoursePlan {
-    SelectedCoursePlan {
+fn stage_plans(song: &Arc<SongData>, count: usize) -> Vec<CourseStagePlan> {
+    (0..count)
+        .map(|i| CourseStagePlan {
+            song: Arc::clone(song),
+            chart_hash: song.charts[0].short_hash.clone(),
+            modifiers: format!("stage-{i}"),
+            gain_seconds: 10.0,
+            gain_lives: 1,
+        })
+        .collect()
+}
+
+fn plan(song: &Arc<SongData>, count: usize) -> CourseSessionPlan {
+    CourseSessionPlan {
         path: "tests/partner-course.crs".into(),
-        name: "Partner course".into(),
-        banner_path: None,
         score_hash: "partner-course".into(),
         course_difficulty_name: "Hard".into(),
         course_meter: Some(8),
-        course_stepchart_label: "Hard 8".into(),
-        course_type: CourseTypeView::Endless,
+        course_type: CourseType::Endless,
         lives: 4,
-        song_stub: Arc::clone(song),
-        stages: (0..count)
-            .map(|i| CourseStagePlan {
-                song: Arc::clone(song),
-                chart_hash: song.charts[0].short_hash.clone(),
-                modifiers: format!("stage-{i}"),
-                gain_seconds: 10.0,
-                gain_lives: 1,
-            })
-            .collect(),
+        stages: stage_plans(song, count),
     }
 }
 
-fn empty_course(song: &Arc<SongData>) -> CourseRunState {
-    let p = plan(song, 0);
-    CourseRunState {
-        path: p.path,
-        name: p.name,
-        banner_path: p.banner_path,
-        score_hash: p.score_hash,
-        course_difficulty_name: p.course_difficulty_name,
-        course_meter: p.course_meter,
-        course_stepchart_label: p.course_stepchart_label,
-        course_type: p.course_type,
-        lives: p.lives,
-        song_stub: p.song_stub,
-        stages: Vec::new(),
-        course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
-        next_stage_index: 0,
-        interrupted: false,
-        stage_summaries: Vec::new(),
+fn cycle_plan(song: &Arc<SongData>, count: usize) -> CourseCyclePlan {
+    CourseCyclePlan {
+        path: "tests/partner-course.crs".into(),
+        stages: stage_plans(song, count),
     }
 }
 
@@ -106,6 +95,180 @@ fn assert_totals(totals: &[CourseDisplayTotals; MAX_PLAYERS], multiplier: u32) {
 }
 
 #[test]
+fn startup_uses_resolved_game_stages_and_retains_course_metadata() {
+    let kind = "dance-routine";
+    let (song, parsed) = partner_song(kind);
+    let mut summary_song = (*song).clone();
+    summary_song.simfile_path = "tests/partner-course.crs".into();
+    summary_song.title = "Partner course".into();
+    summary_song.banner_path = Some("tests/partner-banner.png".into());
+    summary_song.charts.clear();
+    summary_song.music_length_seconds = 5000.0;
+    summary_song.total_length_seconds = 5000;
+    summary_song.precise_last_second_seconds = 5000.0;
+    let summary_song = Arc::new(summary_song);
+    let mut selection = plan(&song, 2);
+    selection.course_type = CourseType::Oni;
+    selection.lives = 7;
+    selection.stages[0].gain_lives = -1;
+    selection.stages[0].gain_seconds = f32::from_bits(0x7fc0_1234);
+    let modifier_pointer = selection.stages[0].modifiers.as_ptr();
+    let score_pointer = selection.score_hash.as_ptr();
+    let difficulty_pointer = selection.course_difficulty_name.as_ptr();
+    // Missing hashes remain skippable without changing surviving payloads.
+    selection.stages.insert(
+        0,
+        CourseStagePlan {
+            song: song.clone(),
+            chart_hash: "missing".into(),
+            modifiers: "unresolved".into(),
+            gain_seconds: 1.0,
+            gain_lives: 99,
+        },
+    );
+    let mut loads = 0;
+    let course = build_course_run_from_selection_with_loader(
+        PreparedCourseStart {
+            plan: selection,
+            song: Arc::clone(&summary_song),
+            endless_source: None,
+        },
+        kind,
+        |loaded_song, indices, offset| {
+            loads += 1;
+            assert!(std::ptr::eq(loaded_song, song.as_ref()));
+            assert_eq!(indices, &[0]);
+            assert_eq!(offset, 0.0);
+            build_requested_gameplay_charts(&parsed, indices, offset)
+        },
+    )
+    .unwrap()
+    .expect("the two valid stages start a course");
+
+    assert_eq!(loads, 2);
+    assert_eq!(course.run.path, Path::new("tests/partner-course.crs"));
+    assert_eq!(course.run.score_hash, "partner-course");
+    assert_eq!(course.run.score_hash.as_ptr(), score_pointer);
+    assert_eq!(course.run.course_difficulty_name, "Hard");
+    assert_eq!(course.run.course_difficulty_name.as_ptr(), difficulty_pointer);
+    assert_eq!(course.run.course_meter, Some(8));
+    assert_eq!(course.run.course_type, CourseType::Oni);
+    assert_eq!(course.run.lives, 7);
+    assert_eq!(course.run.stages.len(), 2);
+    for (index, stage) in course.run.stages.iter().enumerate() {
+        assert!(Arc::ptr_eq(&stage.song, &song));
+        // Hard is runtime slot 3; the loader uses source chart index 0.
+        assert_eq!(stage.steps_index, [3; MAX_PLAYERS]);
+        assert_eq!(stage.preferred_difficulty_index, [3; MAX_PLAYERS]);
+        assert_eq!(stage.modifiers, format!("stage-{index}"));
+    }
+    assert_eq!(course.run.stages[0].modifiers.as_ptr(), modifier_pointer);
+    assert_eq!(course.run.stages[0].gain_seconds.to_bits(), 0x7fc0_1234);
+    assert_eq!(course.run.stages[0].gain_lives, -1);
+    assert_totals(&course.run.course_display_totals, 2);
+    assert_eq!(
+        course.run.entry(false).life_config(kind),
+        [CourseLifeConfig::Battery {
+            total_lives: 7,
+            reward_lives: 2,
+        }; MAX_PLAYERS],
+    );
+    assert_eq!(course.run.progress, CourseProgress::default());
+    assert!(course.run.has_next_stage());
+    assert!(!course.run.is_finished(false));
+    assert_eq!(course.run.next_stage().unwrap().modifiers, "stage-0");
+    assert_eq!(course.run.renewal(), CourseRenewal::NotRequired);
+    assert!(course.stage_summaries.is_empty());
+    assert_eq!(
+        course.run.total_seconds(),
+        2.0 * song.precise_last_second()
+    );
+    assert!(Arc::ptr_eq(&course.song, &summary_song));
+}
+
+fn empty_course(song: &Arc<SongData>) -> CourseRun {
+    let p = plan(song, 0);
+    CourseRun {
+        path: p.path,
+        score_hash: p.score_hash,
+        course_difficulty_name: p.course_difficulty_name,
+        course_meter: p.course_meter,
+        course_type: p.course_type,
+        lives: p.lives,
+        stages: Vec::new(),
+        course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
+        progress: CourseProgress::default(),
+    }
+}
+
+#[test]
+fn startup_skips_unresolved_stages_and_stops_at_the_first_load_failure() {
+    let kind = "dance-routine";
+    let (song, parsed) = partner_song(kind);
+    let mut unresolved = plan(&song, 1);
+    unresolved.stages[0].chart_hash = "missing".into();
+    for selection in [plan(&song, 0), unresolved] {
+        assert!(
+            CourseRun::prepare(selection, kind, |_, _, _| panic!(
+                "unresolved stages must not load payloads"
+            ),)
+            .unwrap()
+            .is_none()
+        );
+    }
+    let mut loads = 0;
+    let result = CourseRun::prepare(plan(&song, 3), kind, |_, indices, offset| {
+        loads += 1;
+        if loads == 2 {
+            Err("simfile removed during startup".into())
+        } else {
+            build_requested_gameplay_charts(&parsed, indices, offset)
+        }
+    });
+    let error = match result {
+        Err(error) => error,
+        Ok(_) => panic!("a failed stage load must reject the startup"),
+    };
+    assert_eq!(loads, 2);
+    assert!(error.contains("tests/partner-course.sm") && error.contains(kind));
+    assert!(error.contains("simfile removed during startup"));
+}
+
+#[test]
+fn cycle_rejection_does_not_load_or_mutate_the_existing_run() {
+    let kind = "dance-routine";
+    let (song, parsed) = partner_song(kind);
+    let original = CourseRun::prepare(plan(&song, 1), kind, |_, indices, offset| {
+        build_requested_gameplay_charts(&parsed, indices, offset)
+    })
+    .unwrap()
+    .unwrap();
+    for reason in 0..3 {
+        let mut course = original.clone();
+        let mut cycle = cycle_plan(&song, 1);
+        match reason {
+            0 => course.course_type = CourseType::Nonstop,
+            1 => course.progress.interrupt(),
+            _ => cycle.path = "tests/other-course.crs".into(),
+        }
+        let progress = course.progress;
+        let modifier_pointer = course.stages[0].modifiers.as_ptr();
+        assert!(
+            !course
+                .append_endless_cycle(cycle, kind, |_, _, _| {
+                    panic!("rejected cycles must not load payloads")
+                })
+                .unwrap()
+        );
+        assert_eq!(course.stages.len(), 1);
+        assert!(Arc::ptr_eq(&course.stages[0].song, &song));
+        assert_eq!(course.stages[0].modifiers.as_ptr(), modifier_pointer);
+        assert_eq!(course.progress, progress);
+        assert_totals(&course.course_display_totals, 1);
+    }
+}
+
+#[test]
 fn partner_course_totals_split_authored_ownership_and_load_each_chart_once() {
     for kind in [
         "dance-routine",
@@ -121,13 +284,13 @@ fn partner_course_totals_split_authored_ownership_and_load_each_chart_once() {
             build_requested_gameplay_charts(&parsed, indices, offset)
         };
         assert!(
-            append_endless_cycle_with_loader(
-                &mut course,
-                plan(&song, 2),
-                &kind.to_ascii_uppercase(),
-                &mut loader
-            )
-            .unwrap()
+            course
+                .append_endless_cycle(
+                    cycle_plan(&song, 2),
+                    &kind.to_ascii_uppercase(),
+                    &mut loader
+                )
+                .unwrap()
         );
         assert_eq!(
             calls, 2,
@@ -151,36 +314,37 @@ fn endless_cycle_load_failure_rolls_back_stages_totals_and_cursor_then_can_retry
         let mut load = |_: &SongData, indices: &[usize], offset: f32| {
             build_requested_gameplay_charts(&parsed, indices, offset)
         };
-        append_endless_cycle_with_loader(&mut course, plan(&song, 1), kind, &mut load).unwrap();
-        course.next_stage_index = 1;
+        course
+            .append_endless_cycle(cycle_plan(&song, 1), kind, &mut load)
+            .unwrap();
+        course.progress = CourseProgress::new(1);
+        let original_progress = course.progress;
         let original_song = Arc::clone(&course.stages[0].song);
         let original_modifier = course.stages[0].modifiers.as_ptr();
         let mut calls = 0;
-        let error = append_endless_cycle_with_loader(
-            &mut course,
-            plan(&song, 3),
-            kind,
-            &mut |song, indices, offset| {
+        let error = course
+            .append_endless_cycle(cycle_plan(&song, 3), kind, |song, indices, offset| {
                 calls += 1;
                 if calls == 2 {
                     Err("simfile removed during reroll".into())
                 } else {
                     load(song, indices, offset)
                 }
-            },
-        )
-        .unwrap_err();
+            })
+            .unwrap_err();
         assert_eq!(calls, 2);
         assert!(error.contains("tests/partner-course.sm") && error.contains(kind));
         assert!(error.contains("simfile removed during reroll"));
         assert_eq!(course.stages.len(), 1);
-        assert_eq!(course.next_stage_index, 1);
+        assert_eq!(course.progress, original_progress);
         assert!(Arc::ptr_eq(&course.stages[0].song, &original_song));
         assert_eq!(course.stages[0].modifiers.as_ptr(), original_modifier);
         assert_eq!(course.next_stage().unwrap().modifiers, "stage-0");
         assert_totals(&course.course_display_totals, 1);
         assert!(
-            append_endless_cycle_with_loader(&mut course, plan(&song, 3), kind, &mut load).unwrap()
+            course
+                .append_endless_cycle(cycle_plan(&song, 3), kind, &mut load)
+                .unwrap()
         );
         assert_eq!(course.stages.len(), 4);
         assert_totals(&course.course_display_totals, 4);
@@ -192,18 +356,18 @@ fn partner_course_rejects_missing_or_extra_payloads_without_panicking_or_mutatin
     let (song, parsed) = partner_song("dance-routine");
     for count in [0, 2] {
         let mut course = empty_course(&song);
-        let error = append_endless_cycle_with_loader(
-            &mut course,
-            plan(&song, 1),
-            "dance-routine",
-            &mut |_, indices, offset| {
-                let payload = build_requested_gameplay_charts(&parsed, indices, offset)?
-                    .pop()
-                    .unwrap();
-                Ok(vec![payload; count])
-            },
-        )
-        .unwrap_err();
+        let error = course
+            .append_endless_cycle(
+                cycle_plan(&song, 1),
+                "dance-routine",
+                |_, indices, offset| {
+                    let payload = build_requested_gameplay_charts(&parsed, indices, offset)?
+                        .pop()
+                        .unwrap();
+                    Ok(vec![payload; count])
+                },
+            )
+            .unwrap_err();
         assert!(error.contains(&format!("{count} payloads")));
         assert!(course.stages.is_empty());
         assert_eq!(course.course_display_totals[0].total_steps, 0);
@@ -211,53 +375,28 @@ fn partner_course_rejects_missing_or_extra_payloads_without_panicking_or_mutatin
 }
 
 #[test]
-fn second_participant_missing_chart_does_not_commit_first_participants_totals() {
-    let (song, _) = partner_song("dance-routine");
-    let mut stage =
-        course_stage_runtime_from_plan(plan(&song, 1).stages.pop().unwrap(), "dance-routine")
-            .unwrap();
-    stage.steps_index[1] = usize::MAX;
-    let mut totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
-    let (_, parsed) = partner_song("dance-routine");
-    let error = add_course_stage_totals_with_loader(
-        &mut totals,
-        &stage,
-        "dance-routine",
-        &mut |_, indices, offset| build_requested_gameplay_charts(&parsed, indices, offset),
-    )
-    .unwrap_err();
-    assert!(error.contains("is missing"));
-    for total in totals {
-        assert_eq!(total.total_steps, 0);
-        assert_eq!(total.possible_grade_points, 0);
-    }
-}
-
-#[test]
 fn interrupted_endless_is_final_without_player_failure_and_cannot_resume() {
     let (song, parsed) = partner_song("dance-routine");
     let mut course = empty_course(&song);
-    append_endless_cycle_with_loader(
-        &mut course,
-        plan(&song, 1),
-        "dance-routine",
-        &mut |_, indices, offset| build_requested_gameplay_charts(&parsed, indices, offset),
-    )
-    .unwrap();
-    course.next_stage_index = 1;
-    course.interrupted = true;
+    course
+        .append_endless_cycle(
+            cycle_plan(&song, 1),
+            "dance-routine",
+            |_, indices, offset| build_requested_gameplay_charts(&parsed, indices, offset),
+        )
+        .unwrap();
+    course.progress = CourseProgress::new(1);
+    course.progress.interrupt();
     assert!(course.is_finished(false));
     assert!(!course.has_next_stage());
     assert!(course.next_stage().is_none());
     let totals = course.course_display_totals;
     assert!(
-        !append_endless_cycle_with_loader(
-            &mut course,
-            plan(&song, 1),
-            "dance-routine",
-            &mut |_, _, _| panic!("an interrupted course must not load another chart"),
-        )
-        .unwrap()
+        !course
+            .append_endless_cycle(cycle_plan(&song, 1), "dance-routine", |_, _, _| panic!(
+                "an interrupted course must not load another chart"
+            ),)
+            .unwrap()
     );
     assert_eq!(course.stages.len(), 1);
     let counters = |total: CourseDisplayTotals| {

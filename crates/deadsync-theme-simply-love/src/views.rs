@@ -131,7 +131,7 @@ impl Default for SimplyLoveVisualPolicyView {
     }
 }
 
-/// Shell-owned presentation policy used while constructing Gameplay state.
+/// Simply Love presentation preferences used while constructing Gameplay state.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayPolicyView {
     pub translated_titles: bool,
@@ -149,7 +149,15 @@ pub struct GameplayPolicyView {
 
 impl Default for GameplayPolicyView {
     fn default() -> Self {
-        let config = deadsync_config::app_config::Config::default();
+        Self::from_config(&deadsync_config::app_config::Config::default(), Default::default())
+    }
+}
+
+impl GameplayPolicyView {
+    pub fn from_config(
+        config: &deadsync_config::app_config::Config,
+        scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+    ) -> Self {
         Self {
             translated_titles: config.translated_titles,
             center_single_notefield: config.center_1player_notefield,
@@ -161,63 +169,20 @@ impl Default for GameplayPolicyView {
             show_bpm_decimal: config.show_bpm_decimal,
             bpm_position: config.gameplay_bpm_position,
             machine_font: config.machine_font,
-            scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter::default(),
+            scorebox_pane_filter,
         }
     }
 }
 
-/// Score/cache data prepared by the shell before Gameplay constructs its
-/// deterministic runtime and song-lifetime presentation state.
-#[derive(Clone, Debug)]
-pub struct GameplayScoreInitView {
-    pub mini_indicator: deadsync_gameplay::GameplayMiniIndicatorData,
-    pub scorebox_profiles: [deadsync_score::GameplayScoreboxProfileSnapshot; 2],
-    pub scorebox_snapshots: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
-    pub rival_score_types: [Option<deadsync_profile::MiniIndicatorScoreType>; 2],
-}
+pub use deadsync_profile_gameplay::stage_scores::GameplayScoreSnapshots as GameplayScoreInitView;
 
-impl Default for GameplayScoreInitView {
-    fn default() -> Self {
-        Self {
-            mini_indicator: deadsync_gameplay::GameplayMiniIndicatorData::default(),
-            scorebox_profiles: std::array::from_fn(|_| {
-                deadsync_score::GameplayScoreboxProfileSnapshot::default()
-            }),
-            scorebox_snapshots: std::array::from_fn(|_| None),
-            rival_score_types: [None; 2],
-        }
-    }
-}
-
-/// Live score/cache data polled by the shell while Gameplay is active.
-#[derive(Clone, Debug)]
-pub struct GameplayScoreRuntimeView {
-    /// Newly completed snapshots only; `None` preserves the screen's current
-    /// value without cloning it on steady gameplay frames.
-    pub scorebox_updates: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
-    pub rival_score_updates: [Option<f64>; 2],
-    pub itl_cmod_warning: [bool; 2],
-}
-
-impl Default for GameplayScoreRuntimeView {
-    fn default() -> Self {
-        Self {
-            scorebox_updates: std::array::from_fn(|_| None),
-            rival_score_updates: [None; 2],
-            itl_cmod_warning: [false; 2],
-        }
-    }
-}
-
-/// Live shell-prepared session and lobby state consumed by Gameplay's screen
-/// logic, separate from the deterministic gameplay simulation state.
+/// Shell-prepared presentation policy and local HUD identity.
 #[derive(Clone, Debug)]
 pub struct GameplayRuntimeView {
     pub policy: GameplayPolicyView,
     pub play_style: PlayStyle,
     pub player_side: PlayerSide,
     pub joined: [bool; 2],
-    pub lobby: SimplyLoveLobbyRuntimeView,
 }
 
 impl Default for GameplayRuntimeView {
@@ -227,7 +192,6 @@ impl Default for GameplayRuntimeView {
             play_style: PlayStyle::default(),
             player_side: PlayerSide::default(),
             joined: [true, false],
-            lobby: SimplyLoveLobbyRuntimeView::default(),
         }
     }
 }
@@ -240,7 +204,6 @@ pub struct GameplayInitView {
     pub hud: deadsync_profile::GameplayHudSnapshot,
     pub judgment_palettes: [deadsync_theme::color::JudgmentPalette; 2],
     pub scores: GameplayScoreInitView,
-    pub background_changes: Vec<deadsync_chart::SongBackgroundChange>,
 }
 
 impl Default for GameplayInitView {
@@ -259,7 +222,6 @@ impl Default for GameplayInitView {
             },
             judgment_palettes: [crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE; 2],
             scores: GameplayScoreInitView::default(),
-            background_changes: Vec::new(),
         }
     }
 }
@@ -284,62 +246,11 @@ impl Default for PracticeRuntimeView {
     }
 }
 
-/// Shell-owned machine/runtime policy consumed by Player Options.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PlayerOptionsPolicyView {
-    pub allow_per_player_global_offsets: bool,
-    pub heart_rate_monitors: bool,
-    pub arcade_navigation: bool,
-    pub machine_font: deadsync_config::theme::MachineFont,
-    pub smx_input: bool,
-    pub smx_panel_lights: bool,
-    pub scorebox_available: bool,
-    pub golf_enabled: bool,
-    pub keyboard_features: bool,
-    pub tournament_mode: bool,
-}
+pub use deadsync_profile_gameplay::stage_options::{
+    JudgmentPaletteChoiceView, PlayerOptionsPlayerView, PlayerOptionsPolicyView,
+};
 
-impl Default for PlayerOptionsPolicyView {
-    fn default() -> Self {
-        let config = deadsync_config::app_config::Config::default();
-        Self {
-            allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
-            heart_rate_monitors: config.machine_enable_heart_rate_monitors,
-            arcade_navigation: config.arcade_options_navigation,
-            machine_font: config.machine_font,
-            smx_input: config.smx_input,
-            smx_panel_lights: config.smx_panel_lights,
-            scorebox_available: false,
-            golf_enabled: config.enable_golf,
-            keyboard_features: config.keyboard_features,
-            tournament_mode: config.tournament.enabled,
-        }
-    }
-}
-
-/// One player's shell-prepared editable options and HRM selection.
-#[derive(Clone, Debug, PartialEq)]
-pub struct PlayerOptionsPlayerView {
-    pub options: deadsync_profile::PlayerOptionsData,
-    pub judgment_palette_id: Option<String>,
-    pub heart_rate_device_id: Option<String>,
-    pub max_heart_rate: u16,
-}
-
-impl Default for PlayerOptionsPlayerView {
-    fn default() -> Self {
-        Self {
-            options: deadsync_profile::PlayerOptionsData::default(),
-            judgment_palette_id: None,
-            heart_rate_device_id: None,
-            max_heart_rate: deadsync_profile::MAX_HEART_RATE_DEFAULT,
-        }
-    }
-}
-
-/// Shell-prepared session and option snapshot used for one Player Options
-/// state. Option edits remain local to the screen and use typed persistence
-/// requests without retaining profile identity, stats, or credentials.
+/// Standalone Simply Love initializer with the theme's legacy defaults.
 #[derive(Clone, Debug)]
 pub struct PlayerOptionsInitView {
     pub policy: PlayerOptionsPolicyView,
@@ -349,13 +260,6 @@ pub struct PlayerOptionsInitView {
     pub music_rate: f32,
     pub players: [PlayerOptionsPlayerView; 2],
     pub judgment_palettes: Vec<JudgmentPaletteChoiceView>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct JudgmentPaletteChoiceView {
-    pub id: String,
-    pub name: String,
-    pub palette: deadsync_theme::color::JudgmentPalette,
 }
 
 impl Default for PlayerOptionsInitView {
@@ -372,6 +276,20 @@ impl Default for PlayerOptionsInitView {
                 name: crate::color::JUDGMENT_PRESET.name.to_owned(),
                 palette: crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
             }],
+        }
+    }
+}
+
+impl From<PlayerOptionsInitView> for deadsync_profile_gameplay::stage_options::PlayerOptionsView {
+    fn from(view: PlayerOptionsInitView) -> Self {
+        Self {
+            policy: view.policy,
+            play_style: view.play_style,
+            player_side: view.player_side,
+            joined: view.joined,
+            music_rate: view.music_rate,
+            players: view.players,
+            judgment_palettes: view.judgment_palettes,
         }
     }
 }
@@ -847,6 +765,15 @@ pub struct SelectCourseInitView {
     pub context: SelectCourseContextView,
 }
 
+/// Presentation inputs applied to the resolved game catalog.
+#[derive(Clone, Debug, Default)]
+pub struct SelectCoursePresentationInitView {
+    pub translated_titles: bool,
+    pub last_course_path: Option<PathBuf>,
+    pub last_course_difficulty: Option<String>,
+    pub context: SelectCourseContextView,
+}
+
 /// Shell-prepared local profile catalog used by Manage Local Profiles.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ManageLocalProfilesView {
@@ -861,52 +788,7 @@ pub struct LocalProfileView {
     pub display_name: String,
 }
 
-/// Shell-prepared profile-picker catalog shared by Select Profile and the
-/// Select Music profile overlay.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ProfilePickerView {
-    pub game: deadsync_config::theme::GameFlag,
-    pub guest: ProfilePickerEntryView,
-    pub profiles: Vec<ProfilePickerEntryView>,
-    pub default_profiles: [deadsync_profile::ActiveProfile; 2],
-    pub three_key_navigation: bool,
-}
-
-impl Default for ProfilePickerView {
-    fn default() -> Self {
-        let options = deadsync_profile::PlayerOptionsData::default();
-        Self {
-            game: deadsync_config::theme::GameFlag::default(),
-            guest: ProfilePickerEntryView {
-                id: String::new(),
-                display_name: String::new(),
-                speed_mod: options.scroll_speed.to_string(),
-                avatar_key: None,
-                total_songs_played: 0,
-                scroll_option: options.scroll_option,
-                mini_indicator: options.mini_indicator,
-                noteskin: options.noteskin,
-                judgment: options.judgment_graphic,
-            },
-            profiles: Vec::new(),
-            default_profiles: std::array::from_fn(|_| deadsync_profile::ActiveProfile::Guest),
-            three_key_navigation: false,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ProfilePickerEntryView {
-    pub id: String,
-    pub display_name: String,
-    pub speed_mod: String,
-    pub avatar_key: Option<String>,
-    pub total_songs_played: u32,
-    pub scroll_option: deadsync_profile::ScrollOption,
-    pub mini_indicator: deadsync_profile::MiniIndicator,
-    pub noteskin: deadsync_profile::NoteSkin,
-    pub judgment: deadsync_profile::JudgmentGraphic,
-}
+pub use deadsync_profile::picker::{ProfilePickerEntryView, ProfilePickerView};
 
 /// Live session routing used throughout Select Music without reading the
 /// process-global profile session from theme code.
@@ -1463,103 +1345,14 @@ pub struct SimplyLoveUpdaterCapabilities {
     pub ffmpeg_install: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MainMenuGrooveError {
-    Disabled,
-    MachineOffline,
-    CannotConnect,
-    TimedOut,
-    InvalidResponse,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MainMenuGrooveStatus {
-    Pending {
-        boogie: bool,
-    },
-    Error {
-        boogie: bool,
-        kind: MainMenuGrooveError,
-    },
-    Connected {
-        boogie: bool,
-        get_scores: bool,
-        leaderboard: bool,
-        auto_submit: bool,
-    },
-}
-
-impl Default for MainMenuGrooveStatus {
-    fn default() -> Self {
-        Self::Pending { boogie: false }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MainMenuArrowCloudError {
-    Disabled,
-    TimedOut,
-    HostBlocked,
-    CannotConnect,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MainMenuArrowCloudStatus {
-    Pending,
-    Connected,
-    Error(MainMenuArrowCloudError),
-}
-
-impl Default for MainMenuArrowCloudStatus {
-    fn default() -> Self {
-        Self::Pending
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct MainMenuSmxConflictView {
-    pub color_rgb: [f32; 3],
-}
-
-/// Shell-prepared runtime data consumed by Simply Love's concrete main menu.
-#[derive(Clone, Debug, PartialEq)]
-pub struct MainMenuRuntimeView {
-    pub game: deadsync_config::theme::GameFlag,
-    pub coin_mode: deadsync_config::coin::CoinMode,
-    pub event_mode: bool,
-    pub credits: u32,
-    pub can_start: bool,
-    pub allow_shutdown_host: bool,
-    pub dedicated_three_key_nav: bool,
-    pub song_count: usize,
-    pub pack_count: usize,
-    pub course_count: usize,
-    pub local_ip: Option<Arc<str>>,
-    pub groovestats: MainMenuGrooveStatus,
-    pub arrowcloud: MainMenuArrowCloudStatus,
-    pub smx_conflict: Option<MainMenuSmxConflictView>,
-}
-
-impl Default for MainMenuRuntimeView {
-    fn default() -> Self {
-        Self {
-            game: deadsync_config::theme::GameFlag::default(),
-            coin_mode: deadsync_config::coin::CoinMode::Home,
-            event_mode: true,
-            credits: 0,
-            can_start: true,
-            allow_shutdown_host: false,
-            dedicated_three_key_nav: false,
-            song_count: 0,
-            pack_count: 0,
-            course_count: 0,
-            local_ip: None,
-            groovestats: MainMenuGrooveStatus::default(),
-            arrowcloud: MainMenuArrowCloudStatus::default(),
-            smx_conflict: None,
-        }
-    }
-}
+pub use deadsync_theme::main_menu::{
+    MainMenuArrowCloudError, MainMenuArrowCloudStatus, MainMenuGrooveError, MainMenuGrooveStatus,
+    MainMenuSmxConflictView,
+};
+pub type MainMenuRuntimeView = deadsync_theme::main_menu::MainMenuRuntimeView<
+    deadsync_config::theme::GameFlag,
+    deadsync_config::coin::CoinMode,
+>;
 
 /// Coarse updater failure category used by Simply Love's localized overlays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1726,6 +1519,30 @@ pub fn frame_histogram(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gameplay_policy_carries_presentation_fields() {
+        let config = deadsync_config::app_config::Config {
+            machine_font: deadsync_config::theme::MachineFont::Mega,
+            bg_brightness: 0.42,
+            gameplay_bg_color: deadlib_present::color::Color::from_hex("#123456")
+                .expect("test color should parse"),
+            smx_input: true,
+            zmod_rating_box_text: true,
+            show_bpm_decimal: true,
+            gameplay_bpm_position: deadsync_config::theme::GameplayBpmPosition::NearField,
+            ..Default::default()
+        };
+        let policy = GameplayPolicyView::from_config(&config, Default::default());
+
+        assert_eq!(policy.machine_font, config.machine_font);
+        assert_eq!(policy.background_brightness, config.bg_brightness);
+        assert_eq!(policy.background_color, config.gameplay_bg_color);
+        assert_eq!(policy.smx_input, config.smx_input);
+        assert_eq!(policy.zmod_rating_box_text, config.zmod_rating_box_text);
+        assert_eq!(policy.show_bpm_decimal, config.show_bpm_decimal);
+        assert_eq!(policy.bpm_position, config.gameplay_bpm_position);
+    }
 
     #[test]
     fn histogram_ignores_empty_samples_and_absorbs_overflow() {

@@ -8,6 +8,13 @@ pub enum ScrollSpeedSetting {
     MMod(f32),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScrollSpeedMode {
+    CMod,
+    XMod,
+    MMod,
+}
+
 impl Default for ScrollSpeedSetting {
     fn default() -> Self {
         Self::CMod(600.0)
@@ -92,6 +99,28 @@ impl FromStr for ScrollSpeedSetting {
 impl ScrollSpeedSetting {
     pub const ARROW_SPACING: f32 = 64.0;
 
+    /// Convert between speed modes using the reference BPM at the chosen rate.
+    #[must_use]
+    pub fn converted_to(self, mode: ScrollSpeedMode, reference_bpm: f32, rate: f32) -> Self {
+        let bpm = match self {
+            Self::CMod(bpm) | Self::MMod(bpm) => bpm,
+            Self::XMod(value) => (reference_bpm * rate * value).round(),
+        };
+        match mode {
+            ScrollSpeedMode::XMod => {
+                let denominator = reference_bpm * rate;
+                let multiplier = if denominator.is_finite() && denominator > 0.0 {
+                    bpm / denominator
+                } else {
+                    1.0
+                };
+                Self::XMod(round_speed_to_step(multiplier, 0.05).clamp(0.05, 20.0))
+            }
+            ScrollSpeedMode::CMod => Self::CMod(round_speed_to_step(bpm, 5.0).clamp(5.0, 2000.0)),
+            ScrollSpeedMode::MMod => Self::MMod(round_speed_to_step(bpm, 5.0).clamp(5.0, 2000.0)),
+        }
+    }
+
     #[must_use]
     pub fn effective_bpm(
         self,
@@ -168,6 +197,14 @@ impl ScrollSpeedSetting {
         } else {
             draw_distance / speed
         }
+    }
+}
+
+fn round_speed_to_step(value: f32, step: f32) -> f32 {
+    if value.is_finite() {
+        (value / step).round() * step
+    } else {
+        value
     }
 }
 

@@ -12,7 +12,7 @@ use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
     ActiveColumnFlash, ActiveHold, ActiveMineExplosion, ActiveTapExplosion, ColumnCue,
-    hold_explosion_active,
+    GameplayProfileData, GameplayRuntimeState, hold_explosion_active,
 };
 use deadsync_noteskin::{HoldEmitter, NoteskinSlot, actor::MAX_HOLD_FLASHES};
 #[cfg(test)]
@@ -43,7 +43,7 @@ pub struct NotefieldLaneFeedback<'a> {
     pub hold_emitter: HoldEmitterState,
 }
 
-/// Song-lifetime presentation state. Fixed storage, no allocations or asset
+/// Song-lifetime hold feedback state. Fixed storage, no allocations or asset
 /// work; even after a long frame, update visits at most MAX_HOLD_FLASHES slots.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HoldEmitterState {
@@ -114,8 +114,7 @@ impl HoldEmitterState {
 
 /// Borrowed per-frame feedback emitted around the receptor row.
 ///
-/// The concrete theme prepares this view from gameplay state; canonical
-/// notefield code owns actor selection, placement, animation, and ordering.
+/// The field compositor prepares this view from the current gameplay state.
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldFeedbackFrameView<'a> {
     /// Cue columns use chart-global column indices.
@@ -140,6 +139,80 @@ pub struct NotefieldFeedbackFrameView<'a> {
     pub countdown_text_slot: u8,
 }
 
+impl<'a> NotefieldFeedbackFrameView<'a> {
+    pub(crate) fn from_gameplay<P: GameplayProfileData, O, C, D, S>(
+        game: &'a GameplayRuntimeState<P, O, C, D>,
+        request: &NotefieldComposeRequest<'_, S>,
+        prepared: &PreparedNotefield<'_, S>,
+        hold_emitters: &mut [HoldEmitterState; MAX_COLS],
+        countdown_font: &'static str,
+        countdown_text_slot: u8,
+    ) -> Self {
+        let player = request.geometry.player_idx;
+        let settings = &request.settings;
+        let skins = &request.noteskin;
+        let col_start = prepared.frame_plan.col_start;
+        let num_cols = prepared.frame_plan.num_cols;
+        Self {
+            column_cues: settings.column_cues.then(|| game.column_cues(player)),
+            column_cue_cursor: settings.column_cues.then(|| game.column_cue_cursor(player)),
+            crossover_cues: settings.crossover_cues.then(|| game.crossover_cues(player)),
+            crossover_cue_entries: settings
+                .crossover_cues
+                .then(|| game.crossover_cue_entries(player)),
+            crossover_cue_cursor: settings
+                .crossover_cues
+                .then(|| game.crossover_cue_cursor(player)),
+            column_flashes: settings
+                .column_flash
+                .then(|| game.column_flashes_for_columns(col_start, num_cols)),
+            tap_explosions: skins
+                .tap_explosion
+                .is_some()
+                .then(|| game.tap_explosions_for_columns(col_start, num_cols)),
+            mine_explosions: skins
+                .mine
+                .or(skins.base)
+                .is_some_and(|skin| skin.mine_hit_explosion.is_some())
+                .then(|| game.mine_explosions_for_columns(col_start, num_cols)),
+            lanes: std::array::from_fn(|local_col| {
+                if local_col >= num_cols {
+                    return NotefieldLaneFeedback::default();
+                }
+                let col = col_start + local_col;
+                let active_hold = game.active_hold_for_render(col);
+                let showing = active_hold
+                    .filter(|active| {
+                        request.chart.notes.get(active.note_index).is_some_and(|note| {
+                            hold_explosion_active(Some(active), prepared.current_beat, note.beat)
+                        })
+                    })
+                    .map(|active| matches!(active.note_type, NoteType::Roll));
+                let hold_emitter = &mut hold_emitters[local_col];
+                let emitter = skins.tap_explosion.and_then(|skin| {
+                    skin.hold_visuals_for_col(local_col, showing.unwrap_or(hold_emitter.is_roll))
+                        .emitter
+                        .as_ref()
+                });
+                hold_emitter.update(request.visual.elapsed_screen_s, showing, emitter);
+                let (receptor_bop_zoom, receptor_press_visual) = if settings.hide_targets {
+                    (0.0, None)
+                } else {
+                    (game.receptor_bop_zoom(col), game.receptor_glow_visual_for_col(col))
+                };
+                NotefieldLaneFeedback {
+                    active_hold,
+                    hold_emitter: *hold_emitter,
+                    receptor_bop_zoom,
+                    receptor_press_visual,
+                }
+            }),
+            countdown_font,
+            countdown_text_slot,
+        }
+    }
+}
+
 /// Compose cues/flashes, receptor targets and feedback, then tap and mine
 /// explosions in the canonical field ordering.
 #[allow(clippy::too_many_arguments)]
@@ -161,6 +234,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         return;
     };
     let options = &request.options;
+    let settings = &request.settings;
     let frame_plan = prepared.frame_plan;
     let col_start = frame_plan.col_start;
     let num_cols = frame_plan.num_cols;
@@ -185,7 +259,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             // The regular cue countdown is independent of the crossover-only
             // profile toggle.
             regular_countdown: true,
-            crossover_countdown: options.frame_features.crossover_countdown,
+            crossover_countdown: settings.crossover_countdown,
             current_music_time: prepared.current_time_s,
             current_screen_time: elapsed_screen,
             music_rate: request.chart.music_rate,
@@ -218,14 +292,14 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     let mut lane_centers = [[0.0; 2]; MAX_COLS];
     let mut lane_zooms = [0.0; MAX_COLS];
     let mut lane_depths = [0.0; MAX_COLS];
-    let targets_enabled = !options.hide_targets
+    let targets_enabled = !settings.hide_targets
         && prepared.receptor_alphas[..num_cols]
             .iter()
             .any(|alpha| *alpha > f32::EPSILON);
     let lane_work_mask = feedback_lane_work_mask(
         num_cols,
         targets_enabled,
-        options.hold_explosion_enabled,
+        settings.hold_explosion_enabled,
         tap_explosion.is_some(),
         notes.mine.mine_hit_explosion.is_some(),
         &frame.lanes,
@@ -284,7 +358,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 + request
                     .song_lua
                     .note_hides
-                    .zoom_offset(local_col, current_beat))
+                    .map_or(0.0, |hides| hides.zoom_offset(local_col, current_beat)))
                 * prepared.column_zooms[local_col]
         };
         lane_zooms[local_col] = effect_zoom;
@@ -368,7 +442,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             ];
         }
         lane_centers[local_col] = center;
-        let hold_slot = if hidden || !options.hold_explosion_enabled {
+        let hold_slot = if hidden || !settings.hold_explosion_enabled {
             None
         } else {
             lane.active_hold.and_then(|active| {
@@ -440,7 +514,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     hold_slot,
                     center,
                     hidden,
-                    hide_targets: options.hide_targets,
+                    hide_targets: settings.hide_targets,
                     reverse: field.column_reverse_percent[local_col] > 0.5,
                     bop_zoom: lane.receptor_bop_zoom,
                     effect_zoom,
@@ -462,7 +536,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             );
         }
         if !hidden
-            && options.hold_explosion_enabled
+            && settings.hold_explosion_enabled
             && let Some(emitter) = tap_explosion.and_then(|skin| {
                 skin.hold_visuals_for_col(local_col, lane.hold_emitter.is_roll)
                     .emitter
@@ -646,9 +720,9 @@ mod tests {
     use super::*;
     use crate::visual_arrow_effect_zoom;
     use crate::{
-        ErrorBarModes, FieldPlacement, LayoutMiniIndicatorPosition, MeasureLineMode,
-        NotefieldChartView, NotefieldFrameFeatures, NotefieldGeometry, NotefieldNoteskinView,
-        NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState, ProxyCaptureRequests,
+        ErrorBarModes, FieldPlacement, LayoutMiniIndicatorPosition,
+        NotefieldChartView, NotefieldGeometry, NotefieldNoteskinView, NotefieldOptions,
+        NotefieldSettings, NotefieldSongLuaView, NotefieldVisualState, ProxyCaptureRequests,
         ViewOverride, ZmodLayoutParams, prepare_notefield,
     };
     use deadlib_present::actors::SpriteSource;
@@ -1043,19 +1117,9 @@ mod tests {
 
     fn options() -> NotefieldOptions {
         NotefieldOptions {
-            mine_size_scale: 1.0,
-            frame_features: NotefieldFrameFeatures {
-                measure_line_mode: MeasureLineMode::Off,
-                measure_cues: false,
-                column_cues: true,
-                crossover_cues: false,
-                crossover_countdown: false,
-                column_flash: true,
-                error_bar: false,
-                error_bar_text: false,
-                combo_visible: false,
-            },
-            notefield_offset: [0.0; 2],
+            error_bar: false,
+            error_bar_text: false,
+            combo_visible: false,
             judgment_offset: [0.0; 2],
             combo_offset: [0.0; 2],
             error_bar_offset: [0.0; 2],
@@ -1071,11 +1135,8 @@ mod tests {
             },
             has_judgment_texture: false,
             error_bar_up: false,
-            fallback_mini_percent: 0.0,
             column_flash_compact: false,
             column_flash_dimmed: false,
-            hide_targets: false,
-            hold_explosion_enabled: true,
             hide_combo_explosions: false,
             judgment_back: false,
             show_fa_plus_window: false,
@@ -1192,11 +1253,17 @@ mod tests {
                 wrapper: glam::Mat4::IDENTITY,
                 wrapper_visible: true,
                 player_position: None,
-                note_hides,
+                note_hides: Some(note_hides),
                 column_offsets: &[],
                 column_splines: &[],
             },
             options: options(),
+            settings: NotefieldSettings {
+                column_cues: true,
+                column_flash: true,
+                hold_explosion_enabled: true,
+                ..NotefieldSettings::default()
+            },
             capture_requests: ProxyCaptureRequests::default(),
             edit_measure_text_slot_base: 0,
             arrow_effect_time_s: 0.1,
@@ -1230,7 +1297,7 @@ mod tests {
         };
         for player_capture in [false, true] {
             let mut req = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
-            req.options.frame_features.combo_visible = true;
+            req.options.combo_visible = true;
             req.capture_requests.player = player_capture;
             req.capture_requests.direct_combo = !player_capture;
             req.capture_requests.direct_judgment = !player_capture;
@@ -1744,7 +1811,7 @@ mod tests {
             2,
             2,
         );
-        request.options.hide_targets = true;
+        request.settings.hide_targets = true;
         request.visual.elapsed_screen_s = 0.14;
         let prepared = prepare_notefield(&request).unwrap();
         let frame = NotefieldFeedbackFrameView {
@@ -2082,7 +2149,7 @@ mod tests {
                 request.chart.visible_beat = beat;
                 request.chart.is_in_delay = in_delay;
                 request.visual.visibility.dark = 0.25;
-                request.options.hide_targets = hide_targets;
+                request.settings.hide_targets = hide_targets;
                 let prepared = prepare_notefield(&request).unwrap();
                 let mut draws = Vec::new();
                 compose_notefield_feedback(
@@ -2353,8 +2420,8 @@ mod tests {
             2,
             2,
         );
-        request.options.hide_targets = true;
-        request.options.hold_explosion_enabled = false;
+        request.settings.hide_targets = true;
+        request.settings.hold_explosion_enabled = false;
         let prepared = prepare_notefield(&request).expect("test notefield should prepare");
         let inactive_taps = [None; 2];
         let inactive_mines = [const { None }; 2];

@@ -34,14 +34,16 @@ pub mod select_style;
 mod select_style_flow;
 pub mod smx_assign;
 pub mod test_lights;
+pub mod transition_audio;
+pub mod transitions;
 
 pub(crate) use crate::views::{DensityGraphSlot, DensityGraphSource};
 pub(crate) use flow::SimplyLoveScreen as Screen;
 pub use flow::{
     LateJoinContext, ProfileSelectionContext, ProfileSelectionPlan, SelectMusicJoinContext,
     SelectMusicJoinPlan, SimplyLoveNavigationPlan, SimplyLoveNavigationPolicy, SimplyLoveScreen,
-    evaluation_summary_return_to, late_join_side, profile_selection_plan, resolve_navigation,
-    select_music_join_plan, uses_actor_fade, uses_actor_only_transition,
+    evaluation_summary_return_to, late_join_side, profile_selection_plan, profile_selection_target,
+    resolve_navigation, select_music_join_plan, uses_actor_fade, uses_actor_only_transition,
 };
 
 #[inline(always)]

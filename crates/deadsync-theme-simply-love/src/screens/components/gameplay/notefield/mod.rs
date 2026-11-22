@@ -1,34 +1,26 @@
 use crate::color;
 use crate::screens::gameplay::GameplayCoreState as State;
-use crate::screens::gameplay::GameplayNoteskinAssets;
-use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
-use deadlib_present::space::*;
+use deadlib_present::actors::{ActorResourceArena, SpriteSource};
 use deadsync_assets::noteskin::SpriteSlot;
-use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
-    AccelEffects, AppearanceEffects, FantasticWindowOptions, GameplayErrorBarTrim,
-    TapExplosionOptions, VisibilityEffects, VisualEffects, blue_fantastic_window_ms,
-    draw_distance_after_targets, draw_distance_before_targets,
-    effective_mini_value_with_visual_mask, gameplay_error_bar_trim_max_window_ix,
-    hold_explosion_enabled_for_options, perspective_effects_from_profile,
-    scroll_effects_from_flags,
+    FantasticWindowOptions, GameplayErrorBarTrim, blue_fantastic_window_ms,
+    gameplay_error_bar_trim_max_window_ix,
 };
 use deadsync_notefield::{
-    BrokenRunLookup, BuiltNotefield, CapturedActorScratch, ComboHudFrame, ComboMilestoneAssets,
-    ComboMilestoneSprite, CounterHudFrame, ErrorBarHudFrame, ErrorBarModes, HoldMeshScratch,
+    BrokenRunLookup, ComboHudFrame, ComboMilestoneAssets, ComboMilestoneSprite,
+    CounterHudFrame, ErrorBarHudFrame, ErrorBarModes,
     IndicatorSprite, JudgmentHudFrame, LayoutMiniIndicatorPosition, MeasureCounterOptions,
-    MeasureLineMode, MiniHudFrame, ModelMeshCache, NotefieldCameraCache, NotefieldChartView,
-    NotefieldComposeRequest, NotefieldFeedbackFrameView, NotefieldFieldFrameView,
-    NotefieldFrameFeatures, NotefieldGeometry, NotefieldHudFrameView, NotefieldLaneFeedback,
-    NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
+    MiniHudFrame, NotefieldComposeRequest, NotefieldHudComposeResult, NotefieldHudFrameView,
+    NotefieldOptions, PreparedNotefield,
     StreamProgressLookup, TapJudgmentHudFrame, TapJudgmentSprite, ZmodLayoutParams,
-    compose_notefield_field, compose_notefield_hud, prepare_notefield,
+    compose_notefield_hud,
 };
-use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_profile as profile_data;
+use deadsync_song_lua::gameplay_presentation::FieldHudBuffers;
+use deadsync_song_lua::playback::FieldFrame;
 use deadsync_theme::NotefieldHudStyle;
-use std::array::from_fn;
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 
 use super::display_mods::{self, DisplayModsFrame};
 
@@ -38,9 +30,6 @@ mod zmod;
 pub use prewarm::{prewarm_frame_text_scratch, prewarm_text_layout};
 pub use text::preferred_mods_text;
 use text::{
-    effective_accel_effects_for_player, effective_mini_percent_for_player,
-    effective_perspective_effects_for_player, effective_scroll_effects_for_player,
-    effective_spacing_multiplier_for_player, effective_visual_effects_for_player,
     error_bar_text_label, offset_ms_text, zmod_measure_counter_text, zmod_run_timer_fmt,
 };
 use zmod::{
@@ -399,22 +388,7 @@ fn zmod_layout_params(
     }
 }
 
-#[inline(always)]
-const fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
-    let mask = profile.tap_explosion_active_mask;
-    hold_explosion_enabled_for_options(TapExplosionOptions {
-        fantastic: mask.contains(profile_data::TapExplosionMask::FANTASTIC),
-        excellent: mask.contains(profile_data::TapExplosionMask::EXCELLENT),
-        great: mask.contains(profile_data::TapExplosionMask::GREAT),
-        decent: mask.contains(profile_data::TapExplosionMask::DECENT),
-        way_off: mask.contains(profile_data::TapExplosionMask::WAY_OFF),
-        miss: mask.contains(profile_data::TapExplosionMask::MISS),
-        held: mask.contains(profile_data::TapExplosionMask::HELD),
-        holding: mask.contains(profile_data::TapExplosionMask::HOLDING),
-    })
-}
-
-/// Immutable profile-derived notefield inputs for one player and song.
+/// Immutable HUD presentation inputs for one player and song.
 ///
 /// The gameplay/render thread owns this fixed two-slot screen cache. It is
 /// populated at gameplay entry from the immutable profile and resolved assets,
@@ -423,10 +397,9 @@ const fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
 /// all clamps, masks, option translation, and font selection happen at warmup.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct GameplayNotefieldPlan {
-    hud_style: NotefieldHudStyle,
-    options: NotefieldOptions,
-    tap_explosion_noteskin_visible: bool,
-    small_combo_font: &'static str,
+    pub(crate) hud_style: NotefieldHudStyle,
+    pub(crate) options: NotefieldOptions,
+    pub(crate) small_combo_font: &'static str,
     combo_font: Option<&'static str>,
 }
 
@@ -437,12 +410,6 @@ pub(crate) fn gameplay_notefield_plan(
     judgment_palette: deadsync_theme::color::JudgmentPalette,
 ) -> GameplayNotefieldPlan {
     let style = crate::notefield_style::notefield_style_with_palette(judgment_palette);
-    let measure_line_mode = match profile.measure_lines {
-        profile_data::MeasureLines::Off => MeasureLineMode::Off,
-        profile_data::MeasureLines::Measure => MeasureLineMode::Measure,
-        profile_data::MeasureLines::Quarter => MeasureLineMode::Quarter,
-        profile_data::MeasureLines::Eighth => MeasureLineMode::Eighth,
-    };
     let error_bar_mask = {
         let mut mask = profile.error_bar_active_mask;
         if mask.is_empty() {
@@ -459,22 +426,9 @@ pub(crate) fn gameplay_notefield_plan(
         }
     };
     let options = NotefieldOptions {
-        mine_size_scale: profile.mine_size_percent.clamp(10, 200) as f32 / 100.0,
-        frame_features: NotefieldFrameFeatures {
-            measure_line_mode,
-            measure_cues: profile.measure_cues,
-            column_cues: profile.column_cues,
-            crossover_cues: profile.crossover_cues,
-            crossover_countdown: profile.column_countdown,
-            column_flash: profile.column_flash_on_miss,
-            error_bar: !error_bar_mask.is_empty(),
-            error_bar_text: error_bar_mask.contains(profile_data::ErrorBarMask::TEXT),
-            combo_visible: !profile.hide_combo,
-        },
-        notefield_offset: [
-            profile.note_field_offset_x.clamp(0, 50) as f32,
-            profile.note_field_offset_y.clamp(-50, 50) as f32,
-        ],
+        error_bar: !error_bar_mask.is_empty(),
+        error_bar_text: error_bar_mask.contains(profile_data::ErrorBarMask::TEXT),
+        combo_visible: !profile.hide_combo,
         judgment_offset: [
             profile
                 .judgment_offset_x
@@ -508,11 +462,8 @@ pub(crate) fn gameplay_notefield_plan(
         zmod_layout: zmod_layout_params(profile, style, has_judgment_texture),
         has_judgment_texture,
         error_bar_up: profile.error_bar_up,
-        fallback_mini_percent: profile.mini_percent as f32,
         column_flash_compact: profile.column_flash_size == profile_data::ColumnFlashSize::Compact,
         column_flash_dimmed: column_flash_dimmed(profile.column_flash_brightness),
-        hide_targets: profile.hide_targets,
-        hold_explosion_enabled: hold_explosion_enabled(profile),
         hide_combo_explosions: profile.hide_combo_explosions,
         judgment_back: profile.judgment_back,
         show_fa_plus_window: profile.show_fa_plus_window,
@@ -567,7 +518,6 @@ pub(crate) fn gameplay_notefield_plan(
     GameplayNotefieldPlan {
         hud_style: style,
         options,
-        tap_explosion_noteskin_visible: !profile.tap_explosion_noteskin_hidden(),
         small_combo_font: zmod_small_combo_font(profile.combo_font),
         combo_font: zmod_combo_font_name(profile.combo_font),
     }
@@ -603,285 +553,31 @@ fn combo_milestone_assets(
     }
 }
 
-pub(crate) fn compose_frame(
+pub(crate) fn compose_hud(
     state: &State,
     judgment_assets: &ResolvedJudgmentAssets,
     resolved_combo_assets: &ResolvedComboMilestoneAssets,
     notefield_plan: &GameplayNotefieldPlan,
-    player_idx: usize,
-    arrow_effect_time_s: f64,
-    arrow_tipsy_time_s: Option<f64>,
-    noteskin_assets: &GameplayNoteskinAssets,
+    frame: &FieldFrame<'_>,
+    request: &NotefieldComposeRequest<'_, SpriteSlot>,
+    prepared: &PreparedNotefield<'_, SpriteSlot>,
     visual_effects: &'static crate::visual_styles::EffectAssets,
-    actor_resources: &ActorResourceArena,
     textures: &impl deadlib_present::texture::TextureContext,
-    model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
-    hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
-    hold_emitters: &[RefCell<[deadsync_notefield::HoldEmitterState; MAX_COLS]>; MAX_PLAYERS],
-    capture_scratch: &[RefCell<CapturedActorScratch>; MAX_PLAYERS],
-    camera_caches: &mut [NotefieldCameraCache; MAX_PLAYERS],
     broken_run_lookup: &BrokenRunLookup,
     stream_progress_lookup: &StreamProgressLookup,
-    profile: &profile_data::Profile,
-    placement: FieldPlacement,
-    play_style: profile_data::PlayStyle,
-    center_1player_notefield: bool,
-    song_lua_judgment_visible: bool,
-    song_lua_combo_visible: bool,
-    song_lua_judgment_transform: Option<deadsync_notefield::HudActorTransform>,
-    song_lua_combo_transform: Option<deadsync_notefield::HudActorTransform>,
-    show_song_visuals: bool,
-    apply_attacks: bool,
-    capture_requests: ProxyCaptureRequests,
-    field_wrapper: glam::Mat4,
-    field_wrapper_visible: bool,
-    player_position: Option<deadsync_notefield::SongLuaPlayerPosition>,
     warn_cmod_for_itl_chart: bool,
     display_mods_text: &std::sync::Arc<str>,
-    timing_labels: &[deadsync_notefield::TimingSegmentLabel],
-    view: ViewOverride,
-    actors: &mut Vec<Actor>,
-    flat_draws: &mut Vec<FlatDraw>,
-    hud_actors: &mut Vec<Actor>,
-    hud_flat_draws: &mut Vec<FlatDraw>,
-) -> BuiltNotefield {
-    actors.clear();
-    flat_draws.clear();
-    hud_actors.clear();
-    hud_flat_draws.clear();
+    buffers: FieldHudBuffers<'_>,
+) -> NotefieldHudComposeResult {
+    let actor_resources = buffers.resources;
+    let player_idx = frame.player;
+    let profile = &state.profiles()[player_idx].0;
     let hold_judgment_texture = judgment_assets.hold_judgment();
     let held_miss_texture = judgment_assets.held_miss();
     let p = &state.players()[player_idx];
-    let mut model_cache = model_caches[player_idx].borrow_mut();
 
-    // Collect concrete profile/runtime inputs here; canonical placement stays
-    // independent of Profile, gameplay state, config, and theme globals.
-    let style = notefield_plan.hud_style;
+    let style = &request.hud_style;
     let judgment_texture = judgment_assets.judgment();
-    let elapsed_screen = state.total_elapsed_in_screen();
-    let base_accel = AccelEffects::from_mask_bits(profile.accel_effects_active_mask.bits());
-    let base_scroll = scroll_effects_from_flags(
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Reverse),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Split),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Alternate),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Cross),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Centered),
-    );
-    let base_perspective = perspective_effects_from_profile(&state.profiles()[player_idx]);
-    let base_visual = VisualEffects::from_mask_bits(profile.visual_effects_active_mask.bits());
-    let base_appearance =
-        AppearanceEffects::from_mask_bits(profile.appearance_effects_active_mask.bits());
-    let accel = if apply_attacks {
-        effective_accel_effects_for_player(state, player_idx)
-    } else {
-        base_accel
-    };
-    let scroll = if let Some(scroll) = view.scroll {
-        scroll
-    } else if apply_attacks {
-        effective_scroll_effects_for_player(state, player_idx)
-    } else {
-        base_scroll
-    };
-    let perspective = if apply_attacks {
-        effective_perspective_effects_for_player(state, player_idx)
-    } else {
-        base_perspective
-    };
-    let visual = if apply_attacks {
-        effective_visual_effects_for_player(state, player_idx)
-    } else {
-        base_visual
-    };
-    let appearance = if apply_attacks {
-        state.effective_appearance_effects_for_player(player_idx)
-    } else {
-        base_appearance
-    };
-    let visibility = if apply_attacks {
-        state.effective_visibility_effects_for_player(player_idx)
-    } else {
-        VisibilityEffects::default()
-    };
-    let mini_percent = if apply_attacks {
-        effective_mini_percent_for_player(state, player_idx)
-    } else {
-        profile.mini_percent as f32
-    };
-    let field_zoom = if apply_attacks {
-        state.field_zoom_for_player(player_idx)
-    } else {
-        let visual_mask = profile.visual_effects_active_mask.bits();
-        let runtime_profile = &state.profiles()[player_idx];
-        let mini =
-            effective_mini_value_with_visual_mask(runtime_profile, visual_mask, mini_percent);
-        mini.mul_add(-0.5, 1.0)
-    };
-    // Canonical composition applies current DrawSize, Tilt, Mini, and the
-    // Centered/Boomerang extension to these unscaled theme metrics.
-    let viewport_height = state.setup.viewport.height();
-    let draw_distance_before = draw_distance_before_targets(viewport_height, 1.0);
-    let draw_distance_after = draw_distance_after_targets(viewport_height, 1.0, 0.0);
-    let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
-    let player_col_start = player_idx.saturating_mul(state.cols_per_player());
-    let column_dirs = from_fn(|local_col| {
-        let col = player_col_start + local_col;
-        if local_col >= state.cols_per_player() || col >= state.num_cols() {
-            1.0
-        } else {
-            if apply_attacks && view.scroll.is_none() {
-                state.notefield_column_scroll_dir(col)
-            } else {
-                scroll.reverse_scale_for_column(local_col, state.cols_per_player())
-            }
-        }
-    });
-    let (time_signatures, bpms, stops, delays, scrolls) = state
-        .gameplay_chart(player_idx)
-        .map(|chart| {
-            let timing = &chart.timing_segments;
-            (
-                timing.time_signatures.as_slice(),
-                timing.bpms.as_slice(),
-                timing.stops.as_slice(),
-                timing.delays.as_slice(),
-                timing.scrolls.as_slice(),
-            )
-        })
-        .unwrap_or((&[], &[], &[], &[], &[]));
-    let base_noteskin = noteskin_assets.noteskin[player_idx].as_deref();
-    let mine_noteskin = noteskin_assets.mine_noteskin[player_idx].as_deref();
-    let tap_explosion_noteskin = if notefield_plan.tap_explosion_noteskin_visible {
-        noteskin_assets.tap_explosion_noteskin[player_idx]
-            .as_deref()
-            .or(base_noteskin)
-    } else {
-        None
-    };
-    let no_song_note_hides = deadsync_gameplay::SongLuaNoteHideWindows::default();
-    let request = NotefieldComposeRequest {
-        timing_labels,
-        hud_style: style,
-        placement,
-        view,
-        geometry: NotefieldGeometry {
-            player_idx,
-            stage_seed: state.setup.song_seed as u32,
-            num_players: state.num_players(),
-            cols_per_player: state.cols_per_player(),
-            total_cols: state.num_cols(),
-            single_style: play_style.is_single(),
-            double_style: play_style.is_double(),
-            shared_sides: play_style.is_routine(),
-            center_one_player: center_1player_notefield,
-            screen_width: screen_width(),
-            screen_height: screen_height(),
-            screen_center_x: screen_center_x(),
-            screen_center_y: screen_center_y(),
-            field_zoom,
-            scroll_speed: if apply_attacks {
-                state.effective_scroll_speed_for_player(player_idx)
-            } else {
-                state.scroll_speed_for_player(player_idx)
-            },
-            draw_distance_before_targets: draw_distance_before,
-            draw_distance_after_targets: draw_distance_after,
-            column_dirs,
-            reverse_scroll: if apply_attacks && view.scroll.is_none() {
-                state.notefield_reverse_scroll(player_idx)
-            } else {
-                scroll.reverse_percent_for_column(0, state.cols_per_player()) > 0.5
-            },
-        },
-        visual: NotefieldVisualState {
-            elapsed_screen_s: elapsed_screen,
-            expand_seconds: state.mods.expand_seconds[player_idx],
-            current_display_beat: state.current_beat_display(),
-            accel,
-            scroll,
-            perspective,
-            visual,
-            appearance,
-            dynamic_sudden: profile
-                .appearance_effects_active_mask
-                .contains(profile_data::AppearanceEffectsMask::DYNAMIC_SUDDEN),
-            visibility,
-            mini_percent,
-            spacing_multiplier: spacing_mult,
-        },
-        chart: NotefieldChartView {
-            timing: state.timing_for_player(player_idx),
-            notes: state.notes(),
-            note_range: state.note_range_for_player(player_idx),
-            lane_note_row_indices: state.lane_note_row_index_lists(),
-            lane_hold_indices: state.lane_hold_index_lists(),
-            note_itg_rows: state.note_itg_rows(),
-            note_time_cache_ns: state.note_time_cache_ns(),
-            hold_end_time_cache_ns: state.hold_end_time_cache_ns(),
-            note_displayed_beat_cache: state.note_displayed_beat_cache(),
-            decaying_hold_indices: state.decaying_hold_indices(),
-            note_row_metadata: &state.chart_runtime.row_indices.note_row_entry_indices,
-            visible_music_time_ns: state.visible_music_time_ns(player_idx),
-            visible_beat: state.visible_beat(player_idx),
-            is_in_delay: state.is_in_delay(),
-            search_beat: state.notefield_search_beat(player_idx),
-            scroll_reference_bpm: state.scroll_reference_bpm(),
-            music_rate: state.music_rate(),
-            note_count_stats: state.note_count_stats(player_idx),
-            time_signatures,
-            bpms,
-            stops,
-            delays,
-            scrolls,
-            displayed_beat_monotonic: state.displayed_beat_monotonic(player_idx),
-        },
-        noteskin: NotefieldNoteskinView {
-            base: base_noteskin,
-            mine: mine_noteskin,
-            receptor: noteskin_assets.receptor_noteskin[player_idx].as_deref(),
-            tap_explosion: tap_explosion_noteskin,
-        },
-        song_lua: NotefieldSongLuaView {
-            wrapper: field_wrapper,
-            wrapper_visible: field_wrapper_visible,
-            player_position,
-            column_splines: if show_song_visuals {
-                &state.song_lua_visuals().column_splines[player_idx]
-            } else {
-                &[]
-            },
-            note_hides: if show_song_visuals {
-                &state.song_lua_visuals().note_hides[player_idx]
-            } else {
-                &no_song_note_hides
-            },
-            column_offsets: if show_song_visuals {
-                &state.song_lua_visuals().column_offsets[player_idx]
-            } else {
-                &[]
-            },
-        },
-        options: notefield_plan.options,
-        capture_requests,
-        edit_measure_text_slot_base: super::FRAME_TEXT_EDIT_MEASURE_BASE
-            + player_idx as u8 * deadsync_notefield::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER,
-        arrow_effect_time_s,
-        arrow_tipsy_time_s,
-        music_time_s: state.current_music_time_seconds(),
-    };
-    let Some(prepared) = prepare_notefield(&request) else {
-        return BuiltNotefield::empty(request.geometry.screen_center_x);
-    };
     let options = &request.options;
     let elapsed_screen = request.visual.elapsed_screen_s;
     let frame_plan = prepared.frame_plan;
@@ -889,119 +585,14 @@ pub(crate) fn compose_frame(
     let num_cols = frame_plan.num_cols;
     let field = prepared.field;
     let playfield_center_x = field.playfield_center_x;
-    let layout_center_x = field.layout_center_x;
     let notefield_offset_y = field.notefield_offset_y;
     let mc_font_name = notefield_plan.small_combo_font;
     let blind_active = prepared.blind_active;
 
-    let noteskin_sprite_source =
-        |slot: &SpriteSlot| slot.actor_texture_source(actor_resources, textures);
-    let mut hold_emitters = hold_emitters[player_idx].borrow_mut();
-    let feedback_frame = NotefieldFeedbackFrameView {
-        column_cues: options
-            .frame_features
-            .column_cues
-            .then(|| state.column_cues(player_idx)),
-        column_cue_cursor: options
-            .frame_features
-            .column_cues
-            .then(|| state.column_cue_cursor(player_idx)),
-        crossover_cues: options
-            .frame_features
-            .crossover_cues
-            .then(|| state.crossover_cues(player_idx)),
-        crossover_cue_entries: options
-            .frame_features
-            .crossover_cues
-            .then(|| state.crossover_cue_entries(player_idx)),
-        crossover_cue_cursor: options
-            .frame_features
-            .crossover_cues
-            .then(|| state.crossover_cue_cursor(player_idx)),
-        column_flashes: options
-            .frame_features
-            .column_flash
-            .then(|| state.column_flashes_for_columns(col_start, num_cols)),
-        tap_explosions: tap_explosion_noteskin
-            .is_some()
-            .then(|| state.tap_explosions_for_columns(col_start, num_cols)),
-        mine_explosions: mine_noteskin
-            .or(base_noteskin)
-            .is_some_and(|noteskin| noteskin.mine_hit_explosion.is_some())
-            .then(|| state.mine_explosions_for_columns(col_start, num_cols)),
-        lanes: from_fn(|local_col| {
-            if local_col >= num_cols {
-                return NotefieldLaneFeedback::default();
-            }
-            let col = col_start + local_col;
-            let showing = state
-                .active_hold_for_render(col)
-                .filter(|active| {
-                    request
-                        .chart
-                        .notes
-                        .get(active.note_index)
-                        .is_some_and(|note| {
-                            deadsync_gameplay::hold_explosion_active(
-                                Some(active),
-                                prepared.current_beat,
-                                note.beat,
-                            )
-                        })
-                })
-                .map(|active| matches!(active.note_type, deadsync_core::note::NoteType::Roll));
-            let emitter = tap_explosion_noteskin.and_then(|skin| {
-                skin.hold_visuals_for_col(
-                    local_col,
-                    showing.unwrap_or(hold_emitters[local_col].is_roll),
-                )
-                .emitter
-                .as_ref()
-            });
-            hold_emitters[local_col].update(elapsed_screen, showing, emitter);
-            NotefieldLaneFeedback {
-                active_hold: state.active_hold_for_render(col),
-                hold_emitter: hold_emitters[local_col],
-                receptor_bop_zoom: if options.hide_targets {
-                    0.0
-                } else {
-                    state.receptor_bop_zoom(col)
-                },
-                receptor_press_visual: (!options.hide_targets)
-                    .then(|| state.receptor_glow_visual_for_col(col))
-                    .flatten(),
-            }
-        }),
-        countdown_font: mc_font_name,
-        countdown_text_slot: super::FRAME_TEXT_COUNTDOWN_BASE
-            + player_idx as u8 * deadsync_notefield::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER,
-    };
-    let field_frame = NotefieldFieldFrameView {
-        feedback: feedback_frame,
-        completed_rows: state.completed_row_visibility(player_idx),
-    };
-    let field_result = {
-        hud_actors.reserve(prepared.frame_plan.hud_actor_reserve);
-        let mut hold_scratch = hold_mesh_scratch[player_idx].borrow_mut();
-        let mut proxy_scratch = capture_scratch[player_idx].borrow_mut();
-        compose_notefield_field(
-            actors,
-            flat_draws,
-            hud_flat_draws,
-            &mut model_cache,
-            &mut hold_scratch,
-            &mut proxy_scratch,
-            &mut camera_caches[player_idx],
-            &request,
-            &prepared,
-            &field_frame,
-            &noteskin_sprite_source,
-        )
-    };
     if let Some(alpha) = display_mods::active_alpha(request.view.hide_display_mods, elapsed_screen)
     {
         display_mods::compose(
-            hud_actors,
+            buffers.actors,
             DisplayModsFrame {
                 mods_text: std::sync::Arc::clone(display_mods_text),
                 warn_cmod_for_itl_chart,
@@ -1012,11 +603,11 @@ pub(crate) fn compose_frame(
         );
     }
 
-    let combo_active = song_lua_combo_visible
+    let combo_active = frame.combo_visible
         && NotefieldHudFrameView::combo_active(
             request.view.hide_combo,
             blind_active,
-            options.frame_features.combo_visible,
+            options.combo_visible,
         );
     let combo_milestone_assets =
         (combo_active && !options.hide_combo_explosions && !p.combo_milestones.is_empty())
@@ -1044,7 +635,7 @@ pub(crate) fn compose_frame(
             combo_color,
             font: notefield_plan.combo_font,
             number_text_slot: super::FRAME_TEXT_COMBO_BASE + player_idx as u8,
-            transform: song_lua_combo_transform,
+            transform: frame.combo_transform,
         }
     });
 
@@ -1056,7 +647,7 @@ pub(crate) fn compose_frame(
         );
     let error_bar_frame = NotefieldHudFrameView::error_active(
         blind_active,
-        options.frame_features.error_bar,
+        options.error_bar,
         offset_indicator_active,
     )
     .then(|| ErrorBarHudFrame {
@@ -1098,14 +689,8 @@ pub(crate) fn compose_frame(
             },
         );
 
-    let judgment_sprite = show_song_visuals
-        .then(|| {
-            deadsync_song_lua::judgment_texture_at(
-                &state.song_lua_visuals().player_actors[player_idx].judgment,
-                state.current_music_time_display(),
-            )
-        })
-        .flatten()
+    let judgment_sprite = frame
+        .judgment_texture
         .map(|texture| TapJudgmentSprite {
             source: SpriteSource::TextureHandle {
                 key: texture.key.clone(),
@@ -1126,7 +711,7 @@ pub(crate) fn compose_frame(
                     frame_rows: sprite.frame_rows,
                 })
         });
-    let tap = if song_lua_judgment_visible
+    let tap = if frame.judgment_visible
         && !blind_active
         && let Some(render) = p.last_judgment.as_ref()
         && TapJudgmentHudFrame::render_active(render, elapsed_screen, options.judgment_animation)
@@ -1135,18 +720,18 @@ pub(crate) fn compose_frame(
         Some(TapJudgmentHudFrame {
             render,
             sprite,
-            transform: song_lua_judgment_transform,
+            transform: frame.judgment_transform,
         })
     } else {
         None
     };
-    let held_misses = if song_lua_judgment_visible && !blind_active && held_miss_texture.is_some() {
+    let held_misses = if frame.judgment_visible && !blind_active && held_miss_texture.is_some() {
         state.held_miss_judgments_for_columns(col_start, num_cols)
     } else {
         &[]
     };
     let hold_judgments =
-        if song_lua_judgment_visible && !blind_active && hold_judgment_texture.is_some() {
+        if frame.judgment_visible && !blind_active && hold_judgment_texture.is_some() {
             state.hold_judgments_for_columns(col_start, num_cols)
         } else {
             &[]
@@ -1194,48 +779,21 @@ pub(crate) fn compose_frame(
         mini: mini_frame,
         judgment: judgment_frame,
     };
-    let hud_result = compose_notefield_hud(
-        hud_actors,
-        hud_flat_draws,
-        &request,
-        &prepared,
+    compose_notefield_hud(
+        buffers.actors,
+        buffers.draws,
+        request,
+        prepared,
         &hud_frame,
-        &mut capture_scratch[player_idx].borrow_mut(),
-    );
-
-    BuiltNotefield {
-        layout_center_x,
-        field_camera: field_result.camera,
-        field_camera_generation: field_result.camera_generation,
-        field_actors: field_result.captured_actors,
-        field_draw_range: field_result.draw_range,
-        judgment_actors: hud_result.judgment_actors,
-        judgment_draw_range: hud_result.judgment_draw_range,
-        combo_actors: hud_result.combo_actors,
-        combo_draw_range: hud_result.combo_draw_range,
-        hud_parts: hud_result.parts,
-    }
+        buffers.capture,
+    )
 }
 
-pub(crate) fn prewarm_actor_resources(
+pub(crate) fn prewarm_hud_actor_resources(
     arena: &ActorResourceArena,
-    noteskin_assets: &GameplayNoteskinAssets,
     profiles: &[profile_data::Profile; MAX_PLAYERS],
     num_players: usize,
 ) {
-    for noteskins in [
-        &noteskin_assets.noteskin,
-        &noteskin_assets.mine_noteskin,
-        &noteskin_assets.receptor_noteskin,
-        &noteskin_assets.tap_explosion_noteskin,
-    ] {
-        for noteskin in noteskins.iter().take(num_players).flatten() {
-            noteskin.for_each_slot(|slot| {
-                let _ = slot.actor_texture_source(arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
-            });
-        }
-    }
-
     for profile in profiles.iter().take(num_players) {
         for texture in [
             resolved_judgment_texture(profile),

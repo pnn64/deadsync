@@ -348,6 +348,127 @@ fn saved_perspective_reaches_lua_for_each_player_side() {
 }
 
 #[test]
+fn saved_turns_and_column_mappings_reach_lua_for_each_player_side() {
+    use deadsync_gameplay::{
+        GameplayInputPlayStyle as Style, GameplayInputPlayerSide as Side, GameplaySession,
+        GameplayTurnOption as Turn, GameplayViewport,
+    };
+    use deadsync_profile::{Profile, TurnOption};
+    let song = deadsync_simfile::song::parse_song_meta_file(
+        &deadsync_root().join("tests/fixtures/song_lua/display-size.ssc"),
+        &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+        0.0,
+        |_| 2.0,
+    )
+    .expect("small context chart");
+    let charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
+    let timing = TimingData::default();
+    let profiles = [
+        Profile {
+            turn_option: TurnOption::Mirror,
+            ..Default::default()
+        },
+        Profile {
+            turn_option: TurnOption::Right,
+            ..Default::default()
+        },
+    ];
+    let speeds = [deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0); 2];
+    let make_context = |session: &GameplaySession| {
+        super::song_lua_play_context(
+            &song,
+            &charts,
+            [&timing; 2],
+            &profiles,
+            &speeds,
+            1.0,
+            GameplayViewport::design(),
+            (854, 480),
+            16.0 / 9.0,
+            0.0,
+            session,
+            &Default::default(),
+            "null",
+        )
+    };
+    let identity: [usize; deadsync_core::input::MAX_COLS] =
+        std::array::from_fn(|column| column);
+    for (side, turn, expected) in [
+        (Side::P1, Turn::Mirror, [3, 2, 1, 0]),
+        (Side::P2, Turn::Right, [1, 3, 0, 2]),
+    ] {
+        let context = make_context(&GameplaySession {
+            player_side: side,
+            ..Default::default()
+        });
+        assert_eq!(context.players[0].turn_option, turn);
+        assert_eq!(context.players[0].column_take_from[..4], expected);
+        assert_eq!(context.players[0].column_take_from[4..], identity[4..]);
+        assert!(!context.players[1].enabled);
+        assert_eq!(context.players[1].turn_option, Turn::None);
+        assert_eq!(context.players[1].column_take_from, identity);
+    }
+
+    let versus = make_context(&GameplaySession {
+        play_style: Style::Versus,
+        ..Default::default()
+    });
+    assert_eq!(versus.players[0].turn_option, Turn::Mirror);
+    assert_eq!(versus.players[0].column_take_from[..4], [3, 2, 1, 0]);
+    assert_eq!(versus.players[1].turn_option, Turn::Right);
+    assert_eq!(versus.players[1].column_take_from[..4], [1, 3, 0, 2]);
+
+    let double = make_context(&GameplaySession {
+        play_style: Style::Double,
+        ..Default::default()
+    });
+    assert_eq!(double.players[0].column_take_from[..8], [7, 6, 5, 4, 3, 2, 1, 0]);
+    assert_eq!(double.players[1].column_take_from, identity);
+}
+
+#[test]
+fn saved_shuffle_mapping_uses_song_seed_and_active_style() {
+    use deadsync_gameplay::{
+        GameplayInputPlayStyle as Style, GameplaySession, GameplayTurnOption as Turn,
+        GameplayViewport, turn_column_mapping, turn_seed_for_song,
+    };
+    let song = deadsync_simfile::song::parse_song_meta_file(
+        &deadsync_root().join("tests/fixtures/song_lua/display-size.ssc"),
+        &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+        0.0,
+        |_| 2.0,
+    )
+    .expect("small context chart");
+    let charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
+    let profiles = std::array::from_fn(|_| deadsync_profile::Profile {
+        turn_option: deadsync_profile::TurnOption::Shuffle,
+        ..Default::default()
+    });
+    for play_style in [Style::Single, Style::Double] {
+        let context = super::song_lua_compile_context(
+            &song,
+            &charts,
+            1,
+            &profiles,
+            &[deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0); 2],
+            1.0,
+            0.0,
+            GameplayViewport::design(),
+            &GameplaySession {
+                play_style,
+                ..Default::default()
+            },
+            false,
+        );
+        assert_eq!(context.players[0].turn_option, Turn::Shuffle);
+        assert_eq!(
+            context.players[0].column_take_from,
+            turn_column_mapping(Turn::Shuffle, play_style.cols_per_player(), turn_seed_for_song(&song))
+        );
+    }
+}
+
+#[test]
 fn ultra_synergy_matrix_preserves_saved_reverse_through_song_lua() {
     use deadsync_gameplay::{
         AttackBaseEffects, GameplayAttackRuntimeState, GameplayInputPlayStyle as Style,

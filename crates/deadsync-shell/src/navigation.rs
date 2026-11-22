@@ -1,61 +1,10 @@
-use crate::Command;
+use crate::{ActiveTheme, Command, ThemeScreen as Screen, TransitionState};
 use crate::interaction::{ExitIntent, ProcessExitPlan, ProcessExitRequest, ShellInteractionState};
 use crate::runtime::ShellState;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
-use std::path::PathBuf;
-
-const FADE_OUT_DURATION: f32 = 0.4;
-const MENU_OUT_DURATION: f32 = 1.0;
-
-pub struct TransitionMusicPaths {
-    pub menu: PathBuf,
-    pub course: PathBuf,
-    pub credits: PathBuf,
-    pub gameover: PathBuf,
-}
-
-pub struct TransitionAudioPlan {
-    pub commands: Vec<Command>,
-    pub stop_screen_sfx: bool,
-    pub clear_play_background: bool,
-}
-
-#[derive(Debug)]
-pub enum TransitionState {
-    Idle,
-    FadingOut {
-        elapsed: f32,
-        duration: f32,
-        target: Screen,
-    },
-    FadingIn {
-        elapsed: f32,
-        duration: f32,
-    },
-    ActorsFadeOut {
-        elapsed: f32,
-        duration: f32,
-        target: Screen,
-    },
-    ActorsFadeIn {
-        elapsed: f32,
-    },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TransitionCompletion {
-    GlobalFadeOut(Screen),
-    ActorFadeOut(Screen),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TransitionFramePlan {
-    pub tick_gameplay: bool,
-    pub step_screen: bool,
-    pub sync_input_capture: bool,
-    pub completion: Option<TransitionCompletion>,
-}
-
+use deadsync_gameplay::exit_route::GameplayExitDestination;
+use deadsync_theme::{
+    ThemeScreenFlow, ThemeTransitions, TransitionKind, TransitionState as ThemeTransitionState,
+};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ScreenChangePlan {
     pub leave_lobby: bool,
@@ -64,19 +13,11 @@ pub struct ScreenChangePlan {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NavigationTransitionStart {
-    DirectEntry {
-        target: Screen,
-    },
+pub enum NavigationTransitionStart<S> {
+    DirectEntry { target: S },
     Busy,
-    ActorFade {
-        from: Screen,
-        target: Screen,
-    },
-    GlobalFade {
-        target: Screen,
-        stop_screen_sfx: bool,
-    },
+    ActorFade { from: S, target: S },
+    GlobalFade { target: S },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,8 +29,8 @@ pub enum FadeCompletionExitPlan {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NavigationTransitionEffectPlan {
-    pub start: NavigationTransitionStart,
+pub struct NavigationTransitionEffectPlan<S> {
+    pub start: NavigationTransitionStart<S>,
     pub clear_exit_intent: bool,
 }
 
@@ -139,305 +80,158 @@ impl ProcessExitNavigationLog {
     }
 }
 
-impl TransitionState {
-    #[inline(always)]
-    pub const fn menu_input_open(&self) -> bool {
-        matches!(
-            self,
-            Self::Idle | Self::FadingIn { .. } | Self::ActorsFadeIn { .. }
-        )
-    }
-
-    pub fn advance_frame(
-        &mut self,
-        delta_time: f32,
-        current_screen: Screen,
-        actor_fade_in_duration: f32,
-    ) -> TransitionFramePlan {
-        let mut plan = TransitionFramePlan {
-            tick_gameplay: false,
-            step_screen: false,
-            sync_input_capture: false,
-            completion: None,
-        };
-        match self {
-            Self::Idle => plan.step_screen = true,
-            Self::FadingOut {
-                elapsed,
-                duration,
-                target,
-            } => {
-                *elapsed += delta_time;
-                plan.tick_gameplay =
-                    *target == Screen::Evaluation && current_screen == Screen::Gameplay;
-                if *elapsed >= *duration {
-                    plan.completion = Some(TransitionCompletion::GlobalFadeOut(*target));
-                }
-            }
-            Self::ActorsFadeOut {
-                elapsed,
-                duration,
-                target,
-            } => {
-                *elapsed += delta_time;
-                if *elapsed >= *duration {
-                    plan.completion = Some(TransitionCompletion::ActorFadeOut(*target));
-                }
-            }
-            Self::FadingIn { elapsed, duration } => {
-                *elapsed += delta_time;
-                plan.tick_gameplay = current_screen == Screen::Gameplay;
-                if *elapsed >= *duration {
-                    *self = Self::Idle;
-                    plan.sync_input_capture = true;
-                }
-            }
-            Self::ActorsFadeIn { elapsed } => {
-                *elapsed += delta_time;
-                if *elapsed >= actor_fade_in_duration {
-                    *self = Self::Idle;
-                    plan.sync_input_capture = true;
-                }
-            }
+/// The simulation advances under the normal entry cover and the exit to results.
+pub fn tick_gameplay_during_transition<T: ThemeScreenFlow>(
+    screen: T::Screen,
+    transition: &ThemeTransitionState<T::Screen>,
+) -> bool {
+    screen == T::SCREENS.gameplay
+        && match transition {
+            ThemeTransitionState::FadingIn { .. } => true,
+            ThemeTransitionState::FadingOut { target, .. } => *target == T::SCREENS.results,
+            _ => false,
         }
-        plan
-    }
 }
 
-pub fn screen_change_plan(previous: Screen, target: Screen) -> ScreenChangePlan {
+pub fn screen_change_plan<T: ThemeScreenFlow>(
+    previous: T::Screen,
+    target: T::Screen,
+) -> ScreenChangePlan {
     ScreenChangePlan {
-        leave_lobby: previous != target && matches!(target, Screen::Menu),
-        exit_gameplay: previous == Screen::Gameplay && target != Screen::Gameplay,
+        leave_lobby: previous != target && target == T::SCREENS.menu,
+        exit_gameplay: previous == T::SCREENS.gameplay && target != T::SCREENS.gameplay,
         clear_text_layout_cache: previous != target,
     }
 }
 
 /// Keep Practice's temporary rate across editor options and chart reloads,
 /// then restore the preferred rate when leaving that flow.
-pub fn practice_music_rate_on_screen_change(
+pub fn practice_music_rate_on_screen_change<T: ThemeScreenFlow>(
     saved_rate: &mut Option<f32>,
-    target: Screen,
+    target: T::Screen,
     current_rate: f32,
 ) -> Option<f32> {
-    match target {
-        Screen::Practice => {
-            saved_rate.get_or_insert(current_rate);
-            None
-        }
-        Screen::PlayerOptions => None,
-        _ => saved_rate.take(),
+    if target == T::SCREENS.practice {
+        saved_rate.get_or_insert(current_rate);
+        None
+    } else if target == T::SCREENS.player_options {
+        None
+    } else {
+        saved_rate.take()
     }
 }
 
 #[inline(always)]
-pub const fn course_plan_required(previous: Screen, target: Screen) -> bool {
-    matches!(previous, Screen::SelectCourse)
-        && matches!(target, Screen::Gameplay | Screen::PlayerOptions)
+pub fn course_plan_required<T: ThemeScreenFlow>(previous: T::Screen, target: T::Screen) -> bool {
+    previous == T::SCREENS.course_selection
+        && (target == T::SCREENS.gameplay || target == T::SCREENS.player_options)
 }
 
-/// Build audio commands for a completed actor-only screen transition.
-pub fn actor_transition_music_commands(
-    previous: Screen,
-    target: Screen,
-    menu_music_enabled: bool,
-    gameover_music_enabled: bool,
-    menu_path: PathBuf,
-    gameover_path: PathBuf,
-) -> Vec<Command> {
-    let target_menu_music =
-        menu_music_enabled && matches!(target, Screen::SelectColor | Screen::SelectStyle);
-    let previous_menu_music =
-        menu_music_enabled && matches!(previous, Screen::SelectColor | Screen::SelectStyle);
-    let target_gameover_music = target == Screen::GameOver && gameover_music_enabled;
-    let previous_gameover_music = previous == Screen::GameOver && gameover_music_enabled;
-    let keep_preview = matches!(
-        (previous, target),
-        (Screen::SelectMusic, Screen::PlayerOptions) | (Screen::PlayerOptions, Screen::SelectMusic)
-    );
+pub fn gameplay_exit_screen<T: ThemeScreenFlow>(destination: GameplayExitDestination) -> T::Screen {
+    match destination {
+        GameplayExitDestination::Results => T::SCREENS.results,
+        GameplayExitDestination::SongSelection => T::SCREENS.song_selection,
+        GameplayExitDestination::CourseSelection => T::SCREENS.course_selection,
+        GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => {
+            T::SCREENS.gameplay
+        }
+    }
+}
 
-    if target_menu_music {
-        if previous_menu_music {
-            Vec::new()
-        } else {
-            vec![Command::PlayMusic {
-                path: menu_path,
-                looped: true,
-                volume: 1.0,
-            }]
-        }
-    } else if target_gameover_music {
-        if previous_gameover_music {
-            Vec::new()
-        } else {
-            vec![Command::PlayMusic {
-                path: gameover_path,
-                looped: false,
-                volume: 1.0,
-            }]
-        }
-    } else if previous_menu_music || !keep_preview {
-        vec![Command::StopMusic]
+pub(crate) fn song_lua_presentation_screen<T: ThemeScreenFlow>(
+    name: &str,
+) -> Result<T::Screen, String> {
+    let screens = T::SCREENS;
+    match name {
+        "ScreenTitleMenu" => Some(screens.menu),
+        "ScreenPractice" => Some(screens.practice),
+        "ScreenSelectCourse" => Some(screens.course_selection),
+        "ScreenPlayerOptions" => Some(screens.player_options),
+        _ => T::named_song_lua_screen(name).filter(|screen| {
+            ![
+                screens.menu,
+                screens.gameplay,
+                screens.practice,
+                screens.results,
+                screens.song_selection,
+                screens.course_selection,
+                screens.player_options,
+            ]
+            .contains(screen)
+        }),
+    }
+    .ok_or_else(|| format!("unsupported song Lua next screen {name}"))
+}
+
+pub fn stage_exit_duration<T: ThemeScreenFlow>(screen: T::Screen) -> Option<f32> {
+    is_play_screen::<T>(screen)
+        .then_some(deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS)
+}
+
+pub fn stage_entry_duration<T: ThemeScreenFlow>(
+    screen: T::Screen,
+    restarting: bool,
+) -> Option<f32> {
+    if screen == T::SCREENS.gameplay && restarting {
+        Some(deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS)
     } else {
-        Vec::new()
+        is_play_screen::<T>(screen).then_some(deadsync_gameplay::GAMEPLAY_ENTRY_TRANSITION_SECONDS)
     }
 }
 
-pub fn transition_audio_plan(
-    previous: Screen,
-    target: Screen,
-    menu_music_enabled: bool,
-    gameover_music_enabled: bool,
-    paths: TransitionMusicPaths,
-) -> TransitionAudioPlan {
-    let mut commands = Vec::new();
-    let target_menu_music = menu_music_enabled
-        && matches!(
-            target,
-            Screen::SelectColor | Screen::SelectStyle | Screen::SelectPlayMode
-        );
-    let previous_menu_music = menu_music_enabled
-        && matches!(
-            previous,
-            Screen::SelectColor | Screen::SelectStyle | Screen::SelectPlayMode
-        );
-    let target_course_music = target == Screen::SelectCourse;
-    let previous_course_music = previous == Screen::SelectCourse;
-    let target_credits_music = target == Screen::Credits;
-    let previous_credits_music = previous == Screen::Credits;
-    let target_gameover_music = target == Screen::GameOver && gameover_music_enabled;
-    let previous_gameover_music = previous == Screen::GameOver && gameover_music_enabled;
-    let keep_preview = matches!(
-        (previous, target),
-        (Screen::SelectMusic, Screen::PlayerOptions) | (Screen::PlayerOptions, Screen::SelectMusic)
-    );
-
-    if target_menu_music {
-        if !previous_menu_music {
-            commands.push(Command::PlayMusic {
-                path: paths.menu,
-                looped: true,
-                volume: 1.0,
-            });
-        }
-    } else if target_course_music {
-        if !previous_course_music {
-            commands.push(Command::PlayMusic {
-                path: paths.course,
-                looped: true,
-                volume: 1.0,
-            });
-        }
-    } else if target_credits_music {
-        if !previous_credits_music {
-            commands.push(Command::PlayMusic {
-                path: paths.credits,
-                looped: true,
-                volume: 1.0,
-            });
-        }
-    } else if target_gameover_music {
-        if !previous_gameover_music {
-            commands.push(Command::PlayMusic {
-                path: paths.gameover,
-                looped: false,
-                volume: 1.0,
-            });
-        }
-    } else if (previous_menu_music || previous_course_music || previous_credits_music)
-        && target != Screen::Gameplay
-    {
-        commands.push(Command::StopMusic);
-    } else if target != Screen::Gameplay && !keep_preview {
-        commands.push(Command::StopMusic);
-    }
-
-    let clear_play_background = matches!(previous, Screen::Gameplay | Screen::Practice)
-        && !matches!(target, Screen::Gameplay | Screen::Practice);
-    if clear_play_background
-        && !target_menu_music
-        && !target_course_music
-        && !target_credits_music
-        && !target_gameover_music
-    {
-        commands.push(Command::StopMusic);
-    }
-
-    TransitionAudioPlan {
-        commands,
-        stop_screen_sfx: previous == Screen::Evaluation && target != Screen::Evaluation,
-        clear_play_background,
-    }
-}
-
-pub fn actor_fade_out_transition(
-    from: Screen,
-    target: Screen,
-    select_color_duration: f32,
-    select_profile_duration: f32,
-) -> TransitionState {
-    let duration = if from == Screen::Menu {
-        MENU_OUT_DURATION
-    } else if from == Screen::SelectColor {
-        select_color_duration
-    } else if from == Screen::SelectProfile {
-        select_profile_duration
-    } else {
-        FADE_OUT_DURATION
-    };
-    TransitionState::ActorsFadeOut {
+pub fn actor_fade_out_transition<T: ThemeTransitions>(
+    from: T::Screen,
+    target: T::Screen,
+) -> ThemeTransitionState<T::Screen> {
+    let duration = T::actor_exit_duration(from);
+    ThemeTransitionState::ActorsFadeOut {
         elapsed: 0.0,
         duration,
         target,
     }
 }
 
-pub const fn global_fade_out_transition(target: Screen, duration: f32) -> TransitionState {
-    TransitionState::FadingOut {
+pub const fn global_fade_out_transition<S>(target: S, duration: f32) -> ThemeTransitionState<S> {
+    ThemeTransitionState::FadingOut {
         elapsed: 0.0,
         duration,
         target,
     }
 }
 
-pub const fn actor_entry_transition(target: Screen) -> TransitionState {
-    if is_actor_fade_screen(target) {
-        TransitionState::ActorsFadeIn { elapsed: 0.0 }
-    } else {
-        TransitionState::Idle
+pub fn actor_entry_transition<T: ThemeTransitions>(
+    target: T::Screen,
+) -> ThemeTransitionState<T::Screen> {
+    match T::actor_entry_duration(target) {
+        Some(duration) => ThemeTransitionState::ActorsFadeIn {
+            elapsed: 0.0,
+            duration,
+        },
+        None => ThemeTransitionState::Idle,
     }
 }
 
-pub const fn global_entry_transition(
-    previous: Screen,
-    target: Screen,
+pub fn global_entry_transition<T: ThemeScreenFlow + ThemeTransitions>(
+    previous: T::Screen,
+    target: T::Screen,
     duration: f32,
-) -> TransitionState {
-    if matches!(
-        (previous, target),
-        (Screen::Options, Screen::Credits) | (Screen::Credits, Screen::Options)
-    ) {
-        TransitionState::Idle
+) -> ThemeTransitionState<T::Screen> {
+    if !is_play_screen::<T>(target) && T::skip_global_entry_fade(previous, target) {
+        ThemeTransitionState::Idle
     } else {
-        TransitionState::FadingIn {
+        ThemeTransitionState::FadingIn {
             elapsed: 0.0,
             duration,
         }
     }
 }
 
-pub const fn apply_actor_entry_transition(shell: &mut ShellState, target: Screen) {
-    shell.transition = actor_entry_transition(target);
+pub fn apply_actor_entry_transition(shell: &mut ShellState, target: Screen) {
+    shell.transition = actor_entry_transition::<ActiveTheme>(target);
 }
 
-pub fn apply_actor_fade_out_transition(
-    shell: &mut ShellState,
-    from: Screen,
-    target: Screen,
-    select_color_duration: f32,
-    select_profile_duration: f32,
-) {
-    shell.transition =
-        actor_fade_out_transition(from, target, select_color_duration, select_profile_duration);
+pub fn apply_actor_fade_out_transition(shell: &mut ShellState, from: Screen, target: Screen) {
+    shell.transition = actor_fade_out_transition::<ActiveTheme>(from, target);
 }
 
 pub const fn apply_global_fade_out_transition(
@@ -448,48 +242,51 @@ pub const fn apply_global_fade_out_transition(
     shell.transition = global_fade_out_transition(target, duration);
 }
 
-pub const fn apply_global_entry_transition(
+pub fn apply_global_entry_transition(
     shell: &mut ShellState,
     previous: Screen,
     target: Screen,
     duration: f32,
 ) {
-    shell.transition = global_entry_transition(previous, target, duration);
+    shell.transition = global_entry_transition::<ActiveTheme>(previous, target, duration);
 }
 
-pub fn menu_exit_uses_fade(screen: Screen, transition: &TransitionState) -> bool {
-    screen == Screen::Menu && transition.menu_input_open()
+pub fn menu_exit_uses_fade<T: ThemeScreenFlow>(
+    screen: T::Screen,
+    transition: &ThemeTransitionState<T::Screen>,
+) -> bool {
+    screen == T::SCREENS.menu && transition.is_idle_or_arriving()
 }
 
-pub fn navigation_transition_start(
-    from: Screen,
-    target: Screen,
-    transition: &TransitionState,
-) -> NavigationTransitionStart {
-    if from == Screen::Init && target == Screen::Menu {
-        return NavigationTransitionStart::DirectEntry { target };
-    }
-    if !matches!(transition, TransitionState::Idle)
-        && !(from == Screen::Menu && transition.menu_input_open())
-    {
-        return NavigationTransitionStart::Busy;
-    }
-    if is_actor_only_transition(from, target) {
-        NavigationTransitionStart::ActorFade { from, target }
+pub fn navigation_transition_start<T: ThemeScreenFlow + ThemeTransitions>(
+    from: T::Screen,
+    target: T::Screen,
+    transition: &ThemeTransitionState<T::Screen>,
+) -> NavigationTransitionStart<T::Screen> {
+    // Gameplay and Practice need the shell's stage entry and exit lifecycle.
+    let kind = if is_play_screen::<T>(from) || is_play_screen::<T>(target) {
+        TransitionKind::Global
     } else {
-        NavigationTransitionStart::GlobalFade {
-            target,
-            stop_screen_sfx: from == Screen::Evaluation && target != Screen::Evaluation,
+        T::transition_kind(from, target)
+    };
+    match kind {
+        TransitionKind::Direct => NavigationTransitionStart::DirectEntry { target },
+        _ if !matches!(transition, ThemeTransitionState::Idle)
+            && !(from == T::SCREENS.menu && transition.is_idle_or_arriving()) =>
+        {
+            NavigationTransitionStart::Busy
         }
+        TransitionKind::Actors => NavigationTransitionStart::ActorFade { from, target },
+        TransitionKind::Global => NavigationTransitionStart::GlobalFade { target },
     }
 }
 
-pub fn navigation_transition_effect_plan(
-    from: Screen,
-    target: Screen,
-    transition: &TransitionState,
-) -> NavigationTransitionEffectPlan {
-    let start = navigation_transition_start(from, target, transition);
+pub fn navigation_transition_effect_plan<T: ThemeScreenFlow + ThemeTransitions>(
+    from: T::Screen,
+    target: T::Screen,
+    transition: &ThemeTransitionState<T::Screen>,
+) -> NavigationTransitionEffectPlan<T::Screen> {
+    let start = navigation_transition_start::<T>(from, target, transition);
     NavigationTransitionEffectPlan {
         clear_exit_intent: matches!(
             start,
@@ -550,17 +347,12 @@ pub const fn fade_completion_plan(intent: ExitIntent) -> FadeCompletionPlan {
     }
 }
 
-#[inline(always)]
-pub const fn is_actor_fade_screen(screen: Screen) -> bool {
-    deadsync_theme_simply_love::screens::uses_actor_fade(screen)
+#[inline]
+pub fn is_play_screen<T: ThemeScreenFlow>(screen: T::Screen) -> bool {
+    screen == T::SCREENS.gameplay || screen == T::SCREENS.practice
 }
 
-#[inline(always)]
-pub const fn is_actor_only_transition(from: Screen, to: Screen) -> bool {
-    deadsync_theme_simply_love::screens::uses_actor_only_transition(from, to)
-}
-
-pub fn write_current_screen_file(screen: Screen, path: &std::path::Path) {
+pub fn write_current_screen_file(name: &str, path: &std::path::Path) {
     if !deadsync_config::runtime::get().write_current_screen {
         return;
     }
@@ -570,7 +362,7 @@ pub fn write_current_screen_file(screen: Screen, path: &std::path::Path) {
         log::warn!("Failed to create current_screen.txt parent dir: {e}");
         return;
     }
-    if let Err(e) = std::fs::write(path, screen.current_screen_file_name()) {
+    if let Err(e) = std::fs::write(path, name) {
         log::warn!("Failed to write current_screen.txt: {e}");
     }
 }
@@ -578,169 +370,221 @@ pub fn write_current_screen_file(screen: Screen, path: &std::path::Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_theme::{
+        Theme, ThemeScreenId, ThemeScreens, TransitionCompletion, TransitionFrame,
+    };
 
-    #[test]
-    fn actor_fade_policy_uses_screen_contract() {
-        assert!(is_actor_fade_screen(Screen::Menu));
-        assert!(is_actor_only_transition(Screen::Menu, Screen::Options));
-        assert!(!is_actor_only_transition(
-            Screen::Gameplay,
-            Screen::Evaluation
-        ));
+    struct AlternateTheme;
+
+    impl Theme for AlternateTheme {
+        type Screen = &'static str;
+        type RuntimeRequest = ();
+
+        fn screen_id(screen: Self::Screen) -> ThemeScreenId {
+            ThemeScreenId::new(screen)
+        }
     }
 
-    #[test]
-    fn actor_transition_music_preserves_preview_and_avoids_restarts() {
-        assert!(
-            actor_transition_music_commands(
-                Screen::SelectMusic,
-                Screen::PlayerOptions,
-                true,
-                false,
-                "menu.ogg".into(),
-                "gameover.ogg".into(),
-            )
-            .is_empty()
-        );
+    impl ThemeScreenFlow for AlternateTheme {
+        const SCREENS: ThemeScreens<Self::Screen> = ThemeScreens {
+            menu: "title",
+            gameplay: "dance",
+            practice: "rehearsal",
+            results: "report",
+            song_selection: "library",
+            course_selection: "marathons",
+            player_options: "setup",
+        };
 
-        assert!(matches!(
-            actor_transition_music_commands(
-                Screen::Menu,
-                Screen::SelectColor,
-                true,
-                false,
-                "menu.ogg".into(),
-                "gameover.ogg".into(),
-            )
-            .as_slice(),
-            [Command::PlayMusic { looped: true, .. }]
-        ));
-
-        assert!(
-            actor_transition_music_commands(
-                Screen::SelectColor,
-                Screen::SelectStyle,
-                true,
-                false,
-                "menu.ogg".into(),
-                "gameover.ogg".into(),
-            )
-            .is_empty()
-        );
-
-        assert!(matches!(
-            actor_transition_music_commands(
-                Screen::Menu,
-                Screen::GameOver,
-                false,
-                true,
-                "menu.ogg".into(),
-                "gameover.ogg".into(),
-            )
-            .as_slice(),
-            [Command::PlayMusic { looped: false, .. }]
-        ));
-
-        assert!(matches!(
-            actor_transition_music_commands(
-                Screen::Options,
-                Screen::Menu,
-                true,
-                false,
-                "menu.ogg".into(),
-                "gameover.ogg".into(),
-            )
-            .as_slice(),
-            [Command::StopMusic]
-        ));
+        fn named_song_lua_screen(name: &str) -> Option<Self::Screen> {
+            match name {
+                "ScreenExtra" => Some("details"),
+                "ScreenGameplayAlias" => Some(Self::SCREENS.gameplay),
+                "ScreenPractice" => panic!("standard destinations use the supplied roles"),
+                _ => None,
+            }
+        }
     }
 
-    fn music_paths() -> TransitionMusicPaths {
-        TransitionMusicPaths {
-            menu: "menu.ogg".into(),
-            course: "course.ogg".into(),
-            credits: "credits.ogg".into(),
-            gameover: "gameover.ogg".into(),
+    impl ThemeTransitions for AlternateTheme {
+        type Actor = ();
+        type EntryContext<'a> = ();
+
+        fn transition_kind(_: Self::Screen, _: Self::Screen) -> TransitionKind {
+            TransitionKind::Direct
+        }
+
+        fn actor_entry_duration(_: Self::Screen) -> Option<f32> {
+            None
+        }
+
+        fn actor_exit_duration(_: Self::Screen) -> f32 {
+            0.0
+        }
+
+        fn skip_global_entry_fade(_: Self::Screen, _: Self::Screen) -> bool {
+            true
+        }
+
+        fn out_transition(_: Self::Screen, _: Self::Screen) -> (Vec<()>, f32) {
+            (Vec::new(), 0.0)
+        }
+
+        fn in_transition(_: Self::Screen, _: ()) -> (Vec<()>, f32) {
+            (Vec::new(), 0.0)
         }
     }
 
     #[test]
-    fn transition_audio_plan_preserves_music_and_cleanup_policy() {
-        let menu = transition_audio_plan(
-            Screen::Menu,
-            Screen::SelectColor,
-            true,
-            false,
-            music_paths(),
+    fn alternate_theme_uses_the_stage_lifecycle_with_its_own_screen_ids() {
+        let idle = ThemeTransitionState::Idle;
+        assert_eq!(
+            navigation_transition_start::<AlternateTheme>("title", "library", &idle),
+            NavigationTransitionStart::DirectEntry { target: "library" }
         );
-        assert!(matches!(
-            menu.commands.as_slice(),
-            [Command::PlayMusic { looped: true, .. }]
+        for (from, to) in [
+            ("library", "dance"),
+            ("library", "rehearsal"),
+            ("dance", "report"),
+        ] {
+            assert_eq!(
+                navigation_transition_start::<AlternateTheme>(from, to, &idle),
+                NavigationTransitionStart::GlobalFade { target: to }
+            );
+        }
+        let entry = stage_entry_duration::<AlternateTheme>("dance", true).unwrap();
+        assert_eq!(
+            entry,
+            deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS
+        );
+        assert_eq!(
+            stage_entry_duration::<AlternateTheme>("rehearsal", true),
+            Some(deadsync_gameplay::GAMEPLAY_ENTRY_TRANSITION_SECONDS)
+        );
+        let fade_in = global_entry_transition::<AlternateTheme>("library", "dance", entry);
+        assert!(tick_gameplay_during_transition::<AlternateTheme>(
+            "dance", &fade_in
         ));
-
-        let preview = transition_audio_plan(
-            Screen::SelectMusic,
-            Screen::PlayerOptions,
-            true,
-            false,
-            music_paths(),
-        );
-        assert!(preview.commands.is_empty());
-
-        let leaving_play = transition_audio_plan(
-            Screen::Gameplay,
-            Screen::Evaluation,
-            false,
-            false,
-            music_paths(),
-        );
-        assert!(leaving_play.clear_play_background);
-        assert!(matches!(
-            leaving_play.commands.as_slice(),
-            [Command::StopMusic, Command::StopMusic]
+        let duration = stage_exit_duration::<AlternateTheme>("dance").unwrap();
+        let fade_out = global_fade_out_transition("report", duration);
+        assert!(tick_gameplay_during_transition::<AlternateTheme>(
+            "dance", &fade_out
         ));
+        assert!(!tick_gameplay_during_transition::<AlternateTheme>(
+            "rehearsal",
+            &fade_out
+        ));
+        assert!(!tick_gameplay_during_transition::<AlternateTheme>(
+            "dance",
+            &global_fade_out_transition("library", duration),
+        ));
+        assert!(screen_change_plan::<AlternateTheme>("dance", "report").exit_gameplay);
+        assert!(!screen_change_plan::<AlternateTheme>("dance", "dance").exit_gameplay);
+    }
 
-        let evaluation = transition_audio_plan(
-            Screen::Evaluation,
-            Screen::Menu,
-            false,
-            false,
-            music_paths(),
+    #[test]
+    fn alternate_theme_uses_standard_destinations_for_course_and_practice() {
+        for (destination, expected) in [
+            (GameplayExitDestination::Results, "report"),
+            (GameplayExitDestination::SongSelection, "library"),
+            (GameplayExitDestination::CourseSelection, "marathons"),
+            (GameplayExitDestination::NextCourseStage, "dance"),
+            (GameplayExitDestination::RestartStage, "dance"),
+        ] {
+            assert_eq!(
+                gameplay_exit_screen::<AlternateTheme>(destination),
+                expected
+            );
+        }
+        assert!(course_plan_required::<AlternateTheme>("marathons", "setup"));
+        assert!(course_plan_required::<AlternateTheme>("marathons", "dance"));
+        assert!(!course_plan_required::<AlternateTheme>("library", "dance"));
+
+        let mut saved_rate = None;
+        assert_eq!(
+            practice_music_rate_on_screen_change::<AlternateTheme>(
+                &mut saved_rate,
+                "rehearsal",
+                1.2
+            ),
+            None
         );
-        assert!(evaluation.stop_screen_sfx);
+        assert_eq!(
+            practice_music_rate_on_screen_change::<AlternateTheme>(&mut saved_rate, "setup", 0.8),
+            None
+        );
+        assert_eq!(
+            practice_music_rate_on_screen_change::<AlternateTheme>(&mut saved_rate, "library", 0.8),
+            Some(1.2)
+        );
+    }
+
+    #[test]
+    fn song_lua_presentation_uses_standard_roles_and_explicit_additional_screens() {
+        for (name, screen) in [
+            ("ScreenTitleMenu", "title"),
+            ("ScreenPractice", "rehearsal"),
+            ("ScreenSelectCourse", "marathons"),
+            ("ScreenPlayerOptions", "setup"),
+            ("ScreenExtra", "details"),
+        ] {
+            assert_eq!(
+                song_lua_presentation_screen::<AlternateTheme>(name),
+                Ok(screen)
+            );
+        }
+        for name in ["ScreenGameplayAlias", "ScreenUnknown"] {
+            assert_eq!(
+                song_lua_presentation_screen::<AlternateTheme>(name),
+                Err(format!("unsupported song Lua next screen {name}"))
+            );
+        }
+        assert_eq!(
+            song_lua_presentation_screen::<ActiveTheme>("ScreenOptionsService"),
+            Ok(Screen::Options)
+        );
+    }
+
+    #[test]
+    fn actor_fade_policy_uses_screen_contract() {
+        assert_eq!(ActiveTheme::actor_entry_duration(Screen::Menu), Some(0.65));
+        assert_eq!(ActiveTheme::transition_kind(Screen::Menu, Screen::Options), TransitionKind::Actors);
+        assert_eq!(
+            ActiveTheme::transition_kind(Screen::Gameplay, Screen::Evaluation),
+            TransitionKind::Global,
+        );
     }
 
     #[test]
     fn transition_constructors_keep_theme_fade_policy() {
         assert!(matches!(
-            actor_fade_out_transition(Screen::Menu, Screen::Options, 0.2, 0.3),
+            actor_fade_out_transition::<ActiveTheme>(Screen::Menu, Screen::Options),
             TransitionState::ActorsFadeOut { duration: 1.0, .. }
         ));
         assert!(matches!(
-            actor_fade_out_transition(Screen::Menu, Screen::ProfileLoad, 0.2, 0.3),
+            actor_fade_out_transition::<ActiveTheme>(Screen::Menu, Screen::ProfileLoad),
             TransitionState::ActorsFadeOut { duration: 1.0, .. }
         ));
         assert!(matches!(
-            actor_entry_transition(Screen::Menu),
+            actor_entry_transition::<ActiveTheme>(Screen::Menu),
             TransitionState::ActorsFadeIn { .. }
         ));
         assert!(matches!(
-            global_entry_transition(Screen::Options, Screen::Credits, 0.5),
+            global_entry_transition::<ActiveTheme>(Screen::Options, Screen::Credits, 0.5),
             TransitionState::Idle
         ));
-        assert!(menu_exit_uses_fade(Screen::Menu, &TransitionState::Idle));
-        assert!(menu_exit_uses_fade(
+        assert!(menu_exit_uses_fade::<ActiveTheme>(
             Screen::Menu,
-            &TransitionState::ActorsFadeIn { elapsed: 0.0 }
+            &TransitionState::Idle
         ));
-        assert!(menu_exit_uses_fade(
+        assert!(menu_exit_uses_fade::<ActiveTheme>(
             Screen::Menu,
             &TransitionState::FadingIn {
                 elapsed: 0.0,
                 duration: 0.4,
             }
         ));
-        assert!(!menu_exit_uses_fade(
+        assert!(!menu_exit_uses_fade::<ActiveTheme>(
             Screen::Menu,
             &TransitionState::ActorsFadeOut {
                 elapsed: 0.0,
@@ -748,7 +592,7 @@ mod tests {
                 target: Screen::Options,
             }
         ));
-        assert!(!menu_exit_uses_fade(
+        assert!(!menu_exit_uses_fade::<ActiveTheme>(
             Screen::Gameplay,
             &TransitionState::Idle
         ));
@@ -767,7 +611,7 @@ mod tests {
             TransitionState::ActorsFadeIn { .. }
         ));
 
-        apply_actor_fade_out_transition(&mut shell, Screen::Menu, Screen::Options, 0.2, 0.3);
+        apply_actor_fade_out_transition(&mut shell, Screen::Menu, Screen::Options);
         assert!(matches!(
             shell.transition,
             TransitionState::ActorsFadeOut {
@@ -797,7 +641,7 @@ mod tests {
     #[test]
     fn screen_change_plan_captures_root_side_effects() {
         assert_eq!(
-            screen_change_plan(Screen::Gameplay, Screen::Menu),
+            screen_change_plan::<ActiveTheme>(Screen::Gameplay, Screen::Menu),
             ScreenChangePlan {
                 leave_lobby: true,
                 exit_gameplay: true,
@@ -805,7 +649,7 @@ mod tests {
             }
         );
         assert_eq!(
-            screen_change_plan(Screen::Menu, Screen::Menu),
+            screen_change_plan::<ActiveTheme>(Screen::Menu, Screen::Menu),
             ScreenChangePlan {
                 leave_lobby: false,
                 exit_gameplay: false,
@@ -813,7 +657,7 @@ mod tests {
             }
         );
         assert_eq!(
-            screen_change_plan(Screen::Evaluation, Screen::Menu),
+            screen_change_plan::<ActiveTheme>(Screen::Evaluation, Screen::Menu),
             ScreenChangePlan {
                 leave_lobby: true,
                 exit_gameplay: false,
@@ -827,7 +671,7 @@ mod tests {
         for preferred_rate in [1.0, 1.25] {
             let mut saved_rate = None;
             assert_eq!(
-                practice_music_rate_on_screen_change(
+                practice_music_rate_on_screen_change::<ActiveTheme>(
                     &mut saved_rate,
                     Screen::Practice,
                     preferred_rate,
@@ -835,7 +679,11 @@ mod tests {
                 None
             );
             assert_eq!(
-                practice_music_rate_on_screen_change(&mut saved_rate, Screen::SelectMusic, 0.75),
+                practice_music_rate_on_screen_change::<ActiveTheme>(
+                    &mut saved_rate,
+                    Screen::SelectMusic,
+                    0.75
+                ),
                 Some(preferred_rate)
             );
             assert_eq!(saved_rate, None);
@@ -845,16 +693,20 @@ mod tests {
     #[test]
     fn practice_options_and_reload_keep_the_original_music_rate() {
         let mut saved_rate = None;
-        practice_music_rate_on_screen_change(&mut saved_rate, Screen::Practice, 1.0);
+        practice_music_rate_on_screen_change::<ActiveTheme>(&mut saved_rate, Screen::Practice, 1.0);
         for target in [Screen::PlayerOptions, Screen::Practice, Screen::Practice] {
             assert_eq!(
-                practice_music_rate_on_screen_change(&mut saved_rate, target, 0.75),
+                practice_music_rate_on_screen_change::<ActiveTheme>(&mut saved_rate, target, 0.75),
                 None
             );
             assert_eq!(saved_rate, Some(1.0));
         }
         assert_eq!(
-            practice_music_rate_on_screen_change(&mut saved_rate, Screen::SelectMusic, 0.75),
+            practice_music_rate_on_screen_change::<ActiveTheme>(
+                &mut saved_rate,
+                Screen::SelectMusic,
+                0.75
+            ),
             Some(1.0)
         );
     }
@@ -862,15 +714,31 @@ mod tests {
     #[test]
     fn leaving_practice_options_restores_rate_and_next_practice_captures_it_again() {
         let mut saved_rate = None;
-        practice_music_rate_on_screen_change(&mut saved_rate, Screen::Practice, 1.0);
-        practice_music_rate_on_screen_change(&mut saved_rate, Screen::PlayerOptions, 0.75);
+        practice_music_rate_on_screen_change::<ActiveTheme>(&mut saved_rate, Screen::Practice, 1.0);
+        practice_music_rate_on_screen_change::<ActiveTheme>(
+            &mut saved_rate,
+            Screen::PlayerOptions,
+            0.75,
+        );
         assert_eq!(
-            practice_music_rate_on_screen_change(&mut saved_rate, Screen::SelectMusic, 0.5),
+            practice_music_rate_on_screen_change::<ActiveTheme>(
+                &mut saved_rate,
+                Screen::SelectMusic,
+                0.5
+            ),
             Some(1.0)
         );
-        practice_music_rate_on_screen_change(&mut saved_rate, Screen::Practice, 1.25);
+        practice_music_rate_on_screen_change::<ActiveTheme>(
+            &mut saved_rate,
+            Screen::Practice,
+            1.25,
+        );
         assert_eq!(
-            practice_music_rate_on_screen_change(&mut saved_rate, Screen::SelectMusic, 0.75),
+            practice_music_rate_on_screen_change::<ActiveTheme>(
+                &mut saved_rate,
+                Screen::SelectMusic,
+                0.75
+            ),
             Some(1.25)
         );
     }
@@ -885,7 +753,7 @@ mod tests {
             Screen::SelectMusic,
         ] {
             assert_eq!(
-                practice_music_rate_on_screen_change(&mut saved_rate, target, 1.25),
+                practice_music_rate_on_screen_change::<ActiveTheme>(&mut saved_rate, target, 1.25),
                 None
             );
         }
@@ -893,25 +761,38 @@ mod tests {
 
     #[test]
     fn selected_course_routes_require_a_playable_course_plan() {
-        assert!(course_plan_required(Screen::SelectCourse, Screen::Gameplay));
-        assert!(course_plan_required(
+        assert!(course_plan_required::<ActiveTheme>(
+            Screen::SelectCourse,
+            Screen::Gameplay
+        ));
+        assert!(course_plan_required::<ActiveTheme>(
             Screen::SelectCourse,
             Screen::PlayerOptions
         ));
-        assert!(!course_plan_required(Screen::SelectCourse, Screen::Menu));
-        assert!(!course_plan_required(Screen::SelectMusic, Screen::Gameplay));
+        assert!(!course_plan_required::<ActiveTheme>(
+            Screen::SelectCourse,
+            Screen::Menu
+        ));
+        assert!(!course_plan_required::<ActiveTheme>(
+            Screen::SelectMusic,
+            Screen::Gameplay
+        ));
     }
 
     #[test]
     fn navigation_transition_start_preserves_entry_and_fade_policy() {
         assert_eq!(
-            navigation_transition_start(Screen::Init, Screen::Menu, &TransitionState::Idle),
+            navigation_transition_start::<ActiveTheme>(
+                Screen::Init,
+                Screen::Menu,
+                &TransitionState::Idle
+            ),
             NavigationTransitionStart::DirectEntry {
                 target: Screen::Menu
             }
         );
         assert_eq!(
-            navigation_transition_start(
+            navigation_transition_start::<ActiveTheme>(
                 Screen::Menu,
                 Screen::Options,
                 &TransitionState::FadingIn {
@@ -925,10 +806,10 @@ mod tests {
             }
         );
         assert_eq!(
-            navigation_transition_start(
+            navigation_transition_start::<ActiveTheme>(
                 Screen::Menu,
                 Screen::Options,
-                &TransitionState::ActorsFadeIn { elapsed: 0.0 },
+                &TransitionState::ActorsFadeIn { elapsed: 0.0, duration: 0.65 },
             ),
             NavigationTransitionStart::ActorFade {
                 from: Screen::Menu,
@@ -936,7 +817,7 @@ mod tests {
             }
         );
         assert_eq!(
-            navigation_transition_start(
+            navigation_transition_start::<ActiveTheme>(
                 Screen::SelectMusic,
                 Screen::Menu,
                 &TransitionState::FadingIn {
@@ -947,32 +828,41 @@ mod tests {
             NavigationTransitionStart::Busy
         );
         assert_eq!(
-            navigation_transition_start(Screen::Menu, Screen::Options, &TransitionState::Idle),
+            navigation_transition_start::<ActiveTheme>(
+                Screen::Menu,
+                Screen::Options,
+                &TransitionState::Idle
+            ),
             NavigationTransitionStart::ActorFade {
                 from: Screen::Menu,
                 target: Screen::Options,
             }
         );
         assert_eq!(
-            navigation_transition_start(Screen::Menu, Screen::Init, &TransitionState::Idle),
-            NavigationTransitionStart::GlobalFade {
-                target: Screen::Init,
-                stop_screen_sfx: false,
-            }
+            navigation_transition_start::<ActiveTheme>(
+                Screen::Menu,
+                Screen::Init,
+                &TransitionState::Idle
+            ),
+            NavigationTransitionStart::GlobalFade { target: Screen::Init }
         );
         assert_eq!(
-            navigation_transition_start(Screen::Evaluation, Screen::Menu, &TransitionState::Idle,),
-            NavigationTransitionStart::GlobalFade {
-                target: Screen::Menu,
-                stop_screen_sfx: true,
-            }
+            navigation_transition_start::<ActiveTheme>(
+                Screen::Evaluation,
+                Screen::Menu,
+                &TransitionState::Idle,
+            ),
+            NavigationTransitionStart::GlobalFade { target: Screen::Menu }
         );
     }
 
     #[test]
     fn navigation_transition_effect_marks_exit_intent_clear_points() {
-        let direct =
-            navigation_transition_effect_plan(Screen::Init, Screen::Menu, &TransitionState::Idle);
+        let direct = navigation_transition_effect_plan::<ActiveTheme>(
+            Screen::Init,
+            Screen::Menu,
+            &TransitionState::Idle,
+        );
         assert_eq!(
             direct,
             NavigationTransitionEffectPlan {
@@ -983,7 +873,7 @@ mod tests {
             }
         );
 
-        let actor = navigation_transition_effect_plan(
+        let actor = navigation_transition_effect_plan::<ActiveTheme>(
             Screen::Menu,
             Screen::ProfileLoad,
             &TransitionState::Idle,
@@ -999,7 +889,7 @@ mod tests {
             }
         );
 
-        let arriving_menu = navigation_transition_effect_plan(
+        let arriving_menu = navigation_transition_effect_plan::<ActiveTheme>(
             Screen::Menu,
             Screen::Options,
             &TransitionState::FadingIn {
@@ -1018,7 +908,7 @@ mod tests {
             }
         );
 
-        let busy = navigation_transition_effect_plan(
+        let busy = navigation_transition_effect_plan::<ActiveTheme>(
             Screen::SelectMusic,
             Screen::Menu,
             &TransitionState::FadingIn {
@@ -1117,9 +1007,8 @@ mod tests {
         let mut transition = TransitionState::Idle;
 
         assert_eq!(
-            transition.advance_frame(0.1, Screen::Menu, 0.65),
-            TransitionFramePlan {
-                tick_gameplay: false,
+            transition.advance_frame(0.1),
+            TransitionFrame {
                 step_screen: true,
                 sync_input_capture: false,
                 completion: None,
@@ -1128,15 +1017,32 @@ mod tests {
     }
 
     #[test]
+    fn play_routes_use_full_entry_even_for_theme_actor_transitions() {
+        for target in [Screen::Gameplay, Screen::Practice] {
+            assert_eq!(ActiveTheme::transition_kind(Screen::Menu, target), TransitionKind::Actors);
+            assert!(matches!(
+                navigation_transition_start::<ActiveTheme>(Screen::Menu, target, &TransitionState::Idle),
+                NavigationTransitionStart::GlobalFade { target: actual, .. } if actual == target
+            ));
+        }
+    }
+
+    #[test]
     fn evaluation_fade_keeps_gameplay_running_until_completion() {
         let mut transition = global_fade_out_transition(Screen::Evaluation, 0.4);
 
-        let first = transition.advance_frame(0.2, Screen::Gameplay, 0.65);
-        assert!(first.tick_gameplay);
+        assert!(tick_gameplay_during_transition::<ActiveTheme>(
+            Screen::Gameplay,
+            &transition
+        ));
+        let first = transition.advance_frame(0.2);
         assert_eq!(first.completion, None);
 
-        let finished = transition.advance_frame(0.2, Screen::Gameplay, 0.65);
-        assert!(finished.tick_gameplay);
+        assert!(tick_gameplay_during_transition::<ActiveTheme>(
+            Screen::Gameplay,
+            &transition
+        ));
+        let finished = transition.advance_frame(0.2);
         assert_eq!(
             finished.completion,
             Some(TransitionCompletion::GlobalFadeOut(Screen::Evaluation))
@@ -1147,9 +1053,12 @@ mod tests {
     fn unrelated_fade_out_does_not_tick_gameplay() {
         let mut transition = global_fade_out_transition(Screen::Menu, 0.1);
 
-        let plan = transition.advance_frame(0.1, Screen::Gameplay, 0.65);
+        assert!(!tick_gameplay_during_transition::<ActiveTheme>(
+            Screen::Gameplay,
+            &transition
+        ));
+        let plan = transition.advance_frame(0.1);
 
-        assert!(!plan.tick_gameplay);
         assert_eq!(
             plan.completion,
             Some(TransitionCompletion::GlobalFadeOut(Screen::Menu))
@@ -1163,9 +1072,12 @@ mod tests {
             duration: 0.4,
         };
 
-        let plan = transition.advance_frame(0.1, Screen::Gameplay, 0.65);
+        assert!(tick_gameplay_during_transition::<ActiveTheme>(
+            Screen::Gameplay,
+            &transition
+        ));
+        let plan = transition.advance_frame(0.1);
 
-        assert!(plan.tick_gameplay);
         assert!(!plan.step_screen);
         assert!(plan.sync_input_capture);
         assert!(matches!(transition, TransitionState::Idle));
@@ -1179,12 +1091,12 @@ mod tests {
             target: Screen::Options,
         };
         assert_eq!(
-            fade_out.advance_frame(0.1, Screen::Menu, 0.65).completion,
+            fade_out.advance_frame(0.1).completion,
             Some(TransitionCompletion::ActorFadeOut(Screen::Options))
         );
 
-        let mut fade_in = TransitionState::ActorsFadeIn { elapsed: 0.6 };
-        let plan = fade_in.advance_frame(0.05, Screen::Menu, 0.65);
+        let mut fade_in = TransitionState::ActorsFadeIn { elapsed: 0.6, duration: 0.65 };
+        let plan = fade_in.advance_frame(0.05);
         assert!(!plan.step_screen);
         assert!(plan.sync_input_capture);
         assert!(matches!(fade_in, TransitionState::Idle));

@@ -479,11 +479,9 @@ extern "C" fn on_match(
             cfnum_i32(IOHIDDeviceGetProperty(device, ctx.key_vendor_id)).map(|x| x as u16);
         let product_id =
             cfnum_i32(IOHIDDeviceGetProperty(device, ctx.key_product_id)).map(|x| x as u16);
-        // Skip the StepManiaX stage's generic-HID duplicate while native SMX
-        // input owns the pad (see `native_smx_owns_device`).
-        if ctx.host.native_smx_owns_device(vendor_id, product_id) {
+        if ctx.host.device_claimed(vendor_id, product_id) {
             log::debug!(
-                "iohid: ignoring StepManiaX pad (vid={vendor_id:04x?} pid={product_id:04x?}); native SMX input owns it"
+                "iohid: ignoring pad (vid={vendor_id:04x?} pid={product_id:04x?}); claimed by another input provider"
             );
             return;
         }

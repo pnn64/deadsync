@@ -2,20 +2,22 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
 
-use deadlib_assets::AssetManager;
+use deadlib_assets::{AssetManager, AssetManifest, TextureAssetSpec};
 use deadlib_platform::display::{self, FullscreenType, MonitorSpec};
 use deadlib_present::space::{self, Metrics};
-use deadlib_render::{Backend, create_backend, render_size_for_physical, render_size_for_window};
+use deadlib_render::{
+    Backend, BackendOptions, VulkanInstanceNames, create_backend_with_options,
+    render_size_for_physical, render_size_for_window,
+};
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_config::app_config::DisplayMode;
-use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
 use crate::dynamic_media::DynamicMedia;
 use crate::window::{AppWindowConfig, AppWindowSetup, DisplayModeChange, ResolutionChange};
-use crate::{Command, ShellState};
+use crate::ShellState;
 
 #[derive(Clone, Copy)]
 pub struct RendererInitConfig {
@@ -131,11 +133,6 @@ pub struct RendererSwitchFailurePlan {
     pub restore_display: bool,
 }
 
-pub struct RendererSwitchResourceResetPlan {
-    pub commands: Vec<Command>,
-    pub refresh_select_music: bool,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RecreateDisplayState {
     pub mode: DisplayMode,
@@ -168,6 +165,7 @@ pub fn initialize_renderer(
     config: RendererInitConfig,
     assets: &mut AssetManager,
     dynamic_media: &mut DynamicMedia,
+    manifest: AssetManifest<impl IntoIterator<Item = TextureAssetSpec>>,
 ) -> Result<RendererInitResult, Box<dyn Error>> {
     let window = setup.window;
     let size = render_size_for_window(&window, config.backend_type, config.high_dpi);
@@ -175,23 +173,25 @@ pub fn initialize_renderer(
     space::set_current_window_px(size.width, size.height);
     space::set_current_metrics(metrics);
 
-    let mut backend = create_backend(
+    let mut backend = create_backend_with_options(
         config.backend_type,
         window.clone(),
         metrics.projection(),
-        config.vsync_enabled,
-        config.present_mode_policy,
-        config.gfx_debug_enabled,
-        config.high_dpi,
+        BackendOptions {
+            vsync_enabled: config.vsync_enabled,
+            present_mode_policy: config.present_mode_policy,
+            gfx_debug_enabled: config.gfx_debug_enabled,
+            high_dpi_enabled: config.high_dpi,
+            vulkan_instance_names: VulkanInstanceNames {
+                application_name: c"DeadSync",
+                engine_name: c"DeadSync Engine",
+            },
+        },
     )?;
     if config.backend_type == BackendType::Software {
         backend.configure_software_threads(software_thread_count(config.software_renderer_threads));
     }
-    deadsync_assets::load_initial_assets(
-        assets,
-        &mut backend,
-        deadsync_theme_simply_love::asset_manifest(),
-    )?;
+    deadsync_assets::load_initial_assets(assets, &mut backend, manifest)?;
     dynamic_media.preload_profile_avatars(assets, &mut backend);
 
     Ok(RendererInitResult {
@@ -236,6 +236,7 @@ pub fn start_renderer_runtime(
     config: RendererStartupConfig,
     assets: &mut AssetManager,
     dynamic_media: &mut DynamicMedia,
+    manifest: AssetManifest<impl IntoIterator<Item = TextureAssetSpec>>,
     now: Instant,
 ) -> Result<RendererStartupResult, Box<dyn Error>> {
     let setup =
@@ -243,7 +244,7 @@ pub fn start_renderer_runtime(
     apply_app_window_setup_state(shell, &setup);
     let monitor_count = setup.monitor_count;
     let fullscreen_type = setup.fullscreen_type;
-    let renderer = initialize_renderer(setup, config.renderer, assets, dynamic_media)?;
+    let renderer = initialize_renderer(setup, config.renderer, assets, dynamic_media, manifest)?;
     apply_renderer_started(shell, renderer.metrics, now);
     Ok(RendererStartupResult {
         window: renderer.window,
@@ -380,29 +381,6 @@ pub fn renderer_switch_plan(
             desired_size,
         ),
     })
-}
-
-pub fn renderer_switch_resource_reset_commands() -> Vec<Command> {
-    vec![
-        Command::SetBanner(None),
-        Command::SetCdTitle(None),
-        Command::SetDensityGraph {
-            slot: DensityGraphSlot::SelectMusicP1,
-            chart_opt: None,
-        },
-        Command::SetDensityGraph {
-            slot: DensityGraphSlot::SelectMusicP2,
-            chart_opt: None,
-        },
-        Command::SetDynamicBackground(None),
-    ]
-}
-
-pub fn renderer_switch_resource_reset_plan() -> RendererSwitchResourceResetPlan {
-    RendererSwitchResourceResetPlan {
-        commands: renderer_switch_resource_reset_commands(),
-        refresh_select_music: true,
-    }
 }
 
 pub const fn renderer_switch_begin_plan(plan: &RendererSwitchPlan) -> RendererSwitchBeginPlan {
@@ -1556,35 +1534,6 @@ mod tests {
             )
             .is_none()
         );
-    }
-
-    #[test]
-    fn renderer_switch_resource_reset_commands_cover_dynamic_media() {
-        let reset = renderer_switch_resource_reset_plan();
-        let commands = &reset.commands;
-
-        assert!(matches!(commands.first(), Some(Command::SetBanner(None))));
-        assert!(matches!(commands.get(1), Some(Command::SetCdTitle(None))));
-        assert!(matches!(
-            commands.get(2),
-            Some(Command::SetDensityGraph {
-                slot: DensityGraphSlot::SelectMusicP1,
-                chart_opt: None,
-            })
-        ));
-        assert!(matches!(
-            commands.get(3),
-            Some(Command::SetDensityGraph {
-                slot: DensityGraphSlot::SelectMusicP2,
-                chart_opt: None,
-            })
-        ));
-        assert!(matches!(
-            commands.get(4),
-            Some(Command::SetDynamicBackground(None))
-        ));
-        assert_eq!(commands.len(), 5);
-        assert!(reset.refresh_select_music);
     }
 
     #[test]

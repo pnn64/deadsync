@@ -99,7 +99,7 @@ impl App {
         };
 
         self.ui_sfx
-            .play(&mut self.audio, "assets/sounds/screenshot.ogg");
+            .play_cue(&mut self.audio, deadsync_theme::UiCue::Screenshot);
         info!("Saved screenshot to {}", saved_path.display());
     }
 

@@ -4,6 +4,121 @@ use sprites::number;
 
 pub(super) type Statistics = Arc<Mutex<super::super::statistics::State>>;
 
+pub(super) const NOTE_FIELD_CATALOG_KEY: &str = "native_note_field_catalog";
+
+pub(super) fn note_field_catalog(call: &mut HostCall<'_>) -> Result<Option<TableId>, Error> {
+    let helpers = table(call, call.captures()[1])?;
+    let value = get_static(call, helpers, NOTE_FIELD_CATALOG_KEY.as_bytes())?;
+    optional_table(call, value)
+}
+
+pub(super) fn attached_player(
+    call: &mut HostCall<'_>,
+    top: TableId,
+    index: usize,
+) -> Result<Option<TableId>, Error> {
+    let globals = table(call, helper(call, 5)?)?;
+    let key = [
+        "__songlua_top_screen_player_1",
+        "__songlua_top_screen_player_2",
+    ][index];
+    let actor = raw(call, globals, key)?;
+    let Some(actor) = optional_table(call, actor)? else {
+        return Ok(None);
+    };
+    // Disabled players retain private compatibility handles but are not drawn.
+    Ok(call
+        .store_ref()
+        .actors
+        .get(&top)
+        .is_some_and(|screen| screen.children.contains(&actor))
+        .then_some(actor))
+}
+
+pub(super) fn startup_note_fields(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Some(catalog) = note_field_catalog(call)? else {
+        return Ok(());
+    };
+    let globals = table(call, helper(call, 5)?)?;
+    let top = get_static(call, globals, b"__songlua_top_screen")?;
+    let Some(top) = optional_table(call, top)? else {
+        return Ok(());
+    };
+    for index in 0..crate::LUA_PLAYERS {
+        if let Some(actor) = attached_player(call, top, index)? {
+            note_field_zoom(call, catalog, actor)?;
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn analytic_multitap_fields(call: &mut HostCall<'_>) -> Result<bool, Error> {
+    let Some(catalog) = note_field_catalog(call)? else {
+        return Ok(true);
+    };
+    let players = raw(call, catalog, "player_options")?;
+    let players = table(call, players)?;
+    let globals = table(call, helper(call, 5)?)?;
+    let top = raw(call, globals, "__songlua_top_screen")?;
+    let top = optional_table(call, top)?;
+    for player in 0..crate::LUA_PLAYERS {
+        if let Some(top) = top
+            && attached_player(call, top, player)?.is_none()
+        {
+            continue;
+        }
+        let levels = call.raw_table_get(players, Value::Number((player + 1) as f64))?;
+        let levels = table(call, levels)?;
+        // The analytic path bakes neutral ArrowEffects and the startup parent.
+        // Nonneutral or approaching field mods need the actual update/draw phases.
+        for level in [3., 4.] {
+            let options = call.raw_table_get(levels, Value::Number(level))?;
+            let state = raw(call, table(call, options)?, "__songlua_player_option_state")?;
+            let state = table(call, state)?;
+            if let Some(initial) = call.store_ref().initial_turn_options {
+                use deadsync_gameplay::GameplayTurnOption as Turn;
+                // The note field keeps its load-time mapping. The factory reads
+                // Song options each update, so a changed turn must run its Lua.
+                for (key, turn) in [
+                    ("mirror", Turn::Mirror),
+                    ("left", Turn::Left),
+                    ("right", Turn::Right),
+                    ("lrmirror", Turn::LRMirror),
+                    ("udmirror", Turn::UDMirror),
+                    ("shuffle", Turn::Shuffle),
+                    ("supershuffle", Turn::Blender),
+                    ("hypershuffle", Turn::Random),
+                ] {
+                    if truthy(raw(call, state, key)?) != (initial[player] == turn) {
+                        return Ok(false);
+                    }
+                }
+                if truthy(raw(call, state, "backwards")?)
+                    || truthy(raw(call, state, "softshuffle")?)
+                {
+                    return Ok(false);
+                }
+            }
+            for key in [
+                "mini",
+                "tilt",
+                "skew",
+                "reverse",
+                "reverse1",
+                "split",
+                "alternate",
+                "cross",
+                "centered",
+            ] {
+                if optional_float(call, state, key)?.unwrap_or(0.) != 0. {
+                    return Ok(false);
+                }
+            }
+        }
+    }
+    Ok(true)
+}
+
 pub(super) fn update(
     call: &mut HostCall<'_>,
     statistics: &Statistics,
@@ -360,7 +475,11 @@ pub(super) fn hud_position(
     })
 }
 
-fn note_field_zoom(call: &mut HostCall<'_>, catalog: TableId, actor: TableId) -> Result<(), Error> {
+pub(super) fn note_field_zoom(
+    call: &mut HostCall<'_>,
+    catalog: TableId,
+    actor: TableId,
+) -> Result<(), Error> {
     let Some(player) = player(call, actor)? else {
         return Ok(());
     };
@@ -378,36 +497,119 @@ fn note_field_zoom(call: &mut HostCall<'_>, catalog: TableId, actor: TableId) ->
     };
     call.with_roots(&[Value::Table(field)], |call| {
         let zoom = 1. - mini * 0.5;
-        for axis in [0, 1, 2] {
-            // The native X/Y writes precede the authored OITG flag read.
-            if axis == 2 && truthy(raw(call, actor, "__songlua_oitg_zoom_mode")?) {
-                break;
-            }
-            let name = ["zoom_x", "zoom_y", "zoom_z"][axis];
-            let guard = call.store();
-            if let Some(node) = guard.actors.get_mut(&field) {
-                let dest = node.destination_mut();
-                match axis {
-                    0 => dest.zoom_x = zoom,
-                    1 => dest.zoom_y = zoom,
-                    _ => dest.zoom_z = zoom,
-                }
-                let mut delta = crate::SongLuaOverlayStateDelta::default();
-                match axis {
-                    0 => delta.zoom_x = Some(zoom),
-                    1 => delta.zoom_y = Some(zoom),
-                    _ => delta.zoom_z = Some(zoom),
-                }
-                capture::write(call, field, delta, false);
-            } else {
-                song_replay::raw_set_named(
-                    call,
-                    field,
-                    &format!("__songlua_state_{name}"),
-                    Value::Number(zoom as f64),
-                )?;
-            }
-        }
-        Ok(())
+        write_note_field_zoom(call, actor, field, zoom)
     })
+}
+
+pub(super) fn draw_note_field(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let Some(catalog) = note_field_catalog(call)? else {
+        return Ok(());
+    };
+    let Some(player) = player(call, actor)?.filter(|index| *index < crate::LUA_PLAYERS) else {
+        return Ok(());
+    };
+    let Some(state) = current_option_state(call, catalog, player)? else {
+        return Ok(());
+    };
+    let mini = optional_float(call, state, "mini")?.unwrap_or(0.);
+    let tilt = optional_float(call, state, "tilt")?.unwrap_or(0.);
+    let reverse = optional_float(call, state, "reverse")?.unwrap_or(0.)
+        + optional_float(call, state, "reverse1")?.unwrap_or(0.);
+    let split = optional_float(call, state, "split")?.unwrap_or(0.);
+    let alternate = optional_float(call, state, "alternate")?.unwrap_or(0.);
+    let cross = optional_float(call, state, "cross")?.unwrap_or(0.);
+    let style = raw(call, actor, "__songlua_style_name")?;
+    let style = assets::text(call, style)?;
+    let reverse = deadsync_gameplay::scroll_reverse_percent_for_column(
+        deadsync_gameplay::ScrollReverseOptions {
+            reverse,
+            split,
+            alternate,
+            cross,
+        },
+        0,
+        crate::song_lua_style_info(&style).columns,
+    ) > 0.5;
+    let field = child(call, actor, "NoteField")?;
+    let Some(field) = optional_table(call, field)? else {
+        return Ok(());
+    };
+    call.with_roots(&[Value::Table(field)], |call| {
+        // PlayerNoteFieldPositioner restores only Y. These destination writes
+        // survive the draw; Player::Update resets only zoom before callbacks.
+        // The renderer already owns the temporary Y shift and field camera.
+        // Keep the float operation order of RageUtil::SCALE, including 0.9f-1.f.
+        let tilt_zoom = if tilt > 0. {
+            tilt * (0.9_f32 - 1.) + 1.
+        } else {
+            tilt * (0.9_f32 - 1.) / -1. + 1.
+        };
+        let zoom = (mini * (0.5 - 1.) + 1.) * tilt_zoom;
+        write_note_field_zoom(call, actor, field, zoom)?;
+        let rotation =
+            ((tilt + 1.) * (-30. - 30.) / (1. - -1.) + 30.) * if reverse { -1. } else { 1. };
+        write_note_field_scalar(call, field, 3, rotation)
+    })
+}
+
+fn write_note_field_zoom(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    field: TableId,
+    zoom: f32,
+) -> Result<(), Error> {
+    for axis in [0, 1, 2] {
+        // The native X/Y writes precede the authored OITG flag read.
+        if axis == 2 && truthy(raw(call, actor, "__songlua_oitg_zoom_mode")?) {
+            break;
+        }
+        write_note_field_scalar(call, field, axis, zoom)?;
+    }
+    Ok(())
+}
+
+fn write_note_field_scalar(
+    call: &mut HostCall<'_>,
+    field: TableId,
+    axis: usize,
+    value: f32,
+) -> Result<(), Error> {
+    let raw_pose = {
+        let store = call.store();
+        let live = store.clock.live.load(std::sync::atomic::Ordering::Relaxed);
+        if let Some(node) = store.actors.get_mut(&field) {
+            let write = |pose: &mut TweenPose| match axis {
+                0 => pose.zoom_x = value,
+                1 => pose.zoom_y = value,
+                2 => pose.zoom_z = value,
+                _ => pose.rot_x_deg = value,
+            };
+            write(node.destination_mut());
+            if let Some(getters) = node
+                .replay
+                .as_mut()
+                .and_then(|replay| replay.getters.as_mut())
+            {
+                write(getters);
+            }
+            if axis == 3 {
+                node.state.rotation[0] = value;
+            }
+            !live || node.raw_live_epoch
+        } else {
+            true
+        }
+    };
+    // Native positioner writes are observable state, not authored command
+    // blocks. In particular, they must never become another renderer wrapper.
+    if raw_pose {
+        let key = [
+            "__songlua_state_zoom_x",
+            "__songlua_state_zoom_y",
+            "__songlua_state_zoom_z",
+            "__songlua_state_rot_x_deg",
+        ][axis];
+        song_replay::raw_set(call, field, key, Value::Number(value as f64))?;
+    }
+    Ok(())
 }

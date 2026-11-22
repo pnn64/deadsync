@@ -1,10 +1,9 @@
 use deadsync_profile::compat as profile;
+use deadsync_profile::picker::{ProfilePickerEntryView, ProfilePickerView};
 use deadsync_profile::{ActiveProfile, PlayerSide};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme_simply_love::SimplyLoveLocalProfileEvent;
-use deadsync_theme_simply_love::views::{
-    LocalProfileView, ManageLocalProfilesView, ProfilePickerEntryView, ProfilePickerView,
-};
+use deadsync_theme_simply_love::views::{LocalProfileView, ManageLocalProfilesView};
 use std::str::FromStr;
 
 pub fn view() -> ManageLocalProfilesView {

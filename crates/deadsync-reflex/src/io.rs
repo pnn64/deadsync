@@ -1,6 +1,6 @@
 use super::*;
 use config::{DeviceConfig, LightMode};
-use deadlib_input_native::PadBackend;
+use deadsync_input::devices::GamepadBackend;
 use deadlib_platform::{
     host_time,
     input::{PadCode, PadId},
@@ -299,19 +299,19 @@ fn connect(
 fn system_event(s: &Service, d: &Device, connected: bool) {
     let id = PadId((REFLEX_PAD_ID_BASE + d.player) as u32);
     let event = if connected {
-        GpSystemEvent::Connected {
+        GamepadSystemEvent::Connected {
             name: d.name.to_string(),
             id,
             vendor_id: Some(VID),
             product_id: Some(PID),
-            backend: PadBackend::Reflex,
+            backend: GamepadBackend::Reflex,
             initial: false,
         }
     } else {
-        GpSystemEvent::Disconnected {
+        GamepadSystemEvent::Disconnected {
             name: d.name.to_string(),
             id,
-            backend: PadBackend::Reflex,
+            backend: GamepadBackend::Reflex,
             initial: false,
         }
     };

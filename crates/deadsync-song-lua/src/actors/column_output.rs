@@ -209,7 +209,7 @@ fn read_position(
     previous: Option<&Spline>,
     scratch: &mut Scratch,
 ) -> Result<Option<Spline>, Error> {
-    let handler = field(call, column, key)?;
+    let handler = notefields::active_handler(call, column, key)?;
     with_table(call, handler, |call, handler| {
         let Some(handler) = handler else {
             return Ok(None);
@@ -329,7 +329,7 @@ fn read_hides(
     index: usize,
     out: &mut Vec<SongLuaNoteHideWindow>,
 ) -> Result<(), Error> {
-    let handler = field(call, column, "__songlua_zoom_handler")?;
+    let handler = notefields::active_handler(call, column, "__songlua_zoom_handler")?;
     with_table(call, handler, |call, handler| {
         let Some(handler) = handler else {
             return Ok(());

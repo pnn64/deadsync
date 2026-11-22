@@ -14626,6 +14626,97 @@ mod tests {
     }
 
     #[test]
+    fn versus_song_charts_share_music_with_both_players() {
+        use crate::song_launch::{
+            SongSelection, change_song_chart, resolve_song_chart_slots, synchronize_song_charts,
+        };
+        use GameplayInputPlayerSide as Side;
+
+        for style in [
+            GameplayInputPlayStyle::Versus,
+            GameplayInputPlayStyle::PumpVersus,
+        ] {
+            let mut song = test_song(2.0, 2.0);
+            song.charts = ["Hard", "Challenge", "Edit"]
+                .into_iter()
+                .map(|difficulty| {
+                    let mut chart = test_chart(ArrowStats::default(), 0, false);
+                    chart.difficulty = difficulty.into();
+                    chart.chart_type = style.chart_type().into();
+                    chart.music_path = Some(PathBuf::from("shared.ogg"));
+                    chart
+                })
+                .collect();
+            let steps = [3, 4];
+            let preferred = [3, 4];
+            assert_eq!(
+                synchronize_song_charts(&song, style, None, steps, preferred),
+                (steps, preferred),
+            );
+
+            song.charts[1].music_path = Some(PathBuf::from("challenge.ogg"));
+            song.charts[2].music_path = Some(PathBuf::from("edit.ogg"));
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some(steps), steps, preferred),
+                (steps, preferred),
+            );
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some([4, 4]), steps, preferred),
+                ([3, 3], [3, 3]),
+            );
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some([3, 3]), steps, preferred),
+                ([4, 4], [4, 4]),
+            );
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some([3, 4]), [3, 5], preferred),
+                ([5, 5], preferred),
+            );
+            assert_eq!(
+                change_song_chart(&song, style, Side::P1, 3, [4, 4], [4, 4]),
+                ([3, 3], [3, 3]),
+            );
+            assert_eq!(
+                change_song_chart(&song, style, Side::P2, 5, [3, 4], preferred),
+                ([5, 5], preferred),
+            );
+            assert_eq!(
+                resolve_song_chart_slots(&song, style, [usize::MAX; MAX_PLAYERS], preferred),
+                ([4, 4], [4, 4]),
+            );
+            let selection = SongSelection {
+                song: Arc::new(song),
+                steps,
+                preferred,
+            };
+            assert_eq!(selection.resolved_chart_slots(style), ([4, 4], [4, 4]));
+            assert_eq!(selection.chart_slots(style), (steps, preferred));
+        }
+    }
+
+    #[test]
+    fn partner_song_charts_follow_the_changed_side_even_with_shared_music() {
+        use crate::song_launch::synchronize_song_charts;
+
+        let song = test_song(2.0, 2.0);
+        for style in [
+            GameplayInputPlayStyle::Couple,
+            GameplayInputPlayStyle::PumpCouple,
+            GameplayInputPlayStyle::Routine,
+            GameplayInputPlayStyle::PumpRoutine,
+        ] {
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some([1, 2]), [3, 2], [3, 2]),
+                ([3, 3], [3, 3]),
+            );
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some([1, 1]), [2, 3], [2, 3]),
+                ([3, 3], [3, 3]),
+            );
+        }
+    }
+
+    #[test]
     fn note_types_define_rescore_and_edge_matching() {
         for note_type in [
             NoteType::Tap,
@@ -18807,6 +18898,66 @@ mod tests {
 
         let columns: Vec<usize> = notes.iter().map(|note| note.column).collect();
         assert_eq!(columns, vec![1, 3, 0, 2]);
+    }
+
+    #[test]
+    fn turn_column_mapping_follows_the_transformed_notes() {
+        for cols in [4, 5, 8, 10] {
+            for turn in [
+                GameplayTurnOption::None,
+                GameplayTurnOption::Mirror,
+                GameplayTurnOption::LRMirror,
+                GameplayTurnOption::UDMirror,
+                GameplayTurnOption::Left,
+                GameplayTurnOption::Right,
+                GameplayTurnOption::Shuffle,
+            ] {
+                for seed in [0, 1, 29, u64::MAX] {
+                    let mut notes: Vec<_> = (0..cols)
+                        .map(|column| {
+                            let mut note = test_note_at(NoteType::Tap, None, false, 48, 1.0);
+                            note.column = column;
+                            note
+                        })
+                        .collect();
+                    apply_turn_options(
+                        &mut notes,
+                        [(0, cols), (0, 0)],
+                        cols,
+                        1,
+                        [turn, GameplayTurnOption::None],
+                        seed,
+                    );
+                    let mapping = turn_column_mapping(turn, cols, seed);
+                    for (source, note) in notes.iter().enumerate() {
+                        assert_eq!(
+                            mapping[note.column], source,
+                            "turn={turn:?}, cols={cols}, seed={seed}"
+                        );
+                    }
+                    assert!(mapping[cols..].iter().copied().eq(cols..MAX_COLS));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn turn_column_mapping_keeps_nonstatic_and_unsupported_turns_local() {
+        let identity: [usize; MAX_COLS] = std::array::from_fn(|column| column);
+        for cols in [0, 4, 5, 8, 10, MAX_COLS + 1] {
+            for turn in [
+                GameplayTurnOption::None,
+                GameplayTurnOption::Blender,
+                GameplayTurnOption::Random,
+            ] {
+                assert_eq!(turn_column_mapping(turn, cols, 29), identity);
+            }
+        }
+        assert_eq!(turn_column_mapping(GameplayTurnOption::Left, 3, 29), identity);
+        assert_eq!(
+            turn_column_mapping(GameplayTurnOption::Mirror, MAX_COLS + 1, 29),
+            identity
+        );
     }
 
     #[test]

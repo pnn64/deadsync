@@ -14,6 +14,20 @@ pub enum GameplayInputPlayStyle {
 }
 
 impl GameplayInputPlayStyle {
+    #[must_use]
+    pub const fn chart_type(self) -> &'static str {
+        match self {
+            Self::Single | Self::Versus => "dance-single",
+            Self::Double => "dance-double",
+            Self::Couple => "dance-couple",
+            Self::Routine => "dance-routine",
+            Self::PumpSingle | Self::PumpVersus => "pump-single",
+            Self::PumpDouble => "pump-double",
+            Self::PumpCouple => "pump-couple",
+            Self::PumpRoutine => "pump-routine",
+        }
+    }
+
     #[inline(always)]
     #[must_use]
     pub const fn cols_per_player(self) -> usize {
@@ -215,6 +229,9 @@ pub trait GameplayProfileData: Clone {
     fn note_field_offset_x(&self) -> f32;
     fn noteskin_name(&self) -> String;
     fn mini_percent(&self) -> f32;
+    fn spacing_percent(&self) -> i32 {
+        0
+    }
     fn global_offset_shift_ms(&self) -> i32;
     fn visual_delay_ms(&self) -> i32;
     fn reverse_scroll(&self) -> bool;
@@ -228,6 +245,9 @@ pub trait GameplayProfileData: Clone {
     fn calculated_weight_pounds(&self) -> i32;
     fn hide_lifebar(&self) -> bool;
     fn hide_danger(&self) -> bool;
+    fn hide_song_background(&self) -> bool {
+        false
+    }
     fn rescore_early_hits(&self) -> bool;
     fn hide_early_dw_judgments(&self) -> bool;
     fn hide_early_dw_flash(&self) -> bool;
@@ -247,6 +267,11 @@ pub trait GameplayProfileData: Clone {
     #[inline(always)]
     fn appearance_effects(&self) -> AppearanceEffects {
         AppearanceEffects::from_mask_bits(self.appearance_mask_bits())
+    }
+
+    #[inline(always)]
+    fn dynamic_sudden(&self) -> bool {
+        self.appearance_mask_bits() & APPEARANCE_MASK_BIT_DYNAMIC_SUDDEN != 0
     }
 
     #[inline(always)]

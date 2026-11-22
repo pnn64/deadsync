@@ -10,7 +10,7 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
     view: FrameOptions,
     mut draw_layer: impl FnMut(ScreenLayer, &mut Vec<Actor>, FieldLayout),
     mut draw_field: impl FnMut(
-        FieldFrame,
+        &FieldFrame<'_>,
         &mut [NotefieldCameraCache; MAX_PLAYERS],
         &mut Vec<Actor>,
         &mut Vec<FlatDraw>,
@@ -53,18 +53,7 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
             hud_parts,
             ..
         } = draw_field(
-            FieldFrame {
-                player,
-                placement,
-                judgment_visible: true,
-                combo_visible: true,
-                judgment_transform: None,
-                combo_transform: None,
-                capture: ProxyCaptureRequests::default(),
-                wrapper: Matrix4::IDENTITY,
-                wrapper_visible: true,
-                player_position: None,
-            },
+            &FieldFrame::new(state, player, placement, view),
             &mut scratch.notefield_camera_cache,
             &mut scratch.notefield_actor_scratch[player],
             &mut scratch.notefield_flat_draw_scratch[player],

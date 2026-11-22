@@ -14,13 +14,15 @@ use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadlib_render_core::{BlendMode, MeshVertex};
+use deadsync_assets::gameplay_stage::{
+    ActiveGameplayStage, PracticeEditorPresentation, PracticeLivePresentation, PracticeStagePresenter,
+};
 use deadsync_gameplay::practice::editor::{
-    PracticeEditor, PracticeEditorCommand, PracticeEditorConfig, PracticeEditorFeedback,
-    PracticeEditorFlash, PracticeEditorRequest, PracticeEditorSnapshot, PracticeEditorSound,
-    PracticePlayRange,
+    PracticeEditorConfig, PracticeEditorFeedback, PracticeEditorFlash, PracticeEditorSound,
 };
 use deadsync_gameplay::practice::{
-    PracticePlayback, PracticePlaybackInput, PracticePlaybackUpdate,
+    PracticeDestination, PracticeHost, PracticeMainMenuItem, PracticeMenuKind, PracticePlaybackUpdate,
+    PracticeSession, PracticeViewRequest,
 };
 use deadsync_gameplay::{
     AutosyncMode, GameplayAudioSnapshot, GameplayTimingTickMode, ScrollEffects,
@@ -29,13 +31,13 @@ use deadsync_gameplay::{
 use deadsync_input::InputEvent;
 use deadsync_input::practice::PracticeKeyEvent;
 use deadsync_notefield::{TimingLabelStyle, TimingSegmentLabel as PracticeTimingLabel};
+use deadsync_online::gameplay_lobby::GameplayLobbySession;
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingSegments};
 use deadsync_theme::FontRole;
 use std::sync::Arc;
 
-const DISPLAY_BEAT_EPSILON: f32 = 0.000_1;
 const MARKER_Z: f32 = 2985.0;
 const EDIT_FIELD_CURSOR_TEX: &str = "practice/snap_display_icon_9x1 (doubleres).png";
 const EDIT_FIELD_CURSOR_Z: f32 = MARKER_Z + 1.0;
@@ -49,16 +51,6 @@ const EDIT_HELP_MISC_Y: f32 = 224.0;
 const EDIT_FIELD_ZOOM_AT_480P: f32 = 0.5;
 const EDIT_FIELD_HEIGHT_AT_480P: f32 = 360.0;
 const EDIT_SNAP_CURSOR_ZOOM: f32 = 0.5;
-/// Time constant for the exponential easing that scrolls the displayed chart
-/// position toward the cursor. Small enough to keep up with the key-repeat
-/// interval, large enough to read as a smooth scroll rather than a jump.
-const DISPLAY_SCROLL_TIME_CONSTANT: f32 = 0.07;
-/// Once the display is within this many beats of the cursor, settle exactly on
-/// it so the chart doesn't creep forever on sub-pixel differences.
-const DISPLAY_SCROLL_SNAP_EPSILON: f32 = 0.001;
-/// Jumps larger than this snap instantly instead of animating, so Home/End and
-/// other long seeks stay responsive instead of blurring across the whole song.
-const DISPLAY_SCROLL_MAX_SMOOTH_BEATS: f32 = 64.0;
 const EDIT_INFO_VALUE_CHARS: usize = 28;
 const EDIT_LINE_SOUND: &str = "assets/sounds/change.ogg";
 const EDIT_MARKER_SOUND: &str = "assets/sounds/screen_edit_marker.ogg";
@@ -205,7 +197,7 @@ impl PracticeEditText {
         }
     }
 
-    fn sync(&mut self, gameplay: &gameplay_screen::State, source: EditInfoSource) {
+    fn sync(&mut self, gameplay: &ActiveGameplayStage, source: EditInfoSource) {
         let revision = i18n::revision();
         let labels_dirty = self.labels.is_none() || self.i18n_revision != revision;
         if labels_dirty {
@@ -247,12 +239,12 @@ impl PracticeEditText {
 /// Capacity is one exact-size boxed slice for the screen lifetime. It warms on
 /// the first visible menu frame and replaces only when the menu definition or
 /// locale revision changes. There is no growth, eviction, pruning, locking, or
-/// worker work on a stable frame; the revision and definition pointer are the
+/// worker work on a stable frame; the revision and menu kind are the
 /// invalidation instrumentation. Replaced rows drop during menu rendering and
 /// remaining rows drop at screen teardown. A miss performs at most the 14
 /// bounded Help-menu lookups and one boxed-slice allocation.
 struct PracticeMenuText {
-    def: Option<&'static MenuDef>,
+    kind: Option<PracticeMenuKind>,
     labels: Option<Box<[Arc<str>]>>,
     i18n_revision: u64,
 }
@@ -260,236 +252,200 @@ struct PracticeMenuText {
 impl PracticeMenuText {
     const fn new() -> Self {
         Self {
-            def: None,
+            kind: None,
             labels: None,
             i18n_revision: u64::MAX,
         }
     }
 
-    fn sync(&mut self, def: &'static MenuDef) {
+    fn sync(&mut self, kind: PracticeMenuKind) {
         let revision = i18n::revision();
         let current = self.labels.is_some()
             && self.i18n_revision == revision
-            && self.def.is_some_and(|cached| std::ptr::eq(cached, def));
+            && self.kind == Some(kind);
         if current {
             return;
         }
 
-        self.labels = Some(def.rows.iter().map(|row| row.label.get()).collect());
-        self.def = Some(def);
+        self.labels = Some(match kind {
+            PracticeMenuKind::Main => PracticeMainMenuItem::ALL
+                .into_iter()
+                .map(|item| main_menu_label(item).get())
+                .collect(),
+            PracticeMenuKind::Help => HELP_MENU_LABELS.iter().map(|key| key.get()).collect(),
+        });
+        self.kind = Some(kind);
         self.i18n_revision = revision;
     }
 }
 
-pub struct State {
-    pub gameplay: gameplay_screen::State,
+pub type State = PracticeHost<gameplay_screen::State, PracticePresentation>;
+
+pub struct PracticePresentation {
     hud: profile_data::GameplayHudSnapshot,
     density_graph: PracticeDensityGraph,
     edit_text: PracticeEditText,
     menu_text: PracticeMenuText,
-    playback: PracticePlayback,
-    editor: PracticeEditor,
-    menu: Option<MenuState>,
-    display_beat: f32,
     edit_scroll_speed_index: usize,
     /// Localized presentation feedback, retained until its visibility expires.
     flash: Option<(Arc<str>, f32)>,
     pending_sfx: Vec<&'static str>,
-    pending_profile: Vec<crate::SimplyLoveProfileRequest>,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct EditSnapshot {
-    editor: PracticeEditorSnapshot,
-    edit_scroll_speed_index: usize,
+fn main_menu_label(item: PracticeMainMenuItem) -> LookupKey {
+    let key = match item {
+        PracticeMainMenuItem::PlayWholeSong => "MenuPlayWholeSong",
+        PracticeMainMenuItem::PlayCurrentToEnd => "MenuPlayCurrentToEnd",
+        PracticeMainMenuItem::PlaySelection => "MenuPlaySelection",
+        PracticeMainMenuItem::SetSelectionStart => "MenuSetSelectionStart",
+        PracticeMainMenuItem::SetSelectionEnd => "MenuSetSelectionEnd",
+        PracticeMainMenuItem::PlayerOptions => "MenuPracticeModeOptions",
+        PracticeMainMenuItem::Exit => "MenuExit",
+    };
+    lookup_key("Practice", key)
 }
 
-#[derive(Clone, Copy)]
-struct MenuState {
-    def: &'static MenuDef,
-    selected: usize,
-}
-
-type MenuAction = fn(&mut State, MusicStartSnap) -> ThemeEffect;
-
-struct MenuRow {
-    label: LookupKey,
-    /// `None` means the row is display-only; activating it just closes the menu.
-    action: Option<MenuAction>,
-}
-
-struct MenuDef {
-    rows: &'static [MenuRow],
-}
-
-impl MenuDef {
-    fn first_actionable_row(&self) -> usize {
-        self.rows
-            .iter()
-            .position(|r| r.action.is_some())
-            .unwrap_or(0)
-    }
-}
-
-static MAIN_MENU: MenuDef = MenuDef {
-    rows: &[
-        MenuRow {
-            label: lookup_key("Practice", "MenuPlayWholeSong"),
-            action: Some(action_play_whole_song),
-        },
-        MenuRow {
-            label: lookup_key("Practice", "MenuPlayCurrentToEnd"),
-            action: Some(action_play_current_to_end),
-        },
-        MenuRow {
-            label: lookup_key("Practice", "MenuPlaySelection"),
-            action: Some(action_play_selection),
-        },
-        MenuRow {
-            label: lookup_key("Practice", "MenuSetSelectionStart"),
-            action: Some(action_set_selection_start),
-        },
-        MenuRow {
-            label: lookup_key("Practice", "MenuSetSelectionEnd"),
-            action: Some(action_set_selection_end),
-        },
-        MenuRow {
-            label: lookup_key("Practice", "MenuPracticeModeOptions"),
-            action: Some(action_editor_options),
-        },
-        MenuRow {
-            label: lookup_key("Practice", "MenuExit"),
-            action: Some(action_exit_practice),
-        },
-    ],
-};
-
-static HELP_MENU: MenuDef = MenuDef {
-    rows: &[
-        MenuRow {
-            label: lookup_key("Practice", "HelpHoldUpDown"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpSemicolonApostrophe"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpCtrlUpDown"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpHomeEnd"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpLeftRight"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpBracketKeys"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpSpace"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpShiftNavigate"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpP"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpF7Ticks"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpF8Autoplay"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpF6Autosync"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpOffsetKeys"),
-            action: None,
-        },
-        MenuRow {
-            label: lookup_key("Practice", "HelpEscEnter"),
-            action: None,
-        },
-    ],
-};
+const HELP_MENU_LABELS: [LookupKey; PracticeMenuKind::Help.row_count()] = [
+    lookup_key("Practice", "HelpHoldUpDown"),
+    lookup_key("Practice", "HelpSemicolonApostrophe"),
+    lookup_key("Practice", "HelpCtrlUpDown"),
+    lookup_key("Practice", "HelpHomeEnd"),
+    lookup_key("Practice", "HelpLeftRight"),
+    lookup_key("Practice", "HelpBracketKeys"),
+    lookup_key("Practice", "HelpSpace"),
+    lookup_key("Practice", "HelpShiftNavigate"),
+    lookup_key("Practice", "HelpP"),
+    lookup_key("Practice", "HelpF7Ticks"),
+    lookup_key("Practice", "HelpF8Autoplay"),
+    lookup_key("Practice", "HelpF6Autosync"),
+    lookup_key("Practice", "HelpOffsetKeys"),
+    lookup_key("Practice", "HelpEscEnter"),
+];
 
 const SNAP_LABELS: [&str; 9] = [
     "4th", "8th", "12th", "16th", "24th", "32nd", "48th", "64th", "192nd",
 ];
 pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) -> State {
-    let playback = PracticePlayback::new(&mut gameplay);
-    let editor = PracticeEditor::new(PracticeEditorConfig {
-        only_dedicated_menu_buttons: runtime.only_dedicated_menu_buttons,
-        three_key_navigation: runtime.three_key_navigation,
-        tab_acceleration: runtime.tab_acceleration,
-    });
-    let active_players = gameplay.num_players();
-    let density_graph = build_practice_density_graph(&gameplay);
-    let timing_labels = std::array::from_fn(|player| {
-        if player < active_players {
-            gameplay.gameplay_chart(player).map_or_else(
-                || Vec::new().into_boxed_slice(),
-                |chart| compile_timing_labels(&chart.timing_segments),
-            )
-        } else {
-            Vec::new().into_boxed_slice()
-        }
-    });
-    gameplay.set_practice_timing_labels(timing_labels);
-    let mut state = State {
-        gameplay,
-        hud: runtime.hud,
-        density_graph,
-        edit_text: PracticeEditText::new(),
-        menu_text: PracticeMenuText::new(),
-        playback,
-        editor,
-        menu: None,
-        display_beat: 0.0,
-        edit_scroll_speed_index: 0,
-        flash: None,
-        pending_sfx: Vec::with_capacity(8),
-        pending_profile: Vec::with_capacity(4),
-    };
-    let cursor = state.editor.cursor_beat();
-    state.editor.set_cursor(&state.gameplay, cursor);
-    snap_display_to_cursor(&mut state);
-    state
+    let session = PracticeSession::new(
+        &mut gameplay.gameplay,
+        PracticeEditorConfig {
+            only_dedicated_menu_buttons: runtime.only_dedicated_menu_buttons,
+            three_key_navigation: runtime.three_key_navigation,
+            tab_acceleration: runtime.tab_acceleration,
+        },
+    );
+    init_with_session(gameplay, runtime.hud, session)
 }
 
-#[inline(always)]
-fn queue_sfx(state: &mut State, path: &'static str) {
-    state.pending_sfx.push(path);
+pub fn init_with_session(
+    mut gameplay: gameplay_screen::State,
+    hud: profile_data::GameplayHudSnapshot,
+    mut session: PracticeSession,
+) -> State {
+    let presentation = PracticePresentation::new(&gameplay.stage, &mut gameplay.presentation, hud);
+    session.snap_display_to_cursor(&mut gameplay.stage.gameplay);
+    State {
+        gameplay,
+        session,
+        presentation,
+    }
+}
+
+impl PracticePresentation {
+    pub fn new(
+        stage: &ActiveGameplayStage,
+        gameplay_hud: &mut gameplay_screen::GameplayPresentation,
+        hud: profile_data::GameplayHudSnapshot,
+    ) -> Self {
+        let active_players = stage.num_players();
+        let density_graph = build_practice_density_graph(stage);
+        let timing_labels = std::array::from_fn(|player| {
+            if player < active_players {
+                stage.gameplay_chart(player).map_or_else(
+                    || Vec::new().into_boxed_slice(),
+                    |chart| compile_timing_labels(&chart.timing_segments),
+                )
+            } else {
+                Vec::new().into_boxed_slice()
+            }
+        });
+        gameplay_hud.set_practice_timing_labels(timing_labels);
+        Self {
+            hud,
+            density_graph,
+            edit_text: PracticeEditText::new(),
+            menu_text: PracticeMenuText::new(),
+            edit_scroll_speed_index: 0,
+            flash: None,
+            pending_sfx: Vec::with_capacity(8),
+        }
+    }
+
+    pub const fn edit_scroll_speed_index(&self) -> usize {
+        self.edit_scroll_speed_index
+    }
+
+    pub fn restore_edit_scroll_speed(&mut self, index: usize) {
+        self.edit_scroll_speed_index = index.min(EDIT_SCROLL_SPEEDS.len() - 1);
+    }
+
+    pub fn editor_feedback(&mut self) -> EditorPresentation<'_> {
+        EditorPresentation {
+            flash: &mut self.flash,
+            pending_sfx: &mut self.pending_sfx,
+            music_rate_text_dirty: false,
+        }
+    }
+}
+
+impl PracticeLivePresentation<gameplay_screen::GameplayPresentation> for PracticePresentation {
+    type Feedback<'a> = EditorPresentation<'a>;
+    type Effect = ThemeEffect;
+    type EditSnapshot = usize;
+
+    fn editor_feedback(&mut self) -> Self::Feedback<'_> {
+        self.editor_feedback()
+    }
+
+    fn edit_snapshot(&self) -> Self::EditSnapshot {
+        self.edit_scroll_speed_index()
+    }
+
+    fn restore_edit_snapshot(&mut self, snapshot: Self::EditSnapshot) {
+        self.restore_edit_scroll_speed(snapshot);
+    }
+
+    fn advance_visuals(&mut self, delta_time: f32) {
+        advance_flash(self, delta_time);
+    }
+
+    fn apply_playback_update(&mut self, update: PracticePlaybackUpdate) {
+        apply_playback_update(self, update);
+    }
+
+    fn apply_view_request(&mut self, request: PracticeViewRequest) {
+        apply_view_request(self, request);
+    }
+
+    fn append_effects(&mut self, effects: &mut Vec<Self::Effect>) {
+        append_presentation_effects(self, ThemeEffect::None, effects);
+    }
 }
 
 fn append_pending_effects(
-    pending_profile: &mut Vec<crate::SimplyLoveProfileRequest>,
+    pending_rates: impl ExactSizeIterator<Item = f32>,
     pending_sfx: &mut Vec<&'static str>,
     effect: ThemeEffect,
     effects: &mut Vec<ThemeEffect>,
 ) {
     effects.reserve(
-        pending_profile.len()
-            + pending_sfx.len()
-            + usize::from(!matches!(effect, ThemeEffect::None)),
+        pending_rates.len() + pending_sfx.len() + usize::from(!matches!(effect, ThemeEffect::None)),
     );
-    effects.extend(
-        pending_profile
-            .drain(..)
-            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(request))),
-    );
+    effects.extend(pending_rates.map(|rate| {
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::SetMusicRate(rate),
+        ))
+    }));
     effects.extend(pending_sfx.drain(..).map(crate::effects::sfx));
     if !matches!(&effect, ThemeEffect::None) {
         debug_assert!(!matches!(&effect, ThemeEffect::Batch(_)));
@@ -497,16 +453,43 @@ fn append_pending_effects(
     }
 }
 
+pub fn append_presentation_effects(
+    presentation: &mut PracticePresentation,
+    effect: ThemeEffect,
+    effects: &mut Vec<ThemeEffect>,
+) {
+    append_pending_effects(std::iter::empty(), &mut presentation.pending_sfx, effect, effects);
+}
+
 /// Borrows only presentation storage while a game-owned editor operation runs.
-struct EditorPresentation<'a> {
+pub struct EditorPresentation<'a> {
     flash: &'a mut Option<(Arc<str>, f32)>,
     pending_sfx: &'a mut Vec<&'static str>,
-    pending_profile: &'a mut Vec<crate::SimplyLoveProfileRequest>,
     music_rate_text_dirty: bool,
 }
 
+impl PracticeEditorPresentation<gameplay_screen::GameplayPresentation> for EditorPresentation<'_> {
+    fn emit(&mut self, game: &gameplay_screen::GameplayCoreState, feedback: PracticeEditorFeedback) {
+        self.emit(game, feedback);
+    }
+
+    fn finish(self, stage: &ActiveGameplayStage, gameplay_hud: &mut gameplay_screen::GameplayPresentation) {
+        self.finish(stage, gameplay_hud);
+    }
+}
+
 impl EditorPresentation<'_> {
-    fn emit(
+    pub fn finish(
+        self,
+        stage: &ActiveGameplayStage,
+        gameplay_hud: &mut gameplay_screen::GameplayPresentation,
+    ) {
+        if self.music_rate_text_dirty {
+            gameplay_screen::sync_music_rate_text(stage, gameplay_hud);
+        }
+    }
+
+    pub fn emit(
         &mut self,
         game: &gameplay_screen::GameplayCoreState,
         feedback: PracticeEditorFeedback,
@@ -517,11 +500,10 @@ impl EditorPresentation<'_> {
                 PracticeEditorSound::Marker => EDIT_MARKER_SOUND,
                 PracticeEditorSound::Snap => EDIT_SNAP_SOUND,
                 PracticeEditorSound::Invalid => EDIT_INVALID_SOUND,
+                PracticeEditorSound::MenuOpenClose => "assets/sounds/start.ogg",
+                PracticeEditorSound::MenuMove => "assets/sounds/change.ogg",
             }),
-            PracticeEditorFeedback::PersistMusicRate(rate) => {
-                self.pending_profile
-                    .push(crate::SimplyLoveProfileRequest::SetMusicRate(rate));
-            }
+            PracticeEditorFeedback::PersistMusicRate(_) => unreachable!("session rate command"),
             PracticeEditorFeedback::SyncMusicRateText => self.music_rate_text_dirty = true,
             PracticeEditorFeedback::Flash(flash) => {
                 let text = match flash {
@@ -593,95 +575,39 @@ impl EditorPresentation<'_> {
     }
 }
 
-fn with_editor<R>(
+fn with_session<R>(
     state: &mut State,
     operation: impl FnOnce(
-        &mut PracticeEditor,
+        &mut PracticeSession,
         &mut gameplay_screen::GameplayCoreState,
         &mut EditorPresentation<'_>,
     ) -> R,
 ) -> R {
-    let mut presentation = EditorPresentation {
-        flash: &mut state.flash,
-        pending_sfx: &mut state.pending_sfx,
-        pending_profile: &mut state.pending_profile,
-        music_rate_text_dirty: false,
-    };
-    let result = operation(
-        &mut state.editor,
-        &mut state.gameplay.gameplay,
-        &mut presentation,
-    );
-    // The text cache is read only after dispatch; every semantic rate/audio and
-    // presentation feedback event has already been processed in its original order.
-    if presentation.music_rate_text_dirty {
-        gameplay_screen::sync_music_rate_text(&mut state.gameplay);
-    }
+    let mut feedback = state.presentation.editor_feedback();
+    let result = operation(&mut state.session, &mut state.gameplay.stage.gameplay, &mut feedback);
+    feedback.finish(&state.gameplay.stage, &mut state.gameplay.presentation);
     result
 }
 
-fn execute_editor_command(
-    state: &mut State,
-    command: PracticeEditorCommand,
-    snap_music_start: MusicStartSnap,
-) -> ThemeEffect {
-    let request = with_editor(state, |editor, game, presentation| {
-        editor.execute(game, command, |game, feedback| {
-            presentation.emit(game, feedback)
-        })
-    });
-    apply_editor_request(state, request, snap_music_start)
-}
-
-fn apply_editor_request(
-    state: &mut State,
-    request: PracticeEditorRequest,
-    snap_music_start: MusicStartSnap,
-) -> ThemeEffect {
+pub fn apply_view_request(presentation: &mut PracticePresentation, request: PracticeViewRequest) {
     match request {
-        PracticeEditorRequest::None => {}
-        PracticeEditorRequest::OpenMainMenu => open_main_menu(state),
-        PracticeEditorRequest::OpenHelpMenu => open_help_menu(state),
-        PracticeEditorRequest::CloseMenu => close_menu(state),
-        PracticeEditorRequest::ActivateMenu => return activate_menu_item(state, snap_music_start),
-        PracticeEditorRequest::StepMenu(delta) => step_menu(state, delta),
-        PracticeEditorRequest::ChangeEditScrollSpeed(delta) => {
-            change_edit_scroll_speed(state, delta)
-        }
-        PracticeEditorRequest::StartPlayback {
-            start_beat,
-            stop_beat,
-        } => {
-            start_playback(state, start_beat, stop_beat, snap_music_start);
-        }
-        PracticeEditorRequest::StopPlayback => stop_playback(state),
-    }
-    ThemeEffect::None
-}
-
-pub const fn edit_snapshot(state: &State) -> EditSnapshot {
-    EditSnapshot {
-        editor: state.editor.snapshot(),
-        edit_scroll_speed_index: state.edit_scroll_speed_index,
+        PracticeViewRequest::ChangeEditScrollSpeed(delta) => change_edit_scroll_speed(presentation, delta),
+        PracticeViewRequest::PlaybackStarted => presentation.flash = None,
+        _ => {}
     }
 }
 
-pub fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
-    state.editor.clear_navigation_holds();
-    state.playback.restore_editing();
-    state.menu = None;
-    state.edit_scroll_speed_index = snapshot
-        .edit_scroll_speed_index
-        .min(EDIT_SCROLL_SPEEDS.len().saturating_sub(1));
-    state.editor.restore(&state.gameplay, snapshot.editor);
-    snap_display_to_cursor(state);
+fn apply_legacy_view_request(state: &mut State, request: PracticeViewRequest) -> ThemeEffect {
+    apply_view_request(&mut state.presentation, request);
+    match request {
+        PracticeViewRequest::Navigate(PracticeDestination::PlayerOptions) => ThemeEffect::Navigate(Screen::PlayerOptions),
+        PracticeViewRequest::Navigate(PracticeDestination::SelectMusic) => ThemeEffect::Navigate(Screen::SelectMusic),
+        _ => ThemeEffect::None,
+    }
 }
 
 pub fn on_enter(state: &mut State) {
-    state.playback.on_enter(&mut state.gameplay);
-    let cursor = state.editor.cursor_beat();
-    state.editor.set_cursor(&state.gameplay, cursor);
-    snap_display_to_cursor(state);
+    state.session.on_enter(&mut state.gameplay);
 }
 
 pub fn update(
@@ -692,7 +618,7 @@ pub fn update(
     snap_music_start: MusicStartSnap,
     effects: &mut Vec<ThemeEffect>,
 ) {
-    let effect = update_inner(
+    advance(
         state,
         delta_time,
         audio_snapshot,
@@ -700,57 +626,49 @@ pub fn update(
         snap_music_start,
     );
     append_pending_effects(
-        &mut state.pending_profile,
-        &mut state.pending_sfx,
-        effect,
+        state.session.drain_music_rates(),
+        &mut state.presentation.pending_sfx,
+        ThemeEffect::None,
         effects,
     );
 }
 
-fn update_inner(
+pub fn advance(
     state: &mut State,
     delta_time: f32,
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
     snap_music_start: MusicStartSnap,
-) -> ThemeEffect {
-    if let Some((_, remaining)) = state.flash.as_mut() {
+) {
+    advance_flash(&mut state.presentation, delta_time);
+    let playback = with_session(state, |session, game, presentation| {
+        session.update(
+            game,
+            delta_time,
+            audio_snapshot,
+            fallback_host_nanos,
+            snap_music_start,
+            |game, feedback| presentation.emit(game, feedback),
+        )
+    });
+    apply_playback_update(&mut state.presentation, playback);
+}
+
+#[inline]
+pub fn advance_flash(presentation: &mut PracticePresentation, delta_time: f32) {
+    if let Some((_, remaining)) = presentation.flash.as_mut() {
         *remaining -= delta_time;
         if *remaining <= 0.0 {
-            state.flash = None;
+            presentation.flash = None;
         }
     }
-    with_editor(state, |editor, game, presentation| {
-        editor.update_music_rate_hold(game, delta_time, |game, feedback| {
-            presentation.emit(game, feedback);
-        });
-    });
+}
 
-    if !state.playback.is_playing() {
-        state.gameplay.advance_screen_elapsed(delta_time);
-        let menu_open = state.menu.is_some();
-        with_editor(state, |editor, game, presentation| {
-            editor.update_navigation_holds(game, delta_time, menu_open, |game, feedback| {
-                presentation.emit(game, feedback);
-            });
-        });
-        update_display_scroll(state, delta_time);
-        return ThemeEffect::None;
-    }
-
-    let editor = &mut state.editor;
-    let update = state.playback.update(
-        &mut state.gameplay,
-        delta_time,
-        audio_snapshot,
-        fallback_host_nanos,
-        snap_music_start,
-        || editor.clear_navigation_holds(),
-    );
+#[inline]
+pub fn apply_playback_update(presentation: &mut PracticePresentation, update: PracticePlaybackUpdate) {
     if update == PracticePlaybackUpdate::Restarted {
-        state.flash = None;
+        presentation.flash = None;
     }
-    ThemeEffect::None
 }
 
 pub fn handle_input(
@@ -759,42 +677,26 @@ pub fn handle_input(
     snap_music_start: MusicStartSnap,
     effects: &mut Vec<ThemeEffect>,
 ) {
-    let effect = handle_input_inner(state, ev, snap_music_start);
+    let effect = process_input(state, ev, snap_music_start);
     append_pending_effects(
-        &mut state.pending_profile,
-        &mut state.pending_sfx,
+        state.session.drain_music_rates(),
+        &mut state.presentation.pending_sfx,
         effect,
         effects,
     );
 }
 
-fn handle_input_inner(
+pub fn process_input(
     state: &mut State,
     ev: &InputEvent,
     snap_music_start: MusicStartSnap,
 ) -> ThemeEffect {
-    if state.menu.is_none() {
-        let editor = &mut state.editor;
-        match state.playback.handle_input(&mut state.gameplay, ev, || {
-            editor.clear_navigation_holds();
-        }) {
-            PracticePlaybackInput::Editing => {}
-            PracticePlaybackInput::Handled => return ThemeEffect::None,
-            PracticePlaybackInput::Stopped { cursor_beat } => {
-                state.editor.set_cursor(&state.gameplay, cursor_beat);
-                snap_display_to_cursor(state);
-                return ThemeEffect::None;
-            }
-        }
-    }
-
-    let menu_open = state.menu.is_some();
-    let request = with_editor(state, |editor, game, presentation| {
-        editor.handle_input(game, ev, menu_open, |game, feedback| {
+    let request = with_session(state, |session, game, presentation| {
+        session.handle_input(game, ev, snap_music_start, |game, feedback| {
             presentation.emit(game, feedback);
         })
     });
-    apply_editor_request(state, request, snap_music_start)
+    apply_legacy_view_request(state, request)
 }
 
 pub fn handle_raw_key_event(
@@ -804,68 +706,102 @@ pub fn handle_raw_key_event(
     effects: &mut Vec<ThemeEffect>,
 ) -> bool {
     let start_len = effects.len();
-    let (consumed, effect) = handle_raw_key_event_inner(state, raw_key, snap_music_start);
+    let (consumed, effect) = process_key(
+        state,
+        &PracticeKeyEvent::from_raw(raw_key),
+        snap_music_start,
+    );
     append_pending_effects(
-        &mut state.pending_profile,
-        &mut state.pending_sfx,
+        state.session.drain_music_rates(),
+        &mut state.presentation.pending_sfx,
         effect,
         effects,
     );
     consumed || effects.len() != start_len
 }
 
-fn handle_raw_key_event_inner(
+pub fn process_key(
     state: &mut State,
-    raw_key: &RawKeyboardEvent,
+    event: &PracticeKeyEvent,
     snap_music_start: MusicStartSnap,
 ) -> (bool, ThemeEffect) {
-    let key_event = PracticeKeyEvent::from_raw(raw_key);
-    let playing = state.playback.is_playing();
-    let menu_open = state.menu.is_some();
-    let result = with_editor(state, |editor, game, presentation| {
-        editor.handle_raw_key(game, &key_event, playing, menu_open, |game, feedback| {
-            presentation.emit(game, feedback);
-        })
+    let (consumed, request) = with_session(state, |session, game, presentation| {
+        session.handle_raw_key(
+            game,
+            event,
+            snap_music_start,
+            |game, feedback| {
+                presentation.emit(game, feedback);
+            },
+        )
     });
-    let effect = apply_editor_request(state, result.request, snap_music_start);
-    (result.consumed, effect)
+    let effect = apply_legacy_view_request(state, request);
+    (consumed, effect)
 }
 
-pub fn push_overlay(actors: &mut Vec<Actor>, state: &mut State) {
-    if !state.playback.is_playing() {
-        append_edit_markers(state, actors);
-        append_density_graph(state, actors);
-        append_edit_overlay(state, actors);
-    }
-    if state.menu.is_some() {
-        append_main_menu(state, actors);
-    }
-    // Render any active flash text regardless of mode so music-rate changes
-    // (and other transient feedback) are visible during loop playback as well.
-    append_flash_overlay(state, actors);
+struct PracticeOverlay<'a> {
+    gameplay: &'a gameplay_screen::State,
+    session: &'a PracticeSession,
+    presentation: &'a mut PracticePresentation,
 }
 
-pub fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
-    let playback_visuals = state.playback.is_playing();
-    let mut notefield = if playback_visuals {
+pub fn push_overlay(
+    actors: &mut Vec<Actor>,
+    gameplay: &gameplay_screen::State,
+    session: &PracticeSession,
+    presentation: &mut PracticePresentation,
+) {
+    let mut state = PracticeOverlay { gameplay, session, presentation };
+    if !session.is_playing() {
+        append_edit_markers(&state, actors);
+        append_density_graph(&state, actors);
+        append_edit_overlay(&mut state, actors);
+    }
+    if session.menu().is_some() {
+        append_main_menu(&mut state, actors);
+    }
+    // Music-rate changes and other feedback are also visible during playback.
+    append_flash_overlay(&state, actors);
+}
+
+pub fn practice_view(
+    session: &PracticeSession,
+    presentation: &PracticePresentation,
+) -> gameplay_screen::ActorViewOverride {
+    let mut notefield = if session.is_playing() {
         gameplay_screen::NotefieldViewOverride::default()
     } else {
-        practice_notefield_view(state)
+        practice_notefield_view(presentation)
     };
     notefield.hide_display_mods = true;
     gameplay_screen::ActorViewOverride {
         notefield,
         hide_gameplay_hud: true,
-        apply_attacks: playback_visuals,
-        show_song_visuals: playback_visuals,
         ..Default::default()
     }
 }
 
-fn practice_notefield_view(state: &State) -> gameplay_screen::NotefieldViewOverride {
+impl PracticeStagePresenter<GameplayLobbySession, gameplay_screen::GameplayPresentation>
+    for PracticePresentation
+{
+    fn frame_view(&self, session: &PracticeSession) -> gameplay_screen::ActorViewOverride {
+        practice_view(session, self)
+    }
+
+    fn append_practice_overlay(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        gameplay: &gameplay_screen::State,
+        session: &PracticeSession,
+    ) {
+        push_overlay(actors, gameplay, session, self);
+    }
+}
+
+fn practice_notefield_view(presentation: &PracticePresentation) -> gameplay_screen::NotefieldViewOverride {
     gameplay_screen::NotefieldViewOverride {
         field_zoom: Some(practice_edit_field_zoom()),
-        scroll_speed: Some(practice_edit_scroll_speed(state)),
+        scroll_speed: Some(practice_edit_scroll_speed(presentation)),
         // ITG ScreenEdit uses separate editor options, never the player's scroll mods.
         scroll: Some(ScrollEffects::default()),
         force_center_1player: true,
@@ -884,193 +820,23 @@ fn practice_edit_cursor_y() -> f32 {
     (screen_height() / 480.0 * EDIT_FIELD_HEIGHT_AT_480P).mul_add(-0.5, screen_center_y())
 }
 
-const fn practice_edit_scroll_speed(state: &State) -> ScrollSpeedSetting {
-    ScrollSpeedSetting::XMod(EDIT_SCROLL_SPEEDS[state.edit_scroll_speed_index])
+const fn practice_edit_scroll_speed(presentation: &PracticePresentation) -> ScrollSpeedSetting {
+    ScrollSpeedSetting::XMod(EDIT_SCROLL_SPEEDS[presentation.edit_scroll_speed_index])
 }
 
 fn practice_marker_bar_height() -> f32 {
     ScrollSpeedSetting::ARROW_SPACING * practice_edit_field_zoom()
 }
 
-fn open_main_menu(state: &mut State) {
-    state.editor.clear_navigation_holds();
-    if state.menu.is_none() {
-        queue_sfx(state, "assets/sounds/start.ogg");
-    }
-    state.menu = Some(MenuState {
-        def: &MAIN_MENU,
-        selected: MAIN_MENU.first_actionable_row(),
-    });
-}
-
-fn open_help_menu(state: &mut State) {
-    state.editor.clear_navigation_holds();
-    if state.menu.is_none() {
-        queue_sfx(state, "assets/sounds/start.ogg");
-    }
-    state.menu = Some(MenuState {
-        def: &HELP_MENU,
-        selected: 0,
-    });
-}
-
-fn close_menu(state: &mut State) {
-    state.menu = None;
-    queue_sfx(state, "assets/sounds/start.ogg");
-}
-
-fn step_menu(state: &mut State, delta: isize) {
-    let Some(menu) = state.menu else {
-        return;
-    };
-    let len = menu.def.rows.len() as isize;
-    if len == 0 {
-        return;
-    }
-    let selected = (menu.selected as isize + delta).rem_euclid(len) as usize;
-    state.menu = Some(MenuState {
-        def: menu.def,
-        selected,
-    });
-    queue_sfx(state, "assets/sounds/change.ogg");
-}
-
-fn activate_menu_item(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    let Some(menu) = state.menu else {
-        return ThemeEffect::None;
-    };
-    let Some(row) = menu.def.rows.get(menu.selected) else {
-        return ThemeEffect::None;
-    };
-    let Some(action) = row.action else {
-        // Display-only row (e.g. Help): treat Enter as close.
-        close_menu(state);
-        return ThemeEffect::None;
-    };
-    state.menu = None;
-    state.editor.clear_navigation_holds();
-    queue_sfx(state, "assets/sounds/start.ogg");
-    action(state, snap_music_start)
-}
-
-fn action_play_whole_song(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    execute_editor_command(
-        state,
-        PracticeEditorCommand::Play(PracticePlayRange::WholeSong),
-        snap_music_start,
-    )
-}
-
-fn action_play_current_to_end(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    execute_editor_command(
-        state,
-        PracticeEditorCommand::Play(PracticePlayRange::CurrentToEnd),
-        snap_music_start,
-    )
-}
-
-fn action_play_selection(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    execute_editor_command(
-        state,
-        PracticeEditorCommand::Play(PracticePlayRange::Selection),
-        snap_music_start,
-    )
-}
-
-fn action_set_selection_start(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    execute_editor_command(
-        state,
-        PracticeEditorCommand::SetSelectionStart,
-        snap_music_start,
-    )
-}
-
-fn action_set_selection_end(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    execute_editor_command(
-        state,
-        PracticeEditorCommand::SetSelectionEnd,
-        snap_music_start,
-    )
-}
-
-fn action_editor_options(_state: &mut State, _snap_music_start: MusicStartSnap) -> ThemeEffect {
-    ThemeEffect::Navigate(Screen::PlayerOptions)
-}
-
-fn action_exit_practice(_state: &mut State, _snap_music_start: MusicStartSnap) -> ThemeEffect {
-    ThemeEffect::Navigate(Screen::SelectMusic)
-}
-
-fn start_playback(
-    state: &mut State,
-    start_beat: f32,
-    stop_beat: f32,
-    snap_music_start: MusicStartSnap,
-) {
-    state.editor.clear_navigation_holds();
-    state.playback.start(
-        &mut state.gameplay,
-        start_beat,
-        stop_beat,
-        snap_music_start,
-    );
-    state.flash = None;
-}
-
-fn stop_playback(state: &mut State) {
-    state.editor.clear_navigation_holds();
-    let current_beat = state.playback.stop(&mut state.gameplay);
-    state.editor.set_cursor(&state.gameplay, current_beat);
-    snap_display_to_cursor(state);
-}
-
-/// Immediately move the displayed scroll position to the cursor with no
-/// smoothing. Used when entering or leaving the edit field, where an animated
-/// scroll would be jarring rather than helpful.
-fn snap_display_to_cursor(state: &mut State) {
-    state.display_beat = state.editor.cursor_beat();
-    let music_time = state.gameplay.music_time_for_beat(state.display_beat);
-    state.gameplay.seek_practice_display(music_time);
-}
-
-/// Ease the displayed scroll position toward the cursor so seeking through the
-/// chart scrolls smoothly instead of redrawing into the next position. Large
-/// jumps snap instantly to stay responsive.
-fn update_display_scroll(state: &mut State, delta_time: f32) {
-    if delta_time <= 0.0 || same_display_beat(state.display_beat, state.editor.cursor_beat()) {
-        return;
-    }
-    let next = next_display_beat(state.display_beat, state.editor.cursor_beat(), delta_time);
-    if same_display_beat(next, state.editor.cursor_beat()) {
-        snap_display_to_cursor(state);
-        return;
-    }
-    state.display_beat = next;
-    let music_time = state.gameplay.music_time_for_beat(state.display_beat);
-    state.gameplay.seek_practice_display(music_time);
-}
-
-/// Pure easing step for [`update_display_scroll`], split out for testing.
-/// Returns the cursor directly when the gap is tiny (settle) or huge (snap),
-/// otherwise an exponential step toward it.
-fn next_display_beat(display_beat: f32, cursor_beat: f32, delta_time: f32) -> f32 {
-    let diff = cursor_beat - display_beat;
-    if diff.abs() <= DISPLAY_SCROLL_SNAP_EPSILON || diff.abs() > DISPLAY_SCROLL_MAX_SMOOTH_BEATS {
-        return cursor_beat;
-    }
-    let t = 1.0 - (-delta_time / DISPLAY_SCROLL_TIME_CONSTANT).exp();
-    diff.mul_add(t, display_beat)
-}
-
-fn change_edit_scroll_speed(state: &mut State, delta: isize) {
+fn change_edit_scroll_speed(presentation: &mut PracticePresentation, delta: isize) {
     let last = EDIT_SCROLL_SPEEDS.len() as isize - 1;
-    let next = (state.edit_scroll_speed_index as isize + delta).clamp(0, last) as usize;
-    if next == state.edit_scroll_speed_index {
+    let next = (presentation.edit_scroll_speed_index as isize + delta).clamp(0, last) as usize;
+    if next == presentation.edit_scroll_speed_index {
         return;
     }
-    state.edit_scroll_speed_index = next;
-    set_flash_tr(state, "FlashZoomChanged");
-    queue_sfx(state, EDIT_MARKER_SOUND);
+    presentation.edit_scroll_speed_index = next;
+    presentation.flash = Some((i18n::tr("Practice", "FlashZoomChanged"), FLASH_DURATION_SECS));
+    presentation.pending_sfx.push(EDIT_MARKER_SOUND);
 }
 
 fn music_rate_flash_text(
@@ -1119,10 +885,6 @@ fn effective_bpm_str(game: &gameplay_screen::GameplayCoreState, rate: f32) -> St
     }
 }
 
-fn set_flash_tr(state: &mut State, key: &str) {
-    state.flash = Some((i18n::tr("Practice", key), FLASH_DURATION_SECS));
-}
-
 fn fmt_music_rate(rate: f32) -> String {
     let scaled = (rate * 100.0).round() as i32;
     let int_part = scaled / 100;
@@ -1136,12 +898,8 @@ fn fmt_music_rate(rate: f32) -> String {
     }
 }
 
-fn same_display_beat(a: f32, b: f32) -> bool {
-    (a - b).abs() <= DISPLAY_BEAT_EPSILON
-}
-
-fn append_edit_markers(state: &State, actors: &mut Vec<Actor>) {
-    let hud = &state.hud;
+fn append_edit_markers(state: &PracticeOverlay<'_>, actors: &mut Vec<Actor>) {
+    let hud = &state.presentation.hud;
     let play_style = hud.play_style;
     let is_p2_single = profile_data::is_single_p2_side(play_style, hud.player_side);
 
@@ -1170,7 +928,7 @@ fn append_edit_markers(state: &State, actors: &mut Vec<Actor>) {
 }
 
 fn append_player_markers(
-    state: &State,
+    state: &PracticeOverlay<'_>,
     actors: &mut Vec<Actor>,
     player_idx: usize,
     placement: MarkerPlacement,
@@ -1228,17 +986,18 @@ fn append_player_markers(
         .max(ScrollSpeedSetting::ARROW_SPACING);
     let marker_phase = (state.gameplay.total_elapsed_in_screen() * std::f32::consts::PI).sin();
     let marker_shade = marker_phase.mul_add(0.25, 0.75);
-    let cursor_y = marker_y_for_beat(state, player_idx, offset_y, state.editor.cursor_beat());
+    let editor = state.session.editor();
+    let cursor_y = marker_y_for_beat(state, player_idx, offset_y, editor.cursor_beat());
     append_field_cursor(
         actors,
         center_x,
         cursor_y,
         width,
         field_zoom,
-        state.editor.snap_index(),
+        editor.snap_index(),
     );
 
-    match (state.editor.selection_anchor(), state.editor.selection_end()) {
+    match (editor.selection_anchor(), editor.selection_end()) {
         (Some(begin), Some(end)) if end > begin => {
             let y1 = marker_y_for_beat(state, player_idx, offset_y, begin);
             let y2 = marker_y_for_beat(state, player_idx, offset_y, end);
@@ -1323,10 +1082,10 @@ fn fmt_itg_float(value: f32) -> String {
     format!("{value:.6}")
 }
 
-fn marker_y_for_beat(state: &State, player_idx: usize, offset_y: f32, beat: f32) -> f32 {
+fn marker_y_for_beat(state: &PracticeOverlay<'_>, player_idx: usize, offset_y: f32, beat: f32) -> f32 {
     let receptor_y = practice_edit_cursor_y() + offset_y;
     let field_zoom = practice_edit_field_zoom();
-    let scroll_speed = practice_edit_scroll_speed(state);
+    let scroll_speed = practice_edit_scroll_speed(state.presentation);
     let current_beat = state.gameplay.visible_beat(player_idx);
     let travel = practice_edit_beat_travel(
         beat,
@@ -1425,7 +1184,7 @@ fn append_snap_cursor_heart(actors: &mut Vec<Actor>, x: f32, y: f32, zoom: f32, 
     ));
 }
 
-fn build_practice_density_graph(gameplay: &gameplay_screen::State) -> PracticeDensityGraph {
+fn build_practice_density_graph(gameplay: &ActiveGameplayStage) -> PracticeDensityGraph {
     let chart = gameplay.chart(0);
     let chart_type = chart.map_or("", |chart| chart.chart_type.as_str());
     let notefield_width = practice_style_notefield_width(chart_type, gameplay.cols_per_player());
@@ -1508,8 +1267,8 @@ fn rotate_practice_density_mesh(vertices: &mut [MeshVertex], thickness: f32) {
     }
 }
 
-fn append_density_graph(state: &State, actors: &mut Vec<Actor>) {
-    let graph = &state.density_graph;
+fn append_density_graph(state: &PracticeOverlay<'_>, actors: &mut Vec<Actor>) {
+    let graph = &state.presentation.density_graph;
     if let Some(mesh) = &graph.mesh {
         actors.push(Actor::Mesh {
             align: [0.0, 0.0],
@@ -1538,28 +1297,27 @@ fn append_density_graph(state: &State, actors: &mut Vec<Actor>) {
     ));
 }
 
-fn append_edit_overlay(state: &mut State, actors: &mut Vec<Actor>) {
+fn append_edit_overlay(state: &mut PracticeOverlay<'_>, actors: &mut Vec<Actor>) {
+    let editor = state.session.editor();
     let source = EditInfoSource {
-        cursor_beat: state.editor.cursor_beat(),
-        current_second: state.gameplay.music_time_for_beat(state.editor.cursor_beat()),
-        selection_anchor: state.editor.selection_anchor(),
-        selection_end: state.editor.selection_end(),
-        snap_index: state.editor.snap_index(),
+        cursor_beat: editor.cursor_beat(),
+        current_second: state.gameplay.music_time_for_beat(editor.cursor_beat()),
+        selection_anchor: editor.selection_anchor(),
+        selection_end: editor.selection_end(),
+        snap_index: editor.snap_index(),
     };
-    state.edit_text.sync(&state.gameplay, source);
-    let labels = state
-        .edit_text
+    state.presentation.edit_text.sync(&state.gameplay.stage, source);
+    let labels = state.presentation.edit_text
         .labels
         .as_ref()
         .expect("Practice edit labels sync before actor construction");
-    let status = &state
-        .edit_text
+    let status = &state.presentation.edit_text
         .info
         .as_ref()
         .expect("Practice edit info sync before actor construction")
         .1;
     let pc = practice_player_color(state);
-    let header_font = machine_font_key(state.gameplay.machine_font(), FontRole::Header);
+    let header_font = machine_font_key(state.gameplay.presentation.machine_font(), FontRole::Header);
     actors.push(act!(text:
         font(header_font):
         settext(&labels.title):
@@ -1613,8 +1371,8 @@ fn append_edit_overlay(state: &mut State, actors: &mut Vec<Actor>) {
     ));
 }
 
-fn append_flash_overlay(state: &State, actors: &mut Vec<Actor>) {
-    if let Some((text, remaining)) = state.flash.as_ref() {
+fn append_flash_overlay(state: &PracticeOverlay<'_>, actors: &mut Vec<Actor>) {
+    if let Some((text, remaining)) = state.presentation.flash.as_ref() {
         let alpha = remaining.clamp(0.0, 1.0);
         let label = text.clone();
         actors.push(act!(text:
@@ -1630,7 +1388,7 @@ fn append_flash_overlay(state: &State, actors: &mut Vec<Actor>) {
     }
 }
 
-fn practice_player_color(state: &State) -> [f32; 4] {
+fn practice_player_color(state: &PracticeOverlay<'_>) -> [f32; 4] {
     color::simply_love_rgba(state.gameplay.active_color_index())
 }
 
@@ -1680,7 +1438,7 @@ fn build_edit_info_text_into(out: &mut String, source: EditInfoSource, suffix: &
     out.push_str(suffix);
 }
 
-fn build_edit_info_suffix(gameplay: &gameplay_screen::State) -> String {
+fn build_edit_info_suffix(gameplay: &ActiveGameplayStage) -> String {
     let chart = &gameplay.charts()[0];
     let song = gameplay.song();
     let difficulty = color::difficulty_display_name_for_song(&chart.difficulty, &song.title, true);
@@ -1834,15 +1592,14 @@ fn push_clipped(status: &mut String, value: &str, max_chars: usize) {
     }
 }
 
-fn append_main_menu(state: &mut State, actors: &mut Vec<Actor>) {
-    let Some(menu) = state.menu else {
+fn append_main_menu(state: &mut PracticeOverlay<'_>, actors: &mut Vec<Actor>) {
+    let Some(menu) = state.session.menu() else {
         return;
     };
-    let row_count = menu.def.rows.len();
+    let row_count = menu.kind.row_count();
     let selected_color = practice_player_color(state);
-    state.menu_text.sync(menu.def);
-    let labels = state
-        .menu_text
+    state.presentation.menu_text.sync(menu.kind);
+    let labels = state.presentation.menu_text
         .labels
         .as_deref()
         .expect("Practice menu labels sync before actor construction");
@@ -1944,10 +1701,9 @@ fn append_help_section(
 #[cfg(test)]
 mod tests {
     use super::{
-        DISPLAY_SCROLL_MAX_SMOOTH_BEATS, DISPLAY_SCROLL_SNAP_EPSILON, EditInfoSource,
-        HELP_MENU, MAIN_MENU, MenuDef, PracticeMenuText, PracticeNumber,
+        EditInfoSource, HELP_MENU_LABELS, PracticeMainMenuItem, PracticeMenuKind, PracticeMenuText, PracticeNumber,
         append_pending_effects, build_edit_info_text_into, compile_timing_labels,
-        fmt_itg_float, fmt_music_rate, next_display_beat, normalize_flash_text,
+        fmt_itg_float, fmt_music_rate, normalize_flash_text,
         practice_density_geom, practice_edit_beat_travel, practice_style_notefield_width,
         push_selection_info, rotate_practice_density_mesh, timing_speed_label,
     };
@@ -2098,11 +1854,10 @@ mod tests {
 
     #[test]
     fn pending_practice_sfx_keep_order_before_navigation() {
-        let mut profiles = Vec::new();
         let mut pending = vec!["assets/sounds/change.ogg", "assets/sounds/start.ogg"];
         let mut effects = Vec::new();
         append_pending_effects(
-            &mut profiles,
+            std::iter::empty(),
             &mut pending,
             ThemeEffect::Navigate(Screen::PlayerOptions),
             &mut effects,
@@ -2127,11 +1882,10 @@ mod tests {
 
     #[test]
     fn practice_rate_persistence_precedes_sound_and_navigation() {
-        let mut profiles = vec![crate::SimplyLoveProfileRequest::SetMusicRate(1.25)];
         let mut sounds = vec!["assets/sounds/change.ogg"];
         let mut effects = Vec::new();
         append_pending_effects(
-            &mut profiles,
+            [1.25].into_iter(),
             &mut sounds,
             ThemeEffect::Navigate(Screen::PlayerOptions),
             &mut effects,
@@ -2152,32 +1906,7 @@ mod tests {
             effects[2],
             ThemeEffect::Navigate(Screen::PlayerOptions)
         ));
-        assert!(profiles.is_empty());
         assert!(sounds.is_empty());
-    }
-
-    #[test]
-    fn display_scroll_settles_and_snaps() {
-        // Tiny gaps settle exactly on the cursor.
-        assert_eq!(next_display_beat(10.0, 10.0 + 0.0005, 0.016), 10.0 + 0.0005);
-        // Huge jumps snap instantly so Home/End stay responsive.
-        let far = 10.0 + DISPLAY_SCROLL_MAX_SMOOTH_BEATS + 1.0;
-        assert_eq!(next_display_beat(10.0, far, 0.016), far);
-    }
-
-    #[test]
-    fn display_scroll_eases_toward_cursor() {
-        let start = 0.0;
-        let target = 4.0;
-        let step = next_display_beat(start, target, 0.016);
-        // A single frame moves partway, never overshoots, and heads the right way.
-        assert!(step > start && step < target);
-        // Repeated stepping converges onto the cursor.
-        let mut beat = start;
-        for _ in 0..240 {
-            beat = next_display_beat(beat, target, 0.016);
-        }
-        assert!((beat - target).abs() <= DISPLAY_SCROLL_SNAP_EPSILON);
     }
 
     #[test]
@@ -2326,13 +2055,13 @@ mod tests {
     #[test]
     fn help_menu_item_keys_resolve_through_i18n() {
         i18n::init_for_tests();
-        assert_menu_labels_localized(&HELP_MENU);
+        assert_menu_labels_localized(HELP_MENU_LABELS);
     }
 
     #[test]
     fn main_menu_item_keys_resolve_through_i18n() {
         i18n::init_for_tests();
-        assert_menu_labels_localized(&MAIN_MENU);
+        assert_menu_labels_localized(PracticeMainMenuItem::ALL.map(super::main_menu_label));
     }
 
     #[test]
@@ -2340,12 +2069,12 @@ mod tests {
         i18n::init_for_tests();
         let mut text = PracticeMenuText::new();
 
-        text.sync(&MAIN_MENU);
+        text.sync(PracticeMenuKind::Main);
         let first_rows = text.labels.as_deref().expect("main labels compiled");
         let first_ptr = first_rows.as_ptr() as usize;
-        assert_eq!(first_rows.len(), MAIN_MENU.rows.len());
+        assert_eq!(first_rows.len(), PracticeMenuKind::Main.row_count());
 
-        text.sync(&MAIN_MENU);
+        text.sync(PracticeMenuKind::Main);
         assert_eq!(
             text.labels
                 .as_deref()
@@ -2355,7 +2084,7 @@ mod tests {
         );
 
         text.i18n_revision = text.i18n_revision.wrapping_sub(1);
-        text.sync(&MAIN_MENU);
+        text.sync(PracticeMenuKind::Main);
         assert_ne!(
             text.labels
                 .as_deref()
@@ -2364,24 +2093,12 @@ mod tests {
             first_ptr
         );
 
-        text.sync(&HELP_MENU);
+        text.sync(PracticeMenuKind::Help);
         assert_eq!(
             text.labels.as_deref().expect("help labels compiled").len(),
-            HELP_MENU.rows.len()
+            PracticeMenuKind::Help.row_count()
         );
-        assert!(text.def.is_some_and(|def| std::ptr::eq(def, &HELP_MENU)));
-    }
-
-    #[test]
-    fn help_menu_rows_have_no_actions_main_menu_rows_all_have_actions() {
-        assert!(
-            HELP_MENU.rows.iter().all(|r| r.action.is_none()),
-            "help rows are display-only"
-        );
-        assert!(
-            MAIN_MENU.rows.iter().all(|r| r.action.is_some()),
-            "every main row must dispatch an action"
-        );
+        assert_eq!(text.kind, Some(PracticeMenuKind::Help));
     }
 
     #[test]
@@ -2412,10 +2129,10 @@ mod tests {
         );
     }
 
-    fn assert_menu_labels_localized(def: &MenuDef) {
-        for row in def.rows {
-            let resolved = row.label.get();
-            let fallback = format!("{}.{}", row.label.section, row.label.key);
+    fn assert_menu_labels_localized(labels: impl IntoIterator<Item = super::LookupKey>) {
+        for label in labels {
+            let resolved = label.get();
+            let fallback = format!("{}.{}", label.section, label.key);
             assert_ne!(
                 resolved.as_ref(),
                 fallback.as_str(),

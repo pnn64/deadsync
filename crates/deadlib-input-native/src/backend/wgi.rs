@@ -468,11 +468,9 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
 
     let vendor_id = controller.HardwareVendorId().ok();
     let product_id = controller.HardwareProductId().ok();
-    // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
-    // owns the pad (see `native_smx_owns_device`).
-    if ctx.host.native_smx_owns_device(vendor_id, product_id) {
+    if ctx.host.device_claimed(vendor_id, product_id) {
         log::debug!(
-            "WGI: ignoring StepManiaX pad (vid={vendor_id:04x?} pid={product_id:04x?}); native SMX input owns it"
+            "WGI: ignoring pad (vid={vendor_id:04x?} pid={product_id:04x?}); claimed by another input provider"
         );
         return;
     }

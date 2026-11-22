@@ -5,13 +5,14 @@
 //! survive screen exits; only unneeded entries are evicted while browsing options.
 //! Existing session textures are borrowed and never counted as eviction candidates.
 
+use crate::{ActiveTheme, player_options::PlayerOptionsState};
 use deadlib_assets::AssetManager;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
 use deadsync_assets::noteskin::{self, Noteskin, Style};
 use deadsync_noteskin::pack::InstalledPack;
-use deadsync_theme_simply_love::screens::player_options::{
-    self, NoteskinPreviewPriority, NoteskinPreviewRequest, State,
+use deadsync_theme::player_options::{
+    NoteskinPreviewPriority, NoteskinPreviewRequest, ThemePlayerOptions,
 };
 use image::RgbaImage;
 use std::collections::{HashMap, HashSet};
@@ -40,14 +41,14 @@ impl Runtime {
             return;
         }
         self.parts = parts;
-        self.textures = player_options::noteskin_preview_textures(&self.skin, parts);
+        self.textures = ActiveTheme::player_options_noteskin_textures(&self.skin, parts);
         self.components.clear();
         for part in 0..11 {
             let bit = 1 << part;
             if parts & bit != 0 {
                 self.components.push((
                     bit,
-                    player_options::noteskin_preview_textures(&self.skin, bit)
+                    ActiveTheme::player_options_noteskin_textures(&self.skin, bit)
                         .into_iter()
                         .map(|(key, _)| key)
                         .collect(),
@@ -119,20 +120,24 @@ impl Service {
 
     pub(super) fn update(
         &mut self,
-        state: &mut State,
+        state: &mut PlayerOptionsState,
         assets: &mut AssetManager,
         backend: &mut Backend,
     ) {
-        let cols = player_options::take_noteskin_preview_requests(state, &mut self.requests);
+        let Some(cols) = ActiveTheme::take_player_options_noteskin_requests(state, &mut self.requests)
+        else {
+            self.idle();
+            return;
+        };
         self.update_cache(cols, assets, backend);
-        player_options::retain_noteskin_previews(state, &self.requests);
+        ActiveTheme::retain_player_options_noteskin_previews(state, &self.requests);
         for request in &self.requests {
             if request.priority == NoteskinPreviewPriority::Nearby {
                 continue;
             }
             let ready = self.runtimes.get(&request.name);
             let parts = ready.map_or(0, |runtime| runtime.ready_parts(assets));
-            player_options::set_noteskin_preview(
+            ActiveTheme::set_player_options_noteskin_preview(
                 state,
                 &request.name,
                 parts,
@@ -582,6 +587,11 @@ return Def.Sprite {
                 .save(skin.join(format!("{name}.png")))
                 .unwrap();
         }
+        let tile = root.join("assets/graphics/alternate-tile.png");
+        fs::create_dir_all(tile.parent().unwrap()).unwrap();
+        RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255]))
+            .save(tile)
+            .unwrap();
         let dirs = deadsync_config::dirs::AppDirs {
             data_dir: root.clone(),
             exe_dir: root.clone(),
@@ -610,6 +620,22 @@ return Def.Sprite {
         )
         .unwrap();
         let mut assets = AssetManager::new();
+        deadsync_assets::load_initial_assets(
+            &mut assets,
+            &mut backend,
+            deadlib_assets::AssetManifest {
+                fonts: &[],
+                textures: [deadlib_assets::texture_asset("alternate-tile.png")],
+                texture_needs_repeat_sampler: |key| key == "alternate-tile.png",
+            },
+        )
+        .unwrap();
+        let tile = assets.texture_context().bind_texture("alternate-tile.png").unwrap();
+        let Some(deadlib_render::Texture::Software(texture)) = assets.textures().get(&tile.handle)
+        else {
+            panic!("alternate tile did not reach the software backend");
+        };
+        assert_eq!(texture.image.get_pixel(0, 0).0, [1, 2, 3, 255]);
         let mut service = Service::default();
         service.requests.push(NoteskinPreviewRequest {
             name: Arc::from("startup-fixture"),
@@ -658,11 +684,10 @@ return Def.Sprite {
         )
         .unwrap();
         full.for_each_slot(|slot| {
-            deadsync_assets::textures::ensure_texture_for_key(
+            deadsync_assets::textures::ensure_native_texture_for_key(
                 &mut assets,
                 &mut backend,
                 slot.texture_key(),
-                |_| false,
             );
         });
         assert!(assets.has_uploaded_texture_key(other));

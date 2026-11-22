@@ -5,6 +5,19 @@
 //! song-Lua gameplay session.
 
 pub mod editor;
+mod session;
+
+pub use session::{
+    PracticeDestination, PracticeMainMenuItem, PracticeMenu, PracticeMenuKind, PracticeSession,
+    PracticeViewRequest,
+};
+
+/// A practice session and its prepared stage with a replaceable presenter.
+pub struct PracticeHost<G, P> {
+    pub gameplay: G,
+    pub session: PracticeSession,
+    pub presentation: P,
+}
 
 use crate::{
     GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, GameplayProfileData,

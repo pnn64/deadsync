@@ -15,7 +15,9 @@ use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadsync_assets::noteskin::{self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot};
-use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
+use deadsync_chart::{ChartData, SongData};
+use deadsync_profile_gameplay::stage_charts::stage_difficulty_indices;
+use deadsync_profile_gameplay::stage_options::PlayerOptionsView;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_theme::AudioRequest;
@@ -31,6 +33,7 @@ mod constants;
 mod inline_nav;
 mod input;
 mod layout;
+mod mount;
 mod noteskins;
 mod pack_options;
 mod pane;
@@ -84,6 +87,10 @@ pub use profile::{
 pub use render::{get_actors, push_actors};
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
+pub use deadsync_theme::player_options::{
+    HeartRateDeviceView, HeartRateDevicesView, HeartRateReadingView, NoteskinPreviewPriority,
+    NoteskinPreviewRequest,
+};
 
 pub fn prepare_presentation(state: &mut State, asset_manager: &AssetManager) {
     prepare_row_titles(state);
@@ -91,28 +98,6 @@ pub fn prepare_presentation(state: &mut State, asset_manager: &AssetManager) {
     prepare_speed_headers(state, asset_manager);
     prepare_music_rate_text(state);
     prepare_choice_layouts(state, asset_manager);
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct HeartRateDeviceView {
-    pub id: String,
-    pub label: String,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HeartRateReadingView {
-    pub configured: bool,
-    pub connected: bool,
-    pub bpm: Option<u16>,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct HeartRateDevicesView {
-    pub supported: bool,
-    pub scanning: bool,
-    pub devices: Vec<HeartRateDeviceView>,
-    pub error: Option<String>,
-    pub readings: [HeartRateReadingView; PLAYER_SLOTS],
 }
 
 const CHANGE_VALUE_SFX: &str = "assets/sounds/change_value.ogg";
@@ -221,7 +206,7 @@ pub fn init(
         noteskin_catalog,
         smx_gif_catalog,
         heart_rate_devices,
-        init_view,
+        init_view.into(),
     )
 }
 
@@ -248,24 +233,21 @@ pub fn init_for_gameplay(
         noteskin_catalog,
         smx_gif_catalog,
         heart_rate_devices,
-        init_view,
+        init_view.into(),
     )
 }
 
-/// Prepare the focused selection before other visible icons and nearby choices.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum NoteskinPreviewPriority {
-    Focused,
-    Visible,
-    Nearby,
-}
-
-/// A preview's runtime identity and required component bits.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NoteskinPreviewRequest {
-    pub name: Arc<str>,
-    pub parts: u16,
-    pub priority: NoteskinPreviewPriority,
+#[must_use]
+pub fn stage_options(state: &State) -> deadsync_profile_gameplay::stage_options::StageOptions {
+    deadsync_profile_gameplay::stage_options::StageOptions {
+        play_style: state.play_style(),
+        chart_steps_index: state.chart_steps_index,
+        music_rate: state.music_rate,
+        player_options: state.player_options.clone(),
+        scroll_speeds: state.speed_mod.each_ref().map(scroll_speed_for_mod),
+        judgment_palette_ids: state.judgment_palette_ids.clone(),
+        heart_rate_device_ids: state.heart_rate_device_ids.clone(),
+    }
 }
 
 /// Reuse the shell's scratch buffer for the demand recorded by the last frame.
@@ -347,9 +329,9 @@ fn init_state(
     noteskin_catalog: NoteskinCatalogView,
     smx_gif_catalog: SmxGifCatalogView,
     heart_rate_devices: HeartRateDevicesView,
-    init_view: PlayerOptionsInitView,
+    init_view: PlayerOptionsView,
 ) -> State {
-    let PlayerOptionsInitView {
+    let PlayerOptionsView {
         policy,
         play_style,
         player_side,
@@ -391,15 +373,8 @@ fn init_state(
 
     let speed_mod_p1 = SpeedMod::from(player_options[P1].scroll_speed);
     let speed_mod_p2 = SpeedMod::from(player_options[P2].scroll_speed);
-    let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
-        let steps_idx = chart_steps_index[player_idx];
-        let mut diff_idx =
-            preferred_difficulty_index[player_idx].min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
-        if steps_idx < STANDARD_DIFFICULTY_COUNT {
-            diff_idx = steps_idx;
-        }
-        diff_idx
-    });
+    let chart_difficulty_index =
+        stage_difficulty_indices(chart_steps_index, preferred_difficulty_index);
 
     let noteskin_names = noteskin_catalog.names;
     let mut pack_menu = pack_options::PackMenu::new(&noteskin::pack_catalog());

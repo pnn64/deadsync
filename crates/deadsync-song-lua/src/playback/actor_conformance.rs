@@ -742,16 +742,14 @@ fn queue_texture(assets: &mut AssetManager, key: &str) {
 }
 
 #[cfg(test)]
-#[path = "image_metadata_tests.rs"]
-mod image_metadata_tests;
-
-#[cfg(test)]
-#[path = "movie_metadata_tests.rs"]
-mod movie_metadata_tests;
-
-#[cfg(test)]
-#[path = "layer_parent_tests.rs"]
-mod layer_parent_tests;
+playback_fixture_tests! {
+    #[path = "image_metadata_tests.rs"]
+    mod image_metadata_tests;
+    #[path = "movie_metadata_tests.rs"]
+    mod movie_metadata_tests;
+    #[path = "layer_parent_tests.rs"]
+    mod layer_parent_tests;
+}
 
 /// Wrap an already compiled primary fixture without selecting additional layers.
 pub fn prepared_primary<S: NoteskinSlot + Clone>(

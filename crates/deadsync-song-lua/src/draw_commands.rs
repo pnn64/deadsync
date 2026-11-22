@@ -55,6 +55,9 @@ pub(crate) struct Context {
     pub(crate) camera: Option<SongLuaOverlayState>,
     pub(crate) color: Color,
     pub(crate) inherited_color: Color,
+    /// Preparation retains transparent payloads, but native draw side effects
+    /// still stop at an ancestor that would have aborted Actor::Draw.
+    pub(crate) native_skipped: bool,
 }
 
 #[derive(Clone, Copy)]

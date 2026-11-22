@@ -2570,6 +2570,20 @@ fn fill_turn_take_from(
     Some(fixed.len())
 }
 
+/// Resolve the stable destination-to-source lanes used by chart spline handlers.
+/// Static turns share the note transformation's permutation and shuffle seed.
+/// Blender and Random move individual notes, so their spline lanes stay local.
+#[must_use]
+pub fn turn_column_mapping(
+    turn: GameplayTurnOption,
+    cols: usize,
+    seed: u64,
+) -> [usize; MAX_COLS] {
+    let mut take_from = std::array::from_fn(|column| column);
+    let _ = fill_turn_take_from(turn, cols, seed, &mut take_from);
+    take_from
+}
+
 fn turn_take_from(turn: GameplayTurnOption, cols: usize, seed: u64) -> Option<Vec<usize>> {
     if cols <= MAX_COLS {
         let mut out = [0usize; MAX_COLS];

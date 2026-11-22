@@ -10,8 +10,10 @@ use deadsync_core::song_time::SongTimeNs;
 pub mod bindings;
 mod callback_input;
 pub mod debounce;
+pub mod devices;
 pub mod fsr;
 pub mod keymap;
+mod menu_lr_chord;
 pub mod practice;
 
 pub use bindings::{
@@ -29,6 +31,7 @@ pub use keymap::{
     any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons, get_keymap,
     set_keymap, with_keymap,
 };
+pub use menu_lr_chord::MenuLrChord;
 
 /// Dedicated RE:Flex player slots follow the native device namespace.
 /// These IDs are persisted in DeadSync's bindings and must remain stable.

@@ -5,8 +5,8 @@
 
 use crate::lobbies::{self, GameplayLobbyWaitStatus, MachinePlayerStats};
 use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState};
-use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_profile::PlayerSide;
+use deadsync_input::{InputEvent, MenuLrChord, VirtualAction};
+use deadsync_profile::{PlayerSide, player_side_index};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -40,6 +40,15 @@ pub enum GameplayLobbyAction {
         p1_stats: Option<MachinePlayerStats>,
         p2_stats: Option<MachinePlayerStats>,
     },
+}
+
+/// The game decides which inputs reach the stage. A HUD toggle is also a
+/// display notification for any presenter with a lobby HUD.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayLobbyInput {
+    PassThrough,
+    Consumed,
+    ToggleHud,
 }
 
 /// Statically bound state access and application-effect conversion.
@@ -76,6 +85,7 @@ pub struct GameplayLobbySession {
     music_started: bool,
     ready: [bool; 2],
     disconnect_holds: [Option<Instant>; 2],
+    hud_chords: [MenuLrChord; 2],
 }
 
 impl GameplayLobbySession {
@@ -92,12 +102,18 @@ impl GameplayLobbySession {
             music_started: false,
             ready: [false; 2],
             disconnect_holds: [None; 2],
+            hud_chords: [MenuLrChord::default(); 2],
         }
     }
 
     #[inline]
     pub const fn runtime_view(&self) -> &LobbyRuntimeView {
         &self.runtime_view
+    }
+
+    /// Replace the retained online view while preserving the stage's local sides.
+    pub fn sync_runtime_view(&mut self, view: LobbyRuntimeView) {
+        self.runtime_view = view;
     }
 
     #[inline]
@@ -163,14 +179,7 @@ impl GameplayLobbySession {
     }
 
     fn local_side_is_active(&self, side: PlayerSide) -> bool {
-        let [p1_joined, p2_joined] = self.joined_sides;
-        if !(p1_joined || p2_joined) {
-            return self.player_side == side;
-        }
-        match side {
-            PlayerSide::P1 => p1_joined,
-            PlayerSide::P2 => p2_joined,
-        }
+        side_is_active(self.joined_sides, self.player_side, side)
     }
 
     fn set_all_local_players_ready(&mut self, ready: bool) {
@@ -180,10 +189,7 @@ impl GameplayLobbySession {
         ];
     }
 
-    fn handle_waiting_input(&mut self, event: &InputEvent) -> bool {
-        if !self.waiting() {
-            return false;
-        }
+    fn update_waiting_input(&mut self, event: &InputEvent) {
         let side = match event.action {
             VirtualAction::p1_start => Some(PlayerSide::P1),
             VirtualAction::p2_start => Some(PlayerSide::P2),
@@ -192,7 +198,7 @@ impl GameplayLobbySession {
         if let Some(side) = side
             && self.local_side_is_active(side)
         {
-            let index = deadsync_profile::player_side_index(side);
+            let index = player_side_index(side);
             if event.pressed {
                 self.ready[index] = true;
                 self.disconnect_holds[index] = Some(event.timestamp);
@@ -200,7 +206,6 @@ impl GameplayLobbySession {
                 self.disconnect_holds[index] = None;
             }
         }
-        true
     }
 
     fn player_stats<P: GameplayProfileData, O, C, D>(
@@ -257,18 +262,91 @@ impl GameplayLobbySession {
     }
 }
 
+fn side_is_active(joined: [bool; 2], fallback_side: PlayerSide, side: PlayerSide) -> bool {
+    if joined == [false, false] {
+        fallback_side == side
+    } else {
+        joined[player_side_index(side)]
+    }
+}
+
 /// Reset readiness on entry and start immediately only for an offline stage.
 pub fn on_enter<H: GameplayLobbyHost>(host: &mut H) {
     let (game, lobby) = host.lobby_parts();
-    lobby.music_started = false;
-    lobby.set_all_local_players_ready(false);
-    lobby.disconnect_holds = [None; 2];
-    if lobbies::gameplay_lobby_wait_required(lobby.runtime_view.snapshot.joined_lobby.as_ref()) {
-        return;
+    lobby.on_enter(game);
+}
+
+impl GameplayLobbySession {
+    /// Start a game stage using only its simulation and retained lobby state.
+    pub fn on_enter<P: GameplayProfileData, O, C, D>(
+        &mut self,
+        game: &mut GameplayRuntimeState<P, O, C, D>,
+    ) {
+        self.music_started = false;
+        self.set_all_local_players_ready(false);
+        self.disconnect_holds = [None; 2];
+        if lobbies::gameplay_lobby_wait_required(self.runtime_view.snapshot.joined_lobby.as_ref()) {
+            return;
+        }
+        self.set_all_local_players_ready(true);
+        game.start_stage_music();
+        self.music_started = true;
     }
-    lobby.set_all_local_players_ready(true);
-    game.start_stage_music();
-    lobby.music_started = true;
+
+    /// Emit lobby work and report whether the stage can advance.
+    pub fn prepare_update<P: GameplayProfileData, O, C, D>(
+        &mut self,
+        game: &mut GameplayRuntimeState<P, O, C, D>,
+        emit: impl FnMut(GameplayLobbyAction),
+    ) -> bool {
+        prepare_update_with_elapsed(game, self, emit, |started_at| {
+            started_at.elapsed().as_secs_f32()
+        })
+    }
+
+    /// Consume input while waiting for readiness.
+    pub fn handle_input(&mut self, event: &InputEvent) -> bool {
+        if !self.waiting() {
+            return false;
+        }
+        self.update_waiting_input(event);
+        true
+    }
+
+    pub fn route_input(&mut self, event: &InputEvent) -> GameplayLobbyInput {
+        self.route_input_with_sides(event, self.joined_sides, self.player_side)
+    }
+
+    /// Allow hosts that refresh their full screen view to supply its current
+    /// HUD sides. Lobby readiness still uses the stage's original participants.
+    pub fn route_input_with_sides(
+        &mut self,
+        event: &InputEvent,
+        joined_sides: [bool; 2],
+        fallback_side: PlayerSide,
+    ) -> GameplayLobbyInput {
+        if self.handle_input(event) {
+            self.hud_chords = [MenuLrChord::default(); 2];
+            return GameplayLobbyInput::Consumed;
+        }
+        if self.runtime_view.snapshot.joined_lobby.is_none() {
+            self.hud_chords = [MenuLrChord::default(); 2];
+            return GameplayLobbyInput::PassThrough;
+        }
+        // Only dedicated menu buttons participate. Dance arrows go to the chart.
+        let side = match event.action {
+            VirtualAction::p1_menu_left | VirtualAction::p1_menu_right => PlayerSide::P1,
+            VirtualAction::p2_menu_left | VirtualAction::p2_menu_right => PlayerSide::P2,
+            _ => return GameplayLobbyInput::PassThrough,
+        };
+        if side_is_active(joined_sides, fallback_side, side)
+            && self.hud_chords[player_side_index(side)].update(event)
+        {
+            GameplayLobbyInput::ToggleHud
+        } else {
+            GameplayLobbyInput::PassThrough
+        }
+    }
 }
 
 /// Prepare a gameplay frame, using real elapsed time only for retained holds.
@@ -276,9 +354,16 @@ pub fn on_enter<H: GameplayLobbyHost>(host: &mut H) {
 /// Starting music queues an audio command. The shell must drain it before
 /// sampling the stream clock for the deterministic gameplay update.
 pub fn prepare_update<H: GameplayLobbyHost>(host: &mut H, effects: &mut Vec<H::Effect>) -> bool {
-    prepare_update_with_elapsed(host, effects, |started_at| {
-        started_at.elapsed().as_secs_f32()
-    })
+    prepare_update_with_actions(host, |action| effects.push(H::lobby_effect(action)))
+}
+
+/// Prepare the frame and emit game-owned lobby actions in source order.
+pub fn prepare_update_with_actions<H: GameplayLobbyHost>(
+    host: &mut H,
+    emit: impl FnMut(GameplayLobbyAction),
+) -> bool {
+    let (game, lobby) = host.lobby_parts();
+    lobby.prepare_update(game, emit)
 }
 
 /// The same frame boundary with an explicit monotonic time for deterministic use.
@@ -287,30 +372,34 @@ pub fn prepare_update_at<H: GameplayLobbyHost>(
     effects: &mut Vec<H::Effect>,
     now: Instant,
 ) -> bool {
-    prepare_update_with_elapsed(host, effects, |started_at| {
-        now.saturating_duration_since(started_at).as_secs_f32()
-    })
+    let (game, lobby) = host.lobby_parts();
+    prepare_update_with_elapsed(
+        game,
+        lobby,
+        |action| effects.push(H::lobby_effect(action)),
+        |started_at| now.saturating_duration_since(started_at).as_secs_f32(),
+    )
 }
 
-fn prepare_update_with_elapsed<H: GameplayLobbyHost>(
-    host: &mut H,
-    effects: &mut Vec<H::Effect>,
+fn prepare_update_with_elapsed<P: GameplayProfileData, O, C, D>(
+    game: &mut GameplayRuntimeState<P, O, C, D>,
+    lobby: &mut GameplayLobbySession,
+    mut emit: impl FnMut(GameplayLobbyAction),
     elapsed: impl FnMut(Instant) -> f32,
 ) -> bool {
-    let (game, lobby) = host.lobby_parts();
     if !lobby.music_started {
         if lobby
             .disconnect_hold_elapsed_with(elapsed)
             .is_some_and(|elapsed| elapsed >= lobby.runtime_view.disconnect_hold_seconds)
         {
             lobby.disconnect_holds = [None; 2];
-            effects.push(H::lobby_effect(GameplayLobbyAction::Disconnect));
+            emit(GameplayLobbyAction::Disconnect);
             lobbies::apply_local_lobby_disconnect(Arc::make_mut(&mut lobby.runtime_view.snapshot));
             lobby.runtime_view.reconnect_status_text = None;
         }
 
         if let Some(action) = lobby.machine_state_action(game) {
-            effects.push(H::lobby_effect(action));
+            emit(action);
         }
         if lobby.waiting() {
             return false;
@@ -323,19 +412,19 @@ fn prepare_update_with_elapsed<H: GameplayLobbyHost>(
     }
 
     if let Some(action) = lobby.machine_state_action(game) {
-        effects.push(H::lobby_effect(action));
+        emit(action);
     }
     true
 }
 
 /// Consume all input while waiting, applying Start edges only to active sides.
 pub fn handle_input<H: GameplayLobbyHost>(host: &mut H, event: &InputEvent) -> bool {
-    host.lobby_parts().1.handle_waiting_input(event)
+    host.lobby_parts().1.handle_input(event)
 }
 
 /// Replace the single retained online view without changing the stage's sides.
 pub fn sync_runtime_view<H: GameplayLobbyHost>(host: &mut H, view: LobbyRuntimeView) {
-    host.lobby_parts().1.runtime_view = view;
+    host.lobby_parts().1.sync_runtime_view(view);
 }
 
 /// Offline stages skip snapshot/reconnect polling for their entire lifetime.

@@ -14,6 +14,556 @@ fn contains_rust(source: &str, expected: &str) -> bool {
 }
 
 #[test]
+fn renderer_and_shell_cues_use_theme_resources() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    let graphics = production_source(&shell.join("graphics.rs"));
+    let prewarm = production_source(&shell.join("gameplay_prewarm.rs"));
+    assert!(!graphics.contains("deadsync_theme_simply_love"));
+    assert!(!prewarm.contains("deadsync_theme"));
+    assert!(graphics.contains("deadsync_assets::load_initial_assets(assets, &mut backend, manifest)"));
+    assert!(prewarm.contains("textures::ensure_native_texture_for_key("));
+
+    let graphics_app = production_source(&shell.join("app/graphics.rs"));
+    let app = read_source(shell.join("app/mod.rs")).expect("application source should be readable");
+    let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
+    let screenshot = production_source(&shell.join("app/screenshot.rs"));
+    assert!(graphics_app.contains("ActiveTheme::asset_manifest()"));
+    assert!(app.contains("UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS)"));
+    assert!(app.contains("AudioRequest::PlayUiCue(UiCue::Confirm)"));
+    assert!(screenshot.contains("UiCue::Screenshot"));
+    for cue_file in [app, &screenshot] {
+        assert!(!cue_file.contains("assets/sounds/"));
+    }
+}
+
+#[test]
+fn engine_initialization_receives_host_identity_and_log_path() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let vulkan = read_source(root.join("crates/deadlib-render-backend-vulkan/src/lib.rs"))
+        .expect("Vulkan backend source");
+    let render = production_source(&root.join("crates/deadlib-render/src/lib.rs"));
+    let shell = production_source(&root.join("crates/deadsync-shell/src/graphics.rs"));
+    assert!(vulkan.contains(".application_name(names.application_name)"));
+    assert!(vulkan.contains(".engine_name(names.engine_name)"));
+    assert!(render.contains("options.vulkan_instance_names"));
+    assert!(shell.contains("create_backend_with_options("));
+    assert!(shell.contains("application_name: c\"DeadSync\""));
+    assert!(shell.contains("engine_name: c\"DeadSync Engine\""));
+    assert!(!vulkan.contains("c\"DeadSync"));
+
+    for backend in ["metal", "wgpu"] {
+        let source = read_source(root.join(format!("crates/deadlib-render-backend-{backend}/src/lib.rs")))
+            .expect("graphics backend source");
+        assert!(!source.contains("set_label(\"DeadSync"));
+        assert!(!source.contains("label: Some(\"deadsync"));
+    }
+
+    let logger = production_source(&root.join("crates/deadlib-platform/src/logging.rs"));
+    let executable = production_source(&root.join("src/main.rs"));
+    assert!(logger.contains("LOG_FILE_PATH.get_or_init(|| log_file_path)"));
+    assert!(logger.contains("rotate_log_files(path, MAX_LOG_FILES)"));
+    assert!(!logger.contains("\"deadsync.log\""));
+    assert!(contains_rust(
+        &executable,
+        "logging::init(config::runtime_load::bootstrap_log_to_file(), dirs.log_path(),",
+    ));
+}
+
+#[test]
+fn confirmed_song_and_course_launches_share_game_policy() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let game = production_source(&root.join("crates/deadsync-gameplay/src/stage_launch.rs"));
+    for contract in [
+        "pub struct StageLaunch<T>",
+        "pub enum StageLaunchRequest<T>",
+        "pub enum StageLaunchPrompt",
+        "pub fn advance(",
+        "pub fn take_ready(",
+    ] {
+        assert!(game.contains(contract), "missing game launch contract {contract}");
+    }
+    assert!(!game.contains("deadsync_theme"));
+    for (screen, prompt, request) in [
+        ("select_music", "SongLaunchPrompt", "SongLaunchRequest"),
+        ("select_course", "StageLaunchPrompt", "StageLaunchRequest"),
+    ] {
+        let theme = production_source(
+            &root.join(format!("crates/deadsync-theme-simply-love/src/screens/{screen}.rs")),
+        );
+        assert!(theme.contains(&format!("launch_prompt: {prompt}")));
+        assert!(theme.contains(&format!("{request}::Confirm(")));
+        assert!(theme.contains(&format!("{request}::PlayerOptions")));
+        for policy in [
+            "OPTIONS_WINDOW_SECONDS",
+            "SHOW_OPTIONS_MESSAGE_SECONDS",
+            "OPTIONS_ENTRY_SECONDS",
+            "ENTERING_OPTIONS_TOTAL_SECONDS",
+            "gameplay_preload_due",
+            "NavigateNoFade(Screen::Gameplay)",
+            "NavigateNoFade(Screen::PlayerOptions)",
+        ] {
+            assert!(!theme.contains(policy), "{screen} owns launch policy {policy}");
+        }
+    }
+    let shell = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
+    assert!(shell.contains("stage_launch.advance(delta_time)"));
+    assert!(shell.contains("Some(ActiveTheme::SCREENS.gameplay)"));
+    assert!(shell.contains("Some(ActiveTheme::SCREENS.player_options)"));
+}
+
+#[test]
+fn course_startup_and_renewal_use_game_contracts() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let plans = production_source(&root.join("crates/deadsync-chart/src/course.rs"));
+    for contract in ["pub struct CourseSessionPlan", "pub struct CourseCyclePlan"] {
+        assert!(plans.contains(contract), "missing game contract {contract}");
+    }
+    for presentation in [
+        "CoursePresentationView",
+        "SelectedCourseView",
+        "pub name:",
+        "pub banner_path:",
+        "song_stub",
+        "course_stepchart_label",
+    ] {
+        assert!(
+            !plans.contains(presentation),
+            "game course plans must not carry theme presentation: {presentation}"
+        );
+    }
+
+    let views = production_source(&root.join("crates/deadsync-theme/src/views.rs"));
+    for compatibility in [
+        "pub struct CoursePresentationView",
+        "pub struct SelectedCourseView",
+        "pub fn into_parts(self) -> (CourseSessionPlan, CoursePresentationView)",
+        "pub fn from_parts(plan: CourseSessionPlan, presentation: CoursePresentationView)",
+    ] {
+        assert!(
+            contains_rust(&views, compatibility),
+            "course presentation must preserve the consuming adapter: {compatibility}"
+        );
+    }
+    let course = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
+    for contract in [
+        "start: PreparedCourseStart",
+        "pub song: Arc<SongData>",
+        "pub run: CourseRun",
+        "pub endless_source: Option<Arc<EndlessCourseSource>>",
+        "CourseRun::prepare(start.plan, chart_type, load)",
+        "course.run.append_endless_cycle(source.next_cycle(),",
+        "course_summary_stage(&course.run, &course.stage_summaries, &course.song)",
+    ] {
+        assert!(
+            contains_rust(&course, contract),
+            "shell course composition is missing {contract}"
+        );
+    }
+    for forbidden in [
+        "SelectedCoursePlan",
+        "SelectedCourseView",
+        "CoursePresentationView",
+        "fn course_stage_runtime_from_plan(",
+        "fn add_course_stage_totals_with_loader(",
+        "fn course_summary_totals(",
+    ] {
+        assert!(
+            !course.contains(forbidden),
+            "shell course composition contains game policy or a combined view: {forbidden}"
+        );
+    }
+
+    // App declares external test modules near its imports; its inline test
+    // block, rather than those declarations, ends the production source.
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("application source should be readable");
+    let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
+    assert!(app.contains("Some(StageSelection::Course(selection)) => selection.start()"));
+    assert!(app.contains("select_course::selected_course_choice(selection)"));
+    assert!(app.contains("select_course::course_catalog(selection).start(choice)"));
+    assert!(app.contains(".map(|course| Arc::clone(&course.song))"));
+    assert!(!app.contains("select_course::selected_course_start_with_cycles("));
+    assert!(!app.contains("select_course::selected_course_plan("));
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    for delegation in [
+        "super::renew_endless_cycle(",
+        "Some(StageSelection::Course(selection)) => selection.can_start()",
+        "select_course::has_selected_course(",
+    ] {
+        assert!(navigation.contains(delegation), "missing {delegation}");
+    }
+    assert!(!navigation.contains("select_course::selected_course_plan("));
+    assert!(!navigation.contains("select_course::reroll_selected_endless_plan("));
+    assert!(!navigation.contains("select_course::reroll_selected_endless_cycle("));
+    assert!(!navigation.contains("select_course::selected_course_cycle("));
+
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
+    );
+    for (start, end) in [
+        ("pub fn selected_course_cycle(", "pub fn selected_course_plan("),
+        (
+            "pub fn reroll_selected_endless_cycle(",
+            "pub fn reroll_selected_endless_plan(",
+        ),
+    ] {
+        let cycle = theme
+            .split_once(start)
+            .and_then(|(_, rest)| rest.split_once(end))
+            .map(|(body, _)| body)
+            .expect("direct cycle helpers and legacy adapters must remain available");
+        for display_work in ["make_course_song(", "course_start(", "CoursePresentationView"] {
+            assert!(
+                !cycle.contains(display_work),
+                "cycle preparation still constructs unused presentation: {display_work}"
+            );
+        }
+    }
+}
+
+#[test]
+fn course_selection_preparation_stays_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let owner = production_source(&root.join("crates/deadsync-simfile/src/course_selection.rs"));
+    for contract in [
+        "pub struct CoursePreparation",
+        "pub struct PreparedCourseRating",
+        "pub struct PreparedCourseCatalog",
+        "pub struct PreparedCourseStart",
+        "pub struct CourseChoice<'a>",
+        "pub fn course_song_stub(",
+        "pub struct CourseResolver",
+        "pub struct EndlessCourseSource",
+        "pub fn prepare_rating(",
+        "pub fn reroll_endless(",
+        "pub fn next_cycle(&self) -> CourseCyclePlan",
+        "pub fn course_score_hash(",
+        "pub fn fresh_course_seed(",
+    ] {
+        assert!(
+            owner.contains(contract),
+            "game course preparation is missing {contract}"
+        );
+    }
+    let stages = production_source(&root.join("crates/deadsync-chart/src/course.rs"));
+    assert!(stages.contains("pub struct CourseStagePlan"));
+    let views = production_source(&root.join("crates/deadsync-theme/src/views.rs"));
+    assert!(contains_rust(
+        &views,
+        "pub use deadsync_chart::course::CourseStagePlan as CourseStageView;",
+    ));
+    let concrete_views =
+        production_source(&root.join("crates/deadsync-theme-simply-love/src/views.rs"));
+    assert!(contains_rust(
+        &concrete_views,
+        "pub type CourseStagePlan = CourseStageView;",
+    ));
+    let runtime = production_source(&root.join("crates/deadsync-gameplay/src/course_run.rs"));
+    assert!(contains_rust(
+        &runtime,
+        "use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan, CourseStagePlan};",
+    ));
+
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
+    );
+    for delegation in [
+        "PreparedCourseCatalog::new(",
+        "catalog.courses()",
+        "rating.charts()",
+        "state.catalog.can_start(choice)",
+        "state.catalog.reroll_cycle(",
+        "pub use deadsync_simfile::course_selection::course_score_hash;",
+    ] {
+        assert!(
+            contains_rust(&theme, delegation),
+            "Select Course must read prepared game data through {delegation}"
+        );
+    }
+    for game_resolution in [
+        "CourseResolver::new(",
+        "CoursePreparation::new(&course)",
+        "preparation.difficulties()",
+        "resolver.prepare_rating(",
+        "preparation.default_rating_index(&ratings)",
+        "EndlessCourseSource::for_selection(",
+    ] {
+        assert!(contains_rust(&owner, game_resolution));
+        assert!(!contains_rust(&theme, game_resolution));
+    }
+    for implementation in [
+        "fn build_song_lookup(",
+        "fn build_song_play_counts(",
+        "fn build_song_grade_counts(",
+        "fn course_score_hash(",
+        "fn fresh_course_seed(",
+        "resolve_course_stage(",
+        "course_difficulty_from_meters(",
+        "course_meter(",
+        "add_chart_totals(",
+        "push_song_bpm_range(",
+    ] {
+        assert!(
+            !theme.contains(implementation),
+            "Select Course still owns game preparation through {implementation}"
+        );
+    }
+    for theme_crate in ["deadsync-theme", "deadsync-theme-simply-love"] {
+        for file in production_rust_files(&root.join("crates").join(theme_crate).join("src")) {
+            let source = production_source(&file);
+            for definition in [
+                "struct CourseStagePlan",
+                "struct CourseStageView",
+                "struct CourseSessionPlan",
+                "struct CourseCyclePlan",
+                "struct CourseResolver",
+                "struct EndlessCourseSource",
+                "struct CoursePreparation",
+                "struct PreparedCourseRating",
+                "struct PreparedCourseCatalog",
+                "struct PreparedCourseStart",
+            ] {
+                assert!(
+                    !source.contains(definition),
+                    "{} owns canonical course preparation: {definition}",
+                    rel_path(&root, &file),
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn gameplay_noteskin_preparation_stays_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let owner = production_source(
+        &root.join("crates/deadsync-assets/src/gameplay_noteskin.rs"),
+    );
+    for contract in [
+        "pub struct GameplayNoteskinAssets",
+        "pub fn gameplay_noteskin_assets(",
+        "pub fn gameplay_data(",
+        "assets.selected_components_for_player(player, profile.tap_explosion_noteskin_hidden())",
+    ] {
+        assert!(
+            contains_rust(&owner, contract),
+            "game noteskin owner is missing {contract}"
+        );
+    }
+
+    let theme_path = root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs");
+    let theme = production_source(&theme_path);
+    assert!(contains_rust(
+        &theme,
+        "pub use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};",
+    ));
+    for file in production_rust_files(&root.join("crates/deadsync-theme-simply-love/src")) {
+        let source = production_source(&file);
+        for implementation in [
+            "struct GameplayNoteskinAssets",
+            "impl GameplayNoteskinAssets",
+            "fn gameplay_noteskin_assets(",
+            "fn noteskin_effects_from_assets(",
+            "fn gameplay_receptor_glow_behavior(",
+            "fn gameplay_receptor_step_behavior(",
+            "tap_explosion_noteskin_visible",
+        ] {
+            assert!(
+                !source.contains(implementation),
+                "{} owns canonical noteskin preparation: {implementation}",
+                rel_path(&root, &file),
+            );
+        }
+    }
+    assert!(!theme.contains("pub noteskin_assets: GameplayNoteskinAssets"));
+    let compositor =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
+    assert!(contains_rust(
+        &compositor,
+        "noteskin: stage.notefield_noteskins(player)",
+    ));
+    assert!(contains_rust(&owner, "slot.actor_texture_source(arena, textures)"));
+    assert!(!theme.contains("stage.notefield_noteskins("));
+}
+
+#[test]
+fn gameplay_stage_bootstrap_is_game_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let stage = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    for startup in [
+        "gameplay_noteskin_assets(",
+        "noteskin_assets.gameplay_data(",
+        "startup.min_seconds_to_music",
+        "gameplay_pack_data(&song, None, None)",
+        "init_gameplay_runtime(",
+        "self.gameplay.replace_song_background_changes(changes)",
+        "gameplay_crossover_annotations_for_player,",
+        "SongLuaGameplaySession::for_gameplay(&mut gameplay)",
+        "GameplayStage::with_song_playback_and_noteskins(",
+        "self.song_lua_sound_paths, self.noteskin_assets, notefield_settings,",
+        "self.gameplay.profiles().each_ref().map(notefield_settings)",
+        "session.attach(gameplay, scene, warm_dynamic_scene)",
+    ] {
+        assert!(contains_rust(&stage, startup), "missing game startup {startup}");
+    }
+    for presentation in ["deadsync_theme", "GameplayInitView", "CourseDisplayInfo"] {
+        assert!(!stage.contains(presentation), "game startup depends on {presentation}");
+    }
+    let theme =
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+            .expect("theme gameplay source");
+    for implementation in [
+        "init_gameplay_runtime(",
+        "fn gameplay_crossover_annotations_for_player(",
+        "SongLuaGameplaySession::for_gameplay(",
+        "song_lua_data.take_live_scene(",
+        "SongMedia::new(",
+        "FrameScratch::new(gameplay)",
+        "pub song_media:",
+        "pub song_scratch:",
+    ] {
+        assert!(!theme.contains(implementation), "theme owns {implementation}");
+    }
+    assert!(theme.contains("pub fn present_stage("));
+    assert!(theme.contains("pub fn init(") && theme.contains("prepare_gameplay_stage("));
+
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell gameplay entry source");
+    assert!(!app.contains("gameplay::init("));
+    let chart_policy = production_source(&root.join("crates/deadsync-gameplay/src/stage_charts.rs"));
+    let chart_adapter =
+        production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_charts.rs"));
+    let song_selection = production_source(&root.join("crates/deadsync-gameplay/src/song_launch.rs"));
+    let select_music = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    );
+    let chart_options = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/player_options/panes/main.rs"),
+    );
+    let stage_start = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
+    let shell_entry = production_source(&root.join("crates/deadsync-shell/src/gameplay_entry.rs"));
+    assert!(chart_policy.contains("pub fn gameplay_chart_entry_plan("));
+    assert!(chart_policy.contains("pub fn lua_reload_chart_indices("));
+    assert!(chart_adapter.contains("pub fn apply_song_lua_reload<S>("));
+    assert!(contains_rust(
+        &chart_adapter,
+        "lua_reload_chart_indices(song, steps, selected_session.play_style)?"
+    ));
+    assert!(contains_rust(
+        &app,
+        "use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};"
+    ));
+    assert!(app.contains("stage_launch.preload_selection()"));
+    assert!(app.contains(".take_ready_song_selection(StageLaunchTarget::Gameplay)"));
+    assert!(app.contains(".take_ready_song_selection(StageLaunchTarget::PlayerOptions)"));
+    assert!(app.contains("stage_start_for_song_selection(selection)"));
+    assert!(song_selection.contains("pub fn synchronize_song_charts("));
+    assert!(song_selection.contains("pub fn resolved_chart_slots("));
+    assert!(song_selection.contains("pub fn resolve_song_chart_slots("));
+    assert!(chart_options.contains("= change_song_chart("));
+    assert!(!chart_options.contains("state.chart_steps_index[player_idx] ="));
+    assert!(stage_start.contains("= resolve_song_chart_slots("));
+    assert!(select_music.contains("= synchronize_song_charts("));
+    assert!(select_music.contains("= select_music_join_charts("));
+    assert!(chart_adapter.contains("pub fn select_music_join_charts("));
+    assert!(!select_music.contains("fn sync_versus_music_selection("));
+    assert!(contains_rust(
+        &app,
+        "let (steps, preferred) = selection.resolved_chart_slots(gameplay_play_style_from_profile(play_style));",
+    ));
+    assert!(contains_rust(
+        &app,
+        "let (chart_steps_index, preferred_difficulty_index) = selection.resolved_chart_slots(",
+    ));
+    assert!(stage_start.contains("selection.resolved_chart_slots("));
+    assert!(!shell_entry.contains("fn resolve_chart("));
+    assert!(!shell_entry.contains("fn apply_song_lua_reload"));
+    let entry = |from: &str, to: &str| {
+        app.split_once(from)
+            .and_then(|(_, rest)| rest.split_once(to))
+            .map(|(entry, _)| entry)
+            .expect("gameplay or practice screen entry")
+    };
+    let gameplay = "if target == CurrentScreen::Gameplay {";
+    let gameplay_entry = entry(gameplay, "if target == CurrentScreen::Evaluation {");
+    for entry in [
+        entry("if target == CurrentScreen::Practice {", gameplay),
+        gameplay_entry,
+    ] {
+        let chart_plan = entry
+            .find("gameplay_chart_entry_plan(")
+            .expect("resolve stage charts");
+        let reload = entry
+            .find("apply_song_lua_reload(")
+            .expect("select Lua charts");
+        let prepare = entry.find("prepare_gameplay_stage(GameplayStageInput {")
+            .expect("prepare game");
+        let backgrounds = entry.find("prepared.resolve_song_backgrounds(")
+            .expect("resolve the final stage's backgrounds");
+        let present = entry.find("crate::gameplay_runtime::present_stage(")
+            .expect("present game");
+        assert!(chart_plan < reload && reload < prepare && prepare < backgrounds && backgrounds < present);
+    }
+    let present = gameplay_entry.find("crate::gameplay_runtime::present_stage(").unwrap();
+    let restore = gameplay_entry.find("state.song_lua.restore_held_inputs(held_inputs)")
+        .expect("restore held inputs");
+    assert!(present < restore);
+    let adapter = production_source(&root.join("crates/deadsync-shell/src/gameplay_runtime.rs"));
+    let host = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    let split = host
+        .find("let (stage, assets) = self.into_parts()")
+        .expect("separate stage from prepared assets");
+    let present = host
+        .find("let presentation = present(&stage, assets)")
+        .expect("present stage");
+    let lobby = adapter
+        .find("let lobby_session = GameplayLobbySession::new(")
+        .expect("initialize the lobby in the shell");
+    let host_call = adapter.find("prepared.into_host(").expect("use shared host constructor");
+    let attach = host
+        .find("attach_prepared_song_lua(gameplay,")
+        .expect("attach callbacks");
+    assert!(lobby < host_call && split < present && present < attach);
+    assert!(contains_rust(&host, "host.stage.song_lua_attachment_parts()"));
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"),
+    );
+    assert!(contains_rust(&host, "pub struct GameplayHost<L, P>"));
+    assert!(contains_rust(&host, "pub stage: ActiveGameplayStage"));
+    assert!(contains_rust(&host, "pub lobby_session: L"));
+    assert!(contains_rust(&host, "pub score_refresh: GameplayScoreRefresh"));
+    assert!(contains_rust(&host, "pub presentation: P"));
+    assert!(contains_rust(&app, "type GameplayState = GameplayHost<"));
+    assert!(app.contains("ActiveTheme::gameplay_presenter(presentation_init)"));
+    for concrete in [
+        "deadsync_theme_simply_love", "SimplyLove", "crate::ActiveTheme", "crate::ThemeScreen",
+        "GameplayStageView",
+    ] {
+        assert!(!adapter.contains(concrete), "the gameplay runtime still depends on {concrete}");
+    }
+    assert!(contains_rust(&adapter, "startup.score_refresh, course_title,"));
+    assert!(contains_rust(
+        gameplay_entry,
+        "let course = self.state.session.course_run.as_ref().map(|course| Arc::clone(&course.song))",
+    ));
+    assert!(contains_rust(
+        gameplay_entry,
+        "let course_title = course.as_ref().map(|course| course.title.as_str())",
+    ));
+    assert!(contains_rust(
+        gameplay_entry,
+        "crate::gameplay_runtime::present_stage(prepared, scene, course_title, gameplay_startup,",
+    ));
+    for label in ["STAGE {number}", "RESTART {count}", "PRACTICE MODE", "song_event_name(stage.song())"] {
+        assert!(theme.contains(label), "the selected theme formats {label}");
+        assert!(!app.contains(label));
+    }
+    assert!(!contains_rust(&theme, "pub struct State"));
+    assert!(contains_rust(&theme, "struct GameplayEffects<'a>(&'a mut State)"));
+}
+
+#[test]
 fn chart_lua_playback_has_no_theme_dependency() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest = read_source(root.join("crates/deadsync-song-lua/Cargo.toml"))
@@ -48,8 +598,65 @@ fn chart_lua_playback_has_no_theme_dependency() {
     assert!(!theme.contains("video_renderer"));
     let shell =
         read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs")).unwrap();
-    assert!(shell.contains("deadsync_song_lua::playback::compose_frame("));
-    assert!(shell.contains("gameplay::frame_layers("));
+    let presentation = production_source(
+        &root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"),
+    );
+    let practice = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"),
+    );
+    assert!(theme.contains("impl GameplayFramePresenter for GameplayPresenter<'_>"));
+    let theme_storage = theme.split_once("pub struct GameplayPresentation {").unwrap()
+        .1.split_once("\n}").unwrap().0;
+    assert!(!theme_storage.contains("ActiveGameplayStage"));
+    assert!(!theme_storage.contains("GameplayLobbySession"));
+    assert!(!theme_storage.contains("pack_group"));
+    assert!(contains_rust(&shell, "state.compose_gameplay_frame(actors, FramePresentationContext"));
+    assert!(contains_rust(&shell, "SongFrameContent::PLAYBACK"));
+    assert!(contains_rust(&shell, "state.gameplay.compose_gameplay_frame(actors, FramePresentationContext"));
+    assert!(contains_rust(&shell, "SongFrameContent::for_practice(&state.session)"));
+    assert!(contains_rust(&shell, ".append_practice_overlay(actors, &state.gameplay, &state.session)"));
+    assert!(!shell.contains("gameplay::frame_layers(") && !shell.contains("gameplay::draw_field("));
+    for former_override in ["apply_attacks:", "show_song_visuals:"] {
+        assert!(!contains_rust(&theme, former_override));
+        assert!(!contains_rust(&practice, former_override));
+    }
+    assert!(contains_rust(&theme, "frame: &deadsync_song_lua::playback::FieldFrame<'_>"));
+    assert!(!contains_rust(&theme, "request.show_song_visuals"));
+    assert!(!contains_rust(&theme, "request.apply_attacks"));
+    for handoff in [
+        "pub trait GameplayFramePresenter",
+        "stage: &GameplayStage<GameplayCoreState<P::Profile, P::Slot>, N>",
+        "presenter: &P",
+        "buffers: GameplayFrameBuffers<'_, P::Scratch>",
+        "stage.gameplay.setup.session",
+        ".map(GameplayProfileData::hide_song_background)",
+        "presenter.draw_layers(",
+        "presenter.field_presentation(",
+        "presenter.draw_field_hud(",
+        "if practice.is_playing()",
+        "Self::PRACTICE_EDITOR",
+    ] {
+        assert!(contains_rust(&presentation, handoff), "missing presenter handoff {handoff}");
+    }
+    for former_owner in ["presenter.stage(", "frame_storage(", "stage.song_scratch"] {
+        assert!(!presentation.contains(former_owner));
+    }
+    assert!(contains_rust(&theme, "compose_stage_frame(actors, stage, &GameplayPresenter {"));
+    let host = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    assert!(host.contains("None => Arc::clone(&assets.pack_group)"));
+    assert!(contains_rust(&host, "pub trait GameplayStagePresenter<L>"));
+    assert!(contains_rust(&host, "pub trait PracticeStagePresenter<L, P: GameplayStagePresenter<L>>"));
+    assert!(contains_rust(&host, "self.stage.with_frame_scratch(|stage, song| { self.presentation.compose_stage_frame("));
+    assert!(contains_rust(&host, "self.presentation.append_song_lua_exit(actors, exit.fade_progress())"));
+    let frame_adapter = shell.split_once("pub(crate) fn push_actors<").unwrap().1;
+    let frame_adapter = frame_adapter.split("#[cfg(test)]").next().unwrap();
+    assert!(!frame_adapter.contains("deadsync_theme_simply_love"));
+    assert!(!frame_adapter.contains("gameplay::push_song_lua_out"));
+    let controller =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_session.rs"));
+    assert!(contains_rust(&controller, "let result = compose(self, &mut scratch); self.song_scratch = Some(scratch);"));
+    assert!(!theme.contains("replace_song_background_changes("));
+    assert!(!presentation.contains("deadsync_theme"));
     for forbidden in [
         "deadsync-assets",
         "deadsync-profile",
@@ -88,6 +695,15 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
 
     for contract in [
         "pub struct SongLuaGameplaySession",
+        "pub struct GameplayStage<G, N = ()>",
+        "pub noteskin_assets: N",
+        "pub song_media: SongMedia",
+        "pub song_scratch: Option<Box<FrameScratch>>",
+        "notefield_scratch: Option<[RefCell<NotefieldFieldScratch>; MAX_PLAYERS]>",
+        "actor_resources: ActorResourceArena",
+        "FrameScratch::new(&gameplay)",
+        "SongMedia::new(&gameplay, sound_paths)",
+        "scratch.enable_dynamic_scene()",
         "pub trait SongLuaGameplayHost",
         "pub fn for_gameplay<",
         "pub fn update<",
@@ -157,8 +773,8 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         );
     }
     for delegation in [
-        "song_lua: SongLuaGameplaySession",
-        "impl SongLuaGameplayHost for State",
+        "pub type State = GameplayHost<",
+        "impl SongLuaGameplayHost for GameplayEffects<'_>",
         "gameplay_session::update(",
         "gameplay_session::handle_input(",
     ] {
@@ -167,11 +783,29 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
             "normal gameplay theme must delegate to the game controller through {delegation}"
         );
     }
-    assert!(
-        contains_rust(&shell, "deadsync_song_lua::gameplay_session::update("),
-        "shell normal gameplay frames must invoke the canonical game controller"
-    );
-    for former_owner in ["gameplay::update(", "gameplay::update_with_input("] {
+    for handoff in [
+        "let stage = &mut state.stage",
+        "let presentation = &mut state.presentation",
+        "presentation.update_gameplay_visuals(game, delta)",
+        "stage.update(",
+        "crate::navigation::song_lua_presentation_screen::<T>",
+        "stage.handle_input(ev, physical)",
+        "stage.take_output()",
+        ".for_each_scheduled_song_sound(previous_song_lua_time,",
+    ] {
+        assert!(
+            contains_rust(&shell, handoff),
+            "shell normal gameplay must use the canonical game handoff {handoff}"
+        );
+    }
+    for former_owner in [
+        "gameplay::update(",
+        "gameplay::update_with_input(",
+        "gameplay::handle_input_with_device(",
+        "gameplay_session::update_with_effects(",
+        "gameplay_session::handle_input_action(",
+        "ActiveTheme::resolve_song_lua_screen",
+    ] {
         assert!(
             !contains_rust(&shell, former_owner),
             "shell must not route gameplay frame orchestration through {former_owner}"
@@ -183,11 +817,14 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
 fn practice_playback_lifecycle_stays_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let controller = production_source(&root.join("crates/deadsync-gameplay/src/practice.rs"));
+    let session = production_source(&root.join("crates/deadsync-gameplay/src/practice/session.rs"));
     let theme = production_source(
         &root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"),
     );
 
     for contract in [
+        "pub struct PracticeHost<G, P>",
+        "pub session: PracticeSession",
         "pub struct PracticePlayback",
         "pub enum PracticePlaybackUpdate",
         "pub enum PracticePlaybackInput",
@@ -210,7 +847,7 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
         "PracticeRuntimeView",
     ] {
         assert!(
-            !controller.contains(presentation),
+            !controller.contains(presentation) && !session.contains(presentation),
             "practice playback depends on presentation through {presentation}"
         );
     }
@@ -224,6 +861,11 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
         "start_practice_music_at(",
         "reset_practice_playback(",
         "GameplayAudioCommand::StopMusic",
+        "state.playback",
+        "seek_practice_display(",
+        "DISPLAY_SCROLL_TIME_CONSTANT",
+        "PracticeEditorRequest::StartPlayback",
+        "PracticeEditorRequest::StopPlayback",
     ] {
         assert!(
             !contains_rust(&theme, former_policy),
@@ -233,18 +875,23 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
     for delegation in [
         "playback: PracticePlayback",
         "PracticePlayback::new(",
-        "state.playback.on_enter(",
-        "state.playback.start(",
-        "state.playback.stop(",
-        "state.playback.update(",
-        "state.playback.handle_input(",
-        "state.playback.restore_editing(",
+        "self.playback.on_enter(",
+        "self.playback.start(",
+        "self.playback.stop(",
+        "self.playback.update(",
+        ".handle_input(game, event, || self.editor.clear_navigation_holds())",
+        "self.playback.restore_editing(",
+        "self.update_display_scroll(game, delta_time)",
+        "game.seek_practice_display(music_time)",
     ] {
         assert!(
-            contains_rust(&theme, delegation),
-            "practice theme must delegate playback through {delegation}"
+            contains_rust(&session, delegation),
+            "the game session must own practice playback through {delegation}"
         );
     }
+    assert!(contains_rust(&theme, "pub type State = PracticeHost<"));
+    assert!(contains_rust(&theme, "session.update("));
+    assert!(contains_rust(&theme, "session.handle_input("));
     assert!(
         !contains_rust(&controller, "pub range:"),
         "themes must not replace the canonical practice loop range"
@@ -255,6 +902,7 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
 fn practice_editor_decisions_stay_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let editor = production_source(&root.join("crates/deadsync-gameplay/src/practice/editor.rs"));
+    let session = production_source(&root.join("crates/deadsync-gameplay/src/practice/session.rs"));
     let input = production_source(&root.join("crates/deadsync-input/src/practice.rs"));
     let theme = production_source(
         &root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"),
@@ -316,14 +964,22 @@ fn practice_editor_decisions_stay_below_the_theme() {
         "editor feedback must expose immutable game facts without allocating an event queue"
     );
     let state = theme
-        .split_once("pub struct State {")
+        .split_once("pub struct PracticePresentation {")
         .and_then(|(_, rest)| rest.split_once("\n}"))
         .map(|(body, _)| body)
         .expect("practice presentation state should be present");
-    assert!(contains_rust(state, "editor: PracticeEditor"));
+    assert!(contains_rust(&session, "editor: PracticeEditor"));
+    assert!(contains_rust(&session, "menu: Option<PracticeMenu>"));
+    assert!(contains_rust(&session, "self.menu.is_some()"));
+    assert!(contains_rust(&session, "self.activate_menu_item(game, snap_music_start, feedback)"));
+    assert!(contains_rust(&session, "PracticeMainMenuItem::PlaySelection"));
+    assert!(contains_rust(&theme, "state.session.menu()"));
     for former_state in [
         "runtime: PracticeRuntimeView",
+        "session: PracticeSession",
+        "menu:",
         "cursor_beat:",
+        "display_beat:",
         "selection_anchor:",
         "selection_end:",
         "snap_index:",
@@ -351,6 +1007,11 @@ fn practice_editor_decisions_stay_below_the_theme() {
         "fn clamp_selection(",
         "fn gameplay_hotkey_input(",
         "GameplayAudioCommand::SetMusicRate",
+        ".update_navigation_holds(",
+        ".update_music_rate_hold(",
+        "PracticeEditorCommand::Play(",
+        "fn activate_menu_item(",
+        "fn step_menu(",
     ] {
         assert!(
             !contains_rust(&theme, former_policy),
@@ -359,20 +1020,20 @@ fn practice_editor_decisions_stay_below_the_theme() {
     }
     for delegation in [
         "PracticeEditorConfig",
-        "PracticeEditorSnapshot",
-        ".handle_raw_key(",
-        ".update_navigation_holds(",
-        ".update_music_rate_hold(",
+        "PracticeMainMenuItem::ALL",
+        "session.handle_raw_key(",
     ] {
         assert!(
             contains_rust(&theme, delegation),
             "practice presentation must use the game-owned editor through {delegation}"
         );
     }
+    assert!(contains_rust(&session, ".update_navigation_holds("));
+    assert!(contains_rust(&session, ".update_music_rate_hold("));
 }
 
 #[test]
-fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
+fn gameplay_lobby_start_readiness_and_input_routing_stay_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let controller = production_source(&root.join("crates/deadsync-online/src/gameplay_lobby.rs"));
     let theme = production_source(
@@ -386,11 +1047,14 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
         "pub struct LobbyRuntimeView",
         "pub struct GameplayLobbySession",
         "pub enum GameplayLobbyAction",
+        "pub enum GameplayLobbyInput",
         "pub trait GameplayLobbyHost",
         "pub fn on_enter<",
         "pub fn prepare_update<",
+        "pub fn prepare_update_with_actions<",
         "pub fn prepare_update_at<",
         "pub fn handle_input<",
+        "pub fn route_input(",
         "pub fn sync_runtime_view<",
     ] {
         assert!(
@@ -403,6 +1067,7 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
         "pub ready:",
         "pub disconnect_holds:",
         "pub joined_sides:",
+        "pub hud_chords:",
     ] {
         assert!(
             !contains_rust(&controller, mutable_policy),
@@ -419,6 +1084,8 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
         "fn gameplay_lobby_player_stats(",
         "apply_local_lobby_disconnect(",
         "state.start_stage_music(",
+        "fn handle_lobby_hud_input(",
+        "MenuLrChord",
     ] {
         assert!(
             !contains_rust(&theme, former_policy),
@@ -426,19 +1093,25 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
         );
     }
     for delegation in [
-        "lobby_session: GameplayLobbySession",
-        "impl GameplayLobbyHost for State",
-        "gameplay_lobby::handle_input(",
-        "state.lobby_session.waiting(",
+        "GameplayHost<GameplayLobbySession, GameplayPresentation>",
+        "impl GameplayLobbyHost for GameplayEffects<'_>",
+        "state.lobby_session.route_input_with_sides(",
+        "state.lobby().waiting(",
     ] {
         assert!(
             contains_rust(&theme, delegation),
             "gameplay theme must delegate lobby behavior through {delegation}"
         );
     }
-    for entry in ["on_enter", "prepare_update"] {
+    for entry in [
+        "lobby.on_enter(&mut stage.gameplay)",
+        "lobby.prepare_update(&mut stage.gameplay,",
+        "match lobby.route_input(ev)",
+        "GameplayLobbyInput::PassThrough => stage.handle_input(ev, physical)",
+        "state.presentation.toggle_lobby_hud()",
+    ] {
         assert!(
-            contains_rust(&shell, &format!("deadsync_online::gameplay_lobby::{entry}(")),
+            contains_rust(&shell, entry),
             "shell must invoke canonical lobby coordination through {entry}"
         );
     }
@@ -457,6 +1130,289 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
                 "pub type SimplyLoveLobbyRuntimeView = deadsync_online::gameplay_lobby::LobbyRuntimeView"
             ),
         "the existing theme lobby view name must remain compatible"
+    );
+}
+
+#[test]
+fn evaluation_and_selection_lobby_decisions_stay_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let controller = production_source(&root.join("crates/deadsync-online/src/lobby_wait.rs"));
+    let theme = root.join("crates/deadsync-theme-simply-love/src/screens");
+    // Evaluation has test modules between its production items.
+    let evaluation = read_source(theme.join("evaluation.rs"))
+        .expect("Evaluation source should be readable");
+    let selection = production_source(&theme.join("select_music.rs"));
+
+    for contract in [
+        "pub struct LocalLobbyPlayers",
+        "pub enum LobbyWaitReason",
+        "pub struct EvaluationLobbySession",
+        "pub struct SelectMusicLobbySession",
+        "pub struct EvaluationPlayerStatsFacts",
+        "pub enum EvaluationLobbyAction",
+        "pub struct SelectMusicLobbyUpdate",
+        "pub fn wait_reason(",
+        "pub fn handle_input(",
+        "pub fn update_at(",
+        "pub fn sync_runtime_view(",
+    ] {
+        assert!(
+            contains_rust(&controller, contract),
+            "game-owned lobby waiting is missing {contract}"
+        );
+    }
+    for presentation_or_runtime in [
+        "deadsync_theme",
+        "deadsync_shell",
+        "SimplyLove",
+        "ThemeEffect",
+        "i18n::",
+        "lobbies::runtime_",
+    ] {
+        assert!(
+            !controller.contains(presentation_or_runtime),
+            "lobby waiting must emit game decisions without presentation or I/O: {presentation_or_runtime}"
+        );
+    }
+    assert!(
+        contains_rust(&controller, "disconnect_holds: [Option<Instant>; 2]")
+            && !contains_rust(&controller, "pub disconnect_holds:")
+            && !contains_rust(&controller, "pub state:")
+            && !controller.contains("fn runtime_view_mut"),
+        "lobby sessions must retain their own private snapshot and hold state"
+    );
+    assert!(
+        contains_rust(&controller, "emit: impl FnMut(EvaluationLobbyAction)")
+            && !contains_rust(&controller, "Vec<EvaluationLobbyAction>"),
+        "Evaluation must publish decisions immediately in callback order"
+    );
+
+    for (name, source, session) in [
+        ("Evaluation", evaluation.as_str(), "EvaluationLobbySession"),
+        ("SelectMusic", selection.as_str(), "SelectMusicLobbySession"),
+    ] {
+        assert!(
+            contains_rust(source, &format!("lobby_session: {session}"))
+                && source.contains("LocalLobbyPlayers")
+                && source.contains("LobbyWaitReason")
+                && contains_rust(source, "state.lobby_session.handle_input(")
+                && contains_rust(source, "state.lobby_session.update(")
+                && contains_rust(source, "state.lobby_session.sync_runtime_view(lobby)"),
+            "{name} must delegate waiting, input, update and snapshot refresh to its game owner"
+        );
+        for former_policy in [
+            "lobby_view: SimplyLoveLobbyRuntimeView",
+            "lobby_disconnect_hold_p1:",
+            "lobby_disconnect_hold_p2:",
+            "fn local_lobby_player_count(",
+            "fn local_lobby_side_is_active(",
+            "fn set_lobby_disconnect_hold(",
+            "fn clear_lobby_disconnect_holds(",
+            "fn lobby_disconnect_hold_elapsed(",
+            "fn evaluation_lobby_lock_text(",
+            "fn select_music_lobby_lock_text_for(",
+            "fn evaluation_lobby_player_stats(",
+            "apply_local_lobby_disconnect(",
+        ] {
+            assert!(
+                !contains_rust(source, former_policy),
+                "{name} still owns lobby waiting policy through {former_policy}"
+            );
+        }
+    }
+    for text_gate in [
+        "select_music_lobby_lock_text(state).is_some()",
+        "select_music_lobby_lock_text(state).is_none()",
+        "evaluation_lobby_status_label(state).is_some()",
+        "evaluation_lobby_status_label(state).is_none()",
+    ] {
+        assert!(
+            !contains_rust(&selection, text_gate) && !contains_rust(&evaluation, text_gate),
+            "localized lobby status must not decide input or update policy: {text_gate}"
+        );
+    }
+
+    // The game decides whether a hold disconnects. SelectMusic still clears its
+    // presentation navigation state before that clock sample and queues the
+    // request before showing the notice; it must not eagerly clear the snapshot.
+    let update = selection
+        .split_once("fn update_impl(")
+        .and_then(|(_, rest)| rest.split_once("if state.reload_ui.is_some()"))
+        .map(|(body, _)| body)
+        .expect("SelectMusic's lobby update adapter should be present");
+    let tick = update.find("state.lobby_session.update(local_players)")
+        .expect("SelectMusic must advance the game-owned disconnect clock");
+    for cleanup in [
+        "clear_menu_chord(state)",
+        "clear_p1_ud_chord(state)",
+        "clear_p2_ud_chord(state)",
+        "clear_overlay_nav_hold(state)",
+        "clear_nav_hold(state)",
+        "state.last_steps_nav_dir_p1 = None",
+        "state.last_steps_nav_time_p1 = None",
+        "state.last_steps_nav_dir_p2 = None",
+        "state.last_steps_nav_time_p2 = None",
+    ] {
+        assert!(
+            update.find(cleanup).is_some_and(|position| position < tick),
+            "SelectMusic must clear {cleanup} before updating the disconnect hold"
+        );
+    }
+    let request = update.find("SimplyLoveLobbyRequest::Disconnect")
+        .expect("SelectMusic must queue the requested disconnect");
+    let notice = update.find("set_lobby_notice(state,")
+        .expect("SelectMusic must display its queued-disconnect notice");
+    assert!(tick < request && request < notice);
+}
+
+#[test]
+fn select_music_remote_selection_policy_stays_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let controller =
+        production_source(&root.join("crates/deadsync-online/src/lobby_selection.rs"));
+    let session = production_source(&root.join("crates/deadsync-online/src/lobby_wait.rs"));
+    let theme = root.join("crates/deadsync-theme-simply-love/src/screens");
+    let selection = production_source(&theme.join("select_music.rs"));
+    let playlists = production_source(&theme.join("select_music/playlists.rs"));
+
+    for contract in [
+        "pub(crate) struct LobbySelectionSyncState",
+        "pub struct LocalSongSelection",
+        "pub struct RemoteChartSelection",
+        "pub struct RemoteSongOptions",
+        "pub struct SelectMusicPresence",
+        "pub struct LobbySelectionSyncStep<",
+        "pub enum RemoteSelectionOutcome",
+        "pub fn local_song_info(",
+        "pub fn resolve_remote_song<",
+        "pub fn remote_song_options(",
+        "pub fn confirmed_song_to_publish(",
+    ] {
+        assert!(
+            contains_rust(&controller, contract),
+            "game-owned lobby selection is missing {contract}"
+        );
+    }
+    for dependency in [
+        "deadsync_theme",
+        "deadsync_shell",
+        "SimplyLove",
+        "ThemeEffect",
+        "i18n::",
+        "lobbies::runtime_",
+    ] {
+        assert!(
+            !controller.contains(dependency),
+            "lobby selection policy must remain independent of presentation and I/O: {dependency}"
+        );
+    }
+    for exposed_cache in [
+        "pub struct LobbySongKey",
+        "pub struct FailedLobbySong",
+        "pub room:",
+        "pub applied:",
+        "pub failed:",
+    ] {
+        assert!(
+            !contains_rust(&controller, exposed_cache),
+            "lobby selection must retain private cache state: {exposed_cache}"
+        );
+    }
+    assert!(
+        contains_rust(&session, "selection: LobbySelectionSyncState")
+            && !contains_rust(&session, "pub selection:")
+            && contains_rust(&session, "pub fn prepare_selection_sync<")
+            && contains_rust(&session, "pub fn record_selection_attempt(")
+            && contains_rust(&controller, "pub remote_to_apply: Option<&")
+            && contains_rust(&controller, "build_local: impl FnOnce() -> Option<LobbySongInfo>"),
+        "the existing lobby session must own selection history and expose borrowed, lazy decisions"
+    );
+
+    for former_policy in [
+        "struct LobbySongKey",
+        "struct FailedLobbySong",
+        "lobby_last_joined_code:",
+        "lobby_last_applied_remote_song:",
+        "lobby_last_failed_remote_song:",
+        "fn lobby_song_paths_match(",
+        "fn lobby_song_path_parts(",
+        "fn lobby_song_matches_remote_selection(",
+        "fn lobby_song_metadata_matches_remote_selection(",
+    ] {
+        assert!(
+            !contains_rust(&selection, former_policy),
+            "SelectMusic still owns remote-selection policy through {former_policy}"
+        );
+    }
+    for delegation in [
+        "lobby_selection::chart_label(",
+        "lobby_selection::local_song_info(",
+        "lobby_selection::resolve_remote_song(",
+        "lobby_selection::remote_song_options(",
+        "lobby_selection::confirmed_song_to_publish(",
+        ".prepare_selection_sync(",
+        ".record_selection_attempt(",
+        "options.should_clear_preview(",
+    ] {
+        assert!(
+            contains_rust(&selection, delegation),
+            "SelectMusic must use the game-owned selection decision through {delegation}"
+        );
+    }
+    assert!(
+        contains_rust(&playlists, "deadsync_online::lobby_selection::song_path(song)"),
+        "the presentation's compatibility path helper must delegate to the game owner"
+    );
+
+    let application = selection
+        .split_once("fn apply_remote_lobby_song_selection(")
+        .and_then(|(_, rest)| rest.split_once("fn publish_lobby_confirmed_song_selection("))
+        .map(|(body, _)| body)
+        .expect("SelectMusic's remote-selection adapter should be present");
+    for policy in [
+        "steps_index_for_chart_hash(",
+        "best_steps_index(",
+        ".clamp(0.5, 3.0)",
+    ] {
+        assert!(
+            !contains_rust(application, policy),
+            "the remote-selection adapter still decides chart/rate policy through {policy}"
+        );
+    }
+    let previous_rate = application
+        .find("let old_rate = state.session.music_rate")
+        .expect("the adapter must preserve the rate before focusing the song");
+    let focus = application
+        .find("focus_song_from_search(")
+        .expect("the adapter must focus the resolved song");
+    let options = application
+        .find("lobby_selection::remote_song_options(")
+        .expect("the adapter must request options from the game owner");
+    assert!(
+        previous_rate < focus && focus < options,
+        "remote options must use live selection facts after focus and the preceding music rate"
+    );
+
+    let synchronization = selection
+        .split_once("fn sync_lobby_select_music_with(")
+        .and_then(|(_, rest)| rest.split_once("fn select_music_lobby_lock_text("))
+        .map(|(body, _)| body)
+        .expect("SelectMusic's synchronization adapter should be present");
+    let prepare = synchronization
+        .find(".prepare_selection_sync(")
+        .expect("the game owner must prepare synchronization");
+    let presence = synchronization
+        .find("SimplyLoveLobbyRequest::UpdateMachineState")
+        .expect("the adapter must queue the returned presence");
+    let apply = synchronization
+        .find("apply_remote_lobby_song_selection(")
+        .expect("the adapter must apply requested remote selection");
+    let record = synchronization
+        .find(".record_selection_attempt(")
+        .expect("the adapter must report the completed resolution");
+    assert!(
+        prepare < presence && presence < apply && apply < record,
+        "presence publication must precede remote application and its recorded result"
     );
 }
 
@@ -2029,26 +2985,28 @@ fn manage_local_profiles_import_execution_is_shell_owned() {
             "Simply Love local-profile boundary is missing {contract}"
         );
     }
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
     for contract in [
         "CreateLocalProfile",
         "RenameLocalProfile",
         "SetDefaultLocalProfile",
         "DeleteLocalProfile",
-        "pub enum SimplyLoveLocalProfileEvent",
-    ] {
-        assert!(
-            effects.contains(contract),
-            "Simply Love local-profile mutation boundary is missing {contract}"
-        );
-    }
-    for contract in [
-        "pub struct SimplyLoveItgProfileCandidate",
-        "pub struct SimplyLoveItgImportSummary",
-        "pub enum SimplyLoveProfileImportEvent",
         "DiscoverItgProfiles",
         "BrowseItgProfiles",
         "StartItgProfileImport",
         "CancelItgProfileImport",
+    ] {
+        assert!(
+            profile_requests.contains(contract),
+            "profile request boundary is missing {contract}"
+        );
+    }
+    for contract in [
+        "pub enum SimplyLoveLocalProfileEvent",
+        "pub struct SimplyLoveItgProfileCandidate",
+        "pub struct SimplyLoveItgImportSummary",
+        "pub enum SimplyLoveProfileImportEvent",
     ] {
         assert!(
             effects.contains(contract),
@@ -2080,6 +3038,8 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
     let theme = root.join("crates/deadsync-theme-simply-love/src");
     let picker = read_source(theme.join("screens/components/shared/profile_boxes.rs"))
         .expect("profile picker should be readable");
+    let catalog = read_source(root.join("crates/deadsync-profile/src/picker.rs"))
+        .expect("game profile catalog should be readable");
     let views =
         read_source(theme.join("views.rs")).expect("Simply Love views should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/local_profiles.rs"))
@@ -2088,6 +3048,7 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
         .expect("shell app should be readable");
     let select_music = read_source(theme.join("screens/select_music.rs"))
         .expect("Select Music should be readable");
+    let shell_input = production_source(&root.join("crates/deadsync-shell/src/app/input_routing.rs"));
 
     for runtime in [
         "deadsync_profile::compat",
@@ -2106,9 +3067,10 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
         );
     }
     assert!(
-        views.contains("pub struct ProfilePickerView")
-            && views.contains("pub struct ProfilePickerEntryView")
+        catalog.contains("pub struct ProfilePickerView")
+            && catalog.contains("pub struct ProfilePickerEntryView")
             && views.contains("pub profile_picker: ProfilePickerView")
+            && shell.contains("use deadsync_profile::picker::")
             && shell.contains("pub fn picker_view() -> ProfilePickerView")
             && shell.contains("profile::scan_local_profiles()")
             && shell.contains("total_songs_played_for_profile")
@@ -2117,6 +3079,12 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
             && shell_app.contains("select_music::sync_profile_picker("),
         "shell must prepare and Select Music must retain the shared profile-picker catalog"
     );
+    assert!(shell_app.contains("<ActiveTheme as ThemeProfilePicker>::ProfilePickerState"));
+    assert!(shell_app.contains("ActiveTheme::init_profile_picker("));
+    assert!(shell_app.contains("ActiveTheme::push_profile_picker_actors("));
+    assert!(shell_input.contains("ActiveTheme::handle_profile_picker_input("));
+    assert!(!shell_app.contains("select_profile::"));
+    assert!(!shell_input.contains("select_profile::"));
 }
 
 #[test]
@@ -2134,6 +3102,8 @@ fn practice_runtime_is_shell_prepared() {
     let loading = read_source(root.join("crates/deadsync-shell/src/app/lua_loading.rs"))
         .expect("shell Lua loading completion should be readable");
     let editor = production_source(&root.join("crates/deadsync-gameplay/src/practice/editor.rs"));
+    let session = production_source(&root.join("crates/deadsync-gameplay/src/practice/session.rs"));
+    let stage_host = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
 
     for runtime in [
         "deadsync_profile::compat",
@@ -2149,16 +3119,63 @@ fn practice_runtime_is_shell_prepared() {
     assert!(
         views.contains("pub struct PracticeRuntimeView")
             && practice.contains("hud: profile_data::GameplayHudSnapshot")
-            && practice.contains("editor: PracticeEditor")
+            && practice.contains("pub type State = PracticeHost<")
             && practice.contains("SimplyLoveProfileRequest::SetMusicRate")
             && editor.contains("GameplayAudioCommand::SetMusicRate")
             && editor.contains("PracticeEditorFeedback::PersistMusicRate")
-            && shell.contains("pub(crate) fn practice_view(")
-            && shell.contains("hud: gameplay.hud.clone()")
-            && shell_app.contains("runtime: practice_runtime_view")
-            && loading.contains("practice::init(gs, finish.runtime)"),
+            && session.contains("PracticeEditorFeedback::PersistMusicRate(rate) => rates.push(rate)")
+            && shell.contains("pub(crate) fn practice_init(")
+            && shell.contains("editor: PracticeEditorConfig")
+            && !shell.contains("PracticeRuntimeView")
+            && shell.contains("hud: hud.clone()")
+            && shell_app.contains("init: practice_init")
+            && contains_rust(&loading, "crate::gameplay_runtime::prepare_practice(gs, finish.init, practice::PracticePresentation::new,")
+            && stage_host.contains("let mut session = PracticeSession::new(")
+            && stage_host.contains("session.snap_display_to_cursor(")
+            && shell.contains("gameplay.into_practice(init.editor,")
+            && shell.contains("present(stage, presentation, init.hud)"),
         "shell must prepare Practice policy/HUD state and execute game-decided rate persistence"
     );
+    for handoff in [
+        "state.session.on_enter(&mut state.gameplay.stage.gameplay)",
+        "state.session.update(",
+        "state.session.handle_input(",
+        "state.session.handle_raw_key(",
+        "state.session.restore(&state.gameplay.stage.gameplay, snapshot.editor)",
+        "view: state.presentation.edit_snapshot()",
+        "state.presentation.restore_edit_snapshot(snapshot.view)",
+        "state.presentation.apply_view_request(request)",
+        "PracticeViewRequest::Navigate(PracticeDestination::PlayerOptions)",
+        "ThemeEffect::Navigate(T::SCREENS.player_options)",
+        "ThemeEffect::Navigate(T::SCREENS.song_selection)",
+        "let rates = state.session.drain_music_rates();",
+        "profile::set_session_music_rate(rate)",
+        "state.presentation.append_effects(effects)",
+        "effects.extend(navigation)",
+    ] {
+        assert!(contains_rust(&shell, handoff), "missing Practice handoff {handoff}");
+    }
+    for compatibility in [
+        "practice::on_enter(",
+        "practice::advance(",
+        "practice::process_input(",
+        "practice::process_key(",
+        "practice::with_session(",
+        "state.menu_open()",
+    ] {
+        assert!(!shell.contains(compatibility));
+    }
+    let live = shell
+        .split_once("pub(crate) fn update_practice")
+        .and_then(|(_, rest)| rest.split_once("pub(crate) fn push_actors"))
+        .expect("shell must keep a live Practice adapter")
+        .0;
+    assert!(contains_rust(live, "Q: PracticeLivePresentation<P>"));
+    for concrete in ["state: &mut PracticeState", "practice::", "SimplyLove", "ActiveTheme"] {
+        assert!(!live.contains(concrete), "live Practice still requires {concrete}");
+    }
+    assert!(stage_host.contains("pub trait PracticeLivePresentation<P>"));
+    assert!(!shell.contains("SimplyLoveProfileRequest::SetMusicRate"));
 }
 
 #[test]
@@ -2315,6 +3332,10 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
     let executor =
         read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
     assert!(
         views.contains("pub struct OptionsInitView")
             && source.contains("pub fn init(view: OptionsInitView)")
@@ -2325,15 +3346,15 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
             && runtime.contains("arrowcloud.ini")
             && effects.contains("pub enum SimplyLoveOptionsConfigRequest")
             && effects.contains("Options(SimplyLoveOptionsConfigRequest)")
-            && effects.contains("SetMachineDefaultScrollSpeed")
-            && effects.contains("SetMachineDefaultScroll")
-            && effects.contains("SetMachineDefaultBackgroundFilter")
-            && effects.contains("SetMachineDefaultNoteskin")
+            && profile_requests.contains("SetMachineDefaultScrollSpeed")
+            && profile_requests.contains("SetMachineDefaultScroll")
+            && profile_requests.contains("SetMachineDefaultBackgroundFilter")
+            && profile_requests.contains("SetMachineDefaultNoteskin")
             && shell.contains("config_requests::execute_options(request, &mut self.input)")
-            && shell.contains("profile::update_machine_default_scroll_speed(setting)")
-            && shell.contains("profile::update_machine_default_scroll(setting)")
-            && shell.contains("profile::update_machine_default_background_filter(setting)")
-            && shell.contains("profile::update_machine_default_noteskin(noteskin)")
+            && profile_executor.contains("profile::update_machine_default_scroll_speed(setting)")
+            && profile_executor.contains("profile::update_machine_default_scroll(setting)")
+            && profile_executor.contains("profile::update_machine_default_background_filter(setting)")
+            && profile_executor.contains("profile::update_machine_default_noteskin(noteskin)")
             && executor.contains("pub(super) fn execute_options")
             && executor
                 .contains("profile::update_machine_default_light_brightness_from_config(percent)")
@@ -3052,25 +4073,29 @@ fn player_options_runtime_reads_are_shell_prepared() {
 
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
+    let stage_options =
+        production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_options.rs"));
     for contract in [
         "pub struct PlayerOptionsPolicyView",
         "pub struct PlayerOptionsPlayerView",
-        "pub struct PlayerOptionsInitView",
-        "pub options: deadsync_profile::PlayerOptionsData",
+        "pub struct PlayerOptionsView",
+        "pub options: PlayerOptionsData",
         "pub heart_rate_device_id: Option<String>",
-        "pub players: [PlayerOptionsPlayerView; 2]",
+        "pub players: [PlayerOptionsPlayerView; MAX_PLAYERS]",
         "pub scorebox_available: bool",
     ] {
         assert!(
-            views.contains(contract),
+            stage_options.contains(contract),
             "missing Player Options contract {contract}"
         );
     }
+    assert!(views.contains("impl Default for PlayerOptionsInitView"));
+    assert!(views.contains("impl From<PlayerOptionsInitView> for "));
 
     let adapter = read_source(root.join("crates/deadsync-shell/src/player_options.rs"))
         .expect("shell Player Options adapter should be readable");
     for runtime_owner in [
-        "pub(crate) fn init_view() -> PlayerOptionsInitView",
+        "pub(crate) fn init_view() -> PlayerOptionsView",
         "profile::get_session_snapshot()",
         "profile::get_for_side",
         "profile.current_player_options()",
@@ -3081,17 +4106,31 @@ fn player_options_runtime_reads_are_shell_prepared() {
             "shell Player Options adapter is missing {runtime_owner}"
         );
     }
+    assert!(!adapter.contains("deadsync_theme_simply_love"));
 
     let screen = read_source(player_options.join("mod.rs"))
         .expect("Player Options screen should be readable");
     let state = read_source(player_options.join("state.rs"))
         .expect("Player Options state should be readable");
+    let theme_profile = production_source(&player_options.join("profile.rs"));
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
-        .expect("Simply Love effects should be readable");
+    let preload = shell
+        .split_once("fn preload_gameplay(")
+        .and_then(|(_, body)| body.split_once("fn defer_gameplay_entry("))
+        .map(|(body, _)| body)
+        .expect("shell gameplay preload should be readable");
+    let stage_start = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
+    let live_case = production_source(&root.join("crates/deadsync-shell/src/app/live_case.rs"));
+    let input = production_source(&root.join("crates/deadsync-shell/src/app/input_routing.rs"));
+    let previews = production_source(&root.join("crates/deadsync-shell/src/app/option_previews.rs"));
+    let heart_rate = production_source(&root.join("crates/deadsync-shell/src/heart_rate.rs"));
     let profile_update = read_source(root.join("crates/deadsync-profile/src/update.rs"))
         .expect("profile update API should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
     assert!(
         screen.contains("init_view: PlayerOptionsInitView")
             && state.contains("policy: PlayerOptionsPolicyView")
@@ -3102,11 +4141,82 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && !state.contains("deadsync_profile::Profile")
             && shell.contains("crate::player_options::init_view()")
             && shell.contains("crate::player_options::gameplay_profiles(")
+            && preload.contains("StageOptions::from_profiles(")
+            && !preload.contains("player_options::init")
+            && !preload.contains("noteskin_catalog_view(")
+            && !preload.contains("smx_gif_catalog_view(")
+            && !preload.contains("heart_rate::devices_view(")
+            && shell.matches("self.take_stage_start()").count() == 2
+            && shell.matches("self.recover_player_options(start, options_screen)").count() == 2
+            && contains_rust(&stage_start, "ActiveTheme::player_options_stage(state)")
+            && contains_rust(&stage_start, "StageOptions::from_profiles(")
+            && !shell.contains("player_options::init_for_gameplay")
+            && !live_case.contains("player_options::init_for_gameplay")
+            && !shell.contains("player_options::apply_no_cmod_alternative(")
+            && contains_rust(&adapter, "stage.resolve_scroll(")
+            && !adapter.contains("screen::State")
+            && !adapter.contains("apply_routine_master_options")
+            && contains_rust(&stage_options, "pub struct StageOptions")
+            && contains_rust(&stage_options, "pub fn resolve_stage_scroll(")
+            && contains_rust(&stage_options, "if play_style.is_routine()")
+            && contains_rust(&theme_profile, "stage_options::apply_no_cmod_alternative(")
             && screen.contains("UpdatePlayerOptions")
-            && effects.contains("UpdatePlayerOptions {")
-            && shell.contains("profile::update_player_options_for_side")
+            && profile_requests.contains("UpdatePlayerOptions {")
+            && profile_executor.contains("profile::update_player_options_for_side")
             && profile_update.contains("pub fn update_player_options_for_side")
     );
+    assert!(adapter.contains("<crate::ActiveTheme as ThemePlayerOptions>::PlayerOptionsState"));
+    assert!(shell.contains("ActiveTheme::init_player_options(PlayerOptionsEntry"));
+    assert!(shell.contains("ActiveTheme::push_player_options_actors("));
+    assert!(shell.contains("ActiveTheme::update_player_options("));
+    assert!(shell.contains("ActiveTheme::handle_player_options_raw_key("));
+    assert!(input.contains("ActiveTheme::handle_player_options_input("));
+    assert!(previews.contains("ActiveTheme::take_player_options_noteskin_requests("));
+    assert!(heart_rate.contains("ActiveTheme::sync_player_options_heart_rate("));
+    assert!(!shell.contains("screens::player_options::"));
+    assert!(!input.contains("screens::player_options::"));
+    assert!(!previews.contains("screens::player_options::"));
+    assert!(stage_start.contains("scroll_speeds: Some(scroll_speeds)"));
+}
+
+#[test]
+fn shell_judgment_palettes_use_the_installed_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    for path in ["app/mod.rs", "player_options.rs", "post_song.rs"] {
+        let source = read_source(shell.join(path)).expect("shell palette consumer source");
+        assert!(
+            contains_rust(&source, "runtime_catalog(ActiveTheme::JUDGMENT_PRESET"),
+            "{path} must use the selected theme's judgment palette"
+        );
+        assert!(!source.contains("color::JUDGMENT_PRESET"), "{path}");
+    }
+    let app = read_source(shell.join("app/mod.rs")).unwrap();
+    assert!(contains_rust(
+        &app,
+        "update_runtime_catalog(ActiveTheme::JUDGMENT_PRESET",
+    ));
+}
+
+#[test]
+fn recorded_replay_playback_is_prepared_by_the_game() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let replay =
+        production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_replay.rs"));
+    let wheel = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    );
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    let stage = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
+    assert!(contains_rust(&replay, "pub struct StageReplayRequest"));
+    assert!(contains_rust(&replay, "pub fn into_playback("));
+    assert!(contains_rust(&wheel, "SimplyLoveRuntimeRequest::StartReplay(payload)"));
+    assert!(!wheel.contains("pending_replay"));
+    assert!(contains_rust(&app, "self.queue_replay_stage(replay)"));
+    assert!(contains_rust(&app, "replay.into_playback()"));
+    assert!(!app.contains("take_pending_replay"));
+    assert!(contains_rust(&stage, "start.replay = Some(replay)"));
 }
 
 #[test]
@@ -3624,17 +4734,24 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
             "shell audio executor is missing {execution}"
         );
     }
-    assert!(shell_app.contains("profile_selection_session_plan("));
-    assert!(shell_app.contains("profile::set_session_player_side(session.active_side)"));
-    assert!(
-        shell_app.contains("profile::set_session_joined(session.p1_joined, session.p2_joined)")
-    );
-    assert!(shell_app.contains("profile::set_session_play_style(session.play_style)"));
     assert!(!shell_app.contains("take_fast_profile_switch_from_select_music"));
 
-    let profile_requests =
-        read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
-            .expect("Simply Love requests should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
+    let theme_effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        .expect("Simply Love requests should be readable");
+    assert!(theme_effects.contains("ProfileRequest as SimplyLoveProfileRequest"));
+    assert!(!theme_effects.contains("pub enum SimplyLoveProfileRequest"));
+    assert!(shell_app.contains("self.handle_profile_request(request)"));
+    assert!(profile_executor.contains("request: ProfileRequest"));
+    assert!(profile_executor.contains("select_profiles(p1, p2, p1_joined, p2_joined)"));
+    assert!(!profile_executor.contains("profile_selection_session_plan("));
+    assert!(profile_requests.contains("profile_selection_session_plan(previous_session.play_style"));
+    assert!(profile_requests.contains("runtime_set_session_player_side(session.active_side)"));
+    assert!(profile_requests.contains("runtime_set_session_joined(session.p1_joined, session.p2_joined)"));
+    assert!(profile_requests.contains("runtime_set_session_play_style(session.play_style)"));
     assert!(profile_requests.contains("fast_switch: bool"));
 
     assert!(
@@ -3706,20 +4823,24 @@ fn audio_control_and_hot_sfx_are_application_owned() {
 }
 
 #[test]
-fn simply_love_crossover_parity_stays_behind_simfile() {
+fn gameplay_crossover_parity_stays_behind_simfile() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
     let manifest = read_source(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
     let gameplay = read_source(theme.join("src/screens/gameplay.rs"))
         .expect("Simply Love gameplay should be readable");
+    let adapter = read_source(root.join("crates/deadsync-profile-gameplay/src/lib.rs"))
+        .expect("gameplay startup adapter should be readable");
     let timing = read_source(root.join("crates/deadsync-simfile/src/timing.rs"))
         .expect("simfile timing adapter should be readable");
 
     assert!(!manifest.contains("\nrssp ="));
     assert!(!gameplay.contains("rssp::"));
-    assert!(gameplay.contains("deadsync_simfile::timing::crossover_annotations::<4>"));
-    assert!(gameplay.contains("deadsync_simfile::timing::crossover_annotations::<8>"));
+    assert!(!gameplay.contains("crossover_annotations::<"));
+    assert!(!adapter.contains("rssp::"));
+    assert!(adapter.contains("deadsync_simfile::timing::crossover_annotations::<4>"));
+    assert!(adapter.contains("deadsync_simfile::timing::crossover_annotations::<8>"));
     assert!(timing.contains("pub fn crossover_annotations<const LANES: usize>"));
     assert!(timing.contains("rssp::step_parity::annotate_timing_rows"));
     assert!(!timing.contains("pub fn rssp_timing_segments_from_deadsync"));
@@ -4041,12 +5162,21 @@ fn select_music_session_runtime_is_shell_prepared() {
 
     let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
     for request in [
         "SetSession {",
         "SetMusicRate(f32)",
         "ToggleFavorite {",
         "TogglePackFavorite {",
         "MarkPacksKnown {",
+    ] {
+        assert!(
+            profile_requests.contains(request),
+            "missing session request {request}"
+        );
+    }
+    for request in [
         "RenameSmxPadConfig {",
         "SetSmxPadConfigDefault {",
         "DeleteSmxPadConfig {",
@@ -4056,20 +5186,24 @@ fn select_music_session_runtime_is_shell_prepared() {
             "missing session request {request}"
         );
     }
-    let executor = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let mut executor = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
+    executor.push_str(
+        &read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+            .expect("shell profile executor should be readable"),
+    );
     for execution in [
-        "SimplyLoveProfileRequest::SetSession",
+        "ProfileRequest::SetSession",
         "profile::set_session_player_side(player_side)",
         "profile::set_session_joined(joined[0], joined[1])",
         "profile::set_session_play_style(play_style)",
-        "SimplyLoveProfileRequest::SetMusicRate(rate)",
+        "ProfileRequest::SetMusicRate(rate)",
         "profile::set_session_music_rate(rate)",
-        "SimplyLoveProfileRequest::ToggleFavorite",
+        "ProfileRequest::ToggleFavorite",
         "profile::toggle_favorite(side, &chart_hash)",
-        "SimplyLoveProfileRequest::TogglePackFavorite",
+        "ProfileRequest::TogglePackFavorite",
         "profile::toggle_pack_favorite(side, &pack_name)",
-        "SimplyLoveProfileRequest::MarkPacksKnown",
+        "ProfileRequest::MarkPacksKnown",
         "profile::mark_packs_known(",
         "SimplyLoveHardwareRequest::RenameSmxPadConfig",
         "profile::rename_pad_config(&old_name, &new_name)",
@@ -4501,13 +5635,17 @@ fn select_music_replay_cache_is_shell_owned() {
     assert!(shell.contains("select_music::sync_machine_replays("));
     for path in rust_files(&root.join("crates/deadsync-theme-simply-love/src")) {
         let source = read_source(&path).expect("Simply Love source should be readable");
-        for runtime_access in ["deadsync_online::score_compat", "scores::"] {
-            assert!(
-                !source.contains(runtime_access),
-                "{} still reads score runtime through {runtime_access}",
-                path.display()
-            );
-        }
+        let score_alias = source.match_indices("scores::").any(|(index, _)| {
+            source[..index]
+                .chars()
+                .next_back()
+                .is_none_or(|ch| ch != '_' && !ch.is_alphanumeric())
+        });
+        assert!(
+            !source.contains("deadsync_online::score_compat") && !score_alias,
+            "{} still reads score runtime",
+            path.display()
+        );
     }
 }
 
@@ -4827,6 +5965,7 @@ fn select_course_runtime_and_caches_are_shell_prepared() {
     for contract in [
         "pub struct SelectCoursePolicyView",
         "pub struct SelectCourseContextView",
+        "pub struct SelectCoursePresentationInitView",
         "pub song_packs: Vec<deadsync_chart::SongPack>",
         "pub courses: Vec<deadsync_simfile::runtime_cache::CourseData>",
         "pub last_course_path: Option<PathBuf>",
@@ -4845,6 +5984,8 @@ fn select_course_runtime_and_caches_are_shell_prepared() {
         "get_course_cache().clone()",
         ".last_played_course(context.play_style)",
         "scores::played_chart_counts_for_machine()",
+        "PreparedCourseCatalog::new(",
+        "select_course::init_prepared(",
     ] {
         assert!(
             service.contains(shell_owner),
@@ -4899,7 +6040,7 @@ fn profile_load_preparation_worker_is_shell_owned() {
         "scores::prewarm_select_music_score_caches",
         "scores::played_chart_counts_for_machine",
         "select_music::init(init)",
-        "select_course::init(select_course_init_view())",
+        "PreparedState::Course(Box::new(prepare_course_screen()))",
     ] {
         assert!(
             service.contains(runtime_owner),
@@ -5067,13 +6208,18 @@ fn content_reload_execution_is_shell_owned() {
         "pub fn sync_reload_events",
         "SimplyLoveContentReloadEvent::Finished { song_packs }",
         "pub fn refresh_from_song_packs",
-        "for pack in &state.song_packs",
     ] {
         assert!(
             theme.contains(prepared_boundary),
             "Select Music is missing content boundary {prepared_boundary}"
         );
     }
+    assert!(
+        contains_rust(&theme, "song_packs: Vec<SongPack>")
+            && contains_rust(&theme, "lobby_selection::resolve_remote_song(")
+            && contains_rust(&theme, "&state.song_packs,"),
+        "Select Music must retain the prepared catalog and borrow it for game-owned lookup"
+    );
 
     let init =
         read_source(root.join("crates/deadsync-theme-simply-love/src/screens/init.rs"))
@@ -5285,7 +6431,7 @@ fn select_music_lobby_runtime_is_shell_owned() {
         );
     }
     assert!(
-        select_music.contains("lobby_view: SimplyLoveLobbyRuntimeView")
+        select_music.contains("lobby_session: SelectMusicLobbySession")
             && select_music.contains("SimplyLoveOnlineRequest::Lobby")
             && overlay.contains("snapshot: &lobby_data::Snapshot")
     );
@@ -5373,13 +6519,13 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
         );
     }
     assert!(
-        gameplay.contains("runtime_view: GameplayPresentationView")
-            && gameplay.contains("lobby_session: GameplayLobbySession")
+        gameplay.contains("runtime_view: GameplayRuntimeView")
+            && gameplay.contains("GameplayHost<GameplayLobbySession, GameplayPresentation>")
             && gameplay.contains("pub fn sync_runtime_view")
             && gameplay.contains("SimplyLoveLobbyRequest::UpdateMachineStats")
     );
     assert!(
-        evaluation.contains("lobby_view: SimplyLoveLobbyRuntimeView")
+        evaluation.contains("lobby_session: EvaluationLobbySession")
             && evaluation.contains("pub fn sync_runtime_view")
             && evaluation.contains("EvaluationRuntimeView")
             && evaluation.contains("SimplyLoveLobbyRequest::UpdateMachineStats")
@@ -5393,8 +6539,8 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
     );
     for shell_owner in [
         "fn sync_active_online_runtime_view",
-        "deadsync_online::gameplay_lobby::sync_runtime_view",
-        "evaluation::sync_runtime_view",
+        "state.lobby_session.sync_runtime_view(lobby)",
+        "ActiveTheme::sync_evaluation_runtime",
         "SimplyLoveLobbyRequest::UpdateMachineStats",
         "runtime_update_machine_state_sides_with_stats_default",
     ] {
@@ -5446,16 +6592,15 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         );
     }
     for contract in [
-        "runtime_view: GameplayPresentationView",
+        "runtime_view: GameplayRuntimeView",
         "init_view: GameplayInitView",
         "runtime_view.policy.translated_titles",
-        "background_changes,",
-        "scores.mini_indicator",
-        "scores.scorebox_profiles",
-        "state.itl_cmod_warning[player_idx]",
-        "pub fn sync_score_runtime_view",
-        "state.runtime_view.policy.center_single_notefield",
-        "state.runtime_view.policy.scorebox_pane_filter",
+        "scores.scorebox_visible",
+        "scores.scorebox_snapshots",
+        "self.presentation.itl_cmod_warning[player]",
+        "pub fn sync_scoreboxes",
+        "self.presentation.runtime_view.policy.center_single_notefield",
+        "state.presentation.runtime_view.policy.scorebox_pane_filter",
         "self.runtime_view.policy.machine_font",
         "policy.background_brightness",
         "policy.background_color",
@@ -5463,7 +6608,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "policy.zmod_rating_box_text",
         "policy.show_bpm_decimal",
         "policy.bpm_position",
-        "machine_font_key(state.machine_font(),",
+        "machine_font_key(state.presentation().machine_font(),",
     ] {
         assert!(
             gameplay.contains(contract),
@@ -5477,11 +6622,8 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "pub struct GameplayPolicyView",
         "pub struct GameplayRuntimeView",
         "pub struct GameplayInitView",
-        "pub struct GameplayScoreInitView",
-        "pub struct GameplayScoreRuntimeView",
+        "GameplayScoreSnapshots as GameplayScoreInitView",
         "pub hud: deadsync_profile::GameplayHudSnapshot",
-        "pub background_changes: Vec<deadsync_chart::SongBackgroundChange>",
-        "pub lobby: SimplyLoveLobbyRuntimeView",
         "pub machine_font: deadsync_config::theme::MachineFont",
         "pub background_brightness: f32",
         "pub background_color: deadlib_present::color::Color",
@@ -5499,27 +6641,18 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
     let adapter = read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
         .expect("shell Gameplay adapter should be readable");
     for runtime_owner in [
-        "fn policy_view(config: &config::app_config::Config)",
-        "pub(crate) fn runtime_view(",
-        "pub(crate) fn init_view(",
-        "profile::get_session_snapshot()",
-        "profile::gameplay_hud_snapshot()",
+        "pub(crate) fn prepare_startup(",
+        "pub mini_indicator: GameplayMiniIndicatorData",
+        "pub lobby_session: GameplayLobbySession",
+        "pub score_refresh: GameplayScoreRefresh",
         "scores::get_cached_local_score_for_side",
         "scores::get_cached_local_ex_score_for_side",
         "scores::get_cached_local_hard_ex_score_for_side",
         "scores::get_or_fetch_player_leaderboards_for_profile",
         "scores::should_warn_cmod_for_itl_chart",
-        "pub(crate) fn score_runtime_view(",
-        "machine_font: config.machine_font",
-        "background_brightness: config.bg_brightness",
-        "background_color: config.gameplay_bg_color",
-        "smx_input: config.smx_input",
-        "zmod_rating_box_text: config.zmod_rating_box_text",
-        "show_bpm_decimal: config.show_bpm_decimal",
-        "bpm_position: config.gameplay_bpm_position",
-        "deadsync_simfile::app_runtime::random_movie_paths",
-        "deadsync_simfile::app_runtime::gameplay_background_changes",
-        "background_changes: background_changes(",
+        "state.score_refresh.has_pending()",
+        "state.score_refresh.poll(&mut state.stage.gameplay,",
+        "state.presentation.sync_leaderboards(updates)",
     ] {
         assert!(
             adapter.contains(runtime_owner),
@@ -5529,10 +6662,76 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
 
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
+    let presentation_init = shell
+        .split_once("fn gameplay_presentation_init(")
+        .and_then(|(_, rest)| rest.split_once("fn gameplay_offset_snapshot("))
+        .expect("shell should assemble the active theme's presentation inputs")
+        .0;
+    for input in [
+        "profile::get_session_snapshot()",
+        "profile::gameplay_hud_snapshot()",
+        "GameplayPolicyView::from_config(config, scorebox_pane_filter(config))",
+    ] {
+        assert!(presentation_init.contains(input), "Gameplay presentation is missing {input}");
+    }
+    for preference in [
+        "machine_font: config.machine_font",
+        "background_brightness: config.bg_brightness",
+        "background_color: config.gameplay_bg_color",
+        "smx_input: config.smx_input",
+        "zmod_rating_box_text: config.zmod_rating_box_text",
+        "show_bpm_decimal: config.show_bpm_decimal",
+        "bpm_position: config.gameplay_bpm_position",
+    ] {
+        assert!(views.contains(preference), "Simply Love should project {preference}");
+    }
     assert!(
-        shell.contains("crate::gameplay_runtime::init_view(")
-            && shell.contains("deadsync_online::gameplay_lobby::sync_runtime_view(state, lobby)")
+        shell.contains("crate::gameplay_runtime::prepare_startup(")
+            && shell.contains("state.lobby_session.sync_runtime_view(lobby)")
     );
+    assert!(shell.contains("mini_indicator: std::mem::take(&mut gameplay_startup.mini_indicator)"));
+    let stage_scores = production_source(
+        &root.join("crates/deadsync-profile-gameplay/src/stage_scores.rs"),
+    );
+    assert!(stage_scores.contains("pub struct GameplayScoreSnapshots"));
+    assert!(stage_scores.contains("pub scorebox_visible: [bool; MAX_PLAYERS]"));
+    let startup = adapter.split_once("pub(crate) struct GameplayStartup").unwrap().1;
+    let startup = startup.split_once("pub(crate) fn present_stage").unwrap().0;
+    assert!(startup.contains("pub scores: GameplayScoreSnapshots"));
+    assert!(!startup.contains("GameplayInitView"));
+    assert!(contains_rust(&stage_scores, "gameplay.set_mini_indicator_rival_score_percent(player, score)"));
+    assert!(!stage_scores.contains("deadsync_theme"));
+    for game_update in [
+        "set_mini_indicator_rival_score_percent",
+        "scorebox_refresh_pending",
+        "GameplayScoreboxProfileSnapshot",
+    ] {
+        assert!(!gameplay.contains(game_update) && !views.contains(game_update));
+    }
+}
+
+#[test]
+fn authored_song_backgrounds_use_the_game_timeline() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let timeline = read_source(root.join("crates/deadsync-gameplay/src/song_backgrounds.rs"))
+        .expect("game background timeline");
+    let stage = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    let init = production_source(&root.join("crates/deadsync-gameplay/src/runtime_init.rs"));
+    let charts = production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_charts.rs"));
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell background sync");
+    let theme = read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+        .expect("theme background presentation");
+
+    assert!(contains_rust(&init, "SongBackgroundTimeline::new("));
+    assert!(contains_rust(&init, "gameplay_charts[0] = gameplay_charts[1].clone()"));
+    assert!(contains_rust(&stage, "stage_background_changes(self.gameplay.song(), &self.gameplay.gameplay_charts()[0],"));
+    assert!(contains_rust(&charts, "deadsync_simfile::app_runtime::gameplay_background_changes("));
+    assert!(timeline.contains("pub fn advance_to_beat(") && timeline.contains("pub fn active_layer2_flash("));
+    assert!(contains_rust(&shell, "gs.stage.gameplay.advance_song_background()"));
+    assert!(contains_rust(&shell, "backgrounds.video_start_second("));
+    assert!(contains_rust(&theme, ".active_layer2_flash(state.current_music_time_display())"));
+    assert!(!shell.contains("next_background_change_ix") && !theme.contains("next_song_layer2_event_ix"));
 }
 
 #[test]
@@ -5553,8 +6752,8 @@ fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
         );
     }
     assert!(
-        online_sync.contains(".is_some_and(deadsync_online::gameplay_lobby::uses_live_runtime)")
-            && online_sync.contains("deadsync_online::gameplay_lobby::sync_runtime_view(state, lobby)"),
+        online_sync.contains(".is_some_and(|state| state.lobby_session.uses_live_runtime())")
+            && online_sync.contains("state.lobby_session.sync_runtime_view(lobby)"),
         "offline Gameplay must skip lobby runtime work and live lobbies must update only lobby state"
     );
 
@@ -5573,8 +6772,8 @@ fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
         );
     }
     assert!(
-        background_sync.contains("gs.song_media.refresh_foreground(&gs.gameplay)")
-            && background_sync.contains("gs.song_media.video_paths()"),
+        background_sync.contains("gs.stage.refresh_song_foreground()")
+            && background_sync.contains("gs.stage.song_media.video_paths()"),
         "Gameplay foreground/video state must be advanced from song-lifetime caches"
     );
 
@@ -5602,27 +6801,25 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let runtime = read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
         .expect("shell Gameplay adapter should be readable");
-    let live_score_view = runtime
-        .split_once("pub(crate) fn score_runtime_view")
-        .and_then(|(_, rest)| rest.split_once("/// Prepare song-invariant score state once"))
+    let live_score_poll = runtime
+        .split_once("fn sync_if_dirty")
+        .and_then(|(_, rest)| rest.split_once("fn mini_indicator_personal_best"))
         .map(|(body, _)| body)
-        .expect("live Gameplay score view should be present");
+        .expect("live Gameplay score polling should be present");
     assert!(
-        live_score_view.contains("state.itl_cmod_warning_snapshot()"),
-        "live score polling must reuse the song-lifetime ITL warning"
-    );
-    assert!(
-        !live_score_view.contains("should_warn_cmod_for_itl_chart"),
-        "live score polling must not recompute the ITL warning every frame"
+        !live_score_poll.contains("should_warn_cmod_for_itl_chart")
+            && !live_score_poll.contains("itl_cmod_warning"),
+        "live score polling must leave the retained ITL warning alone"
     );
 
     let initial_score_sync = runtime
         .split_once("pub(crate) fn sync_initial_scores")
-        .and_then(|(_, rest)| rest.split_once("pub(crate) fn practice_view"))
+        .and_then(|(_, rest)| rest.split_once("pub(crate) struct PracticeInit"))
         .map(|(body, _)| body)
         .expect("initial Gameplay score sync should be present");
     assert!(
-        initial_score_sync.contains("scores::should_warn_cmod_for_itl_chart"),
+        initial_score_sync.contains("scores::should_warn_cmod_for_itl_chart")
+            && initial_score_sync.contains("state.presentation.sync_itl_cmod_warning(warnings)"),
         "Gameplay entry must still prepare the ITL warning"
     );
 
@@ -5733,10 +6930,17 @@ fn evaluation_submission_runtime_is_shell_owned() {
 
     let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    shell.push_str(
-        &read_source(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
-            .expect("shell Evaluation view owner should be readable"),
+    let evaluation_views = production_source(
+        &root.join("crates/deadsync-shell/src/app/evaluation_views.rs"),
     );
+    assert!(contains_rust(&evaluation_views, "chart_queries(self.state.screens.evaluation_stage.as_ref())"));
+    assert!(!evaluation_views.contains(".score_info"));
+    let retry = shell.split_once("fn retry_evaluation_submissions(").unwrap().1;
+    let retry = retry.split_once("fn sync_active_online_runtime_view(").unwrap().0;
+    assert!(contains_rust(retry, "chart_queries(self.state.screens.evaluation_stage.as_ref())"));
+    assert!(!retry.contains(".score_info"));
+    assert!(!shell.contains("screens::evaluation::submission_retry_available("));
+    shell.push_str(&evaluation_views);
     for shell_owner in [
         "fn submission_views",
         "fn execute_evaluation_score_runtime",
@@ -5804,7 +7008,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
         "scores::groovestats_eval_state_from_gameplay",
         "scores::get_or_fetch_player_leaderboards_for_profile",
         "profile_data::runtime_music_profile_snapshot",
-        "evaluation::leaderboard_requests",
+        "ActiveTheme::evaluation_leaderboard_requests",
     ] {
         assert!(
             contains_rust(&shell, shell_owner),
@@ -5856,7 +7060,7 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
             && evaluation.contains("state.context = context")
             && evaluation.contains("if let Some(favorites) = view.favorites")
             && evaluation.contains("state.favorites = favorites")
-            && evaluation.contains("SimplyLoveProfileRequest::ToggleFavorite")
+            && evaluation.contains("SimplyLoveProfileRequest::ToggleEvaluationFavorite { side }")
             && evaluation.contains("policy.machine_font")
             && evaluation.contains("machine_font_key(policy.machine_font")
     );
@@ -5883,12 +7087,16 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
         &read_source(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
             .expect("shell Evaluation view owner should be readable"),
     );
+    shell.push_str(
+        &read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+            .expect("shell profile executor should be readable"),
+    );
     for shell_owner in [
         "fn evaluation_context_view(",
         "crate::session_results::evaluation_view(",
         "profile_data::runtime_evaluation_favorite_membership",
-        "SimplyLoveProfileRequest::ToggleFavorite {",
-        "profile::toggle_favorite(side, &chart_hash)",
+        "ProfileRequest::ToggleEvaluationFavorite { side }",
+        "profile::toggle_favorite(side, chart_hash)",
     ] {
         assert!(
             contains_rust(&shell, shell_owner),
@@ -5977,8 +7185,8 @@ fn qr_login_workers_and_persistence_are_shell_owned() {
 #[test]
 fn simply_love_main_menu_uses_prepared_runtime_view() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
-        .expect("Simply Love views should be readable");
+    let views = read_source(root.join("crates/deadsync-theme/src/main_menu.rs"))
+        .expect("shared main-menu contract should be readable");
     for field in [
         "pub struct MainMenuRuntimeView",
         "pub allow_shutdown_host: bool",
@@ -5998,6 +7206,8 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
             .expect("Simply Love menu should be readable");
     assert!(menu.contains("runtime_view: MainMenuRuntimeView"));
     assert!(menu.contains("pub fn sync_runtime_view"));
+    assert!(menu.contains("impl ThemeMainMenu for crate::SimplyLoveTheme"));
+    assert!(menu.contains("menu_splash::build("));
     for runtime_read in [
         "deadsync_config::runtime::get",
         "deadsync_simfile::runtime_cache",
@@ -6015,6 +7225,7 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
 
     let shell = read_source(root.join("crates/deadsync-shell/src/main_menu.rs"))
         .expect("shell main-menu bridge should be readable");
+    assert!(!shell.contains("deadsync_theme_simply_love"));
     for runtime_read in [
         "runtime_view(credits: u32) -> MainMenuRuntimeView",
         "deadsync_config::runtime::get()",
@@ -6033,7 +7244,21 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(app.contains("crate::main_menu::runtime_view(self.state.coin.credits(coin))"));
-    assert!(app.contains("menu::sync_runtime_view"));
+    for hook in [
+        "menu_state: <ActiveTheme as ThemeMainMenu>::MenuState",
+        "ActiveTheme::init_menu(",
+        "ActiveTheme::sync_menu_runtime(",
+        "ActiveTheme::update_menu(",
+        "MainMenuPhase::Entering",
+        "ActiveTheme::handle_menu_raw_key(",
+        "ActiveTheme::push_menu_actors(",
+        "ActiveTheme::push_menu_exit_overlay(",
+    ] {
+        assert!(app.contains(hook), "shell main menu is missing {hook}");
+    }
+    for concrete in ["screens::menu::", "menu_state.active_color_index", "menu_splash::build(", "fade.menu_exit_elapsed"] {
+        assert!(!app.contains(concrete), "shell still applies menu presentation through {concrete}");
+    }
 }
 
 #[test]
@@ -6224,17 +7449,17 @@ fn simply_love_select_flow_uses_shell_prepared_session_state() {
 
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
-        .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/select_flow.rs"))
         .expect("shell select-flow adapter should be readable");
-    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
-        .expect("shell runtime executor should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
 
     assert!(views.contains("pub struct SelectFlowPlayerView"));
     assert!(views.contains("pub struct SelectFlowRuntimeView"));
-    assert!(effects.contains("SetPlayStyle(PlayStyle)"));
-    assert!(effects.contains("SetPlayMode(PlayMode)"));
+    assert!(profile_requests.contains("SetPlayStyle(PlayStyle)"));
+    assert!(profile_requests.contains("SetPlayMode(PlayMode)"));
     for shell_access in [
         "profile::get_for_side(side)",
         "profile::get_session_play_style()",
@@ -6247,8 +7472,8 @@ fn simply_love_select_flow_uses_shell_prepared_session_state() {
             "shell adapter lacks {shell_access}"
         );
     }
-    assert!(app.contains("SimplyLoveProfileRequest::SetPlayStyle"));
-    assert!(app.contains("SimplyLoveProfileRequest::SetPlayMode"));
+    assert!(profile_executor.contains("ProfileRequest::SetPlayStyle"));
+    assert!(profile_executor.contains("ProfileRequest::SetPlayMode"));
 }
 
 #[test]
@@ -6259,8 +7484,11 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
             .expect("Simply Love flow should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/screen_flow.rs"))
         .expect("shell flow adapter should be readable");
-    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
-        .expect("shell app should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
+    let game_flow = production_source(&root.join("crates/deadsync-core/src/session_flow.rs"));
 
     for oversized_input in [
         "deadsync_config::app_config::Config",
@@ -6274,25 +7502,45 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
         );
     }
     for contract in [
-        "pub struct SimplyLoveNavigationPolicy",
+        "pub struct SessionNavigationPolicy",
         "pub show_select_profile: bool",
         "pub show_select_play_mode: bool",
         "pub show_eval_summary: bool",
         "pub show_name_entry: bool",
         "pub show_gameover: bool",
-        "pub preferred_difficulties: [usize; PLAYER_SLOTS]",
     ] {
-        assert!(flow.contains(contract), "Simply Love flow lacks {contract}");
+        assert!(game_flow.contains(contract), "game session flow lacks {contract}");
     }
+    assert!(flow.contains("pub preferred_difficulties: [usize; PLAYER_SLOTS]"));
+    assert!(flow.contains("deadsync_core::session_flow::resolve_navigation("));
+    for concrete in ["SimplyLove", "deadsync_theme"] {
+        assert!(!game_flow.contains(concrete));
+    }
+    let shell_flow = shell.split_once("const fn navigation_policy").unwrap().1;
+    let shell_flow = shell_flow.split_once("#[cfg(test)]").unwrap().0;
+    assert!(!shell_flow.contains("SimplyLove"));
     assert!(
         shell.contains("const fn navigation_policy(config: &Config)")
             && shell.contains("show_select_profile: config.machine_show_select_profile")
             && shell.contains("show_eval_summary: config.machine_show_eval_summary")
-            && shell.contains("resolve_navigation(")
-            && app.contains("profile_data::profile_combo_carry(&profile_data)")
-            && app.contains("profile_data::preferred_difficulty_indices("),
-        "shell must narrow config and profile state before calling theme flow"
+            && shell.contains("session_flow::resolve_navigation(")
+            && shell.contains("T::SESSION_SCREENS")
+            && profile_requests.contains("profile_combo_carry(&profiles)")
+            && profile_requests.contains("preferred_difficulty_indices(&profiles, session.play_style)")
+            && shell.contains("session_flow::profile_selection_target(")
+            && profile_executor.contains("profile_selection_target::<ActiveTheme>("),
+        "theme navigation must receive prepared inputs from the game and shell"
     );
+    let input = production_source(&root.join("crates/deadsync-shell/src/app/input_routing.rs"));
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).unwrap();
+    let menu_runtime = production_source(&root.join("crates/deadsync-shell/src/main_menu.rs"));
+    assert!(input.contains("crate::main_menu::handle_input::<ActiveTheme>("));
+    assert!(contains_rust(&menu_runtime, "session.remember_menu_start(input); T::handle_menu_input(state, input)"));
+    for entry in [&app, &navigation] {
+        assert!(entry.contains("self.state.session.menu_start_side"));
+        assert!(!entry.contains("menu_state.started_by_p2"));
+    }
 }
 
 #[test]
@@ -6321,16 +7569,18 @@ fn simply_love_post_song_flow_uses_shell_prepared_runtime_state() {
 
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
-        .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/post_song.rs"))
         .expect("shell post-song adapter should be readable");
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
 
     assert!(views.contains("pub struct PostSongPlayerView"));
     assert!(views.contains("pub struct PostSongRuntimeView"));
-    assert!(effects.contains("UpdateInitials([Option<String>; 2])"));
+    assert!(profile_requests.contains("UpdateInitials([Option<String>; PLAYER_SLOTS])"));
     for shell_access in [
         "profile::get_for_side(side)",
         "scores::total_songs_played_for_side",
@@ -6342,7 +7592,7 @@ fn simply_love_post_song_flow_uses_shell_prepared_runtime_state() {
             "shell adapter lacks {shell_access}"
         );
     }
-    assert!(app.contains("SimplyLoveProfileRequest::UpdateInitials"));
+    assert!(profile_executor.contains("ProfileRequest::UpdateInitials"));
     assert!(app.contains("post_song::initials_runtime_view"));
     assert!(app.contains("post_song::gameover_runtime_view"));
     assert!(shell.contains("machine_font: cfg.machine_font"));
@@ -6354,19 +7604,14 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
     let theme =
         read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
             .expect("Simply Love gameplay should be readable");
-    for contract in [
-        "pub struct SmxSensorPanelView",
-        "pub struct SmxSensorPadView",
-        "pub fn smx_sensor_pad_plan",
-        "pub fn smx_sensor_refresh_due",
-        "pub fn smx_sensor_pad_view",
-        "pub fn set_smx_sensor_pad_view",
-    ] {
+    let views = production_source(&root.join("crates/deadsync-theme/src/views.rs"));
+    for contract in ["pub struct SmxSensorPanelView", "pub struct SmxSensorPadView", "pub trait GameplayLivePresentation<G>"] {
         assert!(
-            theme.contains(contract),
-            "Simply Love gameplay is missing sensor view contract {contract}"
+            views.contains(contract),
+            "the shared theme contract is missing {contract}"
         );
     }
+    assert!(theme.contains("fn sync_smx_sensors("));
     for runtime_type in [
         "deadsync_smx",
         "SensorTestData",
@@ -6375,6 +7620,8 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
         "get_test_data(",
         "get_config(",
         "set_test_mode(",
+        "smx_sensor_pad_plan(",
+        "smx_sensor_refresh_accum",
         "std::env::var",
     ] {
         assert!(
@@ -6388,12 +7635,16 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
     for execution in [
         "fn enter_smx_sensors",
         "fn refresh_smx_sensors",
+        "fn stage_smx_sensor_pad_plan",
+        "let session = &stage.gameplay.setup.session",
+        "pub(crate) struct GameplayTelemetryCursor",
+        "cursor.smx_refresh_due(delta_time)",
         "deadsync_smx::set_test_mode",
         "SensorTestMode::CalibratedValues",
         "SensorTestMode::Off",
         "deadsync_smx::get_config",
         "deadsync_smx::get_test_data",
-        "gameplay::set_smx_sensor_pad_view",
+        "state.presentation.sync_smx_sensors(cursor.smx_views)",
     ] {
         assert!(
             shell.contains(execution),
@@ -6406,8 +7657,8 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
         .expect("shell app should be readable");
     let navigation = read_source(root.join("crates/deadsync-shell/src/app/screen_nav.rs"))
         .expect("shell navigation should be readable");
-    assert!(app.contains("crate::gameplay_runtime::exit(gs)"));
-    assert!(navigation.contains("crate::gameplay_runtime::exit(gs)"));
+    assert!(app.contains("crate::gameplay_runtime::exit(gs, &mut self.state.screens.gameplay_telemetry)"));
+    assert!(navigation.contains("crate::gameplay_runtime::exit(gs, &mut self.state.screens.gameplay_telemetry)"));
 }
 
 #[test]
@@ -7301,6 +8552,9 @@ fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
             "uuid_from_hex",
             "from_ini",
             "ini_lines",
+            "StepManiaX",
+            "native_smx",
+            "Reflex",
         ] {
             assert!(
                 !source.contains(token),
@@ -7334,6 +8588,30 @@ fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
     assert!(mapping.contains("deadlib_platform::input::"));
     let backend = read_source(native.join("src/launch.rs")).expect("native launch");
     assert!(backend.contains("deadlib_platform::input::{PadEvent, RawKeyboardEvent}"));
+}
+
+#[test]
+fn dedicated_controller_providers_stay_in_the_game() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let platform = read_source(root.join("crates/deadlib-platform/src/input.rs"))
+        .expect("physical input types");
+    for token in ["StepManiaX", "Smx", "Reflex"] {
+        assert!(!platform.contains(token), "engine controller identity: {token}");
+    }
+    let providers = read_source(root.join("crates/deadsync-input/src/devices.rs"))
+        .expect("game controller providers");
+    assert!(providers.contains("GpSystemEvent<GamepadBackend>"));
+    for (path, provider) in [
+        ("crates/deadsync-smx/src/lib.rs", "Smx"),
+        ("crates/deadsync-reflex/src/io.rs", "Reflex"),
+    ] {
+        let source = read_source(root.join(path)).expect("game input driver");
+        assert!(source.contains(&format!("GamepadBackend::{provider}")));
+    }
+    let launch = read_source(root.join("crates/deadsync-shell/src/input_backend.rs"))
+        .expect("shell input composition");
+    assert!(launch.contains("deadsync_smx::native_smx_owns_device("));
+    assert!(launch.contains("map_backend(GamepadBackend::Native)"));
 }
 
 #[test]
@@ -9771,6 +11049,8 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
+    let compositor =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
     let display_mods =
         read_source(root.join(
             "crates/deadsync-theme-simply-love/src/screens/components/gameplay/display_mods.rs",
@@ -9856,10 +11136,10 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         );
     }
     assert!(
-        source.contains("arrow_effect_time_s: f64"),
-        "Simply Love notefield adapter must receive arrow-effect time explicitly"
+        compositor.contains("arrow_effect_time_s: context.uptime_seconds"),
+        "gameplay compositor must supply arrow-effect time"
     );
-    assert!(source.contains("pub(crate) fn compose_frame("));
+    assert!(source.contains("pub(crate) fn compose_hud("));
     assert!(
         !source.contains("act!("),
         "Simply Love's notefield adapter must assemble canonical DTOs, not actors"
@@ -9868,23 +11148,15 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     assert!(display_mods.contains("actors.push(act!("));
 
     assert!(
-        source.contains("NotefieldComposeRequest {")
-            && source.contains("prepare_notefield(&request)"),
-        "Simply Love must enter the canonical notefield request boundary"
+        compositor.contains("NotefieldComposeRequest {")
+            && compositor.contains("prepare_notefield(&request)"),
+        "gameplay compositor must enter the canonical notefield request boundary"
     );
-    for (view, composer) in [
-        ("NotefieldFieldFrameView {", "compose_notefield_field("),
-        ("NotefieldHudFrameView {", "compose_notefield_hud("),
-    ] {
-        assert!(
-            source.contains(view),
-            "Simply Love must prepare the canonical frame view {view}"
-        );
-        assert_eq!(
-            source.match_indices(composer).count(),
-            1,
-            "Simply Love must cross the canonical frame boundary exactly once through {composer}"
-        );
+    assert!(source.contains("NotefieldHudFrameView {"));
+    assert_eq!(compositor.match_indices("scratch.compose(").count(), 1);
+    assert_eq!(source.match_indices("compose_notefield_hud(").count(), 1);
+    for field_owner in ["NotefieldComposeRequest {", "prepare_notefield(", "notefield_scratch"] {
+        assert!(!source.contains(field_owner), "Simply Love HUD owns {field_owner}");
     }
     for low_level in [
         "MeasureComposeRequest",
@@ -9898,6 +11170,8 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "MineLayerRequest",
         "compose_flat_mine_layers(",
         "compose_notefield_feedback(",
+        "compose_notefield_field(",
+        "NotefieldFieldFrameView {",
         "ComboFeedbackRequest",
         "compose_combo_feedback(",
         "ErrorBarComposeRequest",
@@ -9918,6 +11192,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     for definition in [
         "pub struct NotefieldFieldFrameView",
         "pub struct NotefieldFieldResult",
+        "pub struct NotefieldFieldScratch",
         "pub fn compose_notefield_field",
     ] {
         assert!(
@@ -10097,24 +11372,26 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     assert!(gameplay_runtime.contains("pub fn completed_row_visibility("));
     assert!(field_frame.contains("pub completed_rows: CompletedRowVisibility"));
     assert!(field_frame.contains("completed_rows.hides_note(note_index)"));
-    assert!(source.contains("state.completed_row_visibility(player_idx)"));
+    assert!(field_frame.contains("game.completed_row_visibility(request.geometry.player_idx)"));
     assert!(
         !source.contains("row_hides_completed_note("),
         "Simply Love must consume the borrowed completed-row view instead of querying runtime rows"
     );
 
-    let field_call = source
-        .find("compose_notefield_field(")
-        .expect("Simply Love must compose the canonical field pass");
-    let display_mods_call = source[field_call..]
+    let field_call = compositor
+        .find("let field_result = scratch.compose(")
+        .expect("gameplay compositor must draw the canonical field pass");
+    let hud_hook = compositor
+        .find("let hud_result = presenter.draw_field_hud(")
+        .expect("gameplay compositor must invoke the HUD after the field");
+    assert!(field_call < hud_hook);
+    let display_mods_call = source
         .find("display_mods::compose(")
-        .map(|offset| field_call + offset)
         .expect("Simply Love must retain its concrete DisplayMods insertion point");
-    let hud_call = source[display_mods_call..]
-        .find("let hud_result = compose_notefield_hud(")
-        .map(|offset| display_mods_call + offset)
+    let hud_call = source
+        .find("compose_notefield_hud(")
         .expect("Simply Love must compose the canonical post-chrome HUD pass");
-    assert!(field_call < display_mods_call && display_mods_call < hud_call);
+    assert!(display_mods_call < hud_call);
 
     for (path, definition) in [
         (
@@ -10145,6 +11422,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "pub notes: &'a [Note]",
         "pub noteskin: NotefieldNoteskinView",
         "pub song_lua: NotefieldSongLuaView",
+        "pub settings: NotefieldSettings",
         "pub options: NotefieldOptions",
         "pub arrow_effect_time_s: f64",
         "pub hold_explosion_enabled: bool",
@@ -10158,19 +11436,39 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     }
 
     let delegation = source
-        .find("let Some(prepared) = prepare_notefield(&request)")
+        .find("pub(crate) fn compose_hud(")
         .expect("Simply Love should cross the canonical composition boundary once");
     let actor_emission = &source[delegation..];
     for profile_field in [
         "profile.hide_targets",
-        "profile.hide_combo",
-        "profile.hide_combo_explosions",
-        "profile.judgment_back",
+        "profile.measure_lines",
         "profile.measure_cues",
         "profile.column_cues",
         "profile.crossover_cues",
         "profile.column_flash_on_miss",
         "profile.column_countdown",
+        "profile.mine_size_percent",
+        "profile.note_field_offset_x",
+        "profile.note_field_offset_y",
+        "profile.tap_explosion_active_mask",
+    ] {
+        assert!(
+            !source.contains(profile_field),
+            "Simply Love bypasses stage notefield settings via {profile_field}"
+        );
+    }
+    assert!(contains_rust(
+        &compositor,
+        "settings: stage.notefield_settings(player)",
+    ));
+    let presenter =
+        production_source(&root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"));
+    assert!(contains_rust(&presenter, "fn field_presentation("));
+    assert!(contains_rust(&presenter, "notefield::compose_hud("));
+    for profile_field in [
+        "profile.hide_combo",
+        "profile.hide_combo_explosions",
+        "profile.judgment_back",
         "profile.error_bar_trim",
         "profile.error_bar_multi_tick",
         "profile.short_average_error_bar_enabled",
@@ -10323,10 +11621,10 @@ fn column_countdowns_stay_on_the_prepared_hud_path() {
     let hud = read_source(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD frame should be readable");
 
-    let adapter = read_source(root.join(
-        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
-    ))
-    .expect("Simply Love notefield adapter should be readable");
+    let presenter =
+        production_source(&root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"));
+    let compositor =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
     let prewarm = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
     ))
@@ -10342,8 +11640,9 @@ fn column_countdowns_stay_on_the_prepared_hud_path() {
     );
     assert!(hud.contains("if request.capture_requests.player {"));
     assert!(hud.contains("actors.extend(draws.drain(..).map(actor_from_flat_draw));"));
-    assert!(adapter.contains("countdown_text_slot: super::FRAME_TEXT_COUNTDOWN_BASE"));
-    assert!(adapter.contains("compose_notefield_field(\n            actors,\n            flat_draws,\n            hud_flat_draws,"));
+    assert!(contains_rust(&presenter, "countdown_text_slot: FRAME_TEXT_COUNTDOWN_BASE + player as u8"));
+    assert!(contains_rust(&compositor, "scratch.compose(&stage.gameplay, field, field_flat, hud_flat,"));
+    assert!(contains_rust(&field, "compose_notefield_field(actors, flat_draws, cue_hud_draws,"));
     assert!(prewarm.contains("let countdown_slot = FRAME_TEXT_COUNTDOWN_BASE"));
     assert!(prewarm.contains("prewarm_u32_text_slot("));
     assert!(!prewarm.contains("COLUMN_COUNTDOWN_PREWARM_CAP"));
@@ -10591,9 +11890,10 @@ fn simply_love_explosion_layers_use_canonical_notefield_owner() {
             "canonical feedback frame must delegate explosion composition through {delegation}"
         );
     }
-    assert!(theme.contains("NotefieldFeedbackFrameView {"));
-    assert!(theme.contains("NotefieldFieldFrameView {"));
-    assert!(theme.contains("compose_notefield_field("));
+    assert!(!theme.contains("notefield_scratch.compose("));
+    assert!(field.contains("NotefieldFieldFrameView {"));
+    assert!(field.contains("NotefieldFeedbackFrameView::from_gameplay("));
+    assert!(!theme.contains("compose_notefield_field("));
     assert!(field.contains("compose_notefield_feedback("));
     assert!(!theme.contains("compose_notefield_feedback("));
     for low_level in [
@@ -10834,7 +12134,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "NotefieldFeedbackFrameView",
         "NotefieldFieldFrameView",
         "NotefieldFieldResult",
-        "NotefieldFrameFeatures",
+        "NotefieldFieldScratch",
         "NotefieldFramePlan",
         "NotefieldGeometry",
         "NotefieldHudComposeResult",
@@ -10843,6 +12143,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "NotefieldLaneFeedback",
         "NotefieldNoteskinView",
         "NotefieldOptions",
+        "NotefieldSettings",
         "NotefieldSongLuaView",
         "NotefieldVisualState",
         "NoteskinFrameCacheStats",
@@ -10858,6 +12159,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "ProxyCaptureRequests",
         "quantize_centi_i32",
         "quantize_centi_u32",
+        "resolve_notefield_motion",
         "ScrollTravel",
         "song_lua_note_model_draw",
         "song_lua_player_skew_x_matrix",
@@ -11341,6 +12643,10 @@ fn field_metrics_are_shared() {
         .expect("profile gameplay adapter should be readable");
     let compose = read_source(root.join("crates/deadsync-notefield/src/compose.rs"))
         .expect("canonical composition contract should be readable");
+    let playback = read_source(root.join("crates/deadsync-song-lua/src/playback.rs"))
+        .expect("game field composition should be readable");
+    let native = read_source(root.join("crates/deadsync-song-lua/src/playback/native.rs"))
+        .expect("native field composition should be readable");
 
     for token in [
         "pub(crate) struct ReceptorDrawRequest",
@@ -11376,6 +12682,44 @@ fn field_metrics_are_shared() {
 
     assert!(contract.contains("pub struct NotefieldHudStyle"));
     assert!(compose.contains("pub hud_style: NotefieldHudStyle"));
+    let compositor =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
+    for handoff in [
+        "let mut geometry = frame.geometry",
+        "chart: frame.chart",
+        "visual: frame.visual",
+        "song_lua: frame.song_lua",
+    ] {
+        assert!(contains_rust(&compositor, handoff), "missing notefield handoff {handoff}");
+    }
+    assert!(contains_rust(&theme, "frame.judgment_texture"));
+    for resolved in [
+        "resolve_notefield_motion(",
+        "NotefieldChartView::from_gameplay(state, player)",
+        "crate::judgment_texture_at(",
+        "FieldFrame::new(state, player_idx, placement, view)",
+    ] {
+        assert!(contains_rust(&playback, resolved), "missing game input {resolved}");
+    }
+    assert!(contains_rust(&native, "FieldFrame::new(state, player, placement, view)"));
+    for former_input_owner in [
+        "NotefieldVisualState {",
+        "NotefieldGeometry {",
+        ".effective_scroll_speed_for_player(",
+        ".notefield_column_scroll_dir(",
+        ".gameplay_chart(player_idx)",
+        "note_row_entry_indices",
+        "resolve_notefield_motion(",
+        "NotefieldChartView::from_gameplay(",
+        ".song_lua_visuals(",
+        "judgment_texture_at(",
+    ] {
+        assert!(
+            !contains_rust(&theme, former_input_owner),
+            "theme still reconstructs notefield input through {former_input_owner}"
+        );
+    }
+    assert!(contains_rust(&compose, "let play_style = game.setup.session.play_style"));
     for removed in [
         "NotefieldStyle",
         "ReceptorStyle",
@@ -11448,12 +12792,26 @@ fn field_metrics_are_shared() {
             "canonical feedback-frame owner is missing {token}"
         );
     }
-    assert!(theme.contains("NotefieldFeedbackFrameView {"));
-    assert!(theme.contains("NotefieldFieldFrameView {"));
-    assert!(theme.contains("compose_notefield_field("));
+    assert!(!theme.contains("notefield_scratch.compose("));
+    assert!(contains_rust(&frame, "hold_emitter.update("));
+    assert!(contains_rust(&frame, "game.receptor_glow_visual_for_col(col)"));
+    for former_owner in [
+        "NotefieldLaneFeedback {",
+        "NotefieldFeedbackFrameView {",
+        "NotefieldFieldFrameView {",
+        "HoldEmitterState::",
+        "active_hold_for_render(",
+        "compose_notefield_field(",
+    ] {
+        assert!(!theme.contains(former_owner), "theme owns field feedback {former_owner}");
+    }
     assert!(field.contains("compose_notefield_feedback("));
     assert!(!theme.contains("compose_notefield_feedback("));
-    assert!(theme.contains("slot.actor_texture_source(actor_resources, textures)"));
+    assert!(contains_rust(
+        &compositor,
+        "stage.noteskin_assets.actor_texture_source(slot, actor_resources, textures)",
+    ));
+    assert!(!theme.contains("slot.actor_texture_source("));
     assert!(frame.contains("visual.tiny"));
     let ordered_markers = [
         "compose_column_feedback(",
@@ -11574,6 +12932,709 @@ fn root_screen_tree_is_removed() {
 }
 
 #[test]
+fn course_type_is_owned_by_game_rules() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let rules = production_source(&root.join("crates/deadsync-rules/src/course.rs"));
+    let rules_root = production_source(&root.join("crates/deadsync-rules/src/lib.rs"));
+    let parser = production_source(&root.join("crates/deadsync-simfile/src/course.rs"));
+    let theme = production_source(&root.join("crates/deadsync-theme/src/views.rs"));
+    let selection = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
+    );
+    let runtime = production_source(&root.join("crates/deadsync-gameplay/src/course_run.rs"));
+
+    assert!(
+        contains_rust(&rules_root, "pub mod course;")
+            && contains_rust(
+                &rules,
+                "pub enum CourseType { #[default] Nonstop, Oni, Endless, Survival, }",
+            ),
+        "game rules must own the canonical course modes and Nonstop default"
+    );
+    assert!(
+        contains_rust(&parser, "pub use deadsync_rules::course::CourseType;")
+            && contains_rust(
+                &theme,
+                "pub use deadsync_rules::course::CourseType as CourseTypeView;",
+            ),
+        "parser and theme compatibility paths must reexport the same game-owned type"
+    );
+    assert!(
+        contains_rust(&runtime, "use deadsync_rules::course::CourseType;")
+            && contains_rust(&runtime, "pub course_type: CourseType,"),
+        "the course runtime must refer directly to the canonical game rule"
+    );
+    for (name, source) in [
+        ("parser", &parser),
+        ("theme", &theme),
+        ("selection", &selection),
+        ("runtime", &runtime),
+    ] {
+        for duplicate in ["enum CourseType {", "enum CourseTypeView {"] {
+            assert!(
+                !contains_rust(source, duplicate),
+                "{name} must not duplicate the game-owned course type with {duplicate}"
+            );
+        }
+    }
+    for variant in ["Nonstop", "Oni", "Endless", "Survival"] {
+        let conversion = format!("course::CourseType::{variant} => CourseTypeView::{variant}");
+        assert!(
+            !contains_rust(&selection, &conversion),
+            "course selection must not convert the canonical {variant} mode into a theme enum"
+        );
+    }
+}
+
+#[test]
+fn course_life_selection_stays_in_gameplay() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let life = production_source(&root.join("crates/deadsync-gameplay/src/life.rs"));
+    let course = production_source(&root.join("crates/deadsync-gameplay/src/course_run.rs"));
+    for contract in [
+        "pub struct CourseLifeStage<'a>",
+        "pub song: &'a SongData",
+        "pub steps_index: [usize; MAX_PLAYERS]",
+        "pub gain_lives: i32",
+        "pub gain_seconds: f32",
+    ] {
+        assert!(
+            contains_rust(&life, contract),
+            "gameplay course life selection must accept borrowed stage facts through {contract}"
+        );
+    }
+    let selection = life
+        .split_once("pub fn course_life_config(")
+        .and_then(|(_, rest)| rest.split_once("pub enum CourseLifeState"))
+        .map(|(body, _)| body)
+        .expect("course life selection must live alongside gameplay's life state");
+    assert!(
+        contains_rust(selection, "mode: deadsync_rules::course::CourseType")
+            && contains_rust(selection, "stage: Option<CourseLifeStage<'_>>")
+            && contains_rust(selection, "-> [CourseLifeConfig; MAX_PLAYERS]"),
+        "gameplay must select per-player life from the canonical mode and optional live stage"
+    );
+    let compact_selection: String = selection.chars().filter(|ch| !ch.is_whitespace()).collect();
+    let reward_fallback = compact_selection
+        .split_once("u32::try_from(stage.gain_lives).unwrap_or_else(")
+        .and_then(|(_, rest)| rest.split_once("});"))
+        .map(|(body, _)| body)
+        .expect("negative gain_lives must retain a lazy chart-based reward fallback");
+    assert!(
+        contains_rust(
+            reward_fallback,
+            ".chart_for_steps_index(chart_type, stage.steps_index[player])",
+        ) && compact_selection.matches("chart_for_steps_index(").count() == 1,
+        "chart lookup must remain inside the negative reward fallback for each player's live index"
+    );
+    let initialization = life
+        .split_once("pub fn init_course_life(")
+        .and_then(|(_, rest)| rest.split_once("pub fn course_life_carry("))
+        .map(|(body, _)| body)
+        .expect("course life initialization boundary");
+    assert!(
+        contains_rust(selection, "gain_seconds: stage.gain_seconds")
+            && !selection.contains("SURVIVAL_MIN_GAIN_SECONDS")
+            && !contains_rust(selection, "gain_seconds.is_finite()")
+            && contains_rust(initialization, "gain_seconds.is_finite()")
+            && contains_rust(initialization, "gain_seconds.max(SURVIVAL_MIN_GAIN_SECONDS)"),
+        "Survival gain must reach existing life initialization before normalization"
+    );
+
+    let adapter = course
+        .split_once("pub fn life_config(")
+        .and_then(|(_, rest)| rest.split_once("pub fn lead_in_timing("))
+        .map(|(body, _)| body)
+        .expect("course entry must expose life configuration");
+    for fact in [
+        "self.next_stage().map(|stage| CourseLifeStage {",
+        "song: stage.song.as_ref()",
+        "steps_index: stage.steps_index",
+        "gain_lives: stage.gain_lives",
+        "gain_seconds: stage.gain_seconds",
+        "course_life_config(self.run.course_type, self.run.lives, stage, chart_type)",
+    ] {
+        assert!(
+            contains_rust(adapter, fact),
+            "course entry must delegate life selection using live stage facts through {fact}"
+        );
+    }
+    for policy in [
+        "CourseLifeConfig::",
+        "CourseType::",
+        "CourseTypeView::",
+        "chart_for_steps_index",
+        "u32::try_from",
+        "Arc::",
+        ".clone(",
+    ] {
+        assert!(
+            !contains_rust(adapter, policy),
+            "the borrowed course entry must not own life policy or cloning through {policy}"
+        );
+    }
+
+    // App declares out-of-line test modules before its production methods.
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell application source should be readable");
+    let screen_entry = app
+        .split_once("fn handle_screen_entry_on_fade(")
+        .and_then(|(_, rest)| rest.split_once("impl ApplicationHandler<UserEvent> for App {"))
+        .map(|(body, _)| body)
+        .expect("screen entry must prepare course life from its reload-adjusted entry view");
+    let entry: String = screen_entry.chars().filter(|ch| !ch.is_whitespace()).collect();
+    let borrowed = entry
+        .find("letentry_course=course_run.map(|run|run.entry(lua_reload))")
+        .expect("course life must consume the prepared entry view");
+    let selected = entry
+        .find("letcourse_life_config=entry_course.map_or(")
+        .expect("course life must be selected from entry_course");
+    let life_entry = entry[selected..]
+        .split_once(");")
+        .map(|(body, _)| body)
+        .expect("course life selection call must complete in the entry scope");
+    assert!(
+        borrowed < selected && contains_rust(life_entry, "|entry| entry.life_config("),
+        "life selection must use the entry course after applying Lua reload progress"
+    );
+}
+
+#[test]
+fn course_progress_policy_stays_in_gameplay() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let progress = production_source(&root.join("crates/deadsync-gameplay/src/course_progress.rs"));
+    let course = production_source(&root.join("crates/deadsync-gameplay/src/course_run.rs"));
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    // App declares out-of-line test modules before its production methods.
+    // Read the complete file and inspect the specific lifecycle scopes below.
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell application source should be readable");
+
+    assert!(
+        contains_rust(
+            &progress,
+            "pub struct CourseProgress { next_stage_index: usize, interrupted: bool, }",
+        ),
+        "the game must privately own the course cursor and interruption state"
+    );
+    for contract in [
+        "pub enum CourseRenewal",
+        "pub const fn has_next_stage(",
+        "pub const fn stage_index(",
+        "pub const fn is_finished(",
+        "pub const fn for_entry(",
+        "pub const fn finish_entry(",
+        "pub const fn interrupt_loading(",
+        "pub const fn can_append_endless_cycle(",
+        "pub const fn renewal(",
+        "pub const fn uses_next_stage_lead_in(",
+    ] {
+        assert!(
+            contains_rust(&progress, contract),
+            "course progress policy must remain game-owned through {contract}"
+        );
+    }
+    for presentation in [
+        "deadsync_theme",
+        "deadsync_shell",
+        "SimplyLove",
+        "ThemeEffect",
+        "CurrentScreen",
+        "CourseTypeView",
+    ] {
+        assert!(
+            !progress.contains(presentation),
+            "course progress must consume scalar game facts, not {presentation}"
+        );
+    }
+    assert!(
+        course.contains("crate::course_progress::")
+            && contains_rust(&course, "pub progress: CourseProgress")
+            && !contains_rust(&course, "pub next_stage_index:")
+            && !contains_rust(&course, "pub interrupted:"),
+        "CourseRun must retain game metadata while delegating progress to its controller"
+    );
+    let wrappers = course
+        .split_once("pub fn has_next_stage(")
+        .and_then(|(_, rest)| rest.split_once("pub fn entry("))
+        .map(|(body, _)| body)
+        .expect("the game must expose course progress queries");
+    for delegation in [
+        "self.progress.has_next_stage(",
+        "self.entry(false).next_stage()",
+        "self.progress.is_finished(",
+        "self.progress.renewal(",
+    ] {
+        assert!(
+            contains_rust(wrappers, delegation),
+            "the course runtime must use game-owned progress through {delegation}"
+        );
+    }
+    let wrapper_facts: String = wrappers.chars().filter(|ch| !ch.is_whitespace()).collect();
+    assert!(
+        wrapper_facts.matches("self.stages.len()").count() == 3
+            && wrapper_facts.matches("self.course_type==CourseType::Endless").count() == 3
+            && !wrappers.contains("next_stage_index")
+            && !wrappers.contains("interrupted"),
+        "course availability, selection, completion and renewal must use live catalog facts"
+    );
+    let append = course
+        .split_once("pub fn append_endless_cycle(")
+        .and_then(|(_, rest)| rest.split_once("fn append_stages("))
+        .map(|(body, _)| body)
+        .expect("the game must own cycle authorization");
+    assert!(
+        contains_rust(append, ".can_append_endless_cycle(")
+            && contains_rust(append, "selection.path != self.path")
+            && !append.contains("course.interrupted"),
+        "cycle loading must retain path validation and use game-owned append authorization"
+    );
+
+    let transition = navigation
+        .split_once("fn resolve_course_stage_transition(")
+        .and_then(|(_, rest)| rest.split_once("fn reject_missing_course_plan("))
+        .map(|(body, _)| body)
+        .expect("course renewal must remain before screen commitment");
+    for decision in [
+        "course.run.renewal()",
+        "CourseRenewal::NotRequired",
+        "CourseRenewal::AppendCycle",
+        "CourseRenewal::InvalidCursor",
+        "course.run.progress.interrupt()",
+        "self.pending_song_lua_reload.is_some()",
+    ] {
+        assert!(
+            contains_rust(transition, decision),
+            "course entry must apply the game-owned renewal decision through {decision}"
+        );
+    }
+    assert!(
+        !transition.contains("next_stage_index")
+            && !transition.contains("Ordering::")
+            && !transition.contains("CourseTypeView::Endless")
+            && !transition.contains("select_course_state"),
+        "renewal must use the active run and its game-owned cursor"
+    );
+    let global_entry = navigation
+        .split_once("pub(super) fn prepare_global_fade_entry(")
+        .and_then(|(_, rest)| rest.split_once("pub(super) fn get_out_transition_for_route("))
+        .map(|(body, _)| body)
+        .expect("global screen entry boundary");
+    let renewed = global_entry
+        .find("self.resolve_course_stage_transition(prev, requested)")
+        .expect("course renewal must run before screen entry");
+    let committed = global_entry
+        .find("self.commit_screen_change(target)")
+        .expect("the resolved destination must be committed");
+    assert!(
+        renewed < committed,
+        "renewal must resolve before the application commits its destination screen"
+    );
+    let finish = app
+        .split_once("fn finish_gameplay_init(")
+        .and_then(|(_, rest)| rest.split_once("fn poll_pending_gameplay_init("))
+        .map(|(body, _)| body)
+        .expect("successful gameplay initialization boundary");
+    let entered = finish
+        .find("crate::gameplay_runtime::enter(")
+        .expect("gameplay must enter before advancing course progress");
+    let advanced = finish
+        .find(".finish_entry(")
+        .expect("successful entry must delegate course advancement");
+    assert!(
+        entered < advanced && contains_rust(finish, ".finish_entry(finish.lua_reload)"),
+        "course progress must advance only after successful entry, preserving reload semantics"
+    );
+    let failed_load = app
+        .split_once("fn interrupt_course_loading(")
+        .and_then(|(_, rest)| rest.split_once("pub(super) fn apply_window_focus_change("))
+        .map(|(body, _)| body)
+        .expect("course load-failure boundary");
+    assert!(
+        contains_rust(failed_load, ".run.progress.interrupt_loading(course.stage_summaries.len())")
+            && !failed_load.contains("course.stage_summaries.is_empty()")
+            && !failed_load.contains("course.interrupted"),
+        "the game must decide whether recorded history permits course-loading interruption"
+    );
+    let screen_entry = app
+        .split_once("fn handle_screen_entry_on_fade(")
+        .and_then(|(_, rest)| rest.split_once("impl ApplicationHandler<UserEvent> for App {"))
+        .map(|(body, _)| body)
+        .expect("screen entry must prepare gameplay from a course entry view");
+    assert!(
+        contains_rust(&course, "progress: self.progress.for_entry(lua_reload)")
+            && contains_rust(&course, "self.progress.stage_index(self.run.stages.len(),")
+            && contains_rust(&course, "self.run.stages.get(index)")
+            && contains_rust(&course, "self.progress.uses_next_stage_lead_in()")
+            && contains_rust(screen_entry, "course_run.map(|run| run.entry(lua_reload))")
+            && contains_rust(screen_entry, "entry_course.and_then(CourseEntry::lead_in_timing)")
+            && !contains_rust(screen_entry, "course_run.clone()")
+            && !contains_rust(&app, "course.run.progress ="),
+        "entry must borrow the stages and use game-owned reload and lead-in policy"
+    );
+}
+
+#[test]
+fn evaluation_leaves_using_game_session_origin() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let game = production_source(&root.join("crates/deadsync-core/src/session_flow.rs"));
+    let shell = root.join("crates/deadsync-shell/src");
+    let app = read_source(shell.join("app/mod.rs")).expect("Evaluation entry source");
+    let input = production_source(&shell.join("app/input_routing.rs"));
+    let nav = production_source(&shell.join("app/screen_nav.rs"));
+    let theme = read_source(
+        root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
+    )
+    .expect("Evaluation presentation source");
+    assert!(game.contains("pub enum EvaluationOrigin"));
+    assert!(game.contains("EvaluationOrigin::Course => screens.select_course"));
+    assert!(app.contains("self.state.screens.evaluation_origin = if in_course_run"));
+    assert!(app.contains("ThemeEffect::LeaveEvaluation =>"));
+    assert!(input.contains("ActiveTheme::handle_evaluation_input("));
+    assert!(contains_rust(
+        &nav,
+        "evaluation_return_to::<ActiveTheme>(self.state.screens.evaluation_origin)",
+    ));
+    assert!(theme.contains("Some(origin) => (origin, ThemeEffect::LeaveEvaluation)"));
+    assert!(!app.contains(".return_to_course"));
+    assert!(!app.contains(".auto_advance_seconds"));
+}
+
+#[test]
+fn evaluation_lifecycle_uses_the_installed_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src/app");
+    let app = read_source(shell.join("mod.rs")).expect("Evaluation entry source");
+    let input = production_source(&shell.join("input_routing.rs"));
+    let runtime = production_source(&shell.join("evaluation_views.rs"));
+    assert!(app.contains("type EvaluationState = <ActiveTheme as ThemeEvaluation>::EvaluationState"));
+    assert!(app.contains("evaluation_state: EvaluationState"));
+    assert!(runtime.contains("view: EvaluationState"));
+    for call in [
+        "init_evaluation",
+        "init_course_evaluation",
+        "sync_evaluation_elapsed",
+        "update_evaluation",
+        "handle_evaluation_raw_key",
+        "handle_evaluation_raw_pad",
+        "push_evaluation_actors",
+    ] {
+        assert!(app.contains(&format!("ActiveTheme::{call}(")), "missing {call}");
+    }
+    assert!(input.contains("ActiveTheme::evaluation_test_input_pane_active("));
+    assert!(runtime.contains("chart_queries(self.state.screens.evaluation_stage.as_ref())"));
+}
+
+#[test]
+fn gameplay_exit_routing_stays_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let policy = production_source(&root.join("crates/deadsync-gameplay/src/exit_route.rs"));
+    let theme = production_source(&root.join("crates/deadsync-theme-simply-love/src/effects.rs"));
+    let gameplay = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"),
+    );
+    // Out-of-line test modules precede the app's production imports and methods.
+    let shell = read_source(&root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app source should be readable");
+    let shell_actions = production_source(
+        &root.join("crates/deadsync-shell/src/app/gameplay_actions.rs"),
+    );
+    let shell_input = production_source(
+        &root.join("crates/deadsync-shell/src/app/input_routing.rs"),
+    );
+    let shell_runtime = production_source(&root.join("crates/deadsync-shell/src/gameplay_runtime.rs"));
+    let shell_flow = production_source(&root.join("crates/deadsync-shell/src/screen_flow.rs"));
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    let stage_screens = production_source(&root.join("crates/deadsync-shell/src/navigation.rs"));
+
+    for contract in [
+        "pub struct GameplayExitRouteContext",
+        "pub enum GameplayExitDestination",
+        "pub struct GameplayExitRoute",
+        "pub const fn resolve_gameplay_exit_route(",
+        "pub consume_restart_pending: bool",
+    ] {
+        assert!(
+            contains_rust(&policy, contract),
+            "the game must own semantic exit routing through {contract}"
+        );
+    }
+    for presentation in [
+        "deadsync_theme",
+        "deadsync_shell",
+        "SimplyLove",
+        "ThemeEffect",
+        "CurrentScreen",
+        "Screen::",
+    ] {
+        assert!(
+            !policy.contains(presentation),
+            "game exit policy must not depend on presentation through {presentation}"
+        );
+    }
+    for adapter in [
+        "GameplayAction(deadsync_gameplay::GameplayAction)",
+        "pub fn gameplay_action_for_effect(",
+        "pub const fn effect_for_gameplay_exit(",
+        "pub fn resolve_effect_route(",
+    ] {
+        assert!(
+            contains_rust(&theme, adapter),
+            "the theme must preserve its semantic and compatibility adapters: {adapter}"
+        );
+    }
+    let compatibility = theme
+        .split_once("pub fn resolve_effect_route(")
+        .map(|(_, body)| body)
+        .expect("the public compatibility adapter must remain available");
+    assert!(
+        contains_rust(compatibility, "resolve_gameplay_exit_route(")
+            && contains_rust(compatibility, "effect_for_gameplay_exit(route)")
+            && contains_rust(compatibility, "route.consume_restart_pending"),
+        "the compatibility adapter must use the game's destination and restart decision"
+    );
+    for (fact, projection) in [
+        ("restart_pending", "restart_pending: context.restart_pending"),
+        ("course_active", "course_active: context.course_active"),
+        (
+            "course_has_next_stage",
+            "course_has_next_stage: context.course_has_next_stage",
+        ),
+        (
+            "gameplay_failed",
+            "all_joined_players_failed: context.gameplay_failed",
+        ),
+    ] {
+        assert!(
+            contains_rust(compatibility, projection)
+                && compatibility.matches(format!("context.{fact}").as_str()).count() == 1,
+            "the theme may only forward {fact}; it must not decide course/restart policy"
+        );
+    }
+    assert!(
+        contains_rust(
+            &gameplay,
+            "ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::GameplayAction(action))",
+        ) && !gameplay.contains("fn map_gameplay_action(")
+            && !gameplay.contains("fn screen_for_exit("),
+        "normal gameplay must emit semantic actions without choosing concrete exit screens"
+    );
+    assert!(
+        contains_rust(
+            &gameplay,
+            "let destination = song_lua_transition_screen(name)?; Ok(ThemeEffect::NavigateNoFade(destination))",
+        ),
+        "explicit song Lua destinations must remain validated immediate navigation"
+    );
+
+    assert!(
+        shell_actions.contains("deadsync_gameplay::exit_route::"),
+        "the shell must import the game-owned route policy directly"
+    );
+    assert!(contains_rust(&shell_input, "self.handle_gameplay_action(action, event_loop)"));
+    assert!(contains_rust(&shell_actions, "GameplayFrameEffect::Session(SongLuaGameplayEffect::Action(action)) => { self.handle_gameplay_action(action, event_loop); }"));
+    assert!(contains_rust(
+        &shell_actions,
+        "GameplayFrameEffect::Session(SongLuaGameplayEffect::Navigate(screen)) => { self.handle_immediate_navigation(screen, event_loop); }"
+    ));
+    assert!(!shell_actions.contains("gameplay_action_for_navigation"));
+    assert!(contains_rust(
+        &shell_runtime,
+        "lobby.prepare_update(&mut stage.gameplay,"
+    ));
+    assert!(!shell.contains("effect_for_gameplay_exit("));
+    assert!(!shell_actions.contains("SimplyLoveRuntimeRequest"));
+    assert!(!shell_actions.contains("ThemeEffect"));
+    for old_router in ["theme_effect_route_plan", "resolve_effect_route"] {
+        assert!(
+            !shell.contains(old_router) && !shell_flow.contains(old_router),
+            "the shell must not route gameplay through the theme compatibility API {old_router}"
+        );
+    }
+    let batch = shell
+        .split_once("fn handle_action(")
+        .and_then(|(_, rest)| rest.split_once("fn handle_single_action("))
+        .map(|(body, _)| body)
+        .expect("the shell's per-effect execution boundary must remain present");
+    assert!(
+        contains_rust(
+            batch,
+            "for effect in effects { self.handle_single_action(effect, event_loop)?; }",
+        ) && !batch.contains("resolve_gameplay_exit_route(")
+            && !batch.contains("GameplayExitRouteContext"),
+        "each batch item must be routed after the preceding item executes"
+    );
+    assert!(contains_rust(
+        &shell,
+        "if let Some(gameplay_action) = gameplay_action_for_effect(&action) { self.handle_gameplay_action(gameplay_action, event_loop); return Ok(()); }",
+    ));
+    let routing = shell_actions
+        .split_once("fn handle_gameplay_action(")
+        .and_then(|(_, rest)| rest.split_once("fn handle_song_lua_reload("))
+        .map(|(body, _)| body)
+        .expect("gameplay must have a direct shell handoff");
+    for live_fact in [
+        "action: GameplayAction",
+        "GameplayAction::None => return",
+        "GameplayAction::Restart => { self.try_gameplay_restart(event_loop,",
+        "self.state.screens.current_screen == ActiveTheme::SCREENS.gameplay",
+        "self.state.session.course_run.as_ref()",
+        "restart_pending: self.state.session.restart_pending",
+        "course_active: course.is_some()",
+        "course_has_next_stage: course.is_some_and(|course| course.run.has_next_stage())",
+        "resolve_gameplay_exit_route(",
+        "gameplay_exit_screen::<ActiveTheme>(route.destination)",
+        "route.consume_restart_pending",
+    ] {
+        assert!(
+            contains_rust(routing, live_fact),
+            "each individual effect must use current game facts through {live_fact}"
+        );
+    }
+    for destination in [
+        "GameplayExitDestination::Results => T::SCREENS.results",
+        "GameplayExitDestination::SongSelection => T::SCREENS.song_selection",
+        "GameplayExitDestination::CourseSelection => T::SCREENS.course_selection",
+        "GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => { T::SCREENS.gameplay }",
+    ] {
+        assert!(contains_rust(&stage_screens, destination), "missing game route {destination}");
+    }
+    assert!(
+        contains_rust(
+            routing,
+            "matches!(action, GameplayAction::Navigate(GameplayExit::Complete)) && from_gameplay && self.current_gameplay_stage_failed()",
+        ),
+        "failure lookup must remain lazy and limited to normal gameplay completion"
+    );
+    let decision = routing
+        .find("resolve_gameplay_exit_route(")
+        .expect("game-owned routing decision");
+    let consume = routing
+        .find("self.state.session.restart_pending = false;")
+        .expect("the shell must consume the resolved pending restart before execution");
+    assert!(
+        decision < consume
+            && contains_rust(
+                routing,
+                "if route.consume_restart_pending { self.state.session.restart_pending = false; }",
+            ),
+        "only the resolved route may consume pending restart, before its effect executes"
+    );
+    for misplaced_policy in [
+        "resolve_gameplay_exit_route(",
+        "GameplayExitRouteContext",
+        "gameplay_action_for_effect(",
+        "restart_pending",
+    ] {
+        assert!(
+            !navigation.contains(misplaced_policy),
+            "course/restart routing must precede navigation and fade execution: {misplaced_policy}"
+        );
+    }
+}
+
+#[test]
+fn transition_presentation_and_playback_timing_have_separate_owners() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let contract = production_source(&root.join("crates/deadsync-theme/src/transition.rs"));
+    assert!(contract.contains("pub trait ThemeTransitions: Theme"));
+    assert!(contract.contains("pub enum TransitionState<S>"));
+    for game in ["SimplyLove", "Screen::", "tick_gameplay", "GAMEPLAY_"] {
+        assert!(!contract.contains(game), "transition clock interprets {game}");
+    }
+
+    let owner = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/transitions.rs"),
+    );
+    for presentation in [
+        "impl ThemeTransitions for SimplyLoveTheme",
+        "Screen::Menu if target == Screen::Init => menu::cancel_transition()",
+        "pub fn screen_fade_view(",
+        "pub fn gameplay_smx_overlay_alpha(",
+    ] {
+        assert!(owner.contains(presentation), "missing theme transition {presentation}");
+    }
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/navigation.rs"));
+    for policy in [
+        "if is_play_screen::<T>(from) || is_play_screen::<T>(target)",
+        "T::transition_kind(from, target)",
+        "screen == T::SCREENS.gameplay || screen == T::SCREENS.practice",
+        "then_some(deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS)",
+        "Some(deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS)",
+        "then_some(deadsync_gameplay::GAMEPLAY_ENTRY_TRANSITION_SECONDS)",
+    ] {
+        assert!(contains_rust(&navigation, policy), "missing shared stage policy {policy}");
+    }
+    let adapter = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    for handoff in [
+        "ActiveTheme::current_screen_file_name(target)",
+        "ActiveTheme::out_transition(screen, target)",
+        "ActiveTheme::in_transition(screen, context)",
+        "stage_exit_duration::<ActiveTheme>(screen).unwrap_or(duration)",
+        "stage_entry_duration::<ActiveTheme>(screen, restarting).unwrap_or(duration)",
+    ] {
+        assert!(contains_rust(&adapter, handoff), "missing shell transition handoff {handoff}");
+    }
+
+    // The endpoint still receives the final tick on the completion frame.
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell frame loop");
+    let tick_policy = app.find("let tick_gameplay = tick_gameplay_during_transition::<ActiveTheme>(")
+        .expect("shell gameplay tick policy");
+    let advance = app.find(".advance_frame(transition_dt)")
+        .expect("advance transition clock");
+    assert!(tick_policy < advance);
+    assert!(contains_rust(&app, "screen_fade_view(self.state.screens.current_screen, &self.state.shell.transition)"));
+    assert!(app.contains("let smx_overlay_alpha = gameplay_smx_overlay_alpha("));
+}
+
+#[test]
+fn transition_audio_presentation_is_owned_by_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let contract = production_source(&root.join("crates/deadsync-theme/src/transition.rs"));
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/transition_audio.rs"),
+    );
+    let shell = production_source(&root.join("crates/deadsync-shell/src/transition_effects.rs"));
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/navigation.rs"));
+    let screen_nav = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    let fade = app
+        .split_once("fn handle_audio_and_profile_on_fade(")
+        .and_then(|(_, tail)| tail.split_once("fn begin_play_session("))
+        .expect("global fade handoff should be present")
+        .0;
+
+    assert!(contract.contains("pub trait ThemeTransitionAudio: Theme"));
+    assert!(contract.contains("pub enum TransitionMusic"));
+    assert!(theme.contains("impl ThemeTransitionAudio for SimplyLoveTheme"));
+    for cue in [
+        "resolve_menu_music_path(",
+        "gameover_music_asset_path(",
+        "assets/music/select_course (loop).ogg",
+        "assets/music/credits.ogg",
+    ] {
+        assert!(theme.contains(cue), "theme should select audio cue {cue}");
+        for adapter in [shell.as_str(), navigation.as_str(), screen_nav.as_str(), fade] {
+            assert!(!adapter.contains(cue), "shell still selects audio cue {cue}");
+        }
+    }
+    for handoff in [
+        "T::transition_audio(",
+        "let entering_gameplay = context.target == T::SCREENS.gameplay",
+        "if context.target == T::SCREENS.practice { TransitionMusic::Stop }",
+        "commands.push(Command::UpdateSessionMusicRate(options.music_rate))",
+        "if audio.stop_preview_on_exit { commands.push(Command::StopMusic); }",
+    ] {
+        assert!(contains_rust(&shell, handoff), "missing fade audio handoff {handoff}");
+    }
+    assert!(contains_rust(fade, "transition_effect_plan::<ActiveTheme>("));
+    assert!(contains_rust(&screen_nav, "ActiveTheme::transition_audio("));
+    assert!(contains_rust(&screen_nav, "!is_play_screen::<ActiveTheme>(current) && ActiveTheme::stop_screen_sfx_on_exit(current, target)"));
+}
+
+#[test]
 fn theme_screen_contract_has_explicit_owners() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let generic_screen = read_source(root.join("crates/deadsync-theme/src/screen.rs"))
@@ -11583,10 +13644,12 @@ fn theme_screen_contract_has_explicit_owners() {
     let simply_love_flow =
         read_source(root.join("crates/deadsync-theme-simply-love/src/screens/flow.rs"))
             .expect("Simply Love flow should be readable");
-    let shell_flow = read_source(root.join("crates/deadsync-shell/src/screen_flow.rs"))
-        .expect("shell effect router should be readable");
-
-    for token in ["pub struct ThemeScreenId", "pub trait Theme"] {
+    for token in [
+        "pub struct ThemeScreenId",
+        "pub trait Theme",
+        "pub struct ThemeScreens<S>",
+        "pub trait ThemeScreenFlow: Theme",
+    ] {
         assert!(
             generic_screen.contains(token),
             "deadsync-theme is missing generic screen contract token {token}"
@@ -11608,13 +13671,16 @@ fn theme_screen_contract_has_explicit_owners() {
             "Simply Love is missing concrete flow token {token}"
         );
     }
+    let simply_love = read_source(root.join("crates/deadsync-theme-simply-love/src/lib.rs"))
+        .expect("Simply Love theme should be readable");
+    assert!(simply_love.contains("impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme"));
     let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(
-        shell_flow.contains("theme_effect_route_plan")
+        shell_app.contains("self.handle_gameplay_action(gameplay_action, event_loop)")
             && shell_app.contains("ThemeEffect::Batch(effects)")
             && shell_app.contains("self.handle_single_action(effect, event_loop)?"),
-        "deadsync-shell must own ordered ThemeEffect routing and execution"
+        "the shell must execute effects in order using game-owned exit routing"
     );
 }
 
@@ -11624,7 +13690,7 @@ fn theme_owned_screen_architecture_has_no_contract_crate() {
     let removed_crate_name = ["deadsync", "screens"].join("-");
     assert!(
         !root.join("crates").join(&removed_crate_name).exists(),
-        "the retired screen contract crate must stay absent; screens and redirects are theme-owned"
+        "the retired screen contract crate must stay absent; concrete presentation screens are theme-owned"
     );
 
     let mut files = rust_files(&root.join("crates"));
@@ -11858,6 +13924,14 @@ fn stage_results_are_independent_of_evaluation() {
         .expect("gameplay result owner");
     assert!(results.contains("pub fn stage_result"));
     assert!(results.contains("GameplayRuntimeState"));
+    for course_contract in [
+        "fn course_summary_totals(",
+        "pub fn course_summary_stage(",
+        "pub fn routine_shared_course_result(",
+        "pub fn course_summary_records",
+    ] {
+        assert!(results.contains(course_contract), "missing game result adapter {course_contract}");
+    }
     for forbidden in [
         "deadsync_theme",
         "deadlib_present",
@@ -11872,14 +13946,40 @@ fn stage_results_are_independent_of_evaluation() {
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell source");
     assert!(!shell.contains("append_stage_results_from_eval"));
+    assert!(contains_rust(&shell, "fn gameplay_stage_result(gameplay: &ActiveGameplayStage)"));
+    assert!(contains_rust(
+        &shell,
+        "fn execute_evaluation_score_runtime(gameplay: &ActiveGameplayStage, pack_group: &str)",
+    ));
     let session = read_source(root.join("crates/deadsync-shell/src/session.rs"))
         .expect("session source");
     assert!(
         session.contains("pub fn record_stage_result(&mut self, stage: stage_stats::StageSummary)")
     );
+    assert!(session.contains("pub struct SessionState {"));
+    for presentation in ["EvaluationPage", "course_eval_page", "course_stage_eval_page", "deadsync_theme"] {
+        assert!(!session.contains(presentation), "session storage depends on {presentation}");
+    }
+    assert!(shell.contains("course_evaluation: evaluation_views::CourseEvaluationPages"));
+    let restart = production_source(&root.join("crates/deadsync-shell/src/restart.rs"));
+    for presentation in ["deadsync_theme_simply_love", "ScoreInfo", "SimplyLoveScreen"] {
+        assert!(!restart.contains(presentation), "restart policy depends on {presentation}");
+    }
+    assert!(contains_rust(&results, "pub struct EvaluationStage {"));
+    assert!(contains_rust(&results, "Self::from_stage_result(result, players)"));
+    let actions = shell
+        .split_once("fn prepare_gameplay_restart(")
+        .and_then(|(_, rest)| rest.split_once("fn try_practice_reload("))
+        .expect("restart, reload and Practice entry should be available")
+        .0;
+    assert!(actions.contains("evaluation_stage"));
+    assert!(!actions.contains("score_info"));
+    assert!(contains_rust(&shell, "EvaluationStage::from_gameplay_result(&gameplay.stage.gameplay, &stage)"));
+    assert!(contains_rust(&shell, "self.state.screens.evaluation_stage = evaluation_stage"));
     let adapter = read_source(root.join("crates/deadsync-shell/src/session_results.rs"))
         .expect("result view adapter");
     assert!(!adapter.contains("stage_summary_from_score_info"));
+    assert!(contains_rust(&adapter, "pub(crate) fn evaluation_view(gs: &ActiveGameplayStage,"));
 }
 
 #[test]

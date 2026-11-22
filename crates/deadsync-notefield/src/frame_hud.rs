@@ -164,6 +164,7 @@ impl NotefieldHudFrameView<'_> {
 }
 
 /// Proxy captures produced while composing the canonical HUD sequence.
+#[derive(Default)]
 pub struct NotefieldHudComposeResult {
     pub parts: NotefieldHudParts,
     pub combo_actors: Option<CapturedActorSource>,
@@ -408,7 +409,7 @@ fn compose_combo<S>(
     let show = NotefieldHudFrameView::combo_active(
         request.view.hide_combo,
         prepared.blind_active,
-        request.options.frame_features.combo_visible,
+        request.options.combo_visible,
     );
     let milestone_assets =
         (show && !request.options.hide_combo_explosions && !frame.milestones.is_empty())
@@ -482,7 +483,7 @@ fn compose_error<S>(
     } else {
         field.column_receptor_ys[..num_cols].iter().sum::<f32>() / num_cols as f32
     };
-    let show = request.options.frame_features.error_bar;
+    let show = request.options.error_bar;
     compose_error_bar(
         draws,
         ErrorBarComposeRequest {
@@ -530,7 +531,7 @@ fn compose_error<S>(
             frame_text_slot: frame.frame_text_slot,
             text_visible: !prepared.blind_active
                 && show
-                && request.options.frame_features.error_bar_text,
+                && request.options.error_bar_text,
             text_label: frame.text_label,
             text_centered: request.options.text_error_bar_centered,
         },

@@ -108,19 +108,35 @@ impl<'a, W: Write> Compressed<'a, W> {
         self.have = 0;
         Ok(())
     }
-    fn pump(&mut self, mut input: &[u8], finish: bool) -> Result<(), Error> {
+    fn pump(&mut self, input: &[u8], finish: bool) -> Result<(), Error> {
+        self.pump_input(Some(input), input.len(), finish)
+    }
+    fn pump_zeros(&mut self, len: usize) -> Result<(), Error> {
+        self.pump_input(None, len, false)
+    }
+    fn pump_input(
+        &mut self,
+        mut input: Option<&[u8]>,
+        mut len: usize,
+        finish: bool,
+    ) -> Result<(), Error> {
         loop {
-            let p = self
-                .encoder
-                .process(input, &mut self.output[self.have..], finish)?;
-            input = &input[p.consumed..];
+            let output = &mut self.output[self.have..];
+            let p = match input {
+                Some(bytes) => self.encoder.process(bytes, output, finish)?,
+                None => self.encoder.process_zeros(len, output)?,
+            };
+            if let Some(bytes) = &mut input {
+                *bytes = &bytes[p.consumed..];
+            }
+            len -= p.consumed;
             self.have += p.written;
             if self.have == self.output.len() {
                 self.flush()?;
             }
             match p.status {
-                StreamStatus::NeedInput if !finish && input.is_empty() => return Ok(()),
-                StreamStatus::Done if finish && input.is_empty() => {
+                StreamStatus::NeedInput if !finish && len == 0 => return Ok(()),
+                StreamStatus::Done if finish && len == 0 => {
                     self.flush()?;
                     return Ok(());
                 }
@@ -143,7 +159,12 @@ fn image<W: Write>(
     let mut compressed = Compressed::new(writer, sequence, options)?;
     let mut peak = compressed.memory_bytes();
     while let Some(row) = rows.next_row()? {
-        compressed.pump(row, false)?;
+        if row.zero {
+            compressed.pump(&row.bytes[..1], false)?;
+            compressed.pump_zeros(row.bytes.len() - 1)?;
+        } else {
+            compressed.pump(row.bytes, false)?;
+        }
         peak = peak.max(
             compressed
                 .memory_bytes()

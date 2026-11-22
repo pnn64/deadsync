@@ -14,7 +14,8 @@ use rustmaniax_sdk::{
 };
 pub use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig, SmxInfo, SmxManager};
 
-use deadlib_input_native::{GpSystemEvent, PadBackend, uuid_from_bytes};
+use deadlib_input_native::uuid_from_bytes;
+use deadsync_input::devices::{GamepadBackend, GamepadSystemEvent};
 use deadlib_platform::input::{PadCode, PadEvent, PadId};
 
 pub mod gameplay_driver;
@@ -198,7 +199,7 @@ struct SmxShared {
     /// Listeners for input events (pad presses).
     input_listeners: Mutex<Vec<Box<dyn Fn(PadEvent) + Send>>>,
     /// Listeners for system events (connect/disconnect).
-    sys_listeners: Mutex<Vec<Box<dyn Fn(GpSystemEvent) + Send>>>,
+    sys_listeners: Mutex<Vec<Box<dyn Fn(GamepadSystemEvent) + Send>>>,
     /// Last dispatched input bitmask per pad, used to emit only changed panels.
     prev_input: [AtomicU16; 2],
     /// Stable per-pad device UUID (derived from the serial), cached at connect.
@@ -323,7 +324,7 @@ pub fn add_input_listener(listener: Box<dyn Fn(PadEvent) + Send>) {
 /// # Panics
 ///
 /// Panics if an internal synchronization lock is poisoned.
-pub fn add_sys_listener(listener: Box<dyn Fn(GpSystemEvent) + Send>) {
+pub fn add_sys_listener(listener: Box<dyn Fn(GamepadSystemEvent) + Send>) {
     if let Some(s) = SHARED.get() {
         s.sys_listeners.lock().unwrap().push(listener);
     }
@@ -1240,12 +1241,12 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
                 if pad == 1 { 2 } else { 1 },
                 info.firmware_version
             );
-            let sys_event = GpSystemEvent::Connected {
+            let sys_event = GamepadSystemEvent::Connected {
                 name,
                 id: pad_device_id(pad),
                 vendor_id: Some(SMX_USB_VENDOR_ID),
                 product_id: Some(SMX_USB_PRODUCT_ID),
-                backend: PadBackend::Smx,
+                backend: GamepadBackend::Smx,
                 initial: false,
             };
             for listener in shared.sys_listeners.lock().unwrap().iter() {
@@ -1261,10 +1262,10 @@ fn dispatch_event(shared: &SmxShared, event: SmxEvent) {
                 *slot.lock().unwrap() = None;
             }
             log::info!("SMX: pad {pad} disconnected");
-            let sys_event = GpSystemEvent::Disconnected {
+            let sys_event = GamepadSystemEvent::Disconnected {
                 name: format!("StepManiaX pad {pad}"),
                 id: pad_device_id(pad),
-                backend: PadBackend::Smx,
+                backend: GamepadBackend::Smx,
                 initial: false,
             };
             for listener in shared.sys_listeners.lock().unwrap().iter() {

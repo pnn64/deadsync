@@ -108,14 +108,32 @@ fn unfilter_pixels<const N: usize, const PAETH: bool>(row: &mut [u8], prev: &[u8
     }
 }
 
+/// Unfilter two consecutive Paeth rows together where a vector kernel can.
+/// Returns false, with both rows untouched, where it cannot.
+fn unfilter_paeth_pair(row: &mut [u8], next: &mut [u8], prev: &[u8], bpp: usize) -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        match bpp {
+            3 => x86::unfilter::<3, true>(row, prev, Some(next)),
+            4 => x86::unfilter::<4, true>(row, prev, Some(next)),
+            _ => false,
+        }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let _ = (row, next, prev, bpp);
+        false
+    }
+}
+
 fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize) {
     #[cfg(target_arch = "x86_64")]
     {
         let handled = match bpp {
-            3 => x86::unfilter::<3, PAETH>(row, prev),
-            4 => x86::unfilter::<4, PAETH>(row, prev),
-            6 => x86::unfilter::<6, PAETH>(row, prev),
-            8 => x86::unfilter::<8, PAETH>(row, prev),
+            3 => x86::unfilter::<3, PAETH>(row, prev, None),
+            4 => x86::unfilter::<4, PAETH>(row, prev, None),
+            6 => x86::unfilter::<6, PAETH>(row, prev, None),
+            8 => x86::unfilter::<8, PAETH>(row, prev, None),
             _ => false,
         };
         if handled {
@@ -294,9 +312,34 @@ pub(crate) fn decode(
             continue;
         }
         let stride = row_bytes(w, channels, depth)?;
+        let mut paired = false;
         for row_index in 0..h {
+            if paired {
+                // Unfiltered and compacted together with the previous row.
+                paired = false;
+                continue;
+            }
             let (before, after) = raw.split_at_mut(position);
             let filter = *after.first().ok_or(Error::Truncated)?;
+            if reuse
+                && row_index != 0
+                && row_index + 1 < h
+                && filter == 4
+                && after.get(stride + 1) == Some(&4)
+                && after.len() >= 2 * (stride + 1)
+            {
+                let (row, next) = after.split_at_mut(stride + 1);
+                let previous = &before[(row_index - 1) * stride..row_index * stride];
+                if unfilter_paeth_pair(&mut row[1..], &mut next[1..1 + stride], previous, bpp) {
+                    for n in 0..2 {
+                        let start = position + 1;
+                        raw.copy_within(start..start + stride, (row_index + n) * stride);
+                        position += stride + 1;
+                    }
+                    paired = true;
+                    continue;
+                }
+            }
             let row = after.get_mut(1..1 + stride).ok_or(Error::Truncated)?;
             if row_index == 0 {
                 unfilter_first(row, bpp, filter)?;
@@ -391,6 +434,8 @@ pub(crate) fn decode(
     })
 }
 
+/// With `SCORE`, returns the sum of signed-byte magnitudes, or stops at a
+/// partial sum of at least `limit` with `out` partly written.
 #[inline]
 pub(crate) fn filter_into<const SCORE: bool>(
     row: &[u8],
@@ -398,13 +443,14 @@ pub(crate) fn filter_into<const SCORE: bool>(
     bpp: usize,
     filter: u8,
     out: &mut [u8],
+    limit: u64,
 ) -> u64 {
     match filter {
-        0 => filter_bytes::<0, SCORE>(row, prev, bpp, out),
-        1 => filter_bytes::<1, SCORE>(row, prev, bpp, out),
-        2 => filter_bytes::<2, SCORE>(row, prev, bpp, out),
-        3 => filter_bytes::<3, SCORE>(row, prev, bpp, out),
-        _ => filter_bytes::<4, SCORE>(row, prev, bpp, out),
+        0 => filter_bytes::<0, SCORE>(row, prev, bpp, out, limit),
+        1 => filter_bytes::<1, SCORE>(row, prev, bpp, out, limit),
+        2 => filter_bytes::<2, SCORE>(row, prev, bpp, out, limit),
+        3 => filter_bytes::<3, SCORE>(row, prev, bpp, out, limit),
+        _ => filter_bytes::<4, SCORE>(row, prev, bpp, out, limit),
     }
 }
 
@@ -474,6 +520,7 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
     prev: &[u8],
     bpp: usize,
     out: &mut [u8],
+    limit: u64,
 ) -> u64 {
     let prev = if FILTER >= 2 && FILTER <= 4 {
         &prev[..row.len()]
@@ -499,26 +546,45 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
         // slices avoid accessing the empty previous row of None/Sub.
         (&row[split..], &row[..row.len() - split])
     };
+    let mut score = if SCORE { score_bytes(&out[..split]) } else { 0 };
     let (values, values_tail) = row[split..].as_chunks::<32>();
     let (left, left_tail) = row[..row.len() - split].as_chunks::<32>();
     let (upper, upper_tail) = upper.as_chunks::<32>();
     let (upper_left, corner_tail) = upper_left.as_chunks::<32>();
     let (output, output_tail) = out[split..].as_chunks_mut::<32>();
+    // Score each 256-byte segment after filtering it. Once the partial score
+    // reaches `limit`, the candidate cannot win and the rest is skipped.
     for ((((values, left), upper), upper_left), output) in values
-        .iter()
-        .zip(left)
-        .zip(upper)
-        .zip(upper_left)
-        .zip(output)
+        .chunks(8)
+        .zip(left.chunks(8))
+        .zip(upper.chunks(8))
+        .zip(upper_left.chunks(8))
+        .zip(output.chunks_mut(8))
     {
-        filter_chunk::<FILTER>(values, left, upper, upper_left, output);
+        for ((((values, left), upper), upper_left), output) in values
+            .iter()
+            .zip(left)
+            .zip(upper)
+            .zip(upper_left)
+            .zip(output.iter_mut())
+        {
+            filter_chunk::<FILTER>(values, left, upper, upper_left, output);
+        }
+        if SCORE {
+            for chunk in output.iter() {
+                score += u64::from(score_chunk(chunk));
+            }
+            if score >= limit {
+                return score;
+            }
+        }
     }
     for ((((&value, &left), &upper), &corner), out) in values_tail
         .iter()
         .zip(left_tail)
         .zip(upper_tail)
         .zip(corner_tail)
-        .zip(output_tail)
+        .zip(output_tail.iter_mut())
     {
         let predictor = match FILTER {
             0 => 0,
@@ -530,7 +596,11 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
         };
         *out = value.wrapping_sub(predictor);
     }
-    if SCORE { score_bytes(out) } else { 0 }
+    if SCORE {
+        score + score_bytes(output_tail)
+    } else {
+        0
+    }
 }
 
 pub(crate) fn filter_first<const SCORE: bool>(
@@ -538,13 +608,14 @@ pub(crate) fn filter_first<const SCORE: bool>(
     bpp: usize,
     filter: u8,
     out: &mut [u8],
+    limit: u64,
 ) -> u64 {
     // A pass starts with zero upper predictors: Up equals None, Paeth equals
     // Sub, and Average uses only half the left byte.
     match filter {
-        0 | 2 => filter_bytes::<0, SCORE>(row, &[], bpp, out),
-        1 | 4 => filter_bytes::<1, SCORE>(row, &[], bpp, out),
-        3 => filter_bytes::<5, SCORE>(row, &[], bpp, out),
+        0 | 2 => filter_bytes::<0, SCORE>(row, &[], bpp, out, limit),
+        1 | 4 => filter_bytes::<1, SCORE>(row, &[], bpp, out, limit),
+        3 => filter_bytes::<5, SCORE>(row, &[], bpp, out, limit),
         _ => unreachable!("validated scanline filter"),
     }
 }
@@ -864,6 +935,82 @@ mod tests {
         }
     }
 
+    // PNG Third Edition 9.2 and 9.3, one byte at a time.
+    fn reference_unfilter(raw: &[u8], stride: usize, bpp: usize) -> Vec<u8> {
+        let mut out: Vec<u8> = Vec::new();
+        for (index, row) in raw.chunks(stride + 1).enumerate() {
+            let start = out.len();
+            for x in 0..stride {
+                let a = if x >= bpp { out[start + x - bpp] } else { 0 };
+                let b = if index > 0 {
+                    out[start + x - stride]
+                } else {
+                    0
+                };
+                let c = if index > 0 && x >= bpp {
+                    out[start + x - bpp - stride]
+                } else {
+                    0
+                };
+                let predictor = match row[0] {
+                    0 => 0,
+                    1 => a,
+                    2 => b,
+                    3 => ((u16::from(a) + u16::from(b)) / 2) as u8,
+                    _ => reference_paeth(a, b, c),
+                };
+                out.push(row[1 + x].wrapping_add(predictor));
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn paeth_row_runs_decode_like_the_specification() {
+        let mut state = 0x2545_f491u32;
+        // Runs of Paeth rows of odd and even lengths, at the start and end.
+        let filters = [4, 4, 4, 1, 4, 4, 3, 4, 4, 4, 4, 0, 2, 4, 4, 4];
+        for (color, bpp) in [
+            (ColorType::Rgb, 3),
+            (ColorType::Rgba, 4),
+            (ColorType::GrayscaleAlpha, 2),
+        ] {
+            for width in [21, 22, 23, 40, 64] {
+                for height in [filters.len() - 1, filters.len()] {
+                    let stride = width * bpp;
+                    let mut raw = Vec::new();
+                    for &filter in &filters[..height] {
+                        raw.push(filter);
+                        raw.extend((0..stride).map(|_| {
+                            state ^= state << 13;
+                            state ^= state >> 17;
+                            state ^= state << 5;
+                            state as u8
+                        }));
+                    }
+                    let expected = reference_unfilter(&raw, stride, bpp);
+                    let image = decode(
+                        raw,
+                        width as u32,
+                        height as u32,
+                        color,
+                        8,
+                        false,
+                        usize::MAX,
+                    )
+                    .unwrap();
+                    let Samples::U8(samples) = image.samples else {
+                        panic!("eight-bit samples")
+                    };
+                    assert!(
+                        samples == expected,
+                        "bpp={bpp} width={width} height={height}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn independent_filter_bytes_scores_and_short_row_boundaries() {
         for bpp in [1, 2, 3, 4, 6, 8] {
@@ -911,14 +1058,26 @@ mod tests {
                         }
                         let mut actual = vec![0xa5; len];
                         let predictors: &[u8] = if filter < 2 { &[] } else { &prev };
-                        assert_eq!(
-                            filter_into::<true>(&row, predictors, bpp, filter, &mut actual),
-                            score
-                        );
-                        assert_eq!(actual, expected);
+                        for limit in [0, score / 2, score, score + 1, u64::MAX] {
+                            // Below the limit the score is exact; otherwise the
+                            // candidate only has to lose.
+                            let partial = filter_into::<true>(
+                                &row,
+                                predictors,
+                                bpp,
+                                filter,
+                                &mut actual,
+                                limit,
+                            );
+                            assert_eq!(partial < limit, score < limit, "limit {limit}");
+                            if partial < limit {
+                                assert_eq!(partial, score);
+                                assert_eq!(actual, expected);
+                            }
+                        }
                         actual.fill(0xa5);
                         assert_eq!(
-                            filter_into::<false>(&row, predictors, bpp, filter, &mut actual),
+                            filter_into::<false>(&row, predictors, bpp, filter, &mut actual, 0),
                             0
                         );
                         assert_eq!(actual, expected);
@@ -927,13 +1086,19 @@ mod tests {
                         if prev.iter().all(|&v| v == 0) {
                             let mut first_filtered = vec![0xa5; len];
                             assert_eq!(
-                                filter_first::<true>(&row, bpp, filter, &mut first_filtered),
+                                filter_first::<true>(
+                                    &row,
+                                    bpp,
+                                    filter,
+                                    &mut first_filtered,
+                                    u64::MAX
+                                ),
                                 score
                             );
                             assert_eq!(first_filtered, expected);
                             first_filtered.fill(0xa5);
                             assert_eq!(
-                                filter_first::<false>(&row, bpp, filter, &mut first_filtered),
+                                filter_first::<false>(&row, bpp, filter, &mut first_filtered, 0),
                                 0
                             );
                             assert_eq!(first_filtered, expected);

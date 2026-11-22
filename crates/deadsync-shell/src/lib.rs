@@ -67,10 +67,13 @@ pub(crate) use input_trace::GameplayInputTrace;
 #[cfg(test)]
 pub(crate) use interaction::ExitIntent;
 pub(crate) use interaction::ShellInteractionState;
-pub(crate) use navigation::{TransitionMusicPaths, TransitionState, transition_audio_plan};
 pub(crate) use runtime::ShellState;
 pub(crate) use session::SessionState;
 pub(crate) use stutter_diag::StutterDiagRecorder;
+
+pub(crate) type ActiveTheme = deadsync_theme_simply_love::SimplyLoveTheme;
+pub(crate) type ThemeScreen = <ActiveTheme as deadsync_theme::Theme>::Screen;
+pub(crate) type TransitionState = deadsync_theme::TransitionState<ThemeScreen>;
 
 #[cfg(test)]
 mod tests {

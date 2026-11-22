@@ -1,25 +1,25 @@
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
-use deadsync_theme_simply_love::screens::player_options::{SpeedMod, scroll_speed_for_mod};
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_theme::{
+    ThemeScreenFlow, ThemeTransitionAudio, TransitionAudio, TransitionKind, TransitionMusic,
+};
 
-use crate::{Command, TransitionMusicPaths, transition_audio_plan};
+use crate::Command;
+use crate::navigation::is_play_screen;
 
-pub struct PlayerOptionsTransition<'a> {
-    pub speed_mod: &'a [SpeedMod; MAX_PLAYERS],
+pub struct PlayerOptionsTransition {
+    pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
     pub chart_difficulty_index: [usize; MAX_PLAYERS],
     pub music_rate: f32,
     pub play_style: PlayStyle,
     pub player_side: PlayerSide,
 }
 
-pub struct TransitionEffectContext<'a> {
-    pub previous: Screen,
-    pub target: Screen,
-    pub menu_music_enabled: bool,
-    pub gameover_music_enabled: bool,
-    pub music_paths: TransitionMusicPaths,
-    pub player_options: Option<PlayerOptionsTransition<'a>>,
+pub struct TransitionEffectContext<S> {
+    pub previous: S,
+    pub target: S,
+    pub player_options: Option<PlayerOptionsTransition>,
     pub select_music_preferred_difficulty: Option<usize>,
 }
 
@@ -30,21 +30,54 @@ pub struct TransitionEffectPlan {
     pub preferred_difficulty_index: Option<usize>,
 }
 
-pub fn transition_effect_plan(context: TransitionEffectContext<'_>) -> TransitionEffectPlan {
-    let audio = transition_audio_plan(
-        context.previous,
-        context.target,
-        context.menu_music_enabled,
-        context.gameover_music_enabled,
-        context.music_paths,
-    );
-    let mut commands = audio.commands;
+pub fn transition_music_command(music: TransitionMusic) -> Option<Command> {
+    match music {
+        TransitionMusic::Keep => None,
+        TransitionMusic::Stop => Some(Command::StopMusic),
+        TransitionMusic::Play { path, looping } => Some(Command::PlayMusic {
+            path,
+            looped: looping,
+            volume: 1.0,
+        }),
+    }
+}
+
+pub fn transition_effect_plan<T: ThemeScreenFlow + ThemeTransitionAudio>(
+    context: TransitionEffectContext<T::Screen>,
+    audio_context: T::AudioContext,
+) -> TransitionEffectPlan {
+    let entering_gameplay = context.target == T::SCREENS.gameplay;
+    let audio = if entering_gameplay {
+        // The stage controller takes over the stream when its clock starts.
+        TransitionAudio::default()
+    } else {
+        T::transition_audio(
+            context.previous,
+            context.target,
+            TransitionKind::Global,
+            audio_context,
+        )
+    };
+    let music = if context.target == T::SCREENS.practice {
+        TransitionMusic::Stop
+    } else {
+        audio.music
+    };
+    let previous_is_play = is_play_screen::<T>(context.previous);
+    let clear_play_background = previous_is_play && !is_play_screen::<T>(context.target);
+    let stop_stage_music = clear_play_background && !matches!(music, TransitionMusic::Play { .. });
+    let mut commands = Vec::new();
+    if let Some(command) = transition_music_command(music) {
+        commands.push(command);
+    }
+    if stop_stage_music {
+        commands.push(Command::StopMusic);
+    }
     let mut preferred_difficulty_index = None;
 
-    if matches!(
-        context.previous,
-        Screen::SelectMusic | Screen::PlayerOptions
-    ) {
+    if context.previous == T::SCREENS.song_selection
+        || context.previous == T::SCREENS.player_options
+    {
         if let Some(options) = context.player_options {
             match options.play_style {
                 PlayStyle::Versus
@@ -56,7 +89,7 @@ pub fn transition_effect_plan(context: TransitionEffectContext<'_>) -> Transitio
                     for (index, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
                         commands.push(Command::UpdateScrollSpeed {
                             side,
-                            setting: scroll_speed_for_mod(&options.speed_mod[index]),
+                            setting: options.scroll_speed[index],
                         });
                     }
                 }
@@ -67,7 +100,7 @@ pub fn transition_effect_plan(context: TransitionEffectContext<'_>) -> Transitio
                     let index = player_side_index(options.player_side);
                     commands.push(Command::UpdateScrollSpeed {
                         side: options.player_side,
-                        setting: scroll_speed_for_mod(&options.speed_mod[index]),
+                        setting: options.scroll_speed[index],
                     });
                 }
             }
@@ -81,74 +114,57 @@ pub fn transition_effect_plan(context: TransitionEffectContext<'_>) -> Transitio
             commands.push(Command::UpdatePreferredDifficulty(preferred));
             preferred_difficulty_index = Some(preferred);
         }
-
-        if !matches!(
-            context.target,
-            Screen::SelectMusic | Screen::PlayerOptions | Screen::Gameplay | Screen::SelectCourse
-        ) {
-            commands.push(Command::StopMusic);
-        }
+    }
+    if audio.stop_preview_on_exit {
+        commands.push(Command::StopMusic);
     }
 
-    if context.previous == Screen::SelectMusic {
+    if context.previous == T::SCREENS.song_selection {
         preferred_difficulty_index = context.select_music_preferred_difficulty;
     }
 
     TransitionEffectPlan {
         commands,
-        stop_screen_sfx: audio.stop_screen_sfx,
-        clear_play_background: audio.clear_play_background,
+        stop_screen_sfx: context.previous == T::SCREENS.gameplay
+            || (!previous_is_play && T::stop_screen_sfx_on_exit(context.previous, context.target)),
+        clear_play_background,
         preferred_difficulty_index,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
-    use deadsync_rules::scroll::ScrollSpeedSetting;
-    use deadsync_theme_simply_love::screens::player_options::{SpeedMod, SpeedModType};
-
     use super::*;
+    use crate::{ActiveTheme, ThemeScreen as Screen};
+    use deadsync_config::theme::{SrpgVariant, VisualStyle};
+    use deadsync_theme::{Theme, ThemeScreenId, ThemeScreens};
+    use deadsync_theme_simply_love::screens::transition_audio::TransitionAudioContext;
 
-    fn paths() -> TransitionMusicPaths {
-        TransitionMusicPaths {
-            menu: PathBuf::from("menu.ogg"),
-            course: PathBuf::from("course.ogg"),
-            credits: PathBuf::from("credits.ogg"),
-            gameover: PathBuf::from("gameover.ogg"),
-        }
-    }
+    const AUDIO_CONTEXT: TransitionAudioContext = TransitionAudioContext {
+        menu_music_enabled: false,
+        style: VisualStyle::Hearts,
+        variant: SrpgVariant::Srpg9,
+    };
 
-    fn options(speed_mod: &[SpeedMod; MAX_PLAYERS]) -> PlayerOptionsTransition<'_> {
-        PlayerOptionsTransition {
-            speed_mod,
-            chart_difficulty_index: [2, 5],
-            music_rate: 1.1,
-            play_style: PlayStyle::Single,
-            player_side: PlayerSide::P2,
-        }
+    fn plan(context: TransitionEffectContext<Screen>) -> TransitionEffectPlan {
+        transition_effect_plan::<ActiveTheme>(context, AUDIO_CONTEXT)
     }
 
     #[test]
     fn player_options_persists_settings_before_leaving_wheel_flow() {
-        let speed_mod = [
-            SpeedMod {
-                mod_type: SpeedModType::X,
-                value: 1.5,
-            },
-            SpeedMod {
-                mod_type: SpeedModType::M,
-                value: 650.0,
-            },
-        ];
-        let plan = transition_effect_plan(TransitionEffectContext {
+        let plan = plan(TransitionEffectContext {
             previous: Screen::PlayerOptions,
             target: Screen::Menu,
-            menu_music_enabled: false,
-            gameover_music_enabled: false,
-            music_paths: paths(),
-            player_options: Some(options(&speed_mod)),
+            player_options: Some(PlayerOptionsTransition {
+                scroll_speed: [
+                    ScrollSpeedSetting::XMod(1.5),
+                    ScrollSpeedSetting::MMod(650.0),
+                ],
+                chart_difficulty_index: [2, 5],
+                music_rate: 1.1,
+                play_style: PlayStyle::Single,
+                player_side: PlayerSide::P2,
+            }),
             select_music_preferred_difficulty: None,
         });
 
@@ -165,24 +181,14 @@ mod tests {
 
     #[test]
     fn versus_gameplay_handoff_keeps_music_and_persists_both_players_in_order() {
-        let speed_mod = [
-            SpeedMod {
-                mod_type: SpeedModType::X,
-                value: 1.5,
-            },
-            SpeedMod {
-                mod_type: SpeedModType::M,
-                value: 600.0,
-            },
-        ];
-        let plan = transition_effect_plan(TransitionEffectContext {
+        let plan = plan(TransitionEffectContext {
             previous: Screen::PlayerOptions,
             target: Screen::Gameplay,
-            menu_music_enabled: false,
-            gameover_music_enabled: false,
-            music_paths: paths(),
             player_options: Some(PlayerOptionsTransition {
-                speed_mod: &speed_mod,
+                scroll_speed: [
+                    ScrollSpeedSetting::XMod(1.5),
+                    ScrollSpeedSetting::MMod(600.0),
+                ],
                 chart_difficulty_index: [3, 5],
                 music_rate: 1.1,
                 play_style: PlayStyle::Versus,
@@ -225,12 +231,9 @@ mod tests {
 
     #[test]
     fn select_music_handoff_uses_wheel_preference_and_forwards_cleanup() {
-        let plan = transition_effect_plan(TransitionEffectContext {
+        let plan = plan(TransitionEffectContext {
             previous: Screen::SelectMusic,
             target: Screen::Menu,
-            menu_music_enabled: false,
-            gameover_music_enabled: false,
-            music_paths: paths(),
             player_options: None,
             select_music_preferred_difficulty: Some(4),
         });
@@ -243,5 +246,89 @@ mod tests {
                 .count(),
             2,
         );
+    }
+
+    #[test]
+    fn gameplay_exit_stops_outgoing_music_and_clears_stage_media() {
+        let plan = plan(TransitionEffectContext {
+            previous: Screen::Gameplay,
+            target: Screen::Evaluation,
+            player_options: None,
+            select_music_preferred_difficulty: None,
+        });
+        assert!(plan.clear_play_background);
+        assert!(plan.stop_screen_sfx);
+        assert!(matches!(
+            plan.commands.as_slice(),
+            [Command::StopMusic, Command::StopMusic]
+        ));
+    }
+
+    struct CueTheme;
+
+    impl Theme for CueTheme {
+        type Screen = Screen;
+        type RuntimeRequest = ();
+
+        fn screen_id(screen: Screen) -> ThemeScreenId {
+            ActiveTheme::screen_id(screen)
+        }
+    }
+
+    impl ThemeScreenFlow for CueTheme {
+        const SCREENS: ThemeScreens<Screen> = ActiveTheme::SCREENS;
+    }
+
+    impl ThemeTransitionAudio for CueTheme {
+        type AudioContext = ();
+
+        fn transition_audio(
+            _: Screen,
+            target: Screen,
+            _: TransitionKind,
+            _: (),
+        ) -> TransitionAudio {
+            assert_ne!(target, Self::SCREENS.gameplay);
+            TransitionAudio {
+                music: TransitionMusic::Play {
+                    path: "alternate.ogg".into(),
+                    looping: true,
+                },
+                stop_preview_on_exit: false,
+            }
+        }
+
+        fn stop_screen_sfx_on_exit(_: Screen, _: Screen) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn alternate_theme_music_plays_after_stage_exit_and_keeps_stage_entry_audio_owned_by_game() {
+        for target in [Screen::Gameplay, Screen::Practice, Screen::Evaluation] {
+            let plan = transition_effect_plan::<CueTheme>(
+                TransitionEffectContext {
+                    previous: Screen::Gameplay,
+                    target,
+                    player_options: None,
+                    select_music_preferred_difficulty: None,
+                },
+                (),
+            );
+            assert!(plan.stop_screen_sfx);
+            match target {
+                Screen::Gameplay => assert!(plan.commands.is_empty()),
+                Screen::Practice => {
+                    assert!(matches!(plan.commands.as_slice(), [Command::StopMusic]))
+                }
+                Screen::Evaluation => {
+                    assert!(plan.clear_play_background);
+                    assert!(
+                        matches!(plan.commands.as_slice(), [Command::PlayMusic { path, looped: true, .. }] if path == std::path::Path::new("alternate.ogg"))
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
     }
 }

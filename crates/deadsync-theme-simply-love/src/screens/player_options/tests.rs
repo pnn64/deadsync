@@ -78,6 +78,119 @@ pub(super) mod tests {
         state.active
     }
 
+    #[test]
+    fn stage_options_from_profiles_match_the_unedited_screen() {
+        use crate::views::PlayerOptionsPlayerView;
+        use deadsync_profile::{NoteSkin, Profile};
+        use deadsync_profile_gameplay::stage_options::StageOptions;
+
+        ensure_i18n();
+        let profiles = [
+            Profile {
+                noteskin: NoteSkin::new("workshop?arrows=1&mine_size=80"),
+                judgment_palette_id: Some("palette-p1".to_owned()),
+                scroll_speed: ScrollSpeedSetting::CMod(630.0),
+                no_cmod_alternative: NoCmodAlternative::MMod,
+                ..Profile::default()
+            },
+            Profile {
+                heart_rate_device_id: Some("monitor-p2".to_owned()),
+                scroll_speed: ScrollSpeedSetting::XMod(2.375),
+                mini_percent: 20,
+                ..Profile::default()
+            },
+        ];
+        let steps = [2, 3];
+        let rate = 1.25;
+        let mut view = test_init_view_for(PlayStyle::Versus, PlayerSide::P2, [true, true]);
+        view.music_rate = rate;
+        view.players = profiles.each_ref().map(|profile| PlayerOptionsPlayerView {
+            options: profile.current_player_options(),
+            judgment_palette_id: profile.judgment_palette_id.clone(),
+            heart_rate_device_id: profile.heart_rate_device_id.clone(),
+            max_heart_rate: profile.max_heart_rate,
+        });
+        let screen = super::init(
+            test_song(),
+            steps,
+            steps,
+            0,
+            Screen::SelectMusic,
+            None,
+            test_noteskin_catalog(),
+            deadsync_theme::views::SmxGifCatalogView::default(),
+            super::HeartRateDevicesView::default(),
+            view,
+        );
+
+        assert_eq!(
+            StageOptions::from_profiles(PlayStyle::Versus, steps, rate, &profiles),
+            super::stage_options(&screen)
+        );
+    }
+
+    #[test]
+    fn stepchart_edits_keep_versus_music_and_both_cursors_in_sync() {
+        use super::super::{
+            NavWrap, apply_choice_delta, focused_inline_choice_index, sync_inline_intent_from_row,
+        };
+
+        ensure_i18n();
+        let mut song = test_song();
+        let charts = &mut Arc::make_mut(&mut song).charts;
+        charts[0].music_path = Some(PathBuf::from("main.ogg"));
+        charts.push(ChartData {
+            difficulty: "Challenge".into(),
+            ..charts[0].clone()
+        });
+        charts.push(ChartData {
+            difficulty: "Edit".into(),
+            music_path: Some(PathBuf::from("edit.ogg")),
+            ..charts[0].clone()
+        });
+        let mut state = super::init(
+            song,
+            [3, 3],
+            [3, 3],
+            0,
+            Screen::SelectMusic,
+            None,
+            test_noteskin_catalog(),
+            deadsync_theme::views::SmxGifCatalogView::default(),
+            super::HeartRateDevicesView::default(),
+            test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]),
+        );
+        let mut asset_manager = AssetManager::new();
+        register_test_fonts(&mut asset_manager);
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Stepchart)
+            .unwrap();
+        state.pane_mut().selected_row = [row; 2];
+        sync_inline_intent_from_row(&mut state, P1, row);
+        sync_inline_intent_from_row(&mut state, P2, row);
+
+        apply_choice_delta(&mut state, P1, 1, NavWrap::Clamp);
+        assert_eq!(state.chart_steps_index, [4, 3]);
+        assert_eq!(state.chart_difficulty_index, [4, 3]);
+
+        apply_choice_delta(&mut state, P2, 2, NavWrap::Clamp);
+        assert_eq!(state.chart_steps_index, [5, 5]);
+        assert_eq!(state.chart_difficulty_index, [4, 3]);
+        assert_eq!(focused_inline_choice_index(&state, P1, row), Some(2));
+        assert_eq!(focused_inline_choice_index(&state, P2, row), Some(2));
+        assert!(state.music_rate_text_dirty);
+
+        apply_choice_delta(&mut state, P1, -1, NavWrap::Clamp);
+        assert_eq!(state.chart_steps_index, [4, 4]);
+        assert_eq!(state.chart_difficulty_index, [4, 4]);
+        assert_eq!(focused_inline_choice_index(&state, P2, row), Some(1));
+    }
+
     fn music_rate_lines(state: &super::State) -> (String, Option<String>) {
         let presentation = super::super::music_rate_text(state);
         (

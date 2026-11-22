@@ -1,10 +1,10 @@
 use crate::TransitionState;
-use deadlib_input_native::{GpSystemEvent, PadBackend};
 use deadlib_platform::input::{PadEvent, RawKeyboardEvent};
 use deadsync_gameplay::{
     GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayRawModifierKey, RawKeyAction,
 };
 use deadsync_input::VirtualAction;
+use deadsync_input::devices::{GamepadBackend, GamepadSystemEvent};
 use deadsync_profile::PlayerSide;
 use deadsync_theme::views::GamepadSystemView;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
@@ -16,7 +16,7 @@ use winit::keyboard::KeyCode;
 pub enum UserEvent {
     Pad(PadEvent),
     Key(RawKeyboardEvent),
-    GamepadSystem(GpSystemEvent),
+    GamepadSystem(GamepadSystemEvent),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -160,16 +160,16 @@ pub enum AppRawKeyShortcut {
     ToggleTranslatedTitles,
 }
 
-pub fn gamepad_system_event_plan(screen: Screen, ev: &GpSystemEvent) -> GamepadSystemEventPlan {
+pub fn gamepad_system_event_plan(screen: Screen, ev: &GamepadSystemEvent) -> GamepadSystemEventPlan {
     let forward_to_sandbox = matches!(screen, Screen::Sandbox);
     match ev {
-        GpSystemEvent::StartupComplete => GamepadSystemEventPlan {
+        GamepadSystemEvent::StartupComplete => GamepadSystemEventPlan {
             forward_to_sandbox,
             refresh_smx_underglow: false,
             log_message: None,
             user_message: None,
         },
-        GpSystemEvent::Connected {
+        GamepadSystemEvent::Connected {
             name,
             id,
             backend,
@@ -184,7 +184,7 @@ pub fn gamepad_system_event_plan(screen: Screen, ev: &GpSystemEvent) -> GamepadS
             );
             GamepadSystemEventPlan {
                 forward_to_sandbox,
-                refresh_smx_underglow: *backend == PadBackend::Smx,
+                refresh_smx_underglow: *backend == GamepadBackend::Smx,
                 log_message: Some(format!(
                     "Gamepad connected: {} (ID: {}) via {:?}",
                     name,
@@ -194,7 +194,7 @@ pub fn gamepad_system_event_plan(screen: Screen, ev: &GpSystemEvent) -> GamepadS
                 user_message: (!*initial).then_some(message),
             }
         }
-        GpSystemEvent::Disconnected {
+        GamepadSystemEvent::Disconnected {
             name,
             id,
             backend,
@@ -209,7 +209,7 @@ pub fn gamepad_system_event_plan(screen: Screen, ev: &GpSystemEvent) -> GamepadS
             );
             GamepadSystemEventPlan {
                 forward_to_sandbox,
-                refresh_smx_underglow: *backend == PadBackend::Smx,
+                refresh_smx_underglow: *backend == GamepadBackend::Smx,
                 log_message: Some(format!(
                     "Gamepad disconnected: {} (ID: {}) via {:?}",
                     name,
@@ -222,28 +222,9 @@ pub fn gamepad_system_event_plan(screen: Screen, ev: &GpSystemEvent) -> GamepadS
     }
 }
 
-const fn pad_backend_name(backend: PadBackend) -> &'static str {
-    match backend {
-        #[cfg(windows)]
-        PadBackend::WindowsRawInput => "Windows Raw Input",
-        #[cfg(windows)]
-        PadBackend::WindowsWgi => "Windows Gaming Input",
-        #[cfg(target_os = "linux")]
-        PadBackend::LinuxEvdev => "Linux evdev",
-        #[cfg(target_os = "freebsd")]
-        PadBackend::FreeBsdHidraw => "FreeBSD hidraw",
-        #[cfg(target_os = "freebsd")]
-        PadBackend::FreeBsdEvdev => "FreeBSD evdev",
-        #[cfg(target_os = "macos")]
-        PadBackend::MacOsIohid => "macOS IOHID",
-        PadBackend::Smx => "StepManiaX",
-        PadBackend::Reflex => "RE:Flex",
-    }
-}
-
-pub fn gamepad_system_view(ev: &GpSystemEvent) -> GamepadSystemView {
+pub fn gamepad_system_view(ev: &GamepadSystemEvent) -> GamepadSystemView {
     match ev {
-        GpSystemEvent::Connected {
+        GamepadSystemEvent::Connected {
             name,
             id,
             vendor_id,
@@ -255,10 +236,10 @@ pub fn gamepad_system_view(ev: &GpSystemEvent) -> GamepadSystemView {
             id: usize::from(*id),
             vendor_id: *vendor_id,
             product_id: *product_id,
-            backend: pad_backend_name(*backend),
+            backend: backend.name(),
             initial: *initial,
         },
-        GpSystemEvent::Disconnected {
+        GamepadSystemEvent::Disconnected {
             name,
             id,
             backend,
@@ -266,10 +247,10 @@ pub fn gamepad_system_view(ev: &GpSystemEvent) -> GamepadSystemView {
         } => GamepadSystemView::Disconnected {
             name: name.clone(),
             id: usize::from(*id),
-            backend: pad_backend_name(*backend),
+            backend: backend.name(),
             initial: *initial,
         },
-        GpSystemEvent::StartupComplete => GamepadSystemView::StartupComplete,
+        GamepadSystemEvent::StartupComplete => GamepadSystemView::StartupComplete,
     }
 }
 
@@ -473,7 +454,7 @@ pub const fn app_raw_key_shortcut(
 
 #[inline(always)]
 pub fn screen_accepts_queued_input(screen: Screen, transition: &TransitionState) -> bool {
-    if screen == Screen::Menu && transition.menu_input_open() {
+    if screen == Screen::Menu && transition.is_idle_or_arriving() {
         return true;
     }
     deadsync_config::frame_pacing::queued_input_allowed(
@@ -752,7 +733,7 @@ mod tests {
     fn queued_input_routes_during_title_menu_arrival() {
         assert!(screen_accepts_queued_input(
             Screen::Menu,
-            &TransitionState::ActorsFadeIn { elapsed: 0.0 },
+            &TransitionState::ActorsFadeIn { elapsed: 0.0, duration: 0.65 },
         ));
         assert!(screen_accepts_queued_input(
             Screen::Menu,
@@ -763,7 +744,7 @@ mod tests {
         ));
         assert!(!screen_accepts_queued_input(
             Screen::Options,
-            &TransitionState::ActorsFadeIn { elapsed: 0.0 },
+            &TransitionState::ActorsFadeIn { elapsed: 0.0, duration: 0.65 },
         ));
         assert!(!screen_accepts_queued_input(
             Screen::Menu,
@@ -1402,7 +1383,7 @@ mod tests {
     #[test]
     fn gamepad_system_startup_only_forwards_to_sandbox() {
         assert_eq!(
-            gamepad_system_event_plan(Screen::Menu, &GpSystemEvent::StartupComplete),
+            gamepad_system_event_plan(Screen::Menu, &GamepadSystemEvent::StartupComplete),
             GamepadSystemEventPlan {
                 forward_to_sandbox: false,
                 refresh_smx_underglow: false,
@@ -1411,7 +1392,7 @@ mod tests {
             }
         );
         assert!(
-            gamepad_system_event_plan(Screen::Sandbox, &GpSystemEvent::StartupComplete)
+            gamepad_system_event_plan(Screen::Sandbox, &GamepadSystemEvent::StartupComplete)
                 .forward_to_sandbox
         );
     }
@@ -1420,12 +1401,12 @@ mod tests {
     fn gamepad_connect_plan_refreshes_smx_and_hides_initial_overlay() {
         let initial = gamepad_system_event_plan(
             Screen::Menu,
-            &GpSystemEvent::Connected {
+            &GamepadSystemEvent::Connected {
                 name: "Pad".to_string(),
                 id: PadId(7),
                 vendor_id: None,
                 product_id: None,
-                backend: PadBackend::Smx,
+                backend: GamepadBackend::Smx,
                 initial: true,
             },
         );
@@ -1437,12 +1418,12 @@ mod tests {
 
         let live = gamepad_system_event_plan(
             Screen::Menu,
-            &GpSystemEvent::Connected {
+            &GamepadSystemEvent::Connected {
                 name: "Pad".to_string(),
                 id: PadId(7),
                 vendor_id: None,
                 product_id: None,
-                backend: PadBackend::Smx,
+                backend: GamepadBackend::Smx,
                 initial: false,
             },
         );
@@ -1455,10 +1436,10 @@ mod tests {
     fn gamepad_disconnect_plan_matches_connection_policy() {
         let plan = gamepad_system_event_plan(
             Screen::Sandbox,
-            &GpSystemEvent::Disconnected {
+            &GamepadSystemEvent::Disconnected {
                 name: "Gone".to_string(),
                 id: PadId(3),
-                backend: PadBackend::Smx,
+                backend: GamepadBackend::Smx,
                 initial: false,
             },
         );

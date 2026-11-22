@@ -1368,7 +1368,7 @@ end }
                     music_nanos: -6_000_000_000 + index as i64 * 16_666_667,
                     has_music_mapping: true, valid_at_host_nanos: host, ..Default::default()
                 }, ..Default::default() }, || host, &mut Vec::new());
-            let output = state.take_song_lua_output();
+            let output = state.stage.take_output();
             assert!(output.errors.is_empty(), "native update {}: {:?}", index + 1, output.errors);
         }
         let actual = state.song_lua.as_ref().unwrap().runtime().observe_stage_statistics().unwrap();
@@ -2295,7 +2295,7 @@ end }}
         assert!(scene.matches_entries(&[], 0), "no authored entry is invented");
         assert!(scene.context().foreground_names.is_empty() && scene.context().layer_start_beats.is_empty());
         assert_eq!(scene.states().len(), 1, "the screen has no authored actor overlay");
-        let startup = state.take_song_lua_output();
+        let startup = state.stage.take_output();
         assert!(startup.errors.is_empty() && startup.source_broadcasts.is_empty());
         assert_eq!(startup.broadcasts.iter().filter(|(_, name, _)| name == "ScreenChanged").count(), 1);
         state.set_live_autoplay_enabled(true);
@@ -2309,7 +2309,7 @@ end }}
                     has_music_mapping: true, valid_at_host_nanos: host, ..Default::default() },
                 ..Default::default()
             }, || host, &mut effects);
-            let output = state.take_song_lua_output();
+            let output = state.stage.take_output();
             assert!(output.errors.is_empty() && output.source_broadcasts.is_empty(), "{:?}", output.errors);
             if effects.iter().any(|effect| matches!(effect,
                 deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme_simply_love::screens::SimplyLoveScreen::Evaluation))) {
@@ -2413,7 +2413,7 @@ return Def.ActorFrame {
             gameplay::update_with_input(state, delta, snapshot, ||host, &mut Vec::new(), |state| {
                 input_replay.dispatch(state, &json!({"event":event,"step_clock_inputs":clocks}), snapshot).unwrap();
             });
-            assert!(state.take_song_lua_output().errors.is_empty());
+            assert!(state.stage.take_output().errors.is_empty());
         };
         // Use the chart's calibrated note time, 30ms before this frame. Repeats must
         // not score the second note or cause another synthesized Lua repeat.
@@ -2501,7 +2501,7 @@ return Def.ActorFrame {
         gameplay::update(&mut state,0.0,GameplayAudioSnapshot::default(),||3_000_001,&mut Vec::new());
         state.clear_song_lua_inputs();
         assert_eq!(find_text(&state),"2:1:2","focus loss releases held callback buttons");
-        assert!(state.take_song_lua_output().errors.is_empty());
+        assert!(state.stage.take_output().errors.is_empty());
     }
 
     #[test]
@@ -2524,7 +2524,7 @@ return Def.ActorFrame {
                         has_music_mapping: true, valid_at_host_nanos: host, ..Default::default() },
                     ..Default::default()
                 }, || host, &mut effects);
-                let output = state.take_song_lua_output();
+                let output = state.stage.take_output();
                 assert!(output.errors.is_empty(), "{:?}", output.errors);
                 assert!(effects.iter().all(|effect| !matches!(effect,
                     SimplyLoveEffect::Navigate(_) | SimplyLoveEffect::NavigateNoFade(_))),
@@ -2541,7 +2541,7 @@ return Def.ActorFrame {
                 has_music_mapping: true, valid_at_host_nanos: host, ..Default::default() },
             ..Default::default()
         }, || host, &mut Vec::new());
-        let output = state.take_song_lua_output();
+        let output = state.stage.take_output();
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         output
     }
@@ -2585,7 +2585,7 @@ return Def.ActorFrame {{
                         has_music_mapping: true, valid_at_host_nanos: nanos as u64 + 1_000_000_000,
                         ..Default::default() }, ..Default::default()
                 }, || nanos as u64 + 1_000_000_000, &mut effects);
-                let output = state.take_song_lua_output();
+                let output = state.stage.take_output();
                 assert!(output.errors.is_empty(), "{:?}", output.errors);
                 lifecycle.extend(output.source_broadcasts.iter()
                     .filter(|event| matches!(event.name.as_str(), "TargetOff" | "TargetEnd"))
@@ -2606,7 +2606,7 @@ return Def.ActorFrame {{
             assert!(matches_target, "explicit target must select completed transition destination: {effects:?}");
             let mut effects = Vec::new();
             gameplay::update(&mut state, 1.0, GameplayAudioSnapshot::default(), || 100_000_000_000, &mut effects);
-            assert!(effects.is_empty() && state.take_song_lua_output().source_broadcasts.is_empty(),
+            assert!(effects.is_empty() && state.stage.take_output().source_broadcasts.is_empty(),
                 "completed transition is consumed once");
         }
     }
@@ -2794,7 +2794,7 @@ return Def.ActorFrame {
                     has_music_mapping: true, valid_at_host_nanos: host, ..Default::default() },
                 ..Default::default()
             }, || host, &mut effects);
-            let output = state.take_song_lua_output();
+            let output = state.stage.take_output();
             assert!(output.errors.is_empty(), "{:?}", output.errors);
             let names: Vec<_> = output.source_broadcasts.iter().map(|event| event.name.as_str()).collect();
             assert_eq!(names, match frame {
@@ -3021,11 +3021,11 @@ return Def.ActorFrame {
         assert_eq!(checks.uncompared_normal_draws, 3, "normal RGB calls are not extra immediate calls");
         assert_eq!(checks.failures, 0);
         assert!(mismatches.is_empty());
-        let output = state.take_song_lua_output();
+        let output = state.stage.take_output();
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         assert_eq!(output.draw_frames.iter().map(|frame| frame.immediate).collect::<Vec<_>>(), [true, false],
             "the command Draw precedes the completed normal callback");
-        assert!(state.song_lua_draw_frames().is_empty(), "taking output consumes both frame kinds once");
+        assert!(state.stage.song_lua.draw_frames().is_empty(), "taking output consumes both frame kinds once");
         let normal = &output.draw_frames[1];
         assert_eq!(normal.ops.len(), 5, "Draw, Begin, Draw, Finish, Draw");
         let calls = normal.ops.iter().filter_map(|op| match op {
@@ -3127,8 +3127,8 @@ return Def.ActorFrame {
                 has_music_mapping: true, valid_at_host_nanos: 1_000_000_000, ..Default::default() },
             ..Default::default()
         }, || 1_000_000_000, &mut Vec::new());
-        assert_eq!(state.song_lua_draw_frames().len(), 1);
-        assert_eq!(state.song_lua_draw_frames()[0].ops.len(), 3, "native nil-target proxy adds no submission");
+        assert_eq!(state.stage.song_lua.draw_frames().len(), 1);
+        assert_eq!(state.stage.song_lua.draw_frames()[0].ops.len(), 3, "native nil-target proxy adds no submission");
         let scene = state.song_lua.as_ref().unwrap();
         let screen = [scene.context().screen_width, scene.context().screen_height];
         let mut checks = super::interactive::DrawChecks::default();
@@ -3209,7 +3209,7 @@ return Def.Actor {
                     has_music_mapping:true, valid_at_host_nanos:(now+5_000_000_000) as u64,
                     ..Default::default() }, ..Default::default()
             }, || (now+5_000_000_000) as u64, &mut effects);
-            let output=state.take_song_lua_output();
+            let output=state.stage.take_output();
             assert!(output.errors.is_empty(), "{:?}", output.errors);
             judgments.extend(output.source_broadcasts.into_iter().filter(|event| event.name=="FinalMineJudgment"));
             if effects.iter().any(|effect| matches!(effect,
@@ -3329,7 +3329,7 @@ return Def.ActorFrame {
                     has_music_mapping: true, valid_at_host_nanos: at as u64 + 1_000_000_000,
                     ..Default::default() }, ..Default::default()
             }, || at as u64 + 1_000_000_000, &mut effects);
-            let output = state.take_song_lua_output();
+            let output = state.stage.take_output();
             assert!(output.errors.is_empty(), "{:?}", output.errors);
             for event in &output.source_broadcasts {
                 if event.name == "OwnedEnd" {
@@ -3356,7 +3356,7 @@ return Def.ActorFrame {
         assert_eq!(after_end, 0, "screen End does not advance queues it creates");
         effects.clear();
         gameplay::update(&mut state, 1.0, GameplayAudioSnapshot::default(), || 100_000_000_000, &mut effects);
-        let output = state.take_song_lua_output();
+        let output = state.stage.take_output();
         assert!(output.source_broadcasts.is_empty() && effects.is_empty(), "screen End and draw run only once");
     }
 
@@ -3474,7 +3474,7 @@ return Def.ActorFrame {
                 has_music_mapping: true, valid_at_host_nanos: 800_000_000, ..Default::default() },
             ..Default::default()
         }, || 800_000_000, &mut effects);
-        let first = state.take_song_lua_output();
+        let first = state.stage.take_output();
         assert!(first.errors.is_empty(), "{:?}", first.errors);
         let initial = first.source_broadcasts.iter().find(|event| event.name == "EngineStartup")
             .expect("zero-delta input activates the foreground");
@@ -3487,7 +3487,7 @@ return Def.ActorFrame {
                 has_music_mapping: true, valid_at_host_nanos: 900_000_000, ..Default::default() },
             ..Default::default()
         }, || 900_000_000, &mut effects);
-        let startup = state.take_song_lua_output();
+        let startup = state.stage.take_output();
         assert!(startup.errors.is_empty(), "{:?}", startup.errors);
         let expected_beat = context.song_timing.as_ref().unwrap()
             .get_song_position(tap_time as f32 / 1_000_000_000.0).beat;
@@ -3496,7 +3496,7 @@ return Def.ActorFrame {
                 has_music_mapping: true, valid_at_host_nanos: 1_000_000_000, ..Default::default() },
             ..Default::default()
         }, || 1_000_000_000, &mut effects);
-        let output = state.take_song_lua_output();
+        let output = state.stage.take_output();
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         assert_eq!(state.gameplay.players_runtime.players[0].life, 0.125,
             "native judgment dispatch applies Lua writes before row scoring and foreground update");
@@ -3533,7 +3533,7 @@ return Def.ActorFrame {
                 has_music_mapping: true, valid_at_host_nanos: 1_100_000_000, ..Default::default() },
             ..Default::default()
         }, || 1_100_000_000, &mut effects);
-        let next = state.take_song_lua_output();
+        let next = state.stage.take_output();
         assert!(next.errors.is_empty(), "{:?}", next.errors);
         assert!(!next.source_broadcasts.iter().any(|event| event.name == "EngineJudgment"));
         assert!(!next.source_broadcasts.iter().any(|event| event.name.starts_with("EngineStep")));
@@ -3545,7 +3545,7 @@ return Def.ActorFrame {
                 has_music_mapping: true, valid_at_host_nanos: 1_500_000_000, ..Default::default() },
             ..Default::default()
         }, || 1_500_000_000, &mut effects);
-        let held = state.take_song_lua_output();
+        let held = state.stage.take_output();
         assert!(held.errors.is_empty(), "{:?}", held.errors);
         assert_eq!(held.source_broadcasts.iter().filter(|event| event.name == "EngineHold").count(), 1);
         assert!(!held.source_broadcasts.iter().any(|event| event.name.starts_with("EngineStep")),
@@ -3560,7 +3560,7 @@ return Def.ActorFrame {
                     has_music_mapping: true, valid_at_host_nanos: 2_000_000_000 + index as u64 * 100_000_000,
                     ..Default::default() }, ..Default::default()
             }, || 2_000_000_000, &mut effects);
-            let output = state.take_song_lua_output();
+            let output = state.stage.take_output();
             assert!(output.errors.is_empty(), "{:?}", output.errors);
             let offs: Vec<_> = output.source_broadcasts.iter().filter(|event| event.name == "EngineOff").collect();
             assert_eq!(offs.len(), usize::from(index == 1), "Off runs on LeaveGameplay, after one actor update");
@@ -5895,7 +5895,7 @@ fn replay_mode(
         draw_checks.bind(&state, trace, 1)?;
     }
 
-    let startup = state.take_song_lua_output();
+    let startup = state.stage.take_output();
     let startup_scenes = startup
             .broadcasts
             .iter()
@@ -5954,7 +5954,7 @@ fn replay_mode(
                 )?
             };
             state = init_scene(prepared)?;
-            let startup = state.take_song_lua_output();
+            let startup = state.stage.take_output();
             errors.extend(startup.errors);
             runtime_coverage.extend(startup.coverage_gaps);
             broadcasts.extend(
@@ -6091,7 +6091,7 @@ fn replay_mode(
                 // A callback can fail during this update before its output is
                 // normally drained below. Preserve that cause when a dependent
                 // draw check aborts, together with the exact replay position.
-                errors.extend(state.take_song_lua_output().errors.into_iter().map(|error|
+                errors.extend(state.stage.take_output().errors.into_iter().map(|error|
                     format!("scene {scene_count}, update {}: {error}", index + 1)));
                 return Err(format!(
                     "draw comparison failed at scene {scene_count}, update {}, seconds {seconds}, beat {}: {error}; callback errors ({} total, newest first): {:?}",
@@ -6135,7 +6135,7 @@ fn replay_mode(
         {
             first_navigation = Some(seconds);
         }
-        let output = state.take_song_lua_output();
+        let output = state.stage.take_output();
         broadcasts.extend(
             output
                 .source_broadcasts

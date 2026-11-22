@@ -538,11 +538,9 @@ fn add_dev_if_new(
     let Some(pending) = probe_dev(&path) else {
         return;
     };
-    // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
-    // owns the pad (see `native_smx_owns_device`).
-    if host.native_smx_owns_device(pending.vendor_id, pending.product_id) {
+    if host.device_claimed(pending.vendor_id, pending.product_id) {
         debug!(
-            "hidraw: ignoring StepManiaX pad (vid={:04x?} pid={:04x?}); native SMX input owns it",
+            "hidraw: ignoring pad (vid={:04x?} pid={:04x?}); claimed by another input provider",
             pending.vendor_id, pending.product_id
         );
         return;

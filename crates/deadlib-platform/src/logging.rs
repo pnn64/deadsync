@@ -11,8 +11,7 @@ use std::time::SystemTime;
 #[cfg(not(windows))]
 use std::ffi::OsStr;
 
-const LOG_FILE_PATH_FALLBACK: &str = "deadsync.log";
-/// Total number of log files to retain: the live `deadsync.log` plus the most
+/// Total number of log files to retain: the live log plus the most
 /// recent `MAX_LOG_FILES - 1` timestamped backups of previous runs.
 const MAX_LOG_FILES: usize = 3;
 static FILE_LOGGING_ENABLED: AtomicBool = AtomicBool::new(true);
@@ -112,23 +111,16 @@ fn log_file_slot() -> &'static Mutex<Option<File>> {
     LOG_FILE.get_or_init(|| Mutex::new(None))
 }
 
-fn reset_log_file() {
+fn reset_log_file(path: &Path) {
     if let Ok(mut slot) = log_file_slot().lock() {
-        *slot = open_log_file();
+        *slot = open_log_file(path);
     }
-}
-
-fn log_file_path() -> PathBuf {
-    LOG_FILE_PATH
-        .get()
-        .cloned()
-        .unwrap_or_else(|| PathBuf::from(LOG_FILE_PATH_FALLBACK))
 }
 
 /// Rotates logs so the previous run is preserved under a timestamped name.
 ///
-/// `deadsync.log` always points at the current run. Before it is truncated the
-/// existing file is archived as `deadsync-YYYY-MM-DD_HHMMSS.log` (stamped from
+/// The live path always points at the current run. Before it is truncated the
+/// existing file is archived with a timestamp in its name (stamped from
 /// its last-modified time), then older backups are pruned so at most
 /// `keep` files total remain on disk (the live log plus `keep - 1` backups).
 fn rotate_log_files(path: &Path, keep: usize) {
@@ -146,7 +138,7 @@ fn rotate_log_files(path: &Path, keep: usize) {
 }
 
 /// Builds a unique timestamped backup path next to `path`, e.g.
-/// `deadsync.log` -> `deadsync-2026-06-15_175005.log`. A numeric suffix is
+/// `application.log` -> `application-2026-06-15_175005.log`. A numeric suffix is
 /// appended if a backup from the same second already exists.
 fn timestamped_backup_path(path: &Path) -> Option<PathBuf> {
     let dir = path.parent()?;
@@ -217,16 +209,15 @@ fn prune_old_logs(path: &Path, keep: usize) {
     }
 }
 
-fn open_log_file() -> Option<File> {
-    let path = log_file_path();
+fn open_log_file(path: &Path) -> Option<File> {
     if FILE_LOGGING_ENABLED.load(Ordering::Relaxed) {
-        rotate_log_files(&path, MAX_LOG_FILES);
+        rotate_log_files(path, MAX_LOG_FILES);
     }
     match OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
-        .open(&path)
+        .open(path)
     {
         Ok(file) => Some(file),
         Err(err) => {
@@ -416,8 +407,8 @@ pub fn write_report_block(title: &str, lines: &[String]) {
 
 pub fn init(file_logging_enabled: bool, log_file_path: PathBuf) {
     FILE_LOGGING_ENABLED.store(file_logging_enabled, Ordering::Relaxed);
-    let _ = LOG_FILE_PATH.set(log_file_path);
-    reset_log_file();
+    let path = LOG_FILE_PATH.get_or_init(|| log_file_path);
+    reset_log_file(path);
     let mut builder = env_logger::builder();
     builder
         .format(format_record)
@@ -442,4 +433,43 @@ pub fn init(file_logging_enabled: bool, log_file_path: PathBuf) {
 #[inline(always)]
 pub fn set_file_logging_enabled(enabled: bool) {
     FILE_LOGGING_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opening_a_host_log_archives_and_reopens_the_configured_path() {
+        let time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("deadlib-log-{}-{time}", std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("observatory.trace");
+        std::fs::write(&path, "previous run").unwrap();
+
+        let mut file = open_log_file(&path).unwrap();
+        file.write_all(b"current run").unwrap();
+        drop(file);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "current run");
+        let archive = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|entry| entry != &path)
+            .unwrap();
+        assert!(
+            archive
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("observatory-")
+        );
+        assert_eq!(archive.extension(), path.extension());
+        assert_eq!(std::fs::read_to_string(&archive).unwrap(), "previous run");
+        std::fs::remove_file(archive).unwrap();
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(dir).unwrap();
+    }
 }

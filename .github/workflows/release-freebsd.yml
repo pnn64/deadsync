@@ -66,7 +66,7 @@ jobs:
           command -v scp >/dev/null
           command -v tar >/dev/null
 
-      - name: Build release on FreeBSD host
+      - name: Set up FreeBSD builder and build release
         shell: bash
         run: |
           bash scripts/build-freebsd-release-remote.sh \

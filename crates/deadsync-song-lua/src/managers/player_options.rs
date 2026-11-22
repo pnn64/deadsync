@@ -93,6 +93,20 @@ fn create(
             set(state, "tilt", player.perspective.tilt, call)?;
             set(state, "skew", player.perspective.skew, call)?;
         }
+        let turn = match player.turn_option {
+            deadsync_gameplay::GameplayTurnOption::None => None,
+            deadsync_gameplay::GameplayTurnOption::Mirror => Some("mirror"),
+            deadsync_gameplay::GameplayTurnOption::Left => Some("left"),
+            deadsync_gameplay::GameplayTurnOption::Right => Some("right"),
+            deadsync_gameplay::GameplayTurnOption::LRMirror => Some("lrmirror"),
+            deadsync_gameplay::GameplayTurnOption::UDMirror => Some("udmirror"),
+            deadsync_gameplay::GameplayTurnOption::Shuffle => Some("shuffle"),
+            deadsync_gameplay::GameplayTurnOption::Blender => Some("supershuffle"),
+            deadsync_gameplay::GameplayTurnOption::Random => Some("hypershuffle"),
+        };
+        if let Some(turn) = turn {
+            set(state, turn, true, call)?;
+        }
         set(
             owner,
             "__songlua_reference_bpm",

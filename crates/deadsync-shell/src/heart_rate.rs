@@ -1,4 +1,9 @@
-use deadsync_theme_simply_love::screens::{evaluation, gameplay, player_options, select_music};
+use crate::{ActiveTheme, player_options::PlayerOptionsState};
+use deadsync_theme::player_options::{
+    HeartRateDeviceView, HeartRateDevicesView, HeartRateReadingView, ThemePlayerOptions,
+};
+use deadsync_theme::views::{GameplayLivePresentation, HeartRatePlayerView, HeartRateView};
+use deadsync_theme_simply_love::screens::{evaluation, select_music};
 
 /// Game-thread owner for heart-rate configuration invalidation.
 ///
@@ -44,7 +49,7 @@ impl Runtime {
         true
     }
 
-    pub(crate) fn refresh_player_options(&mut self, state: &mut player_options::State) -> bool {
+    pub(crate) fn refresh_player_options(&mut self, state: &mut PlayerOptionsState) -> bool {
         let key = (
             deadsync_heart_rate::discovery_generation(),
             deadsync_heart_rate::player_readings_generation(),
@@ -56,7 +61,7 @@ impl Runtime {
         // publication may cause one redundant refresh, but cannot be hidden.
         let view = devices_view();
         self.player_options_view_key = Some(key);
-        player_options::set_heart_rate_devices(state, &view);
+        ActiveTheme::sync_player_options_heart_rate(state, &view);
         true
     }
 
@@ -72,7 +77,7 @@ impl Runtime {
         let view = if enabled {
             readings_view()
         } else {
-            gameplay::HeartRateView::default()
+            HeartRateView::default()
         };
         self.select_music_view_key = Some(key);
         select_music::set_heart_rate_view(state, view);
@@ -100,22 +105,20 @@ fn readings_view_key(enabled: bool, generation: impl FnOnce() -> (u64, u64)) -> 
     (enabled, readings, profiles)
 }
 
-pub(crate) fn devices_view() -> player_options::HeartRateDevicesView {
+pub(crate) fn devices_view() -> HeartRateDevicesView {
     let snapshot = deadsync_heart_rate::discovery_snapshot();
-    let readings = deadsync_heart_rate::player_readings().map(|reading| {
-        player_options::HeartRateReadingView {
-            configured: reading.configured,
-            connected: reading.connected,
-            bpm: reading.bpm,
-        }
+    let readings = deadsync_heart_rate::player_readings().map(|reading| HeartRateReadingView {
+        configured: reading.configured,
+        connected: reading.connected,
+        bpm: reading.bpm,
     });
-    player_options::HeartRateDevicesView {
+    HeartRateDevicesView {
         supported: snapshot.supported,
         scanning: snapshot.scanning,
         devices: snapshot
             .devices
             .into_iter()
-            .map(|device| player_options::HeartRateDeviceView {
+            .map(|device| HeartRateDeviceView {
                 id: device.id,
                 label: device.label,
             })
@@ -125,16 +128,16 @@ pub(crate) fn devices_view() -> player_options::HeartRateDevicesView {
     }
 }
 
-fn readings_view() -> gameplay::HeartRateView {
+fn readings_view() -> HeartRateView {
     let readings = deadsync_heart_rate::player_readings();
     let max_heart_rates = deadsync_profile::runtime_max_heart_rates();
-    let players = std::array::from_fn(|idx| gameplay::HeartRatePlayerView {
+    let players = std::array::from_fn(|idx| HeartRatePlayerView {
         configured: readings[idx].configured,
         connected: readings[idx].connected,
         bpm: readings[idx].bpm,
         max_heart_rate: max_heart_rates[idx],
     });
-    gameplay::HeartRateView { players }
+    HeartRateView { players }
 }
 
 pub(crate) fn refresh_evaluation(state: &mut evaluation::State, enabled: bool) -> bool {
@@ -145,19 +148,22 @@ pub(crate) fn refresh_evaluation(state: &mut evaluation::State, enabled: bool) -
     let view = if enabled {
         readings_view()
     } else {
-        gameplay::HeartRateView::default()
+        HeartRateView::default()
     };
     evaluation::set_heart_rate_view(state, generation, view);
     true
 }
 
-pub(crate) fn refresh_gameplay(state: &mut gameplay::State) -> bool {
+pub(crate) fn refresh_gameplay<G>(
+    presentation: &mut impl GameplayLivePresentation<G>,
+    previous: &mut (u64, u64),
+) {
     let generation = heart_rate_view_generation();
-    if gameplay::heart_rate_generation(state) == generation {
-        return false;
+    if *previous == generation {
+        return;
     }
-    gameplay::set_heart_rate_view(state, generation, readings_view());
-    true
+    *previous = generation;
+    presentation.sync_heart_rate(generation, readings_view());
 }
 
 #[cfg(test)]

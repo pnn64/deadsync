@@ -18,6 +18,7 @@ mod tests {
         std::fs::write(
             &path,
             "#TITLE:Loading test;\n#BPMS:0=120;\n\
+            #BGCHANGES:0=background.png=1=0=0=0;\n\
             #FGCHANGES:0=main.lua=1=0=0=0=StretchNoLoop====;\n\
             #NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:Hard;\n\
             #METER:1;\n#NOTES:\n1000\n0000\n0010\n0000\n;\n",
@@ -28,6 +29,7 @@ mod tests {
             "return Def.Quad { OnCommand = function(self) self:linear(1):x(100) end }",
         )
         .unwrap();
+        std::fs::write(root.join("background.png"), []).unwrap();
         Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&path, 0.0).unwrap())
     }
 
@@ -126,20 +128,17 @@ mod tests {
                             elapsed: 0.0,
                             duration: 2.0,
                         };
-                        app.state.screens.player_options_state =
-                            Some(player_options::init_for_gameplay(
-                                song.clone(),
-                                [0; MAX_PLAYERS],
-                                [3; MAX_PLAYERS],
-                                5,
-                                CurrentScreen::SelectMusic,
-                                None,
-                                noteskin_catalog_view(&app.dirs),
-                                crate::smx_config::smx_gif_catalog_view(),
-                                crate::heart_rate::devices_view(),
-                                crate::player_options::init_view(),
-                            ));
-                        app.handle_screen_entry_on_fade(CurrentScreen::PlayerOptions, target);
+                        let wheel = &mut app.state.screens.select_music_state;
+                        wheel.entries = vec![select_music::MusicWheelEntry::Song(song.clone())];
+                        wheel.selected_index = 0;
+                        wheel.selected_steps_index = 0;
+                        wheel.preferred_difficulty_index = 3;
+                        wheel.active_color_index = 5;
+                        app.prepare_screen_state(CurrentScreen::SelectMusic, target);
+                        assert!(app.state.pending_stage.is_some());
+                        assert!(app.state.screens.player_options_state.is_none());
+                        app.handle_screen_entry_on_fade(CurrentScreen::SelectMusic, target);
+                        assert!(app.state.pending_stage.is_none());
                         assert!(
                             app.pending_gameplay_init.is_some(),
                             "Lua preparation must be a worker"
@@ -150,12 +149,22 @@ mod tests {
                         finish_pending_stage(&mut app);
                         assert_eq!(progress.fraction(), 1.0);
                         assert!(app.song_lua_loading().is_none());
+                        let gameplay = if target == CurrentScreen::Gameplay {
+                            app.state.screens.gameplay_state.as_ref().unwrap()
+                        } else {
+                            &app.state.screens.practice_state.as_ref().unwrap().gameplay
+                        };
+                        assert!(gameplay.stage.song_frame().uses_song_lua_compositor());
+                        assert!(gameplay.song_backgrounds().changes().iter().any(|change| {
+                            matches!(&change.target, deadsync_chart::SongBackgroundChangeTarget::File(path)
+                                if path.ends_with("background.png"))
+                        }));
                         if target == CurrentScreen::Gameplay {
                             assert!(app.state.screens.gameplay_state.is_some());
                         } else {
                             let state = app.state.screens.practice_state.as_mut().unwrap();
                             let now = Instant::now();
-                            practice::handle_input(
+                            crate::gameplay_runtime::handle_practice_input::<ActiveTheme, _, _>(
                                 state,
                                 &InputEvent::new(
                                     VirtualAction::p1_menu_down,
@@ -167,11 +176,13 @@ mod tests {
                                     now,
                                     now,
                                 ),
-                                |_, seconds| seconds,
+                                &mut app.audio,
+                                &app.gameplay_sfx,
+                                &mut app.music_clock,
                                 &mut Vec::new(),
                             );
-                            let before = format!("{:?}", practice::edit_snapshot(state));
-                            assert!(app.prepare_restart_player_options(
+                            let before = format!("{:?}", crate::gameplay_runtime::practice_edit_snapshot(state));
+                            assert!(app.prepare_restart_stage(
                                 song.clone(),
                                 [song.charts[0].short_hash.as_str(); MAX_PLAYERS],
                                 1.0,
@@ -185,7 +196,7 @@ mod tests {
                             );
                             assert_loading_frame(&mut app);
                             finish_pending_stage(&mut app);
-                            let after = practice::edit_snapshot(
+                            let after = crate::gameplay_runtime::practice_edit_snapshot(
                                 app.state.screens.practice_state.as_ref().unwrap(),
                             );
                             assert_eq!(
@@ -194,7 +205,65 @@ mod tests {
                                 "practice reload retains editor selection"
                             );
                         }
+                        assert_eq!(app.get_in_transition_for_screen(target).1, 2.0);
+                        assert_eq!(
+                            app.get_out_transition_for_route(target, CurrentScreen::Evaluation).1,
+                            1.5,
+                        );
+                        app.state.session.gameplay_restart_count = 1;
+                        let entry_duration = if target == CurrentScreen::Gameplay { 0.2 } else { 2.0 };
+                        assert_eq!(app.get_in_transition_for_screen(target).1, entry_duration);
                     }
+                },
+            )
+        });
+    }
+
+    #[test]
+    fn practice_restart_load_failure_restores_options_for_the_requested_stage() {
+        on_app_thread(|| {
+            with_session(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P1,
+                true,
+                false,
+                || {
+                    let root = tempfile::tempdir().unwrap();
+                    let mut app = test_app(root.path());
+                    let song = song(root.path());
+                    let speeds = [
+                        ScrollSpeedSetting::CMod(630.0),
+                        ScrollSpeedSetting::XMod(2.5),
+                    ];
+                    app.state.screens.current_screen = CurrentScreen::Practice;
+                    assert!(app.prepare_restart_stage(
+                        Arc::clone(&song),
+                        [song.charts[0].short_hash.as_str(); MAX_PLAYERS],
+                        1.25,
+                        speeds,
+                        5,
+                        CurrentScreen::Practice,
+                    ));
+                    assert!(app.state.screens.player_options_state.is_none());
+                    let stage = app.state.pending_stage.as_ref().unwrap();
+                    let expected_steps = stage.options.chart_steps_index;
+                    let expected_difficulty = stage.chart_difficulty_index;
+                    std::fs::remove_file(&song.simfile_path).unwrap();
+
+                    let (target, _) = app.prepare_global_fade_entry(CurrentScreen::Practice);
+
+                    assert_eq!(target, CurrentScreen::PlayerOptions);
+                    assert!(app.state.pending_stage.is_none());
+                    assert!(app.pending_gameplay_init.is_none());
+                    let recovered = app.state.screens.player_options_state.as_ref().unwrap();
+                    let recovered = ActiveTheme::player_options_selection(recovered);
+                    assert!(Arc::ptr_eq(recovered.song, &song));
+                    assert_eq!(recovered.return_screen, CurrentScreen::Practice);
+                    assert_eq!(recovered.color_index, 5);
+                    assert_eq!(recovered.music_rate, 1.25);
+                    assert_eq!(recovered.steps, expected_steps);
+                    assert_eq!(recovered.preferred, expected_difficulty);
+                    assert_eq!(recovered.scroll_speeds, speeds);
                 },
             )
         });
@@ -238,7 +307,7 @@ impl App {
 impl App {
     pub(super) fn finish_practice_init(
         &mut self,
-        mut gs: gameplay::State,
+        mut gs: GameplayState,
         finish: PracticeInitFinish,
     ) -> Vec<Command> {
         self.gameplay_live_textures.reset();
@@ -252,7 +321,7 @@ impl App {
         self.gameplay_sfx = prewarm_gameplay_sfx(
             &mut self.audio,
             gs.song_lua_visuals(),
-            &gs.song_media.sound_paths,
+            &gs.stage.song_media.sound_paths,
         );
         let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
         let show_video_backgrounds = finish.config.show_video_backgrounds;
@@ -270,19 +339,19 @@ impl App {
                     &gs.noteskin_assets.tap_explosion_noteskin,
                 ],
                 gs.song(),
-                &gs.background_changes,
+                gs.song_backgrounds().changes(),
                 gs.song_lua_visuals(),
             );
             self.dynamic_media.set_gameplay_background_paths(
                 &mut self.asset_manager,
                 backend,
                 gs.song(),
-                &gs.background_changes,
+                gs.song_backgrounds().changes(),
             );
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
                 backend,
-                gs.song_media.video_paths(),
+                gs.stage.song_media.video_paths(),
             );
             prewarm_gameplay_banners(
                 &mut self.dynamic_media,
@@ -310,14 +379,18 @@ impl App {
             "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
             song.title
         );
-        commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
+        commands.push(Command::SetPackBanner(gs.presentation.pack_banner_path.clone()));
         commands.push(Command::SetDynamicBackground(background_path));
         // Reconcile chart timing and any video fallback once after the
         // deferred command installs the initial media.
-        gs.background_path_dirty = true;
-        let mut practice_state = practice::init(gs, finish.runtime);
+        gs.presentation.background_path_dirty = true;
+        let mut practice_state = crate::gameplay_runtime::prepare_practice(
+            gs,
+            finish.init,
+            practice::PracticePresentation::new,
+        );
         if let Some(snapshot) = finish.edit_snapshot {
-            practice::restore_edit_snapshot(&mut practice_state, snapshot);
+            crate::gameplay_runtime::restore_practice_edit_snapshot(&mut practice_state, snapshot);
         }
         self.state.screens.practice_state = Some(practice_state);
         if let Some(ps) = self.state.screens.practice_state.as_mut() {

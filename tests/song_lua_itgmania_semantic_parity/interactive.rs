@@ -847,7 +847,7 @@ impl DrawChecks {
     fn recorded(
         &self, state: &gameplay::State, screen: [f32; 2], clock: [f32; 2],
     ) -> Result<RecordedDraws, String> {
-        let frames = state.song_lua_draw_frames();
+        let frames = state.stage.song_lua.draw_frames();
         if frames.is_empty() { return Ok(RecordedDraws::default()); }
         let scene = state.song_lua.as_ref().ok_or("draw submissions have no owned scene")?;
         let bindings = scene.visual_draw_bindings();

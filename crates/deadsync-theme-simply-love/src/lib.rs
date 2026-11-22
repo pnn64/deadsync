@@ -35,10 +35,55 @@ pub use effects::{
     SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner, SimplyLoveSyncPlotView,
     SimplyLoveSyncRequest, SimplyLoveSyncResult, SimplyLoveSyncSongResult,
     SimplyLoveSyncStreamEvent, SimplyLoveSyncTarget, SimplyLoveTournamentConfigRequest,
-    SimplyLoveUpdaterRequest, resolve_effect_route,
+    SimplyLoveUpdaterRequest, effect_for_gameplay_exit, gameplay_action_for_effect,
+    resolve_effect_route,
 };
 
 pub struct SimplyLoveTheme;
+
+impl SimplyLoveTheme {
+    #[must_use]
+    pub const fn gameplay_exit_screen(
+        destination: deadsync_gameplay::exit_route::GameplayExitDestination,
+    ) -> screens::SimplyLoveScreen {
+        use deadsync_gameplay::exit_route::GameplayExitDestination;
+        use deadsync_theme::ThemeScreenFlow;
+
+        match destination {
+            GameplayExitDestination::Results => Self::SCREENS.results,
+            GameplayExitDestination::SongSelection => Self::SCREENS.song_selection,
+            GameplayExitDestination::CourseSelection => Self::SCREENS.course_selection,
+            GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => {
+                Self::SCREENS.gameplay
+            }
+        }
+    }
+
+    pub fn resolve_song_lua_screen(name: Option<&str>) -> Result<screens::SimplyLoveScreen, String> {
+        screens::gameplay::song_lua_transition_screen(name)
+    }
+
+    /// Interpret legacy screen destinations that also have a gameplay meaning.
+    #[must_use]
+    pub const fn gameplay_action_for_navigation(
+        screen: screens::SimplyLoveScreen,
+        immediate: bool,
+    ) -> Option<deadsync_gameplay::GameplayAction> {
+        use deadsync_gameplay::{GameplayAction, GameplayExit};
+        use screens::SimplyLoveScreen;
+
+        let exit = match screen {
+            SimplyLoveScreen::Evaluation => GameplayExit::Complete,
+            SimplyLoveScreen::SelectMusic => GameplayExit::Cancel,
+            _ => return None,
+        };
+        Some(if immediate {
+            GameplayAction::NavigateNoFade(exit)
+        } else {
+            GameplayAction::Navigate(exit)
+        })
+    }
+}
 
 impl deadsync_theme::Theme for SimplyLoveTheme {
     type Screen = screens::SimplyLoveScreen;
@@ -47,6 +92,70 @@ impl deadsync_theme::Theme for SimplyLoveTheme {
     #[inline(always)]
     fn screen_id(screen: Self::Screen) -> deadsync_theme::ThemeScreenId {
         screen.id()
+    }
+
+    fn current_screen_file_name(screen: Self::Screen) -> &'static str {
+        screen.current_screen_file_name()
+    }
+}
+
+impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme {
+    const SCREENS: deadsync_theme::ThemeScreens<Self::Screen> = deadsync_theme::ThemeScreens {
+        menu: screens::SimplyLoveScreen::Menu,
+        gameplay: screens::SimplyLoveScreen::Gameplay,
+        practice: screens::SimplyLoveScreen::Practice,
+        results: screens::SimplyLoveScreen::Evaluation,
+        song_selection: screens::SimplyLoveScreen::SelectMusic,
+        course_selection: screens::SimplyLoveScreen::SelectCourse,
+        player_options: screens::SimplyLoveScreen::PlayerOptions,
+    };
+
+    fn named_song_lua_screen(name: &str) -> Option<Self::Screen> {
+        screens::gameplay::named_song_lua_screen(name)
+    }
+}
+
+impl deadsync_theme::ThemeSessionFlow for SimplyLoveTheme {
+    const SESSION_SCREENS: deadsync_core::session_flow::SessionScreens<Self::Screen> = {
+        use deadsync_theme::ThemeScreenFlow;
+        use screens::SimplyLoveScreen as Screen;
+
+        deadsync_core::session_flow::SessionScreens {
+            menu: Self::SCREENS.menu,
+            select_music: Self::SCREENS.song_selection,
+            select_course: Self::SCREENS.course_selection,
+            select_profile: Some(Screen::SelectProfile),
+            select_color: Some(Screen::SelectColor),
+            select_style: Some(Screen::SelectStyle),
+            select_play_mode: Some(Screen::SelectPlayMode),
+            profile_load: Screen::ProfileLoad,
+            evaluation_summary: Some(Screen::EvaluationSummary),
+            initials: Some(Screen::Initials),
+            gameover: Some(Screen::GameOver),
+        }
+    };
+    const PROFILE_LOGIN_SCREENS: deadsync_core::session_flow::ProfileLoginScreens<Self::Screen> =
+        deadsync_core::session_flow::ProfileLoginScreens {
+            groovestats: Some(screens::SimplyLoveScreen::GrooveStatsLogin),
+            arrowcloud: Some(screens::SimplyLoveScreen::ArrowCloudLogin),
+        };
+}
+
+impl deadsync_theme::color::ThemeJudgmentPalette for SimplyLoveTheme {
+    const JUDGMENT_PRESET: deadsync_theme::color::JudgmentPalettePreset = color::JUDGMENT_PRESET;
+}
+
+impl deadsync_theme::ThemeResources for SimplyLoveTheme {
+    const SOUNDS: deadsync_theme::ThemeSounds = deadsync_theme::ThemeSounds {
+        effects: SFX_PATHS,
+        change: Some("assets/sounds/change.ogg"),
+        confirm: Some("assets/sounds/start.ogg"),
+        screenshot: Some("assets/sounds/screenshot.ogg"),
+    };
+
+    fn asset_manifest()
+    -> deadsync_theme::ThemeAssetManifest<impl Iterator<Item = deadlib_assets::TextureAssetSpec>> {
+        asset_manifest()
     }
 }
 

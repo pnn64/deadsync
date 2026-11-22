@@ -40,7 +40,7 @@ fn adaptive_filter(image: &Image) -> Vec<u8> {
     let mut filtered = Vec::with_capacity(size);
     let mut rows = encode_rows::Rows::new(image, false, Filter::Adaptive).unwrap();
     while let Some(row) = rows.next_row().unwrap() {
-        filtered.extend_from_slice(row);
+        filtered.extend_from_slice(row.bytes);
     }
     filtered
 }

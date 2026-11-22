@@ -2172,7 +2172,6 @@ fn song_lua_tween_playback_matches_native() {
                     &updates,
                     0..updates.len(),
                     &mut cursors,
-                    None,
                     &mut state,
                 );
                 let visible = state.sprite_texture && state.visible && state.diffuse[3] > 0.000_001;
@@ -2268,7 +2267,6 @@ fn song_lua_tween_playback_matches_native() {
                         &updates,
                         0..updates.len(),
                         &mut cursors,
-                        None,
                         &mut initial,
                     );
                     assert!(!initial.sprite_texture, "texture appears before Bind");
@@ -2390,7 +2388,6 @@ fn song_lua_static_overlay_state_skips_runtime_caches() {
             &[],
             0..0,
             &mut dynamic_cursors,
-            None,
             &mut dynamic_cache,
         );
         let actual = song_lua_overlay_render_state_from(
@@ -2403,7 +2400,6 @@ fn song_lua_static_overlay_state_skips_runtime_caches() {
             &[],
             0..0,
             &mut static_cursors,
-            None,
             &mut static_cache,
         );
         assert_eq!(actual, expected, "now={now}");
@@ -2438,7 +2434,7 @@ fn song_lua_overlay_update_track_restores_cropped_state() {
     }];
     let mut cursors = vec![0; tracks.len()];
     let mut active = SongLuaOverlayState::default();
-    apply_song_lua_overlay_runtime_updates_for(1.5, &tracks, 0..1, &mut cursors, None, &mut active);
+    apply_song_lua_overlay_runtime_updates_for(1.5, &tracks, 0..1, &mut cursors, &mut active);
     assert!((active.croptop - 0.4).abs() <= f32::EPSILON);
 
     let mut restored = SongLuaOverlayState {
@@ -2450,14 +2446,13 @@ fn song_lua_overlay_update_track_restores_cropped_state() {
         &tracks,
         0..1,
         &mut cursors,
-        None,
         &mut restored,
     );
     assert_eq!(restored.croptop, 0.0);
 }
 
 #[test]
-fn song_lua_overlay_visibility_and_slice_geometry_change_atomically() {
+fn song_lua_overlay_visibility_keeps_unrelated_slice_interpolation() {
     use deadsync_song_lua::{
         SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
         SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
@@ -2501,36 +2496,22 @@ fn song_lua_overlay_visibility_and_slice_geometry_change_atomically() {
         },
     ];
 
-    let mut crop = SongLuaOverlayState::default();
-    let mut visible = SongLuaOverlayState::default();
     let mut cursors = vec![0; tracks.len()];
-    let snap = song_lua_overlay_update_snap(0.05, &tracks, &[1], &mut cursors);
-    apply_song_lua_overlay_runtime_updates_for(0.05, &tracks, 0..1, &mut cursors, snap, &mut crop);
-    apply_song_lua_overlay_runtime_updates_for(
-        0.05,
-        &tracks,
-        1..2,
-        &mut cursors,
-        snap,
-        &mut visible,
-    );
-    assert_eq!(crop.cropbottom, 0.8);
-    assert!(visible.visible);
-
-    let mut crop = SongLuaOverlayState::default();
-    let mut visible = SongLuaOverlayState::default();
-    let snap = song_lua_overlay_update_snap(0.15, &tracks, &[1], &mut cursors);
-    apply_song_lua_overlay_runtime_updates_for(0.15, &tracks, 0..1, &mut cursors, snap, &mut crop);
-    apply_song_lua_overlay_runtime_updates_for(
-        0.15,
-        &tracks,
-        1..2,
-        &mut cursors,
-        snap,
-        &mut visible,
-    );
-    assert_eq!(crop.cropbottom, 0.8);
-    assert!(visible.visible);
+    for (now, expected_crop, expected_visible) in [
+        (0.05, 0.4, false),
+        (0.1, 0.8, true),
+        (0.15, 0.4, true),
+        (0.2, 0.0, false),
+    ] {
+        let mut crop = SongLuaOverlayState::default();
+        let mut visible = SongLuaOverlayState::default();
+        apply_song_lua_overlay_runtime_updates_for(now, &tracks, 0..1, &mut cursors, &mut crop);
+        apply_song_lua_overlay_runtime_updates_for(
+            now, &tracks, 1..2, &mut cursors, &mut visible,
+        );
+        assert!((crop.cropbottom - expected_crop).abs() < 0.000_001);
+        assert_eq!(visible.visible, expected_visible, "visibility at {now}");
+    }
 }
 
 #[test]
@@ -2554,14 +2535,11 @@ fn song_lua_dormant_visibility_track_stays_hidden_until_trigger() {
         ],
     }];
     let mut cursors = vec![0];
-    let snap = song_lua_overlay_update_snap(1.0, &tracks, &[0], &mut cursors);
     let mut state = SongLuaOverlayState {
         visible: false,
         ..SongLuaOverlayState::default()
     };
-    apply_song_lua_overlay_runtime_updates_for(1.0, &tracks, 0..1, &mut cursors, snap, &mut state);
-
-    assert!(snap.is_none());
+    apply_song_lua_overlay_runtime_updates_for(1.0, &tracks, 0..1, &mut cursors, &mut state);
     assert!(!state.visible);
 }
 
@@ -8659,7 +8637,7 @@ fn check_native_model_textures(name: &str, native: &str, explicit_updates: bool,
                 let end = runtime_updates.partition_point(|track| track.overlay_index <= index);
                 song_lua_overlay_render_state_from(
                     second, index, overlay, &[], &[], &[], &runtime_updates, start..end,
-                    &mut update_cursors, None, &mut message_caches[index],
+                    &mut update_cursors, &mut message_caches[index],
                 )
             }).collect::<Vec<_>>();
             let states = actor_conformance::compose_overlay_states(
@@ -9919,7 +9897,6 @@ fn song_lua_effect_clock_advances_and_seeks_across_wraps() {
                 &tracks,
                 0..1,
                 &mut cursors,
-                None,
                 &mut state,
             );
             let clock = match effect_clock {
@@ -11006,11 +10983,11 @@ fn song_lua_update_setstate_records_animation_epoch() {
     }];
     let mut cursors = [0];
     let mut state = SongLuaOverlayState::default();
-    apply_song_lua_overlay_runtime_updates_for(1.1, &tracks, 0..1, &mut cursors, None, &mut state);
+    apply_song_lua_overlay_runtime_updates_for(1.1, &tracks, 0..1, &mut cursors, &mut state);
     assert_eq!(state.sprite_state_index, Some(0));
     assert_eq!(state.sprite_animation_epoch, Some(1.0));
 
-    apply_song_lua_overlay_runtime_updates_for(2.0, &tracks, 0..1, &mut cursors, None, &mut state);
+    apply_song_lua_overlay_runtime_updates_for(2.0, &tracks, 0..1, &mut cursors, &mut state);
     assert_eq!(state.sprite_state_index, Some(2));
     assert_eq!(state.sprite_animation_epoch, Some(2.0));
 }
@@ -13759,6 +13736,49 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         false,
         [0; MAX_PLAYERS],
     );
+    let visuals = &mut state.mods.song_lua_visuals;
+    visuals.note_hides[0] = deadsync_gameplay::SongLuaNoteHideWindows::new(vec![
+        deadsync_gameplay::SongLuaNoteHideWindowRuntime {
+            column: 0,
+            start_beat: 0.0,
+            end_beat: 4.0,
+        },
+    ]);
+    visuals.column_offsets[0] = vec![deadsync_gameplay::SongLuaColumnOffsetWindowRuntime {
+        column: 0,
+        target: deadsync_gameplay::SongLuaColumnTransformTarget::OffsetY,
+        start_second: 0.0,
+        end_second: 1.0,
+        sustain_end_second: 2.0,
+        from_y: 0.0,
+        to_y: 12.0,
+        easing: deadsync_gameplay::SongLuaEase::Linear,
+        opt1: None,
+        opt2: None,
+    }];
+    visuals.column_splines[0] = vec![deadsync_gameplay::SongLuaColumnSplineTrack {
+        player: 0,
+        column: 0,
+        time_offset: 0.0,
+        frames: Arc::from([]),
+    }];
+    visuals.player_actors[0].judgment.textures = [-1.0, 1.0]
+        .map(|second| crate::SongLuaJudgmentTexture {
+            second,
+            path: PathBuf::from("fixture-judgment.png"),
+            key: Arc::from(if second < 0.0 { "early" } else { "late" }),
+            frame_size: [64.0, 16.0],
+            frame_cols: 1,
+            frame_rows: 6,
+        })
+        .into();
+    state.mods.attacks.mask_windows[0] = deadsync_gameplay::build_attack_mask_windows(&[
+        deadsync_gameplay::ChartAttackWindow {
+            start_second: 0.0,
+            len_seconds: 10.0,
+            mods: "100% drunk".into(),
+        },
+    ]);
     let mut media = SongMedia::new(&state, sounds);
     let assets = AssetManager::new();
     let mut scratches = [FrameScratch::new(&state), FrameScratch::new(&state)];
@@ -13804,6 +13824,10 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
                     }
                 },
                 |request, _, _, _, _, _| {
+                    assert_eq!(
+                        request.judgment_texture.unwrap().key.as_ref(),
+                        if now < 1.0 { "early" } else { "late" },
+                    );
                     field_requests[style].push((
                         request.player,
                         request.judgment_visible,
@@ -13846,6 +13870,292 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         };
         assert_eq!(target_sizes(&scratches[0]), target_sizes(&scratches[1]));
     }
+
+    use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
+    use deadsync_assets::gameplay_stage::{ActiveGameplayStage, PreparedGameplayStage};
+    use deadsync_gameplay::practice::editor::{PracticeEditorCommand, PracticePlayRange};
+    use deadsync_gameplay::practice::{PracticeSession, PracticeViewRequest};
+    use deadsync_notefield::{
+        CapturedActorScratch, MeasureLineMode, NotefieldComposeRequest, NotefieldHudComposeResult,
+        NotefieldSettings, PreparedNotefield,
+    };
+    use deadsync_song_lua::gameplay_presentation::{
+        FieldHudBuffers, FieldPresentation, FramePresentationContext, GameplayFrameBuffers,
+        GameplayFramePresenter, GameplayFrameView, SongFrameContent, compose_stage_frame,
+    };
+    use deadsync_song_lua::gameplay_session::StageNoteskins;
+    use deadsync_song_lua::playback as shared;
+
+    struct FixturePresenter<'a> {
+        noteskins: &'a GameplayNoteskinAssets,
+        expect_song_content: bool,
+        capture_storage: &'a std::cell::Cell<Option<*const CapturedActorScratch>>,
+    }
+
+    impl GameplayFramePresenter for FixturePresenter<'_> {
+        type Profile = deadsync_profile_gameplay::GameplayProfile;
+        type Slot = SpriteSlot;
+        type View = GameplayFrameView;
+        type Policy = [f32; 4];
+        type Scratch = usize;
+
+        fn draw_layers<'a>(
+            &'a self,
+            hud_count: &'a mut usize,
+            context: FramePresentationContext<'a, Self::View, Self::Policy>,
+        ) -> impl FnMut(shared::ScreenLayer, &mut Vec<Actor>, shared::FieldLayout) + 'a {
+            move |layer, actors, _| match layer {
+                shared::ScreenLayer::Hud => *hud_count += 1,
+                shared::ScreenLayer::System => {
+                    let mut actor = test_source_actor();
+                    if let Actor::Frame { background, .. } = &mut actor {
+                        *background =
+                            Some(deadlib_present::actors::Background::Color(context.policy));
+                    }
+                    actors.push(actor);
+                }
+                _ => {}
+            }
+        }
+
+        fn field_presentation(
+            &self,
+            _: FramePresentationContext<'_, Self::View, Self::Policy>,
+            _player: usize,
+        ) -> FieldPresentation<'_> {
+            FieldPresentation::default()
+        }
+
+        fn draw_field_hud(
+            &self,
+            _: FramePresentationContext<'_, Self::View, Self::Policy>,
+            gameplay: &GameplayCoreState,
+            frame: &shared::FieldFrame<'_>,
+            request: &NotefieldComposeRequest<'_, Self::Slot>,
+            prepared: &PreparedNotefield<'_, Self::Slot>,
+            buffers: FieldHudBuffers<'_>,
+        ) -> NotefieldHudComposeResult {
+            let capture_storage = std::ptr::from_ref(&*buffers.capture);
+            if let Some(previous) = self.capture_storage.replace(Some(capture_storage)) {
+                assert_eq!(capture_storage, previous);
+            }
+            assert!(prepared.notes.is_some(), "the game prepared the actual noteskin");
+            assert!(std::ptr::eq(request.chart.notes, gameplay.notes()));
+            assert_eq!(frame.music_time_s, gameplay.current_music_time_seconds());
+            assert_eq!(request.geometry.player_idx, frame.player);
+            assert_eq!(
+                request.settings,
+                NotefieldSettings {
+                    mine_size_scale: 2.0,
+                    measure_line_mode: MeasureLineMode::Eighth,
+                    measure_cues: true,
+                    column_cues: true,
+                    crossover_cues: true,
+                    crossover_countdown: true,
+                    column_flash: true,
+                    notefield_offset: [50.0, -50.0],
+                    fallback_mini_percent: 20.0,
+                    hide_targets: false,
+                    hold_explosion_enabled: false,
+                    hide_tap_explosion_noteskin: false,
+                },
+            );
+            let player = frame.player;
+            let base = self.noteskins.noteskin[player].as_deref().unwrap();
+            let receptor = self.noteskins.receptor_noteskin[player].as_deref().unwrap();
+            assert!(std::ptr::eq(request.noteskin.base.unwrap(), base));
+            assert!(std::ptr::eq(request.noteskin.mine.unwrap(), base));
+            assert!(std::ptr::eq(request.noteskin.receptor.unwrap(), receptor));
+            assert!(std::ptr::eq(request.noteskin.tap_explosion.unwrap(), base));
+            let visuals = gameplay.song_lua_visuals();
+            if self.expect_song_content {
+                assert_eq!(request.visual.visual.drunk, 1.0);
+                assert!(std::ptr::eq(
+                    request.song_lua.note_hides.unwrap(),
+                    &visuals.note_hides[player],
+                ));
+                assert!(std::ptr::eq(
+                    request.song_lua.column_offsets,
+                    visuals.column_offsets[player].as_slice(),
+                ));
+                assert!(std::ptr::eq(
+                    request.song_lua.column_splines,
+                    visuals.column_splines[player].as_slice(),
+                ));
+                assert_eq!(frame.judgment_texture.unwrap().key.as_ref(), "early");
+            } else {
+                assert_eq!(request.visual.visual.drunk, 0.0);
+                assert!(request.song_lua.note_hides.is_none());
+                assert!(request.song_lua.column_offsets.is_empty());
+                assert!(request.song_lua.column_splines.is_empty());
+                assert!(frame.judgment_texture.is_none());
+            }
+            NotefieldHudComposeResult::default()
+        }
+    }
+
+    let style = deadsync_noteskin::Style {
+        num_cols: state.cols_per_player(),
+        num_players: state.num_players(),
+    };
+    let load_skin = |name| Arc::new(deadsync_assets::noteskin::load_itg_skin(&style, name).unwrap());
+    let noteskin_assets = GameplayNoteskinAssets {
+        noteskin: [Some(load_skin("cel")), None],
+        receptor_noteskin: [Some(load_skin("metal")), None],
+        ..Default::default()
+    };
+    state.update_profile(0, |profile| {
+        profile.mine_size_percent = 250;
+        profile.measure_lines = profile_data::MeasureLines::Eighth;
+        profile.measure_cues = true;
+        profile.column_cues = true;
+        profile.crossover_cues = true;
+        profile.column_countdown = true;
+        profile.column_flash_on_miss = true;
+        profile.note_field_offset_x = 99;
+        profile.note_field_offset_y = -99;
+        profile.mini_percent = 20;
+        profile.hide_targets = false;
+        profile
+            .tap_explosion_active_mask
+            .remove(profile_data::TapExplosionMask::HOLDING);
+    });
+    let mut prepared = PreparedGameplayStage::from_gameplay(state, noteskin_assets);
+    prepared.song_lua_sound_paths = media.sound_paths;
+    let (mut stage, _) = prepared.into_parts();
+    let arena = stage.actor_resources();
+    arena.lock_growth();
+    let warmed = arena.stats();
+    assert!(warmed.textures > 0, "stage prewarmed its own noteskin textures");
+    for skin in stage.noteskin_assets.components_for_player(0).into_iter().flatten() {
+        skin.for_each_slot(|slot| {
+            let _ = slot.actor_texture_source(arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
+        });
+    }
+    assert_eq!(arena.stats(), warmed);
+    let noteskins = stage.noteskin_assets.clone();
+    let capture_storage = std::cell::Cell::new(None);
+    let presenter = |expect_song_content| FixturePresenter {
+        noteskins: &noteskins,
+        expect_song_content,
+        capture_storage: &capture_storage,
+    };
+    stage.gameplay.update_profile(0, |profile| {
+        profile.hide_targets = true;
+        profile.measure_lines = profile_data::MeasureLines::Off;
+        profile.tap_explosion_noteskin = Some(profile_data::NoteSkin::none_choice());
+    });
+    let hide_tap_explosion = stage.profiles()[0].tap_explosion_noteskin_hidden();
+    assert!(
+        stage.noteskin_assets.selected_components_for_player(0, hide_tap_explosion)[3]
+            .is_none()
+    );
+    let song_time = stage.current_music_time_ns();
+    let mut hud_counts = [0; 2];
+    let mut song = stage.song_scratch.take().expect("stage frame scratch");
+    let song_frame = std::ptr::from_ref(song.as_ref());
+    deadsync_gameplay::refresh_active_attack_masks(&mut stage.gameplay, 1.0);
+    for (hud_count, color) in hud_counts
+        .iter_mut()
+        .zip([[1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0]])
+    {
+        let mut actors = Vec::new();
+        stage.actor_resources().begin_hit_stats(true);
+        let segments = compose_stage_frame(
+            &mut actors,
+            &stage,
+            &presenter(true),
+            GameplayFrameBuffers {
+                song: &mut song,
+                presentation: hud_count,
+            },
+            FramePresentationContext {
+                assets: &assets,
+                view: GameplayFrameView::default(),
+                uptime_seconds: 0.0,
+                policy: color,
+            },
+            SongFrameContent::PLAYBACK,
+        );
+        assert!(segments.segments(&song, &actors).count() > 0);
+        assert!(
+            stage.actor_resources().stats().texture_hits > 0,
+            "the game draws the field with the stage's prewarmed textures with an empty HUD",
+        );
+        assert_eq!(song.render_targets().len(), 3);
+        assert!(actors.iter().any(|actor| {
+            matches!(
+                actor,
+                Actor::Frame {
+                    background: Some(deadlib_present::actors::Background::Color(tint)),
+                    ..
+                } if *tint == color
+            )
+        }));
+        assert_eq!(std::ptr::from_ref(song.as_ref()), song_frame);
+        assert_eq!(stage.current_music_time_ns(), song_time);
+    }
+    assert_eq!(hud_counts, [1, 1]);
+
+    let mut practice = PracticeSession::new(&mut stage.gameplay, Default::default());
+    let mut practice_hud_count = 0;
+    let mut assert_practice_frame =
+        |stage: &mut ActiveGameplayStage, practice: &PracticeSession, playing| {
+            stage.gameplay.set_current_music_time_ns(song_time);
+            deadsync_gameplay::refresh_active_attack_masks(&mut stage.gameplay, 1.0);
+            let mut actors = Vec::new();
+            compose_stage_frame(
+                &mut actors,
+                stage,
+                &presenter(playing),
+                GameplayFrameBuffers {
+                    song: &mut song,
+                    presentation: &mut practice_hud_count,
+                },
+                FramePresentationContext {
+                    assets: &assets,
+                    view: GameplayFrameView::default(),
+                    uptime_seconds: 0.0,
+                    policy: [1.0; 4],
+                },
+                SongFrameContent::for_practice(practice),
+            );
+            assert_eq!(
+                song.render_targets().len(),
+                if playing { 3 } else { 0 },
+            );
+            assert_eq!(std::ptr::from_ref(song.as_ref()), song_frame);
+        };
+    let snap = |_: &std::path::Path, seconds| seconds;
+    assert_practice_frame(&mut stage, &practice, false);
+    assert_eq!(
+        practice.execute(
+            &mut stage.gameplay,
+            PracticeEditorCommand::Play(PracticePlayRange::WholeSong),
+            snap,
+            |_, _| {},
+        ),
+        PracticeViewRequest::PlaybackStarted
+    );
+    assert_practice_frame(&mut stage, &practice, true);
+
+    let now = std::time::Instant::now();
+    let back = deadsync_input::InputEvent::new(
+        deadsync_input::VirtualAction::p1_back,
+        0,
+        true,
+        deadsync_core::input::InputSource::Keyboard,
+        now,
+        0,
+        now,
+        now,
+    );
+    assert_eq!(
+        practice.handle_input(&mut stage.gameplay, &back, snap, |_, _| {}),
+        PracticeViewRequest::PlaybackStopped
+    );
+    assert_practice_frame(&mut stage, &practice, false);
+    stage.song_scratch = Some(song);
 }
 
 fn prepare_fixture(

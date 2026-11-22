@@ -90,7 +90,6 @@ impl Layer {
                 tracks,
                 movie.updates.clone(),
                 &mut self.cursors,
-                None,
                 &mut movie.messages,
             );
             let SongLuaOverlayKind::Sprite {
@@ -173,5 +172,7 @@ impl Movies {
 }
 
 #[cfg(all(test, feature = "test-support"))]
-#[path = "movie_tests.rs"]
-mod tests;
+playback_fixture_tests! {
+    #[path = "movie_tests.rs"]
+    mod tests;
+}

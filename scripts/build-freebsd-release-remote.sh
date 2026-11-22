@@ -79,6 +79,20 @@ fi
 command -v tar >/dev/null
 command -v git >/dev/null"
 
+echo "Checking FreeBSD build dependencies"
+ssh_run '
+if ! pkg-config --exists "dbus-1 >= 1.6" 2>/dev/null; then
+  echo "Installing dbus and pkgconf on the FreeBSD builder"
+  if [ "$(id -u)" -eq 0 ]; then
+    /usr/sbin/pkg install -y dbus pkgconf
+  elif ! command -v sudo >/dev/null 2>&1 || ! sudo -n /usr/sbin/pkg install -y dbus pkgconf; then
+    echo "Run pkg install dbus pkgconf as root on the FreeBSD builder, or allow the SSH user to run this install with passwordless sudo." >&2
+    exit 1
+  fi
+fi
+pkg-config --print-errors --modversion "dbus-1 >= 1.6"
+'
+
 echo "Checking for Rust stable updates on the FreeBSD builder"
 ssh_run "rustup update stable --no-self-update
 rustup run stable rustc --version

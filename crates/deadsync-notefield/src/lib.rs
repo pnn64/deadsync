@@ -28,14 +28,14 @@ mod timing_labels;
 mod transforms;
 
 pub use actor_builder::{
-    BuiltNotefield, CapturedActorScratch, CapturedActorSource, NotefieldFrameFeatures,
-    NotefieldFramePlan, NotefieldHudParts,
+    BuiltNotefield, CapturedActorScratch, CapturedActorSource, NotefieldFramePlan, NotefieldHudParts,
 };
 pub use combo_feedback::{ComboMilestoneAssets, ComboMilestoneSprite};
 pub use compose::{
     MeasureCounterOptions, NotefieldChartView, NotefieldComposeRequest, NotefieldGeometry,
-    NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
-    PreparedNotefield, PreparedNotefieldNotes, SongLuaPlayerPosition, prepare_notefield,
+    NotefieldNoteskinView, NotefieldOptions, NotefieldSettings, NotefieldSongLuaView,
+    NotefieldVisualState, PreparedNotefield, PreparedNotefieldNotes, SongLuaPlayerPosition,
+    prepare_notefield, resolve_notefield_motion,
 };
 pub use display_mods::{
     DISPLAY_TURN_BLENDER, DISPLAY_TURN_LEFT, DISPLAY_TURN_LR_MIRROR, DISPLAY_TURN_MIRROR,
@@ -45,7 +45,8 @@ pub use display_mods::{
 pub use error_bar::{ERROR_BAR_TEXT_SLOTS_PER_PLAYER, ErrorBarModes, error_bar_boundaries_s};
 pub use feedback::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER;
 pub use field_frame::{
-    NotefieldFieldFrameView, NotefieldFieldResult, actor_from_flat_draw, compose_notefield_field,
+    NotefieldFieldFrameView, NotefieldFieldResult, NotefieldFieldScratch, actor_from_flat_draw,
+    compose_notefield_field,
 };
 pub use frame_feedback::{HoldEmitterState, NotefieldFeedbackFrameView, NotefieldLaneFeedback};
 pub use frame_hud::{

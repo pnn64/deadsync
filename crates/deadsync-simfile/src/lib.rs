@@ -5,6 +5,7 @@ pub mod bpm;
 pub mod cache;
 pub mod changes;
 pub mod course;
+pub mod course_selection;
 pub mod event_intro;
 pub mod golf;
 pub mod matrix;

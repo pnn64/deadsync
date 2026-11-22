@@ -89,15 +89,32 @@ impl Deflater {
         output: &mut [u8],
         finish: bool,
     ) -> Result<DeflateProgress, Error> {
+        self.process_input(Some(input), input.len(), output, finish)
+    }
+    /// `process` for `len` zero input bytes, whose checksum needs no reads.
+    pub(crate) fn process_zeros(
+        &mut self,
+        len: usize,
+        output: &mut [u8],
+    ) -> Result<DeflateProgress, Error> {
+        self.process_input(None, len, output, false)
+    }
+    fn process_input(
+        &mut self,
+        input: Option<&[u8]>,
+        len: usize,
+        output: &mut [u8],
+        finish: bool,
+    ) -> Result<DeflateProgress, Error> {
         if let Some(error) = &self.failure {
             return Err(error.clone());
         }
-        if self.finishing && !input.is_empty() {
+        if self.finishing && len != 0 {
             let error = Error::Invalid("input after zlib finish");
             self.failure = Some(error.clone());
             return Err(error);
         }
-        let result = self.run(input, output, finish);
+        let result = self.run(input, len, output, finish);
         if let Err(error) = &result {
             self.failure = Some(error.clone());
         }
@@ -105,7 +122,8 @@ impl Deflater {
     }
     fn run(
         &mut self,
-        input: &[u8],
+        input: Option<&[u8]>,
+        len: usize,
         output: &mut [u8],
         finish: bool,
     ) -> Result<DeflateProgress, Error> {
@@ -134,15 +152,22 @@ impl Deflater {
                     status: StreamStatus::Done,
                 });
             }
-            let n = (self.history + BLOCK - self.window.len()).min(input.len() - consumed);
+            let n = (self.history + BLOCK - self.window.len()).min(len - consumed);
             self.total_in = self.total_in.checked_add(n).ok_or(Error::LimitExceeded)?;
-            self.window
-                .extend_from_slice(&input[consumed..consumed + n]);
-            if self.mode != Compression::Rle {
-                self.checksum.update(&input[consumed..consumed + n]);
+            if let Some(input) = input {
+                let bytes = &input[consumed..consumed + n];
+                self.window.extend_from_slice(bytes);
+                if self.mode != Compression::Rle {
+                    self.checksum.update(bytes);
+                }
+            } else {
+                self.window.resize(self.window.len() + n, 0);
+                if self.mode != Compression::Rle {
+                    self.checksum.update_zeros(n);
+                }
             }
             consumed += n;
-            let final_block = finish && consumed == input.len();
+            let final_block = finish && consumed == len;
             if self.window.len() == self.history + BLOCK || final_block {
                 self.encode_block(final_block);
             } else {
@@ -194,6 +219,74 @@ impl Deflater {
                 .bytes
                 .extend_from_slice(&self.checksum.finish().to_be_bytes());
             self.finishing = true;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Drive one stream. `None` parts are zero runs fed through
+    /// `process_zeros`; the last part must carry bytes to finish the stream.
+    fn stream(mode: Compression, parts: &[(Option<&[u8]>, usize)], capacity: usize) -> Vec<u8> {
+        let mut deflater = Deflater::new(mode).unwrap();
+        let mut buffer = vec![0; capacity];
+        let mut encoded = Vec::new();
+        for (n, &(mut input, mut len)) in parts.iter().enumerate() {
+            let finish = n + 1 == parts.len();
+            loop {
+                let progress = match input {
+                    Some(bytes) => deflater.process(bytes, &mut buffer, finish),
+                    None => deflater.process_zeros(len, &mut buffer),
+                }
+                .unwrap();
+                encoded.extend_from_slice(&buffer[..progress.written]);
+                if let Some(bytes) = &mut input {
+                    *bytes = &bytes[progress.consumed..];
+                }
+                len -= progress.consumed;
+                match progress.status {
+                    StreamStatus::NeedOutput => {}
+                    StreamStatus::NeedInput if !finish && len == 0 => break,
+                    StreamStatus::Done if finish && len == 0 => break,
+                    status => panic!("unexpected {status:?}"),
+                }
+            }
+        }
+        encoded
+    }
+
+    #[test]
+    fn zero_runs_encode_like_zero_bytes() {
+        let bytes: Vec<u8> = (0..70_000u32).map(|n| (n * 37 % 251) as u8 | 1).collect();
+        let zeros = vec![0; 70_000];
+        for mode in [Compression::Fast, Compression::Rle, Compression::Stored] {
+            for runs in [
+                [0, 1, 5],
+                [3, 32768, 7],
+                [32765, 70_000, 2],
+                [1, 40_000, 65_000],
+            ] {
+                let mut with_runs = Vec::new();
+                let mut materialized = Vec::new();
+                for (n, &run) in runs.iter().enumerate() {
+                    let text = &bytes[n * 9_000..n * 9_000 + 1 + n * 4_000];
+                    with_runs.push((Some(text), text.len()));
+                    materialized.push((Some(text), text.len()));
+                    with_runs.push((None, run));
+                    materialized.push((Some(&zeros[..run]), run));
+                }
+                with_runs.push((Some(&bytes[..3]), 3));
+                materialized.push((Some(&bytes[..3]), 3));
+                for capacity in [1, 7, 65_536] {
+                    assert_eq!(
+                        stream(mode, &with_runs, capacity),
+                        stream(mode, &materialized, capacity),
+                        "{mode:?} {runs:?} {capacity}"
+                    );
+                }
+            }
         }
     }
 }

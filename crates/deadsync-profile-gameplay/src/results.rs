@@ -1,12 +1,147 @@
 //! Completed gameplay results, independent of screen construction and rendering.
 use crate::GameplayProfile;
+use deadsync_chart::{ChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::course_run::CourseRun;
 use deadsync_gameplay::{GameplayRuntimeState, build_crossover_rows};
 use deadsync_profile as profile_data;
+use deadsync_rules::course::CourseType;
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::{judgment, timing as timing_stats};
-use deadsync_score::stage_stats::{PlayerStageSummary, StageSummary};
+use deadsync_score::stage_stats::{self, PlayerStageSummary, StageSummary};
 use deadsync_score::{self as score_data, GrooveStatsEvalState, ItlEvalState};
 use std::collections::HashMap;
+use std::sync::Arc;
+
+/// Played chart identities and resolved settings retained for Evaluation.
+#[derive(Clone)]
+pub struct EvaluationStage {
+    pub song: Arc<SongData>,
+    charts: [Option<(profile_data::PlayerSide, Arc<ChartData>)>; MAX_PLAYERS],
+    pub music_rate: f32,
+    pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
+}
+
+impl EvaluationStage {
+    pub fn from_gameplay_result<A, C, D>(
+        game: &GameplayRuntimeState<GameplayProfile, A, C, D>,
+        result: &StageSummary,
+    ) -> Option<Self> {
+        let players = std::array::from_fn(|player| {
+            (player < game.num_players()).then(|| {
+                let side = crate::profile_side_from_gameplay(
+                    game.setup.session.runtime_player_side(player),
+                );
+                (side, game.scroll_speed_for_player(player))
+            })
+        });
+        Self::from_stage_result(result, players)
+    }
+
+    /// Players are in result slot order. Restart settings use physical-side order.
+    pub fn from_stage_result(
+        result: &StageSummary,
+        players: [Option<(profile_data::PlayerSide, ScrollSpeedSetting)>; MAX_PLAYERS],
+    ) -> Option<Self> {
+        let mut scroll_speed = [ScrollSpeedSetting::default(); MAX_PLAYERS];
+        let charts = players.map(|player| {
+            let (side, speed) = player?;
+            let index = profile_data::player_side_index(side);
+            let result = result.players[index].as_ref()?;
+            scroll_speed[index] = speed;
+            Some((side, Arc::clone(&result.chart)))
+        });
+        charts.iter().any(Option::is_some).then(|| Self {
+            song: Arc::clone(&result.song),
+            charts,
+            music_rate: if result.music_rate.is_finite() && result.music_rate > 0.0 {
+                result.music_rate
+            } else {
+                1.0
+            },
+            scroll_speed,
+        })
+    }
+
+    pub fn chart_hashes(&self) -> [&str; MAX_PLAYERS] {
+        let mut hashes = [""; MAX_PLAYERS];
+        for (side, chart_hash) in self.player_chart_queries().into_iter().flatten() {
+            hashes[profile_data::player_side_index(side)] = chart_hash;
+        }
+        hashes
+    }
+
+    pub fn player_chart_queries(&self) -> [Option<(profile_data::PlayerSide, &str)>; MAX_PLAYERS] {
+        self.charts.each_ref().map(|entry| {
+            entry.as_ref().map(|(side, chart)| (*side, chart.short_hash.as_str()))
+        })
+    }
+}
+
+fn course_summary_totals(run: &CourseRun) -> [stage_stats::CourseSummaryTotals; MAX_PLAYERS] {
+    if run.course_type == CourseType::Endless {
+        [stage_stats::CourseSummaryTotals::default(); MAX_PLAYERS]
+    } else {
+        run.course_display_totals
+            .map(|total| stage_stats::CourseSummaryTotals {
+                possible_grade_points: total.possible_grade_points,
+                total_steps: total.total_steps,
+                holds_total: total.holds_total,
+                rolls_total: total.rolls_total,
+                mines_total: total.mines_total,
+            })
+    }
+}
+
+pub fn course_summary_stage(
+    run: &CourseRun,
+    stage_summaries: &[StageSummary],
+    song_stub: &SongData,
+) -> Option<StageSummary> {
+    stage_stats::build_course_summary_stage(stage_stats::CourseSummaryInput {
+        path: run.path.as_path(),
+        name: &song_stub.title,
+        banner_path: song_stub.banner_path.as_deref(),
+        score_hash: run.score_hash.as_str(),
+        difficulty_name: run.course_difficulty_name.as_str(),
+        meter: run.course_meter,
+        song_stub,
+        course_total_seconds: run.total_seconds(),
+        totals: course_summary_totals(run),
+        stage_summaries,
+    })
+}
+
+/// The shared result saved for the master participant in a Routine course.
+pub fn routine_shared_course_result(
+    run: &CourseRun,
+    summary: &StageSummary,
+    play_style: profile_data::PlayStyle,
+) -> Option<PlayerStageSummary> {
+    if !play_style.is_routine() {
+        return None;
+    }
+    let [Some(first), Some(second)] = &summary.players else {
+        return None;
+    };
+    Some(stage_stats::routine_shared_course_player(
+        first,
+        second,
+        course_summary_totals(run),
+    ))
+}
+
+/// The result each side saves for a course: StageStats::CommitScores saves
+/// one shared Routine result, for the master player.
+pub fn course_summary_records<'a>(
+    summary: &'a StageSummary,
+    routine_shared: Option<&'a PlayerStageSummary>,
+) -> [Option<&'a PlayerStageSummary>; MAX_PLAYERS] {
+    match routine_shared {
+        Some(shared) => std::array::from_fn(|idx| (idx == 0).then_some(shared)),
+        None => summary.players.each_ref().map(Option::as_ref),
+    }
+}
 
 /// Capture each completed player's original chart result before the runtime is
 /// discarded. Online eligibility is supplied by the shell after score saving.

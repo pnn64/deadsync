@@ -6,6 +6,7 @@ use crate::{SongLuaCompileContext, SongLuaStartup};
 
 pub(super) struct Session {
     pub roots: TableId,
+    pub background_layer_count: usize,
     pub ready: bool,
     pub activated: bool,
     pub discovery_started: bool,
@@ -201,12 +202,25 @@ impl Actors {
 }
 fn zero_update(call: &mut HostCall<'_>) -> Result<(), Error> {
     let id = call.function_data::<u64>().unwrap().clone();
-    let roots = call.store().scenes[&id]
-        .song_session
-        .as_ref()
-        .unwrap()
-        .roots;
-    zero_node(call, roots)
+    let (roots, background_layers) = {
+        let store = call.store_ref();
+        let session = store.scenes[&id].song_session.as_ref().unwrap();
+        (session.roots, session.background_layer_count)
+    };
+    let mut index = 0;
+    loop {
+        if index == background_layers {
+            live_feedback::startup_note_fields(call)?;
+        }
+        let value = call.raw_table_get(roots, Value::Number((index + 1) as f64))?;
+        if value == Value::Nil {
+            return Ok(());
+        }
+        if let Value::Table(actor) = value {
+            zero_node(call, actor)?;
+        }
+        index += 1;
+    }
 }
 fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Activate>().unwrap().clone();

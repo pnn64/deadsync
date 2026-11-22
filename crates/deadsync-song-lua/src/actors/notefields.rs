@@ -296,10 +296,99 @@ fn columns(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<Value,
                 Value::Table(column),
             )?;
         }
+        bind_chart_columns(call, columns, player, &style)?;
         set(call, actor, "__songlua_note_columns", Value::Table(columns))?;
         lifecycle::invalidate_plans(call)?;
         Ok(Value::Table(columns))
     })
+}
+
+fn bind_chart_columns(
+    call: &mut HostCall<'_>,
+    columns: TableId,
+    player: usize,
+    style: &str,
+) -> Result<(), Error> {
+    let style = crate::song_lua_style_info(style);
+    if style.style_type == "StyleType_TwoPlayersSharedSides" {
+        return Ok(());
+    }
+    let mapping = call
+        .store()
+        .column_take_from
+        .as_ref()
+        .and_then(|players| players.get(player))
+        .copied();
+    let Some(mapping) = mapping else {
+        return Ok(());
+    };
+    let moved = mapping
+        .iter()
+        .enumerate()
+        .take(style.columns)
+        .any(|(column, &source)| source != column && source < style.columns);
+    if !moved {
+        return Ok(());
+    }
+    let disabled = splines::handler(call)?;
+    call.with_roots(&[Value::Table(disabled)], |call| {
+        for (column, &source) in mapping.iter().enumerate().take(style.columns) {
+            if source == column || source >= style.columns {
+                continue;
+            }
+            let column = table(
+                call,
+                call.raw_table_get(columns, Value::Number((column + 1) as f64))?,
+            )?;
+            let source = call.raw_table_get(columns, Value::Number((source + 1) as f64))?;
+            set(call, column, "__songlua_chart_source", source)?;
+            set(
+                call,
+                column,
+                "__songlua_chart_disabled_handler",
+                Value::Table(disabled),
+            )?;
+        }
+        Ok(())
+    })
+}
+
+/// Native NoteColumnRenderer::ActiveHandler selects each property independently.
+/// Raw Lua column handles stay in physical order; only captured draw handlers
+/// follow the original chart notes through a whole-column turn.
+pub(super) fn active_handler(
+    call: &mut HostCall<'_>,
+    column: TableId,
+    key: &'static str,
+) -> Result<Value, Error> {
+    let source = get_static(call, column, b"__songlua_chart_source")?;
+    let Value::Table(source_column) = source else {
+        return field(call, column, key);
+    };
+    call.with_roots(&[source], |call| {
+        // Read the source's raw handler once, without following its own mapping.
+        let incoming = field(call, source_column, key)?;
+        call.with_roots(&[incoming], |call| {
+            if chart_handler(call, incoming)? {
+                return Ok(incoming);
+            }
+            let own = field(call, column, key)?;
+            call.with_roots(&[own], |call| {
+                if chart_handler(call, own)? {
+                    get_static(call, column, b"__songlua_chart_disabled_handler")
+                } else {
+                    Ok(own)
+                }
+            })
+        })
+    })
+}
+
+fn chart_handler(call: &mut HostCall<'_>, handler: Value) -> Result<bool, Error> {
+    let Value::Table(handler) = handler else {
+        return Ok(false);
+    };
+    Ok(!field(call, handler, "__songlua_subtract_song_beat")?.is_truthy())
 }
 
 fn method(call: &mut HostCall<'_>) -> Result<(), Error> {

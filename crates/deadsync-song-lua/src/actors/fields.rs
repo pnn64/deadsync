@@ -393,7 +393,7 @@ mod tests {
     fn the_live_pose_owns_exactly_the_native_state_properties() {
         // The names the state read skipped during playback before fields had
         // identities. A field is native exactly when it is one of them.
-        const OWNED: [&str; 39] = [
+        const OWNED: [&str; 40] = [
             "aux",
             "basezoom",
             "basezoom_x",
@@ -416,6 +416,7 @@ mod tests {
             "halign",
             "mask_dest",
             "mask_source",
+            "movie_position_seconds",
             "quaternion",
             "rot_x_deg",
             "rot_y_deg",

@@ -1,19 +1,18 @@
 //! Song Lua compilation, host bindings, and playback.
-#[cfg_attr(
-    test,
-    expect(
-        dead_code,
-        reason = "unit tests build actor math without the playback renderer"
-    )
-)]
 mod actor_quaternion;
 pub mod gameplay;
+pub mod gameplay_presentation;
 pub mod gameplay_session;
 #[cfg(feature = "test-support")]
 pub mod trace_capture;
-// Playback is tested with concrete asset fixtures by tests/playback.rs.
+// Asset fixtures use the integration crate so the asset dependency and the
+// playback code share the same Song Lua types.
+#[cfg(test)]
+macro_rules! playback_fixture_tests {
+    ($($fixture:item)*) => {};
+}
 
-#[cfg(not(test))]
+#[cfg_attr(test, allow(dead_code))]
 pub mod playback;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -1747,6 +1746,10 @@ pub struct SongLuaPlayerContext {
     /// Saved scroll options already applied to every ModsLevel before song Lua loads.
     pub scroll: deadsync_gameplay::ScrollEffects,
     pub perspective: deadsync_gameplay::PerspectiveEffects,
+    /// Saved turn option assigned to every ModsLevel before song Lua loads.
+    pub turn_option: deadsync_gameplay::GameplayTurnOption,
+    /// Physical destination column -> original chart column, using the note transform's seed.
+    pub column_take_from: [usize; deadsync_core::input::MAX_COLS],
     pub display_bpms: [f32; 2],
     pub noteskin_name: String,
     /// Profile-selected graphic already loaded by the gameplay theme.
@@ -1788,6 +1791,8 @@ impl Default for SongLuaPlayerContext {
             mini: 0.0,
             scroll: deadsync_gameplay::ScrollEffects::default(),
             perspective: deadsync_gameplay::PerspectiveEffects::default(),
+            turn_option: deadsync_gameplay::GameplayTurnOption::None,
+            column_take_from: std::array::from_fn(|column| column),
             display_bpms: [60.0, 60.0],
             noteskin_name: SONG_LUA_DEFAULT_NOTESKIN_NAME.to_string(),
             judgment_texture: None,

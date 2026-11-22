@@ -44,11 +44,20 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
+pub mod course_progress;
+pub mod course_run;
+pub mod exit_route;
 pub mod practice;
+pub mod song_backgrounds;
+pub mod song_launch;
+pub mod stage_launch;
+pub mod stage_charts;
 
 // ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.
 const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
+pub const GAMEPLAY_ENTRY_TRANSITION_SECONDS: f32 = 2.0;
+pub const GAMEPLAY_RESTART_TRANSITION_SECONDS: f32 = 0.2;
 // Simply Love: ScreenGameplay GiveUpSeconds=0.33.
 pub const GIVE_UP_HOLD_SECONDS: f32 = 0.33;
 // Mirrors ScreenGameplay::AbortGiveUpText tween duration (1/2 second).
@@ -173,3 +182,5 @@ include!("tests.rs");
 include!("runtime_regression_tests.rs");
 #[cfg(test)]
 mod calibration_tests;
+#[cfg(test)]
+mod course_life_config_tests;

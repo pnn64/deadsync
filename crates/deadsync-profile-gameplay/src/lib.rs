@@ -1,6 +1,12 @@
 pub mod results;
+pub mod stage_charts;
+pub mod stage_options;
+pub mod stage_replay;
+pub mod stage_scores;
 
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::{CrossoverRow, build_crossover_rows};
+use deadsync_rules::{note::Note, timing::TimingSegments};
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -150,6 +156,48 @@ pub fn gameplay_runtime_profile_data(
         player_profiles[first_player].clone(),
         player_profiles[1].clone(),
     ]
+}
+
+/// Use simfile timing to classify the transformed chart's crossover rows.
+pub fn gameplay_crossover_annotations_for_player(
+    notes: &[Note],
+    note_range: (usize, usize),
+    timing_segments: &TimingSegments,
+    cols_per_player: usize,
+    col_start: usize,
+) -> Vec<CrossoverRow> {
+    let (start, end) = note_range;
+    if start >= end {
+        return Vec::new();
+    }
+    let annotations = match cols_per_player {
+        4 => {
+            let (rows, row_to_beat, _) = build_crossover_rows::<4>(notes, note_range, col_start);
+            deadsync_simfile::timing::crossover_annotations::<4>(
+                &rows,
+                &row_to_beat,
+                timing_segments,
+            )
+        }
+        8 => {
+            let (rows, row_to_beat, _) = build_crossover_rows::<8>(notes, note_range, col_start);
+            deadsync_simfile::timing::crossover_annotations::<8>(
+                &rows,
+                &row_to_beat,
+                timing_segments,
+            )
+        }
+        _ => return Vec::new(),
+    };
+    annotations
+        .iter()
+        .map(|annotation| CrossoverRow {
+            beat: annotation.beat,
+            column_mask: annotation.column_mask,
+            crossover: annotation.crossover,
+            bracket: annotation.bracket,
+        })
+        .collect()
 }
 
 #[must_use]
@@ -542,9 +590,24 @@ pub fn song_lua_compile_context(
             player_side, false,
         )
     }));
+    let turn_seed = deadsync_gameplay::turn_seed_for_song(song);
+    let player_turn_options: [deadsync_gameplay::GameplayTurnOption; MAX_PLAYERS] =
+        std::array::from_fn(|player| {
+            if player < num_players {
+                gameplay_turn_option(player_profiles[player].turn_option)
+            } else {
+                deadsync_gameplay::GameplayTurnOption::None
+            }
+        });
     context.players = std::array::from_fn(|player| deadsync_song_lua::SongLuaPlayerContext {
         enabled: player < num_players,
         autoplay: 0.0,
+        turn_option: player_turn_options[player],
+        column_take_from: deadsync_gameplay::turn_column_mapping(
+            player_turn_options[player],
+            play_style.cols_per_player(),
+            turn_seed,
+        ),
         difficulty: if player < num_players {
             song_lua_difficulty_from_chart(&charts[player].difficulty)
         } else {
@@ -1082,6 +1145,10 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
         self.mini_percent as f32
     }
 
+    fn spacing_percent(&self) -> i32 {
+        self.spacing_percent
+    }
+
     fn global_offset_shift_ms(&self) -> i32 {
         self.global_offset_shift_ms
     }
@@ -1136,6 +1203,10 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
 
     fn hide_danger(&self) -> bool {
         self.hide_danger
+    }
+
+    fn hide_song_background(&self) -> bool {
+        self.hide_song_bg
     }
 
     fn rescore_early_hits(&self) -> bool {

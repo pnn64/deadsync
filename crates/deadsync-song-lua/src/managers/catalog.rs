@@ -38,6 +38,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
         .expect("catalog context")
         .clone();
     let context = setup.context;
+    crate::actors::configure_column_turns(call, &context);
     let catalog = object(call, |call, catalog| {
         // Chart density is cached before the native current song option level exists.
         let rate = object(call, |call, rate| {

@@ -121,7 +121,8 @@ fn load_layers(call: &mut HostCall<'_>, data: &Load, top: TableId) -> Result<Val
         let retained = call.try_new_table()?;
         call.raw_table_set(state, Value::Number(3.), Value::Table(retained))?;
         call.store().scenes.get_mut(&data.scene).unwrap().initial_states = Some(Default::default());
-        call.store().scenes.get_mut(&data.scene).unwrap().song_session = Some(song_activation::Session { roots, ready: false, activated: false, discovery_started: false, locals: None, queued: HashMap::new(), messages: None });
+        let background_layer_count = data.plan.entries.iter().take_while(|entry| entry.background).count();
+        call.store().scenes.get_mut(&data.scene).unwrap().song_session = Some(song_activation::Session { roots, background_layer_count, ready: false, activated: false, discovery_started: false, locals: None, queued: HashMap::new(), messages: None });
         capture_screen(call, data, retained, globals)?;
         for (index, entry) in data.plan.entries.iter().enumerate() {
             let result = execute(call, entry);

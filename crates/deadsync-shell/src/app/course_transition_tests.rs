@@ -1,6 +1,8 @@
 use super::*;
 use crate::gameplay_regression_tests::tests::{build_compiled_test_state, with_session};
 use deadsync_chart::{SongPack, SyncPref};
+use deadsync_core::input::InputSource;
+use deadsync_gameplay::course_progress::CourseProgress;
 use deadsync_gameplay::{GameplayInputPlayStyle, GameplaySession, GameplayViewport};
 use deadsync_simfile::{
     cache::build_song_meta,
@@ -91,7 +93,11 @@ pub(super) fn test_app(root: &std::path::Path) -> App {
     )
 }
 
-fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<SongData> {
+fn prepare_course_wheel(
+    app: &mut App,
+    root: &std::path::Path,
+    pump: bool,
+) -> (PathBuf, Arc<SongData>, Arc<SongData>) {
     let a = fixture(root, "A", pump);
     let b = fixture(root, "B", pump);
     let course_path = root.join("endless.crs");
@@ -135,13 +141,21 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
         &course_path,
         Some("Hard"),
     );
-    let mut plan = select_course::selected_course_plan(&app.state.screens.select_course_state)
-        .expect("real selected course plan");
-    assert_eq!(plan.stages.len(), 2);
+    (course_path, a, b)
+}
+
+fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<SongData> {
+    let (course_path, a, b) = prepare_course_wheel(app, root, pump);
+    let style = profile::get_session_play_style();
+    let selection = &app.state.screens.select_course_state;
+    let choice = select_course::selected_course_choice(selection).expect("selected rating");
+    let mut start = select_course::course_catalog(selection).start(choice).expect("real selected course plan");
+    assert_eq!(start.plan.stages.len(), 2);
     // The previous cycle contains A. The fresh cycle must append A then B.
-    plan.stages.truncate(1);
-    let mut run = build_course_run_from_selection(plan, style.chart_type()).unwrap();
-    run.next_stage_index = 1;
+    start.plan.stages.truncate(1);
+    let mut run =
+        build_course_run_from_selection(start, style.chart_type()).unwrap();
+    run.run.progress = CourseProgress::new(1);
     app.state.session.begin_play_session(Instant::now());
     app.state.session.last_course_wheel_path = Some(course_path);
     app.state.session.course_run = Some(run);
@@ -165,6 +179,101 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
     b
 }
 
+fn press_course_start(app: &mut App) {
+    let now = Instant::now();
+    let event = InputEvent::new(
+        VirtualAction::p1_start,
+        0,
+        true,
+        InputSource::Keyboard,
+        now,
+        0,
+        now,
+        now,
+    );
+    let mut effects = Vec::new();
+    select_course::handle_input(
+        &mut app.state.screens.select_course_state,
+        &event,
+        &mut effects,
+    );
+    let mut effects = effects.into_iter();
+    assert!(matches!(
+        effects.next(),
+        Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+            AudioRequest::PlaySfx("assets/sounds/start.ogg")
+        )))
+    ));
+    let Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::CourseLaunch(request))) = effects.next()
+    else {
+        panic!("course Start should signal launch intent");
+    };
+    assert!(effects.next().is_none());
+    app.request_stage_launch(
+        ActiveTheme::SCREENS.course_selection,
+        request.map_selection(StageSelection::Course),
+    );
+}
+
+#[test]
+fn course_launch_uses_confirmed_rating_after_wheel_replacement() {
+    on_app_thread(|| {
+        with_session(
+            profile_data::PlayStyle::Routine,
+            profile_data::PlayerSide::P1,
+            true,
+            true,
+            || {
+                for options in [false, true] {
+                    let root = tempfile::tempdir().unwrap();
+                    let mut app = test_app(root.path());
+                    let (course_path, first_song, _) =
+                        prepare_course_wheel(&mut app, root.path(), false);
+                    app.state.screens.current_screen = CurrentScreen::SelectCourse;
+                    app.state.shell.transition = TransitionState::Idle;
+                    let rating =
+                        select_course::selected_course_choice(&app.state.screens.select_course_state)
+                            .unwrap()
+                            .difficulty;
+                    press_course_start(&mut app);
+                    assert_eq!(app.advance_stage_launch(1.25), None);
+                    let (remaining, target) = if options {
+                        press_course_start(&mut app);
+                        (1.35, CurrentScreen::PlayerOptions)
+                    } else {
+                        (0.25, CurrentScreen::Gameplay)
+                    };
+
+                    app.state.screens.select_course_state = select_course::init(Default::default());
+                    assert!(!select_course::has_selected_course(&app.state.screens.select_course_state));
+                    assert_eq!(app.advance_stage_launch(remaining), Some(target));
+                    assert!(app.theme_effect_scratch.is_empty());
+                    assert!(!app.reject_missing_course_plan(CurrentScreen::SelectCourse, target));
+                    assert_eq!(app.prepare_global_fade_entry(target).0, target);
+
+                    let course = app.state.session.course_run.as_ref().unwrap();
+                    assert_eq!(course.run.path, course_path);
+                    assert_eq!(
+                        course.run.course_difficulty_name,
+                        deadsync_simfile::course::difficulty_label(rating)
+                    );
+                    assert!(course.endless_source.is_some());
+                    if options {
+                        let options = app.state.screens.player_options_state.as_ref().unwrap();
+                        assert!(Arc::ptr_eq(&options.song, &first_song));
+                    } else {
+                        finish_pending_stage(&mut app);
+                        let gameplay = app.state.screens.gameplay_state.as_ref().unwrap();
+                        assert!(Arc::ptr_eq(&gameplay.song_arc(), &first_song));
+                        assert_eq!(gameplay.pack_group.as_ref(), "PR845 transition");
+                        assert_eq!(gameplay.presentation.stage_intro_text.as_ref(), "STAGE 1");
+                    }
+                }
+            },
+        );
+    });
+}
+
 #[test]
 fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
     on_app_thread(|| {
@@ -183,11 +292,15 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     let mut app = test_app(root.path());
                     let b = prepare_boundary(&mut app, root.path(), pump);
                     match failure {
-                        // Selection still has B's metadata, but its payload load fails.
+                        // The run retains B's metadata, but its payload load fails.
                         "payload" => std::fs::remove_file(&b.simfile_path).unwrap(),
                         "plan" => {
-                            app.state.screens.select_course_state =
-                                select_course::init(SelectCourseInitView::default())
+                            app.state
+                                .session
+                                .course_run
+                                .as_mut()
+                                .unwrap()
+                                .endless_source = None;
                         }
                         "cursor" => {
                             app.state
@@ -195,7 +308,8 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                                 .course_run
                                 .as_mut()
                                 .unwrap()
-                                .next_stage_index = 2
+                                .run
+                                .progress = CourseProgress::new(2)
                         }
                         _ => unreachable!(),
                     }
@@ -208,6 +322,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     assert_eq!(app.state.screens.current_screen, CurrentScreen::Evaluation);
                     assert!(app.state.session.course_run.is_none());
                     assert!(app.state.screens.player_options_state.is_none());
+                    assert!(app.state.pending_stage.is_none());
                     assert!(app.pending_gameplay_init.is_none());
                     assert!(app.state.screens.gameplay_state.is_none());
                     assert_eq!(app.state.session.played_stages.len(), 2);
@@ -216,13 +331,67 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         app.state.session.played_stages[1].song.title,
                         "PR845 transition"
                     );
-                    assert!(app.state.session.course_stage_eval_pages.is_empty());
-                    assert_eq!(app.state.session.course_eval_pages.len(), 2);
-                    assert!(app.state.screens.evaluation_state.return_to_course);
+                    assert!(app.state.screens.course_evaluation.stages.is_empty());
+                    assert_eq!(app.state.screens.course_evaluation.pages.len(), 2);
+                    assert_eq!(app.state.screens.evaluation_origin, EvaluationOrigin::Course);
+                    app.step_course_eval_page(-1);
+                    assert_eq!(
+                        app.state.screens.evaluation_state.score_info[0].as_ref().unwrap().song.title,
+                        "A",
+                    );
+                    let completed_song = Arc::clone(&app.state.session.played_stages[0].song);
+                    app.state.screens.evaluation_state.score_info = [None, None];
+                    let side = profile_data::PlayerSide::P2;
+                    let chart_hash = app.state.session.played_stages[0].players[1]
+                        .as_ref().unwrap().chart.short_hash.clone();
+                    score_data::groovestats_set_submit_ui_status(
+                        1, &chart_hash, 1, score_data::GrooveStatsSubmitUiStatus::TimedOut,
+                    );
+                    app.sync_evaluation_runtime_view(app.evaluation_policy, Instant::now());
+                    let retry_available = app.evaluation_submission_retry_available();
+                    score_data::groovestats_reset_submit_ui_status(1, &chart_hash);
+                    assert!(retry_available);
+
+                    let _profiles = ScoreProfiles::new();
+                    let was_favorite = profile_data::runtime_profile_has_favorite_for_side(side, &chart_hash);
+                    let favorite = profile_data::requests::ProfileRequest::ToggleEvaluationFavorite { side };
+                    app.handle_profile_request(favorite.clone());
+                    let is_favorite = profile_data::runtime_profile_has_favorite_for_side(side, &chart_hash);
+                    app.handle_profile_request(favorite);
+                    assert_ne!(is_favorite, was_favorite);
+
+                    assert!(app.prepare_gameplay_restart());
+                    let restart = app.state.pending_stage.take().expect("restart selection");
+                    assert!(Arc::ptr_eq(&restart.song, &completed_song));
+                    assert_eq!(restart.return_screen, CurrentScreen::Gameplay);
+                    assert!(app.prepare_practice_from_eval());
+                    let practice = app.state.pending_stage.take().expect("practice selection");
+                    assert!(Arc::ptr_eq(&practice.song, &completed_song));
+                    assert_eq!(practice.return_screen, CurrentScreen::Practice);
+                    assert_eq!(practice.options, restart.options);
+                    app.step_course_eval_page(1);
+                    assert_eq!(
+                        app.state.screens.evaluation_state.score_info[0].as_ref().unwrap().song.title,
+                        "PR845 transition",
+                    );
+                    assert_eq!(
+                        app.state.screens.evaluation_stage.as_ref().unwrap().song.title,
+                        "PR845 transition",
+                    );
+                    app.state.clear_course_runtime();
+                    assert!(app.state.screens.course_evaluation.pages.is_empty());
+                    assert_eq!(app.state.session.played_stages.len(), 2);
                     assert_eq!(
                         app.state.session.last_course_wheel_path.as_deref(),
                         Some(root.path().join("endless.crs").as_path())
                     );
+                    app.state.shell.transition = TransitionState::Idle;
+                    app.leave_evaluation();
+                    assert!(matches!(
+                        app.state.shell.transition,
+                        TransitionState::FadingOut { target: CurrentScreen::SelectCourse, .. }
+                            | TransitionState::ActorsFadeOut { target: CurrentScreen::SelectCourse, .. }
+                    ));
                 });
             }
         }
@@ -230,7 +399,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
 }
 
 #[test]
-fn endless_successful_renewal_starts_next_song_with_extended_totals() {
+fn endless_renewal_survives_replacing_the_course_wheel_and_extends_totals() {
     on_app_thread(|| {
         with_session(
             profile_data::PlayStyle::Routine,
@@ -244,18 +413,24 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
                     .unwrap();
                 let mut app = test_app(root.path());
                 prepare_boundary(&mut app, root.path(), false);
+                app.state.screens.select_course_state =
+                    select_course::init(SelectCourseInitView::default());
+                assert!(!select_course::has_selected_course(
+                    &app.state.screens.select_course_state
+                ));
                 let before = app
                     .state
                     .session
                     .course_run
                     .as_ref()
                     .unwrap()
+                    .run
                     .course_display_totals;
                 let (target, _) = app.prepare_global_fade_entry(CurrentScreen::Gameplay);
                 assert_eq!(target, CurrentScreen::Gameplay);
                 let run = app.state.session.course_run.as_ref().unwrap();
-                assert_eq!(run.stages.len(), 3);
-                for (after, before) in run.course_display_totals.iter().zip(before) {
+                assert_eq!(run.run.stages.len(), 3);
+                for (after, before) in run.run.course_display_totals.iter().zip(before) {
                     assert_eq!(
                         after.possible_grade_points,
                         3 * before.possible_grade_points
@@ -270,7 +445,9 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
                         .course_run
                         .as_ref()
                         .unwrap()
-                        .next_stage_index,
+                        .run
+                        .progress
+                        .next_stage_index(),
                     2
                 );
                 assert_eq!(
@@ -303,13 +480,15 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
                             .course_run
                             .as_ref()
                             .unwrap()
-                            .next_stage_index,
+                            .run
+                            .progress
+                            .next_stage_index(),
                         expected_cursor
                     );
                 }
                 let run = app.state.session.course_run.as_ref().unwrap();
-                assert_eq!(run.stages.len(), 5);
-                for (after, before) in run.course_display_totals.iter().zip(before) {
+                assert_eq!(run.run.stages.len(), 5);
+                for (after, before) in run.run.course_display_totals.iter().zip(before) {
                     assert_eq!(
                         after.possible_grade_points,
                         5 * before.possible_grade_points
@@ -392,6 +571,7 @@ fn interrupted_endless_saves_accumulated_routine_score_and_all_evaluation_pages(
                     .course_run
                     .as_ref()
                     .unwrap()
+                    .run
                     .score_hash
                     .clone();
                 // Finish the previous cycle and both songs of the next cycle.
@@ -409,7 +589,7 @@ fn interrupted_endless_saves_accumulated_routine_score_and_all_evaluation_pages(
                         .song_completed_naturally = true;
                 }
                 assert_eq!(app.state.session.played_stages.len(), 2);
-                assert_eq!(app.state.session.course_stage_eval_pages.len(), 2);
+                assert_eq!(app.state.screens.course_evaluation.stages.len(), 2);
                 std::fs::remove_file(&b.simfile_path).unwrap();
                 let (target, _) = app.prepare_global_fade_entry(CurrentScreen::Gameplay);
                 assert_eq!(target, CurrentScreen::Evaluation);
@@ -417,8 +597,8 @@ fn interrupted_endless_saves_accumulated_routine_score_and_all_evaluation_pages(
                 assert!(app.state.screens.gameplay_state.is_none());
                 assert!(app.pending_gameplay_init.is_none());
                 assert_eq!(app.state.session.played_stages.len(), 4);
-                assert_eq!(app.state.session.course_eval_pages.len(), 4);
-                assert!(app.state.session.course_stage_eval_pages.is_empty());
+                assert_eq!(app.state.screens.course_evaluation.pages.len(), 4);
+                assert!(app.state.screens.course_evaluation.stages.is_empty());
                 assert_eq!(app.state.session.played_stages[0].song.title, "A");
                 assert_eq!(app.state.session.played_stages[1].song.title, "A");
                 assert_eq!(app.state.session.played_stages[2].song.title, "B");
@@ -426,7 +606,7 @@ fn interrupted_endless_saves_accumulated_routine_score_and_all_evaluation_pages(
                     app.state.session.played_stages[3].song.title,
                     "PR845 transition"
                 );
-                assert!(app.state.screens.evaluation_state.return_to_course);
+                assert_eq!(app.state.screens.evaluation_origin, EvaluationOrigin::Course);
                 for (side, directory) in profiles.directories.iter().enumerate() {
                     let index = score_data::load_local_score_index_from_root(
                         &directory.path().join("scores/local"),
@@ -464,9 +644,9 @@ fn course_stage_load_failures_preserve_recorded_results_and_evaluation_pages() {
                         let stages_played = app.state.coin.bookkeeping().stages_played;
                         let course = app.state.session.course_run.as_mut().unwrap();
                         if !endless {
-                            course.course_type = deadsync_theme::views::CourseTypeView::Nonstop;
+                            course.run.course_type = deadsync_rules::course::CourseType::Nonstop;
                         }
-                        let score_hash = course.score_hash.clone();
+                        let score_hash = course.run.score_hash.clone();
                         // Nonzero earned points distinguish the accumulated result
                         // from a saved empty result or the next, unplayed song.
                         for player in course.stage_summaries[0].players.iter_mut().flatten() {
@@ -510,17 +690,18 @@ fn course_stage_load_failures_preserve_recorded_results_and_evaluation_pages() {
                         assert!(app.pending_gameplay_init.is_none());
                         assert!(app.state.screens.gameplay_state.is_none());
                         assert!(app.state.screens.player_options_state.is_none());
+                        assert!(app.state.pending_stage.is_none());
                         assert_eq!(
                             app.state.shell.interaction.message(),
                             Some("Unable to prepare next course stage")
                         );
                         assert_eq!(app.state.session.played_stages.len(), completed_songs + 1);
                         assert_eq!(
-                            app.state.session.course_eval_pages.len(),
+                            app.state.screens.course_evaluation.pages.len(),
                             completed_songs + 1
                         );
-                        assert!(app.state.session.course_stage_eval_pages.is_empty());
-                        assert!(app.state.screens.evaluation_state.return_to_course);
+                        assert!(app.state.screens.course_evaluation.stages.is_empty());
+                        assert_eq!(app.state.screens.evaluation_origin, EvaluationOrigin::Course);
                         assert_eq!(
                             app.state.coin.bookkeeping().stages_played,
                             stages_played + 1
@@ -577,7 +758,16 @@ fn preparation_failure_without_completed_course_songs_keeps_existing_exit() {
                         ..
                     }
                 ));
-                assert!(!app.state.session.course_run.as_ref().unwrap().interrupted);
+                assert!(
+                    !app.state
+                        .session
+                        .course_run
+                        .as_ref()
+                        .unwrap()
+                        .run
+                        .progress
+                        .is_interrupted()
+                );
                 assert!(app.state.session.played_stages.is_empty());
             },
         );

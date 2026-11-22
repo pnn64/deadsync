@@ -1,4 +1,5 @@
 use super::App;
+use crate::ActiveTheme;
 use crate::input::{
     GameplayQueuedEvent, GameplayRawKeyEvent, GameplayRawKeyRouteContext, PreScreenInputContext,
     PreScreenInputRoute, QueuedInputBatchState, QueuedInputEventRoute, QueuedInputFlushPlan,
@@ -8,6 +9,9 @@ use crate::input::{
 use deadsync_config as config;
 use deadsync_gameplay::RawKeyAction;
 use deadsync_input::{self as logical_input, InputEvent};
+use deadsync_theme::evaluation::ThemeEvaluation;
+use deadsync_theme::player_options::ThemePlayerOptions;
+use deadsync_theme::profile_picker::ThemeProfilePicker;
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
@@ -281,7 +285,9 @@ impl App {
             }
         }
         let evaluation_test_input_active = current_screen == CurrentScreen::Evaluation
-            && screens::evaluation::test_input_pane_active(&self.state.screens.evaluation_state);
+            && ActiveTheme::evaluation_test_input_pane_active(
+                &self.state.screens.evaluation_state,
+            );
         match pre_screen_input_route(
             ev.pressed,
             ev.action,
@@ -307,25 +313,25 @@ impl App {
         if current_screen == CurrentScreen::Gameplay {
             debug_assert!(self.theme_effect_scratch.is_empty());
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                crate::gameplay_runtime::handle_input(
+                let action = crate::gameplay_runtime::handle_input(
                     gs,
                     &ev,
                     self.input.physical_input(&ev),
                     &mut self.audio,
                     &self.gameplay_sfx,
                     &mut self.music_clock,
-                    &mut self.theme_effect_scratch,
                 );
+                self.handle_gameplay_action(action, event_loop);
             } else if self.pending_gameplay_init.is_some() {
                 // Native InputFilter retains edges while ScreenGameplay loads.
                 self.pending_gameplay_lua_inputs.push((ev, self.input.physical_input(&ev)));
             }
-            return self.drain_theme_effects(event_loop);
+            return Ok(());
         }
         if current_screen == CurrentScreen::Practice {
             debug_assert!(self.theme_effect_scratch.is_empty());
             if let Some(state) = self.state.screens.practice_state.as_mut() {
-                crate::gameplay_runtime::handle_practice_input(
+                crate::gameplay_runtime::handle_practice_input::<crate::ActiveTheme, _, _>(
                     state,
                     &ev,
                     &mut self.audio,
@@ -338,7 +344,7 @@ impl App {
         }
         if current_screen == CurrentScreen::SelectProfile {
             debug_assert!(self.theme_effect_scratch.is_empty());
-            screens::select_profile::handle_input(
+            ActiveTheme::handle_profile_picker_input(
                 &mut self.state.screens.select_profile_state,
                 &ev,
                 &mut self.theme_effect_scratch,
@@ -404,7 +410,7 @@ impl App {
         if current_screen == CurrentScreen::PlayerOptions {
             debug_assert!(self.theme_effect_scratch.is_empty());
             if let Some(state) = self.state.screens.player_options_state.as_mut() {
-                screens::player_options::handle_input(
+                ActiveTheme::handle_player_options_input(
                     state,
                     &self.asset_manager,
                     &ev,
@@ -434,7 +440,11 @@ impl App {
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
-                screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
+                crate::main_menu::handle_input::<ActiveTheme>(
+                    &mut self.state.screens.menu_state,
+                    &mut self.state.session,
+                    &ev,
+                )
             }
             CurrentScreen::SelectProfile => unreachable!("Select Profile uses the flat buffer"),
             CurrentScreen::SelectColor => {
@@ -488,9 +498,11 @@ impl App {
                 unreachable!("Select Course input uses the flat buffer")
             }
             CurrentScreen::PlayerOptions => unreachable!("Player Options input routed directly"),
-            CurrentScreen::Evaluation => {
-                screens::evaluation::handle_input(&mut self.state.screens.evaluation_state, &ev)
-            }
+            CurrentScreen::Evaluation => ActiveTheme::handle_evaluation_input(
+                &mut self.state.screens.evaluation_state,
+                &ev,
+                self.state.screens.evaluation_origin,
+            ),
             CurrentScreen::EvaluationSummary => {
                 let num_stages = self.post_select_display_stage_count(
                     config::runtime::get().show_course_individual_scores,

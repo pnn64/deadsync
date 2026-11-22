@@ -67,9 +67,12 @@ unsafe fn fold(state: u32, bytes: &[u8]) -> u32 {
 #[inline]
 #[target_feature(enable = "sse2")]
 fn load(bytes: &[u8; 16]) -> __m128i {
-    _mm_set_epi64x(
-        i64::from_le_bytes(bytes[8..].try_into().unwrap()),
-        i64::from_le_bytes(bytes[..8].try_into().unwrap()),
+    // Byte lanes compile to one unaligned load; 64-bit halves added a
+    // redundant reload and unpack of the upper half.
+    let b = bytes.map(|byte| byte as i8);
+    _mm_setr_epi8(
+        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13],
+        b[14], b[15],
     )
 }
 
@@ -126,29 +129,43 @@ pub(super) fn adler_update(state: &mut super::Adler32, input: &[u8]) -> bool {
 
 #[target_feature(enable = "ssse3")]
 unsafe fn adler(state: &mut super::Adler32, input: &[u8]) {
-    // Two weighted bytes total at most (16 + 15) * 255, so the signed
-    // saturating pair multiply cannot saturate. Four-byte sums and their
-    // prefixes fit in u32 throughout a 5552-byte Adler reduction block.
-    let ones8 = _mm_set1_epi8(1);
-    let ones16 = _mm_set1_epi16(1);
-    let weights = _mm_setr_epi8(16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1);
-    for block in input.chunks(5552) {
-        let (groups, tail) = block.as_chunks::<16>();
-        let mut sums = _mm_setzero_si128();
-        let mut prefixes = _mm_setzero_si128();
-        let mut weighted = _mm_setzero_si128();
+    // Each 32-byte group adds its byte sum, from SAD against zero, and its
+    // bytes weighted 32..1. A pair of weighted bytes is at most
+    // (32 + 31) * 255 and the two halves' pairs together at most 23970, so
+    // the i16 multiply-adds cannot saturate. In a 16 KiB block of G = 512
+    // groups, the prefix total is at most 32 * 255 * G * (G - 1) / 2 < 2^31
+    // and every other lane total is smaller, so u32 lanes cannot overflow;
+    // the block's contribution to `b` is combined in u64.
+    let zero = _mm_setzero_si128();
+    let ones = _mm_set1_epi16(1);
+    let high = _mm_setr_epi8(
+        32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17,
+    );
+    let low = _mm_setr_epi8(16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1);
+    for block in input.chunks(16384) {
+        let (groups, tail) = block.as_chunks::<32>();
+        let mut sums = zero;
+        let mut prefixes = zero;
+        let mut weighted = zero;
         for bytes in groups {
-            let v = load(bytes);
+            let (first, second) = bytes.split_at(16);
+            let first = load(first.try_into().unwrap());
+            let second = load(second.try_into().unwrap());
             prefixes = _mm_add_epi32(prefixes, sums);
-            sums = _mm_add_epi32(sums, _mm_madd_epi16(_mm_maddubs_epi16(v, ones8), ones16));
-            weighted = _mm_add_epi32(
-                weighted,
-                _mm_madd_epi16(_mm_maddubs_epi16(v, weights), ones16),
+            let sad = _mm_add_epi32(_mm_sad_epu8(first, zero), _mm_sad_epu8(second, zero));
+            sums = _mm_add_epi32(sums, sad);
+            let pairs = _mm_add_epi16(
+                _mm_maddubs_epi16(first, high),
+                _mm_maddubs_epi16(second, low),
             );
+            weighted = _mm_add_epi32(weighted, _mm_madd_epi16(pairs, ones));
         }
-        // Each prior group contributes another 16 to every byte's weight;
-        // the current group contributes the descending weights 16..1.
-        state.b += state.a * (groups.len() * 16) as u32 + 16 * total(prefixes) + total(weighted);
+        // Each prior group adds another 32 to every byte's weight.
+        let b = u64::from(state.b)
+            + u64::from(state.a) * (groups.len() * 32) as u64
+            + 32 * u64::from(total(prefixes))
+            + u64::from(total(weighted));
+        state.b = (b % 65521) as u32;
         state.a += total(sums);
         for &byte in tail {
             state.a += u32::from(byte);
@@ -173,7 +190,7 @@ fn vector_adler_matches_byte_oracle_for_states_splits_and_modulus_boundaries() {
         return;
     }
     for constant in [false, true] {
-        let bytes: Vec<u8> = (0..11140)
+        let bytes: Vec<u8> = (0..65600)
             .map(|n| {
                 if constant {
                     255
@@ -183,7 +200,8 @@ fn vector_adler_matches_byte_oracle_for_states_splits_and_modulus_boundaries() {
             })
             .collect();
         for offset in 0..32 {
-            for len in (0..140).chain([255, 256, 257, 5551, 5552, 5553, 11103, 11104, 11105]) {
+            let blocks = [5552, 16383, 16384, 16385, 32768, 65535, 65536, 65537];
+            for len in (0..140).chain([255, 256, 257]).chain(blocks) {
                 let input = &bytes[offset..offset + len];
                 for (a, b) in [(0, 0), (1, 0), (65520, 65520), (65520, 0), (0, 65520)] {
                     let (mut x, mut y) = (a, b);

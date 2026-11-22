@@ -1,12 +1,24 @@
 use std::arch::x86_64::*;
 
-pub(super) fn unfilter<const N: usize, const PAETH: bool>(row: &mut [u8], prev: &[u8]) -> bool {
+/// Unfilter `row`, then `next` when given: the following row, also Paeth,
+/// with pixels of at most four bytes.
+pub(super) fn unfilter<const N: usize, const PAETH: bool>(
+    row: &mut [u8],
+    prev: &[u8],
+    next: Option<&mut [u8]>,
+) -> bool {
     assert!(matches!(N, 3 | 4 | 6 | 8));
+    assert!(next.is_none() || PAETH && N <= 4);
     if row.len() >= 64 && std::is_x86_feature_detected!("sse4.1") {
         let prev = &prev[..row.len()];
         // SAFETY: SSE4.1 availability is checked above. Byte accesses use
         // checked slices and fixed-size arrays, including the final pixel.
-        unsafe { run::<N, PAETH>(row, prev) };
+        unsafe {
+            match next {
+                Some(next) if PAETH && N <= 4 => run_pair::<N>(row, &mut next[..prev.len()], prev),
+                _ => run::<N, PAETH>(row, prev),
+            }
+        };
         true
     } else {
         false
@@ -45,7 +57,20 @@ fn step<const N: usize, const PAETH: bool>(
         return (next, up_bytes, packed);
     }
     let up = _mm_cvtepu8_epi16(up_bytes);
-    let residual = _mm_cvtepu8_epi16(data_bytes);
+    let next = paeth(_mm_cvtepu8_epi16(data_bytes), up, left, upper_left);
+    let bytes = _mm_packus_epi16(next, _mm_setzero_si128());
+    let packed = if N <= 4 {
+        u64::from(_mm_cvtsi128_si32(bytes) as u32)
+    } else {
+        _mm_cvtsi128_si64(bytes) as u64
+    };
+    (next, up, packed)
+}
+
+/// One Paeth reconstruction on 16-bit lanes holding bytes.
+#[inline]
+#[target_feature(enable = "sse4.1")]
+fn paeth(residual: __m128i, up: __m128i, left: __m128i, upper_left: __m128i) -> __m128i {
     let low = _mm_min_epi16(left, up);
     let high = _mm_max_epi16(left, up);
     // Prepare the preceding-row terms independently of the reconstructed
@@ -59,14 +84,89 @@ fn step<const N: usize, const PAETH: bool>(
     // comparisons. This preserves Paeth's ties without incrementing bounds.
     let candidate = _mm_blendv_epi8(low, upper_left, _mm_cmpgt_epi16(high, threshold));
     let predictor = _mm_blendv_epi8(high, candidate, _mm_cmpgt_epi16(threshold, low));
-    let next = _mm_and_si128(_mm_add_epi16(predictor, residual), _mm_set1_epi16(255));
-    let bytes = _mm_packus_epi16(next, _mm_setzero_si128());
-    let packed = if N <= 4 {
-        u64::from(_mm_cvtsi128_si32(bytes) as u32)
+    _mm_and_si128(_mm_add_epi16(predictor, residual), _mm_set1_epi16(255))
+}
+
+/// The four bytes at `pos`, zero-padded past the end of `bytes`.
+#[inline]
+fn word(bytes: &[u8], pos: usize) -> u32 {
+    if bytes.len() - pos >= 4 {
+        u32::from_le_bytes(bytes[pos..pos + 4].try_into().unwrap())
     } else {
-        _mm_cvtsi128_si64(bytes) as u64
-    };
-    (next, up, packed)
+        let mut padded = [0; 4];
+        padded[..bytes.len() - pos].copy_from_slice(&bytes[pos..]);
+        u32::from_le_bytes(padded)
+    }
+}
+
+/// Store up to `N` reconstructed bytes at `pos`.
+#[inline]
+fn put<const N: usize>(bytes: &mut [u8], pos: usize, value: [u8; 4]) {
+    if bytes.len() - pos >= N {
+        bytes[pos..pos + N].copy_from_slice(&value[..N]);
+    } else {
+        let n = bytes.len() - pos;
+        bytes[pos..].copy_from_slice(&value[..n]);
+    }
+}
+
+/// Two consecutive Paeth rows of pixels up to four bytes share each register:
+/// the first row's pixel in the low four lanes and the second row's, one pixel
+/// behind, in the high four. The second row's up pixel is then the first
+/// row's previous result, its left pixel is already in the high lanes of the
+/// previous result, and its upper-left pixel is the previous up. One Paeth
+/// evaluation reconstructs a pixel of each row.
+#[target_feature(enable = "sse4.1")]
+unsafe fn run_pair<const N: usize>(first: &mut [u8], second: &mut [u8], prev: &[u8]) {
+    let steps = first.len().div_ceil(N);
+    let mut left = _mm_setzero_si128();
+    let mut upper_left = _mm_setzero_si128();
+    let mut step = 0;
+    while step <= steps {
+        let pos = step * N;
+        if step != 0 && pos + 4 <= first.len() {
+            // Whole pixels: full-width loads, and stores of exactly the pixel
+            // so a later load never straddles an earlier store.
+            let a = u32::from_le_bytes(first[pos..pos + 4].try_into().unwrap());
+            let b = u32::from_le_bytes(second[pos - N..pos - N + 4].try_into().unwrap());
+            let p = u32::from_le_bytes(prev[pos..pos + 4].try_into().unwrap());
+            let residual = _mm_insert_epi32::<1>(_mm_cvtsi32_si128(a as i32), b as i32);
+            let up = _mm_or_si128(
+                _mm_cvtepu8_epi16(_mm_cvtsi32_si128(p as i32)),
+                _mm_slli_si128::<8>(left),
+            );
+            let next = paeth(_mm_cvtepu8_epi16(residual), up, left, upper_left);
+            let bytes = (_mm_cvtsi128_si64(_mm_packus_epi16(next, next)) as u64).to_le_bytes();
+            first[pos..pos + N].copy_from_slice(&bytes[..N]);
+            second[pos - N..pos].copy_from_slice(&bytes[4..4 + N]);
+            (left, upper_left) = (next, up);
+            step += 1;
+            continue;
+        }
+        // The first step, and the row end, where lanes for a row that has not
+        // started or has finished hold zeros or values that are never stored.
+        let (residual, above) = if step < steps {
+            (word(first, pos), word(prev, pos))
+        } else {
+            (0, 0)
+        };
+        let below = if step != 0 { word(second, pos - N) } else { 0 };
+        let residual = _mm_cvtsi64_si128((u64::from(below) << 32 | u64::from(residual)) as i64);
+        let up = _mm_or_si128(
+            _mm_cvtepu8_epi16(_mm_cvtsi32_si128(above as i32)),
+            _mm_slli_si128::<8>(left),
+        );
+        let next = paeth(_mm_cvtepu8_epi16(residual), up, left, upper_left);
+        let bytes = (_mm_cvtsi128_si64(_mm_packus_epi16(next, next)) as u64).to_le_bytes();
+        if step < steps {
+            put::<N>(first, pos, [bytes[0], bytes[1], bytes[2], bytes[3]]);
+        }
+        if step != 0 {
+            put::<N>(second, pos - N, [bytes[4], bytes[5], bytes[6], bytes[7]]);
+        }
+        (left, upper_left) = (next, up);
+        step += 1;
+    }
 }
 
 #[target_feature(enable = "sse4.1")]
@@ -250,5 +350,38 @@ mod tests {
         }
         averages::<4>();
         averages::<8>();
+    }
+
+    fn pairs<const N: usize>() {
+        let mut state = 0x9e37_79b9u32;
+        let mut random = |mask: u8| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state as u8 & mask
+        };
+        for len in [64, 65, 66, 67, 200, 771, 1024] {
+            // Narrow value ranges produce Paeth ties; full ranges cover the rest.
+            for mask in [1, 3, 255] {
+                let prev: Vec<u8> = (0..len).map(|_| random(mask)).collect();
+                let first: Vec<u8> = (0..len).map(|_| random(mask)).collect();
+                let second: Vec<u8> = (0..len).map(|_| random(mask)).collect();
+                let (mut a, mut b) = (first.clone(), second.clone());
+                assert!(unfilter::<N, true>(&mut a, &prev, None));
+                assert!(unfilter::<N, true>(&mut b, &a, None));
+                let (mut x, mut y) = (first, second);
+                assert!(unfilter::<N, true>(&mut x, &prev, Some(&mut y)));
+                assert_eq!((x, y), (a, b), "N={N} len={len} mask={mask}");
+            }
+        }
+    }
+
+    #[test]
+    fn paired_paeth_rows_match_one_row_at_a_time() {
+        if !std::is_x86_feature_detected!("sse4.1") {
+            return;
+        }
+        pairs::<3>();
+        pairs::<4>();
     }
 }

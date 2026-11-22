@@ -13,6 +13,7 @@ use deadsync_gameplay::{
     GameplayInputPlayStyle, GameplayInputPlayerSide, GameplaySession, GameplayViewport,
 };
 use deadsync_profile as profile;
+use deadsync_song_lua::gameplay_presentation::{FramePresentationContext, SongFrameContent};
 use deadsync_theme_simply_love::{self as theme, screens::gameplay, views::GameplayInitView};
 use std::{
     cell::RefCell,
@@ -494,20 +495,7 @@ fn sample_state(
     init.hud.player_side = theme_side;
     init.hud.p1.joined = joined[0];
     init.hud.p2.joined = joined[1];
-    let scorebox_profile = deadsync_score::GameplayScoreboxProfileSnapshot::new(
-        true,
-        true,
-        false,
-        true,
-        String::new(),
-        String::new(),
-        false,
-        "DeadSync".into(),
-        None,
-        None,
-        false,
-    );
-    init.scores.scorebox_profiles = [scorebox_profile.clone(), scorebox_profile];
+    init.scores.scorebox_visible = [true; 2];
     let scorebox_snapshot =
         deadsync_score::CachedPlayerLeaderboardData::ready(deadsync_score::PlayerLeaderboardData {
             panes: vec![deadsync_score::LeaderboardPane {
@@ -731,36 +719,19 @@ fn compose(
     center_single_notefield: bool,
 ) -> RenderFrame {
     let mut actors: Vec<Actor> = Vec::new();
-    let mut song = state.song_scratch.take().expect("song scratch");
-    let mut hud = state.frame_scratch.take().expect("HUD scratch");
     let mut view = gameplay::ActorViewOverride::default();
     view.notefield.force_center_1player = center_single_notefield;
-    let visual = Default::default();
-    let segments = deadsync_song_lua::playback::compose_frame(
+    let segments = gameplay::compose_frame(
+        state,
         &mut actors,
-        &state.gameplay,
-        &state.song_media,
-        &mut song,
-        assets,
-        deadsync_song_lua::playback::FrameOptions {
+        FramePresentationContext {
+            assets,
+            view,
             uptime_seconds: 32.05,
-            play_style: state.gameplay.setup.session.play_style,
-            player_side: state.gameplay.setup.session.player_side,
-            hide_song_bg: [false; 2],
-            notefield: view.notefield,
-            hide_gameplay_hud: false,
-            apply_attacks: true,
-            show_song_visuals: true,
+            policy: Default::default(),
         },
-        gameplay::frame_layers(state, &mut hud, assets, view, visual),
-        |request, cameras, field, flat, hud, hud_flat| {
-            gameplay::draw_field(
-                state, assets, view, 32.05, visual, request, cameras, field, flat, hud, hud_flat,
-            )
-        },
+        SongFrameContent::PLAYBACK,
     );
-    state.song_scratch = Some(song);
-    state.frame_scratch = Some(hud);
     compose::build_passes(
         segments.segments(state.song_frame(), &actors),
         state.render_targets(),

@@ -655,7 +655,10 @@ mod looping_rooms {
                     if !controls[section] && update.seconds >= [36.2, 70.3, 83.6, 130.1][section] {
                         let control = compose_fixture_frame_with_view_and_clock(&mut state, &assets, &metrics,
                             &mut Vec::new(), &mut compose::TextLayoutCache::default(), &mut compose::ComposeScratch::default(),
-                            screen_gameplay::ActorViewOverride { apply_attacks: false, ..Default::default() },
+                            FixtureFrameView {
+                                presentation: screen_gameplay::ActorViewOverride::default(),
+                                preview: Some(SongFrameContent::preview(false, true)),
+                            },
                             &FIXTURE_TEXTURES, Some(update.wall_seconds));
                         assert!(compare_draws(&expected.draws,
                             actual_draws(&control, &metrics, &receptor_handles, &tap_handles, &native_vertices)).is_err(),

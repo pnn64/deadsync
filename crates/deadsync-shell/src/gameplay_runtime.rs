@@ -1,27 +1,66 @@
 use deadlib_platform::input::RawKeyboardEvent;
-use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
+use deadsync_assets::gameplay_stage::{
+    ActiveGameplayStage, GameplayCoreState, GameplayHost, GameplayStageAssets, GameplayStagePresenter,
+    PracticeEditorPresentation, PracticeLivePresentation, PracticeStagePresenter, PreparedGameplayStage,
+};
+use deadsync_chart::ChartData;
 use deadsync_config as config;
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
-    GameplayAudioCommand, GameplayAudioSnapshot, GameplayMiniIndicatorData, GameplayMusicCut,
-    GameplaySession, GameplaySessionCommand, GameplayStreamClockSnapshot, gameplay_runtime_charts,
+    GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, GameplayMiniIndicatorData, GameplayMusicCut,
+    GameplayInputPlayerSide, GameplayInputPlayStyle, GameplaySession, GameplaySessionCommand,
+    GameplayStreamClockSnapshot, gameplay_runtime_charts,
+};
+use deadsync_gameplay::practice::{
+    PracticeDestination, PracticeHost, PracticeViewRequest,
+    editor::{PracticeEditorConfig, PracticeEditorSnapshot},
 };
 use deadsync_input::InputEvent;
+use deadsync_input::practice::PracticeKeyEvent;
+use deadsync_online::gameplay_lobby::{
+    GameplayLobbyAction, GameplayLobbyInput, GameplayLobbySession, LobbyRuntimeView,
+};
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::{
     gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
 };
-use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
-use deadsync_theme_simply_love::screens::{gameplay, practice};
-use deadsync_theme_simply_love::views::{
-    GameplayInitView, GameplayPolicyView, GameplayRuntimeView, GameplayScoreInitView,
-    GameplayScoreRuntimeView, PracticeRuntimeView, SimplyLoveLobbyRuntimeView,
+use deadsync_profile_gameplay::stage_scores::{
+    GameplayScoreRefresh, GameplayScoreSnapshots, mini_indicator_rival_score,
 };
-use std::path::Path;
+use deadsync_song_lua::gameplay_presentation::{FramePresentationContext, SongFrameContent};
+use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
+use deadsync_theme::{ThemeEffect, ThemeScreenFlow};
+use deadsync_theme::views::{GameplayLivePresentation, SmxSensorPadView, SmxSensorPanelView};
+use smallvec::SmallVec;
 use std::sync::Arc;
 
 const GAMEPLAY_SCOREBOX_ENTRIES: usize = 5;
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PracticeEditSnapshot<V> {
+    editor: PracticeEditorSnapshot,
+    view: V,
+}
+
+pub(crate) fn practice_edit_snapshot<P, Q: PracticeLivePresentation<P>>(
+    state: &PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
+) -> PracticeEditSnapshot<Q::EditSnapshot> {
+    PracticeEditSnapshot {
+        editor: state.session.editor().snapshot(),
+        view: state.presentation.edit_snapshot(),
+    }
+}
+
+pub(crate) fn restore_practice_edit_snapshot<P, Q: PracticeLivePresentation<P>>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
+    snapshot: PracticeEditSnapshot<Q::EditSnapshot>,
+) {
+    state.session.restore(&state.gameplay.stage.gameplay, snapshot.editor);
+    state.session.snap_display_to_cursor(&mut state.gameplay.stage.gameplay);
+    state.presentation.restore_edit_snapshot(snapshot.view);
+}
 
 /// Game-thread-owned cursor for the current Gameplay or Practice song's
 /// asynchronous leaderboard snapshots. It is single-threaded and retains one
@@ -49,8 +88,10 @@ impl ScoreRuntimeCursor {
     }
 
     #[inline(always)]
-    fn sync_if_dirty(&mut self, state: &mut gameplay::State) {
-        if !gameplay::scorebox_refresh_pending(state) {
+    fn sync_if_dirty<P: GameplayLivePresentation<GameplayCoreState>>(
+        &mut self, state: &mut GameplayHost<GameplayLobbySession, P>,
+    ) {
+        if !state.score_refresh.has_pending() {
             return;
         }
         let generation = deadsync_score::runtime_player_leaderboard_generation();
@@ -60,69 +101,15 @@ impl ScoreRuntimeCursor {
 
         // Capture the generation before taking cache locks. A completion racing
         // this refresh can cause one redundant pass, but cannot be hidden.
-        let view = score_runtime_view(state);
+        let updates = state.score_refresh.poll(&mut state.stage.gameplay, |chart_hash, profile| {
+            scores::get_or_fetch_player_leaderboards_for_profile(
+                chart_hash,
+                profile,
+                GAMEPLAY_SCOREBOX_ENTRIES,
+            )
+        });
         self.generation = Some(generation);
-        gameplay::sync_score_runtime_view(state, view);
-    }
-}
-
-fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
-    GameplayPolicyView {
-        translated_titles: config.translated_titles,
-        center_single_notefield: config.center_1player_notefield,
-        background_brightness: config.bg_brightness,
-        background_color: config.gameplay_bg_color,
-        smx_input: config.smx_input,
-        zmod_rating_box_text: config.zmod_rating_box_text,
-        difficulty_color_scheme: config.difficulty_color_scheme,
-        show_bpm_decimal: config.show_bpm_decimal,
-        bpm_position: config.gameplay_bpm_position,
-        machine_font: config.machine_font,
-        scorebox_pane_filter: crate::app::scorebox_pane_filter(config),
-    }
-}
-
-fn background_changes(
-    config: &config::app_config::Config,
-    song: &SongData,
-    gameplay_charts: &[Arc<GameplayChartData>; 2],
-    session: &GameplaySession,
-) -> Vec<SongBackgroundChange> {
-    let random_movie_paths = deadsync_simfile::app_runtime::random_movie_paths(
-        song,
-        matches!(
-            config.random_background_mode,
-            config::theme::RandomBackgroundMode::RandomMovies
-        ),
-    );
-    let chart = background_chart(gameplay_charts, session);
-    deadsync_simfile::app_runtime::gameplay_background_changes(song, chart, random_movie_paths)
-}
-
-fn background_chart<'a>(
-    gameplay_charts: &'a [Arc<GameplayChartData>; 2],
-    session: &GameplaySession,
-) -> &'a GameplayChartData {
-    if session.p2_runtime_player() {
-        &gameplay_charts[1]
-    } else {
-        &gameplay_charts[0]
-    }
-}
-
-pub(crate) fn runtime_view(
-    config: &config::app_config::Config,
-    lobby: SimplyLoveLobbyRuntimeView,
-) -> GameplayRuntimeView {
-    let session = profile::get_session_snapshot();
-    GameplayRuntimeView {
-        policy: policy_view(config),
-        play_style: session.play_style,
-        player_side: session.player_side,
-        joined: std::array::from_fn(|idx| {
-            session.side_joined(profile_data::player_side_for_index(idx))
-        }),
-        lobby,
+        state.presentation.sync_leaderboards(updates);
     }
 }
 
@@ -169,45 +156,6 @@ fn mini_indicator_machine_best(
                 .and_then(|(_, score)| mini_indicator_percent(score.percent))
         }
     }
-}
-
-fn leaderboard_matches_score_type(
-    pane: &deadsync_score::LeaderboardPane,
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> bool {
-    match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => !pane.is_ex && !pane.is_hard_ex(),
-        profile_data::MiniIndicatorScoreType::Ex => pane.is_ex && !pane.is_hard_ex(),
-        profile_data::MiniIndicatorScoreType::HardEx => pane.is_hard_ex(),
-    }
-}
-
-fn mini_indicator_rival_score(
-    snapshot: Option<&deadsync_score::CachedPlayerLeaderboardData>,
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> Option<f64> {
-    let panes = snapshot?
-        .data
-        .as_ref()?
-        .panes
-        .iter()
-        .filter(|pane| !pane.disabled && leaderboard_matches_score_type(pane, score_type));
-    let mut rival = None::<f64>;
-    let mut world_record = None::<f64>;
-    for entry in panes
-        .flat_map(|pane| pane.entries.iter())
-        .filter(|entry| !entry.is_fail && entry.score.is_finite())
-    {
-        if entry.is_rival || entry.is_self {
-            rival = Some(rival.map_or(entry.score, |score| score.max(entry.score)));
-        }
-        if entry.rank == 1 {
-            world_record = Some(world_record.map_or(entry.score, |score| score.max(entry.score)));
-        }
-    }
-    rival
-        .or(world_record)
-        .map(|score_10000| (score_10000 / 100.0).clamp(0.0, 100.0))
 }
 
 fn mini_indicator_view(
@@ -276,11 +224,11 @@ fn scorebox_profiles(
     snapshots
 }
 
-fn score_init_view(
+fn prepare_scores(
     charts: &[Arc<ChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
-) -> GameplayScoreInitView {
+) -> (GameplayMiniIndicatorData, GameplayScoreRefresh, GameplayScoreSnapshots) {
     let runtime_charts = gameplay_runtime_charts(charts, session);
     let runtime_profiles = gameplay_runtime_profile_data(profiles, session);
     let scorebox_profiles = scorebox_profiles(&runtime_profiles, session);
@@ -306,122 +254,119 @@ fn score_init_view(
             );
         }
     }
-    GameplayScoreInitView {
-        mini_indicator: mini_indicator_view(
-            &runtime_charts,
-            &runtime_profiles,
-            session,
-            &scorebox_snapshots,
-        ),
+    let mini_indicator = mini_indicator_view(
+        &runtime_charts,
+        &runtime_profiles,
+        session,
+        &scorebox_snapshots,
+    );
+    let scorebox_visible = scorebox_profiles
+        .each_ref()
+        .map(|profile| profile.display_scorebox && profile.online_active());
+    let score_refresh = GameplayScoreRefresh::new(
         scorebox_profiles,
-        scorebox_snapshots,
+        &scorebox_snapshots,
         rival_score_types,
-    }
+    );
+    (
+        mini_indicator,
+        score_refresh,
+        GameplayScoreSnapshots { scorebox_visible, scorebox_snapshots },
+    )
 }
 
-pub(crate) fn init_view(
-    config: &config::app_config::Config,
-    lobby: SimplyLoveLobbyRuntimeView,
-    song: &SongData,
+pub(crate) struct GameplayStartup {
+    pub mini_indicator: GameplayMiniIndicatorData,
+    pub lobby_session: GameplayLobbySession,
+    pub score_refresh: GameplayScoreRefresh,
+    pub scores: GameplayScoreSnapshots,
+}
+
+pub(crate) fn prepare_startup(
+    lobby: LobbyRuntimeView,
     charts: &[Arc<ChartData>; 2],
-    gameplay_charts: &[Arc<GameplayChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
     score_cursor: &mut ScoreRuntimeCursor,
-) -> GameplayInitView {
-    // Seed before `score_init_view` can start a request so even an immediate
-    // worker completion publishes a generation newer than this song's cursor.
+) -> GameplayStartup {
+    // Seed before preparing scores so even an immediate worker completion
+    // publishes a generation newer than this song's cursor.
     score_cursor.begin_song();
-    GameplayInitView {
-        runtime: runtime_view(config, lobby),
-        hud: profile::gameplay_hud_snapshot(),
-        judgment_palettes: {
-            let catalog = deadsync_config::judgment_palettes::runtime_catalog(
-                deadsync_theme_simply_love::color::JUDGMENT_PRESET,
-            );
-            std::array::from_fn(|player| {
-                catalog.resolve(profiles[player].judgment_palette_id.as_deref())
-            })
-        },
-        scores: score_init_view(charts, profiles, session),
-        background_changes: background_changes(config, song, gameplay_charts, session),
-    }
+    let lobby_session = GameplayLobbySession::new(
+        lobby,
+        session.joined_sides,
+        profile_side_from_gameplay(session.player_side),
+    );
+    let (mini_indicator, score_refresh, scores) = prepare_scores(charts, profiles, session);
+    GameplayStartup { mini_indicator, lobby_session, score_refresh, scores }
 }
 
-pub(crate) fn refresh_chart_view(
-    view: &mut GameplayInitView,
-    config: &config::app_config::Config,
-    song: &SongData,
+pub(crate) fn refresh_chart_scores(
+    startup: &mut GameplayStartup,
     charts: &[Arc<ChartData>; 2],
-    gameplay_charts: &[Arc<GameplayChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
 ) {
-    view.scores = score_init_view(charts, profiles, session);
-    view.background_changes = background_changes(config, song, gameplay_charts, session);
+    (startup.mini_indicator, startup.score_refresh, startup.scores) =
+        prepare_scores(charts, profiles, session);
 }
 
-pub(crate) fn score_runtime_view(state: &gameplay::State) -> GameplayScoreRuntimeView {
-    let mut scorebox_updates = std::array::from_fn(|_| None);
-    let mut rival_score_updates = [None; 2];
-    for player in 0..state.num_players() {
-        let side = profile_side_from_gameplay(state.runtime_player_side(player));
-        let side_idx = profile_data::player_side_index(side);
-        let profile = gameplay::scorebox_profile_for_side(state, side);
-        let rival_score_type = gameplay::rival_score_type_for_side(state, side);
-        if (!profile.display_scorebox && rival_score_type.is_none())
-            || !profile.online_active()
-            || !gameplay::scorebox_snapshot_for_side(state, side)
-                .is_some_and(|snapshot| snapshot.loading)
-        {
-            continue;
-        }
-        let chart_hash = state.charts()[player].short_hash.trim();
-        if chart_hash.is_empty() {
-            continue;
-        }
-        if let Some(snapshot) = scores::get_or_fetch_player_leaderboards_for_profile(
-            chart_hash,
-            profile,
-            GAMEPLAY_SCOREBOX_ENTRIES,
-        ) && !snapshot.loading
-        {
-            if let Some(score_type) = rival_score_type {
-                rival_score_updates[player] =
-                    mini_indicator_rival_score(Some(&snapshot), score_type);
-            }
-            scorebox_updates[side_idx] = Some(snapshot);
-        }
-    }
-    GameplayScoreRuntimeView {
-        scorebox_updates,
-        rival_score_updates,
-        itl_cmod_warning: state.itl_cmod_warning_snapshot(),
-    }
+pub(crate) fn present_stage<P>(
+    prepared: PreparedGameplayStage,
+    scene: Option<deadsync_song_lua::SongLuaLiveScene>,
+    course_title: Option<&str>,
+    startup: GameplayStartup,
+    present: impl FnOnce(&ActiveGameplayStage, GameplayStageAssets, GameplayScoreSnapshots) -> P,
+) -> GameplayHost<GameplayLobbySession, P> {
+    prepared.into_host(
+        scene,
+        startup.lobby_session,
+        startup.score_refresh,
+        course_title,
+        |stage, assets| present(stage, assets, startup.scores),
+    )
 }
 
 /// Prepare song-invariant score state once, before gameplay begins. In
 /// particular, resolving the ITL warning must never become part of the live
 /// score-polling path: its app-runtime adapter may inspect profile and catalog
 /// state, while the result cannot change during a stage.
-pub(crate) fn sync_initial_scores(state: &mut gameplay::State) {
-    let mut view = GameplayScoreRuntimeView::default();
-    view.itl_cmod_warning = std::array::from_fn(|player| {
-        player < state.num_players() && scores::should_warn_cmod_for_itl_chart(state, player)
+pub(crate) fn sync_initial_scores<P: GameplayLivePresentation<GameplayCoreState>>(
+    state: &mut GameplayHost<GameplayLobbySession, P>,
+) {
+    let warnings = std::array::from_fn(|player| {
+        player < state.stage.num_players() && scores::should_warn_cmod_for_itl_chart(&state.stage, player)
     });
-    gameplay::sync_score_runtime_view(state, view);
+    state.presentation.sync_itl_cmod_warning(warnings);
 }
 
-pub(crate) fn practice_view(
+pub(crate) struct PracticeInit {
+    editor: PracticeEditorConfig,
+    hud: profile_data::GameplayHudSnapshot,
+}
+
+pub(crate) fn practice_init(
     config: &config::app_config::Config,
-    gameplay: &GameplayInitView,
-) -> PracticeRuntimeView {
-    PracticeRuntimeView {
-        only_dedicated_menu_buttons: config.only_dedicated_menu_buttons,
-        three_key_navigation: config.three_key_navigation,
-        tab_acceleration: config.tab_acceleration,
-        hud: gameplay.hud.clone(),
+    hud: &profile_data::GameplayHudSnapshot,
+) -> PracticeInit {
+    PracticeInit {
+        editor: PracticeEditorConfig {
+            only_dedicated_menu_buttons: config.only_dedicated_menu_buttons,
+            three_key_navigation: config.three_key_navigation,
+            tab_acceleration: config.tab_acceleration,
+        },
+        hud: hud.clone(),
     }
+}
+
+pub(crate) fn prepare_practice<P, Q>(
+    gameplay: GameplayHost<GameplayLobbySession, P>,
+    init: PracticeInit,
+    present: impl FnOnce(&ActiveGameplayStage, &mut P, profile_data::GameplayHudSnapshot) -> Q,
+) -> PracticeHost<GameplayHost<GameplayLobbySession, P>, Q> {
+    gameplay.into_practice(init.editor, |stage, presentation| {
+        present(stage, presentation, init.hud)
+    })
 }
 
 fn smx_sensor_value(data: &deadsync_smx::SensorTestData, panel: usize, fsr: bool) -> Option<u16> {
@@ -445,7 +390,7 @@ fn smx_sensor_value(data: &deadsync_smx::SensorTestData, panel: usize, fsr: bool
 fn smx_sensor_view(
     config: &deadsync_smx::SmxConfig,
     data: Option<&deadsync_smx::SensorTestData>,
-) -> gameplay::SmxSensorPadView {
+) -> SmxSensorPadView {
     let fsr = deadsync_smx::is_fsr(config);
     let panels = std::array::from_fn(|panel| {
         let threshold = if fsr {
@@ -459,60 +404,143 @@ fn smx_sensor_view(
         } else {
             u16::from(config.panel_settings[panel].load_cell_high_threshold)
         };
-        gameplay::SmxSensorPanelView {
+        SmxSensorPanelView {
             threshold,
             value: data.and_then(|data| smx_sensor_value(data, panel, fsr)),
         }
     });
-    gameplay::SmxSensorPadView { fsr, panels }
+    SmxSensorPadView { fsr, panels }
 }
 
 fn update_smx_sensor_view(
-    mut view: gameplay::SmxSensorPadView,
+    mut view: SmxSensorPadView,
     data: Option<&deadsync_smx::SensorTestData>,
-) -> gameplay::SmxSensorPadView {
+) -> SmxSensorPadView {
     for (panel, panel_view) in view.panels.iter_mut().enumerate() {
         panel_view.value = data.and_then(|data| smx_sensor_value(data, panel, view.fsr));
     }
     view
 }
 
-fn enter_smx_sensors(state: &mut gameplay::State, smx_input: bool) {
-    let plan = gameplay::smx_sensor_pad_plan(state, smx_input);
-    for (store_idx, sdk_pad) in plan.into_iter().flatten() {
-        deadsync_smx::set_test_mode(sdk_pad, deadsync_smx::SensorTestMode::CalibratedValues);
-        let view = deadsync_smx::get_config(sdk_pad)
-            .as_ref()
-            .map(|config| smx_sensor_view(config, None));
-        gameplay::set_smx_sensor_pad_view(state, store_idx, view);
+// The SDK streams at about 30 Hz. Read at 60 Hz to bound lock traffic even
+// on high-refresh frames, and retain at most one unconsumed sample interval.
+const SMX_SAMPLE_INTERVAL: f32 = 1.0 / 60.0;
+
+pub(crate) struct GameplayTelemetryCursor {
+    smx_elapsed: f32,
+    smx_views: [Option<SmxSensorPadView>; MAX_PLAYERS],
+    heart_rate_generation: (u64, u64),
+}
+
+impl Default for GameplayTelemetryCursor {
+    fn default() -> Self {
+        Self {
+            smx_elapsed: SMX_SAMPLE_INTERVAL,
+            smx_views: [None; MAX_PLAYERS],
+            heart_rate_generation: (u64::MAX, u64::MAX),
+        }
     }
 }
 
-fn refresh_smx_sensors(state: &mut gameplay::State, delta_time: f32, smx_input: bool) {
-    if !gameplay::smx_sensor_refresh_due(state, delta_time) {
+impl GameplayTelemetryCursor {
+    fn smx_refresh_due(&mut self, delta_time: f32) -> bool {
+        self.smx_elapsed += delta_time;
+        if self.smx_elapsed < SMX_SAMPLE_INTERVAL {
+            return false;
+        }
+        self.smx_elapsed = (self.smx_elapsed - SMX_SAMPLE_INTERVAL).min(SMX_SAMPLE_INTERVAL);
+        true
+    }
+}
+
+/// Pairs of snapshot slot and SDK pad. Singles use profile slot zero even
+/// on the right pad, while Doubles expose both physical pads to one player.
+fn smx_sensor_pad_plan(
+    play_style: GameplayInputPlayStyle,
+    side: GameplayInputPlayerSide,
+    num_players: usize,
+    fsr_display: [bool; MAX_PLAYERS],
+    smx_input: bool,
+) -> [Option<(usize, usize)>; MAX_PLAYERS] {
+    if !smx_input || !fsr_display.into_iter().any(|enabled| enabled) {
+        return [None; MAX_PLAYERS];
+    }
+    if play_style.is_double() {
+        return [fsr_display[0].then_some((0, 0)), fsr_display[0].then_some((1, 1))];
+    }
+    if num_players >= MAX_PLAYERS {
+        return std::array::from_fn(|idx| fsr_display[idx].then_some((idx, idx)));
+    }
+    let sdk_pad = usize::from(side == GameplayInputPlayerSide::P2);
+    [(num_players == 1 && fsr_display[0]).then_some((0, sdk_pad)), None]
+}
+
+fn stage_smx_sensor_pad_plan(
+    stage: &ActiveGameplayStage,
+    smx_input: bool,
+) -> [Option<(usize, usize)>; MAX_PLAYERS] {
+    let session = &stage.gameplay.setup.session;
+    smx_sensor_pad_plan(
+        session.play_style,
+        session.player_side,
+        stage.num_players(),
+        stage.profiles().each_ref().map(|profile| profile.smx_fsr_display),
+        smx_input,
+    )
+}
+
+fn enter_smx_sensors<P: GameplayLivePresentation<GameplayCoreState>>(
+    state: &mut GameplayHost<GameplayLobbySession, P>,
+    cursor: &mut GameplayTelemetryCursor,
+    smx_input: bool,
+) {
+    let plan = stage_smx_sensor_pad_plan(&state.stage, smx_input);
+    for (store_idx, sdk_pad) in plan.into_iter().flatten() {
+        deadsync_smx::set_test_mode(sdk_pad, deadsync_smx::SensorTestMode::CalibratedValues);
+        cursor.smx_views[store_idx] = deadsync_smx::get_config(sdk_pad)
+            .as_ref()
+            .map(|config| smx_sensor_view(config, None));
+    }
+    state.presentation.sync_smx_sensors(cursor.smx_views);
+}
+
+fn refresh_smx_sensors<P: GameplayLivePresentation<GameplayCoreState>>(
+    state: &mut GameplayHost<GameplayLobbySession, P>,
+    cursor: &mut GameplayTelemetryCursor,
+    delta_time: f32,
+    smx_input: bool,
+) {
+    if !cursor.smx_refresh_due(delta_time) {
         return;
     }
-    let plan = gameplay::smx_sensor_pad_plan(state, smx_input);
+    let plan = stage_smx_sensor_pad_plan(&state.stage, smx_input);
+    if plan.iter().all(Option::is_none) {
+        return;
+    }
     for (store_idx, sdk_pad) in plan.into_iter().flatten() {
         let data = deadsync_smx::get_test_data(sdk_pad);
-        let view = if let Some(view) = gameplay::smx_sensor_pad_view(state, store_idx) {
+        cursor.smx_views[store_idx] = if let Some(view) = cursor.smx_views[store_idx] {
             Some(update_smx_sensor_view(view, data.as_ref()))
         } else {
             deadsync_smx::get_config(sdk_pad)
                 .as_ref()
                 .map(|config| smx_sensor_view(config, data.as_ref()))
         };
-        gameplay::set_smx_sensor_pad_view(state, store_idx, view);
     }
+    state.presentation.sync_smx_sensors(cursor.smx_views);
 }
 
-pub(crate) fn exit(state: &mut gameplay::State) {
+pub(crate) fn exit<P: GameplayLivePresentation<GameplayCoreState>>(
+    state: &mut GameplayHost<GameplayLobbySession, P>,
+    cursor: &mut GameplayTelemetryCursor,
+) {
     // Always clear both pads, including one whose config was unavailable on
     // enter. Otherwise the SDK keeps streaming sensor data after gameplay.
     for pad in 0..2 {
         deadsync_smx::set_test_mode(pad, deadsync_smx::SensorTestMode::Off);
     }
-    gameplay::on_exit(state);
+    cursor.smx_views = [None; MAX_PLAYERS];
+    state.presentation.sync_smx_sensors(cursor.smx_views);
 }
 
 #[inline(always)]
@@ -607,63 +635,84 @@ pub(crate) fn drain_core(
 }
 
 #[inline(always)]
-pub(crate) fn drain(
-    state: &mut gameplay::State,
+pub(crate) fn drain<P>(
+    state: &mut GameplayHost<GameplayLobbySession, P>,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
-    drain_core(&mut state.gameplay, audio, sounds, music_clock);
+    drain_core(&mut state.stage.gameplay, audio, sounds, music_clock);
 }
 
-pub(crate) fn enter(
-    state: &mut gameplay::State,
+pub(crate) fn enter<P: GameplayLivePresentation<GameplayCoreState>>(
+    state: &mut GameplayHost<GameplayLobbySession, P>,
+    telemetry: &mut GameplayTelemetryCursor,
     smx_input: bool,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
-    deadsync_online::gameplay_lobby::on_enter(state);
-    enter_smx_sensors(state, smx_input);
+    let (stage, lobby) = state.stage_and_lobby();
+    lobby.on_enter(&mut stage.gameplay);
+    *telemetry = GameplayTelemetryCursor::default();
+    enter_smx_sensors(state, telemetry, smx_input);
     drain(state, audio, sounds, music_clock);
 }
 
-pub(crate) const MAX_UPDATE_EFFECTS: usize = 6;
-const MAX_INPUT_EFFECTS: usize = 1;
+const MAX_UPDATE_EFFECTS: usize = 6;
 
-pub(crate) fn update(
-    state: &mut gameplay::State,
+pub(crate) enum GameplayFrameEffect<S> {
+    Lobby(GameplayLobbyAction),
+    Session(SongLuaGameplayEffect<S>),
+}
+
+pub(crate) type GameplayFrameEffects<S> = SmallVec<[GameplayFrameEffect<S>; MAX_UPDATE_EFFECTS]>;
+
+pub(crate) fn update<T, P>(
+    state: &mut GameplayHost<GameplayLobbySession, P>,
     delta_time: f32,
     smx_input: bool,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     score_cursor: &mut ScoreRuntimeCursor,
-    effects: &mut Vec<ThemeEffect>,
-) {
-    let start_len = effects.len();
-    crate::heart_rate::refresh_gameplay(state);
-    if !deadsync_online::gameplay_lobby::prepare_update(state, effects) {
-        debug_assert!(effects.len() - start_len <= MAX_UPDATE_EFFECTS);
-        return;
+    telemetry: &mut GameplayTelemetryCursor,
+) -> GameplayFrameEffects<T::Screen>
+where
+    T: ThemeScreenFlow,
+    P: GameplayLivePresentation<GameplayCoreState>,
+{
+    let mut effects = GameplayFrameEffects::<T::Screen>::new();
+    crate::heart_rate::refresh_gameplay(
+        &mut state.presentation,
+        &mut telemetry.heart_rate_generation,
+    );
+    let (stage, lobby) = state.stage_and_lobby();
+    if !lobby.prepare_update(&mut stage.gameplay, |action| {
+        effects.push(GameplayFrameEffect::Lobby(action));
+    }) {
+        debug_assert!(effects.len() <= MAX_UPDATE_EFFECTS);
+        return effects;
     }
 
-    refresh_smx_sensors(state, delta_time, smx_input);
+    refresh_smx_sensors(state, telemetry, delta_time, smx_input);
 
     // A lobby can queue stage music during `prepare_update`. Execute it before
     // taking the clock snapshot so the deterministic update sees the new
     // stream mapping on the same frame, matching the pre-boundary behavior.
     drain(state, audio, sounds, music_clock);
     let previous_song_lua_time = state.current_music_time_display();
-    deadsync_song_lua::gameplay_session::update(
-        state,
+    let stage = &mut state.stage;
+    let presentation = &mut state.presentation;
+    stage.update(
         delta_time,
         snapshot(music_clock),
         deadlib_platform::host_time::now_nanos,
-        effects,
-        |_| {},
+        crate::navigation::song_lua_presentation_screen::<T>,
+        |effect| effects.push(GameplayFrameEffect::Session(effect)),
+        |game, delta| presentation.update_gameplay_visuals(game, delta),
     );
-    let output = state.take_song_lua_output();
+    let output = stage.take_output();
     for command in output.actor_sounds {
         use deadsync_song_lua::SongLuaActorSound;
         match command {
@@ -699,192 +748,214 @@ pub(crate) fn update(
     }
     score_cursor.sync_if_dirty(state);
     drain(state, audio, sounds, music_clock);
-    let current_song_lua_time = state.current_music_time_display();
-    state.song_media.for_each_sound_event(
-        previous_song_lua_time,
-        current_song_lua_time,
-        |path: &Path| {
+    state
+        .stage
+        .for_each_scheduled_song_sound(previous_song_lua_time, |path| {
             if let Some(sound) = sounds.resolve_path(path) {
                 audio.play_sfx(sound);
             }
-        },
-    );
-    debug_assert!(effects.len() - start_len <= MAX_UPDATE_EFFECTS);
+        });
+    debug_assert!(effects.len() <= MAX_UPDATE_EFFECTS);
+    effects
 }
 
-pub(crate) fn handle_input(
-    state: &mut gameplay::State,
+pub(crate) fn handle_input<P: GameplayLivePresentation<GameplayCoreState>>(
+    state: &mut GameplayHost<GameplayLobbySession, P>,
     ev: &InputEvent,
     physical: Option<deadsync_input::PhysicalInput>,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
-    effects: &mut Vec<ThemeEffect>,
-) {
-    let start_len = effects.len();
-    gameplay::handle_input_with_device(state, ev, physical, effects);
+) -> GameplayAction {
+    let (stage, lobby) = state.stage_and_lobby();
+    let action = match lobby.route_input(ev) {
+        GameplayLobbyInput::PassThrough => stage.handle_input(ev, physical),
+        GameplayLobbyInput::Consumed => GameplayAction::None,
+        GameplayLobbyInput::ToggleHud => {
+            state.presentation.toggle_lobby_hud();
+            GameplayAction::None
+        }
+    };
     drain(state, audio, sounds, music_clock);
-    debug_assert!(effects.len() - start_len <= MAX_INPUT_EFFECTS);
+    action
 }
 
-pub(crate) fn update_practice(
-    state: &mut practice::State,
+pub(crate) fn update_practice<P, Q>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
     delta_time: f32,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     score_cursor: &mut ScoreRuntimeCursor,
-    effects: &mut Vec<ThemeEffect>,
-) {
-    practice::update(
-        state,
+    effects: &mut Vec<Q::Effect>,
+) where
+    P: GameplayLivePresentation<GameplayCoreState>,
+    Q: PracticeLivePresentation<P>,
+{
+    let audio_snapshot = snapshot(music_clock);
+    state.presentation.advance_visuals(delta_time);
+    let mut feedback = state.presentation.editor_feedback();
+    let playback = state.session.update(
+        &mut state.gameplay.stage.gameplay,
         delta_time,
-        snapshot(music_clock),
+        audio_snapshot,
         deadlib_platform::host_time::now_nanos,
         deadlib_audio::stream::snap_music_start_sec,
-        effects,
+        |game, event| feedback.emit(game, event),
     );
+    feedback.finish(&state.gameplay.stage, &mut state.gameplay.presentation);
+    state.presentation.apply_playback_update(playback);
     score_cursor.sync_if_dirty(&mut state.gameplay);
     drain(&mut state.gameplay, audio, sounds, music_clock);
+    apply_practice_output(state, None, effects);
 }
 
-pub(crate) fn enter_practice(
-    state: &mut practice::State,
+pub(crate) fn enter_practice<P, Q>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
-    practice::on_enter(state);
+    state.session.on_enter(&mut state.gameplay.stage.gameplay);
     drain(&mut state.gameplay, audio, sounds, music_clock);
 }
 
-pub(crate) fn handle_practice_input(
-    state: &mut practice::State,
+pub(crate) fn handle_practice_input<T, P, Q>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
     ev: &InputEvent,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
-    effects: &mut Vec<ThemeEffect>,
-) {
-    practice::handle_input(
-        state,
+    effects: &mut Vec<ThemeEffect<T::Screen, T::RuntimeRequest>>,
+) where
+    T: ThemeScreenFlow,
+    Q: PracticeLivePresentation<P, Effect = ThemeEffect<T::Screen, T::RuntimeRequest>>,
+{
+    let mut feedback = state.presentation.editor_feedback();
+    let request = state.session.handle_input(
+        &mut state.gameplay.stage.gameplay,
         ev,
         deadlib_audio::stream::snap_music_start_sec,
-        effects,
+        |game, event| feedback.emit(game, event),
     );
+    feedback.finish(&state.gameplay.stage, &mut state.gameplay.presentation);
+    state.presentation.apply_view_request(request);
     drain(&mut state.gameplay, audio, sounds, music_clock);
+    apply_practice_output(state, practice_navigation::<T>(request), effects);
 }
 
-pub(crate) fn handle_practice_raw_key(
-    state: &mut practice::State,
+pub(crate) fn handle_practice_raw_key<T, P, Q>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
     ev: &RawKeyboardEvent,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
-    effects: &mut Vec<ThemeEffect>,
-) -> bool {
-    let consumed = practice::handle_raw_key_event(
-        state,
-        ev,
+    effects: &mut Vec<ThemeEffect<T::Screen, T::RuntimeRequest>>,
+) -> bool
+where
+    T: ThemeScreenFlow,
+    Q: PracticeLivePresentation<P, Effect = ThemeEffect<T::Screen, T::RuntimeRequest>>,
+{
+    let mut feedback = state.presentation.editor_feedback();
+    let (consumed, request) = state.session.handle_raw_key(
+        &mut state.gameplay.stage.gameplay,
+        &PracticeKeyEvent::from_raw(ev),
         deadlib_audio::stream::snap_music_start_sec,
-        effects,
+        |game, event| feedback.emit(game, event),
     );
+    feedback.finish(&state.gameplay.stage, &mut state.gameplay.presentation);
+    state.presentation.apply_view_request(request);
     drain(&mut state.gameplay, audio, sounds, music_clock);
+    apply_practice_output(state, practice_navigation::<T>(request), effects);
     consumed
 }
 
-/// Run chart playback and request the current theme's presentation fragments.
-pub(crate) fn push_actors(
-    actors: &mut Vec<deadlib_present::actors::Actor>,
-    state: &mut deadsync_theme_simply_love::screens::gameplay::State,
-    assets: &deadlib_assets::AssetManager,
-    view: deadsync_theme_simply_love::screens::gameplay::ActorViewOverride,
-    arrow_effect_time_s: f64,
-    visual_policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
-) -> deadsync_song_lua::playback::GameplayActorSegments {
-    use deadsync_theme_simply_love::screens::gameplay;
-    let mut song = state
-        .song_scratch
-        .take()
-        .expect("song scratch restored after every frame");
-    let mut hud = state
-        .frame_scratch
-        .take()
-        .expect("theme scratch restored after every frame");
-    let session = &state.gameplay.setup.session;
-    let options = deadsync_song_lua::playback::FrameOptions {
-        uptime_seconds: arrow_effect_time_s,
-        play_style: session.play_style,
-        player_side: session.player_side,
-        hide_song_bg: std::array::from_fn(|p| state.profiles()[p].hide_song_bg),
-        notefield: view.notefield,
-        hide_gameplay_hud: view.hide_gameplay_hud,
-        apply_attacks: view.apply_attacks,
-        show_song_visuals: view.show_song_visuals,
-    };
-    let segments = deadsync_song_lua::playback::compose_frame(
-        actors,
-        &state.gameplay,
-        &state.song_media,
-        &mut song,
-        assets,
-        options,
-        gameplay::frame_layers(state, &mut hud, assets, view, visual_policy),
-        |request, cameras, field, flat, hud, hud_flat| {
-            gameplay::draw_field(
-                state,
-                assets,
-                view,
-                arrow_effect_time_s,
-                visual_policy,
-                request,
-                cameras,
-                field,
-                flat,
-                hud,
-                hud_flat,
-            )
-        },
-    );
-    state.song_scratch = Some(song);
-    state.frame_scratch = Some(hud);
-    gameplay::push_song_lua_out(actors, state);
-    segments
+fn practice_navigation<T: ThemeScreenFlow>(
+    request: PracticeViewRequest,
+) -> Option<ThemeEffect<T::Screen, T::RuntimeRequest>> {
+    match request {
+        PracticeViewRequest::Navigate(PracticeDestination::PlayerOptions) => {
+            Some(ThemeEffect::Navigate(T::SCREENS.player_options))
+        }
+        PracticeViewRequest::Navigate(PracticeDestination::SelectMusic) => {
+            Some(ThemeEffect::Navigate(T::SCREENS.song_selection))
+        }
+        _ => None,
+    }
 }
 
-pub(crate) fn push_practice_actors(
+fn apply_practice_output<P, Q: PracticeLivePresentation<P>>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
+    navigation: Option<Q::Effect>,
+    effects: &mut Vec<Q::Effect>,
+) {
+    let rates = state.session.drain_music_rates();
+    for rate in rates {
+        profile::set_session_music_rate(rate);
+    }
+    state.presentation.append_effects(effects);
+    effects.extend(navigation);
+}
+
+pub(crate) fn push_actors<L, P: GameplayStagePresenter<L>>(
     actors: &mut Vec<deadlib_present::actors::Actor>,
-    state: &mut deadsync_theme_simply_love::screens::practice::State,
+    state: &mut GameplayHost<L, P>,
+    assets: &deadlib_assets::AssetManager,
+    view: P::View,
+    uptime_seconds: f64,
+    policy: P::Policy,
+) -> deadsync_song_lua::playback::GameplayActorSegments {
+    state.compose_gameplay_frame(
+        actors,
+        FramePresentationContext {
+            assets,
+            view,
+            uptime_seconds,
+            policy,
+        },
+        SongFrameContent::PLAYBACK,
+    )
+}
+
+pub(crate) fn push_practice_actors<L, P, Q>(
+    actors: &mut Vec<deadlib_present::actors::Actor>,
+    state: &mut PracticeHost<GameplayHost<L, P>, Q>,
     assets: &deadlib_assets::AssetManager,
     arrow_effect_time_s: f64,
-    visual_policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
-) -> deadsync_song_lua::playback::GameplayActorSegments {
-    use deadsync_theme_simply_love::screens::practice;
+    visual_policy: P::Policy,
+) -> deadsync_song_lua::playback::GameplayActorSegments
+where
+    P: GameplayStagePresenter<L>,
+    Q: PracticeStagePresenter<L, P>,
+{
     actors.reserve(128);
-    let view = practice::practice_view(state);
-    let segments = push_actors(
+    let view = state.presentation.frame_view(&state.session);
+    let segments = state.gameplay.compose_gameplay_frame(
         actors,
-        &mut state.gameplay,
-        assets,
-        view,
-        arrow_effect_time_s,
-        visual_policy,
+        FramePresentationContext {
+            assets,
+            view,
+            uptime_seconds: arrow_effect_time_s,
+            policy: visual_policy,
+        },
+        SongFrameContent::for_practice(&state.session),
     );
-    practice::push_overlay(actors, state);
+    state
+        .presentation
+        .append_practice_overlay(actors, &state.gameplay, &state.session);
     segments
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        background_chart, mini_indicator_percent, mini_indicator_rival_score, policy_view,
-        score_generation_changed, scorebox_profiles, smx_sensor_value,
+        GameplayTelemetryCursor, SMX_SAMPLE_INTERVAL, mini_indicator_percent,
+        mini_indicator_rival_score, score_generation_changed, scorebox_profiles,
+        smx_sensor_pad_plan, smx_sensor_value,
     };
-    use deadsync_chart::GameplayChartData;
     use deadsync_gameplay::GameplaySession;
     use deadsync_profile as profile_data;
     use deadsync_profile_gameplay::gameplay_runtime_profile_data;
-    use std::sync::Arc;
 
     fn leaderboard_entry(
         rank: u32,
@@ -923,61 +994,30 @@ mod tests {
     }
 
     #[test]
-    fn gameplay_policy_carries_presentation_fields() {
-        let config = deadsync_config::app_config::Config {
-            machine_font: deadsync_config::theme::MachineFont::Mega,
-            bg_brightness: 0.42,
-            gameplay_bg_color: deadlib_present::color::Color::from_hex("#123456")
-                .expect("test color should parse"),
-            smx_input: true,
-            zmod_rating_box_text: true,
-            show_bpm_decimal: true,
-            gameplay_bpm_position: deadsync_config::theme::GameplayBpmPosition::NearField,
-            ..Default::default()
-        };
-        let policy = policy_view(&config);
+    fn smx_sensor_plan_uses_stage_style_and_physical_side() {
+        use deadsync_gameplay::{GameplayInputPlayStyle as Style, GameplayInputPlayerSide as Side};
 
-        assert_eq!(policy.machine_font, config.machine_font);
-        assert_eq!(policy.background_brightness, config.bg_brightness);
-        assert_eq!(policy.background_color, config.gameplay_bg_color);
-        assert_eq!(policy.smx_input, config.smx_input);
-        assert_eq!(policy.zmod_rating_box_text, config.zmod_rating_box_text);
-        assert_eq!(policy.show_bpm_decimal, config.show_bpm_decimal);
-        assert_eq!(policy.bpm_position, config.gameplay_bpm_position);
+        for (style, side, players, display, enabled, expected) in [
+            (Style::Single, Side::P2, 1, [true, false], true, [Some((0, 1)), None]),
+            (Style::Double, Side::P2, 1, [true, false], true, [Some((0, 0)), Some((1, 1))]),
+            (Style::Routine, Side::P2, 2, [true, true], true, [Some((0, 0)), Some((1, 1))]),
+            (Style::Versus, Side::P1, 2, [false, true], true, [None, Some((1, 1))]),
+            (Style::Double, Side::P1, 1, [false, true], true, [None, None]),
+            (Style::Single, Side::P2, 1, [true, false], false, [None, None]),
+        ] {
+            assert_eq!(smx_sensor_pad_plan(style, side, players, display, enabled), expected);
+        }
     }
 
     #[test]
-    fn p2_solo_backgrounds_use_the_runtime_chart() {
-        let charts = std::array::from_fn(|_| {
-            Arc::new(GameplayChartData {
-                notes: Vec::new(),
-                parsed_notes: Vec::new(),
-                row_to_beat: Vec::new(),
-                timing_segments: deadsync_rules::timing::TimingSegments::default(),
-                timing: deadsync_rules::timing::TimingData::default(),
-                chart_attacks: None,
-            })
-        });
-        let p1 = GameplaySession::default();
-        let p2 = GameplaySession {
-            play_style: deadsync_profile_gameplay::gameplay_play_style_from_profile(
-                profile_data::PlayStyle::Single,
-            ),
-            player_side: deadsync_profile_gameplay::gameplay_player_side_from_profile(
-                profile_data::PlayerSide::P2,
-            ),
-            joined_sides: [false, true],
-            ..Default::default()
-        };
-
-        assert!(std::ptr::eq(
-            background_chart(&charts, &p1),
-            charts[0].as_ref()
-        ));
-        assert!(std::ptr::eq(
-            background_chart(&charts, &p2),
-            charts[1].as_ref()
-        ));
+    fn smx_sensor_sampling_retains_fractional_time_and_caps_catch_up() {
+        let mut cursor = GameplayTelemetryCursor::default();
+        assert!(cursor.smx_refresh_due(0.0));
+        assert!(!cursor.smx_refresh_due(SMX_SAMPLE_INTERVAL / 2.0));
+        assert!(cursor.smx_refresh_due(SMX_SAMPLE_INTERVAL / 2.0));
+        assert!(cursor.smx_refresh_due(10.0));
+        assert!(cursor.smx_refresh_due(0.0));
+        assert!(!cursor.smx_refresh_due(0.0));
     }
 
     #[test]

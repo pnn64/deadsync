@@ -2,6 +2,7 @@ use crate::act;
 use crate::color;
 use deadlib_present::actors::{Actor, TextContent};
 use deadsync_core::input::MAX_PLAYERS;
+pub use deadsync_theme::views::{HeartRatePlayerView, HeartRateView};
 
 /// Color zones keyed by percentage of the player's maximum heart rate:
 /// 0 grey (<50%), 1 white (50-59%), 2 blue (60-69%), 3 green (70-79%),
@@ -14,21 +15,6 @@ const ZONE_RGBA: [[f32; 4]; 6] = [
     deadlib_present::color::rgba_hex("#FFD23F"),
     deadlib_present::color::rgba_hex("#FF3030"),
 ];
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HeartRatePlayerView {
-    pub configured: bool,
-    pub connected: bool,
-    pub bpm: Option<u16>,
-    /// Player's configured maximum heart rate (bpm). Zones are computed as a
-    /// percentage of this value. Zero falls back to the profile default.
-    pub max_heart_rate: u16,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HeartRateView {
-    pub players: [HeartRatePlayerView; MAX_PLAYERS],
-}
 
 /// Fixed two-player display text updated only when a monitor reading changes.
 ///

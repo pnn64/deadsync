@@ -41,6 +41,8 @@ pub mod favorites_view;
 pub mod lock_wait;
 pub mod pad_config;
 pub mod pad_config_sync;
+pub mod picker;
+pub mod requests;
 pub mod update;
 
 mod profile_ini;
@@ -4321,6 +4323,25 @@ pub const fn play_style_for_joined(
 #[must_use]
 pub const fn player_side_is_joined(joined_mask: u8, side: PlayerSide) -> bool {
     joined_mask & player_side_joined_mask(side) != 0
+}
+
+/// Return the Versus style when an unjoined side can join a one-player session.
+#[must_use]
+pub const fn late_join_play_style(
+    style: PlayStyle,
+    joined_mask: u8,
+    side: PlayerSide,
+) -> Option<PlayStyle> {
+    let p1_joined = player_side_is_joined(joined_mask, PlayerSide::P1);
+    let p2_joined = player_side_is_joined(joined_mask, PlayerSide::P2);
+    if style.is_double() || p1_joined == p2_joined || player_side_is_joined(joined_mask, side) {
+        return None;
+    }
+    Some(if style.is_pump() {
+        PlayStyle::PumpVersus
+    } else {
+        PlayStyle::Versus
+    })
 }
 
 #[inline(always)]
@@ -12175,6 +12196,34 @@ mod tests {
         assert_eq!(
             play_style_for_joined(PlayStyle::Versus, false, true),
             PlayStyle::Single
+        );
+    }
+
+    #[test]
+    fn late_join_selects_versus_for_the_current_game() {
+        assert_eq!(
+            late_join_play_style(PlayStyle::Single, SESSION_JOINED_MASK_P1, PlayerSide::P2),
+            Some(PlayStyle::Versus)
+        );
+        assert_eq!(
+            late_join_play_style(
+                PlayStyle::PumpSingle,
+                SESSION_JOINED_MASK_P2,
+                PlayerSide::P1
+            ),
+            Some(PlayStyle::PumpVersus)
+        );
+        assert_eq!(
+            late_join_play_style(
+                PlayStyle::PumpDouble,
+                SESSION_JOINED_MASK_P2,
+                PlayerSide::P1
+            ),
+            None
+        );
+        assert_eq!(
+            late_join_play_style(PlayStyle::Single, SESSION_JOINED_MASK_P1, PlayerSide::P1),
+            None
         );
     }
 

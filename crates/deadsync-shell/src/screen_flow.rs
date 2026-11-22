@@ -1,27 +1,20 @@
 use deadsync_config::app_config::Config;
-#[cfg(test)]
+use deadsync_core::input::MAX_PLAYERS;
+use deadsync_core::session_flow::{
+    self, EvaluationOrigin, SessionNavigationPlan, SessionNavigationPolicy,
+};
 use deadsync_profile::PlayerSide;
+use deadsync_theme::ThemeSessionFlow;
+use deadsync_theme::profile_picker::ProfilePickerContext;
 #[cfg(test)]
-use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
-pub(crate) use deadsync_theme_simply_love::screens::{
-    LateJoinContext, ProfileSelectionContext, evaluation_summary_return_to, late_join_side,
-    profile_selection_plan,
-};
 #[cfg(test)]
 use deadsync_theme_simply_love::screens::{
-    SelectMusicJoinContext, SelectMusicJoinPlan, select_music_join_plan,
+    LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, SelectMusicJoinPlan,
+    late_join_side, profile_selection_plan, select_music_join_plan,
 };
-use deadsync_theme_simply_love::screens::{
-    SimplyLoveNavigationPlan, SimplyLoveNavigationPolicy, resolve_navigation,
-};
-pub(crate) use deadsync_theme_simply_love::{
-    SimplyLoveEffectRouteContext as ThemeEffectRouteContext,
-    resolve_effect_route as theme_effect_route_plan,
-};
-
-const fn navigation_policy(config: &Config) -> SimplyLoveNavigationPolicy {
-    SimplyLoveNavigationPolicy {
+const fn navigation_policy(config: &Config) -> SessionNavigationPolicy {
+    SessionNavigationPolicy {
         show_select_profile: config.machine_show_select_profile,
         show_select_color: config.machine_show_select_color,
         show_select_style: config.machine_show_select_style,
@@ -32,17 +25,73 @@ const fn navigation_policy(config: &Config) -> SimplyLoveNavigationPolicy {
     }
 }
 
-pub(crate) fn navigation_route_plan(
+pub(crate) fn navigation_route_plan<T: ThemeSessionFlow>(
     config: &Config,
-    from: Screen,
-    requested: Screen,
+    from: T::Screen,
+    requested: T::Screen,
     has_played_stages: bool,
-) -> SimplyLoveNavigationPlan {
-    resolve_navigation(
+) -> SessionNavigationPlan<T::Screen> {
+    session_flow::resolve_navigation(
+        T::SESSION_SCREENS,
         navigation_policy(config),
         from,
         requested,
         has_played_stages,
+    )
+}
+
+pub(crate) fn evaluation_return_to<T: ThemeSessionFlow>(origin: EvaluationOrigin) -> T::Screen {
+    session_flow::evaluation_return_to(T::SESSION_SCREENS, origin)
+}
+
+pub(crate) fn evaluation_summary_return_to<T: ThemeSessionFlow>(
+    previous: T::Screen,
+    pending_post_select_summary_exit: bool,
+) -> T::Screen {
+    session_flow::evaluation_summary_return_to(
+        T::SESSION_SCREENS,
+        previous,
+        pending_post_select_summary_exit,
+    )
+}
+
+pub(crate) fn profile_picker_context<T: ThemeSessionFlow>(
+    previous: T::Screen,
+    color_index: i32,
+    menu_start_side: PlayerSide,
+    joined_players: impl FnOnce() -> [bool; MAX_PLAYERS],
+) -> ProfilePickerContext {
+    let fast_switch = previous == T::SESSION_SCREENS.select_music;
+    let joined = if previous == T::SESSION_SCREENS.menu {
+        Some([
+            menu_start_side == PlayerSide::P1,
+            menu_start_side == PlayerSide::P2,
+        ])
+    } else if fast_switch {
+        Some(joined_players())
+    } else {
+        None
+    };
+    ProfilePickerContext {
+        color_index,
+        joined,
+        fast_switch,
+    }
+}
+
+pub(crate) fn profile_selection_target<T: ThemeSessionFlow>(
+    current_screen: T::Screen,
+    fast_switch: bool,
+    show_groovestats_login: bool,
+    show_arrowcloud_login: bool,
+) -> Option<T::Screen> {
+    session_flow::profile_selection_target(
+        T::SESSION_SCREENS,
+        T::PROFILE_LOGIN_SCREENS,
+        current_screen,
+        fast_switch,
+        show_groovestats_login,
+        show_arrowcloud_login,
     )
 }
 
@@ -60,8 +109,219 @@ pub(crate) fn preferred_play_style_for_joined(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_input::VirtualAction;
+    use crate::ActiveTheme;
+    use crate::main_menu::MainMenuRuntimeView;
+    use deadlib_platform::input::RawKeyboardEvent;
+    use deadlib_present::actors::Actor;
+    use deadsync_core::input::InputSource;
+    use deadsync_core::session_flow::{ProfileLoginScreens, SessionScreens};
+    use deadsync_input::{InputEvent, VirtualAction};
     use deadsync_profile::PlayStyle;
+    use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
+    use deadsync_theme::{Theme, ThemeEffect, ThemeScreenFlow, ThemeScreenId, ThemeScreens, ThemeTransitions, TransitionKind};
+
+    struct AlternateTheme;
+
+    impl Theme for AlternateTheme {
+        type Screen = &'static str;
+        type RuntimeRequest = ();
+
+        fn screen_id(screen: Self::Screen) -> ThemeScreenId {
+            ThemeScreenId::new(screen)
+        }
+    }
+
+    impl ThemeScreenFlow for AlternateTheme {
+        const SCREENS: ThemeScreens<Self::Screen> = ThemeScreens {
+            menu: "home",
+            gameplay: "play",
+            practice: "editor",
+            results: "result",
+            song_selection: "songs",
+            course_selection: "courses",
+            player_options: "settings",
+        };
+    }
+
+    impl ThemeSessionFlow for AlternateTheme {
+        const SESSION_SCREENS: SessionScreens<Self::Screen> = SessionScreens {
+            menu: Self::SCREENS.menu,
+            select_music: Self::SCREENS.song_selection,
+            select_course: Self::SCREENS.course_selection,
+            select_profile: None,
+            select_color: None,
+            select_style: None,
+            select_play_mode: Some("mode"),
+            profile_load: "prepare",
+            evaluation_summary: Some("set-results"),
+            initials: None,
+            gameover: Some("finished"),
+        };
+        const PROFILE_LOGIN_SCREENS: ProfileLoginScreens<Self::Screen> = ProfileLoginScreens {
+            groovestats: None,
+            arrowcloud: Some("link-account"),
+        };
+    }
+
+    impl ThemeTransitions for AlternateTheme {
+        type Actor = Actor;
+        type EntryContext<'a> = ();
+
+        fn transition_kind(_: Self::Screen, _: Self::Screen) -> TransitionKind {
+            TransitionKind::Direct
+        }
+
+        fn actor_entry_duration(_: Self::Screen) -> Option<f32> { None }
+
+        fn actor_exit_duration(_: Self::Screen) -> f32 { 0.0 }
+
+        fn skip_global_entry_fade(_: Self::Screen, _: Self::Screen) -> bool { true }
+
+        fn out_transition(_: Self::Screen, _: Self::Screen) -> (Vec<Actor>, f32) {
+            (Vec::new(), 0.0)
+        }
+
+        fn in_transition(_: Self::Screen, _: ()) -> (Vec<Actor>, f32) {
+            (Vec::new(), 0.0)
+        }
+    }
+
+    struct AlternateMenu {
+        color_index: i32,
+        credits: u32,
+        active_time: f32,
+    }
+
+    impl ThemeMainMenu for AlternateTheme {
+        type MenuState = AlternateMenu;
+        type MenuRuntimeView = MainMenuRuntimeView;
+        type MenuInput = InputEvent;
+        type MenuRawKey = RawKeyboardEvent;
+        type MenuVisualPolicy = ();
+
+        fn init_menu(color_index: i32) -> AlternateMenu {
+            AlternateMenu { color_index, credits: 0, active_time: 0.0 }
+        }
+
+        fn menu_color_index(state: &AlternateMenu) -> i32 {
+            state.color_index
+        }
+
+        fn set_menu_color_index(state: &mut AlternateMenu, color_index: i32) {
+            state.color_index = color_index;
+        }
+
+        fn sync_menu_runtime(state: &mut AlternateMenu, view: MainMenuRuntimeView) {
+            state.credits = view.credits;
+        }
+
+        fn update_menu(
+            state: &mut AlternateMenu, delta_time: f32, phase: MainMenuPhase,
+        ) -> ThemeEffect<Self::Screen, ()> {
+            if phase == MainMenuPhase::Active {
+                state.active_time += delta_time;
+            }
+            ThemeEffect::None
+        }
+
+        fn handle_menu_input(_: &mut AlternateMenu, input: &InputEvent) -> ThemeEffect<Self::Screen, ()> {
+            if input.pressed && matches!(input.action, VirtualAction::p2_start) {
+                ThemeEffect::Navigate("mode")
+            } else {
+                ThemeEffect::None
+            }
+        }
+
+        fn push_menu_actors(
+            actors: &mut Vec<Actor>, state: &AlternateMenu, frame: MainMenuFrame<'_, Self::Screen, ()>,
+        ) {
+            actors.push(deadlib_present::__act_from_builder!(
+                (xy(8.0, 8.0): setsize(12.0, 12.0): diffuse(1.0, 1.0, 1.0, frame.alpha_multiplier): z(state.credits as i16))
+                deadlib_assets::present_dsl::SpriteBuilder::solid()
+            ));
+        }
+    }
+
+    #[test]
+    fn evaluation_returns_to_the_origin_in_the_installed_theme() {
+        assert_eq!(evaluation_return_to::<AlternateTheme>(EvaluationOrigin::Song), "songs");
+        assert_eq!(evaluation_return_to::<AlternateTheme>(EvaluationOrigin::Course), "courses");
+    }
+
+    #[test]
+    fn profile_picker_uses_game_session_and_theme_roles() {
+        let from_menu = profile_picker_context::<AlternateTheme>("home", 7, PlayerSide::P2, || {
+            panic!("startup uses the side that pressed Start");
+        });
+        assert_eq!(from_menu.joined, Some([false, true]));
+        assert_eq!(from_menu.color_index, 7);
+        assert!(!from_menu.fast_switch);
+
+        let from_songs =
+            profile_picker_context::<AlternateTheme>("songs", 7, PlayerSide::P1, || [true, true]);
+        assert_eq!(from_songs.joined, Some([true, true]));
+        assert!(from_songs.fast_switch);
+        assert_eq!(
+            profile_selection_target::<AlternateTheme>("songs", true, true, true),
+            None,
+        );
+        assert_eq!(
+            profile_selection_target::<AlternateTheme>("picker", true, true, true),
+            Some("songs"),
+        );
+        assert_eq!(
+            profile_selection_target::<AlternateTheme>("picker", false, true, true),
+            Some("link-account"),
+        );
+        assert_eq!(
+            profile_selection_target::<AlternateTheme>("picker", false, true, false),
+            Some("mode"),
+        );
+    }
+
+    #[test]
+    fn alternate_title_menu_uses_game_session_flow() {
+        let config = Config {
+            machine_show_select_play_mode: false,
+            machine_show_eval_summary: true,
+            ..Config::default()
+        };
+        let mut menu = AlternateTheme::init_menu(0);
+        AlternateTheme::set_menu_color_index(&mut menu, 7);
+        AlternateTheme::sync_menu_runtime(&mut menu, MainMenuRuntimeView { credits: 3, ..Default::default() });
+        AlternateTheme::update_menu(&mut menu, 0.5, MainMenuPhase::Entering);
+        AlternateTheme::update_menu(&mut menu, 0.25, MainMenuPhase::Active);
+        assert_eq!(menu.active_time, 0.25);
+        let mut actors = Vec::new();
+        AlternateTheme::push_menu_actors(&mut actors, &menu, MainMenuFrame {
+            update_banner_tag: None,
+            alpha_multiplier: 0.75,
+            transition: &deadsync_theme::TransitionState::Idle,
+            visual_policy: (),
+        });
+        assert!(matches!(actors.as_slice(), [Actor::Sprite { z: 3, tint, .. }] if tint[3] == 0.75));
+
+        let mut session = crate::SessionState::new(0, [0; 2]);
+        let now = std::time::Instant::now();
+        let start = InputEvent::new(VirtualAction::p2_start, 0, true, InputSource::Keyboard, now, 0, now, now);
+        let action = crate::main_menu::handle_input::<AlternateTheme>(&mut menu, &mut session, &start);
+        let ThemeEffect::Navigate(target) = action else { panic!("menu should request a startup screen") };
+        assert_eq!(session.menu_start_side, PlayerSide::P2);
+        let plan = navigation_route_plan::<AlternateTheme>(&config, "home", target, false);
+        assert_eq!(plan.target, "prepare");
+        assert!(plan.initialize_session_side);
+        assert!(plan.apply_preferred_style);
+        assert!(plan.apply_preferred_play_mode);
+
+        let plan = navigation_route_plan::<AlternateTheme>(&config, "courses", "home", true);
+        assert_eq!(plan.target, "set-results");
+        assert_eq!(plan.pending_post_select_summary_exit, Some(true));
+        assert_eq!(evaluation_summary_return_to::<AlternateTheme>("courses", false), "courses");
+        assert_eq!(evaluation_summary_return_to::<AlternateTheme>("courses", true), "finished");
+        AlternateTheme::reset_menu(&mut menu);
+        assert_eq!(AlternateTheme::menu_color_index(&menu), 7);
+        assert_eq!(menu.active_time, 0.0);
+    }
 
     #[test]
     fn post_select_exit_enters_configured_summary_flow() {
@@ -69,11 +329,11 @@ mod tests {
             machine_show_eval_summary: true,
             ..Config::default()
         };
-        let plan = navigation_route_plan(&cfg, Screen::SelectMusic, Screen::Menu, true);
+        let plan = navigation_route_plan::<ActiveTheme>(&cfg, Screen::SelectMusic, Screen::Menu, true);
         assert_eq!(plan.target, Screen::EvaluationSummary);
         assert_eq!(plan.pending_post_select_summary_exit, Some(true));
 
-        let plan = navigation_route_plan(&cfg, Screen::SelectMusic, Screen::Menu, false);
+        let plan = navigation_route_plan::<ActiveTheme>(&cfg, Screen::SelectMusic, Screen::Menu, false);
         assert_eq!(plan.target, Screen::Menu);
         assert_eq!(plan.pending_post_select_summary_exit, None);
     }
@@ -87,7 +347,7 @@ mod tests {
             machine_show_select_play_mode: false,
             ..Config::default()
         };
-        let plan = navigation_route_plan(&cfg, Screen::Menu, Screen::SelectProfile, false);
+        let plan = navigation_route_plan::<ActiveTheme>(&cfg, Screen::Menu, Screen::SelectProfile, false);
         assert_eq!(plan.target, Screen::ProfileLoad);
         assert!(plan.apply_preferred_style);
         assert!(plan.apply_preferred_play_mode);
@@ -115,13 +375,13 @@ mod tests {
                     machine_show_select_play_mode: false,
                     ..Config::default()
                 };
-                let selection = crate::profile_session::profile_selection_session_plan(
+                let selection = deadsync_profile::requests::profile_selection_session_plan(
                     deadsync_profile::play_style_from_machine_preference(preferred, game),
                     true,
                     true,
                 );
                 let navigation =
-                    navigation_route_plan(&cfg, Screen::SelectProfile, Screen::SelectColor, false);
+                    navigation_route_plan::<ActiveTheme>(&cfg, Screen::SelectProfile, Screen::SelectColor, false);
                 assert_eq!(navigation.target, Screen::ProfileLoad);
                 assert!(navigation.apply_preferred_style);
                 assert_eq!(
@@ -162,7 +422,7 @@ mod tests {
 
     #[test]
     fn direct_summary_navigation_clears_pending_exit() {
-        let plan = navigation_route_plan(
+        let plan = navigation_route_plan::<ActiveTheme>(
             &Config::default(),
             Screen::Evaluation,
             Screen::EvaluationSummary,
@@ -174,27 +434,17 @@ mod tests {
     #[test]
     fn evaluation_summary_returns_to_wheel_until_exit_flow_is_pending() {
         assert_eq!(
-            evaluation_summary_return_to(Screen::SelectMusic, false),
+            evaluation_summary_return_to::<ActiveTheme>(Screen::SelectMusic, false),
             Screen::SelectMusic,
         );
         assert_eq!(
-            evaluation_summary_return_to(Screen::SelectCourse, false),
+            evaluation_summary_return_to::<ActiveTheme>(Screen::SelectCourse, false),
             Screen::SelectCourse,
         );
         assert_eq!(
-            evaluation_summary_return_to(Screen::SelectMusic, true),
+            evaluation_summary_return_to::<ActiveTheme>(Screen::SelectMusic, true),
             Screen::Initials,
         );
-    }
-
-    fn action_context() -> ThemeEffectRouteContext {
-        ThemeEffectRouteContext {
-            current_screen: Screen::Gameplay,
-            restart_pending: false,
-            course_active: false,
-            course_has_next_stage: false,
-            gameplay_failed: false,
-        }
     }
 
     #[test]
@@ -245,99 +495,6 @@ mod tests {
             assert!(!plan.refresh_select_music);
             assert_eq!(plan.navigation_target, Some(expected));
         }
-    }
-
-    #[test]
-    fn restart_redirect_takes_priority_over_course_wheel_routing() {
-        let plan = theme_effect_route_plan(
-            ThemeEffect::NavigateNoFade(Screen::SelectMusic),
-            ThemeEffectRouteContext {
-                restart_pending: true,
-                course_active: true,
-                ..action_context()
-            },
-        );
-        assert!(matches!(
-            plan.action,
-            ThemeEffect::NavigateNoFade(Screen::Gameplay)
-        ));
-        assert!(plan.clear_restart_pending);
-    }
-
-    #[test]
-    fn restart_redirect_requires_gameplay_and_pending_restart() {
-        let plan = theme_effect_route_plan(
-            ThemeEffect::NavigateNoFade(Screen::SelectMusic),
-            ThemeEffectRouteContext {
-                current_screen: Screen::Evaluation,
-                restart_pending: true,
-                ..action_context()
-            },
-        );
-        assert!(matches!(
-            plan.action,
-            ThemeEffect::NavigateNoFade(Screen::SelectMusic)
-        ));
-        assert!(!plan.clear_restart_pending);
-    }
-
-    #[test]
-    fn passing_course_stage_chains_back_to_gameplay() {
-        let plan = theme_effect_route_plan(
-            ThemeEffect::Navigate(Screen::Evaluation),
-            ThemeEffectRouteContext {
-                course_active: true,
-                course_has_next_stage: true,
-                ..action_context()
-            },
-        );
-        assert!(matches!(
-            plan.action,
-            ThemeEffect::Navigate(Screen::Gameplay)
-        ));
-    }
-
-    #[test]
-    fn failed_or_final_course_stage_enters_evaluation() {
-        for context in [
-            ThemeEffectRouteContext {
-                course_active: true,
-                course_has_next_stage: true,
-                gameplay_failed: true,
-                ..action_context()
-            },
-            ThemeEffectRouteContext {
-                course_active: true,
-                course_has_next_stage: false,
-                ..action_context()
-            },
-        ] {
-            let plan = theme_effect_route_plan(ThemeEffect::Navigate(Screen::Evaluation), context);
-            assert!(matches!(
-                plan.action,
-                ThemeEffect::Navigate(Screen::Evaluation)
-            ));
-        }
-    }
-
-    #[test]
-    fn course_wheel_redirect_preserves_fade_mode() {
-        let context = ThemeEffectRouteContext {
-            course_active: true,
-            ..action_context()
-        };
-        let fade = theme_effect_route_plan(ThemeEffect::Navigate(Screen::SelectMusic), context);
-        assert!(matches!(
-            fade.action,
-            ThemeEffect::Navigate(Screen::SelectCourse)
-        ));
-
-        let no_fade =
-            theme_effect_route_plan(ThemeEffect::NavigateNoFade(Screen::SelectMusic), context);
-        assert!(matches!(
-            no_fade.action,
-            ThemeEffect::NavigateNoFade(Screen::SelectCourse)
-        ));
     }
 
     fn late_join_context(screen: Screen) -> LateJoinContext {
