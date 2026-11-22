@@ -31,6 +31,11 @@ theme to describe an input or store a setting:
   with no wrapper allocation or conversion.
 - `deadsync-input` owns the logical device namespace, including persisted RE:Flex
   IDs. `deadlib-platform::input` owns physical events and native transport limits.
+- `deadsync-input::devices` owns the StepManiaX and RE:Flex provider identities.
+  The shell adapts OS connection events by moving their existing payload into the
+  game's provider type. Native backends ask the host whether another provider
+  claimed a device. DeadSync supplies its existing live StepManiaX ownership
+  predicate, with no change to device slots or hot-plug ordering.
 
 ## Gameplay policy and presentation
 
@@ -251,6 +256,11 @@ Workspace callers are updated for these source-level changes:
 
 - Import `REFLEX_PAD_ID_BASE` and `PAD_ID_COUNT_CAP` from `deadsync-input`.
   Persisted device IDs are unchanged.
+- Import `GamepadBackend` and `GamepadSystemEvent` from
+  `deadsync_input::devices` for DeadSync's dedicated controllers.
+  `deadlib_input_native::{PadBackend, GpSystemEvent}` still expose the native
+  event contract. `BackendHost::device_claimed` exposes the caller's device
+  claim predicate to native enumeration and hot-plug handlers.
 - Exhaustive `GameplayAction` matches must handle the new `Restart` action.
 - Normal gameplay effects now carry `SimplyLoveRuntimeRequest::GameplayAction`;
   exhaustive runtime-request matches must handle that variant. The exit-routing

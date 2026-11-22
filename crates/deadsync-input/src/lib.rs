@@ -10,6 +10,7 @@ use deadsync_core::song_time::SongTimeNs;
 pub mod bindings;
 mod callback_input;
 pub mod debounce;
+pub mod devices;
 pub mod fsr;
 pub mod keymap;
 pub mod practice;

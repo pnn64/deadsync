@@ -602,11 +602,9 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{h:?}"));
     let vendor = hid.dwVendorId as u16;
     let product = hid.dwProductId as u16;
-    // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
-    // owns the pad (see `native_smx_owns_device`).
-    if ctx.host.native_smx_owns_device(Some(vendor), Some(product)) {
+    if ctx.host.device_claimed(Some(vendor), Some(product)) {
         log::debug!(
-            "RawInput: ignoring StepManiaX pad (vid={vendor:04x} pid={product:04x}); native SMX input owns it"
+            "RawInput: ignoring pad (vid={vendor:04x} pid={product:04x}); claimed by another input provider"
         );
         return;
     }

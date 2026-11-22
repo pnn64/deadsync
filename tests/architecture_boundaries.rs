@@ -7818,6 +7818,9 @@ fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
             "uuid_from_hex",
             "from_ini",
             "ini_lines",
+            "StepManiaX",
+            "native_smx",
+            "Reflex",
         ] {
             assert!(
                 !source.contains(token),
@@ -7851,6 +7854,30 @@ fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
     assert!(mapping.contains("deadlib_platform::input::"));
     let backend = read_source(native.join("src/launch.rs")).expect("native launch");
     assert!(backend.contains("deadlib_platform::input::{PadEvent, RawKeyboardEvent}"));
+}
+
+#[test]
+fn dedicated_controller_providers_stay_in_the_game() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let platform = read_source(root.join("crates/deadlib-platform/src/input.rs"))
+        .expect("physical input types");
+    for token in ["StepManiaX", "Smx", "Reflex"] {
+        assert!(!platform.contains(token), "engine controller identity: {token}");
+    }
+    let providers = read_source(root.join("crates/deadsync-input/src/devices.rs"))
+        .expect("game controller providers");
+    assert!(providers.contains("GpSystemEvent<GamepadBackend>"));
+    for (path, provider) in [
+        ("crates/deadsync-smx/src/lib.rs", "Smx"),
+        ("crates/deadsync-reflex/src/io.rs", "Reflex"),
+    ] {
+        let source = read_source(root.join(path)).expect("game input driver");
+        assert!(source.contains(&format!("GamepadBackend::{provider}")));
+    }
+    let launch = read_source(root.join("crates/deadsync-shell/src/input_backend.rs"))
+        .expect("shell input composition");
+    assert!(launch.contains("deadsync_smx::native_smx_owns_device("));
+    assert!(launch.contains("map_backend(GamepadBackend::Native)"));
 }
 
 #[test]

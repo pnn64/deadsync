@@ -1,6 +1,7 @@
 use crate::UserEvent;
 #[cfg(windows)]
 use deadlib_input_native::WindowsPadBackend;
+use deadsync_input::devices::GamepadBackend;
 use winit::event_loop::EventLoopProxy;
 
 /// Startup settings for the platform and `StepManiaX` input backends.
@@ -44,7 +45,9 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
                     let _ = proxy_pad.send_event(UserEvent::Pad(event));
                 },
                 move |event| {
-                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(event));
+                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(
+                        event.map_backend(GamepadBackend::Native),
+                    ));
                 },
                 move |event| {
                     let _ = proxy_key.send_event(UserEvent::Key(event));
@@ -65,7 +68,9 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
                     let _ = proxy_pad.send_event(UserEvent::Pad(event));
                 },
                 move |event| {
-                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(event));
+                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(
+                        event.map_backend(GamepadBackend::Native),
+                    ));
                 },
                 move |event| {
                     let _ = proxy_key.send_event(UserEvent::Key(event));
@@ -86,7 +91,9 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
                     let _ = proxy_pad.send_event(UserEvent::Pad(event));
                 },
                 move |event| {
-                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(event));
+                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(
+                        event.map_backend(GamepadBackend::Native),
+                    ));
                 },
                 move |event| {
                     let _ = proxy_key.send_event(UserEvent::Key(event));
@@ -107,7 +114,9 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
                     let _ = proxy_pad.send_event(UserEvent::Pad(event));
                 },
                 move |event| {
-                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(event));
+                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(
+                        event.map_backend(GamepadBackend::Native),
+                    ));
                 },
                 move |event| {
                     let _ = proxy_key.send_event(UserEvent::Key(event));

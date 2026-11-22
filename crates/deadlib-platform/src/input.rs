@@ -32,6 +32,81 @@ impl From<PadId> for usize {
     }
 }
 
+/// Operating-system providers for native controller input.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PadBackend {
+    #[cfg(windows)]
+    WindowsRawInput,
+    #[cfg(windows)]
+    WindowsWgi,
+    #[cfg(target_os = "linux")]
+    LinuxEvdev,
+    #[cfg(target_os = "freebsd")]
+    FreeBsdHidraw,
+    #[cfg(target_os = "freebsd")]
+    FreeBsdEvdev,
+    #[cfg(target_os = "macos")]
+    MacOsIohid,
+}
+
+/// Physical controller lifecycle event with a caller-selectable provider identity.
+#[derive(Clone, Debug)]
+pub enum GpSystemEvent<Backend = PadBackend> {
+    Connected {
+        name: String,
+        id: PadId,
+        vendor_id: Option<u16>,
+        product_id: Option<u16>,
+        backend: Backend,
+        /// True when this connection is part of startup enumeration.
+        initial: bool,
+    },
+    Disconnected {
+        name: String,
+        id: PadId,
+        backend: Backend,
+        /// True when this disconnect is part of startup enumeration.
+        initial: bool,
+    },
+    StartupComplete,
+}
+
+impl<Backend> GpSystemEvent<Backend> {
+    /// Changes the provider identity while moving the captured event data.
+    #[must_use]
+    pub fn map_backend<T>(self, map: impl FnOnce(Backend) -> T) -> GpSystemEvent<T> {
+        match self {
+            Self::Connected {
+                name,
+                id,
+                vendor_id,
+                product_id,
+                backend,
+                initial,
+            } => GpSystemEvent::Connected {
+                name,
+                id,
+                vendor_id,
+                product_id,
+                backend: map(backend),
+                initial,
+            },
+            Self::Disconnected {
+                name,
+                id,
+                backend,
+                initial,
+            } => GpSystemEvent::Disconnected {
+                name,
+                id,
+                backend: map(backend),
+                initial,
+            },
+            Self::StartupComplete => GpSystemEvent::StartupComplete,
+        }
+    }
+}
+
 /// Platform-specific button or axis element code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PadCode(pub u32);
@@ -113,5 +188,38 @@ mod tests {
     fn pad_physical_ids_are_plain_numeric_wrappers() {
         assert_eq!(usize::from(PadId(7)), 7);
         assert_eq!(PadCode(0xDEAD_BEEF).into_u32(), 0xDEAD_BEEF);
+    }
+
+    #[test]
+    fn provider_mapping_preserves_the_connection_payload() {
+        let name = String::from("Test pad");
+        let name_pointer = name.as_ptr();
+        let event = GpSystemEvent::Connected {
+            name,
+            id: PadId(17),
+            vendor_id: Some(0x1234),
+            product_id: None,
+            backend: 1,
+            initial: true,
+        };
+        let GpSystemEvent::Connected {
+            name,
+            id: PadId(17),
+            vendor_id: Some(0x1234),
+            product_id: None,
+            backend: "provider",
+            initial: true,
+        } = event.map_backend(|backend| {
+            assert_eq!(backend, 1);
+            "provider"
+        })
+        else {
+            panic!("connection payload was changed");
+        };
+        assert_eq!(name.as_ptr(), name_pointer);
+        assert!(matches!(
+            GpSystemEvent::<i32>::StartupComplete.map_backend::<&str>(|_| unreachable!()),
+            GpSystemEvent::StartupComplete
+        ));
     }
 }

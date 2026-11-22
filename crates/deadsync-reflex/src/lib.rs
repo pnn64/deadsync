@@ -18,7 +18,8 @@ mod io;
 
 use config::Config;
 pub use config::LightMode;
-use deadlib_input_native::{GpSystemEvent, uuid_from_bytes};
+use deadlib_input_native::uuid_from_bytes;
+use deadsync_input::devices::GamepadSystemEvent;
 use deadlib_platform::input::PadEvent;
 use deadsync_input::REFLEX_PAD_ID_BASE;
 use deadsync_input::fsr::{BackendKind, HostPadAction, PadDeviceId, PadView};
@@ -64,14 +65,14 @@ struct Service {
     save_failed: AtomicBool,
     thread: Mutex<Option<JoinHandle<()>>>,
     input: Arc<dyn Fn(PadEvent) + Send + Sync>,
-    system: Arc<dyn Fn(GpSystemEvent) + Send + Sync>,
+    system: Arc<dyn Fn(GamepadSystemEvent) + Send + Sync>,
 }
 static SERVICE: OnceLock<Arc<Service>> = OnceLock::new();
 
 pub fn start(
     data_dir: &Path,
     input: impl Fn(PadEvent) + Send + Sync + 'static,
-    system: impl Fn(GpSystemEvent) + Send + Sync + 'static,
+    system: impl Fn(GamepadSystemEvent) + Send + Sync + 'static,
 ) {
     if std::env::var_os("DEADSYNC_MOCK_PADS").is_some() || SERVICE.get().is_some() {
         return;

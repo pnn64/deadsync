@@ -1049,11 +1049,9 @@ fn add_dev_if_new(
     if devs.iter().any(|dev| dev.path == spec.path) {
         return;
     }
-    // Skip the StepManiaX stage's generic-HID duplicate while native SMX input
-    // owns the pad (see `native_smx_owns_device`).
-    if host.native_smx_owns_device(spec.vendor_id, spec.product_id) {
+    if host.device_claimed(spec.vendor_id, spec.product_id) {
         log::debug!(
-            "linux evdev: ignoring StepManiaX pad (vid={:04x?} pid={:04x?}); native SMX input owns it",
+            "linux evdev: ignoring pad (vid={:04x?} pid={:04x?}); claimed by another input provider",
             spec.vendor_id,
             spec.product_id
         );

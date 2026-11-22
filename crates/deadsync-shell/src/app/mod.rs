@@ -11112,8 +11112,8 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::GamepadSystem(ev) => {
                 if matches!(
                     &ev,
-                    deadlib_input_native::GpSystemEvent::Connected {
-                        backend: deadlib_input_native::PadBackend::Reflex,
+                    deadsync_input::devices::GamepadSystemEvent::Connected {
+                        backend: deadsync_input::devices::GamepadBackend::Reflex,
                         ..
                     }
                 ) {
