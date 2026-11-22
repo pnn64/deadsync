@@ -12,7 +12,7 @@ use deadsync_gameplay::practice::{
 };
 use deadsync_input::InputEvent;
 use deadsync_input::practice::PracticeKeyEvent;
-use deadsync_online::gameplay_lobby::GameplayLobbyAction;
+use deadsync_online::gameplay_lobby::{GameplayLobbyAction, GameplayLobbyInput};
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
@@ -741,12 +741,14 @@ pub(crate) fn handle_input(
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) -> GameplayAction {
-    let lobby_hud_toggled = gameplay::handle_lobby_hud_input(state, ev);
     let (stage, lobby) = state.stage_and_lobby();
-    let action = if lobby.handle_input(ev) || lobby_hud_toggled {
-        GameplayAction::None
-    } else {
-        stage.handle_input(ev, physical)
+    let action = match lobby.route_input(ev) {
+        GameplayLobbyInput::PassThrough => stage.handle_input(ev, physical),
+        GameplayLobbyInput::Consumed => GameplayAction::None,
+        GameplayLobbyInput::ToggleHud => {
+            gameplay::toggle_lobby_hud(state);
+            GameplayAction::None
+        }
     };
     drain(state, audio, sounds, music_clock);
     action

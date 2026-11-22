@@ -255,8 +255,8 @@ any rendering observes it. Rate repeats still run during playback and while a
 menu is open; Control and Tab retain their existing navigation semantics.
 
 `deadsync-online::gameplay_lobby` owns gameplay readiness, disconnect holds,
-waiting-input consumption, machine-stat publication, and one-time music start.
-The shell calls its entry, update, and snapshot-refresh operations directly.
+input routing, machine-stat publication, and one-time music start. The shell
+calls its entry, update, input, and snapshot-refresh operations directly.
 An entered lobby always waits until the next update, and the server snapshot
 decides when playback begins. The update that starts playback publishes pre-start stats,
 starts music, and publishes post-start stats in the original order. A completed
@@ -265,6 +265,8 @@ The shell drains the queued audio command before sampling the stream clock.
 Readiness and reconnect changes never re-pause a stage that has already started.
 The entry-time refresh flag and active local sides remain fixed for the stage.
 Themes retain lobby HUD visibility, translated status text, and countdown display.
+The lobby session recognizes the dedicated menu-left/menu-right chord and tells
+the shell which edges reach gameplay. A presenter receives the toggle separately.
 
 `deadsync-online::lobby_wait` owns Evaluation and Select Music input barriers,
 held-Start disconnects, and Evaluation machine-stat publication. Each screen has

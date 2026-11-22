@@ -5,8 +5,8 @@
 
 use crate::lobbies::{self, GameplayLobbyWaitStatus, MachinePlayerStats};
 use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState};
-use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_profile::PlayerSide;
+use deadsync_input::{InputEvent, MenuLrChord, VirtualAction};
+use deadsync_profile::{PlayerSide, player_side_index};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -40,6 +40,15 @@ pub enum GameplayLobbyAction {
         p1_stats: Option<MachinePlayerStats>,
         p2_stats: Option<MachinePlayerStats>,
     },
+}
+
+/// The game decides which inputs reach the stage. A HUD toggle is also a
+/// display notification for any presenter with a lobby HUD.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayLobbyInput {
+    PassThrough,
+    Consumed,
+    ToggleHud,
 }
 
 /// Statically bound state access and application-effect conversion.
@@ -76,6 +85,7 @@ pub struct GameplayLobbySession {
     music_started: bool,
     ready: [bool; 2],
     disconnect_holds: [Option<Instant>; 2],
+    hud_chords: [MenuLrChord; 2],
 }
 
 impl GameplayLobbySession {
@@ -92,6 +102,7 @@ impl GameplayLobbySession {
             music_started: false,
             ready: [false; 2],
             disconnect_holds: [None; 2],
+            hud_chords: [MenuLrChord::default(); 2],
         }
     }
 
@@ -163,14 +174,7 @@ impl GameplayLobbySession {
     }
 
     fn local_side_is_active(&self, side: PlayerSide) -> bool {
-        let [p1_joined, p2_joined] = self.joined_sides;
-        if !(p1_joined || p2_joined) {
-            return self.player_side == side;
-        }
-        match side {
-            PlayerSide::P1 => p1_joined,
-            PlayerSide::P2 => p2_joined,
-        }
+        side_is_active(self.joined_sides, self.player_side, side)
     }
 
     fn set_all_local_players_ready(&mut self, ready: bool) {
@@ -180,10 +184,7 @@ impl GameplayLobbySession {
         ];
     }
 
-    fn handle_waiting_input(&mut self, event: &InputEvent) -> bool {
-        if !self.waiting() {
-            return false;
-        }
+    fn update_waiting_input(&mut self, event: &InputEvent) {
         let side = match event.action {
             VirtualAction::p1_start => Some(PlayerSide::P1),
             VirtualAction::p2_start => Some(PlayerSide::P2),
@@ -192,7 +193,7 @@ impl GameplayLobbySession {
         if let Some(side) = side
             && self.local_side_is_active(side)
         {
-            let index = deadsync_profile::player_side_index(side);
+            let index = player_side_index(side);
             if event.pressed {
                 self.ready[index] = true;
                 self.disconnect_holds[index] = Some(event.timestamp);
@@ -200,7 +201,6 @@ impl GameplayLobbySession {
                 self.disconnect_holds[index] = None;
             }
         }
-        true
     }
 
     fn player_stats<P: GameplayProfileData, O, C, D>(
@@ -257,6 +257,14 @@ impl GameplayLobbySession {
     }
 }
 
+fn side_is_active(joined: [bool; 2], fallback_side: PlayerSide, side: PlayerSide) -> bool {
+    if joined == [false, false] {
+        fallback_side == side
+    } else {
+        joined[player_side_index(side)]
+    }
+}
+
 /// Reset readiness on entry and start immediately only for an offline stage.
 pub fn on_enter<H: GameplayLobbyHost>(host: &mut H) {
     let (game, lobby) = host.lobby_parts();
@@ -291,9 +299,48 @@ impl GameplayLobbySession {
         })
     }
 
-    /// Consume the input while the stage is waiting for lobby readiness.
+    /// Consume input while waiting for readiness.
     pub fn handle_input(&mut self, event: &InputEvent) -> bool {
-        self.handle_waiting_input(event)
+        if !self.waiting() {
+            return false;
+        }
+        self.update_waiting_input(event);
+        true
+    }
+
+    pub fn route_input(&mut self, event: &InputEvent) -> GameplayLobbyInput {
+        self.route_input_with_sides(event, self.joined_sides, self.player_side)
+    }
+
+    /// Allow hosts that refresh their full screen view to supply its current
+    /// HUD sides. Lobby readiness still uses the stage's original participants.
+    pub fn route_input_with_sides(
+        &mut self,
+        event: &InputEvent,
+        joined_sides: [bool; 2],
+        fallback_side: PlayerSide,
+    ) -> GameplayLobbyInput {
+        if self.handle_input(event) {
+            self.hud_chords = [MenuLrChord::default(); 2];
+            return GameplayLobbyInput::Consumed;
+        }
+        if self.runtime_view.snapshot.joined_lobby.is_none() {
+            self.hud_chords = [MenuLrChord::default(); 2];
+            return GameplayLobbyInput::PassThrough;
+        }
+        // Only dedicated menu buttons participate. Dance arrows go to the chart.
+        let side = match event.action {
+            VirtualAction::p1_menu_left | VirtualAction::p1_menu_right => PlayerSide::P1,
+            VirtualAction::p2_menu_left | VirtualAction::p2_menu_right => PlayerSide::P2,
+            _ => return GameplayLobbyInput::PassThrough,
+        };
+        if side_is_active(joined_sides, fallback_side, side)
+            && self.hud_chords[player_side_index(side)].update(event)
+        {
+            GameplayLobbyInput::ToggleHud
+        } else {
+            GameplayLobbyInput::PassThrough
+        }
     }
 }
 

@@ -7,13 +7,9 @@ use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
 use deadsync_config::theme::GameFlag;
 use deadsync_core::input::InputSource;
-use deadsync_input::{InputEvent, VirtualAction, with_keymap};
+use deadsync_input::{InputEvent, MenuLrChord, VirtualAction, with_keymap};
 use deadsync_profile::PlayerSide;
-use std::time::{Duration, Instant};
-
-const MENU_LR_CHORD_WINDOW: Duration = Duration::from_millis(75);
-const MENU_LR_LEFT: u8 = 1 << 0;
-const MENU_LR_RIGHT: u8 = 1 << 1;
+use std::time::Duration;
 
 // Default menu repeat timing used by list overlays: 0.375s, then 8 repeats/sec.
 pub(super) const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
@@ -53,17 +49,8 @@ pub fn advance_hold_repeat(
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-struct MenuLrChordSideState {
-    held_mask: u8,
-    left_pressed_at: Option<Instant>,
-    right_pressed_at: Option<Instant>,
-    fired: bool,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
 pub struct MenuLrChordTracker {
-    p1: MenuLrChordSideState,
-    p2: MenuLrChordSideState,
+    sides: [MenuLrChord; 2],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,87 +108,12 @@ pub const fn menu_lr_side(action: VirtualAction) -> Option<PlayerSide> {
     }
 }
 
-#[inline(always)]
-const fn menu_lr_bit(action: VirtualAction) -> Option<u8> {
-    match action {
-        VirtualAction::p1_left
-        | VirtualAction::p1_menu_left
-        | VirtualAction::p2_left
-        | VirtualAction::p2_menu_left => Some(MENU_LR_LEFT),
-        VirtualAction::p1_right
-        | VirtualAction::p1_menu_right
-        | VirtualAction::p2_right
-        | VirtualAction::p2_menu_right => Some(MENU_LR_RIGHT),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-fn menu_lr_times_are_simultaneous(a: Option<Instant>, b: Option<Instant>) -> bool {
-    let (Some(a), Some(b)) = (a, b) else {
-        return false;
-    };
-    if a >= b {
-        a.duration_since(b) <= MENU_LR_CHORD_WINDOW
-    } else {
-        b.duration_since(a) <= MENU_LR_CHORD_WINDOW
-    }
-}
-
 impl MenuLrChordTracker {
-    #[inline(always)]
-    const fn side_state(&self, side: PlayerSide) -> &MenuLrChordSideState {
-        match side {
-            PlayerSide::P1 => &self.p1,
-            PlayerSide::P2 => &self.p2,
-        }
-    }
-
-    #[inline(always)]
-    const fn side_state_mut(&mut self, side: PlayerSide) -> &mut MenuLrChordSideState {
-        match side {
-            PlayerSide::P1 => &mut self.p1,
-            PlayerSide::P2 => &mut self.p2,
-        }
-    }
-
     pub fn update(&mut self, ev: &InputEvent) -> Option<PlayerSide> {
-        let Some(side) = menu_lr_side(ev.action) else {
-            return None;
-        };
-        let Some(bit) = menu_lr_bit(ev.action) else {
-            return None;
-        };
-        let side_state = self.side_state_mut(side);
-        if ev.pressed {
-            side_state.held_mask |= bit;
-            if bit == MENU_LR_LEFT {
-                side_state.left_pressed_at = Some(ev.timestamp);
-            } else {
-                side_state.right_pressed_at = Some(ev.timestamp);
-            }
-            if !side_state.fired
-                && side_state.held_mask == (MENU_LR_LEFT | MENU_LR_RIGHT)
-                && menu_lr_times_are_simultaneous(
-                    side_state.left_pressed_at,
-                    side_state.right_pressed_at,
-                )
-            {
-                side_state.fired = true;
-                return Some(side);
-            }
-        } else {
-            side_state.held_mask &= !bit;
-            if bit == MENU_LR_LEFT {
-                side_state.left_pressed_at = None;
-            } else {
-                side_state.right_pressed_at = None;
-            }
-            if side_state.held_mask != (MENU_LR_LEFT | MENU_LR_RIGHT) {
-                side_state.fired = false;
-            }
-        }
-        None
+        let side = menu_lr_side(ev.action)?;
+        self.sides[deadsync_profile::player_side_index(side)]
+            .update(ev)
+            .then_some(side)
     }
 
     #[inline(always)]
@@ -212,7 +124,7 @@ impl MenuLrChordTracker {
     #[inline(always)]
     #[must_use]
     pub const fn both_held(&self, side: PlayerSide) -> bool {
-        self.side_state(side).held_mask == (MENU_LR_LEFT | MENU_LR_RIGHT)
+        self.sides[deadsync_profile::player_side_index(side)].both_held()
     }
 }
 

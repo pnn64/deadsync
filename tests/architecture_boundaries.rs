@@ -776,7 +776,7 @@ fn practice_editor_decisions_stay_below_the_theme() {
 }
 
 #[test]
-fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
+fn gameplay_lobby_start_readiness_and_input_routing_stay_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let controller = production_source(&root.join("crates/deadsync-online/src/gameplay_lobby.rs"));
     let theme = production_source(
@@ -790,12 +790,14 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
         "pub struct LobbyRuntimeView",
         "pub struct GameplayLobbySession",
         "pub enum GameplayLobbyAction",
+        "pub enum GameplayLobbyInput",
         "pub trait GameplayLobbyHost",
         "pub fn on_enter<",
         "pub fn prepare_update<",
         "pub fn prepare_update_with_actions<",
         "pub fn prepare_update_at<",
         "pub fn handle_input<",
+        "pub fn route_input(",
         "pub fn sync_runtime_view<",
     ] {
         assert!(
@@ -808,6 +810,7 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
         "pub ready:",
         "pub disconnect_holds:",
         "pub joined_sides:",
+        "pub hud_chords:",
     ] {
         assert!(
             !contains_rust(&controller, mutable_policy),
@@ -824,6 +827,8 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
         "fn gameplay_lobby_player_stats(",
         "apply_local_lobby_disconnect(",
         "state.start_stage_music(",
+        "fn handle_lobby_hud_input(",
+        "MenuLrChord",
     ] {
         assert!(
             !contains_rust(&theme, former_policy),
@@ -833,7 +838,7 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
     for delegation in [
         "lobby_session: GameplayLobbySession",
         "impl GameplayLobbyHost for State",
-        "gameplay_lobby::handle_input(",
+        "state.lobby_session.route_input_with_sides(",
         "state.lobby_session.waiting(",
     ] {
         assert!(
@@ -844,7 +849,9 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
     for entry in [
         "lobby.on_enter(&mut stage.gameplay)",
         "lobby.prepare_update(&mut stage.gameplay,",
-        "lobby.handle_input(ev)",
+        "match lobby.route_input(ev)",
+        "GameplayLobbyInput::PassThrough => stage.handle_input(ev, physical)",
+        "gameplay::toggle_lobby_hud(state)",
     ] {
         assert!(
             contains_rust(&shell, entry),

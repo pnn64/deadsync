@@ -19,7 +19,6 @@ use crate::screens::components::shared::heart_rate;
 pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::components::shared::{gs_scorebox, lobby_hud};
-use crate::screens::input as screen_input;
 use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
 use crate::visual_styles;
 use deadlib_assets::AssetManager;
@@ -56,13 +55,13 @@ use deadsync_gameplay::{
     autosync_mode_status_line, blue_fantastic_window_ms,
     exit_transition_alpha, scroll_receptor_y, spacing_multiplier_for_percent,
 };
-use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_input::InputEvent;
 use deadsync_notefield::{
     BrokenRunLookup, CapturedActorScratch, HoldMeshScratch, ModelMeshCache, StreamProgressLookup,
 };
 use deadsync_noteskin::NoteskinSlot;
 use deadsync_online::gameplay_lobby::{
-    self, GameplayLobbyAction, GameplayLobbyHost, GameplayLobbySession,
+    self, GameplayLobbyAction, GameplayLobbyHost, GameplayLobbyInput, GameplayLobbySession,
 };
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
@@ -89,8 +88,6 @@ use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
-#[cfg(test)]
-use std::time::Instant;
 
 /// Selects the entry cue during song preparation, including indexed restarts.
 #[must_use]
@@ -1596,56 +1593,17 @@ pub fn init(
 #[derive(Debug)]
 struct GameplayLobbyHudVisibility {
     visible: bool,
-    menu_lr_chord: screen_input::MenuLrChordTracker,
 }
 
 impl Default for GameplayLobbyHudVisibility {
     fn default() -> Self {
-        Self {
-            visible: true,
-            menu_lr_chord: screen_input::MenuLrChordTracker::default(),
-        }
+        Self { visible: true }
     }
 }
 
 impl GameplayLobbyHudVisibility {
-    fn handle_input(
-        &mut self,
-        ev: &InputEvent,
-        joined_lobby: bool,
-        waiting: bool,
-        joined_sides: [bool; 2],
-        fallback_side: profile_data::PlayerSide,
-    ) -> bool {
-        if !joined_lobby || waiting {
-            self.menu_lr_chord = screen_input::MenuLrChordTracker::default();
-            return false;
-        }
-        // Keep gameplay arrows available to the chart. Only explicitly mapped
-        // menu buttons participate in the lobby-HUD chord.
-        let side = match ev.action {
-            VirtualAction::p1_menu_left | VirtualAction::p1_menu_right => {
-                profile_data::PlayerSide::P1
-            }
-            VirtualAction::p2_menu_left | VirtualAction::p2_menu_right => {
-                profile_data::PlayerSide::P2
-            }
-            _ => return false,
-        };
-        let [p1_joined, p2_joined] = joined_sides;
-        let side_is_active = if p1_joined || p2_joined {
-            match side {
-                profile_data::PlayerSide::P1 => p1_joined,
-                profile_data::PlayerSide::P2 => p2_joined,
-            }
-        } else {
-            side == fallback_side
-        };
-        if !side_is_active || self.menu_lr_chord.update(ev).is_none() {
-            return false;
-        }
+    const fn toggle(&mut self) {
         self.visible = !self.visible;
-        true
     }
 
     #[inline(always)]
@@ -2421,26 +2379,27 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeE
     handle_input_with_device(state, ev, None, effects);
 }
 
-pub fn handle_input_with_device(state: &mut State, ev: &InputEvent,
-    physical: Option<deadsync_input::PhysicalInput>, effects: &mut Vec<ThemeEffect>) {
-    let lobby_hud_toggled = handle_lobby_hud_input(state, ev);
-    if gameplay_lobby::handle_input(state, ev) || lobby_hud_toggled {
-        return;
-    }
-    gameplay_session::handle_input(state, ev, physical, effects);
-}
-
-/// Handle the presentation shortcut before the game processes the same edge.
-pub fn handle_lobby_hud_input(state: &mut State, ev: &InputEvent) -> bool {
-    let lobby_waiting = gameplay_lobby_wait_active(state);
-    let joined_lobby = state.lobby_session.runtime_view().snapshot.joined_lobby.is_some();
-    state.lobby_hud_visibility.handle_input(
+pub fn handle_input_with_device(
+    state: &mut State,
+    ev: &InputEvent,
+    physical: Option<deadsync_input::PhysicalInput>,
+    effects: &mut Vec<ThemeEffect>,
+) {
+    match state.lobby_session.route_input_with_sides(
         ev,
-        joined_lobby,
-        lobby_waiting,
         state.runtime_view.joined,
         state.runtime_view.player_side,
-    )
+    ) {
+        GameplayLobbyInput::PassThrough => {
+            gameplay_session::handle_input(state, ev, physical, effects);
+        }
+        GameplayLobbyInput::ToggleHud => toggle_lobby_hud(state),
+        GameplayLobbyInput::Consumed => {}
+    }
+}
+
+pub const fn toggle_lobby_hud(state: &mut State) {
+    state.lobby_hud_visibility.toggle();
 }
 
 impl State {
@@ -6139,23 +6098,6 @@ mod tests {
         }
     }
 
-    fn lobby_hud_input_event(
-        action: VirtualAction,
-        pressed: bool,
-        timestamp: Instant,
-    ) -> InputEvent {
-        InputEvent {
-            action,
-            input_slot: 0,
-            pressed,
-            source: deadsync_core::input::InputSource::Keyboard,
-            timestamp,
-            timestamp_host_nanos: 0,
-            stored_at: timestamp,
-            emitted_at: timestamp,
-        }
-    }
-
     fn test_joined_lobby(players: Vec<lobby_data::LobbyPlayer>) -> lobby_data::JoinedLobby {
         lobby_data::JoinedLobby {
             code: "ABCD".to_string(),
@@ -6206,146 +6148,15 @@ mod tests {
 
     #[test]
     fn lobby_hud_visibility_starts_visible_for_each_gameplay_state() {
-        let visibility = GameplayLobbyHudVisibility::default();
+        let mut visibility = GameplayLobbyHudVisibility::default();
 
         assert!(visibility.should_render(true, false));
         assert!(!visibility.should_render(false, false));
-    }
-
-    #[test]
-    fn lobby_hud_menu_lr_chord_toggles_once_per_press_cycle_for_both_sides() {
-        let at = Instant::now();
-        let mut visibility = GameplayLobbyHudVisibility::default();
-        let p1 = [true, false];
-
-        assert!(!visibility.handle_input(
-            &lobby_hud_input_event(VirtualAction::p1_menu_left, true, at),
-            true,
-            false,
-            p1,
-            profile_data::PlayerSide::P1,
-        ));
-        assert!(visibility.handle_input(
-            &lobby_hud_input_event(VirtualAction::p1_menu_right, true, at),
-            true,
-            false,
-            p1,
-            profile_data::PlayerSide::P1,
-        ));
-        assert!(!visibility.visible);
-
-        assert!(!visibility.handle_input(
-            &lobby_hud_input_event(VirtualAction::p1_menu_right, true, at),
-            true,
-            false,
-            p1,
-            profile_data::PlayerSide::P1,
-        ));
-        assert!(!visibility.visible);
-
-        for (action, pressed) in [
-            (VirtualAction::p1_menu_left, false),
-            (VirtualAction::p1_menu_right, false),
-            (VirtualAction::p1_menu_left, true),
-        ] {
-            assert!(!visibility.handle_input(
-                &lobby_hud_input_event(action, pressed, at),
-                true,
-                false,
-                p1,
-                profile_data::PlayerSide::P1,
-            ));
-        }
-        assert!(visibility.handle_input(
-            &lobby_hud_input_event(VirtualAction::p1_menu_right, true, at),
-            true,
-            false,
-            p1,
-            profile_data::PlayerSide::P1,
-        ));
-        assert!(visibility.visible);
-
-        for action in [VirtualAction::p1_menu_left, VirtualAction::p1_menu_right] {
-            assert!(!visibility.handle_input(
-                &lobby_hud_input_event(action, false, at),
-                true,
-                false,
-                p1,
-                profile_data::PlayerSide::P1,
-            ));
-        }
-        let p2 = [false, true];
-        assert!(!visibility.handle_input(
-            &lobby_hud_input_event(VirtualAction::p2_menu_left, true, at),
-            true,
-            false,
-            p2,
-            profile_data::PlayerSide::P2,
-        ));
-        assert!(visibility.handle_input(
-            &lobby_hud_input_event(VirtualAction::p2_menu_right, true, at),
-            true,
-            false,
-            p2,
-            profile_data::PlayerSide::P2,
-        ));
-        assert!(!visibility.visible);
-    }
-
-    #[test]
-    fn lobby_hud_toggle_ignores_dance_arrows_inactive_sides_and_non_lobby_play() {
-        let at = Instant::now();
-        let mut visibility = GameplayLobbyHudVisibility::default();
-
-        for action in [VirtualAction::p1_left, VirtualAction::p1_right] {
-            assert!(!visibility.handle_input(
-                &lobby_hud_input_event(action, true, at),
-                true,
-                false,
-                [true, false],
-                profile_data::PlayerSide::P1,
-            ));
-        }
-        for action in [VirtualAction::p2_menu_left, VirtualAction::p2_menu_right] {
-            assert!(!visibility.handle_input(
-                &lobby_hud_input_event(action, true, at),
-                true,
-                false,
-                [true, false],
-                profile_data::PlayerSide::P1,
-            ));
-        }
-        for action in [VirtualAction::p1_menu_left, VirtualAction::p1_menu_right] {
-            assert!(!visibility.handle_input(
-                &lobby_hud_input_event(action, true, at),
-                false,
-                false,
-                [true, false],
-                profile_data::PlayerSide::P1,
-            ));
-        }
-        assert!(visibility.visible);
-    }
-
-    #[test]
-    fn lobby_hud_remains_rendered_and_does_not_toggle_during_ready_wait() {
-        let at = Instant::now();
-        let mut visibility = GameplayLobbyHudVisibility {
-            visible: false,
-            ..GameplayLobbyHudVisibility::default()
-        };
-
-        for action in [VirtualAction::p1_menu_left, VirtualAction::p1_menu_right] {
-            assert!(!visibility.handle_input(
-                &lobby_hud_input_event(action, true, at),
-                true,
-                true,
-                [true, false],
-                profile_data::PlayerSide::P1,
-            ));
-        }
-        assert!(!visibility.visible);
+        visibility.toggle();
+        assert!(!visibility.should_render(true, false));
         assert!(visibility.should_render(true, true));
+        visibility.toggle();
+        assert!(visibility.should_render(true, false));
     }
 
     #[test]

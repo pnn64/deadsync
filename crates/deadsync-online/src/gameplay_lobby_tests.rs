@@ -188,6 +188,75 @@ fn ready_updates(effects: &[GameplayLobbyAction]) -> Vec<[bool; 2]> {
 }
 
 #[test]
+fn lobby_hud_chord_consumes_only_the_completing_edge_for_each_local_player() {
+    use GameplayLobbyInput::{PassThrough, ToggleHud};
+    use VirtualAction::{
+        p1_left, p1_menu_left, p1_menu_right, p1_right, p2_menu_left, p2_menu_right,
+    };
+
+    let now = Instant::now();
+    let mut lobby = GameplayLobbySession::new(
+        joined_view(GAMEPLAY_SCREEN_NAME, true),
+        [true, true],
+        PlayerSide::P1,
+    );
+    for (action, pressed, millis, expected) in [
+        (p1_left, true, 0, PassThrough),
+        (p1_right, true, 0, PassThrough),
+        (p1_menu_left, true, 0, PassThrough),
+        (p2_menu_right, true, 0, PassThrough),
+        (p1_menu_right, true, 75, ToggleHud),
+        (p1_menu_right, true, 75, PassThrough),
+        (p2_menu_left, true, 76, PassThrough),
+        (p1_menu_left, false, 77, PassThrough),
+        (p1_menu_left, true, 78, ToggleHud),
+        (p2_menu_right, false, 79, PassThrough),
+        (p2_menu_right, true, 80, ToggleHud),
+    ] {
+        let timestamp = now + Duration::from_millis(millis);
+        assert_eq!(
+            lobby.route_input(&event(action, pressed, timestamp)),
+            expected
+        );
+    }
+}
+
+#[test]
+fn lobby_hud_chord_respects_fallback_side_waiting_and_disconnect() {
+    use GameplayLobbyInput::{Consumed, PassThrough, ToggleHud};
+    use VirtualAction::{p1_menu_left, p1_menu_right, p2_menu_left, p2_menu_right};
+
+    let now = Instant::now();
+    let mut lobby = GameplayLobbySession::new(
+        joined_view(GAMEPLAY_SCREEN_NAME, true),
+        [false, false],
+        PlayerSide::P2,
+    );
+    for action in [p1_menu_left, p1_menu_right, p2_menu_left] {
+        assert_eq!(lobby.route_input(&event(action, true, now)), PassThrough);
+    }
+
+    lobby.runtime_view.reconnect_status_text = Some("Reconnecting".into());
+    for action in [p2_menu_right, p2_menu_left] {
+        assert_eq!(lobby.route_input(&event(action, true, now)), Consumed);
+    }
+    lobby.runtime_view.reconnect_status_text = None;
+    assert_eq!(
+        lobby.route_input(&event(p2_menu_right, true, now)),
+        PassThrough
+    );
+    assert_eq!(
+        lobby.route_input(&event(p2_menu_left, true, now)),
+        ToggleHud
+    );
+
+    lobby.runtime_view = LobbyRuntimeView::default();
+    for action in [p2_menu_left, p2_menu_right] {
+        assert_eq!(lobby.route_input(&event(action, true, now)), PassThrough);
+    }
+}
+
+#[test]
 fn offline_entry_starts_once_without_lobby_effects_or_input_consumption() {
     let mut host = Host::new(
         LobbyRuntimeView {
