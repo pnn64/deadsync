@@ -263,17 +263,7 @@ impl Vm {
         }
         let radix = radix as u8;
         let text = &self.strings.bytes[slot_index(string.0)];
-        let text = &text[..crate::pattern::find_byte(text, 0).unwrap_or(text.len())];
-        let whitespace = |c: &u8| crate::locale::is_space(*c);
-        let first = text
-            .iter()
-            .position(|c| !whitespace(c))
-            .unwrap_or(text.len());
-        let last = text
-            .iter()
-            .rposition(|c| !whitespace(c))
-            .map_or(first, |i| i + 1);
-        let text = &text[first..last];
+        let text = crate::locale::trim_number_text(text);
         let (negative, text) = match text.first() {
             Some(b'-') => (true, &text[1..]),
             Some(b'+') => (false, &text[1..]),

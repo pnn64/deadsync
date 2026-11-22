@@ -331,19 +331,21 @@ fn terminated(bytes: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(result)
 }
 
-pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
-    let nul = if bytes.len() < 32 {
-        bytes.iter().position(|&byte| byte == 0)
-    } else {
-        crate::pattern::find_byte(bytes, 0)
-    };
-    let bytes = &bytes[..nul.unwrap_or(bytes.len())];
+#[inline]
+pub(crate) fn trim_number_text(bytes: &[u8]) -> &[u8] {
     let ascii_prefix = if bytes.len() >= 128 && ascii_space(bytes[0]) {
         crate::pattern::scan_boundary(bytes, |byte| !ascii_space(byte))
     } else {
         0
     };
     let bytes = &bytes[ascii_prefix..];
+    // The skipped ASCII whitespace cannot contain the C-string terminator.
+    let nul = if bytes.len() < 32 {
+        bytes.iter().position(|&byte| byte == 0)
+    } else {
+        crate::pattern::find_byte(bytes, 0)
+    };
+    let bytes = &bytes[..nul.unwrap_or(bytes.len())];
     let start = bytes
         .iter()
         .position(|&b| !is_space(b))
@@ -357,7 +359,11 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
             .rposition(|&byte| !is_space(byte))
             .map_or(0, |i| i + 1)
     };
-    let bytes = &bytes[..end];
+    &bytes[..end]
+}
+
+pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
+    let bytes = trim_number_text(bytes);
     if DECIMAL_DOT.load(AtomicOrdering::Acquire) {
         return parse_normalized(bytes);
     }
