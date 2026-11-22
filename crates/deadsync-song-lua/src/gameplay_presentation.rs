@@ -81,7 +81,7 @@ pub trait GameplayFramePresenter {
     fn draw_field(
         &self,
         context: FramePresentationContext<'_, Self::View, Self::Policy>,
-        request: FieldFrame,
+        request: &FieldFrame<'_>,
         buffers: FieldRenderBuffers<'_>,
     ) -> BuiltNotefield;
 

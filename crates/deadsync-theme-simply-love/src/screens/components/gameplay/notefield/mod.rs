@@ -1,7 +1,6 @@
 use crate::color;
 use crate::screens::gameplay::GameplayCoreState as State;
 use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
-use deadlib_present::space::*;
 use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
@@ -13,15 +12,15 @@ use deadsync_notefield::{
     BrokenRunLookup, BuiltNotefield, CapturedActorScratch, ComboHudFrame, ComboMilestoneAssets,
     ComboMilestoneSprite, CounterHudFrame, ErrorBarHudFrame, ErrorBarModes, HoldMeshScratch,
     IndicatorSprite, JudgmentHudFrame, LayoutMiniIndicatorPosition, MeasureCounterOptions,
-    MeasureLineMode, MiniHudFrame, ModelMeshCache, NotefieldCameraCache, NotefieldChartView,
+    MeasureLineMode, MiniHudFrame, ModelMeshCache, NotefieldCameraCache,
     NotefieldComposeRequest, NotefieldFeedbackFrameView, NotefieldFieldFrameView,
     NotefieldFrameFeatures, NotefieldHudFrameView, NotefieldLaneFeedback,
-    NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView,
+    NotefieldNoteskinView, NotefieldOptions,
     StreamProgressLookup, TapJudgmentHudFrame, TapJudgmentSprite, ZmodLayoutParams,
-    compose_notefield_field, compose_notefield_hud, prepare_notefield, resolve_notefield_motion,
+    compose_notefield_field, compose_notefield_hud, prepare_notefield,
 };
-use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_profile as profile_data;
+use deadsync_song_lua::playback::FieldFrame;
 use deadsync_theme::NotefieldHudStyle;
 use std::array::from_fn;
 use std::cell::{Cell, RefCell};
@@ -601,7 +600,7 @@ pub(crate) fn compose_frame(
     judgment_assets: &ResolvedJudgmentAssets,
     resolved_combo_assets: &ResolvedComboMilestoneAssets,
     notefield_plan: &GameplayNotefieldPlan,
-    player_idx: usize,
+    frame: &FieldFrame<'_>,
     arrow_effect_time_s: f64,
     arrow_tipsy_time_s: Option<f64>,
     noteskin_assets: &GameplayNoteskinAssets,
@@ -615,23 +614,10 @@ pub(crate) fn compose_frame(
     camera_caches: &mut [NotefieldCameraCache; MAX_PLAYERS],
     broken_run_lookup: &BrokenRunLookup,
     stream_progress_lookup: &StreamProgressLookup,
-    profile: &profile_data::Profile,
-    placement: FieldPlacement,
     center_1player_notefield: bool,
-    song_lua_judgment_visible: bool,
-    song_lua_combo_visible: bool,
-    song_lua_judgment_transform: Option<deadsync_notefield::HudActorTransform>,
-    song_lua_combo_transform: Option<deadsync_notefield::HudActorTransform>,
-    show_song_visuals: bool,
-    apply_attacks: bool,
-    capture_requests: ProxyCaptureRequests,
-    field_wrapper: glam::Mat4,
-    field_wrapper_visible: bool,
-    player_position: Option<deadsync_notefield::SongLuaPlayerPosition>,
     warn_cmod_for_itl_chart: bool,
     display_mods_text: &std::sync::Arc<str>,
     timing_labels: &[deadsync_notefield::TimingSegmentLabel],
-    view: ViewOverride,
     actors: &mut Vec<Actor>,
     flat_draws: &mut Vec<FlatDraw>,
     hud_actors: &mut Vec<Actor>,
@@ -641,6 +627,10 @@ pub(crate) fn compose_frame(
     flat_draws.clear();
     hud_actors.clear();
     hud_flat_draws.clear();
+    let player_idx = frame.player;
+    let profile = &state.profiles()[player_idx].0;
+    let view = frame.view;
+    let capture_requests = frame.capture;
     let hold_judgment_texture = judgment_assets.hold_judgment();
     let held_miss_texture = judgment_assets.held_miss();
     let p = &state.players()[player_idx];
@@ -648,14 +638,8 @@ pub(crate) fn compose_frame(
 
     let style = notefield_plan.hud_style;
     let judgment_texture = judgment_assets.judgment();
-    let (geometry, visual) = resolve_notefield_motion(
-        state,
-        player_idx,
-        center_1player_notefield,
-        [screen_width(), screen_height()],
-        view.scroll,
-        apply_attacks,
-    );
+    let mut geometry = frame.geometry;
+    geometry.center_one_player |= center_1player_notefield;
     let base_noteskin = noteskin_assets.noteskin[player_idx].as_deref();
     let mine_noteskin = noteskin_assets.mine_noteskin[player_idx].as_deref();
     let tap_explosion_noteskin = if notefield_plan.tap_explosion_noteskin_visible {
@@ -665,48 +649,28 @@ pub(crate) fn compose_frame(
     } else {
         None
     };
-    let no_song_note_hides = deadsync_gameplay::SongLuaNoteHideWindows::default();
     let request = NotefieldComposeRequest {
         timing_labels,
         hud_style: style,
-        placement,
+        placement: frame.placement,
         view,
         geometry,
-        visual,
-        chart: NotefieldChartView::from_gameplay(state, player_idx),
+        visual: frame.visual,
+        chart: frame.chart,
         noteskin: NotefieldNoteskinView {
             base: base_noteskin,
             mine: mine_noteskin,
             receptor: noteskin_assets.receptor_noteskin[player_idx].as_deref(),
             tap_explosion: tap_explosion_noteskin,
         },
-        song_lua: NotefieldSongLuaView {
-            wrapper: field_wrapper,
-            wrapper_visible: field_wrapper_visible,
-            player_position,
-            column_splines: if show_song_visuals {
-                &state.song_lua_visuals().column_splines[player_idx]
-            } else {
-                &[]
-            },
-            note_hides: if show_song_visuals {
-                &state.song_lua_visuals().note_hides[player_idx]
-            } else {
-                &no_song_note_hides
-            },
-            column_offsets: if show_song_visuals {
-                &state.song_lua_visuals().column_offsets[player_idx]
-            } else {
-                &[]
-            },
-        },
+        song_lua: frame.song_lua,
         options: notefield_plan.options,
         capture_requests,
         edit_measure_text_slot_base: super::FRAME_TEXT_EDIT_MEASURE_BASE
             + player_idx as u8 * deadsync_notefield::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER,
         arrow_effect_time_s,
         arrow_tipsy_time_s,
-        music_time_s: state.current_music_time_seconds(),
+        music_time_s: frame.music_time_s,
     };
     let Some(prepared) = prepare_notefield(&request) else {
         return BuiltNotefield::empty(request.geometry.screen_center_x);
@@ -841,7 +805,7 @@ pub(crate) fn compose_frame(
         );
     }
 
-    let combo_active = song_lua_combo_visible
+    let combo_active = frame.combo_visible
         && NotefieldHudFrameView::combo_active(
             request.view.hide_combo,
             blind_active,
@@ -873,7 +837,7 @@ pub(crate) fn compose_frame(
             combo_color,
             font: notefield_plan.combo_font,
             number_text_slot: super::FRAME_TEXT_COMBO_BASE + player_idx as u8,
-            transform: song_lua_combo_transform,
+            transform: frame.combo_transform,
         }
     });
 
@@ -927,14 +891,8 @@ pub(crate) fn compose_frame(
             },
         );
 
-    let judgment_sprite = show_song_visuals
-        .then(|| {
-            deadsync_song_lua::judgment_texture_at(
-                &state.song_lua_visuals().player_actors[player_idx].judgment,
-                state.current_music_time_display(),
-            )
-        })
-        .flatten()
+    let judgment_sprite = frame
+        .judgment_texture
         .map(|texture| TapJudgmentSprite {
             source: SpriteSource::TextureHandle {
                 key: texture.key.clone(),
@@ -955,7 +913,7 @@ pub(crate) fn compose_frame(
                     frame_rows: sprite.frame_rows,
                 })
         });
-    let tap = if song_lua_judgment_visible
+    let tap = if frame.judgment_visible
         && !blind_active
         && let Some(render) = p.last_judgment.as_ref()
         && TapJudgmentHudFrame::render_active(render, elapsed_screen, options.judgment_animation)
@@ -964,18 +922,18 @@ pub(crate) fn compose_frame(
         Some(TapJudgmentHudFrame {
             render,
             sprite,
-            transform: song_lua_judgment_transform,
+            transform: frame.judgment_transform,
         })
     } else {
         None
     };
-    let held_misses = if song_lua_judgment_visible && !blind_active && held_miss_texture.is_some() {
+    let held_misses = if frame.judgment_visible && !blind_active && held_miss_texture.is_some() {
         state.held_miss_judgments_for_columns(col_start, num_cols)
     } else {
         &[]
     };
     let hold_judgments =
-        if song_lua_judgment_visible && !blind_active && hold_judgment_texture.is_some() {
+        if frame.judgment_visible && !blind_active && hold_judgment_texture.is_some() {
             state.hold_judgments_for_columns(col_start, num_cols)
         } else {
             &[]

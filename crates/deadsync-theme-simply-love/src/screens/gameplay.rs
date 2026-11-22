@@ -1267,13 +1267,12 @@ impl GameplayFramePresenter for State {
     fn draw_field(
         &self,
         context: FramePresentationContext<'_, Self::View, Self::Policy>,
-        request: deadsync_song_lua::playback::FieldFrame,
+        request: &deadsync_song_lua::playback::FieldFrame<'_>,
         buffers: FieldRenderBuffers<'_>,
     ) -> deadsync_notefield::BuiltNotefield {
         draw_field(
             self,
             context.assets,
-            context.view,
             context.uptime_seconds,
             context.policy,
             request,
@@ -4771,30 +4770,22 @@ fn score_value_color(state: &State, player: usize) -> (f64, [f32; 4]) {
 pub fn draw_field(
     state: &State,
     asset_manager: &AssetManager,
-    view: ActorViewOverride,
     arrow_effect_time_s: f64,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
-    request: deadsync_song_lua::playback::FieldFrame,
+    request: &deadsync_song_lua::playback::FieldFrame<'_>,
     notefield_camera_cache: &mut [deadsync_notefield::NotefieldCameraCache; MAX_PLAYERS],
     field_scratch: &mut Vec<Actor>,
     flat_draw_scratch: &mut Vec<deadlib_present::actors::FlatDraw>,
     hud_scratch: &mut Vec<Actor>,
     hud_flat_draw_scratch: &mut Vec<deadlib_present::actors::FlatDraw>,
 ) -> deadsync_notefield::BuiltNotefield {
-    let notefield_view = view.notefield;
-    let center_1player_notefield =
-        state.runtime_view.policy.center_single_notefield || notefield_view.force_center_1player;
     let player_idx = request.player;
-    let placement = request.placement;
-    let judgment_visible = request.judgment_visible;
-    let combo_visible = request.combo_visible;
-    let profile = &state.profiles()[player_idx];
     notefield::compose_frame(
         state,
         state.notefield_judgment_assets(player_idx),
         &state.notefield_combo_assets,
         state.notefield_plan(player_idx),
-        player_idx,
+        request,
         arrow_effect_time_s,
         {
             #[cfg(feature = "test-support")]
@@ -4817,23 +4808,10 @@ pub fn draw_field(
         notefield_camera_cache,
         &state.notefield_broken_run_lookup[player_idx],
         &state.notefield_stream_progress_lookup[player_idx],
-        profile,
-        placement,
-        center_1player_notefield,
-        judgment_visible,
-        combo_visible,
-        request.judgment_transform,
-        request.combo_transform,
-        request.show_song_visuals,
-        request.apply_attacks,
-        request.capture,
-        request.wrapper,
-        request.wrapper_visible,
-        request.player_position,
+        state.runtime_view.policy.center_single_notefield,
         state.itl_cmod_warning[player_idx],
         state.display_mods_text(player_idx),
         &state.practice_timing_labels[player_idx],
-        notefield_view,
         field_scratch,
         flat_draw_scratch,
         hud_scratch,

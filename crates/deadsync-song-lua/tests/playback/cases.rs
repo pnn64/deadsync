@@ -13736,6 +13736,49 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         false,
         [0; MAX_PLAYERS],
     );
+    let visuals = &mut state.mods.song_lua_visuals;
+    visuals.note_hides[0] = deadsync_gameplay::SongLuaNoteHideWindows::new(vec![
+        deadsync_gameplay::SongLuaNoteHideWindowRuntime {
+            column: 0,
+            start_beat: 0.0,
+            end_beat: 4.0,
+        },
+    ]);
+    visuals.column_offsets[0] = vec![deadsync_gameplay::SongLuaColumnOffsetWindowRuntime {
+        column: 0,
+        target: deadsync_gameplay::SongLuaColumnTransformTarget::OffsetY,
+        start_second: 0.0,
+        end_second: 1.0,
+        sustain_end_second: 2.0,
+        from_y: 0.0,
+        to_y: 12.0,
+        easing: deadsync_gameplay::SongLuaEase::Linear,
+        opt1: None,
+        opt2: None,
+    }];
+    visuals.column_splines[0] = vec![deadsync_gameplay::SongLuaColumnSplineTrack {
+        player: 0,
+        column: 0,
+        time_offset: 0.0,
+        frames: Arc::from([]),
+    }];
+    visuals.player_actors[0].judgment.textures = [-1.0, 1.0]
+        .map(|second| crate::SongLuaJudgmentTexture {
+            second,
+            path: PathBuf::from("fixture-judgment.png"),
+            key: Arc::from(if second < 0.0 { "early" } else { "late" }),
+            frame_size: [64.0, 16.0],
+            frame_cols: 1,
+            frame_rows: 6,
+        })
+        .into();
+    state.mods.attacks.mask_windows[0] = deadsync_gameplay::build_attack_mask_windows(&[
+        deadsync_gameplay::ChartAttackWindow {
+            start_second: 0.0,
+            len_seconds: 10.0,
+            mods: "100% drunk".into(),
+        },
+    ]);
     let mut media = SongMedia::new(&state, sounds);
     let assets = AssetManager::new();
     let mut scratches = [FrameScratch::new(&state), FrameScratch::new(&state)];
@@ -13781,6 +13824,10 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
                     }
                 },
                 |request, _, _, _, _, _| {
+                    assert_eq!(
+                        request.judgment_texture.unwrap().key.as_ref(),
+                        if now < 1.0 { "early" } else { "late" },
+                    );
                     field_requests[style].push((
                         request.player,
                         request.judgment_visible,
@@ -13878,11 +13925,36 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         fn draw_field(
             &self,
             _: FramePresentationContext<'_, Self::View, Self::Policy>,
-            request: shared::FieldFrame,
+            request: &shared::FieldFrame<'_>,
             _: FieldRenderBuffers<'_>,
         ) -> deadsync_notefield::BuiltNotefield {
-            assert_eq!(request.apply_attacks, self.expect_song_content);
-            assert_eq!(request.show_song_visuals, self.expect_song_content);
+            assert!(std::ptr::eq(request.chart.notes, self.stage.notes()));
+            assert_eq!(request.music_time_s, self.stage.current_music_time_seconds());
+            assert_eq!(request.geometry.player_idx, request.player);
+            let visuals = self.stage.song_lua_visuals();
+            let player = request.player;
+            if self.expect_song_content {
+                assert_eq!(request.visual.visual.drunk, 1.0);
+                assert!(std::ptr::eq(
+                    request.song_lua.note_hides.unwrap(),
+                    &visuals.note_hides[player],
+                ));
+                assert!(std::ptr::eq(
+                    request.song_lua.column_offsets,
+                    visuals.column_offsets[player].as_slice(),
+                ));
+                assert!(std::ptr::eq(
+                    request.song_lua.column_splines,
+                    visuals.column_splines[player].as_slice(),
+                ));
+                assert_eq!(request.judgment_texture.unwrap().key.as_ref(), "early");
+            } else {
+                assert_eq!(request.visual.visual.drunk, 0.0);
+                assert!(request.song_lua.note_hides.is_none());
+                assert!(request.song_lua.column_offsets.is_empty());
+                assert!(request.song_lua.column_splines.is_empty());
+                assert!(request.judgment_texture.is_none());
+            }
             deadsync_notefield::BuiltNotefield {
                 layout_center_x: 200.0,
                 field_camera: None,
@@ -13914,6 +13986,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
     };
     let song_frame = std::ptr::from_ref(presenter.stage.song_frame());
     let song_time = presenter.stage.current_music_time_ns();
+    deadsync_gameplay::refresh_active_attack_masks(&mut presenter.stage.gameplay, 1.0);
     for color in [[1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0]] {
         let mut actors = Vec::new();
         let segments = compose_gameplay_frame(
@@ -13945,6 +14018,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         |presenter: &mut FixturePresenter, practice: &PracticeSession, playing| {
             presenter.expect_song_content = playing;
             presenter.stage.gameplay.set_current_music_time_ns(song_time);
+            deadsync_gameplay::refresh_active_attack_masks(&mut presenter.stage.gameplay, 1.0);
             let mut actors = Vec::new();
             compose_practice_frame(
                 &mut actors,

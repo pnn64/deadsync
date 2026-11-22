@@ -30,9 +30,11 @@ use deadsync_gameplay::{
 };
 use deadsync_notefield::ViewOverride as NotefieldViewOverride;
 use deadsync_notefield::{
-    CapturedActorSource, FieldPlacement, ModelMeshCache, NotefieldCameraCache,
-    ProxyCaptureRequests, SongLuaPlayerTransformRequest, ViewOverride, actor_from_flat_draw,
+    CapturedActorSource, FieldPlacement, ModelMeshCache, NotefieldCameraCache, NotefieldChartView,
+    NotefieldGeometry, NotefieldSongLuaView, NotefieldVisualState, ProxyCaptureRequests,
+    SongLuaPlayerTransformRequest, ViewOverride, actor_from_flat_draw,
     noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
+    resolve_notefield_motion,
     song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
 };
 use deadsync_noteskin::ModelDrawState;
@@ -14925,20 +14927,74 @@ pub struct FieldLayout {
     pub playfield_center_x: f32,
 }
 
-pub struct FieldFrame {
+/// Game-resolved inputs for one field draw. The presenter supplies layout
+/// preferences and assets for the native HUD.
+pub struct FieldFrame<'a> {
     pub player: usize,
     pub placement: FieldPlacement,
-    pub apply_attacks: bool,
-    pub show_song_visuals: bool,
+    pub view: ViewOverride,
+    pub geometry: NotefieldGeometry,
+    pub visual: NotefieldVisualState,
+    pub chart: NotefieldChartView<'a>,
+    pub song_lua: NotefieldSongLuaView<'a>,
+    pub music_time_s: f32,
     pub judgment_visible: bool,
     pub combo_visible: bool,
+    pub judgment_texture: Option<&'a crate::SongLuaJudgmentTexture>,
     pub judgment_transform: Option<deadsync_notefield::HudActorTransform>,
     pub combo_transform: Option<deadsync_notefield::HudActorTransform>,
     pub capture: ProxyCaptureRequests,
-    pub wrapper: Matrix4,
-    pub wrapper_visible: bool,
-    /// A Lua-moved Player's own position, which centers the field perspective.
-    pub player_position: Option<deadsync_notefield::SongLuaPlayerPosition>,
+}
+
+impl<'a> FieldFrame<'a> {
+    #[inline]
+    fn new<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot>(
+        state: &'a GameplayCoreState<P, S>,
+        player: usize,
+        placement: FieldPlacement,
+        options: FrameOptions,
+    ) -> Self {
+        let view = options.notefield;
+        let (geometry, visual) = resolve_notefield_motion(
+            state,
+            player,
+            view.force_center_1player,
+            [screen_width(), screen_height()],
+            view.scroll,
+            options.apply_attacks,
+        );
+        let visuals = options.show_song_visuals.then(|| state.song_lua_visuals());
+        Self {
+            player,
+            placement,
+            view,
+            geometry,
+            visual,
+            chart: NotefieldChartView::from_gameplay(state, player),
+            song_lua: NotefieldSongLuaView {
+                note_hides: visuals.map(|visuals| &visuals.note_hides[player]),
+                column_offsets: visuals
+                    .map_or(&[], |visuals| visuals.column_offsets[player].as_slice()),
+                column_splines: visuals
+                    .map_or(&[], |visuals| visuals.column_splines[player].as_slice()),
+                wrapper: Matrix4::IDENTITY,
+                wrapper_visible: true,
+                player_position: None,
+            },
+            music_time_s: state.current_music_time_seconds(),
+            judgment_visible: true,
+            combo_visible: true,
+            judgment_texture: visuals.and_then(|visuals| {
+                crate::judgment_texture_at(
+                    &visuals.player_actors[player].judgment,
+                    state.current_music_time_display(),
+                )
+            }),
+            judgment_transform: None,
+            combo_transform: None,
+            capture: ProxyCaptureRequests::default(),
+        }
+    }
 }
 
 fn song_lua_field_wrapper(actor: &crate::SongLuaCapturedActor, clock: [f32; 2]) -> (Matrix4, bool) {
@@ -15017,7 +15073,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     view: FrameOptions,
     mut draw_layer: impl FnMut(ScreenLayer, &mut Vec<Actor>, FieldLayout),
     mut draw_field: impl FnMut(
-        FieldFrame,
+        &FieldFrame<'_>,
         &mut [NotefieldCameraCache; MAX_PLAYERS],
         &mut Vec<Actor>,
         &mut Vec<FlatDraw>,
@@ -15599,6 +15655,26 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 } else {
                     ((None, true), (None, true))
                 };
+            let mut field = FieldFrame::new(state, player_idx, placement, view);
+            field.song_lua.wrapper = field_wrapper;
+            field.song_lua.wrapper_visible = field_wrapper_visible;
+            field.song_lua.player_position = Some(player_position);
+            field.judgment_visible = judgment_visible;
+            field.combo_visible = combo_visible;
+            field.judgment_transform = judgment_transform;
+            field.combo_transform = combo_transform;
+            field.capture = ProxyCaptureRequests {
+                player: requests.player && !direct_player_candidates[player_idx],
+                // Whole-player captures consume the same field source, so
+                // materialize compact notes into that cold actor capture.
+                note_field: (requests.note_field && !direct_note_field_candidates[player_idx])
+                    || (requests.player && !direct_player_candidates[player_idx]),
+                direct_note_field: requests.note_field && direct_note_field_candidates[player_idx],
+                judgment: requests.judgment && !direct_judgment_candidates[player_idx],
+                direct_judgment: requests.judgment && !direct_judgment_candidates[player_idx],
+                combo: requests.combo && !direct_combo_candidates[player_idx],
+                direct_combo: requests.combo && direct_combo_candidates[player_idx],
+            };
             let deadsync_notefield::BuiltNotefield {
                 layout_center_x,
                 field_camera,
@@ -15611,34 +15687,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 mut combo_draw_range,
                 hud_parts,
             } = draw_field(
-                FieldFrame {
-                    wrapper: field_wrapper,
-                    wrapper_visible: field_wrapper_visible,
-                    player_position: Some(player_position),
-                    player: player_idx,
-                    placement,
-                    apply_attacks,
-                    show_song_visuals,
-                    judgment_visible,
-                    combo_visible,
-                    judgment_transform,
-                    combo_transform,
-                    capture: ProxyCaptureRequests {
-                        player: requests.player && !direct_player_candidates[player_idx],
-                        // Whole-player captures consume the same field source, so
-                        // materialize compact notes into that cold actor capture.
-                        note_field: (requests.note_field
-                            && !direct_note_field_candidates[player_idx])
-                            || (requests.player && !direct_player_candidates[player_idx]),
-                        direct_note_field: requests.note_field
-                            && direct_note_field_candidates[player_idx],
-                        judgment: requests.judgment && !direct_judgment_candidates[player_idx],
-                        direct_judgment: requests.judgment
-                            && direct_judgment_candidates[player_idx],
-                        combo: requests.combo && !direct_combo_candidates[player_idx],
-                        direct_combo: requests.combo && direct_combo_candidates[player_idx],
-                    },
-                },
+                &field,
                 notefield_camera_cache,
                 field_scratch,
                 flat_draw_scratch,

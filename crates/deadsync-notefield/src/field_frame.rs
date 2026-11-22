@@ -679,15 +679,18 @@ fn compose_field_contents<S, F>(
         let head_layers = hold_plan.head_layers;
         let head_slot = hold_plan.head_slot;
 
-        let note_hides = request.song_lua.note_hides;
-        let has_zoom_spline = note_hides.has_column_hides(local_col);
+        let note_hides = request
+            .song_lua
+            .note_hides
+            .filter(|hides| hides.has_column_hides(local_col));
+        let has_zoom_spline = note_hides.is_some();
         // NoteDisplay interpolates the beat along the body's original endpoints,
         // then samples only the spline's X scale for each strip vertex.
         let body_head_beat = if engaged { current_beat } else { note.beat };
         let body_zoom_offset_at_y = |y: f32| {
-            if !has_zoom_spline {
+            let Some(note_hides) = note_hides else {
                 return 0.0;
-            }
+            };
             let beat = if (y_tail - y_head).abs() <= f32::EPSILON {
                 body_head_beat
             } else {
@@ -705,11 +708,7 @@ fn compose_field_contents<S, F>(
                     head_anchor_adjusted_travel / field_zoom,
                     transform_cache,
                     1.0,
-                ) + if has_zoom_spline {
-                    note_hides.zoom_offset(local_col, note.beat)
-                } else {
-                    0.0
-                }),
+                ) + note_hides.map_or(0.0, |hides| hides.zoom_offset(local_col, note.beat))),
         );
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
@@ -1153,15 +1152,17 @@ fn compose_visible_notes<S, F>(
         let direction = prepared.field.column_dirs[local_col];
         let receptor_y = prepared.field.column_receptor_ys[local_col];
         let lane_offset = lane_offsets[local_col];
-        let lane_has_hides = request.song_lua.note_hides.has_column_hides(local_col);
+        let lane_hides = request
+            .song_lua
+            .note_hides
+            .filter(|hides| hides.has_column_hides(local_col));
         for_each_lane_index(
             request.chart.lane_note_rows(col),
             visible_note_bounds[local_col],
             |note_index| {
                 let note = &request.chart.notes[note_index];
                 if matches!(note.note_type, NoteType::Hold | NoteType::Roll)
-                    || (lane_has_hides
-                        && song_lua_note_hidden(request.song_lua.note_hides, local_col, note.beat))
+                    || lane_hides.is_some_and(|hides| song_lua_note_hidden(hides, local_col, note.beat))
                 {
                     return;
                 }

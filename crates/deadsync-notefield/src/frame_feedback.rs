@@ -284,7 +284,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 + request
                     .song_lua
                     .note_hides
-                    .zoom_offset(local_col, current_beat))
+                    .map_or(0.0, |hides| hides.zoom_offset(local_col, current_beat)))
                 * prepared.column_zooms[local_col]
         };
         lane_zooms[local_col] = effect_zoom;
@@ -1192,7 +1192,7 @@ mod tests {
                 wrapper: glam::Mat4::IDENTITY,
                 wrapper_visible: true,
                 player_position: None,
-                note_hides,
+                note_hides: Some(note_hides),
                 column_offsets: &[],
                 column_splines: &[],
             },

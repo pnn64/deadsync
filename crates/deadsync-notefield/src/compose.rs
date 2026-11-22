@@ -333,7 +333,8 @@ pub struct NotefieldNoteskinView<'a, S> {
 /// Song Lua note visibility and per-column placement inputs for one player.
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldSongLuaView<'a> {
-    pub note_hides: &'a SongLuaNoteHideWindows,
+    /// Absent while the game suppresses song-authored visuals.
+    pub note_hides: Option<&'a SongLuaNoteHideWindows>,
     pub column_offsets: &'a [SongLuaColumnOffsetWindowRuntime],
     pub column_splines: &'a [deadsync_gameplay::SongLuaColumnSplineTrack],
     /// Local native Actor wrapper matrix, outside the NoteField's own tilt.

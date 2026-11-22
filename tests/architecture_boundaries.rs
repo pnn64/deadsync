@@ -414,7 +414,9 @@ fn chart_lua_playback_has_no_theme_dependency() {
         assert!(!contains_rust(&theme, former_override));
         assert!(!contains_rust(&practice, former_override));
     }
-    assert!(contains_rust(&theme, "request.show_song_visuals, request.apply_attacks,"));
+    assert!(contains_rust(&theme, "request: &deadsync_song_lua::playback::FieldFrame<'_>"));
+    assert!(!contains_rust(&theme, "request.show_song_visuals"));
+    assert!(!contains_rust(&theme, "request.apply_attacks"));
     for handoff in [
         "pub trait GameplayFramePresenter",
         "stage.gameplay.setup.session",
@@ -12223,6 +12225,10 @@ fn field_metrics_are_shared() {
         .expect("profile gameplay adapter should be readable");
     let compose = read_source(root.join("crates/deadsync-notefield/src/compose.rs"))
         .expect("canonical composition contract should be readable");
+    let playback = read_source(root.join("crates/deadsync-song-lua/src/playback.rs"))
+        .expect("game field composition should be readable");
+    let native = read_source(root.join("crates/deadsync-song-lua/src/playback/native.rs"))
+        .expect("native field composition should be readable");
 
     for token in [
         "pub(crate) struct ReceptorDrawRequest",
@@ -12259,11 +12265,23 @@ fn field_metrics_are_shared() {
     assert!(contract.contains("pub struct NotefieldHudStyle"));
     assert!(compose.contains("pub hud_style: NotefieldHudStyle"));
     for handoff in [
-        "resolve_notefield_motion(",
-        "NotefieldChartView::from_gameplay(state, player_idx)",
+        "let mut geometry = frame.geometry",
+        "chart: frame.chart",
+        "visual: frame.visual",
+        "song_lua: frame.song_lua",
+        "frame.judgment_texture",
     ] {
         assert!(contains_rust(&theme, handoff), "missing notefield handoff {handoff}");
     }
+    for resolved in [
+        "resolve_notefield_motion(",
+        "NotefieldChartView::from_gameplay(state, player)",
+        "crate::judgment_texture_at(",
+        "FieldFrame::new(state, player_idx, placement, view)",
+    ] {
+        assert!(contains_rust(&playback, resolved), "missing game input {resolved}");
+    }
+    assert!(contains_rust(&native, "FieldFrame::new(state, player, placement, view)"));
     for former_input_owner in [
         "NotefieldVisualState {",
         "NotefieldGeometry {",
@@ -12271,6 +12289,10 @@ fn field_metrics_are_shared() {
         ".notefield_column_scroll_dir(",
         ".gameplay_chart(player_idx)",
         "note_row_entry_indices",
+        "resolve_notefield_motion(",
+        "NotefieldChartView::from_gameplay(",
+        ".song_lua_visuals(",
+        "judgment_texture_at(",
     ] {
         assert!(
             !contains_rust(&theme, former_input_owner),
