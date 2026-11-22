@@ -1,7 +1,7 @@
 use deadsync_audio_stream::{AudioControl, SfxId};
 use deadsync_config as config;
 use deadsync_theme::views::{AudioOptionsView, AudioOutputDeviceView};
-use deadsync_theme::{AudioOutputModeChoice, AudioRequest, AudioVolumeTarget};
+use deadsync_theme::{AudioOutputModeChoice, AudioRequest, AudioVolumeTarget, ThemeSounds, UiCue};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -12,19 +12,38 @@ use std::path::{Path, PathBuf};
 /// screen handles happens on exit; the audio cache retains the sample data.
 pub(super) struct UiSfx {
     fixed: HashMap<&'static str, SfxId>,
+    cues: [Option<SfxId>; UiCue::ALL.len()],
     pub(super) screen: HashMap<PathBuf, SfxId>,
 }
 
 impl UiSfx {
-    pub fn prepare(audio: &mut AudioControl, paths: &[&'static str]) -> Self {
-        let mut fixed = HashMap::with_capacity(paths.len());
-        for &path in paths {
-            if let Some(sound) = audio.prepare_sfx(&deadsync_assets::resolve_asset_path(path)) {
+    pub fn prepare(audio: &mut AudioControl, sounds: ThemeSounds) -> Self {
+        Self::prepare_paths(sounds, |path| {
+            audio.prepare_sfx(&deadsync_assets::resolve_asset_path(path))
+        })
+    }
+
+    fn prepare_paths(
+        sounds: ThemeSounds,
+        mut prepare: impl FnMut(&'static str) -> Option<SfxId>,
+    ) -> Self {
+        let mut fixed = HashMap::with_capacity(sounds.effects.len());
+        for &path in sounds.effects {
+            if let Some(sound) = prepare(path) {
                 fixed.insert(path, sound);
             }
         }
+        let cues = UiCue::ALL.map(|cue| {
+            let path = sounds.cue(cue)?;
+            if sounds.effects.contains(&path) {
+                fixed.get(path).cloned()
+            } else {
+                prepare(path)
+            }
+        });
         Self {
             fixed,
+            cues,
             screen: HashMap::new(),
         }
     }
@@ -47,6 +66,12 @@ impl UiSfx {
 
     pub fn play(&self, audio: &mut AudioControl, path: &str) {
         if let Some(sound) = self.fixed.get(path) {
+            audio.play_sfx(sound);
+        }
+    }
+
+    pub fn play_cue(&self, audio: &mut AudioControl, cue: UiCue) {
+        if let Some(sound) = &self.cues[cue.index()] {
             audio.play_sfx(sound);
         }
     }
@@ -120,6 +145,7 @@ fn linux_backend(name: &str) -> deadlib_audio::LinuxAudioBackend {
 pub(super) fn execute(audio: &mut AudioControl, sounds: &UiSfx, request: AudioRequest) {
     match request {
         AudioRequest::PlaySfx(path) => sounds.play(audio, path),
+        AudioRequest::PlayUiCue(cue) => sounds.play_cue(audio, cue),
         AudioRequest::PlayScreenSfxPath(path) => {
             if let Some(sound) = sounds.screen.get(&path) {
                 audio.play_screen_sfx(sound);
@@ -188,6 +214,65 @@ pub(super) fn execute(audio: &mut AudioControl, sounds: &UiSfx, request: AudioRe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_theme::{Theme, ThemeAssetManifest, ThemeResources, ThemeScreenId};
+
+    struct AlternateTheme;
+
+    impl Theme for AlternateTheme {
+        type Screen = ();
+        type RuntimeRequest = ();
+
+        fn screen_id(_: Self::Screen) -> ThemeScreenId {
+            ThemeScreenId::new("alternate")
+        }
+    }
+
+    impl ThemeResources for AlternateTheme {
+        const SOUNDS: ThemeSounds = ThemeSounds {
+            effects: &["alternate/menu.ogg"],
+            change: Some("alternate/move.ogg"),
+            confirm: Some("alternate/menu.ogg"),
+            screenshot: None,
+        };
+
+        fn asset_manifest()
+        -> ThemeAssetManifest<impl Iterator<Item = deadlib_assets::TextureAssetSpec>> {
+            ThemeAssetManifest {
+                fonts: &[],
+                textures: std::iter::once(deadlib_assets::texture_asset("alternate/tile.png")),
+                texture_needs_repeat_sampler: |key| key == "alternate/tile.png",
+            }
+        }
+    }
+
+    #[test]
+    fn alternate_theme_supplies_shell_cues_and_renderer_manifest() {
+        let mut paths = Vec::new();
+        UiSfx::prepare_paths(AlternateTheme::SOUNDS, |path| {
+            paths.push(path);
+            None
+        });
+        assert_eq!(paths, ["alternate/menu.ogg", "alternate/move.ogg"]);
+
+        let root = tempfile::tempdir().unwrap();
+        let dirs = deadsync_config::dirs::AppDirs {
+            cache_dir: root.path().join("cache"),
+            data_dir: root.path().join("data"),
+            exe_dir: root.path().to_owned(),
+            portable: false,
+        };
+        let manifest = AlternateTheme::asset_manifest();
+        let jobs = deadsync_assets::textures::initial_texture_jobs(
+            manifest.textures,
+            &dirs.asset_paths(None),
+            manifest.texture_needs_repeat_sampler,
+        );
+        let [job] = jobs.as_slice() else {
+            panic!("expected only the alternate tile");
+        };
+        assert_eq!(job.key, "alternate/tile.png");
+        assert_eq!(job.sampler.wrap, deadlib_render_core::SamplerWrap::Repeat);
+    }
 
     #[test]
     fn audio_output_modes_round_trip_through_shell_mapping() {

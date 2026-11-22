@@ -115,6 +115,20 @@ impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme {
     }
 }
 
+impl deadsync_theme::ThemeResources for SimplyLoveTheme {
+    const SOUNDS: deadsync_theme::ThemeSounds = deadsync_theme::ThemeSounds {
+        effects: SFX_PATHS,
+        change: Some("assets/sounds/change.ogg"),
+        confirm: Some("assets/sounds/start.ogg"),
+        screenshot: Some("assets/sounds/screenshot.ogg"),
+    };
+
+    fn asset_manifest()
+    -> deadsync_theme::ThemeAssetManifest<impl Iterator<Item = deadlib_assets::TextureAssetSpec>> {
+        asset_manifest()
+    }
+}
+
 mod act_macro {
     macro_rules! act {
         (sprite($tex:literal): $($tail:tt)+) => {{

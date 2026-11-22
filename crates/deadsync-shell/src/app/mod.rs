@@ -199,7 +199,8 @@ use deadsync_theme::views::{
     NoteskinCatalogView, SmxAssignmentView,
 };
 use deadsync_theme::{
-    AudioRequest, PlatformRequest, RevealPathKind, ThemeScreenFlow, TransitionCompletion,
+    AudioRequest, PlatformRequest, RevealPathKind, ThemeResources, ThemeScreenFlow,
+    TransitionCompletion, UiCue,
 };
 use deadsync_theme_simply_love::screens::transitions::{
     gameplay_smx_overlay_alpha, screen_fade_view,
@@ -5423,8 +5424,7 @@ impl App {
         // Share Rips as the machine starts with it; every later change comes
         // with the config snapshot in the frame loop.
         deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
-        let ui_sfx =
-            audio_requests::UiSfx::prepare(&mut audio, deadsync_theme_simply_love::SFX_PATHS);
+        let ui_sfx = audio_requests::UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS);
         let audio_options = audio_requests::options_view(&audio);
         let state = AppState::new(
             &dirs,
@@ -5846,7 +5846,7 @@ impl App {
                                     audio_requests::execute(
                                         &mut self.audio,
                                         &self.ui_sfx,
-                                        AudioRequest::PlaySfx("assets/sounds/change.ogg"),
+                                        AudioRequest::PlayUiCue(UiCue::Change),
                                     );
                                     debug!(
                                         "Force-reloaded song from disk: {}",
@@ -6645,11 +6645,10 @@ impl App {
         match input {
             OffsetPromptInput::Consumed => {}
             OffsetPromptInput::ChoiceChanged => {
-                self.ui_sfx
-                    .play(&mut self.audio, "assets/sounds/change.ogg");
+                self.ui_sfx.play_cue(&mut self.audio, UiCue::Change);
             }
             OffsetPromptInput::Decide(save_changes) => {
-                self.ui_sfx.play(&mut self.audio, "assets/sounds/start.ogg");
+                self.ui_sfx.play_cue(&mut self.audio, UiCue::Confirm);
                 self.finalize_gameplay_offset_prompt(save_changes, event_loop);
             }
         }
@@ -7273,8 +7272,7 @@ impl App {
         self.state.screens.evaluation_state = page;
         self.mark_evaluation_runtime_dirty();
         self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
-        self.ui_sfx
-            .play(&mut self.audio, "assets/sounds/change.ogg");
+        self.ui_sfx.play_cue(&mut self.audio, UiCue::Change);
     }
 
     fn apply_select_music_join(&mut self, join_side: profile_data::PlayerSide) {
@@ -7393,7 +7391,7 @@ impl App {
 
         self.theme_effect_scratch
             .push(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
-                AudioRequest::PlaySfx("assets/sounds/start.ogg"),
+                AudioRequest::PlayUiCue(UiCue::Confirm),
             )));
         true
     }
@@ -8735,8 +8733,7 @@ impl App {
             let new_value = !config::runtime::get().translated_titles;
             config::runtime_update::update_translated_titles(new_value);
             options::sync_translated_titles(&mut self.state.screens.options_state, new_value);
-            self.ui_sfx
-                .play(&mut self.audio, "assets/sounds/change.ogg");
+            self.ui_sfx.play_cue(&mut self.audio, UiCue::Change);
         }
         // Screen-specific Escape handling resides in per-screen raw handlers now
 

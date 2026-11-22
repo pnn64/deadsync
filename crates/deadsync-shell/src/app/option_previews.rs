@@ -582,6 +582,11 @@ return Def.Sprite {
                 .save(skin.join(format!("{name}.png")))
                 .unwrap();
         }
+        let tile = root.join("assets/graphics/alternate-tile.png");
+        fs::create_dir_all(tile.parent().unwrap()).unwrap();
+        RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255]))
+            .save(tile)
+            .unwrap();
         let dirs = deadsync_config::dirs::AppDirs {
             data_dir: root.clone(),
             exe_dir: root.clone(),
@@ -610,6 +615,22 @@ return Def.Sprite {
         )
         .unwrap();
         let mut assets = AssetManager::new();
+        deadsync_assets::load_initial_assets(
+            &mut assets,
+            &mut backend,
+            deadlib_assets::AssetManifest {
+                fonts: &[],
+                textures: [deadlib_assets::texture_asset("alternate-tile.png")],
+                texture_needs_repeat_sampler: |key| key == "alternate-tile.png",
+            },
+        )
+        .unwrap();
+        let tile = assets.texture_context().bind_texture("alternate-tile.png").unwrap();
+        let Some(deadlib_render::Texture::Software(texture)) = assets.textures().get(&tile.handle)
+        else {
+            panic!("alternate tile did not reach the software backend");
+        };
+        assert_eq!(texture.image.get_pixel(0, 0).0, [1, 2, 3, 255]);
         let mut service = Service::default();
         service.requests.push(NoteskinPreviewRequest {
             name: Arc::from("startup-fixture"),
@@ -658,11 +679,10 @@ return Def.Sprite {
         )
         .unwrap();
         full.for_each_slot(|slot| {
-            deadsync_assets::textures::ensure_texture_for_key(
+            deadsync_assets::textures::ensure_native_texture_for_key(
                 &mut assets,
                 &mut backend,
                 slot.texture_key(),
-                |_| false,
             );
         });
         assert!(assets.has_uploaded_texture_key(other));

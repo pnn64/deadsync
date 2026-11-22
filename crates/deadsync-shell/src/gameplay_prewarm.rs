@@ -57,11 +57,10 @@ fn prewarm_noteskin_textures(
                     prewarm_model_texture_key(assets, backend, seen, seen_model_textures, key);
                 }
             } else if insert_texture_key(seen, key) {
-                deadsync_assets::textures::ensure_texture_for_key(
+                deadsync_assets::textures::ensure_native_texture_for_key(
                     assets,
                     backend,
                     key,
-                    deadsync_theme_simply_love::asset_manifest().texture_needs_repeat_sampler,
                 );
             }
         }
@@ -320,12 +319,10 @@ pub fn prewarm_gameplay_assets<StateDelta>(
                                 }
                             }
                         } else if insert_texture_key(&mut seen, slot.texture_key()) {
-                            deadsync_assets::textures::ensure_texture_for_key(
+                            deadsync_assets::textures::ensure_native_texture_for_key(
                                 assets,
                                 backend,
                                 slot.texture_key(),
-                                deadsync_theme_simply_love::asset_manifest()
-                                    .texture_needs_repeat_sampler,
                             );
                         }
                     }

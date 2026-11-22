@@ -14,6 +14,30 @@ fn contains_rust(source: &str, expected: &str) -> bool {
 }
 
 #[test]
+fn renderer_and_shell_cues_use_theme_resources() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    let graphics = production_source(&shell.join("graphics.rs"));
+    let prewarm = production_source(&shell.join("gameplay_prewarm.rs"));
+    assert!(!graphics.contains("deadsync_theme_simply_love"));
+    assert!(!prewarm.contains("deadsync_theme"));
+    assert!(graphics.contains("deadsync_assets::load_initial_assets(assets, &mut backend, manifest)"));
+    assert!(prewarm.contains("textures::ensure_native_texture_for_key("));
+
+    let graphics_app = production_source(&shell.join("app/graphics.rs"));
+    let app = read_source(shell.join("app/mod.rs")).expect("application source should be readable");
+    let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
+    let screenshot = production_source(&shell.join("app/screenshot.rs"));
+    assert!(graphics_app.contains("ActiveTheme::asset_manifest()"));
+    assert!(app.contains("UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS)"));
+    assert!(app.contains("AudioRequest::PlayUiCue(UiCue::Confirm)"));
+    assert!(screenshot.contains("UiCue::Screenshot"));
+    for cue_file in [app, &screenshot] {
+        assert!(!cue_file.contains("assets/sounds/"));
+    }
+}
+
+#[test]
 fn confirmed_song_and_course_launches_share_game_policy() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let game = production_source(&root.join("crates/deadsync-gameplay/src/stage_launch.rs"));
