@@ -1,11 +1,10 @@
 use super::{
     JudgmentSpriteMetadata, ResolvedComboMilestoneAssets, ResolvedJudgmentAssets,
     combo_milestone_assets, error_bar_trim_max_window_ix, gameplay_notefield_plan,
-    judgment_frame_size, prewarm_actor_resources,
+    judgment_frame_size,
 };
 use crate::notefield_style::notefield_style;
-use deadlib_present::actors::{ActorResourceArena, SpriteSource};
-use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
+use deadlib_present::actors::SpriteSource;
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{ActiveHold, hold_explosion_active, hold_head_render_flags};
@@ -13,7 +12,6 @@ use deadsync_notefield::{error_bar_boundaries_s, offset_center};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
-use std::sync::Arc;
 
 #[test]
 fn song_plan_preserves_profile_derived_hud_appearance() {
@@ -148,36 +146,6 @@ fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
     }
     let logical = slot.logical_size();
     [logical[0] * scale, logical[1] * scale]
-}
-
-#[test]
-fn actor_resource_prewarm_covers_every_noteskin_slot() {
-    crate::tests::init_paths();
-    let style = Style {
-        num_cols: 4,
-        num_players: 1,
-    };
-    let noteskin = Arc::new(
-        load_itg_skin(&style, "default").expect("dance/default should load from assets/noteskins"),
-    );
-    let assets = GameplayNoteskinAssets {
-        noteskin: [Some(Arc::clone(&noteskin)), None],
-        mine_noteskin: [Some(Arc::clone(&noteskin)), None],
-        receptor_noteskin: [Some(Arc::clone(&noteskin)), None],
-        tap_explosion_noteskin: [Some(Arc::clone(&noteskin)), None],
-    };
-    let profiles = std::array::from_fn(|_| profile_data::Profile::default());
-    let arena = ActorResourceArena::default();
-
-    prewarm_actor_resources(&arena, &assets, &profiles, 1);
-    let warmed = arena.stats();
-    noteskin.for_each_slot(|slot| {
-        let _ = slot.actor_texture_source(&arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
-    });
-
-    assert!(warmed.textures > 0);
-    assert_eq!(arena.stats().texture_misses, warmed.texture_misses);
-    assert_eq!(arena.stats().texture_saturated, 0);
 }
 
 #[test]

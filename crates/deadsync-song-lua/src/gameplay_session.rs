@@ -11,6 +11,8 @@ use crate::playback::{
     FrameScratch, GameplayCoreState, NOTEFIELD_ACTOR_SCRATCH_CAPACITY,
     NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY, SongMedia, prewarm_texture_bindings,
 };
+use deadlib_present::actors::{ActorResourceArena, SpriteSource};
+use deadlib_present::texture::TextureContext;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     GameplayAction, GameplayAudioSnapshot, GameplayExit, GameplayInputPlayerSide,
@@ -51,6 +53,20 @@ pub trait StageNoteskins<S: NoteskinSlot> {
     /// Base, mine, receptor, and tap explosion components for cache warmup.
     fn components_for_player(&self, player: usize) -> [Option<&NoteskinRuntime<S>>; 4];
 
+    fn actor_texture_source(
+        &self,
+        slot: &S,
+        _arena: &ActorResourceArena,
+        textures: &impl TextureContext,
+    ) -> SpriteSource {
+        let key = slot.texture_key_shared();
+        SpriteSource::TextureHandle {
+            handle: textures.texture_handle(&key),
+            generation: textures.texture_registry_generation(),
+            key,
+        }
+    }
+
     /// Components used for drawing after applying profile settings and fallbacks.
     fn selected_components_for_player(
         &self,
@@ -80,6 +96,7 @@ pub struct GameplayStage<G, N = ()> {
     pub song_media: SongMedia,
     pub song_scratch: Option<Box<FrameScratch>>,
     pub noteskin_assets: N,
+    actor_resources: ActorResourceArena,
     notefield_settings: [NotefieldSettings; MAX_PLAYERS],
     // These caches also survive replacing the authored compositor storage.
     notefield_scratch: Option<[RefCell<NotefieldFieldScratch>; MAX_PLAYERS]>,
@@ -94,6 +111,7 @@ impl<G> GameplayStage<G> {
             song_media: SongMedia::default(),
             song_scratch: None,
             noteskin_assets: (),
+            actor_resources: ActorResourceArena::new(0),
             notefield_settings: [NotefieldSettings::default(); MAX_PLAYERS],
             notefield_scratch: None,
         }
@@ -101,6 +119,10 @@ impl<G> GameplayStage<G> {
 }
 
 impl<G, N> GameplayStage<G, N> {
+    pub const fn actor_resources(&self) -> &ActorResourceArena {
+        &self.actor_resources
+    }
+
     /// Warm dynamic render storage after successful callback installation.
     pub fn song_lua_attachment_parts(
         &mut self,
@@ -167,6 +189,24 @@ impl<P: GameplayProfileData, S: NoteskinSlot + Clone, N: StageNoteskins<S>>
     ) -> Self {
         let song_scratch = Some(Box::new(FrameScratch::new(&gameplay)));
         let song_media = SongMedia::new(&gameplay, sound_paths);
+        let skins: [_; MAX_PLAYERS] =
+            std::array::from_fn(|player| noteskin_assets.components_for_player(player));
+        let actor_resources = ActorResourceArena::default();
+        for component in 0..4 {
+            for skin in skins
+                .iter()
+                .take(gameplay.num_players())
+                .filter_map(|skins| skins[component])
+            {
+                skin.for_each_slot(|slot| {
+                    let _ = noteskin_assets.actor_texture_source(
+                        slot,
+                        &actor_resources,
+                        &deadlib_assets::METADATA_TEXTURE_CONTEXT,
+                    );
+                });
+            }
+        }
         let notefield_scratch = Some(std::array::from_fn(|player| {
             let active = usize::from(player < gameplay.num_players());
             RefCell::new(NotefieldFieldScratch::new(
@@ -175,7 +215,7 @@ impl<P: GameplayProfileData, S: NoteskinSlot + Clone, N: StageNoteskins<S>>
                     active * NOTEFIELD_ACTOR_SCRATCH_CAPACITY,
                     active * NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
                 ],
-                noteskin_assets.components_for_player(player),
+                skins[player],
             ))
         }));
         Self {
@@ -184,6 +224,7 @@ impl<P: GameplayProfileData, S: NoteskinSlot + Clone, N: StageNoteskins<S>>
             song_media,
             song_scratch,
             noteskin_assets,
+            actor_resources,
             notefield_settings,
             notefield_scratch,
         }

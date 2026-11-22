@@ -13875,10 +13875,13 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
     use deadsync_assets::gameplay_stage::{ActiveGameplayStage, PreparedGameplayStage};
     use deadsync_gameplay::practice::editor::{PracticeEditorCommand, PracticePlayRange};
     use deadsync_gameplay::practice::{PracticeSession, PracticeViewRequest};
-    use deadsync_notefield::{MeasureLineMode, NotefieldSettings};
+    use deadsync_notefield::{
+        CapturedActorScratch, MeasureLineMode, NotefieldComposeRequest, NotefieldHudComposeResult,
+        NotefieldSettings, PreparedNotefield,
+    };
     use deadsync_song_lua::gameplay_presentation::{
-        FieldRenderBuffers, FramePresentationContext, GameplayFramePresenter, GameplayFrameView,
-        compose_gameplay_frame, compose_practice_frame,
+        FieldHudBuffers, FieldPresentation, FramePresentationContext, GameplayFramePresenter,
+        GameplayFrameView, compose_gameplay_frame, compose_practice_frame,
     };
     use deadsync_song_lua::gameplay_session::StageNoteskins;
     use deadsync_song_lua::playback as shared;
@@ -13887,7 +13890,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         stage: ActiveGameplayStage,
         hud_count: Option<usize>,
         expect_song_content: bool,
-        field_storage: std::cell::Cell<Option<*const deadsync_notefield::NotefieldFieldScratch>>,
+        capture_storage: std::cell::Cell<Option<*const CapturedActorScratch>>,
     }
 
     impl GameplayFramePresenter for FixturePresenter {
@@ -13927,21 +13930,32 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
             }
         }
 
-        fn draw_field(
+        fn field_presentation(
             &self,
             _: FramePresentationContext<'_, Self::View, Self::Policy>,
-            request: &shared::FieldFrame<'_>,
-            buffers: FieldRenderBuffers<'_, Self::Slot>,
-        ) -> deadsync_notefield::BuiltNotefield {
-            let field_storage = std::ptr::from_ref(&*buffers.notefield);
-            if let Some(previous) = self.field_storage.replace(Some(field_storage)) {
-                assert_eq!(field_storage, previous);
+            _player: usize,
+        ) -> FieldPresentation<'_> {
+            FieldPresentation::default()
+        }
+
+        fn draw_field_hud(
+            &self,
+            _: FramePresentationContext<'_, Self::View, Self::Policy>,
+            frame: &shared::FieldFrame<'_>,
+            request: &NotefieldComposeRequest<'_, Self::Slot>,
+            prepared: &PreparedNotefield<'_, Self::Slot>,
+            buffers: FieldHudBuffers<'_>,
+        ) -> NotefieldHudComposeResult {
+            let capture_storage = std::ptr::from_ref(&*buffers.capture);
+            if let Some(previous) = self.capture_storage.replace(Some(capture_storage)) {
+                assert_eq!(capture_storage, previous);
             }
+            assert!(prepared.notes.is_some(), "the game prepared the actual noteskin");
             assert!(std::ptr::eq(request.chart.notes, self.stage.notes()));
-            assert_eq!(request.music_time_s, self.stage.current_music_time_seconds());
-            assert_eq!(request.geometry.player_idx, request.player);
+            assert_eq!(frame.music_time_s, self.stage.current_music_time_seconds());
+            assert_eq!(request.geometry.player_idx, frame.player);
             assert_eq!(
-                buffers.settings,
+                request.settings,
                 NotefieldSettings {
                     mine_size_scale: 2.0,
                     measure_line_mode: MeasureLineMode::Eighth,
@@ -13952,19 +13966,19 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
                     column_flash: true,
                     notefield_offset: [50.0, -50.0],
                     fallback_mini_percent: 20.0,
-                    hide_targets: true,
+                    hide_targets: false,
                     hold_explosion_enabled: false,
                     hide_tap_explosion_noteskin: false,
                 },
             );
             let noteskins = &self.stage.noteskin_assets;
-            let player = request.player;
+            let player = frame.player;
             let base = noteskins.noteskin[player].as_deref().unwrap();
             let receptor = noteskins.receptor_noteskin[player].as_deref().unwrap();
-            assert!(std::ptr::eq(buffers.noteskins.base.unwrap(), base));
-            assert!(std::ptr::eq(buffers.noteskins.mine.unwrap(), base));
-            assert!(std::ptr::eq(buffers.noteskins.receptor.unwrap(), receptor));
-            assert!(std::ptr::eq(buffers.noteskins.tap_explosion.unwrap(), base));
+            assert!(std::ptr::eq(request.noteskin.base.unwrap(), base));
+            assert!(std::ptr::eq(request.noteskin.mine.unwrap(), base));
+            assert!(std::ptr::eq(request.noteskin.receptor.unwrap(), receptor));
+            assert!(std::ptr::eq(request.noteskin.tap_explosion.unwrap(), base));
             let visuals = self.stage.song_lua_visuals();
             if self.expect_song_content {
                 assert_eq!(request.visual.visual.drunk, 1.0);
@@ -13980,26 +13994,15 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
                     request.song_lua.column_splines,
                     visuals.column_splines[player].as_slice(),
                 ));
-                assert_eq!(request.judgment_texture.unwrap().key.as_ref(), "early");
+                assert_eq!(frame.judgment_texture.unwrap().key.as_ref(), "early");
             } else {
                 assert_eq!(request.visual.visual.drunk, 0.0);
                 assert!(request.song_lua.note_hides.is_none());
                 assert!(request.song_lua.column_offsets.is_empty());
                 assert!(request.song_lua.column_splines.is_empty());
-                assert!(request.judgment_texture.is_none());
+                assert!(frame.judgment_texture.is_none());
             }
-            deadsync_notefield::BuiltNotefield {
-                layout_center_x: 200.0,
-                field_camera: None,
-                field_camera_generation: 0,
-                field_actors: None,
-                field_draw_range: None,
-                judgment_actors: None,
-                judgment_draw_range: None,
-                combo_actors: None,
-                combo_draw_range: None,
-                hud_parts: Default::default(),
-            }
+            NotefieldHudComposeResult::default()
         }
 
         fn finish_frame(&self, _: &mut Vec<Actor>) {
@@ -14029,7 +14032,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         profile.note_field_offset_x = 99;
         profile.note_field_offset_y = -99;
         profile.mini_percent = 20;
-        profile.hide_targets = true;
+        profile.hide_targets = false;
         profile
             .tap_explosion_active_mask
             .remove(profile_data::TapExplosionMask::HOLDING);
@@ -14037,14 +14040,24 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
     let mut prepared = PreparedGameplayStage::from_gameplay(state, noteskin_assets);
     prepared.song_lua_sound_paths = media.sound_paths;
     let (stage, _) = prepared.into_parts();
+    let arena = stage.actor_resources();
+    arena.lock_growth();
+    let warmed = arena.stats();
+    assert!(warmed.textures > 0, "stage prewarmed its own noteskin textures");
+    for skin in stage.noteskin_assets.components_for_player(0).into_iter().flatten() {
+        skin.for_each_slot(|slot| {
+            let _ = slot.actor_texture_source(arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
+        });
+    }
+    assert_eq!(arena.stats(), warmed);
     let mut presenter = FixturePresenter {
         stage,
         hud_count: Some(0),
         expect_song_content: true,
-        field_storage: std::cell::Cell::new(None),
+        capture_storage: std::cell::Cell::new(None),
     };
     presenter.stage.gameplay.update_profile(0, |profile| {
-        profile.hide_targets = false;
+        profile.hide_targets = true;
         profile.measure_lines = profile_data::MeasureLines::Off;
         profile.tap_explosion_noteskin = Some(profile_data::NoteSkin::none_choice());
     });
@@ -14058,6 +14071,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
     deadsync_gameplay::refresh_active_attack_masks(&mut presenter.stage.gameplay, 1.0);
     for color in [[1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0]] {
         let mut actors = Vec::new();
+        presenter.stage.actor_resources().begin_hit_stats(true);
         let segments = compose_gameplay_frame(
             &mut actors,
             &mut presenter,
@@ -14067,6 +14081,10 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
             color,
         );
         assert!(segments.segments(presenter.stage.song_frame(), &actors).count() > 0);
+        assert!(
+            presenter.stage.actor_resources().stats().texture_hits > 0,
+            "the game draws the field with the stage's prewarmed textures with an empty HUD",
+        );
         assert_eq!(presenter.stage.render_targets().len(), 3);
         assert!(actors.iter().any(|actor| {
             matches!(

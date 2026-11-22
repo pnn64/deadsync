@@ -1,6 +1,8 @@
 //! Game-owned noteskin selection, component composition, and feedback timing.
 
 use crate::noteskin::{self, Noteskin, SpriteSlot};
+use deadlib_present::actors::{ActorResourceArena, SpriteSource};
+use deadlib_present::texture::TextureContext;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
@@ -57,6 +59,16 @@ impl GameplayNoteskinAssets {
 impl StageNoteskins<SpriteSlot> for GameplayNoteskinAssets {
     fn components_for_player(&self, player: usize) -> [Option<&Noteskin>; 4] {
         self.components_for_player(player)
+    }
+
+    #[inline]
+    fn actor_texture_source(
+        &self,
+        slot: &SpriteSlot,
+        arena: &ActorResourceArena,
+        textures: &impl TextureContext,
+    ) -> SpriteSource {
+        slot.actor_texture_source(arena, textures)
     }
 }
 

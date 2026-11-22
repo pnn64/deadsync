@@ -390,7 +390,7 @@ impl Default for NotefieldSettings {
 }
 
 /// HUD presentation preferences and resolved asset availability.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct NotefieldOptions {
     pub combo_visible: bool,
     pub error_bar: bool,

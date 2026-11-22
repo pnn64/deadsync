@@ -10,8 +10,8 @@ use crate::screens::components::gameplay::score_counter::{
     score_leader_alphas,
 };
 use crate::screens::components::gameplay::{
-    FRAME_TEXT_BPM, FRAME_TEXT_LIFE_BASE, FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats, notefield,
-    step_stats_gifs,
+    FRAME_TEXT_BPM, FRAME_TEXT_COUNTDOWN_BASE, FRAME_TEXT_EDIT_MEASURE_BASE, FRAME_TEXT_LIFE_BASE,
+    FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats, notefield, step_stats_gifs,
 };
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::density::{self, DensityHistCache};
@@ -69,7 +69,8 @@ use deadsync_profile_gameplay::{
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score as score_data;
 use deadsync_song_lua::gameplay_presentation::{
-    FieldRenderBuffers, FramePresentationContext, GameplayFramePresenter, GameplayFrameView,
+    FieldHudBuffers, FieldPresentation, FramePresentationContext, GameplayFramePresenter,
+    GameplayFrameView,
 };
 use deadsync_song_lua::gameplay_session::{self, SongLuaGameplayHost, SongLuaGameplaySession};
 use deadsync_song_lua::playback::song_meter_progress;
@@ -742,7 +743,6 @@ pub struct State {
     // the first frame.
     smx_sensor_refresh_accum: f32,
     pub frame_scratch: Option<Box<GameplayFrameScratch>>,
-    actor_resources: ActorResourceArena,
 }
 
 const STATIC_FILTER: usize = 0;
@@ -1031,10 +1031,8 @@ impl State {
             let player = &gameplay.players()[player];
             LifeMeterVisual::new(player.life, player.is_failing || player.life <= 0.0)
         });
-        let actor_resources = ActorResourceArena::default();
-        notefield::prewarm_actor_resources(
-            &actor_resources,
-            noteskin_assets,
+        notefield::prewarm_hud_actor_resources(
+            stage.actor_resources(),
             &step_stats_profiles,
             gameplay.num_players(),
         );
@@ -1114,7 +1112,6 @@ impl State {
             heart_rate_text: heart_rate::HeartRateTextPlan::default(),
             smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
             frame_scratch: Some(Box::new(frame_scratch)),
-            actor_resources,
         };
         state
     }
@@ -1153,7 +1150,7 @@ impl State {
 
     #[inline(always)]
     pub const fn actor_resources(&self) -> &ActorResourceArena {
-        &self.actor_resources
+        self.stage.actor_resources()
     }
 
     #[inline(always)]
@@ -1232,18 +1229,54 @@ impl GameplayFramePresenter for State {
         frame_layers(self, scratch, context.assets, context.view, context.policy)
     }
 
-    fn draw_field(
+    fn field_presentation(
+        &self,
+        _context: FramePresentationContext<'_, Self::View, Self::Policy>,
+        player: usize,
+    ) -> FieldPresentation<'_> {
+        let plan = self.notefield_plan(player);
+        FieldPresentation {
+            hud_style: plan.hud_style,
+            hud_options: plan.options,
+            center_one_player: self.runtime_view.policy.center_single_notefield,
+            timing_labels: &self.practice_timing_labels[player],
+            edit_measure_text_slot_base: FRAME_TEXT_EDIT_MEASURE_BASE
+                + player as u8 * deadsync_notefield::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER,
+            countdown_font: plan.small_combo_font,
+            countdown_text_slot: FRAME_TEXT_COUNTDOWN_BASE
+                + player as u8 * deadsync_notefield::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER,
+        }
+    }
+
+    #[cfg(feature = "test-support")]
+    fn arrow_tipsy_clock_input(&self, player: usize) -> Option<f64> {
+        self.arrow_tipsy_clock_inputs[player]
+    }
+
+    fn draw_field_hud(
         &self,
         context: FramePresentationContext<'_, Self::View, Self::Policy>,
-        request: &deadsync_song_lua::playback::FieldFrame<'_>,
-        buffers: FieldRenderBuffers<'_, noteskin::SpriteSlot>,
-    ) -> deadsync_notefield::BuiltNotefield {
-        draw_field(
-            self,
-            context.assets,
-            context.uptime_seconds,
-            context.policy,
+        frame: &deadsync_song_lua::playback::FieldFrame<'_>,
+        request: &deadsync_notefield::NotefieldComposeRequest<'_, Self::Slot>,
+        prepared: &deadsync_notefield::PreparedNotefield<'_, Self::Slot>,
+        buffers: FieldHudBuffers<'_>,
+    ) -> deadsync_notefield::NotefieldHudComposeResult {
+        let player = frame.player;
+        notefield::compose_hud(
+            &self.stage.gameplay,
+            self.notefield_judgment_assets(player),
+            &self.notefield_combo_assets,
+            self.notefield_plan(player),
+            frame,
             request,
+            prepared,
+            &context.policy.assets.effects,
+            self.stage.actor_resources(),
+            context.assets.texture_context(),
+            &self.notefield_broken_run_lookup[player],
+            &self.notefield_stream_progress_lookup[player],
+            self.itl_cmod_warning[player],
+            self.display_mods_text(player),
             buffers,
         )
     }
@@ -4678,52 +4711,6 @@ fn score_value_color(state: &State, player: usize) -> (f64, [f32; 4]) {
             [1.0; 4],
         )
     }
-}
-
-pub fn draw_field(
-    state: &State,
-    asset_manager: &AssetManager,
-    arrow_effect_time_s: f64,
-    visual_policy: crate::views::SimplyLoveVisualPolicyView,
-    request: &deadsync_song_lua::playback::FieldFrame<'_>,
-    buffers: FieldRenderBuffers<'_, noteskin::SpriteSlot>,
-) -> deadsync_notefield::BuiltNotefield {
-    let player_idx = request.player;
-    notefield::compose_frame(
-        state,
-        state.notefield_judgment_assets(player_idx),
-        &state.notefield_combo_assets,
-        state.notefield_plan(player_idx),
-        request,
-        arrow_effect_time_s,
-        {
-            #[cfg(feature = "test-support")]
-            {
-                state.arrow_tipsy_clock_inputs[player_idx]
-            }
-            #[cfg(not(feature = "test-support"))]
-            {
-                None
-            }
-        },
-        buffers.noteskins,
-        buffers.settings,
-        &visual_policy.assets.effects,
-        state.actor_resources(),
-        asset_manager.texture_context(),
-        buffers.notefield,
-        buffers.cameras,
-        &state.notefield_broken_run_lookup[player_idx],
-        &state.notefield_stream_progress_lookup[player_idx],
-        state.runtime_view.policy.center_single_notefield,
-        state.itl_cmod_warning[player_idx],
-        state.display_mods_text(player_idx),
-        &state.practice_timing_labels[player_idx],
-        buffers.field,
-        buffers.field_flat,
-        buffers.hud,
-        buffers.hud_flat,
-    )
 }
 
 

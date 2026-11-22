@@ -164,6 +164,7 @@ impl NotefieldHudFrameView<'_> {
 }
 
 /// Proxy captures produced while composing the canonical HUD sequence.
+#[derive(Default)]
 pub struct NotefieldHudComposeResult {
     pub parts: NotefieldHudParts,
     pub combo_actors: Option<CapturedActorSource>,

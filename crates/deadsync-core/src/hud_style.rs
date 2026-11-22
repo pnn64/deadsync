@@ -2,7 +2,7 @@
 //! Canonical field geometry and gameplay rules are owned by the game.
 
 /// Theme-provided metrics and colors for canonical column cue composition.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ColumnCueStyle {
     pub top_y: f32,
     pub reverse_anchor_y: f32,
@@ -20,7 +20,7 @@ pub struct ColumnCueStyle {
 }
 
 /// Theme-provided geometry for one column-flash size mode.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ColumnFlashLayoutStyle {
     pub top_y: f32,
     pub height_trim: f32,
@@ -29,7 +29,7 @@ pub struct ColumnFlashLayoutStyle {
 }
 
 /// Theme-provided metrics and judgment colors for column miss flashes.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ColumnFlashStyle {
     pub default_layout: ColumnFlashLayoutStyle,
     pub compact_layout: ColumnFlashLayoutStyle,
@@ -48,7 +48,7 @@ pub struct ColumnFlashStyle {
 
 /// Theme-provided presentation values for the canonical measure counter and
 /// run timer actors.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct CounterHudStyle {
     pub text_z: i16,
     pub shadow_len: f32,
@@ -72,7 +72,7 @@ pub struct CounterHudStyle {
 
 /// Theme-provided placement and failure color for the canonical mini score
 /// indicator actor.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct MiniIndicatorStyle {
     pub column_offset: f32,
     pub under_up_x_offset: f32,
@@ -84,7 +84,7 @@ pub struct MiniIndicatorStyle {
 
 /// Theme-provided placement and layering for canonical tap and hold judgment
 /// feedback actors.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct JudgmentFeedbackStyle {
     pub tap_front_z: i16,
     pub tap_back_z: i16,
@@ -101,7 +101,7 @@ pub struct JudgmentFeedbackStyle {
 
 /// Theme-provided metrics and colors for canonical combo numbers and combo
 /// milestone feedback.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ComboFeedbackStyle {
     pub threshold: u32,
     pub milestone_z: i16,
@@ -129,7 +129,7 @@ pub struct ComboFeedbackStyle {
     pub thousand_x_travel: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ErrorBarPalette {
     pub fantastic_blue: [f32; 4],
     pub fa_plus_white: [f32; 4],
@@ -139,7 +139,7 @@ pub struct ErrorBarPalette {
     pub way_off: [f32; 4],
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ErrorBarLayers {
     pub background: i16,
     pub band: i16,
@@ -150,7 +150,7 @@ pub struct ErrorBarLayers {
 
 /// Theme-provided dimensions, colors, timings, labels, and layers for the
 /// canonical error-bar actors.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ErrorBarStyle {
     pub colorful_width: f32,
     pub colorful_height: f32,
@@ -214,7 +214,7 @@ pub struct ErrorBarStyle {
 /// Field placement, receptor anchors, note/hold layers, mine geometry, and
 /// measure-line coverage/order belong to the shared field compositor. These metrics
 /// style feedback without changing the field's geometry or note ordering.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct NotefieldHudStyle {
     pub judgment_normal_y: f32,
     pub judgment_reverse_y: f32,

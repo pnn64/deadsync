@@ -7,13 +7,14 @@ use std::array::from_fn;
 
 use crate::transforms::sm_scale;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LayoutMiniIndicatorPosition {
+    #[default]
     Default,
     UnderUpArrow,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ZmodLayoutParams {
     pub judgment_height: f32,
     pub has_error_bar: bool,

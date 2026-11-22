@@ -262,9 +262,10 @@ fn gameplay_noteskin_preparation_stays_below_the_theme() {
         production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
     assert!(contains_rust(
         &compositor,
-        "noteskins: stage.notefield_noteskins(request.player)",
+        "noteskin: stage.notefield_noteskins(player)",
     ));
-    assert!(contains_rust(&theme, "buffers.noteskins,"));
+    assert!(contains_rust(&owner, "slot.actor_texture_source(arena, textures)"));
+    assert!(!theme.contains("stage.notefield_noteskins("));
 }
 
 #[test]
@@ -426,7 +427,7 @@ fn chart_lua_playback_has_no_theme_dependency() {
         assert!(!contains_rust(&theme, former_override));
         assert!(!contains_rust(&practice, former_override));
     }
-    assert!(contains_rust(&theme, "request: &deadsync_song_lua::playback::FieldFrame<'_>"));
+    assert!(contains_rust(&theme, "frame: &deadsync_song_lua::playback::FieldFrame<'_>"));
     assert!(!contains_rust(&theme, "request.show_song_visuals"));
     assert!(!contains_rust(&theme, "request.apply_attacks"));
     for handoff in [
@@ -434,7 +435,8 @@ fn chart_lua_playback_has_no_theme_dependency() {
         "stage.gameplay.setup.session",
         ".map(GameplayProfileData::hide_song_background)",
         "presenter.draw_layers(",
-        "presenter.draw_field(",
+        "presenter.field_presentation(",
+        "presenter.draw_field_hud(",
         "stage.song_scratch = Some(song)",
         "if practice.is_playing()",
         "SongFrameContent::PRACTICE_EDITOR",
@@ -485,6 +487,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         "pub song_media: SongMedia",
         "pub song_scratch: Option<Box<FrameScratch>>",
         "notefield_scratch: Option<[RefCell<NotefieldFieldScratch>; MAX_PLAYERS]>",
+        "actor_resources: ActorResourceArena",
         "FrameScratch::new(&gameplay)",
         "SongMedia::new(&gameplay, sound_paths)",
         "scratch.enable_dynamic_scene()",
@@ -6292,9 +6295,9 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "background_changes,",
         "scores.mini_indicator",
         "scores.scorebox_profiles",
-        "state.itl_cmod_warning[player_idx]",
+        "self.itl_cmod_warning[player]",
         "pub fn sync_score_runtime_view",
-        "state.runtime_view.policy.center_single_notefield",
+        "self.runtime_view.policy.center_single_notefield",
         "state.runtime_view.policy.scorebox_pane_filter",
         "self.runtime_view.policy.machine_font",
         "policy.background_brightness",
@@ -10668,6 +10671,8 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
+    let compositor =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
     let display_mods =
         read_source(root.join(
             "crates/deadsync-theme-simply-love/src/screens/components/gameplay/display_mods.rs",
@@ -10753,10 +10758,10 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         );
     }
     assert!(
-        source.contains("arrow_effect_time_s: f64"),
-        "Simply Love notefield adapter must receive arrow-effect time explicitly"
+        compositor.contains("arrow_effect_time_s: context.uptime_seconds"),
+        "gameplay compositor must supply arrow-effect time"
     );
-    assert!(source.contains("pub(crate) fn compose_frame("));
+    assert!(source.contains("pub(crate) fn compose_hud("));
     assert!(
         !source.contains("act!("),
         "Simply Love's notefield adapter must assemble canonical DTOs, not actors"
@@ -10765,17 +10770,15 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     assert!(display_mods.contains("actors.push(act!("));
 
     assert!(
-        source.contains("NotefieldComposeRequest {")
-            && source.contains("prepare_notefield(&request)"),
-        "Simply Love must enter the canonical notefield request boundary"
+        compositor.contains("NotefieldComposeRequest {")
+            && compositor.contains("prepare_notefield(&request)"),
+        "gameplay compositor must enter the canonical notefield request boundary"
     );
     assert!(source.contains("NotefieldHudFrameView {"));
-    for composer in ["notefield_scratch.compose(", "compose_notefield_hud("] {
-        assert_eq!(
-            source.match_indices(composer).count(),
-            1,
-            "Simply Love must cross the canonical frame boundary exactly once through {composer}"
-        );
+    assert_eq!(compositor.match_indices("scratch.compose(").count(), 1);
+    assert_eq!(source.match_indices("compose_notefield_hud(").count(), 1);
+    for field_owner in ["NotefieldComposeRequest {", "prepare_notefield(", "notefield_scratch"] {
+        assert!(!source.contains(field_owner), "Simply Love HUD owns {field_owner}");
     }
     for low_level in [
         "MeasureComposeRequest",
@@ -10997,18 +11000,20 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "Simply Love must consume the borrowed completed-row view instead of querying runtime rows"
     );
 
-    let field_call = source
-        .find("notefield_scratch.compose(")
-        .expect("Simply Love must compose the canonical field pass");
-    let display_mods_call = source[field_call..]
+    let field_call = compositor
+        .find("let field_result = scratch.compose(")
+        .expect("gameplay compositor must draw the canonical field pass");
+    let hud_hook = compositor
+        .find("let hud_result = presenter.draw_field_hud(")
+        .expect("gameplay compositor must invoke the HUD after the field");
+    assert!(field_call < hud_hook);
+    let display_mods_call = source
         .find("display_mods::compose(")
-        .map(|offset| field_call + offset)
         .expect("Simply Love must retain its concrete DisplayMods insertion point");
-    let hud_call = source[display_mods_call..]
-        .find("let hud_result = compose_notefield_hud(")
-        .map(|offset| display_mods_call + offset)
+    let hud_call = source
+        .find("compose_notefield_hud(")
         .expect("Simply Love must compose the canonical post-chrome HUD pass");
-    assert!(field_call < display_mods_call && display_mods_call < hud_call);
+    assert!(display_mods_call < hud_call);
 
     for (path, definition) in [
         (
@@ -11053,7 +11058,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     }
 
     let delegation = source
-        .find("let Some(prepared) = prepare_notefield(&request)")
+        .find("pub(crate) fn compose_hud(")
         .expect("Simply Love should cross the canonical composition boundary once");
     let actor_emission = &source[delegation..];
     for profile_field in [
@@ -11074,15 +11079,14 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
             "Simply Love bypasses stage notefield settings via {profile_field}"
         );
     }
-    let compositor =
-        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
     assert!(contains_rust(
         &compositor,
-        "settings: stage.notefield_settings(request.player)",
+        "settings: stage.notefield_settings(player)",
     ));
     let presenter =
         production_source(&root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"));
-    assert!(contains_rust(&presenter, "buffers.noteskins, buffers.settings,"));
+    assert!(contains_rust(&presenter, "fn field_presentation("));
+    assert!(contains_rust(&presenter, "notefield::compose_hud("));
     for profile_field in [
         "profile.hide_combo",
         "profile.hide_combo_explosions",
@@ -11239,10 +11243,10 @@ fn column_countdowns_stay_on_the_prepared_hud_path() {
     let hud = read_source(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD frame should be readable");
 
-    let adapter = read_source(root.join(
-        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
-    ))
-    .expect("Simply Love notefield adapter should be readable");
+    let presenter =
+        production_source(&root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"));
+    let compositor =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
     let prewarm = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
     ))
@@ -11258,8 +11262,8 @@ fn column_countdowns_stay_on_the_prepared_hud_path() {
     );
     assert!(hud.contains("if request.capture_requests.player {"));
     assert!(hud.contains("actors.extend(draws.drain(..).map(actor_from_flat_draw));"));
-    assert!(contains_rust(&adapter, "super::FRAME_TEXT_COUNTDOWN_BASE + player_idx as u8"));
-    assert!(contains_rust(&adapter, "notefield_scratch.compose(state, actors, flat_draws, hud_flat_draws,"));
+    assert!(contains_rust(&presenter, "countdown_text_slot: FRAME_TEXT_COUNTDOWN_BASE + player as u8"));
+    assert!(contains_rust(&compositor, "scratch.compose(&stage.gameplay, field, field_flat, hud_flat,"));
     assert!(contains_rust(&field, "compose_notefield_field(actors, flat_draws, cue_hud_draws,"));
     assert!(prewarm.contains("let countdown_slot = FRAME_TEXT_COUNTDOWN_BASE"));
     assert!(prewarm.contains("prewarm_u32_text_slot("));
@@ -11508,7 +11512,7 @@ fn simply_love_explosion_layers_use_canonical_notefield_owner() {
             "canonical feedback frame must delegate explosion composition through {delegation}"
         );
     }
-    assert!(theme.contains("notefield_scratch.compose("));
+    assert!(!theme.contains("notefield_scratch.compose("));
     assert!(field.contains("NotefieldFieldFrameView {"));
     assert!(field.contains("NotefieldFeedbackFrameView::from_gameplay("));
     assert!(!theme.contains("compose_notefield_field("));
@@ -12300,15 +12304,17 @@ fn field_metrics_are_shared() {
 
     assert!(contract.contains("pub struct NotefieldHudStyle"));
     assert!(compose.contains("pub hud_style: NotefieldHudStyle"));
+    let compositor =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
     for handoff in [
         "let mut geometry = frame.geometry",
         "chart: frame.chart",
         "visual: frame.visual",
         "song_lua: frame.song_lua",
-        "frame.judgment_texture",
     ] {
-        assert!(contains_rust(&theme, handoff), "missing notefield handoff {handoff}");
+        assert!(contains_rust(&compositor, handoff), "missing notefield handoff {handoff}");
     }
+    assert!(contains_rust(&theme, "frame.judgment_texture"));
     for resolved in [
         "resolve_notefield_motion(",
         "NotefieldChartView::from_gameplay(state, player)",
@@ -12408,7 +12414,7 @@ fn field_metrics_are_shared() {
             "canonical feedback-frame owner is missing {token}"
         );
     }
-    assert!(theme.contains("notefield_scratch.compose("));
+    assert!(!theme.contains("notefield_scratch.compose("));
     assert!(contains_rust(&frame, "hold_emitter.update("));
     assert!(contains_rust(&frame, "game.receptor_glow_visual_for_col(col)"));
     for former_owner in [
@@ -12423,7 +12429,11 @@ fn field_metrics_are_shared() {
     }
     assert!(field.contains("compose_notefield_feedback("));
     assert!(!theme.contains("compose_notefield_feedback("));
-    assert!(theme.contains("slot.actor_texture_source(actor_resources, textures)"));
+    assert!(contains_rust(
+        &compositor,
+        "stage.noteskin_assets.actor_texture_source(slot, actor_resources, textures)",
+    ));
+    assert!(!theme.contains("slot.actor_texture_source("));
     assert!(frame.contains("visual.tiny"));
     let ordered_markers = [
         "compose_column_feedback(",

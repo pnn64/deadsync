@@ -1,7 +1,6 @@
 use crate::color;
 use crate::screens::gameplay::GameplayCoreState as State;
-use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
-use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
+use deadlib_present::actors::{ActorResourceArena, SpriteSource};
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
@@ -9,15 +8,16 @@ use deadsync_gameplay::{
     gameplay_error_bar_trim_max_window_ix,
 };
 use deadsync_notefield::{
-    BrokenRunLookup, BuiltNotefield, ComboHudFrame, ComboMilestoneAssets, ComboMilestoneSprite,
+    BrokenRunLookup, ComboHudFrame, ComboMilestoneAssets, ComboMilestoneSprite,
     CounterHudFrame, ErrorBarHudFrame, ErrorBarModes,
     IndicatorSprite, JudgmentHudFrame, LayoutMiniIndicatorPosition, MeasureCounterOptions,
-    MiniHudFrame, NotefieldCameraCache, NotefieldComposeRequest, NotefieldFieldScratch,
-    NotefieldHudFrameView, NotefieldNoteskinView, NotefieldOptions, NotefieldSettings,
+    MiniHudFrame, NotefieldComposeRequest, NotefieldHudComposeResult, NotefieldHudFrameView,
+    NotefieldOptions, PreparedNotefield,
     StreamProgressLookup, TapJudgmentHudFrame, TapJudgmentSprite, ZmodLayoutParams,
-    compose_notefield_hud, prepare_notefield,
+    compose_notefield_hud,
 };
 use deadsync_profile as profile_data;
+use deadsync_song_lua::gameplay_presentation::FieldHudBuffers;
 use deadsync_song_lua::playback::FieldFrame;
 use deadsync_theme::NotefieldHudStyle;
 use std::cell::Cell;
@@ -397,9 +397,9 @@ fn zmod_layout_params(
 /// all clamps, masks, option translation, and font selection happen at warmup.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct GameplayNotefieldPlan {
-    hud_style: NotefieldHudStyle,
-    options: NotefieldOptions,
-    small_combo_font: &'static str,
+    pub(crate) hud_style: NotefieldHudStyle,
+    pub(crate) options: NotefieldOptions,
+    pub(crate) small_combo_font: &'static str,
     combo_font: Option<&'static str>,
 }
 
@@ -553,70 +553,31 @@ fn combo_milestone_assets(
     }
 }
 
-pub(crate) fn compose_frame(
+pub(crate) fn compose_hud(
     state: &State,
     judgment_assets: &ResolvedJudgmentAssets,
     resolved_combo_assets: &ResolvedComboMilestoneAssets,
     notefield_plan: &GameplayNotefieldPlan,
     frame: &FieldFrame<'_>,
-    arrow_effect_time_s: f64,
-    arrow_tipsy_time_s: Option<f64>,
-    noteskin: NotefieldNoteskinView<'_, SpriteSlot>,
-    settings: NotefieldSettings,
+    request: &NotefieldComposeRequest<'_, SpriteSlot>,
+    prepared: &PreparedNotefield<'_, SpriteSlot>,
     visual_effects: &'static crate::visual_styles::EffectAssets,
     actor_resources: &ActorResourceArena,
     textures: &impl deadlib_present::texture::TextureContext,
-    notefield_scratch: &mut NotefieldFieldScratch,
-    camera_caches: &mut [NotefieldCameraCache; MAX_PLAYERS],
     broken_run_lookup: &BrokenRunLookup,
     stream_progress_lookup: &StreamProgressLookup,
-    center_1player_notefield: bool,
     warn_cmod_for_itl_chart: bool,
     display_mods_text: &std::sync::Arc<str>,
-    timing_labels: &[deadsync_notefield::TimingSegmentLabel],
-    actors: &mut Vec<Actor>,
-    flat_draws: &mut Vec<FlatDraw>,
-    hud_actors: &mut Vec<Actor>,
-    hud_flat_draws: &mut Vec<FlatDraw>,
-) -> BuiltNotefield {
-    actors.clear();
-    flat_draws.clear();
-    hud_actors.clear();
-    hud_flat_draws.clear();
+    buffers: FieldHudBuffers<'_>,
+) -> NotefieldHudComposeResult {
     let player_idx = frame.player;
     let profile = &state.profiles()[player_idx].0;
-    let view = frame.view;
-    let capture_requests = frame.capture;
     let hold_judgment_texture = judgment_assets.hold_judgment();
     let held_miss_texture = judgment_assets.held_miss();
     let p = &state.players()[player_idx];
 
-    let style = notefield_plan.hud_style;
+    let style = &request.hud_style;
     let judgment_texture = judgment_assets.judgment();
-    let mut geometry = frame.geometry;
-    geometry.center_one_player |= center_1player_notefield;
-    let request = NotefieldComposeRequest {
-        timing_labels,
-        hud_style: style,
-        placement: frame.placement,
-        view,
-        geometry,
-        visual: frame.visual,
-        chart: frame.chart,
-        noteskin,
-        song_lua: frame.song_lua,
-        settings,
-        options: notefield_plan.options,
-        capture_requests,
-        edit_measure_text_slot_base: super::FRAME_TEXT_EDIT_MEASURE_BASE
-            + player_idx as u8 * deadsync_notefield::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER,
-        arrow_effect_time_s,
-        arrow_tipsy_time_s,
-        music_time_s: frame.music_time_s,
-    };
-    let Some(prepared) = prepare_notefield(&request) else {
-        return BuiltNotefield::empty(request.geometry.screen_center_x);
-    };
     let options = &request.options;
     let elapsed_screen = request.visual.elapsed_screen_s;
     let frame_plan = prepared.frame_plan;
@@ -624,31 +585,14 @@ pub(crate) fn compose_frame(
     let num_cols = frame_plan.num_cols;
     let field = prepared.field;
     let playfield_center_x = field.playfield_center_x;
-    let layout_center_x = field.layout_center_x;
     let notefield_offset_y = field.notefield_offset_y;
     let mc_font_name = notefield_plan.small_combo_font;
     let blind_active = prepared.blind_active;
 
-    let noteskin_sprite_source =
-        |slot: &SpriteSlot| slot.actor_texture_source(actor_resources, textures);
-    hud_actors.reserve(prepared.frame_plan.hud_actor_reserve);
-    let field_result = notefield_scratch.compose(
-        state,
-        actors,
-        flat_draws,
-        hud_flat_draws,
-        &mut camera_caches[player_idx],
-        &request,
-        &prepared,
-        mc_font_name,
-        super::FRAME_TEXT_COUNTDOWN_BASE
-            + player_idx as u8 * deadsync_notefield::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER,
-        &noteskin_sprite_source,
-    );
     if let Some(alpha) = display_mods::active_alpha(request.view.hide_display_mods, elapsed_screen)
     {
         display_mods::compose(
-            hud_actors,
+            buffers.actors,
             DisplayModsFrame {
                 mods_text: std::sync::Arc::clone(display_mods_text),
                 warn_cmod_for_itl_chart,
@@ -835,48 +779,21 @@ pub(crate) fn compose_frame(
         mini: mini_frame,
         judgment: judgment_frame,
     };
-    let hud_result = compose_notefield_hud(
-        hud_actors,
-        hud_flat_draws,
-        &request,
-        &prepared,
+    compose_notefield_hud(
+        buffers.actors,
+        buffers.draws,
+        request,
+        prepared,
         &hud_frame,
-        notefield_scratch.hud_capture_scratch(),
-    );
-
-    BuiltNotefield {
-        layout_center_x,
-        field_camera: field_result.camera,
-        field_camera_generation: field_result.camera_generation,
-        field_actors: field_result.captured_actors,
-        field_draw_range: field_result.draw_range,
-        judgment_actors: hud_result.judgment_actors,
-        judgment_draw_range: hud_result.judgment_draw_range,
-        combo_actors: hud_result.combo_actors,
-        combo_draw_range: hud_result.combo_draw_range,
-        hud_parts: hud_result.parts,
-    }
+        buffers.capture,
+    )
 }
 
-pub(crate) fn prewarm_actor_resources(
+pub(crate) fn prewarm_hud_actor_resources(
     arena: &ActorResourceArena,
-    noteskin_assets: &GameplayNoteskinAssets,
     profiles: &[profile_data::Profile; MAX_PLAYERS],
     num_players: usize,
 ) {
-    for noteskins in [
-        &noteskin_assets.noteskin,
-        &noteskin_assets.mine_noteskin,
-        &noteskin_assets.receptor_noteskin,
-        &noteskin_assets.tap_explosion_noteskin,
-    ] {
-        for noteskin in noteskins.iter().take(num_players).flatten() {
-            noteskin.for_each_slot(|slot| {
-                let _ = slot.actor_texture_source(arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
-            });
-        }
-    }
-
     for profile in profiles.iter().take(num_players) {
         for texture in [
             resolved_judgment_texture(profile),
