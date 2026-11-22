@@ -34,12 +34,15 @@ pub(crate) fn chunk_id_into(name: &[u8], out: &mut [u8]) -> usize {
         out[used..used + bytes.len()].copy_from_slice(bytes);
         used += bytes.len();
     };
-    let name = &name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())];
     if let Some(name) = name.strip_prefix(b"=") {
-        append(&name[..name.len().min(size - 1)]);
+        let prefix = &name[..name.len().min(size - 1)];
+        let end = crate::pattern::find_byte(prefix, 0).unwrap_or(prefix.len());
+        append(&prefix[..end]);
         return used;
     }
     if let Some(name) = name.strip_prefix(b"@") {
+        let end = crate::pattern::find_byte(name, 0).unwrap_or(name.len());
+        let name = &name[..end];
         let limit = size - b" '...' \0".len();
         if name.len() > limit {
             append(b"...");
@@ -50,14 +53,14 @@ pub(crate) fn chunk_id_into(name: &[u8], out: &mut [u8]) -> usize {
         return used;
     }
     let limit = size - b" [string \"...\"] \0".len();
-    let len = name
+    let prefix = &name[..name.len().min(limit)];
+    let len = prefix
         .iter()
-        .position(|&b| matches!(b, b'\n' | b'\r'))
-        .unwrap_or(name.len())
-        .min(limit);
+        .position(|&b| matches!(b, 0 | b'\n' | b'\r'))
+        .unwrap_or(prefix.len());
     append(b"[string \"");
-    append(&name[..len]);
-    if len < name.len() {
+    append(&prefix[..len]);
+    if name.get(len).is_some_and(|&b| b != 0) {
         append(b"...");
     }
     append(b"\"]");
