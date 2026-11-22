@@ -224,11 +224,7 @@ impl Host {
     }
 
     fn lua(&mut self, source: &str) {
-        let mut runtime = self.session.scene_mut().unwrap().runtime_mut();
-        runtime
-            .vm_mut()
-            .execute(&compile_named(source.as_bytes(), b"@/session-assert.lua").unwrap())
-            .unwrap();
+        run_lua(&mut self.session, source);
     }
 
     fn take_output(&mut self) -> song::SongLuaLiveOutput {
@@ -266,6 +262,14 @@ impl Host {
         );
         (effects, self.take_output())
     }
+}
+
+fn run_lua(session: &mut SongLuaGameplaySession, source: &str) {
+    let mut runtime = session.scene_mut().unwrap().runtime_mut();
+    runtime
+        .vm_mut()
+        .execute(&compile_named(source.as_bytes(), b"@/session-assert.lua").unwrap())
+        .unwrap();
 }
 
 fn event(action: VirtualAction, input_slot: u32, pressed: bool, music_nanos: i64) -> InputEvent {
@@ -472,15 +476,44 @@ return Def.ActorFrame {
 }
 
 #[test]
-fn unsupported_destination_is_resolved_before_end_and_can_be_corrected() {
+fn direct_stage_resolves_gameplay_exits_and_checks_presentation_before_end() {
+    use game::{GameplayAction, GameplayExit};
+    use session::SongLuaGameplayEffect::{Action, Navigate, ReloadSongLua};
+
+    let frame = |stage: &mut session::GameplayStage<Game>| {
+        let mut effects = Vec::new();
+        stage.update(
+            0.125,
+            game::GameplayAudioSnapshot::default(),
+            || HOST_ORIGIN as u64,
+            |name| match name {
+                "ScreenUnknown" => Err(format!("unsupported gameplay destination: {name}")),
+                "ScreenExtra" => Ok("extra"),
+                _ => panic!("the game owns destination {name}"),
+            },
+            |effect| effects.push(effect),
+            |_, _| {},
+        );
+        (effects, stage.take_output())
+    };
+
     for (destination, expected) in [
         (
-            "ScreenEvaluationStage",
-            Effect::Pop(game::GameplayExit::Complete),
+            "",
+            Action(GameplayAction::NavigateNoFade(GameplayExit::Complete)),
         ),
-        ("ScreenGameplay", Effect::Reload),
+        (
+            "ScreenEvaluationStage",
+            Action(GameplayAction::NavigateNoFade(GameplayExit::Complete)),
+        ),
+        (
+            "ScreenSelectMusic",
+            Action(GameplayAction::NavigateNoFade(GameplayExit::Cancel)),
+        ),
+        ("ScreenGameplay", ReloadSongLua),
+        ("ScreenExtra", Navigate("extra")),
     ] {
-        let mut host = Host::new(
+        let host = Host::new(
             r#"
 Ends, Draws = 0, 0
 local started = false
@@ -501,9 +534,13 @@ return Def.ActorFrame {
 }
 "#,
         );
+        let mut stage = session::GameplayStage {
+            gameplay: host.game,
+            song_lua: host.session,
+        };
         let mut rejected = false;
-        for frame in 0..20 {
-            let (effects, output) = host.frame(0.125, frame * 125_000_000);
+        for _ in 0..20 {
+            let (effects, output) = frame(&mut stage);
             assert!(effects.is_empty());
             if !output.errors.is_empty() {
                 assert_eq!(
@@ -518,15 +555,21 @@ return Def.ActorFrame {
             rejected,
             "the completed transition must validate its destination"
         );
-        assert!(!host.session.is_ended());
-        host.lua(&format!(
-            "assert(Ends == 0); DrawsBefore = Draws; SCREENMAN:GetTopScreen():SetNextScreenName('{destination}')"
-        ));
-        let (effects, output) = host.frame(0.125, 2_500_000_000);
+        assert!(!stage.song_lua.is_ended());
+        run_lua(
+            &mut stage.song_lua,
+            &format!(
+                "assert(Ends == 0); DrawsBefore = Draws; SCREENMAN:GetTopScreen():SetNextScreenName('{destination}')"
+            ),
+        );
+        let (effects, output) = frame(&mut stage);
         no_errors(&output);
         assert_eq!(effects, [expected]);
-        assert!(host.session.is_ended());
-        host.lua("assert(Ends == 1 and Draws == DrawsBefore)");
+        assert!(stage.song_lua.is_ended());
+        run_lua(
+            &mut stage.song_lua,
+            "assert(Ends == 1 and Draws == DrawsBefore)",
+        );
     }
 }
 

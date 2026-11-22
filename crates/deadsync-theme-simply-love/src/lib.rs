@@ -109,6 +109,10 @@ impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme {
         course_selection: screens::SimplyLoveScreen::SelectCourse,
         player_options: screens::SimplyLoveScreen::PlayerOptions,
     };
+
+    fn named_song_lua_screen(name: &str) -> Option<Self::Screen> {
+        screens::gameplay::named_song_lua_screen(name)
+    }
 }
 
 mod act_macro {

@@ -138,6 +138,31 @@ pub fn gameplay_exit_screen<T: ThemeScreenFlow>(destination: GameplayExitDestina
     }
 }
 
+pub(crate) fn song_lua_presentation_screen<T: ThemeScreenFlow>(
+    name: &str,
+) -> Result<T::Screen, String> {
+    let screens = T::SCREENS;
+    match name {
+        "ScreenTitleMenu" => Some(screens.menu),
+        "ScreenPractice" => Some(screens.practice),
+        "ScreenSelectCourse" => Some(screens.course_selection),
+        "ScreenPlayerOptions" => Some(screens.player_options),
+        _ => T::named_song_lua_screen(name).filter(|screen| {
+            ![
+                screens.menu,
+                screens.gameplay,
+                screens.practice,
+                screens.results,
+                screens.song_selection,
+                screens.course_selection,
+                screens.player_options,
+            ]
+            .contains(screen)
+        }),
+    }
+    .ok_or_else(|| format!("unsupported song Lua next screen {name}"))
+}
+
 pub fn stage_exit_duration<T: ThemeScreenFlow>(screen: T::Screen) -> Option<f32> {
     is_play_screen::<T>(screen)
         .then_some(deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS)
@@ -370,6 +395,15 @@ mod tests {
             course_selection: "marathons",
             player_options: "setup",
         };
+
+        fn named_song_lua_screen(name: &str) -> Option<Self::Screen> {
+            match name {
+                "ScreenExtra" => Some("details"),
+                "ScreenGameplayAlias" => Some(Self::SCREENS.gameplay),
+                "ScreenPractice" => panic!("standard destinations use the supplied roles"),
+                _ => None,
+            }
+        }
     }
 
     impl ThemeTransitions for AlternateTheme {
@@ -482,6 +516,32 @@ mod tests {
         assert_eq!(
             practice_music_rate_on_screen_change::<AlternateTheme>(&mut saved_rate, "library", 0.8),
             Some(1.2)
+        );
+    }
+
+    #[test]
+    fn song_lua_presentation_uses_standard_roles_and_explicit_additional_screens() {
+        for (name, screen) in [
+            ("ScreenTitleMenu", "title"),
+            ("ScreenPractice", "rehearsal"),
+            ("ScreenSelectCourse", "marathons"),
+            ("ScreenPlayerOptions", "setup"),
+            ("ScreenExtra", "details"),
+        ] {
+            assert_eq!(
+                song_lua_presentation_screen::<AlternateTheme>(name),
+                Ok(screen)
+            );
+        }
+        for name in ["ScreenGameplayAlias", "ScreenUnknown"] {
+            assert_eq!(
+                song_lua_presentation_screen::<AlternateTheme>(name),
+                Err(format!("unsupported song Lua next screen {name}"))
+            );
+        }
+        assert_eq!(
+            song_lua_presentation_screen::<ActiveTheme>("ScreenOptionsService"),
+            Ok(Screen::Options)
         );
     }
 

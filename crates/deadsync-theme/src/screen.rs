@@ -47,6 +47,11 @@ pub struct ThemeScreens<S> {
 /// Supplies the distinct screens used by the shared game flow.
 pub trait ThemeScreenFlow: Theme {
     const SCREENS: ThemeScreens<Self::Screen>;
+
+    /// Resolve a song Lua name for a screen outside the standard game flow.
+    fn named_song_lua_screen(_name: &str) -> Option<Self::Screen> {
+        None
+    }
 }
 
 #[cfg(test)]

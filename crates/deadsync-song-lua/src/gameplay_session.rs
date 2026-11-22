@@ -1,7 +1,7 @@
 //! Game-owned ordering for live song Lua, gameplay updates, input and screen exit.
 //!
-//! The host supplies presentation work and resolves named destinations. This
-//! module owns frame ordering and emits gameplay actions directly to the caller.
+//! The host supplies presentation work and resolves presentation destinations.
+//! This module owns frame ordering and the meaning of authored gameplay exits.
 
 use crate::{
     SongLuaInputEvent, SongLuaInputType, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLiveRequest,
@@ -28,8 +28,8 @@ pub struct SongLuaOutView {
     pub left: f32,
 }
 
-/// Ordered output of a gameplay frame. An explicit Lua screen name is resolved
-/// by the caller before the live scene ends.
+/// Ordered output of a gameplay frame. Presentation destinations are resolved
+/// before the live scene ends.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SongLuaGameplayEffect<S> {
     Action(GameplayAction),
@@ -69,7 +69,7 @@ where
         delta_time: f32,
         audio_snapshot: GameplayAudioSnapshot,
         fallback_host_nanos: impl FnOnce() -> u64,
-        resolve_screen: impl FnOnce(Option<&str>) -> Result<S, String>,
+        resolve_presentation: impl FnOnce(&str) -> Result<S, String>,
         emit: impl FnMut(SongLuaGameplayEffect<S>),
         update_visuals: impl FnOnce(&GameplayRuntimeState<P, O, C, D>, f32),
     ) {
@@ -79,7 +79,15 @@ where
             delta_time,
             audio_snapshot,
             fallback_host_nanos,
-            resolve_screen,
+            |name| match name.unwrap_or_default() {
+                "" | "ScreenEvaluationStage" => Ok(SongLuaGameplayEffect::Action(
+                    GameplayAction::NavigateNoFade(GameplayExit::Complete),
+                )),
+                "ScreenSelectMusic" => Ok(SongLuaGameplayEffect::Action(
+                    GameplayAction::NavigateNoFade(GameplayExit::Cancel),
+                )),
+                name => resolve_presentation(name).map(SongLuaGameplayEffect::Navigate),
+            },
             emit,
             |stage, delta| update_visuals(&stage.gameplay, delta),
             |_| {},
@@ -624,7 +632,7 @@ impl SongLuaGameplaySession {
         game: &mut GameplayRuntimeState<P, O, C, D>,
         delta: f32,
         uptime_seconds: Option<f64>,
-        resolve_screen: impl FnOnce(Option<&str>) -> Result<S, String>,
+        next_screen_effect: impl FnOnce(Option<&str>) -> Result<SongLuaGameplayEffect<S>, String>,
         emit: &mut impl FnMut(SongLuaGameplayEffect<S>),
         frame_actions: &mut FrameActions,
     ) -> Result<(), String>
@@ -702,7 +710,7 @@ impl SongLuaGameplaySession {
             let effect = if reload {
                 SongLuaGameplayEffect::ReloadSongLua
             } else {
-                SongLuaGameplayEffect::Navigate(resolve_screen(target.as_deref())?)
+                next_screen_effect(target.as_deref())?
             };
             self.end(game)?;
             emit(effect);
@@ -741,9 +749,8 @@ pub fn update<H: SongLuaGameplayHost>(
     );
 }
 
-/// Advance one complete game frame, including authored Update/input/Draw phases.
-/// The caller receives game output in source order and resolves only explicit
-/// Lua screen destinations. The callbacks are statically dispatched.
+/// Compatibility frame entry point that retains the caller's Lua destination
+/// adapter. The direct stage API resolves standard gameplay exits itself.
 pub fn update_with_effects<H: SongLuaGameplayHost, S>(
     host: &mut H,
     delta_time: f32,
@@ -761,7 +768,7 @@ pub fn update_with_effects<H: SongLuaGameplayHost, S>(
         delta_time,
         audio_snapshot,
         fallback_host_nanos,
-        resolve_screen,
+        |name| resolve_screen(name).map(SongLuaGameplayEffect::Navigate),
         emit,
         H::update_gameplay_visuals,
         after_update_input,
@@ -779,7 +786,7 @@ fn drive_frame<H, P: GameplayProfileData, O, C, D, S>(
     delta_time: f32,
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
-    resolve_screen: impl FnOnce(Option<&str>) -> Result<S, String>,
+    next_screen_effect: impl FnOnce(Option<&str>) -> Result<SongLuaGameplayEffect<S>, String>,
     mut emit: impl FnMut(SongLuaGameplayEffect<S>),
     update_visuals: impl FnOnce(&mut H, f32),
     after_update_input: impl FnOnce(&mut H),
@@ -838,7 +845,7 @@ fn drive_frame<H, P: GameplayProfileData, O, C, D, S>(
             game,
             delta_time,
             uptime_seconds,
-            resolve_screen,
+            next_screen_effect,
             &mut emit,
             &mut frame_actions,
         ) {

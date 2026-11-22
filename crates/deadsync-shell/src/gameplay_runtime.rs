@@ -715,7 +715,7 @@ pub(crate) fn update(
         delta_time,
         snapshot(music_clock),
         deadlib_platform::host_time::now_nanos,
-        ActiveTheme::resolve_song_lua_screen,
+        crate::navigation::song_lua_presentation_screen::<ActiveTheme>,
         |effect| effects.push(GameplayFrameEffect::Session(effect)),
         update_visuals,
     );

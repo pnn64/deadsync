@@ -2216,20 +2216,50 @@ pub fn prepare_update(state: &mut State, effects: &mut Vec<ThemeEffect>) -> bool
     gameplay_lobby::prepare_update(state, effects)
 }
 
-pub(crate) fn song_lua_transition_screen(name: Option<&str>) -> Result<crate::screens::SimplyLoveScreen, String> {
+pub(crate) fn song_lua_transition_screen(
+    name: Option<&str>,
+) -> Result<crate::screens::SimplyLoveScreen, String> {
     use crate::screens::SimplyLoveScreen as Screen;
-    let Some(name) = name.filter(|name| !name.is_empty()) else { return Ok(Screen::Evaluation); };
+    let Some(name) = name.filter(|name| !name.is_empty()) else {
+        return Ok(Screen::Evaluation);
+    };
+    named_song_lua_screen(name).ok_or_else(|| format!("unsupported song Lua next screen {name}"))
+}
+
+pub(crate) fn named_song_lua_screen(name: &str) -> Option<crate::screens::SimplyLoveScreen> {
+    use crate::screens::SimplyLoveScreen as Screen;
     [
-        Screen::Menu, Screen::Practice, Screen::Options,
-        Screen::Credits, Screen::ContentBrowser, Screen::ManageLocalProfiles, Screen::Init,
-        Screen::Initials, Screen::GameOver, Screen::Mappings, Screen::Input,
-        Screen::SelectProfile, Screen::GrooveStatsLogin, Screen::ArrowCloudLogin, Screen::SelectColor,
-        Screen::SelectStyle, Screen::SelectPlayMode, Screen::ProfileLoad, Screen::SelectMusic,
-        Screen::SelectCourse, Screen::Sandbox, Screen::Evaluation, Screen::EvaluationSummary,
-        Screen::PlayerOptions, Screen::TestLights, Screen::OverscanAdjustment, Screen::ConfigurePads,
+        Screen::Menu,
+        Screen::Practice,
+        Screen::Options,
+        Screen::Credits,
+        Screen::ContentBrowser,
+        Screen::ManageLocalProfiles,
+        Screen::Init,
+        Screen::Initials,
+        Screen::GameOver,
+        Screen::Mappings,
+        Screen::Input,
+        Screen::SelectProfile,
+        Screen::GrooveStatsLogin,
+        Screen::ArrowCloudLogin,
+        Screen::SelectColor,
+        Screen::SelectStyle,
+        Screen::SelectPlayMode,
+        Screen::ProfileLoad,
+        Screen::SelectMusic,
+        Screen::SelectCourse,
+        Screen::Sandbox,
+        Screen::Evaluation,
+        Screen::EvaluationSummary,
+        Screen::PlayerOptions,
+        Screen::TestLights,
+        Screen::OverscanAdjustment,
+        Screen::ConfigurePads,
         Screen::SmxAssignPads,
-    ].into_iter().find(|screen| screen.current_screen_file_name() == name)
-        .ok_or_else(|| format!("unsupported song Lua next screen {name}"))
+    ]
+    .into_iter()
+    .find(|screen| screen.current_screen_file_name() == name)
 }
 
 /// Advances deterministic gameplay using the shell-prepared audio snapshot.

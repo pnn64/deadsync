@@ -66,12 +66,7 @@ impl App {
                     self.handle_song_lua_reload(event_loop);
                 }
                 GameplayFrameEffect::Session(SongLuaGameplayEffect::Navigate(screen)) => {
-                    if let Some(action) = ActiveTheme::gameplay_action_for_navigation(screen, true)
-                    {
-                        self.handle_gameplay_action(action, event_loop);
-                    } else {
-                        self.handle_immediate_navigation(screen, event_loop);
-                    }
+                    self.handle_immediate_navigation(screen, event_loop);
                 }
             }
         }

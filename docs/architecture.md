@@ -439,8 +439,11 @@ to draw their own covers and HUD effects.
 
 Normal gameplay sends stage actions, Lua reload requests, and lobby work
 directly to the shell in frame order. The shell keeps course continuation and
-stage restart on the gameplay lifecycle. The theme supplies screens for results
-and selection and resolves explicit Lua screen names before the live scene ends.
+stage restart on the gameplay lifecycle. The game interprets the default and
+`ScreenEvaluationStage` as completion, `ScreenSelectMusic` as cancellation, and
+`ScreenGameplay` as reload. The shell maps other standard Lua destinations to
+screen roles. Themes can expose additional named presentation screens, which
+are validated before the live scene ends.
 Gameplay frames under a screen transition still dispatch lobby work in order.
 
 The game-owned Practice session coordinates editor input, chart playback, and

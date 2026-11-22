@@ -485,6 +485,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
     for handoff in [
         "let (stage, update_visuals) = state.stage_for_update()",
         "stage.update(",
+        "crate::navigation::song_lua_presentation_screen::<ActiveTheme>",
         "stage.handle_input(ev, physical)",
         "stage.take_output()",
     ] {
@@ -499,6 +500,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         "gameplay::handle_input_with_device(",
         "gameplay_session::update_with_effects(",
         "gameplay_session::handle_input_action(",
+        "ActiveTheme::resolve_song_lua_screen",
     ] {
         assert!(
             !contains_rust(&shell, former_owner),
@@ -12738,6 +12740,11 @@ fn gameplay_exit_routing_stays_below_the_theme() {
     );
     assert!(contains_rust(&shell_input, "self.handle_gameplay_action(action, event_loop)"));
     assert!(contains_rust(&shell_actions, "GameplayFrameEffect::Session(SongLuaGameplayEffect::Action(action)) => { self.handle_gameplay_action(action, event_loop); }"));
+    assert!(contains_rust(
+        &shell_actions,
+        "GameplayFrameEffect::Session(SongLuaGameplayEffect::Navigate(screen)) => { self.handle_immediate_navigation(screen, event_loop); }"
+    ));
+    assert!(!shell_actions.contains("gameplay_action_for_navigation"));
     assert!(contains_rust(
         &shell_runtime,
         "lobby.prepare_update(&mut stage.gameplay,"
