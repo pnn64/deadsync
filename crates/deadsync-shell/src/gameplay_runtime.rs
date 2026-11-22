@@ -32,9 +32,7 @@ use deadsync_profile_gameplay::stage_scores::{
 use deadsync_song_lua::gameplay_presentation::{FramePresentationContext, SongFrameContent};
 use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
 use deadsync_theme::{ThemeEffect, ThemeScreenFlow};
-use deadsync_theme::views::{
-    GameplayLivePresentation, GameplayStageView, SmxSensorPadView, SmxSensorPanelView,
-};
+use deadsync_theme::views::{GameplayLivePresentation, SmxSensorPadView, SmxSensorPanelView};
 use smallvec::SmallVec;
 use std::sync::Arc;
 
@@ -316,22 +314,16 @@ pub(crate) fn refresh_chart_scores(
 pub(crate) fn present_stage<P>(
     prepared: PreparedGameplayStage,
     scene: Option<deadsync_song_lua::SongLuaLiveScene>,
-    view: GameplayStageView,
+    course_title: Option<&str>,
     startup: GameplayStartup,
-    present: impl FnOnce(
-        &ActiveGameplayStage,
-        GameplayStageAssets,
-        &GameplayStageView,
-        GameplayScoreSnapshots,
-    ) -> P,
+    present: impl FnOnce(&ActiveGameplayStage, GameplayStageAssets, GameplayScoreSnapshots) -> P,
 ) -> GameplayHost<GameplayLobbySession, P> {
-    let course_name = view.course.as_ref().map(|course| course.title.as_str());
     prepared.into_host(
         scene,
         startup.lobby_session,
         startup.score_refresh,
-        course_name,
-        |stage, assets| present(stage, assets, &view, startup.scores),
+        course_title,
+        |stage, assets| present(stage, assets, startup.scores),
     )
 }
 

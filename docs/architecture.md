@@ -156,8 +156,9 @@ their render caches and HUD appearance.
 `deadsync-assets::gameplay_stage` prepares the simulation for both Gameplay and
 Practice. It resolves the game profile's noteskin feedback, pack sync preference,
 canonical crossover annotations, Lua lead-in and lifecycle, and the existing
-score targets before the shell constructs the screen. Course banner and title
-overrides are applied during presentation. The shell installs live Lua callbacks
+score targets before the shell constructs the screen. Course submissions use the
+title from the active run. The theme formats the course title and displays its
+banner. The shell installs live Lua callbacks
 after the theme builds its initial caches, then restores held inputs for a
 replacement stage. Render scratch warms at the same callback-install boundary.
 Simply Love's public combined constructor delegates to the shared preparation

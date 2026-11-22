@@ -52,7 +52,6 @@ pub(crate) mod tests {
     use deadsync_song_lua::playback::{
         FieldFrame, FieldLayout, FrameScratch, GameplayActorSegments, ScreenLayer,
     };
-    use deadsync_theme::views::{GameplayReplayView, GameplayStageIntro, GameplayStageView};
     use deadsync_theme_simply_love::screens::gameplay as screen_gameplay;
     use deadsync_theme_simply_love::views::GameplayInitView;
 
@@ -518,7 +517,7 @@ pub(crate) mod tests {
         crate::gameplay_runtime::present_stage(
             prepared,
             scene,
-            GameplayStageView { intro: GameplayStageIntro::Song, replay: None, course: None },
+            None,
             crate::gameplay_runtime::GameplayStartup {
                 mini_indicator: Default::default(),
                 lobby_session: deadsync_online::gameplay_lobby::GameplayLobbySession::new(
@@ -529,7 +528,7 @@ pub(crate) mod tests {
                 score_refresh: Default::default(),
                 scores,
             },
-            move |stage, assets, _, scores| {
+            move |stage, assets, scores| {
                 init.scores = scores;
                 screen_gameplay::GameplayPresentation::from_stage(
                     stage, assets, Arc::from("EVENT"), None, None, None, init,
@@ -4592,11 +4591,7 @@ return Def.ActorFrame{
                         let mut host = crate::gameplay_runtime::present_stage(
                             prepared,
                             scene,
-                            GameplayStageView {
-                                intro: GameplayStageIntro::Restart(2),
-                                replay: Some(GameplayReplayView { name: "AAA".into(), score_10000: 9876.0 }),
-                                course: None,
-                            },
+                            Some(""),
                             crate::gameplay_runtime::GameplayStartup {
                                 mini_indicator: Default::default(),
                                 lobby_session: deadsync_online::gameplay_lobby::GameplayLobbySession::new(
@@ -4608,17 +4603,14 @@ return Def.ActorFrame{
                                     ..Default::default()
                                 },
                             },
-                            |stage, _, view, scores| {
+                            |stage, _, scores| {
                                 assert_eq!(stage.song().title, "Alternate startup");
                                 assert!(stage.song_lua.is_none());
-                                assert!(matches!(view.intro, GameplayStageIntro::Restart(2)));
-                                let replay = view.replay.as_ref().unwrap();
-                                assert_eq!(replay.name, "AAA");
-                                assert_eq!(replay.score_10000, 9876.0);
                                 assert_eq!(scores.scorebox_visible, [true, false]);
                                 AlternateGameplay
                             },
                         );
+                        assert_eq!(host.pack_group.as_ref(), "Untitled Course");
                         assert!(host.song_lua.is_some());
                         use crate::gameplay_runtime::{self, GameplayFrameEffect};
                         use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;

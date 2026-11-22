@@ -9551,16 +9551,18 @@ impl App {
                         mini_indicator: std::mem::take(&mut gameplay_startup.mini_indicator),
                     });
                     prepared.resolve_song_backgrounds(init_config.random_background_mode);
+                    let view = GameplayStageView {
+                        intro: GameplayStageIntro::Practice,
+                        replay: None,
+                        course: None,
+                    };
+                    let present = ActiveTheme::gameplay_presenter(presentation_init);
                     let gs = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
-                        GameplayStageView {
-                            intro: GameplayStageIntro::Practice,
-                            replay: None,
-                            course: None,
-                        },
+                        None,
                         gameplay_startup,
-                        ActiveTheme::gameplay_presenter(presentation_init),
+                        |stage, assets, scores| present(stage, assets, &view, scores),
                     );
                     Ok(gs)
                 };
@@ -9861,7 +9863,6 @@ impl App {
                 } else {
                     GameplayStageIntro::Song
                 };
-                let stage_view = GameplayStageView { intro, replay, course };
                 let combo_carry = self.state.session.combo_carry;
                 let stage_options = start.options;
                 let music_rate = stage_options.music_rate;
@@ -9977,12 +9978,15 @@ impl App {
                         mini_indicator: std::mem::take(&mut gameplay_startup.mini_indicator),
                     });
                     prepared.resolve_song_backgrounds(init_config.random_background_mode);
+                    let course_title = course.as_ref().map(|course| course.title.as_str());
+                    let view = GameplayStageView { intro, replay, course: course.clone() };
+                    let present = ActiveTheme::gameplay_presenter(presentation_init);
                     let mut state = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
-                        stage_view,
+                        course_title,
                         gameplay_startup,
-                        ActiveTheme::gameplay_presenter(presentation_init),
+                        |stage, assets, scores| present(stage, assets, &view, scores),
                     );
                     state.song_lua.restore_held_inputs(held_inputs);
                     Ok(state)

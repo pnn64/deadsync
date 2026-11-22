@@ -952,14 +952,14 @@ impl GameplayPresentation {
         course_banner_path: Option<PathBuf>,
         init_view: GameplayInitView,
     ) -> Self {
-        let pack_label = assets.score_pack_group(
-            course_display_info.as_ref().map(|course| &course.name),
-        );
         let GameplayStageAssets {
             hide_song_intro,
+            pack_group,
             pack_banner_path,
-            ..
         } = assets;
+        let pack_label = course_display_info
+            .as_ref()
+            .map_or(pack_group, |course| Arc::clone(&course.name));
         let pack_banner_path = if course_display_info.is_some() {
             course_banner_path
         } else {

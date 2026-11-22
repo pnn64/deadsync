@@ -41,6 +41,7 @@ pub type PreparedGameplaySongLua = deadsync_song_lua::playback::PreparedGameplay
 pub struct GameplayHost<L, P> {
     pub stage: ActiveGameplayStage,
     pub lobby_session: L,
+    /// Pack or course identity used for score submissions.
     pub pack_group: Arc<str>,
     pub score_refresh: GameplayScoreRefresh,
     pub presentation: P,

@@ -476,9 +476,25 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(contains_rust(&host, "pub presentation: P"));
     assert!(contains_rust(&app, "type GameplayState = GameplayHost<"));
     assert!(app.contains("ActiveTheme::gameplay_presenter(presentation_init)"));
-    for concrete in ["deadsync_theme_simply_love", "SimplyLove", "crate::ActiveTheme", "crate::ThemeScreen"] {
+    for concrete in [
+        "deadsync_theme_simply_love", "SimplyLove", "crate::ActiveTheme", "crate::ThemeScreen",
+        "GameplayStageView",
+    ] {
         assert!(!adapter.contains(concrete), "the gameplay runtime still depends on {concrete}");
     }
+    assert!(contains_rust(&adapter, "startup.score_refresh, course_title,"));
+    assert!(contains_rust(
+        gameplay_entry,
+        "let course = self.state.session.course_run.as_ref().map(|course| Arc::clone(&course.song))",
+    ));
+    assert!(contains_rust(
+        gameplay_entry,
+        "let course_title = course.as_ref().map(|course| course.title.as_str())",
+    ));
+    assert!(contains_rust(
+        gameplay_entry,
+        "crate::gameplay_runtime::present_stage(prepared, scene, course_title, gameplay_startup,",
+    ));
     for label in ["STAGE {number}", "RESTART {count}", "PRACTICE MODE", "song_event_name(stage.song())"] {
         assert!(theme.contains(label), "the selected theme formats {label}");
         assert!(!app.contains(label));
