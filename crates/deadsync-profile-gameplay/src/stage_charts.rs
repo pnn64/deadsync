@@ -38,6 +38,62 @@ pub fn stage_difficulty_indices(
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SelectMusicJoinContext {
+    pub active_side: PlayerSide,
+    pub join_side: PlayerSide,
+    pub selected_steps: usize,
+    pub preferred_difficulty: usize,
+    pub p1_profile_preferred: usize,
+    pub p2_profile_preferred: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SelectMusicJoinPlan {
+    pub selected_steps: usize,
+    pub preferred_difficulty: usize,
+    pub p2_selected_steps: usize,
+    pub p2_preferred_difficulty: usize,
+}
+
+#[must_use]
+pub const fn select_music_join_plan(context: SelectMusicJoinContext) -> SelectMusicJoinPlan {
+    if matches!(context.active_side, PlayerSide::P2) && matches!(context.join_side, PlayerSide::P1)
+    {
+        SelectMusicJoinPlan {
+            selected_steps: context.p1_profile_preferred,
+            preferred_difficulty: context.p1_profile_preferred,
+            p2_selected_steps: context.selected_steps,
+            p2_preferred_difficulty: context.preferred_difficulty,
+        }
+    } else {
+        SelectMusicJoinPlan {
+            selected_steps: context.selected_steps,
+            preferred_difficulty: context.preferred_difficulty,
+            p2_selected_steps: context.p2_profile_preferred,
+            p2_preferred_difficulty: context.p2_profile_preferred,
+        }
+    }
+}
+
+/// Keep the incumbent's chart and start the joining player at the easiest
+/// available chart. The new player's saved difficulty remains their preference.
+#[must_use]
+pub fn select_music_join_charts(
+    context: SelectMusicJoinContext,
+    song: Option<&SongData>,
+    play_style: PlayStyle,
+) -> SelectMusicJoinPlan {
+    let mut plan = select_music_join_plan(context);
+    if let Some(first) = song.and_then(|song| song.best_steps_index(play_style.chart_type(), 0)) {
+        match context.join_side {
+            PlayerSide::P1 => plan.selected_steps = first,
+            PlayerSide::P2 => plan.p2_selected_steps = first,
+        }
+    }
+    plan
+}
+
 #[must_use]
 pub fn gameplay_chart_entry_plan(
     song: &SongData,

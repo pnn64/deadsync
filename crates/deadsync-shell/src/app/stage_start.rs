@@ -167,7 +167,7 @@ impl App {
     pub(super) fn stage_start_for_song_selection(&self, selection: SongSelection) -> StageStart {
         let session = profile::get_session_snapshot();
         let (steps, preferred) =
-            selection.chart_slots(gameplay_play_style_from_profile(session.play_style));
+            selection.resolved_chart_slots(gameplay_play_style_from_profile(session.play_style));
         StageStart::from_profiles(
             selection.song,
             steps,
@@ -355,6 +355,53 @@ mod tests {
                     assert!(Arc::ptr_eq(&state.song_arc(), &song));
                     let expected = song.chart_for_steps_index("dance-single", 3).unwrap();
                     assert_eq!(state.chart(0).unwrap().short_hash, expected.short_hash);
+                },
+            )
+        });
+    }
+
+    #[test]
+    fn versus_song_launch_uses_one_music_choice_in_gameplay_and_options() {
+        on_app_thread(|| {
+            with_session(
+                profile_data::PlayStyle::Versus,
+                profile_data::PlayerSide::P1,
+                true,
+                true,
+                || {
+                    let root = tempfile::tempdir().unwrap();
+                    let mut app = test_app(root.path());
+                    let mut song = confirm_test_song(&mut app, root.path());
+                    app.clear_stage_launch();
+                    for (index, chart) in Arc::make_mut(&mut song).charts.iter_mut().enumerate() {
+                        chart.music_path = Some(root.path().join(format!("chart-{index}.ogg")));
+                    }
+                    let selection = SongSelection {
+                        song,
+                        steps: [3, 2],
+                        preferred: [3, 2],
+                    };
+                    let start = app.stage_start_for_song_selection(selection.clone());
+                    assert_eq!(start.options.chart_steps_index, [2, 2]);
+                    assert_eq!(start.chart_difficulty_index, [2, 2]);
+
+                    app.request_stage_launch(
+                        ActiveTheme::SCREENS.song_selection,
+                        StageLaunchRequest::Confirm(StageSelection::Song(selection)),
+                    );
+                    app.request_stage_launch(
+                        ActiveTheme::SCREENS.song_selection,
+                        StageLaunchRequest::PlayerOptions,
+                    );
+                    assert_eq!(
+                        app.advance_stage_launch(OPTIONS_ENTRY_SECONDS),
+                        Some(CurrentScreen::PlayerOptions),
+                    );
+                    let (target, _) = app.prepare_global_fade_entry(CurrentScreen::PlayerOptions);
+                    assert_eq!(target, CurrentScreen::PlayerOptions);
+                    let options = app.state.screens.player_options_state.as_ref().unwrap();
+                    assert_eq!(options.chart_steps_index, [2, 2]);
+                    assert_eq!(options.chart_difficulty_index, [2, 2]);
                 },
             )
         });

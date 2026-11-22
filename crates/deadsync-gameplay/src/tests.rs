@@ -14626,6 +14626,82 @@ mod tests {
     }
 
     #[test]
+    fn versus_song_charts_share_music_with_both_players() {
+        use crate::song_launch::{SongSelection, synchronize_song_charts};
+
+        for style in [
+            GameplayInputPlayStyle::Versus,
+            GameplayInputPlayStyle::PumpVersus,
+        ] {
+            let mut song = test_song(2.0, 2.0);
+            song.charts = ["Hard", "Challenge", "Edit"]
+                .into_iter()
+                .map(|difficulty| {
+                    let mut chart = test_chart(ArrowStats::default(), 0, false);
+                    chart.difficulty = difficulty.into();
+                    chart.chart_type = style.chart_type().into();
+                    chart.music_path = Some(PathBuf::from("shared.ogg"));
+                    chart
+                })
+                .collect();
+            let steps = [3, 4];
+            let preferred = [3, 4];
+            assert_eq!(
+                synchronize_song_charts(&song, style, None, steps, preferred),
+                (steps, preferred),
+            );
+
+            song.charts[1].music_path = Some(PathBuf::from("challenge.ogg"));
+            song.charts[2].music_path = Some(PathBuf::from("edit.ogg"));
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some(steps), steps, preferred),
+                (steps, preferred),
+            );
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some([4, 4]), steps, preferred),
+                ([3, 3], [3, 3]),
+            );
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some([3, 3]), steps, preferred),
+                ([4, 4], [4, 4]),
+            );
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some([3, 4]), [3, 5], preferred),
+                ([5, 5], preferred),
+            );
+            let selection = SongSelection {
+                song: Arc::new(song),
+                steps,
+                preferred,
+            };
+            assert_eq!(selection.resolved_chart_slots(style), ([4, 4], [4, 4]));
+            assert_eq!(selection.chart_slots(style), (steps, preferred));
+        }
+    }
+
+    #[test]
+    fn partner_song_charts_follow_the_changed_side_even_with_shared_music() {
+        use crate::song_launch::synchronize_song_charts;
+
+        let song = test_song(2.0, 2.0);
+        for style in [
+            GameplayInputPlayStyle::Couple,
+            GameplayInputPlayStyle::PumpCouple,
+            GameplayInputPlayStyle::Routine,
+            GameplayInputPlayStyle::PumpRoutine,
+        ] {
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some([1, 2]), [3, 2], [3, 2]),
+                ([3, 3], [3, 3]),
+            );
+            assert_eq!(
+                synchronize_song_charts(&song, style, Some([1, 1]), [2, 3], [2, 3]),
+                ([3, 3], [3, 3]),
+            );
+        }
+    }
+
+    #[test]
     fn note_types_define_rescore_and_edge_matching() {
         for note_type in [
             NoteType::Tap,

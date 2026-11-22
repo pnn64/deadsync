@@ -3,6 +3,9 @@ use deadsync_profile::{
     PLAYER_SLOTS, PlayStyle, PlayerSide, joined_player_mask, late_join_play_style,
     player_side_index,
 };
+pub use deadsync_profile_gameplay::stage_charts::{
+    SelectMusicJoinContext, SelectMusicJoinPlan, select_music_join_plan,
+};
 
 /// Concrete screen identity for Simply Love.
 ///
@@ -148,24 +151,6 @@ pub struct LateJoinContext {
     pub joined: [bool; PLAYER_SLOTS],
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SelectMusicJoinContext {
-    pub active_side: PlayerSide,
-    pub join_side: PlayerSide,
-    pub selected_steps: usize,
-    pub preferred_difficulty: usize,
-    pub p1_profile_preferred: usize,
-    pub p2_profile_preferred: usize,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SelectMusicJoinPlan {
-    pub selected_steps: usize,
-    pub preferred_difficulty: usize,
-    pub p2_selected_steps: usize,
-    pub p2_preferred_difficulty: usize,
-}
-
 #[must_use]
 pub fn late_join_side(
     pressed: bool,
@@ -192,26 +177,6 @@ pub fn late_join_side(
     };
     let joined_mask = joined_player_mask(context.joined[0], context.joined[1]);
     late_join_play_style(context.play_style, joined_mask, side).map(|_| side)
-}
-
-#[must_use]
-pub const fn select_music_join_plan(context: SelectMusicJoinContext) -> SelectMusicJoinPlan {
-    if matches!(context.active_side, PlayerSide::P2) && matches!(context.join_side, PlayerSide::P1)
-    {
-        SelectMusicJoinPlan {
-            selected_steps: context.p1_profile_preferred,
-            preferred_difficulty: context.p1_profile_preferred,
-            p2_selected_steps: context.selected_steps,
-            p2_preferred_difficulty: context.preferred_difficulty,
-        }
-    } else {
-        SelectMusicJoinPlan {
-            selected_steps: context.selected_steps,
-            preferred_difficulty: context.preferred_difficulty,
-            p2_selected_steps: context.p2_profile_preferred,
-            p2_preferred_difficulty: context.p2_profile_preferred,
-        }
-    }
 }
 
 #[must_use]

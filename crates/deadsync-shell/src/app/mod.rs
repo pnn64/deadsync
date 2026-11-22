@@ -2913,7 +2913,8 @@ impl App {
         };
         let session = profile::get_session_snapshot();
         let play_style = session.play_style;
-        let (steps, preferred) = selection.chart_slots(gameplay_play_style_from_profile(play_style));
+        let (steps, preferred) =
+            selection.resolved_chart_slots(gameplay_play_style_from_profile(play_style));
         let song = Arc::clone(&selection.song);
         let player_side = session.player_side;
         let plan = gameplay_chart_entry_plan(&song, steps, preferred, play_style, player_side);
@@ -9229,7 +9230,7 @@ impl App {
                         select_music::selected_song_choice(&self.state.screens.select_music_state)
                     })
                     .expect("cannot open player options without a selected song");
-                let (chart_steps_index, preferred_difficulty_index) = selection.chart_slots(
+                let (chart_steps_index, preferred_difficulty_index) = selection.resolved_chart_slots(
                     gameplay_play_style_from_profile(profile::get_session_play_style()),
                 );
 

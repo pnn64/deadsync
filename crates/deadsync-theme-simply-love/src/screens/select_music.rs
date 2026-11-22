@@ -53,7 +53,9 @@ use deadsync_chart::{
 };
 use deadsync_config::theme::GameFlag;
 use deadsync_core::input::InputSource;
-use deadsync_gameplay::song_launch::{SongLaunchPrompt, SongLaunchRequest, SongSelection};
+use deadsync_gameplay::song_launch::{
+    SongLaunchPrompt, SongLaunchRequest, SongSelection, synchronize_song_charts,
+};
 use deadsync_input::{InputEvent, Keymap, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_online::lobby_selection::{self, LocalSongSelection, RemoteSelectionOutcome};
@@ -61,6 +63,8 @@ use deadsync_online::lobby_wait::{LobbyWaitReason, LocalLobbyPlayers, SelectMusi
 use deadsync_profile as profile_data;
 use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
 use deadsync_profile::pad_config_sync::{AppliedPadConfig, PadConfigIntent};
+use deadsync_profile_gameplay::gameplay_play_style_from_profile;
+use deadsync_profile_gameplay::stage_charts::{SelectMusicJoinContext, select_music_join_charts};
 use deadsync_score as score_data;
 use deadsync_simfile::bpm::{BpmTimeline, beat_at_sec_from_bpms, sec_at_beat_from_bpms};
 use deadsync_simfile::playlist::song_pack_and_dir_name;
@@ -2042,34 +2046,6 @@ pub fn is_difficulty_playable(
     song.has_standard_difficulty(chart_type, difficulty_index)
 }
 
-fn sync_versus_music_selection(state: &mut State, song: &SongData, chart_type: &str) {
-    let p1_changed = state.cached_steps_index_p1 != state.selected_steps_index;
-    let p2_changed = state.cached_steps_index_p2 != state.p2_selected_steps_index;
-    if !p1_changed && !p2_changed {
-        return;
-    }
-
-    let p1_music = song.chart_music_path(chart_type, state.selected_steps_index);
-    let p2_music = song.chart_music_path(chart_type, state.p2_selected_steps_index);
-    // Partner styles play one chart, so both sides always follow one selection.
-    let partner = state.session.play_style.is_couple() || state.session.play_style.is_routine();
-    if p1_music == p2_music && !partner {
-        return;
-    }
-
-    if p2_changed {
-        state.selected_steps_index = state.p2_selected_steps_index;
-        if state.selected_steps_index < STANDARD_DIFFICULTY_COUNT {
-            state.preferred_difficulty_index = state.selected_steps_index;
-        }
-    } else {
-        state.p2_selected_steps_index = state.selected_steps_index;
-        if state.p2_selected_steps_index < STANDARD_DIFFICULTY_COUNT {
-            state.p2_preferred_difficulty_index = state.p2_selected_steps_index;
-        }
-    }
-}
-
 fn ensure_chart_cache_for_song(
     state: &mut State,
     song: &Arc<SongData>,
@@ -2077,7 +2053,15 @@ fn ensure_chart_cache_for_song(
     is_versus: bool,
 ) {
     if is_versus {
-        sync_versus_music_selection(state, song.as_ref(), chart_type);
+        let (steps, preferred) = synchronize_song_charts(
+            song,
+            gameplay_play_style_from_profile(state.session.play_style),
+            Some([state.cached_steps_index_p1, state.cached_steps_index_p2]),
+            [state.selected_steps_index, state.p2_selected_steps_index],
+            [state.preferred_difficulty_index, state.p2_preferred_difficulty_index],
+        );
+        [state.selected_steps_index, state.p2_selected_steps_index] = steps;
+        [state.preferred_difficulty_index, state.p2_preferred_difficulty_index] = preferred;
     }
 
     let song_changed = state
@@ -2213,30 +2197,28 @@ pub fn apply_player_join(
     join_side: profile_data::PlayerSide,
     preferred_difficulties: [usize; 2],
 ) {
-    let plan = super::select_music_join_plan(super::SelectMusicJoinContext {
-        active_side: session.player_side,
-        join_side,
-        selected_steps: state.selected_steps_index,
-        preferred_difficulty: state.preferred_difficulty_index,
-        p1_profile_preferred: preferred_difficulties[0],
-        p2_profile_preferred: preferred_difficulties[1],
-    });
+    let song = match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Song(song)) => Some(song.as_ref()),
+        _ => None,
+    };
+    let plan = select_music_join_charts(
+        SelectMusicJoinContext {
+            active_side: session.player_side,
+            join_side,
+            selected_steps: state.selected_steps_index,
+            preferred_difficulty: state.preferred_difficulty_index,
+            p1_profile_preferred: preferred_difficulties[0],
+            p2_profile_preferred: preferred_difficulties[1],
+        },
+        song,
+        session.play_style,
+    );
     state.session = session;
     state.selected_steps_index = plan.selected_steps;
     state.preferred_difficulty_index = plan.preferred_difficulty;
     state.p2_selected_steps_index = plan.p2_selected_steps;
     state.p2_preferred_difficulty_index = plan.p2_preferred_difficulty;
 
-    // Difficulty rows include gaps. Index zero in ITGmania's playable list is
-    // the easiest available chart, which need not be the Beginner display row.
-    if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index)
-        && let Some(first) = song.best_steps_index(session.play_style.chart_type(), 0)
-    {
-        match join_side {
-            profile_data::PlayerSide::P1 => state.selected_steps_index = first,
-            profile_data::PlayerSide::P2 => state.p2_selected_steps_index = first,
-        }
-    }
     trigger_immediate_refresh(state);
     prime_displayed_chart_data(state);
 }
@@ -15633,6 +15615,7 @@ mod tests {
 
     #[test]
     fn embedded_profile_consumer_preserves_sound_before_selection() {
+        crate::tests::init_paths();
         let mut state = init_placeholder();
         let mut overlay = profile_boxes::init(ProfilePickerView::default());
         profile_boxes::set_fast_switch(&mut overlay, true);
@@ -15668,6 +15651,7 @@ mod tests {
 
     #[test]
     fn embedded_profile_consumer_forwards_sound_only_effects() {
+        crate::tests::init_paths();
         let mut overlay = profile_boxes::init(ProfilePickerView::default());
         profile_boxes::set_joined(&mut overlay, false, false);
         let mut effects = Vec::with_capacity(1);
@@ -15688,6 +15672,7 @@ mod tests {
 
     #[test]
     fn embedded_profile_consumer_suppresses_cancel_navigation() {
+        crate::tests::init_paths();
         let mut state = init_placeholder();
         let mut overlay = profile_boxes::init(ProfilePickerView::default());
         profile_boxes::set_fast_switch(&mut overlay, true);
