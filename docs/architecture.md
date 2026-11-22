@@ -451,6 +451,12 @@ chart playback, and loop restarts. The shell drives the session directly and
 applies its rate changes after draining game audio commands. The theme draws the
 editor and turns menu selections into typed commands or screen destinations.
 
+`deadsync-profile-gameplay` resolves stage-local scroll options for preloading,
+Practice, and Gameplay. The resolver applies the No CMod alternative and any
+tournament MMod override before live Routine shares the master's effective
+speed and Mini. Scoring and note scroll use the same effective setting, and
+replay entry retains each participant's recorded speed and Mini.
+
 ## Remaining separation
 
 Continue the layer separation within the existing workspace crates.

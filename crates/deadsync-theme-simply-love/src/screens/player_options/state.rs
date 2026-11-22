@@ -501,6 +501,10 @@ pub(super) struct RowLayoutKey {
 }
 
 impl State {
+    pub const fn play_style(&self) -> deadsync_profile::PlayStyle {
+        self.play_style
+    }
+
     #[inline(always)]
     pub(crate) const fn pane(&self) -> &PaneState {
         &self.panes[self.current_pane.index()]

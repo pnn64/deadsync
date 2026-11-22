@@ -2882,7 +2882,7 @@ impl App {
         let player_side = session.player_side;
         let plan = gameplay_chart_entry_plan(&song, steps, preferred, play_style, player_side);
         let cfg = config::runtime::get();
-        let mut options = player_options::init_for_gameplay(
+        let options = player_options::init_for_gameplay(
             Arc::clone(&song),
             steps,
             preferred,
@@ -2894,19 +2894,8 @@ impl App {
             crate::heart_rate::devices_view(),
             crate::player_options::init_view(),
         );
-        let mut scroll_speeds = player_options::apply_no_cmod_alternative(
-            &mut options,
-            cfg.tournament.enabled && cfg.tournament.enforce_no_cmod,
-        );
-        let player_profiles = crate::player_options::gameplay_profiles(
-            &options.player_options,
-            &options.judgment_palette_ids,
-            &options.heart_rate_device_ids,
-            cfg.tournament,
-            play_style,
-            &mut scroll_speeds,
-            true,
-        );
+        let (player_profiles, scroll_speeds) =
+            crate::player_options::gameplay_profiles(&options, cfg.tournament, play_style, false);
         let mut requested_chart_ixs = plan.chart_indices.to_vec();
         if let Some(light_plan) = cabinet_light_plan(song.as_ref(), plan.chart_indices[0]) {
             requested_chart_ixs.extend(light_plan.request_chart_ixs());
@@ -9505,21 +9494,11 @@ impl App {
                         resolved_steps_index[last_played_idx];
                 }
 
-                // Auto-switch CMod → the player's configured alternative for
-                // no-cmod charts (this play only; the persisted profile is
-                // untouched, so song select restores CMod).
-                let mut scroll_speeds = player_options::apply_no_cmod_alternative(
-                    &mut po_state,
-                    cfg.tournament.enabled && cfg.tournament.enforce_no_cmod,
-                );
-                let player_profiles = crate::player_options::gameplay_profiles(
-                    &po_state.player_options,
-                    &po_state.judgment_palette_ids,
-                    &po_state.heart_rate_device_ids,
+                let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
+                    &po_state,
                     cfg.tournament,
                     play_style,
-                    &mut scroll_speeds,
-                    true,
+                    false,
                 );
 
                 let mut gameplay_session = gameplay_session();
@@ -9914,27 +9893,7 @@ impl App {
                         resolved_steps_index[last_played_idx];
                 }
 
-                // Auto-switch CMod → the player's configured alternative for
-                // no-cmod charts (this play only; the persisted profile is
-                // untouched, so song select restores CMod). Replays must
-                // reproduce the recorded scroll speed, so skip the swap there.
                 commands.extend(last_played_commands);
-                let mut scroll_speeds = if replay_pending.is_none() {
-                    player_options::apply_no_cmod_alternative(
-                        &mut po_state,
-                        cfg.tournament.enabled && cfg.tournament.enforce_no_cmod,
-                    )
-                } else {
-                    let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type {
-                        player_options::SpeedModType::X => ScrollSpeedSetting::XMod(m.value),
-                        player_options::SpeedModType::C => ScrollSpeedSetting::CMod(m.value),
-                        player_options::SpeedModType::M => ScrollSpeedSetting::MMod(m.value),
-                    };
-                    [
-                        to_scroll_speed(&po_state.speed_mod[0]),
-                        to_scroll_speed(&po_state.speed_mod[1]),
-                    ]
-                };
 
                 let color_index = po_state.active_color_index;
                 let (course_display_info, course_banner_path) = self
@@ -9966,15 +9925,11 @@ impl App {
                     deadsync_simfile::event_intro::gameplay_event_intro_text(song_arc.as_ref())
                 };
                 let combo_carry = self.state.session.combo_carry;
-                let player_profiles = crate::player_options::gameplay_profiles(
-                    &po_state.player_options,
-                    &po_state.judgment_palette_ids,
-                    &po_state.heart_rate_device_ids,
+                let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
+                    &po_state,
                     cfg.tournament,
                     play_style,
-                    &mut scroll_speeds,
-                    // Replays reproduce each participant's recorded options.
-                    replay_pending.is_none(),
+                    replay_pending.is_some(),
                 );
                 let mut gameplay_session = gameplay_session();
                 let mut gameplay_init_view = crate::gameplay_runtime::init_view(

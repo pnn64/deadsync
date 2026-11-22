@@ -3757,6 +3757,9 @@ fn player_options_runtime_reads_are_shell_prepared() {
         .expect("Player Options screen should be readable");
     let state = read_source(player_options.join("state.rs"))
         .expect("Player Options state should be readable");
+    let stage_options =
+        production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_options.rs"));
+    let theme_profile = production_source(&player_options.join("profile.rs"));
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let profile_update = read_source(root.join("crates/deadsync-profile/src/update.rs"))
@@ -3775,6 +3778,12 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && !state.contains("deadsync_profile::Profile")
             && shell.contains("crate::player_options::init_view()")
             && shell.contains("crate::player_options::gameplay_profiles(")
+            && !shell.contains("player_options::apply_no_cmod_alternative(")
+            && contains_rust(&adapter, "resolve_stage_scroll(")
+            && !adapter.contains("apply_routine_master_options")
+            && contains_rust(&stage_options, "pub fn resolve_stage_scroll(")
+            && contains_rust(&stage_options, "if play_style.is_routine()")
+            && contains_rust(&theme_profile, "stage_options::apply_no_cmod_alternative(")
             && screen.contains("UpdatePlayerOptions")
             && profile_requests.contains("UpdatePlayerOptions {")
             && profile_executor.contains("profile::update_player_options_for_side")

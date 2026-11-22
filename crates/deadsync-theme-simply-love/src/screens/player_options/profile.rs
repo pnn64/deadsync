@@ -1,7 +1,9 @@
 use super::*;
 use crate::fonts::machine_font_key;
 use deadsync_profile::NoCmodAlternative;
-use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_profile_gameplay::stage_options;
+pub(super) use deadsync_profile_gameplay::stage_options::reference_bpm_for_song;
+use deadsync_rules::scroll::{ScrollSpeedMode, ScrollSpeedSetting};
 use deadsync_theme::FontRole;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -108,26 +110,14 @@ pub fn convert_speed_mod_to_type(
     reference_bpm: f32,
     rate: f32,
 ) -> SpeedMod {
-    let target_bpm = match speed_mod.mod_type {
-        SpeedModType::C | SpeedModType::M => speed_mod.value,
-        SpeedModType::X => (reference_bpm * rate * speed_mod.value).round(),
+    let mode = match new_type {
+        SpeedModType::X => ScrollSpeedMode::XMod,
+        SpeedModType::C => ScrollSpeedMode::CMod,
+        SpeedModType::M => ScrollSpeedMode::MMod,
     };
-    let value = match new_type {
-        SpeedModType::X => {
-            let denom = reference_bpm * rate;
-            let raw = if denom.is_finite() && denom > 0.0 {
-                target_bpm / denom
-            } else {
-                1.0
-            };
-            round_to_step(raw, 0.05).clamp(0.05, 20.0)
-        }
-        SpeedModType::C | SpeedModType::M => round_to_step(target_bpm, 5.0).clamp(5.0, 2000.0),
-    };
-    SpeedMod {
-        mod_type: new_type,
-        value,
-    }
+    scroll_speed_for_mod(speed_mod)
+        .converted_to(mode, reference_bpm, rate)
+        .into()
 }
 
 #[must_use]
@@ -138,12 +128,13 @@ pub fn effective_scroll_speed_with_alt(
     reference_bpm: f32,
     rate: f32,
 ) -> ScrollSpeedSetting {
-    match no_cmod_alt_speed_mod_type(alt) {
-        Some(new_type) if is_no_cmod && base.mod_type == SpeedModType::C => scroll_speed_for_mod(
-            &convert_speed_mod_to_type(base, new_type, reference_bpm, rate),
-        ),
-        _ => scroll_speed_for_mod(base),
-    }
+    stage_options::effective_scroll_speed_with_alt(
+        scroll_speed_for_mod(base),
+        alt,
+        is_no_cmod,
+        reference_bpm,
+        rate,
+    )
 }
 
 #[inline(always)]
@@ -170,31 +161,14 @@ pub fn apply_no_cmod_alternative(
     state: &mut State,
     enforce_tournament_mmod: bool,
 ) -> [ScrollSpeedSetting; PLAYER_SLOTS] {
-    let is_no_cmod = state.song.is_no_cmod();
-    let reference_bpm = reference_bpm_for_song(
+    stage_options::apply_no_cmod_alternative(
         &state.song,
         resolve_p1_chart(&state.song, &state.chart_steps_index, state.play_style),
-    );
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
-    std::array::from_fn(|player_idx| {
-        let effective = effective_scroll_speed_with_alt(
-            &state.speed_mod[player_idx],
-            if enforce_tournament_mmod {
-                NoCmodAlternative::MMod
-            } else {
-                state.player_options[player_idx].no_cmod_alternative
-            },
-            is_no_cmod,
-            reference_bpm,
-            rate,
-        );
-        state.player_options[player_idx].scroll_speed = effective;
-        effective
-    })
+        state.music_rate,
+        &mut state.player_options,
+        state.speed_mod.each_ref().map(scroll_speed_for_mod),
+        enforce_tournament_mmod,
+    )
 }
 
 pub(super) fn fmt_music_rate(rate: f32) -> String {
@@ -400,18 +374,6 @@ pub(super) fn resolve_p1_chart<'a>(
 ) -> Option<&'a ChartData> {
     let target_chart_type = play_style.chart_type();
     song.chart_for_steps_index(target_chart_type, chart_steps_index[0])
-}
-
-pub(super) fn reference_bpm_for_song(song: &SongData, chart: Option<&ChartData>) -> f32 {
-    let bpm = song
-        .chart_display_bpm_range(chart)
-        .map(|(_, hi)| hi as f32)
-        .unwrap_or(song.max_bpm as f32);
-    if bpm.is_finite() && bpm > 0.0 {
-        bpm
-    } else {
-        120.0
-    }
 }
 
 /// Translate a difficulty index (0=Beginner..4=Challenge) to a localized display name.
