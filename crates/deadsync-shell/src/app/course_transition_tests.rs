@@ -136,13 +136,15 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
         &course_path,
         Some("Hard"),
     );
-    let (mut plan, presentation) =
-        select_course::selected_course_start(&app.state.screens.select_course_state)
+    let (mut plan, presentation, endless_source) =
+        select_course::selected_course_start_with_cycles(&app.state.screens.select_course_state)
             .expect("real selected course plan");
     assert_eq!(plan.stages.len(), 2);
     // The previous cycle contains A. The fresh cycle must append A then B.
     plan.stages.truncate(1);
-    let mut run = build_course_run_from_selection(plan, presentation, style.chart_type()).unwrap();
+    let mut run =
+        build_course_run_from_selection(plan, presentation, endless_source, style.chart_type())
+            .unwrap();
     run.run.progress = CourseProgress::new(1);
     app.state.session.begin_play_session(Instant::now());
     app.state.session.last_course_wheel_path = Some(course_path);
@@ -185,11 +187,15 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     let mut app = test_app(root.path());
                     let b = prepare_boundary(&mut app, root.path(), pump);
                     match failure {
-                        // Selection still has B's metadata, but its payload load fails.
+                        // The run retains B's metadata, but its payload load fails.
                         "payload" => std::fs::remove_file(&b.simfile_path).unwrap(),
                         "plan" => {
-                            app.state.screens.select_course_state =
-                                select_course::init(SelectCourseInitView::default())
+                            app.state
+                                .session
+                                .course_run
+                                .as_mut()
+                                .unwrap()
+                                .endless_source = None;
                         }
                         "cursor" => {
                             app.state
@@ -233,7 +239,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
 }
 
 #[test]
-fn endless_successful_renewal_starts_next_song_with_extended_totals() {
+fn endless_renewal_survives_replacing_the_course_wheel_and_extends_totals() {
     on_app_thread(|| {
         with_session(
             profile_data::PlayStyle::Routine,
@@ -247,6 +253,11 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
                     .unwrap();
                 let mut app = test_app(root.path());
                 prepare_boundary(&mut app, root.path(), false);
+                app.state.screens.select_course_state =
+                    select_course::init(SelectCourseInitView::default());
+                assert!(!select_course::has_selected_course(
+                    &app.state.screens.select_course_state
+                ));
                 let before = app
                     .state
                     .session

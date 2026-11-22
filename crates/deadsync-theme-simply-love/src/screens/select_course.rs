@@ -35,7 +35,9 @@ use deadsync_simfile::course::{
     self, COURSE_RATING_ORDER, CourseFile, CourseTotals, Difficulty, nearest_filled_slot,
 };
 pub use deadsync_simfile::course_selection::course_score_hash;
-use deadsync_simfile::course_selection::{CoursePreparation, CourseResolver, fresh_course_seed};
+use deadsync_simfile::course_selection::{
+    CoursePreparation, CourseResolver, EndlessCourseSource, fresh_course_seed,
+};
 use deadsync_theme::FontRole;
 use deadsync_theme::views::{CoursePresentationView, CourseTypeView};
 use std::cell::RefCell;
@@ -432,7 +434,7 @@ struct InitData {
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
-    resolver: CourseResolver,
+    resolver: Arc<CourseResolver>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -503,7 +505,7 @@ pub struct State {
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
-    resolver: CourseResolver,
+    resolver: Arc<CourseResolver>,
     bg: visual_style_bg::State,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
@@ -613,12 +615,12 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
 
 fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
     let translated_titles = init_view.translated_titles;
-    let resolver = CourseResolver::new(
+    let resolver = Arc::new(CourseResolver::new(
         &init_view.song_packs,
         &init_view.played_chart_counts,
         &init_view.chart_grades,
         init_view.context.play_style.chart_type(),
-    );
+    ));
 
     let mut grouped: HashMap<String, Vec<Arc<CourseMeta>>> = HashMap::new();
     let mut course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>> = HashMap::new();
@@ -939,28 +941,43 @@ fn set_selected_course_rating_index(state: &mut State, idx: usize) {
 
 /// Whether the selected rating contains stages that can start a course.
 pub fn has_selected_course(state: &State) -> bool {
-    selected_course_meta(state)
-        .and_then(|meta| selected_course_rating(state, meta))
-        .is_some_and(|rating| !rating.runtime_stages.is_empty())
+    selected_playable_rating(state).is_some()
 }
 
 /// Game startup data and the independently retained course presentation.
 pub fn selected_course_start(state: &State) -> Option<(CourseSessionPlan, CoursePresentationView)> {
+    let (meta, rating) = selected_playable_rating(state)?;
+    Some(course_start(meta, rating, rating.runtime_stages.clone()))
+}
+
+/// Capture the same confirmed rating for startup and for subsequent Endless cycles.
+pub fn selected_course_start_with_cycles(
+    state: &State,
+) -> Option<(
+    CourseSessionPlan,
+    CoursePresentationView,
+    Option<EndlessCourseSource>,
+)> {
+    let (meta, rating) = selected_playable_rating(state)?;
+    let (plan, presentation) = course_start(meta, rating, rating.runtime_stages.clone());
+    let cycles = EndlessCourseSource::for_selection(
+        &state.resolver,
+        &meta.source,
+        rating.course_difficulty,
+        &plan,
+    );
+    Some((plan, presentation, cycles))
+}
+
+fn selected_playable_rating(state: &State) -> Option<(&CourseMeta, &CourseRatingMeta)> {
     let meta = selected_course_meta(state)?;
     let rating = selected_course_rating(state, meta)?;
-    if rating.runtime_stages.is_empty() {
-        return None;
-    }
-    Some(course_start(meta, rating, rating.runtime_stages.clone()))
+    (!rating.runtime_stages.is_empty()).then_some((meta, rating))
 }
 
 /// The selected stages without startup labels or summary presentation.
 pub fn selected_course_cycle(state: &State) -> Option<CourseCyclePlan> {
-    let meta = selected_course_meta(state)?;
-    let rating = selected_course_rating(state, meta)?;
-    if rating.runtime_stages.is_empty() {
-        return None;
-    }
+    let (meta, rating) = selected_playable_rating(state)?;
     Some(CourseCyclePlan {
         path: meta.path.clone(),
         stages: rating.runtime_stages.clone(),

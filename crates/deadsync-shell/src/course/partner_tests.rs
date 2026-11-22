@@ -1,5 +1,5 @@
 use super::*;
-use deadsync_chart::course::CourseStagePlan;
+use deadsync_chart::course::{CourseCyclePlan, CourseStagePlan};
 use deadsync_gameplay::CourseDisplayTotals;
 use deadsync_gameplay::CourseLifeConfig;
 use deadsync_gameplay::course_progress::{CourseProgress, CourseRenewal};
@@ -149,6 +149,7 @@ fn startup_uses_game_stages_and_rules_independently_of_presentation() {
         let course = build_course_run_from_selection_with_loader(
             selection,
             display,
+            None,
             kind,
             |loaded_song, indices, offset| {
                 loads += 1;

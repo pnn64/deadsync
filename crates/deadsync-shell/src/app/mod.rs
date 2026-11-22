@@ -30,8 +30,8 @@ use self::screenshot::auto_screenshot_eval_results;
 use crate::{ActiveTheme, ThemeScreen as CurrentScreen, TransitionState};
 use crate::command::Command;
 use crate::course::{
-    CourseRunState, append_endless_cycle, build_course_graph_stages,
-    build_course_run_from_selection, build_course_summary_score_info, build_course_summary_stage,
+    CourseRunState, build_course_graph_stages, build_course_run_from_selection,
+    build_course_summary_score_info, build_course_summary_stage, renew_endless_cycle,
     routine_shared_course_player,
 };
 #[cfg(test)]
@@ -6670,8 +6670,8 @@ impl App {
     }
 
     fn start_course_run_from_selected(&mut self) -> bool {
-        let Some((selection, presentation)) =
-            select_course::selected_course_start(&self.state.screens.select_course_state)
+        let Some((selection, presentation, endless_source)) =
+            select_course::selected_course_start_with_cycles(&self.state.screens.select_course_state)
         else {
             warn!("Unable to start course run: selected course has no playable stages.");
             return false;
@@ -6681,6 +6681,7 @@ impl App {
         let Some(course_run) = build_course_run_from_selection(
             selection,
             presentation,
+            endless_source,
             profile::get_session_play_style().chart_type(),
         ) else {
             warn!("Unable to start course run: failed to resolve course stages.");
@@ -11994,6 +11995,7 @@ mod tests {
             mines_total: 6,
         };
         let course = CourseRunState {
+            endless_source: None,
             presentation: deadsync_theme::views::CoursePresentationView {
                 name: "Test Course".to_string(),
                 banner_path: None,
@@ -12075,6 +12077,7 @@ mod tests {
         };
         // An Endless cycle of two songs that ended after the first.
         let course = CourseRunState {
+            endless_source: None,
             presentation: deadsync_theme::views::CoursePresentationView {
                 name: "Test Course".to_string(),
                 banner_path: None,
@@ -12210,6 +12213,7 @@ mod tests {
             },
         ];
         let course = CourseRunState {
+            endless_source: None,
             presentation: deadsync_theme::views::CoursePresentationView {
                 name: "Test Course".into(),
                 banner_path: None,

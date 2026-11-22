@@ -64,17 +64,7 @@ impl App {
         };
         let renewed = match course.run.renewal() {
             CourseRenewal::AppendCycle => {
-                select_course::reroll_selected_endless_cycle(&self.state.screens.select_course_state)
-                    .or_else(|| {
-                        select_course::selected_course_cycle(&self.state.screens.select_course_state)
-                    })
-                    .is_some_and(|selection| {
-                        super::append_endless_cycle(
-                            course,
-                            selection,
-                            profile::get_session_play_style().chart_type(),
-                        )
-                    })
+                super::renew_endless_cycle(course, profile::get_session_play_style().chart_type())
             }
             // Skipping unprepared history cannot repair an invalid cursor.
             CourseRenewal::InvalidCursor => false,

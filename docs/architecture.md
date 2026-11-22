@@ -96,7 +96,7 @@ difficulty availability and defaults, ordered stage preparation, numeric totals,
 score identity, and seeded Endless rerolls. `deadsync-chart::course::CourseStagePlan`
 is the canonical resolved stage payload. The theme supplies one seed per course,
 shared across its ratings, and formats each selected chart through an inline
-immutable callback. There is no additional retained stage buffer or chart search.
+immutable callback.
 
 Preparation preserves authored entry indices for random selection, skips missing
 entries, and records only accepted songs in repeat history. History starts fresh
@@ -114,13 +114,13 @@ banner, options label, and summary song template. The original song template is
 preserved because evaluation also uses its artist, BPM, and other metadata.
 Presentation values do not participate in runtime stage loading or life policy.
 
-Endless renewal accepts `CourseCyclePlan`, containing only the path and stages.
-It preserves the existing run's rules and score identity, checks the exact path
-and game-owned append authorization, and retains partial resolution and rollback
-on loader failures. Direct renewal and fallback paths no longer construct unused
-labels or a summary song template. Readiness checks borrow the selected rating
-without cloning its stage vector. Legacy theme selection functions remain
-adapters, and their consuming split/recombine operations move existing storage.
+On confirmation, an Endless run retains its resolver, authored course, rating,
+and original stage order. The game rerolls from that source and falls back to
+the confirmed order if it resolves an empty cycle. Renewal supplies
+`CourseCyclePlan` to the active run, which checks the exact path and append
+authorization. The course keeps its rules and score identity when the theme
+rebuilds the wheel. Readiness checks borrow the selected rating, and the legacy
+selection adapters still support their original callers.
 
 `deadsync-gameplay::course_run::CourseRun` resolves the selected stage plans into
 playable stages and computes their per-player totals. Startup and Endless

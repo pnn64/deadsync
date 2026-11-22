@@ -49,11 +49,11 @@ fn course_startup_and_renewal_use_game_contracts() {
     let course = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
     for contract in [
         "selection: CourseSessionPlan",
-        "selection: CourseCyclePlan",
         "pub presentation: CoursePresentationView",
         "pub run: CourseRun",
+        "pub endless_source: Option<Arc<EndlessCourseSource>>",
         "CourseRun::prepare(selection, chart_type, load)",
-        "course.run.append_endless_cycle(",
+        "course.run.append_endless_cycle(source.next_cycle(),",
         "course_summary_stage(&course.run, &course.stage_summaries,",
         "course.presentation.song_stub.as_ref()",
     ] {
@@ -80,18 +80,19 @@ fn course_startup_and_renewal_use_game_contracts() {
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("application source should be readable");
     let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
-    assert!(app.contains("select_course::selected_course_start("));
+    assert!(app.contains("select_course::selected_course_start_with_cycles("));
     assert!(!app.contains("select_course::selected_course_plan("));
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     for delegation in [
-        "select_course::reroll_selected_endless_cycle(",
-        "select_course::selected_course_cycle(",
+        "super::renew_endless_cycle(",
         "select_course::has_selected_course(",
     ] {
         assert!(navigation.contains(delegation), "missing {delegation}");
     }
     assert!(!navigation.contains("select_course::selected_course_plan("));
     assert!(!navigation.contains("select_course::reroll_selected_endless_plan("));
+    assert!(!navigation.contains("select_course::reroll_selected_endless_cycle("));
+    assert!(!navigation.contains("select_course::selected_course_cycle("));
 
     let theme = production_source(
         &root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
@@ -125,8 +126,10 @@ fn course_selection_preparation_stays_below_the_theme() {
         "pub struct CoursePreparation",
         "pub struct PreparedCourseRating",
         "pub struct CourseResolver",
+        "pub struct EndlessCourseSource",
         "pub fn prepare_rating(",
         "pub fn reroll_endless(",
+        "pub fn next_cycle(&self) -> CourseCyclePlan",
         "pub fn course_score_hash(",
         "pub fn fresh_course_seed(",
     ] {
@@ -164,6 +167,7 @@ fn course_selection_preparation_stays_below_the_theme() {
         "resolver.prepare_rating(",
         "preparation.default_rating_index(&ratings)",
         "resolver.reroll_endless(",
+        "EndlessCourseSource::for_selection(",
         "pub use deadsync_simfile::course_selection::course_score_hash;",
     ] {
         assert!(
@@ -197,6 +201,7 @@ fn course_selection_preparation_stays_below_the_theme() {
                 "struct CourseSessionPlan",
                 "struct CourseCyclePlan",
                 "struct CourseResolver",
+                "struct EndlessCourseSource",
                 "struct CoursePreparation",
                 "struct PreparedCourseRating",
             ] {
@@ -12586,8 +12591,9 @@ fn course_progress_policy_stays_in_gameplay() {
     assert!(
         !transition.contains("next_stage_index")
             && !transition.contains("Ordering::")
-            && !transition.contains("CourseTypeView::Endless"),
-        "the navigation adapter must not recalculate cursor or renewal policy"
+            && !transition.contains("CourseTypeView::Endless")
+            && !transition.contains("select_course_state"),
+        "renewal must use the active run and its game-owned cursor"
     );
     let global_entry = navigation
         .split_once("pub(super) fn prepare_global_fade_entry(")

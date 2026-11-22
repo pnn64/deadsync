@@ -238,6 +238,7 @@ fn readiness_and_cycle_helpers_preserve_empty_rating_and_reroll_fallbacks() {
     let missing = init(SelectCourseInitView::default());
     assert!(!has_selected_course(&missing));
     assert!(selected_course_start(&missing).is_none());
+    assert!(selected_course_start_with_cycles(&missing).is_none());
     assert!(selected_course_cycle(&missing).is_none());
     assert!(selected_course_plan(&missing).is_none());
     assert!(reroll_selected_endless_cycle(&missing).is_none());
@@ -276,7 +277,7 @@ fn readiness_and_cycle_helpers_preserve_empty_rating_and_reroll_fallbacks() {
 
     let mut state = selected_state(true);
     let cached = selected_course_cycle(&state).unwrap();
-    state.resolver = CourseResolver::new(&[], &[], &[], "dance-single");
+    state.resolver = Arc::new(CourseResolver::new(&[], &[], &[], "dance-single"));
     assert!(reroll_selected_endless_cycle(&state).is_none());
     assert!(reroll_selected_endless_plan(&state).is_none());
     let fallback = reroll_selected_endless_cycle(&state)
@@ -284,10 +285,16 @@ fn readiness_and_cycle_helpers_preserve_empty_rating_and_reroll_fallbacks() {
         .unwrap();
     assert_eq!(fallback.path, cached.path);
     assert_stages(&fallback.stages, &cached.stages);
+    let (_, _, source) = selected_course_start_with_cycles(&state).unwrap();
+    let retained_fallback = source.unwrap().next_cycle();
+    assert_eq!(retained_fallback.path, cached.path);
+    assert_stages(&retained_fallback.stages, &cached.stages);
 
     let state = selected_state(false);
     assert!(has_selected_course(&state));
     assert!(selected_course_start(&state).is_some());
+    let (_, _, source) = selected_course_start_with_cycles(&state).unwrap();
+    assert!(source.is_none());
     assert!(selected_course_cycle(&state).is_some());
     assert!(reroll_selected_endless_cycle(&state).is_none());
     assert!(reroll_selected_endless_plan(&state).is_none());

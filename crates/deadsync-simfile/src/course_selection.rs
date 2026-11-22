@@ -5,7 +5,7 @@ use crate::course::{
     ResolvedCourseStage, SongSort, add_chart_totals, course_difficulty_from_meters, course_meter,
     nearest_filled_slot, push_song_bpm_range, resolve_course_stage, song_unique_key,
 };
-use deadsync_chart::course::CourseStagePlan;
+use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan, CourseStagePlan};
 use deadsync_chart::{ChartData, SongData, SongPack};
 use deadsync_rules::course::CourseType;
 use rustc_hash::FxHashMap;
@@ -100,6 +100,53 @@ pub struct PreparedCourseRating {
     pub min_bpm: Option<f64>,
     pub max_bpm: Option<f64>,
     pub total_length_seconds: i32,
+}
+
+/// Immutable input for generating cycles after a course has been confirmed.
+pub struct EndlessCourseSource {
+    resolver: Arc<CourseResolver>,
+    course: CourseFile,
+    difficulty: Difficulty,
+    original: CourseCyclePlan,
+}
+
+impl EndlessCourseSource {
+    pub fn for_selection(
+        resolver: &Arc<CourseResolver>,
+        course: &CourseFile,
+        difficulty: Difficulty,
+        selection: &CourseSessionPlan,
+    ) -> Option<Self> {
+        if selection.course_type != CourseType::Endless || selection.stages.is_empty() {
+            return None;
+        }
+        Some(Self {
+            resolver: Arc::clone(resolver),
+            course: course.clone(),
+            difficulty,
+            original: CourseCyclePlan {
+                path: selection.path.clone(),
+                stages: selection.stages.clone(),
+            },
+        })
+    }
+
+    /// Reroll against the original catalog, falling back to the admitted order
+    /// when the resolver produces no usable stages.
+    pub fn next_cycle(&self) -> CourseCyclePlan {
+        let Some(stages) = self.resolver.reroll_endless(
+            &self.original.path,
+            &self.course,
+            self.difficulty,
+            fresh_course_seed(),
+        ) else {
+            return self.original.clone();
+        };
+        CourseCyclePlan {
+            path: self.original.path.clone(),
+            stages,
+        }
+    }
 }
 
 /// Immutable catalog and score facts retained for selection and Endless cycles.
