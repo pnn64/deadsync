@@ -451,9 +451,11 @@ impl Vm {
         match frame.pc {
             0 => {
                 let name = self.package_name(frame)?;
-                let bytes = self.concat_bytes(name)?;
-                let search = &bytes;
-                let replaced = replace(search, b'.', if cfg!(windows) { b"\\" } else { b"/" })?;
+                let mut replaced = self.concat_bytes(name)?;
+                let separator = if cfg!(windows) { b'\\' } else { b'/' };
+                for byte in &mut replaced {
+                    *byte = if *byte == b'.' { separator } else { *byte };
+                }
                 self.reserve_registers(base + 11)?;
                 self.resize_registers(self.registers.len().max(base + 11));
                 self.registers[base] = name;
