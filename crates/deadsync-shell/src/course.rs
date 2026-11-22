@@ -1,4 +1,4 @@
-use deadsync_chart::course::CourseStagePlan;
+use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan, CourseStagePlan};
 use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::course_progress::{CourseProgress, CourseRenewal};
@@ -12,7 +12,8 @@ use deadsync_profile::compat as profile;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide};
 use deadsync_rules::course::CourseType;
 use deadsync_score::{self as score_data, stage_stats};
-use deadsync_theme_simply_love::views::{CourseGraphStage, ScoreInfo, SelectedCoursePlan};
+use deadsync_theme::views::CoursePresentationView;
+use deadsync_theme_simply_love::views::{CourseGraphStage, ScoreInfo};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -29,15 +30,12 @@ pub struct CourseStageRuntime {
 #[derive(Clone)]
 pub struct CourseRunState {
     pub path: PathBuf,
-    pub name: String,
-    pub banner_path: Option<PathBuf>,
     pub score_hash: String,
     pub course_difficulty_name: String,
     pub course_meter: Option<u32>,
-    pub course_stepchart_label: String,
     pub course_type: CourseType,
     pub lives: i32,
-    pub song_stub: Arc<SongData>,
+    pub presentation: CoursePresentationView,
     pub stages: Vec<CourseStageRuntime>,
     pub course_display_totals: [CourseDisplayTotals; MAX_PLAYERS],
     pub progress: CourseProgress,
@@ -177,22 +175,9 @@ fn add_course_stage_totals_with_loader(
     Ok(())
 }
 
-fn add_course_stage_totals(
-    totals: &mut [CourseDisplayTotals; MAX_PLAYERS],
-    stage: &CourseStageRuntime,
-    chart_type: &str,
-) -> Result<(), String> {
-    add_course_stage_totals_with_loader(
-        totals,
-        stage,
-        chart_type,
-        &mut deadsync_simfile::app_runtime::load_gameplay_charts,
-    )
-}
-
 pub fn append_endless_cycle(
     course: &mut CourseRunState,
-    selection: SelectedCoursePlan,
+    selection: CourseCyclePlan,
     chart_type: &str,
 ) -> bool {
     match append_endless_cycle_with_loader(
@@ -211,7 +196,7 @@ pub fn append_endless_cycle(
 
 fn append_endless_cycle_with_loader(
     course: &mut CourseRunState,
-    selection: SelectedCoursePlan,
+    selection: CourseCyclePlan,
     chart_type: &str,
     load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
 ) -> Result<bool, String> {
@@ -244,42 +229,60 @@ fn append_endless_cycle_with_loader(
 }
 
 pub fn build_course_run_from_selection(
-    selection: SelectedCoursePlan,
+    selection: CourseSessionPlan,
+    presentation: CoursePresentationView,
     chart_type: &str,
 ) -> Option<CourseRunState> {
+    match build_course_run_from_selection_with_loader(
+        selection,
+        presentation,
+        chart_type,
+        &mut deadsync_simfile::app_runtime::load_gameplay_charts,
+    ) {
+        Ok(course) => course,
+        Err(error) => {
+            log::warn!("Unable to build course run: {error}");
+            None
+        }
+    }
+}
+
+fn build_course_run_from_selection_with_loader(
+    selection: CourseSessionPlan,
+    presentation: CoursePresentationView,
+    chart_type: &str,
+    load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
+) -> Result<Option<CourseRunState>, String> {
     let mut stages = Vec::with_capacity(selection.stages.len());
     let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
     for stage in selection.stages {
         if let Some(runtime) = course_stage_runtime_from_plan(stage, chart_type) {
-            if let Err(error) =
-                add_course_stage_totals(&mut course_display_totals, &runtime, chart_type)
-            {
-                log::warn!("Unable to build course run: {error}");
-                return None;
-            }
+            add_course_stage_totals_with_loader(
+                &mut course_display_totals,
+                &runtime,
+                chart_type,
+                load,
+            )?;
             stages.push(runtime);
         }
     }
     if stages.is_empty() {
-        return None;
+        return Ok(None);
     }
 
-    Some(CourseRunState {
+    Ok(Some(CourseRunState {
         path: selection.path,
-        name: selection.name,
-        banner_path: selection.banner_path,
         score_hash: selection.score_hash,
         course_difficulty_name: selection.course_difficulty_name,
         course_meter: selection.course_meter,
-        course_stepchart_label: selection.course_stepchart_label,
         course_type: selection.course_type,
         lives: selection.lives,
-        song_stub: selection.song_stub,
+        presentation,
         stages,
         course_display_totals,
         progress: CourseProgress::default(),
         stage_summaries: Vec::new(),
-    })
+    }))
 }
 
 fn course_stage_seconds(stage: &CourseStageRuntime) -> f32 {
@@ -325,12 +328,12 @@ pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats
     let totals = course_summary_totals(course);
     stage_stats::build_course_summary_stage(stage_stats::CourseSummaryInput {
         path: course.path.as_path(),
-        name: course.name.as_str(),
-        banner_path: course.banner_path.as_deref(),
+        name: course.presentation.name.as_str(),
+        banner_path: course.presentation.banner_path.as_deref(),
         score_hash: course.score_hash.as_str(),
         difficulty_name: course.course_difficulty_name.as_str(),
         meter: course.course_meter,
-        song_stub: course.song_stub.as_ref(),
+        song_stub: course.presentation.song_stub.as_ref(),
         course_total_seconds: course_total_seconds(course),
         totals,
         stage_summaries: course.stage_summaries.as_slice(),

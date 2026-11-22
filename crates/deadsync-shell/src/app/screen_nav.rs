@@ -73,9 +73,9 @@ impl App {
         };
         let renewed = match course.renewal() {
             CourseRenewal::AppendCycle => {
-                select_course::reroll_selected_endless_plan(&self.state.screens.select_course_state)
+                select_course::reroll_selected_endless_cycle(&self.state.screens.select_course_state)
                     .or_else(|| {
-                        select_course::selected_course_plan(&self.state.screens.select_course_state)
+                        select_course::selected_course_cycle(&self.state.screens.select_course_state)
                     })
                     .is_some_and(|selection| {
                         super::append_endless_cycle(
@@ -111,8 +111,7 @@ impl App {
         target: CurrentScreen,
     ) -> bool {
         if !course_plan_required(previous, target)
-            || select_course::selected_course_plan(&self.state.screens.select_course_state)
-                .is_some()
+            || select_course::has_selected_course(&self.state.screens.select_course_state)
         {
             return false;
         }

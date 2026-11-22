@@ -14,6 +14,100 @@ fn contains_rust(source: &str, expected: &str) -> bool {
 }
 
 #[test]
+fn course_startup_and_renewal_use_game_contracts() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let plans = production_source(&root.join("crates/deadsync-chart/src/course.rs"));
+    for contract in ["pub struct CourseSessionPlan", "pub struct CourseCyclePlan"] {
+        assert!(plans.contains(contract), "missing game contract {contract}");
+    }
+    for presentation in [
+        "CoursePresentationView",
+        "SelectedCourseView",
+        "pub name:",
+        "pub banner_path:",
+        "song_stub",
+        "course_stepchart_label",
+    ] {
+        assert!(
+            !plans.contains(presentation),
+            "game course plans must not carry theme presentation: {presentation}"
+        );
+    }
+
+    let views = production_source(&root.join("crates/deadsync-theme/src/views.rs"));
+    for compatibility in [
+        "pub struct CoursePresentationView",
+        "pub struct SelectedCourseView",
+        "pub fn into_parts(self) -> (CourseSessionPlan, CoursePresentationView)",
+        "pub fn from_parts(plan: CourseSessionPlan, presentation: CoursePresentationView)",
+    ] {
+        assert!(
+            contains_rust(&views, compatibility),
+            "course presentation must preserve the consuming adapter: {compatibility}"
+        );
+    }
+    let course = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
+    for contract in [
+        "selection: CourseSessionPlan",
+        "selection: CourseCyclePlan",
+        "pub presentation: CoursePresentationView",
+        "course.presentation.song_stub.as_ref()",
+    ] {
+        assert!(
+            contains_rust(&course, contract),
+            "shell course composition is missing {contract}"
+        );
+    }
+    for legacy_view in ["SelectedCoursePlan", "SelectedCourseView"] {
+        assert!(
+            !course.contains(legacy_view),
+            "course startup and renewal must not consume {legacy_view}"
+        );
+    }
+
+    // App declares external test modules near its imports; its inline test
+    // block, rather than those declarations, ends the production source.
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("application source should be readable");
+    let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
+    assert!(app.contains("select_course::selected_course_start("));
+    assert!(!app.contains("select_course::selected_course_plan("));
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    for delegation in [
+        "select_course::reroll_selected_endless_cycle(",
+        "select_course::selected_course_cycle(",
+        "select_course::has_selected_course(",
+    ] {
+        assert!(navigation.contains(delegation), "missing {delegation}");
+    }
+    assert!(!navigation.contains("select_course::selected_course_plan("));
+    assert!(!navigation.contains("select_course::reroll_selected_endless_plan("));
+
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
+    );
+    for (start, end) in [
+        ("pub fn selected_course_cycle(", "pub fn selected_course_plan("),
+        (
+            "pub fn reroll_selected_endless_cycle(",
+            "pub fn reroll_selected_endless_plan(",
+        ),
+    ] {
+        let cycle = theme
+            .split_once(start)
+            .and_then(|(_, rest)| rest.split_once(end))
+            .map(|(body, _)| body)
+            .expect("direct cycle helpers and legacy adapters must remain available");
+        for display_work in ["make_course_song(", "course_start(", "CoursePresentationView"] {
+            assert!(
+                !cycle.contains(display_work),
+                "cycle preparation still constructs unused presentation: {display_work}"
+            );
+        }
+    }
+}
+
+#[test]
 fn course_selection_preparation_stays_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let owner = production_source(&root.join("crates/deadsync-simfile/src/course_selection.rs"));
@@ -47,7 +141,7 @@ fn course_selection_preparation_stays_below_the_theme() {
     let shell = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
     assert!(contains_rust(
         &shell,
-        "use deadsync_chart::course::CourseStagePlan;",
+        "use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan, CourseStagePlan};",
     ));
 
     let theme = production_source(
@@ -59,7 +153,7 @@ fn course_selection_preparation_stays_below_the_theme() {
         "preparation.difficulties()",
         "resolver.prepare_rating(",
         "preparation.default_rating_index(&ratings)",
-        "state.resolver.reroll_endless(",
+        "resolver.reroll_endless(",
         "pub use deadsync_simfile::course_selection::course_score_hash;",
     ] {
         assert!(
@@ -90,6 +184,8 @@ fn course_selection_preparation_stays_below_the_theme() {
             for definition in [
                 "struct CourseStagePlan",
                 "struct CourseStageView",
+                "struct CourseSessionPlan",
+                "struct CourseCyclePlan",
                 "struct CourseResolver",
                 "struct CoursePreparation",
                 "struct PreparedCourseRating",

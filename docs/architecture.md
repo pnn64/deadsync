@@ -104,6 +104,21 @@ path-based score hashes retain their existing behavior. Endless rerolls prepare
 only the new stage sequence and reuse the initial rating's presentation metadata.
 Themes keep localized track-list text, wheel grouping, labels, and layout.
 
+Course startup accepts `deadsync-chart::course::CourseSessionPlan`: path, score
+identity, canonical difficulty and meter, mode, life settings, and resolved stages.
+The shell retains the separate `CoursePresentationView` for the course name,
+banner, options label, and summary song template. The original song template is
+preserved because evaluation also uses its artist, BPM, and other metadata.
+Presentation values do not participate in runtime stage loading or life policy.
+
+Endless renewal accepts `CourseCyclePlan`, containing only the path and stages.
+It preserves the existing run's rules and score identity, checks the exact path
+and game-owned append authorization, and retains partial resolution and rollback
+on loader failures. Direct renewal and fallback paths no longer construct unused
+labels or a summary song template. Readiness checks borrow the selected rating
+without cloning its stage vector. Legacy theme selection functions remain
+adapters, and their consuming split/recombine operations move existing storage.
+
 `deadsync-gameplay::course_life_config` owns course life-model selection and Oni
 rewards alongside life initialization, damage, and carry. Its `CourseLifeStage`
 borrows song metadata and copies the selected chart indices and authored gains.
@@ -258,8 +273,10 @@ Workspace callers are updated for these source-level changes:
   retain their public names as aliases of that same type, with unchanged fields.
   `deadsync_simfile::course_selection` supplies the reusable preparation API;
   Select Course's `course_score_hash`, selection, and Endless reroll functions
-  remain compatible adapters. `SelectedCourseView` still combines game stages
-  with the selected theme's presentation metadata.
+  remain compatible adapters. `SelectedCourseView` retains its flat public
+  fields and provides consuming `into_parts`/`from_parts` adapters. New startup
+  callers use `CourseSessionPlan` with a separate `CoursePresentationView`;
+  renewal uses `CourseCyclePlan` and readiness uses a borrowed query.
 - Initialize gameplay through `init_gameplay_runtime`.
   `GameplayControlRuntimeState` now keeps one-shot target handling private and
   no longer supports struct-literal construction outside `deadsync-gameplay`.
@@ -341,6 +358,11 @@ precedence, score facts, difficulty policy, skipped entries, numeric aggregation
 empty ratings, authored random indices, and fresh-history Endless rerolls without
 depending on a theme. Existing shell tests retain real selection-to-runtime and
 Endless transition coverage.
+Startup guards require the game session/cycle contracts and separate retained
+presentation, while rejecting legacy combined views in shell loading paths.
+Regression tests check lossless storage transfer, presentation-independent
+runtime results, early cycle rejection without loading, and unchanged public
+selection and renewal behavior.
 
 ```sh
 cargo test -p deadsync --test layer_dependencies --test architecture_boundaries
@@ -351,6 +373,7 @@ cargo test -p deadsync-gameplay --lib course_progress
 cargo test -p deadsync-gameplay --lib course_life_config_tests
 cargo test -p deadsync-simfile --lib course::tests::course_type_follows_itg_precedence
 cargo test -p deadsync-simfile --lib course_selection
+cargo test -p deadsync-theme-simply-love --lib screens::select_course
 cargo test -p deadsync-shell --lib -- course::partner_tests app::course_transition_tests --test-threads=1
 cargo test -p deadsync-online --lib gameplay_lobby
 cargo test -p deadsync-online --lib lobby_wait
@@ -372,10 +395,10 @@ difficulty availability, and complete stage-sequence preparation now have game
 owners. The shell still orchestrates runtime chart loading and result assembly;
 carry algorithms and score aggregation already have game owners.
 
-Course preparation now returns game-owned stages, but the shell still receives
-the selected course through a theme wrapper containing labels and a wheel song
-stub. Separating that startup contract from presentation metadata remains a step
-toward a fully theme-independent course session.
+Course startup and renewal now use game-owned contracts, with display metadata
+retained separately. `CourseRunState` remains an application aggregate: reusable
+runtime stage preparation and result orchestration can move below the composition
+root in a later pass without changing the public theme selection adapters.
 
 The shell still uses concrete theme screen types. Consolidate that integration
 behind a theme-neutral presentation interface after the remaining runtime work;

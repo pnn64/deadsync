@@ -1,6 +1,7 @@
 //! Plain data prepared for concrete theme screens.
 
 use crate::{DisplayModeChoice, FullscreenChoice, PresentPolicyChoice, RendererChoice};
+use deadsync_chart::course::CourseSessionPlan;
 use deadsync_chart::{ChartData, SongData};
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -214,7 +215,16 @@ pub struct SmxGifCatalogView {
 pub use deadsync_chart::course::CourseStagePlan as CourseStageView;
 pub use deadsync_rules::course::CourseType as CourseTypeView;
 
-/// Game-prepared course stages and presentation metadata for runtime startup.
+/// Theme-prepared course labels and summary metadata, separate from game startup.
+#[derive(Clone, Debug)]
+pub struct CoursePresentationView {
+    pub name: String,
+    pub banner_path: Option<PathBuf>,
+    pub song_stub: Arc<SongData>,
+    pub course_stepchart_label: String,
+}
+
+/// Compatibility view combining a game session plan with its presentation.
 #[derive(Clone, Debug)]
 pub struct SelectedCourseView {
     pub path: PathBuf,
@@ -228,6 +238,46 @@ pub struct SelectedCourseView {
     pub course_type: CourseTypeView,
     pub lives: i32,
     pub stages: Vec<CourseStageView>,
+}
+
+impl SelectedCourseView {
+    /// Separate gameplay data and presentation by moving their existing storage.
+    pub fn into_parts(self) -> (CourseSessionPlan, CoursePresentationView) {
+        (
+            CourseSessionPlan {
+                path: self.path,
+                score_hash: self.score_hash,
+                course_difficulty_name: self.course_difficulty_name,
+                course_meter: self.course_meter,
+                course_type: self.course_type,
+                lives: self.lives,
+                stages: self.stages,
+            },
+            CoursePresentationView {
+                name: self.name,
+                banner_path: self.banner_path,
+                song_stub: self.song_stub,
+                course_stepchart_label: self.course_stepchart_label,
+            },
+        )
+    }
+
+    /// Rebuild the compatibility view without cloning either part.
+    pub fn from_parts(plan: CourseSessionPlan, presentation: CoursePresentationView) -> Self {
+        Self {
+            path: plan.path,
+            name: presentation.name,
+            banner_path: presentation.banner_path,
+            score_hash: plan.score_hash,
+            song_stub: presentation.song_stub,
+            course_difficulty_name: plan.course_difficulty_name,
+            course_meter: plan.course_meter,
+            course_stepchart_label: presentation.course_stepchart_label,
+            course_type: plan.course_type,
+            lives: plan.lives,
+            stages: plan.stages,
+        }
+    }
 }
 
 /// Chart source and duration used by a course-summary density graph.

@@ -7034,8 +7034,8 @@ impl App {
     }
 
     fn start_course_run_from_selected(&mut self) -> bool {
-        let Some(selection) =
-            select_course::selected_course_plan(&self.state.screens.select_course_state)
+        let Some((selection, presentation)) =
+            select_course::selected_course_start(&self.state.screens.select_course_state)
         else {
             warn!("Unable to start course run: selected course has no playable stages.");
             return false;
@@ -7044,6 +7044,7 @@ impl App {
         let course_difficulty_name = selection.course_difficulty_name.clone();
         let Some(course_run) = build_course_run_from_selection(
             selection,
+            presentation,
             profile::get_session_play_style().chart_type(),
         ) else {
             warn!("Unable to start course run: failed to resolve course stages.");
@@ -7082,7 +7083,7 @@ impl App {
             color_index,
             CurrentScreen::SelectCourse,
             Some(player_options::FixedStepchart {
-                label: course_run.course_stepchart_label.clone(),
+                label: course_run.presentation.course_stepchart_label.clone(),
             }),
             noteskin_catalog_view(&self.dirs),
             crate::smx_config::smx_gif_catalog_view(),
@@ -10409,9 +10410,9 @@ impl App {
                     .map_or((None, None), |course| {
                         (
                             Some(gameplay::CourseDisplayInfo {
-                                name: Arc::from(course.name.as_str()),
+                                name: Arc::from(course.presentation.name.as_str()),
                             }),
-                            course.banner_path.clone(),
+                            course.presentation.banner_path.clone(),
                         )
                     });
                 let stage_intro_text: Arc<str> = if let Some(course) = entry_course
@@ -12529,15 +12530,17 @@ mod tests {
         };
         let course = CourseRunState {
             path: PathBuf::from("Courses/Test.crs"),
-            name: "Test Course".to_string(),
-            banner_path: None,
             score_hash: "course-hash".to_string(),
             course_difficulty_name: "Hard".to_string(),
             course_meter: Some(12),
-            course_stepchart_label: "Hard".to_string(),
             course_type: deadsync_theme::views::CourseTypeView::Nonstop,
             lives: -1,
-            song_stub: song_a.clone(),
+            presentation: deadsync_theme::views::CoursePresentationView {
+                name: "Test Course".to_string(),
+                banner_path: None,
+                course_stepchart_label: "Hard".to_string(),
+                song_stub: song_a.clone(),
+            },
             stages: vec![test_course_stage(song_a.clone()), test_course_stage(song_b)],
             course_display_totals,
             progress: CourseProgress::new(1),
@@ -12606,15 +12609,17 @@ mod tests {
         // An Endless cycle of two songs that ended after the first.
         let course = CourseRunState {
             path: PathBuf::from("Courses/Test.crs"),
-            name: "Test Course".to_string(),
-            banner_path: None,
             score_hash: "routine-course-hash".to_string(),
             course_difficulty_name: "Hard".to_string(),
             course_meter: Some(12),
-            course_stepchart_label: "Hard".to_string(),
             course_type: deadsync_theme::views::CourseTypeView::Endless,
             lives: -1,
-            song_stub: song.clone(),
+            presentation: deadsync_theme::views::CoursePresentationView {
+                name: "Test Course".to_string(),
+                banner_path: None,
+                course_stepchart_label: "Hard".to_string(),
+                song_stub: song.clone(),
+            },
             stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
             course_display_totals: [
                 CourseDisplayTotals {
@@ -12737,15 +12742,17 @@ mod tests {
         ];
         let course = CourseRunState {
             path: PathBuf::from("Courses/Test.crs"),
-            name: "Test Course".into(),
-            banner_path: None,
             score_hash: "course-hash".into(),
             course_difficulty_name: "Hard".into(),
             course_meter: Some(12),
-            course_stepchart_label: "Hard".into(),
             course_type: deadsync_theme::views::CourseTypeView::Nonstop,
             lives: -1,
-            song_stub: song.clone(),
+            presentation: deadsync_theme::views::CoursePresentationView {
+                name: "Test Course".into(),
+                banner_path: None,
+                course_stepchart_label: "Hard".into(),
+                song_stub: song.clone(),
+            },
             stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
             course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
             progress: CourseProgress::new(1),

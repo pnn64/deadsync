@@ -25,7 +25,7 @@ use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
-use deadsync_chart::course::CourseStagePlan;
+use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan, CourseStagePlan};
 use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData};
 use deadsync_input::{InputEvent, VirtualAction};
@@ -37,7 +37,7 @@ use deadsync_simfile::course::{
 pub use deadsync_simfile::course_selection::course_score_hash;
 use deadsync_simfile::course_selection::{CoursePreparation, CourseResolver, fresh_course_seed};
 use deadsync_theme::FontRole;
-use deadsync_theme::views::CourseTypeView;
+use deadsync_theme::views::{CoursePresentationView, CourseTypeView};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -937,45 +937,95 @@ fn set_selected_course_rating_index(state: &mut State, idx: usize) {
     rebuild_course_summary(state);
 }
 
-pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
+/// Whether the selected rating contains stages that can start a course.
+pub fn has_selected_course(state: &State) -> bool {
+    selected_course_meta(state)
+        .and_then(|meta| selected_course_rating(state, meta))
+        .is_some_and(|rating| !rating.runtime_stages.is_empty())
+}
+
+/// Game startup data and the independently retained course presentation.
+pub fn selected_course_start(state: &State) -> Option<(CourseSessionPlan, CoursePresentationView)> {
     let meta = selected_course_meta(state)?;
     let rating = selected_course_rating(state, meta)?;
     if rating.runtime_stages.is_empty() {
         return None;
     }
-    Some(course_plan(meta, rating, rating.runtime_stages.clone()))
+    Some(course_start(meta, rating, rating.runtime_stages.clone()))
 }
 
-fn course_plan(
+/// The selected stages without startup labels or summary presentation.
+pub fn selected_course_cycle(state: &State) -> Option<CourseCyclePlan> {
+    let meta = selected_course_meta(state)?;
+    let rating = selected_course_rating(state, meta)?;
+    if rating.runtime_stages.is_empty() {
+        return None;
+    }
+    Some(CourseCyclePlan {
+        path: meta.path.clone(),
+        stages: rating.runtime_stages.clone(),
+    })
+}
+
+pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
+    let (plan, presentation) = selected_course_start(state)?;
+    Some(SelectedCoursePlan::from_parts(plan, presentation))
+}
+
+fn course_start(
     meta: &CourseMeta,
     rating: &CourseRatingMeta,
     stages: Vec<CourseStagePlan>,
-) -> SelectedCoursePlan {
-    SelectedCoursePlan {
+) -> (CourseSessionPlan, CoursePresentationView) {
+    (
+        CourseSessionPlan {
+            path: meta.path.clone(),
+            score_hash: meta.score_hash.clone(),
+            course_difficulty_name: rating.course_difficulty_name.clone(),
+            course_meter: rating.course_meter,
+            course_type: meta.course_type,
+            lives: meta.lives,
+            stages,
+        },
+        CoursePresentationView {
+            name: meta.name.clone(),
+            banner_path: meta.banner_path.clone(),
+            song_stub: Arc::new(make_course_song(meta)),
+            course_stepchart_label: rating.course_stepchart_label.clone(),
+        },
+    )
+}
+
+fn reroll_endless_stages(
+    resolver: &CourseResolver,
+    meta: &CourseMeta,
+    rating: &CourseRatingMeta,
+) -> Option<Vec<CourseStagePlan>> {
+    resolver.reroll_endless(
+        &meta.path,
+        &meta.source,
+        rating.course_difficulty,
+        fresh_course_seed(),
+    )
+}
+
+/// Fresh Endless stages without allocating course presentation metadata.
+pub fn reroll_selected_endless_cycle(state: &State) -> Option<CourseCyclePlan> {
+    let meta = selected_course_meta(state)?;
+    let rating = selected_course_rating(state, meta)?;
+    let stages = reroll_endless_stages(&state.resolver, meta, rating)?;
+    Some(CourseCyclePlan {
         path: meta.path.clone(),
-        name: meta.name.clone(),
-        banner_path: meta.banner_path.clone(),
-        score_hash: meta.score_hash.clone(),
-        song_stub: Arc::new(make_course_song(meta)),
-        course_difficulty_name: rating.course_difficulty_name.clone(),
-        course_meter: rating.course_meter,
-        course_stepchart_label: rating.course_stepchart_label.clone(),
-        course_type: meta.course_type,
-        lives: meta.lives,
         stages,
-    }
+    })
 }
 
 pub fn reroll_selected_endless_plan(state: &State) -> Option<SelectedCoursePlan> {
     let meta = selected_course_meta(state)?;
     let rating = selected_course_rating(state, meta)?;
-    let stages = state.resolver.reroll_endless(
-        &meta.path,
-        &meta.source,
-        rating.course_difficulty,
-        fresh_course_seed(),
-    )?;
-    Some(course_plan(meta, rating, stages))
+    let stages = reroll_endless_stages(&state.resolver, meta, rating)?;
+    let (plan, presentation) = course_start(meta, rating, stages);
+    Some(SelectedCoursePlan::from_parts(plan, presentation))
 }
 
 #[inline(always)]
@@ -2646,6 +2696,9 @@ fn handle_exit_prompt_input(
         _ => ThemeEffect::None,
     }
 }
+
+#[cfg(test)]
+mod course_plan_tests;
 
 #[cfg(test)]
 mod effect_buffer_tests {
