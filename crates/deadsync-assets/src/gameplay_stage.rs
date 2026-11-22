@@ -17,6 +17,7 @@ use deadsync_profile_gameplay::{
     GameplayProfile, gameplay_crossover_annotations_for_player, gameplay_pack_data,
     gameplay_runtime_profile_data,
 };
+use deadsync_profile_gameplay::stage_scores::GameplayScoreRefresh;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_song_lua::SongLuaLiveScene;
 use deadsync_song_lua::gameplay_session::{GameplayStage, SongLuaGameplaySession};
@@ -35,6 +36,7 @@ pub struct GameplayHost<L, P> {
     pub stage: ActiveGameplayStage,
     pub lobby_session: L,
     pub pack_group: Arc<str>,
+    pub score_refresh: GameplayScoreRefresh,
     pub presentation: P,
 }
 

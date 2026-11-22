@@ -9434,7 +9434,7 @@ impl App {
                 );
 
                 let mut gameplay_session = gameplay_session();
-                let mut gameplay_init_view = crate::gameplay_runtime::init_view(
+                let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
                     &cfg,
                     lobby_views::refresh(),
                     &charts,
@@ -9443,7 +9443,7 @@ impl App {
                     &mut self.state.screens.gameplay_score_cursor,
                 );
                 let practice_init =
-                    crate::gameplay_runtime::practice_init(&cfg, &gameplay_init_view);
+                    crate::gameplay_runtime::practice_init(&cfg, &gameplay_startup.presentation);
                 let init_started = Instant::now();
                 let metrics = self.state.shell.metrics;
                 let viewport = gameplay_viewport(metrics);
@@ -9480,7 +9480,7 @@ impl App {
                         &mut gameplay_session, init_config.global_offset_seconds,
                     )? {
                         crate::gameplay_runtime::refresh_chart_scores(
-                            &mut gameplay_init_view, &charts, &player_profiles, &gameplay_session,
+                            &mut gameplay_startup, &charts, &player_profiles, &gameplay_session,
                         );
                     }
                     let (mut prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
@@ -9508,7 +9508,7 @@ impl App {
                         include_post_fail_passes: false,
                         combo_carry: [0; MAX_PLAYERS],
                         song_lua_data: prepared_song_lua,
-                        mini_indicator: std::mem::take(&mut gameplay_init_view.scores.mini_indicator),
+                        mini_indicator: std::mem::take(&mut gameplay_startup.mini_indicator),
                     });
                     prepared.resolve_song_backgrounds(init_config.random_background_mode);
                     let gs = crate::gameplay_runtime::present_stage(
@@ -9518,7 +9518,7 @@ impl App {
                         Some(Arc::from("Practice Mode")),
                         None,
                         None,
-                        gameplay_init_view,
+                        gameplay_startup,
                     );
                     Ok(gs)
                 };
@@ -9803,16 +9803,14 @@ impl App {
                 commands.extend(last_played_commands);
 
                 let color_index = start.color_index;
-                let (course_display_info, course_banner_path) = self
+                let (course_name, course_banner_path) = self
                     .state
                     .session
                     .course_run
                     .as_ref()
                     .map_or((None, None), |course| {
                         (
-                            Some(gameplay::CourseDisplayInfo {
-                                name: Arc::from(course.presentation.name.as_str()),
-                            }),
+                            Some(Arc::from(course.presentation.name.as_str())),
                             course.presentation.banner_path.clone(),
                         )
                     });
@@ -9843,7 +9841,7 @@ impl App {
                     replay_offsets.is_some(),
                 );
                 let mut gameplay_session = gameplay_session();
-                let mut gameplay_init_view = crate::gameplay_runtime::init_view(
+                let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
                     &cfg,
                     self.gameplay_lobby.refresh_now(),
                     &charts,
@@ -9918,7 +9916,7 @@ impl App {
                         &mut gameplay_session, gameplay_config.global_offset_seconds,
                     )? {
                         crate::gameplay_runtime::refresh_chart_scores(
-                            &mut gameplay_init_view, &charts, &player_profiles, &gameplay_session,
+                            &mut gameplay_startup, &charts, &player_profiles, &gameplay_session,
                         );
                     }
                     let (mut prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
@@ -9943,7 +9941,7 @@ impl App {
                         include_post_fail_passes,
                         combo_carry,
                         song_lua_data: prepared_song_lua,
-                        mini_indicator: std::mem::take(&mut gameplay_init_view.scores.mini_indicator),
+                        mini_indicator: std::mem::take(&mut gameplay_startup.mini_indicator),
                     });
                     prepared.resolve_song_backgrounds(init_config.random_background_mode);
                     let mut state = crate::gameplay_runtime::present_stage(
@@ -9951,9 +9949,9 @@ impl App {
                         scene,
                         stage_intro_text,
                         replay_status_text,
-                        course_display_info,
+                        course_name,
                         course_banner_path,
-                        gameplay_init_view,
+                        gameplay_startup,
                     );
                     state.song_lua.restore_held_inputs(held_inputs);
                     Ok(state)

@@ -374,8 +374,8 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         .find("attach_prepared_song_lua(gameplay,")
         .expect("attach callbacks");
     assert!(
-        split < lobby && lobby < present && present < attach,
-        "gameplay assembly sets up the lobby before the HUD and the startup callbacks"
+        lobby < split && split < present && present < attach,
+        "the shell captures the lobby before presenting the prepared stage and attaching callbacks"
     );
     assert!(contains_rust(&adapter, "state.stage.song_lua_attachment_parts()"));
     let owner = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
@@ -385,6 +385,7 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(contains_rust(&owner, "pub struct GameplayHost<L, P>"));
     assert!(contains_rust(&owner, "pub stage: ActiveGameplayStage"));
     assert!(contains_rust(&owner, "pub lobby_session: L"));
+    assert!(contains_rust(&owner, "pub score_refresh: GameplayScoreRefresh"));
     assert!(contains_rust(&owner, "pub presentation: P"));
     assert!(contains_rust(&adapter, "type GameplayState = GameplayHost<"));
     assert!(!contains_rust(&theme, "pub struct State"));
@@ -6271,7 +6272,7 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
         );
     }
     assert!(
-        gameplay.contains("runtime_view: GameplayPresentationView")
+        gameplay.contains("runtime_view: GameplayRuntimeView")
             && gameplay.contains("GameplayHost<GameplayLobbySession, GameplayPresentation>")
             && gameplay.contains("pub fn sync_runtime_view")
             && gameplay.contains("SimplyLoveLobbyRequest::UpdateMachineStats")
@@ -6344,13 +6345,13 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         );
     }
     for contract in [
-        "runtime_view: GameplayPresentationView",
+        "runtime_view: GameplayRuntimeView",
         "init_view: GameplayInitView",
         "runtime_view.policy.translated_titles",
-        "scores.mini_indicator",
-        "scores.scorebox_profiles",
+        "scores.scorebox_visible",
+        "scores.scorebox_snapshots",
         "self.presentation.itl_cmod_warning[player]",
-        "pub fn sync_score_runtime_view",
+        "pub fn sync_scoreboxes",
         "self.presentation.runtime_view.policy.center_single_notefield",
         "state.presentation.runtime_view.policy.scorebox_pane_filter",
         "self.runtime_view.policy.machine_font",
@@ -6375,9 +6376,8 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "pub struct GameplayRuntimeView",
         "pub struct GameplayInitView",
         "pub struct GameplayScoreInitView",
-        "pub struct GameplayScoreRuntimeView",
         "pub hud: deadsync_profile::GameplayHudSnapshot",
-        "pub lobby: SimplyLoveLobbyRuntimeView",
+        "pub scorebox_visible: [bool; 2]",
         "pub machine_font: deadsync_config::theme::MachineFont",
         "pub background_brightness: f32",
         "pub background_color: deadlib_present::color::Color",
@@ -6396,8 +6396,10 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         .expect("shell Gameplay adapter should be readable");
     for runtime_owner in [
         "fn policy_view(config: &config::app_config::Config)",
-        "pub(crate) fn runtime_view(",
-        "pub(crate) fn init_view(",
+        "pub(crate) fn prepare_startup(",
+        "pub mini_indicator: GameplayMiniIndicatorData",
+        "pub lobby_session: GameplayLobbySession",
+        "pub score_refresh: GameplayScoreRefresh",
         "profile::get_session_snapshot()",
         "profile::gameplay_hud_snapshot()",
         "scores::get_cached_local_score_for_side",
@@ -6405,7 +6407,9 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "scores::get_cached_local_hard_ex_score_for_side",
         "scores::get_or_fetch_player_leaderboards_for_profile",
         "scores::should_warn_cmod_for_itl_chart",
-        "pub(crate) fn score_runtime_view(",
+        "state.score_refresh.has_pending()",
+        "state.score_refresh.poll(&mut state.stage.gameplay,",
+        "state.presentation.sync_scoreboxes(updates)",
         "machine_font: config.machine_font",
         "background_brightness: config.bg_brightness",
         "background_color: config.gameplay_bg_color",
@@ -6423,9 +6427,22 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(
-        shell.contains("crate::gameplay_runtime::init_view(")
+        shell.contains("crate::gameplay_runtime::prepare_startup(")
             && shell.contains("state.lobby_session.sync_runtime_view(lobby)")
     );
+    assert!(shell.contains("mini_indicator: std::mem::take(&mut gameplay_startup.mini_indicator)"));
+    let stage_scores = production_source(
+        &root.join("crates/deadsync-profile-gameplay/src/stage_scores.rs"),
+    );
+    assert!(contains_rust(&stage_scores, "gameplay.set_mini_indicator_rival_score_percent(player, score)"));
+    assert!(!stage_scores.contains("deadsync_theme"));
+    for game_update in [
+        "set_mini_indicator_rival_score_percent",
+        "scorebox_refresh_pending",
+        "GameplayScoreboxProfileSnapshot",
+    ] {
+        assert!(!gameplay.contains(game_update) && !views.contains(game_update));
+    }
 }
 
 #[test]
@@ -6519,18 +6536,15 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let runtime = read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
         .expect("shell Gameplay adapter should be readable");
-    let live_score_view = runtime
-        .split_once("pub(crate) fn score_runtime_view")
-        .and_then(|(_, rest)| rest.split_once("/// Prepare song-invariant score state once"))
+    let live_score_poll = runtime
+        .split_once("fn sync_if_dirty")
+        .and_then(|(_, rest)| rest.split_once("fn policy_view"))
         .map(|(body, _)| body)
-        .expect("live Gameplay score view should be present");
+        .expect("live Gameplay score polling should be present");
     assert!(
-        live_score_view.contains("state.presentation.itl_cmod_warning_snapshot()"),
-        "live score polling must reuse the song-lifetime ITL warning"
-    );
-    assert!(
-        !live_score_view.contains("should_warn_cmod_for_itl_chart"),
-        "live score polling must not recompute the ITL warning every frame"
+        !live_score_poll.contains("should_warn_cmod_for_itl_chart")
+            && !live_score_poll.contains("itl_cmod_warning"),
+        "live score polling must leave the retained ITL warning alone"
     );
 
     let initial_score_sync = runtime
@@ -6539,7 +6553,8 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
         .map(|(body, _)| body)
         .expect("initial Gameplay score sync should be present");
     assert!(
-        initial_score_sync.contains("scores::should_warn_cmod_for_itl_chart"),
+        initial_score_sync.contains("scores::should_warn_cmod_for_itl_chart")
+            && initial_score_sync.contains("state.presentation.set_itl_cmod_warning(warnings)"),
         "Gameplay entry must still prepare the ITL warning"
     );
 

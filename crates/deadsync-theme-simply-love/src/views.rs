@@ -166,58 +166,20 @@ impl Default for GameplayPolicyView {
     }
 }
 
-/// Score/cache data prepared by the shell before Gameplay constructs its
-/// deterministic runtime and song-lifetime presentation state.
-#[derive(Clone, Debug)]
+/// Initial scorebox visibility and boards for the gameplay HUD.
+#[derive(Clone, Debug, Default)]
 pub struct GameplayScoreInitView {
-    pub mini_indicator: deadsync_gameplay::GameplayMiniIndicatorData,
-    pub scorebox_profiles: [deadsync_score::GameplayScoreboxProfileSnapshot; 2],
+    pub scorebox_visible: [bool; 2],
     pub scorebox_snapshots: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
-    pub rival_score_types: [Option<deadsync_profile::MiniIndicatorScoreType>; 2],
 }
 
-impl Default for GameplayScoreInitView {
-    fn default() -> Self {
-        Self {
-            mini_indicator: deadsync_gameplay::GameplayMiniIndicatorData::default(),
-            scorebox_profiles: std::array::from_fn(|_| {
-                deadsync_score::GameplayScoreboxProfileSnapshot::default()
-            }),
-            scorebox_snapshots: std::array::from_fn(|_| None),
-            rival_score_types: [None; 2],
-        }
-    }
-}
-
-/// Live score/cache data polled by the shell while Gameplay is active.
-#[derive(Clone, Debug)]
-pub struct GameplayScoreRuntimeView {
-    /// Newly completed snapshots only; `None` preserves the screen's current
-    /// value without cloning it on steady gameplay frames.
-    pub scorebox_updates: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
-    pub rival_score_updates: [Option<f64>; 2],
-    pub itl_cmod_warning: [bool; 2],
-}
-
-impl Default for GameplayScoreRuntimeView {
-    fn default() -> Self {
-        Self {
-            scorebox_updates: std::array::from_fn(|_| None),
-            rival_score_updates: [None; 2],
-            itl_cmod_warning: [false; 2],
-        }
-    }
-}
-
-/// Live shell-prepared session and lobby state consumed by Gameplay's screen
-/// logic, separate from the deterministic gameplay simulation state.
+/// Shell-prepared presentation policy and local HUD identity.
 #[derive(Clone, Debug)]
 pub struct GameplayRuntimeView {
     pub policy: GameplayPolicyView,
     pub play_style: PlayStyle,
     pub player_side: PlayerSide,
     pub joined: [bool; 2],
-    pub lobby: SimplyLoveLobbyRuntimeView,
 }
 
 impl Default for GameplayRuntimeView {
@@ -227,7 +189,6 @@ impl Default for GameplayRuntimeView {
             play_style: PlayStyle::default(),
             player_side: PlayerSide::default(),
             joined: [true, false],
-            lobby: SimplyLoveLobbyRuntimeView::default(),
         }
     }
 }

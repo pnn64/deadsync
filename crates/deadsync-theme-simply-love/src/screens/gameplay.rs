@@ -19,7 +19,7 @@ use crate::screens::components::shared::heart_rate;
 pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::components::shared::{gs_scorebox, lobby_hud};
-use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
+use crate::views::{GameplayInitView, GameplayRuntimeView};
 use crate::visual_styles;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{
@@ -615,30 +615,6 @@ fn smooth_life_p(value: f32) -> f32 {
     }
 }
 
-/// The presentation portion of an incoming gameplay view. The lobby snapshot is
-/// consumed by the game session and is never retained a second time here.
-#[derive(Clone, Debug)]
-struct GameplayPresentationView {
-    policy: crate::views::GameplayPolicyView,
-    play_style: profile_data::PlayStyle,
-    player_side: profile_data::PlayerSide,
-    joined: [bool; 2],
-}
-
-impl GameplayPresentationView {
-    fn split(view: GameplayRuntimeView) -> (Self, crate::views::SimplyLoveLobbyRuntimeView) {
-        (
-            Self {
-                policy: view.policy,
-                play_style: view.play_style,
-                player_side: view.player_side,
-                joined: view.joined,
-            },
-            view.lobby,
-        )
-    }
-}
-
 pub type State = GameplayHost<GameplayLobbySession, GameplayPresentation>;
 
 pub struct GameplayPresentation {
@@ -660,16 +636,11 @@ pub struct GameplayPresentation {
     pub(crate) gameplay_stats_text: gameplay_stats::GameplayStatsTextPlan,
     pub(crate) pack_label: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
-    pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
+    scorebox_visible: [bool; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
-    rival_score_types: [Option<profile_data::MiniIndicatorScoreType>; MAX_PLAYERS],
     scorebox_plans: [gs_scorebox::GameplayScoreboxPlan; MAX_PLAYERS],
-    /// Whether an active scorebox still has an asynchronous leaderboard load
-    /// to poll. The game thread updates this two-entry reduction only when a
-    /// score snapshot changes; completed songs pay one boolean test per frame.
-    scorebox_refresh_pending: bool,
     itl_cmod_warning: [bool; MAX_PLAYERS],
-    runtime_view: GameplayPresentationView,
+    runtime_view: GameplayRuntimeView,
     lobby_hud_visibility: GameplayLobbyHudVisibility,
     step_stats_mode: GameplayStepStatsMode,
     pub(crate) song_banner_key: Option<Arc<str>>,
@@ -885,14 +856,14 @@ pub fn from_stage(
     replay_status_text: Option<Arc<str>>,
     course_display_info: Option<CourseDisplayInfo>,
     course_banner_path: Option<PathBuf>,
-    mut init_view: GameplayInitView,
+    init_view: GameplayInitView,
 ) -> State {
     let pack_group = assets.score_pack_group(
         course_display_info.as_ref().map(|course| &course.name),
     );
-    let runtime = &mut init_view.runtime;
+    let runtime = &init_view.runtime;
     let lobby_session = GameplayLobbySession::new(
-        std::mem::take(&mut runtime.lobby),
+        Default::default(),
         runtime.joined,
         runtime.player_side,
     );
@@ -909,6 +880,7 @@ pub fn from_stage(
         stage,
         lobby_session,
         pack_group,
+        score_refresh: Default::default(),
         presentation,
     }
 }
@@ -929,8 +901,8 @@ impl GameplayPresentation {
         self.arrow_tipsy_clock_inputs = tipsy;
     }
 
-    pub const fn itl_cmod_warning_snapshot(&self) -> [bool; MAX_PLAYERS] {
-        self.itl_cmod_warning
+    pub fn set_itl_cmod_warning(&mut self, warnings: [bool; MAX_PLAYERS]) {
+        self.itl_cmod_warning = warnings;
     }
 
     pub(crate) fn set_practice_timing_labels(
@@ -971,10 +943,8 @@ impl GameplayPresentation {
         } = init_view;
         let gameplay = &stage.gameplay;
         let noteskin_assets = &stage.noteskin_assets;
-        let scorebox_profile_snapshot = scores.scorebox_profiles;
+        let scorebox_visible = scores.scorebox_visible;
         let scorebox_side_snapshot = scores.scorebox_snapshots;
-        let rival_score_types = scores.rival_score_types;
-        let (runtime_view, _) = GameplayPresentationView::split(runtime_view);
         let density_graph = DensityGraphRenderState::from_gameplay(gameplay);
         let step_stats_profiles =
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
@@ -999,16 +969,11 @@ impl GameplayPresentation {
         let scorebox_plans = std::array::from_fn(|side| {
             gs_scorebox::GameplayScoreboxPlan::new_with_palette(
                 scorebox_side_snapshot[side].as_ref(),
-                &scorebox_profile_snapshot[side],
+                scorebox_visible[side],
                 runtime_view.policy.scorebox_pane_filter,
                 judgment_palettes[side],
             )
         });
-        let scorebox_refresh_pending = scorebox_refresh_pending_from(
-            &scorebox_profile_snapshot,
-            &scorebox_side_snapshot,
-            &rival_score_types,
-        );
         let song = gameplay.song();
         let song_full_title: Arc<str> =
             Arc::from(song.display_full_title(runtime_view.policy.translated_titles));
@@ -1081,11 +1046,9 @@ impl GameplayPresentation {
             gameplay_stats_text,
             pack_label,
             pack_banner_path,
-            scorebox_profile_snapshot,
+            scorebox_visible,
             scorebox_side_snapshot,
-            rival_score_types,
             scorebox_plans,
-            scorebox_refresh_pending,
             itl_cmod_warning: [false; MAX_PLAYERS],
             lobby_hud_visibility: GameplayLobbyHudVisibility::default(),
             runtime_view,
@@ -1496,7 +1459,7 @@ pub fn init(
     course_banner_path: Option<PathBuf>,
     combo_carry: [u32; MAX_PLAYERS],
     song_lua_data: PreparedGameplaySongLua,
-    mut init_view: GameplayInitView,
+    init_view: GameplayInitView,
 ) -> State {
     let (prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
         song,
@@ -1520,7 +1483,7 @@ pub fn init(
         include_post_fail_passes,
         combo_carry,
         song_lua_data,
-        mini_indicator: std::mem::take(&mut init_view.scores.mini_indicator),
+        mini_indicator: Default::default(),
     });
     let mut state = present_stage(
         prepared,
@@ -2008,20 +1971,6 @@ fn write_gameplay_lobby_hud_status(state: &impl GameplayScreenView, text: &mut S
     true
 }
 
-pub fn scorebox_snapshot_for_side(
-    state: &impl GameplayScreenView,
-    side: profile_data::PlayerSide,
-) -> Option<&score_data::CachedPlayerLeaderboardData> {
-    state.presentation().scorebox_side_snapshot[profile_data::player_side_index(side)].as_ref()
-}
-
-pub fn scorebox_profile_for_side(
-    state: &impl GameplayScreenView,
-    side: profile_data::PlayerSide,
-) -> &score_data::GameplayScoreboxProfileSnapshot {
-    &state.presentation().scorebox_profile_snapshot[profile_data::player_side_index(side)]
-}
-
 pub fn push_scorebox_actors_for_side(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
@@ -2049,18 +1998,16 @@ pub const fn on_exit(state: &mut State) {
 
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: GameplayRuntimeView) {
-    let (view, lobby) = GameplayPresentationView::split(view);
     if state.presentation.runtime_view.policy.scorebox_pane_filter != view.policy.scorebox_pane_filter {
         state.presentation.scorebox_plans = std::array::from_fn(|side| {
             gs_scorebox::GameplayScoreboxPlan::new_with_palette(
                 state.presentation.scorebox_side_snapshot[side].as_ref(),
-                &state.presentation.scorebox_profile_snapshot[side],
+                state.presentation.scorebox_visible[side],
                 view.policy.scorebox_pane_filter,
                 state.presentation.judgment_palettes[side],
             )
         });
     }
-    gameplay_lobby::sync_runtime_view(&mut GameplayEffects(state), lobby);
     state.presentation.runtime_view = view;
 }
 
@@ -2078,60 +2025,24 @@ pub fn sync_lobby_runtime_view(state: &mut State, lobby: crate::views::SimplyLov
     gameplay_lobby::sync_runtime_view(&mut GameplayEffects(state), lobby);
 }
 
-#[inline(always)]
-fn scorebox_refresh_pending_from(
-    profiles: &[score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
-    snapshots: &[Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
-    rival_score_types: &[Option<profile_data::MiniIndicatorScoreType>; MAX_PLAYERS],
-) -> bool {
-    profiles.iter().zip(snapshots).zip(rival_score_types).any(
-        |((profile, snapshot), rival_score_type)| {
-            (profile.display_scorebox || rival_score_type.is_some())
-                && profile.online_active()
-                && snapshot.as_ref().is_some_and(|snapshot| snapshot.loading)
-        },
-    )
-}
-
-/// Whether gameplay still needs the shell to poll asynchronous score loading.
-#[inline(always)]
-pub fn scorebox_refresh_pending(state: &impl GameplayScreenView) -> bool {
-    state.presentation().scorebox_refresh_pending
-}
-
-#[inline(always)]
-pub fn sync_score_runtime_view(state: &mut State, view: GameplayScoreRuntimeView) {
-    for (side, update) in view.scorebox_updates.into_iter().enumerate() {
-        if update.is_some() {
-            state.presentation.scorebox_side_snapshot[side] = update;
-            state.presentation.scorebox_plans[side] = gs_scorebox::GameplayScoreboxPlan::new_with_palette(
-                state.presentation.scorebox_side_snapshot[side].as_ref(),
-                &state.presentation.scorebox_profile_snapshot[side],
-                state.presentation.runtime_view.policy.scorebox_pane_filter,
-                state.presentation.judgment_palettes[side],
-            );
+impl GameplayPresentation {
+    /// Replace completed boards by side and rebuild their cached text plans.
+    pub fn sync_scoreboxes(
+        &mut self,
+        updates: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    ) {
+        for (side, update) in updates.into_iter().enumerate() {
+            if let Some(snapshot) = update {
+                self.scorebox_side_snapshot[side] = Some(snapshot);
+                self.scorebox_plans[side] = gs_scorebox::GameplayScoreboxPlan::new_with_palette(
+                    self.scorebox_side_snapshot[side].as_ref(),
+                    self.scorebox_visible[side],
+                    self.runtime_view.policy.scorebox_pane_filter,
+                    self.judgment_palettes[side],
+                );
+            }
         }
     }
-    for (player, rival_score) in view.rival_score_updates.into_iter().enumerate() {
-        if let Some(rival_score) = rival_score {
-            state
-                .gameplay
-                .set_mini_indicator_rival_score_percent(player, rival_score);
-        }
-    }
-    state.presentation.scorebox_refresh_pending = scorebox_refresh_pending_from(
-        &state.presentation.scorebox_profile_snapshot,
-        &state.presentation.scorebox_side_snapshot,
-        &state.presentation.rival_score_types,
-    );
-    state.presentation.itl_cmod_warning = view.itl_cmod_warning;
-}
-
-pub fn rival_score_type_for_side(
-    state: &impl GameplayScreenView,
-    side: profile_data::PlayerSide,
-) -> Option<profile_data::MiniIndicatorScoreType> {
-    state.presentation().rival_score_types[profile_data::player_side_index(side)]
 }
 
 /// Compatibility wrapper for the game-owned lobby frame boundary.
@@ -5511,62 +5422,6 @@ mod tests {
         for (actual, expected) in quarter.into_iter().zip([0.0, 0.75, 0.75, 1.0]) {
             assert!((actual - expected).abs() <= 1e-6);
         }
-    }
-
-    #[test]
-    fn scorebox_polling_stops_when_loading_finishes() {
-        let mut profiles: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
-            std::array::from_fn(|_| deadsync_score::GameplayScoreboxProfileSnapshot::default());
-        profiles[0].display_scorebox = true;
-        profiles[0].gs_active = true;
-        let mut snapshots = [
-            Some(score_data::CachedPlayerLeaderboardData::loading()),
-            None,
-        ];
-        let mut rival_score_types = [None; MAX_PLAYERS];
-
-        assert!(scorebox_refresh_pending_from(
-            &profiles,
-            &snapshots,
-            &rival_score_types,
-        ));
-        snapshots[0] = Some(score_data::CachedPlayerLeaderboardData {
-            loading: false,
-            data: None,
-            error: None,
-        });
-        assert!(!scorebox_refresh_pending_from(
-            &profiles,
-            &snapshots,
-            &rival_score_types,
-        ));
-
-        snapshots[0] = Some(score_data::CachedPlayerLeaderboardData::loading());
-        profiles[0].display_scorebox = false;
-        assert!(!scorebox_refresh_pending_from(
-            &profiles,
-            &snapshots,
-            &rival_score_types,
-        ));
-        rival_score_types[0] = Some(profile_data::MiniIndicatorScoreType::Itg);
-        assert!(scorebox_refresh_pending_from(
-            &profiles,
-            &snapshots,
-            &rival_score_types,
-        ));
-        profiles[0].display_scorebox = true;
-        profiles[0].gs_active = false;
-        assert!(!scorebox_refresh_pending_from(
-            &profiles,
-            &snapshots,
-            &rival_score_types,
-        ));
-        profiles[0].ac_active = true;
-        assert!(scorebox_refresh_pending_from(
-            &profiles,
-            &snapshots,
-            &rival_score_types,
-        ));
     }
 
     #[test]

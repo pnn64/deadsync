@@ -540,7 +540,7 @@ pub(crate) mod tests {
             .clone_from(&player_profiles[1].display_name);
         hud.p2.guest = false;
         hud.p2.hide_username = false;
-        let mut init_view = deadsync_theme_simply_love::views::GameplayInitView {
+        let init_view = deadsync_theme_simply_love::views::GameplayInitView {
             hud,
             ..Default::default()
         };
@@ -628,7 +628,7 @@ pub(crate) mod tests {
             include_post_fail_passes: false,
             combo_carry: [0; MAX_PLAYERS],
             song_lua_data: prepared,
-            mini_indicator: std::mem::take(&mut init_view.scores.mini_indicator),
+            mini_indicator: Default::default(),
         });
         crate::gameplay_runtime::present_stage(
             prepared,
@@ -637,7 +637,16 @@ pub(crate) mod tests {
             None,
             None,
             None,
-            init_view,
+            crate::gameplay_runtime::GameplayStartup {
+                mini_indicator: Default::default(),
+                lobby_session: deadsync_online::gameplay_lobby::GameplayLobbySession::new(
+                    Default::default(),
+                    init_view.runtime.joined,
+                    init_view.runtime.player_side,
+                ),
+                score_refresh: Default::default(),
+                presentation: init_view,
+            },
         )
     }
 
@@ -1314,6 +1323,14 @@ end }
                 assert!(segments.segments(state.song_frame(), &actors).count() > 0);
             };
             render(&mut state);
+            let mut score_profiles =
+                std::array::from_fn(|_| deadsync_score::GameplayScoreboxProfileSnapshot::default());
+            score_profiles[0].gs_active = true;
+            state.score_refresh = deadsync_profile_gameplay::stage_scores::GameplayScoreRefresh::new(
+                score_profiles,
+                &[Some(deadsync_score::CachedPlayerLeaderboardData::loading()), None],
+                [Some(profile_data::MiniIndicatorScoreType::Itg), None],
+            );
             let replacement = screen_gameplay::GameplayPresentation::from_stage(
                 &state.stage,
                 deadsync_assets::gameplay_stage::GameplayStageAssets {
@@ -1328,6 +1345,39 @@ end }
                 Default::default(),
             );
             state.presentation = replacement;
+            let loading = state.score_refresh.poll(&mut state.stage.gameplay, |_, _| {
+                Some(deadsync_score::CachedPlayerLeaderboardData::loading())
+            });
+            assert!(loading.iter().all(Option::is_none));
+            assert!(state.score_refresh.has_pending());
+            let updates = state.score_refresh.poll(&mut state.stage.gameplay, |hash, _| {
+                assert!(!hash.is_empty());
+                let pane = deadsync_score::leaderboard_pane(
+                    "GrooveStats",
+                    vec![deadsync_score::LeaderboardEntry {
+                        rank: 1,
+                        name: "Rival".into(),
+                        machine_tag: None,
+                        score: 9_750.0,
+                        date: String::new(),
+                        is_rival: true,
+                        is_self: false,
+                        is_fail: false,
+                    }],
+                    false,
+                ).unwrap();
+                Some(deadsync_score::CachedPlayerLeaderboardData::ready(
+                    deadsync_score::PlayerLeaderboardData {
+                        panes: vec![pane],
+                        srpg_self_score: None,
+                        itl_self_score: None,
+                        itl_self_rank: None,
+                    },
+                ))
+            });
+            assert!(updates[0].is_some() && updates[1].is_none());
+            assert!(!state.score_refresh.has_pending());
+            assert_eq!(state.stage.mini_indicator_rival_score_percent(0), 97.5);
             render(&mut state);
             assert_eq!(&*state.presentation.stage_intro_text, "REPLACEMENT");
             assert_eq!(state.stage.current_music_time_ns(), time);

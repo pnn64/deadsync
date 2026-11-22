@@ -13,13 +13,16 @@ use deadsync_gameplay::practice::{
 };
 use deadsync_input::InputEvent;
 use deadsync_input::practice::PracticeKeyEvent;
-use deadsync_online::gameplay_lobby::{GameplayLobbyAction, GameplayLobbyInput, GameplayLobbySession};
+use deadsync_online::gameplay_lobby::{
+    GameplayLobbyAction, GameplayLobbyInput, GameplayLobbySession, LobbyRuntimeView,
+};
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::{
     gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
 };
+use deadsync_profile_gameplay::stage_scores::{GameplayScoreRefresh, mini_indicator_rival_score};
 use deadsync_song_lua::gameplay_presentation::{FramePresentationContext, SongFrameContent};
 use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
 use deadsync_theme::ThemeScreenFlow;
@@ -27,7 +30,6 @@ use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::{gameplay, practice};
 use deadsync_theme_simply_love::views::{
     GameplayInitView, GameplayPolicyView, GameplayRuntimeView, GameplayScoreInitView,
-    GameplayScoreRuntimeView, SimplyLoveLobbyRuntimeView,
 };
 use smallvec::SmallVec;
 use std::sync::Arc;
@@ -83,7 +85,7 @@ impl ScoreRuntimeCursor {
 
     #[inline(always)]
     fn sync_if_dirty(&mut self, state: &mut GameplayState) {
-        if !gameplay::scorebox_refresh_pending(state) {
+        if !state.score_refresh.has_pending() {
             return;
         }
         let generation = deadsync_score::runtime_player_leaderboard_generation();
@@ -93,9 +95,15 @@ impl ScoreRuntimeCursor {
 
         // Capture the generation before taking cache locks. A completion racing
         // this refresh can cause one redundant pass, but cannot be hidden.
-        let view = score_runtime_view(state);
+        let updates = state.score_refresh.poll(&mut state.stage.gameplay, |chart_hash, profile| {
+            scores::get_or_fetch_player_leaderboards_for_profile(
+                chart_hash,
+                profile,
+                GAMEPLAY_SCOREBOX_ENTRIES,
+            )
+        });
         self.generation = Some(generation);
-        gameplay::sync_score_runtime_view(state, view);
+        state.presentation.sync_scoreboxes(updates);
     }
 }
 
@@ -112,22 +120,6 @@ fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
         bpm_position: config.gameplay_bpm_position,
         machine_font: config.machine_font,
         scorebox_pane_filter: crate::app::scorebox_pane_filter(config),
-    }
-}
-
-pub(crate) fn runtime_view(
-    config: &config::app_config::Config,
-    lobby: SimplyLoveLobbyRuntimeView,
-) -> GameplayRuntimeView {
-    let session = profile::get_session_snapshot();
-    GameplayRuntimeView {
-        policy: policy_view(config),
-        play_style: session.play_style,
-        player_side: session.player_side,
-        joined: std::array::from_fn(|idx| {
-            session.side_joined(profile_data::player_side_for_index(idx))
-        }),
-        lobby,
     }
 }
 
@@ -174,45 +166,6 @@ fn mini_indicator_machine_best(
                 .and_then(|(_, score)| mini_indicator_percent(score.percent))
         }
     }
-}
-
-fn leaderboard_matches_score_type(
-    pane: &deadsync_score::LeaderboardPane,
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> bool {
-    match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => !pane.is_ex && !pane.is_hard_ex(),
-        profile_data::MiniIndicatorScoreType::Ex => pane.is_ex && !pane.is_hard_ex(),
-        profile_data::MiniIndicatorScoreType::HardEx => pane.is_hard_ex(),
-    }
-}
-
-fn mini_indicator_rival_score(
-    snapshot: Option<&deadsync_score::CachedPlayerLeaderboardData>,
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> Option<f64> {
-    let panes = snapshot?
-        .data
-        .as_ref()?
-        .panes
-        .iter()
-        .filter(|pane| !pane.disabled && leaderboard_matches_score_type(pane, score_type));
-    let mut rival = None::<f64>;
-    let mut world_record = None::<f64>;
-    for entry in panes
-        .flat_map(|pane| pane.entries.iter())
-        .filter(|entry| !entry.is_fail && entry.score.is_finite())
-    {
-        if entry.is_rival || entry.is_self {
-            rival = Some(rival.map_or(entry.score, |score| score.max(entry.score)));
-        }
-        if entry.rank == 1 {
-            world_record = Some(world_record.map_or(entry.score, |score| score.max(entry.score)));
-        }
-    }
-    rival
-        .or(world_record)
-        .map(|score_10000| (score_10000 / 100.0).clamp(0.0, 100.0))
 }
 
 fn mini_indicator_view(
@@ -281,11 +234,11 @@ fn scorebox_profiles(
     snapshots
 }
 
-fn score_init_view(
+fn prepare_scores(
     charts: &[Arc<ChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
-) -> GameplayScoreInitView {
+) -> (GameplayMiniIndicatorData, GameplayScoreRefresh, GameplayScoreInitView) {
     let runtime_charts = gameplay_runtime_charts(charts, session);
     let runtime_profiles = gameplay_runtime_profile_data(profiles, session);
     let scorebox_profiles = scorebox_profiles(&runtime_profiles, session);
@@ -311,52 +264,83 @@ fn score_init_view(
             );
         }
     }
-    GameplayScoreInitView {
-        mini_indicator: mini_indicator_view(
-            &runtime_charts,
-            &runtime_profiles,
-            session,
-            &scorebox_snapshots,
-        ),
+    let mini_indicator = mini_indicator_view(
+        &runtime_charts,
+        &runtime_profiles,
+        session,
+        &scorebox_snapshots,
+    );
+    let scorebox_visible = scorebox_profiles
+        .each_ref()
+        .map(|profile| profile.display_scorebox && profile.online_active());
+    let score_refresh = GameplayScoreRefresh::new(
         scorebox_profiles,
-        scorebox_snapshots,
+        &scorebox_snapshots,
         rival_score_types,
-    }
+    );
+    (
+        mini_indicator,
+        score_refresh,
+        GameplayScoreInitView { scorebox_visible, scorebox_snapshots },
+    )
 }
 
-pub(crate) fn init_view(
+pub(crate) struct GameplayStartup {
+    pub mini_indicator: GameplayMiniIndicatorData,
+    pub lobby_session: GameplayLobbySession,
+    pub score_refresh: GameplayScoreRefresh,
+    pub presentation: GameplayInitView,
+}
+
+pub(crate) fn prepare_startup(
     config: &config::app_config::Config,
-    lobby: SimplyLoveLobbyRuntimeView,
+    lobby: LobbyRuntimeView,
     charts: &[Arc<ChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
     score_cursor: &mut ScoreRuntimeCursor,
-) -> GameplayInitView {
-    // Seed before `score_init_view` can start a request so even an immediate
-    // worker completion publishes a generation newer than this song's cursor.
+) -> GameplayStartup {
+    // Seed before preparing scores so even an immediate worker completion
+    // publishes a generation newer than this song's cursor.
     score_cursor.begin_song();
-    GameplayInitView {
-        runtime: runtime_view(config, lobby),
-        hud: profile::gameplay_hud_snapshot(),
-        judgment_palettes: {
-            let catalog = deadsync_config::judgment_palettes::runtime_catalog(
-                deadsync_theme_simply_love::color::JUDGMENT_PRESET,
-            );
-            std::array::from_fn(|player| {
-                catalog.resolve(profiles[player].judgment_palette_id.as_deref())
-            })
-        },
-        scores: score_init_view(charts, profiles, session),
+    let lobby_session = GameplayLobbySession::new(
+        lobby,
+        session.joined_sides,
+        profile_side_from_gameplay(session.player_side),
+    );
+    let hud_session = profile::get_session_snapshot();
+    let runtime = GameplayRuntimeView {
+        policy: policy_view(config),
+        play_style: hud_session.play_style,
+        player_side: hud_session.player_side,
+        joined: std::array::from_fn(|idx| {
+            hud_session.side_joined(profile_data::player_side_for_index(idx))
+        }),
+    };
+    let hud = profile::gameplay_hud_snapshot();
+    let judgment_palettes = {
+        let catalog = deadsync_config::judgment_palettes::runtime_catalog(
+            deadsync_theme_simply_love::color::JUDGMENT_PRESET,
+        );
+        std::array::from_fn(|player| catalog.resolve(profiles[player].judgment_palette_id.as_deref()))
+    };
+    let (mini_indicator, score_refresh, scores) = prepare_scores(charts, profiles, session);
+    GameplayStartup {
+        mini_indicator,
+        lobby_session,
+        score_refresh,
+        presentation: GameplayInitView { runtime, hud, judgment_palettes, scores },
     }
 }
 
 pub(crate) fn refresh_chart_scores(
-    view: &mut GameplayInitView,
+    startup: &mut GameplayStartup,
     charts: &[Arc<ChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
 ) {
-    view.scores = score_init_view(charts, profiles, session);
+    (startup.mini_indicator, startup.score_refresh, startup.presentation.scores) =
+        prepare_scores(charts, profiles, session);
 }
 
 pub(crate) fn present_stage(
@@ -364,33 +348,26 @@ pub(crate) fn present_stage(
     scene: Option<deadsync_song_lua::SongLuaLiveScene>,
     stage_intro_text: Arc<str>,
     replay_status_text: Option<Arc<str>>,
-    course_display_info: Option<gameplay::CourseDisplayInfo>,
+    course_name: Option<Arc<str>>,
     course_banner_path: Option<std::path::PathBuf>,
-    mut view: GameplayInitView,
+    startup: GameplayStartup,
 ) -> GameplayState {
     let (stage, assets) = prepared.into_parts();
-    let pack_group = assets.score_pack_group(
-        course_display_info.as_ref().map(|course| &course.name),
-    );
-    let runtime = &mut view.runtime;
-    let lobby_session = GameplayLobbySession::new(
-        std::mem::take(&mut runtime.lobby),
-        runtime.joined,
-        runtime.player_side,
-    );
+    let pack_group = assets.score_pack_group(course_name.as_ref());
     let presentation = gameplay::GameplayPresentation::from_stage(
         &stage,
         assets,
         stage_intro_text,
         replay_status_text,
-        course_display_info,
+        course_name.map(|name| gameplay::CourseDisplayInfo { name }),
         course_banner_path,
-        view,
+        startup.presentation,
     );
     let mut state = GameplayState {
         stage,
-        lobby_session,
+        lobby_session: startup.lobby_session,
         pack_group,
+        score_refresh: startup.score_refresh,
         presentation,
     };
     let (gameplay, session, warm_dynamic_scene) = state.stage.song_lua_attachment_parts();
@@ -398,55 +375,15 @@ pub(crate) fn present_stage(
     state
 }
 
-pub(crate) fn score_runtime_view(state: &GameplayState) -> GameplayScoreRuntimeView {
-    let mut scorebox_updates = std::array::from_fn(|_| None);
-    let mut rival_score_updates = [None; 2];
-    for player in 0..state.num_players() {
-        let side = profile_side_from_gameplay(state.runtime_player_side(player));
-        let side_idx = profile_data::player_side_index(side);
-        let profile = gameplay::scorebox_profile_for_side(state, side);
-        let rival_score_type = gameplay::rival_score_type_for_side(state, side);
-        if (!profile.display_scorebox && rival_score_type.is_none())
-            || !profile.online_active()
-            || !gameplay::scorebox_snapshot_for_side(state, side)
-                .is_some_and(|snapshot| snapshot.loading)
-        {
-            continue;
-        }
-        let chart_hash = state.charts()[player].short_hash.trim();
-        if chart_hash.is_empty() {
-            continue;
-        }
-        if let Some(snapshot) = scores::get_or_fetch_player_leaderboards_for_profile(
-            chart_hash,
-            profile,
-            GAMEPLAY_SCOREBOX_ENTRIES,
-        ) && !snapshot.loading
-        {
-            if let Some(score_type) = rival_score_type {
-                rival_score_updates[player] =
-                    mini_indicator_rival_score(Some(&snapshot), score_type);
-            }
-            scorebox_updates[side_idx] = Some(snapshot);
-        }
-    }
-    GameplayScoreRuntimeView {
-        scorebox_updates,
-        rival_score_updates,
-        itl_cmod_warning: state.presentation.itl_cmod_warning_snapshot(),
-    }
-}
-
 /// Prepare song-invariant score state once, before gameplay begins. In
 /// particular, resolving the ITL warning must never become part of the live
 /// score-polling path: its app-runtime adapter may inspect profile and catalog
 /// state, while the result cannot change during a stage.
 pub(crate) fn sync_initial_scores(state: &mut GameplayState) {
-    let mut view = GameplayScoreRuntimeView::default();
-    view.itl_cmod_warning = std::array::from_fn(|player| {
-        player < state.num_players() && scores::should_warn_cmod_for_itl_chart(state, player)
+    let warnings = std::array::from_fn(|player| {
+        player < state.stage.num_players() && scores::should_warn_cmod_for_itl_chart(&state.stage, player)
     });
-    gameplay::sync_score_runtime_view(state, view);
+    state.presentation.set_itl_cmod_warning(warnings);
 }
 
 pub(crate) struct PracticeInit {

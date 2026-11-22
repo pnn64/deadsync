@@ -495,20 +495,7 @@ fn sample_state(
     init.hud.player_side = theme_side;
     init.hud.p1.joined = joined[0];
     init.hud.p2.joined = joined[1];
-    let scorebox_profile = deadsync_score::GameplayScoreboxProfileSnapshot::new(
-        true,
-        true,
-        false,
-        true,
-        String::new(),
-        String::new(),
-        false,
-        "DeadSync".into(),
-        None,
-        None,
-        false,
-    );
-    init.scores.scorebox_profiles = [scorebox_profile.clone(), scorebox_profile];
+    init.scores.scorebox_visible = [true; 2];
     let scorebox_snapshot =
         deadsync_score::CachedPlayerLeaderboardData::ready(deadsync_score::PlayerLeaderboardData {
             panes: vec![deadsync_score::LeaderboardPane {

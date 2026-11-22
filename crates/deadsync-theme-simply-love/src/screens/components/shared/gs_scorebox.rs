@@ -147,11 +147,11 @@ pub(crate) struct GameplayScoreboxPlan {
 impl GameplayScoreboxPlan {
     pub(crate) fn new_with_palette(
         snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
-        profile: &score_data::GameplayScoreboxProfileSnapshot,
+        visible: bool,
         filter: score_data::SelectMusicScoreboxFilter,
         palette: JudgmentPalette,
     ) -> Self {
-        if !profile.display_scorebox || !profile.online_active() {
+        if !visible {
             return Self::default();
         }
         Self {

@@ -2,6 +2,7 @@ pub mod results;
 pub mod stage_charts;
 pub mod stage_options;
 pub mod stage_replay;
+pub mod stage_scores;
 
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{CrossoverRow, build_crossover_rows};
