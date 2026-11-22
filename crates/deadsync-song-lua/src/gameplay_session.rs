@@ -7,7 +7,11 @@ use crate::{
     SongLuaInputEvent, SongLuaInputType, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLiveRequest,
     SongLuaLiveScene,
 };
-use crate::playback::{FrameScratch, GameplayCoreState, SongMedia, prewarm_texture_bindings};
+use crate::playback::{
+    FrameScratch, GameplayCoreState, NOTEFIELD_ACTOR_SCRATCH_CAPACITY,
+    NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY, SongMedia, prewarm_texture_bindings,
+};
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     GameplayAction, GameplayAudioSnapshot, GameplayExit, GameplayInputPlayerSide,
     GameplayProfileData, GameplayRuntimeState, handle_core_input, update_core,
@@ -16,7 +20,9 @@ use deadsync_gameplay::{
 use deadsync_input::{
     CallbackInputState, HeldCallbackInputs, InputEvent, PhysicalInput, VirtualAction,
 };
-use deadsync_noteskin::NoteskinSlot;
+use deadsync_notefield::NotefieldFieldScratch;
+use deadsync_noteskin::{NoteskinRuntime, NoteskinSlot};
+use std::cell::{RefCell, RefMut};
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
@@ -46,6 +52,8 @@ pub struct GameplayStage<G> {
     pub song_lua: SongLuaGameplaySession,
     pub song_media: SongMedia,
     pub song_scratch: Option<Box<FrameScratch>>,
+    // These caches also survive replacing the authored compositor storage.
+    notefield_scratch: Option<[RefCell<NotefieldFieldScratch>; MAX_PLAYERS]>,
 }
 
 impl<G> GameplayStage<G> {
@@ -56,6 +64,7 @@ impl<G> GameplayStage<G> {
             song_lua,
             song_media: SongMedia::default(),
             song_scratch: None,
+            notefield_scratch: None,
         }
     }
 
@@ -82,6 +91,13 @@ impl<G> GameplayStage<G> {
             .as_deref()
             .map_or(&[], FrameScratch::render_targets)
     }
+
+    pub(crate) fn notefield_scratch(&self, player: usize) -> RefMut<'_, NotefieldFieldScratch> {
+        self.notefield_scratch
+            .as_ref()
+            .expect("field storage prepared with stage playback")[player]
+            .borrow_mut()
+    }
 }
 
 impl<P: GameplayProfileData, S: NoteskinSlot + Clone> GameplayStage<GameplayCoreState<P, S>> {
@@ -91,13 +107,37 @@ impl<P: GameplayProfileData, S: NoteskinSlot + Clone> GameplayStage<GameplayCore
         song_lua: SongLuaGameplaySession,
         sound_paths: Vec<PathBuf>,
     ) -> Self {
+        Self::with_song_playback_and_noteskins(
+            gameplay, song_lua, sound_paths, [[None; 4]; MAX_PLAYERS],
+        )
+    }
+
+    /// Prepare player field caches from the noteskins selected for the stage.
+    pub fn with_song_playback_and_noteskins(
+        gameplay: GameplayCoreState<P, S>,
+        song_lua: SongLuaGameplaySession,
+        sound_paths: Vec<PathBuf>,
+        skins: [[Option<&NoteskinRuntime<S>>; 4]; MAX_PLAYERS],
+    ) -> Self {
         let song_scratch = Some(Box::new(FrameScratch::new(&gameplay)));
         let song_media = SongMedia::new(&gameplay, sound_paths);
+        let notefield_scratch = Some(std::array::from_fn(|player| {
+            let active = usize::from(player < gameplay.num_players());
+            RefCell::new(NotefieldFieldScratch::new(
+                active * gameplay.cols_per_player(),
+                [
+                    active * NOTEFIELD_ACTOR_SCRATCH_CAPACITY,
+                    active * NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
+                ],
+                skins[player],
+            ))
+        }));
         Self {
             gameplay,
             song_lua,
             song_media,
             song_scratch,
+            notefield_scratch,
         }
     }
 

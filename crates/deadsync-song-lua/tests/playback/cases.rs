@@ -13884,6 +13884,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         stage: GameplayStage<GameplayCoreState>,
         hud_count: Option<usize>,
         expect_song_content: bool,
+        field_storage: std::cell::Cell<Option<*const deadsync_notefield::NotefieldFieldScratch>>,
     }
 
     impl GameplayFramePresenter for FixturePresenter {
@@ -13926,8 +13927,12 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
             &self,
             _: FramePresentationContext<'_, Self::View, Self::Policy>,
             request: &shared::FieldFrame<'_>,
-            _: FieldRenderBuffers<'_>,
+            buffers: FieldRenderBuffers<'_>,
         ) -> deadsync_notefield::BuiltNotefield {
+            let field_storage = std::ptr::from_ref(&*buffers.notefield);
+            if let Some(previous) = self.field_storage.replace(Some(field_storage)) {
+                assert_eq!(field_storage, previous);
+            }
             assert!(std::ptr::eq(request.chart.notes, self.stage.notes()));
             assert_eq!(request.music_time_s, self.stage.current_music_time_seconds());
             assert_eq!(request.geometry.player_idx, request.player);
@@ -13983,6 +13988,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         ),
         hud_count: Some(0),
         expect_song_content: true,
+        field_storage: std::cell::Cell::new(None),
     };
     let song_frame = std::ptr::from_ref(presenter.stage.song_frame());
     let song_time = presenter.stage.current_music_time_ns();

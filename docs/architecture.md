@@ -188,6 +188,11 @@ the borrowed Lua columns and note visibility, and the current authored judgment
 texture to the field presenter. Both native and Lua composition use the same
 preparation. The presenter supplies HUD assets and layout.
 
+Stage preparation prewarms the notefield model cache against the selected
+noteskins and sizes the hold mesh and field capture buffers. The stage retains
+these caches and the hold emitters across frames. `deadsync-notefield` samples
+the stage for receptor feedback, cues, flashes, and explosions in draw order.
+
 `deadsync-gameplay::stage_charts` resolves chart fallback and assigns charts to
 solo, Versus, and partner players. Preload, Player Options entry, and direct
 stage entry read the wheel through one adapter. The game validates Lua's

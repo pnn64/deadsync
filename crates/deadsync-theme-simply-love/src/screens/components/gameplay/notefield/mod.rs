@@ -3,27 +3,25 @@ use crate::screens::gameplay::GameplayCoreState as State;
 use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
 use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
 use deadsync_assets::noteskin::SpriteSlot;
-use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     FantasticWindowOptions, GameplayErrorBarTrim, TapExplosionOptions, blue_fantastic_window_ms,
     gameplay_error_bar_trim_max_window_ix, hold_explosion_enabled_for_options,
 };
 use deadsync_notefield::{
-    BrokenRunLookup, BuiltNotefield, CapturedActorScratch, ComboHudFrame, ComboMilestoneAssets,
-    ComboMilestoneSprite, CounterHudFrame, ErrorBarHudFrame, ErrorBarModes, HoldMeshScratch,
+    BrokenRunLookup, BuiltNotefield, ComboHudFrame, ComboMilestoneAssets, ComboMilestoneSprite,
+    CounterHudFrame, ErrorBarHudFrame, ErrorBarModes,
     IndicatorSprite, JudgmentHudFrame, LayoutMiniIndicatorPosition, MeasureCounterOptions,
-    MeasureLineMode, MiniHudFrame, ModelMeshCache, NotefieldCameraCache,
-    NotefieldComposeRequest, NotefieldFeedbackFrameView, NotefieldFieldFrameView,
-    NotefieldFrameFeatures, NotefieldHudFrameView, NotefieldLaneFeedback,
+    MeasureLineMode, MiniHudFrame, NotefieldCameraCache, NotefieldComposeRequest,
+    NotefieldFieldScratch, NotefieldFrameFeatures, NotefieldHudFrameView,
     NotefieldNoteskinView, NotefieldOptions,
     StreamProgressLookup, TapJudgmentHudFrame, TapJudgmentSprite, ZmodLayoutParams,
-    compose_notefield_field, compose_notefield_hud, prepare_notefield,
+    compose_notefield_hud, prepare_notefield,
 };
 use deadsync_profile as profile_data;
 use deadsync_song_lua::playback::FieldFrame;
 use deadsync_theme::NotefieldHudStyle;
-use std::array::from_fn;
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 
 use super::display_mods::{self, DisplayModsFrame};
 
@@ -607,10 +605,7 @@ pub(crate) fn compose_frame(
     visual_effects: &'static crate::visual_styles::EffectAssets,
     actor_resources: &ActorResourceArena,
     textures: &impl deadlib_present::texture::TextureContext,
-    model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
-    hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
-    hold_emitters: &[RefCell<[deadsync_notefield::HoldEmitterState; MAX_COLS]>; MAX_PLAYERS],
-    capture_scratch: &[RefCell<CapturedActorScratch>; MAX_PLAYERS],
+    notefield_scratch: &mut NotefieldFieldScratch,
     camera_caches: &mut [NotefieldCameraCache; MAX_PLAYERS],
     broken_run_lookup: &BrokenRunLookup,
     stream_progress_lookup: &StreamProgressLookup,
@@ -634,7 +629,6 @@ pub(crate) fn compose_frame(
     let hold_judgment_texture = judgment_assets.hold_judgment();
     let held_miss_texture = judgment_assets.held_miss();
     let p = &state.players()[player_idx];
-    let mut model_cache = model_caches[player_idx].borrow_mut();
 
     let style = notefield_plan.hud_style;
     let judgment_texture = judgment_assets.judgment();
@@ -689,108 +683,20 @@ pub(crate) fn compose_frame(
 
     let noteskin_sprite_source =
         |slot: &SpriteSlot| slot.actor_texture_source(actor_resources, textures);
-    let mut hold_emitters = hold_emitters[player_idx].borrow_mut();
-    let feedback_frame = NotefieldFeedbackFrameView {
-        column_cues: options
-            .frame_features
-            .column_cues
-            .then(|| state.column_cues(player_idx)),
-        column_cue_cursor: options
-            .frame_features
-            .column_cues
-            .then(|| state.column_cue_cursor(player_idx)),
-        crossover_cues: options
-            .frame_features
-            .crossover_cues
-            .then(|| state.crossover_cues(player_idx)),
-        crossover_cue_entries: options
-            .frame_features
-            .crossover_cues
-            .then(|| state.crossover_cue_entries(player_idx)),
-        crossover_cue_cursor: options
-            .frame_features
-            .crossover_cues
-            .then(|| state.crossover_cue_cursor(player_idx)),
-        column_flashes: options
-            .frame_features
-            .column_flash
-            .then(|| state.column_flashes_for_columns(col_start, num_cols)),
-        tap_explosions: tap_explosion_noteskin
-            .is_some()
-            .then(|| state.tap_explosions_for_columns(col_start, num_cols)),
-        mine_explosions: mine_noteskin
-            .or(base_noteskin)
-            .is_some_and(|noteskin| noteskin.mine_hit_explosion.is_some())
-            .then(|| state.mine_explosions_for_columns(col_start, num_cols)),
-        lanes: from_fn(|local_col| {
-            if local_col >= num_cols {
-                return NotefieldLaneFeedback::default();
-            }
-            let col = col_start + local_col;
-            let showing = state
-                .active_hold_for_render(col)
-                .filter(|active| {
-                    request
-                        .chart
-                        .notes
-                        .get(active.note_index)
-                        .is_some_and(|note| {
-                            deadsync_gameplay::hold_explosion_active(
-                                Some(active),
-                                prepared.current_beat,
-                                note.beat,
-                            )
-                        })
-                })
-                .map(|active| matches!(active.note_type, deadsync_core::note::NoteType::Roll));
-            let emitter = tap_explosion_noteskin.and_then(|skin| {
-                skin.hold_visuals_for_col(
-                    local_col,
-                    showing.unwrap_or(hold_emitters[local_col].is_roll),
-                )
-                .emitter
-                .as_ref()
-            });
-            hold_emitters[local_col].update(elapsed_screen, showing, emitter);
-            NotefieldLaneFeedback {
-                active_hold: state.active_hold_for_render(col),
-                hold_emitter: hold_emitters[local_col],
-                receptor_bop_zoom: if options.hide_targets {
-                    0.0
-                } else {
-                    state.receptor_bop_zoom(col)
-                },
-                receptor_press_visual: (!options.hide_targets)
-                    .then(|| state.receptor_glow_visual_for_col(col))
-                    .flatten(),
-            }
-        }),
-        countdown_font: mc_font_name,
-        countdown_text_slot: super::FRAME_TEXT_COUNTDOWN_BASE
+    hud_actors.reserve(prepared.frame_plan.hud_actor_reserve);
+    let field_result = notefield_scratch.compose(
+        state,
+        actors,
+        flat_draws,
+        hud_flat_draws,
+        &mut camera_caches[player_idx],
+        &request,
+        &prepared,
+        mc_font_name,
+        super::FRAME_TEXT_COUNTDOWN_BASE
             + player_idx as u8 * deadsync_notefield::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER,
-    };
-    let field_frame = NotefieldFieldFrameView {
-        feedback: feedback_frame,
-        completed_rows: state.completed_row_visibility(player_idx),
-    };
-    let field_result = {
-        hud_actors.reserve(prepared.frame_plan.hud_actor_reserve);
-        let mut hold_scratch = hold_mesh_scratch[player_idx].borrow_mut();
-        let mut proxy_scratch = capture_scratch[player_idx].borrow_mut();
-        compose_notefield_field(
-            actors,
-            flat_draws,
-            hud_flat_draws,
-            &mut model_cache,
-            &mut hold_scratch,
-            &mut proxy_scratch,
-            &mut camera_caches[player_idx],
-            &request,
-            &prepared,
-            &field_frame,
-            &noteskin_sprite_source,
-        )
-    };
+        &noteskin_sprite_source,
+    );
     if let Some(alpha) = display_mods::active_alpha(request.view.hide_display_mods, elapsed_screen)
     {
         display_mods::compose(
@@ -987,7 +893,7 @@ pub(crate) fn compose_frame(
         &request,
         &prepared,
         &hud_frame,
-        &mut capture_scratch[player_idx].borrow_mut(),
+        notefield_scratch.hud_capture_scratch(),
     );
 
     BuiltNotefield {

@@ -5,7 +5,7 @@ use crate::transforms::{
 };
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
-    HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
+    HoldEmitterState, HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
     MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest,
     NoteXParams, NotefieldCameraCache, NotefieldComposeRequest, NotefieldFeedbackFrameView,
     PreparedNotefield, PreparedNotefieldNotes, VisualEffectParams,
@@ -30,10 +30,11 @@ use deadlib_present::anim::EffectState;
 use deadlib_render_core::BlendMode;
 use deadsync_core::{input::MAX_COLS, note::NoteType};
 use deadsync_gameplay::{
-    AppearanceEffects, CompletedRowVisibility, VisualEffects, hold_head_render_flags,
+    AppearanceEffects, CompletedRowVisibility, GameplayProfileData, GameplayRuntimeState,
+    VisualEffects, hold_head_render_flags,
     song_lua_note_hidden,
 };
-use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot};
+use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinRuntime, NoteskinSlot};
 use deadsync_rules::note::HoldResult;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
@@ -42,12 +43,88 @@ use std::ops::Range;
 
 /// Borrowed runtime state needed by the canonical field presentation pass.
 ///
-/// The concrete theme resolves gameplay state into this fixed-size view;
-/// canonical notefield code owns all draw selection, placement, and ordering.
+/// Canonical notefield code owns all draw selection, placement, and ordering.
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldFieldFrameView<'a> {
     pub feedback: NotefieldFeedbackFrameView<'a>,
     pub completed_rows: CompletedRowVisibility<'a>,
+}
+
+/// Reusable notefield drawing state for one player, retained for the stage.
+pub struct NotefieldFieldScratch {
+    model_cache: ModelMeshCache,
+    hold_mesh: HoldMeshScratch,
+    capture: CapturedActorScratch,
+    hold_emitters: [HoldEmitterState; MAX_COLS],
+}
+
+impl NotefieldFieldScratch {
+    pub fn new<S: NoteskinSlot>(
+        columns: usize,
+        [field_capacity, hud_capacity]: [usize; 2],
+        skins: [Option<&NoteskinRuntime<S>>; 4],
+    ) -> Self {
+        Self {
+            model_cache: if columns == 0 || skins.iter().all(Option::is_none) {
+                ModelMeshCache::default()
+            } else {
+                ModelMeshCache::for_noteskins(skins)
+            },
+            hold_mesh: HoldMeshScratch::with_columns(columns),
+            capture: CapturedActorScratch::with_capacities(field_capacity, hud_capacity),
+            hold_emitters: [HoldEmitterState::default(); MAX_COLS],
+        }
+    }
+
+    pub fn hud_capture_scratch(&mut self) -> &mut CapturedActorScratch {
+        &mut self.capture
+    }
+
+    /// Sample the stage's feedback and render it with the same field and lane
+    /// geometry used for notes. Call after preparing the visible field.
+    pub fn compose<P, O, C, D, S, F>(
+        &mut self,
+        game: &GameplayRuntimeState<P, O, C, D>,
+        actors: &mut Vec<Actor>,
+        flat_draws: &mut Vec<FlatDraw>,
+        cue_hud_draws: &mut Vec<FlatDraw>,
+        camera_cache: &mut NotefieldCameraCache,
+        request: &NotefieldComposeRequest<'_, S>,
+        prepared: &PreparedNotefield<'_, S>,
+        countdown_font: &'static str,
+        countdown_text_slot: u8,
+        sprite_source: &F,
+    ) -> NotefieldFieldResult
+    where
+        P: GameplayProfileData,
+        S: NoteskinSlot,
+        F: Fn(&S) -> SpriteSource,
+    {
+        let frame = NotefieldFieldFrameView {
+            feedback: NotefieldFeedbackFrameView::from_gameplay(
+                game,
+                request,
+                prepared,
+                &mut self.hold_emitters,
+                countdown_font,
+                countdown_text_slot,
+            ),
+            completed_rows: game.completed_row_visibility(request.geometry.player_idx),
+        };
+        compose_notefield_field(
+            actors,
+            flat_draws,
+            cue_hud_draws,
+            &mut self.model_cache,
+            &mut self.hold_mesh,
+            &mut self.capture,
+            camera_cache,
+            request,
+            prepared,
+            &frame,
+            sprite_source,
+        )
+    }
 }
 
 /// Optional shared field capture produced while preserving the live actor tree.

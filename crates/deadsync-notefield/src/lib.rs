@@ -46,7 +46,8 @@ pub use display_mods::{
 pub use error_bar::{ERROR_BAR_TEXT_SLOTS_PER_PLAYER, ErrorBarModes, error_bar_boundaries_s};
 pub use feedback::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER;
 pub use field_frame::{
-    NotefieldFieldFrameView, NotefieldFieldResult, actor_from_flat_draw, compose_notefield_field,
+    NotefieldFieldFrameView, NotefieldFieldResult, NotefieldFieldScratch, actor_from_flat_draw,
+    compose_notefield_field,
 };
 pub use frame_feedback::{HoldEmitterState, NotefieldFeedbackFrameView, NotefieldLaneFeedback};
 pub use frame_hud::{

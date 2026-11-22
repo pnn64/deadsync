@@ -43,7 +43,7 @@ use deadsync_assets::gameplay_stage::{
 };
 use deadsync_assets::noteskin;
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
-use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::song_backgrounds::SongLayer2Flash;
 use deadsync_gameplay::{
@@ -56,10 +56,7 @@ use deadsync_gameplay::{
     exit_transition_alpha, scroll_receptor_y, spacing_multiplier_for_percent,
 };
 use deadsync_input::InputEvent;
-use deadsync_notefield::{
-    BrokenRunLookup, CapturedActorScratch, HoldMeshScratch, ModelMeshCache, StreamProgressLookup,
-};
-use deadsync_noteskin::NoteskinSlot;
+use deadsync_notefield::{BrokenRunLookup, ModelMeshCache, StreamProgressLookup};
 use deadsync_online::gameplay_lobby::{
     self, GameplayLobbyAction, GameplayLobbyHost, GameplayLobbyInput, GameplayLobbySession,
 };
@@ -79,12 +76,10 @@ use deadsync_song_lua::gameplay_session::{
 };
 use deadsync_song_lua::playback::song_meter_progress;
 use deadsync_song_lua::playback::{
-    NOTEFIELD_ACTOR_SCRATCH_CAPACITY, NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
-    PLAYER_ACTOR_SCRATCH_CAPACITY,
+    NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY, PLAYER_ACTOR_SCRATCH_CAPACITY,
 };
 use deadsync_theme::FontRole;
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -689,11 +684,6 @@ pub struct State {
     /// path string. There are no misses, growth, eviction, or gameplay-thread
     /// destruction; the single optional entry is released with the screen.
     song_background_key: Option<Arc<str>>,
-    pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
-    pub(crate) notefield_hold_mesh_scratch: [RefCell<HoldMeshScratch>; MAX_PLAYERS],
-    notefield_hold_emitters:
-        [RefCell<[deadsync_notefield::HoldEmitterState; MAX_COLS]>; MAX_PLAYERS],
-    pub(crate) notefield_capture_scratch: [RefCell<CapturedActorScratch>; MAX_PLAYERS],
     notefield_broken_run_lookup: [BrokenRunLookup; MAX_PLAYERS],
     notefield_stream_progress_lookup: [StreamProgressLookup; MAX_PLAYERS],
     /// Fixed song-lifetime width derived at screen entry from immutable noteskin
@@ -918,7 +908,7 @@ impl State {
         )
     }
 
-    /// Construct the theme's HUD and field caches for a prepared stage.
+    /// Construct the theme's HUD for a prepared stage.
     pub fn present_stage(
         prepared: PreparedGameplayStage,
         stage_intro_text: Arc<str>,
@@ -1025,19 +1015,6 @@ impl State {
             .background_path
             .as_deref()
             .map(deadlib_assets::media_path_key);
-        let notefield_model_cache =
-            notefield_model_cache_from_assets(&noteskin_assets, gameplay.num_players());
-        let notefield_hold_mesh_scratch = std::array::from_fn(|player| {
-            let columns = usize::from(player < gameplay.num_players()) * gameplay.cols_per_player();
-            RefCell::new(HoldMeshScratch::with_columns(columns))
-        });
-        let notefield_capture_scratch = std::array::from_fn(|player| {
-            let active = player < gameplay.num_players();
-            RefCell::new(CapturedActorScratch::with_capacities(
-                usize::from(active) * NOTEFIELD_ACTOR_SCRATCH_CAPACITY,
-                usize::from(active) * NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
-            ))
-        });
         let notefield_broken_run_lookup = std::array::from_fn(|player| {
             BrokenRunLookup::new(gameplay.measure_counter_segments(player))
         });
@@ -1113,12 +1090,6 @@ impl State {
             song_banner_key,
             pack_banner_key,
             song_background_key,
-            notefield_model_cache,
-            notefield_hold_mesh_scratch,
-            notefield_hold_emitters: std::array::from_fn(|_| {
-                RefCell::new([deadsync_notefield::HoldEmitterState::default(); MAX_COLS])
-            }),
-            notefield_capture_scratch,
             notefield_broken_run_lookup,
             notefield_stream_progress_lookup,
             notefield_widths,
@@ -1276,11 +1247,7 @@ impl GameplayFramePresenter for State {
             context.uptime_seconds,
             context.policy,
             request,
-            buffers.cameras,
-            buffers.field,
-            buffers.field_flat,
-            buffers.hud,
-            buffers.hud_flat,
+            buffers,
         )
     }
 
@@ -1446,69 +1413,18 @@ pub fn visible_banner_paths(state: &State) -> [Option<&Path>; 2] {
     ]
 }
 
-fn prewarm_notefield_model_cache_slots(
-    cache: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
-    assets: &GameplayNoteskinAssets,
-    num_players: usize,
-) {
-    for player in 0..num_players.min(MAX_PLAYERS) {
-        let mut cache = cache[player].borrow_mut();
-        for skin in [
-            assets.noteskin[player].as_ref(),
-            assets.mine_noteskin[player].as_ref(),
-            assets.receptor_noteskin[player].as_ref(),
-            assets.tap_explosion_noteskin[player].as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            skin.for_each_slot(|slot| {
-                // Prewarming is required in optimized builds too. Keep the
-                // side effect outside `debug_assert!`, which does not evaluate
-                // its condition when debug assertions are disabled.
-                let retained = cache.prewarm_slot(slot);
-                debug_assert!(
-                    retained,
-                    "noteskin slot frame cache was sealed before prewarming completed"
-                );
-            });
-        }
-        cache.seal();
-        cache.reset_stats();
-    }
-}
-
-fn notefield_model_cache_slot_count(assets: &GameplayNoteskinAssets, player: usize) -> usize {
-    let mut stable_ids = HashSet::new();
-    for skin in [
-        assets.noteskin[player].as_ref(),
-        assets.mine_noteskin[player].as_ref(),
-        assets.receptor_noteskin[player].as_ref(),
-        assets.tap_explosion_noteskin[player].as_ref(),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        skin.for_each_slot(|slot| {
-            stable_ids.insert(slot.stable_id());
-        });
-    }
-    stable_ids.len()
-}
-
+/// Compatibility entry point for callers prewarming noteskin components.
 pub fn notefield_model_cache_from_assets(
     assets: &GameplayNoteskinAssets,
     num_players: usize,
 ) -> [RefCell<ModelMeshCache>; MAX_PLAYERS] {
-    let cache: [RefCell<ModelMeshCache>; MAX_PLAYERS] = std::array::from_fn(|player| {
+    std::array::from_fn(|player| {
         RefCell::new(if player < num_players {
-            ModelMeshCache::with_capacity(notefield_model_cache_slot_count(assets, player))
+            ModelMeshCache::for_noteskins(assets.components_for_player(player))
         } else {
             ModelMeshCache::default()
         })
-    });
-    prewarm_notefield_model_cache_slots(&cache, assets, num_players);
-    cache
+    })
 }
 
 /// Compatibility constructor for callers that initialize and present a stage together.
@@ -4773,11 +4689,7 @@ pub fn draw_field(
     arrow_effect_time_s: f64,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     request: &deadsync_song_lua::playback::FieldFrame<'_>,
-    notefield_camera_cache: &mut [deadsync_notefield::NotefieldCameraCache; MAX_PLAYERS],
-    field_scratch: &mut Vec<Actor>,
-    flat_draw_scratch: &mut Vec<deadlib_present::actors::FlatDraw>,
-    hud_scratch: &mut Vec<Actor>,
-    hud_flat_draw_scratch: &mut Vec<deadlib_present::actors::FlatDraw>,
+    buffers: FieldRenderBuffers<'_>,
 ) -> deadsync_notefield::BuiltNotefield {
     let player_idx = request.player;
     notefield::compose_frame(
@@ -4801,21 +4713,18 @@ pub fn draw_field(
         &visual_policy.assets.effects,
         state.actor_resources(),
         asset_manager.texture_context(),
-        &state.notefield_model_cache,
-        &state.notefield_hold_mesh_scratch,
-        &state.notefield_hold_emitters,
-        &state.notefield_capture_scratch,
-        notefield_camera_cache,
+        buffers.notefield,
+        buffers.cameras,
         &state.notefield_broken_run_lookup[player_idx],
         &state.notefield_stream_progress_lookup[player_idx],
         state.runtime_view.policy.center_single_notefield,
         state.itl_cmod_warning[player_idx],
         state.display_mods_text(player_idx),
         &state.practice_timing_labels[player_idx],
-        field_scratch,
-        flat_draw_scratch,
-        hud_scratch,
-        hud_flat_draw_scratch,
+        buffers.field,
+        buffers.field_flat,
+        buffers.hud,
+        buffers.hud_flat,
     )
 }
 

@@ -23,6 +23,17 @@ pub struct GameplayNoteskinAssets {
 }
 
 impl GameplayNoteskinAssets {
+    /// Base, mine, receptor and tap-explosion components for a runtime player.
+    #[must_use]
+    pub fn components_for_player(&self, player: usize) -> [Option<&Noteskin>; 4] {
+        [
+            self.noteskin[player].as_deref(),
+            self.mine_noteskin[player].as_deref(),
+            self.receptor_noteskin[player].as_deref(),
+            self.tap_explosion_noteskin[player].as_deref(),
+        ]
+    }
+
     /// Prepare deterministic feedback from the selected components without
     /// exposing asset loading or noteskin runtime types to the gameplay core.
     pub fn gameplay_data(

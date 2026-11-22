@@ -12,7 +12,7 @@ use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
     ActiveColumnFlash, ActiveHold, ActiveMineExplosion, ActiveTapExplosion, ColumnCue,
-    hold_explosion_active,
+    GameplayProfileData, GameplayRuntimeState, hold_explosion_active,
 };
 use deadsync_noteskin::{HoldEmitter, NoteskinSlot, actor::MAX_HOLD_FLASHES};
 #[cfg(test)]
@@ -43,7 +43,7 @@ pub struct NotefieldLaneFeedback<'a> {
     pub hold_emitter: HoldEmitterState,
 }
 
-/// Song-lifetime presentation state. Fixed storage, no allocations or asset
+/// Song-lifetime hold feedback state. Fixed storage, no allocations or asset
 /// work; even after a long frame, update visits at most MAX_HOLD_FLASHES slots.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HoldEmitterState {
@@ -114,8 +114,7 @@ impl HoldEmitterState {
 
 /// Borrowed per-frame feedback emitted around the receptor row.
 ///
-/// The concrete theme prepares this view from gameplay state; canonical
-/// notefield code owns actor selection, placement, animation, and ordering.
+/// The field compositor prepares this view from the current gameplay state.
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldFeedbackFrameView<'a> {
     /// Cue columns use chart-global column indices.
@@ -138,6 +137,81 @@ pub struct NotefieldFeedbackFrameView<'a> {
     pub lanes: [NotefieldLaneFeedback<'a>; MAX_COLS],
     pub countdown_font: &'static str,
     pub countdown_text_slot: u8,
+}
+
+impl<'a> NotefieldFeedbackFrameView<'a> {
+    pub(crate) fn from_gameplay<P: GameplayProfileData, O, C, D, S>(
+        game: &'a GameplayRuntimeState<P, O, C, D>,
+        request: &NotefieldComposeRequest<'_, S>,
+        prepared: &PreparedNotefield<'_, S>,
+        hold_emitters: &mut [HoldEmitterState; MAX_COLS],
+        countdown_font: &'static str,
+        countdown_text_slot: u8,
+    ) -> Self {
+        let player = request.geometry.player_idx;
+        let options = &request.options;
+        let features = options.frame_features;
+        let skins = &request.noteskin;
+        let col_start = prepared.frame_plan.col_start;
+        let num_cols = prepared.frame_plan.num_cols;
+        Self {
+            column_cues: features.column_cues.then(|| game.column_cues(player)),
+            column_cue_cursor: features.column_cues.then(|| game.column_cue_cursor(player)),
+            crossover_cues: features.crossover_cues.then(|| game.crossover_cues(player)),
+            crossover_cue_entries: features
+                .crossover_cues
+                .then(|| game.crossover_cue_entries(player)),
+            crossover_cue_cursor: features
+                .crossover_cues
+                .then(|| game.crossover_cue_cursor(player)),
+            column_flashes: features
+                .column_flash
+                .then(|| game.column_flashes_for_columns(col_start, num_cols)),
+            tap_explosions: skins
+                .tap_explosion
+                .is_some()
+                .then(|| game.tap_explosions_for_columns(col_start, num_cols)),
+            mine_explosions: skins
+                .mine
+                .or(skins.base)
+                .is_some_and(|skin| skin.mine_hit_explosion.is_some())
+                .then(|| game.mine_explosions_for_columns(col_start, num_cols)),
+            lanes: std::array::from_fn(|local_col| {
+                if local_col >= num_cols {
+                    return NotefieldLaneFeedback::default();
+                }
+                let col = col_start + local_col;
+                let active_hold = game.active_hold_for_render(col);
+                let showing = active_hold
+                    .filter(|active| {
+                        request.chart.notes.get(active.note_index).is_some_and(|note| {
+                            hold_explosion_active(Some(active), prepared.current_beat, note.beat)
+                        })
+                    })
+                    .map(|active| matches!(active.note_type, NoteType::Roll));
+                let hold_emitter = &mut hold_emitters[local_col];
+                let emitter = skins.tap_explosion.and_then(|skin| {
+                    skin.hold_visuals_for_col(local_col, showing.unwrap_or(hold_emitter.is_roll))
+                        .emitter
+                        .as_ref()
+                });
+                hold_emitter.update(request.visual.elapsed_screen_s, showing, emitter);
+                let (receptor_bop_zoom, receptor_press_visual) = if options.hide_targets {
+                    (0.0, None)
+                } else {
+                    (game.receptor_bop_zoom(col), game.receptor_glow_visual_for_col(col))
+                };
+                NotefieldLaneFeedback {
+                    active_hold,
+                    hold_emitter: *hold_emitter,
+                    receptor_bop_zoom,
+                    receptor_press_visual,
+                }
+            }),
+            countdown_font,
+            countdown_text_slot,
+        }
+    }
 }
 
 /// Compose cues/flashes, receptor targets and feedback, then tap and mine

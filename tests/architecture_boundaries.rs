@@ -270,7 +270,8 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         "self.gameplay.replace_song_background_changes(changes)",
         "gameplay_crossover_annotations_for_player,",
         "SongLuaGameplaySession::for_gameplay(&mut gameplay)",
-        "GameplayStage::with_song_playback(",
+        "GameplayStage::with_song_playback_and_noteskins(",
+        "self.noteskin_assets.components_for_player(player)",
         "session.attach(gameplay, scene, warm_dynamic_scene)",
     ] {
         assert!(contains_rust(&stage, startup), "missing game startup {startup}");
@@ -471,6 +472,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         "pub struct GameplayStage<G>",
         "pub song_media: SongMedia",
         "pub song_scratch: Option<Box<FrameScratch>>",
+        "notefield_scratch: Option<[RefCell<NotefieldFieldScratch>; MAX_PLAYERS]>",
         "FrameScratch::new(&gameplay)",
         "SongMedia::new(&gameplay, sound_paths)",
         "scratch.enable_dynamic_scene()",
@@ -10755,14 +10757,8 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
             && source.contains("prepare_notefield(&request)"),
         "Simply Love must enter the canonical notefield request boundary"
     );
-    for (view, composer) in [
-        ("NotefieldFieldFrameView {", "compose_notefield_field("),
-        ("NotefieldHudFrameView {", "compose_notefield_hud("),
-    ] {
-        assert!(
-            source.contains(view),
-            "Simply Love must prepare the canonical frame view {view}"
-        );
+    assert!(source.contains("NotefieldHudFrameView {"));
+    for composer in ["notefield_scratch.compose(", "compose_notefield_hud("] {
         assert_eq!(
             source.match_indices(composer).count(),
             1,
@@ -10781,6 +10777,8 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "MineLayerRequest",
         "compose_flat_mine_layers(",
         "compose_notefield_feedback(",
+        "compose_notefield_field(",
+        "NotefieldFieldFrameView {",
         "ComboFeedbackRequest",
         "compose_combo_feedback(",
         "ErrorBarComposeRequest",
@@ -10801,6 +10799,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     for definition in [
         "pub struct NotefieldFieldFrameView",
         "pub struct NotefieldFieldResult",
+        "pub struct NotefieldFieldScratch",
         "pub fn compose_notefield_field",
     ] {
         assert!(
@@ -10980,14 +10979,14 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     assert!(gameplay_runtime.contains("pub fn completed_row_visibility("));
     assert!(field_frame.contains("pub completed_rows: CompletedRowVisibility"));
     assert!(field_frame.contains("completed_rows.hides_note(note_index)"));
-    assert!(source.contains("state.completed_row_visibility(player_idx)"));
+    assert!(field_frame.contains("game.completed_row_visibility(request.geometry.player_idx)"));
     assert!(
         !source.contains("row_hides_completed_note("),
         "Simply Love must consume the borrowed completed-row view instead of querying runtime rows"
     );
 
     let field_call = source
-        .find("compose_notefield_field(")
+        .find("notefield_scratch.compose(")
         .expect("Simply Love must compose the canonical field pass");
     let display_mods_call = source[field_call..]
         .find("display_mods::compose(")
@@ -11225,8 +11224,9 @@ fn column_countdowns_stay_on_the_prepared_hud_path() {
     );
     assert!(hud.contains("if request.capture_requests.player {"));
     assert!(hud.contains("actors.extend(draws.drain(..).map(actor_from_flat_draw));"));
-    assert!(adapter.contains("countdown_text_slot: super::FRAME_TEXT_COUNTDOWN_BASE"));
-    assert!(adapter.contains("compose_notefield_field(\n            actors,\n            flat_draws,\n            hud_flat_draws,"));
+    assert!(contains_rust(&adapter, "super::FRAME_TEXT_COUNTDOWN_BASE + player_idx as u8"));
+    assert!(contains_rust(&adapter, "notefield_scratch.compose(state, actors, flat_draws, hud_flat_draws,"));
+    assert!(contains_rust(&field, "compose_notefield_field(actors, flat_draws, cue_hud_draws,"));
     assert!(prewarm.contains("let countdown_slot = FRAME_TEXT_COUNTDOWN_BASE"));
     assert!(prewarm.contains("prewarm_u32_text_slot("));
     assert!(!prewarm.contains("COLUMN_COUNTDOWN_PREWARM_CAP"));
@@ -11474,9 +11474,10 @@ fn simply_love_explosion_layers_use_canonical_notefield_owner() {
             "canonical feedback frame must delegate explosion composition through {delegation}"
         );
     }
-    assert!(theme.contains("NotefieldFeedbackFrameView {"));
-    assert!(theme.contains("NotefieldFieldFrameView {"));
-    assert!(theme.contains("compose_notefield_field("));
+    assert!(theme.contains("notefield_scratch.compose("));
+    assert!(field.contains("NotefieldFieldFrameView {"));
+    assert!(field.contains("NotefieldFeedbackFrameView::from_gameplay("));
+    assert!(!theme.contains("compose_notefield_field("));
     assert!(field.contains("compose_notefield_feedback("));
     assert!(!theme.contains("compose_notefield_feedback("));
     for low_level in [
@@ -11717,6 +11718,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "NotefieldFeedbackFrameView",
         "NotefieldFieldFrameView",
         "NotefieldFieldResult",
+        "NotefieldFieldScratch",
         "NotefieldFrameFeatures",
         "NotefieldFramePlan",
         "NotefieldGeometry",
@@ -12372,9 +12374,19 @@ fn field_metrics_are_shared() {
             "canonical feedback-frame owner is missing {token}"
         );
     }
-    assert!(theme.contains("NotefieldFeedbackFrameView {"));
-    assert!(theme.contains("NotefieldFieldFrameView {"));
-    assert!(theme.contains("compose_notefield_field("));
+    assert!(theme.contains("notefield_scratch.compose("));
+    assert!(contains_rust(&frame, "hold_emitter.update("));
+    assert!(contains_rust(&frame, "game.receptor_glow_visual_for_col(col)"));
+    for former_owner in [
+        "NotefieldLaneFeedback {",
+        "NotefieldFeedbackFrameView {",
+        "NotefieldFieldFrameView {",
+        "HoldEmitterState::",
+        "active_hold_for_render(",
+        "compose_notefield_field(",
+    ] {
+        assert!(!theme.contains(former_owner), "theme owns field feedback {former_owner}");
+    }
     assert!(field.contains("compose_notefield_feedback("));
     assert!(!theme.contains("compose_notefield_feedback("));
     assert!(theme.contains("slot.actor_texture_source(actor_resources, textures)"));

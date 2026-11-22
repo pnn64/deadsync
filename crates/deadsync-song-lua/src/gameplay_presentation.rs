@@ -10,7 +10,9 @@ use deadlib_present::actors::{Actor, FlatDraw};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::GameplayProfileData;
 use deadsync_gameplay::practice::PracticeSession;
-use deadsync_notefield::{BuiltNotefield, NotefieldCameraCache, ViewOverride};
+use deadsync_notefield::{
+    BuiltNotefield, NotefieldCameraCache, NotefieldFieldScratch, ViewOverride,
+};
 use deadsync_noteskin::NoteskinSlot;
 
 /// Layout and HUD options shared by normal play and Practice.
@@ -48,6 +50,7 @@ pub struct FramePresentationContext<'a, View, Policy> {
 
 pub struct FieldRenderBuffers<'a> {
     pub cameras: &'a mut [NotefieldCameraCache; MAX_PLAYERS],
+    pub notefield: &'a mut NotefieldFieldScratch,
     pub field: &'a mut Vec<Actor>,
     pub field_flat: &'a mut Vec<FlatDraw>,
     pub hud: &'a mut Vec<Actor>,
@@ -197,6 +200,7 @@ fn compose_stage_frame<P: GameplayFramePresenter>(
                 request,
                 FieldRenderBuffers {
                     cameras,
+                    notefield: &mut stage.notefield_scratch(request.player),
                     field,
                     field_flat,
                     hud,

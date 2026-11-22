@@ -3,9 +3,11 @@ use deadlib_present::actors::{Actor, FlatTexturedMesh, SizeSpec};
 use deadlib_render_core::{BlendMode, TMeshCacheKey, TexturedMeshVertex};
 use deadsync_core::input::MAX_COLS;
 use deadsync_noteskin::{
-    ModelDrawState, ModelMesh, ModelTweenCursor, NoteskinSlot, model_vertex_for_sprite,
+    ModelDrawState, ModelMesh, ModelTweenCursor, NoteskinRuntime, NoteskinSlot,
+    model_vertex_for_sprite,
 };
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 const MIN_SLOT_LOOKUP_SIZE: usize = 2;
@@ -46,12 +48,12 @@ pub struct NoteskinFrameCacheStats {
 
 /// Per-player notefield model geometry cache.
 ///
-/// Owner: gameplay screen logic, one cache per active player notefield.
+/// Owner: the stage, with one cache per active player notefield.
 /// Threading: single game/render frame path; callers hold it behind `RefCell`.
 /// Lifetime: gameplay screen/session, cleared or rebuilt at song transitions.
 /// Capacity: caller-sized dense slot states and a lookup table kept at or below
 /// 50% load. Before sealing, both grow when the initial estimate is too small.
-/// Warmup: the gameplay adapter registers every noteskin slot and then seals
+/// Warmup: stage preparation registers every noteskin slot and then seals
 /// growth before live play. It supplies the exact unique slot count so normal
 /// prewarming does not reallocate or rehash.
 /// Miss: before sealing, registers the slot and prebuilds model geometry. A
@@ -87,6 +89,30 @@ impl Default for ModelMeshCache {
 }
 
 impl ModelMeshCache {
+    /// Register every slot in the selected noteskins without growing the cache
+    /// during warmup or playback.
+    pub fn for_noteskins<S: NoteskinSlot>(skins: [Option<&NoteskinRuntime<S>>; 4]) -> Self {
+        let capacity = {
+            let mut stable_ids = HashSet::new();
+            for skin in skins.into_iter().flatten() {
+                skin.for_each_slot(|slot| {
+                    stable_ids.insert(slot.stable_id());
+                });
+            }
+            stable_ids.len()
+        };
+        let mut cache = Self::with_capacity(capacity);
+        for skin in skins.into_iter().flatten() {
+            skin.for_each_slot(|slot| {
+                let retained = cache.prewarm_slot(slot);
+                debug_assert!(retained, "noteskin slot was lost during prewarming");
+            });
+        }
+        cache.seal();
+        cache.reset_stats();
+        cache
+    }
+
     #[inline(always)]
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {

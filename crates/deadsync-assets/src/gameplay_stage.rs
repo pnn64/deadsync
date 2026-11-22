@@ -89,10 +89,11 @@ impl PreparedGameplayStage {
 
     pub fn into_parts(self) -> (GameplayStage<GameplayCoreState>, GameplayStageAssets) {
         (
-            GameplayStage::with_song_playback(
+            GameplayStage::with_song_playback_and_noteskins(
                 self.gameplay,
                 self.song_lua,
                 self.song_lua_sound_paths,
+                std::array::from_fn(|player| self.noteskin_assets.components_for_player(player)),
             ),
             GameplayStageAssets {
                 noteskin_assets: self.noteskin_assets,
