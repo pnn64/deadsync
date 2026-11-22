@@ -690,10 +690,12 @@ impl Pattern {
         (next.repeat == Repeat::One && matches!(next.kind, Kind::Byte | Kind::Literal))
             .then_some(next.arg as u8)
     }
-    /// The mandatory literal or class at the start of a match. Other bytes fail the
-    /// first instruction without reaching any later instruction or error.
+    /// The mandatory literal or class after any leading capture instructions.
+    /// Leading captures only record positions in compiler-assigned work slots.
     pub(crate) fn leading_byte(&self) -> Option<LeadingByte<'_>> {
-        let first = self.code.first()?;
+        let first = self.code.iter().find(|instruction| {
+            !matches!(instruction.kind, Kind::Open | Kind::Close | Kind::Position)
+        })?;
         if !matches!(first.repeat, Repeat::One | Repeat::Plus) {
             return None;
         }
