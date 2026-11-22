@@ -333,7 +333,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     );
                     assert!(app.state.screens.course_evaluation.stages.is_empty());
                     assert_eq!(app.state.screens.course_evaluation.pages.len(), 2);
-                    assert!(app.state.screens.evaluation_state.return_to_course);
+                    assert_eq!(app.state.screens.evaluation_origin, EvaluationOrigin::Course);
                     app.step_course_eval_page(-1);
                     assert_eq!(
                         app.state.screens.evaluation_state.score_info[0].as_ref().unwrap().song.title,
@@ -385,6 +385,13 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         app.state.session.last_course_wheel_path.as_deref(),
                         Some(root.path().join("endless.crs").as_path())
                     );
+                    app.state.shell.transition = TransitionState::Idle;
+                    app.leave_evaluation();
+                    assert!(matches!(
+                        app.state.shell.transition,
+                        TransitionState::FadingOut { target: CurrentScreen::SelectCourse, .. }
+                            | TransitionState::ActorsFadeOut { target: CurrentScreen::SelectCourse, .. }
+                    ));
                 });
             }
         }
@@ -599,7 +606,7 @@ fn interrupted_endless_saves_accumulated_routine_score_and_all_evaluation_pages(
                     app.state.session.played_stages[3].song.title,
                     "PR845 transition"
                 );
-                assert!(app.state.screens.evaluation_state.return_to_course);
+                assert_eq!(app.state.screens.evaluation_origin, EvaluationOrigin::Course);
                 for (side, directory) in profiles.directories.iter().enumerate() {
                     let index = score_data::load_local_score_index_from_root(
                         &directory.path().join("scores/local"),
@@ -694,7 +701,7 @@ fn course_stage_load_failures_preserve_recorded_results_and_evaluation_pages() {
                             completed_songs + 1
                         );
                         assert!(app.state.screens.course_evaluation.stages.is_empty());
-                        assert!(app.state.screens.evaluation_state.return_to_course);
+                        assert_eq!(app.state.screens.evaluation_origin, EvaluationOrigin::Course);
                         assert_eq!(
                             app.state.coin.bookkeeping().stages_played,
                             stages_played + 1

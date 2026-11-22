@@ -1,6 +1,8 @@
 use deadsync_config::app_config::Config;
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_core::session_flow::{self, SessionNavigationPlan, SessionNavigationPolicy};
+use deadsync_core::session_flow::{
+    self, EvaluationOrigin, SessionNavigationPlan, SessionNavigationPolicy,
+};
 use deadsync_profile::PlayerSide;
 use deadsync_theme::ThemeSessionFlow;
 use deadsync_theme::profile_picker::ProfilePickerContext;
@@ -36,6 +38,10 @@ pub(crate) fn navigation_route_plan<T: ThemeSessionFlow>(
         requested,
         has_played_stages,
     )
+}
+
+pub(crate) fn evaluation_return_to<T: ThemeSessionFlow>(origin: EvaluationOrigin) -> T::Screen {
+    session_flow::evaluation_return_to(T::SESSION_SCREENS, origin)
 }
 
 pub(crate) fn evaluation_summary_return_to<T: ThemeSessionFlow>(
@@ -234,6 +240,12 @@ mod tests {
                 deadlib_assets::present_dsl::SpriteBuilder::solid()
             ));
         }
+    }
+
+    #[test]
+    fn evaluation_returns_to_the_origin_in_the_installed_theme() {
+        assert_eq!(evaluation_return_to::<AlternateTheme>(EvaluationOrigin::Song), "songs");
+        assert_eq!(evaluation_return_to::<AlternateTheme>(EvaluationOrigin::Course), "courses");
     }
 
     #[test]

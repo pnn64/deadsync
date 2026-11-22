@@ -179,6 +179,7 @@ use deadsync_assets::gameplay_stage::{
 };
 use deadsync_chart::{GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_core::session_flow::EvaluationOrigin;
 use deadsync_gameplay::stage_charts::take_player_charts;
 use deadsync_gameplay::practice::PracticeHost;
 #[cfg(test)]
@@ -650,6 +651,7 @@ pub struct ScreensState {
     select_course_state: select_course::State,
     sandbox_state: sandbox::State,
     evaluation_state: evaluation::State,
+    evaluation_origin: EvaluationOrigin,
     evaluation_stage: Option<EvaluationStage>,
     course_evaluation: evaluation_views::CourseEvaluationPages,
     evaluation_summary_state: evaluation_summary::State,
@@ -896,7 +898,6 @@ fn build_course_summary_eval_state(
     );
     state.active_color_index = active_color_index;
     evaluation::sync_elapsed(&mut state, session_elapsed, gameplay_elapsed);
-    state.return_to_course = true;
     state.allow_online_panes = false;
     CourseEvaluationPage { view: state, stage: evaluation_stage }
 }
@@ -1344,6 +1345,7 @@ impl ScreensState {
             select_course_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
+            evaluation_origin: EvaluationOrigin::Song,
             evaluation_stage: None,
             course_evaluation: Default::default(),
             evaluation_summary_state,
@@ -1357,7 +1359,6 @@ impl ScreensState {
         delta_time: f32,
         now: Instant,
         session: &SessionState,
-        stage_pending: bool,
         premium_seconds_left: Option<u32>,
         asset_manager: &AssetManager,
         audio: &mut deadsync_audio_stream::AudioControl,
@@ -1496,19 +1497,7 @@ impl ScreensState {
                     session_elapsed,
                     gameplay_elapsed,
                 );
-                let update_effect = evaluation::update(&mut self.evaluation_state, delta_time);
-                let navigation = if let Some(delay) = self.evaluation_state.auto_advance_seconds
-                    && self.evaluation_state.screen_elapsed >= delay
-                    && (stage_pending || self.player_options_state.is_some())
-                {
-                    ThemeEffect::Navigate(CurrentScreen::Gameplay)
-                } else {
-                    ThemeEffect::None
-                };
-                (
-                    Some(ThemeEffect::sequence(update_effect, navigation)),
-                    false,
-                )
+                (Some(evaluation::update(&mut self.evaluation_state, delta_time)), false)
             }
             CurrentScreen::EvaluationSummary => {
                 evaluation_summary::update(&mut self.evaluation_summary_state, delta_time);
@@ -4840,7 +4829,6 @@ impl App {
                     logic_dt,
                     redraw_started,
                     &self.state.session,
-                    self.state.pending_stage.is_some(),
                     premium_seconds_left,
                     &self.asset_manager,
                     &mut self.audio,
@@ -5672,6 +5660,10 @@ impl App {
             ThemeEffect::NavigateNoFade(screen) => {
                 self.handle_immediate_navigation(screen, event_loop);
                 return Ok(());
+            }
+            ThemeEffect::LeaveEvaluation => {
+                self.leave_evaluation();
+                Vec::new()
             }
             ThemeEffect::Exit => self.handle_process_exit(ProcessExitRequest::Exit),
             ThemeEffect::Shutdown => self.handle_process_exit(ProcessExitRequest::Shutdown),
@@ -7232,8 +7224,6 @@ impl App {
             pages.push(course_page);
             for mut page in per_song_pages {
                 page.view.sfx_paths = sfx_paths.clone();
-                page.view.return_to_course = true;
-                page.view.auto_advance_seconds = None;
                 page.view.screen_elapsed = screen_elapsed;
                 evaluation::sync_elapsed(&mut page.view, session_elapsed, gameplay_elapsed);
                 pages.push(page);
@@ -7318,8 +7308,6 @@ impl App {
         let (session_elapsed, gameplay_elapsed) =
             evaluation::elapsed_times(&self.state.screens.evaluation_state);
         evaluation::sync_elapsed(&mut page, session_elapsed, gameplay_elapsed);
-        page.return_to_course = true;
-        page.auto_advance_seconds = None;
         self.state.screens.evaluation_state = page;
         self.state.screens.evaluation_stage = stage;
         self.mark_evaluation_runtime_dirty();
@@ -9669,8 +9657,6 @@ impl App {
                 let init_view = Self::evaluation_init_view(&gameplay_results, &stage, &config);
                 let mut eval_state = evaluation::init(init_view);
                 eval_state.active_color_index = color_idx;
-                eval_state.return_to_course = true;
-                eval_state.auto_advance_seconds = None;
                 self.state.screens.course_evaluation.stages.push(CourseEvaluationPage {
                     view: eval_state,
                     stage: evaluation_stage,
@@ -10063,6 +10049,11 @@ impl App {
                 Self::execute_evaluation_score_runtime(&gameplay.stage, &gameplay.pack_group);
             }
             let in_course_run = self.state.session.course_run.is_some();
+            self.state.screens.evaluation_origin = if in_course_run {
+                EvaluationOrigin::Course
+            } else {
+                EvaluationOrigin::Song
+            };
             let (init_view, evaluation_stage, failed, completed_course) = if let Some(gameplay) =
                 gameplay_results.as_ref()
             {
@@ -10086,8 +10077,6 @@ impl App {
             self.state.screens.evaluation_state = evaluation::init(init_view);
             self.state.screens.evaluation_stage = evaluation_stage;
             self.state.screens.evaluation_state.active_color_index = color_idx;
-            self.state.screens.evaluation_state.return_to_course = in_course_run;
-            self.state.screens.evaluation_state.auto_advance_seconds = None;
             let session_elapsed = self.state.session.session_start_time.map_or(0.0, |start| {
                 Instant::now().duration_since(start).as_secs_f32()
             });

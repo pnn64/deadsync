@@ -495,9 +495,11 @@ impl App {
                 unreachable!("Select Course input uses the flat buffer")
             }
             CurrentScreen::PlayerOptions => unreachable!("Player Options input routed directly"),
-            CurrentScreen::Evaluation => {
-                screens::evaluation::handle_input(&mut self.state.screens.evaluation_state, &ev)
-            }
+            CurrentScreen::Evaluation => screens::evaluation::handle_session_input(
+                &mut self.state.screens.evaluation_state,
+                &ev,
+                self.state.screens.evaluation_origin,
+            ),
             CurrentScreen::EvaluationSummary => {
                 let num_stages = self.post_select_display_stage_count(
                     config::runtime::get().show_course_individual_scores,

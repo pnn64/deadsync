@@ -21,6 +21,23 @@ pub struct ProfileLoginScreens<S> {
     pub arrowcloud: Option<S>,
 }
 
+/// The selection that started the play session shown in Evaluation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EvaluationOrigin {
+    Song,
+    Course,
+}
+
+pub const fn evaluation_return_to<S: Copy>(
+    screens: SessionScreens<S>,
+    origin: EvaluationOrigin,
+) -> S {
+    match origin {
+        EvaluationOrigin::Song => screens.select_music,
+        EvaluationOrigin::Course => screens.select_course,
+    }
+}
+
 pub fn profile_selection_target<S: Copy + Eq>(
     screens: SessionScreens<S>,
     login: ProfileLoginScreens<S>,

@@ -9,7 +9,9 @@ use crate::navigation::{
     navigation_transition_effect_plan, practice_music_rate_on_screen_change, process_exit_navigation_plan,
     screen_change_plan, stage_entry_duration, stage_exit_duration, write_current_screen_file,
 };
-use crate::screen_flow::{navigation_route_plan, preferred_play_style_for_joined};
+use crate::screen_flow::{
+    evaluation_return_to, navigation_route_plan, preferred_play_style_for_joined,
+};
 use crate::transition_effects::transition_music_command;
 use deadlib_present::actors::Actor;
 use deadsync_config as config;
@@ -273,6 +275,13 @@ impl App {
 
     pub(super) fn handle_navigation_action(&mut self, target: CurrentScreen) {
         self.handle_navigation_action_inner(target, true);
+    }
+
+    pub(super) fn leave_evaluation(&mut self) {
+        if self.state.screens.current_screen == ActiveTheme::SCREENS.results {
+            let target = evaluation_return_to::<ActiveTheme>(self.state.screens.evaluation_origin);
+            self.handle_navigation_action(target);
+        }
     }
 
     pub(super) fn handle_immediate_navigation(

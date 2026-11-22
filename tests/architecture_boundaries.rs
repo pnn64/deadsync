@@ -13275,6 +13275,32 @@ fn course_progress_policy_stays_in_gameplay() {
 }
 
 #[test]
+fn evaluation_leaves_using_game_session_origin() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let game = production_source(&root.join("crates/deadsync-core/src/session_flow.rs"));
+    let shell = root.join("crates/deadsync-shell/src");
+    let app = read_source(shell.join("app/mod.rs")).expect("Evaluation entry source");
+    let input = production_source(&shell.join("app/input_routing.rs"));
+    let nav = production_source(&shell.join("app/screen_nav.rs"));
+    let theme = read_source(
+        root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
+    )
+    .expect("Evaluation presentation source");
+    assert!(game.contains("pub enum EvaluationOrigin"));
+    assert!(game.contains("EvaluationOrigin::Course => screens.select_course"));
+    assert!(app.contains("self.state.screens.evaluation_origin = if in_course_run"));
+    assert!(app.contains("ThemeEffect::LeaveEvaluation =>"));
+    assert!(input.contains("screens::evaluation::handle_session_input("));
+    assert!(contains_rust(
+        &nav,
+        "evaluation_return_to::<ActiveTheme>(self.state.screens.evaluation_origin)",
+    ));
+    assert!(theme.contains("Some(origin) => (origin, ThemeEffect::LeaveEvaluation)"));
+    assert!(!app.contains(".return_to_course"));
+    assert!(!app.contains(".auto_advance_seconds"));
+}
+
+#[test]
 fn gameplay_exit_routing_stays_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let policy = production_source(&root.join("crates/deadsync-gameplay/src/exit_route.rs"));

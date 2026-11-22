@@ -15,6 +15,8 @@ pub enum ThemeEffect<S, R> {
     Navigate(S),
     /// Navigate immediately without the current screen's out-transition.
     NavigateNoFade(S),
+    /// Leave the results screen for the selection that began the play session.
+    LeaveEvaluation,
     Exit,
     Shutdown,
     Runtime(R),
@@ -54,6 +56,7 @@ impl<S, R> ThemeInputResult<S, R> {
 pub enum ThemeFlowEvent<S> {
     Navigate(S),
     NavigateNoFade(S),
+    LeaveEvaluation,
     Exit,
     Shutdown,
 }
@@ -141,6 +144,7 @@ impl<S: Copy, R> ThemeEffect<S, R> {
         match self {
             Self::Navigate(screen) => Some(ThemeFlowEvent::Navigate(*screen)),
             Self::NavigateNoFade(screen) => Some(ThemeFlowEvent::NavigateNoFade(*screen)),
+            Self::LeaveEvaluation => Some(ThemeFlowEvent::LeaveEvaluation),
             Self::Exit => Some(ThemeFlowEvent::Exit),
             Self::Shutdown => Some(ThemeFlowEvent::Shutdown),
             Self::None | Self::Batch(_) | Self::Runtime(_) => None,
@@ -159,6 +163,10 @@ mod tests {
     fn extracts_only_flow_effects() {
         let navigate: ThemeEffect<_, ()> = ThemeEffect::Navigate(MENU);
         assert_eq!(navigate.flow_event(), Some(ThemeFlowEvent::Navigate(MENU)));
+        assert_eq!(
+            ThemeEffect::<ThemeScreenId, ()>::LeaveEvaluation.flow_event(),
+            Some(ThemeFlowEvent::LeaveEvaluation),
+        );
 
         let runtime = ThemeEffect::<ThemeScreenId, u8>::Runtime(7);
         assert_eq!(runtime.flow_event(), None);

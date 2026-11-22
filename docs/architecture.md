@@ -574,6 +574,12 @@ retained with the game result for the selected page. Submission refresh and
 retry, leaderboard queries, and favorite actions use the recorded player sides
 and charts for that page.
 
+The shell records whether Evaluation came from a song or a course when it
+enters the results screen. Themes issue a leave request. The game selects the
+corresponding return role, including after the course has ended or the player
+has moved between result pages. Simply Love uses the origin to choose its
+audio feedback and retains the standalone screen API.
+
 `deadsync-profile` decides whether a second player can join a one-player session
 and which Versus style applies. The shell handles the credit and session update.
 Simply Love controls where to accept join input and how to update its screens.

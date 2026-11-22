@@ -939,6 +939,44 @@ mod tests {
     }
 
     #[test]
+    fn evaluation_session_leave_uses_the_game_origin_for_feedback() {
+        use super::{Screen, ThemeEffect, handle_input, handle_session_input};
+        use deadsync_core::session_flow::EvaluationOrigin;
+        use deadsync_theme::AudioRequest;
+
+        let mut state = super::init(super::EvaluationInitView::default());
+        state.return_to_course = true;
+        state.auto_advance_seconds = Some(1.0);
+        let start = press(VirtualAction::p1_start);
+        let effect = handle_session_input(&mut state, &start, EvaluationOrigin::Song);
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("song results should play their cue before leaving");
+        };
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    AudioRequest::PlaySfx("assets/sounds/start.ogg"),
+                )),
+                ThemeEffect::LeaveEvaluation,
+            ],
+        ));
+        assert!(matches!(handle_input(&mut state, &start), ThemeEffect::None));
+        state.auto_advance_seconds = None;
+        assert!(matches!(
+            handle_input(&mut state, &start),
+            ThemeEffect::Navigate(Screen::SelectCourse),
+        ));
+
+        state.return_to_course = false;
+        let back = press(VirtualAction::p2_back);
+        assert!(matches!(
+            handle_session_input(&mut state, &back, EvaluationOrigin::Course),
+            ThemeEffect::LeaveEvaluation,
+        ));
+    }
+
+    #[test]
     fn fail_label_appends_stream_measure_progress() {
         assert_eq!(&*cached_fail_label_text(125.9, None), "2:05");
         assert_eq!(&*cached_fail_label_text(125.9, Some((3, 8))), "2:05\n3/8");
@@ -5016,6 +5054,24 @@ mod input_audio_effect_tests {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+    handle_input_impl(state, ev, None)
+}
+
+pub fn handle_session_input(
+    state: &mut State,
+    ev: &InputEvent,
+    origin: deadsync_core::session_flow::EvaluationOrigin,
+) -> ThemeEffect {
+    handle_input_impl(state, ev, Some(origin))
+}
+
+fn handle_input_impl(
+    state: &mut State,
+    ev: &InputEvent,
+    session_origin: Option<deadsync_core::session_flow::EvaluationOrigin>,
+) -> ThemeEffect {
+    use deadsync_core::session_flow::EvaluationOrigin;
+
     // Feed virtual input through the test_input state so the highlight feedback on the
     // EvalPane::TestInput pad reflects MENU buttons / Start / Select while the pane is active.
     test_input::apply_virtual_input(&mut state.test_input_state, ev);
@@ -5071,7 +5127,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
         return ThemeEffect::sequence(favorite_effect, ThemeEffect::None);
     }
-    if state.auto_advance_seconds.is_some() {
+    if session_origin.is_none() && state.auto_advance_seconds.is_some() {
         return ThemeEffect::sequence(favorite_effect, ThemeEffect::None);
     }
     if state.event_overlay_visible {
@@ -5238,12 +5294,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             },
         );
     }
-    let return_target = if state.return_to_course {
-        Screen::SelectCourse
-    } else {
-        Screen::SelectMusic
-    };
-
     let play_style = state.context.play_style;
     let enable_groovestats = state.context.policy.enable_groovestats;
     let enable_arrowcloud = state.context.policy.enable_arrowcloud;
@@ -5359,10 +5409,23 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         VirtualAction::p1_back
         | VirtualAction::p1_start
         | VirtualAction::p2_back
-        | VirtualAction::p2_start => prepend_sfx(
-            (return_target == Screen::SelectMusic).then_some("assets/sounds/start.ogg"),
-            ThemeEffect::Navigate(return_target),
-        ),
+        | VirtualAction::p2_start => {
+            let (origin, exit) = match session_origin {
+                Some(origin) => (origin, ThemeEffect::LeaveEvaluation),
+                None if state.return_to_course => (
+                    EvaluationOrigin::Course,
+                    ThemeEffect::Navigate(Screen::SelectCourse),
+                ),
+                None => (
+                    EvaluationOrigin::Song,
+                    ThemeEffect::Navigate(Screen::SelectMusic),
+                ),
+            };
+            prepend_sfx(
+                (origin == EvaluationOrigin::Song).then_some("assets/sounds/start.ogg"),
+                exit,
+            )
+        }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
                 if shift_pane_for(profile_data::PlayerSide::P1, 1) {
