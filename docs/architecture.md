@@ -522,8 +522,9 @@ Gameplay frames under a screen transition still dispatch lobby work in order.
 
 The game-owned Practice session coordinates editor input, the edit seek clock,
 chart playback, and loop restarts. The shell drives the session directly and
-applies its rate changes after draining game audio commands. The theme draws the
-editor and turns menu selections into typed commands or screen destinations.
+applies its rate changes after draining game audio commands. The session chooses
+the destination on menu activation, and the shell resolves it through the theme's
+screen roles. A reload restores the game editor state and the theme's saved view.
 
 `deadsync-profile-gameplay` resolves stage-local scroll options for preloading,
 Practice, and Gameplay. The resolver applies the No CMod alternative and any
@@ -540,8 +541,9 @@ startup, normal song-Lua lifecycle, callback input sequencing, practice
 playback/editor behavior, and gameplay lobby coordination now have game owners,
 as do Evaluation and Select Music lobby input barriers, disconnect handling, and
 remote song-selection synchronization. The shell advances the game-owned stage
-and lobby controller directly. The HUD receives a read-only simulation reference
-at its existing frame boundary. Simply Love still wraps the stage for rendering.
+and lobby controller directly. The gameplay runtime accepts presenters for
+startup, reload, live updates, and rendering. The app selects the Simply Love
+presenters and assembles their initial HUD preferences.
 Course continuation and restart destinations, course progress, interruption,
 Endless renewal, course modes, life selection, difficulty availability, runtime
 stage preparation, and course score aggregation now have game owners.

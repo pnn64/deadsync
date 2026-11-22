@@ -474,8 +474,11 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(contains_rust(&host, "pub lobby_session: L"));
     assert!(contains_rust(&host, "pub score_refresh: GameplayScoreRefresh"));
     assert!(contains_rust(&host, "pub presentation: P"));
-    assert!(contains_rust(&adapter, "type GameplayState = GameplayHost<"));
+    assert!(contains_rust(&app, "type GameplayState = GameplayHost<"));
     assert!(app.contains("ActiveTheme::gameplay_presenter(presentation_init)"));
+    for concrete in ["deadsync_theme_simply_love", "SimplyLove", "crate::ActiveTheme", "crate::ThemeScreen"] {
+        assert!(!adapter.contains(concrete), "the gameplay runtime still depends on {concrete}");
+    }
     for label in ["STAGE {number}", "RESTART {count}", "PRACTICE MODE", "song_event_name(stage.song())"] {
         assert!(theme.contains(label), "the selected theme formats {label}");
         assert!(!app.contains(label));
@@ -3040,11 +3043,11 @@ fn practice_runtime_is_shell_prepared() {
             && !shell.contains("PracticeRuntimeView")
             && shell.contains("hud: hud.clone()")
             && shell_app.contains("init: practice_init")
-            && loading.contains("crate::gameplay_runtime::prepare_practice(gs, finish.init)")
+            && contains_rust(&loading, "crate::gameplay_runtime::prepare_practice(gs, finish.init, practice::PracticePresentation::new,")
             && stage_host.contains("let mut session = PracticeSession::new(")
             && stage_host.contains("session.snap_display_to_cursor(")
             && shell.contains("gameplay.into_practice(init.editor,")
-            && shell.contains("practice::PracticePresentation::new("),
+            && shell.contains("present(stage, presentation, init.hud)"),
         "shell must prepare Practice policy/HUD state and execute game-decided rate persistence"
     );
     for handoff in [
@@ -3053,6 +3056,8 @@ fn practice_runtime_is_shell_prepared() {
         "state.session.handle_input(",
         "state.session.handle_raw_key(",
         "state.session.restore(&state.gameplay.stage.gameplay, snapshot.editor)",
+        "view: state.presentation.edit_snapshot()",
+        "state.presentation.restore_edit_snapshot(snapshot.view)",
         "state.presentation.apply_view_request(request)",
         "PracticeViewRequest::Navigate(PracticeDestination::PlayerOptions)",
         "ThemeEffect::Navigate(T::SCREENS.player_options)",
@@ -6513,13 +6518,10 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
     let adapter = read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
         .expect("shell Gameplay adapter should be readable");
     for runtime_owner in [
-        "fn policy_view(config: &config::app_config::Config)",
         "pub(crate) fn prepare_startup(",
         "pub mini_indicator: GameplayMiniIndicatorData",
         "pub lobby_session: GameplayLobbySession",
         "pub score_refresh: GameplayScoreRefresh",
-        "profile::get_session_snapshot()",
-        "profile::gameplay_hud_snapshot()",
         "scores::get_cached_local_score_for_side",
         "scores::get_cached_local_ex_score_for_side",
         "scores::get_cached_local_hard_ex_score_for_side",
@@ -6528,13 +6530,6 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "state.score_refresh.has_pending()",
         "state.score_refresh.poll(&mut state.stage.gameplay,",
         "state.presentation.sync_leaderboards(updates)",
-        "machine_font: config.machine_font",
-        "background_brightness: config.bg_brightness",
-        "background_color: config.gameplay_bg_color",
-        "smx_input: config.smx_input",
-        "zmod_rating_box_text: config.zmod_rating_box_text",
-        "show_bpm_decimal: config.show_bpm_decimal",
-        "bpm_position: config.gameplay_bpm_position",
     ] {
         assert!(
             adapter.contains(runtime_owner),
@@ -6544,6 +6539,29 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
 
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
+    let presentation_init = shell
+        .split_once("fn gameplay_presentation_init(")
+        .and_then(|(_, rest)| rest.split_once("fn gameplay_offset_snapshot("))
+        .expect("shell should assemble the active theme's presentation inputs")
+        .0;
+    for input in [
+        "profile::get_session_snapshot()",
+        "profile::gameplay_hud_snapshot()",
+        "GameplayPolicyView::from_config(config, scorebox_pane_filter(config))",
+    ] {
+        assert!(presentation_init.contains(input), "Gameplay presentation is missing {input}");
+    }
+    for preference in [
+        "machine_font: config.machine_font",
+        "background_brightness: config.bg_brightness",
+        "background_color: config.gameplay_bg_color",
+        "smx_input: config.smx_input",
+        "zmod_rating_box_text: config.zmod_rating_box_text",
+        "show_bpm_decimal: config.show_bpm_decimal",
+        "bpm_position: config.gameplay_bpm_position",
+    ] {
+        assert!(views.contains(preference), "Simply Love should project {preference}");
+    }
     assert!(
         shell.contains("crate::gameplay_runtime::prepare_startup(")
             && shell.contains("state.lobby_session.sync_runtime_view(lobby)")
@@ -6555,7 +6573,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
     assert!(stage_scores.contains("pub struct GameplayScoreSnapshots"));
     assert!(stage_scores.contains("pub scorebox_visible: [bool; MAX_PLAYERS]"));
     let startup = adapter.split_once("pub(crate) struct GameplayStartup").unwrap().1;
-    let startup = startup.split_once("pub(crate) fn presentation_init").unwrap().0;
+    let startup = startup.split_once("pub(crate) fn present_stage").unwrap().0;
     assert!(startup.contains("pub scores: GameplayScoreSnapshots"));
     assert!(!startup.contains("GameplayInitView"));
     assert!(contains_rust(&stage_scores, "gameplay.set_mini_indicator_rival_score_percent(player, score)"));
@@ -6662,7 +6680,7 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
         .expect("shell Gameplay adapter should be readable");
     let live_score_poll = runtime
         .split_once("fn sync_if_dirty")
-        .and_then(|(_, rest)| rest.split_once("fn policy_view"))
+        .and_then(|(_, rest)| rest.split_once("fn mini_indicator_personal_best"))
         .map(|(body, _)| body)
         .expect("live Gameplay score polling should be present");
     assert!(
@@ -6678,7 +6696,7 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
         .expect("initial Gameplay score sync should be present");
     assert!(
         initial_score_sync.contains("scores::should_warn_cmod_for_itl_chart")
-            && initial_score_sync.contains("state.presentation.set_itl_cmod_warning(warnings)"),
+            && initial_score_sync.contains("state.presentation.sync_itl_cmod_warning(warnings)"),
         "Gameplay entry must still prepare the ITL warning"
     );
 

@@ -1225,6 +1225,10 @@ impl deadsync_theme::views::GameplayLivePresentation<GameplayCoreState> for Game
         GameplayPresentation::sync_scoreboxes(self, updates);
     }
 
+    fn sync_itl_cmod_warning(&mut self, warnings: [bool; MAX_PLAYERS]) {
+        self.set_itl_cmod_warning(warnings);
+    }
+
     fn toggle_lobby_hud(&mut self) {
         self.lobby_hud_visibility.toggle();
     }

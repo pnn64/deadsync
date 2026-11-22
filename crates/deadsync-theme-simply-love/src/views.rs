@@ -131,7 +131,7 @@ impl Default for SimplyLoveVisualPolicyView {
     }
 }
 
-/// Shell-owned presentation policy used while constructing Gameplay state.
+/// Simply Love presentation preferences used while constructing Gameplay state.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayPolicyView {
     pub translated_titles: bool,
@@ -149,7 +149,15 @@ pub struct GameplayPolicyView {
 
 impl Default for GameplayPolicyView {
     fn default() -> Self {
-        let config = deadsync_config::app_config::Config::default();
+        Self::from_config(&deadsync_config::app_config::Config::default(), Default::default())
+    }
+}
+
+impl GameplayPolicyView {
+    pub fn from_config(
+        config: &deadsync_config::app_config::Config,
+        scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+    ) -> Self {
         Self {
             translated_titles: config.translated_titles,
             center_single_notefield: config.center_1player_notefield,
@@ -161,7 +169,7 @@ impl Default for GameplayPolicyView {
             show_bpm_decimal: config.show_bpm_decimal,
             bpm_position: config.gameplay_bpm_position,
             machine_font: config.machine_font,
-            scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter::default(),
+            scorebox_pane_filter,
         }
     }
 }
@@ -1689,6 +1697,30 @@ pub fn frame_histogram(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gameplay_policy_carries_presentation_fields() {
+        let config = deadsync_config::app_config::Config {
+            machine_font: deadsync_config::theme::MachineFont::Mega,
+            bg_brightness: 0.42,
+            gameplay_bg_color: deadlib_present::color::Color::from_hex("#123456")
+                .expect("test color should parse"),
+            smx_input: true,
+            zmod_rating_box_text: true,
+            show_bpm_decimal: true,
+            gameplay_bpm_position: deadsync_config::theme::GameplayBpmPosition::NearField,
+            ..Default::default()
+        };
+        let policy = GameplayPolicyView::from_config(&config, Default::default());
+
+        assert_eq!(policy.machine_font, config.machine_font);
+        assert_eq!(policy.background_brightness, config.bg_brightness);
+        assert_eq!(policy.background_color, config.gameplay_bg_color);
+        assert_eq!(policy.smx_input, config.smx_input);
+        assert_eq!(policy.zmod_rating_box_text, config.zmod_rating_box_text);
+        assert_eq!(policy.show_bpm_decimal, config.show_bpm_decimal);
+        assert_eq!(policy.bpm_position, config.gameplay_bpm_position);
+    }
 
     #[test]
     fn histogram_ignores_empty_samples_and_absorbs_overflow() {

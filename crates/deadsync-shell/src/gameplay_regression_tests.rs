@@ -4513,18 +4513,31 @@ return Def.ActorFrame{
         }
     }
 
-    struct AlternatePractice;
+    struct AlternatePractice {
+        overlay_visible: bool,
+    }
+
+    struct AlternatePracticeFeedback;
 
     impl PracticeLivePresentation<AlternateGameplay> for AlternatePractice {
-        type Feedback<'a> = Self;
+        type Feedback<'a> = AlternatePracticeFeedback;
         type Effect = deadsync_theme::ThemeEffect<&'static str, ()>;
+        type EditSnapshot = bool;
 
-        fn editor_feedback(&mut self) -> Self {
-            Self
+        fn editor_feedback(&mut self) -> Self::Feedback<'_> {
+            AlternatePracticeFeedback
+        }
+
+        fn edit_snapshot(&self) -> Self::EditSnapshot {
+            self.overlay_visible
+        }
+
+        fn restore_edit_snapshot(&mut self, visible: Self::EditSnapshot) {
+            self.overlay_visible = visible;
         }
     }
 
-    impl PracticeEditorPresentation<AlternateGameplay> for AlternatePractice {
+    impl PracticeEditorPresentation<AlternateGameplay> for AlternatePracticeFeedback {
         fn emit(&mut self, _game: &State, _feedback: deadsync_gameplay::practice::editor::PracticeEditorFeedback) {}
     }
 
@@ -4542,7 +4555,9 @@ return Def.ActorFrame{
             _gameplay: &GameplayHost<L, AlternateGameplay>,
             _session: &deadsync_gameplay::practice::PracticeSession,
         ) {
-            actors.push(alternate_marker(ALTERNATE_PRACTICE_MARKER));
+            if self.overlay_visible {
+                actors.push(alternate_marker(ALTERNATE_PRACTICE_MARKER));
+            }
         }
     }
 
@@ -4647,9 +4662,14 @@ return Def.ActorFrame{
                         });
                         assert_eq!(destination, Some("rehearsal"));
                         assert!(host.song_lua.is_ended());
-                        let mut practice = host.into_practice(Default::default(), |stage, _| {
+                        gameplay_runtime::sync_initial_scores(&mut host);
+                        let practice_init = gameplay_runtime::practice_init(
+                            &Default::default(),
+                            &profile::gameplay_hud_snapshot(),
+                        );
+                        let mut practice = gameplay_runtime::prepare_practice(host, practice_init, |stage, _, _| {
                             assert!(stage.song_lua.is_ended());
-                            AlternatePractice
+                            AlternatePractice { overlay_visible: true }
                         });
                         assert!(!practice.session.is_playing());
                         gameplay_runtime::enter_practice(&mut practice, &mut audio, &sounds, &mut clock);
@@ -4682,6 +4702,17 @@ return Def.ActorFrame{
                         let input = |action| InputEvent::new(
                             action, 0, true, InputSource::Keyboard, timestamp, 0, timestamp, timestamp,
                         );
+                        let editor = practice.session.editor().snapshot();
+                        let saved = gameplay_runtime::practice_edit_snapshot(&practice);
+                        practice.presentation.overlay_visible = false;
+                        gameplay_runtime::handle_practice_input::<AlternateGameplayTheme, _, _>(
+                            &mut practice, &input(VirtualAction::p1_menu_down), &mut audio, &sounds,
+                            &mut clock, &mut effects,
+                        );
+                        assert_ne!(practice.session.editor().snapshot().cursor_beat, editor.cursor_beat);
+                        gameplay_runtime::restore_practice_edit_snapshot(&mut practice, saved);
+                        assert_eq!(practice.session.editor().snapshot(), editor);
+                        assert!(practice.presentation.overlay_visible);
                         for action in [VirtualAction::p1_start, VirtualAction::p1_start] {
                             gameplay_runtime::handle_practice_input::<AlternateGameplayTheme, _, _>(
                                 &mut practice, &input(action), &mut audio, &sounds, &mut clock, &mut effects,
@@ -4733,7 +4764,7 @@ return Def.ActorFrame{
                 presentation: AlternateGameplay,
             },
             session,
-            presentation: AlternatePractice,
+            presentation: AlternatePractice { overlay_visible: true },
         };
         let gameplay_snapshot = |stage: &ActiveGameplayStage| {
             let player = &stage.players()[0];

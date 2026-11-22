@@ -82,8 +82,11 @@ pub trait PracticeLivePresentation<P> {
     where
         Self: 'a;
     type Effect;
+    type EditSnapshot;
 
     fn editor_feedback(&mut self) -> Self::Feedback<'_>;
+    fn edit_snapshot(&self) -> Self::EditSnapshot;
+    fn restore_edit_snapshot(&mut self, snapshot: Self::EditSnapshot);
     fn advance_visuals(&mut self, _delta_time: f32) {}
     fn apply_playback_update(&mut self, _update: PracticePlaybackUpdate) {}
     fn apply_view_request(&mut self, _request: PracticeViewRequest) {}

@@ -312,7 +312,7 @@ impl App {
 impl App {
     pub(super) fn finish_practice_init(
         &mut self,
-        mut gs: crate::gameplay_runtime::GameplayState,
+        mut gs: GameplayState,
         finish: PracticeInitFinish,
     ) -> Vec<Command> {
         self.gameplay_live_textures.reset();
@@ -389,7 +389,11 @@ impl App {
         // Reconcile chart timing and any video fallback once after the
         // deferred command installs the initial media.
         gs.presentation.background_path_dirty = true;
-        let mut practice_state = crate::gameplay_runtime::prepare_practice(gs, finish.init);
+        let mut practice_state = crate::gameplay_runtime::prepare_practice(
+            gs,
+            finish.init,
+            practice::PracticePresentation::new,
+        );
         if let Some(snapshot) = finish.edit_snapshot {
             crate::gameplay_runtime::restore_practice_edit_snapshot(&mut practice_state, snapshot);
         }

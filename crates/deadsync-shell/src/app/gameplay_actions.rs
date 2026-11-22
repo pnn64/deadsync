@@ -13,7 +13,7 @@ use winit::event_loop::ActiveEventLoop;
 
 const MAX_TRANSITION_LOBBY_EFFECTS: usize = 3;
 
-fn retain_lobby_effects(effects: &mut GameplayFrameEffects) {
+fn retain_lobby_effects<S>(effects: &mut GameplayFrameEffects<S>) {
     effects.retain(|effect| matches!(effect, GameplayFrameEffect::Lobby(_)));
     debug_assert!(effects.len() <= MAX_TRANSITION_LOBBY_EFFECTS);
 }
@@ -152,7 +152,7 @@ mod tests {
 
     #[test]
     fn transition_gameplay_retains_bounded_lobby_order() {
-        let mut effects = GameplayFrameEffects::new();
+        let mut effects = GameplayFrameEffects::<()>::new();
         effects.extend([
             GameplayFrameEffect::Session(SongLuaGameplayEffect::ReloadSongLua),
             GameplayFrameEffect::Lobby(GameplayLobbyAction::Disconnect),

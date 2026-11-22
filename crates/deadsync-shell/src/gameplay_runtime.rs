@@ -1,4 +1,3 @@
-use crate::ThemeScreen;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadsync_assets::gameplay_stage::{
     ActiveGameplayStage, GameplayCoreState, GameplayHost, GameplayStageAssets, GameplayStagePresenter,
@@ -36,35 +35,33 @@ use deadsync_theme::{ThemeEffect, ThemeScreenFlow};
 use deadsync_theme::views::{
     GameplayLivePresentation, GameplayStageView, SmxSensorPadView, SmxSensorPanelView,
 };
-use deadsync_theme_simply_love::screens::{gameplay, practice};
-use deadsync_theme_simply_love::views::{
-    GameplayInitView, GameplayPolicyView, GameplayRuntimeView,
-};
 use smallvec::SmallVec;
 use std::sync::Arc;
 
 const GAMEPLAY_SCOREBOX_ENTRIES: usize = 5;
 
-pub(crate) type GameplayState = GameplayHost<GameplayLobbySession, gameplay::GameplayPresentation>;
-pub(crate) type PracticeState = PracticeHost<GameplayState, practice::PracticePresentation>;
-
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PracticeEditSnapshot {
+pub(crate) struct PracticeEditSnapshot<V> {
     editor: PracticeEditorSnapshot,
-    edit_scroll_speed_index: usize,
+    view: V,
 }
 
-pub(crate) fn practice_edit_snapshot(state: &PracticeState) -> PracticeEditSnapshot {
+pub(crate) fn practice_edit_snapshot<P, Q: PracticeLivePresentation<P>>(
+    state: &PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
+) -> PracticeEditSnapshot<Q::EditSnapshot> {
     PracticeEditSnapshot {
         editor: state.session.editor().snapshot(),
-        edit_scroll_speed_index: state.presentation.edit_scroll_speed_index(),
+        view: state.presentation.edit_snapshot(),
     }
 }
 
-pub(crate) fn restore_practice_edit_snapshot(state: &mut PracticeState, snapshot: PracticeEditSnapshot) {
+pub(crate) fn restore_practice_edit_snapshot<P, Q: PracticeLivePresentation<P>>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
+    snapshot: PracticeEditSnapshot<Q::EditSnapshot>,
+) {
     state.session.restore(&state.gameplay.stage.gameplay, snapshot.editor);
     state.session.snap_display_to_cursor(&mut state.gameplay.stage.gameplay);
-    state.presentation.restore_edit_scroll_speed(snapshot.edit_scroll_speed_index);
+    state.presentation.restore_edit_snapshot(snapshot.view);
 }
 
 /// Game-thread-owned cursor for the current Gameplay or Practice song's
@@ -115,22 +112,6 @@ impl ScoreRuntimeCursor {
         });
         self.generation = Some(generation);
         state.presentation.sync_leaderboards(updates);
-    }
-}
-
-fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
-    GameplayPolicyView {
-        translated_titles: config.translated_titles,
-        center_single_notefield: config.center_1player_notefield,
-        background_brightness: config.bg_brightness,
-        background_color: config.gameplay_bg_color,
-        smx_input: config.smx_input,
-        zmod_rating_box_text: config.zmod_rating_box_text,
-        difficulty_color_scheme: config.difficulty_color_scheme,
-        show_bpm_decimal: config.show_bpm_decimal,
-        bpm_position: config.gameplay_bpm_position,
-        machine_font: config.machine_font,
-        scorebox_pane_filter: crate::app::scorebox_pane_filter(config),
     }
 }
 
@@ -322,29 +303,6 @@ pub(crate) fn prepare_startup(
     GameplayStartup { mini_indicator, lobby_session, score_refresh, scores }
 }
 
-pub(crate) fn presentation_init(
-    config: &config::app_config::Config,
-    profiles: &[profile_data::Profile; 2],
-) -> GameplayInitView {
-    let hud_session = profile::get_session_snapshot();
-    let runtime = GameplayRuntimeView {
-        policy: policy_view(config),
-        play_style: hud_session.play_style,
-        player_side: hud_session.player_side,
-        joined: std::array::from_fn(|idx| {
-            hud_session.side_joined(profile_data::player_side_for_index(idx))
-        }),
-    };
-    let hud = profile::gameplay_hud_snapshot();
-    let judgment_palettes = {
-        let catalog = deadsync_config::judgment_palettes::runtime_catalog(
-            deadsync_theme_simply_love::color::JUDGMENT_PRESET,
-        );
-        std::array::from_fn(|player| catalog.resolve(profiles[player].judgment_palette_id.as_deref()))
-    };
-    GameplayInitView { runtime, hud, judgment_palettes, scores: Default::default() }
-}
-
 pub(crate) fn refresh_chart_scores(
     startup: &mut GameplayStartup,
     charts: &[Arc<ChartData>; 2],
@@ -381,11 +339,13 @@ pub(crate) fn present_stage<P>(
 /// particular, resolving the ITL warning must never become part of the live
 /// score-polling path: its app-runtime adapter may inspect profile and catalog
 /// state, while the result cannot change during a stage.
-pub(crate) fn sync_initial_scores(state: &mut GameplayState) {
+pub(crate) fn sync_initial_scores<P: GameplayLivePresentation<GameplayCoreState>>(
+    state: &mut GameplayHost<GameplayLobbySession, P>,
+) {
     let warnings = std::array::from_fn(|player| {
         player < state.stage.num_players() && scores::should_warn_cmod_for_itl_chart(&state.stage, player)
     });
-    state.presentation.set_itl_cmod_warning(warnings);
+    state.presentation.sync_itl_cmod_warning(warnings);
 }
 
 pub(crate) struct PracticeInit {
@@ -407,9 +367,13 @@ pub(crate) fn practice_init(
     }
 }
 
-pub(crate) fn prepare_practice(gameplay: GameplayState, init: PracticeInit) -> PracticeState {
+pub(crate) fn prepare_practice<P, Q>(
+    gameplay: GameplayHost<GameplayLobbySession, P>,
+    init: PracticeInit,
+    present: impl FnOnce(&ActiveGameplayStage, &mut P, profile_data::GameplayHudSnapshot) -> Q,
+) -> PracticeHost<GameplayHost<GameplayLobbySession, P>, Q> {
     gameplay.into_practice(init.editor, |stage, presentation| {
-        practice::PracticePresentation::new(stage, presentation, init.hud)
+        present(stage, presentation, init.hud)
     })
 }
 
@@ -705,12 +669,12 @@ pub(crate) fn enter<P: GameplayLivePresentation<GameplayCoreState>>(
 
 const MAX_UPDATE_EFFECTS: usize = 6;
 
-pub(crate) enum GameplayFrameEffect<S = ThemeScreen> {
+pub(crate) enum GameplayFrameEffect<S> {
     Lobby(GameplayLobbyAction),
     Session(SongLuaGameplayEffect<S>),
 }
 
-pub(crate) type GameplayFrameEffects<S = ThemeScreen> = SmallVec<[GameplayFrameEffect<S>; MAX_UPDATE_EFFECTS]>;
+pub(crate) type GameplayFrameEffects<S> = SmallVec<[GameplayFrameEffect<S>; MAX_UPDATE_EFFECTS]>;
 
 pub(crate) fn update<T, P>(
     state: &mut GameplayHost<GameplayLobbySession, P>,
@@ -994,7 +958,7 @@ where
 mod tests {
     use super::{
         GameplayTelemetryCursor, SMX_SAMPLE_INTERVAL, mini_indicator_percent,
-        mini_indicator_rival_score, policy_view, score_generation_changed, scorebox_profiles,
+        mini_indicator_rival_score, score_generation_changed, scorebox_profiles,
         smx_sensor_pad_plan, smx_sensor_value,
     };
     use deadsync_gameplay::GameplaySession;
@@ -1062,30 +1026,6 @@ mod tests {
         assert!(cursor.smx_refresh_due(10.0));
         assert!(cursor.smx_refresh_due(0.0));
         assert!(!cursor.smx_refresh_due(0.0));
-    }
-
-    #[test]
-    fn gameplay_policy_carries_presentation_fields() {
-        let config = deadsync_config::app_config::Config {
-            machine_font: deadsync_config::theme::MachineFont::Mega,
-            bg_brightness: 0.42,
-            gameplay_bg_color: deadlib_present::color::Color::from_hex("#123456")
-                .expect("test color should parse"),
-            smx_input: true,
-            zmod_rating_box_text: true,
-            show_bpm_decimal: true,
-            gameplay_bpm_position: deadsync_config::theme::GameplayBpmPosition::NearField,
-            ..Default::default()
-        };
-        let policy = policy_view(&config);
-
-        assert_eq!(policy.machine_font, config.machine_font);
-        assert_eq!(policy.background_brightness, config.bg_brightness);
-        assert_eq!(policy.background_color, config.gameplay_bg_color);
-        assert_eq!(policy.smx_input, config.smx_input);
-        assert_eq!(policy.zmod_rating_box_text, config.zmod_rating_box_text);
-        assert_eq!(policy.show_bpm_decimal, config.show_bpm_decimal);
-        assert_eq!(policy.bpm_position, config.gameplay_bpm_position);
     }
 
     #[test]

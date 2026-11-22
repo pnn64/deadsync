@@ -130,14 +130,14 @@ use deadsync_profile_gameplay::{
 use deadsync_simfile::{app_runtime as song_loading, sync_offset};
 use deadsync_theme_simply_love::color;
 use deadsync_theme_simply_love::views::{
-    BookkeepingView, OptionsInitView, OptionsPackSyncView, OptionsSongPackView,
-    SelectMusicInitView, TimingHealth,
+    BookkeepingView, GameplayInitView, GameplayPolicyView, GameplayRuntimeView, OptionsInitView,
+    OptionsPackSyncView, OptionsSongPackView, SelectMusicInitView, TimingHealth,
 };
 use deadsync_theme_simply_love::{
     screens::{
         self, content_browser, credits, evaluation, evaluation_summary, gameover, gameplay, init,
         initials, input as input_screen, manage_local_profiles, mappings, menu, options,
-        overscan_adjustment, player_options, profile_load, sandbox, select_color,
+        overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
         select_course, select_mode, select_music, select_profile, select_style, test_lights,
     },
     visual_styles,
@@ -172,10 +172,14 @@ compile_error!(
 use deadlib_platform::input::PadEvent;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
-use deadsync_assets::gameplay_stage::{ActiveGameplayStage, GameplayStageInput, prepare_gameplay_stage};
+use deadsync_assets::gameplay_stage::{
+    ActiveGameplayStage, GameplayHost, GameplayStageInput, PracticeLivePresentation,
+    prepare_gameplay_stage,
+};
 use deadsync_chart::{GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::stage_charts::take_player_charts;
+use deadsync_gameplay::practice::PracticeHost;
 #[cfg(test)]
 use deadsync_gameplay::{CourseDisplayTotals, course_progress::CourseProgress};
 use deadsync_gameplay::{GameplaySession, GameplayViewport, LeadInTiming};
@@ -186,6 +190,7 @@ use deadsync_lights::cabinet_chart::{
     cabinet_light_chart_from_loaded, cabinet_light_key, cabinet_light_plan,
 };
 use deadsync_lights::{self as lights, HideFlags};
+use deadsync_online::gameplay_lobby::GameplayLobbySession;
 use deadsync_gameplay::stage_launch::{StageLaunch, StageLaunchPrompt, StageLaunchTarget};
 use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};
 use deadsync_profile_gameplay::stage_options::StageOptions;
@@ -552,7 +557,33 @@ fn gameplay_session() -> GameplaySession {
     }
 }
 
-fn gameplay_offset_snapshot(gs: &crate::gameplay_runtime::GameplayState) -> GameplayOffsetSnapshot {
+type GameplayState = GameplayHost<GameplayLobbySession, gameplay::GameplayPresentation>;
+type PracticeState = PracticeHost<GameplayState, practice::PracticePresentation>;
+type PracticeEditSnapshot = crate::gameplay_runtime::PracticeEditSnapshot<
+    <practice::PracticePresentation as PracticeLivePresentation<gameplay::GameplayPresentation>>::EditSnapshot,
+>;
+
+fn gameplay_presentation_init(
+    config: &config::app_config::Config,
+    profiles: &[profile_data::Profile; MAX_PLAYERS],
+) -> GameplayInitView {
+    let hud_session = profile::get_session_snapshot();
+    let runtime = GameplayRuntimeView {
+        policy: GameplayPolicyView::from_config(config, scorebox_pane_filter(config)),
+        play_style: hud_session.play_style,
+        player_side: hud_session.player_side,
+        joined: std::array::from_fn(|idx| {
+            hud_session.side_joined(profile_data::player_side_for_index(idx))
+        }),
+    };
+    let hud = profile::gameplay_hud_snapshot();
+    let catalog = config::judgment_palettes::runtime_catalog(color::JUDGMENT_PRESET);
+    let judgment_palettes =
+        std::array::from_fn(|player| catalog.resolve(profiles[player].judgment_palette_id.as_deref()));
+    GameplayInitView { runtime, hud, judgment_palettes, scores: Default::default() }
+}
+
+fn gameplay_offset_snapshot(gs: &GameplayState) -> GameplayOffsetSnapshot {
     GameplayOffsetSnapshot {
         initial_global_seconds: gs.initial_global_offset_seconds(),
         global_seconds: gs.global_offset_seconds(),
@@ -580,8 +611,8 @@ const fn saturating_u32(value: usize) -> u32 {
 pub struct ScreensState {
     current_screen: CurrentScreen,
     menu_state: menu::State,
-    gameplay_state: Option<crate::gameplay_runtime::GameplayState>,
-    practice_state: Option<crate::gameplay_runtime::PracticeState>,
+    gameplay_state: Option<GameplayState>,
+    practice_state: Option<PracticeState>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor,
     options_state: options::State,
@@ -663,7 +694,7 @@ pub struct AppState {
 }
 
 struct PendingGameplayInit {
-    receiver: std::sync::mpsc::Receiver<Result<crate::gameplay_runtime::GameplayState, String>>,
+    receiver: std::sync::mpsc::Receiver<Result<GameplayState, String>>,
     finish: PendingGameplayFinish,
     loading: Option<SongLuaLoading>,
 }
@@ -678,7 +709,7 @@ struct PracticeInitFinish {
     payload_ms: f64,
     config: config::app_config::Config,
     init: crate::gameplay_runtime::PracticeInit,
-    edit_snapshot: Option<crate::gameplay_runtime::PracticeEditSnapshot>,
+    edit_snapshot: Option<PracticeEditSnapshot>,
 }
 
 struct GameplayPreload {
@@ -877,7 +908,7 @@ fn sync_gameplay_banners(
     media: &mut DynamicMedia,
     assets: &mut AssetManager,
     backend: &mut renderer_backend::Backend,
-    state: &crate::gameplay_runtime::GameplayState,
+    state: &GameplayState,
     mode: config::theme::GameplayBannerMode,
 ) {
     let visible_paths: SmallVec<[&Path; 2]> = gameplay::visible_banner_paths(state)
@@ -901,7 +932,7 @@ fn prewarm_gameplay_banners(
     media: &mut DynamicMedia,
     assets: &mut AssetManager,
     backend: &mut renderer_backend::Backend,
-    state: &crate::gameplay_runtime::GameplayState,
+    state: &GameplayState,
     mode: config::theme::GameplayBannerMode,
 ) {
     let visible_paths: SmallVec<[&Path; 2]> = gameplay::visible_banner_paths(state)
@@ -933,7 +964,7 @@ fn prewarm_gameplay_banners(
     }
 }
 
-fn gameplay_background_video_path(state: &crate::gameplay_runtime::GameplayState) -> Option<&Path> {
+fn gameplay_background_video_path(state: &GameplayState) -> Option<&Path> {
     state
         .presentation.background_allow_video
         .then_some(state.presentation.current_background_path.as_deref())
@@ -958,7 +989,7 @@ fn prewarm_gameplay_text_layout_cache(
     cache: &mut compose::TextLayoutCache,
     compose_scratch: &mut compose::ComposeScratch,
     actor_scratch: &mut Vec<Actor>,
-    state: &mut crate::gameplay_runtime::GameplayState,
+    state: &mut GameplayState,
     config: &config::app_config::Config,
     edit_measure_text: bool,
 ) {
@@ -3022,7 +3053,7 @@ impl App {
 
     fn finish_gameplay_init(
         &mut self,
-        mut gs: crate::gameplay_runtime::GameplayState,
+        mut gs: GameplayState,
         finish: &GameplayInitFinish,
     ) -> Vec<Command> {
         self.gameplay_live_textures.reset();
@@ -6659,7 +6690,7 @@ impl App {
         true
     }
 
-    fn update_combo_carry_from_gameplay(&mut self, gs: &crate::gameplay_runtime::GameplayState) {
+    fn update_combo_carry_from_gameplay(&mut self, gs: &GameplayState) {
         let num_players = gs.num_players().min(MAX_PLAYERS);
         let player_combos =
             std::array::from_fn(|idx| (idx < num_players).then(|| gs.players()[idx].combo));
@@ -7419,7 +7450,7 @@ impl App {
     }
 
     fn refresh_gameplay_background_path(
-        state: &mut crate::gameplay_runtime::GameplayState,
+        state: &mut GameplayState,
         show_video_backgrounds: bool,
     ) -> Option<PathBuf> {
         let path = state
@@ -9443,8 +9474,7 @@ impl App {
                 );
 
                 let mut gameplay_session = gameplay_session();
-                let presentation_init =
-                    crate::gameplay_runtime::presentation_init(&cfg, &player_profiles);
+                let presentation_init = gameplay_presentation_init(&cfg, &player_profiles);
                 let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
                     lobby_views::refresh(),
                     &charts,
@@ -9464,7 +9494,7 @@ impl App {
                 let has_song_lua = !song_arc.background_lua_changes.is_empty()
                     || !song_arc.foreground_lua_changes.is_empty();
                 let init_config = cfg.clone();
-                let init = move || -> Result<crate::gameplay_runtime::GameplayState, String> {
+                let init = move || -> Result<GameplayState, String> {
                     space::set_current_metrics(metrics);
                     space::set_current_window_px(display_size.0, display_size.1);
                     let prepared_song_lua = crate::gameplay_entry::prepare_song_lua(
@@ -9844,8 +9874,7 @@ impl App {
                     replay_offsets.is_some(),
                 );
                 let mut gameplay_session = gameplay_session();
-                let presentation_init =
-                    crate::gameplay_runtime::presentation_init(&cfg, &player_profiles);
+                let presentation_init = gameplay_presentation_init(&cfg, &player_profiles);
                 let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
                     self.gameplay_lobby.refresh_now(),
                     &charts,

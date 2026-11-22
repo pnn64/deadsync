@@ -242,6 +242,7 @@ pub trait GameplayLivePresentation<G> {
     fn update_gameplay_visuals(&mut self, _game: &G, _delta_time: f32) {}
 
     fn sync_leaderboards(&mut self, _updates: [Option<CachedPlayerLeaderboardData>; MAX_PLAYERS]) {}
+    fn sync_itl_cmod_warning(&mut self, _warnings: [bool; MAX_PLAYERS]) {}
 
     fn toggle_lobby_hud(&mut self) {}
 

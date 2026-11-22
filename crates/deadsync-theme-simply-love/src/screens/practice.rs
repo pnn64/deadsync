@@ -401,9 +401,18 @@ impl PracticePresentation {
 impl PracticeLivePresentation<gameplay_screen::GameplayPresentation> for PracticePresentation {
     type Feedback<'a> = EditorPresentation<'a>;
     type Effect = ThemeEffect;
+    type EditSnapshot = usize;
 
     fn editor_feedback(&mut self) -> Self::Feedback<'_> {
         self.editor_feedback()
+    }
+
+    fn edit_snapshot(&self) -> Self::EditSnapshot {
+        self.edit_scroll_speed_index()
+    }
+
+    fn restore_edit_snapshot(&mut self, snapshot: Self::EditSnapshot) {
+        self.restore_edit_scroll_speed(snapshot);
     }
 
     fn advance_visuals(&mut self, delta_time: f32) {
