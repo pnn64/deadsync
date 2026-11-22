@@ -216,23 +216,34 @@ pub const fn select_music_join_plan(context: SelectMusicJoinContext) -> SelectMu
 
 #[must_use]
 pub fn profile_selection_plan(context: ProfileSelectionContext) -> ProfileSelectionPlan {
-    let preferred_active = context.preferred_difficulties[player_side_index(context.active_side)];
-    let navigation_target = if context.fast_switch {
-        (context.current_screen != SimplyLoveScreen::SelectMusic)
-            .then_some(SimplyLoveScreen::SelectMusic)
-    } else if context.show_groovestats_login {
+    ProfileSelectionPlan {
+        preferred_active: context.preferred_difficulties[player_side_index(context.active_side)],
+        preferred_p2: context.preferred_difficulties[player_side_index(PlayerSide::P2)],
+        refresh_select_music: context.fast_switch,
+        navigation_target: profile_selection_target(
+            context.current_screen,
+            context.fast_switch,
+            context.show_groovestats_login,
+            context.show_arrowcloud_login,
+        ),
+    }
+}
+
+#[must_use]
+pub fn profile_selection_target(
+    current_screen: SimplyLoveScreen,
+    fast_switch: bool,
+    show_groovestats_login: bool,
+    show_arrowcloud_login: bool,
+) -> Option<SimplyLoveScreen> {
+    if fast_switch {
+        (current_screen != SimplyLoveScreen::SelectMusic).then_some(SimplyLoveScreen::SelectMusic)
+    } else if show_groovestats_login {
         Some(SimplyLoveScreen::GrooveStatsLogin)
-    } else if context.show_arrowcloud_login {
+    } else if show_arrowcloud_login {
         Some(SimplyLoveScreen::ArrowCloudLogin)
     } else {
         Some(SimplyLoveScreen::SelectColor)
-    };
-
-    ProfileSelectionPlan {
-        preferred_active,
-        preferred_p2: context.preferred_difficulties[player_side_index(PlayerSide::P2)],
-        refresh_select_music: context.fast_switch,
-        navigation_target,
     }
 }
 

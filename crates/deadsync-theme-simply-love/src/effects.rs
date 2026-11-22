@@ -21,7 +21,8 @@ use deadsync_gameplay::exit_route::{
 };
 use deadsync_gameplay::{GameplayAction, GameplayExit};
 use deadsync_input::{InputBinding, VirtualAction};
-use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
+use deadsync_profile::PlayerSide;
+pub use deadsync_profile::requests::ProfileRequest as SimplyLoveProfileRequest;
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
 use deadsync_smx::SmxPadPreset;
 use deadsync_theme::color::DifficultyColorScheme;
@@ -94,75 +95,6 @@ pub enum SimplyLoveContentRequest {
     /// [`crate::views::SimplyLoveApplyReplayGainEvent`]. Cancel an in-flight
     /// run with [`SimplyLoveContentRequest::SkipReplayGain`].
     ApplyReplayGain,
-}
-
-#[derive(Clone, Debug)]
-pub enum SimplyLoveProfileRequest {
-    Select {
-        p1: ActiveProfile,
-        p2: ActiveProfile,
-        p1_joined: bool,
-        p2_joined: bool,
-        fast_switch: bool,
-    },
-    SetPlayStyle(PlayStyle),
-    SetSession {
-        play_style: PlayStyle,
-        player_side: PlayerSide,
-        joined: [bool; 2],
-    },
-    SetMusicRate(f32),
-    SetPlayMode(PlayMode),
-    SetMachineDefaultScrollSpeed(deadsync_rules::scroll::ScrollSpeedSetting),
-    SetMachineDefaultScroll(deadsync_profile::ScrollOption),
-    SetMachineDefaultBackgroundFilter(deadsync_profile::BackgroundFilter),
-    SetMachineDefaultNoteskin(deadsync_profile::NoteSkin),
-    UpdatePlayerOptions {
-        side: PlayerSide,
-        options: Box<deadsync_profile::PlayerOptionsData>,
-        judgment_palette_id: Option<String>,
-        heart_rate_device_id: Option<String>,
-        max_heart_rate: u16,
-    },
-    UpdateInitials([Option<String>; 2]),
-    ToggleFavorite {
-        side: deadsync_profile::PlayerSide,
-        chart_hash: String,
-    },
-    TogglePackFavorite {
-        side: deadsync_profile::PlayerSide,
-        pack_name: String,
-    },
-    ToggleSeriesFavorite {
-        side: deadsync_profile::PlayerSide,
-        series_name: String,
-    },
-    MarkPacksKnown {
-        profile_ids: Vec<String>,
-        pack_names: Vec<String>,
-    },
-    CreateLocalProfile {
-        display_name: String,
-    },
-    RenameLocalProfile {
-        profile_id: String,
-        display_name: String,
-    },
-    SetDefaultLocalProfile {
-        side: PlayerSide,
-        profile_id: String,
-    },
-    DeleteLocalProfile {
-        profile_id: String,
-    },
-    DiscoverItgProfiles,
-    BrowseItgProfiles {
-        title: String,
-    },
-    StartItgProfileImport {
-        dir: PathBuf,
-    },
-    CancelItgProfileImport,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -2616,26 +2616,28 @@ fn manage_local_profiles_import_execution_is_shell_owned() {
             "Simply Love local-profile boundary is missing {contract}"
         );
     }
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
     for contract in [
         "CreateLocalProfile",
         "RenameLocalProfile",
         "SetDefaultLocalProfile",
         "DeleteLocalProfile",
-        "pub enum SimplyLoveLocalProfileEvent",
-    ] {
-        assert!(
-            effects.contains(contract),
-            "Simply Love local-profile mutation boundary is missing {contract}"
-        );
-    }
-    for contract in [
-        "pub struct SimplyLoveItgProfileCandidate",
-        "pub struct SimplyLoveItgImportSummary",
-        "pub enum SimplyLoveProfileImportEvent",
         "DiscoverItgProfiles",
         "BrowseItgProfiles",
         "StartItgProfileImport",
         "CancelItgProfileImport",
+    ] {
+        assert!(
+            profile_requests.contains(contract),
+            "profile request boundary is missing {contract}"
+        );
+    }
+    for contract in [
+        "pub enum SimplyLoveLocalProfileEvent",
+        "pub struct SimplyLoveItgProfileCandidate",
+        "pub struct SimplyLoveItgImportSummary",
+        "pub enum SimplyLoveProfileImportEvent",
     ] {
         assert!(
             effects.contains(contract),
@@ -2902,6 +2904,10 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
     let executor =
         read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
     assert!(
         views.contains("pub struct OptionsInitView")
             && source.contains("pub fn init(view: OptionsInitView)")
@@ -2912,15 +2918,15 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
             && runtime.contains("arrowcloud.ini")
             && effects.contains("pub enum SimplyLoveOptionsConfigRequest")
             && effects.contains("Options(SimplyLoveOptionsConfigRequest)")
-            && effects.contains("SetMachineDefaultScrollSpeed")
-            && effects.contains("SetMachineDefaultScroll")
-            && effects.contains("SetMachineDefaultBackgroundFilter")
-            && effects.contains("SetMachineDefaultNoteskin")
+            && profile_requests.contains("SetMachineDefaultScrollSpeed")
+            && profile_requests.contains("SetMachineDefaultScroll")
+            && profile_requests.contains("SetMachineDefaultBackgroundFilter")
+            && profile_requests.contains("SetMachineDefaultNoteskin")
             && shell.contains("config_requests::execute_options(request, &mut self.input)")
-            && shell.contains("profile::update_machine_default_scroll_speed(setting)")
-            && shell.contains("profile::update_machine_default_scroll(setting)")
-            && shell.contains("profile::update_machine_default_background_filter(setting)")
-            && shell.contains("profile::update_machine_default_noteskin(noteskin)")
+            && profile_executor.contains("profile::update_machine_default_scroll_speed(setting)")
+            && profile_executor.contains("profile::update_machine_default_scroll(setting)")
+            && profile_executor.contains("profile::update_machine_default_background_filter(setting)")
+            && profile_executor.contains("profile::update_machine_default_noteskin(noteskin)")
             && executor.contains("pub(super) fn execute_options")
             && executor
                 .contains("profile::update_machine_default_light_brightness_from_config(percent)")
@@ -3675,10 +3681,12 @@ fn player_options_runtime_reads_are_shell_prepared() {
         .expect("Player Options state should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
-        .expect("Simply Love effects should be readable");
     let profile_update = read_source(root.join("crates/deadsync-profile/src/update.rs"))
         .expect("profile update API should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
     assert!(
         screen.contains("init_view: PlayerOptionsInitView")
             && state.contains("policy: PlayerOptionsPolicyView")
@@ -3690,8 +3698,8 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && shell.contains("crate::player_options::init_view()")
             && shell.contains("crate::player_options::gameplay_profiles(")
             && screen.contains("UpdatePlayerOptions")
-            && effects.contains("UpdatePlayerOptions {")
-            && shell.contains("profile::update_player_options_for_side")
+            && profile_requests.contains("UpdatePlayerOptions {")
+            && profile_executor.contains("profile::update_player_options_for_side")
             && profile_update.contains("pub fn update_player_options_for_side")
     );
 }
@@ -4211,17 +4219,24 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
             "shell audio executor is missing {execution}"
         );
     }
-    assert!(shell_app.contains("profile_selection_session_plan("));
-    assert!(shell_app.contains("profile::set_session_player_side(session.active_side)"));
-    assert!(
-        shell_app.contains("profile::set_session_joined(session.p1_joined, session.p2_joined)")
-    );
-    assert!(shell_app.contains("profile::set_session_play_style(session.play_style)"));
     assert!(!shell_app.contains("take_fast_profile_switch_from_select_music"));
 
-    let profile_requests =
-        read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
-            .expect("Simply Love requests should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
+    let theme_effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        .expect("Simply Love requests should be readable");
+    assert!(theme_effects.contains("ProfileRequest as SimplyLoveProfileRequest"));
+    assert!(!theme_effects.contains("pub enum SimplyLoveProfileRequest"));
+    assert!(shell_app.contains("self.handle_profile_request(request)"));
+    assert!(profile_executor.contains("request: ProfileRequest"));
+    assert!(profile_executor.contains("select_profiles(p1, p2, p1_joined, p2_joined)"));
+    assert!(!profile_executor.contains("profile_selection_session_plan("));
+    assert!(profile_requests.contains("profile_selection_session_plan(previous_session.play_style"));
+    assert!(profile_requests.contains("runtime_set_session_player_side(session.active_side)"));
+    assert!(profile_requests.contains("runtime_set_session_joined(session.p1_joined, session.p2_joined)"));
+    assert!(profile_requests.contains("runtime_set_session_play_style(session.play_style)"));
     assert!(profile_requests.contains("fast_switch: bool"));
 
     assert!(
@@ -4632,12 +4647,21 @@ fn select_music_session_runtime_is_shell_prepared() {
 
     let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
     for request in [
         "SetSession {",
         "SetMusicRate(f32)",
         "ToggleFavorite {",
         "TogglePackFavorite {",
         "MarkPacksKnown {",
+    ] {
+        assert!(
+            profile_requests.contains(request),
+            "missing session request {request}"
+        );
+    }
+    for request in [
         "RenameSmxPadConfig {",
         "SetSmxPadConfigDefault {",
         "DeleteSmxPadConfig {",
@@ -4647,20 +4671,24 @@ fn select_music_session_runtime_is_shell_prepared() {
             "missing session request {request}"
         );
     }
-    let executor = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let mut executor = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
+    executor.push_str(
+        &read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+            .expect("shell profile executor should be readable"),
+    );
     for execution in [
-        "SimplyLoveProfileRequest::SetSession",
+        "ProfileRequest::SetSession",
         "profile::set_session_player_side(player_side)",
         "profile::set_session_joined(joined[0], joined[1])",
         "profile::set_session_play_style(play_style)",
-        "SimplyLoveProfileRequest::SetMusicRate(rate)",
+        "ProfileRequest::SetMusicRate(rate)",
         "profile::set_session_music_rate(rate)",
-        "SimplyLoveProfileRequest::ToggleFavorite",
+        "ProfileRequest::ToggleFavorite",
         "profile::toggle_favorite(side, &chart_hash)",
-        "SimplyLoveProfileRequest::TogglePackFavorite",
+        "ProfileRequest::TogglePackFavorite",
         "profile::toggle_pack_favorite(side, &pack_name)",
-        "SimplyLoveProfileRequest::MarkPacksKnown",
+        "ProfileRequest::MarkPacksKnown",
         "profile::mark_packs_known(",
         "SimplyLoveHardwareRequest::RenameSmxPadConfig",
         "profile::rename_pad_config(&old_name, &new_name)",
@@ -6479,11 +6507,15 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
         &read_source(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
             .expect("shell Evaluation view owner should be readable"),
     );
+    shell.push_str(
+        &read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+            .expect("shell profile executor should be readable"),
+    );
     for shell_owner in [
         "fn evaluation_context_view(",
         "crate::session_results::evaluation_view(",
         "profile_data::runtime_evaluation_favorite_membership",
-        "SimplyLoveProfileRequest::ToggleFavorite {",
+        "ProfileRequest::ToggleFavorite {",
         "profile::toggle_favorite(side, &chart_hash)",
     ] {
         assert!(
@@ -6820,17 +6852,17 @@ fn simply_love_select_flow_uses_shell_prepared_session_state() {
 
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
-        .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/select_flow.rs"))
         .expect("shell select-flow adapter should be readable");
-    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
-        .expect("shell runtime executor should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
 
     assert!(views.contains("pub struct SelectFlowPlayerView"));
     assert!(views.contains("pub struct SelectFlowRuntimeView"));
-    assert!(effects.contains("SetPlayStyle(PlayStyle)"));
-    assert!(effects.contains("SetPlayMode(PlayMode)"));
+    assert!(profile_requests.contains("SetPlayStyle(PlayStyle)"));
+    assert!(profile_requests.contains("SetPlayMode(PlayMode)"));
     for shell_access in [
         "profile::get_for_side(side)",
         "profile::get_session_play_style()",
@@ -6843,8 +6875,8 @@ fn simply_love_select_flow_uses_shell_prepared_session_state() {
             "shell adapter lacks {shell_access}"
         );
     }
-    assert!(app.contains("SimplyLoveProfileRequest::SetPlayStyle"));
-    assert!(app.contains("SimplyLoveProfileRequest::SetPlayMode"));
+    assert!(profile_executor.contains("ProfileRequest::SetPlayStyle"));
+    assert!(profile_executor.contains("ProfileRequest::SetPlayMode"));
 }
 
 #[test]
@@ -6855,8 +6887,10 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
             .expect("Simply Love flow should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/screen_flow.rs"))
         .expect("shell flow adapter should be readable");
-    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
-        .expect("shell app should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
 
     for oversized_input in [
         "deadsync_config::app_config::Config",
@@ -6885,9 +6919,10 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
             && shell.contains("show_select_profile: config.machine_show_select_profile")
             && shell.contains("show_eval_summary: config.machine_show_eval_summary")
             && shell.contains("resolve_navigation(")
-            && app.contains("profile_data::profile_combo_carry(&profile_data)")
-            && app.contains("profile_data::preferred_difficulty_indices("),
-        "shell must narrow config and profile state before calling theme flow"
+            && profile_requests.contains("profile_combo_carry(&profiles)")
+            && profile_requests.contains("preferred_difficulty_indices(&profiles, session.play_style)")
+            && profile_executor.contains("profile_selection_target("),
+        "theme navigation must receive prepared inputs from the game and shell"
     );
 }
 
@@ -6917,16 +6952,18 @@ fn simply_love_post_song_flow_uses_shell_prepared_runtime_state() {
 
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
-        .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/post_song.rs"))
         .expect("shell post-song adapter should be readable");
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
+    let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
+        .expect("game profile requests should be readable");
+    let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
+        .expect("shell profile executor should be readable");
 
     assert!(views.contains("pub struct PostSongPlayerView"));
     assert!(views.contains("pub struct PostSongRuntimeView"));
-    assert!(effects.contains("UpdateInitials([Option<String>; 2])"));
+    assert!(profile_requests.contains("UpdateInitials([Option<String>; PLAYER_SLOTS])"));
     for shell_access in [
         "profile::get_for_side(side)",
         "scores::total_songs_played_for_side",
@@ -6938,7 +6975,7 @@ fn simply_love_post_song_flow_uses_shell_prepared_runtime_state() {
             "shell adapter lacks {shell_access}"
         );
     }
-    assert!(app.contains("SimplyLoveProfileRequest::UpdateInitials"));
+    assert!(profile_executor.contains("ProfileRequest::UpdateInitials"));
     assert!(app.contains("post_song::initials_runtime_view"));
     assert!(app.contains("post_song::gameover_runtime_view"));
     assert!(shell.contains("machine_font: cfg.machine_font"));

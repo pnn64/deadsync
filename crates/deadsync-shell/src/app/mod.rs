@@ -16,6 +16,7 @@ mod live_case;
 mod lobby_views;
 mod lua_loading;
 mod option_previews;
+mod profile_requests;
 mod reflex_runtime;
 mod screen_nav;
 mod screenshot;
@@ -72,8 +73,7 @@ use crate::offset_prompt::{
     gameplay_offset_saveable_changed, route_offset_prompt_input,
 };
 use crate::profile_session::{
-    persist_gameplay_combo_carry, profile_selection_session_plan, record_last_played_course,
-    reset_operator_profile_session,
+    persist_gameplay_combo_carry, record_last_played_course, reset_operator_profile_session,
 };
 use crate::restart::{
     GameplayReloadSource, GameplayRestartRoute, RestartPrepareSource, fast_gameplay_restart_plan,
@@ -82,9 +82,7 @@ use crate::restart::{
     restart_chart_steps, restart_payload_from_eval,
 };
 use crate::runtime::ShellState;
-use crate::screen_flow::{
-    ProfileSelectionContext, evaluation_summary_return_to, profile_selection_plan,
-};
+use crate::screen_flow::evaluation_summary_return_to;
 use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 use crate::session::SessionState as ShellSessionState;
 use crate::session_results::{
@@ -214,7 +212,7 @@ use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveDebugRequest,
     SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
     SimplyLoveInputResult as ThemeInputResult, SimplyLoveLobbyRequest, SimplyLoveMediaRequest,
-    SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent, SimplyLoveProfileRequest,
+    SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent,
     SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncEvent, SimplyLoveSyncOwner,
     SimplyLoveSyncRequest, effect_for_gameplay_exit, gameplay_action_for_effect,
 };
@@ -5827,279 +5825,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::Select {
-                    p1,
-                    p2,
-                    p1_joined,
-                    p2_joined,
-                    fast_switch,
-                }) => {
-                    let previous_session = profile::get_session_snapshot();
-                    let previous_profiles = profile_data::runtime_active_profiles();
-                    let changed_profiles = [previous_profiles[0] != p1, previous_profiles[1] != p2];
-                    let selected_guest = [
-                        profile_data::active_profile_is_guest(&p1),
-                        profile_data::active_profile_is_guest(&p2),
-                    ];
-                    let session = profile_selection_session_plan(
-                        previous_session.play_style,
-                        p1_joined,
-                        p2_joined,
-                    );
-                    profile::set_session_player_side(session.active_side);
-                    profile::set_session_joined(session.p1_joined, session.p2_joined);
-                    profile::set_session_play_style(session.play_style);
-                    let profile_data = profile::set_active_profiles(p1, p2);
-                    let (show_groovestats_login, show_arrowcloud_login) = if fast_switch {
-                        (false, false)
-                    } else {
-                        let cfg = config::runtime::get();
-                        (
-                            crate::qr_login::should_auto_show_groovestats(
-                                cfg.enable_groovestats,
-                                cfg.groovestats_qr_login_when,
-                            ),
-                            crate::qr_login::should_auto_show_arrowcloud(
-                                cfg.enable_arrowcloud,
-                                cfg.arrowcloud_qr_login_when,
-                            ),
-                        )
-                    };
-                    self.state.session.combo_carry =
-                        profile_data::profile_combo_carry(&profile_data);
-                    let preferred_difficulties = profile_data::preferred_difficulty_indices(
-                        &profile_data,
-                        session.play_style,
-                    );
-                    let plan = profile_selection_plan(ProfileSelectionContext {
-                        preferred_difficulties,
-                        active_side: session.active_side,
-                        fast_switch,
-                        current_screen: self.state.screens.current_screen,
-                        show_groovestats_login,
-                        show_arrowcloud_login,
-                    });
-                    if let Some(backend) = self.backend.as_mut() {
-                        self.dynamic_media.set_profile_avatar_for_side(
-                            &mut self.asset_manager,
-                            backend,
-                            profile_data::PlayerSide::P1,
-                            profile_data[0].avatar_path.clone(),
-                        );
-                        self.dynamic_media.set_profile_avatar_for_side(
-                            &mut self.asset_manager,
-                            backend,
-                            profile_data::PlayerSide::P2,
-                            profile_data[1].avatar_path.clone(),
-                        );
-                    }
-
-                    if plan.refresh_select_music
-                        && self.state.screens.current_screen == CurrentScreen::SelectMusic
-                    {
-                        let preference_updates = prepare_music_profile_selection(
-                            &mut self.state.screens.select_music_state,
-                            music_session_view(
-                                previous_session,
-                                previous_profiles
-                                    .each_ref()
-                                    .map(profile_data::active_profile_is_guest),
-                            ),
-                            music_session_view(profile::get_session_snapshot(), selected_guest),
-                            changed_profiles,
-                            preferred_difficulties,
-                        );
-                        self.sync_select_music_runtime_view(self.select_music_policy);
-                        let current_color_index =
-                            self.state.screens.select_profile_state.active_color_index;
-                        let sm = &mut self.state.screens.select_music_state;
-                        sm.active_color_index = current_color_index;
-                        select_music::apply_profile_preferences(sm, preference_updates);
-                        self.state.session.preferred_difficulty_index =
-                            sm.preferred_difficulty_index;
-                    } else {
-                        self.state.session.preferred_difficulty_index = plan.preferred_active;
-                    }
-                    if let Some(target) = plan.navigation_target {
-                        // ProfileLoad asynchronously prepares SelectMusic/SelectCourse state;
-                        // avoid redundant eager init here.
-                        self.handle_navigation_action(target);
-                    }
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::SetPlayStyle(
-                    play_style,
-                )) => {
-                    profile::set_session_play_style(play_style);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::SetSession {
-                    play_style,
-                    player_side,
-                    joined,
-                }) => {
-                    profile::set_session_player_side(player_side);
-                    profile::set_session_joined(joined[0], joined[1]);
-                    profile::set_session_play_style(play_style);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::SetMusicRate(rate)) => {
-                    profile::set_session_music_rate(rate);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::SetPlayMode(
-                    play_mode,
-                )) => {
-                    profile::set_session_play_mode(play_mode);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::SetMachineDefaultScrollSpeed(setting),
-                ) => {
-                    profile::update_machine_default_scroll_speed(setting);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::SetMachineDefaultScroll(setting),
-                ) => {
-                    profile::update_machine_default_scroll(setting);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::SetMachineDefaultBackgroundFilter(setting),
-                ) => {
-                    profile::update_machine_default_background_filter(setting);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::SetMachineDefaultNoteskin(noteskin),
-                ) => {
-                    profile::update_machine_default_noteskin(noteskin);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::UpdatePlayerOptions {
-                        side,
-                        options,
-                        judgment_palette_id,
-                        heart_rate_device_id,
-                        max_heart_rate,
-                    },
-                ) => {
-                    profile::update_player_options_for_side(
-                        side,
-                        *options,
-                        judgment_palette_id,
-                        heart_rate_device_id,
-                        max_heart_rate,
-                    );
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::UpdateInitials(
-                    updates,
-                )) => {
-                    for (side, initials) in
-                        [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2]
-                            .into_iter()
-                            .zip(updates)
-                    {
-                        if let Some(initials) = initials {
-                            profile::update_player_initials_for_side(side, &initials);
-                        }
-                    }
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::ToggleFavorite {
-                    side,
-                    chart_hash,
-                }) => {
-                    profile::toggle_favorite(side, &chart_hash);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::TogglePackFavorite { side, pack_name },
-                ) => {
-                    profile::toggle_pack_favorite(side, &pack_name);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::ToggleSeriesFavorite { side, series_name },
-                ) => {
-                    profile::toggle_series_favorite(side, &series_name);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::MarkPacksKnown {
-                    profile_ids,
-                    pack_names,
-                }) => {
-                    profile::mark_packs_known(&profile_ids, pack_names.iter().map(String::as_str));
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::CreateLocalProfile { display_name },
-                ) => {
-                    let event = crate::local_profiles::create(&display_name);
-                    manage_local_profiles::apply_local_profile_event(
-                        &mut self.state.screens.manage_local_profiles_state,
-                        event,
-                    );
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::RenameLocalProfile {
-                        profile_id,
-                        display_name,
-                    },
-                ) => {
-                    let event = crate::local_profiles::rename(&profile_id, &display_name);
-                    manage_local_profiles::apply_local_profile_event(
-                        &mut self.state.screens.manage_local_profiles_state,
-                        event,
-                    );
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::SetDefaultLocalProfile { side, profile_id },
-                ) => {
-                    let event = crate::local_profiles::set_default(side, profile_id);
-                    manage_local_profiles::apply_local_profile_event(
-                        &mut self.state.screens.manage_local_profiles_state,
-                        event,
-                    );
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::DeleteLocalProfile { profile_id },
-                ) => {
-                    let event = crate::local_profiles::delete(&profile_id);
-                    manage_local_profiles::apply_local_profile_event(
-                        &mut self.state.screens.manage_local_profiles_state,
-                        event,
-                    );
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::DiscoverItgProfiles,
-                ) => {
-                    self.profile_import.discover();
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::BrowseItgProfiles { title },
-                ) => {
-                    self.profile_import.browse(title);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::StartItgProfileImport { dir },
-                ) => {
-                    self.profile_import.start(dir);
-                    Vec::new()
-                }
-                SimplyLoveRuntimeRequest::Profile(
-                    SimplyLoveProfileRequest::CancelItgProfileImport,
-                ) => {
-                    self.profile_import.cancel();
+                SimplyLoveRuntimeRequest::Profile(request) => {
+                    self.handle_profile_request(request);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffset {

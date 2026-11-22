@@ -2,13 +2,11 @@ use deadsync_config::app_config::Config;
 #[cfg(test)]
 use deadsync_profile::PlayerSide;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+pub(crate) use deadsync_theme_simply_love::screens::evaluation_summary_return_to;
 #[cfg(test)]
 use deadsync_theme_simply_love::screens::{
-    LateJoinContext, SelectMusicJoinContext, SelectMusicJoinPlan, late_join_side,
-    select_music_join_plan,
-};
-pub(crate) use deadsync_theme_simply_love::screens::{
-    ProfileSelectionContext, evaluation_summary_return_to, profile_selection_plan,
+    LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, SelectMusicJoinPlan,
+    late_join_side, profile_selection_plan, select_music_join_plan,
 };
 use deadsync_theme_simply_love::screens::{
     SimplyLoveNavigationPlan, SimplyLoveNavigationPolicy, resolve_navigation,
@@ -109,7 +107,7 @@ mod tests {
                     machine_show_select_play_mode: false,
                     ..Config::default()
                 };
-                let selection = crate::profile_session::profile_selection_session_plan(
+                let selection = deadsync_profile::requests::profile_selection_session_plan(
                     deadsync_profile::play_style_from_machine_preference(preferred, game),
                     true,
                     true,

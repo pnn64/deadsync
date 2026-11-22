@@ -446,6 +446,11 @@ alongside the game run.
 and which Versus style applies. The shell handles the credit and session update.
 Simply Love controls where to accept join input and how to update its screens.
 
+`deadsync-profile` owns the profile request type and applies confirmed profile
+selections, including the joined sides, active side, and play style. It returns
+the preferences and avatar paths that the shell uses to refresh the active theme.
+Simply Love chooses the next screen after a profile is selected.
+
 The shell still stores concrete screen state and routes concrete runtime
 requests. A replaceable theme needs those integration points as well as the
 transition interface.

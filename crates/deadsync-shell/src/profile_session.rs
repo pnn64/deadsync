@@ -2,9 +2,7 @@ use std::path::Path;
 
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::compat as profile;
-use deadsync_profile::{
-    PlayMode, PlayStyle, PlayerSide, TimingTickMode, play_style_for_joined, player_side_index,
-};
+use deadsync_profile::{PlayMode, PlayStyle, PlayerSide, TimingTickMode, player_side_index};
 
 use crate::SessionState;
 
@@ -22,31 +20,6 @@ pub struct GameplayComboCarryContext {
     pub play_style: PlayStyle,
     pub active_side: PlayerSide,
     pub player_combos: [Option<u32>; MAX_PLAYERS],
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct ProfileSelectionSessionPlan {
-    pub active_side: PlayerSide,
-    pub p1_joined: bool,
-    pub p2_joined: bool,
-    pub play_style: PlayStyle,
-}
-
-pub(crate) const fn profile_selection_session_plan(
-    current_style: PlayStyle,
-    p1_joined: bool,
-    p2_joined: bool,
-) -> ProfileSelectionSessionPlan {
-    ProfileSelectionSessionPlan {
-        active_side: if p1_joined {
-            PlayerSide::P1
-        } else {
-            PlayerSide::P2
-        },
-        p1_joined: p1_joined || current_style.is_couple() || current_style.is_routine(),
-        p2_joined: p2_joined || current_style.is_couple() || current_style.is_routine(),
-        play_style: play_style_for_joined(current_style, p1_joined, p2_joined),
-    }
 }
 
 pub const fn gameplay_combo_carry_updates(
@@ -178,37 +151,6 @@ mod tests {
                     combo: 456,
                 }),
             ]
-        );
-    }
-
-    #[test]
-    fn profile_selection_session_follows_confirmed_joined_sides() {
-        assert_eq!(
-            profile_selection_session_plan(PlayStyle::Single, true, true),
-            ProfileSelectionSessionPlan {
-                active_side: PlayerSide::P1,
-                p1_joined: true,
-                p2_joined: true,
-                play_style: PlayStyle::Versus,
-            }
-        );
-        assert_eq!(
-            profile_selection_session_plan(PlayStyle::Versus, false, true),
-            ProfileSelectionSessionPlan {
-                active_side: PlayerSide::P2,
-                p1_joined: false,
-                p2_joined: true,
-                play_style: PlayStyle::Single,
-            }
-        );
-        assert_eq!(
-            profile_selection_session_plan(PlayStyle::Double, true, false),
-            ProfileSelectionSessionPlan {
-                active_side: PlayerSide::P1,
-                p1_joined: true,
-                p2_joined: false,
-                play_style: PlayStyle::Double,
-            }
         );
     }
 
