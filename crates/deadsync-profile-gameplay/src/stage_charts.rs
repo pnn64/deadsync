@@ -1,13 +1,29 @@
 //! Stage chart selection from profile choices and authored Lua reloads.
 
 use crate::{gameplay_play_style_from_profile, gameplay_player_side_from_profile};
-use deadsync_chart::{ChartData, GameplayChartData, SongData};
+use deadsync_chart::{ChartData, GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::stage_charts::{self, GameplayChartEntryPlan, lua_reload_chart_indices};
 use deadsync_gameplay::{GameplayInputPlayStyle as Style, GameplaySession};
 use deadsync_profile::{PlayStyle, PlayerSide};
 use deadsync_song_lua::playback::PreparedGameplaySongLua;
 use std::sync::Arc;
+
+/// Standard chart slots select their own difficulty. Edits retain the
+/// player's preferred standard difficulty for fallback and profile saves.
+#[must_use]
+pub fn stage_difficulty_indices(
+    steps: [usize; MAX_PLAYERS],
+    preferred: [usize; MAX_PLAYERS],
+) -> [usize; MAX_PLAYERS] {
+    std::array::from_fn(|player| {
+        if steps[player] < STANDARD_DIFFICULTY_COUNT {
+            steps[player]
+        } else {
+            preferred[player].min(STANDARD_DIFFICULTY_COUNT - 1)
+        }
+    })
+}
 
 #[must_use]
 pub fn gameplay_chart_entry_plan(

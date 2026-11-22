@@ -173,6 +173,10 @@ payloads, and session changes together after loading succeeds.
 startup, including legacy noteskin migration and effective scroll speed.
 Select Music preload reads the session and player profiles directly. Gameplay
 and Practice accept the same settings when Simply Love submits Player Options.
+Direct song entry, course stages, and restarts queue those settings in the
+shell. Chart selection and difficulty fallback use the same game helpers for
+both entry paths. If chart loading fails, the shell reopens Player Options
+with the requested stage and settings.
 
 `deadsync-song-lua::gameplay_session` owns the live song scene, callback setup,
 Update/input/Draw ordering, output buffering, deferred reloads, and exit clocks.

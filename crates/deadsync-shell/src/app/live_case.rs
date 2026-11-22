@@ -1,7 +1,6 @@
 use super::*;
 use crate::frame_pacing_trace::{GameplayPacingReport, GameplayStorageSample};
 use crate::live_case::{ExpectedRuntime, LiveCase, sha256_file, verify_hash};
-use deadsync_theme_simply_love::views::PlayerOptionsPlayerView;
 use serde::Serialize;
 
 pub(super) struct LiveCaseRuntime {
@@ -233,21 +232,16 @@ impl App {
         profile::set_session_music_rate(spec.music_rate);
         self.begin_play_session();
 
-        let mut init_view = crate::player_options::init_view();
-        init_view.players = std::array::from_fn(|_| PlayerOptionsPlayerView::default());
-        let player_options = player_options::init_for_gameplay(
+        let default_profiles = std::array::from_fn(|_| profile_data::Profile::default());
+        self.state.pending_stage = Some(StageStart::from_profiles(
             Arc::clone(&song),
             chart_steps_index,
             chart_steps_index,
             self.state.screens.menu_state.active_color_index,
             CurrentScreen::SelectMusic,
-            None,
-            noteskin_catalog_view(&self.dirs),
-            crate::smx_config::smx_gif_catalog_view(),
-            crate::heart_rate::devices_view(),
-            init_view,
-        );
-        self.state.screens.player_options_state = Some(player_options);
+            profile::get_session_snapshot(),
+            &default_profiles,
+        ));
         self.state.screens.current_screen = CurrentScreen::PlayerOptions;
 
         let prev = CurrentScreen::PlayerOptions;

@@ -3790,6 +3790,8 @@ fn player_options_runtime_reads_are_shell_prepared() {
         .and_then(|(_, body)| body.split_once("fn defer_gameplay_entry("))
         .map(|(body, _)| body)
         .expect("shell gameplay preload should be readable");
+    let stage_start = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
+    let live_case = production_source(&root.join("crates/deadsync-shell/src/app/live_case.rs"));
     let profile_update = read_source(root.join("crates/deadsync-profile/src/update.rs"))
         .expect("profile update API should be readable");
     let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
@@ -3811,7 +3813,12 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && !preload.contains("noteskin_catalog_view(")
             && !preload.contains("smx_gif_catalog_view(")
             && !preload.contains("heart_rate::devices_view(")
-            && shell.matches("player_options::stage_options(&po_state)").count() == 2
+            && shell.matches("self.take_stage_start()").count() == 2
+            && shell.matches("self.recover_player_options(start, options_screen)").count() == 2
+            && contains_rust(&stage_start, "player_options::stage_options(state)")
+            && contains_rust(&stage_start, "StageOptions::from_profiles(")
+            && !shell.contains("player_options::init_for_gameplay")
+            && !live_case.contains("player_options::init_for_gameplay")
             && !shell.contains("player_options::apply_no_cmod_alternative(")
             && contains_rust(&adapter, "stage.resolve_scroll(")
             && !adapter.contains("screen::State")

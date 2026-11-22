@@ -80,6 +80,7 @@ impl App {
             std::time::Instant::now(),
         );
         self.state.screens.player_options_state = None;
+        self.state.pending_stage = None;
         self.pending_gameplay_init = None;
         // The normal evaluation lifecycle records the finished song, saves the
         // accumulated course score and retains its per-song evaluation pages.
@@ -99,6 +100,7 @@ impl App {
         warn!("Unable to enter {target:?}: selected course has no playable stages.");
         self.state.session.course_run = None;
         self.state.screens.player_options_state = None;
+        self.state.pending_stage = None;
         self.state.shell.transition = crate::TransitionState::Idle;
         self.sync_gameplay_input_capture();
         deadlib_present::runtime::clear_all();
@@ -148,6 +150,9 @@ impl App {
     #[inline(always)]
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
+        if !is_play_screen::<ActiveTheme>(target) {
+            self.state.pending_stage = None;
+        }
         let plan = screen_change_plan::<ActiveTheme>(prev, target);
         if let Some(rate) = practice_music_rate_on_screen_change::<ActiveTheme>(
             &mut self.state.session.pre_practice_music_rate,

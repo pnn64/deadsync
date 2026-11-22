@@ -217,6 +217,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     assert_eq!(app.state.screens.current_screen, CurrentScreen::Evaluation);
                     assert!(app.state.session.course_run.is_none());
                     assert!(app.state.screens.player_options_state.is_none());
+                    assert!(app.state.pending_stage.is_none());
                     assert!(app.pending_gameplay_init.is_none());
                     assert!(app.state.screens.gameplay_state.is_none());
                     assert_eq!(app.state.session.played_stages.len(), 2);
@@ -530,6 +531,7 @@ fn course_stage_load_failures_preserve_recorded_results_and_evaluation_pages() {
                         assert!(app.pending_gameplay_init.is_none());
                         assert!(app.state.screens.gameplay_state.is_none());
                         assert!(app.state.screens.player_options_state.is_none());
+                        assert!(app.state.pending_stage.is_none());
                         assert_eq!(
                             app.state.shell.interaction.message(),
                             Some("Unable to prepare next course stage")

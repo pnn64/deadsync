@@ -15,7 +15,8 @@ use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadsync_assets::noteskin::{self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot};
-use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
+use deadsync_chart::{ChartData, SongData};
+use deadsync_profile_gameplay::stage_charts::stage_difficulty_indices;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_theme::AudioRequest;
@@ -404,15 +405,8 @@ fn init_state(
 
     let speed_mod_p1 = SpeedMod::from(player_options[P1].scroll_speed);
     let speed_mod_p2 = SpeedMod::from(player_options[P2].scroll_speed);
-    let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
-        let steps_idx = chart_steps_index[player_idx];
-        let mut diff_idx =
-            preferred_difficulty_index[player_idx].min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
-        if steps_idx < STANDARD_DIFFICULTY_COUNT {
-            diff_idx = steps_idx;
-        }
-        diff_idx
-    });
+    let chart_difficulty_index =
+        stage_difficulty_indices(chart_steps_index, preferred_difficulty_index);
 
     let noteskin_names = noteskin_catalog.names;
     let mut pack_menu = pack_options::PackMenu::new(&noteskin::pack_catalog());

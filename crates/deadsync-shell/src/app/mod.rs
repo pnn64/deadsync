@@ -23,10 +23,12 @@ mod screen_nav;
 mod screenshot;
 mod select_music_views;
 mod smx_runtime;
+mod stage_start;
 mod updater;
 
 use self::lua_loading::SongLuaLoading;
 use self::screenshot::auto_screenshot_eval_results;
+use self::stage_start::StageStart;
 use crate::{ActiveTheme, ThemeScreen as CurrentScreen, TransitionState};
 use crate::command::Command;
 use crate::course::{
@@ -652,6 +654,7 @@ pub struct AppState {
     shell: ShellState,
     screens: ScreensState,
     session: SessionState,
+    pending_stage: Option<StageStart>,
     coin: crate::coin::State,
     gameplay_offset_save_prompt: Option<GameplayOffsetSavePrompt>,
     play_input_policy: InputRoutePolicy,
@@ -1306,6 +1309,7 @@ impl ScreensState {
         delta_time: f32,
         now: Instant,
         session: &SessionState,
+        stage_pending: bool,
         premium_seconds_left: Option<u32>,
         asset_manager: &AssetManager,
         audio: &mut deadsync_audio_stream::AudioControl,
@@ -1447,7 +1451,7 @@ impl ScreensState {
                 let update_effect = evaluation::update(&mut self.evaluation_state, delta_time);
                 let navigation = if let Some(delay) = self.evaluation_state.auto_advance_seconds
                     && self.evaluation_state.screen_elapsed >= delay
-                    && self.player_options_state.is_some()
+                    && (stage_pending || self.player_options_state.is_some())
                 {
                     ThemeEffect::Navigate(CurrentScreen::Gameplay)
                 } else {
@@ -1547,6 +1551,7 @@ impl AppState {
             shell,
             screens,
             session,
+            pending_stage: None,
             coin,
             gameplay_offset_save_prompt: None,
             play_input_policy: InputRoutePolicy::from_config(&cfg),
@@ -3231,6 +3236,7 @@ impl App {
             Instant::now(),
         );
         self.state.screens.player_options_state = None;
+        self.state.pending_stage = None;
         self.pending_gameplay_init = None;
         // A failed Lua screen replacement can still have an unfinished stage.
         // Only completed, already recorded songs belong in this result.
@@ -4794,6 +4800,7 @@ impl App {
                     logic_dt,
                     redraw_started,
                     &self.state.session,
+                    self.state.pending_stage.is_some(),
                     premium_seconds_left,
                     &self.asset_manager,
                     &mut self.audio,
@@ -6484,9 +6491,16 @@ impl App {
             config::runtime::song_path_is_writable,
             |simfile_path| {
                 let updated_song = song_loading::reload_song_in_cache(simfile_path)?;
-                if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
+                let screen_song = self
+                    .state
+                    .screens
+                    .player_options_state
+                    .as_mut()
+                    .map(|state| &mut state.song);
+                let pending_song = self.state.pending_stage.as_mut().map(|stage| &mut stage.song);
+                for song in [screen_song, pending_song].into_iter().flatten() {
                     let _ = deadsync_simfile::runtime_cache::replace_song_arc_if_same_simfile(
-                        &mut po_state.song,
+                        song,
                         &updated_song,
                     );
                 }
@@ -6676,40 +6690,42 @@ impl App {
         true
     }
 
-    fn prepare_player_options_for_course_stage(
-        &mut self,
-        color_index: i32,
-        prewarm_noteskin_catalog: bool,
-    ) -> bool {
+    fn prepare_course_stage(&mut self, color_index: i32, show_player_options: bool) -> bool {
         let Some(course_run) = self.state.session.course_run.as_ref() else {
             return false;
         };
         let Some(stage) = course_run.run.next_stage() else {
             return false;
         };
-        let init = if prewarm_noteskin_catalog {
-            player_options::init
+        let label = course_run.presentation.course_stepchart_label.clone();
+        if show_player_options {
+            self.state.screens.player_options_state = Some(player_options::init(
+                stage.song.clone(),
+                stage.steps_index,
+                stage.preferred_difficulty_index,
+                color_index,
+                CurrentScreen::SelectCourse,
+                Some(player_options::FixedStepchart { label }),
+                noteskin_catalog_view(&self.dirs),
+                crate::smx_config::smx_gif_catalog_view(),
+                crate::heart_rate::devices_view(),
+                crate::player_options::init_view(),
+            ));
         } else {
-            player_options::init_for_gameplay
-        };
-        self.state.screens.player_options_state = Some(init(
-            stage.song.clone(),
-            stage.steps_index,
-            stage.preferred_difficulty_index,
-            color_index,
-            CurrentScreen::SelectCourse,
-            Some(player_options::FixedStepchart {
-                label: course_run.presentation.course_stepchart_label.clone(),
-            }),
-            noteskin_catalog_view(&self.dirs),
-            crate::smx_config::smx_gif_catalog_view(),
-            crate::heart_rate::devices_view(),
-            crate::player_options::init_view(),
-        ));
+            let mut start = StageStart::from_current_profiles(
+                stage.song.clone(),
+                stage.steps_index,
+                stage.preferred_difficulty_index,
+                color_index,
+                CurrentScreen::SelectCourse,
+            );
+            start.fixed_stepchart_label = Some(label);
+            self.state.pending_stage = Some(start);
+        }
         true
     }
 
-    fn prepare_restart_player_options(
+    fn prepare_restart_stage(
         &mut self,
         song: Arc<deadsync_chart::SongData>,
         chart_hashes: [&str; MAX_PLAYERS],
@@ -6732,27 +6748,22 @@ impl App {
             player_side,
         );
 
-        let mut po_state = player_options::init_for_gameplay(
+        let mut start = StageStart::from_profiles(
             song,
             chart_steps_index,
             chart_steps_index,
             active_color_index,
             return_screen,
-            None,
-            noteskin_catalog_view(&self.dirs),
-            crate::smx_config::smx_gif_catalog_view(),
-            crate::heart_rate::devices_view(),
-            crate::player_options::init_view(),
+            session,
+            &crate::player_options::active_profiles(),
         );
-        po_state.music_rate = music_rate;
-        po_state.speed_mod =
-            std::array::from_fn(|i| player_options::SpeedMod::from(scroll_speed[i]));
-        player_options::sync_speed_mod_type_rows(&mut po_state);
-        self.state.screens.player_options_state = Some(po_state);
+        start.options.music_rate = music_rate;
+        start.options.scroll_speeds = scroll_speed;
+        self.state.pending_stage = Some(start);
         true
     }
 
-    fn prepare_player_options_for_gameplay_restart(&mut self) -> bool {
+    fn prepare_gameplay_restart(&mut self) -> bool {
         let eval_payload =
             restart_payload_from_eval(&self.state.screens.evaluation_state.score_info);
         match gameplay_restart_prepare_source(
@@ -6772,7 +6783,7 @@ impl App {
                 let music_rate = gs.music_rate();
                 let scroll_speed = [gs.scroll_speed_for_player(0), gs.scroll_speed_for_player(1)];
                 let active_color_index = gs.active_color_index();
-                self.prepare_restart_player_options(
+                self.prepare_restart_stage(
                     song,
                     [chart_hashes[0].as_str(), chart_hashes[1].as_str()],
                     music_rate,
@@ -6786,7 +6797,7 @@ impl App {
                     return false;
                 };
                 let active_color_index = self.state.screens.evaluation_state.active_color_index;
-                self.prepare_restart_player_options(
+                self.prepare_restart_stage(
                     payload.song,
                     [
                         payload.chart_hashes[0].as_str(),
@@ -6802,7 +6813,7 @@ impl App {
         }
     }
 
-    fn prepare_player_options_for_practice_from_eval(&mut self) -> bool {
+    fn prepare_practice_from_eval(&mut self) -> bool {
         let eval_payload =
             restart_payload_from_eval(&self.state.screens.evaluation_state.score_info);
         match practice_restart_prepare_source(
@@ -6814,7 +6825,7 @@ impl App {
                     return false;
                 };
                 let active_color_index = self.state.screens.evaluation_state.active_color_index;
-                self.prepare_restart_player_options(
+                self.prepare_restart_stage(
                     payload.song,
                     [
                         payload.chart_hashes[0].as_str(),
@@ -6831,7 +6842,7 @@ impl App {
     }
 
     fn try_gameplay_restart(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
-        let restartable = self.prepare_player_options_for_gameplay_restart();
+        let restartable = self.prepare_gameplay_restart();
         match gameplay_restart_route(
             self.state.screens.current_screen,
             restartable,
@@ -6921,9 +6932,9 @@ impl App {
             return false;
         }
 
-        if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
+        if let Some(stage) = self.state.pending_stage.as_mut() {
             let _ = deadsync_simfile::runtime_cache::replace_song_arc_if_same_simfile(
-                &mut po_state.song,
+                &mut stage.song,
                 &updated_song,
             );
         }
@@ -6941,7 +6952,7 @@ impl App {
         if !practice_from_eval_allowed(self.state.screens.current_screen, eval_payload_available) {
             return false;
         }
-        if !self.prepare_player_options_for_practice_from_eval() {
+        if !self.prepare_practice_from_eval() {
             log::warn!("Ignored {label} practice: no replayable evaluation payload.");
             return false;
         }
@@ -7016,7 +7027,7 @@ impl App {
             [old_difficulties[0].as_str(), old_difficulties[1].as_str()],
         );
 
-        if !self.prepare_restart_player_options(
+        if !self.prepare_restart_stage(
             updated_song,
             [new_hashes[0].as_str(), new_hashes[1].as_str()],
             music_rate,
@@ -8900,19 +8911,36 @@ impl App {
                 .screens
                 .player_options_state
                 .as_ref()
-                .map(|state| PlayerOptionsTransition {
-                    scroll_speed: state
-                        .speed_mod
-                        .each_ref()
-                        .map(player_options::scroll_speed_for_mod),
-                    chart_difficulty_index: state.chart_difficulty_index,
-                    music_rate: state.music_rate,
+                .map(|state| {
+                    (
+                        state
+                            .speed_mod
+                            .each_ref()
+                            .map(player_options::scroll_speed_for_mod),
+                        state.chart_difficulty_index,
+                        state.music_rate,
+                    )
+                })
+                .or_else(|| {
+                    self.state.pending_stage.as_ref().map(|start| {
+                        (
+                            start.options.scroll_speeds,
+                            start.chart_difficulty_index,
+                            start.options.music_rate,
+                        )
+                    })
+                })
+                .map(|(scroll_speed, chart_difficulty_index, music_rate)| PlayerOptionsTransition {
+                    scroll_speed,
+                    chart_difficulty_index,
+                    music_rate,
                     play_style: session.play_style,
                     player_side: session.player_side,
                 })
         } else {
             None
         };
+        let submitted_music_rate = player_options.as_ref().map(|options| options.music_rate);
         let plan = transition_effect_plan::<ActiveTheme>(
             TransitionEffectContext {
                 previous: prev,
@@ -8941,8 +8969,8 @@ impl App {
                     debug!("Saved scroll speed ({side:?}): {setting}");
                 }
             }
-            if let Some(state) = &self.state.screens.player_options_state {
-                debug!("Session music rate set to {:.2}x", state.music_rate);
+            if let Some(rate) = submitted_music_rate {
+                debug!("Session music rate set to {rate:.2}x");
             }
         }
         if let Some(preferred) = plan.preferred_difficulty_index {
@@ -9165,7 +9193,7 @@ impl App {
                     return;
                 }
                 let color_index = self.state.screens.select_course_state.active_color_index;
-                if !self.prepare_player_options_for_course_stage(color_index, true) {
+                if !self.prepare_course_stage(color_index, true) {
                     self.state.screens.player_options_state = None;
                     warn!("Unable to prepare PlayerOptions for the selected course.");
                 }
@@ -9199,8 +9227,8 @@ impl App {
                     self.state.screens.select_course_state.active_color_index,
                     |gs| gs.gameplay.active_color_index(),
                 );
-                if !self.prepare_player_options_for_course_stage(color_index, false) {
-                    self.state.screens.player_options_state = None;
+                if !self.prepare_course_stage(color_index, false) {
+                    self.state.pending_stage = None;
                     warn!("Unable to prepare gameplay for the next course stage.");
                 }
             }
@@ -9208,16 +9236,15 @@ impl App {
             && (prev == CurrentScreen::SelectMusic
                 || (target == CurrentScreen::Gameplay && prev == CurrentScreen::SelectCourse))
             && self.state.screens.player_options_state.is_none()
+            && self.state.pending_stage.is_none()
         {
-            // Allow starting Gameplay directly from SelectMusic (Simply Love behavior) by
-            // constructing a PlayerOptions state from persisted profile/session defaults.
             if prev == CurrentScreen::SelectCourse {
                 if !self.start_course_run_from_selected() {
                     warn!("Unable to start gameplay: selected course has no playable stages.");
                     return;
                 }
                 let color_index = self.state.screens.select_course_state.active_color_index;
-                if !self.prepare_player_options_for_course_stage(color_index, false) {
+                if !self.prepare_course_stage(color_index, false) {
                     warn!("Unable to prepare gameplay for the selected course stage.");
                 }
             } else {
@@ -9225,17 +9252,12 @@ impl App {
                     .selected_music_gameplay_choice(profile::get_session_play_style())
                     .expect("cannot start Gameplay or Practice without a selected song");
                 let color_index = self.state.screens.select_music_state.active_color_index;
-                self.state.screens.player_options_state = Some(player_options::init_for_gameplay(
+                self.state.pending_stage = Some(StageStart::from_current_profiles(
                     song_arc,
                     chart_steps_index,
                     preferred_difficulty_index,
                     color_index,
                     CurrentScreen::SelectMusic,
-                    None,
-                    noteskin_catalog_view(&self.dirs),
-                    crate::smx_config::smx_gif_catalog_view(),
-                    crate::heart_rate::devices_view(),
-                    crate::player_options::init_view(),
                 ));
             }
         }
@@ -9322,12 +9344,12 @@ impl App {
         }
         if target == CurrentScreen::Practice {
             self.audio.stop_music();
-            if let Some(mut po_state) = self.state.screens.player_options_state.take() {
+            if let Some((start, options_screen)) = self.take_stage_start() {
                 // Preserve the editor cursor/selection across a returning
                 // PlayerOptions->Practice trip and across an in-place Practice
                 // chart reload (Ctrl+Shift+R re-enters Practice from Practice).
                 let edit_snapshot = ((prev == CurrentScreen::PlayerOptions
-                    && po_state.return_screen == CurrentScreen::Practice)
+                    && start.return_screen == CurrentScreen::Practice)
                     || prev == CurrentScreen::Practice)
                     .then(|| {
                         self.state
@@ -9337,14 +9359,14 @@ impl App {
                             .map(practice::edit_snapshot)
                     })
                     .flatten();
-                let song_arc = po_state.song.clone();
+                let song_arc = Arc::clone(&start.song);
                 let session = profile::get_session_snapshot();
                 let play_style = session.play_style;
                 let player_side = session.player_side;
                 let chart_plan = gameplay_chart_entry_plan(
                     &song_arc,
-                    po_state.chart_steps_index,
-                    po_state.chart_difficulty_index,
+                    start.options.chart_steps_index,
+                    start.chart_difficulty_index,
                     play_style,
                     player_side,
                 );
@@ -9380,9 +9402,7 @@ impl App {
                             "Failed to load practice payload for '{}': {}",
                             song_arc.title, e
                         );
-                        player_options::prepare_presentation(&mut po_state, &self.asset_manager);
-                        self.commit_screen_change(CurrentScreen::PlayerOptions);
-                        self.state.screens.player_options_state = Some(po_state);
+                        self.recover_player_options(start, options_screen);
                         return commands;
                     }
                 };
@@ -9403,13 +9423,13 @@ impl App {
                     self.state
                         .screens
                         .select_music_state
-                        .preferred_difficulty_index = po_state.chart_difficulty_index[0];
+                        .preferred_difficulty_index = start.chart_difficulty_index[0];
                     self.state.screens.select_music_state.selected_steps_index =
                         resolved_steps_index[0];
                     self.state
                         .screens
                         .select_music_state
-                        .p2_preferred_difficulty_index = po_state.chart_difficulty_index[1];
+                        .p2_preferred_difficulty_index = start.chart_difficulty_index[1];
                     self.state
                         .screens
                         .select_music_state
@@ -9419,12 +9439,12 @@ impl App {
                         .screens
                         .select_music_state
                         .preferred_difficulty_index =
-                        po_state.chart_difficulty_index[last_played_idx];
+                        start.chart_difficulty_index[last_played_idx];
                     self.state.screens.select_music_state.selected_steps_index =
                         resolved_steps_index[last_played_idx];
                 }
 
-                let stage_options = player_options::stage_options(&po_state);
+                let stage_options = start.options;
                 let music_rate = stage_options.music_rate;
                 let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
                     crate::player_options::active_profiles(),
@@ -9452,7 +9472,7 @@ impl App {
                 let metrics = self.state.shell.metrics;
                 let viewport = gameplay_viewport(metrics);
                 let display_size = space::current_window_px();
-                let color_index = po_state.active_color_index;
+                let color_index = start.color_index;
                 let loading = SongLuaLoading::for_song(&song_arc, cfg.song_lua_mode, color_index);
                 let bake_progress = loading.as_ref().map(|loading| loading.progress.clone());
                 let has_song_lua = !song_arc.background_lua_changes.is_empty()
@@ -9557,7 +9577,7 @@ impl App {
                     }
                 }
             } else {
-                panic!("Navigating to Practice without PlayerOptions state!");
+                panic!("Navigating to Practice without a stage selection!");
             }
         }
         if target == CurrentScreen::Gameplay {
@@ -9645,22 +9665,22 @@ impl App {
                     payload.score / 100.0
                 ))
             });
-            if let Some(mut po_state) = self.state.screens.player_options_state.take() {
-                let song_arc = po_state.song.clone();
+            if let Some((start, options_screen)) = self.take_stage_start() {
+                let song_arc = Arc::clone(&start.song);
                 let session = profile::get_session_snapshot();
                 let play_style = session.play_style;
                 let player_side = session.player_side;
                 let chart_plan = gameplay_chart_entry_plan(
                     &song_arc,
-                    po_state.chart_steps_index,
-                    po_state.chart_difficulty_index,
+                    start.options.chart_steps_index,
+                    start.chart_difficulty_index,
                     play_style,
                     player_side,
                 );
                 let last_played_commands = gameplay_last_played_commands(
                     song_arc.as_ref(),
                     &chart_plan,
-                    po_state.chart_difficulty_index,
+                    start.chart_difficulty_index,
                     play_style,
                     player_side,
                 );
@@ -9773,12 +9793,7 @@ impl App {
                                     "Failed to load gameplay payload for '{}': {}",
                                     song_arc.title, e
                                 );
-                                player_options::prepare_presentation(
-                                    &mut po_state,
-                                    &self.asset_manager,
-                                );
-                                self.commit_screen_change(CurrentScreen::PlayerOptions);
-                                self.state.screens.player_options_state = Some(po_state);
+                                self.recover_player_options(start, options_screen);
                                 return commands;
                             }
                         }
@@ -9805,13 +9820,13 @@ impl App {
                     self.state
                         .screens
                         .select_music_state
-                        .preferred_difficulty_index = po_state.chart_difficulty_index[0];
+                        .preferred_difficulty_index = start.chart_difficulty_index[0];
                     self.state.screens.select_music_state.selected_steps_index =
                         resolved_steps_index[0];
                     self.state
                         .screens
                         .select_music_state
-                        .p2_preferred_difficulty_index = po_state.chart_difficulty_index[1];
+                        .p2_preferred_difficulty_index = start.chart_difficulty_index[1];
                     self.state
                         .screens
                         .select_music_state
@@ -9821,14 +9836,14 @@ impl App {
                         .screens
                         .select_music_state
                         .preferred_difficulty_index =
-                        po_state.chart_difficulty_index[last_played_idx];
+                        start.chart_difficulty_index[last_played_idx];
                     self.state.screens.select_music_state.selected_steps_index =
                         resolved_steps_index[last_played_idx];
                 }
 
                 commands.extend(last_played_commands);
 
-                let color_index = po_state.active_color_index;
+                let color_index = start.color_index;
                 let (course_display_info, course_banner_path) = self
                     .state
                     .session
@@ -9858,7 +9873,7 @@ impl App {
                     deadsync_simfile::event_intro::gameplay_event_intro_text(song_arc.as_ref())
                 };
                 let combo_carry = self.state.session.combo_carry;
-                let stage_options = player_options::stage_options(&po_state);
+                let stage_options = start.options;
                 let music_rate = stage_options.music_rate;
                 let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
                     crate::player_options::active_profiles(),
@@ -10015,7 +10030,7 @@ impl App {
                     }
                 }
             } else {
-                panic!("Navigating to Gameplay without PlayerOptions state!");
+                panic!("Navigating to Gameplay without a stage selection!");
             }
         }
 

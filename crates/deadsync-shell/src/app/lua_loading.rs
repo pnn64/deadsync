@@ -126,20 +126,17 @@ mod tests {
                             elapsed: 0.0,
                             duration: 2.0,
                         };
-                        app.state.screens.player_options_state =
-                            Some(player_options::init_for_gameplay(
-                                song.clone(),
-                                [0; MAX_PLAYERS],
-                                [3; MAX_PLAYERS],
-                                5,
-                                CurrentScreen::SelectMusic,
-                                None,
-                                noteskin_catalog_view(&app.dirs),
-                                crate::smx_config::smx_gif_catalog_view(),
-                                crate::heart_rate::devices_view(),
-                                crate::player_options::init_view(),
-                            ));
-                        app.handle_screen_entry_on_fade(CurrentScreen::PlayerOptions, target);
+                        let wheel = &mut app.state.screens.select_music_state;
+                        wheel.entries = vec![select_music::MusicWheelEntry::Song(song.clone())];
+                        wheel.selected_index = 0;
+                        wheel.selected_steps_index = 0;
+                        wheel.preferred_difficulty_index = 3;
+                        wheel.active_color_index = 5;
+                        app.prepare_screen_state(CurrentScreen::SelectMusic, target);
+                        assert!(app.state.pending_stage.is_some());
+                        assert!(app.state.screens.player_options_state.is_none());
+                        app.handle_screen_entry_on_fade(CurrentScreen::SelectMusic, target);
+                        assert!(app.state.pending_stage.is_none());
                         assert!(
                             app.pending_gameplay_init.is_some(),
                             "Lua preparation must be a worker"
@@ -173,7 +170,7 @@ mod tests {
                                 &mut Vec::new(),
                             );
                             let before = format!("{:?}", practice::edit_snapshot(state));
-                            assert!(app.prepare_restart_player_options(
+                            assert!(app.prepare_restart_stage(
                                 song.clone(),
                                 [song.charts[0].short_hash.as_str(); MAX_PLAYERS],
                                 1.0,
@@ -205,6 +202,61 @@ mod tests {
                         let entry_duration = if target == CurrentScreen::Gameplay { 0.2 } else { 2.0 };
                         assert_eq!(app.get_in_transition_for_screen(target).1, entry_duration);
                     }
+                },
+            )
+        });
+    }
+
+    #[test]
+    fn practice_restart_load_failure_restores_options_for_the_requested_stage() {
+        on_app_thread(|| {
+            with_session(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P1,
+                true,
+                false,
+                || {
+                    let root = tempfile::tempdir().unwrap();
+                    let mut app = test_app(root.path());
+                    let song = song(root.path());
+                    let speeds = [
+                        ScrollSpeedSetting::CMod(630.0),
+                        ScrollSpeedSetting::XMod(2.5),
+                    ];
+                    app.state.screens.current_screen = CurrentScreen::Practice;
+                    assert!(app.prepare_restart_stage(
+                        Arc::clone(&song),
+                        [song.charts[0].short_hash.as_str(); MAX_PLAYERS],
+                        1.25,
+                        speeds,
+                        5,
+                        CurrentScreen::Practice,
+                    ));
+                    assert!(app.state.screens.player_options_state.is_none());
+                    let stage = app.state.pending_stage.as_ref().unwrap();
+                    let expected_steps = stage.options.chart_steps_index;
+                    let expected_difficulty = stage.chart_difficulty_index;
+                    std::fs::remove_file(&song.simfile_path).unwrap();
+
+                    let (target, _) = app.prepare_global_fade_entry(CurrentScreen::Practice);
+
+                    assert_eq!(target, CurrentScreen::PlayerOptions);
+                    assert!(app.state.pending_stage.is_none());
+                    assert!(app.pending_gameplay_init.is_none());
+                    let recovered = app.state.screens.player_options_state.as_ref().unwrap();
+                    assert!(Arc::ptr_eq(&recovered.song, &song));
+                    assert_eq!(recovered.return_screen, CurrentScreen::Practice);
+                    assert_eq!(recovered.active_color_index, 5);
+                    assert_eq!(recovered.music_rate, 1.25);
+                    assert_eq!(recovered.chart_steps_index, expected_steps);
+                    assert_eq!(recovered.chart_difficulty_index, expected_difficulty);
+                    assert_eq!(
+                        recovered
+                            .speed_mod
+                            .each_ref()
+                            .map(player_options::scroll_speed_for_mod),
+                        speeds
+                    );
                 },
             )
         });

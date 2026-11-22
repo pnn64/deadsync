@@ -122,7 +122,7 @@ impl App {
                 .gameplay_state
                 .as_ref()
                 .is_some_and(|state| state.song_lua.is_some())
-            || !self.prepare_player_options_for_gameplay_restart()
+            || !self.prepare_gameplay_restart()
         {
             warn!("Cannot reload song Lua without an active gameplay screen");
             return;
