@@ -611,6 +611,11 @@ updates, and actor composition. The shell tracks the game result separately and
 uses it to resolve chart queries. The theme reports which leaderboard panes need
 data and receives the available results as a runtime view.
 
+Video banners, screenshot labels, and StepManiaX result lighting use the
+completed stage's song, chart, and grade. The shell captures the automatic
+screenshot criteria before giving the result to the theme, and the theme
+reports when it has finished showing animations and dialogs.
+
 Several screens and runtime requests still use concrete Simply Love types.
 Evaluation also uses Simply Love support code for course noteskin previews,
-entry audio, screenshots, and other screen integrations.
+entry audio, and other screen integrations.

@@ -16,15 +16,15 @@ use deadsync_lights::{
 use deadsync_profile::{
     HideLightType, PlayStyle, PlayerSide, physical_player_slot_for_chart_pad, player_side_index,
 };
+use deadsync_profile_gameplay::results::EvaluationStage;
 use deadsync_score::Grade;
 use deadsync_simfile::app_runtime as song_loading;
 use deadsync_smx::gameplay_driver as smx_driver;
-use deadsync_smx::gifs::FullPadAnim;
+use deadsync_smx::gifs::{FullPadAnim, difficulty_tag};
 use deadsync_smx::panel_fx::JudgementGifs;
 use deadsync_smx::panels::{Clock, PADS};
 use deadsync_theme::views::LightsTestView;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
-use deadsync_theme_simply_love::views::ScoreInfo;
 
 pub fn lights_test_view(state: LightState, mode: Mode) -> LightsTestView {
     let cabinet = [
@@ -162,23 +162,21 @@ impl SmxResultContext {
     }
 }
 
-pub fn smx_result_context(screen: Screen, score_info: &[Option<ScoreInfo>; 2]) -> SmxResultContext {
+pub fn smx_result_context(screen: Screen, stage: Option<&EvaluationStage>) -> SmxResultContext {
     if !matches!(
         screen,
         Screen::Evaluation | Screen::EvaluationSummary | Screen::Initials
     ) {
         return SmxResultContext::default();
     }
-    score_info
-        .iter()
-        .flatten()
-        .map(|score| SmxResultContext {
-            grade: Some(score.grade),
-            difficulty: Some(deadsync_theme_simply_love::color::difficulty_gif_tag(
-                &score.chart.difficulty,
-            )),
+    stage
+        .into_iter()
+        .flat_map(EvaluationStage::players)
+        .min_by_key(|player| player.grade.to_sprite_state())
+        .map(|player| SmxResultContext {
+            grade: Some(player.grade),
+            difficulty: Some(difficulty_tag(&player.chart.difficulty)),
         })
-        .min_by_key(|context| context.grade_sprite_state())
         .unwrap_or_default()
 }
 
@@ -254,7 +252,7 @@ pub fn smx_pad_gif_frame_plan(
     enabled: bool,
     smx_input: bool,
     smx_config_view: bool,
-    score_info: &[Option<ScoreInfo>; 2],
+    stage: Option<&EvaluationStage>,
 ) -> SmxPadGifFramePlan {
     let assignment_preview = smx_options_light_preview_active(screen, smx_input, smx_config_view);
     let role = smx_background_role(screen, enabled, assignment_preview);
@@ -262,7 +260,7 @@ pub fn smx_pad_gif_frame_plan(
         assignment_preview,
         role,
         current_song_needed: role.is_some(),
-        result_context: smx_result_context(screen, score_info),
+        result_context: smx_result_context(screen, stage),
         beat_locked: enabled && matches!(screen, Screen::SelectMusic),
     }
 }
@@ -572,13 +570,12 @@ mod tests {
 
     #[test]
     fn smx_pad_gif_plan_suppresses_assignment_preview_backgrounds() {
-        let score_info = [None, None];
-        let select = smx_pad_gif_frame_plan(Screen::SelectMusic, true, true, false, &score_info);
+        let select = smx_pad_gif_frame_plan(Screen::SelectMusic, true, true, false, None);
         assert_eq!(select.role, Some("song_select"));
         assert!(select.current_song_needed);
         assert!(select.beat_locked);
 
-        let options = smx_pad_gif_frame_plan(Screen::Options, true, true, true, &score_info);
+        let options = smx_pad_gif_frame_plan(Screen::Options, true, true, true, None);
         assert!(options.assignment_preview);
         assert_eq!(options.role, None);
         assert!(!options.current_song_needed);
@@ -652,11 +649,11 @@ mod tests {
     #[test]
     fn empty_result_context_has_no_grade_or_difficulty() {
         assert_eq!(
-            smx_result_context(Screen::Evaluation, &[None, None]),
+            smx_result_context(Screen::Evaluation, None),
             SmxResultContext::default(),
         );
         assert_eq!(
-            smx_result_context(Screen::Gameplay, &[None, None]),
+            smx_result_context(Screen::Gameplay, None),
             SmxResultContext::default(),
         );
     }

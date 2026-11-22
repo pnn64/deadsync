@@ -28,7 +28,7 @@ mod updater;
 
 use self::evaluation_views::CourseEvaluationPage;
 use self::lua_loading::SongLuaLoading;
-use self::screenshot::auto_screenshot_eval_results;
+use self::screenshot::EvaluationCapture;
 use self::stage_start::{StageSelection, StageStart};
 use crate::{ActiveTheme, ThemeScreen as CurrentScreen, TransitionState};
 use crate::command::Command;
@@ -87,7 +87,6 @@ use crate::restart::{
 };
 use crate::runtime::ShellState;
 use crate::screen_flow::evaluation_summary_return_to;
-use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 pub use crate::session::SessionState;
 use crate::session_results::{
     fill_stage_indices, post_select_display_stage_count, post_select_display_stages,
@@ -655,6 +654,7 @@ pub struct ScreensState {
     evaluation_state: EvaluationState,
     evaluation_origin: EvaluationOrigin,
     evaluation_stage: Option<EvaluationStage>,
+    evaluation_capture: EvaluationCapture,
     course_evaluation: evaluation_views::CourseEvaluationPages,
     evaluation_summary_state: evaluation_summary::State,
     initials_state: initials::State,
@@ -889,6 +889,7 @@ fn build_course_summary_eval_state(
         profile.scorebox.play_style,
         &profiles,
     );
+    let capture = EvaluationCapture::from_scores(&score_info);
     let mut state = ActiveTheme::init_course_evaluation(
         score_info,
         routine_shared.map(|shared| shared.score_percent),
@@ -900,7 +901,11 @@ fn build_course_summary_eval_state(
         active_color_index,
     );
     ActiveTheme::sync_evaluation_elapsed(&mut state, session_elapsed, gameplay_elapsed);
-    CourseEvaluationPage { view: state, stage: evaluation_stage }
+    CourseEvaluationPage {
+        view: state,
+        stage: evaluation_stage,
+        capture,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1348,6 +1353,7 @@ impl ScreensState {
             evaluation_state,
             evaluation_origin: EvaluationOrigin::Song,
             evaluation_stage: None,
+            evaluation_capture: EvaluationCapture::default(),
             course_evaluation: Default::default(),
             evaluation_summary_state,
             initials_state,
@@ -4163,7 +4169,7 @@ impl App {
             enabled,
             smx_input,
             options::is_smx_config_view(&self.state.screens.options_state),
-            &self.state.screens.evaluation_state.score_info,
+            self.state.screens.evaluation_stage.as_ref(),
         );
         let role = frame_plan.role;
 
@@ -4848,28 +4854,7 @@ impl App {
                     self.handle_immediate_navigation(target, event_loop);
                 }
             }
-            let current_screen = self.state.screens.current_screen;
-            let auto_screenshot_ready = current_screen == CurrentScreen::Evaluation
-                && evaluation::auto_screenshot_ready(&self.state.screens.evaluation_state);
-            let auto_screenshot_plan = auto_screenshot_frame_plan(
-                AutoScreenshotFrameContext {
-                    screen: current_screen,
-                    already_taken: self.state.screens.evaluation_state.auto_screenshot_taken,
-                    ready: auto_screenshot_ready,
-                    mask: if current_screen == CurrentScreen::Evaluation {
-                        frame_policy.auto_screenshot_eval
-                    } else {
-                        0
-                    },
-                },
-                auto_screenshot_eval_results(&self.state.screens.evaluation_state),
-            );
-            if auto_screenshot_plan.mark_taken {
-                self.state.screens.evaluation_state.auto_screenshot_taken = true;
-            }
-            if auto_screenshot_plan.request_capture {
-                self.state.shell.screenshot.request(None);
-            }
+            self.update_evaluation_capture(frame_policy.auto_screenshot_eval);
         }
         if self.gameplay_preload_holds_frame() && self.song_lua_loading().is_none() {
             // Navigation was requested while stepping this frame. Do not draw
@@ -4989,11 +4974,9 @@ impl App {
                     CurrentScreen::Evaluation => {
                         let desired_path = if show_select_music_video_banners {
                             screens
-                                .evaluation_state
-                                .score_info
-                                .iter()
-                                .flatten()
-                                .find_map(|score| score.song.banner_path.as_deref())
+                                .evaluation_stage
+                                .as_ref()
+                                .and_then(|stage| stage.song.banner_path.as_deref())
                         } else {
                             None
                         };
@@ -7226,6 +7209,7 @@ impl App {
             course_page.view.sfx_paths = sfx_paths.clone();
             self.state.screens.evaluation_state = course_page.view.clone();
             self.state.screens.evaluation_stage = course_page.stage.clone();
+            self.state.screens.evaluation_capture = course_page.capture;
 
             let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
             pages.push(course_page);
@@ -7313,7 +7297,9 @@ impl App {
     }
 
     fn step_course_eval_page(&mut self, delta: i32) {
-        let Some(CourseEvaluationPage { view: mut page, stage }) = self.state.screens.course_evaluation.step(delta) else {
+        let Some(CourseEvaluationPage { view: mut page, stage, capture }) =
+            self.state.screens.course_evaluation.step(delta)
+        else {
             return;
         };
         page.screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
@@ -7322,6 +7308,7 @@ impl App {
         ActiveTheme::sync_evaluation_elapsed(&mut page, session_elapsed, gameplay_elapsed);
         self.state.screens.evaluation_state = page;
         self.state.screens.evaluation_stage = stage;
+        self.state.screens.evaluation_capture = capture;
         self.mark_evaluation_runtime_dirty();
         self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
         self.ui_sfx.play_cue(&mut self.audio, UiCue::Change);
@@ -9667,10 +9654,12 @@ impl App {
                 );
                 let _ = self.record_stage_result(stage.clone(), failed, &config, false);
                 let init_view = Self::evaluation_init_view(&gameplay_results, &stage, &config);
+                let capture = EvaluationCapture::from_scores(&init_view.score_info);
                 let eval_state = ActiveTheme::init_evaluation(init_view, color_idx);
                 self.state.screens.course_evaluation.stages.push(CourseEvaluationPage {
                     view: eval_state,
                     stage: evaluation_stage,
+                    capture,
                 });
             }
 
@@ -10085,6 +10074,7 @@ impl App {
                 }
                 (EvaluationInitView::default(), None, false, completed)
             };
+            self.state.screens.evaluation_capture = EvaluationCapture::from_scores(&init_view.score_info);
             self.state.screens.evaluation_state = ActiveTheme::init_evaluation(init_view, color_idx);
             self.state.screens.evaluation_stage = evaluation_stage;
             let session_elapsed = self.state.session.session_start_time.map_or(0.0, |start| {
@@ -10105,6 +10095,7 @@ impl App {
                     .push(CourseEvaluationPage {
                         view: self.state.screens.evaluation_state.clone(),
                         stage: self.state.screens.evaluation_stage.clone(),
+                        capture: self.state.screens.evaluation_capture,
                     });
             }
             self.finalize_entered_evaluation(&config, failed, completed_course);

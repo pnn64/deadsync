@@ -341,6 +341,23 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     );
                     let completed_song = Arc::clone(&app.state.session.played_stages[0].song);
                     app.state.screens.evaluation_state.score_info = [None, None];
+                    let stage = app.state.screens.evaluation_stage.as_ref().unwrap();
+                    let first = stage.players().next().unwrap();
+                    let title = screenshot::current_song_title(&app.state).unwrap();
+                    assert_eq!(title.title, completed_song.title);
+                    assert_eq!(title.meter, Some(first.chart.meter));
+                    let lit_player = stage.players().min_by_key(|player| player.grade.to_sprite_state()).unwrap();
+                    let lighting = crate::lighting::smx_result_context(CurrentScreen::Evaluation, Some(stage));
+                    assert_eq!(lighting.grade, Some(lit_player.grade));
+                    assert_eq!(lighting.difficulty, Some(deadsync_smx::gifs::difficulty_tag(&lit_player.chart.difficulty)));
+
+                    let screenshot_mask = config::theme::AUTO_SS_FAILS | config::theme::AUTO_SS_CLEARS;
+                    app.state.screens.evaluation_state.screen_elapsed = 10.0;
+                    app.update_evaluation_capture(screenshot_mask);
+                    assert_eq!(app.state.shell.screenshot.take_pending_request(), Some(None));
+                    app.update_evaluation_capture(screenshot_mask);
+                    assert!(!app.state.shell.screenshot.pending());
+
                     let side = profile_data::PlayerSide::P2;
                     let chart_hash = app.state.session.played_stages[0].players[1]
                         .as_ref().unwrap().chart.short_hash.clone();

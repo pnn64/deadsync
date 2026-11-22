@@ -13326,6 +13326,31 @@ fn evaluation_lifecycle_uses_the_installed_theme() {
 }
 
 #[test]
+fn evaluation_media_uses_host_results_and_theme_capture_readiness() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    let app = read_source(shell.join("app/mod.rs")).expect("Evaluation entry source");
+    let screenshot = production_source(&shell.join("app/screenshot.rs"));
+    let lighting = production_source(&shell.join("lighting.rs"));
+
+    assert!(contains_rust(
+        &app,
+        "screens.evaluation_stage.as_ref().and_then(|stage| stage.song.banner_path.as_deref())",
+    ));
+    assert!(contains_rust(
+        &app,
+        "options::is_smx_config_view(&self.state.screens.options_state), self.state.screens.evaluation_stage.as_ref()",
+    ));
+    assert!(screenshot.contains("ActiveTheme::evaluation_capture_ready("));
+    assert!(screenshot.contains(".evaluation_stage"));
+    assert!(!screenshot.contains("deadsync_theme_simply_love"));
+    assert!(!screenshot.contains(".score_info"));
+    assert!(lighting.contains("EvaluationStage::players"));
+    assert!(!lighting.contains("ScoreInfo"));
+    assert!(!lighting.contains("deadsync_theme_simply_love::color"));
+}
+
+#[test]
 fn gameplay_exit_routing_stays_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let policy = production_source(&root.join("crates/deadsync-gameplay/src/exit_route.rs"));

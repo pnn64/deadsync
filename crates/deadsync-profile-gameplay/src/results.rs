@@ -17,9 +17,16 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct EvaluationStage {
     pub song: Arc<SongData>,
-    charts: [Option<(profile_data::PlayerSide, Arc<ChartData>)>; MAX_PLAYERS],
+    players: [Option<EvaluationPlayer>; MAX_PLAYERS],
     pub music_rate: f32,
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
+}
+
+#[derive(Clone)]
+pub struct EvaluationPlayer {
+    pub side: profile_data::PlayerSide,
+    pub chart: Arc<ChartData>,
+    pub grade: score_data::Grade,
 }
 
 impl EvaluationStage {
@@ -44,16 +51,20 @@ impl EvaluationStage {
         players: [Option<(profile_data::PlayerSide, ScrollSpeedSetting)>; MAX_PLAYERS],
     ) -> Option<Self> {
         let mut scroll_speed = [ScrollSpeedSetting::default(); MAX_PLAYERS];
-        let charts = players.map(|player| {
+        let players = players.map(|player| {
             let (side, speed) = player?;
             let index = profile_data::player_side_index(side);
             let result = result.players[index].as_ref()?;
             scroll_speed[index] = speed;
-            Some((side, Arc::clone(&result.chart)))
+            Some(EvaluationPlayer {
+                side,
+                chart: Arc::clone(&result.chart),
+                grade: result.grade,
+            })
         });
-        charts.iter().any(Option::is_some).then(|| Self {
+        players.iter().any(Option::is_some).then(|| Self {
             song: Arc::clone(&result.song),
-            charts,
+            players,
             music_rate: if result.music_rate.is_finite() && result.music_rate > 0.0 {
                 result.music_rate
             } else {
@@ -71,9 +82,14 @@ impl EvaluationStage {
         hashes
     }
 
+    /// The players in result slot order, including P2 as the first slot in solo P2.
+    pub fn players(&self) -> impl Iterator<Item = &EvaluationPlayer> {
+        self.players.iter().flatten()
+    }
+
     pub fn player_chart_queries(&self) -> [Option<(profile_data::PlayerSide, &str)>; MAX_PLAYERS] {
-        self.charts.each_ref().map(|entry| {
-            entry.as_ref().map(|(side, chart)| (*side, chart.short_hash.as_str()))
+        self.players.each_ref().map(|entry| {
+            entry.as_ref().map(|player| (player.side, player.chart.short_hash.as_str()))
         })
     }
 }

@@ -96,6 +96,10 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
         sync_runtime_view(state, view);
     }
 
+    fn evaluation_capture_ready(state: &State) -> bool {
+        auto_screenshot_ready(state)
+    }
+
     fn evaluation_leaderboard_requests(state: &State) -> ([bool; MAX_PLAYERS], bool) {
         (leaderboard_requests(state), state.allow_online_panes)
     }

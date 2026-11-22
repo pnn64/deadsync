@@ -56,6 +56,8 @@ pub trait ThemeEvaluation: ThemeTransitions {
         visual_policy: Self::EvaluationVisualPolicy,
     );
     fn sync_evaluation_runtime(state: &mut Self::EvaluationState, view: Self::EvaluationRuntime);
+    /// Whether the result can be captured with its presentation settled.
+    fn evaluation_capture_ready(state: &Self::EvaluationState) -> bool;
     /// Returns the requested sides and whether online results can be shown on this page.
     fn evaluation_leaderboard_requests(
         state: &Self::EvaluationState,

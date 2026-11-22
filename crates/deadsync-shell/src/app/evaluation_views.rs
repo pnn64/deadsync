@@ -3,6 +3,7 @@ use super::{
     EvaluationSubmissionView, MAX_PLAYERS, ScoreboxSideView, SimplyLoveGrooveStatsService,
     evaluation_context_view, scorebox_pane_filter,
 };
+use super::screenshot::EvaluationCapture;
 use crate::ActiveTheme;
 use deadsync_config as config;
 use deadsync_online::score_compat as scores;
@@ -22,6 +23,7 @@ pub(super) fn chart_queries(stage: Option<&EvaluationStage>) -> PlayerQueries<'_
 pub(super) struct CourseEvaluationPage {
     pub(super) view: EvaluationState,
     pub(super) stage: Option<EvaluationStage>,
+    pub(super) capture: EvaluationCapture,
 }
 
 /// Retains Evaluation screens during a course and supports paging through the results.
