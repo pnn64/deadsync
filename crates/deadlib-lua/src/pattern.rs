@@ -236,6 +236,8 @@ pub(crate) fn has_magic(bytes: &[u8]) -> bool {
         .is_some_and(|&byte| byte != 0)
 }
 
+const ASCII_SPACE_BITS: u64 = crate::locale::ascii_class_bits(b's')[0];
+
 #[inline(never)]
 fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     if bytes.first().is_some_and(|&byte| !set_has(set, byte)) {
@@ -253,6 +255,11 @@ fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
             return Some(scan_boundary(bytes, |byte| !byte.is_ascii_alphanumeric()));
         }
         return excluded_set_run(bytes, set);
+    }
+    if index == 0 && bits == ASCII_SPACE_BITS {
+        return Some(scan_boundary(bytes, |byte| {
+            !crate::locale::ascii_space(byte)
+        }));
     }
     let offset = bits.trailing_zeros();
     let normalized = bits >> offset;
@@ -290,6 +297,9 @@ fn excluded_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
         return None;
     }
     let missing = !bits;
+    if index == 0 && missing == ASCII_SPACE_BITS {
+        return Some(scan_boundary(bytes, crate::locale::ascii_space));
+    }
     let base = (index * 64) as u8;
     let offset = missing.trailing_zeros();
     let first = base + offset as u8;
@@ -1178,6 +1188,19 @@ mod byte_search_tests {
                 assert_eq!(range_set_run(&bytes, &set), Some(expected));
             }
             bytes[index] = b'x';
+        }
+    }
+
+    #[test]
+    fn ascii_whitespace_runs_match_bitmap_membership() {
+        let spaces = [ASCII_SPACE_BITS, 0, 0, 0];
+        for (set, fill) in [(spaces, b' '), (spaces.map(|word| !word), b'x')] {
+            let mut bytes = [fill; 65];
+            for byte in 0..=u8::MAX {
+                bytes[32] = byte;
+                let end = if set_has(&set, byte) { bytes.len() } else { 32 };
+                assert_eq!(range_set_run(&bytes, &set), Some(end));
+            }
         }
     }
 
