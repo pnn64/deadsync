@@ -178,6 +178,12 @@ shell. Chart selection and difficulty fallback use the same game helpers for
 both entry paths. If chart loading fails, the shell reopens Player Options
 with the requested stage and settings.
 
+Machine replay confirmation sends a `StageReplayRequest` to the shell. The
+queued stage keeps the selected song, chart, and recording together during
+the fade. `deadsync-profile-gameplay::stage_replay` converts the owned input
+buffer and recorded beat-zero offset for the existing playback controller.
+Simply Love draws the picker and formats the playback label.
+
 `deadsync-song-lua::gameplay_session` owns the live song scene, callback setup,
 Update/input/Draw ordering, output buffering, deferred reloads, and exit clocks.
 The shell calls its controller directly. The statically bound host adapter
@@ -288,6 +294,10 @@ retained keys without allocating.
 ## Rust API migration
 
 Workspace callers are updated for these source-level changes:
+
+- Replay confirmation emits `SimplyLoveRuntimeRequest::StartReplay`, which
+  replaces `select_music::take_pending_replay`. The `ReplayStartPayload`
+  reexport retains its fields.
 
 - Import `REFLEX_PAD_ID_BASE` and `PAD_ID_COUNT_CAP` from `deadsync-input`.
   Persisted device IDs are unchanged.

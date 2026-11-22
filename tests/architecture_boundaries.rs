@@ -3835,6 +3835,27 @@ fn player_options_runtime_reads_are_shell_prepared() {
 }
 
 #[test]
+fn recorded_replay_playback_is_prepared_by_the_game() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let replay =
+        production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_replay.rs"));
+    let wheel = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    );
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    let stage = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
+    assert!(contains_rust(&replay, "pub struct StageReplayRequest"));
+    assert!(contains_rust(&replay, "pub fn into_playback("));
+    assert!(contains_rust(&wheel, "SimplyLoveRuntimeRequest::StartReplay(payload)"));
+    assert!(!wheel.contains("pending_replay"));
+    assert!(contains_rust(&app, "self.queue_replay_stage(replay)"));
+    assert!(contains_rust(&app, "replay.into_playback()"));
+    assert!(!app.contains("take_pending_replay"));
+    assert!(contains_rust(&stage, "start.replay = Some(replay)"));
+}
+
+#[test]
 fn simply_love_smx_assignment_uses_shell_prepared_hardware_state() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme_screen = read_source(

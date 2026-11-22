@@ -104,6 +104,11 @@ pub fn start_sfx(restart_count: u32) -> Option<PathBuf> {
     }
 }
 
+#[must_use]
+pub fn replay_status_text(name: &str, score_10000: f64) -> Arc<str> {
+    Arc::from(format!("Autoplay - {name} {:.2}%", score_10000 / 100.0))
+}
+
 const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;

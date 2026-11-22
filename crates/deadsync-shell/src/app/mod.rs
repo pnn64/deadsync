@@ -178,10 +178,7 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::stage_charts::take_player_charts;
 #[cfg(test)]
 use deadsync_gameplay::{CourseDisplayTotals, course_progress::CourseProgress};
-use deadsync_gameplay::{
-    GameplaySession, GameplayViewport, LeadInTiming, ReplayInputEdge,
-    ReplayOffsetSnapshot,
-};
+use deadsync_gameplay::{GameplaySession, GameplayViewport, LeadInTiming};
 use deadsync_input as logical_input;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_input_fsr as fsr_input;
@@ -2863,6 +2860,19 @@ impl App {
             preferred[1] = state.p2_preferred_difficulty_index;
         }
         Some((Arc::clone(song), steps, preferred))
+    }
+
+    fn selected_music_stage_start(&self) -> Option<StageStart> {
+        let (song, steps, preferred) =
+            self.selected_music_gameplay_choice(profile::get_session_play_style())?;
+        let color_index = self.state.screens.select_music_state.active_color_index;
+        Some(StageStart::from_current_profiles(
+            song,
+            steps,
+            preferred,
+            color_index,
+            CurrentScreen::SelectMusic,
+        ))
     }
 
     fn preload_gameplay(&mut self) {
@@ -5636,6 +5646,12 @@ impl App {
             ThemeEffect::Runtime(request) => match request {
                 SimplyLoveRuntimeRequest::GameplayAction(_) => {
                     unreachable!("gameplay actions must be normalized before runtime execution")
+                }
+                SimplyLoveRuntimeRequest::StartReplay(replay) => {
+                    if self.queue_replay_stage(replay) {
+                        self.handle_navigation_action(ActiveTheme::SCREENS.gameplay);
+                    }
+                    Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LinkArrowCloud {
                     profile_id,
@@ -9248,17 +9264,10 @@ impl App {
                     warn!("Unable to prepare gameplay for the selected course stage.");
                 }
             } else {
-                let (song_arc, chart_steps_index, preferred_difficulty_index) = self
-                    .selected_music_gameplay_choice(profile::get_session_play_style())
+                let start = self
+                    .selected_music_stage_start()
                     .expect("cannot start Gameplay or Practice without a selected song");
-                let color_index = self.state.screens.select_music_state.active_color_index;
-                self.state.pending_stage = Some(StageStart::from_current_profiles(
-                    song_arc,
-                    chart_steps_index,
-                    preferred_difficulty_index,
-                    color_index,
-                    CurrentScreen::SelectMusic,
-                ));
+                self.state.pending_stage = Some(start);
             }
         }
         if target == CurrentScreen::PlayerOptions
@@ -9640,32 +9649,15 @@ impl App {
                 self.state.session.course_stage_eval_pages.push(eval_state);
             }
 
-            let replay_pending =
-                select_music::take_pending_replay(&mut self.state.screens.select_music_state);
-            let replay_edges = replay_pending.as_ref().map(|payload| {
-                payload
-                    .replay
-                    .iter()
-                    .copied()
-                    .map(|e| ReplayInputEdge {
-                        lane_index: e.lane_index,
-                        pressed: e.pressed,
-                        source: e.source,
-                        event_music_time_ns: e.event_music_time_ns,
-                    })
-                    .collect::<Vec<_>>()
-            });
-            let replay_offsets = replay_pending.as_ref().map(|payload| ReplayOffsetSnapshot {
-                beat0_time_ns: payload.replay_beat0_time_ns,
-            });
-            let replay_status_text = replay_pending.as_ref().map(|payload| {
-                Arc::<str>::from(format!(
-                    "Autoplay - {} {:.2}%",
-                    payload.name,
-                    payload.score / 100.0
-                ))
-            });
-            if let Some((start, options_screen)) = self.take_stage_start() {
+            if let Some((mut start, options_screen)) = self.take_stage_start() {
+                let (replay_edges, replay_offsets, replay_status_text) =
+                    if let Some(replay) = start.replay.take() {
+                        let status = gameplay::replay_status_text(&replay.name, replay.score);
+                        let (edges, offsets) = replay.into_playback();
+                        (Some(edges), Some(offsets), Some(status))
+                    } else {
+                        (None, None, None)
+                    };
                 let song_arc = Arc::clone(&start.song);
                 let session = profile::get_session_snapshot();
                 let play_style = session.play_style;
@@ -9881,7 +9873,7 @@ impl App {
                     stage_options,
                     cfg.tournament,
                     play_style,
-                    replay_pending.is_some(),
+                    replay_offsets.is_some(),
                 );
                 let mut gameplay_session = gameplay_session();
                 let mut gameplay_init_view = crate::gameplay_runtime::init_view(

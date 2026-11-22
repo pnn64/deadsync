@@ -1736,7 +1736,6 @@ pub struct State {
     profile_picker: ProfilePickerView,
     profile_switch_overlay: Option<profile_boxes::State>,
     profile_switch_overlay_is_late_join: bool,
-    pending_replay: Option<select_music_menu::ReplayStartPayload>,
     select_music_menu: select_music_menu::State,
     leaderboard: select_music_menu::LeaderboardOverlayState,
     downloads_overlay: select_music_menu::DownloadsOverlayState,
@@ -3971,7 +3970,6 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         profile_picker: init_view.profile_picker,
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
-        pending_replay: None,
         select_music_menu: select_music_menu::State::Hidden,
         leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
@@ -4224,7 +4222,6 @@ pub fn init_placeholder() -> State {
         profile_picker: ProfilePickerView::default(),
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
-        pending_replay: None,
         select_music_menu: select_music_menu::State::Hidden,
         leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
@@ -9323,10 +9320,9 @@ fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffec
             ThemeEffect::None
         }
         select_music_menu::ReplayInputOutcome::StartGameplay(payload) => {
-            state.pending_replay = Some(payload);
             state.out_prompt = OutPromptState::None;
             queue_sfx(state, "assets/sounds/start.ogg");
-            ThemeEffect::Navigate(Screen::Gameplay)
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::StartReplay(payload))
         }
         select_music_menu::ReplayInputOutcome::None => ThemeEffect::None,
     }
@@ -11932,12 +11928,6 @@ pub fn prime_displayed_chart_data(state: &mut State) {
     state.displayed_chart_p2 = state
         .cached_chart_ix_p2
         .map(|chart_ix| DisplayedChart { song, chart_ix });
-}
-
-pub const fn take_pending_replay(
-    state: &mut State,
-) -> Option<select_music_menu::ReplayStartPayload> {
-    state.pending_replay.take()
 }
 
 #[inline(always)]
@@ -14733,6 +14723,72 @@ mod tests {
         sync_bias_axis_pos, sync_graph_cols, sync_low_confidence_warning,
         sync_overlay_graph_size,
     };
+
+    #[test]
+    fn replay_selection_emits_the_selected_recording_with_its_start_cue() {
+        use super::{AudioRequest, ThemeEffect, score_data, select_music_menu};
+        use crate::SimplyLoveRuntimeRequest;
+        use deadsync_core::input::InputSource;
+        use deadsync_input::{InputEvent, VirtualAction};
+        use std::time::Instant;
+
+        let mut state = select_lr_state(
+            deadsync_profile::PlayStyle::Single,
+            deadsync_profile::PlayerSide::P1,
+        );
+        let replay = vec![score_data::ReplayEdge {
+            event_music_time_ns: 15,
+            lane_index: 0,
+            pressed: true,
+            source: InputSource::Keyboard,
+        }];
+        let edge_storage = replay.as_ptr();
+        super::sync_machine_replays(
+            &mut state,
+            vec![score_data::MachineReplayEntry {
+                rank: 1,
+                name: "AAA".into(),
+                score: 9876.0,
+                date: String::new(),
+                is_fail: false,
+                replay_beat0_time_ns: 10,
+                replay,
+            }],
+        );
+        select_music_menu::update_replay_overlay(
+            &mut state.replay_overlay,
+            select_music_menu::REPLAY_INPUT_LOCK_SECONDS,
+        );
+        let now = Instant::now();
+        let event = InputEvent::new(
+            VirtualAction::p1_start,
+            0,
+            true,
+            InputSource::Keyboard,
+            now,
+            0,
+            now,
+            now,
+        );
+        let effect = super::handle_replay_overlay_input(&mut state, &event);
+        let mut effects = Vec::new();
+        append_pending_runtime(&mut state, effect, &mut effects);
+        let [
+            ..,
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(
+                "assets/sounds/start.ogg",
+            ))),
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::StartReplay(request)),
+        ] = effects.as_slice() else {
+            panic!("expected a start cue followed by the replay request");
+        };
+        assert!(matches!(
+            state.replay_overlay,
+            select_music_menu::ReplayOverlayState::Hidden
+        ));
+        assert_eq!(request.replay.as_ptr(), edge_storage);
+        assert_eq!(request.replay_beat0_time_ns, 10);
+    }
 
     #[test]
     fn music_wheel_caps_held_fast_scroll_sounds_but_not_individual_taps() {
