@@ -163,6 +163,12 @@ replacement stage. Render scratch warms at the same callback-install boundary.
 Simply Love's public combined constructor delegates to the shared preparation
 and presentation paths for existing callers.
 
+`deadsync-gameplay::stage_charts` resolves chart fallback and assigns charts to
+solo, Versus, and partner players. Preload, Player Options entry, and direct
+stage entry read the wheel through one adapter. The game validates Lua's
+replacement indices against the requested style and commits chart metadata,
+payloads, and session changes together after loading succeeds.
+
 `deadsync-song-lua::gameplay_session` owns the live song scene, callback setup,
 Update/input/Draw ordering, output buffering, deferred reloads, and exit clocks.
 The shell calls its controller directly. The statically bound host adapter

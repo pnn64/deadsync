@@ -48,6 +48,7 @@ pub mod course_progress;
 pub mod course_run;
 pub mod exit_route;
 pub mod practice;
+pub mod stage_charts;
 
 // ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.
 const MIN_SECONDS_TO_STEP: f32 = 6.0;

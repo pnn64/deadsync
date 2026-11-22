@@ -47,7 +47,7 @@ use crate::frame_stats::{
     FrameStatsSummaryContext, frame_stats_summary, frame_stats_target_us, frame_stats_two_player,
 };
 use crate::frame_stutter::{ComposeBreakdown, trace_frame_stutter};
-use crate::gameplay_entry::{gameplay_chart_entry_plan, gameplay_last_played_commands};
+use crate::gameplay_entry::gameplay_last_played_commands;
 use crate::gameplay_prewarm::{
     GameplayLiveTextures, GameplaySfx, prewarm_gameplay_assets, prewarm_gameplay_sfx,
 };
@@ -173,6 +173,7 @@ use deadlib_present::actors::Actor;
 use deadsync_assets::gameplay_stage::{GameplayStageInput, prepare_gameplay_stage};
 use deadsync_chart::{GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::stage_charts::take_player_charts;
 #[cfg(test)]
 use deadsync_gameplay::{CourseDisplayTotals, course_progress::CourseProgress};
 use deadsync_gameplay::{
@@ -186,6 +187,7 @@ use deadsync_lights::cabinet_chart::{
     cabinet_light_chart_from_loaded, cabinet_light_key, cabinet_light_plan,
 };
 use deadsync_lights::{self as lights, HideFlags};
+use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};
 #[cfg(test)]
 use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -2841,29 +2843,19 @@ impl App {
 
     fn selected_music_gameplay_choice(
         &self,
+        play_style: profile_data::PlayStyle,
     ) -> Option<(Arc<SongData>, [usize; MAX_PLAYERS], [usize; MAX_PLAYERS])> {
         let state = &self.state.screens.select_music_state;
         let select_music::MusicWheelEntry::Song(song) = state.entries.get(state.selected_index)?
         else {
             return None;
         };
-        let (steps, preferred) = match profile::get_session_play_style() {
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
-            | profile_data::PlayStyle::Couple
-            | profile_data::PlayStyle::PumpCouple
-            | profile_data::PlayStyle::Routine
-            | profile_data::PlayStyle::PumpRoutine => (
-                [state.selected_steps_index, state.p2_selected_steps_index],
-                [
-                    state.preferred_difficulty_index,
-                    state.p2_preferred_difficulty_index,
-                ],
-            ),
-            _ => (
-                [state.selected_steps_index; MAX_PLAYERS],
-                [state.preferred_difficulty_index; MAX_PLAYERS],
-            ),
-        };
+        let mut steps = [state.selected_steps_index; MAX_PLAYERS];
+        let mut preferred = [state.preferred_difficulty_index; MAX_PLAYERS];
+        if play_style.player_count() == MAX_PLAYERS {
+            steps[1] = state.p2_selected_steps_index;
+            preferred[1] = state.p2_preferred_difficulty_index;
+        }
         Some((Arc::clone(song), steps, preferred))
     }
 
@@ -2874,11 +2866,11 @@ impl App {
         {
             return;
         }
-        let Some((song, steps, preferred)) = self.selected_music_gameplay_choice() else {
-            return;
-        };
         let session = profile::get_session_snapshot();
         let play_style = session.play_style;
+        let Some((song, steps, preferred)) = self.selected_music_gameplay_choice(play_style) else {
+            return;
+        };
         let player_side = session.player_side;
         let plan = gameplay_chart_entry_plan(&song, steps, preferred, play_style, player_side);
         let cfg = config::runtime::get();
@@ -9180,39 +9172,9 @@ impl App {
                     warn!("Unable to prepare PlayerOptions for the selected course.");
                 }
             } else {
-                let (song_arc, chart_steps_index, preferred_difficulty_index) = {
-                    let sm_state = &self.state.screens.select_music_state;
-                    let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
-                    let song = match entry {
-                        select_music::MusicWheelEntry::Song(s) => s,
-                        _ => panic!("Cannot open player options on a pack header"),
-                    };
-                    let play_style = profile::get_session_play_style();
-                    let (steps, pref) = match play_style {
-                        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
-                        | profile_data::PlayStyle::Couple
-                        | profile_data::PlayStyle::PumpCouple
-                        | profile_data::PlayStyle::Routine
-                        | profile_data::PlayStyle::PumpRoutine => (
-                            [
-                                sm_state.selected_steps_index,
-                                sm_state.p2_selected_steps_index,
-                            ],
-                            [
-                                sm_state.preferred_difficulty_index,
-                                sm_state.p2_preferred_difficulty_index,
-                            ],
-                        ),
-                        profile_data::PlayStyle::Single
-                        | profile_data::PlayStyle::Double
-                        | profile_data::PlayStyle::PumpSingle
-                        | profile_data::PlayStyle::PumpDouble => (
-                            [sm_state.selected_steps_index; 2],
-                            [sm_state.preferred_difficulty_index; 2],
-                        ),
-                    };
-                    (song.clone(), steps, pref)
-                };
+                let (song_arc, chart_steps_index, preferred_difficulty_index) = self
+                    .selected_music_gameplay_choice(profile::get_session_play_style())
+                    .expect("cannot open player options without a selected song");
 
                 let color_index = self.state.screens.select_music_state.active_color_index;
                 let return_screen = if prev == CurrentScreen::Practice {
@@ -9261,39 +9223,9 @@ impl App {
                     warn!("Unable to prepare gameplay for the selected course stage.");
                 }
             } else {
-                let (song_arc, chart_steps_index, preferred_difficulty_index) = {
-                    let sm_state = &self.state.screens.select_music_state;
-                    let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
-                    let song = match entry {
-                        select_music::MusicWheelEntry::Song(s) => s,
-                        _ => panic!("Cannot start gameplay or practice on a pack header"),
-                    };
-                    let play_style = profile::get_session_play_style();
-                    let (steps, pref) = match play_style {
-                        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
-                        | profile_data::PlayStyle::Couple
-                        | profile_data::PlayStyle::PumpCouple
-                        | profile_data::PlayStyle::Routine
-                        | profile_data::PlayStyle::PumpRoutine => (
-                            [
-                                sm_state.selected_steps_index,
-                                sm_state.p2_selected_steps_index,
-                            ],
-                            [
-                                sm_state.preferred_difficulty_index,
-                                sm_state.p2_preferred_difficulty_index,
-                            ],
-                        ),
-                        profile_data::PlayStyle::Single
-                        | profile_data::PlayStyle::Double
-                        | profile_data::PlayStyle::PumpSingle
-                        | profile_data::PlayStyle::PumpDouble => (
-                            [sm_state.selected_steps_index; 2],
-                            [sm_state.preferred_difficulty_index; 2],
-                        ),
-                    };
-                    (song.clone(), steps, pref)
-                };
+                let (song_arc, chart_steps_index, preferred_difficulty_index) = self
+                    .selected_music_gameplay_choice(profile::get_session_play_style())
+                    .expect("cannot start Gameplay or Practice without a selected song");
                 let color_index = self.state.screens.select_music_state.active_color_index;
                 self.state.screens.player_options_state = Some(player_options::init_for_gameplay(
                     song_arc,
@@ -9466,7 +9398,7 @@ impl App {
                     );
                     self.gameplay_lights.set_cabinet_chart(key, events);
                 }
-                let mut gameplay_charts = crate::gameplay_entry::take_player_charts(gameplay_song);
+                let mut gameplay_charts = take_player_charts(gameplay_song);
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
                 if play_style.is_versus() {
@@ -9546,7 +9478,7 @@ impl App {
                         init_config.song_lua_mode,
                         bake_progress,
                     );
-                    if crate::gameplay_entry::apply_song_lua_reload(
+                    if apply_song_lua_reload(
                         &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
                         &mut gameplay_session, init_config.global_offset_seconds,
                     )? {
@@ -9862,7 +9794,7 @@ impl App {
                     } else {
                         self.gameplay_lights.clear();
                     }
-                    crate::gameplay_entry::take_player_charts(gameplay_song)
+                    take_player_charts(gameplay_song)
                 };
                 let payload_ms = preloaded_payload_ms
                     .unwrap_or_else(|| payload_started.elapsed().as_secs_f64() * 1000.0);
@@ -10005,7 +9937,7 @@ impl App {
                         )
                         })
                     };
-                    if crate::gameplay_entry::apply_song_lua_reload(
+                    if apply_song_lua_reload(
                         &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
                         &mut gameplay_session, gameplay_config.global_offset_seconds,
                     )? {

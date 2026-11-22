@@ -14,6 +14,20 @@ pub enum GameplayInputPlayStyle {
 }
 
 impl GameplayInputPlayStyle {
+    #[must_use]
+    pub const fn chart_type(self) -> &'static str {
+        match self {
+            Self::Single | Self::Versus => "dance-single",
+            Self::Double => "dance-double",
+            Self::Couple => "dance-couple",
+            Self::Routine => "dance-routine",
+            Self::PumpSingle | Self::PumpVersus => "pump-single",
+            Self::PumpDouble => "pump-double",
+            Self::PumpCouple => "pump-couple",
+            Self::PumpRoutine => "pump-routine",
+        }
+    }
+
     #[inline(always)]
     #[must_use]
     pub const fn cols_per_player(self) -> usize {

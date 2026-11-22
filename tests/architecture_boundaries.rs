@@ -293,6 +293,24 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell gameplay entry source");
     assert!(!app.contains("gameplay::init("));
+    let chart_policy = production_source(&root.join("crates/deadsync-gameplay/src/stage_charts.rs"));
+    let chart_adapter =
+        production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_charts.rs"));
+    let shell_entry = production_source(&root.join("crates/deadsync-shell/src/gameplay_entry.rs"));
+    assert!(chart_policy.contains("pub fn gameplay_chart_entry_plan("));
+    assert!(chart_policy.contains("pub fn lua_reload_chart_indices("));
+    assert!(chart_adapter.contains("pub fn apply_song_lua_reload<S>("));
+    assert!(contains_rust(
+        &chart_adapter,
+        "lua_reload_chart_indices(song, steps, selected_session.play_style)?"
+    ));
+    assert!(contains_rust(
+        &app,
+        "use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};"
+    ));
+    assert_eq!(app.matches(".selected_music_gameplay_choice(").count(), 3);
+    assert!(!shell_entry.contains("fn resolve_chart("));
+    assert!(!shell_entry.contains("fn apply_song_lua_reload"));
     let entry = |from: &str, to: &str| {
         app.split_once(from)
             .and_then(|(_, rest)| rest.split_once(to))
@@ -305,12 +323,17 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         entry("if target == CurrentScreen::Practice {", gameplay),
         gameplay_entry,
     ] {
-        let reload = entry.find("apply_song_lua_reload(").expect("select Lua charts");
+        let chart_plan = entry
+            .find("gameplay_chart_entry_plan(")
+            .expect("resolve stage charts");
+        let reload = entry
+            .find("apply_song_lua_reload(")
+            .expect("select Lua charts");
         let prepare = entry.find("prepare_gameplay_stage(GameplayStageInput {")
             .expect("prepare game");
         let present = entry.find("crate::gameplay_runtime::present_stage(")
             .expect("present game");
-        assert!(reload < prepare && prepare < present);
+        assert!(chart_plan < reload && reload < prepare && prepare < present);
     }
     let present = gameplay_entry.find("crate::gameplay_runtime::present_stage(").unwrap();
     let restore = gameplay_entry.find("state.song_lua.restore_held_inputs(held_inputs)")

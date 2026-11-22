@@ -1,4 +1,5 @@
 pub mod results;
+pub mod stage_charts;
 pub mod stage_options;
 
 use deadsync_core::input::MAX_PLAYERS;
