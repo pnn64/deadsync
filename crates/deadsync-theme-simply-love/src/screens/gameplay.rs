@@ -268,19 +268,19 @@ pub struct CourseDisplayInfo {
 }
 
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
-const TRANSITION_IN_DURATION: f32 = 2.0;
+const TRANSITION_IN_DURATION: f32 = deadsync_gameplay::GAMEPLAY_ENTRY_TRANSITION_SECONDS;
 /// SL/zmod parity: when re-entering Gameplay as a restart, skip the splode +
 /// stage-text in-transition (`ScreenGameplay in/default.lua` calls
 /// `Hide` immediately when `SL.Global.GameplayReloadCheck` is true). Use a
 /// short fade-from-black so the new gameplay frame doesn't pop in.
-pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
+pub const TRANSITION_IN_RESTART_DURATION: f32 = deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS;
 /// Duration of the black-to-transparent fade that ends the in-transition.
 /// The black holds solid for (`TRANSITION_IN_DURATION` - this), then lifts over this window.
 pub const TRANSITION_IN_BLACK_FADE_DURATION: f32 = 0.6;
 // The cover follows the game-owned song exit clock.
 pub const TRANSITION_OUT_DELAY: f32 = gameplay_session::SONG_LUA_OUT_DELAY;
 pub const TRANSITION_OUT_FADE_DURATION: f32 = gameplay_session::SONG_LUA_OUT_FADE_DURATION;
-const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
+const TRANSITION_OUT_DURATION: f32 = gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum BackgroundTransition {

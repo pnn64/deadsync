@@ -1,11 +1,8 @@
-use crate::Command;
+use crate::{ActiveTheme, Command, ThemeScreen as Screen, TransitionState};
 use crate::interaction::{ExitIntent, ProcessExitPlan, ProcessExitRequest, ShellInteractionState};
 use crate::runtime::ShellState;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme::{ThemeTransitions, TransitionKind};
 use std::path::PathBuf;
-
-const FADE_OUT_DURATION: f32 = 0.4;
-const MENU_OUT_DURATION: f32 = 1.0;
 
 pub struct TransitionMusicPaths {
     pub menu: PathBuf,
@@ -18,42 +15,6 @@ pub struct TransitionAudioPlan {
     pub commands: Vec<Command>,
     pub stop_screen_sfx: bool,
     pub clear_play_background: bool,
-}
-
-#[derive(Debug)]
-pub enum TransitionState {
-    Idle,
-    FadingOut {
-        elapsed: f32,
-        duration: f32,
-        target: Screen,
-    },
-    FadingIn {
-        elapsed: f32,
-        duration: f32,
-    },
-    ActorsFadeOut {
-        elapsed: f32,
-        duration: f32,
-        target: Screen,
-    },
-    ActorsFadeIn {
-        elapsed: f32,
-    },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TransitionCompletion {
-    GlobalFadeOut(Screen),
-    ActorFadeOut(Screen),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TransitionFramePlan {
-    pub tick_gameplay: bool,
-    pub step_screen: bool,
-    pub sync_input_capture: bool,
-    pub completion: Option<TransitionCompletion>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,69 +100,14 @@ impl ProcessExitNavigationLog {
     }
 }
 
-impl TransitionState {
-    #[inline(always)]
-    pub const fn menu_input_open(&self) -> bool {
-        matches!(
-            self,
-            Self::Idle | Self::FadingIn { .. } | Self::ActorsFadeIn { .. }
-        )
-    }
-
-    pub fn advance_frame(
-        &mut self,
-        delta_time: f32,
-        current_screen: Screen,
-        actor_fade_in_duration: f32,
-    ) -> TransitionFramePlan {
-        let mut plan = TransitionFramePlan {
-            tick_gameplay: false,
-            step_screen: false,
-            sync_input_capture: false,
-            completion: None,
-        };
-        match self {
-            Self::Idle => plan.step_screen = true,
-            Self::FadingOut {
-                elapsed,
-                duration,
-                target,
-            } => {
-                *elapsed += delta_time;
-                plan.tick_gameplay =
-                    *target == Screen::Evaluation && current_screen == Screen::Gameplay;
-                if *elapsed >= *duration {
-                    plan.completion = Some(TransitionCompletion::GlobalFadeOut(*target));
-                }
-            }
-            Self::ActorsFadeOut {
-                elapsed,
-                duration,
-                target,
-            } => {
-                *elapsed += delta_time;
-                if *elapsed >= *duration {
-                    plan.completion = Some(TransitionCompletion::ActorFadeOut(*target));
-                }
-            }
-            Self::FadingIn { elapsed, duration } => {
-                *elapsed += delta_time;
-                plan.tick_gameplay = current_screen == Screen::Gameplay;
-                if *elapsed >= *duration {
-                    *self = Self::Idle;
-                    plan.sync_input_capture = true;
-                }
-            }
-            Self::ActorsFadeIn { elapsed } => {
-                *elapsed += delta_time;
-                if *elapsed >= actor_fade_in_duration {
-                    *self = Self::Idle;
-                    plan.sync_input_capture = true;
-                }
-            }
+/// The simulation advances under the normal entry cover and the exit to results.
+pub fn tick_gameplay_during_transition(screen: Screen, transition: &TransitionState) -> bool {
+    screen == Screen::Gameplay
+        && match transition {
+            TransitionState::FadingIn { .. } => true,
+            TransitionState::FadingOut { target, .. } => *target == Screen::Evaluation,
+            _ => false,
         }
-        plan
-    }
 }
 
 pub fn screen_change_plan(previous: Screen, target: Screen) -> ScreenChangePlan {
@@ -369,21 +275,8 @@ pub fn transition_audio_plan(
     }
 }
 
-pub fn actor_fade_out_transition(
-    from: Screen,
-    target: Screen,
-    select_color_duration: f32,
-    select_profile_duration: f32,
-) -> TransitionState {
-    let duration = if from == Screen::Menu {
-        MENU_OUT_DURATION
-    } else if from == Screen::SelectColor {
-        select_color_duration
-    } else if from == Screen::SelectProfile {
-        select_profile_duration
-    } else {
-        FADE_OUT_DURATION
-    };
+pub fn actor_fade_out_transition(from: Screen, target: Screen) -> TransitionState {
+    let duration = ActiveTheme::actor_exit_duration(from);
     TransitionState::ActorsFadeOut {
         elapsed: 0.0,
         duration,
@@ -399,45 +292,31 @@ pub const fn global_fade_out_transition(target: Screen, duration: f32) -> Transi
     }
 }
 
-pub const fn actor_entry_transition(target: Screen) -> TransitionState {
-    if is_actor_fade_screen(target) {
-        TransitionState::ActorsFadeIn { elapsed: 0.0 }
-    } else {
-        TransitionState::Idle
+pub fn actor_entry_transition(target: Screen) -> TransitionState {
+    match ActiveTheme::actor_entry_duration(target) {
+        Some(duration) => TransitionState::ActorsFadeIn { elapsed: 0.0, duration },
+        None => TransitionState::Idle,
     }
 }
 
-pub const fn global_entry_transition(
+pub fn global_entry_transition(
     previous: Screen,
     target: Screen,
     duration: f32,
 ) -> TransitionState {
-    if matches!(
-        (previous, target),
-        (Screen::Options, Screen::Credits) | (Screen::Credits, Screen::Options)
-    ) {
+    if !is_play_screen(target) && ActiveTheme::skip_global_entry_fade(previous, target) {
         TransitionState::Idle
     } else {
-        TransitionState::FadingIn {
-            elapsed: 0.0,
-            duration,
-        }
+        TransitionState::FadingIn { elapsed: 0.0, duration }
     }
 }
 
-pub const fn apply_actor_entry_transition(shell: &mut ShellState, target: Screen) {
+pub fn apply_actor_entry_transition(shell: &mut ShellState, target: Screen) {
     shell.transition = actor_entry_transition(target);
 }
 
-pub fn apply_actor_fade_out_transition(
-    shell: &mut ShellState,
-    from: Screen,
-    target: Screen,
-    select_color_duration: f32,
-    select_profile_duration: f32,
-) {
-    shell.transition =
-        actor_fade_out_transition(from, target, select_color_duration, select_profile_duration);
+pub fn apply_actor_fade_out_transition(shell: &mut ShellState, from: Screen, target: Screen) {
+    shell.transition = actor_fade_out_transition(from, target);
 }
 
 pub const fn apply_global_fade_out_transition(
@@ -448,7 +327,7 @@ pub const fn apply_global_fade_out_transition(
     shell.transition = global_fade_out_transition(target, duration);
 }
 
-pub const fn apply_global_entry_transition(
+pub fn apply_global_entry_transition(
     shell: &mut ShellState,
     previous: Screen,
     target: Screen,
@@ -458,7 +337,7 @@ pub const fn apply_global_entry_transition(
 }
 
 pub fn menu_exit_uses_fade(screen: Screen, transition: &TransitionState) -> bool {
-    screen == Screen::Menu && transition.menu_input_open()
+    screen == Screen::Menu && transition.is_idle_or_arriving()
 }
 
 pub fn navigation_transition_start(
@@ -466,21 +345,24 @@ pub fn navigation_transition_start(
     target: Screen,
     transition: &TransitionState,
 ) -> NavigationTransitionStart {
-    if from == Screen::Init && target == Screen::Menu {
-        return NavigationTransitionStart::DirectEntry { target };
-    }
-    if !matches!(transition, TransitionState::Idle)
-        && !(from == Screen::Menu && transition.menu_input_open())
-    {
-        return NavigationTransitionStart::Busy;
-    }
-    if is_actor_only_transition(from, target) {
-        NavigationTransitionStart::ActorFade { from, target }
+    // Gameplay and Practice need the shell's stage entry and exit lifecycle.
+    let kind = if is_play_screen(from) || is_play_screen(target) {
+        TransitionKind::Global
     } else {
-        NavigationTransitionStart::GlobalFade {
+        ActiveTheme::transition_kind(from, target)
+    };
+    match kind {
+        TransitionKind::Direct => NavigationTransitionStart::DirectEntry { target },
+        _ if !matches!(transition, TransitionState::Idle)
+            && !(from == Screen::Menu && transition.is_idle_or_arriving()) =>
+        {
+            NavigationTransitionStart::Busy
+        }
+        TransitionKind::Actors => NavigationTransitionStart::ActorFade { from, target },
+        TransitionKind::Global => NavigationTransitionStart::GlobalFade {
             target,
             stop_screen_sfx: from == Screen::Evaluation && target != Screen::Evaluation,
-        }
+        },
     }
 }
 
@@ -550,17 +432,12 @@ pub const fn fade_completion_plan(intent: ExitIntent) -> FadeCompletionPlan {
     }
 }
 
-#[inline(always)]
-pub const fn is_actor_fade_screen(screen: Screen) -> bool {
-    deadsync_theme_simply_love::screens::uses_actor_fade(screen)
+#[inline]
+pub const fn is_play_screen(screen: Screen) -> bool {
+    matches!(screen, Screen::Gameplay | Screen::Practice)
 }
 
-#[inline(always)]
-pub const fn is_actor_only_transition(from: Screen, to: Screen) -> bool {
-    deadsync_theme_simply_love::screens::uses_actor_only_transition(from, to)
-}
-
-pub fn write_current_screen_file(screen: Screen, path: &std::path::Path) {
+pub fn write_current_screen_file(name: &str, path: &std::path::Path) {
     if !deadsync_config::runtime::get().write_current_screen {
         return;
     }
@@ -570,7 +447,7 @@ pub fn write_current_screen_file(screen: Screen, path: &std::path::Path) {
         log::warn!("Failed to create current_screen.txt parent dir: {e}");
         return;
     }
-    if let Err(e) = std::fs::write(path, screen.current_screen_file_name()) {
+    if let Err(e) = std::fs::write(path, name) {
         log::warn!("Failed to write current_screen.txt: {e}");
     }
 }
@@ -578,15 +455,16 @@ pub fn write_current_screen_file(screen: Screen, path: &std::path::Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_theme::{TransitionCompletion, TransitionFrame};
 
     #[test]
     fn actor_fade_policy_uses_screen_contract() {
-        assert!(is_actor_fade_screen(Screen::Menu));
-        assert!(is_actor_only_transition(Screen::Menu, Screen::Options));
-        assert!(!is_actor_only_transition(
-            Screen::Gameplay,
-            Screen::Evaluation
-        ));
+        assert_eq!(ActiveTheme::actor_entry_duration(Screen::Menu), Some(0.65));
+        assert_eq!(ActiveTheme::transition_kind(Screen::Menu, Screen::Options), TransitionKind::Actors);
+        assert_eq!(
+            ActiveTheme::transition_kind(Screen::Gameplay, Screen::Evaluation),
+            TransitionKind::Global,
+        );
     }
 
     #[test]
@@ -713,11 +591,11 @@ mod tests {
     #[test]
     fn transition_constructors_keep_theme_fade_policy() {
         assert!(matches!(
-            actor_fade_out_transition(Screen::Menu, Screen::Options, 0.2, 0.3),
+            actor_fade_out_transition(Screen::Menu, Screen::Options),
             TransitionState::ActorsFadeOut { duration: 1.0, .. }
         ));
         assert!(matches!(
-            actor_fade_out_transition(Screen::Menu, Screen::ProfileLoad, 0.2, 0.3),
+            actor_fade_out_transition(Screen::Menu, Screen::ProfileLoad),
             TransitionState::ActorsFadeOut { duration: 1.0, .. }
         ));
         assert!(matches!(
@@ -731,7 +609,7 @@ mod tests {
         assert!(menu_exit_uses_fade(Screen::Menu, &TransitionState::Idle));
         assert!(menu_exit_uses_fade(
             Screen::Menu,
-            &TransitionState::ActorsFadeIn { elapsed: 0.0 }
+            &TransitionState::ActorsFadeIn { elapsed: 0.0, duration: 0.65 }
         ));
         assert!(menu_exit_uses_fade(
             Screen::Menu,
@@ -767,7 +645,7 @@ mod tests {
             TransitionState::ActorsFadeIn { .. }
         ));
 
-        apply_actor_fade_out_transition(&mut shell, Screen::Menu, Screen::Options, 0.2, 0.3);
+        apply_actor_fade_out_transition(&mut shell, Screen::Menu, Screen::Options);
         assert!(matches!(
             shell.transition,
             TransitionState::ActorsFadeOut {
@@ -928,7 +806,7 @@ mod tests {
             navigation_transition_start(
                 Screen::Menu,
                 Screen::Options,
-                &TransitionState::ActorsFadeIn { elapsed: 0.0 },
+                &TransitionState::ActorsFadeIn { elapsed: 0.0, duration: 0.65 },
             ),
             NavigationTransitionStart::ActorFade {
                 from: Screen::Menu,
@@ -1117,9 +995,8 @@ mod tests {
         let mut transition = TransitionState::Idle;
 
         assert_eq!(
-            transition.advance_frame(0.1, Screen::Menu, 0.65),
-            TransitionFramePlan {
-                tick_gameplay: false,
+            transition.advance_frame(0.1),
+            TransitionFrame {
                 step_screen: true,
                 sync_input_capture: false,
                 completion: None,
@@ -1128,15 +1005,26 @@ mod tests {
     }
 
     #[test]
+    fn play_routes_use_full_entry_even_for_theme_actor_transitions() {
+        for target in [Screen::Gameplay, Screen::Practice] {
+            assert_eq!(ActiveTheme::transition_kind(Screen::Menu, target), TransitionKind::Actors);
+            assert!(matches!(
+                navigation_transition_start(Screen::Menu, target, &TransitionState::Idle),
+                NavigationTransitionStart::GlobalFade { target: actual, .. } if actual == target
+            ));
+        }
+    }
+
+    #[test]
     fn evaluation_fade_keeps_gameplay_running_until_completion() {
         let mut transition = global_fade_out_transition(Screen::Evaluation, 0.4);
 
-        let first = transition.advance_frame(0.2, Screen::Gameplay, 0.65);
-        assert!(first.tick_gameplay);
+        assert!(tick_gameplay_during_transition(Screen::Gameplay, &transition));
+        let first = transition.advance_frame(0.2);
         assert_eq!(first.completion, None);
 
-        let finished = transition.advance_frame(0.2, Screen::Gameplay, 0.65);
-        assert!(finished.tick_gameplay);
+        assert!(tick_gameplay_during_transition(Screen::Gameplay, &transition));
+        let finished = transition.advance_frame(0.2);
         assert_eq!(
             finished.completion,
             Some(TransitionCompletion::GlobalFadeOut(Screen::Evaluation))
@@ -1147,9 +1035,9 @@ mod tests {
     fn unrelated_fade_out_does_not_tick_gameplay() {
         let mut transition = global_fade_out_transition(Screen::Menu, 0.1);
 
-        let plan = transition.advance_frame(0.1, Screen::Gameplay, 0.65);
+        assert!(!tick_gameplay_during_transition(Screen::Gameplay, &transition));
+        let plan = transition.advance_frame(0.1);
 
-        assert!(!plan.tick_gameplay);
         assert_eq!(
             plan.completion,
             Some(TransitionCompletion::GlobalFadeOut(Screen::Menu))
@@ -1163,9 +1051,9 @@ mod tests {
             duration: 0.4,
         };
 
-        let plan = transition.advance_frame(0.1, Screen::Gameplay, 0.65);
+        assert!(tick_gameplay_during_transition(Screen::Gameplay, &transition));
+        let plan = transition.advance_frame(0.1);
 
-        assert!(plan.tick_gameplay);
         assert!(!plan.step_screen);
         assert!(plan.sync_input_capture);
         assert!(matches!(transition, TransitionState::Idle));
@@ -1179,12 +1067,12 @@ mod tests {
             target: Screen::Options,
         };
         assert_eq!(
-            fade_out.advance_frame(0.1, Screen::Menu, 0.65).completion,
+            fade_out.advance_frame(0.1).completion,
             Some(TransitionCompletion::ActorFadeOut(Screen::Options))
         );
 
-        let mut fade_in = TransitionState::ActorsFadeIn { elapsed: 0.6 };
-        let plan = fade_in.advance_frame(0.05, Screen::Menu, 0.65);
+        let mut fade_in = TransitionState::ActorsFadeIn { elapsed: 0.6, duration: 0.65 };
+        let plan = fade_in.advance_frame(0.05);
         assert!(!plan.step_screen);
         assert!(plan.sync_input_capture);
         assert!(matches!(fade_in, TransitionState::Idle));

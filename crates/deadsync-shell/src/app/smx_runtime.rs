@@ -1,5 +1,5 @@
 use super::{App, SmxFramePolicy};
-use crate::navigation::TransitionState;
+use crate::TransitionState;
 use crate::pad_config::{
     PadConfigFsrTarget, apply_pad_commands, pad_config_fsr_plan, pad_config_profile_cursor,
     pad_config_profile_entries,

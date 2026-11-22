@@ -454,7 +454,7 @@ pub const fn app_raw_key_shortcut(
 
 #[inline(always)]
 pub fn screen_accepts_queued_input(screen: Screen, transition: &TransitionState) -> bool {
-    if screen == Screen::Menu && transition.menu_input_open() {
+    if screen == Screen::Menu && transition.is_idle_or_arriving() {
         return true;
     }
     deadsync_config::frame_pacing::queued_input_allowed(
@@ -733,7 +733,7 @@ mod tests {
     fn queued_input_routes_during_title_menu_arrival() {
         assert!(screen_accepts_queued_input(
             Screen::Menu,
-            &TransitionState::ActorsFadeIn { elapsed: 0.0 },
+            &TransitionState::ActorsFadeIn { elapsed: 0.0, duration: 0.65 },
         ));
         assert!(screen_accepts_queued_input(
             Screen::Menu,
@@ -744,7 +744,7 @@ mod tests {
         ));
         assert!(!screen_accepts_queued_input(
             Screen::Options,
-            &TransitionState::ActorsFadeIn { elapsed: 0.0 },
+            &TransitionState::ActorsFadeIn { elapsed: 0.0, duration: 0.65 },
         ));
         assert!(!screen_accepts_queued_input(
             Screen::Menu,

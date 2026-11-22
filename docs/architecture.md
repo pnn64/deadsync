@@ -413,21 +413,33 @@ cargo test -p deadsync-input --test input_pipeline_allocations
 cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 ```
 
+## Screen transitions
+
+The shell runs the shared transition clock using the selected theme's screen
+type. `ThemeTransitions` supplies transition actors, actor-fade timing, and
+presentation routing for non-play screens. Simply Love owns menu fades, overlay
+opacity, and its compatibility names for `current_screen.txt`.
+
+Gameplay and Practice use the full stage lifecycle for transitions. Their faded
+routes use game-owned entry, restart, and exit durations. The shell evaluates
+the gameplay tick condition before advancing the transition. Pending
+loading still holds the clock and fade-in completion allows the next idle frame
+to step the screen. Themes receive the transition phase and its elapsed time
+to draw their own covers and HUD effects.
+
 ## Remaining separation
 
 The production crate graph follows these directions. Gameplay and Practice
-startup, normal song-Lua lifecycle,
-callback input sequencing, practice playback/editor behavior, and gameplay lobby
-coordination now have game owners, as do Evaluation and Select Music lobby input
-barriers, disconnect handling, and remote song-selection synchronization. Simply
-Love still wraps gameplay state, while gameplay noteskin preparation and effect
-conversion now have a game owner. Course continuation and restart destinations,
-course progress, interruption, Endless renewal, course modes, life selection,
-difficulty availability, runtime stage preparation, and course score aggregation
-now have game owners. `CourseRunState` keeps application-owned result history
-and display metadata alongside the game run.
+startup, normal song-Lua lifecycle, callback input sequencing, practice
+playback/editor behavior, and gameplay lobby coordination now have game owners,
+as do Evaluation and Select Music lobby input barriers, disconnect handling, and
+remote song-selection synchronization. Simply Love still wraps gameplay state.
+Course continuation and restart destinations, course progress, interruption,
+Endless renewal, course modes, life selection, difficulty availability, runtime
+stage preparation, and course score aggregation now have game owners.
+`CourseRunState` keeps application-owned result history and display metadata
+alongside the game run.
 
-The shell still uses concrete theme screen types. Consolidate that integration
-behind a theme-neutral presentation interface after the remaining runtime work;
-concrete screen identifiers, menu layout, translations, and transition appearance
-remain valid theme responsibilities.
+The shell still stores concrete screen state and routes concrete runtime
+requests. A replaceable theme needs those integration points as well as the
+transition interface.

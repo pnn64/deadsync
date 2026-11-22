@@ -18,6 +18,7 @@ use deadsync_input::{
 
 pub const SONG_LUA_OUT_DELAY: f32 = 0.5;
 pub const SONG_LUA_OUT_FADE_DURATION: f32 = 1.0;
+pub const GAMEPLAY_EXIT_TRANSITION_SECONDS: f32 = SONG_LUA_OUT_DELAY + SONG_LUA_OUT_FADE_DURATION;
 
 /// Presentation-only snapshot of the native gameplay exit clock.
 #[derive(Clone, Copy, Debug, PartialEq)]

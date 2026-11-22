@@ -8,8 +8,8 @@ use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 use winit::keyboard::KeyCode;
 
 use crate::{
-    Command,
-    navigation::{TransitionState, menu_exit_uses_fade},
+    Command, TransitionState,
+    navigation::menu_exit_uses_fade,
 };
 
 const MESSAGE_HOLD_SECONDS: f32 = 3.33;
@@ -248,7 +248,7 @@ mod tests {
         let plan = state.plan_process_exit(
             ProcessExitRequest::Shutdown,
             Screen::Menu,
-            &TransitionState::ActorsFadeIn { elapsed: 0.1 },
+            &TransitionState::ActorsFadeIn { elapsed: 0.1, duration: 0.65 },
         );
         assert!(matches!(plan, ProcessExitPlan::BeginFade));
         assert_eq!(state.exit_intent(), ExitIntent::Shutdown);

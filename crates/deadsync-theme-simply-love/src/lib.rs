@@ -49,6 +49,10 @@ impl deadsync_theme::Theme for SimplyLoveTheme {
     fn screen_id(screen: Self::Screen) -> deadsync_theme::ThemeScreenId {
         screen.id()
     }
+
+    fn current_screen_file_name(screen: Self::Screen) -> &'static str {
+        screen.current_screen_file_name()
+    }
 }
 
 mod act_macro {

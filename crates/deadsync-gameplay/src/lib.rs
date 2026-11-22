@@ -52,6 +52,8 @@ pub mod practice;
 // ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.
 const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
+pub const GAMEPLAY_ENTRY_TRANSITION_SECONDS: f32 = 2.0;
+pub const GAMEPLAY_RESTART_TRANSITION_SECONDS: f32 = 0.2;
 // Simply Love: ScreenGameplay GiveUpSeconds=0.33.
 pub const GIVE_UP_HOLD_SECONDS: f32 = 0.33;
 // Mirrors ScreenGameplay::AbortGiveUpText tween duration (1/2 second).

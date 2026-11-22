@@ -25,6 +25,10 @@ pub trait Theme {
     type RuntimeRequest;
 
     fn screen_id(screen: Self::Screen) -> ThemeScreenId;
+
+    fn current_screen_file_name(screen: Self::Screen) -> &'static str {
+        Self::screen_id(screen).as_str()
+    }
 }
 
 #[cfg(test)]

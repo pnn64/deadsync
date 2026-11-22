@@ -64,9 +64,8 @@ use crate::lighting::{
     lighting_frame_plan, lights_test_view, load_cabinet_light_chart, operator_menu_button_route,
     smx_pad_blackout, smx_pad_gif_frame_plan,
 };
-use crate::navigation::{
-    TransitionCompletion, TransitionMusicPaths, TransitionState, is_actor_fade_screen,
-};
+use crate::TransitionState;
+use crate::navigation::{TransitionMusicPaths, tick_gameplay_during_transition};
 use crate::offset_prompt::{
     GameplayOffsetSavePrompt, GameplayOffsetSnapshot, OffsetPromptInput,
     gameplay_offset_prompt_needed, gameplay_offset_prompt_text, gameplay_offset_save_targets,
@@ -199,8 +198,9 @@ use deadsync_theme::views::{
     AppPathView, AppPathsView, AudioOptionsView, DensityGraphView as DensityGraphSource,
     NoteskinCatalogView, SmxAssignmentView,
 };
-use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
+use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind, TransitionCompletion};
+use crate::ThemeScreen as CurrentScreen;
+use deadsync_theme_simply_love::screens::transitions::{gameplay_smx_overlay_alpha, screen_fade_view};
 use deadsync_theme_simply_love::views::{
     EvaluationContextView, EvaluationInitView, EvaluationPlayerView, EvaluationPolicyView,
     EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource,
@@ -241,7 +241,6 @@ const fn resumes_music_wheel(from: CurrentScreen) -> bool {
 
 /// Imperative effects to be executed by the shell.
 /* -------------------- transition timing constants -------------------- */
-const MENU_ACTORS_FADE_DURATION: f32 = 0.65;
 const GAMEPLAY_PRELOAD_POLL_INTERVAL: Duration = Duration::from_millis(16);
 const GAMEPLAY_OFFSET_PROMPT_Z_BACKDROP: i16 = 31990;
 const GAMEPLAY_OFFSET_PROMPT_Z_CURSOR: i16 = 31991;
@@ -4786,15 +4785,15 @@ impl App {
         } else {
             logic_dt
         };
-        let transition_plan = self.state.shell.transition.advance_frame(
-            transition_dt,
+        let tick_gameplay = tick_gameplay_during_transition(
             self.state.screens.current_screen,
-            MENU_ACTORS_FADE_DURATION,
+            &self.state.shell.transition,
         );
+        let transition_plan = self.state.shell.transition.advance_frame(transition_dt);
         if transition_plan.sync_input_capture {
             self.sync_gameplay_input_capture();
         }
-        if transition_plan.tick_gameplay
+        if tick_gameplay
             && let Some(gs) = self.state.screens.gameplay_state.as_mut()
         {
             // Keep gameplay stepping under evaluation fades so late judgments
@@ -8127,50 +8126,11 @@ impl App {
         Option<deadsync_song_lua::playback::GameplayActorSegments>,
     ) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
-        let mut screen_alpha_multiplier = 1.0;
-        let mut menu_entry_elapsed = None;
-        let mut menu_exit_elapsed = None;
-        let menu_canceling = self.state.screens.current_screen == CurrentScreen::Menu
-            && matches!(
-                &self.state.shell.transition,
-                TransitionState::FadingOut { target, .. } if *target == CurrentScreen::Init
-            );
-
-        let is_actor_fade_screen = is_actor_fade_screen(self.state.screens.current_screen);
-
-        if is_actor_fade_screen {
-            match self.state.shell.transition {
-                TransitionState::ActorsFadeIn { elapsed } => {
-                    if self.state.screens.current_screen == CurrentScreen::Menu {
-                        menu_entry_elapsed = Some(elapsed);
-                    } else {
-                        screen_alpha_multiplier =
-                            (elapsed / MENU_ACTORS_FADE_DURATION).clamp(0.0, 1.0);
-                    }
-                }
-                TransitionState::FadingIn { elapsed, .. }
-                    if self.state.screens.current_screen == CurrentScreen::Menu =>
-                {
-                    menu_entry_elapsed = Some(elapsed);
-                }
-                TransitionState::ActorsFadeOut {
-                    elapsed, duration, ..
-                } => {
-                    if self.state.screens.current_screen == CurrentScreen::Menu {
-                        menu_exit_elapsed = Some(elapsed);
-                    } else {
-                        screen_alpha_multiplier = 1.0 - (elapsed / duration).clamp(0.0, 1.0);
-                    }
-                }
-                TransitionState::FadingOut { elapsed, .. }
-                    if self.state.screens.current_screen == CurrentScreen::Menu
-                        && !menu_canceling =>
-                {
-                    menu_exit_elapsed = Some(elapsed);
-                }
-                _ => {}
-            }
-        }
+        let fade = screen_fade_view(
+            self.state.screens.current_screen,
+            &self.state.shell.transition,
+        );
+        let screen_alpha_multiplier = fade.screen_alpha;
 
         let mut actors = std::mem::take(&mut self.actor_scratch);
         actors.clear();
@@ -8196,40 +8156,18 @@ impl App {
                     &self.state.screens.menu_state,
                     update_tag.as_deref(),
                     screen_alpha_multiplier,
-                    menu_entry_elapsed,
-                    menu_exit_elapsed,
+                    fade.menu_entry_elapsed,
+                    fade.menu_exit_elapsed,
                     visual_policy,
                 );
             }
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
-                    let smx_overlay_alpha = match self.state.shell.transition {
-                        TransitionState::FadingIn { .. } if gs.hide_song_intro => 1.0,
-                        TransitionState::FadingIn { elapsed, duration } => {
-                            if duration <= gameplay::TRANSITION_IN_RESTART_DURATION + 0.01 {
-                                // Restart: the in-transition black fades over the whole short
-                                // duration; mirror it so the overlays fade in with the black.
-                                (elapsed / duration).clamp(0.0, 1.0)
-                            } else {
-                                // Normal entry: black holds solid until the last
-                                // TRANSITION_IN_BLACK_FADE_DURATION seconds, then lifts.
-                                let fade_start =
-                                    duration - gameplay::TRANSITION_IN_BLACK_FADE_DURATION;
-                                ((elapsed - fade_start)
-                                    / gameplay::TRANSITION_IN_BLACK_FADE_DURATION)
-                                    .clamp(0.0, 1.0)
-                            }
-                        }
-                        TransitionState::FadingOut { elapsed, .. } => {
-                            // Mirror the out-transition black quad: hold full opacity
-                            // during TRANSITION_OUT_DELAY then fade down as the black fades up.
-                            1.0 - ((elapsed - gameplay::TRANSITION_OUT_DELAY)
-                                / gameplay::TRANSITION_OUT_FADE_DURATION)
-                                .clamp(0.0, 1.0)
-                        }
-                        _ => 1.0,
-                    };
+                    let smx_overlay_alpha = gameplay_smx_overlay_alpha(
+                        gs.hide_song_intro,
+                        &self.state.shell.transition,
+                    );
                     gameplay_segments = Some(crate::gameplay_runtime::push_actors(
                         &mut actors,
                         gs,
@@ -8515,17 +8453,6 @@ impl App {
         }
         self.append_gameplay_offset_prompt_actors(&mut actors);
 
-        let menu_splash_elapsed =
-            if self.state.screens.current_screen == CurrentScreen::Menu && !menu_canceling {
-                match &self.state.shell.transition {
-                    TransitionState::FadingOut { elapsed, .. }
-                    | TransitionState::ActorsFadeOut { elapsed, .. } => Some(*elapsed),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-
         match &self.state.shell.transition {
             TransitionState::FadingOut { target, .. } => {
                 let (out_actors, _) =
@@ -8540,7 +8467,7 @@ impl App {
             _ => {}
         }
 
-        if let Some(elapsed) = menu_splash_elapsed {
+        if let Some(elapsed) = fade.menu_exit_elapsed {
             actors.extend(screens::components::menu::menu_splash::build(
                 self.state.screens.menu_state.active_color_index,
                 &visual_policy.assets.effects,

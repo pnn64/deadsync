@@ -1,15 +1,11 @@
-use super::{
-    App, Command, CurrentScreen, content_browser, credits, evaluation, evaluation_summary,
-    gameover, gameplay, init, initials, input_screen, manage_local_profiles, mappings, menu,
-    options, overscan_adjustment, player_options, profile_load, sandbox, select_color,
-    select_course, select_mode, select_music, select_profile, select_style, test_lights,
-};
+use super::{App, Command, CurrentScreen, menu, select_color, select_course};
+use crate::ActiveTheme;
 use crate::interaction::ProcessExitRequest;
 use crate::navigation::{
     FadeCompletionEffect, NavigationTransitionStart, ProcessExitNavigationEffect,
     actor_transition_music_commands, apply_actor_entry_transition, apply_actor_fade_out_transition,
     apply_global_entry_transition, apply_global_fade_out_transition, course_plan_required,
-    fade_completion_plan, navigation_transition_effect_plan, practice_music_rate_on_screen_change,
+    fade_completion_plan, is_play_screen, navigation_transition_effect_plan, practice_music_rate_on_screen_change,
     process_exit_navigation_plan, screen_change_plan, write_current_screen_file,
 };
 use crate::screen_flow::{navigation_route_plan, preferred_play_style_for_joined};
@@ -18,6 +14,8 @@ use deadsync_config as config;
 use deadsync_gameplay::course_progress::CourseRenewal;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
+use deadsync_theme::{Theme, ThemeTransitions};
+use deadsync_theme_simply_love::screens::transitions::PlayEntryTransition;
 use deadsync_theme_simply_love::views::OverscanAdjustmentView;
 use deadsync_theme_simply_love::{SimplyLoveQrLoginService, screens, visual_styles};
 use log::{debug, info, warn};
@@ -118,7 +116,7 @@ impl App {
         warn!("Unable to enter {target:?}: selected course has no playable stages.");
         self.state.session.course_run = None;
         self.state.screens.player_options_state = None;
-        self.state.shell.transition = crate::navigation::TransitionState::Idle;
+        self.state.shell.transition = crate::TransitionState::Idle;
         self.sync_gameplay_input_capture();
         deadlib_present::runtime::clear_all();
         true
@@ -204,7 +202,10 @@ impl App {
         }
         self.state.screens.current_screen = target;
         self.sync_gameplay_input_capture();
-        write_current_screen_file(target, &self.dirs.current_screen_path());
+        write_current_screen_file(
+            ActiveTheme::current_screen_file_name(target),
+            &self.dirs.current_screen_path(),
+        );
         if plan.clear_text_layout_cache {
             self.ui_text_layout_cache.clear();
         }
@@ -320,16 +321,6 @@ impl App {
             return;
         }
 
-        if from == CurrentScreen::Init && target == CurrentScreen::Menu {
-            debug!("Instant navigation Init→Menu (out-transition handled by Init screen)");
-            menu::reset_for_entry(&mut self.state.screens.menu_state);
-            self.commit_screen_change(target);
-            apply_actor_entry_transition(&mut self.state.shell, target);
-            self.sync_gameplay_input_capture();
-            deadlib_present::runtime::clear_all();
-            return;
-        }
-
         let transition_plan =
             navigation_transition_effect_plan(from, target, &self.state.shell.transition);
         if transition_plan.clear_exit_intent {
@@ -337,6 +328,10 @@ impl App {
         }
         match transition_plan.start {
             NavigationTransitionStart::DirectEntry { target } => {
+                if from == CurrentScreen::Init && target == CurrentScreen::Menu {
+                    debug!("Instant navigation Init?Menu (out-transition handled by Init screen)");
+                    menu::reset_for_entry(&mut self.state.screens.menu_state);
+                }
                 self.commit_screen_change(target);
                 apply_actor_entry_transition(&mut self.state.shell, target);
                 self.sync_gameplay_input_capture();
@@ -357,13 +352,7 @@ impl App {
 
     fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
         debug!("Starting actor-only fade out to screen: {target:?}");
-        apply_actor_fade_out_transition(
-            &mut self.state.shell,
-            from,
-            target,
-            select_color::exit_anim_duration(),
-            select_profile::exit_anim_duration(),
-        );
+        apply_actor_fade_out_transition(&mut self.state.shell, from, target);
         self.sync_gameplay_input_capture();
     }
 
@@ -480,85 +469,39 @@ impl App {
         screen: CurrentScreen,
         target: CurrentScreen,
     ) -> (Vec<Actor>, f32) {
-        match screen {
-            CurrentScreen::Menu if target == CurrentScreen::Init => menu::cancel_transition(),
-            CurrentScreen::Menu => menu::out_transition(),
-            CurrentScreen::Gameplay => gameplay::out_transition(),
-            CurrentScreen::Practice => gameplay::out_transition(),
-            CurrentScreen::Options => options::out_transition(),
-            CurrentScreen::ContentBrowser => content_browser::out_transition(),
-            CurrentScreen::Credits => credits::out_transition(),
-            CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
-            CurrentScreen::Mappings => mappings::out_transition(),
-            CurrentScreen::TestLights => test_lights::out_transition(),
-            CurrentScreen::OverscanAdjustment => overscan_adjustment::out_transition(),
-            CurrentScreen::PlayerOptions => player_options::out_transition(),
-            CurrentScreen::SelectProfile => select_profile::out_transition(),
-            CurrentScreen::SelectColor => select_color::out_transition(),
-            CurrentScreen::ArrowCloudLogin => screens::arrowcloud_login::out_transition(),
-            CurrentScreen::GrooveStatsLogin => screens::groovestats_login::out_transition(),
-            CurrentScreen::SelectStyle => select_style::out_transition(),
-            CurrentScreen::SelectPlayMode => select_mode::out_transition(),
-            CurrentScreen::ProfileLoad => profile_load::out_transition(),
-            CurrentScreen::SelectMusic => select_music::out_transition(),
-            CurrentScreen::SelectCourse => select_course::out_transition(),
-            CurrentScreen::Sandbox => sandbox::out_transition(),
-            CurrentScreen::Init => init::out_transition(),
-            CurrentScreen::Evaluation => evaluation::out_transition(),
-            CurrentScreen::EvaluationSummary => evaluation_summary::out_transition(),
-            CurrentScreen::Initials => initials::out_transition(),
-            CurrentScreen::GameOver => gameover::out_transition(),
-            CurrentScreen::Input => input_screen::out_transition(),
-            CurrentScreen::ConfigurePads => screens::pad_config::out_transition(),
-            CurrentScreen::SmxAssignPads => screens::smx_assign::out_transition(),
-        }
+        let (actors, duration) = ActiveTheme::out_transition(screen, target);
+        let duration = if is_play_screen(screen) {
+            deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS
+        } else {
+            duration
+        };
+        (actors, duration)
     }
 
     pub(super) fn get_in_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
-        match screen {
-            CurrentScreen::Menu => menu::in_transition(),
-            CurrentScreen::Gameplay => gameplay::in_transition(
+        let play = match screen {
+            CurrentScreen::Gameplay => Some((
                 self.state.screens.gameplay_state.as_ref(),
-                &self.asset_manager,
                 self.state.session.gameplay_restart_count > 0,
-                super::simply_love_visual_policy(&config::runtime::get()),
-            ),
-            CurrentScreen::Practice => gameplay::in_transition(
-                self.state
-                    .screens
-                    .practice_state
-                    .as_ref()
-                    .map(|state| &state.gameplay),
-                &self.asset_manager,
+            )),
+            CurrentScreen::Practice => Some((
+                self.state.screens.practice_state.as_ref().map(|state| &state.gameplay),
                 false,
-                super::simply_love_visual_policy(&config::runtime::get()),
-            ),
-            CurrentScreen::Options => options::in_transition(),
-            CurrentScreen::ContentBrowser => content_browser::in_transition(),
-            CurrentScreen::Credits => credits::in_transition(),
-            CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),
-            CurrentScreen::Mappings => mappings::in_transition(),
-            CurrentScreen::TestLights => test_lights::in_transition(),
-            CurrentScreen::OverscanAdjustment => overscan_adjustment::in_transition(),
-            CurrentScreen::PlayerOptions => player_options::in_transition(),
-            CurrentScreen::SelectProfile => select_profile::in_transition(),
-            CurrentScreen::SelectColor => select_color::in_transition(),
-            CurrentScreen::ArrowCloudLogin => screens::arrowcloud_login::in_transition(),
-            CurrentScreen::GrooveStatsLogin => screens::groovestats_login::in_transition(),
-            CurrentScreen::SelectStyle => select_style::in_transition(),
-            CurrentScreen::SelectPlayMode => select_mode::in_transition(),
-            CurrentScreen::ProfileLoad => profile_load::in_transition(),
-            CurrentScreen::SelectMusic => select_music::in_transition(),
-            CurrentScreen::SelectCourse => select_course::in_transition(),
-            CurrentScreen::Sandbox => sandbox::in_transition(),
-            CurrentScreen::Evaluation => evaluation::in_transition(),
-            CurrentScreen::EvaluationSummary => evaluation_summary::in_transition(),
-            CurrentScreen::Initials => initials::in_transition(),
-            CurrentScreen::GameOver => gameover::in_transition(),
-            CurrentScreen::Input => input_screen::in_transition(),
-            CurrentScreen::ConfigurePads => screens::pad_config::in_transition(),
-            CurrentScreen::SmxAssignPads => screens::smx_assign::in_transition(),
-            CurrentScreen::Init => (vec![], 0.0),
-        }
+            )),
+            _ => None,
+        };
+        let context = play.map(|(gameplay, restart)| PlayEntryTransition {
+            gameplay,
+            assets: &self.asset_manager,
+            restart,
+            policy: super::simply_love_visual_policy(&config::runtime::get()),
+        });
+        let (actors, duration) = ActiveTheme::in_transition(screen, context);
+        let duration = match play {
+            Some((_, true)) => deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS,
+            Some((_, false)) => deadsync_gameplay::GAMEPLAY_ENTRY_TRANSITION_SECONDS,
+            None => duration,
+        };
+        (actors, duration)
     }
 }

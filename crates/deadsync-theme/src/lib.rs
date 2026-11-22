@@ -2,6 +2,7 @@ pub mod color;
 mod effect;
 mod runtime;
 mod screen;
+mod transition;
 pub mod views;
 
 pub use effect::{ThemeEffect, ThemeFlowEvent, ThemeInputResult};
@@ -11,6 +12,9 @@ pub use runtime::{
     RevealPathKind, thread_choice_index, thread_count_from_choice,
 };
 pub use screen::{Theme, ThemeScreenId};
+pub use transition::{
+    ThemeTransitions, TransitionCompletion, TransitionFrame, TransitionKind, TransitionState,
+};
 
 // Keep the theme-facing API while game/engine consumers use the owning crates.
 pub use deadlib_assets::AssetManifest as ThemeAssetManifest;

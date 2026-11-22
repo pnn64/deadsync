@@ -12714,6 +12714,54 @@ fn gameplay_exit_routing_stays_below_the_theme() {
 }
 
 #[test]
+fn transition_presentation_and_playback_timing_have_separate_owners() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let contract = production_source(&root.join("crates/deadsync-theme/src/transition.rs"));
+    assert!(contract.contains("pub trait ThemeTransitions: Theme"));
+    assert!(contract.contains("pub enum TransitionState<S>"));
+    for game in ["SimplyLove", "Screen::", "tick_gameplay", "GAMEPLAY_"] {
+        assert!(!contract.contains(game), "transition clock interprets {game}");
+    }
+
+    let owner = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/transitions.rs"),
+    );
+    for presentation in [
+        "impl ThemeTransitions for SimplyLoveTheme",
+        "Screen::Menu if target == Screen::Init => menu::cancel_transition()",
+        "pub fn screen_fade_view(",
+        "pub fn gameplay_smx_overlay_alpha(",
+    ] {
+        assert!(owner.contains(presentation), "missing theme transition {presentation}");
+    }
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/navigation.rs"));
+    assert!(navigation.contains("if is_play_screen(from) || is_play_screen(target)"));
+    assert!(navigation.contains("ActiveTheme::transition_kind(from, target)"));
+    let adapter = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    for handoff in [
+        "ActiveTheme::current_screen_file_name(target)",
+        "ActiveTheme::out_transition(screen, target)",
+        "ActiveTheme::in_transition(screen, context)",
+        "if is_play_screen(screen) { deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS",
+        "Some((_, true)) => deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS",
+        "Some((_, false)) => deadsync_gameplay::GAMEPLAY_ENTRY_TRANSITION_SECONDS",
+    ] {
+        assert!(contains_rust(&adapter, handoff), "missing shell transition handoff {handoff}");
+    }
+
+    // The endpoint still receives the final tick on the completion frame.
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell frame loop");
+    let tick_policy = app.find("let tick_gameplay = tick_gameplay_during_transition(")
+        .expect("shell gameplay tick policy");
+    let advance = app.find(".advance_frame(transition_dt)")
+        .expect("advance transition clock");
+    assert!(tick_policy < advance);
+    assert!(app.contains("let fade = screen_fade_view("));
+    assert!(app.contains("let smx_overlay_alpha = gameplay_smx_overlay_alpha("));
+}
+
+#[test]
 fn theme_screen_contract_has_explicit_owners() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let generic_screen = read_source(root.join("crates/deadsync-theme/src/screen.rs"))

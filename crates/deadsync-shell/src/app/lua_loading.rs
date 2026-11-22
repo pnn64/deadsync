@@ -194,6 +194,14 @@ mod tests {
                                 "practice reload retains editor selection"
                             );
                         }
+                        assert_eq!(app.get_in_transition_for_screen(target).1, 2.0);
+                        assert_eq!(
+                            app.get_out_transition_for_route(target, CurrentScreen::Evaluation).1,
+                            1.5,
+                        );
+                        app.state.session.gameplay_restart_count = 1;
+                        let entry_duration = if target == CurrentScreen::Gameplay { 0.2 } else { 2.0 };
+                        assert_eq!(app.get_in_transition_for_screen(target).1, entry_duration);
                     }
                 },
             )
