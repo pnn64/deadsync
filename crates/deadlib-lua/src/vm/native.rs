@@ -664,8 +664,7 @@ impl Vm {
             let Value::String(id) = value else {
                 unreachable!("print string conversion");
             };
-            let bytes = &self.strings.bytes[slot_index(id.0)];
-            let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
+            let bytes = io::c_bytes(&self.strings.bytes[slot_index(id.0)]);
             if let Some(output) = &mut self.output {
                 if completed != 0 {
                     output.try_push(b'\t')?;
