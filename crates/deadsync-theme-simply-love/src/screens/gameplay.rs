@@ -468,24 +468,7 @@ impl DensityGraphRenderState {
     }
 }
 
-pub const SMX_SENSOR_PANEL_COUNT: usize = 9;
-
-/// Renderer-neutral sensor values prepared by the shell for one SMX panel.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct SmxSensorPanelView {
-    pub threshold: u16,
-    pub value: Option<u16>,
-}
-
-/// Renderer-neutral sensor snapshot prepared by the shell for one SMX pad.
-///
-/// `fsr` is retained so the shell can interpret later SDK samples without
-/// retaining backend config types in the concrete theme state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SmxSensorPadView {
-    pub fsr: bool,
-    pub panels: [SmxSensorPanelView; SMX_SENSOR_PANEL_COUNT],
-}
+pub use deadsync_theme::views::{SMX_SENSOR_PANEL_COUNT, SmxSensorPadView, SmxSensorPanelView};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GameplayStepStatsMode {
@@ -757,7 +740,6 @@ pub struct GameplayPresentation {
     pub(crate) heart_rate_text: heart_rate::HeartRateTextPlan,
     // Time banked toward the next shell-owned sensor refresh. Seeded to fire on
     // the first frame.
-    smx_sensor_refresh_accum: f32,
     pub frame_scratch: Option<Box<GameplayFrameScratch>>,
 }
 
@@ -1130,7 +1112,6 @@ impl GameplayPresentation {
             heart_rate_view: HeartRateView::default(),
             heart_rate_generation: (u64::MAX, u64::MAX),
             heart_rate_text: heart_rate::HeartRateTextPlan::default(),
-            smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
             frame_scratch: Some(Box::new(frame_scratch)),
         }
     }
@@ -1232,6 +1213,30 @@ impl GameplayStagePresenter<GameplayLobbySession> for GameplayPresentation {
 
     fn append_song_lua_exit(&self, actors: &mut Vec<Actor>, fade_progress: f32) {
         push_song_lua_fade(actors, fade_progress);
+    }
+}
+
+impl deadsync_theme::views::GameplayLivePresentation<GameplayCoreState> for GameplayPresentation {
+    fn update_gameplay_visuals(&mut self, game: &GameplayCoreState, delta_time: f32) {
+        self.life_meter_update()(game, delta_time);
+    }
+
+    fn sync_leaderboards(&mut self, updates: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS]) {
+        GameplayPresentation::sync_scoreboxes(self, updates);
+    }
+
+    fn toggle_lobby_hud(&mut self) {
+        self.lobby_hud_visibility.toggle();
+    }
+
+    fn sync_smx_sensors(&mut self, views: [Option<SmxSensorPadView>; MAX_PLAYERS]) {
+        self.smx_sensor_views = views;
+    }
+
+    fn sync_heart_rate(&mut self, generation: (u64, u64), view: HeartRateView) {
+        self.heart_rate_text.sync(view);
+        self.heart_rate_view = view;
+        self.heart_rate_generation = generation;
     }
 }
 
@@ -1741,16 +1746,6 @@ fn push_system_profile_footer(
     });
 }
 
-fn gameplay_player_index_for_side(state: &impl GameplayScreenView, side: profile_data::PlayerSide) -> Option<usize> {
-    if state.num_players() >= 2 {
-        return Some(profile_data::player_side_index(side));
-    }
-    if state.num_players() == 0 || state.presentation().runtime_view.player_side != side {
-        return None;
-    }
-    Some(0)
-}
-
 #[derive(Clone, Copy)]
 struct StepStatsScorePos {
     score_x: f32,
@@ -2195,63 +2190,6 @@ fn update_life_meter_visuals(
     }
 }
 
-/// The pads to drive for the FSR sensor display, as `(store_index, sdk_pad)`:
-/// `store_index` is how the sensor arrays are keyed (profile index normally, SDK
-/// pad in Doubles) and `sdk_pad` is the SDK pad to enable/read. `None` slots are
-/// skipped. Returns all-`None` cheaply (before any config/session lookup) when no
-/// player wants the display or SMX input is off, so the per-frame caller does no
-/// further work.
-pub fn smx_sensor_pad_plan(state: &impl GameplayScreenView, smx_input: bool) -> [Option<(usize, usize)>; 2] {
-    let mut out = [None, None];
-    if !state.profiles()[0].smx_fsr_display && !state.profiles()[1].smx_fsr_display {
-        return out;
-    }
-    if !smx_input {
-        return out;
-    }
-    if state.presentation().runtime_view.play_style.is_double() {
-        // One player drives both pads; key the sensor arrays by SDK pad.
-        if state.profiles()[0].smx_fsr_display {
-            out = [Some((0, 0)), Some((1, 1))];
-        }
-        return out;
-    }
-    // Each FSR-display player keys by profile index but reads its SIDE's SDK pad
-    // (P1 -> 0, P2 -> 1); a single P2 player is profile 0 but plays pad 1.
-    let mut n = 0;
-    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        let Some(pidx) = gameplay_player_index_for_side(state, side) else {
-            continue;
-        };
-        if !state.profiles()[pidx].smx_fsr_display {
-            continue;
-        }
-        out[n] = Some((pidx, profile_data::player_side_index(side)));
-        n += 1;
-    }
-    out
-}
-
-// The pad streams sensor data at ~30Hz on the wire (the SDK requests it on a
-// fixed interval), so reading it once per render frame is wasted work that
-// scales with the (vsync-off) frame rate and needlessly contends the SDK's
-// shared state lock. Sample on a fixed timer instead. 60Hz comfortably
-// oversamples the 30Hz source while decoupling the read cost from frame rate.
-const SMX_SENSOR_REFRESH_HZ: f32 = 60.0;
-const SMX_SENSOR_REFRESH_INTERVAL: f32 = 1.0 / SMX_SENSOR_REFRESH_HZ;
-
-pub fn smx_sensor_refresh_due(state: &mut State, delta_time: f32) -> bool {
-    state.presentation.smx_sensor_refresh_accum += delta_time;
-    if state.presentation.smx_sensor_refresh_accum < SMX_SENSOR_REFRESH_INTERVAL {
-        return false;
-    }
-    // Keep the leftover so cadence stays steady, but cap it so a long stall
-    // (load spike, alt-tab) can't bank up a burst of catch-up refreshes.
-    state.presentation.smx_sensor_refresh_accum = (state.presentation.smx_sensor_refresh_accum - SMX_SENSOR_REFRESH_INTERVAL)
-        .min(SMX_SENSOR_REFRESH_INTERVAL);
-    true
-}
-
 pub fn smx_sensor_pad_view(state: &impl GameplayScreenView, store_idx: usize) -> Option<SmxSensorPadView> {
     state.presentation().smx_sensor_views.get(store_idx).copied().flatten()
 }
@@ -2271,9 +2209,9 @@ pub fn heart_rate_generation(state: &impl GameplayScreenView) -> (u64, u64) {
 }
 
 pub fn set_heart_rate_view(state: &mut State, generation: (u64, u64), view: HeartRateView) {
-    state.presentation.heart_rate_text.sync(view);
-    state.presentation.heart_rate_view = view;
-    state.presentation.heart_rate_generation = generation;
+    deadsync_theme::views::GameplayLivePresentation::sync_heart_rate(
+        &mut state.presentation, generation, view,
+    );
 }
 
 /// Refresh song-rate-derived presentation only on an explicit Practice rate

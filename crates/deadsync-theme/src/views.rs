@@ -3,13 +3,15 @@
 use crate::{DisplayModeChoice, FullscreenChoice, PresentPolicyChoice, RendererChoice};
 use deadsync_chart::course::CourseSessionPlan;
 use deadsync_chart::{ChartData, SongData};
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{
     ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, WindowCounts,
 };
 use deadsync_score::{
-    ColumnJudgmentList, Grade, GrooveStatsEvalState, ItlEvalState, LeaderboardEntry,
+    CachedPlayerLeaderboardData, ColumnJudgmentList, Grade, GrooveStatsEvalState, ItlEvalState,
+    LeaderboardEntry,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -233,6 +235,46 @@ pub enum GameplayStageIntro {
 pub struct GameplayReplayView {
     pub name: String,
     pub score_10000: f64,
+}
+
+/// Optional HUD updates from the live stage. None of these hooks control play.
+pub trait GameplayLivePresentation<G> {
+    fn update_gameplay_visuals(&mut self, _game: &G, _delta_time: f32) {}
+
+    fn sync_leaderboards(&mut self, _updates: [Option<CachedPlayerLeaderboardData>; MAX_PLAYERS]) {}
+
+    fn toggle_lobby_hud(&mut self) {}
+
+    fn sync_smx_sensors(&mut self, _views: [Option<SmxSensorPadView>; MAX_PLAYERS]) {}
+
+    fn sync_heart_rate(&mut self, _generation: (u64, u64), _view: HeartRateView) {}
+}
+
+pub const SMX_SENSOR_PANEL_COUNT: usize = 9;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SmxSensorPanelView {
+    pub threshold: u16,
+    pub value: Option<u16>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SmxSensorPadView {
+    pub fsr: bool,
+    pub panels: [SmxSensorPanelView; SMX_SENSOR_PANEL_COUNT],
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HeartRatePlayerView {
+    pub configured: bool,
+    pub connected: bool,
+    pub bpm: Option<u16>,
+    pub max_heart_rate: u16,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HeartRateView {
+    pub players: [HeartRatePlayerView; MAX_PLAYERS],
 }
 
 /// Theme-prepared course labels and summary metadata, separate from game startup.

@@ -198,7 +198,7 @@ impl App {
         if plan.exit_gameplay {
             self.audio.stop_mine_sfx();
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                crate::gameplay_runtime::exit(gs);
+                crate::gameplay_runtime::exit(gs, &mut self.state.screens.gameplay_telemetry);
             }
         }
         if prev != target {

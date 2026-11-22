@@ -4420,6 +4420,31 @@ return Def.ActorFrame{
 
     struct AlternateGameplay;
 
+    impl deadsync_theme::views::GameplayLivePresentation<State> for AlternateGameplay {}
+
+    struct AlternateGameplayTheme;
+
+    impl deadsync_theme::Theme for AlternateGameplayTheme {
+        type Screen = &'static str;
+        type RuntimeRequest = ();
+
+        fn screen_id(screen: Self::Screen) -> deadsync_theme::ThemeScreenId {
+            deadsync_theme::ThemeScreenId::new(screen)
+        }
+    }
+
+    impl deadsync_theme::ThemeScreenFlow for AlternateGameplayTheme {
+        const SCREENS: deadsync_theme::ThemeScreens<Self::Screen> = deadsync_theme::ThemeScreens {
+            menu: "home",
+            gameplay: "dance",
+            practice: "rehearsal",
+            results: "record",
+            song_selection: "library",
+            course_selection: "marathon",
+            player_options: "settings",
+        };
+    }
+
     impl GameplayFramePresenter for AlternateGameplay {
         type Profile = GameplayProfile;
         type Slot = noteskin::SpriteSlot;
@@ -4535,7 +4560,7 @@ return Def.ActorFrame{
                             false,
                         );
                         assert!(scene.is_some());
-                        let host = crate::gameplay_runtime::present_stage(
+                        let mut host = crate::gameplay_runtime::present_stage(
                             prepared,
                             scene,
                             GameplayStageView {
@@ -4566,8 +4591,50 @@ return Def.ActorFrame{
                             },
                         );
                         assert!(host.song_lua.is_some());
+                        use crate::gameplay_runtime::{self, GameplayFrameEffect};
+                        use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
+
+                        let mut audio = deadsync_audio_stream::AudioControl::without_audio();
+                        let mut clock = deadsync_audio_stream::MusicClock::without_audio();
+                        let mut score_cursor = Default::default();
+                        let mut telemetry = Default::default();
+                        let sounds = crate::gameplay_prewarm::GameplaySfx::default();
+                        gameplay_runtime::enter(&mut host, &mut telemetry, false, &mut audio, &sounds, &mut clock);
+                        // The inert audio clock never reaches a beat-zero foreground.
+                        // Seed the same request and destination the Lua screen stores.
+                        {
+                            let mut runtime = host.song_lua.scene_mut().unwrap().runtime_mut();
+                            runtime.vm_mut().with_native_stack(|stack| {
+                                let top = stack.top();
+                                stack.push_bytes(b"__songlua_top_screen")?;
+                                stack.get_table(-10002, true)?;
+                                let screen = stack.top_offset();
+                                stack.push_bytes(b"__songlua_next_screen_name")?;
+                                stack.push_bytes(b"ScreenPractice")?;
+                                stack.set_table(screen, true)?;
+                                stack.set_top(top)
+                            }).unwrap();
+                            deadsync_song_lua::test_support::seed_rust_transition(
+                                &runtime, "SM_DoNextScreen",
+                            );
+                        }
+                        assert_eq!(
+                            host.song_lua.scene().unwrap().next_screen_name().unwrap().as_deref(),
+                            Some("ScreenPractice"),
+                        );
+                        let destination = (0..20).find_map(|_| {
+                            gameplay_runtime::update::<AlternateGameplayTheme, _>(
+                                &mut host, 0.125, false, &mut audio, &sounds, &mut clock,
+                                &mut score_cursor, &mut telemetry,
+                            ).into_iter().find_map(|effect| match effect {
+                                GameplayFrameEffect::Session(SongLuaGameplayEffect::Navigate(screen)) => Some(screen),
+                                _ => None,
+                            })
+                        });
+                        assert_eq!(destination, Some("rehearsal"));
+                        assert!(host.song_lua.is_ended());
                         let practice = host.into_practice(Default::default(), |stage, _| {
-                            assert!(stage.song_lua.is_some());
+                            assert!(stage.song_lua.is_ended());
                             AlternatePractice
                         });
                         assert!(!practice.session.is_playing());

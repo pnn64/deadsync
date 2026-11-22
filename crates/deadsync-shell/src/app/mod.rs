@@ -583,6 +583,7 @@ pub struct ScreensState {
     gameplay_state: Option<crate::gameplay_runtime::GameplayState>,
     practice_state: Option<crate::gameplay_runtime::PracticeState>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
+    gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor,
     options_state: options::State,
     content_browser_state: content_browser::State,
     credits_state: credits::State,
@@ -1263,6 +1264,7 @@ impl ScreensState {
             gameplay_state: None,
             practice_state: None,
             gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor::default(),
+            gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor::default(),
             options_state,
             content_browser_state,
             credits_state,
@@ -3129,6 +3131,7 @@ impl App {
         if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
             crate::gameplay_runtime::enter(
                 gs,
+                &mut self.state.screens.gameplay_telemetry,
                 self.state.play_input_policy.smx_input,
                 &mut self.audio,
                 &self.gameplay_sfx,
@@ -3221,7 +3224,7 @@ impl App {
         // A failed Lua screen replacement can still have an unfinished stage.
         // Only completed, already recorded songs belong in this result.
         if let Some(mut gameplay) = self.state.screens.gameplay_state.take() {
-            crate::gameplay_runtime::exit(&mut gameplay);
+            crate::gameplay_runtime::exit(&mut gameplay, &mut self.state.screens.gameplay_telemetry);
         }
         true
     }
@@ -9314,7 +9317,7 @@ impl App {
                 .is_some_and(|gameplay| gameplay.should_finalize_stage_result())
             && let Some(mut gameplay) = self.state.screens.gameplay_state.take()
         {
-            crate::gameplay_runtime::exit(&mut gameplay);
+            crate::gameplay_runtime::exit(&mut gameplay, &mut self.state.screens.gameplay_telemetry);
             self.update_combo_carry_from_gameplay(&gameplay);
             Self::execute_evaluation_score_runtime(&gameplay.stage, &gameplay.pack_group);
             let stage = Self::gameplay_stage_result(&gameplay.stage);
@@ -9600,7 +9603,7 @@ impl App {
                 && self.state.session.course_run.is_some()
                 && let Some(gs) = self.state.screens.gameplay_state.as_mut()
             {
-                crate::gameplay_runtime::exit(gs);
+                crate::gameplay_runtime::exit(gs, &mut self.state.screens.gameplay_telemetry);
             }
             if prev == CurrentScreen::Gameplay
                 && !lua_reload
@@ -9992,7 +9995,7 @@ impl App {
         if target == CurrentScreen::Evaluation {
             let config = config::runtime::get();
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                crate::gameplay_runtime::exit(gs);
+                crate::gameplay_runtime::exit(gs, &mut self.state.screens.gameplay_telemetry);
             }
             let gameplay_results = self.state.screens.gameplay_state.take();
             if let Some(gs) = gameplay_results.as_ref() {

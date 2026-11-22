@@ -28,7 +28,7 @@ impl App {
         let Some(gameplay) = self.state.screens.gameplay_state.as_mut() else {
             return;
         };
-        let mut effects = gameplay_runtime::update(
+        let mut effects = gameplay_runtime::update::<ActiveTheme, _>(
             gameplay,
             delta_time,
             self.state.play_input_policy.smx_input,
@@ -36,6 +36,7 @@ impl App {
             &self.gameplay_sfx,
             &mut self.music_clock,
             &mut self.state.screens.gameplay_score_cursor,
+            &mut self.state.screens.gameplay_telemetry,
         );
         if lobby_only {
             retain_lobby_effects(&mut effects);

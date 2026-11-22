@@ -706,9 +706,10 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
     }
     for handoff in [
         "let stage = &mut state.stage",
-        "let update_visuals = state.presentation.life_meter_update()",
+        "let presentation = &mut state.presentation",
+        "presentation.update_gameplay_visuals(game, delta)",
         "stage.update(",
-        "crate::navigation::song_lua_presentation_screen::<ActiveTheme>",
+        "crate::navigation::song_lua_presentation_screen::<T>",
         "stage.handle_input(ev, physical)",
         "stage.take_output()",
         ".for_each_scheduled_song_sound(previous_song_lua_time,",
@@ -1028,7 +1029,7 @@ fn gameplay_lobby_start_readiness_and_input_routing_stay_below_the_theme() {
         "lobby.prepare_update(&mut stage.gameplay,",
         "match lobby.route_input(ev)",
         "GameplayLobbyInput::PassThrough => stage.handle_input(ev, physical)",
-        "gameplay::toggle_lobby_hud(state)",
+        "state.presentation.toggle_lobby_hud()",
     ] {
         assert!(
             contains_rust(&shell, entry),
@@ -6515,7 +6516,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "scores::should_warn_cmod_for_itl_chart",
         "state.score_refresh.has_pending()",
         "state.score_refresh.poll(&mut state.stage.gameplay,",
-        "state.presentation.sync_scoreboxes(updates)",
+        "state.presentation.sync_leaderboards(updates)",
         "machine_font: config.machine_font",
         "background_brightness: config.bg_brightness",
         "background_color: config.gameplay_bg_color",
@@ -7407,19 +7408,14 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
     let theme =
         read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
             .expect("Simply Love gameplay should be readable");
-    for contract in [
-        "pub struct SmxSensorPanelView",
-        "pub struct SmxSensorPadView",
-        "pub fn smx_sensor_pad_plan",
-        "pub fn smx_sensor_refresh_due",
-        "pub fn smx_sensor_pad_view",
-        "pub fn set_smx_sensor_pad_view",
-    ] {
+    let views = production_source(&root.join("crates/deadsync-theme/src/views.rs"));
+    for contract in ["pub struct SmxSensorPanelView", "pub struct SmxSensorPadView", "pub trait GameplayLivePresentation<G>"] {
         assert!(
-            theme.contains(contract),
-            "Simply Love gameplay is missing sensor view contract {contract}"
+            views.contains(contract),
+            "the shared theme contract is missing {contract}"
         );
     }
+    assert!(theme.contains("fn sync_smx_sensors("));
     for runtime_type in [
         "deadsync_smx",
         "SensorTestData",
@@ -7428,6 +7424,8 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
         "get_test_data(",
         "get_config(",
         "set_test_mode(",
+        "smx_sensor_pad_plan(",
+        "smx_sensor_refresh_accum",
         "std::env::var",
     ] {
         assert!(
@@ -7441,12 +7439,16 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
     for execution in [
         "fn enter_smx_sensors",
         "fn refresh_smx_sensors",
+        "fn stage_smx_sensor_pad_plan",
+        "let session = &stage.gameplay.setup.session",
+        "pub(crate) struct GameplayTelemetryCursor",
+        "cursor.smx_refresh_due(delta_time)",
         "deadsync_smx::set_test_mode",
         "SensorTestMode::CalibratedValues",
         "SensorTestMode::Off",
         "deadsync_smx::get_config",
         "deadsync_smx::get_test_data",
-        "gameplay::set_smx_sensor_pad_view",
+        "state.presentation.sync_smx_sensors(cursor.smx_views)",
     ] {
         assert!(
             shell.contains(execution),
@@ -7459,8 +7461,8 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
         .expect("shell app should be readable");
     let navigation = read_source(root.join("crates/deadsync-shell/src/app/screen_nav.rs"))
         .expect("shell navigation should be readable");
-    assert!(app.contains("crate::gameplay_runtime::exit(gs)"));
-    assert!(navigation.contains("crate::gameplay_runtime::exit(gs)"));
+    assert!(app.contains("crate::gameplay_runtime::exit(gs, &mut self.state.screens.gameplay_telemetry)"));
+    assert!(navigation.contains("crate::gameplay_runtime::exit(gs, &mut self.state.screens.gameplay_telemetry)"));
 }
 
 #[test]
