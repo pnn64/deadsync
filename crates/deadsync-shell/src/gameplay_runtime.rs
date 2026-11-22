@@ -7,7 +7,9 @@ use deadsync_gameplay::{
     GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, GameplayMiniIndicatorData, GameplayMusicCut,
     GameplaySession, GameplaySessionCommand, GameplayStreamClockSnapshot, gameplay_runtime_charts,
 };
-use deadsync_gameplay::practice::{PracticeSession, editor::PracticeEditorConfig};
+use deadsync_gameplay::practice::{
+    PracticeSession, PracticeViewRequest, editor::PracticeEditorConfig,
+};
 use deadsync_input::InputEvent;
 use deadsync_input::practice::PracticeKeyEvent;
 use deadsync_online::gameplay_lobby::GameplayLobbyAction;
@@ -797,13 +799,21 @@ pub(crate) fn update_practice(
     score_cursor: &mut ScoreRuntimeCursor,
     effects: &mut Vec<ThemeEffect>,
 ) {
-    practice::advance(
-        state,
-        delta_time,
-        snapshot(music_clock),
-        deadlib_platform::host_time::now_nanos,
-        deadlib_audio::stream::snap_music_start_sec,
-    );
+    let audio_snapshot = snapshot(music_clock);
+    practice::advance_flash(state, delta_time);
+    let menu_open = state.menu_open();
+    let playback = practice::with_session(state, |session, game, presentation| {
+        session.update(
+            game,
+            delta_time,
+            menu_open,
+            audio_snapshot,
+            deadlib_platform::host_time::now_nanos,
+            deadlib_audio::stream::snap_music_start_sec,
+            |game, feedback| presentation.emit(game, feedback),
+        )
+    });
+    practice::apply_playback_update(state, playback);
     score_cursor.sync_if_dirty(&mut state.gameplay);
     drain(&mut state.gameplay, audio, sounds, music_clock);
     apply_practice_output(state, ThemeEffect::None, effects);
@@ -815,7 +825,7 @@ pub(crate) fn enter_practice(
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
-    practice::on_enter(state);
+    practice::with_session(state, |session, game, _| session.on_enter(game));
     drain(&mut state.gameplay, audio, sounds, music_clock);
 }
 
@@ -827,7 +837,17 @@ pub(crate) fn handle_practice_input(
     music_clock: &mut deadsync_audio_stream::MusicClock,
     effects: &mut Vec<ThemeEffect>,
 ) {
-    let effect = practice::process_input(state, ev, deadlib_audio::stream::snap_music_start_sec);
+    let menu_open = state.menu_open();
+    let request = practice::with_session(state, |session, game, presentation| {
+        session.handle_input(
+            game,
+            ev,
+            menu_open,
+            deadlib_audio::stream::snap_music_start_sec,
+            |game, feedback| presentation.emit(game, feedback),
+        )
+    });
+    let effect = practice_request_effect(state, request);
     drain(&mut state.gameplay, audio, sounds, music_clock);
     apply_practice_output(state, effect, effects);
 }
@@ -840,13 +860,46 @@ pub(crate) fn handle_practice_raw_key(
     music_clock: &mut deadsync_audio_stream::MusicClock,
     effects: &mut Vec<ThemeEffect>,
 ) -> bool {
-    let (consumed, effect) = practice::process_key(
-        state,
-        &PracticeKeyEvent::from_raw(ev),
-        deadlib_audio::stream::snap_music_start_sec,
-    );
+    let menu_open = state.menu_open();
+    let (consumed, request) = practice::with_session(state, |session, game, presentation| {
+        session.handle_raw_key(
+            game,
+            &PracticeKeyEvent::from_raw(ev),
+            menu_open,
+            deadlib_audio::stream::snap_music_start_sec,
+            |game, feedback| presentation.emit(game, feedback),
+        )
+    });
+    let effect = practice_request_effect(state, request);
     drain(&mut state.gameplay, audio, sounds, music_clock);
     apply_practice_output(state, effect, effects) || consumed
+}
+
+fn practice_request_effect(
+    state: &mut practice::State,
+    request: PracticeViewRequest,
+) -> ThemeEffect {
+    use practice::PracticeMenuAction;
+
+    match practice::apply_view_request(state, request) {
+        None => ThemeEffect::None,
+        Some(PracticeMenuAction::Edit(command)) => {
+            let request = practice::with_session(state, |session, game, presentation| {
+                session.clear_navigation_holds();
+                session.execute(
+                    game,
+                    command,
+                    deadlib_audio::stream::snap_music_start_sec,
+                    |game, feedback| presentation.emit(game, feedback),
+                )
+            });
+            practice_request_effect(state, request)
+        }
+        Some(PracticeMenuAction::Navigate(screen)) => {
+            practice::with_session(state, |session, _, _| session.clear_navigation_holds());
+            ThemeEffect::Navigate(screen)
+        }
+    }
 }
 
 fn apply_practice_output(

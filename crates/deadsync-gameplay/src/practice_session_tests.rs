@@ -87,11 +87,56 @@ fn practice_session_routes_playback_input_even_with_a_theme_menu_visible() {
     );
     assert!(!session.is_playing());
     assert_eq!(session.editor().cursor_beat(), 1.5);
+    assert_eq!(game.current_music_time_ns(), 750_000_000);
     assert!(game.pending_input_is_empty());
     assert_eq!(
         game.drain_audio_commands().collect::<Vec<_>>(),
         [GameplayAudioCommand::StopMusic]
     );
+}
+
+#[test]
+fn practice_session_seeks_the_edit_clock_without_presentation() {
+    use crate::practice::editor::PracticeEditorSnapshot;
+    use crate::practice::{PracticePlaybackUpdate, PracticeSession};
+
+    let mut game = practice_session_game(false);
+    let mut session = PracticeSession::new(&mut game, Default::default());
+    session.on_enter(&mut game);
+    game.drain_audio_commands().for_each(drop);
+    let start = game.current_music_time_ns();
+    session.restore(
+        &game,
+        PracticeEditorSnapshot {
+            cursor_beat: 4.0,
+            ..Default::default()
+        },
+    );
+    let target =
+        song_time_ns_from_seconds(game.music_time_for_beat(session.editor().cursor_beat()));
+    assert!(target > start);
+
+    let advance = |session: &mut PracticeSession, game: &mut State| {
+        assert_eq!(
+            session.update(
+                game,
+                0.016,
+                false,
+                GameplayAudioSnapshot::default(),
+                || panic!("the edit cursor drives the stage clock"),
+                practice_session_no_music_snap,
+                |_, _| {},
+            ),
+            PracticePlaybackUpdate::Editing
+        );
+    };
+    advance(&mut session, &mut game);
+    assert!(game.current_music_time_ns() > start && game.current_music_time_ns() < target);
+    for _ in 0..240 {
+        advance(&mut session, &mut game);
+    }
+    assert_eq!(game.current_music_time_ns(), target);
+    assert_eq!(game.drain_audio_commands().count(), 0);
 }
 
 #[test]

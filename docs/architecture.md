@@ -446,10 +446,10 @@ screen roles. Themes can expose additional named presentation screens, which
 are validated before the live scene ends.
 Gameplay frames under a screen transition still dispatch lobby work in order.
 
-The game-owned Practice session coordinates editor input, chart playback, and
-loop restarts. The shell prepares the session and applies its rate changes after
-draining game audio commands. The theme responds with cursor animation, menus,
-sounds, and text.
+The game-owned Practice session coordinates editor input, the edit seek clock,
+chart playback, and loop restarts. The shell drives the session directly and
+applies its rate changes after draining game audio commands. The theme draws the
+editor and turns menu selections into typed commands or screen destinations.
 
 ## Remaining separation
 

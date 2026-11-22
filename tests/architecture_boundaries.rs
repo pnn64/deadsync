@@ -556,6 +556,8 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
         "reset_practice_playback(",
         "GameplayAudioCommand::StopMusic",
         "state.playback",
+        "seek_practice_display(",
+        "DISPLAY_SCROLL_TIME_CONSTANT",
         "PracticeEditorRequest::StartPlayback",
         "PracticeEditorRequest::StopPlayback",
     ] {
@@ -573,6 +575,8 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
         "self.playback.update(",
         ".handle_input(game, event, || self.editor.clear_navigation_holds())",
         "self.playback.restore_editing(",
+        "self.update_display_scroll(game, delta_time)",
+        "game.seek_practice_display(music_time)",
     ] {
         assert!(
             contains_rust(&session, delegation),
@@ -663,6 +667,7 @@ fn practice_editor_decisions_stay_below_the_theme() {
     for former_state in [
         "runtime: PracticeRuntimeView",
         "cursor_beat:",
+        "display_beat:",
         "selection_anchor:",
         "selection_end:",
         "snap_index:",
@@ -2795,14 +2800,25 @@ fn practice_runtime_is_shell_prepared() {
         "shell must prepare Practice policy/HUD state and execute game-decided rate persistence"
     );
     for handoff in [
-        "practice::advance(",
-        "practice::process_input(",
-        "practice::process_key(",
+        "session.on_enter(game)",
+        "session.update(",
+        "session.handle_input(",
+        "session.handle_raw_key(",
+        "session.execute(",
+        "practice::apply_view_request(state, request)",
         "let rates = state.drain_music_rates();",
         "profile::set_session_music_rate(rate)",
         "practice::append_presentation_effects(state, effect, effects)",
     ] {
         assert!(contains_rust(&shell, handoff), "missing Practice handoff {handoff}");
+    }
+    for compatibility in [
+        "practice::on_enter(",
+        "practice::advance(",
+        "practice::process_input(",
+        "practice::process_key(",
+    ] {
+        assert!(!shell.contains(compatibility));
     }
     assert!(!shell.contains("SimplyLoveProfileRequest::SetMusicRate"));
 }

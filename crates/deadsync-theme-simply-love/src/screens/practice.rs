@@ -32,7 +32,6 @@ use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingSegments};
 use deadsync_theme::FontRole;
 use std::sync::Arc;
 
-const DISPLAY_BEAT_EPSILON: f32 = 0.000_1;
 const MARKER_Z: f32 = 2985.0;
 const EDIT_FIELD_CURSOR_TEX: &str = "practice/snap_display_icon_9x1 (doubleres).png";
 const EDIT_FIELD_CURSOR_Z: f32 = MARKER_Z + 1.0;
@@ -46,16 +45,6 @@ const EDIT_HELP_MISC_Y: f32 = 224.0;
 const EDIT_FIELD_ZOOM_AT_480P: f32 = 0.5;
 const EDIT_FIELD_HEIGHT_AT_480P: f32 = 360.0;
 const EDIT_SNAP_CURSOR_ZOOM: f32 = 0.5;
-/// Time constant for the exponential easing that scrolls the displayed chart
-/// position toward the cursor. Small enough to keep up with the key-repeat
-/// interval, large enough to read as a smooth scroll rather than a jump.
-const DISPLAY_SCROLL_TIME_CONSTANT: f32 = 0.07;
-/// Once the display is within this many beats of the cursor, settle exactly on
-/// it so the chart doesn't creep forever on sub-pixel differences.
-const DISPLAY_SCROLL_SNAP_EPSILON: f32 = 0.001;
-/// Jumps larger than this snap instantly instead of animating, so Home/End and
-/// other long seeks stay responsive instead of blurring across the whole song.
-const DISPLAY_SCROLL_MAX_SMOOTH_BEATS: f32 = 64.0;
 const EDIT_INFO_VALUE_CHARS: usize = 28;
 const EDIT_LINE_SOUND: &str = "assets/sounds/change.ogg";
 const EDIT_MARKER_SOUND: &str = "assets/sounds/screen_edit_marker.ogg";
@@ -286,7 +275,6 @@ pub struct State {
     menu_text: PracticeMenuText,
     session: PracticeSession,
     menu: Option<MenuState>,
-    display_beat: f32,
     edit_scroll_speed_index: usize,
     /// Localized presentation feedback, retained until its visibility expires.
     flash: Option<(Arc<str>, f32)>,
@@ -294,6 +282,10 @@ pub struct State {
 }
 
 impl State {
+    pub const fn menu_open(&self) -> bool {
+        self.menu.is_some()
+    }
+
     pub fn drain_music_rates(&mut self) -> std::vec::Drain<'_, f32> {
         self.session.drain_music_rates()
     }
@@ -311,12 +303,18 @@ struct MenuState {
     selected: usize,
 }
 
-type MenuAction = fn(&mut State, MusicStartSnap) -> ThemeEffect;
+/// The selected row's intent, applied by the session owner.
+#[must_use]
+#[derive(Clone, Copy)]
+pub enum PracticeMenuAction {
+    Edit(PracticeEditorCommand),
+    Navigate(Screen),
+}
 
 struct MenuRow {
     label: LookupKey,
     /// `None` means the row is display-only; activating it just closes the menu.
-    action: Option<MenuAction>,
+    action: Option<PracticeMenuAction>,
 }
 
 struct MenuDef {
@@ -336,31 +334,41 @@ static MAIN_MENU: MenuDef = MenuDef {
     rows: &[
         MenuRow {
             label: lookup_key("Practice", "MenuPlayWholeSong"),
-            action: Some(action_play_whole_song),
+            action: Some(PracticeMenuAction::Edit(PracticeEditorCommand::Play(
+                PracticePlayRange::WholeSong,
+            ))),
         },
         MenuRow {
             label: lookup_key("Practice", "MenuPlayCurrentToEnd"),
-            action: Some(action_play_current_to_end),
+            action: Some(PracticeMenuAction::Edit(PracticeEditorCommand::Play(
+                PracticePlayRange::CurrentToEnd,
+            ))),
         },
         MenuRow {
             label: lookup_key("Practice", "MenuPlaySelection"),
-            action: Some(action_play_selection),
+            action: Some(PracticeMenuAction::Edit(PracticeEditorCommand::Play(
+                PracticePlayRange::Selection,
+            ))),
         },
         MenuRow {
             label: lookup_key("Practice", "MenuSetSelectionStart"),
-            action: Some(action_set_selection_start),
+            action: Some(PracticeMenuAction::Edit(
+                PracticeEditorCommand::SetSelectionStart,
+            )),
         },
         MenuRow {
             label: lookup_key("Practice", "MenuSetSelectionEnd"),
-            action: Some(action_set_selection_end),
+            action: Some(PracticeMenuAction::Edit(
+                PracticeEditorCommand::SetSelectionEnd,
+            )),
         },
         MenuRow {
             label: lookup_key("Practice", "MenuPracticeModeOptions"),
-            action: Some(action_editor_options),
+            action: Some(PracticeMenuAction::Navigate(Screen::PlayerOptions)),
         },
         MenuRow {
             label: lookup_key("Practice", "MenuExit"),
-            action: Some(action_exit_practice),
+            action: Some(PracticeMenuAction::Navigate(Screen::SelectMusic)),
         },
     ],
 };
@@ -444,7 +452,7 @@ pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) 
 pub fn init_with_session(
     mut gameplay: gameplay_screen::State,
     hud: profile_data::GameplayHudSnapshot,
-    session: PracticeSession,
+    mut session: PracticeSession,
 ) -> State {
     let active_players = gameplay.num_players();
     let density_graph = build_practice_density_graph(&gameplay);
@@ -459,7 +467,8 @@ pub fn init_with_session(
         }
     });
     gameplay.set_practice_timing_labels(timing_labels);
-    let mut state = State {
+    session.snap_display_to_cursor(&mut gameplay.stage.gameplay);
+    State {
         gameplay,
         hud,
         density_graph,
@@ -467,13 +476,10 @@ pub fn init_with_session(
         menu_text: PracticeMenuText::new(),
         session,
         menu: None,
-        display_beat: 0.0,
         edit_scroll_speed_index: 0,
         flash: None,
         pending_sfx: Vec::with_capacity(8),
-    };
-    snap_display_to_cursor(&mut state);
-    state
+    }
 }
 
 #[inline(always)]
@@ -511,14 +517,14 @@ pub fn append_presentation_effects(
 }
 
 /// Borrows only presentation storage while a game-owned editor operation runs.
-struct EditorPresentation<'a> {
+pub struct EditorPresentation<'a> {
     flash: &'a mut Option<(Arc<str>, f32)>,
     pending_sfx: &'a mut Vec<&'static str>,
     music_rate_text_dirty: bool,
 }
 
 impl EditorPresentation<'_> {
-    fn emit(
+    pub fn emit(
         &mut self,
         game: &gameplay_screen::GameplayCoreState,
         feedback: PracticeEditorFeedback,
@@ -602,7 +608,7 @@ impl EditorPresentation<'_> {
     }
 }
 
-fn with_session<R>(
+pub fn with_session<R>(
     state: &mut State,
     operation: impl FnOnce(
         &mut PracticeSession,
@@ -617,7 +623,7 @@ fn with_session<R>(
     };
     let result = operation(
         &mut state.session,
-        &mut state.gameplay.gameplay,
+        &mut state.gameplay.stage.gameplay,
         &mut presentation,
     );
     // The text cache is read only after dispatch; every semantic rate/audio and
@@ -628,36 +634,43 @@ fn with_session<R>(
     result
 }
 
-fn execute_editor_command(
-    state: &mut State,
-    command: PracticeEditorCommand,
-    snap_music_start: MusicStartSnap,
-) -> ThemeEffect {
-    let request = with_session(state, |session, game, presentation| {
-        session.execute(game, command, snap_music_start, |game, feedback| {
-            presentation.emit(game, feedback)
-        })
-    });
-    apply_view_request(state, request, snap_music_start)
-}
-
-fn apply_view_request(
+fn apply_legacy_view_request(
     state: &mut State,
     request: PracticeViewRequest,
     snap_music_start: MusicStartSnap,
 ) -> ThemeEffect {
+    let Some(action) = apply_view_request(state, request) else {
+        return ThemeEffect::None;
+    };
+    state.session.clear_navigation_holds();
+    match action {
+        PracticeMenuAction::Edit(command) => {
+            let request = with_session(state, |session, game, presentation| {
+                session.execute(game, command, snap_music_start, |game, feedback| {
+                    presentation.emit(game, feedback)
+                })
+            });
+            apply_legacy_view_request(state, request, snap_music_start)
+        }
+        PracticeMenuAction::Navigate(screen) => ThemeEffect::Navigate(screen),
+    }
+}
+
+pub fn apply_view_request(
+    state: &mut State,
+    request: PracticeViewRequest,
+) -> Option<PracticeMenuAction> {
     match request {
-        PracticeViewRequest::None => {}
+        PracticeViewRequest::None | PracticeViewRequest::PlaybackStopped => {}
         PracticeViewRequest::OpenMainMenu => open_main_menu(state),
         PracticeViewRequest::OpenHelpMenu => open_help_menu(state),
         PracticeViewRequest::CloseMenu => close_menu(state),
-        PracticeViewRequest::ActivateMenu => return activate_menu_item(state, snap_music_start),
+        PracticeViewRequest::ActivateMenu => return activate_menu_item(state),
         PracticeViewRequest::StepMenu(delta) => step_menu(state, delta),
         PracticeViewRequest::ChangeEditScrollSpeed(delta) => change_edit_scroll_speed(state, delta),
         PracticeViewRequest::PlaybackStarted => state.flash = None,
-        PracticeViewRequest::PlaybackStopped => snap_display_to_cursor(state),
     }
-    ThemeEffect::None
+    None
 }
 
 pub const fn edit_snapshot(state: &State) -> EditSnapshot {
@@ -673,12 +686,13 @@ pub fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
         .edit_scroll_speed_index
         .min(EDIT_SCROLL_SPEEDS.len().saturating_sub(1));
     state.session.restore(&state.gameplay, snapshot.editor);
-    snap_display_to_cursor(state);
+    state
+        .session
+        .snap_display_to_cursor(&mut state.gameplay.stage.gameplay);
 }
 
 pub fn on_enter(state: &mut State) {
     state.session.on_enter(&mut state.gameplay);
-    snap_display_to_cursor(state);
 }
 
 pub fn update(
@@ -711,14 +725,9 @@ pub fn advance(
     fallback_host_nanos: impl FnOnce() -> u64,
     snap_music_start: MusicStartSnap,
 ) {
-    if let Some((_, remaining)) = state.flash.as_mut() {
-        *remaining -= delta_time;
-        if *remaining <= 0.0 {
-            state.flash = None;
-        }
-    }
-    let menu_open = state.menu.is_some();
-    match with_session(state, |session, game, presentation| {
+    advance_flash(state, delta_time);
+    let menu_open = state.menu_open();
+    let playback = with_session(state, |session, game, presentation| {
         session.update(
             game,
             delta_time,
@@ -728,10 +737,24 @@ pub fn advance(
             snap_music_start,
             |game, feedback| presentation.emit(game, feedback),
         )
-    }) {
-        PracticePlaybackUpdate::Editing => update_display_scroll(state, delta_time),
-        PracticePlaybackUpdate::Playing => {}
-        PracticePlaybackUpdate::Restarted => state.flash = None,
+    });
+    apply_playback_update(state, playback);
+}
+
+#[inline]
+pub fn advance_flash(state: &mut State, delta_time: f32) {
+    if let Some((_, remaining)) = state.flash.as_mut() {
+        *remaining -= delta_time;
+        if *remaining <= 0.0 {
+            state.flash = None;
+        }
+    }
+}
+
+#[inline]
+pub fn apply_playback_update(state: &mut State, update: PracticePlaybackUpdate) {
+    if update == PracticePlaybackUpdate::Restarted {
+        state.flash = None;
     }
 }
 
@@ -755,13 +778,13 @@ pub fn process_input(
     ev: &InputEvent,
     snap_music_start: MusicStartSnap,
 ) -> ThemeEffect {
-    let menu_open = state.menu.is_some();
+    let menu_open = state.menu_open();
     let request = with_session(state, |session, game, presentation| {
         session.handle_input(game, ev, menu_open, snap_music_start, |game, feedback| {
             presentation.emit(game, feedback);
         })
     });
-    apply_view_request(state, request, snap_music_start)
+    apply_legacy_view_request(state, request, snap_music_start)
 }
 
 pub fn handle_raw_key_event(
@@ -790,7 +813,7 @@ pub fn process_key(
     event: &PracticeKeyEvent,
     snap_music_start: MusicStartSnap,
 ) -> (bool, ThemeEffect) {
-    let menu_open = state.menu.is_some();
+    let menu_open = state.menu_open();
     let (consumed, request) = with_session(state, |session, game, presentation| {
         session.handle_raw_key(
             game,
@@ -802,7 +825,7 @@ pub fn process_key(
             },
         )
     });
-    let effect = apply_view_request(state, request, snap_music_start);
+    let effect = apply_legacy_view_request(state, request, snap_music_start);
     (consumed, effect)
 }
 
@@ -908,109 +931,17 @@ fn step_menu(state: &mut State, delta: isize) {
     queue_sfx(state, "assets/sounds/change.ogg");
 }
 
-fn activate_menu_item(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    let Some(menu) = state.menu else {
-        return ThemeEffect::None;
-    };
-    let Some(row) = menu.def.rows.get(menu.selected) else {
-        return ThemeEffect::None;
-    };
+fn activate_menu_item(state: &mut State) -> Option<PracticeMenuAction> {
+    let menu = state.menu?;
+    let row = menu.def.rows.get(menu.selected)?;
     let Some(action) = row.action else {
         // Display-only row (e.g. Help): treat Enter as close.
         close_menu(state);
-        return ThemeEffect::None;
+        return None;
     };
     state.menu = None;
-    state.session.clear_navigation_holds();
     queue_sfx(state, "assets/sounds/start.ogg");
-    action(state, snap_music_start)
-}
-
-fn action_play_whole_song(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    execute_editor_command(
-        state,
-        PracticeEditorCommand::Play(PracticePlayRange::WholeSong),
-        snap_music_start,
-    )
-}
-
-fn action_play_current_to_end(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    execute_editor_command(
-        state,
-        PracticeEditorCommand::Play(PracticePlayRange::CurrentToEnd),
-        snap_music_start,
-    )
-}
-
-fn action_play_selection(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    execute_editor_command(
-        state,
-        PracticeEditorCommand::Play(PracticePlayRange::Selection),
-        snap_music_start,
-    )
-}
-
-fn action_set_selection_start(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    execute_editor_command(
-        state,
-        PracticeEditorCommand::SetSelectionStart,
-        snap_music_start,
-    )
-}
-
-fn action_set_selection_end(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
-    execute_editor_command(
-        state,
-        PracticeEditorCommand::SetSelectionEnd,
-        snap_music_start,
-    )
-}
-
-fn action_editor_options(_state: &mut State, _snap_music_start: MusicStartSnap) -> ThemeEffect {
-    ThemeEffect::Navigate(Screen::PlayerOptions)
-}
-
-fn action_exit_practice(_state: &mut State, _snap_music_start: MusicStartSnap) -> ThemeEffect {
-    ThemeEffect::Navigate(Screen::SelectMusic)
-}
-
-/// Immediately move the displayed scroll position to the cursor with no
-/// smoothing. Used when entering or leaving the edit field, where an animated
-/// scroll would be jarring rather than helpful.
-fn snap_display_to_cursor(state: &mut State) {
-    state.display_beat = state.session.editor().cursor_beat();
-    let music_time = state.gameplay.music_time_for_beat(state.display_beat);
-    state.gameplay.seek_practice_display(music_time);
-}
-
-/// Ease the displayed scroll position toward the cursor so seeking through the
-/// chart scrolls smoothly instead of redrawing into the next position. Large
-/// jumps snap instantly to stay responsive.
-fn update_display_scroll(state: &mut State, delta_time: f32) {
-    let cursor = state.session.editor().cursor_beat();
-    if delta_time <= 0.0 || same_display_beat(state.display_beat, cursor) {
-        return;
-    }
-    let next = next_display_beat(state.display_beat, cursor, delta_time);
-    if same_display_beat(next, cursor) {
-        snap_display_to_cursor(state);
-        return;
-    }
-    state.display_beat = next;
-    let music_time = state.gameplay.music_time_for_beat(state.display_beat);
-    state.gameplay.seek_practice_display(music_time);
-}
-
-/// Pure easing step for [`update_display_scroll`], split out for testing.
-/// Returns the cursor directly when the gap is tiny (settle) or huge (snap),
-/// otherwise an exponential step toward it.
-fn next_display_beat(display_beat: f32, cursor_beat: f32, delta_time: f32) -> f32 {
-    let diff = cursor_beat - display_beat;
-    if diff.abs() <= DISPLAY_SCROLL_SNAP_EPSILON || diff.abs() > DISPLAY_SCROLL_MAX_SMOOTH_BEATS {
-        return cursor_beat;
-    }
-    let t = 1.0 - (-delta_time / DISPLAY_SCROLL_TIME_CONSTANT).exp();
-    diff.mul_add(t, display_beat)
+    Some(action)
 }
 
 fn change_edit_scroll_speed(state: &mut State, delta: isize) {
@@ -1085,10 +1016,6 @@ fn fmt_music_rate(rate: f32) -> String {
     } else {
         format!("{int_part}.{frac2:02}")
     }
-}
-
-fn same_display_beat(a: f32, b: f32) -> bool {
-    (a - b).abs() <= DISPLAY_BEAT_EPSILON
 }
 
 fn append_edit_markers(state: &State, actors: &mut Vec<Actor>) {
@@ -1897,10 +1824,9 @@ fn append_help_section(
 #[cfg(test)]
 mod tests {
     use super::{
-        DISPLAY_SCROLL_MAX_SMOOTH_BEATS, DISPLAY_SCROLL_SNAP_EPSILON, EditInfoSource,
-        HELP_MENU, MAIN_MENU, MenuDef, PracticeMenuText, PracticeNumber,
+        EditInfoSource, HELP_MENU, MAIN_MENU, MenuDef, PracticeMenuText, PracticeNumber,
         append_pending_effects, build_edit_info_text_into, compile_timing_labels,
-        fmt_itg_float, fmt_music_rate, next_display_beat, normalize_flash_text,
+        fmt_itg_float, fmt_music_rate, normalize_flash_text,
         practice_density_geom, practice_edit_beat_travel, practice_style_notefield_width,
         push_selection_info, rotate_practice_density_mesh, timing_speed_label,
     };
@@ -2104,30 +2030,6 @@ mod tests {
             ThemeEffect::Navigate(Screen::PlayerOptions)
         ));
         assert!(sounds.is_empty());
-    }
-
-    #[test]
-    fn display_scroll_settles_and_snaps() {
-        // Tiny gaps settle exactly on the cursor.
-        assert_eq!(next_display_beat(10.0, 10.0 + 0.0005, 0.016), 10.0 + 0.0005);
-        // Huge jumps snap instantly so Home/End stay responsive.
-        let far = 10.0 + DISPLAY_SCROLL_MAX_SMOOTH_BEATS + 1.0;
-        assert_eq!(next_display_beat(10.0, far, 0.016), far);
-    }
-
-    #[test]
-    fn display_scroll_eases_toward_cursor() {
-        let start = 0.0;
-        let target = 4.0;
-        let step = next_display_beat(start, target, 0.016);
-        // A single frame moves partway, never overshoots, and heads the right way.
-        assert!(step > start && step < target);
-        // Repeated stepping converges onto the cursor.
-        let mut beat = start;
-        for _ in 0..240 {
-            beat = next_display_beat(beat, target, 0.016);
-        }
-        assert!((beat - target).abs() <= DISPLAY_SCROLL_SNAP_EPSILON);
     }
 
     #[test]
