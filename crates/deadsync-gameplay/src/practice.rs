@@ -5,6 +5,9 @@
 //! song-Lua gameplay session.
 
 pub mod editor;
+mod session;
+
+pub use session::{PracticeSession, PracticeViewRequest};
 
 use crate::{
     GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, GameplayProfileData,

@@ -7,7 +7,9 @@ use deadsync_gameplay::{
     GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, GameplayMiniIndicatorData, GameplayMusicCut,
     GameplaySession, GameplaySessionCommand, GameplayStreamClockSnapshot, gameplay_runtime_charts,
 };
+use deadsync_gameplay::practice::{PracticeSession, editor::PracticeEditorConfig};
 use deadsync_input::InputEvent;
+use deadsync_input::practice::PracticeKeyEvent;
 use deadsync_online::gameplay_lobby::{self, GameplayLobbyAction};
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
@@ -451,6 +453,21 @@ pub(crate) fn practice_view(
     }
 }
 
+pub(crate) fn prepare_practice(
+    mut gameplay: gameplay::State,
+    runtime: PracticeRuntimeView,
+) -> practice::State {
+    let session = PracticeSession::new(
+        &mut gameplay.gameplay,
+        PracticeEditorConfig {
+            only_dedicated_menu_buttons: runtime.only_dedicated_menu_buttons,
+            three_key_navigation: runtime.three_key_navigation,
+            tab_acceleration: runtime.tab_acceleration,
+        },
+    );
+    practice::init_with_session(gameplay, runtime.hud, session)
+}
+
 fn smx_sensor_value(data: &deadsync_smx::SensorTestData, panel: usize, fsr: bool) -> Option<u16> {
     data.have_data_from_panel[panel].then(|| {
         if fsr {
@@ -775,16 +792,16 @@ pub(crate) fn update_practice(
     score_cursor: &mut ScoreRuntimeCursor,
     effects: &mut Vec<ThemeEffect>,
 ) {
-    practice::update(
+    practice::advance(
         state,
         delta_time,
         snapshot(music_clock),
         deadlib_platform::host_time::now_nanos,
         deadlib_audio::stream::snap_music_start_sec,
-        effects,
     );
     score_cursor.sync_if_dirty(&mut state.gameplay);
     drain(&mut state.gameplay, audio, sounds, music_clock);
+    apply_practice_output(state, ThemeEffect::None, effects);
 }
 
 pub(crate) fn enter_practice(
@@ -805,13 +822,9 @@ pub(crate) fn handle_practice_input(
     music_clock: &mut deadsync_audio_stream::MusicClock,
     effects: &mut Vec<ThemeEffect>,
 ) {
-    practice::handle_input(
-        state,
-        ev,
-        deadlib_audio::stream::snap_music_start_sec,
-        effects,
-    );
+    let effect = practice::process_input(state, ev, deadlib_audio::stream::snap_music_start_sec);
     drain(&mut state.gameplay, audio, sounds, music_clock);
+    apply_practice_output(state, effect, effects);
 }
 
 pub(crate) fn handle_practice_raw_key(
@@ -822,14 +835,28 @@ pub(crate) fn handle_practice_raw_key(
     music_clock: &mut deadsync_audio_stream::MusicClock,
     effects: &mut Vec<ThemeEffect>,
 ) -> bool {
-    let consumed = practice::handle_raw_key_event(
+    let (consumed, effect) = practice::process_key(
         state,
-        ev,
+        &PracticeKeyEvent::from_raw(ev),
         deadlib_audio::stream::snap_music_start_sec,
-        effects,
     );
     drain(&mut state.gameplay, audio, sounds, music_clock);
-    consumed
+    apply_practice_output(state, effect, effects) || consumed
+}
+
+fn apply_practice_output(
+    state: &mut practice::State,
+    effect: ThemeEffect,
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    let rates = state.drain_music_rates();
+    let changed_rate = rates.len() != 0;
+    for rate in rates {
+        profile::set_session_music_rate(rate);
+    }
+    let start_len = effects.len();
+    practice::append_presentation_effects(state, effect, effects);
+    changed_rate || effects.len() != start_len
 }
 
 /// Run chart playback and request the current theme's presentation fragments.

@@ -433,6 +433,11 @@ stage restart on the gameplay lifecycle. The theme supplies screens for results
 and selection and resolves explicit Lua screen names before the live scene ends.
 Gameplay frames under a screen transition still dispatch lobby work in order.
 
+The game-owned Practice session coordinates editor input, chart playback, and
+loop restarts. The shell prepares the session and applies its rate changes after
+draining game audio commands. The theme responds with cursor animation, menus,
+sounds, and text.
+
 ## Remaining separation
 
 Continue the layer separation within the existing workspace crates.

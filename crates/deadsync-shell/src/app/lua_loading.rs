@@ -155,7 +155,7 @@ mod tests {
                         } else {
                             let state = app.state.screens.practice_state.as_mut().unwrap();
                             let now = Instant::now();
-                            practice::handle_input(
+                            crate::gameplay_runtime::handle_practice_input(
                                 state,
                                 &InputEvent::new(
                                     VirtualAction::p1_menu_down,
@@ -167,7 +167,9 @@ mod tests {
                                     now,
                                     now,
                                 ),
-                                |_, seconds| seconds,
+                                &mut app.audio,
+                                &app.gameplay_sfx,
+                                &mut app.music_clock,
                                 &mut Vec::new(),
                             );
                             let before = format!("{:?}", practice::edit_snapshot(state));
@@ -323,7 +325,7 @@ impl App {
         // Reconcile chart timing and any video fallback once after the
         // deferred command installs the initial media.
         gs.background_path_dirty = true;
-        let mut practice_state = practice::init(gs, finish.runtime);
+        let mut practice_state = crate::gameplay_runtime::prepare_practice(gs, finish.runtime);
         if let Some(snapshot) = finish.edit_snapshot {
             practice::restore_edit_snapshot(&mut practice_state, snapshot);
         }

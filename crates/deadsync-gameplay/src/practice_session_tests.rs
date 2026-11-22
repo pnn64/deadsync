@@ -41,6 +41,117 @@ fn practice_session_audio(seconds: f32) -> GameplayAudioSnapshot {
 }
 
 #[test]
+fn practice_session_routes_playback_input_even_with_a_theme_menu_visible() {
+    use crate::practice::editor::{PracticeEditorCommand, PracticePlayRange};
+    use crate::practice::{PracticeSession, PracticeViewRequest};
+
+    let mut game = practice_session_game(true);
+    let mut session = PracticeSession::new(&mut game, Default::default());
+    assert_eq!(
+        session.execute(
+            &mut game,
+            PracticeEditorCommand::Play(PracticePlayRange::WholeSong),
+            practice_session_snap,
+            |_, _| {},
+        ),
+        PracticeViewRequest::PlaybackStarted
+    );
+    game.drain_audio_commands().for_each(drop);
+    for pressed in [true, false] {
+        assert_eq!(
+            session.handle_input(
+                &mut game,
+                &test_input_event_with_source(
+                    VirtualAction::p1_left,
+                    pressed,
+                    InputSource::Keyboard
+                ),
+                true,
+                practice_session_snap,
+                |_, _| {},
+            ),
+            PracticeViewRequest::None
+        );
+    }
+    assert_eq!(game.pending_input.edges.len(), 2);
+    game.set_current_music_time_ns(750_000_000);
+    assert_eq!(
+        session.handle_input(
+            &mut game,
+            &test_input_event(VirtualAction::p2_back),
+            true,
+            practice_session_snap,
+            |_, _| {},
+        ),
+        PracticeViewRequest::PlaybackStopped
+    );
+    assert!(!session.is_playing());
+    assert_eq!(session.editor().cursor_beat(), 1.5);
+    assert!(game.pending_input_is_empty());
+    assert_eq!(
+        game.drain_audio_commands().collect::<Vec<_>>(),
+        [GameplayAudioCommand::StopMusic]
+    );
+}
+
+#[test]
+fn practice_session_queues_rate_changes_without_a_presentation_consumer() {
+    use crate::practice::editor::PracticeEditorFeedback;
+    use crate::practice::{PracticePlaybackUpdate, PracticeSession};
+    use deadsync_input::practice::{PracticeKey, PracticeKeyEvent};
+
+    let mut game = practice_session_game(false);
+    let mut session = PracticeSession::new(&mut game, Default::default());
+    let feedback = |_: &State, event| {
+        assert!(!matches!(
+            event,
+            PracticeEditorFeedback::PersistMusicRate(_)
+        ));
+    };
+    for key in [PracticeKey::Shift, PracticeKey::RateIncrease] {
+        assert!(
+            session
+                .handle_raw_key(
+                    &mut game,
+                    &PracticeKeyEvent {
+                        key,
+                        pressed: true,
+                        repeat: false,
+                        timestamp: Instant::now()
+                    },
+                    false,
+                    practice_session_no_music_snap,
+                    feedback,
+                )
+                .0
+        );
+    }
+    let elapsed = game.boundary.total_elapsed_in_screen;
+    assert_eq!(
+        session.update(
+            &mut game,
+            1.0,
+            true,
+            GameplayAudioSnapshot::default(),
+            || panic!("editing does not sample the gameplay clock"),
+            practice_session_no_music_snap,
+            feedback,
+        ),
+        PracticePlaybackUpdate::Editing
+    );
+    assert_eq!(game.boundary.total_elapsed_in_screen, elapsed + 1.0);
+    let rates = session.drain_music_rates().collect::<Vec<_>>();
+    assert!(rates.len() > 1);
+    assert_eq!(rates.last().copied(), Some(game.music_rate()));
+    assert!(rates.windows(2).all(|pair| pair[0] < pair[1]));
+    assert!(
+        game.drain_audio_commands()
+            .eq(rates.into_iter().map(GameplayAudioCommand::SetMusicRate))
+    );
+    assert_eq!(session.drain_music_rates().count(), 0);
+}
+
+#[test]
 fn practice_session_initialization_entry_and_edit_restore_do_not_run_playback() {
     use crate::practice::{PracticePlayback, PracticePlaybackInput, PracticePlaybackUpdate};
 

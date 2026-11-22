@@ -496,6 +496,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
 fn practice_playback_lifecycle_stays_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let controller = production_source(&root.join("crates/deadsync-gameplay/src/practice.rs"));
+    let session = production_source(&root.join("crates/deadsync-gameplay/src/practice/session.rs"));
     let theme = production_source(
         &root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"),
     );
@@ -523,7 +524,7 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
         "PracticeRuntimeView",
     ] {
         assert!(
-            !controller.contains(presentation),
+            !controller.contains(presentation) && !session.contains(presentation),
             "practice playback depends on presentation through {presentation}"
         );
     }
@@ -537,6 +538,9 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
         "start_practice_music_at(",
         "reset_practice_playback(",
         "GameplayAudioCommand::StopMusic",
+        "state.playback",
+        "PracticeEditorRequest::StartPlayback",
+        "PracticeEditorRequest::StopPlayback",
     ] {
         assert!(
             !contains_rust(&theme, former_policy),
@@ -546,18 +550,21 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
     for delegation in [
         "playback: PracticePlayback",
         "PracticePlayback::new(",
-        "state.playback.on_enter(",
-        "state.playback.start(",
-        "state.playback.stop(",
-        "state.playback.update(",
-        "state.playback.handle_input(",
-        "state.playback.restore_editing(",
+        "self.playback.on_enter(",
+        "self.playback.start(",
+        "self.playback.stop(",
+        "self.playback.update(",
+        ".handle_input(game, event, || self.editor.clear_navigation_holds())",
+        "self.playback.restore_editing(",
     ] {
         assert!(
-            contains_rust(&theme, delegation),
-            "practice theme must delegate playback through {delegation}"
+            contains_rust(&session, delegation),
+            "the game session must own practice playback through {delegation}"
         );
     }
+    assert!(contains_rust(&theme, "session: PracticeSession"));
+    assert!(contains_rust(&theme, "session.update("));
+    assert!(contains_rust(&theme, "session.handle_input("));
     assert!(
         !contains_rust(&controller, "pub range:"),
         "themes must not replace the canonical practice loop range"
@@ -568,6 +575,7 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
 fn practice_editor_decisions_stay_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let editor = production_source(&root.join("crates/deadsync-gameplay/src/practice/editor.rs"));
+    let session = production_source(&root.join("crates/deadsync-gameplay/src/practice/session.rs"));
     let input = production_source(&root.join("crates/deadsync-input/src/practice.rs"));
     let theme = production_source(
         &root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"),
@@ -633,7 +641,8 @@ fn practice_editor_decisions_stay_below_the_theme() {
         .and_then(|(_, rest)| rest.split_once("\n}"))
         .map(|(body, _)| body)
         .expect("practice presentation state should be present");
-    assert!(contains_rust(state, "editor: PracticeEditor"));
+    assert!(contains_rust(state, "session: PracticeSession"));
+    assert!(contains_rust(&session, "editor: PracticeEditor"));
     for former_state in [
         "runtime: PracticeRuntimeView",
         "cursor_beat:",
@@ -664,6 +673,8 @@ fn practice_editor_decisions_stay_below_the_theme() {
         "fn clamp_selection(",
         "fn gameplay_hotkey_input(",
         "GameplayAudioCommand::SetMusicRate",
+        ".update_navigation_holds(",
+        ".update_music_rate_hold(",
     ] {
         assert!(
             !contains_rust(&theme, former_policy),
@@ -673,15 +684,15 @@ fn practice_editor_decisions_stay_below_the_theme() {
     for delegation in [
         "PracticeEditorConfig",
         "PracticeEditorSnapshot",
-        ".handle_raw_key(",
-        ".update_navigation_holds(",
-        ".update_music_rate_hold(",
+        "session.handle_raw_key(",
     ] {
         assert!(
             contains_rust(&theme, delegation),
             "practice presentation must use the game-owned editor through {delegation}"
         );
     }
+    assert!(contains_rust(&session, ".update_navigation_holds("));
+    assert!(contains_rust(&session, ".update_music_rate_hold("));
 }
 
 #[test]
@@ -2733,6 +2744,7 @@ fn practice_runtime_is_shell_prepared() {
     let loading = read_source(root.join("crates/deadsync-shell/src/app/lua_loading.rs"))
         .expect("shell Lua loading completion should be readable");
     let editor = production_source(&root.join("crates/deadsync-gameplay/src/practice/editor.rs"));
+    let session = production_source(&root.join("crates/deadsync-gameplay/src/practice/session.rs"));
 
     for runtime in [
         "deadsync_profile::compat",
@@ -2748,16 +2760,30 @@ fn practice_runtime_is_shell_prepared() {
     assert!(
         views.contains("pub struct PracticeRuntimeView")
             && practice.contains("hud: profile_data::GameplayHudSnapshot")
-            && practice.contains("editor: PracticeEditor")
+            && practice.contains("session: PracticeSession")
             && practice.contains("SimplyLoveProfileRequest::SetMusicRate")
             && editor.contains("GameplayAudioCommand::SetMusicRate")
             && editor.contains("PracticeEditorFeedback::PersistMusicRate")
+            && session.contains("PracticeEditorFeedback::PersistMusicRate(rate) => rates.push(rate)")
             && shell.contains("pub(crate) fn practice_view(")
             && shell.contains("hud: gameplay.hud.clone()")
             && shell_app.contains("runtime: practice_runtime_view")
-            && loading.contains("practice::init(gs, finish.runtime)"),
+            && loading.contains("crate::gameplay_runtime::prepare_practice(gs, finish.runtime)")
+            && shell.contains("let session = PracticeSession::new(")
+            && shell.contains("practice::init_with_session(gameplay, runtime.hud, session)"),
         "shell must prepare Practice policy/HUD state and execute game-decided rate persistence"
     );
+    for handoff in [
+        "practice::advance(",
+        "practice::process_input(",
+        "practice::process_key(",
+        "let rates = state.drain_music_rates();",
+        "profile::set_session_music_rate(rate)",
+        "practice::append_presentation_effects(state, effect, effects)",
+    ] {
+        assert!(contains_rust(&shell, handoff), "missing Practice handoff {handoff}");
+    }
+    assert!(!shell.contains("SimplyLoveProfileRequest::SetMusicRate"));
 }
 
 #[test]

@@ -15,13 +15,10 @@ use deadlib_present::space::{
 };
 use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_gameplay::practice::editor::{
-    PracticeEditor, PracticeEditorCommand, PracticeEditorConfig, PracticeEditorFeedback,
-    PracticeEditorFlash, PracticeEditorRequest, PracticeEditorSnapshot, PracticeEditorSound,
-    PracticePlayRange,
+    PracticeEditorCommand, PracticeEditorConfig, PracticeEditorFeedback, PracticeEditorFlash,
+    PracticeEditorSnapshot, PracticeEditorSound, PracticePlayRange,
 };
-use deadsync_gameplay::practice::{
-    PracticePlayback, PracticePlaybackInput, PracticePlaybackUpdate,
-};
+use deadsync_gameplay::practice::{PracticePlaybackUpdate, PracticeSession, PracticeViewRequest};
 use deadsync_gameplay::{
     AutosyncMode, GameplayAudioSnapshot, GameplayTimingTickMode, ScrollEffects,
     spacing_multiplier_for_percent,
@@ -287,15 +284,19 @@ pub struct State {
     density_graph: PracticeDensityGraph,
     edit_text: PracticeEditText,
     menu_text: PracticeMenuText,
-    playback: PracticePlayback,
-    editor: PracticeEditor,
+    session: PracticeSession,
     menu: Option<MenuState>,
     display_beat: f32,
     edit_scroll_speed_index: usize,
     /// Localized presentation feedback, retained until its visibility expires.
     flash: Option<(Arc<str>, f32)>,
     pending_sfx: Vec<&'static str>,
-    pending_profile: Vec<crate::SimplyLoveProfileRequest>,
+}
+
+impl State {
+    pub fn drain_music_rates(&mut self) -> std::vec::Drain<'_, f32> {
+        self.session.drain_music_rates()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -429,12 +430,22 @@ const SNAP_LABELS: [&str; 9] = [
     "4th", "8th", "12th", "16th", "24th", "32nd", "48th", "64th", "192nd",
 ];
 pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) -> State {
-    let playback = PracticePlayback::new(&mut gameplay);
-    let editor = PracticeEditor::new(PracticeEditorConfig {
-        only_dedicated_menu_buttons: runtime.only_dedicated_menu_buttons,
-        three_key_navigation: runtime.three_key_navigation,
-        tab_acceleration: runtime.tab_acceleration,
-    });
+    let session = PracticeSession::new(
+        &mut gameplay.gameplay,
+        PracticeEditorConfig {
+            only_dedicated_menu_buttons: runtime.only_dedicated_menu_buttons,
+            three_key_navigation: runtime.three_key_navigation,
+            tab_acceleration: runtime.tab_acceleration,
+        },
+    );
+    init_with_session(gameplay, runtime.hud, session)
+}
+
+pub fn init_with_session(
+    mut gameplay: gameplay_screen::State,
+    hud: profile_data::GameplayHudSnapshot,
+    session: PracticeSession,
+) -> State {
     let active_players = gameplay.num_players();
     let density_graph = build_practice_density_graph(&gameplay);
     let timing_labels = std::array::from_fn(|player| {
@@ -450,21 +461,17 @@ pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) 
     gameplay.set_practice_timing_labels(timing_labels);
     let mut state = State {
         gameplay,
-        hud: runtime.hud,
+        hud,
         density_graph,
         edit_text: PracticeEditText::new(),
         menu_text: PracticeMenuText::new(),
-        playback,
-        editor,
+        session,
         menu: None,
         display_beat: 0.0,
         edit_scroll_speed_index: 0,
         flash: None,
         pending_sfx: Vec::with_capacity(8),
-        pending_profile: Vec::with_capacity(4),
     };
-    let cursor = state.editor.cursor_beat();
-    state.editor.set_cursor(&state.gameplay, cursor);
     snap_display_to_cursor(&mut state);
     state
 }
@@ -475,21 +482,19 @@ fn queue_sfx(state: &mut State, path: &'static str) {
 }
 
 fn append_pending_effects(
-    pending_profile: &mut Vec<crate::SimplyLoveProfileRequest>,
+    pending_rates: impl ExactSizeIterator<Item = f32>,
     pending_sfx: &mut Vec<&'static str>,
     effect: ThemeEffect,
     effects: &mut Vec<ThemeEffect>,
 ) {
     effects.reserve(
-        pending_profile.len()
-            + pending_sfx.len()
-            + usize::from(!matches!(effect, ThemeEffect::None)),
+        pending_rates.len() + pending_sfx.len() + usize::from(!matches!(effect, ThemeEffect::None)),
     );
-    effects.extend(
-        pending_profile
-            .drain(..)
-            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(request))),
-    );
+    effects.extend(pending_rates.map(|rate| {
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::SetMusicRate(rate),
+        ))
+    }));
     effects.extend(pending_sfx.drain(..).map(crate::effects::sfx));
     if !matches!(&effect, ThemeEffect::None) {
         debug_assert!(!matches!(&effect, ThemeEffect::Batch(_)));
@@ -497,11 +502,18 @@ fn append_pending_effects(
     }
 }
 
+pub fn append_presentation_effects(
+    state: &mut State,
+    effect: ThemeEffect,
+    effects: &mut Vec<ThemeEffect>,
+) {
+    append_pending_effects(std::iter::empty(), &mut state.pending_sfx, effect, effects);
+}
+
 /// Borrows only presentation storage while a game-owned editor operation runs.
 struct EditorPresentation<'a> {
     flash: &'a mut Option<(Arc<str>, f32)>,
     pending_sfx: &'a mut Vec<&'static str>,
-    pending_profile: &'a mut Vec<crate::SimplyLoveProfileRequest>,
     music_rate_text_dirty: bool,
 }
 
@@ -518,10 +530,7 @@ impl EditorPresentation<'_> {
                 PracticeEditorSound::Snap => EDIT_SNAP_SOUND,
                 PracticeEditorSound::Invalid => EDIT_INVALID_SOUND,
             }),
-            PracticeEditorFeedback::PersistMusicRate(rate) => {
-                self.pending_profile
-                    .push(crate::SimplyLoveProfileRequest::SetMusicRate(rate));
-            }
+            PracticeEditorFeedback::PersistMusicRate(_) => unreachable!("session rate command"),
             PracticeEditorFeedback::SyncMusicRateText => self.music_rate_text_dirty = true,
             PracticeEditorFeedback::Flash(flash) => {
                 let text = match flash {
@@ -593,10 +602,10 @@ impl EditorPresentation<'_> {
     }
 }
 
-fn with_editor<R>(
+fn with_session<R>(
     state: &mut State,
     operation: impl FnOnce(
-        &mut PracticeEditor,
+        &mut PracticeSession,
         &mut gameplay_screen::GameplayCoreState,
         &mut EditorPresentation<'_>,
     ) -> R,
@@ -604,11 +613,10 @@ fn with_editor<R>(
     let mut presentation = EditorPresentation {
         flash: &mut state.flash,
         pending_sfx: &mut state.pending_sfx,
-        pending_profile: &mut state.pending_profile,
         music_rate_text_dirty: false,
     };
     let result = operation(
-        &mut state.editor,
+        &mut state.session,
         &mut state.gameplay.gameplay,
         &mut presentation,
     );
@@ -625,62 +633,51 @@ fn execute_editor_command(
     command: PracticeEditorCommand,
     snap_music_start: MusicStartSnap,
 ) -> ThemeEffect {
-    let request = with_editor(state, |editor, game, presentation| {
-        editor.execute(game, command, |game, feedback| {
+    let request = with_session(state, |session, game, presentation| {
+        session.execute(game, command, snap_music_start, |game, feedback| {
             presentation.emit(game, feedback)
         })
     });
-    apply_editor_request(state, request, snap_music_start)
+    apply_view_request(state, request, snap_music_start)
 }
 
-fn apply_editor_request(
+fn apply_view_request(
     state: &mut State,
-    request: PracticeEditorRequest,
+    request: PracticeViewRequest,
     snap_music_start: MusicStartSnap,
 ) -> ThemeEffect {
     match request {
-        PracticeEditorRequest::None => {}
-        PracticeEditorRequest::OpenMainMenu => open_main_menu(state),
-        PracticeEditorRequest::OpenHelpMenu => open_help_menu(state),
-        PracticeEditorRequest::CloseMenu => close_menu(state),
-        PracticeEditorRequest::ActivateMenu => return activate_menu_item(state, snap_music_start),
-        PracticeEditorRequest::StepMenu(delta) => step_menu(state, delta),
-        PracticeEditorRequest::ChangeEditScrollSpeed(delta) => {
-            change_edit_scroll_speed(state, delta)
-        }
-        PracticeEditorRequest::StartPlayback {
-            start_beat,
-            stop_beat,
-        } => {
-            start_playback(state, start_beat, stop_beat, snap_music_start);
-        }
-        PracticeEditorRequest::StopPlayback => stop_playback(state),
+        PracticeViewRequest::None => {}
+        PracticeViewRequest::OpenMainMenu => open_main_menu(state),
+        PracticeViewRequest::OpenHelpMenu => open_help_menu(state),
+        PracticeViewRequest::CloseMenu => close_menu(state),
+        PracticeViewRequest::ActivateMenu => return activate_menu_item(state, snap_music_start),
+        PracticeViewRequest::StepMenu(delta) => step_menu(state, delta),
+        PracticeViewRequest::ChangeEditScrollSpeed(delta) => change_edit_scroll_speed(state, delta),
+        PracticeViewRequest::PlaybackStarted => state.flash = None,
+        PracticeViewRequest::PlaybackStopped => snap_display_to_cursor(state),
     }
     ThemeEffect::None
 }
 
 pub const fn edit_snapshot(state: &State) -> EditSnapshot {
     EditSnapshot {
-        editor: state.editor.snapshot(),
+        editor: state.session.editor().snapshot(),
         edit_scroll_speed_index: state.edit_scroll_speed_index,
     }
 }
 
 pub fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
-    state.editor.clear_navigation_holds();
-    state.playback.restore_editing();
     state.menu = None;
     state.edit_scroll_speed_index = snapshot
         .edit_scroll_speed_index
         .min(EDIT_SCROLL_SPEEDS.len().saturating_sub(1));
-    state.editor.restore(&state.gameplay, snapshot.editor);
+    state.session.restore(&state.gameplay, snapshot.editor);
     snap_display_to_cursor(state);
 }
 
 pub fn on_enter(state: &mut State) {
-    state.playback.on_enter(&mut state.gameplay);
-    let cursor = state.editor.cursor_beat();
-    state.editor.set_cursor(&state.gameplay, cursor);
+    state.session.on_enter(&mut state.gameplay);
     snap_display_to_cursor(state);
 }
 
@@ -692,7 +689,7 @@ pub fn update(
     snap_music_start: MusicStartSnap,
     effects: &mut Vec<ThemeEffect>,
 ) {
-    let effect = update_inner(
+    advance(
         state,
         delta_time,
         audio_snapshot,
@@ -700,57 +697,42 @@ pub fn update(
         snap_music_start,
     );
     append_pending_effects(
-        &mut state.pending_profile,
+        state.session.drain_music_rates(),
         &mut state.pending_sfx,
-        effect,
+        ThemeEffect::None,
         effects,
     );
 }
 
-fn update_inner(
+pub fn advance(
     state: &mut State,
     delta_time: f32,
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
     snap_music_start: MusicStartSnap,
-) -> ThemeEffect {
+) {
     if let Some((_, remaining)) = state.flash.as_mut() {
         *remaining -= delta_time;
         if *remaining <= 0.0 {
             state.flash = None;
         }
     }
-    with_editor(state, |editor, game, presentation| {
-        editor.update_music_rate_hold(game, delta_time, |game, feedback| {
-            presentation.emit(game, feedback);
-        });
-    });
-
-    if !state.playback.is_playing() {
-        state.gameplay.advance_screen_elapsed(delta_time);
-        let menu_open = state.menu.is_some();
-        with_editor(state, |editor, game, presentation| {
-            editor.update_navigation_holds(game, delta_time, menu_open, |game, feedback| {
-                presentation.emit(game, feedback);
-            });
-        });
-        update_display_scroll(state, delta_time);
-        return ThemeEffect::None;
+    let menu_open = state.menu.is_some();
+    match with_session(state, |session, game, presentation| {
+        session.update(
+            game,
+            delta_time,
+            menu_open,
+            audio_snapshot,
+            fallback_host_nanos,
+            snap_music_start,
+            |game, feedback| presentation.emit(game, feedback),
+        )
+    }) {
+        PracticePlaybackUpdate::Editing => update_display_scroll(state, delta_time),
+        PracticePlaybackUpdate::Playing => {}
+        PracticePlaybackUpdate::Restarted => state.flash = None,
     }
-
-    let editor = &mut state.editor;
-    let update = state.playback.update(
-        &mut state.gameplay,
-        delta_time,
-        audio_snapshot,
-        fallback_host_nanos,
-        snap_music_start,
-        || editor.clear_navigation_holds(),
-    );
-    if update == PracticePlaybackUpdate::Restarted {
-        state.flash = None;
-    }
-    ThemeEffect::None
 }
 
 pub fn handle_input(
@@ -759,42 +741,27 @@ pub fn handle_input(
     snap_music_start: MusicStartSnap,
     effects: &mut Vec<ThemeEffect>,
 ) {
-    let effect = handle_input_inner(state, ev, snap_music_start);
+    let effect = process_input(state, ev, snap_music_start);
     append_pending_effects(
-        &mut state.pending_profile,
+        state.session.drain_music_rates(),
         &mut state.pending_sfx,
         effect,
         effects,
     );
 }
 
-fn handle_input_inner(
+pub fn process_input(
     state: &mut State,
     ev: &InputEvent,
     snap_music_start: MusicStartSnap,
 ) -> ThemeEffect {
-    if state.menu.is_none() {
-        let editor = &mut state.editor;
-        match state.playback.handle_input(&mut state.gameplay, ev, || {
-            editor.clear_navigation_holds();
-        }) {
-            PracticePlaybackInput::Editing => {}
-            PracticePlaybackInput::Handled => return ThemeEffect::None,
-            PracticePlaybackInput::Stopped { cursor_beat } => {
-                state.editor.set_cursor(&state.gameplay, cursor_beat);
-                snap_display_to_cursor(state);
-                return ThemeEffect::None;
-            }
-        }
-    }
-
     let menu_open = state.menu.is_some();
-    let request = with_editor(state, |editor, game, presentation| {
-        editor.handle_input(game, ev, menu_open, |game, feedback| {
+    let request = with_session(state, |session, game, presentation| {
+        session.handle_input(game, ev, menu_open, snap_music_start, |game, feedback| {
             presentation.emit(game, feedback);
         })
     });
-    apply_editor_request(state, request, snap_music_start)
+    apply_view_request(state, request, snap_music_start)
 }
 
 pub fn handle_raw_key_event(
@@ -804,9 +771,13 @@ pub fn handle_raw_key_event(
     effects: &mut Vec<ThemeEffect>,
 ) -> bool {
     let start_len = effects.len();
-    let (consumed, effect) = handle_raw_key_event_inner(state, raw_key, snap_music_start);
+    let (consumed, effect) = process_key(
+        state,
+        &PracticeKeyEvent::from_raw(raw_key),
+        snap_music_start,
+    );
     append_pending_effects(
-        &mut state.pending_profile,
+        state.session.drain_music_rates(),
         &mut state.pending_sfx,
         effect,
         effects,
@@ -814,25 +785,29 @@ pub fn handle_raw_key_event(
     consumed || effects.len() != start_len
 }
 
-fn handle_raw_key_event_inner(
+pub fn process_key(
     state: &mut State,
-    raw_key: &RawKeyboardEvent,
+    event: &PracticeKeyEvent,
     snap_music_start: MusicStartSnap,
 ) -> (bool, ThemeEffect) {
-    let key_event = PracticeKeyEvent::from_raw(raw_key);
-    let playing = state.playback.is_playing();
     let menu_open = state.menu.is_some();
-    let result = with_editor(state, |editor, game, presentation| {
-        editor.handle_raw_key(game, &key_event, playing, menu_open, |game, feedback| {
-            presentation.emit(game, feedback);
-        })
+    let (consumed, request) = with_session(state, |session, game, presentation| {
+        session.handle_raw_key(
+            game,
+            event,
+            menu_open,
+            snap_music_start,
+            |game, feedback| {
+                presentation.emit(game, feedback);
+            },
+        )
     });
-    let effect = apply_editor_request(state, result.request, snap_music_start);
-    (result.consumed, effect)
+    let effect = apply_view_request(state, request, snap_music_start);
+    (consumed, effect)
 }
 
 pub fn push_overlay(actors: &mut Vec<Actor>, state: &mut State) {
-    if !state.playback.is_playing() {
+    if !state.session.is_playing() {
         append_edit_markers(state, actors);
         append_density_graph(state, actors);
         append_edit_overlay(state, actors);
@@ -846,7 +821,7 @@ pub fn push_overlay(actors: &mut Vec<Actor>, state: &mut State) {
 }
 
 pub fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
-    let playback_visuals = state.playback.is_playing();
+    let playback_visuals = state.session.is_playing();
     let mut notefield = if playback_visuals {
         gameplay_screen::NotefieldViewOverride::default()
     } else {
@@ -893,7 +868,6 @@ fn practice_marker_bar_height() -> f32 {
 }
 
 fn open_main_menu(state: &mut State) {
-    state.editor.clear_navigation_holds();
     if state.menu.is_none() {
         queue_sfx(state, "assets/sounds/start.ogg");
     }
@@ -904,7 +878,6 @@ fn open_main_menu(state: &mut State) {
 }
 
 fn open_help_menu(state: &mut State) {
-    state.editor.clear_navigation_holds();
     if state.menu.is_none() {
         queue_sfx(state, "assets/sounds/start.ogg");
     }
@@ -948,7 +921,7 @@ fn activate_menu_item(state: &mut State, snap_music_start: MusicStartSnap) -> Th
         return ThemeEffect::None;
     };
     state.menu = None;
-    state.editor.clear_navigation_holds();
+    state.session.clear_navigation_holds();
     queue_sfx(state, "assets/sounds/start.ogg");
     action(state, snap_music_start)
 }
@@ -1001,34 +974,11 @@ fn action_exit_practice(_state: &mut State, _snap_music_start: MusicStartSnap) -
     ThemeEffect::Navigate(Screen::SelectMusic)
 }
 
-fn start_playback(
-    state: &mut State,
-    start_beat: f32,
-    stop_beat: f32,
-    snap_music_start: MusicStartSnap,
-) {
-    state.editor.clear_navigation_holds();
-    state.playback.start(
-        &mut state.gameplay,
-        start_beat,
-        stop_beat,
-        snap_music_start,
-    );
-    state.flash = None;
-}
-
-fn stop_playback(state: &mut State) {
-    state.editor.clear_navigation_holds();
-    let current_beat = state.playback.stop(&mut state.gameplay);
-    state.editor.set_cursor(&state.gameplay, current_beat);
-    snap_display_to_cursor(state);
-}
-
 /// Immediately move the displayed scroll position to the cursor with no
 /// smoothing. Used when entering or leaving the edit field, where an animated
 /// scroll would be jarring rather than helpful.
 fn snap_display_to_cursor(state: &mut State) {
-    state.display_beat = state.editor.cursor_beat();
+    state.display_beat = state.session.editor().cursor_beat();
     let music_time = state.gameplay.music_time_for_beat(state.display_beat);
     state.gameplay.seek_practice_display(music_time);
 }
@@ -1037,11 +987,12 @@ fn snap_display_to_cursor(state: &mut State) {
 /// chart scrolls smoothly instead of redrawing into the next position. Large
 /// jumps snap instantly to stay responsive.
 fn update_display_scroll(state: &mut State, delta_time: f32) {
-    if delta_time <= 0.0 || same_display_beat(state.display_beat, state.editor.cursor_beat()) {
+    let cursor = state.session.editor().cursor_beat();
+    if delta_time <= 0.0 || same_display_beat(state.display_beat, cursor) {
         return;
     }
-    let next = next_display_beat(state.display_beat, state.editor.cursor_beat(), delta_time);
-    if same_display_beat(next, state.editor.cursor_beat()) {
+    let next = next_display_beat(state.display_beat, cursor, delta_time);
+    if same_display_beat(next, cursor) {
         snap_display_to_cursor(state);
         return;
     }
@@ -1228,17 +1179,18 @@ fn append_player_markers(
         .max(ScrollSpeedSetting::ARROW_SPACING);
     let marker_phase = (state.gameplay.total_elapsed_in_screen() * std::f32::consts::PI).sin();
     let marker_shade = marker_phase.mul_add(0.25, 0.75);
-    let cursor_y = marker_y_for_beat(state, player_idx, offset_y, state.editor.cursor_beat());
+    let editor = state.session.editor();
+    let cursor_y = marker_y_for_beat(state, player_idx, offset_y, editor.cursor_beat());
     append_field_cursor(
         actors,
         center_x,
         cursor_y,
         width,
         field_zoom,
-        state.editor.snap_index(),
+        editor.snap_index(),
     );
 
-    match (state.editor.selection_anchor(), state.editor.selection_end()) {
+    match (editor.selection_anchor(), editor.selection_end()) {
         (Some(begin), Some(end)) if end > begin => {
             let y1 = marker_y_for_beat(state, player_idx, offset_y, begin);
             let y2 = marker_y_for_beat(state, player_idx, offset_y, end);
@@ -1539,12 +1491,13 @@ fn append_density_graph(state: &State, actors: &mut Vec<Actor>) {
 }
 
 fn append_edit_overlay(state: &mut State, actors: &mut Vec<Actor>) {
+    let editor = state.session.editor();
     let source = EditInfoSource {
-        cursor_beat: state.editor.cursor_beat(),
-        current_second: state.gameplay.music_time_for_beat(state.editor.cursor_beat()),
-        selection_anchor: state.editor.selection_anchor(),
-        selection_end: state.editor.selection_end(),
-        snap_index: state.editor.snap_index(),
+        cursor_beat: editor.cursor_beat(),
+        current_second: state.gameplay.music_time_for_beat(editor.cursor_beat()),
+        selection_anchor: editor.selection_anchor(),
+        selection_end: editor.selection_end(),
+        snap_index: editor.snap_index(),
     };
     state.edit_text.sync(&state.gameplay, source);
     let labels = state
@@ -2098,11 +2051,10 @@ mod tests {
 
     #[test]
     fn pending_practice_sfx_keep_order_before_navigation() {
-        let mut profiles = Vec::new();
         let mut pending = vec!["assets/sounds/change.ogg", "assets/sounds/start.ogg"];
         let mut effects = Vec::new();
         append_pending_effects(
-            &mut profiles,
+            std::iter::empty(),
             &mut pending,
             ThemeEffect::Navigate(Screen::PlayerOptions),
             &mut effects,
@@ -2127,11 +2079,10 @@ mod tests {
 
     #[test]
     fn practice_rate_persistence_precedes_sound_and_navigation() {
-        let mut profiles = vec![crate::SimplyLoveProfileRequest::SetMusicRate(1.25)];
         let mut sounds = vec!["assets/sounds/change.ogg"];
         let mut effects = Vec::new();
         append_pending_effects(
-            &mut profiles,
+            [1.25].into_iter(),
             &mut sounds,
             ThemeEffect::Navigate(Screen::PlayerOptions),
             &mut effects,
@@ -2152,7 +2103,6 @@ mod tests {
             effects[2],
             ThemeEffect::Navigate(Screen::PlayerOptions)
         ));
-        assert!(profiles.is_empty());
         assert!(sounds.is_empty());
     }
 
