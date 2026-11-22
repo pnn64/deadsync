@@ -9,6 +9,10 @@ pub use deadsync_song_lua::*;
 mod actor_quaternion;
 #[path = "../src/runtime_fallback.rs"]
 mod runtime_fallback;
+macro_rules! playback_fixture_tests {
+    ($($fixture:item)*) => { $($fixture)* };
+}
+
 pub mod playback {
     include!("../src/playback.rs");
     mod tests {

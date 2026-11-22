@@ -270,6 +270,7 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         "self.gameplay.replace_song_background_changes(changes)",
         "gameplay_crossover_annotations_for_player,",
         "SongLuaGameplaySession::for_gameplay(&mut gameplay)",
+        "GameplayStage::with_song_playback(",
         "session.attach(gameplay, scene, warm_dynamic_scene)",
     ] {
         assert!(contains_rust(&stage, startup), "missing game startup {startup}");
@@ -285,6 +286,10 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         "fn gameplay_crossover_annotations_for_player(",
         "SongLuaGameplaySession::for_gameplay(",
         "song_lua_data.take_live_scene(",
+        "SongMedia::new(",
+        "FrameScratch::new(gameplay)",
+        "pub song_media:",
+        "pub song_scratch:",
     ] {
         assert!(!theme.contains(implementation), "theme owns {implementation}");
     }
@@ -356,6 +361,7 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         split < present && present < attach,
         "startup callbacks follow presentation cache setup"
     );
+    assert!(contains_rust(&adapter, "state.stage.song_lua_attachment_parts()"));
 }
 
 #[test]
@@ -434,6 +440,11 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
     for contract in [
         "pub struct SongLuaGameplaySession",
         "pub struct GameplayStage<G>",
+        "pub song_media: SongMedia",
+        "pub song_scratch: Option<Box<FrameScratch>>",
+        "FrameScratch::new(&gameplay)",
+        "SongMedia::new(&gameplay, sound_paths)",
+        "scratch.enable_dynamic_scene()",
         "pub trait SongLuaGameplayHost",
         "pub fn for_gameplay<",
         "pub fn update<",
@@ -519,6 +530,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         "crate::navigation::song_lua_presentation_screen::<ActiveTheme>",
         "stage.handle_input(ev, physical)",
         "stage.take_output()",
+        ".for_each_scheduled_song_sound(previous_song_lua_time,",
     ] {
         assert!(
             contains_rust(&shell, handoff),
@@ -6372,8 +6384,8 @@ fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
         );
     }
     assert!(
-        background_sync.contains("gs.song_media.refresh_foreground(&gs.stage.gameplay)")
-            && background_sync.contains("gs.song_media.video_paths()"),
+        background_sync.contains("gs.stage.refresh_song_foreground()")
+            && background_sync.contains("gs.stage.song_media.video_paths()"),
         "Gameplay foreground/video state must be advanced from song-lifetime caches"
     );
 

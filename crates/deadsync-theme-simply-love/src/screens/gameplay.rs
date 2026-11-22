@@ -747,7 +747,6 @@ pub struct State {
     background_transition: Option<BackgroundTransition>,
     background_transition_expired: Cell<bool>,
     background_transition_start_time: f32,
-    pub song_media: deadsync_song_lua::playback::SongMedia,
     smx_sensor_views: [Option<SmxSensorPadView>; 2],
     pub heart_rate_view: HeartRateView,
     heart_rate_generation: (u64, u64),
@@ -756,7 +755,6 @@ pub struct State {
     // the first frame.
     smx_sensor_refresh_accum: f32,
     pub frame_scratch: Option<Box<GameplayFrameScratch>>,
-    pub song_scratch: Option<Box<deadsync_song_lua::playback::FrameScratch>>,
     actor_resources: ActorResourceArena,
 }
 
@@ -839,16 +837,7 @@ impl State {
         &mut SongLuaGameplaySession,
         impl FnOnce() + '_,
     ) {
-        let song_scratch = &mut self.song_scratch;
-        (
-            &mut self.stage.gameplay,
-            &mut self.stage.song_lua,
-            move || {
-                if let Some(scratch) = song_scratch {
-                    scratch.enable_dynamic_scene();
-                }
-            },
-        )
+        self.stage.song_lua_attachment_parts()
     }
 
     /// The shell drains sounds and requests once after each gameplay frame.
@@ -929,7 +918,7 @@ impl State {
         )
     }
 
-    /// Construct the theme's HUD, field, and media caches for a prepared stage.
+    /// Construct the theme's HUD and field caches for a prepared stage.
     pub fn present_stage(
         prepared: PreparedGameplayStage,
         stage_intro_text: Arc<str>,
@@ -962,7 +951,6 @@ impl State {
     ) -> Self {
         let GameplayStageAssets {
             noteskin_assets,
-            song_lua_sound_paths,
             hide_song_intro,
             pack_group,
             pack_banner_path,
@@ -1083,15 +1071,12 @@ impl State {
             assets.prewarm();
         }
         let background_transition_start_time = gameplay.current_music_time_display();
-        let song_scratch = Box::new(deadsync_song_lua::playback::FrameScratch::new(gameplay));
         let frame_scratch = GameplayFrameScratch {
             lobby_hud_cache: lobby_hud::LobbyHudCache::default(),
             lobby_hud_status_scratch: String::with_capacity(128),
             bpm_text,
             presentation_skeleton: GameplayPresentationSkeleton::default(),
         };
-        let song_media =
-            deadsync_song_lua::playback::SongMedia::new(gameplay, song_lua_sound_paths);
         let step_stats_mode = gameplay_step_stats_mode(
             hud_snapshot.play_style,
             gameplay.num_cols(),
@@ -1156,14 +1141,12 @@ impl State {
             background_transition: None,
             background_transition_expired: Cell::new(false),
             background_transition_start_time,
-            song_media,
             smx_sensor_views: [None, None],
             heart_rate_view: HeartRateView::default(),
             heart_rate_generation: (u64::MAX, u64::MAX),
             heart_rate_text: heart_rate::HeartRateTextPlan::default(),
             smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
             frame_scratch: Some(Box::new(frame_scratch)),
-            song_scratch: Some(song_scratch),
             actor_resources,
         };
         state
@@ -1194,15 +1177,11 @@ impl State {
 
     /// Borrows this frame's offscreen passes in song-layer dependency order.
     pub fn song_frame(&self) -> &deadsync_song_lua::playback::FrameScratch {
-        self.song_scratch
-            .as_deref()
-            .expect("song frame restored after composition")
+        self.stage.song_frame()
     }
 
     pub fn render_targets(&self) -> &[deadlib_present::actors::RenderTarget] {
-        self.song_scratch
-            .as_ref()
-            .map_or(&[], |scratch| scratch.render_targets())
+        self.stage.render_targets()
     }
 
     #[inline(always)]

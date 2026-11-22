@@ -163,6 +163,13 @@ replacement stage. Render scratch warms at the same callback-install boundary.
 Simply Love's public combined constructor delegates to the shared preparation
 and presentation paths for existing callers.
 
+`GameplayStage` owns the song media schedules and the reusable compositor
+storage for Gameplay and Practice. Game-stage construction prepares those
+buffers before presentation. The shell samples foreground ownership and video
+clocks at their existing media boundaries, and plays scheduled Lua sounds
+after draining gameplay audio. Themes supply HUD and field presentation
+separately.
+
 `deadsync-gameplay::stage_charts` resolves chart fallback and assigns charts to
 solo, Versus, and partner players. Preload, Player Options entry, and direct
 stage entry read the wheel through one adapter. The game validates Lua's
@@ -302,6 +309,11 @@ retained keys without allocating.
 ## Rust API migration
 
 Workspace callers are updated for these source-level changes:
+
+- Construct controller-only stages with `GameplayStage::new`. Use
+  `GameplayStage::with_song_playback` to prepare the compositor and media
+  schedules. Sound paths for prewarming are available in
+  `stage.song_media.sound_paths`.
 
 - Read authored background changes and active timing through
   `gameplay.song_backgrounds()`. The `GameplayInitView.background_changes`

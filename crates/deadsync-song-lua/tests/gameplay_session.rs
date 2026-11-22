@@ -437,10 +437,7 @@ return Def.ActorFrame {
         .unwrap()
         .started_at = Instant::now() - Duration::from_secs(10);
     let mut effects = Vec::new();
-    let mut stage = session::GameplayStage {
-        gameplay: host.game,
-        song_lua: host.session,
-    };
+    let mut stage = session::GameplayStage::new(host.game, host.session);
     let mut visual_updates = 0;
     stage.update(
         0.01,
@@ -534,10 +531,7 @@ return Def.ActorFrame {
 }
 "#,
         );
-        let mut stage = session::GameplayStage {
-            gameplay: host.game,
-            song_lua: host.session,
-        };
+        let mut stage = session::GameplayStage::new(host.game, host.session);
         let mut rejected = false;
         for _ in 0..20 {
             let (effects, output) = frame(&mut stage);

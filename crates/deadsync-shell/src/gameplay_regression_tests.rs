@@ -1623,7 +1623,7 @@ end
                         );
                         set_fixture_time(&mut state, 1.0);
                         assert!(
-                            state.song_media.refresh_foreground(&state.stage.gameplay),
+                            state.stage.refresh_song_foreground(),
                             "native foreground media must actually activate"
                         );
                         assert!(!state.song_frame().uses_song_lua_compositor());

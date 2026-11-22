@@ -1,19 +1,17 @@
 //! Song Lua compilation, host bindings, and playback.
-#[cfg_attr(
-    test,
-    expect(
-        dead_code,
-        reason = "unit tests build actor math without the playback renderer"
-    )
-)]
 mod actor_quaternion;
 pub mod gameplay;
 pub mod gameplay_session;
 #[cfg(feature = "test-support")]
 pub mod trace_capture;
-// Playback is tested with concrete asset fixtures by tests/playback.rs.
+// Asset fixtures use the integration crate so the asset dependency and the
+// playback code share the same Song Lua types.
+#[cfg(test)]
+macro_rules! playback_fixture_tests {
+    ($($fixture:item)*) => {};
+}
 
-#[cfg(not(test))]
+#[cfg_attr(test, allow(dead_code))]
 pub mod playback;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

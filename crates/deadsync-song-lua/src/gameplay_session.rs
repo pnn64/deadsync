@@ -7,6 +7,7 @@ use crate::{
     SongLuaInputEvent, SongLuaInputType, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLiveRequest,
     SongLuaLiveScene,
 };
+use crate::playback::{FrameScratch, GameplayCoreState, SongMedia, prewarm_texture_bindings};
 use deadsync_gameplay::{
     GameplayAction, GameplayAudioSnapshot, GameplayExit, GameplayInputPlayerSide,
     GameplayProfileData, GameplayRuntimeState, handle_core_input, update_core,
@@ -15,7 +16,9 @@ use deadsync_gameplay::{
 use deadsync_input::{
     CallbackInputState, HeldCallbackInputs, InputEvent, PhysicalInput, VirtualAction,
 };
+use deadsync_noteskin::NoteskinSlot;
 use std::ops::{Deref, DerefMut};
+use std::path::{Path, PathBuf};
 
 pub const SONG_LUA_OUT_DELAY: f32 = 0.5;
 pub const SONG_LUA_OUT_FADE_DURATION: f32 = 1.0;
@@ -37,11 +40,86 @@ pub enum SongLuaGameplayEffect<S> {
     Navigate(S),
 }
 
-/// The live simulation and authored callbacks for a stage. Presentation can
-/// attach its own caches and read the simulation without owning its lifecycle.
+/// The live simulation, authored callbacks, and playback state for a stage.
 pub struct GameplayStage<G> {
     pub gameplay: G,
     pub song_lua: SongLuaGameplaySession,
+    pub song_media: SongMedia,
+    pub song_scratch: Option<Box<FrameScratch>>,
+}
+
+impl<G> GameplayStage<G> {
+    /// Construct a stage for running the controller without a compositor.
+    pub fn new(gameplay: G, song_lua: SongLuaGameplaySession) -> Self {
+        Self {
+            gameplay,
+            song_lua,
+            song_media: SongMedia::default(),
+            song_scratch: None,
+        }
+    }
+
+    /// Warm dynamic render storage after successful callback installation.
+    pub fn song_lua_attachment_parts(
+        &mut self,
+    ) -> (&mut G, &mut SongLuaGameplaySession, impl FnOnce() + '_) {
+        let song_scratch = &mut self.song_scratch;
+        (&mut self.gameplay, &mut self.song_lua, move || {
+            if let Some(scratch) = song_scratch {
+                scratch.enable_dynamic_scene();
+            }
+        })
+    }
+
+    pub fn song_frame(&self) -> &FrameScratch {
+        self.song_scratch
+            .as_deref()
+            .expect("song frame restored after composition")
+    }
+
+    pub fn render_targets(&self) -> &[deadlib_present::actors::RenderTarget] {
+        self.song_scratch
+            .as_deref()
+            .map_or(&[], FrameScratch::render_targets)
+    }
+}
+
+impl<P: GameplayProfileData, S: NoteskinSlot + Clone> GameplayStage<GameplayCoreState<P, S>> {
+    /// Prepare the reusable song media and compositor storage for a stage.
+    pub fn with_song_playback(
+        gameplay: GameplayCoreState<P, S>,
+        song_lua: SongLuaGameplaySession,
+        sound_paths: Vec<PathBuf>,
+    ) -> Self {
+        let song_scratch = Some(Box::new(FrameScratch::new(&gameplay)));
+        let song_media = SongMedia::new(&gameplay, sound_paths);
+        Self {
+            gameplay,
+            song_lua,
+            song_media,
+            song_scratch,
+        }
+    }
+
+    pub fn prewarm_song_texture_bindings(&mut self, assets: &deadlib_assets::AssetManager) {
+        if let Some(scratch) = self.song_scratch.as_deref_mut() {
+            prewarm_texture_bindings(&self.gameplay, scratch, assets);
+        }
+    }
+
+    #[must_use]
+    pub fn refresh_song_foreground(&mut self) -> bool {
+        self.song_media.refresh_foreground(&self.gameplay)
+    }
+
+    pub fn for_each_song_video_position(&mut self, visit: impl FnMut(&Path, f32, bool)) {
+        self.song_media.for_each_video_position(&self.gameplay, visit);
+    }
+
+    pub fn for_each_scheduled_song_sound(&mut self, previous: f32, visit: impl FnMut(&Path)) {
+        self.song_media
+            .for_each_sound_event(previous, self.gameplay.current_music_time_display(), visit);
+    }
 }
 
 impl<G> Deref for GameplayStage<G> {

@@ -10942,8 +10942,10 @@ fn append_song_lua_overlay_output<S: NoteskinSlot + Clone>(
 }
 
 #[cfg(test)]
-#[path = "playback/bitmap_text_projection_tests.rs"]
-mod bitmap_text_projection_tests;
+playback_fixture_tests! {
+    #[path = "playback/bitmap_text_projection_tests.rs"]
+    mod bitmap_text_projection_tests;
+}
 
 /// Emits compiled multi-output overlays directly into the caller's reused
 /// frame buffer. Returning `None` means the overlay is a single-output kind and
@@ -14741,6 +14743,7 @@ impl FrameScratch {
 /// Song-lifetime media schedules advanced by the shell on the game thread.
 /// Event lists are built once; frame updates advance cursors and reuse the video
 /// list. Seeks rewind those cursors. There is no shared access or eviction.
+#[derive(Default)]
 pub struct SongMedia {
     pub sound_paths: Vec<PathBuf>,
     song_lua_sound_events: Vec<SongLuaSoundEvent>,
@@ -16691,12 +16694,12 @@ pub mod actor_capture_test_support {
 pub mod actor_conformance;
 
 #[cfg(test)]
-#[path = "playback/screen_projection_tests.rs"]
-mod screen_projection_tests;
-
-#[cfg(test)]
-#[path = "playback/visibility_boundary_tests.rs"]
-mod visibility_boundary_tests;
+playback_fixture_tests! {
+    #[path = "playback/screen_projection_tests.rs"]
+    mod screen_projection_tests;
+    #[path = "playback/visibility_boundary_tests.rs"]
+    mod visibility_boundary_tests;
+}
 
 fn player_scratch<T>(active_players: usize, capacity: usize) -> [Vec<T>; MAX_PLAYERS] {
     std::array::from_fn(|player| {

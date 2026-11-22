@@ -65,7 +65,6 @@ pub struct PreparedGameplayStage {
 /// Resolved assets and metadata used to construct a stage's presentation.
 pub struct GameplayStageAssets {
     pub noteskin_assets: GameplayNoteskinAssets,
-    pub song_lua_sound_paths: Vec<PathBuf>,
     pub hide_song_intro: bool,
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
@@ -90,13 +89,13 @@ impl PreparedGameplayStage {
 
     pub fn into_parts(self) -> (GameplayStage<GameplayCoreState>, GameplayStageAssets) {
         (
-            GameplayStage {
-                gameplay: self.gameplay,
-                song_lua: self.song_lua,
-            },
+            GameplayStage::with_song_playback(
+                self.gameplay,
+                self.song_lua,
+                self.song_lua_sound_paths,
+            ),
             GameplayStageAssets {
                 noteskin_assets: self.noteskin_assets,
-                song_lua_sound_paths: self.song_lua_sound_paths,
                 hide_song_intro: self.hide_song_intro,
                 pack_group: self.pack_group,
                 pack_banner_path: self.pack_banner_path,

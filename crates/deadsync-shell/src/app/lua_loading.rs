@@ -154,6 +154,7 @@ mod tests {
                         } else {
                             &app.state.screens.practice_state.as_ref().unwrap().gameplay
                         };
+                        assert!(gameplay.stage.song_frame().uses_song_lua_compositor());
                         assert!(gameplay.song_backgrounds().changes().iter().any(|change| {
                             matches!(&change.target, deadsync_chart::SongBackgroundChangeTarget::File(path)
                                 if path.ends_with("background.png"))
@@ -325,7 +326,7 @@ impl App {
         self.gameplay_sfx = prewarm_gameplay_sfx(
             &mut self.audio,
             gs.song_lua_visuals(),
-            &gs.song_media.sound_paths,
+            &gs.stage.song_media.sound_paths,
         );
         let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
         let show_video_backgrounds = finish.config.show_video_backgrounds;
@@ -355,7 +356,7 @@ impl App {
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
                 backend,
-                gs.song_media.video_paths(),
+                gs.stage.song_media.video_paths(),
             );
             prewarm_gameplay_banners(
                 &mut self.dynamic_media,

@@ -965,13 +965,7 @@ fn prewarm_gameplay_text_layout_cache(
     cache.begin_frame_stats(true);
     compose_scratch.clear_retained_frames();
 
-    if let Some(scratch) = state.song_scratch.as_mut() {
-        deadsync_song_lua::playback::prewarm_texture_bindings(
-            &state.stage.gameplay,
-            scratch,
-            assets,
-        );
-    }
+    state.stage.prewarm_song_texture_bindings(assets);
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
     // Build the representative opening frame in the App-owned actor buffer.
@@ -3070,7 +3064,7 @@ impl App {
         self.gameplay_sfx = prewarm_gameplay_sfx(
             &mut self.audio,
             gs.song_lua_visuals(),
-            &gs.song_media.sound_paths,
+            &gs.stage.song_media.sound_paths,
         );
         let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
         let background_path =
@@ -3099,7 +3093,7 @@ impl App {
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
                 backend,
-                gs.song_media.video_paths(),
+                gs.stage.song_media.video_paths(),
             );
             prewarm_gameplay_banners(
                 &mut self.dynamic_media,
@@ -5075,8 +5069,7 @@ impl App {
                     _ => None,
                 };
                 if let Some(state) = song {
-                    state.song_media.for_each_video_position(
-                        &state.stage.gameplay,
+                    state.stage.for_each_song_video_position(
                         |path, seconds, looped| {
                             self.dynamic_media.queue_song_lua_video_frame(
                                 &mut self.asset_manager,
@@ -7480,7 +7473,7 @@ impl App {
             let Some(gs) = gs else {
                 return;
             };
-            let foreground_videos_changed = gs.song_media.refresh_foreground(&gs.stage.gameplay);
+            let foreground_videos_changed = gs.stage.refresh_song_foreground();
             let had_pending_background_change = gs.background_path_dirty;
             let video_mode_changed = gs.background_allow_video != show_video_backgrounds;
             let background_changed = gs.stage.gameplay.advance_song_background();
@@ -7593,7 +7586,7 @@ impl App {
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
                 backend,
-                gs.song_media.video_paths(),
+                gs.stage.song_media.video_paths(),
             );
         }
     }

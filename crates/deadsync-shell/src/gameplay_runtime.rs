@@ -27,7 +27,6 @@ use deadsync_theme_simply_love::views::{
     GameplayScoreRuntimeView, PracticeRuntimeView, SimplyLoveLobbyRuntimeView,
 };
 use smallvec::SmallVec;
-use std::path::Path;
 use std::sync::Arc;
 
 const GAMEPLAY_SCOREBOX_ENTRIES: usize = 5;
@@ -355,7 +354,7 @@ pub(crate) fn present_stage(
         course_banner_path,
         view,
     );
-    let (gameplay, session, warm_dynamic_scene) = state.song_lua_attachment_parts();
+    let (gameplay, session, warm_dynamic_scene) = state.stage.song_lua_attachment_parts();
     attach_prepared_song_lua(gameplay, session, scene, warm_dynamic_scene);
     state
 }
@@ -723,16 +722,13 @@ pub(crate) fn update(
     }
     score_cursor.sync_if_dirty(state);
     drain(state, audio, sounds, music_clock);
-    let current_song_lua_time = state.current_music_time_display();
-    state.song_media.for_each_sound_event(
-        previous_song_lua_time,
-        current_song_lua_time,
-        |path: &Path| {
+    state
+        .stage
+        .for_each_scheduled_song_sound(previous_song_lua_time, |path| {
             if let Some(sound) = sounds.resolve_path(path) {
                 audio.play_sfx(sound);
             }
-        },
-    );
+        });
     debug_assert!(effects.len() <= MAX_UPDATE_EFFECTS);
     effects
 }
@@ -894,6 +890,7 @@ pub(crate) fn push_actors(
 ) -> deadsync_song_lua::playback::GameplayActorSegments {
     use deadsync_theme_simply_love::screens::gameplay;
     let mut song = state
+        .stage
         .song_scratch
         .take()
         .expect("song scratch restored after every frame");
@@ -915,7 +912,7 @@ pub(crate) fn push_actors(
     let segments = deadsync_song_lua::playback::compose_frame(
         actors,
         &state.gameplay,
-        &state.song_media,
+        &state.stage.song_media,
         &mut song,
         assets,
         options,
@@ -936,7 +933,7 @@ pub(crate) fn push_actors(
             )
         },
     );
-    state.song_scratch = Some(song);
+    state.stage.song_scratch = Some(song);
     state.frame_scratch = Some(hud);
     gameplay::push_song_lua_out(actors, state);
     segments
