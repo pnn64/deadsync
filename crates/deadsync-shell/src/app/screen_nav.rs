@@ -271,6 +271,27 @@ impl App {
         self.handle_navigation_action_inner(target, true);
     }
 
+    pub(super) fn handle_immediate_navigation(
+        &mut self,
+        target: CurrentScreen,
+        event_loop: &ActiveEventLoop,
+    ) {
+        let current = self.state.screens.current_screen;
+        if target == CurrentScreen::Gameplay
+            && current == CurrentScreen::SelectMusic
+            && self.defer_gameplay_entry(event_loop)
+        {
+            return;
+        }
+        if self.maybe_begin_gameplay_offset_prompt(current, target, true) {
+            return;
+        }
+        // Skip the outgoing transition and let the destination play its intro.
+        if matches!(self.state.shell.transition, crate::TransitionState::Idle) {
+            self.on_fade_complete(target, event_loop);
+        }
+    }
+
     pub(super) fn handle_navigation_action_after_prompt(&mut self, target: CurrentScreen) {
         self.handle_navigation_action_inner(target, false);
     }

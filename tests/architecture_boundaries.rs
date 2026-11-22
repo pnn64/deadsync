@@ -471,11 +471,20 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
             "normal gameplay theme must delegate to the game controller through {delegation}"
         );
     }
-    assert!(
-        contains_rust(&shell, "deadsync_song_lua::gameplay_session::update("),
-        "shell normal gameplay frames must invoke the canonical game controller"
-    );
-    for former_owner in ["gameplay::update(", "gameplay::update_with_input("] {
+    for handoff in [
+        "gameplay_session::update_with_effects(",
+        "gameplay_session::handle_input_action(state, ev, physical)",
+    ] {
+        assert!(
+            contains_rust(&shell, handoff),
+            "shell normal gameplay must use the canonical game handoff {handoff}"
+        );
+    }
+    for former_owner in [
+        "gameplay::update(",
+        "gameplay::update_with_input(",
+        "gameplay::handle_input_with_device(",
+    ] {
         assert!(
             !contains_rust(&shell, former_owner),
             "shell must not route gameplay frame orchestration through {former_owner}"
@@ -693,6 +702,7 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
         "pub trait GameplayLobbyHost",
         "pub fn on_enter<",
         "pub fn prepare_update<",
+        "pub fn prepare_update_with_actions<",
         "pub fn prepare_update_at<",
         "pub fn handle_input<",
         "pub fn sync_runtime_view<",
@@ -740,9 +750,9 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
             "gameplay theme must delegate lobby behavior through {delegation}"
         );
     }
-    for entry in ["on_enter", "prepare_update"] {
+    for entry in ["on_enter", "prepare_update_with_actions", "handle_input"] {
         assert!(
-            contains_rust(&shell, &format!("deadsync_online::gameplay_lobby::{entry}(")),
+            contains_rust(&shell, &format!("gameplay_lobby::{entry}(")),
             "shell must invoke canonical lobby coordination through {entry}"
         );
     }
@@ -12586,6 +12596,13 @@ fn gameplay_exit_routing_stays_below_the_theme() {
     // Out-of-line test modules precede the app's production imports and methods.
     let shell = read_source(&root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app source should be readable");
+    let shell_actions = production_source(
+        &root.join("crates/deadsync-shell/src/app/gameplay_actions.rs"),
+    );
+    let shell_input = production_source(
+        &root.join("crates/deadsync-shell/src/app/input_routing.rs"),
+    );
+    let shell_runtime = production_source(&root.join("crates/deadsync-shell/src/gameplay_runtime.rs"));
     let shell_flow = production_source(&root.join("crates/deadsync-shell/src/screen_flow.rs"));
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
 
@@ -12670,9 +12687,15 @@ fn gameplay_exit_routing_stays_below_the_theme() {
     );
 
     assert!(
-        shell.contains("deadsync_gameplay::exit_route::"),
+        shell_actions.contains("deadsync_gameplay::exit_route::"),
         "the shell must import the game-owned route policy directly"
     );
+    assert!(contains_rust(&shell_input, "self.handle_gameplay_action(action, event_loop)"));
+    assert!(contains_rust(&shell_actions, "GameplayFrameEffect::Session(SongLuaGameplayEffect::Action(action)) => { self.handle_gameplay_action(action, event_loop); }"));
+    assert!(contains_rust(&shell_runtime, "gameplay_lobby::prepare_update_with_actions("));
+    assert!(!shell.contains("effect_for_gameplay_exit("));
+    assert!(!shell_actions.contains("SimplyLoveRuntimeRequest"));
+    assert!(!shell_actions.contains("ThemeEffect"));
     for old_router in ["theme_effect_route_plan", "resolve_effect_route"] {
         assert!(
             !shell.contains(old_router) && !shell_flow.contains(old_router),
@@ -12692,23 +12715,27 @@ fn gameplay_exit_routing_stays_below_the_theme() {
             && !batch.contains("GameplayExitRouteContext"),
         "each batch item must be routed after the preceding item executes"
     );
-    let routing = shell
-        .split_once("fn handle_single_action(")
-        .and_then(|(_, rest)| rest.split_once("let commands = match action {"))
+    assert!(contains_rust(
+        &shell,
+        "if let Some(gameplay_action) = gameplay_action_for_effect(&action) { self.handle_gameplay_action(gameplay_action, event_loop); return Ok(()); }",
+    ));
+    let routing = shell_actions
+        .split_once("fn handle_gameplay_action(")
+        .and_then(|(_, rest)| rest.split_once("fn handle_song_lua_reload("))
         .map(|(body, _)| body)
-        .expect("routing must happen before individual effect execution");
+        .expect("gameplay must have a direct shell handoff");
     for live_fact in [
-        "gameplay_action_for_effect(&action)",
-        "Some(GameplayAction::None) => (ThemeEffect::None, false)",
-        "Some(GameplayAction::Restart)",
-        "ThemeEffect::Runtime(SimplyLoveRuntimeRequest::RestartGameplay)",
+        "action: GameplayAction",
+        "GameplayAction::None => return",
+        "GameplayAction::Restart => { self.try_gameplay_restart(event_loop,",
         "self.state.screens.current_screen == CurrentScreen::Gameplay",
         "self.state.session.course_run.as_ref()",
         "restart_pending: self.state.session.restart_pending",
         "course_active: course.is_some()",
         "course_has_next_stage: course.is_some_and(|course| course.run.has_next_stage())",
         "resolve_gameplay_exit_route(",
-        "effect_for_gameplay_exit(route)",
+        "GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => { CurrentScreen::Gameplay }",
+        "destination => ActiveTheme::gameplay_exit_screen(destination)",
         "route.consume_restart_pending",
     ] {
         assert!(
@@ -12719,7 +12746,7 @@ fn gameplay_exit_routing_stays_below_the_theme() {
     assert!(
         contains_rust(
             routing,
-            "matches!(gameplay_action, GameplayAction::Navigate(GameplayExit::Complete)) && from_gameplay && self.current_gameplay_stage_failed()",
+            "matches!(action, GameplayAction::Navigate(GameplayExit::Complete)) && from_gameplay && self.current_gameplay_stage_failed()",
         ),
         "failure lookup must remain lazy and limited to normal gameplay completion"
     );
@@ -12733,7 +12760,7 @@ fn gameplay_exit_routing_stays_below_the_theme() {
         decision < consume
             && contains_rust(
                 routing,
-                "if clear_restart_pending { self.state.session.restart_pending = false; }",
+                "if route.consume_restart_pending { self.state.session.restart_pending = false; }",
             ),
         "only the resolved route may consume pending restart, before its effect executes"
     );
@@ -12833,7 +12860,7 @@ fn theme_screen_contract_has_explicit_owners() {
     let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(
-        shell_app.contains("resolve_gameplay_exit_route(")
+        shell_app.contains("self.handle_gameplay_action(gameplay_action, event_loop)")
             && shell_app.contains("ThemeEffect::Batch(effects)")
             && shell_app.contains("self.handle_single_action(effect, event_loop)?"),
         "the shell must execute effects in order using game-owned exit routing"

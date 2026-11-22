@@ -10,6 +10,7 @@ mod config_requests;
 #[cfg(test)]
 mod course_transition_tests;
 mod evaluation_views;
+mod gameplay_actions;
 mod graphics;
 mod input_routing;
 mod live_case;
@@ -174,9 +175,8 @@ use deadsync_chart::{GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 #[cfg(test)]
 use deadsync_gameplay::{CourseDisplayTotals, course_progress::CourseProgress};
-use deadsync_gameplay::exit_route::{GameplayExitRouteContext, resolve_gameplay_exit_route};
 use deadsync_gameplay::{
-    GameplayAction, GameplayExit, GameplaySession, GameplayViewport, LeadInTiming, ReplayInputEdge,
+    GameplaySession, GameplayViewport, LeadInTiming, ReplayInputEdge,
     ReplayOffsetSnapshot,
 };
 use deadsync_input as logical_input;
@@ -214,7 +214,7 @@ use deadsync_theme_simply_love::{
     SimplyLoveInputResult as ThemeInputResult, SimplyLoveLobbyRequest, SimplyLoveMediaRequest,
     SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent,
     SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncEvent, SimplyLoveSyncOwner,
-    SimplyLoveSyncRequest, effect_for_gameplay_exit, gameplay_action_for_effect,
+    SimplyLoveSyncRequest, gameplay_action_for_effect,
 };
 
 /// The main Options rows that launch standalone child screens should regain
@@ -516,21 +516,6 @@ const fn screen_entry_runtime_views(screen: CurrentScreen) -> u8 {
         CurrentScreen::SelectCourse => SELECT_COURSE_RUNTIME_VIEWS,
         _ => 0,
     }
-}
-
-const MAX_TRANSITION_LOBBY_EFFECTS: usize = 3;
-
-fn retain_lobby_effects(effects: &mut Vec<ThemeEffect>) {
-    debug_assert!(effects.len() <= crate::gameplay_runtime::MAX_UPDATE_EFFECTS);
-    effects.retain(|effect| {
-        matches!(
-            effect,
-            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                SimplyLoveOnlineRequest::Lobby(_)
-            ))
-        )
-    });
-    debug_assert!(effects.len() <= MAX_TRANSITION_LOBBY_EFFECTS);
 }
 
 fn song_lua_seed() -> u32 {
@@ -1317,25 +1302,10 @@ impl ScreensState {
         gameplay_sfx: &GameplaySfx,
         music_clock: &mut deadsync_audio_stream::MusicClock,
         smx_assignment: Option<&SmxAssignmentView>,
-        gameplay_smx_input: bool,
         effects: &mut Vec<ThemeEffect>,
     ) {
         let (effect, _) = match self.current_screen {
-            CurrentScreen::Gameplay => {
-                if let Some(gs) = self.gameplay_state.as_mut() {
-                    crate::gameplay_runtime::update(
-                        gs,
-                        delta_time,
-                        gameplay_smx_input,
-                        audio,
-                        gameplay_sfx,
-                        music_clock,
-                        &mut self.gameplay_score_cursor,
-                        effects,
-                    );
-                }
-                (None, false)
-            }
+            CurrentScreen::Gameplay => unreachable!("gameplay has its own frame handoff"),
             CurrentScreen::Practice => {
                 if let Some(ps) = self.practice_state.as_mut() {
                     crate::gameplay_runtime::update_practice(
@@ -4790,23 +4760,10 @@ impl App {
         if transition_plan.sync_input_capture {
             self.sync_gameplay_input_capture();
         }
-        if tick_gameplay
-            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
-        {
+        if tick_gameplay {
             // Keep gameplay stepping under evaluation fades so late judgments
             // and HUD animations settle while transition input remains blocked.
-            debug_assert!(self.theme_effect_scratch.is_empty());
-            crate::gameplay_runtime::update(
-                gs,
-                delta_time,
-                self.state.play_input_policy.smx_input,
-                &mut self.audio,
-                &self.gameplay_sfx,
-                &mut self.music_clock,
-                &mut self.state.screens.gameplay_score_cursor,
-                &mut self.theme_effect_scratch,
-            );
-            retain_lobby_effects(&mut self.theme_effect_scratch);
+            self.step_gameplay(delta_time, true, event_loop);
         }
         if tick_menu_attract {
             menu::update_attract(&mut self.state.screens.menu_state, logic_dt)
@@ -4821,7 +4778,9 @@ impl App {
             gameplay_offset_prompt_active: self.state.gameplay_offset_save_prompt.is_some(),
         });
         if transition_plan.step_screen && !self.gameplay_preload_holds_frame() {
-            if step_plan.step_screen {
+            if step_plan.step_screen && self.state.screens.current_screen == CurrentScreen::Gameplay {
+                self.step_gameplay(logic_dt, false, event_loop);
+            } else if step_plan.step_screen {
                 let smx_assignment = matches!(
                     self.state.screens.current_screen,
                     CurrentScreen::Options
@@ -4853,7 +4812,6 @@ impl App {
                     &self.gameplay_sfx,
                     &mut self.music_clock,
                     smx_assignment.as_ref(),
-                    self.state.play_input_policy.smx_input,
                     &mut self.theme_effect_scratch,
                 );
                 let _ = self.drain_theme_effects(event_loop);
@@ -5662,37 +5620,9 @@ impl App {
         action: ThemeEffect,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
-        let (action, clear_restart_pending) = match gameplay_action_for_effect(&action) {
-            Some(GameplayAction::None) => (ThemeEffect::None, false),
-            Some(GameplayAction::Restart) => (
-                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::RestartGameplay),
-                false,
-            ),
-            Some(gameplay_action) => {
-                let from_gameplay = self.state.screens.current_screen == CurrentScreen::Gameplay;
-                let course = self.state.session.course_run.as_ref();
-                let all_joined_players_failed = matches!(
-                    gameplay_action,
-                    GameplayAction::Navigate(GameplayExit::Complete)
-                ) && from_gameplay
-                    && self.current_gameplay_stage_failed();
-                let route = resolve_gameplay_exit_route(
-                    gameplay_action,
-                    GameplayExitRouteContext {
-                        from_gameplay,
-                        restart_pending: self.state.session.restart_pending,
-                        course_active: course.is_some(),
-                        course_has_next_stage: course.is_some_and(|course| course.run.has_next_stage()),
-                        all_joined_players_failed,
-                    },
-                )
-                .expect("navigation action must have a gameplay exit route");
-                (effect_for_gameplay_exit(route), route.consume_restart_pending)
-            }
-            None => (action, false),
-        };
-        if clear_restart_pending {
-            self.state.session.restart_pending = false;
+        if let Some(gameplay_action) = gameplay_action_for_effect(&action) {
+            self.handle_gameplay_action(gameplay_action, event_loop);
+            return Ok(());
         }
 
         let commands = match action {
@@ -5703,24 +5633,7 @@ impl App {
                 Vec::new()
             }
             ThemeEffect::NavigateNoFade(screen) => {
-                if screen == CurrentScreen::Gameplay
-                    && self.state.screens.current_screen == CurrentScreen::SelectMusic
-                    && self.defer_gameplay_entry(event_loop)
-                {
-                    return Ok(());
-                }
-                if self.maybe_begin_gameplay_offset_prompt(
-                    self.state.screens.current_screen,
-                    screen,
-                    true,
-                ) {
-                    return Ok(());
-                }
-                // Skip the current screen's out-transition and immediately enter `screen`,
-                // letting the target screen's in-transition handle the visual change.
-                if matches!(self.state.shell.transition, TransitionState::Idle) {
-                    self.on_fade_complete(screen, event_loop);
-                }
+                self.handle_immediate_navigation(screen, event_loop);
                 return Ok(());
             }
             ThemeEffect::Exit => self.handle_process_exit(ProcessExitRequest::Exit),
@@ -5809,20 +5722,7 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::ReloadSongLua => {
-                    if self.state.screens.current_screen != CurrentScreen::Gameplay
-                        || self.pending_gameplay_init.is_some()
-                        || !self.state.screens.gameplay_state.as_ref().is_some_and(|state| state.song_lua.is_some())
-                        || !self.prepare_player_options_for_gameplay_restart()
-                    {
-                        warn!("Cannot reload song Lua without an active gameplay screen");
-                    } else {
-                        self.pending_song_lua_reload = self.state.screens.gameplay_state.as_mut()
-                            .and_then(|state| state.song_lua.take().map(|scene| (scene, state.take_song_lua_held_inputs())));
-                        self.state.shell.transition = TransitionState::Idle;
-                        self.state.session.restart_pending = false;
-                        self.state.gameplay_offset_save_prompt = None;
-                        self.on_fade_complete(CurrentScreen::Gameplay, event_loop);
-                    }
+                    self.handle_song_lua_reload(event_loop);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Profile(request) => {
@@ -11519,78 +11419,6 @@ mod tests {
                 .title_logo_texture_key
                 .is_none()
         );
-    }
-
-    #[test]
-    fn transition_gameplay_keeps_only_lobby_runtime_effects() {
-        let mut effects = Vec::with_capacity(8);
-        effects.extend([
-            ThemeEffect::Navigate(CurrentScreen::Evaluation),
-            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect),
-            )),
-        ]);
-
-        retain_lobby_effects(&mut effects);
-
-        assert!(matches!(
-            effects.as_slice(),
-            [ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect)
-            ))]
-        ));
-        assert_eq!(effects.capacity(), 8);
-    }
-
-    #[test]
-    fn transition_gameplay_retains_bounded_lobby_order() {
-        let mut effects = Vec::with_capacity(8);
-        effects.extend([
-            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect),
-            )),
-            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::UpdateMachineState {
-                    screen_name: "ScreenGameplay",
-                    ready: false,
-                }),
-            )),
-            ThemeEffect::Navigate(CurrentScreen::Evaluation),
-            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::UpdateMachineStats {
-                    screen_name: "ScreenGameplay",
-                    p1_ready: true,
-                    p2_ready: true,
-                    p1_stats: None,
-                    p2_stats: None,
-                }),
-            )),
-        ]);
-
-        retain_lobby_effects(&mut effects);
-
-        assert!(matches!(
-            effects.as_slice(),
-            [
-                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect)
-                )),
-                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::UpdateMachineState {
-                        ready: false,
-                        ..
-                    })
-                )),
-                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::UpdateMachineStats {
-                        p1_ready: true,
-                        p2_ready: true,
-                        ..
-                    })
-                )),
-            ]
-        ));
-        assert_eq!(effects.capacity(), 8);
     }
 
     fn test_chart(hash: &str) -> ChartData {

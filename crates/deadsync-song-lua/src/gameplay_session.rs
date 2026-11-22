@@ -1,7 +1,7 @@
 //! Game-owned ordering for live song Lua, gameplay updates, input and screen exit.
 //!
-//! The host supplies presentation work and converts semantic actions to its
-//! screen effects. This module owns when those operations run.
+//! The host supplies presentation work and resolves named destinations. This
+//! module owns frame ordering and emits gameplay actions directly to the caller.
 
 use crate::{
     SongLuaInputEvent, SongLuaInputType, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLiveRequest,
@@ -25,6 +25,15 @@ pub const GAMEPLAY_EXIT_TRANSITION_SECONDS: f32 = SONG_LUA_OUT_DELAY + SONG_LUA_
 pub struct SongLuaOutView {
     pub phase: u8,
     pub left: f32,
+}
+
+/// Ordered output of a gameplay frame. An explicit Lua screen name is resolved
+/// by the caller before the live scene ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SongLuaGameplayEffect<S> {
+    Action(GameplayAction),
+    ReloadSongLua,
+    Navigate(S),
 }
 
 /// Statically bound access to gameplay and its presentation host.
@@ -539,12 +548,13 @@ impl SongLuaGameplaySession {
         game.publish_song_lua_visuals(scene)
     }
 
-    fn advance<H: SongLuaGameplayHost>(
+    fn advance<H: SongLuaGameplayHost, S>(
         &mut self,
         game: &mut HostGame<H>,
         delta: f32,
         uptime_seconds: Option<f64>,
-        effects: &mut Vec<H::Effect>,
+        resolve_screen: impl FnOnce(Option<&str>) -> Result<S, String>,
+        emit: &mut impl FnMut(SongLuaGameplayEffect<S>),
         frame_actions: &mut FrameActions,
     ) -> Result<(), String>
     where
@@ -588,7 +598,7 @@ impl SongLuaGameplaySession {
         if self.draw_reload_pending
             || matches!(request, Some(SongLuaLiveRequest::NewScreen(screen)) if screen == "ScreenGameplay")
         {
-            effects.push(H::reload_song_lua_effect());
+            emit(SongLuaGameplayEffect::ReloadSongLua);
             frame_actions.screen_changes = true;
             self.draw_reload_pending = false;
         }
@@ -619,12 +629,12 @@ impl SongLuaGameplaySession {
                 .map_err(|error| error.to_string())?;
             let reload = target.as_deref() == Some("ScreenGameplay");
             let effect = if reload {
-                H::reload_song_lua_effect()
+                SongLuaGameplayEffect::ReloadSongLua
             } else {
-                H::next_screen_effect(target.as_deref())?
+                SongLuaGameplayEffect::Navigate(resolve_screen(target.as_deref())?)
             };
             self.end(game)?;
-            effects.push(effect);
+            emit(effect);
             frame_actions.pop |= !reload;
             frame_actions.screen_changes = true;
         }
@@ -632,17 +642,44 @@ impl SongLuaGameplaySession {
     }
 }
 
-/// Advance one complete game frame, including authored Update/input/Draw phases.
-///
-/// Host borrows end before each presentation or frame-input hook, allowing an
-/// existing owner to receive its complete state without allocating a closure or
-/// using dynamic dispatch.
+/// Advance a frame and convert its output using the host's effect adapter.
 pub fn update<H: SongLuaGameplayHost>(
     host: &mut H,
     delta_time: f32,
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
     effects: &mut Vec<H::Effect>,
+    after_update_input: impl FnOnce(&mut H),
+) where
+    HostGame<H>: SongLuaGameplayVisualState,
+{
+    update_with_effects(
+        host,
+        delta_time,
+        audio_snapshot,
+        fallback_host_nanos,
+        H::next_screen_effect,
+        |effect| {
+            effects.push(match effect {
+                SongLuaGameplayEffect::Action(action) => H::gameplay_effect(action),
+                SongLuaGameplayEffect::ReloadSongLua => H::reload_song_lua_effect(),
+                SongLuaGameplayEffect::Navigate(effect) => effect,
+            });
+        },
+        after_update_input,
+    );
+}
+
+/// Advance one complete game frame, including authored Update/input/Draw phases.
+/// The caller receives game output in source order and resolves only explicit
+/// Lua screen destinations. The callbacks are statically dispatched.
+pub fn update_with_effects<H: SongLuaGameplayHost, S>(
+    host: &mut H,
+    delta_time: f32,
+    audio_snapshot: GameplayAudioSnapshot,
+    fallback_host_nanos: impl FnOnce() -> u64,
+    resolve_screen: impl FnOnce(Option<&str>) -> Result<S, String>,
+    mut emit: impl FnMut(SongLuaGameplayEffect<S>),
     after_update_input: impl FnOnce(&mut H),
 ) where
     HostGame<H>: SongLuaGameplayVisualState,
@@ -695,11 +732,12 @@ pub fn update<H: SongLuaGameplayHost>(
         {
             game.finalize_completed_stage();
         }
-        if let Err(error) = session.advance::<H>(
+        if let Err(error) = session.advance::<H, S>(
             game,
             delta_time,
             uptime_seconds,
-            effects,
+            resolve_screen,
+            &mut emit,
             &mut frame_actions,
         ) {
             session.output.errors.push(error);
@@ -722,7 +760,7 @@ pub fn update<H: SongLuaGameplayHost>(
             }
             GameplayAction::None if resolved_action == GameplayAction::None => {}
             _ => {
-                effects.push(H::gameplay_effect(resolved_action));
+                emit(SongLuaGameplayEffect::Action(resolved_action));
                 frame_actions.record_gameplay_action(resolved_action);
             }
         }
@@ -772,6 +810,28 @@ pub fn handle_input<H: SongLuaGameplayHost>(
     physical: Option<PhysicalInput>,
     effects: &mut Vec<H::Effect>,
 ) {
+    if let Some(effect) = handle_input_with_action(host, event, physical, H::gameplay_effect) {
+        effects.push(effect);
+    }
+}
+
+/// Deliver the input edge and return the action generated by the game.
+#[must_use]
+pub fn handle_input_action<H: SongLuaGameplayHost>(
+    host: &mut H,
+    event: &InputEvent,
+    physical: Option<PhysicalInput>,
+) -> GameplayAction {
+    handle_input_with_action(host, event, physical, std::convert::identity)
+        .unwrap_or(GameplayAction::None)
+}
+
+fn handle_input_with_action<H: SongLuaGameplayHost, T>(
+    host: &mut H,
+    event: &InputEvent,
+    physical: Option<PhysicalInput>,
+    map_action: impl FnOnce(GameplayAction) -> T,
+) -> Option<T> {
     let (game, session) = host.gameplay_parts();
     let action = handle_core_input(game, event);
     session.queue_inputs(std::iter::once((*event, physical)));
@@ -784,15 +844,15 @@ pub fn handle_input<H: SongLuaGameplayHost>(
     }
     // Input's former effect append skips its no-op action.
     if action == GameplayAction::None {
-        return;
+        return None;
     }
-    let effect = H::gameplay_effect(action);
+    let effect = map_action(action);
     if matches!(action, GameplayAction::NavigateNoFade(_))
         && let Err(error) = session.end(game)
     {
         session.output.errors.push(error);
     }
-    effects.push(effect);
+    Some(effect)
 }
 
 fn song_lua_device_names(physical: Option<PhysicalInput>) -> (String, String) {

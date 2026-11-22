@@ -41,6 +41,50 @@ pub use effects::{
 
 pub struct SimplyLoveTheme;
 
+impl SimplyLoveTheme {
+    #[must_use]
+    pub const fn gameplay_exit_screen(
+        destination: deadsync_gameplay::exit_route::GameplayExitDestination,
+    ) -> screens::SimplyLoveScreen {
+        use deadsync_gameplay::exit_route::GameplayExitDestination;
+        use screens::SimplyLoveScreen;
+
+        match destination {
+            GameplayExitDestination::Results => SimplyLoveScreen::Evaluation,
+            GameplayExitDestination::SongSelection => SimplyLoveScreen::SelectMusic,
+            GameplayExitDestination::CourseSelection => SimplyLoveScreen::SelectCourse,
+            GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => {
+                SimplyLoveScreen::Gameplay
+            }
+        }
+    }
+
+    pub fn resolve_song_lua_screen(name: Option<&str>) -> Result<screens::SimplyLoveScreen, String> {
+        screens::gameplay::song_lua_transition_screen(name)
+    }
+
+    /// Interpret legacy screen destinations that also have a gameplay meaning.
+    #[must_use]
+    pub const fn gameplay_action_for_navigation(
+        screen: screens::SimplyLoveScreen,
+        immediate: bool,
+    ) -> Option<deadsync_gameplay::GameplayAction> {
+        use deadsync_gameplay::{GameplayAction, GameplayExit};
+        use screens::SimplyLoveScreen;
+
+        let exit = match screen {
+            SimplyLoveScreen::Evaluation => GameplayExit::Complete,
+            SimplyLoveScreen::SelectMusic => GameplayExit::Cancel,
+            _ => return None,
+        };
+        Some(if immediate {
+            GameplayAction::NavigateNoFade(exit)
+        } else {
+            GameplayAction::Navigate(exit)
+        })
+    }
+}
+
 impl deadsync_theme::Theme for SimplyLoveTheme {
     type Screen = screens::SimplyLoveScreen;
     type RuntimeRequest = SimplyLoveRuntimeRequest;

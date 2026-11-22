@@ -16,10 +16,10 @@ use deadsync_config::theme::{
     SelectMusicWheelStyle, SrpgVariant, TournamentScoringSystem, VersionOverlaySide, VisualStyle,
 };
 use deadsync_gameplay::exit_route::{
-    GameplayExitDestination, GameplayExitRoute, GameplayExitRouteContext,
+    GameplayExitRoute, GameplayExitRouteContext,
     resolve_gameplay_exit_route,
 };
-use deadsync_gameplay::{GameplayAction, GameplayExit};
+use deadsync_gameplay::GameplayAction;
 use deadsync_input::{InputBinding, VirtualAction};
 use deadsync_profile::PlayerSide;
 pub use deadsync_profile::requests::ProfileRequest as SimplyLoveProfileRequest;
@@ -957,17 +957,11 @@ pub fn gameplay_action_for_effect(effect: &SimplyLoveEffect) -> Option<GameplayA
         SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::GameplayAction(action)) => {
             Some(*action)
         }
-        SimplyLoveEffect::Navigate(SimplyLoveScreen::Evaluation) => {
-            Some(GameplayAction::Navigate(GameplayExit::Complete))
+        SimplyLoveEffect::Navigate(screen) => {
+            crate::SimplyLoveTheme::gameplay_action_for_navigation(*screen, false)
         }
-        SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::Evaluation) => {
-            Some(GameplayAction::NavigateNoFade(GameplayExit::Complete))
-        }
-        SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectMusic) => {
-            Some(GameplayAction::Navigate(GameplayExit::Cancel))
-        }
-        SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::SelectMusic) => {
-            Some(GameplayAction::NavigateNoFade(GameplayExit::Cancel))
+        SimplyLoveEffect::NavigateNoFade(screen) => {
+            crate::SimplyLoveTheme::gameplay_action_for_navigation(*screen, true)
         }
         _ => None,
     }
@@ -976,14 +970,7 @@ pub fn gameplay_action_for_effect(effect: &SimplyLoveEffect) -> Option<GameplayA
 /// Select Simply Love's screen for an already resolved game destination.
 #[must_use]
 pub const fn effect_for_gameplay_exit(route: GameplayExitRoute) -> SimplyLoveEffect {
-    let screen = match route.destination {
-        GameplayExitDestination::Results => SimplyLoveScreen::Evaluation,
-        GameplayExitDestination::SongSelection => SimplyLoveScreen::SelectMusic,
-        GameplayExitDestination::CourseSelection => SimplyLoveScreen::SelectCourse,
-        GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => {
-            SimplyLoveScreen::Gameplay
-        }
-    };
+    let screen = crate::SimplyLoveTheme::gameplay_exit_screen(route.destination);
     if route.immediate {
         SimplyLoveEffect::NavigateNoFade(screen)
     } else {
@@ -1034,6 +1021,8 @@ pub fn resolve_effect_route(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_gameplay::GameplayExit;
+    use deadsync_gameplay::exit_route::GameplayExitDestination;
 
     #[test]
     fn gameplay_action_adapter_preserves_semantic_requests() {

@@ -2163,7 +2163,7 @@ pub fn prepare_update(state: &mut State, effects: &mut Vec<ThemeEffect>) -> bool
     gameplay_lobby::prepare_update(state, effects)
 }
 
-fn song_lua_transition_screen(name: Option<&str>) -> Result<crate::screens::SimplyLoveScreen, String> {
+pub(crate) fn song_lua_transition_screen(name: Option<&str>) -> Result<crate::screens::SimplyLoveScreen, String> {
     use crate::screens::SimplyLoveScreen as Screen;
     let Some(name) = name.filter(|name| !name.is_empty()) else { return Ok(Screen::Evaluation); };
     [
@@ -2317,22 +2317,24 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeE
 
 pub fn handle_input_with_device(state: &mut State, ev: &InputEvent,
     physical: Option<deadsync_input::PhysicalInput>, effects: &mut Vec<ThemeEffect>) {
+    let lobby_hud_toggled = handle_lobby_hud_input(state, ev);
+    if gameplay_lobby::handle_input(state, ev) || lobby_hud_toggled {
+        return;
+    }
+    gameplay_session::handle_input(state, ev, physical, effects);
+}
+
+/// Handle the presentation shortcut before the game processes the same edge.
+pub fn handle_lobby_hud_input(state: &mut State, ev: &InputEvent) -> bool {
     let lobby_waiting = gameplay_lobby_wait_active(state);
     let joined_lobby = state.lobby_session.runtime_view().snapshot.joined_lobby.is_some();
-    let lobby_hud_toggled = state.lobby_hud_visibility.handle_input(
+    state.lobby_hud_visibility.handle_input(
         ev,
         joined_lobby,
         lobby_waiting,
         state.runtime_view.joined,
         state.runtime_view.player_side,
-    );
-    if gameplay_lobby::handle_input(state, ev) {
-        return;
-    }
-    if lobby_hud_toggled {
-        return;
-    }
-    gameplay_session::handle_input(state, ev, physical, effects);
+    )
 }
 
 impl State {

@@ -276,7 +276,15 @@ pub fn on_enter<H: GameplayLobbyHost>(host: &mut H) {
 /// Starting music queues an audio command. The shell must drain it before
 /// sampling the stream clock for the deterministic gameplay update.
 pub fn prepare_update<H: GameplayLobbyHost>(host: &mut H, effects: &mut Vec<H::Effect>) -> bool {
-    prepare_update_with_elapsed(host, effects, |started_at| {
+    prepare_update_with_actions(host, |action| effects.push(H::lobby_effect(action)))
+}
+
+/// Prepare the frame and emit game-owned lobby actions in source order.
+pub fn prepare_update_with_actions<H: GameplayLobbyHost>(
+    host: &mut H,
+    emit: impl FnMut(GameplayLobbyAction),
+) -> bool {
+    prepare_update_with_elapsed(host, emit, |started_at| {
         started_at.elapsed().as_secs_f32()
     })
 }
@@ -287,14 +295,16 @@ pub fn prepare_update_at<H: GameplayLobbyHost>(
     effects: &mut Vec<H::Effect>,
     now: Instant,
 ) -> bool {
-    prepare_update_with_elapsed(host, effects, |started_at| {
-        now.saturating_duration_since(started_at).as_secs_f32()
-    })
+    prepare_update_with_elapsed(
+        host,
+        |action| effects.push(H::lobby_effect(action)),
+        |started_at| now.saturating_duration_since(started_at).as_secs_f32(),
+    )
 }
 
 fn prepare_update_with_elapsed<H: GameplayLobbyHost>(
     host: &mut H,
-    effects: &mut Vec<H::Effect>,
+    mut emit: impl FnMut(GameplayLobbyAction),
     elapsed: impl FnMut(Instant) -> f32,
 ) -> bool {
     let (game, lobby) = host.lobby_parts();
@@ -304,13 +314,13 @@ fn prepare_update_with_elapsed<H: GameplayLobbyHost>(
             .is_some_and(|elapsed| elapsed >= lobby.runtime_view.disconnect_hold_seconds)
         {
             lobby.disconnect_holds = [None; 2];
-            effects.push(H::lobby_effect(GameplayLobbyAction::Disconnect));
+            emit(GameplayLobbyAction::Disconnect);
             lobbies::apply_local_lobby_disconnect(Arc::make_mut(&mut lobby.runtime_view.snapshot));
             lobby.runtime_view.reconnect_status_text = None;
         }
 
         if let Some(action) = lobby.machine_state_action(game) {
-            effects.push(H::lobby_effect(action));
+            emit(action);
         }
         if lobby.waiting() {
             return false;
@@ -323,7 +333,7 @@ fn prepare_update_with_elapsed<H: GameplayLobbyHost>(
     }
 
     if let Some(action) = lobby.machine_state_action(game) {
-        effects.push(H::lobby_effect(action));
+        emit(action);
     }
     true
 }

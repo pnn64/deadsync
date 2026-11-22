@@ -427,6 +427,12 @@ loading still holds the clock and fade-in completion allows the next idle frame
 to step the screen. Themes receive the transition phase and its elapsed time
 to draw their own covers and HUD effects.
 
+Normal gameplay sends stage actions, Lua reload requests, and lobby work
+directly to the shell in frame order. The shell keeps course continuation and
+stage restart on the gameplay lifecycle. The theme supplies screens for results
+and selection and resolves explicit Lua screen names before the live scene ends.
+Gameplay frames under a screen transition still dispatch lobby work in order.
+
 ## Remaining separation
 
 Continue the layer separation within the existing workspace crates.

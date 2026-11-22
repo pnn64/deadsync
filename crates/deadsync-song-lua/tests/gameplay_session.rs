@@ -432,9 +432,23 @@ return Def.ActorFrame {
         .as_mut()
         .unwrap()
         .started_at = Instant::now() - Duration::from_secs(10);
-    let (effects, output) = host.frame(0.01, 0);
-    no_errors(&output);
-    assert_eq!(effects, [Effect::Pop(game::GameplayExit::Cancel)]);
+    let mut effects = Vec::new();
+    session::update_with_effects(
+        &mut host,
+        0.01,
+        game::GameplayAudioSnapshot::default(),
+        || HOST_ORIGIN as u64,
+        |_| -> Result<(), String> { panic!("core cancellation must use the game action") },
+        |effect| effects.push(effect),
+        |_| {},
+    );
+    no_errors(&host.take_output());
+    assert_eq!(
+        effects,
+        [session::SongLuaGameplayEffect::Action(game::GameplayAction::NavigateNoFade(
+            game::GameplayExit::Cancel,
+        ))]
+    );
     assert!(host.session.is_ended());
     assert_eq!(host.game.players()[0].life, 0.375);
     host.lua("assert(Ends == 1 and Draws == 0)");

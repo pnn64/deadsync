@@ -1,24 +1,28 @@
+use crate::{ActiveTheme, ThemeScreen};
 use deadlib_platform::input::RawKeyboardEvent;
 use deadsync_assets::gameplay_stage::{PreparedGameplayStage, attach_prepared_song_lua};
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
 use deadsync_config as config;
 use deadsync_gameplay::{
-    GameplayAudioCommand, GameplayAudioSnapshot, GameplayMiniIndicatorData, GameplayMusicCut,
+    GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, GameplayMiniIndicatorData, GameplayMusicCut,
     GameplaySession, GameplaySessionCommand, GameplayStreamClockSnapshot, gameplay_runtime_charts,
 };
 use deadsync_input::InputEvent;
+use deadsync_online::gameplay_lobby::{self, GameplayLobbyAction};
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::{
     gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
 };
+use deadsync_song_lua::gameplay_session::{self, SongLuaGameplayEffect};
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::{gameplay, practice};
 use deadsync_theme_simply_love::views::{
     GameplayInitView, GameplayPolicyView, GameplayRuntimeView, GameplayScoreInitView,
     GameplayScoreRuntimeView, PracticeRuntimeView, SimplyLoveLobbyRuntimeView,
 };
+use smallvec::SmallVec;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -651,8 +655,14 @@ pub(crate) fn enter(
     drain(state, audio, sounds, music_clock);
 }
 
-pub(crate) const MAX_UPDATE_EFFECTS: usize = 6;
-const MAX_INPUT_EFFECTS: usize = 1;
+const MAX_UPDATE_EFFECTS: usize = 6;
+
+pub(crate) enum GameplayFrameEffect {
+    Lobby(GameplayLobbyAction),
+    Session(SongLuaGameplayEffect<ThemeScreen>),
+}
+
+pub(crate) type GameplayFrameEffects = SmallVec<[GameplayFrameEffect; MAX_UPDATE_EFFECTS]>;
 
 pub(crate) fn update(
     state: &mut gameplay::State,
@@ -662,13 +672,14 @@ pub(crate) fn update(
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     score_cursor: &mut ScoreRuntimeCursor,
-    effects: &mut Vec<ThemeEffect>,
-) {
-    let start_len = effects.len();
+) -> GameplayFrameEffects {
+    let mut effects = GameplayFrameEffects::new();
     crate::heart_rate::refresh_gameplay(state);
-    if !deadsync_online::gameplay_lobby::prepare_update(state, effects) {
-        debug_assert!(effects.len() - start_len <= MAX_UPDATE_EFFECTS);
-        return;
+    if !gameplay_lobby::prepare_update_with_actions(state, |action| {
+        effects.push(GameplayFrameEffect::Lobby(action));
+    }) {
+        debug_assert!(effects.len() <= MAX_UPDATE_EFFECTS);
+        return effects;
     }
 
     refresh_smx_sensors(state, delta_time, smx_input);
@@ -678,12 +689,13 @@ pub(crate) fn update(
     // stream mapping on the same frame, matching the pre-boundary behavior.
     drain(state, audio, sounds, music_clock);
     let previous_song_lua_time = state.current_music_time_display();
-    deadsync_song_lua::gameplay_session::update(
+    gameplay_session::update_with_effects(
         state,
         delta_time,
         snapshot(music_clock),
         deadlib_platform::host_time::now_nanos,
-        effects,
+        ActiveTheme::resolve_song_lua_screen,
+        |effect| effects.push(GameplayFrameEffect::Session(effect)),
         |_| {},
     );
     let output = state.take_song_lua_output();
@@ -732,7 +744,8 @@ pub(crate) fn update(
             }
         },
     );
-    debug_assert!(effects.len() - start_len <= MAX_UPDATE_EFFECTS);
+    debug_assert!(effects.len() <= MAX_UPDATE_EFFECTS);
+    effects
 }
 
 pub(crate) fn handle_input(
@@ -742,12 +755,15 @@ pub(crate) fn handle_input(
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
-    effects: &mut Vec<ThemeEffect>,
-) {
-    let start_len = effects.len();
-    gameplay::handle_input_with_device(state, ev, physical, effects);
+) -> GameplayAction {
+    let lobby_hud_toggled = gameplay::handle_lobby_hud_input(state, ev);
+    let action = if gameplay_lobby::handle_input(state, ev) || lobby_hud_toggled {
+        GameplayAction::None
+    } else {
+        gameplay_session::handle_input_action(state, ev, physical)
+    };
     drain(state, audio, sounds, music_clock);
-    debug_assert!(effects.len() - start_len <= MAX_INPUT_EFFECTS);
+    action
 }
 
 pub(crate) fn update_practice(

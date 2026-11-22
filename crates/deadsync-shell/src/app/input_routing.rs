@@ -307,20 +307,20 @@ impl App {
         if current_screen == CurrentScreen::Gameplay {
             debug_assert!(self.theme_effect_scratch.is_empty());
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                crate::gameplay_runtime::handle_input(
+                let action = crate::gameplay_runtime::handle_input(
                     gs,
                     &ev,
                     self.input.physical_input(&ev),
                     &mut self.audio,
                     &self.gameplay_sfx,
                     &mut self.music_clock,
-                    &mut self.theme_effect_scratch,
                 );
+                self.handle_gameplay_action(action, event_loop);
             } else if self.pending_gameplay_init.is_some() {
                 // Native InputFilter retains edges while ScreenGameplay loads.
                 self.pending_gameplay_lua_inputs.push((ev, self.input.physical_input(&ev)));
             }
-            return self.drain_theme_effects(event_loop);
+            return Ok(());
         }
         if current_screen == CurrentScreen::Practice {
             debug_assert!(self.theme_effect_scratch.is_empty());
