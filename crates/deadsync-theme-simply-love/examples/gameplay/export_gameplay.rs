@@ -734,7 +734,8 @@ fn compose(
     let mut actors: Vec<Actor> = Vec::new();
     let mut view = gameplay::ActorViewOverride::default();
     view.notefield.force_center_1player = center_single_notefield;
-    let segments = state.compose_frame(
+    let segments = gameplay::compose_frame(
+        state,
         &mut actors,
         FramePresentationContext {
             assets,

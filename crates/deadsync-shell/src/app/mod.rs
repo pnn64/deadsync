@@ -172,7 +172,7 @@ compile_error!(
 use deadlib_platform::input::PadEvent;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
-use deadsync_assets::gameplay_stage::{GameplayStageInput, prepare_gameplay_stage};
+use deadsync_assets::gameplay_stage::{ActiveGameplayStage, GameplayStageInput, prepare_gameplay_stage};
 use deadsync_chart::{GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::stage_charts::take_player_charts;
@@ -549,7 +549,7 @@ fn gameplay_session() -> GameplaySession {
     }
 }
 
-fn gameplay_offset_snapshot(gs: &gameplay::State) -> GameplayOffsetSnapshot {
+fn gameplay_offset_snapshot(gs: &crate::gameplay_runtime::GameplayState) -> GameplayOffsetSnapshot {
     GameplayOffsetSnapshot {
         initial_global_seconds: gs.initial_global_offset_seconds(),
         global_seconds: gs.global_offset_seconds(),
@@ -577,7 +577,7 @@ const fn saturating_u32(value: usize) -> u32 {
 pub struct ScreensState {
     current_screen: CurrentScreen,
     menu_state: menu::State,
-    gameplay_state: Option<gameplay::State>,
+    gameplay_state: Option<crate::gameplay_runtime::GameplayState>,
     practice_state: Option<practice::State>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     options_state: options::State,
@@ -658,7 +658,7 @@ pub struct AppState {
 }
 
 struct PendingGameplayInit {
-    receiver: std::sync::mpsc::Receiver<Result<gameplay::State, String>>,
+    receiver: std::sync::mpsc::Receiver<Result<crate::gameplay_runtime::GameplayState, String>>,
     finish: PendingGameplayFinish,
     loading: Option<SongLuaLoading>,
 }
@@ -872,7 +872,7 @@ fn sync_gameplay_banners(
     media: &mut DynamicMedia,
     assets: &mut AssetManager,
     backend: &mut renderer_backend::Backend,
-    state: &gameplay::State,
+    state: &crate::gameplay_runtime::GameplayState,
     mode: config::theme::GameplayBannerMode,
 ) {
     let visible_paths: SmallVec<[&Path; 2]> = gameplay::visible_banner_paths(state)
@@ -896,7 +896,7 @@ fn prewarm_gameplay_banners(
     media: &mut DynamicMedia,
     assets: &mut AssetManager,
     backend: &mut renderer_backend::Backend,
-    state: &gameplay::State,
+    state: &crate::gameplay_runtime::GameplayState,
     mode: config::theme::GameplayBannerMode,
 ) {
     let visible_paths: SmallVec<[&Path; 2]> = gameplay::visible_banner_paths(state)
@@ -928,7 +928,7 @@ fn prewarm_gameplay_banners(
     }
 }
 
-fn gameplay_background_video_path(state: &gameplay::State) -> Option<&Path> {
+fn gameplay_background_video_path(state: &crate::gameplay_runtime::GameplayState) -> Option<&Path> {
     state
         .presentation.background_allow_video
         .then_some(state.presentation.current_background_path.as_deref())
@@ -953,7 +953,7 @@ fn prewarm_gameplay_text_layout_cache(
     cache: &mut compose::TextLayoutCache,
     compose_scratch: &mut compose::ComposeScratch,
     actor_scratch: &mut Vec<Actor>,
-    state: &mut gameplay::State,
+    state: &mut crate::gameplay_runtime::GameplayState,
     config: &config::app_config::Config,
     edit_measure_text: bool,
 ) {
@@ -1637,7 +1637,7 @@ pub struct App {
     pending_gameplay_init: Option<PendingGameplayInit>,
     /// Sole-owner handoff at a queued Lua screen boundary. The existing CPU
     /// load worker consumes it; replacement actors retain the same Lua VM.
-    pending_song_lua_reload: Option<(deadsync_song_lua::SongLuaLiveScene, gameplay::SongLuaHeldInputs)>,
+    pending_song_lua_reload: Option<(deadsync_song_lua::SongLuaLiveScene, deadsync_input::HeldCallbackInputs)>,
     pending_gameplay_lua_inputs: Vec<(InputEvent, Option<deadsync_input::PhysicalInput>)>,
     /// One speculative, CPU-only load owned by the Select Music confirmation
     /// transition. It preloads the selected gameplay chart payload and compiled
@@ -3044,7 +3044,7 @@ impl App {
 
     fn finish_gameplay_init(
         &mut self,
-        mut gs: gameplay::State,
+        mut gs: crate::gameplay_runtime::GameplayState,
         finish: &GameplayInitFinish,
     ) -> Vec<Command> {
         self.gameplay_live_textures.reset();
@@ -3052,8 +3052,8 @@ impl App {
         // the next course stage. Gameplay-to-gameplay skips screen exit.
         self.audio.stop_mine_sfx();
         // Releases can arrive while the replacement Lua screen is prepared.
-        gs.reconcile_song_lua_held_inputs(|event| self.input.is_down(event));
-        gs.queue_song_lua_inputs(self.pending_gameplay_lua_inputs.drain(..));
+        gs.stage.song_lua.reconcile_held_inputs(|event| self.input.is_down(event));
+        gs.stage.song_lua.queue_inputs(self.pending_gameplay_lua_inputs.drain(..));
         if let Some(case) = &self.live_case {
             gs.gameplay.set_live_autoplay_enabled(case.autoplay());
         }
@@ -3401,7 +3401,7 @@ impl App {
         changed
     }
 
-    fn gameplay_stage_result(gameplay: &gameplay::State) -> stage_stats::StageSummary {
+    fn gameplay_stage_result(gameplay: &ActiveGameplayStage) -> stage_stats::StageSummary {
         let online = std::array::from_fn(|player| {
             if player >= gameplay.num_players().min(MAX_PLAYERS) {
                 return Default::default();
@@ -3415,7 +3415,7 @@ impl App {
     }
 
     fn evaluation_init_view(
-        gameplay: &gameplay::State,
+        gameplay: &ActiveGameplayStage,
         stage: &stage_stats::StageSummary,
         config: &config::app_config::Config,
     ) -> EvaluationInitView {
@@ -3434,13 +3434,13 @@ impl App {
         )
     }
 
-    fn execute_evaluation_score_runtime(gameplay: &gameplay::State) {
+    fn execute_evaluation_score_runtime(gameplay: &ActiveGameplayStage, pack_group: &str) {
         // Persist one score file per play, including fails and replay lane input,
         // unless the gameplay runtime marked the run as disqualified.
         scores::save_local_scores_from_gameplay(gameplay);
         let _ = scores::save_itl_data_from_gameplay(gameplay);
         scores::submit_groovestats_payloads_from_gameplay(gameplay);
-        scores::submit_arrowcloud_payloads_from_gameplay(gameplay, gameplay.pack_group.as_ref());
+        scores::submit_arrowcloud_payloads_from_gameplay(gameplay, pack_group);
     }
 
     fn retry_evaluation_submissions(state: &evaluation::State) -> bool {
@@ -3512,14 +3512,14 @@ impl App {
                     .screens
                     .gameplay_state
                     .as_ref()
-                    .is_some_and(deadsync_online::gameplay_lobby::uses_live_runtime);
+                    .is_some_and(|state| state.lobby_session.uses_live_runtime());
                 if !uses_live_lobby {
                     return;
                 }
                 if let Some(lobby) = self.gameplay_lobby.refresh_if_dirty(now)
                     && let Some(state) = self.state.screens.gameplay_state.as_mut()
                 {
-                    deadsync_online::gameplay_lobby::sync_runtime_view(state, lobby);
+                    state.lobby_session.sync_runtime_view(lobby);
                 }
             }
             CurrentScreen::Evaluation => {
@@ -5123,8 +5123,8 @@ impl App {
                 .map(|state| &state.gameplay),
             _ => None,
         };
-        let actor_resources = gameplay_state.map(gameplay::State::actor_resources);
-        let render_targets = gameplay_state.map_or(&[][..], gameplay::State::render_targets);
+        let actor_resources = gameplay_state.map(|state| state.stage.actor_resources());
+        let render_targets = gameplay_state.map_or(&[][..], |state| state.stage.render_targets());
         let segmented_actors = gameplay_segments.as_ref().map(|segments| {
             segments.segments(
                 gameplay_state
@@ -6664,7 +6664,7 @@ impl App {
         true
     }
 
-    fn update_combo_carry_from_gameplay(&mut self, gs: &gameplay::State) {
+    fn update_combo_carry_from_gameplay(&mut self, gs: &crate::gameplay_runtime::GameplayState) {
         let num_players = gs.num_players().min(MAX_PLAYERS);
         let player_combos =
             std::array::from_fn(|idx| (idx < num_players).then(|| gs.players()[idx].combo));
@@ -7418,7 +7418,7 @@ impl App {
     }
 
     fn refresh_gameplay_background_path(
-        state: &mut gameplay::State,
+        state: &mut crate::gameplay_runtime::GameplayState,
         show_video_backgrounds: bool,
     ) -> Option<PathBuf> {
         let path = state
@@ -8004,7 +8004,7 @@ impl App {
                     .screens
                     .gameplay_state
                     .as_ref()
-                    .map(gameplay::State::twitch_chat_layout),
+                    .map(gameplay::twitch_chat_layout),
                 self.frame_config.tournament.enabled,
                 &self.asset_manager,
             );
@@ -9309,8 +9309,8 @@ impl App {
         {
             crate::gameplay_runtime::exit(&mut gameplay);
             self.update_combo_carry_from_gameplay(&gameplay);
-            Self::execute_evaluation_score_runtime(&gameplay);
-            let stage = Self::gameplay_stage_result(&gameplay);
+            Self::execute_evaluation_score_runtime(&gameplay.stage, &gameplay.pack_group);
+            let stage = Self::gameplay_stage_result(&gameplay.stage);
             let failed =
                 stage_stats::all_players_failed(&stage, gameplay.setup.session.joined_sides);
             if self
@@ -9454,7 +9454,7 @@ impl App {
                 let has_song_lua = !song_arc.background_lua_changes.is_empty()
                     || !song_arc.foreground_lua_changes.is_empty();
                 let init_config = cfg.clone();
-                let init = move || -> Result<gameplay::State, String> {
+                let init = move || -> Result<crate::gameplay_runtime::GameplayState, String> {
                     space::set_current_metrics(metrics);
                     space::set_current_window_px(display_size.0, display_size.1);
                     let prepared_song_lua = crate::gameplay_entry::prepare_song_lua(
@@ -9560,7 +9560,7 @@ impl App {
             let retained_scene = self.pending_song_lua_reload.take();
             let lua_reload = retained_scene.is_some();
             let (retained_scene, held_inputs) = retained_scene.map_or_else(
-                || (None, gameplay::SongLuaHeldInputs::default()), |(scene, held)| (Some(scene), held));
+                || (None, deadsync_input::HeldCallbackInputs::default()), |(scene, held)| (Some(scene), held));
 
             self.audio.stop_music();
             if prev != CurrentScreen::Gameplay {
@@ -9600,9 +9600,9 @@ impl App {
                 self.update_combo_carry_from_gameplay(&gameplay_results);
                 course_display_carry = Some(gameplay_results.course_display_carry());
                 let color_idx = gameplay_results.active_color_index();
-                Self::execute_evaluation_score_runtime(&gameplay_results);
+                Self::execute_evaluation_score_runtime(&gameplay_results.stage, &gameplay_results.pack_group);
                 let config = config::runtime::get();
-                let stage = Self::gameplay_stage_result(&gameplay_results);
+                let stage = Self::gameplay_stage_result(&gameplay_results.stage);
                 let failed = stage_stats::all_players_failed(
                     &stage,
                     gameplay_results.setup.session.joined_sides,
@@ -10010,13 +10010,13 @@ impl App {
                 |gs| gs.gameplay.active_color_index(),
             );
             if let Some(gameplay) = gameplay_results.as_ref() {
-                Self::execute_evaluation_score_runtime(gameplay);
+                Self::execute_evaluation_score_runtime(&gameplay.stage, &gameplay.pack_group);
             }
             let in_course_run = self.state.session.course_run.is_some();
             let (init_view, failed, completed_course) = if let Some(gameplay) =
                 gameplay_results.as_ref()
             {
-                let stage = Self::gameplay_stage_result(gameplay);
+                let stage = Self::gameplay_stage_result(&gameplay.stage);
                 let failed =
                     stage_stats::all_players_failed(&stage, gameplay.setup.session.joined_sides);
                 let completed = self.record_stage_result(stage.clone(), failed, &config, true);

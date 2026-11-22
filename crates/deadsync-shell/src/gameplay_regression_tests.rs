@@ -756,7 +756,7 @@ pub(crate) mod tests {
                     ..Default::default()
                 }, ..Default::default()
             }, || 1_000_000, &mut Vec::new());
-            let output = state.take_song_lua_output();
+            let output = state.stage.take_output();
             assert!(output.errors.is_empty(), "fixture Lua frame failed: {:?}", output.errors);
         }
     }
@@ -864,7 +864,8 @@ pub(crate) mod tests {
         let uptime_seconds = game_time.unwrap_or(123.0);
         let policy = deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default();
         let segments = match preview {
-            Some(song_content) => state.compose_frame(
+            Some(song_content) => screen_gameplay::compose_frame(
+                state,
                 actors,
                 FramePresentationContext {
                     assets,
@@ -1313,7 +1314,7 @@ end }
                 assert!(segments.segments(state.song_frame(), &actors).count() > 0);
             };
             render(&mut state);
-            let (replacement, _) = screen_gameplay::GameplayPresentation::from_stage(
+            let replacement = screen_gameplay::GameplayPresentation::from_stage(
                 &state.stage,
                 deadsync_assets::gameplay_stage::GameplayStageAssets {
                     hide_song_intro: false,
@@ -1420,13 +1421,13 @@ return Def.ActorFrame { Name = 'Foreground',
                 GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()),
                 "Software", None, true);
             assert!(state.song_lua.is_some(), "runtime mode retains its VM");
-            let startup = state.take_song_lua_output();
+            let startup = state.stage.take_output();
             assert!(startup.errors.is_empty(), "{:?}", startup.errors);
             // Foreground::HandleMessage suppresses loading-time On. Its first
             // Update at the authored start beat dispatches On instead.
             assert_eq!(startup.broadcasts.iter().filter(|event| event.1 == "LiveEntry").count(), 0);
             assert_eq!(startup.broadcasts.iter().filter(|event| event.1 == "LiveInit").count(), 1);
-            assert!(state.take_song_lua_output().broadcasts.is_empty());
+            assert!(state.stage.take_output().broadcasts.is_empty());
             state.boundary.total_elapsed_in_screen = 10.0;
             screen_gameplay::update(&mut state, 0.0, deadsync_gameplay::GameplayAudioSnapshot {
                 stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
@@ -1434,7 +1435,7 @@ return Def.ActorFrame { Name = 'Foreground',
                     valid_at_host_nanos: 1_000_000, ..Default::default()
                 }, ..Default::default()
             }, || 1_000_000, &mut Vec::new());
-            let activation = state.take_song_lua_output();
+            let activation = state.stage.take_output();
             assert!(activation.errors.is_empty(), "{:?}", activation.errors);
             assert_eq!(activation.broadcasts.iter().filter(|event| event.1 == "LiveEntry").count(), 1,
                 "foreground activation at music={}, beat={}, broadcasts={:?}",
@@ -1460,13 +1461,13 @@ return Def.ActorFrame { Name = 'Foreground',
                 };
                 let mut effects = Vec::new();
                 screen_gameplay::update(&mut state, 0.1, snapshot, || 1_000_000, &mut effects);
-                let output = state.take_song_lua_output();
+                let output = state.stage.take_output();
                 assert!(output.errors.is_empty(), "{:?}", output.errors);
                 assert_eq!(output.broadcasts.iter().filter(|event| event.1 == "LiveFrame").count(), 1);
                 let transition = (tick == 2).then(|| deadsync_song_lua::SongLuaLiveRequest::Transition("SM_DoNextScreen".into()));
                 assert_eq!(output.request, transition, "tick={tick}, progress={}", state.players_runtime.players[0].current_possible_points);
                 assert_eq!(output.broadcasts.iter().filter(|event| event.1 == "LiveOff").count(), usize::from(tick == 2));
-                assert!(state.take_song_lua_output().broadcasts.is_empty());
+                assert!(state.stage.take_output().broadcasts.is_empty());
                 assert_eq!(state.players_runtime.players[0].current_possible_points, progress,
                     "clock={}, autoplay={}, notes={:?}, counts={:?}", state.current_music_time_seconds(),
                     state.live_autoplay_enabled(), state.chart_runtime.notes.iter().map(|note| note.beat).collect::<Vec<_>>(),
@@ -1580,7 +1581,7 @@ end
                             profiles, "Software", None, true,
                         );
                         assert!(state.song_lua.is_some(), "Runtime mode retains the Lua scene");
-                        assert!(state.take_song_lua_output().errors.is_empty());
+                        assert!(state.stage.take_output().errors.is_empty());
                         state.boundary.total_elapsed_in_screen = 10.0;
                         state.gameplay.set_live_autoplay_enabled(true);
                         for tick in 0..=540 {
@@ -1594,7 +1595,7 @@ end
                                         ..Default::default()
                                     }, ..Default::default()
                                 }, || host_nanos, &mut Vec::new());
-                            let output = state.take_song_lua_output();
+                            let output = state.stage.take_output();
                             assert!(output.errors.is_empty(), "tick {tick}: {:?}", output.errors);
                             if ![30, 300, 540].contains(&tick) { continue; }
                             // Verify the VM independently before checking the state
@@ -1801,7 +1802,7 @@ end
                 assert!(state.tap_row_judgment_callback.is_none());
                 assert!(state.hold_judgment_callback.is_none());
                 assert!(state.avoided_mine_judgment_callback.is_none());
-                state.queue_song_lua_inputs(std::iter::from_fn(|| {
+                state.stage.song_lua.queue_inputs(std::iter::from_fn(|| {
                     panic!("ordinary gameplay must not consume Lua input events")
                 }));
                 let mut input_phases = 0;
@@ -1823,7 +1824,7 @@ end
                         &mut effects,
                         |_| input_phases += 1,
                     );
-                    let output = state.take_song_lua_output();
+                    let output = state.stage.take_output();
                     assert!(
                         output.errors.is_empty()
                             && output.sounds.is_empty()
@@ -4300,7 +4301,8 @@ return Def.ActorFrame{
                     &mut state.gameplay,
                     Default::default(),
                 );
-                let plain_edit_segments = state.compose_frame(
+                let plain_edit_segments = screen_gameplay::compose_frame(
+                    &mut state,
                     &mut plain_edit_actors,
                     FramePresentationContext {
                         assets: &assets,
@@ -7552,7 +7554,7 @@ return Def.ActorFrame{}
                             });
                         let song_lua_data =
                             deadsync_song_lua::playback::actor_conformance::prepared_primary(primary);
-                        let mut state = screen_gameplay::State::from_gameplay(
+                        let mut state = screen_gameplay::from_gameplay(
                             init(
                                 song,
                                 charts,
@@ -7854,7 +7856,7 @@ return Def.ActorFrame{}
                         },
                         ..Default::default()
                     }, || host, &mut Vec::new());
-                    let output = state.take_song_lua_output();
+                    let output = state.stage.take_output();
                     assert!(output.errors.is_empty(), "Lua frame failed: {:?}", output.errors);
                 };
                 let mut now = 0.0f32;
@@ -8149,7 +8151,7 @@ return Def.ActorFrame{}
                                 &mut Vec::new(),
                             );
                             state.set_current_music_time_ns(music);
-                            let output = state.take_song_lua_output();
+                            let output = state.stage.take_output();
                             assert!(output.errors.is_empty(),
                                 "ending Baked Lua at {at}s: {:?}", output.errors);
                         };
@@ -9090,11 +9092,11 @@ return Def.ActorFrame{}
                     // update. Reuse that observed input only for option approach.
                     state.gameplay.set_player_option_clock_deltas(update.option_deltas.players);
                     if let Some(clocks) = &update.arrow_clock_inputs {
-                        state.set_notefield_tipsy_clock_inputs(
+                        state.presentation.set_notefield_tipsy_clock_inputs(
                             clocks.players.each_ref().map(|player| player.times()[0]),
                         );
                     } else {
-                        state.set_notefield_tipsy_clock_inputs([None; 2]);
+                        state.presentation.set_notefield_tipsy_clock_inputs([None; 2]);
                     }
                     screen_gameplay::update(&mut state, update.delta, deadsync_gameplay::GameplayAudioSnapshot {
                         stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
@@ -9108,7 +9110,7 @@ return Def.ActorFrame{}
                     // delta twice. This setter leaves attack approach history
                     // intact; each captured delta advances modifiers only once.
                     state.set_current_music_time_ns(music);
-                    let output = state.take_song_lua_output();
+                    let output = state.stage.take_output();
                     assert!(output.errors.is_empty(), "Lua update {} at beat {}: {:?}",
                         update.sequence, update.beat, output.errors);
                     let Some(expected) = selected.get(&update.sequence) else { continue; };
@@ -9391,7 +9393,7 @@ return Def.ActorFrame{}
                             ..Default::default()
                         }, || host, &mut Vec::new());
                         state.set_current_music_time_ns(music);
-                        let output = state.take_song_lua_output();
+                        let output = state.stage.take_output();
                         assert!(output.errors.is_empty(), "production Baked Lua at {at}s: {:?}", output.errors);
                     };
                     let mut now = 0.0f32;

@@ -367,14 +367,28 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     let present = adapter
         .find("gameplay::GameplayPresentation::from_stage(")
         .expect("present stage");
+    let lobby = adapter
+        .find("let lobby_session = GameplayLobbySession::new(")
+        .expect("initialize the lobby in the shell");
     let attach = adapter
         .find("attach_prepared_song_lua(gameplay,")
         .expect("attach callbacks");
     assert!(
-        split < present && present < attach,
-        "startup callbacks follow presentation cache setup"
+        split < lobby && lobby < present && present < attach,
+        "gameplay assembly sets up the lobby before the HUD and the startup callbacks"
     );
     assert!(contains_rust(&adapter, "state.stage.song_lua_attachment_parts()"));
+    let owner = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"),
+    );
+    assert!(contains_rust(&owner, "pub struct GameplayHost<L, P>"));
+    assert!(contains_rust(&owner, "pub stage: ActiveGameplayStage"));
+    assert!(contains_rust(&owner, "pub lobby_session: L"));
+    assert!(contains_rust(&owner, "pub presentation: P"));
+    assert!(contains_rust(&adapter, "type GameplayState = GameplayHost<"));
+    assert!(!contains_rust(&theme, "pub struct State"));
+    assert!(contains_rust(&theme, "struct GameplayEffects<'a>(&'a mut State)"));
 }
 
 #[test]
@@ -582,8 +596,8 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         );
     }
     for delegation in [
-        "stage: ActiveGameplayStage",
-        "impl SongLuaGameplayHost for State",
+        "pub type State = GameplayHost<",
+        "impl SongLuaGameplayHost for GameplayEffects<'_>",
         "gameplay_session::update(",
         "gameplay_session::handle_input(",
     ] {
@@ -593,7 +607,8 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         );
     }
     for handoff in [
-        "let (stage, update_visuals) = state.stage_for_update()",
+        "let stage = &mut state.stage",
+        "let update_visuals = state.presentation.life_meter_update()",
         "stage.update(",
         "crate::navigation::song_lua_presentation_screen::<ActiveTheme>",
         "stage.handle_input(ev, physical)",
@@ -889,8 +904,8 @@ fn gameplay_lobby_start_readiness_and_input_routing_stay_below_the_theme() {
         );
     }
     for delegation in [
-        "lobby_session: GameplayLobbySession",
-        "impl GameplayLobbyHost for State",
+        "GameplayHost<GameplayLobbySession, GameplayPresentation>",
+        "impl GameplayLobbyHost for GameplayEffects<'_>",
         "state.lobby_session.route_input_with_sides(",
         "state.lobby().waiting(",
     ] {
@@ -6239,7 +6254,7 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
     }
     assert!(
         gameplay.contains("runtime_view: GameplayPresentationView")
-            && gameplay.contains("lobby_session: GameplayLobbySession")
+            && gameplay.contains("GameplayHost<GameplayLobbySession, GameplayPresentation>")
             && gameplay.contains("pub fn sync_runtime_view")
             && gameplay.contains("SimplyLoveLobbyRequest::UpdateMachineStats")
     );
@@ -6258,7 +6273,7 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
     );
     for shell_owner in [
         "fn sync_active_online_runtime_view",
-        "deadsync_online::gameplay_lobby::sync_runtime_view",
+        "state.lobby_session.sync_runtime_view(lobby)",
         "evaluation::sync_runtime_view",
         "SimplyLoveLobbyRequest::UpdateMachineStats",
         "runtime_update_machine_state_sides_with_stats_default",
@@ -6391,7 +6406,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         .expect("shell app should be readable");
     assert!(
         shell.contains("crate::gameplay_runtime::init_view(")
-            && shell.contains("deadsync_online::gameplay_lobby::sync_runtime_view(state, lobby)")
+            && shell.contains("state.lobby_session.sync_runtime_view(lobby)")
     );
 }
 
@@ -6437,8 +6452,8 @@ fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
         );
     }
     assert!(
-        online_sync.contains(".is_some_and(deadsync_online::gameplay_lobby::uses_live_runtime)")
-            && online_sync.contains("deadsync_online::gameplay_lobby::sync_runtime_view(state, lobby)"),
+        online_sync.contains(".is_some_and(|state| state.lobby_session.uses_live_runtime())")
+            && online_sync.contains("state.lobby_session.sync_runtime_view(lobby)"),
         "offline Gameplay must skip lobby runtime work and live lobbies must update only lobby state"
     );
 
@@ -6492,7 +6507,7 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
         .map(|(body, _)| body)
         .expect("live Gameplay score view should be present");
     assert!(
-        live_score_view.contains("state.itl_cmod_warning_snapshot()"),
+        live_score_view.contains("state.presentation.itl_cmod_warning_snapshot()"),
         "live score polling must reuse the song-lifetime ITL warning"
     );
     assert!(
@@ -13537,6 +13552,11 @@ fn stage_results_are_independent_of_evaluation() {
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell source");
     assert!(!shell.contains("append_stage_results_from_eval"));
+    assert!(contains_rust(&shell, "fn gameplay_stage_result(gameplay: &ActiveGameplayStage)"));
+    assert!(contains_rust(
+        &shell,
+        "fn execute_evaluation_score_runtime(gameplay: &ActiveGameplayStage, pack_group: &str)",
+    ));
     let session = read_source(root.join("crates/deadsync-shell/src/session.rs"))
         .expect("session source");
     assert!(
@@ -13545,6 +13565,7 @@ fn stage_results_are_independent_of_evaluation() {
     let adapter = read_source(root.join("crates/deadsync-shell/src/session_results.rs"))
         .expect("result view adapter");
     assert!(!adapter.contains("stage_summary_from_score_info"));
+    assert!(contains_rust(&adapter, "pub(crate) fn evaluation_view(gs: &ActiveGameplayStage,"));
 }
 
 #[test]

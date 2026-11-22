@@ -111,6 +111,11 @@ impl GameplayLobbySession {
         &self.runtime_view
     }
 
+    /// Replace the retained online view while preserving the stage's local sides.
+    pub fn sync_runtime_view(&mut self, view: LobbyRuntimeView) {
+        self.runtime_view = view;
+    }
+
     #[inline]
     pub const fn uses_live_runtime(&self) -> bool {
         self.live_runtime
@@ -419,7 +424,7 @@ pub fn handle_input<H: GameplayLobbyHost>(host: &mut H, event: &InputEvent) -> b
 
 /// Replace the single retained online view without changing the stage's sides.
 pub fn sync_runtime_view<H: GameplayLobbyHost>(host: &mut H, view: LobbyRuntimeView) {
-    host.lobby_parts().1.runtime_view = view;
+    host.lobby_parts().1.sync_runtime_view(view);
 }
 
 /// Offline stages skip snapshot/reconnect polling for their entire lifetime.

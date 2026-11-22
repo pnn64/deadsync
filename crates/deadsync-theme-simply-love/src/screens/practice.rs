@@ -470,7 +470,7 @@ pub fn init_with_session(
             Vec::new().into_boxed_slice()
         }
     });
-    gameplay.set_practice_timing_labels(timing_labels);
+    gameplay.presentation.set_practice_timing_labels(timing_labels);
     session.snap_display_to_cursor(&mut gameplay.stage.gameplay);
     State {
         gameplay,
@@ -1440,7 +1440,7 @@ fn append_edit_overlay(state: &mut State, actors: &mut Vec<Actor>) {
         .expect("Practice edit info sync before actor construction")
         .1;
     let pc = practice_player_color(state);
-    let header_font = machine_font_key(state.gameplay.machine_font(), FontRole::Header);
+    let header_font = machine_font_key(state.gameplay.presentation.machine_font(), FontRole::Header);
     actors.push(act!(text:
         font(header_font):
         settext(&labels.title):

@@ -1,5 +1,6 @@
 //! Gameplay startup with resolved song, noteskin, and Lua assets.
 
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -28,6 +29,34 @@ pub type GameplayCoreState =
     deadsync_song_lua::playback::GameplayCoreState<GameplayProfile, SpriteSlot>;
 pub type ActiveGameplayStage = GameplayStage<GameplayCoreState, GameplayNoteskinAssets>;
 pub type PreparedGameplaySongLua = deadsync_song_lua::playback::PreparedGameplaySongLua<SpriteSlot>;
+
+/// Owns a live stage and its session data alongside a replaceable presentation.
+pub struct GameplayHost<L, P> {
+    pub stage: ActiveGameplayStage,
+    pub lobby_session: L,
+    pub pack_group: Arc<str>,
+    pub presentation: P,
+}
+
+impl<L, P> GameplayHost<L, P> {
+    pub fn stage_and_lobby(&mut self) -> (&mut ActiveGameplayStage, &mut L) {
+        (&mut self.stage, &mut self.lobby_session)
+    }
+}
+
+impl<L, P> Deref for GameplayHost<L, P> {
+    type Target = ActiveGameplayStage;
+
+    fn deref(&self) -> &Self::Target {
+        &self.stage
+    }
+}
+
+impl<L, P> DerefMut for GameplayHost<L, P> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.stage
+    }
+}
 
 pub struct GameplayStageInput {
     pub song: Arc<SongData>,

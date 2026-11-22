@@ -151,7 +151,7 @@ pub(crate) fn refresh_evaluation(state: &mut evaluation::State, enabled: bool) -
     true
 }
 
-pub(crate) fn refresh_gameplay(state: &mut gameplay::State) -> bool {
+pub(crate) fn refresh_gameplay(state: &mut crate::gameplay_runtime::GameplayState) -> bool {
     let generation = heart_rate_view_generation();
     if gameplay::heart_rate_generation(state) == generation {
         return false;

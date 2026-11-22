@@ -343,6 +343,10 @@ where
     pub fn take_output(&mut self) -> SongLuaLiveOutput {
         self.song_lua.take_output(&mut self.gameplay)
     }
+
+    pub fn clear_song_lua_inputs(&mut self) {
+        self.song_lua.clear_inputs(&mut self.gameplay);
+    }
 }
 
 /// Statically bound access to gameplay and its presentation host.

@@ -312,7 +312,7 @@ impl App {
 impl App {
     pub(super) fn finish_practice_init(
         &mut self,
-        mut gs: gameplay::State,
+        mut gs: crate::gameplay_runtime::GameplayState,
         finish: PracticeInitFinish,
     ) -> Vec<Command> {
         self.gameplay_live_textures.reset();

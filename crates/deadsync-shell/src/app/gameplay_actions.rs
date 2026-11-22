@@ -136,7 +136,7 @@ impl App {
                     state
                         .song_lua
                         .take()
-                        .map(|scene| (scene, state.take_song_lua_held_inputs()))
+                        .map(|scene| (scene, state.stage.song_lua.take_held_inputs()))
                 });
         self.state.shell.transition = TransitionState::Idle;
         self.state.session.restart_pending = false;

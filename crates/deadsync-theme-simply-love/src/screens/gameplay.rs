@@ -23,7 +23,7 @@ use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeVi
 use crate::visual_styles;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{
-    Actor, ActorResourceArena, InlineText, RetainedActorFrame, SizeSpec, TextAlign, TextContent,
+    Actor, InlineText, RetainedActorFrame, SizeSpec, TextAlign, TextContent,
 };
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::compose::{
@@ -38,7 +38,7 @@ use deadlib_render_core::{BlendMode, MeshVertex};
 pub use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
 pub use deadsync_assets::gameplay_stage::GameplayCoreState;
 use deadsync_assets::gameplay_stage::{
-    ActiveGameplayStage, GameplayStageAssets, GameplayStageInput, PreparedGameplaySongLua,
+    ActiveGameplayStage, GameplayHost, GameplayStageAssets, GameplayStageInput, PreparedGameplaySongLua,
     PreparedGameplayStage, attach_prepared_song_lua, prepare_gameplay_stage,
 };
 use deadsync_assets::noteskin;
@@ -79,7 +79,7 @@ use deadsync_song_lua::playback::{
 };
 use deadsync_theme::FontRole;
 use std::cell::{Cell, RefCell};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
@@ -615,9 +615,6 @@ fn smooth_life_p(value: f32) -> f32 {
     }
 }
 
-/// Compatibility alias for the game-owned held-input reload token.
-pub type SongLuaHeldInputs = deadsync_input::HeldCallbackInputs;
-
 /// The presentation portion of an incoming gameplay view. The lobby snapshot is
 /// consumed by the game session and is never retained a second time here.
 #[derive(Clone, Debug)]
@@ -642,12 +639,7 @@ impl GameplayPresentationView {
     }
 }
 
-pub struct State {
-    pub stage: ActiveGameplayStage,
-    pub lobby_session: GameplayLobbySession,
-    pub pack_group: Arc<str>,
-    pub presentation: GameplayPresentation,
-}
+pub type State = GameplayHost<GameplayLobbySession, GameplayPresentation>;
 
 pub struct GameplayPresentation {
     #[cfg(feature = "test-support")]
@@ -851,159 +843,104 @@ impl GameplayPresentationSkeleton {
     }
 }
 
-impl State {
-    /// Transfer authored callbacks from the loading worker to the game session.
-    pub fn attach_song_lua(
-        &mut self,
-        scene: deadsync_song_lua::SongLuaLiveScene,
-    ) -> Result<(), String> {
-        let (gameplay, session, warm_dynamic_scene) = self.song_lua_attachment_parts();
-        session.attach(gameplay, scene, warm_dynamic_scene)
-    }
+#[must_use]
+pub fn from_gameplay(
+    gameplay: GameplayCoreState,
+    noteskin_assets: GameplayNoteskinAssets,
+) -> State {
+    present_stage(
+        PreparedGameplayStage::from_gameplay(gameplay, noteskin_assets),
+        Arc::from("EVENT"),
+        None,
+        None,
+        None,
+        GameplayInitView::default(),
+    )
+}
 
-    /// Supply the core, its controller, and the render scratch warmup to the shell.
-    pub fn song_lua_attachment_parts(
-        &mut self,
-    ) -> (
-        &mut GameplayCoreState,
-        &mut SongLuaGameplaySession,
-        impl FnOnce() + '_,
-    ) {
-        self.stage.song_lua_attachment_parts()
-    }
+pub fn present_stage(
+    prepared: PreparedGameplayStage,
+    stage_intro_text: Arc<str>,
+    replay_status_text: Option<Arc<str>>,
+    course_display_info: Option<CourseDisplayInfo>,
+    course_banner_path: Option<PathBuf>,
+    init_view: GameplayInitView,
+) -> State {
+    let (stage, assets) = prepared.into_parts();
+    from_stage(
+        stage,
+        assets,
+        stage_intro_text,
+        replay_status_text,
+        course_display_info,
+        course_banner_path,
+        init_view,
+    )
+}
 
-    /// The shell drains sounds and requests once after each gameplay frame.
-    /// Broadcast listeners have already run in the retained Lua scene.
-    pub fn take_song_lua_output(&mut self) -> deadsync_song_lua::SongLuaLiveOutput {
-        self.stage.take_output()
-    }
-
-    /// Borrow only the life animation cache while the game runs its frame.
-    pub fn stage_for_update(
-        &mut self,
-    ) -> (
-        &mut ActiveGameplayStage,
-        impl FnOnce(&GameplayCoreState, f32) + '_,
-    ) {
-        let visuals = &mut self.presentation.life_meter_visuals;
-        (&mut self.stage, move |game, delta| {
-            update_life_meter_visuals(game, visuals, delta);
-        })
-    }
-
-    pub fn stage_and_lobby(
-        &mut self,
-    ) -> (
-        &mut ActiveGameplayStage,
-        &mut GameplayLobbySession,
-    ) {
-        (&mut self.stage, &mut self.lobby_session)
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn song_lua_draw_frames(&self) -> &[deadsync_song_lua::SongLuaDrawFrame] {
-        self.song_lua.draw_frames()
-    }
-
-    /// Replay raw native cache clocks; actor/effect outputs remain locally computed.
-    #[cfg(feature = "test-support")]
-    pub fn set_notefield_tipsy_clock_inputs(&mut self, tipsy: [Option<f64>; MAX_PLAYERS]) {
-        assert!(
-            tipsy
-                .iter()
-                .flatten()
-                .all(|time| time.is_finite() && *time >= 0.0),
-            "native ArrowEffects clocks must be finite and nonnegative"
-        );
-        self.presentation.arrow_tipsy_clock_inputs = tipsy;
-    }
-
-    pub const fn machine_font(&self) -> deadsync_config::theme::MachineFont {
-        self.presentation.runtime_view.policy.machine_font
-    }
-
-    #[inline(always)]
-    pub fn judgment_palette(&self, player: usize) -> deadsync_theme::color::JudgmentPalette {
-        self.presentation.judgment_palettes[player.min(MAX_PLAYERS - 1)]
-    }
-
-    /// Song-lifetime ITL warning state prepared by the shell on gameplay entry.
-    /// Live score polling reuses this snapshot instead of re-reading profile or
-    /// song-catalog runtime state every frame.
-    #[inline(always)]
-    pub const fn itl_cmod_warning_snapshot(&self) -> [bool; MAX_PLAYERS] {
-        self.presentation.itl_cmod_warning
-    }
-
-    #[must_use]
-    pub fn from_gameplay(
-        gameplay: GameplayCoreState,
-        noteskin_assets: GameplayNoteskinAssets,
-    ) -> Self {
-        Self::present_stage(
-            PreparedGameplayStage::from_gameplay(gameplay, noteskin_assets),
-            Arc::from("EVENT"),
-            None,
-            None,
-            None,
-            GameplayInitView::default(),
-        )
-    }
-
-    /// Construct the theme's HUD for a prepared stage.
-    pub fn present_stage(
-        prepared: PreparedGameplayStage,
-        stage_intro_text: Arc<str>,
-        replay_status_text: Option<Arc<str>>,
-        course_display_info: Option<CourseDisplayInfo>,
-        course_banner_path: Option<PathBuf>,
-        init_view: GameplayInitView,
-    ) -> Self {
-        let (stage, assets) = prepared.into_parts();
-        Self::from_stage(
-            stage,
-            assets,
-            stage_intro_text,
-            replay_status_text,
-            course_display_info,
-            course_banner_path,
-            init_view,
-        )
-    }
-
-    /// Prepare presentation for an independently constructed game stage.
-    pub fn from_stage(
-        stage: ActiveGameplayStage,
-        assets: GameplayStageAssets,
-        stage_intro_text: Arc<str>,
-        replay_status_text: Option<Arc<str>>,
-        course_display_info: Option<CourseDisplayInfo>,
-        course_banner_path: Option<PathBuf>,
-        init_view: GameplayInitView,
-    ) -> Self {
-        let pack_group = assets.score_pack_group(
-            course_display_info.as_ref().map(|course| &course.name),
-        );
-        let (presentation, lobby_session) = GameplayPresentation::from_stage(
-            &stage,
-            assets,
-            stage_intro_text,
-            replay_status_text,
-            course_display_info,
-            course_banner_path,
-            init_view,
-        );
-        Self {
-            stage,
-            lobby_session,
-            pack_group,
-            presentation,
-        }
+pub fn from_stage(
+    stage: ActiveGameplayStage,
+    assets: GameplayStageAssets,
+    stage_intro_text: Arc<str>,
+    replay_status_text: Option<Arc<str>>,
+    course_display_info: Option<CourseDisplayInfo>,
+    course_banner_path: Option<PathBuf>,
+    mut init_view: GameplayInitView,
+) -> State {
+    let pack_group = assets.score_pack_group(
+        course_display_info.as_ref().map(|course| &course.name),
+    );
+    let runtime = &mut init_view.runtime;
+    let lobby_session = GameplayLobbySession::new(
+        std::mem::take(&mut runtime.lobby),
+        runtime.joined,
+        runtime.player_side,
+    );
+    let presentation = GameplayPresentation::from_stage(
+        &stage,
+        assets,
+        stage_intro_text,
+        replay_status_text,
+        course_display_info,
+        course_banner_path,
+        init_view,
+    );
+    State {
+        stage,
+        lobby_session,
+        pack_group,
+        presentation,
     }
 }
 
 impl GameplayPresentation {
-    /// Prepare the HUD and return the lobby controller to the stage host.
+    /// Borrow the life animation cache for a game-owned update.
+    pub fn life_meter_update(&mut self) -> impl FnOnce(&GameplayCoreState, f32) + '_ {
+        let visuals = &mut self.life_meter_visuals;
+        move |game, delta| update_life_meter_visuals(game, visuals, delta)
+    }
+
+    #[cfg(feature = "test-support")]
+    pub fn set_notefield_tipsy_clock_inputs(&mut self, tipsy: [Option<f64>; MAX_PLAYERS]) {
+        assert!(
+            tipsy.iter().flatten().all(|time| time.is_finite() && *time >= 0.0),
+            "native ArrowEffects clocks must be finite and nonnegative"
+        );
+        self.arrow_tipsy_clock_inputs = tipsy;
+    }
+
+    pub const fn itl_cmod_warning_snapshot(&self) -> [bool; MAX_PLAYERS] {
+        self.itl_cmod_warning
+    }
+
+    pub(crate) fn set_practice_timing_labels(
+        &mut self,
+        labels: [Box<[deadsync_notefield::TimingSegmentLabel]>; MAX_PLAYERS],
+    ) {
+        self.practice_timing_labels = labels;
+    }
+
+    /// Prepare the HUD for a stage supplied by the game host.
     pub fn from_stage(
         stage: &ActiveGameplayStage,
         assets: GameplayStageAssets,
@@ -1012,7 +949,7 @@ impl GameplayPresentation {
         course_display_info: Option<CourseDisplayInfo>,
         course_banner_path: Option<PathBuf>,
         init_view: GameplayInitView,
-    ) -> (Self, GameplayLobbySession) {
+    ) -> Self {
         let pack_label = assets.score_pack_group(
             course_display_info.as_ref().map(|course| &course.name),
         );
@@ -1037,9 +974,7 @@ impl GameplayPresentation {
         let scorebox_profile_snapshot = scores.scorebox_profiles;
         let scorebox_side_snapshot = scores.scorebox_snapshots;
         let rival_score_types = scores.rival_score_types;
-        let (runtime_view, lobby) = GameplayPresentationView::split(runtime_view);
-        let lobby_session =
-            GameplayLobbySession::new(lobby, runtime_view.joined, runtime_view.player_side);
+        let (runtime_view, _) = GameplayPresentationView::split(runtime_view);
         let density_graph = DensityGraphRenderState::from_gameplay(gameplay);
         let step_stats_profiles =
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
@@ -1131,7 +1066,7 @@ impl GameplayPresentation {
             !step_stats_profiles[0].step_statistics.is_empty(),
             !step_stats_profiles[1].step_statistics.is_empty(),
         );
-        let presentation = Self {
+        Self {
             #[cfg(feature = "test-support")]
             arrow_tipsy_clock_inputs: [None; MAX_PLAYERS],
             judgment_palettes,
@@ -1186,8 +1121,7 @@ impl GameplayPresentation {
             heart_rate_text: heart_rate::HeartRateTextPlan::default(),
             smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
             frame_scratch: Some(Box::new(frame_scratch)),
-        };
-        (presentation, lobby_session)
+        }
     }
 
     #[inline(always)]
@@ -1256,81 +1190,52 @@ impl GameplayPresentation {
     }
 }
 
-impl State {
-    pub(crate) fn set_practice_timing_labels(
-        &mut self,
-        labels: [Box<[deadsync_notefield::TimingSegmentLabel]>; MAX_PLAYERS],
-    ) {
-        self.presentation.practice_timing_labels = labels;
-    }
+pub fn compose_frame(
+    state: &mut State,
+    actors: &mut Vec<Actor>,
+    context: FramePresentationContext<
+        '_,
+        ActorViewOverride,
+        crate::views::SimplyLoveVisualPolicyView,
+    >,
+    song_content: SongFrameContent,
+) -> deadsync_song_lua::playback::GameplayActorSegments {
+    let segments = state.stage.with_frame_scratch(|stage, song| {
+        state.presentation.compose_frame(
+            stage,
+            &state.lobby_session,
+            song,
+            actors,
+            context,
+            song_content,
+        )
+    });
+    push_song_lua_out(actors, &state.stage);
+    segments
+}
 
-    /// Borrows this frame's offscreen passes in song-layer dependency order.
-    pub fn song_frame(&self) -> &deadsync_song_lua::playback::FrameScratch {
-        self.stage.song_frame()
-    }
-
-    pub fn compose_frame(
-        &mut self,
-        actors: &mut Vec<Actor>,
-        context: FramePresentationContext<
-            '_,
-            ActorViewOverride,
-            crate::views::SimplyLoveVisualPolicyView,
-        >,
-        song_content: SongFrameContent,
-    ) -> deadsync_song_lua::playback::GameplayActorSegments {
-        let segments = self.stage.with_frame_scratch(|stage, song| {
-            self.presentation.compose_frame(
-                stage,
-                &self.lobby_session,
-                song,
-                actors,
-                context,
-                song_content,
-            )
-        });
-        push_song_lua_out(actors, &self.stage);
-        segments
-    }
-
-    pub fn render_targets(&self) -> &[deadlib_present::actors::RenderTarget] {
-        self.stage.render_targets()
-    }
-
-    #[inline(always)]
-    pub const fn actor_resources(&self) -> &ActorResourceArena {
-        self.stage.actor_resources()
-    }
-
-    #[inline(always)]
-    pub fn active_background_start_sec(&self) -> Option<f32> {
-        self.song_backgrounds().active_start_second()
-    }
-
-    pub fn twitch_chat_layout(&self) -> super::components::shared::twitch_chat::GameplayLayout {
-        let style = self.presentation.hud_snapshot.play_style;
-        let p2 = self.presentation.hud_snapshot.player_side == profile_data::PlayerSide::P2;
-        let centered = style.is_double() || self.presentation.runtime_view.policy.center_single_notefield;
-        let sign = if p2 { 1.0 } else { -1.0 };
-        let w = screen_width();
-        let center = w * 0.5
-            + if centered {
-                0.0
-            } else {
-                sign * w.clamp(640.0, 854.0) * 0.25
-            }
-            + sign * self.profiles()[0].note_field_offset_x.clamp(0, 50) as f32;
-        let half_width = self.presentation.notefield_width(0) * self.field_zoom_for_player(0) * 0.5;
-        super::components::shared::twitch_chat::GameplayLayout {
-            two_players: self.num_players() > 1,
-            p2,
-            centered,
-            field_left: center - half_width,
-            field_right: center + half_width,
-            statistics: self.presentation.step_stats_mode != GameplayStepStatsMode::Hidden,
+pub fn twitch_chat_layout(state: &impl GameplayScreenView) -> super::components::shared::twitch_chat::GameplayLayout {
+    let style = state.presentation().hud_snapshot.play_style;
+    let p2 = state.presentation().hud_snapshot.player_side == profile_data::PlayerSide::P2;
+    let centered = style.is_double() || state.presentation().runtime_view.policy.center_single_notefield;
+    let sign = if p2 { 1.0 } else { -1.0 };
+    let w = screen_width();
+    let center = w * 0.5
+        + if centered {
+            0.0
+        } else {
+            sign * w.clamp(640.0, 854.0) * 0.25
         }
+        + sign * state.profiles()[0].note_field_offset_x.clamp(0, 50) as f32;
+    let half_width = state.presentation().notefield_width(0) * state.field_zoom_for_player(0) * 0.5;
+    super::components::shared::twitch_chat::GameplayLayout {
+        two_players: state.num_players() > 1,
+        p2,
+        centered,
+        field_left: center - half_width,
+        field_right: center + half_width,
+        statistics: state.presentation().step_stats_mode != GameplayStepStatsMode::Hidden,
     }
-
 }
 
 impl GameplayFramePresenter for GameplayPresenter<'_> {
@@ -1405,7 +1310,9 @@ impl GameplayFramePresenter for GameplayPresenter<'_> {
     }
 }
 
-impl GameplayLobbyHost for State {
+struct GameplayEffects<'a>(&'a mut State);
+
+impl GameplayLobbyHost for GameplayEffects<'_> {
     type Profile = GameplayProfile;
     type OverlayActor = <Self as SongLuaGameplayHost>::OverlayActor;
     type CapturedActor = <Self as SongLuaGameplayHost>::CapturedActor;
@@ -1413,12 +1320,12 @@ impl GameplayLobbyHost for State {
     type Effect = ThemeEffect;
 
     fn lobby_parts(&mut self) -> (&mut GameplayCoreState, &mut GameplayLobbySession) {
-        let (stage, lobby) = self.stage_and_lobby();
+        let (stage, lobby) = self.0.stage_and_lobby();
         (&mut stage.gameplay, lobby)
     }
 
     fn lobby_session(&self) -> &GameplayLobbySession {
-        &self.lobby_session
+        &self.0.lobby_session
     }
 
     fn lobby_effect(action: GameplayLobbyAction) -> ThemeEffect {
@@ -1441,7 +1348,7 @@ impl GameplayLobbyHost for State {
     }
 }
 
-impl SongLuaGameplayHost for State {
+impl SongLuaGameplayHost for GameplayEffects<'_> {
     type Profile = GameplayProfile;
     type OverlayActor = deadsync_song_lua::SongLuaOverlayActor<
         deadsync_song_lua::SongLuaOverlayKind<
@@ -1455,13 +1362,13 @@ impl SongLuaGameplayHost for State {
     type Effect = ThemeEffect;
 
     fn gameplay_parts(&mut self) -> (&mut GameplayCoreState, &mut SongLuaGameplaySession) {
-        (&mut self.stage.gameplay, &mut self.stage.song_lua)
+        (&mut self.0.stage.gameplay, &mut self.0.stage.song_lua)
     }
 
     fn update_gameplay_visuals(&mut self, delta_time: f32) {
         update_life_meter_visuals(
-            &self.stage.gameplay,
-            &mut self.presentation.life_meter_visuals,
+            &self.0.stage.gameplay,
+            &mut self.0.presentation.life_meter_visuals,
             delta_time,
         );
     }
@@ -1480,20 +1387,6 @@ impl SongLuaGameplayHost for State {
     fn next_screen_effect(name: Option<&str>) -> Result<ThemeEffect, String> {
         let destination = song_lua_transition_screen(name)?;
         Ok(ThemeEffect::NavigateNoFade(destination))
-    }
-}
-
-impl Deref for State {
-    type Target = ActiveGameplayStage;
-
-    fn deref(&self) -> &Self::Target {
-        &self.stage
-    }
-}
-
-impl DerefMut for State {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.stage
     }
 }
 
@@ -1629,7 +1522,7 @@ pub fn init(
         song_lua_data,
         mini_indicator: std::mem::take(&mut init_view.scores.mini_indicator),
     });
-    let mut state = State::present_stage(
+    let mut state = present_stage(
         prepared,
         stage_intro_text,
         replay_status_text,
@@ -2147,7 +2040,7 @@ pub fn push_scorebox_actors_for_side(
 }
 
 pub fn on_enter(state: &mut State) {
-    gameplay_lobby::on_enter(state);
+    gameplay_lobby::on_enter(&mut GameplayEffects(state));
 }
 
 pub const fn on_exit(state: &mut State) {
@@ -2167,7 +2060,7 @@ pub fn sync_runtime_view(state: &mut State, view: GameplayRuntimeView) {
             )
         });
     }
-    gameplay_lobby::sync_runtime_view(state, lobby);
+    gameplay_lobby::sync_runtime_view(&mut GameplayEffects(state), lobby);
     state.presentation.runtime_view = view;
 }
 
@@ -2182,7 +2075,7 @@ pub fn uses_live_lobby_runtime(state: &impl GameplayScreenView) -> bool {
 /// joined sides, and player side are fixed at stage construction.
 #[inline(always)]
 pub fn sync_lobby_runtime_view(state: &mut State, lobby: crate::views::SimplyLoveLobbyRuntimeView) {
-    gameplay_lobby::sync_runtime_view(state, lobby);
+    gameplay_lobby::sync_runtime_view(&mut GameplayEffects(state), lobby);
 }
 
 #[inline(always)]
@@ -2243,7 +2136,7 @@ pub fn rival_score_type_for_side(
 
 /// Compatibility wrapper for the game-owned lobby frame boundary.
 pub fn prepare_update(state: &mut State, effects: &mut Vec<ThemeEffect>) -> bool {
-    gameplay_lobby::prepare_update(state, effects)
+    gameplay_lobby::prepare_update(&mut GameplayEffects(state), effects)
 }
 
 pub(crate) fn song_lua_transition_screen(
@@ -2312,12 +2205,12 @@ pub fn update_with_input(
     after_update_input: impl FnOnce(&mut State),
 ) {
     gameplay_session::update(
-        state,
+        &mut GameplayEffects(state),
         delta_time,
         audio_snapshot,
         fallback_host_nanos,
         effects,
-        after_update_input,
+        |host| after_update_input(host.0),
     );
 }
 
@@ -2443,7 +2336,7 @@ pub fn handle_input_with_device(
         state.presentation.runtime_view.player_side,
     ) {
         GameplayLobbyInput::PassThrough => {
-            gameplay_session::handle_input(state, ev, physical, effects);
+            gameplay_session::handle_input(&mut GameplayEffects(state), ev, physical, effects);
         }
         GameplayLobbyInput::ToggleHud => toggle_lobby_hud(state),
         GameplayLobbyInput::Consumed => {}
@@ -2452,31 +2345,6 @@ pub fn handle_input_with_device(
 
 pub const fn toggle_lobby_hud(state: &mut State) {
     state.presentation.lobby_hud_visibility.toggle();
-}
-
-impl State {
-    pub fn queue_song_lua_inputs(
-        &mut self,
-        events: impl IntoIterator<Item = (InputEvent, Option<deadsync_input::PhysicalInput>)>,
-    ) {
-        self.song_lua.queue_inputs(events);
-    }
-
-    pub fn reconcile_song_lua_held_inputs(&mut self, is_down: impl FnMut(&InputEvent) -> bool) {
-        self.song_lua.reconcile_held_inputs(is_down);
-    }
-
-    pub fn clear_song_lua_inputs(&mut self) {
-        self.stage.song_lua.clear_inputs(&mut self.stage.gameplay);
-    }
-
-    pub fn take_song_lua_held_inputs(&mut self) -> SongLuaHeldInputs {
-        self.song_lua.take_held_inputs()
-    }
-
-    pub fn restore_song_lua_held_inputs(&mut self, held: SongLuaHeldInputs) {
-        self.song_lua.restore_held_inputs(held);
-    }
 }
 
 /// Compatibility callback route for hardware and recorded native input owners.
@@ -5338,7 +5206,7 @@ mod tests {
         use deadsync_gameplay::GameplayExit;
 
         assert!(matches!(
-            <State as SongLuaGameplayHost>::gameplay_effect(GameplayAction::None),
+            <GameplayEffects<'_> as SongLuaGameplayHost>::gameplay_effect(GameplayAction::None),
             ThemeEffect::None
         ));
         for action in [
@@ -5349,7 +5217,7 @@ mod tests {
             GameplayAction::Restart,
         ] {
             assert!(matches!(
-                <State as SongLuaGameplayHost>::gameplay_effect(action),
+                <GameplayEffects<'_> as SongLuaGameplayHost>::gameplay_effect(action),
                 ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::GameplayAction(actual))
                     if actual == action
             ));
@@ -5366,11 +5234,11 @@ mod tests {
             (Some("ScreenSelectCourse"), Screen::SelectCourse),
             (Some("ScreenTitleMenu"), Screen::Menu),
         ] {
-            let effect = <State as SongLuaGameplayHost>::next_screen_effect(name).unwrap();
+            let effect = <GameplayEffects<'_> as SongLuaGameplayHost>::next_screen_effect(name).unwrap();
             assert!(matches!(effect, ThemeEffect::NavigateNoFade(screen) if screen == expected));
         }
         for name in ["ScreenUnknown", "ScreenGameplay"] {
-            assert!(<State as SongLuaGameplayHost>::next_screen_effect(Some(name)).is_err());
+            assert!(<GameplayEffects<'_> as SongLuaGameplayHost>::next_screen_effect(Some(name)).is_err());
         }
     }
 
