@@ -232,6 +232,12 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
         let value = (bits as f64) * 2f64.powi(exp.saturating_add(skipped));
         return Some(if negative { -value } else { value });
     }
+    if unsigned.len() >= 64 && unsigned.starts_with("00000000") {
+        // Keep one digit before any decimal point or exponent.
+        let start = crate::pattern::byte_run(unsigned.as_bytes(), b'0') - 1;
+        let magnitude: f64 = unsigned[start..].parse().ok()?;
+        return Some(if negative { -magnitude } else { magnitude });
+    }
     // Rust accepts NaN/inf for runtime conversions; source numerals always start with a digit.
     text.parse().ok()
 }
