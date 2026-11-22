@@ -1086,12 +1086,22 @@ pub(super) fn drain_commands(call: &mut HostCall<'_>, actor: TableId) -> Result<
             return Ok(());
         }
         song_pose::advance_position(call, actor)?;
-        let recurring = call
-            .store()
-            .actors
-            .get(&actor)
-            .and_then(|a| a.capture.as_ref())
-            .is_some_and(|c| c.recurring.command.is_some());
+        // A drain nested inside the command that just became recurring
+        // (Update -> Update2 -> Update) must not spend the frame remainder:
+        // the command is still on the stack, so invoking it again is a no-op
+        // that reads as "did not requeue" and ends the loop. Whoever runs
+        // that command, an outer drain or the recurring scheduler, owns the
+        // remainder once it returns.
+        let recurring = call.store().actors.get(&actor).is_some_and(|a| {
+            a.capture
+                .as_ref()
+                .and_then(|c| c.recurring.command.as_ref())
+                .is_some_and(|command| {
+                    let mut field = command.clone();
+                    field.extend_from_slice(b"Command");
+                    !a.active_commands.contains(&field)
+                })
+        });
         if !was_recurring
             && recurring
             && let Some(remainder) = remainder
