@@ -698,7 +698,9 @@ impl Pattern {
             return None;
         }
         match first.kind {
-            Kind::Byte | Kind::Literal => Some(LeadingByte::Literal(first.arg as u8)),
+            Kind::Byte | Kind::Literal | Kind::Balance => {
+                Some(LeadingByte::Literal(first.arg as u8))
+            }
             Kind::Set => Some(LeadingByte::Class(&self.sets[first.arg as usize])),
             _ => None,
         }
@@ -709,7 +711,13 @@ impl Pattern {
         start: usize,
         work: &mut Work,
     ) -> Result<Option<Matched>, Error> {
-        let first = self.leading_byte().filter(|_| !self.anchored);
+        if self.anchored {
+            if start > source.len() {
+                return Ok(None);
+            }
+            return self.match_at(source, start, work);
+        }
+        let first = self.leading_byte();
         let mut pos = start;
         while pos <= source.len() {
             if let Some(first) = first {
@@ -720,9 +728,6 @@ impl Pattern {
             }
             if let Some(found) = self.match_at(source, pos, work)? {
                 return Ok(Some(found));
-            }
-            if self.anchored {
-                break;
             }
             pos += 1;
         }
