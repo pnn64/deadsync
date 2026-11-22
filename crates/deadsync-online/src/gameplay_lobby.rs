@@ -260,15 +260,41 @@ impl GameplayLobbySession {
 /// Reset readiness on entry and start immediately only for an offline stage.
 pub fn on_enter<H: GameplayLobbyHost>(host: &mut H) {
     let (game, lobby) = host.lobby_parts();
-    lobby.music_started = false;
-    lobby.set_all_local_players_ready(false);
-    lobby.disconnect_holds = [None; 2];
-    if lobbies::gameplay_lobby_wait_required(lobby.runtime_view.snapshot.joined_lobby.as_ref()) {
-        return;
+    lobby.on_enter(game);
+}
+
+impl GameplayLobbySession {
+    /// Start a game stage using only its simulation and retained lobby state.
+    pub fn on_enter<P: GameplayProfileData, O, C, D>(
+        &mut self,
+        game: &mut GameplayRuntimeState<P, O, C, D>,
+    ) {
+        self.music_started = false;
+        self.set_all_local_players_ready(false);
+        self.disconnect_holds = [None; 2];
+        if lobbies::gameplay_lobby_wait_required(self.runtime_view.snapshot.joined_lobby.as_ref()) {
+            return;
+        }
+        self.set_all_local_players_ready(true);
+        game.start_stage_music();
+        self.music_started = true;
     }
-    lobby.set_all_local_players_ready(true);
-    game.start_stage_music();
-    lobby.music_started = true;
+
+    /// Emit lobby work and report whether the stage can advance.
+    pub fn prepare_update<P: GameplayProfileData, O, C, D>(
+        &mut self,
+        game: &mut GameplayRuntimeState<P, O, C, D>,
+        emit: impl FnMut(GameplayLobbyAction),
+    ) -> bool {
+        prepare_update_with_elapsed(game, self, emit, |started_at| {
+            started_at.elapsed().as_secs_f32()
+        })
+    }
+
+    /// Consume the input while the stage is waiting for lobby readiness.
+    pub fn handle_input(&mut self, event: &InputEvent) -> bool {
+        self.handle_waiting_input(event)
+    }
 }
 
 /// Prepare a gameplay frame, using real elapsed time only for retained holds.
@@ -284,9 +310,8 @@ pub fn prepare_update_with_actions<H: GameplayLobbyHost>(
     host: &mut H,
     emit: impl FnMut(GameplayLobbyAction),
 ) -> bool {
-    prepare_update_with_elapsed(host, emit, |started_at| {
-        started_at.elapsed().as_secs_f32()
-    })
+    let (game, lobby) = host.lobby_parts();
+    lobby.prepare_update(game, emit)
 }
 
 /// The same frame boundary with an explicit monotonic time for deterministic use.
@@ -295,19 +320,21 @@ pub fn prepare_update_at<H: GameplayLobbyHost>(
     effects: &mut Vec<H::Effect>,
     now: Instant,
 ) -> bool {
+    let (game, lobby) = host.lobby_parts();
     prepare_update_with_elapsed(
-        host,
+        game,
+        lobby,
         |action| effects.push(H::lobby_effect(action)),
         |started_at| now.saturating_duration_since(started_at).as_secs_f32(),
     )
 }
 
-fn prepare_update_with_elapsed<H: GameplayLobbyHost>(
-    host: &mut H,
+fn prepare_update_with_elapsed<P: GameplayProfileData, O, C, D>(
+    game: &mut GameplayRuntimeState<P, O, C, D>,
+    lobby: &mut GameplayLobbySession,
     mut emit: impl FnMut(GameplayLobbyAction),
     elapsed: impl FnMut(Instant) -> f32,
 ) -> bool {
-    let (game, lobby) = host.lobby_parts();
     if !lobby.music_started {
         if lobby
             .disconnect_hold_elapsed_with(elapsed)
@@ -340,7 +367,7 @@ fn prepare_update_with_elapsed<H: GameplayLobbyHost>(
 
 /// Consume all input while waiting, applying Start edges only to active sides.
 pub fn handle_input<H: GameplayLobbyHost>(host: &mut H, event: &InputEvent) -> bool {
-    host.lobby_parts().1.handle_waiting_input(event)
+    host.lobby_parts().1.handle_input(event)
 }
 
 /// Replace the single retained online view without changing the stage's sides.

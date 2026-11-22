@@ -1622,8 +1622,10 @@ end
                             profiles,
                         );
                         set_fixture_time(&mut state, 1.0);
-                        assert!(state.song_media.refresh_foreground(&state.gameplay),
-                            "native foreground media must actually activate");
+                        assert!(
+                            state.song_media.refresh_foreground(&state.stage.gameplay),
+                            "native foreground media must actually activate"
+                        );
                         assert!(!state.song_frame().uses_song_lua_compositor());
                         let assets = fixture_assets();
                         let mut actors = Vec::new();
@@ -5083,6 +5085,7 @@ return Def.ActorFrame {
                     }
                     set_fixture_time(&mut state, seconds);
                     state
+                        .stage
                         .gameplay
                         .refresh_live_notefield_options(state.current_bpm_display());
                     let frame = compose_fixture_frame(

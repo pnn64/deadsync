@@ -15,6 +15,7 @@ use deadsync_gameplay::{
 use deadsync_input::{
     CallbackInputState, HeldCallbackInputs, InputEvent, PhysicalInput, VirtualAction,
 };
+use std::ops::{Deref, DerefMut};
 
 pub const SONG_LUA_OUT_DELAY: f32 = 0.5;
 pub const SONG_LUA_OUT_FADE_DURATION: f32 = 1.0;
@@ -34,6 +35,76 @@ pub enum SongLuaGameplayEffect<S> {
     Action(GameplayAction),
     ReloadSongLua,
     Navigate(S),
+}
+
+/// The live simulation and authored callbacks for a stage. Presentation can
+/// attach its own caches and read the simulation without owning its lifecycle.
+pub struct GameplayStage<G> {
+    pub gameplay: G,
+    pub song_lua: SongLuaGameplaySession,
+}
+
+impl<G> Deref for GameplayStage<G> {
+    type Target = G;
+
+    #[inline]
+    fn deref(&self) -> &G {
+        &self.gameplay
+    }
+}
+
+impl<G> DerefMut for GameplayStage<G> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut G {
+        &mut self.gameplay
+    }
+}
+
+impl<P: GameplayProfileData, O, C, D> GameplayStage<GameplayRuntimeState<P, O, C, D>>
+where
+    GameplayRuntimeState<P, O, C, D>: SongLuaGameplayVisualState,
+{
+    pub fn update<S>(
+        &mut self,
+        delta_time: f32,
+        audio_snapshot: GameplayAudioSnapshot,
+        fallback_host_nanos: impl FnOnce() -> u64,
+        resolve_screen: impl FnOnce(Option<&str>) -> Result<S, String>,
+        emit: impl FnMut(SongLuaGameplayEffect<S>),
+        update_visuals: impl FnOnce(&GameplayRuntimeState<P, O, C, D>, f32),
+    ) {
+        drive_frame(
+            self,
+            |stage| (&mut stage.gameplay, &mut stage.song_lua),
+            delta_time,
+            audio_snapshot,
+            fallback_host_nanos,
+            resolve_screen,
+            emit,
+            |stage, delta| update_visuals(&stage.gameplay, delta),
+            |_| {},
+        );
+    }
+
+    #[must_use]
+    pub fn handle_input(
+        &mut self,
+        event: &InputEvent,
+        physical: Option<PhysicalInput>,
+    ) -> GameplayAction {
+        handle_input_with_action(
+            &mut self.gameplay,
+            &mut self.song_lua,
+            event,
+            physical,
+            std::convert::identity,
+        )
+        .unwrap_or(GameplayAction::None)
+    }
+
+    pub fn take_output(&mut self) -> SongLuaLiveOutput {
+        self.song_lua.take_output(&mut self.gameplay)
+    }
 }
 
 /// Statically bound access to gameplay and its presentation host.
@@ -548,9 +619,9 @@ impl SongLuaGameplaySession {
         game.publish_song_lua_visuals(scene)
     }
 
-    fn advance<H: SongLuaGameplayHost, S>(
+    fn advance<P: GameplayProfileData, O, C, D, S>(
         &mut self,
-        game: &mut HostGame<H>,
+        game: &mut GameplayRuntimeState<P, O, C, D>,
         delta: f32,
         uptime_seconds: Option<f64>,
         resolve_screen: impl FnOnce(Option<&str>) -> Result<S, String>,
@@ -558,7 +629,7 @@ impl SongLuaGameplaySession {
         frame_actions: &mut FrameActions,
     ) -> Result<(), String>
     where
-        HostGame<H>: SongLuaGameplayVisualState,
+        GameplayRuntimeState<P, O, C, D>: SongLuaGameplayVisualState,
     {
         let Some(scene) = &mut self.scene else {
             return Ok(());
@@ -679,14 +750,45 @@ pub fn update_with_effects<H: SongLuaGameplayHost, S>(
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
     resolve_screen: impl FnOnce(Option<&str>) -> Result<S, String>,
-    mut emit: impl FnMut(SongLuaGameplayEffect<S>),
+    emit: impl FnMut(SongLuaGameplayEffect<S>),
     after_update_input: impl FnOnce(&mut H),
 ) where
     HostGame<H>: SongLuaGameplayVisualState,
 {
+    drive_frame(
+        host,
+        H::gameplay_parts,
+        delta_time,
+        audio_snapshot,
+        fallback_host_nanos,
+        resolve_screen,
+        emit,
+        H::update_gameplay_visuals,
+        after_update_input,
+    );
+}
+
+fn drive_frame<H, P: GameplayProfileData, O, C, D, S>(
+    host: &mut H,
+    gameplay_parts: impl Fn(
+        &mut H,
+    ) -> (
+        &mut GameplayRuntimeState<P, O, C, D>,
+        &mut SongLuaGameplaySession,
+    ),
+    delta_time: f32,
+    audio_snapshot: GameplayAudioSnapshot,
+    fallback_host_nanos: impl FnOnce() -> u64,
+    resolve_screen: impl FnOnce(Option<&str>) -> Result<S, String>,
+    mut emit: impl FnMut(SongLuaGameplayEffect<S>),
+    update_visuals: impl FnOnce(&mut H, f32),
+    after_update_input: impl FnOnce(&mut H),
+) where
+    GameplayRuntimeState<P, O, C, D>: SongLuaGameplayVisualState,
+{
     let mut frame_actions = FrameActions::default();
     let action = {
-        let (game, session) = host.gameplay_parts();
+        let (game, session) = gameplay_parts(host);
         if session.ended {
             return;
         }
@@ -732,7 +834,7 @@ pub fn update_with_effects<H: SongLuaGameplayHost, S>(
         {
             game.finalize_completed_stage();
         }
-        if let Err(error) = session.advance::<H, S>(
+        if let Err(error) = session.advance(
             game,
             delta_time,
             uptime_seconds,
@@ -745,9 +847,9 @@ pub fn update_with_effects<H: SongLuaGameplayHost, S>(
         action
     };
 
-    host.update_gameplay_visuals(delta_time);
+    update_visuals(host, delta_time);
     let has_scene = {
-        let (game, session) = host.gameplay_parts();
+        let (game, session) = gameplay_parts(host);
         let resolved_action = game.resolve_frame_action(action);
         match action {
             GameplayAction::Navigate(GameplayExit::Complete)
@@ -772,7 +874,7 @@ pub fn update_with_effects<H: SongLuaGameplayHost, S>(
     }
 
     {
-        let (game, session) = host.gameplay_parts();
+        let (game, session) = gameplay_parts(host);
         let mut pending = session.inputs.take_pending();
         for (event, physical) in pending.drain(..) {
             session.dispatch_input(game, &event, physical);
@@ -788,7 +890,7 @@ pub fn update_with_effects<H: SongLuaGameplayHost, S>(
     }
     after_update_input(host);
 
-    let (game, session) = host.gameplay_parts();
+    let (game, session) = gameplay_parts(host);
     if frame_actions.pop
         && let Err(error) = session.end(game)
     {
@@ -810,7 +912,10 @@ pub fn handle_input<H: SongLuaGameplayHost>(
     physical: Option<PhysicalInput>,
     effects: &mut Vec<H::Effect>,
 ) {
-    if let Some(effect) = handle_input_with_action(host, event, physical, H::gameplay_effect) {
+    let (game, session) = host.gameplay_parts();
+    if let Some(effect) =
+        handle_input_with_action(game, session, event, physical, H::gameplay_effect)
+    {
         effects.push(effect);
     }
 }
@@ -822,17 +927,18 @@ pub fn handle_input_action<H: SongLuaGameplayHost>(
     event: &InputEvent,
     physical: Option<PhysicalInput>,
 ) -> GameplayAction {
-    handle_input_with_action(host, event, physical, std::convert::identity)
+    let (game, session) = host.gameplay_parts();
+    handle_input_with_action(game, session, event, physical, std::convert::identity)
         .unwrap_or(GameplayAction::None)
 }
 
-fn handle_input_with_action<H: SongLuaGameplayHost, T>(
-    host: &mut H,
+fn handle_input_with_action<P: GameplayProfileData, O, C, D, T>(
+    game: &mut GameplayRuntimeState<P, O, C, D>,
+    session: &mut SongLuaGameplaySession,
     event: &InputEvent,
     physical: Option<PhysicalInput>,
     map_action: impl FnOnce(GameplayAction) -> T,
 ) -> Option<T> {
-    let (game, session) = host.gameplay_parts();
     let action = handle_core_input(game, event);
     session.queue_inputs(std::iter::once((*event, physical)));
     if matches!(

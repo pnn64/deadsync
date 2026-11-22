@@ -17,7 +17,7 @@ use deadsync_profile_gameplay::{
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_song_lua::SongLuaLiveScene;
-use deadsync_song_lua::gameplay_session::SongLuaGameplaySession;
+use deadsync_song_lua::gameplay_session::{GameplayStage, SongLuaGameplaySession};
 use deadsync_song_lua::playback::song_lua_sound_paths;
 
 use crate::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
@@ -62,7 +62,32 @@ pub struct PreparedGameplayStage {
     pub pack_banner_path: Option<PathBuf>,
 }
 
+/// Resolved assets and metadata used to construct a stage's presentation.
+pub struct GameplayStageAssets {
+    pub noteskin_assets: GameplayNoteskinAssets,
+    pub song_lua_sound_paths: Vec<PathBuf>,
+    pub hide_song_intro: bool,
+    pub pack_group: Arc<str>,
+    pub pack_banner_path: Option<PathBuf>,
+}
+
 impl PreparedGameplayStage {
+    pub fn into_parts(self) -> (GameplayStage<GameplayCoreState>, GameplayStageAssets) {
+        (
+            GameplayStage {
+                gameplay: self.gameplay,
+                song_lua: self.song_lua,
+            },
+            GameplayStageAssets {
+                noteskin_assets: self.noteskin_assets,
+                song_lua_sound_paths: self.song_lua_sound_paths,
+                hide_song_intro: self.hide_song_intro,
+                pack_group: self.pack_group,
+                pack_banner_path: self.pack_banner_path,
+            },
+        )
+    }
+
     /// Prepare lifecycle state for a caller-supplied simulation.
     pub fn from_gameplay(
         mut gameplay: GameplayCoreState,

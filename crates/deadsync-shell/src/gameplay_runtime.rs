@@ -10,14 +10,14 @@ use deadsync_gameplay::{
 use deadsync_gameplay::practice::{PracticeSession, editor::PracticeEditorConfig};
 use deadsync_input::InputEvent;
 use deadsync_input::practice::PracticeKeyEvent;
-use deadsync_online::gameplay_lobby::{self, GameplayLobbyAction};
+use deadsync_online::gameplay_lobby::GameplayLobbyAction;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::{
     gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
 };
-use deadsync_song_lua::gameplay_session::{self, SongLuaGameplayEffect};
+use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::{gameplay, practice};
 use deadsync_theme_simply_love::views::{
@@ -377,8 +377,10 @@ pub(crate) fn present_stage(
     course_banner_path: Option<std::path::PathBuf>,
     view: GameplayInitView,
 ) -> gameplay::State {
-    let mut state = gameplay::State::present_stage(
-        prepared,
+    let (stage, assets) = prepared.into_parts();
+    let mut state = gameplay::State::from_stage(
+        stage,
+        assets,
         stage_intro_text,
         replay_status_text,
         course_display_info,
@@ -657,7 +659,7 @@ pub(crate) fn drain(
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
-    drain_core(&mut state.gameplay, audio, sounds, music_clock);
+    drain_core(&mut state.stage.gameplay, audio, sounds, music_clock);
 }
 
 pub(crate) fn enter(
@@ -667,7 +669,8 @@ pub(crate) fn enter(
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
-    deadsync_online::gameplay_lobby::on_enter(state);
+    let (stage, lobby) = state.stage_and_lobby();
+    lobby.on_enter(&mut stage.gameplay);
     enter_smx_sensors(state, smx_input);
     drain(state, audio, sounds, music_clock);
 }
@@ -692,7 +695,8 @@ pub(crate) fn update(
 ) -> GameplayFrameEffects {
     let mut effects = GameplayFrameEffects::new();
     crate::heart_rate::refresh_gameplay(state);
-    if !gameplay_lobby::prepare_update_with_actions(state, |action| {
+    let (stage, lobby) = state.stage_and_lobby();
+    if !lobby.prepare_update(&mut stage.gameplay, |action| {
         effects.push(GameplayFrameEffect::Lobby(action));
     }) {
         debug_assert!(effects.len() <= MAX_UPDATE_EFFECTS);
@@ -706,16 +710,16 @@ pub(crate) fn update(
     // stream mapping on the same frame, matching the pre-boundary behavior.
     drain(state, audio, sounds, music_clock);
     let previous_song_lua_time = state.current_music_time_display();
-    gameplay_session::update_with_effects(
-        state,
+    let (stage, update_visuals) = state.stage_for_update();
+    stage.update(
         delta_time,
         snapshot(music_clock),
         deadlib_platform::host_time::now_nanos,
         ActiveTheme::resolve_song_lua_screen,
         |effect| effects.push(GameplayFrameEffect::Session(effect)),
-        |_| {},
+        update_visuals,
     );
-    let output = state.take_song_lua_output();
+    let output = stage.take_output();
     for command in output.actor_sounds {
         use deadsync_song_lua::SongLuaActorSound;
         match command {
@@ -774,10 +778,11 @@ pub(crate) fn handle_input(
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) -> GameplayAction {
     let lobby_hud_toggled = gameplay::handle_lobby_hud_input(state, ev);
-    let action = if gameplay_lobby::handle_input(state, ev) || lobby_hud_toggled {
+    let (stage, lobby) = state.stage_and_lobby();
+    let action = if lobby.handle_input(ev) || lobby_hud_toggled {
         GameplayAction::None
     } else {
-        gameplay_session::handle_input_action(state, ev, physical)
+        stage.handle_input(ev, physical)
     };
     drain(state, audio, sounds, music_clock);
     action

@@ -963,7 +963,11 @@ fn prewarm_gameplay_text_layout_cache(
     compose_scratch.clear_retained_frames();
 
     if let Some(scratch) = state.song_scratch.as_mut() {
-        deadsync_song_lua::playback::prewarm_texture_bindings(&state.gameplay, scratch, assets);
+        deadsync_song_lua::playback::prewarm_texture_bindings(
+            &state.stage.gameplay,
+            scratch,
+            assets,
+        );
     }
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
@@ -5076,7 +5080,7 @@ impl App {
                 };
                 if let Some(state) = song {
                     state.song_media.for_each_video_position(
-                        &state.gameplay,
+                        &state.stage.gameplay,
                         |path, seconds, looped| {
                             self.dynamic_media.queue_song_lua_video_frame(
                                 &mut self.asset_manager,
@@ -7482,7 +7486,7 @@ impl App {
             let Some(gs) = gs else {
                 return;
             };
-            let foreground_videos_changed = gs.song_media.refresh_foreground(&gs.gameplay);
+            let foreground_videos_changed = gs.song_media.refresh_foreground(&gs.stage.gameplay);
             let had_pending_background_change = gs.background_path_dirty;
             let video_mode_changed = gs.background_allow_video != show_video_backgrounds;
             let mut background_changed = false;

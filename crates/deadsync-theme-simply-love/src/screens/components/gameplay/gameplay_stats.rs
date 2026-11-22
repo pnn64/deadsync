@@ -637,8 +637,9 @@ mod density_life_clip_tests {
 }
 
 fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize) {
-    let graph = state.gameplay.density_graph_view();
-    let num_players = state.gameplay.num_players();
+    let game = &mut state.stage.gameplay;
+    let graph = game.density_graph_view();
+    let num_players = game.num_players();
     let render = &mut state.density_graph;
     let graph_w = graph.graph_w;
     let graph_h = graph.graph_h;
@@ -652,9 +653,7 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
         render.life_mesh[player_idx] = None;
         render.mesh_offset[player_idx] = 0.0;
         render.life_mesh_offset[player_idx] = 0.0;
-        state
-            .gameplay
-            .set_density_graph_life_dirty(player_idx, false);
+        game.set_density_graph_life_dirty(player_idx, false);
         return;
     }
 
@@ -671,20 +670,18 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
 
     let prev_offset = render.life_mesh_offset[player_idx];
     let offset_changed = offset != prev_offset;
-    if !offset_changed && !state.gameplay.density_graph_life_dirty(player_idx) {
+    if !offset_changed && !game.density_graph_life_dirty(player_idx) {
         return;
     }
 
     render.life_mesh_offset[player_idx] = offset;
-    state
-        .gameplay
-        .set_density_graph_life_dirty(player_idx, false);
+    game.set_density_graph_life_dirty(player_idx, false);
     if offset > prev_offset
-        && let Some(points) = state.gameplay.density_graph_life_points_mut(player_idx)
+        && let Some(points) = game.density_graph_life_points_mut(player_idx)
     {
         clip_density_life_points(points, offset);
     }
-    let Some(points) = state.gameplay.density_graph_life_points(player_idx) else {
+    let Some(points) = game.density_graph_life_points(player_idx) else {
         render.life_mesh[player_idx] = None;
         return;
     };

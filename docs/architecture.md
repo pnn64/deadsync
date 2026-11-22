@@ -456,7 +456,9 @@ The production crate graph follows these directions. Gameplay and Practice
 startup, normal song-Lua lifecycle, callback input sequencing, practice
 playback/editor behavior, and gameplay lobby coordination now have game owners,
 as do Evaluation and Select Music lobby input barriers, disconnect handling, and
-remote song-selection synchronization. Simply Love still wraps gameplay state.
+remote song-selection synchronization. The shell advances the game-owned stage
+and lobby controller directly. The HUD receives a read-only simulation reference
+at its existing frame boundary. Simply Love still wraps the stage for rendering.
 Course continuation and restart destinations, course progress, interruption,
 Endless renewal, course modes, life selection, difficulty availability, runtime
 stage preparation, and course score aggregation now have game owners.

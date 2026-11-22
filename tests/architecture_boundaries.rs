@@ -312,9 +312,19 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         .expect("restore held inputs");
     assert!(present < restore);
     let adapter = production_source(&root.join("crates/deadsync-shell/src/gameplay_runtime.rs"));
-    let present = adapter.find("gameplay::State::present_stage(").expect("present stage");
-    let attach = adapter.find("attach_prepared_song_lua(gameplay,").expect("attach callbacks");
-    assert!(present < attach, "startup callbacks follow presentation cache setup");
+    let split = adapter
+        .find("prepared.into_parts()")
+        .expect("separate stage from prepared assets");
+    let present = adapter
+        .find("gameplay::State::from_stage(")
+        .expect("present stage");
+    let attach = adapter
+        .find("attach_prepared_song_lua(gameplay,")
+        .expect("attach callbacks");
+    assert!(
+        split < present && present < attach,
+        "startup callbacks follow presentation cache setup"
+    );
 }
 
 #[test]
@@ -392,6 +402,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
 
     for contract in [
         "pub struct SongLuaGameplaySession",
+        "pub struct GameplayStage<G>",
         "pub trait SongLuaGameplayHost",
         "pub fn for_gameplay<",
         "pub fn update<",
@@ -461,7 +472,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         );
     }
     for delegation in [
-        "song_lua: SongLuaGameplaySession",
+        "stage: GameplayStage<GameplayCoreState>",
         "impl SongLuaGameplayHost for State",
         "gameplay_session::update(",
         "gameplay_session::handle_input(",
@@ -472,8 +483,10 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         );
     }
     for handoff in [
-        "gameplay_session::update_with_effects(",
-        "gameplay_session::handle_input_action(state, ev, physical)",
+        "let (stage, update_visuals) = state.stage_for_update()",
+        "stage.update(",
+        "stage.handle_input(ev, physical)",
+        "stage.take_output()",
     ] {
         assert!(
             contains_rust(&shell, handoff),
@@ -484,6 +497,8 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         "gameplay::update(",
         "gameplay::update_with_input(",
         "gameplay::handle_input_with_device(",
+        "gameplay_session::update_with_effects(",
+        "gameplay_session::handle_input_action(",
     ] {
         assert!(
             !contains_rust(&shell, former_owner),
@@ -761,9 +776,13 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
             "gameplay theme must delegate lobby behavior through {delegation}"
         );
     }
-    for entry in ["on_enter", "prepare_update_with_actions", "handle_input"] {
+    for entry in [
+        "lobby.on_enter(&mut stage.gameplay)",
+        "lobby.prepare_update(&mut stage.gameplay,",
+        "lobby.handle_input(ev)",
+    ] {
         assert!(
-            contains_rust(&shell, &format!("gameplay_lobby::{entry}(")),
+            contains_rust(&shell, entry),
             "shell must invoke canonical lobby coordination through {entry}"
         );
     }
@@ -6233,7 +6252,7 @@ fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
         );
     }
     assert!(
-        background_sync.contains("gs.song_media.refresh_foreground(&gs.gameplay)")
+        background_sync.contains("gs.song_media.refresh_foreground(&gs.stage.gameplay)")
             && background_sync.contains("gs.song_media.video_paths()"),
         "Gameplay foreground/video state must be advanced from song-lifetime caches"
     );
@@ -12719,7 +12738,10 @@ fn gameplay_exit_routing_stays_below_the_theme() {
     );
     assert!(contains_rust(&shell_input, "self.handle_gameplay_action(action, event_loop)"));
     assert!(contains_rust(&shell_actions, "GameplayFrameEffect::Session(SongLuaGameplayEffect::Action(action)) => { self.handle_gameplay_action(action, event_loop); }"));
-    assert!(contains_rust(&shell_runtime, "gameplay_lobby::prepare_update_with_actions("));
+    assert!(contains_rust(
+        &shell_runtime,
+        "lobby.prepare_update(&mut stage.gameplay,"
+    ));
     assert!(!shell.contains("effect_for_gameplay_exit("));
     assert!(!shell_actions.contains("SimplyLoveRuntimeRequest"));
     assert!(!shell_actions.contains("ThemeEffect"));

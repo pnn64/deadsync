@@ -39,8 +39,8 @@ use deadlib_render_core::{BlendMode, MeshVertex};
 pub use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
 pub use deadsync_assets::gameplay_stage::GameplayCoreState;
 use deadsync_assets::gameplay_stage::{
-    GameplayStageInput, PreparedGameplaySongLua, PreparedGameplayStage, attach_prepared_song_lua,
-    prepare_gameplay_stage,
+    GameplayStageAssets, GameplayStageInput, PreparedGameplaySongLua, PreparedGameplayStage,
+    attach_prepared_song_lua, prepare_gameplay_stage,
 };
 use deadsync_assets::noteskin;
 use deadsync_chart::{
@@ -74,7 +74,7 @@ use deadsync_profile_gameplay::{
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score as score_data;
 use deadsync_song_lua::gameplay_session::{
-    self, SongLuaGameplayHost, SongLuaGameplaySession,
+    self, GameplayStage, SongLuaGameplayHost, SongLuaGameplaySession,
 };
 use deadsync_song_lua::playback::song_meter_progress;
 use deadsync_song_lua::playback::{
@@ -651,9 +651,7 @@ impl GameplayPresentationView {
 }
 
 pub struct State {
-    pub gameplay: GameplayCoreState,
-    /// Game-owned song callbacks, frame ordering, input and exit state.
-    pub song_lua: SongLuaGameplaySession,
+    pub stage: GameplayStage<GameplayCoreState>,
     #[cfg(feature = "test-support")]
     pub(crate) arrow_tipsy_clock_inputs: [Option<f64>; MAX_PLAYERS],
     judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
@@ -852,19 +850,49 @@ impl State {
     /// Supply the core, its controller, and the render scratch warmup to the shell.
     pub fn song_lua_attachment_parts(
         &mut self,
-    ) -> (&mut GameplayCoreState, &mut SongLuaGameplaySession, impl FnOnce() + '_) {
+    ) -> (
+        &mut GameplayCoreState,
+        &mut SongLuaGameplaySession,
+        impl FnOnce() + '_,
+    ) {
         let song_scratch = &mut self.song_scratch;
-        (&mut self.gameplay, &mut self.song_lua, move || {
-            if let Some(scratch) = song_scratch {
-                scratch.enable_dynamic_scene();
-            }
-        })
+        (
+            &mut self.stage.gameplay,
+            &mut self.stage.song_lua,
+            move || {
+                if let Some(scratch) = song_scratch {
+                    scratch.enable_dynamic_scene();
+                }
+            },
+        )
     }
 
     /// The shell drains sounds and requests once after each gameplay frame.
     /// Broadcast listeners have already run in the retained Lua scene.
     pub fn take_song_lua_output(&mut self) -> deadsync_song_lua::SongLuaLiveOutput {
-        self.song_lua.take_output(&mut self.gameplay)
+        self.stage.take_output()
+    }
+
+    /// Borrow only the life animation cache while the game runs its frame.
+    pub fn stage_for_update(
+        &mut self,
+    ) -> (
+        &mut GameplayStage<GameplayCoreState>,
+        impl FnOnce(&GameplayCoreState, f32) + '_,
+    ) {
+        let visuals = &mut self.life_meter_visuals;
+        (&mut self.stage, move |game, delta| {
+            update_life_meter_visuals(game, visuals, delta);
+        })
+    }
+
+    pub fn stage_and_lobby(
+        &mut self,
+    ) -> (
+        &mut GameplayStage<GameplayCoreState>,
+        &mut GameplayLobbySession,
+    ) {
+        (&mut self.stage, &mut self.lobby_session)
     }
 
     #[cfg(feature = "test-support")]
@@ -926,15 +954,36 @@ impl State {
         course_banner_path: Option<PathBuf>,
         init_view: GameplayInitView,
     ) -> Self {
-        let PreparedGameplayStage {
-            gameplay,
+        let (stage, assets) = prepared.into_parts();
+        Self::from_stage(
+            stage,
+            assets,
+            stage_intro_text,
+            replay_status_text,
+            course_display_info,
+            course_banner_path,
+            init_view,
+        )
+    }
+
+    /// Prepare presentation for an independently constructed game stage.
+    pub fn from_stage(
+        stage: GameplayStage<GameplayCoreState>,
+        assets: GameplayStageAssets,
+        stage_intro_text: Arc<str>,
+        replay_status_text: Option<Arc<str>>,
+        course_display_info: Option<CourseDisplayInfo>,
+        course_banner_path: Option<PathBuf>,
+        init_view: GameplayInitView,
+    ) -> Self {
+        let GameplayStageAssets {
             noteskin_assets,
-            song_lua,
             song_lua_sound_paths,
             hide_song_intro,
             pack_group,
             pack_banner_path,
-        } = prepared;
+        } = assets;
+        let gameplay = &stage.gameplay;
         let (pack_group, pack_banner_path) = if let Some(course) = &course_display_info {
             (Arc::clone(&course.name), course_banner_path)
         } else {
@@ -953,13 +1002,13 @@ impl State {
         let (runtime_view, lobby) = GameplayPresentationView::split(runtime_view);
         let lobby_session =
             GameplayLobbySession::new(lobby, runtime_view.joined, runtime_view.player_side);
-        let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
+        let density_graph = DensityGraphRenderState::from_gameplay(gameplay);
         let step_stats_profiles =
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
         let step_stats_extra_resolved =
             step_stats_gifs::resolve_random_extras(&step_stats_profiles);
         let gameplay_stats_text = gameplay_stats::GameplayStatsTextPlan::from_gameplay(
-            &gameplay,
+            gameplay,
             course_display_info.is_some(),
         );
         let notefield_judgment_assets = std::array::from_fn(|player| {
@@ -1020,9 +1069,9 @@ impl State {
         let notefield_stream_progress_lookup = std::array::from_fn(|player| {
             StreamProgressLookup::new(gameplay.mini_indicator_stream_segments(player))
         });
-        let notefield_widths = gameplay_notefield_widths(&gameplay, &noteskin_assets);
+        let notefield_widths = gameplay_notefield_widths(gameplay, &noteskin_assets);
         let display_mods_text =
-            std::array::from_fn(|player| notefield::preferred_mods_text(&gameplay, player));
+            std::array::from_fn(|player| notefield::preferred_mods_text(gameplay, player));
         let rate_text = cached_rate_text(gameplay.music_rate());
         let bpm_text = GameplayBpmTextPlan::new(
             display_bpm(gameplay.current_bpm_display(), gameplay.music_rate()),
@@ -1055,10 +1104,10 @@ impl State {
             .iter()
             .map(|change| gameplay.music_time_for_beat(change.start_beat))
             .collect();
-        let song_layer2_events = build_song_layer2_events(&gameplay);
+        let song_layer2_events = build_song_layer2_events(gameplay);
         let next_song_layer2_event_ix = song_layer2_events
             .partition_point(|event| event.start_second <= gameplay.current_music_time_display());
-        let song_scratch = Box::new(deadsync_song_lua::playback::FrameScratch::new(&gameplay));
+        let song_scratch = Box::new(deadsync_song_lua::playback::FrameScratch::new(gameplay));
         let frame_scratch = GameplayFrameScratch {
             lobby_hud_cache: lobby_hud::LobbyHudCache::default(),
             lobby_hud_status_scratch: String::with_capacity(128),
@@ -1066,7 +1115,7 @@ impl State {
             presentation_skeleton: GameplayPresentationSkeleton::default(),
         };
         let song_media =
-            deadsync_song_lua::playback::SongMedia::new(&gameplay, song_lua_sound_paths);
+            deadsync_song_lua::playback::SongMedia::new(gameplay, song_lua_sound_paths);
         let step_stats_mode = gameplay_step_stats_mode(
             hud_snapshot.play_style,
             gameplay.num_cols(),
@@ -1074,8 +1123,7 @@ impl State {
             !step_stats_profiles[1].step_statistics.is_empty(),
         );
         let state = Self {
-            gameplay,
-            song_lua,
+            stage,
             #[cfg(feature = "test-support")]
             arrow_tipsy_clock_inputs: [None; MAX_PLAYERS],
             judgment_palettes,
@@ -1245,7 +1293,8 @@ impl GameplayLobbyHost for State {
     type Effect = ThemeEffect;
 
     fn lobby_parts(&mut self) -> (&mut GameplayCoreState, &mut GameplayLobbySession) {
-        (&mut self.gameplay, &mut self.lobby_session)
+        let (stage, lobby) = self.stage_and_lobby();
+        (&mut stage.gameplay, lobby)
     }
 
     fn lobby_session(&self) -> &GameplayLobbySession {
@@ -1286,11 +1335,15 @@ impl SongLuaGameplayHost for State {
     type Effect = ThemeEffect;
 
     fn gameplay_parts(&mut self) -> (&mut GameplayCoreState, &mut SongLuaGameplaySession) {
-        (&mut self.gameplay, &mut self.song_lua)
+        (&mut self.stage.gameplay, &mut self.stage.song_lua)
     }
 
     fn update_gameplay_visuals(&mut self, delta_time: f32) {
-        update_life_meter_visuals(self, delta_time);
+        update_life_meter_visuals(
+            &self.stage.gameplay,
+            &mut self.life_meter_visuals,
+            delta_time,
+        );
     }
 
     fn gameplay_effect(action: GameplayAction) -> ThemeEffect {
@@ -1311,16 +1364,16 @@ impl SongLuaGameplayHost for State {
 }
 
 impl Deref for State {
-    type Target = GameplayCoreState;
+    type Target = GameplayStage<GameplayCoreState>;
 
     fn deref(&self) -> &Self::Target {
-        &self.gameplay
+        &self.stage
     }
 }
 
 impl DerefMut for State {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.gameplay
+        &mut self.stage
     }
 }
 
@@ -2208,12 +2261,15 @@ pub fn update_with_input(
     );
 }
 
-fn update_life_meter_visuals(state: &mut State, delta_time: f32) {
-    for player in 0..state.gameplay.num_players().min(MAX_PLAYERS) {
-        let runtime = &state.gameplay.players()[player];
+fn update_life_meter_visuals(
+    game: &GameplayCoreState,
+    visuals: &mut [LifeMeterVisual; MAX_PLAYERS],
+    delta_time: f32,
+) {
+    for (runtime, visual) in game.players().iter().zip(visuals).take(game.num_players()) {
         let life = runtime.life;
         let dead = runtime.is_failing || life <= 0.0;
-        state.life_meter_visuals[player].update(life, dead, delta_time);
+        visual.update(life, dead, delta_time);
     }
 }
 
@@ -2350,7 +2406,7 @@ impl State {
     }
 
     pub fn clear_song_lua_inputs(&mut self) {
-        self.song_lua.clear_inputs(&mut self.gameplay);
+        self.stage.song_lua.clear_inputs(&mut self.stage.gameplay);
     }
 
     pub fn take_song_lua_held_inputs(&mut self) -> SongLuaHeldInputs {
@@ -2364,7 +2420,7 @@ impl State {
 
 /// Compatibility callback route for hardware and recorded native input owners.
 pub fn handle_song_lua_input(state: &mut State, input: &deadsync_song_lua::SongLuaInputEvent<'_>) {
-    state.song_lua.input(&mut state.gameplay, input);
+    state.stage.song_lua.input(&mut state.stage.gameplay, input);
 }
 
 thread_local! {
