@@ -184,6 +184,14 @@ the fade. `deadsync-profile-gameplay::stage_replay` converts the owned input
 buffer and recorded beat-zero offset for the existing playback controller.
 Simply Love draws the picker and formats the playback label.
 
+`deadsync-gameplay::song_backgrounds` owns the authored background timeline.
+Stage preparation expands random backgrounds using the final master chart,
+including solo P2 and Lua chart replacements. Cue starts are converted once
+with the stage timing map. The primary cursor keeps its forward-only behavior,
+and layer-two lookup follows the display clock in either direction. The shell
+loads textures and drives video timing. The theme applies tint, transitions,
+and flash easing to the selected cues.
+
 `deadsync-song-lua::gameplay_session` owns the live song scene, callback setup,
 Update/input/Draw ordering, output buffering, deferred reloads, and exit clocks.
 The shell calls its controller directly. The statically bound host adapter
@@ -294,6 +302,10 @@ retained keys without allocating.
 ## Rust API migration
 
 Workspace callers are updated for these source-level changes:
+
+- Read authored background changes and active timing through
+  `gameplay.song_backgrounds()`. The `GameplayInitView.background_changes`
+  field still accepts an explicit timeline for compatibility constructors.
 
 - Replay confirmation emits `SimplyLoveRuntimeRequest::StartReplay`, which
   replaces `select_music::take_pending_replay`. The `ReplayStartPayload`

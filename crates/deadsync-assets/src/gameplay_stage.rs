@@ -72,6 +72,22 @@ pub struct GameplayStageAssets {
 }
 
 impl PreparedGameplayStage {
+    /// Select authored and random cues against the master chart installed in
+    /// the prepared simulation, after any Lua chart replacement or side mapping.
+    pub fn resolve_song_backgrounds(&mut self, mode: deadsync_config::theme::RandomBackgroundMode) {
+        use deadsync_profile_gameplay::stage_charts::stage_background_changes;
+
+        let changes = stage_background_changes(
+            self.gameplay.song(),
+            &self.gameplay.gameplay_charts()[0],
+            matches!(
+                mode,
+                deadsync_config::theme::RandomBackgroundMode::RandomMovies
+            ),
+        );
+        self.gameplay.replace_song_background_changes(changes);
+    }
+
     pub fn into_parts(self) -> (GameplayStage<GameplayCoreState>, GameplayStageAssets) {
         (
             GameplayStage {

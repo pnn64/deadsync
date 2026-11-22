@@ -835,6 +835,27 @@ where
         Arc::clone(&self.source.song)
     }
 
+    #[must_use]
+    pub const fn song_backgrounds(&self) -> &crate::song_backgrounds::SongBackgroundTimeline {
+        &self.source.song_backgrounds
+    }
+
+    pub fn replace_song_background_changes(
+        &mut self,
+        changes: Vec<deadsync_chart::SongBackgroundChange>,
+    ) {
+        let beat = self.current_beat();
+        self.source
+            .song_backgrounds
+            .replace_primary(changes, &self.timing_runtime.timing, beat);
+    }
+
+    #[must_use]
+    pub fn advance_song_background(&mut self) -> bool {
+        let beat = self.current_beat();
+        self.source.song_backgrounds.advance_to_beat(beat)
+    }
+
     #[inline(always)]
     pub fn notes(&self) -> &[Note] {
         &self.chart_runtime.notes

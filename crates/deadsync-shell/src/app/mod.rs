@@ -3087,14 +3087,14 @@ impl App {
                     &gs.noteskin_assets.tap_explosion_noteskin,
                 ],
                 gs.song(),
-                &gs.background_changes,
+                gs.song_backgrounds().changes(),
                 gs.song_lua_visuals(),
             );
             self.dynamic_media.set_gameplay_background_paths(
                 &mut self.asset_manager,
                 backend,
                 gs.song(),
-                &gs.background_changes,
+                gs.song_backgrounds().changes(),
             );
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
@@ -7429,27 +7429,14 @@ impl App {
         show_video_backgrounds: bool,
     ) -> Option<PathBuf> {
         let path = state
-            .song()
-            .gameplay_background_path_for_changes(
-                &state.background_changes,
-                state.next_background_change_ix,
-                show_video_backgrounds,
-            )
+            .song_backgrounds()
+            .active_path(state.song(), show_video_backgrounds)
             .cloned();
         state.current_background_key = path.as_deref().map(deadlib_assets::media_path_key);
         state.current_background_path.clone_from(&path);
         state.background_allow_video = show_video_backgrounds;
         state.background_path_dirty = false;
         path
-    }
-
-    fn active_gameplay_background_change(
-        state: &gameplay::State,
-    ) -> Option<&deadsync_chart::SongBackgroundChange> {
-        state
-            .next_background_change_ix
-            .checked_sub(1)
-            .and_then(|ix| state.background_changes.get(ix))
     }
 
     fn sync_live_gameplay_textures(&mut self) {
@@ -7496,14 +7483,7 @@ impl App {
             let foreground_videos_changed = gs.song_media.refresh_foreground(&gs.stage.gameplay);
             let had_pending_background_change = gs.background_path_dirty;
             let video_mode_changed = gs.background_allow_video != show_video_backgrounds;
-            let mut background_changed = false;
-            while let Some(change) = gs.background_changes.get(gs.next_background_change_ix) {
-                if gs.current_beat() < change.start_beat {
-                    break;
-                }
-                gs.next_background_change_ix += 1;
-                background_changed = true;
-            }
+            let background_changed = gs.stage.gameplay.advance_song_background();
             if background_changed {
                 gs.background_path_dirty = true;
             }
@@ -7519,7 +7499,9 @@ impl App {
                     .as_ref()
                     .is_some_and(|key| key != &gs.current_background_key)
             {
-                let transition = Self::active_gameplay_background_change(gs)
+                let transition = gs
+                    .song_backgrounds()
+                    .active_change()
                     .map(|change| change.transition.clone())
                     .unwrap_or_default();
                 let old_texture_key = old_texture_key.expect("tracked background transition key");
@@ -7536,20 +7518,14 @@ impl App {
             }
             (
                 (background_sync_due && background_backend_ready).then(|| {
-                    let active_change = Self::active_gameplay_background_change(gs);
-                    let bg_start_change = active_change.filter(|change| {
-                        matches!(
-                            &change.target,
-                            deadsync_chart::SongBackgroundChangeTarget::File(path)
-                                if gs.current_background_path.as_ref() == Some(path)
-                        )
-                    });
+                    let backgrounds = gs.song_backgrounds();
                     BgVideoTiming {
                         current_sec: deadsync_core::song_time::song_time_ns_to_seconds(
                             gs.current_music_time_ns(),
                         ),
-                        start_sec: bg_start_change.and_then(|_| gs.active_background_start_sec()),
-                        rate: active_change.map_or(1.0, |change| change.rate),
+                        start_sec: backgrounds
+                            .video_start_second(gs.current_background_path.as_deref()),
+                        rate: backgrounds.active_change().map_or(1.0, |change| change.rate),
                     }
                 }),
                 foreground_videos_changed,
@@ -9468,9 +9444,7 @@ impl App {
                 let mut gameplay_init_view = crate::gameplay_runtime::init_view(
                     &cfg,
                     lobby_views::refresh(),
-                    song_arc.as_ref(),
                     &charts,
-                    &gameplay_charts,
                     &player_profiles,
                     &gameplay_session,
                     &mut self.state.screens.gameplay_score_cursor,
@@ -9512,12 +9486,11 @@ impl App {
                         &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
                         &mut gameplay_session, init_config.global_offset_seconds,
                     )? {
-                        crate::gameplay_runtime::refresh_chart_view(
-                            &mut gameplay_init_view, &init_config, &song_arc, &charts,
-                            &gameplay_charts, &player_profiles, &gameplay_session,
+                        crate::gameplay_runtime::refresh_chart_scores(
+                            &mut gameplay_init_view, &charts, &player_profiles, &gameplay_session,
                         );
                     }
-                    let (prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
+                    let (mut prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
                         song: song_arc,
                         charts,
                         gameplay_charts,
@@ -9544,6 +9517,7 @@ impl App {
                         song_lua_data: prepared_song_lua,
                         mini_indicator: std::mem::take(&mut gameplay_init_view.scores.mini_indicator),
                     });
+                    prepared.resolve_song_backgrounds(init_config.random_background_mode);
                     let gs = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
@@ -9879,9 +9853,7 @@ impl App {
                 let mut gameplay_init_view = crate::gameplay_runtime::init_view(
                     &cfg,
                     self.gameplay_lobby.refresh_now(),
-                    song_arc.as_ref(),
                     &charts,
-                    &gameplay_charts,
                     &player_profiles,
                     &gameplay_session,
                     &mut self.state.screens.gameplay_score_cursor,
@@ -9952,12 +9924,11 @@ impl App {
                         &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
                         &mut gameplay_session, gameplay_config.global_offset_seconds,
                     )? {
-                        crate::gameplay_runtime::refresh_chart_view(
-                            &mut gameplay_init_view, &init_config, &song_arc, &charts,
-                            &gameplay_charts, &player_profiles, &gameplay_session,
+                        crate::gameplay_runtime::refresh_chart_scores(
+                            &mut gameplay_init_view, &charts, &player_profiles, &gameplay_session,
                         );
                     }
-                    let (prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
+                    let (mut prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
                         song: song_arc,
                         charts,
                         gameplay_charts,
@@ -9981,6 +9952,7 @@ impl App {
                         song_lua_data: prepared_song_lua,
                         mini_indicator: std::mem::take(&mut gameplay_init_view.scores.mini_indicator),
                     });
+                    prepared.resolve_song_backgrounds(init_config.random_background_mode);
                     let mut state = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,

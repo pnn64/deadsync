@@ -1,7 +1,7 @@
 use crate::{ActiveTheme, ThemeScreen};
 use deadlib_platform::input::RawKeyboardEvent;
 use deadsync_assets::gameplay_stage::{PreparedGameplayStage, attach_prepared_song_lua};
-use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
+use deadsync_chart::ChartData;
 use deadsync_config as config;
 use deadsync_gameplay::{
     GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, GameplayMiniIndicatorData, GameplayMusicCut,
@@ -88,34 +88,6 @@ fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
         bpm_position: config.gameplay_bpm_position,
         machine_font: config.machine_font,
         scorebox_pane_filter: crate::app::scorebox_pane_filter(config),
-    }
-}
-
-fn background_changes(
-    config: &config::app_config::Config,
-    song: &SongData,
-    gameplay_charts: &[Arc<GameplayChartData>; 2],
-    session: &GameplaySession,
-) -> Vec<SongBackgroundChange> {
-    let random_movie_paths = deadsync_simfile::app_runtime::random_movie_paths(
-        song,
-        matches!(
-            config.random_background_mode,
-            config::theme::RandomBackgroundMode::RandomMovies
-        ),
-    );
-    let chart = background_chart(gameplay_charts, session);
-    deadsync_simfile::app_runtime::gameplay_background_changes(song, chart, random_movie_paths)
-}
-
-fn background_chart<'a>(
-    gameplay_charts: &'a [Arc<GameplayChartData>; 2],
-    session: &GameplaySession,
-) -> &'a GameplayChartData {
-    if session.p2_runtime_player() {
-        &gameplay_charts[1]
-    } else {
-        &gameplay_charts[0]
     }
 }
 
@@ -331,9 +303,7 @@ fn score_init_view(
 pub(crate) fn init_view(
     config: &config::app_config::Config,
     lobby: SimplyLoveLobbyRuntimeView,
-    song: &SongData,
     charts: &[Arc<ChartData>; 2],
-    gameplay_charts: &[Arc<GameplayChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
     score_cursor: &mut ScoreRuntimeCursor,
@@ -353,21 +323,17 @@ pub(crate) fn init_view(
             })
         },
         scores: score_init_view(charts, profiles, session),
-        background_changes: background_changes(config, song, gameplay_charts, session),
+        background_changes: Vec::new(),
     }
 }
 
-pub(crate) fn refresh_chart_view(
+pub(crate) fn refresh_chart_scores(
     view: &mut GameplayInitView,
-    config: &config::app_config::Config,
-    song: &SongData,
     charts: &[Arc<ChartData>; 2],
-    gameplay_charts: &[Arc<GameplayChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
 ) {
     view.scores = score_init_view(charts, profiles, session);
-    view.background_changes = background_changes(config, song, gameplay_charts, session);
 }
 
 pub(crate) fn present_stage(
@@ -1001,14 +967,12 @@ pub(crate) fn push_practice_actors(
 #[cfg(test)]
 mod tests {
     use super::{
-        background_chart, mini_indicator_percent, mini_indicator_rival_score, policy_view,
+        mini_indicator_percent, mini_indicator_rival_score, policy_view,
         score_generation_changed, scorebox_profiles, smx_sensor_value,
     };
-    use deadsync_chart::GameplayChartData;
     use deadsync_gameplay::GameplaySession;
     use deadsync_profile as profile_data;
     use deadsync_profile_gameplay::gameplay_runtime_profile_data;
-    use std::sync::Arc;
 
     fn leaderboard_entry(
         rank: u32,
@@ -1068,40 +1032,6 @@ mod tests {
         assert_eq!(policy.zmod_rating_box_text, config.zmod_rating_box_text);
         assert_eq!(policy.show_bpm_decimal, config.show_bpm_decimal);
         assert_eq!(policy.bpm_position, config.gameplay_bpm_position);
-    }
-
-    #[test]
-    fn p2_solo_backgrounds_use_the_runtime_chart() {
-        let charts = std::array::from_fn(|_| {
-            Arc::new(GameplayChartData {
-                notes: Vec::new(),
-                parsed_notes: Vec::new(),
-                row_to_beat: Vec::new(),
-                timing_segments: deadsync_rules::timing::TimingSegments::default(),
-                timing: deadsync_rules::timing::TimingData::default(),
-                chart_attacks: None,
-            })
-        });
-        let p1 = GameplaySession::default();
-        let p2 = GameplaySession {
-            play_style: deadsync_profile_gameplay::gameplay_play_style_from_profile(
-                profile_data::PlayStyle::Single,
-            ),
-            player_side: deadsync_profile_gameplay::gameplay_player_side_from_profile(
-                profile_data::PlayerSide::P2,
-            ),
-            joined_sides: [false, true],
-            ..Default::default()
-        };
-
-        assert!(std::ptr::eq(
-            background_chart(&charts, &p1),
-            charts[0].as_ref()
-        ));
-        assert!(std::ptr::eq(
-            background_chart(&charts, &p2),
-            charts[1].as_ref()
-        ));
     }
 
     #[test]

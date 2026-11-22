@@ -43,11 +43,10 @@ use deadsync_assets::gameplay_stage::{
     attach_prepared_song_lua, prepare_gameplay_stage,
 };
 use deadsync_assets::noteskin;
-use deadsync_chart::{
-    ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
-};
+use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::song_time::song_time_ns_to_seconds;
+use deadsync_gameplay::song_backgrounds::SongLayer2Flash;
 use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
     CourseDisplayTotals, CourseLifeConfig, ExitTransitionKind,
@@ -341,12 +340,6 @@ impl BackgroundTransition {
             _ => 1.0,
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct SongLayer2Event {
-    start_second: f32,
-    color: Option<[f32; 4]>,
 }
 
 pub struct DensityGraphRenderState {
@@ -742,20 +735,6 @@ pub struct State {
     practice_timing_labels: [Box<[deadsync_notefield::TimingSegmentLabel]>; MAX_PLAYERS],
     sync_overlay_text_cache: RefCell<SyncOverlayTextCache>,
     pub background_path_dirty: bool,
-    pub background_changes: Vec<SongBackgroundChange>,
-    /// Song-lifetime beat-to-seconds results parallel to `background_changes`.
-    /// Built exactly once at screen entry so video timing never walks the chart
-    /// timing map during a live frame. The two vectors have identical lengths
-    /// and are immutable until screen destruction.
-    background_change_start_seconds: Vec<f32>,
-    pub next_background_change_ix: usize,
-    /// Song-lifetime layer-2 timeline compiled at screen entry and owned by the
-    /// gameplay thread. Capacity is exact and immutable; steady frames advance
-    /// the adjacent cursor without misses, growth, pruning, or allocation.
-    /// Backward seeks walk only crossed events. Storage is freed with the
-    /// screen.
-    song_layer2_events: Vec<SongLayer2Event>,
-    next_song_layer2_event_ix: Cell<usize>,
     pub current_background_path: Option<PathBuf>,
     pub current_background_key: Option<Arc<str>>,
     pub background_allow_video: bool,
@@ -973,7 +952,7 @@ impl State {
 
     /// Prepare presentation for an independently constructed game stage.
     pub fn from_stage(
-        stage: GameplayStage<GameplayCoreState>,
+        mut stage: GameplayStage<GameplayCoreState>,
         assets: GameplayStageAssets,
         stage_intro_text: Arc<str>,
         replay_status_text: Option<Arc<str>>,
@@ -988,7 +967,6 @@ impl State {
             pack_group,
             pack_banner_path,
         } = assets;
-        let gameplay = &stage.gameplay;
         let (pack_group, pack_banner_path) = if let Some(course) = &course_display_info {
             (Arc::clone(&course.name), course_banner_path)
         } else {
@@ -1001,6 +979,10 @@ impl State {
             scores,
             background_changes,
         } = init_view;
+        if !background_changes.is_empty() {
+            stage.gameplay.replace_song_background_changes(background_changes);
+        }
+        let gameplay = &stage.gameplay;
         let scorebox_profile_snapshot = scores.scorebox_profiles;
         let scorebox_side_snapshot = scores.scorebox_snapshots;
         let rival_score_types = scores.rival_score_types;
@@ -1101,17 +1083,6 @@ impl State {
             assets.prewarm();
         }
         let background_transition_start_time = gameplay.current_music_time_display();
-        let next_background_change_ix = background_changes
-            .iter()
-            .take_while(|change| change.start_beat <= gameplay.current_beat())
-            .count();
-        let background_change_start_seconds = background_changes
-            .iter()
-            .map(|change| gameplay.music_time_for_beat(change.start_beat))
-            .collect();
-        let song_layer2_events = build_song_layer2_events(gameplay);
-        let next_song_layer2_event_ix = song_layer2_events
-            .partition_point(|event| event.start_second <= gameplay.current_music_time_display());
         let song_scratch = Box::new(deadsync_song_lua::playback::FrameScratch::new(gameplay));
         let frame_scratch = GameplayFrameScratch {
             lobby_hud_cache: lobby_hud::LobbyHudCache::default(),
@@ -1177,11 +1148,6 @@ impl State {
             practice_timing_labels: std::array::from_fn(|_| Box::default()),
             sync_overlay_text_cache: RefCell::new(SyncOverlayTextCache::default()),
             background_path_dirty: true,
-            background_changes,
-            background_change_start_seconds,
-            next_background_change_ix,
-            song_layer2_events,
-            next_song_layer2_event_ix: Cell::new(next_song_layer2_event_ix),
             current_background_path: None,
             current_background_key: None,
             background_allow_video: false,
@@ -1246,10 +1212,7 @@ impl State {
 
     #[inline(always)]
     pub fn active_background_start_sec(&self) -> Option<f32> {
-        active_background_start_sec(
-            &self.background_change_start_seconds,
-            self.next_background_change_ix,
-        )
+        self.song_backgrounds().active_start_second()
     }
 
     #[inline(always)]
@@ -3401,21 +3364,6 @@ fn push_background(
     push_layer2_bganimations(actors, state);
 }
 
-fn active_background_change(state: &State) -> Option<&SongBackgroundChange> {
-    state
-        .next_background_change_ix
-        .checked_sub(1)
-        .and_then(|ix| state.background_changes.get(ix))
-}
-
-#[inline(always)]
-fn active_background_start_sec(start_seconds: &[f32], next_change_ix: usize) -> Option<f32> {
-    next_change_ix
-        .checked_sub(1)
-        .and_then(|ix| start_seconds.get(ix))
-        .copied()
-}
-
 pub fn begin_background_transition(
     state: &mut State,
     previous_texture_key: Arc<str>,
@@ -3477,7 +3425,7 @@ fn push_current_bgchange_media(
     if &*state.background_texture_key == "__black" {
         return;
     }
-    let change = active_background_change(state);
+    let change = state.song_backgrounds().active_change();
     if change.is_some_and(|change| change.effect_is("SongBgWithMovieViz")) {
         if let Some(key) = state.song_background_key.as_ref() {
             actors.push(background_media_sprite(
@@ -3643,66 +3591,24 @@ fn apply_bgchange_transition(
 
 const LAYER2_FLASH_SECONDS: f32 = 0.6;
 
-fn song_layer2_color(target: &SongBackgroundChangeTarget) -> Option<[f32; 4]> {
-    let SongBackgroundChangeTarget::Animation(name) = target else {
-        return None;
-    };
-    if name.eq_ignore_ascii_case("white flash") {
-        Some([1.0; 4])
-    } else if name.eq_ignore_ascii_case("yellow flash") {
-        Some([1.0, 1.0, 160.0 / 255.0, 1.0])
-    } else {
-        None
-    }
-}
-
-fn build_song_layer2_events(gameplay: &GameplayCoreState) -> Vec<SongLayer2Event> {
-    gameplay
-        .song()
-        .background_layer2_changes
-        .iter()
-        .map(|change| SongLayer2Event {
-            start_second: gameplay.timing().get_time_for_beat(change.start_beat),
-            color: song_layer2_color(&change.target),
-        })
-        .collect()
-}
-
-fn song_layer2_animation_from(
-    events: &[SongLayer2Event],
-    next_event_ix: &Cell<usize>,
-    now: f32,
-) -> Option<[f32; 4]> {
-    if !now.is_finite() {
-        return None;
-    }
-    let mut next_ix = next_event_ix.get().min(events.len());
-    while next_ix < events.len() && events[next_ix].start_second <= now {
-        next_ix += 1;
-    }
-    while next_ix > 0 && events[next_ix - 1].start_second > now {
-        next_ix -= 1;
-    }
-    next_event_ix.set(next_ix);
-
-    let event = next_ix.checked_sub(1).and_then(|index| events.get(index))?;
-    let elapsed = now - event.start_second;
+fn layer2_flash_color(flash: SongLayer2Flash, elapsed: f32) -> Option<[f32; 4]> {
     if !(0.0..=LAYER2_FLASH_SECONDS).contains(&elapsed) {
         return None;
     }
-    let mut color = event.color?;
     let progress = (elapsed / LAYER2_FLASH_SECONDS).clamp(0.0, 1.0);
-    color[3] *= 1.0 - progress * progress;
-    Some(color)
+    let blue = match flash {
+        SongLayer2Flash::White => 1.0,
+        SongLayer2Flash::Yellow => 160.0 / 255.0,
+    };
+    Some([1.0, 1.0, blue, 1.0 - progress * progress])
 }
 
 fn push_layer2_bganimations(actors: &mut Vec<Actor>, state: &State) {
-    let now = state.current_music_time_display();
-    let Some(color) = song_layer2_animation_from(
-        &state.song_layer2_events,
-        &state.next_song_layer2_event_ix,
-        now,
-    ) else {
+    let Some(color) = state
+        .song_backgrounds()
+        .active_layer2_flash(state.current_music_time_display())
+        .and_then(|(flash, elapsed)| layer2_flash_color(flash, elapsed))
+    else {
         return;
     };
     actors.push(act!(quad:
@@ -5482,14 +5388,16 @@ mod tests {
     }
 
     #[test]
-    fn background_start_cache_tracks_the_active_timeline_cursor() {
-        let start_seconds = [0.25, 4.5, 9.75];
-
-        assert_eq!(active_background_start_sec(&start_seconds, 0), None);
-        assert_eq!(active_background_start_sec(&start_seconds, 1), Some(0.25));
-        assert_eq!(active_background_start_sec(&start_seconds, 2), Some(4.5));
-        assert_eq!(active_background_start_sec(&start_seconds, 3), Some(9.75));
-        assert_eq!(active_background_start_sec(&start_seconds, 4), None);
+    fn layer2_flash_keeps_its_tint_and_fade() {
+        assert_eq!(
+            layer2_flash_color(SongLayer2Flash::White, 0.0),
+            Some([1.0; 4])
+        );
+        assert_eq!(
+            layer2_flash_color(SongLayer2Flash::Yellow, LAYER2_FLASH_SECONDS * 0.5),
+            Some([1.0, 1.0, 160.0 / 255.0, 0.75]),
+        );
+        assert_eq!(layer2_flash_color(SongLayer2Flash::White, 1.0), None);
     }
 
     #[test]

@@ -1145,6 +1145,7 @@ where
             song,
             charts,
             gameplay_charts,
+            song_backgrounds: Default::default(),
         },
         setup: GameplaySetupRuntimeState {
             num_cols,
@@ -1354,6 +1355,13 @@ where
         },
         pending_input: GameplayPendingInputState::with_capacity(pending_edges_capacity),
     };
+    state.source.song_backgrounds = crate::song_backgrounds::SongBackgroundTimeline::new(
+        Vec::new(),
+        &state.song().background_layer2_changes,
+        state.timing(),
+        state.current_beat(),
+        state.current_music_time_display(),
+    );
     state.control.update_trace =
         GameplayUpdateTraceState::from_capacity_snapshot(&state.capacity_trace_snapshot());
     refresh_active_attack_masks(&mut state, 0.0);

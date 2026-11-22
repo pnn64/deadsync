@@ -1,13 +1,26 @@
 //! Stage chart selection from profile choices and authored Lua reloads.
 
 use crate::{gameplay_play_style_from_profile, gameplay_player_side_from_profile};
-use deadsync_chart::{ChartData, GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
+use deadsync_chart::{
+    ChartData, GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongBackgroundChange, SongData,
+};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::stage_charts::{self, GameplayChartEntryPlan, lua_reload_chart_indices};
 use deadsync_gameplay::{GameplayInputPlayStyle as Style, GameplaySession};
 use deadsync_profile::{PlayStyle, PlayerSide};
 use deadsync_song_lua::playback::PreparedGameplaySongLua;
 use std::sync::Arc;
+
+/// Resolve primary backgrounds using the final stage's master chart.
+#[must_use]
+pub fn stage_background_changes(
+    song: &SongData,
+    master_chart: &GameplayChartData,
+    random_movies: bool,
+) -> Vec<SongBackgroundChange> {
+    let movies = deadsync_simfile::app_runtime::random_movie_paths(song, random_movies);
+    deadsync_simfile::app_runtime::gameplay_background_changes(song, master_chart, movies)
+}
 
 /// Standard chart slots select their own difficulty. Edits retain the
 /// player's preferred standard difficulty for fallback and profile saves.

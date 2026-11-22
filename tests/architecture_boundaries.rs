@@ -267,6 +267,7 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         "startup.min_seconds_to_music",
         "gameplay_pack_data(&song, None, None)",
         "init_gameplay_runtime(",
+        "self.gameplay.replace_song_background_changes(changes)",
         "gameplay_crossover_annotations_for_player,",
         "SongLuaGameplaySession::for_gameplay(&mut gameplay)",
         "session.attach(gameplay, scene, warm_dynamic_scene)",
@@ -331,9 +332,11 @@ fn gameplay_stage_bootstrap_is_game_owned() {
             .expect("select Lua charts");
         let prepare = entry.find("prepare_gameplay_stage(GameplayStageInput {")
             .expect("prepare game");
+        let backgrounds = entry.find("prepared.resolve_song_backgrounds(")
+            .expect("resolve the final stage's backgrounds");
         let present = entry.find("crate::gameplay_runtime::present_stage(")
             .expect("present game");
-        assert!(chart_plan < reload && reload < prepare && prepare < present);
+        assert!(chart_plan < reload && reload < prepare && prepare < backgrounds && backgrounds < present);
     }
     let present = gameplay_entry.find("crate::gameplay_runtime::present_stage(").unwrap();
     let restore = gameplay_entry.find("state.song_lua.restore_held_inputs(held_inputs)")
@@ -6292,9 +6295,6 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "zmod_rating_box_text: config.zmod_rating_box_text",
         "show_bpm_decimal: config.show_bpm_decimal",
         "bpm_position: config.gameplay_bpm_position",
-        "deadsync_simfile::app_runtime::random_movie_paths",
-        "deadsync_simfile::app_runtime::gameplay_background_changes",
-        "background_changes: background_changes(",
     ] {
         assert!(
             adapter.contains(runtime_owner),
@@ -6308,6 +6308,30 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         shell.contains("crate::gameplay_runtime::init_view(")
             && shell.contains("deadsync_online::gameplay_lobby::sync_runtime_view(state, lobby)")
     );
+}
+
+#[test]
+fn authored_song_backgrounds_use_the_game_timeline() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let timeline = read_source(root.join("crates/deadsync-gameplay/src/song_backgrounds.rs"))
+        .expect("game background timeline");
+    let stage = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    let init = production_source(&root.join("crates/deadsync-gameplay/src/runtime_init.rs"));
+    let charts = production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_charts.rs"));
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell background sync");
+    let theme = read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+        .expect("theme background presentation");
+
+    assert!(contains_rust(&init, "SongBackgroundTimeline::new("));
+    assert!(contains_rust(&init, "gameplay_charts[0] = gameplay_charts[1].clone()"));
+    assert!(contains_rust(&stage, "stage_background_changes(self.gameplay.song(), &self.gameplay.gameplay_charts()[0],"));
+    assert!(contains_rust(&charts, "deadsync_simfile::app_runtime::gameplay_background_changes("));
+    assert!(timeline.contains("pub fn advance_to_beat(") && timeline.contains("pub fn active_layer2_flash("));
+    assert!(contains_rust(&shell, "gs.stage.gameplay.advance_song_background()"));
+    assert!(contains_rust(&shell, "backgrounds.video_start_second("));
+    assert!(contains_rust(&theme, ".active_layer2_flash(state.current_music_time_display())"));
+    assert!(!shell.contains("next_background_change_ix") && !theme.contains("next_song_layer2_event_ix"));
 }
 
 #[test]

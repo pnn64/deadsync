@@ -18,6 +18,7 @@ mod tests {
         std::fs::write(
             &path,
             "#TITLE:Loading test;\n#BPMS:0=120;\n\
+            #BGCHANGES:0=background.png=1=0=0=0;\n\
             #FGCHANGES:0=main.lua=1=0=0=0=StretchNoLoop====;\n\
             #NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:Hard;\n\
             #METER:1;\n#NOTES:\n1000\n0000\n0010\n0000\n;\n",
@@ -28,6 +29,7 @@ mod tests {
             "return Def.Quad { OnCommand = function(self) self:linear(1):x(100) end }",
         )
         .unwrap();
+        std::fs::write(root.join("background.png"), []).unwrap();
         Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&path, 0.0).unwrap())
     }
 
@@ -147,6 +149,15 @@ mod tests {
                         finish_pending_stage(&mut app);
                         assert_eq!(progress.fraction(), 1.0);
                         assert!(app.song_lua_loading().is_none());
+                        let gameplay = if target == CurrentScreen::Gameplay {
+                            app.state.screens.gameplay_state.as_ref().unwrap()
+                        } else {
+                            &app.state.screens.practice_state.as_ref().unwrap().gameplay
+                        };
+                        assert!(gameplay.song_backgrounds().changes().iter().any(|change| {
+                            matches!(&change.target, deadsync_chart::SongBackgroundChangeTarget::File(path)
+                                if path.ends_with("background.png"))
+                        }));
                         if target == CurrentScreen::Gameplay {
                             assert!(app.state.screens.gameplay_state.is_some());
                         } else {
@@ -332,14 +343,14 @@ impl App {
                     &gs.noteskin_assets.tap_explosion_noteskin,
                 ],
                 gs.song(),
-                &gs.background_changes,
+                gs.song_backgrounds().changes(),
                 gs.song_lua_visuals(),
             );
             self.dynamic_media.set_gameplay_background_paths(
                 &mut self.asset_manager,
                 backend,
                 gs.song(),
-                &gs.background_changes,
+                gs.song_backgrounds().changes(),
             );
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
