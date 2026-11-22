@@ -6540,7 +6540,7 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
     for shell_owner in [
         "fn sync_active_online_runtime_view",
         "state.lobby_session.sync_runtime_view(lobby)",
-        "evaluation::sync_runtime_view",
+        "ActiveTheme::sync_evaluation_runtime",
         "SimplyLoveLobbyRequest::UpdateMachineStats",
         "runtime_update_machine_state_sides_with_stats_default",
     ] {
@@ -7008,7 +7008,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
         "scores::groovestats_eval_state_from_gameplay",
         "scores::get_or_fetch_player_leaderboards_for_profile",
         "profile_data::runtime_music_profile_snapshot",
-        "evaluation::leaderboard_requests",
+        "ActiveTheme::evaluation_leaderboard_requests",
     ] {
         assert!(
             contains_rust(&shell, shell_owner),
@@ -13290,7 +13290,7 @@ fn evaluation_leaves_using_game_session_origin() {
     assert!(game.contains("EvaluationOrigin::Course => screens.select_course"));
     assert!(app.contains("self.state.screens.evaluation_origin = if in_course_run"));
     assert!(app.contains("ThemeEffect::LeaveEvaluation =>"));
-    assert!(input.contains("screens::evaluation::handle_session_input("));
+    assert!(input.contains("ActiveTheme::handle_evaluation_input("));
     assert!(contains_rust(
         &nav,
         "evaluation_return_to::<ActiveTheme>(self.state.screens.evaluation_origin)",
@@ -13298,6 +13298,31 @@ fn evaluation_leaves_using_game_session_origin() {
     assert!(theme.contains("Some(origin) => (origin, ThemeEffect::LeaveEvaluation)"));
     assert!(!app.contains(".return_to_course"));
     assert!(!app.contains(".auto_advance_seconds"));
+}
+
+#[test]
+fn evaluation_lifecycle_uses_the_installed_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src/app");
+    let app = read_source(shell.join("mod.rs")).expect("Evaluation entry source");
+    let input = production_source(&shell.join("input_routing.rs"));
+    let runtime = production_source(&shell.join("evaluation_views.rs"));
+    assert!(app.contains("type EvaluationState = <ActiveTheme as ThemeEvaluation>::EvaluationState"));
+    assert!(app.contains("evaluation_state: EvaluationState"));
+    assert!(runtime.contains("view: EvaluationState"));
+    for call in [
+        "init_evaluation",
+        "init_course_evaluation",
+        "sync_evaluation_elapsed",
+        "update_evaluation",
+        "handle_evaluation_raw_key",
+        "handle_evaluation_raw_pad",
+        "push_evaluation_actors",
+    ] {
+        assert!(app.contains(&format!("ActiveTheme::{call}(")), "missing {call}");
+    }
+    assert!(input.contains("ActiveTheme::evaluation_test_input_pane_active("));
+    assert!(runtime.contains("chart_queries(self.state.screens.evaluation_stage.as_ref())"));
 }
 
 #[test]

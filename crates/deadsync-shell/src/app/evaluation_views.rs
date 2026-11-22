@@ -1,13 +1,15 @@
 use super::{
-    App, EVALUATION_LEADERBOARD_ROWS, EvaluationPolicyView, EvaluationRuntimeView,
+    App, EVALUATION_LEADERBOARD_ROWS, EvaluationPolicyView, EvaluationRuntimeView, EvaluationState,
     EvaluationSubmissionView, MAX_PLAYERS, ScoreboxSideView, SimplyLoveGrooveStatsService,
     evaluation_context_view, scorebox_pane_filter,
 };
+use crate::ActiveTheme;
 use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::results::EvaluationStage;
-use deadsync_theme_simply_love::screens::{SimplyLoveScreen as CurrentScreen, evaluation};
+use deadsync_theme::evaluation::ThemeEvaluation;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use std::{sync::Arc, time::Instant};
 
 type PlayerQueries<'a> = [Option<(profile_data::PlayerSide, &'a str)>; MAX_PLAYERS];
@@ -18,7 +20,7 @@ pub(super) fn chart_queries(stage: Option<&EvaluationStage>) -> PlayerQueries<'_
 
 #[derive(Clone)]
 pub(super) struct CourseEvaluationPage {
-    pub(super) view: evaluation::State,
+    pub(super) view: EvaluationState,
     pub(super) stage: Option<EvaluationStage>,
 }
 
@@ -399,8 +401,8 @@ impl App {
 
         let state = &self.state.screens.evaluation_state;
         let player_queries = chart_queries(self.state.screens.evaluation_stage.as_ref());
-        let leaderboard_requests = evaluation::leaderboard_requests(state);
-        let allow_online_panes = state.allow_online_panes;
+        let (leaderboard_requests, allow_online_panes) =
+            ActiveTheme::evaluation_leaderboard_requests(state);
 
         let submission_auto_retry_due = self
             .evaluation_submission_auto_retry_at
@@ -489,7 +491,7 @@ impl App {
             return;
         }
 
-        evaluation::sync_runtime_view(
+        ActiveTheme::sync_evaluation_runtime(
             &mut self.state.screens.evaluation_state,
             EvaluationRuntimeView {
                 context,

@@ -606,6 +606,11 @@ the same entry path. `deadsync-profile-gameplay` defines the session and setting
 view used for startup and recovery. Simply Love's standalone initializer keeps
 its existing defaults and converts them to that shared view.
 
-The shell still stores concrete screen state and routes concrete runtime
-requests. A replaceable theme needs those integration points as well as the
-transition interface.
+Stage and course Evaluation mount through the selected theme for entry, input,
+updates, and actor composition. The shell tracks the game result separately and
+uses it to resolve chart queries. The theme reports which leaderboard panes need
+data and receives the available results as a runtime view.
+
+Several screens and runtime requests still use concrete Simply Love types.
+Evaluation also uses Simply Love support code for course noteskin previews,
+entry audio, screenshots, and other screen integrations.

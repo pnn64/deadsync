@@ -9,6 +9,7 @@ use crate::input::{
 use deadsync_config as config;
 use deadsync_gameplay::RawKeyAction;
 use deadsync_input::{self as logical_input, InputEvent};
+use deadsync_theme::evaluation::ThemeEvaluation;
 use deadsync_theme::player_options::ThemePlayerOptions;
 use deadsync_theme::profile_picker::ThemeProfilePicker;
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
@@ -284,7 +285,9 @@ impl App {
             }
         }
         let evaluation_test_input_active = current_screen == CurrentScreen::Evaluation
-            && screens::evaluation::test_input_pane_active(&self.state.screens.evaluation_state);
+            && ActiveTheme::evaluation_test_input_pane_active(
+                &self.state.screens.evaluation_state,
+            );
         match pre_screen_input_route(
             ev.pressed,
             ev.action,
@@ -495,7 +498,7 @@ impl App {
                 unreachable!("Select Course input uses the flat buffer")
             }
             CurrentScreen::PlayerOptions => unreachable!("Player Options input routed directly"),
-            CurrentScreen::Evaluation => screens::evaluation::handle_session_input(
+            CurrentScreen::Evaluation => ActiveTheme::handle_evaluation_input(
                 &mut self.state.screens.evaluation_state,
                 &ev,
                 self.state.screens.evaluation_origin,

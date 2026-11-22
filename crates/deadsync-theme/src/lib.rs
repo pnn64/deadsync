@@ -1,5 +1,6 @@
 pub mod color;
 mod effect;
+pub mod evaluation;
 pub mod main_menu;
 pub mod player_options;
 pub mod profile_picker;

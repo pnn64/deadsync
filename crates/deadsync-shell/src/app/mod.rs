@@ -207,6 +207,7 @@ use deadsync_theme::views::{
     SmxAssignmentView,
 };
 use deadsync_theme::color::ThemeJudgmentPalette;
+use deadsync_theme::evaluation::ThemeEvaluation;
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
 use deadsync_theme::player_options::{PlayerOptionsEntry, ThemePlayerOptions};
 use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
@@ -565,6 +566,7 @@ fn gameplay_session() -> GameplaySession {
 
 type GameplayState = GameplayHost<GameplayLobbySession, gameplay::GameplayPresentation>;
 type PracticeState = PracticeHost<GameplayState, practice::PracticePresentation>;
+type EvaluationState = <ActiveTheme as ThemeEvaluation>::EvaluationState;
 type PracticeEditSnapshot = crate::gameplay_runtime::PracticeEditSnapshot<
     <practice::PracticePresentation as PracticeLivePresentation<gameplay::GameplayPresentation>>::EditSnapshot,
 >;
@@ -650,7 +652,7 @@ pub struct ScreensState {
     stage_launch: StageLaunch<StageSelection>,
     select_course_state: select_course::State,
     sandbox_state: sandbox::State,
-    evaluation_state: evaluation::State,
+    evaluation_state: EvaluationState,
     evaluation_origin: EvaluationOrigin,
     evaluation_stage: Option<EvaluationStage>,
     course_evaluation: evaluation_views::CourseEvaluationPages,
@@ -755,7 +757,7 @@ struct GameplayInitFinish {
     config: config::app_config::Config,
 }
 
-fn apply_course_noteskins(course_page: &mut evaluation::State, song_pages: &[CourseEvaluationPage]) {
+fn apply_course_noteskins(course_page: &mut EvaluationState, song_pages: &[CourseEvaluationPage]) {
     for summary in course_page.score_info.iter_mut().flatten() {
         if summary.noteskin.is_none() {
             summary.noteskin = song_pages
@@ -887,7 +889,7 @@ fn build_course_summary_eval_state(
         profile.scorebox.play_style,
         &profiles,
     );
-    let mut state = evaluation::init_from_score_info(
+    let mut state = ActiveTheme::init_course_evaluation(
         score_info,
         routine_shared.map(|shared| shared.score_percent),
         stage.duration_seconds,
@@ -895,10 +897,9 @@ fn build_course_summary_eval_state(
             evaluation_views::EvaluationFramePolicy::from_config(config).context(),
             &profile,
         ),
+        active_color_index,
     );
-    state.active_color_index = active_color_index;
-    evaluation::sync_elapsed(&mut state, session_elapsed, gameplay_elapsed);
-    state.allow_online_panes = false;
+    ActiveTheme::sync_evaluation_elapsed(&mut state, session_elapsed, gameplay_elapsed);
     CourseEvaluationPage { view: state, stage: evaluation_stage }
 }
 
@@ -1291,8 +1292,8 @@ impl ScreensState {
         let mut init_state = init::init(init_songs_root, init_courses_root);
         init_state.active_color_index = color_index;
 
-        let mut evaluation_state = evaluation::init(EvaluationInitView::default());
-        evaluation_state.active_color_index = color_index;
+        let evaluation_state =
+            ActiveTheme::init_evaluation(EvaluationInitView::default(), color_index);
 
         let mut evaluation_summary_state = evaluation_summary::init(
             deadsync_theme_simply_love::views::PostSongRuntimeView::default(),
@@ -1486,18 +1487,22 @@ impl ScreensState {
                 false,
             ),
             CurrentScreen::Evaluation => {
-                let (session_elapsed, _) = evaluation::elapsed_times(&self.evaluation_state);
+                let (session_elapsed, _) =
+                    ActiveTheme::evaluation_elapsed_times(&self.evaluation_state);
                 let session_elapsed = session.session_start_time.map_or(session_elapsed, |start| {
                     now.duration_since(start).as_secs_f32()
                 });
                 let gameplay_elapsed =
                     stage_stats::total_stage_duration_seconds(&session.played_stages);
-                evaluation::sync_elapsed(
+                ActiveTheme::sync_evaluation_elapsed(
                     &mut self.evaluation_state,
                     session_elapsed,
                     gameplay_elapsed,
                 );
-                (Some(evaluation::update(&mut self.evaluation_state, delta_time)), false)
+                (
+                    Some(ActiveTheme::update_evaluation(&mut self.evaluation_state, delta_time)),
+                    false,
+                )
             }
             CurrentScreen::EvaluationSummary => {
                 evaluation_summary::update(&mut self.evaluation_summary_state, delta_time);
@@ -4695,7 +4700,7 @@ impl App {
                 .select_music_state
                 .test_input_overlay_visible;
         let evaluation_snek_test = self.state.screens.current_screen == CurrentScreen::Evaluation
-            && screens::evaluation::test_input_pane_active(
+            && ActiveTheme::evaluation_test_input_pane_active(
                 &self.state.screens.evaluation_state,
             );
         let snek_test_active =
@@ -4721,7 +4726,7 @@ impl App {
                     snapshot.revision,
                 );
             } else {
-                screens::evaluation::set_snek_sensor_state(
+                ActiveTheme::sync_evaluation_snek_sensors(
                     &mut self.state.screens.evaluation_state,
                     snapshot.connected,
                     snapshot.read_error,
@@ -6854,7 +6859,8 @@ impl App {
                 let Some(payload) = self.state.screens.evaluation_stage.clone() else {
                     return false;
                 };
-                let active_color_index = self.state.screens.evaluation_state.active_color_index;
+                let active_color_index =
+                    ActiveTheme::evaluation_color_index(&self.state.screens.evaluation_state);
                 self.prepare_restart_stage(
                     Arc::clone(&payload.song),
                     payload.chart_hashes(),
@@ -6877,7 +6883,8 @@ impl App {
                 let Some(payload) = self.state.screens.evaluation_stage.clone() else {
                     return false;
                 };
-                let active_color_index = self.state.screens.evaluation_state.active_color_index;
+                let active_color_index =
+                    ActiveTheme::evaluation_color_index(&self.state.screens.evaluation_state);
                 self.prepare_restart_stage(
                     Arc::clone(&payload.song),
                     payload.chart_hashes(),
@@ -7176,7 +7183,7 @@ impl App {
         self.ui_sfx
             .prepare_screen(&mut self.audio, sfx_paths.iter());
         self.state.screens.evaluation_state.sfx_paths = sfx_paths.clone();
-        let color_idx = self.state.screens.evaluation_state.active_color_index;
+        let color_idx = ActiveTheme::evaluation_color_index(&self.state.screens.evaluation_state);
         // The cue follows the completed stage, even when its screen is replaced
         // by the course summary below. Result bookkeeping has already finished.
         let entry_sfx = evaluation::entry_sfx(failed, config.visual_style, config.srpg_variant)
@@ -7198,7 +7205,7 @@ impl App {
             let gameplay_elapsed =
                 stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
             let (session_elapsed, _) =
-                evaluation::elapsed_times(&self.state.screens.evaluation_state);
+                ActiveTheme::evaluation_elapsed_times(&self.state.screens.evaluation_state);
             let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
             let routine_shared = routine_shared_course_player(
                 &course_run,
@@ -7225,7 +7232,11 @@ impl App {
             for mut page in per_song_pages {
                 page.view.sfx_paths = sfx_paths.clone();
                 page.view.screen_elapsed = screen_elapsed;
-                evaluation::sync_elapsed(&mut page.view, session_elapsed, gameplay_elapsed);
+                ActiveTheme::sync_evaluation_elapsed(
+                    &mut page.view,
+                    session_elapsed,
+                    gameplay_elapsed,
+                );
                 pages.push(page);
             }
             self.state.screens.course_evaluation.replace_pages(pages);
@@ -7233,10 +7244,11 @@ impl App {
             self.state.screens.course_evaluation.clear_pages();
         }
 
-        let (session_elapsed, _) = evaluation::elapsed_times(&self.state.screens.evaluation_state);
+        let (session_elapsed, _) =
+            ActiveTheme::evaluation_elapsed_times(&self.state.screens.evaluation_state);
         let gameplay_elapsed =
             stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
-        evaluation::sync_elapsed(
+        ActiveTheme::sync_evaluation_elapsed(
             &mut self.state.screens.evaluation_state,
             session_elapsed,
             gameplay_elapsed,
@@ -7306,8 +7318,8 @@ impl App {
         };
         page.screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
         let (session_elapsed, gameplay_elapsed) =
-            evaluation::elapsed_times(&self.state.screens.evaluation_state);
-        evaluation::sync_elapsed(&mut page, session_elapsed, gameplay_elapsed);
+            ActiveTheme::evaluation_elapsed_times(&self.state.screens.evaluation_state);
+        ActiveTheme::sync_evaluation_elapsed(&mut page, session_elapsed, gameplay_elapsed);
         self.state.screens.evaluation_state = page;
         self.state.screens.evaluation_stage = stage;
         self.mark_evaluation_runtime_dirty();
@@ -7985,7 +7997,7 @@ impl App {
                 init::push_actors(&mut actors, &self.state.screens.init_state, visual_policy);
             }
             CurrentScreen::Evaluation => {
-                evaluation::push_actors(
+                ActiveTheme::push_evaluation_actors(
                     &mut actors,
                     &self.state.screens.evaluation_state,
                     &self.asset_manager,
@@ -8661,7 +8673,7 @@ impl App {
                 }
             }
             RawKeyScreenRoute::Evaluation => {
-                screens::evaluation::handle_raw_key_event(
+                ActiveTheme::handle_evaluation_raw_key(
                     &mut self.state.screens.evaluation_state,
                     &raw_key,
                 );
@@ -9655,8 +9667,7 @@ impl App {
                 );
                 let _ = self.record_stage_result(stage.clone(), failed, &config, false);
                 let init_view = Self::evaluation_init_view(&gameplay_results, &stage, &config);
-                let mut eval_state = evaluation::init(init_view);
-                eval_state.active_color_index = color_idx;
+                let eval_state = ActiveTheme::init_evaluation(init_view, color_idx);
                 self.state.screens.course_evaluation.stages.push(CourseEvaluationPage {
                     view: eval_state,
                     stage: evaluation_stage,
@@ -10042,7 +10053,7 @@ impl App {
                 media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
             }
             let color_idx = gameplay_results.as_ref().map_or(
-                self.state.screens.evaluation_state.active_color_index,
+                ActiveTheme::evaluation_color_index(&self.state.screens.evaluation_state),
                 |gs| gs.gameplay.active_color_index(),
             );
             if let Some(gameplay) = gameplay_results.as_ref() {
@@ -10074,15 +10085,14 @@ impl App {
                 }
                 (EvaluationInitView::default(), None, false, completed)
             };
-            self.state.screens.evaluation_state = evaluation::init(init_view);
+            self.state.screens.evaluation_state = ActiveTheme::init_evaluation(init_view, color_idx);
             self.state.screens.evaluation_stage = evaluation_stage;
-            self.state.screens.evaluation_state.active_color_index = color_idx;
             let session_elapsed = self.state.session.session_start_time.map_or(0.0, |start| {
                 Instant::now().duration_since(start).as_secs_f32()
             });
             let gameplay_elapsed =
                 stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
-            evaluation::sync_elapsed(
+            ActiveTheme::sync_evaluation_elapsed(
                 &mut self.state.screens.evaluation_state,
                 session_elapsed,
                 gameplay_elapsed,
@@ -10111,7 +10121,9 @@ impl App {
                 CurrentScreen::SelectCourse => {
                     self.state.screens.select_course_state.active_color_index
                 }
-                CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
+                CurrentScreen::Evaluation => ActiveTheme::evaluation_color_index(
+                    &self.state.screens.evaluation_state,
+                ),
                 _ => {
                     self.state
                         .screens
@@ -10156,7 +10168,9 @@ impl App {
                 CurrentScreen::SelectCourse => {
                     self.state.screens.select_course_state.active_color_index
                 }
-                CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
+                CurrentScreen::Evaluation => ActiveTheme::evaluation_color_index(
+                    &self.state.screens.evaluation_state,
+                ),
                 _ => self.state.screens.initials_state.active_color_index,
             };
             let display_stages = self
@@ -10191,7 +10205,9 @@ impl App {
                 CurrentScreen::SelectCourse => {
                     self.state.screens.select_course_state.active_color_index
                 }
-                CurrentScreen::Evaluation => self.state.screens.evaluation_state.active_color_index,
+                CurrentScreen::Evaluation => ActiveTheme::evaluation_color_index(
+                    &self.state.screens.evaluation_state,
+                ),
                 _ => self.state.screens.gameover_state.active_color_index,
             };
             self.state.screens.gameover_state =
@@ -10630,7 +10646,7 @@ impl ApplicationHandler<UserEvent> for App {
                         );
                     }
                     RawPadScreenRoute::Evaluation => {
-                        screens::evaluation::handle_raw_pad_event(
+                        ActiveTheme::handle_evaluation_raw_pad(
                             &mut self.state.screens.evaluation_state,
                             &ev,
                         );
