@@ -824,6 +824,21 @@ impl Vm {
                     self.substitution_push(index, value)?;
                     self.substitution_value(index)?
                 } else {
+                    if c == b'%' {
+                        let tail = &self.strings.bytes[slot][pos..];
+                        if tail.starts_with(b"%%") {
+                            let output = &mut self.substitutions[index].output;
+                            let room = io::LINE_BUFFER - output.len();
+                            if room > 1 {
+                                // Leave the next flush to substitution_byte.
+                                let limit = tail.len().min(2 * (room - 1));
+                                let extra = byte_run(&tail[..limit], b'%') / 2;
+                                output.resize(output.len() + 1 + extra, b'%');
+                                pos += 2 * extra;
+                                continue;
+                            }
+                        }
+                    }
                     self.substitution_byte(index, c)?
                 }
             };
