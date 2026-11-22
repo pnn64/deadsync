@@ -13,6 +13,7 @@ use crate::transition_effects::transition_music_command;
 use deadlib_present::actors::Actor;
 use deadsync_config as config;
 use deadsync_gameplay::course_progress::CourseRenewal;
+use deadsync_gameplay::song_launch::SongLaunchTarget;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_theme::{
@@ -150,6 +151,18 @@ impl App {
     #[inline(always)]
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
+        if prev == ActiveTheme::SCREENS.song_selection && target != prev {
+            let ready_target = if target == ActiveTheme::SCREENS.gameplay {
+                Some(SongLaunchTarget::Gameplay)
+            } else if target == ActiveTheme::SCREENS.player_options {
+                Some(SongLaunchTarget::PlayerOptions)
+            } else {
+                None
+            };
+            if !ready_target.is_some_and(|target| self.state.screens.song_launch.ready_for(target)) {
+                self.clear_song_launch();
+            }
+        }
         if !is_play_screen::<ActiveTheme>(target) {
             self.state.pending_stage = None;
         }

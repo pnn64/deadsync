@@ -186,6 +186,9 @@ use deadsync_lights::cabinet_chart::{
     cabinet_light_chart_from_loaded, cabinet_light_key, cabinet_light_plan,
 };
 use deadsync_lights::{self as lights, HideFlags};
+use deadsync_gameplay::song_launch::{
+    SongLaunch, SongLaunchPrompt, SongLaunchRequest, SongLaunchTarget,
+};
 use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};
 use deadsync_profile_gameplay::stage_options::StageOptions;
 #[cfg(test)]
@@ -606,6 +609,7 @@ pub struct ScreensState {
     select_play_mode_state: select_mode::State,
     profile_load_state: profile_load::State,
     select_music_state: select_music::State,
+    song_launch: SongLaunch,
     select_course_state: select_course::State,
     sandbox_state: sandbox::State,
     evaluation_state: evaluation::State,
@@ -1286,6 +1290,7 @@ impl ScreensState {
             select_play_mode_state,
             profile_load_state,
             select_music_state,
+            song_launch: SongLaunch::default(),
             select_course_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
@@ -2838,49 +2843,19 @@ impl App {
         })
     }
 
-    fn selected_music_gameplay_choice(
-        &self,
-        play_style: profile_data::PlayStyle,
-    ) -> Option<(Arc<SongData>, [usize; MAX_PLAYERS], [usize; MAX_PLAYERS])> {
-        let state = &self.state.screens.select_music_state;
-        let select_music::MusicWheelEntry::Song(song) = state.entries.get(state.selected_index)?
-        else {
-            return None;
-        };
-        let mut steps = [state.selected_steps_index; MAX_PLAYERS];
-        let mut preferred = [state.preferred_difficulty_index; MAX_PLAYERS];
-        if play_style.player_count() == MAX_PLAYERS {
-            steps[1] = state.p2_selected_steps_index;
-            preferred[1] = state.p2_preferred_difficulty_index;
-        }
-        Some((Arc::clone(song), steps, preferred))
-    }
-
-    fn selected_music_stage_start(&self) -> Option<StageStart> {
-        let (song, steps, preferred) =
-            self.selected_music_gameplay_choice(profile::get_session_play_style())?;
-        let color_index = self.state.screens.select_music_state.active_color_index;
-        Some(StageStart::from_current_profiles(
-            song,
-            steps,
-            preferred,
-            color_index,
-            CurrentScreen::SelectMusic,
-        ))
-    }
-
     fn preload_gameplay(&mut self) {
         if self.state.screens.current_screen != CurrentScreen::SelectMusic
             || self.gameplay_preload.is_some()
-            || !select_music::gameplay_preload_due(&self.state.screens.select_music_state)
         {
             return;
         }
-        let session = profile::get_session_snapshot();
-        let play_style = session.play_style;
-        let Some((song, steps, preferred)) = self.selected_music_gameplay_choice(play_style) else {
+        let Some(selection) = self.state.screens.song_launch.preload_selection() else {
             return;
         };
+        let session = profile::get_session_snapshot();
+        let play_style = session.play_style;
+        let (steps, preferred) = selection.chart_slots(gameplay_play_style_from_profile(play_style));
+        let song = Arc::clone(&selection.song);
         let player_side = session.player_side;
         let plan = gameplay_chart_entry_plan(&song, steps, preferred, play_style, player_side);
         let cfg = config::runtime::get();
@@ -2986,7 +2961,7 @@ impl App {
             return;
         };
         if self.state.screens.current_screen == CurrentScreen::SelectMusic
-            && select_music::gameplay_preload_cancelled(&self.state.screens.select_music_state)
+            && self.state.screens.song_launch.prompt() == SongLaunchPrompt::EnteringOptions
         {
             // A Start press selected Player Options before the normal prompt
             // deadline. Do not let a completed speculative preload redirect it.
@@ -4814,6 +4789,10 @@ impl App {
                     &mut self.theme_effect_scratch,
                 );
                 let _ = self.drain_theme_effects(event_loop);
+                if let Some(target) = self.advance_song_launch(logic_dt) {
+                    let _ = self.drain_theme_effects(event_loop);
+                    self.handle_immediate_navigation(target, event_loop);
+                }
             }
             let current_screen = self.state.screens.current_screen;
             let auto_screenshot_ready = current_screen == CurrentScreen::Evaluation
@@ -5639,6 +5618,10 @@ impl App {
             ThemeEffect::Runtime(request) => match request {
                 SimplyLoveRuntimeRequest::GameplayAction(_) => {
                     unreachable!("gameplay actions must be normalized before runtime execution")
+                }
+                SimplyLoveRuntimeRequest::SongLaunch(request) => {
+                    self.request_song_launch(request);
+                    Vec::new()
                 }
                 SimplyLoveRuntimeRequest::StartReplay(replay) => {
                     if self.queue_replay_stage(replay) {
@@ -9185,9 +9168,21 @@ impl App {
                     warn!("Unable to prepare PlayerOptions for the selected course.");
                 }
             } else {
-                let (song_arc, chart_steps_index, preferred_difficulty_index) = self
-                    .selected_music_gameplay_choice(profile::get_session_play_style())
+                let selection = (prev == ActiveTheme::SCREENS.song_selection)
+                    .then(|| {
+                        self.state
+                            .screens
+                            .song_launch
+                            .take_ready(SongLaunchTarget::PlayerOptions)
+                    })
+                    .flatten()
+                    .or_else(|| {
+                        select_music::selected_song_choice(&self.state.screens.select_music_state)
+                    })
                     .expect("cannot open player options without a selected song");
+                let (chart_steps_index, preferred_difficulty_index) = selection.chart_slots(
+                    gameplay_play_style_from_profile(profile::get_session_play_style()),
+                );
 
                 let color_index = self.state.screens.select_music_state.active_color_index;
                 let return_screen = if prev == CurrentScreen::Practice {
@@ -9196,7 +9191,7 @@ impl App {
                     CurrentScreen::SelectMusic
                 };
                 self.state.screens.player_options_state = Some(player_options::init(
-                    song_arc,
+                    selection.song,
                     chart_steps_index,
                     preferred_difficulty_index,
                     color_index,
@@ -9235,10 +9230,16 @@ impl App {
                     warn!("Unable to prepare gameplay for the selected course stage.");
                 }
             } else {
-                let start = self
-                    .selected_music_stage_start()
+                let selection = self
+                    .state
+                    .screens
+                    .song_launch
+                    .take_ready(SongLaunchTarget::Gameplay)
+                    .or_else(|| {
+                        select_music::selected_song_choice(&self.state.screens.select_music_state)
+                    })
                     .expect("cannot start Gameplay or Practice without a selected song");
-                self.state.pending_stage = Some(start);
+                self.state.pending_stage = Some(self.stage_start_for_song_selection(selection));
             }
         }
         if target == CurrentScreen::PlayerOptions

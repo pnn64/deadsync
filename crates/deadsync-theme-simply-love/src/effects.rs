@@ -897,6 +897,7 @@ pub enum SimplyLoveUpdaterRequest {
 pub enum SimplyLoveRuntimeRequest {
     /// Preserve the game action until the shell supplies current session facts.
     GameplayAction(deadsync_gameplay::GameplayAction),
+    SongLaunch(deadsync_gameplay::song_launch::SongLaunchRequest),
     StartReplay(deadsync_profile_gameplay::stage_replay::StageReplayRequest),
     RestartGameplay,
     /// Replace the gameplay screen without committing its stage or Lua VM.

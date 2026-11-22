@@ -53,6 +53,7 @@ use deadsync_chart::{
 };
 use deadsync_config::theme::GameFlag;
 use deadsync_core::input::InputSource;
+use deadsync_gameplay::song_launch::{SongLaunchPrompt, SongLaunchRequest, SongSelection};
 use deadsync_input::{InputEvent, Keymap, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_online::lobby_selection::{self, LocalSongSelection, RemoteSelectionOutcome};
@@ -132,9 +133,6 @@ const SYNC_BEAT_RATE_MIN_ELAPSED_SECS: f32 = 0.5;
 // Cycles through AuthorCredit, Description, ChartName every 2 seconds.
 const STEP_ARTIST_CYCLE_SECONDS: f32 = 2.0;
 
-// ITGmania metric: ScreenSelectMusic ShowOptionsMessageSeconds (fallback: 1.5).
-const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
-
 // Simply Love BGAnimations/ScreenSelectMusic background.lua white flash overlay.
 const SL_BG_FLASH_SLEEP_SECONDS: f32 = 0.6;
 const SL_BG_FLASH_FADE_SECONDS: f32 = 0.5;
@@ -158,10 +156,6 @@ const ENTERING_OPTIONS_FADE_OUT_SECONDS: f32 = 0.125;
 const ENTERING_OPTIONS_HIBERNATE_SECONDS: f32 = 0.1;
 const ENTERING_OPTIONS_FADE_IN_SECONDS: f32 = 0.125;
 const ENTERING_OPTIONS_HOLD_SECONDS: f32 = 1.0;
-const ENTERING_OPTIONS_TOTAL_SECONDS: f32 = ENTERING_OPTIONS_FADE_OUT_SECONDS
-    + ENTERING_OPTIONS_HIBERNATE_SECONDS
-    + ENTERING_OPTIONS_FADE_IN_SECONDS
-    + ENTERING_OPTIONS_HOLD_SECONDS;
 
 // Simply Love BGAnimations/ScreenSelectMusic overlay/EscapeFromEventMode.lua prompt.
 const SL_EXIT_PROMPT_BG_ALPHA: f32 = 0.925;
@@ -913,13 +907,6 @@ impl InputId {
             slot: ev.input_slot,
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum OutPromptState {
-    None,
-    PressStartForOptions { elapsed: f32 },
-    EnteringOptions { elapsed: f32 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1703,7 +1690,7 @@ pub struct State {
     step_artist_cycle_base: f32,
 
     // Internal state
-    out_prompt: OutPromptState,
+    song_launch_prompt: SongLaunchPrompt,
     exit_prompt: ExitPromptState,
     song_delete_prompt: Option<SongDeletePromptState>,
     reload_ui: Option<ReloadUiState>,
@@ -2428,6 +2415,21 @@ fn selected_song_arc(state: &State) -> Option<Arc<SongData>> {
     }
 }
 
+fn song_choice(state: &State, song: Arc<SongData>) -> SongSelection {
+    SongSelection {
+        song,
+        steps: [state.selected_steps_index, state.p2_selected_steps_index],
+        preferred: [
+            state.preferred_difficulty_index,
+            state.p2_preferred_difficulty_index,
+        ],
+    }
+}
+
+pub fn selected_song_choice(state: &State) -> Option<SongSelection> {
+    selected_song_arc(state).map(|song| song_choice(state, song))
+}
+
 fn reload_selected_song(state: &State) -> Option<ThemeEffect> {
     let Some(song) = selected_song_arc(state) else {
         return None;
@@ -2444,7 +2446,7 @@ fn song_delete_shortcut_allowed(state: &State) -> bool {
     state.policy.allow_song_deletion
         && state.nav_key_held_direction.is_none()
         && state.wheel_offset_from_selection.abs() < 0.0001
-        && state.out_prompt == OutPromptState::None
+        && state.song_launch_prompt == SongLaunchPrompt::Hidden
         && state.exit_prompt == ExitPromptState::None
         && state.song_delete_prompt.is_none()
         && !delayed_selection_updates_blocked(state)
@@ -3945,7 +3947,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         scorebox_cycle_clocks: Default::default(),
         scorebox_fetch_phase: Default::default(),
         wheel_offset_from_selection: 0.0,
-        out_prompt: OutPromptState::None,
+        song_launch_prompt: SongLaunchPrompt::Hidden,
         exit_prompt: ExitPromptState::None,
         song_delete_prompt: None,
         reload_ui: None,
@@ -4197,7 +4199,7 @@ pub fn init_placeholder() -> State {
         scorebox_cycle_clocks: Default::default(),
         scorebox_fetch_phase: Default::default(),
         wheel_offset_from_selection: 0.0,
-        out_prompt: OutPromptState::None,
+        song_launch_prompt: SongLaunchPrompt::Hidden,
         exit_prompt: ExitPromptState::None,
         song_delete_prompt: None,
         reload_ui: None,
@@ -4652,7 +4654,7 @@ fn clear_stale_preview(
 
 #[inline(always)]
 fn preview_hotkey_allowed(state: &State) -> bool {
-    state.out_prompt == OutPromptState::None
+    state.song_launch_prompt == SongLaunchPrompt::Hidden
         && state.exit_prompt == ExitPromptState::None
         && !delayed_selection_updates_blocked(state)
 }
@@ -9320,7 +9322,6 @@ fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffec
             ThemeEffect::None
         }
         select_music_menu::ReplayInputOutcome::StartGameplay(payload) => {
-            state.out_prompt = OutPromptState::None;
             queue_sfx(state, "assets/sounds/start.ogg");
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::StartReplay(payload))
         }
@@ -10315,7 +10316,7 @@ pub fn handle_confirm(state: &mut State, effects: &mut Vec<ThemeEffect>) {
 
 fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
     clear_nav_hold(state);
-    if state.out_prompt != OutPromptState::None {
+    if state.song_launch_prompt != SongLaunchPrompt::Hidden {
         return ThemeEffect::None;
     }
     if state.entries.is_empty() {
@@ -10335,8 +10336,9 @@ fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
                     state.policy.media.preview_starts_immediately,
                 );
             }
-            state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
-            ThemeEffect::None
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongLaunch(
+                SongLaunchRequest::Confirm(song_choice(state, song)),
+            ))
         }
         Some(entry @ MusicWheelEntry::PackHeader { .. }) if entry.is_series_header() => {
             let MusicWheelEntry::PackHeader { name, .. } = entry else {
@@ -10990,16 +10992,15 @@ fn handle_input_impl(
         return handle_song_delete_prompt_input(state, ev);
     }
 
-    if state.out_prompt != OutPromptState::None {
+    if state.song_launch_prompt != SongLaunchPrompt::Hidden {
         if ev.pressed
             && matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start)
-            && matches!(
-                state.out_prompt,
-                OutPromptState::PressStartForOptions { .. }
-            )
+            && state.song_launch_prompt == SongLaunchPrompt::OfferOptions
         {
             queue_sfx(state, "assets/sounds/start.ogg");
-            state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongLaunch(
+                SongLaunchRequest::PlayerOptions,
+            ));
         }
         return ThemeEffect::None;
     }
@@ -11415,31 +11416,8 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         return start_reload_song_dirs(state, reload_dirs);
     }
 
-    match state.out_prompt {
-        OutPromptState::PressStartForOptions { elapsed } => {
-            let elapsed = elapsed + dt.max(0.0);
-            if elapsed >= SHOW_OPTIONS_MESSAGE_SECONDS {
-                // Preserve the v0.5.855 transition semantics: the prompt is
-                // finished before Gameplay entry begins. The shell can retain
-                // the previously presented frame while asynchronous loading
-                // completes, but this state must not survive a later return.
-                clear_preview(state);
-                state.out_prompt = OutPromptState::None;
-                return ThemeEffect::NavigateNoFade(Screen::Gameplay);
-            }
-            state.out_prompt = OutPromptState::PressStartForOptions { elapsed };
-            return ThemeEffect::None;
-        }
-        OutPromptState::EnteringOptions { elapsed } => {
-            let elapsed = elapsed + dt.max(0.0);
-            if elapsed >= ENTERING_OPTIONS_TOTAL_SECONDS {
-                state.out_prompt = OutPromptState::None;
-                return ThemeEffect::NavigateNoFade(Screen::PlayerOptions);
-            }
-            state.out_prompt = OutPromptState::EnteringOptions { elapsed };
-            return ThemeEffect::None;
-        }
-        OutPromptState::None => {}
+    if state.song_launch_prompt != SongLaunchPrompt::Hidden {
+        return ThemeEffect::None;
     }
 
     if let ExitPromptState::Active {
@@ -11933,7 +11911,7 @@ pub fn prime_displayed_chart_data(state: &mut State) {
 #[inline(always)]
 pub fn allows_late_join(state: &State) -> bool {
     state.reload_ui.is_none()
-        && state.out_prompt == OutPromptState::None
+        && state.song_launch_prompt == SongLaunchPrompt::Hidden
         && state.exit_prompt == ExitPromptState::None
         && state.select_music_menu.is_hidden()
         && matches!(
@@ -11953,17 +11931,13 @@ pub fn allows_late_join(state: &State) -> bool {
         && !state.pad_config_overlay_visible
 }
 
-#[must_use]
-pub const fn gameplay_preload_due(state: &State) -> bool {
-    matches!(
-        state.out_prompt,
-        OutPromptState::PressStartForOptions { .. }
-    )
+pub fn sync_song_launch_prompt(state: &mut State, prompt: SongLaunchPrompt) {
+    state.song_launch_prompt = prompt;
 }
 
-#[must_use]
-pub const fn gameplay_preload_cancelled(state: &State) -> bool {
-    matches!(state.out_prompt, OutPromptState::EnteringOptions { .. })
+pub fn stop_song_launch_preview(state: &mut State, effects: &mut Vec<ThemeEffect>) {
+    clear_preview(state);
+    append_pending_runtime(state, ThemeEffect::None, effects);
 }
 
 // Fast non-allocating formatters where possible
@@ -14292,7 +14266,7 @@ pub fn push_actors(
     }
 
     // Simply Love ScreenSelectMusic out transition: "Press &START; for options"
-    if state.out_prompt != OutPromptState::None {
+    if state.song_launch_prompt != SongLaunchPrompt::Hidden {
         actors.push(act!(quad:
             align(0.0, 0.0): xy(0.0, 0.0):
             zoomto(screen_width(), screen_height()):
@@ -14303,8 +14277,8 @@ pub fn push_actors(
             linear(TRANSITION_OUT_DURATION): cropbottom(-0.5): alpha(1.0)
         ));
 
-        match state.out_prompt {
-            OutPromptState::PressStartForOptions { .. } => {
+        match state.song_launch_prompt {
+            SongLaunchPrompt::OfferOptions => {
                 actors.push(act!(text:
                     font(machine_font_key(state.policy.machine_font, FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
@@ -14315,7 +14289,7 @@ pub fn push_actors(
                     z(1401)
                 ));
             }
-            OutPromptState::EnteringOptions { .. } => {
+            SongLaunchPrompt::EnteringOptions => {
                 // Fade out "Press Start for options"
                 actors.push(act!(text:
                     font(machine_font_key(state.policy.machine_font, FontRole::Header)):
@@ -14342,7 +14316,7 @@ pub fn push_actors(
                     sleep(ENTERING_OPTIONS_HOLD_SECONDS)
                 ));
             }
-            OutPromptState::None => {}
+            SongLaunchPrompt::Hidden => {}
         }
     }
 
@@ -16452,12 +16426,19 @@ mod tests {
 
         let mut disabled = init_placeholder();
         disabled.entries = vec![super::MusicWheelEntry::Song(song.clone())];
-        let effect = handle_confirm(&mut disabled);
+        let ThemeEffect::Batch(effects) = handle_confirm(&mut disabled) else {
+            panic!("expected the start sound and a confirmed song");
+        };
         assert!(matches!(
-            effect,
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-                deadsync_theme::AudioRequest::PlaySfx(_)
-            ))
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(_)
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongLaunch(
+                    super::SongLaunchRequest::Confirm(choice)
+                )),
+            ] if Arc::ptr_eq(&choice.song, &song)
         ));
         assert!(disabled.currently_playing_preview_song.is_none());
 
@@ -16489,67 +16470,6 @@ mod tests {
             panic!("preview should retain the selected wheel song");
         };
         assert!(Arc::ptr_eq(current_song, &song));
-    }
-
-    #[test]
-    fn gameplay_prompt_finishes_at_original_deadline_and_stops_preview() {
-        let mut state = init_placeholder();
-        let mut song = (*test_song("Slow Lua Song")).clone();
-        song.music_path = Some(PathBuf::from("Slow Lua Song/music.ogg"));
-        state.entries = vec![super::MusicWheelEntry::Song(Arc::new(song))];
-        state.policy.media.show_previews = true;
-        state.policy.media.preview_starts_immediately = true;
-        let _ = handle_confirm(&mut state);
-        assert!(super::gameplay_preload_due(&state));
-
-        let smx = deadsync_theme::views::SmxAssignmentView::default();
-        let mut effects = Vec::new();
-        super::update(
-            &mut state,
-            super::SHOW_OPTIONS_MESSAGE_SECONDS,
-            &smx,
-            &mut effects,
-        );
-        assert!(matches!(
-            effects.as_slice(),
-            [
-                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-                    deadsync_theme::AudioRequest::StopMusic
-                )),
-                ThemeEffect::NavigateNoFade(super::Screen::Gameplay)
-            ]
-        ));
-        assert!(!super::gameplay_preload_due(&state));
-        assert!(!super::gameplay_preload_cancelled(&state));
-        assert!(state.currently_playing_preview_song.is_none());
-
-        let repeated = super::update_impl(&mut state, 1.0, &smx);
-        assert!(matches!(repeated, ThemeEffect::None));
-    }
-
-    #[test]
-    fn start_during_gameplay_prompt_still_enters_player_options() {
-        let mut state = init_placeholder();
-        state.entries = vec![super::MusicWheelEntry::Song(test_song("Options Song"))];
-        let _ = handle_confirm(&mut state);
-
-        handle_input(
-            &mut state,
-            &input_event(
-                VirtualAction::p1_start,
-                deadsync_core::input::InputSource::Gamepad,
-                true,
-            ),
-            false,
-        );
-        assert!(super::gameplay_preload_cancelled(&state));
-
-        let smx = deadsync_theme::views::SmxAssignmentView::default();
-        let effect = super::update_impl(&mut state, super::ENTERING_OPTIONS_TOTAL_SECONDS, &smx);
-        assert!(matches!(
-            effect,
-            ThemeEffect::NavigateNoFade(super::Screen::PlayerOptions)
-        ));
     }
 
     #[test]
@@ -19932,18 +19852,27 @@ mod tests {
     fn pump_center_confirms_select_music_prompts() {
         let mut state = init_placeholder();
         state.session.play_style = profile_data::PlayStyle::PumpSingle;
-        state.out_prompt = super::OutPromptState::PressStartForOptions { elapsed: 0.0 };
+        state.song_launch_prompt = super::SongLaunchPrompt::OfferOptions;
 
-        handle_input(
+        let effect = handle_input(
             &mut state,
             &input_event(VirtualAction::p1_center, InputSource::Gamepad, true),
             false,
         );
 
         assert!(matches!(
-            state.out_prompt,
-            super::OutPromptState::EnteringOptions { .. }
+            effect,
+            ThemeEffect::Batch(effects) if effects.iter().any(|effect| matches!(
+                effect,
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongLaunch(
+                    super::SongLaunchRequest::PlayerOptions
+                ))
+            ))
         ));
+        assert_eq!(
+            state.song_launch_prompt,
+            super::SongLaunchPrompt::OfferOptions
+        );
     }
 
     #[test]

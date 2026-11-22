@@ -14,6 +14,43 @@ fn contains_rust(source: &str, expected: &str) -> bool {
 }
 
 #[test]
+fn confirmed_song_launch_uses_game_policy() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let game = production_source(&root.join("crates/deadsync-gameplay/src/song_launch.rs"));
+    for contract in [
+        "pub struct SongSelection",
+        "pub struct SongLaunch",
+        "pub enum SongLaunchRequest",
+        "pub enum SongLaunchPrompt",
+        "pub fn advance(",
+        "pub fn take_ready(",
+    ] {
+        assert!(game.contains(contract), "missing game launch contract {contract}");
+    }
+    assert!(!game.contains("deadsync_theme"));
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    );
+    assert!(theme.contains("song_launch_prompt: SongLaunchPrompt"));
+    assert!(theme.contains("SongLaunchRequest::Confirm("));
+    assert!(theme.contains("SongLaunchRequest::PlayerOptions"));
+    for policy in [
+        "OPTIONS_WINDOW_SECONDS",
+        "SHOW_OPTIONS_MESSAGE_SECONDS",
+        "OPTIONS_ENTRY_SECONDS",
+        "gameplay_preload_due",
+        "NavigateNoFade(Screen::Gameplay)",
+        "NavigateNoFade(Screen::PlayerOptions)",
+    ] {
+        assert!(!theme.contains(policy), "theme owns launch policy {policy}");
+    }
+    let shell = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
+    assert!(shell.contains("song_launch.advance(delta_time)"));
+    assert!(shell.contains("Some(ActiveTheme::SCREENS.gameplay)"));
+    assert!(shell.contains("Some(ActiveTheme::SCREENS.player_options)"));
+}
+
+#[test]
 fn course_startup_and_renewal_use_game_contracts() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let plans = production_source(&root.join("crates/deadsync-chart/src/course.rs"));
@@ -345,7 +382,10 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         &app,
         "use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};"
     ));
-    assert_eq!(app.matches(".selected_music_gameplay_choice(").count(), 3);
+    assert!(app.contains("song_launch.preload_selection()"));
+    assert!(app.contains(".take_ready(SongLaunchTarget::Gameplay)"));
+    assert!(app.contains(".take_ready(SongLaunchTarget::PlayerOptions)"));
+    assert!(app.contains("stage_start_for_song_selection(selection)"));
     assert!(!shell_entry.contains("fn resolve_chart("));
     assert!(!shell_entry.contains("fn apply_song_lua_reload"));
     let entry = |from: &str, to: &str| {
