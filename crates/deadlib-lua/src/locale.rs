@@ -269,12 +269,28 @@ pub(crate) fn add_class_bits(set: &mut [u64; 4], code: u8) {
     }
 }
 pub(crate) fn map_case(bytes: &mut [u8], upper: bool) {
-    if let Some(ctype) = ctype() {
+    let table = ctype();
+    if let Some(values) = table.as_deref() {
         let shift = if upper { 8 } else { 0 };
-        for byte in bytes {
-            *byte = (ctype[usize::from(*byte)] >> shift) as u8;
+        if bytes.len() < 1024
+            || !bytes.is_ascii()
+            || values[..128].iter().enumerate().any(|(index, &value)| {
+                let byte = index as u8;
+                let ascii = if upper {
+                    byte.to_ascii_uppercase()
+                } else {
+                    byte.to_ascii_lowercase()
+                };
+                (value >> shift) as u8 != ascii
+            })
+        {
+            for byte in bytes {
+                *byte = (values[usize::from(*byte)] >> shift) as u8;
+            }
+            return;
         }
-    } else if upper {
+    }
+    if upper {
         bytes.make_ascii_uppercase();
     } else {
         bytes.make_ascii_lowercase();
