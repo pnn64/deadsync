@@ -180,6 +180,7 @@ fn game_controller_test_builds_stay_independent_of_themes_and_application() {
         "deadsync-assets",
         "deadsync-gameplay",
         "deadsync-online",
+        "deadsync-simfile",
         "deadsync-song-lua",
     ] {
         let failures = dependency_violations(&metadata, Some(owner));

@@ -14,6 +14,97 @@ fn contains_rust(source: &str, expected: &str) -> bool {
 }
 
 #[test]
+fn course_selection_preparation_stays_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let owner = production_source(&root.join("crates/deadsync-simfile/src/course_selection.rs"));
+    for contract in [
+        "pub struct CoursePreparation",
+        "pub struct PreparedCourseRating",
+        "pub struct CourseResolver",
+        "pub fn prepare_rating(",
+        "pub fn reroll_endless(",
+        "pub fn course_score_hash(",
+        "pub fn fresh_course_seed(",
+    ] {
+        assert!(
+            owner.contains(contract),
+            "game course preparation is missing {contract}"
+        );
+    }
+    let stages = production_source(&root.join("crates/deadsync-chart/src/course.rs"));
+    assert!(stages.contains("pub struct CourseStagePlan"));
+    let views = production_source(&root.join("crates/deadsync-theme/src/views.rs"));
+    assert!(contains_rust(
+        &views,
+        "pub use deadsync_chart::course::CourseStagePlan as CourseStageView;",
+    ));
+    let concrete_views =
+        production_source(&root.join("crates/deadsync-theme-simply-love/src/views.rs"));
+    assert!(contains_rust(
+        &concrete_views,
+        "pub type CourseStagePlan = CourseStageView;",
+    ));
+    let shell = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
+    assert!(contains_rust(
+        &shell,
+        "use deadsync_chart::course::CourseStagePlan;",
+    ));
+
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
+    );
+    for delegation in [
+        "CourseResolver::new(",
+        "CoursePreparation::new(course)",
+        "preparation.difficulties()",
+        "resolver.prepare_rating(",
+        "preparation.default_rating_index(&ratings)",
+        "state.resolver.reroll_endless(",
+        "pub use deadsync_simfile::course_selection::course_score_hash;",
+    ] {
+        assert!(
+            contains_rust(&theme, delegation),
+            "Select Course must use game preparation through {delegation}"
+        );
+    }
+    for implementation in [
+        "fn build_song_lookup(",
+        "fn build_song_play_counts(",
+        "fn build_song_grade_counts(",
+        "fn course_score_hash(",
+        "fn fresh_course_seed(",
+        "resolve_course_stage(",
+        "course_difficulty_from_meters(",
+        "course_meter(",
+        "add_chart_totals(",
+        "push_song_bpm_range(",
+    ] {
+        assert!(
+            !theme.contains(implementation),
+            "Select Course still owns game preparation through {implementation}"
+        );
+    }
+    for theme_crate in ["deadsync-theme", "deadsync-theme-simply-love"] {
+        for file in production_rust_files(&root.join("crates").join(theme_crate).join("src")) {
+            let source = production_source(&file);
+            for definition in [
+                "struct CourseStagePlan",
+                "struct CourseStageView",
+                "struct CourseResolver",
+                "struct CoursePreparation",
+                "struct PreparedCourseRating",
+            ] {
+                assert!(
+                    !source.contains(definition),
+                    "{} owns canonical course preparation: {definition}",
+                    rel_path(&root, &file),
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn gameplay_noteskin_preparation_stays_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let owner = production_source(

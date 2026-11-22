@@ -211,19 +211,10 @@ pub struct SmxGifCatalogView {
     pub judgment_packs: Vec<String>,
 }
 
-/// One resolved chart in a course selection.
-#[derive(Clone, Debug)]
-pub struct CourseStageView {
-    pub song: Arc<SongData>,
-    pub chart_hash: String,
-    pub modifiers: String,
-    pub gain_seconds: f32,
-    pub gain_lives: i32,
-}
-
+pub use deadsync_chart::course::CourseStagePlan as CourseStageView;
 pub use deadsync_rules::course::CourseType as CourseTypeView;
 
-/// A selected course prepared by a theme for runtime startup.
+/// Game-prepared course stages and presentation metadata for runtime startup.
 #[derive(Clone, Debug)]
 pub struct SelectedCourseView {
     pub path: PathBuf,

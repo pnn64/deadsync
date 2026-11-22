@@ -88,6 +88,22 @@ The parser's `CourseType` and theme's `CourseTypeView` public paths remain
 reexports, with the same variants and Nonstop default. Course selection passes
 the value directly instead of converting between duplicate enums.
 
+`deadsync-simfile::course_selection` owns course catalog lookup, play/grade facts,
+difficulty availability and defaults, ordered stage preparation, numeric totals,
+score identity, and seeded Endless rerolls. `deadsync-chart::course::CourseStagePlan`
+is the canonical resolved stage payload. The theme supplies one seed per course,
+shared across its ratings, and formats each selected chart through an inline
+immutable callback. There is no additional retained stage buffer or chart search.
+
+Preparation preserves authored entry indices for random selection, skips missing
+entries, and records only accepted songs in repeat history. History starts fresh
+for each rating and Endless cycle. Explicit nonnegative meters retain empty
+ratings; implicit Medium remains available. Catalog duplicate precedence,
+saturating play counts and totals, duration rounding, raw authored gains, and
+path-based score hashes retain their existing behavior. Endless rerolls prepare
+only the new stage sequence and reuse the initial rating's presentation metadata.
+Themes keep localized track-list text, wheel grouping, labels, and layout.
+
 `deadsync-gameplay::course_life_config` owns course life-model selection and Oni
 rewards alongside life initialization, damage, and carry. Its `CourseLifeStage`
 borrows song metadata and copies the selected chart indices and authored gains.
@@ -237,6 +253,13 @@ Workspace callers are updated for these source-level changes:
   existing qualified and glob variant imports. The shell's
   `course_life_config_for_stage` signature remains compatible and delegates to
   the game using borrowed stage facts.
+- Use `deadsync_chart::course::CourseStagePlan` for resolved course stages.
+  `deadsync_theme::views::CourseStageView` and Simply Love's `CourseStagePlan`
+  retain their public names as aliases of that same type, with unchanged fields.
+  `deadsync_simfile::course_selection` supplies the reusable preparation API;
+  Select Course's `course_score_hash`, selection, and Endless reroll functions
+  remain compatible adapters. `SelectedCourseView` still combines game stages
+  with the selected theme's presentation metadata.
 - Initialize gameplay through `init_gameplay_runtime`.
   `GameplayControlRuntimeState` now keeps one-shot target handling private and
   no longer supports struct-literal construction outside `deadsync-gameplay`.
@@ -279,10 +302,10 @@ target-specific, and build dependencies are included. Development dependencies
 are excluded because tests may exercise multiple layers together. Third-party
 dependency internals are not traversed.
 
-The game asset crate and the gameplay, online, and song-Lua controller crates
-additionally have a test-build guard: their direct development dependencies and
-production closures must remain independent of themes and the application shell.
-This keeps their behavior tests usable by any theme.
+The game asset and simfile crates, and the gameplay, online, and song-Lua
+controller crates, additionally have a test-build guard: their direct development
+dependencies and production closures must remain independent of themes and the
+application shell. This keeps their behavior tests usable by any theme.
 
 `tests/architecture_boundaries.rs` additionally checks source ownership and the
 specific APIs that protect canonical gameplay and notefield composition. Noteskin
@@ -312,6 +335,12 @@ Course-mode and life-selection guards require the canonical game type, public
 compatibility paths, borrowed shell adapter, lazy chart lookup, and reload entry
 ordering. Game regressions cover life-model selection, authored and automatic
 rewards, actual chart-slot lookup, raw Survival gains, and initialization/carry.
+Course-preparation guards require game-owned resolver and stage types, theme
+delegation, and the public compatibility aliases. Simfile tests cover catalog
+precedence, score facts, difficulty policy, skipped entries, numeric aggregation,
+empty ratings, authored random indices, and fresh-history Endless rerolls without
+depending on a theme. Existing shell tests retain real selection-to-runtime and
+Endless transition coverage.
 
 ```sh
 cargo test -p deadsync --test layer_dependencies --test architecture_boundaries
@@ -321,6 +350,7 @@ cargo test -p deadsync-gameplay --lib exit_route
 cargo test -p deadsync-gameplay --lib course_progress
 cargo test -p deadsync-gameplay --lib course_life_config_tests
 cargo test -p deadsync-simfile --lib course::tests::course_type_follows_itg_precedence
+cargo test -p deadsync-simfile --lib course_selection
 cargo test -p deadsync-shell --lib -- course::partner_tests app::course_transition_tests --test-threads=1
 cargo test -p deadsync-online --lib gameplay_lobby
 cargo test -p deadsync-online --lib lobby_wait
@@ -337,15 +367,15 @@ coordination now have game owners, as do Evaluation and Select Music lobby input
 barriers, disconnect handling, and remote song-selection synchronization. Simply
 Love still wraps gameplay state, while gameplay noteskin preparation and effect
 conversion now have a game owner. Course continuation and restart destinations,
-course progress, interruption, Endless renewal, course modes, and life selection
-now have game owners. Course preparation and result orchestration still run
-through the shell's course/session code; carry algorithms and score aggregation
-already have game owners.
+course progress, interruption, Endless renewal, course modes, life selection,
+difficulty availability, and complete stage-sequence preparation now have game
+owners. The shell still orchestrates runtime chart loading and result assembly;
+carry algorithms and score aggregation already have game owners.
 
-Course difficulty availability and stage-sequence construction still run in the
-Select Course theme screen, including Endless rerolls. The simfile crate already
-owns individual stage resolution; consolidating the complete sequence there is a
-remaining boundary before the shell can consume a theme-independent course plan.
+Course preparation now returns game-owned stages, but the shell still receives
+the selected course through a theme wrapper containing labels and a wheel song
+stub. Separating that startup contract from presentation metadata remains a step
+toward a fully theme-independent course session.
 
 The shell still uses concrete theme screen types. Consolidate that integration
 behind a theme-neutral presentation interface after the remaining runtime work;

@@ -1,5 +1,6 @@
 pub mod background;
 pub mod chart;
+pub mod course;
 pub mod notes;
 pub mod song;
 
