@@ -399,8 +399,23 @@ fn chart_lua_playback_has_no_theme_dependency() {
     assert!(!theme.contains("video_renderer"));
     let shell =
         read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs")).unwrap();
-    assert!(shell.contains("deadsync_song_lua::playback::compose_frame("));
-    assert!(shell.contains("gameplay::frame_layers("));
+    let presentation = production_source(
+        &root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"),
+    );
+    assert!(theme.contains("impl GameplayFramePresenter for State"));
+    assert!(shell.contains("compose_gameplay_frame as push_actors"));
+    assert!(!shell.contains("gameplay::frame_layers(") && !shell.contains("gameplay::draw_field("));
+    for handoff in [
+        "pub trait GameplayFramePresenter",
+        "stage.gameplay.setup.session",
+        ".map(GameplayProfileData::hide_song_background)",
+        "presenter.draw_layers(",
+        "presenter.draw_field(",
+        "stage.song_scratch = Some(song)",
+    ] {
+        assert!(contains_rust(&presentation, handoff), "missing presenter handoff {handoff}");
+    }
+    assert!(!presentation.contains("deadsync_theme"));
     for forbidden in [
         "deadsync-assets",
         "deadsync-profile",

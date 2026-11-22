@@ -170,6 +170,13 @@ clocks at their existing media boundaries, and plays scheduled Lua sounds
 after draining gameplay audio. Themes supply HUD and field presentation
 separately.
 
+`deadsync-song-lua::gameplay_presentation` drives frame composition through
+`GameplayFramePresenter`. The presenter supplies screen layers, notefield
+actors, and any final overlays. The game builds frame options from the live
+session and saved player settings, preserves capture order, and restores the
+stage and theme buffers before final overlays. Gameplay, Practice, and the
+gameplay exporter use the same entry point.
+
 `deadsync-gameplay::stage_charts` resolves chart fallback and assigns charts to
 solo, Versus, and partner players. Preload, Player Options entry, and direct
 stage entry read the wheel through one adapter. The game validates Lua's

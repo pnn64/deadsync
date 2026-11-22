@@ -242,6 +242,9 @@ pub trait GameplayProfileData: Clone {
     fn calculated_weight_pounds(&self) -> i32;
     fn hide_lifebar(&self) -> bool;
     fn hide_danger(&self) -> bool;
+    fn hide_song_background(&self) -> bool {
+        false
+    }
     fn rescore_early_hits(&self) -> bool;
     fn hide_early_dw_judgments(&self) -> bool;
     fn hide_early_dw_flash(&self) -> bool;

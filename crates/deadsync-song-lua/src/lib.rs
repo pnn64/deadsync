@@ -1,6 +1,7 @@
 //! Song Lua compilation, host bindings, and playback.
 mod actor_quaternion;
 pub mod gameplay;
+pub mod gameplay_presentation;
 pub mod gameplay_session;
 #[cfg(feature = "test-support")]
 pub mod trace_capture;

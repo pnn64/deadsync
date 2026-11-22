@@ -879,65 +879,7 @@ fn apply_practice_output(
     changed_rate || effects.len() != start_len
 }
 
-/// Run chart playback and request the current theme's presentation fragments.
-pub(crate) fn push_actors(
-    actors: &mut Vec<deadlib_present::actors::Actor>,
-    state: &mut deadsync_theme_simply_love::screens::gameplay::State,
-    assets: &deadlib_assets::AssetManager,
-    view: deadsync_theme_simply_love::screens::gameplay::ActorViewOverride,
-    arrow_effect_time_s: f64,
-    visual_policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
-) -> deadsync_song_lua::playback::GameplayActorSegments {
-    use deadsync_theme_simply_love::screens::gameplay;
-    let mut song = state
-        .stage
-        .song_scratch
-        .take()
-        .expect("song scratch restored after every frame");
-    let mut hud = state
-        .frame_scratch
-        .take()
-        .expect("theme scratch restored after every frame");
-    let session = &state.gameplay.setup.session;
-    let options = deadsync_song_lua::playback::FrameOptions {
-        uptime_seconds: arrow_effect_time_s,
-        play_style: session.play_style,
-        player_side: session.player_side,
-        hide_song_bg: std::array::from_fn(|p| state.profiles()[p].hide_song_bg),
-        notefield: view.notefield,
-        hide_gameplay_hud: view.hide_gameplay_hud,
-        apply_attacks: view.apply_attacks,
-        show_song_visuals: view.show_song_visuals,
-    };
-    let segments = deadsync_song_lua::playback::compose_frame(
-        actors,
-        &state.gameplay,
-        &state.stage.song_media,
-        &mut song,
-        assets,
-        options,
-        gameplay::frame_layers(state, &mut hud, assets, view, visual_policy),
-        |request, cameras, field, flat, hud, hud_flat| {
-            gameplay::draw_field(
-                state,
-                assets,
-                view,
-                arrow_effect_time_s,
-                visual_policy,
-                request,
-                cameras,
-                field,
-                flat,
-                hud,
-                hud_flat,
-            )
-        },
-    );
-    state.stage.song_scratch = Some(song);
-    state.frame_scratch = Some(hud);
-    gameplay::push_song_lua_out(actors, state);
-    segments
-}
+pub(crate) use deadsync_song_lua::gameplay_presentation::compose_gameplay_frame as push_actors;
 
 pub(crate) fn push_practice_actors(
     actors: &mut Vec<deadlib_present::actors::Actor>,

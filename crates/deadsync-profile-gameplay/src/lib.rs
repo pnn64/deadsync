@@ -1200,6 +1200,10 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
         self.hide_danger
     }
 
+    fn hide_song_background(&self) -> bool {
+        self.hide_song_bg
+    }
+
     fn rescore_early_hits(&self) -> bool {
         self.rescore_early_hits
     }

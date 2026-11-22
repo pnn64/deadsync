@@ -731,36 +731,16 @@ fn compose(
     center_single_notefield: bool,
 ) -> RenderFrame {
     let mut actors: Vec<Actor> = Vec::new();
-    let mut song = state.song_scratch.take().expect("song scratch");
-    let mut hud = state.frame_scratch.take().expect("HUD scratch");
     let mut view = gameplay::ActorViewOverride::default();
     view.notefield.force_center_1player = center_single_notefield;
-    let visual = Default::default();
-    let segments = deadsync_song_lua::playback::compose_frame(
+    let segments = deadsync_song_lua::gameplay_presentation::compose_gameplay_frame(
         &mut actors,
-        &state.gameplay,
-        &state.song_media,
-        &mut song,
+        state,
         assets,
-        deadsync_song_lua::playback::FrameOptions {
-            uptime_seconds: 32.05,
-            play_style: state.gameplay.setup.session.play_style,
-            player_side: state.gameplay.setup.session.player_side,
-            hide_song_bg: [false; 2],
-            notefield: view.notefield,
-            hide_gameplay_hud: false,
-            apply_attacks: true,
-            show_song_visuals: true,
-        },
-        gameplay::frame_layers(state, &mut hud, assets, view, visual),
-        |request, cameras, field, flat, hud, hud_flat| {
-            gameplay::draw_field(
-                state, assets, view, 32.05, visual, request, cameras, field, flat, hud, hud_flat,
-            )
-        },
+        view,
+        32.05,
+        Default::default(),
     );
-    state.song_scratch = Some(song);
-    state.frame_scratch = Some(hud);
     compose::build_passes(
         segments.segments(state.song_frame(), &actors),
         state.render_targets(),

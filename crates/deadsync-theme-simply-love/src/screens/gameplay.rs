@@ -72,6 +72,9 @@ use deadsync_profile_gameplay::{
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score as score_data;
+use deadsync_song_lua::gameplay_presentation::{
+    FieldRenderBuffers, FramePresentationContext, GameplayFramePresenter, GameplayFrameView,
+};
 use deadsync_song_lua::gameplay_session::{
     self, GameplayStage, SongLuaGameplayHost, SongLuaGameplaySession,
 };
@@ -257,12 +260,24 @@ pub struct ActorViewOverride {
 
 impl Default for ActorViewOverride {
     fn default() -> Self {
+        let view = GameplayFrameView::default();
         Self {
-            notefield: NotefieldViewOverride::default(),
-            hide_gameplay_hud: false,
-            apply_attacks: true,
-            show_song_visuals: true,
+            notefield: view.notefield,
+            hide_gameplay_hud: view.hide_gameplay_hud,
+            apply_attacks: view.apply_attacks,
+            show_song_visuals: view.show_song_visuals,
             smx_overlay_alpha: 1.0,
+        }
+    }
+}
+
+impl From<ActorViewOverride> for GameplayFrameView {
+    fn from(view: ActorViewOverride) -> Self {
+        Self {
+            notefield: view.notefield,
+            hide_gameplay_hud: view.hide_gameplay_hud,
+            apply_attacks: view.apply_attacks,
+            show_song_visuals: view.show_song_visuals,
         }
     }
 }
@@ -1229,6 +1244,64 @@ impl State {
     #[inline(always)]
     const fn display_mods_text(&self, player: usize) -> &Arc<str> {
         &self.display_mods_text[player]
+    }
+}
+
+impl GameplayFramePresenter for State {
+    type Profile = GameplayProfile;
+    type Slot = noteskin::SpriteSlot;
+    type View = ActorViewOverride;
+    type Policy = crate::views::SimplyLoveVisualPolicyView;
+    type Scratch = Box<GameplayFrameScratch>;
+
+    fn stage(&self) -> &GameplayStage<GameplayCoreState> {
+        &self.stage
+    }
+
+    fn frame_storage(
+        &mut self,
+    ) -> (
+        &mut GameplayStage<GameplayCoreState>,
+        &mut Option<Self::Scratch>,
+    ) {
+        (&mut self.stage, &mut self.frame_scratch)
+    }
+
+    fn draw_layers<'a>(
+        &'a self,
+        scratch: &'a mut Self::Scratch,
+        context: FramePresentationContext<'a, Self::View, Self::Policy>,
+    ) -> impl FnMut(
+        deadsync_song_lua::playback::ScreenLayer,
+        &mut Vec<Actor>,
+        deadsync_song_lua::playback::FieldLayout,
+    ) + 'a {
+        frame_layers(self, scratch, context.assets, context.view, context.policy)
+    }
+
+    fn draw_field(
+        &self,
+        context: FramePresentationContext<'_, Self::View, Self::Policy>,
+        request: deadsync_song_lua::playback::FieldFrame,
+        buffers: FieldRenderBuffers<'_>,
+    ) -> deadsync_notefield::BuiltNotefield {
+        draw_field(
+            self,
+            context.assets,
+            context.view,
+            context.uptime_seconds,
+            context.policy,
+            request,
+            buffers.cameras,
+            buffers.field,
+            buffers.field_flat,
+            buffers.hud,
+            buffers.hud_flat,
+        )
+    }
+
+    fn finish_frame(&self, actors: &mut Vec<Actor>) {
+        push_song_lua_out(actors, self);
     }
 }
 

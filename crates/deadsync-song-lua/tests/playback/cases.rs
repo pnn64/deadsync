@@ -13823,6 +13823,116 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         };
         assert_eq!(target_sizes(&scratches[0]), target_sizes(&scratches[1]));
     }
+
+    use deadsync_song_lua::gameplay_presentation::{
+        FieldRenderBuffers, FramePresentationContext, GameplayFramePresenter, GameplayFrameView,
+        compose_gameplay_frame,
+    };
+    use deadsync_song_lua::gameplay_session::{GameplayStage, SongLuaGameplaySession};
+    use deadsync_song_lua::playback as shared;
+
+    struct FixturePresenter {
+        stage: GameplayStage<GameplayCoreState>,
+        hud_count: Option<usize>,
+    }
+
+    impl GameplayFramePresenter for FixturePresenter {
+        type Profile = deadsync_profile_gameplay::GameplayProfile;
+        type Slot = SpriteSlot;
+        type View = GameplayFrameView;
+        type Policy = [f32; 4];
+        type Scratch = usize;
+
+        fn stage(&self) -> &GameplayStage<GameplayCoreState> {
+            &self.stage
+        }
+
+        fn frame_storage(
+            &mut self,
+        ) -> (&mut GameplayStage<GameplayCoreState>, &mut Option<usize>) {
+            (&mut self.stage, &mut self.hud_count)
+        }
+
+        fn draw_layers<'a>(
+            &'a self,
+            hud_count: &'a mut usize,
+            context: FramePresentationContext<'a, Self::View, Self::Policy>,
+        ) -> impl FnMut(shared::ScreenLayer, &mut Vec<Actor>, shared::FieldLayout) + 'a {
+            move |layer, actors, _| match layer {
+                shared::ScreenLayer::Hud => *hud_count += 1,
+                shared::ScreenLayer::System => {
+                    let mut actor = test_source_actor();
+                    if let Actor::Frame { background, .. } = &mut actor {
+                        *background =
+                            Some(deadlib_present::actors::Background::Color(context.policy));
+                    }
+                    actors.push(actor);
+                }
+                _ => {}
+            }
+        }
+
+        fn draw_field(
+            &self,
+            _: FramePresentationContext<'_, Self::View, Self::Policy>,
+            _: shared::FieldFrame,
+            _: FieldRenderBuffers<'_>,
+        ) -> deadsync_notefield::BuiltNotefield {
+            deadsync_notefield::BuiltNotefield {
+                layout_center_x: 200.0,
+                field_camera: None,
+                field_camera_generation: 0,
+                field_actors: None,
+                field_draw_range: None,
+                judgment_actors: None,
+                judgment_draw_range: None,
+                combo_actors: None,
+                combo_draw_range: None,
+                hud_parts: Default::default(),
+            }
+        }
+
+        fn finish_frame(&self, _: &mut Vec<Actor>) {
+            assert!(self.hud_count.is_some());
+            assert!(self.stage.song_scratch.is_some());
+        }
+    }
+
+    let mut presenter = FixturePresenter {
+        stage: GameplayStage::with_song_playback(
+            state,
+            SongLuaGameplaySession::new(),
+            media.sound_paths,
+        ),
+        hud_count: Some(0),
+    };
+    let song_frame = std::ptr::from_ref(presenter.stage.song_frame());
+    let song_time = presenter.stage.current_music_time_ns();
+    for color in [[1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0]] {
+        let mut actors = Vec::new();
+        let segments = compose_gameplay_frame(
+            &mut actors,
+            &mut presenter,
+            &assets,
+            GameplayFrameView::default(),
+            0.0,
+            color,
+        );
+        assert!(segments.segments(presenter.stage.song_frame(), &actors).count() > 0);
+        assert_eq!(presenter.stage.render_targets().len(), 3);
+        assert!(actors.iter().any(|actor| {
+            matches!(
+                actor,
+                Actor::Frame {
+                    background: Some(deadlib_present::actors::Background::Color(tint)),
+                    ..
+                } if *tint == color
+            )
+        }));
+        assert_eq!(std::ptr::from_ref(presenter.stage.song_frame()), song_frame);
+        assert_eq!(presenter.stage.current_music_time_ns(), song_time);
+    }
+    assert_eq!(presenter.hud_count, Some(2));
 }
 
 fn prepare_fixture(
