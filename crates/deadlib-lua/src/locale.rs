@@ -422,6 +422,12 @@ fn parse_normalized(bytes: &[u8]) -> Option<f64> {
     // digits and clamps the textual exponent before adjusting for the radix
     // position. Short inputs cannot expose either difference from core's parser.
     if cfg!(all(windows, target_env = "msvc")) && bytes.len() > 768 {
+        let unsigned = if unsigned.starts_with(b"00000000") {
+            // Keep a zero so the mantissa remains present before a dot or exponent.
+            &unsigned[crate::pattern::byte_run(unsigned, b'0') - 1..]
+        } else {
+            unsigned
+        };
         return crate::numeric::decimal_number(unsigned.iter().copied(), negative);
     }
     std::str::from_utf8(bytes).ok()?.parse().ok()
