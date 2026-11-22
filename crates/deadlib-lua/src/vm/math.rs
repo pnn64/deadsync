@@ -277,6 +277,11 @@ impl Vm {
         if text.is_empty() {
             return Ok(Value::Nil);
         }
+        let text = if text.len() >= 64 && text.starts_with(b"00000000") {
+            &text[crate::pattern::byte_run(text, b'0')..]
+        } else {
+            text
+        };
         let maximum = if std::mem::size_of::<std::ffi::c_ulong>() == 4 {
             u64::from(u32::MAX)
         } else {
