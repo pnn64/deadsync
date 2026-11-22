@@ -360,8 +360,12 @@ impl Vm {
             }
             STR_REP => {
                 let repeat = (self.integer_argument(base, count, 1, None)? as i32).max(0) as usize;
-                if len == 0 || repeat == 0 {
-                    self.registers[base] = self.try_intern(b"")?;
+                if len == 0 || repeat <= 1 {
+                    self.registers[base] = if repeat == 1 {
+                        self.string_slice(source, 0..len)?
+                    } else {
+                        self.try_intern(b"")?
+                    };
                     return Ok(1);
                 }
                 let size = len
