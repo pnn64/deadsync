@@ -996,12 +996,11 @@ impl Vm {
             return (false, false);
         };
         let Value::String(mode) =
-            self.tables[slot_index(mt.0)].get(Value::String(self.meta_names[Meta::Mode as usize]))
+            self.tables[slot_index(mt.0)].get_string(self.meta_names[Meta::Mode as usize])
         else {
             return (false, false);
         };
-        let mode = &self.strings.bytes[slot_index(mode.0)];
-        let mode = &mode[..mode.iter().position(|&b| b == 0).unwrap_or(mode.len())];
+        let mode = io::c_bytes(&self.strings.bytes[slot_index(mode.0)]);
         (mode.contains(&b'k'), mode.contains(&b'v'))
     }
     fn marked_value(&self, value: Value) -> bool {
