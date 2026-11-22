@@ -5,7 +5,6 @@ use deadsync_profile_gameplay::results::{
     course_summary_records, course_summary_stage, routine_shared_course_result,
 };
 use deadsync_online::score_compat as scores;
-use deadsync_profile::compat as profile;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide};
 use deadsync_score::{self as score_data, stage_stats};
 use deadsync_simfile::course_selection::{EndlessCourseSource, PreparedCourseStart};
@@ -82,12 +81,15 @@ pub fn routine_shared_course_player(
     routine_shared_course_result(&course.run, summary, play_style)
 }
 
+#[cfg(test)]
 pub fn score_info_from_stage(
     stage: &stage_stats::StageSummary,
     side: PlayerSide,
 ) -> Option<ScoreInfo> {
     let idx = profile_data::player_side_index(side);
-    score_info_from_stage_with_record(stage, side, stage.players[idx].as_ref())
+    score_info_from_stage_with_record(
+        stage, side, stage.players[idx].as_ref(), &profile_data::runtime_profile_for_side(side),
+    )
 }
 
 /// `record` is the result saved for `side`, which record highlights rank.
@@ -96,6 +98,7 @@ fn score_info_from_stage_with_record(
     stage: &stage_stats::StageSummary,
     side: PlayerSide,
     record: Option<&stage_stats::PlayerStageSummary>,
+    profile: &profile_data::Profile,
 ) -> Option<ScoreInfo> {
     let idx = profile_data::player_side_index(side);
     let player = stage.players[idx].as_ref()?;
@@ -119,9 +122,8 @@ fn score_info_from_stage_with_record(
     let personal_record_highlight_rank = local_score_valid
         .then_some(personal_record_highlight_rank)
         .flatten();
-    let profile = profile::get_for_side(side);
     let speed_mod = profile.scroll_speed;
-    let mods_text = profile_data::evaluation_mods_text(&profile, speed_mod);
+    let mods_text = profile_data::evaluation_mods_text(profile, speed_mod);
     let disabled_timing_windows = profile.timing_windows.disabled_windows();
 
     Some(ScoreInfo {
@@ -194,40 +196,36 @@ fn score_info_from_stage_with_record(
     })
 }
 
+pub fn course_summary_profiles(
+    stage: &stage_stats::StageSummary,
+    play_style: PlayStyle,
+    active_side: PlayerSide,
+) -> [Option<profile_data::Profile>; MAX_PLAYERS] {
+    let profiles = profile_data::runtime_lock_profiles();
+    std::array::from_fn(|idx| {
+        (stage.players[idx].is_some()
+            && (play_style.player_count() > 1 || idx == profile_data::player_side_index(active_side)))
+            .then(|| profiles[idx].clone())
+    })
+}
+
 pub fn build_course_summary_score_info(
     stage: &stage_stats::StageSummary,
     routine_shared: Option<&stage_stats::PlayerStageSummary>,
     course_graph_stages: &[Vec<CourseGraphStage>; MAX_PLAYERS],
     play_style: PlayStyle,
-    active_side: PlayerSide,
+    profiles: &[Option<profile_data::Profile>; MAX_PLAYERS],
 ) -> [Option<ScoreInfo>; MAX_PLAYERS] {
     let mut score_info = std::array::from_fn(|_| None);
     let records = course_summary_records(stage, routine_shared);
-    match play_style {
-        PlayStyle::Versus
-        | PlayStyle::PumpVersus
-        | PlayStyle::Couple
-        | PlayStyle::PumpCouple
-        | PlayStyle::Routine
-        | PlayStyle::PumpRoutine => {
-            for side in [PlayerSide::P1, PlayerSide::P2] {
-                let idx = profile_data::player_side_index(side);
-                score_info[idx] = score_info_from_stage_with_record(stage, side, records[idx]);
-                if let Some(score) = score_info[idx].as_mut() {
-                    score
-                        .course_graph_stages
-                        .clone_from(&course_graph_stages[idx]);
-                }
-            }
-        }
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
-            let idx = profile_data::player_side_index(active_side);
-            score_info[0] = score_info_from_stage(stage, active_side);
-            if let Some(score) = score_info[0].as_mut() {
-                score
-                    .course_graph_stages
-                    .clone_from(&course_graph_stages[idx]);
-            }
+    let solo = play_style.player_count() == 1;
+    for (idx, profile) in profiles.iter().enumerate() {
+        let Some(profile) = profile else { continue };
+        let (slot, record) = if solo { (0, stage.players[idx].as_ref()) } else { (idx, records[idx]) };
+        let side = profile_data::player_side_for_index(idx);
+        score_info[slot] = score_info_from_stage_with_record(stage, side, record, profile);
+        if let Some(score) = score_info[slot].as_mut() {
+            score.course_graph_stages.clone_from(&course_graph_stages[idx]);
         }
     }
     score_info

@@ -1,17 +1,7 @@
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
-use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
-use deadsync_theme_simply_love::views::ScoreInfo;
-use std::sync::Arc;
-
-pub struct RestartPayload {
-    pub song: Arc<SongData>,
-    pub chart_hashes: [String; MAX_PLAYERS],
-    pub music_rate: f32,
-    pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
-}
+use deadsync_theme::ThemeScreenFlow;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RestartPrepareSource {
@@ -21,10 +11,10 @@ pub enum RestartPrepareSource {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GameplayRestartRoute {
+pub enum GameplayRestartRoute<S> {
     MissingState,
     FastGameplayExit,
-    Navigate(Screen),
+    Navigate(S),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,68 +30,42 @@ pub enum GameplayReloadSource {
     Unavailable,
 }
 
-pub fn restart_payload_from_eval(
-    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
-) -> Option<RestartPayload> {
-    let mut song = None;
-    let mut chart_hashes = std::array::from_fn(|_| String::new());
-    let mut scroll_speed = [ScrollSpeedSetting::default(); MAX_PLAYERS];
-    let mut music_rate = None;
-
-    for entry in score_info.iter().flatten() {
-        song.get_or_insert_with(|| entry.song.clone());
-        let side = player_side_index(entry.side);
-        chart_hashes[side].clone_from(&entry.chart.short_hash);
-        scroll_speed[side] = entry.speed_mod;
-        if music_rate.is_none() && entry.music_rate.is_finite() && entry.music_rate > 0.0 {
-            music_rate = Some(entry.music_rate);
-        }
-    }
-
-    song.map(|song| RestartPayload {
-        song,
-        chart_hashes,
-        music_rate: music_rate.unwrap_or(1.0),
-        scroll_speed,
-    })
-}
-
-pub const fn gameplay_restart_prepare_source(
-    screen: Screen,
+pub fn gameplay_restart_prepare_source<T: ThemeScreenFlow>(
+    screen: T::Screen,
     gameplay_state_active: bool,
     evaluation_payload_available: bool,
 ) -> RestartPrepareSource {
     if gameplay_state_active {
         RestartPrepareSource::Gameplay
-    } else if matches!(screen, Screen::Evaluation) && evaluation_payload_available {
+    } else if screen == T::SCREENS.results && evaluation_payload_available {
         RestartPrepareSource::Evaluation
     } else {
         RestartPrepareSource::Unavailable
     }
 }
 
-pub const fn practice_restart_prepare_source(
-    screen: Screen,
+pub fn practice_restart_prepare_source<T: ThemeScreenFlow>(
+    screen: T::Screen,
     evaluation_payload_available: bool,
 ) -> RestartPrepareSource {
-    if matches!(screen, Screen::Evaluation) && evaluation_payload_available {
+    if practice_from_eval_allowed::<T>(screen, evaluation_payload_available) {
         RestartPrepareSource::Evaluation
     } else {
         RestartPrepareSource::Unavailable
     }
 }
 
-pub const fn gameplay_restart_route(
-    screen: Screen,
+pub fn gameplay_restart_route<T: ThemeScreenFlow>(
+    screen: T::Screen,
     restartable_state: bool,
     gameplay_state_active: bool,
-) -> GameplayRestartRoute {
+) -> GameplayRestartRoute<T::Screen> {
     if !restartable_state {
         GameplayRestartRoute::MissingState
-    } else if matches!(screen, Screen::Gameplay) && gameplay_state_active {
+    } else if screen == T::SCREENS.gameplay && gameplay_state_active {
         GameplayRestartRoute::FastGameplayExit
     } else {
-        GameplayRestartRoute::Navigate(Screen::Gameplay)
+        GameplayRestartRoute::Navigate(T::SCREENS.gameplay)
     }
 }
 
@@ -120,14 +84,14 @@ pub const fn fast_gameplay_restart_plan(
     }
 }
 
-pub const fn gameplay_reload_source(
-    screen: Screen,
+pub fn gameplay_reload_source<T: ThemeScreenFlow>(
+    screen: T::Screen,
     gameplay_state_active: bool,
     evaluation_payload_available: bool,
 ) -> GameplayReloadSource {
     if gameplay_state_active {
         GameplayReloadSource::Gameplay
-    } else if matches!(screen, Screen::Evaluation) && evaluation_payload_available {
+    } else if practice_from_eval_allowed::<T>(screen, evaluation_payload_available) {
         GameplayReloadSource::Evaluation
     } else {
         GameplayReloadSource::Unavailable
@@ -135,16 +99,16 @@ pub const fn gameplay_reload_source(
 }
 
 #[inline(always)]
-pub const fn practice_from_eval_allowed(
-    screen: Screen,
+pub fn practice_from_eval_allowed<T: ThemeScreenFlow>(
+    screen: T::Screen,
     evaluation_payload_available: bool,
 ) -> bool {
-    matches!(screen, Screen::Evaluation) && evaluation_payload_available
+    screen == T::SCREENS.results && evaluation_payload_available
 }
 
 #[inline(always)]
-pub const fn practice_reload_allowed(screen: Screen, practice_state_active: bool) -> bool {
-    matches!(screen, Screen::Practice) && practice_state_active
+pub fn practice_reload_allowed<T: ThemeScreenFlow>(screen: T::Screen, practice_state_active: bool) -> bool {
+    screen == T::SCREENS.practice && practice_state_active
 }
 
 #[inline(always)]
@@ -184,6 +148,30 @@ pub fn restart_chart_steps(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_theme::{Theme, ThemeScreenId, ThemeScreens};
+
+    struct TestTheme;
+
+    impl Theme for TestTheme {
+        type Screen = &'static str;
+        type RuntimeRequest = ();
+
+        fn screen_id(screen: Self::Screen) -> ThemeScreenId {
+            ThemeScreenId::new(screen)
+        }
+    }
+
+    impl ThemeScreenFlow for TestTheme {
+        const SCREENS: ThemeScreens<Self::Screen> = ThemeScreens {
+            menu: "home",
+            gameplay: "play",
+            practice: "editor",
+            results: "results",
+            song_selection: "library",
+            course_selection: "courses",
+            player_options: "settings",
+        };
+    }
 
     #[test]
     fn restart_steps_preserve_versus_and_collapse_single_side() {
@@ -204,23 +192,23 @@ mod tests {
     #[test]
     fn restart_prepare_source_prefers_live_gameplay_then_eval_payload() {
         assert_eq!(
-            gameplay_restart_prepare_source(Screen::Gameplay, true, false),
+            gameplay_restart_prepare_source::<TestTheme>("play", true, false),
             RestartPrepareSource::Gameplay
         );
         assert_eq!(
-            gameplay_restart_prepare_source(Screen::Evaluation, false, true),
+            gameplay_restart_prepare_source::<TestTheme>("results", false, true),
             RestartPrepareSource::Evaluation
         );
         assert_eq!(
-            gameplay_restart_prepare_source(Screen::SelectMusic, false, true),
+            gameplay_restart_prepare_source::<TestTheme>("library", false, true),
             RestartPrepareSource::Unavailable
         );
         assert_eq!(
-            practice_restart_prepare_source(Screen::Evaluation, true),
+            practice_restart_prepare_source::<TestTheme>("results", true),
             RestartPrepareSource::Evaluation
         );
         assert_eq!(
-            practice_restart_prepare_source(Screen::Gameplay, true),
+            practice_restart_prepare_source::<TestTheme>("play", true),
             RestartPrepareSource::Unavailable
         );
     }
@@ -228,16 +216,16 @@ mod tests {
     #[test]
     fn gameplay_restart_route_uses_fast_exit_only_from_live_gameplay() {
         assert_eq!(
-            gameplay_restart_route(Screen::Gameplay, false, true),
+            gameplay_restart_route::<TestTheme>("play", false, true),
             GameplayRestartRoute::MissingState
         );
         assert_eq!(
-            gameplay_restart_route(Screen::Gameplay, true, true),
+            gameplay_restart_route::<TestTheme>("play", true, true),
             GameplayRestartRoute::FastGameplayExit
         );
         assert_eq!(
-            gameplay_restart_route(Screen::Evaluation, true, false),
-            GameplayRestartRoute::Navigate(Screen::Gameplay)
+            gameplay_restart_route::<TestTheme>("results", true, false),
+            GameplayRestartRoute::Navigate("play")
         );
     }
 
@@ -261,20 +249,20 @@ mod tests {
     #[test]
     fn reload_and_practice_routes_require_matching_screen_state() {
         assert_eq!(
-            gameplay_reload_source(Screen::Gameplay, true, false),
+            gameplay_reload_source::<TestTheme>("play", true, false),
             GameplayReloadSource::Gameplay
         );
         assert_eq!(
-            gameplay_reload_source(Screen::Evaluation, false, true),
+            gameplay_reload_source::<TestTheme>("results", false, true),
             GameplayReloadSource::Evaluation
         );
         assert_eq!(
-            gameplay_reload_source(Screen::Evaluation, false, false),
+            gameplay_reload_source::<TestTheme>("results", false, false),
             GameplayReloadSource::Unavailable
         );
-        assert!(practice_from_eval_allowed(Screen::Evaluation, true));
-        assert!(!practice_from_eval_allowed(Screen::Evaluation, false));
-        assert!(practice_reload_allowed(Screen::Practice, true));
-        assert!(!practice_reload_allowed(Screen::Gameplay, true));
+        assert!(practice_from_eval_allowed::<TestTheme>("results", true));
+        assert!(!practice_from_eval_allowed::<TestTheme>("results", false));
+        assert!(practice_reload_allowed::<TestTheme>("editor", true));
+        assert!(!practice_reload_allowed::<TestTheme>("play", true));
     }
 }

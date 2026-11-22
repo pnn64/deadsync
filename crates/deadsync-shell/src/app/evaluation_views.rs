@@ -6,16 +6,23 @@ use super::{
 use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
+use deadsync_profile_gameplay::results::RestartPayload;
 use deadsync_theme_simply_love::screens::{SimplyLoveScreen as CurrentScreen, evaluation};
 use std::{sync::Arc, time::Instant};
 
 type PlayerQueries<'a> = [Option<(profile_data::PlayerSide, &'a str)>; MAX_PLAYERS];
 
+#[derive(Clone)]
+pub(super) struct CourseEvaluationPage {
+    pub(super) view: evaluation::State,
+    pub(super) restart: Option<RestartPayload>,
+}
+
 /// Retains Evaluation screens during a course and supports paging through the results.
 #[derive(Default)]
 pub(super) struct CourseEvaluationPages {
-    pub(super) stages: Vec<evaluation::State>,
-    pub(super) pages: Vec<evaluation::State>,
+    pub(super) stages: Vec<CourseEvaluationPage>,
+    pub(super) pages: Vec<CourseEvaluationPage>,
     index: usize,
 }
 
@@ -30,12 +37,12 @@ impl CourseEvaluationPages {
         self.index = 0;
     }
 
-    pub(super) fn replace_pages(&mut self, pages: Vec<evaluation::State>) {
+    pub(super) fn replace_pages(&mut self, pages: Vec<CourseEvaluationPage>) {
         self.pages = pages;
         self.index = 0;
     }
 
-    pub(super) fn step(&mut self, delta: i32) -> Option<evaluation::State> {
+    pub(super) fn step(&mut self, delta: i32) -> Option<CourseEvaluationPage> {
         let len = self.pages.len();
         if len <= 1 || delta == 0 {
             return None;

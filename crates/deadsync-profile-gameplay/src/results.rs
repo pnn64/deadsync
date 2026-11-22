@@ -1,15 +1,71 @@
 //! Completed gameplay results, independent of screen construction and rendering.
 use crate::GameplayProfile;
-use deadsync_chart::SongData;
+use deadsync_chart::{ChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::course_run::CourseRun;
 use deadsync_gameplay::{GameplayRuntimeState, build_crossover_rows};
 use deadsync_profile as profile_data;
 use deadsync_rules::course::CourseType;
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::{judgment, timing as timing_stats};
 use deadsync_score::stage_stats::{self, PlayerStageSummary, StageSummary};
 use deadsync_score::{self as score_data, GrooveStatsEvalState, ItlEvalState};
 use std::collections::HashMap;
+use std::sync::Arc;
+
+/// The song and resolved player settings retained after a stage ends.
+#[derive(Clone)]
+pub struct RestartPayload {
+    pub song: Arc<SongData>,
+    charts: [Option<Arc<ChartData>>; MAX_PLAYERS],
+    pub music_rate: f32,
+    pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
+}
+
+impl RestartPayload {
+    pub fn from_gameplay_result<A, C, D>(
+        game: &GameplayRuntimeState<GameplayProfile, A, C, D>,
+        result: &StageSummary,
+    ) -> Option<Self> {
+        let mut speeds = [None; MAX_PLAYERS];
+        for player in 0..game.num_players().min(MAX_PLAYERS) {
+            let side = crate::profile_side_from_gameplay(game.setup.session.runtime_player_side(player));
+            speeds[profile_data::player_side_index(side)] = Some(game.scroll_speed_for_player(player));
+        }
+        Self::from_stage_result(result, speeds)
+    }
+
+    /// The requested sides have their scroll settings in physical-side order.
+    pub fn from_stage_result(
+        result: &StageSummary,
+        speeds: [Option<ScrollSpeedSetting>; MAX_PLAYERS],
+    ) -> Option<Self> {
+        let mut charts = [None, None];
+        let mut scroll_speed = [ScrollSpeedSetting::default(); MAX_PLAYERS];
+        for (side, speed) in speeds.into_iter().enumerate() {
+            if let (Some(player), Some(speed)) = (&result.players[side], speed) {
+                charts[side] = Some(Arc::clone(&player.chart));
+                scroll_speed[side] = speed;
+            }
+        }
+        charts.iter().any(Option::is_some).then(|| Self {
+            song: Arc::clone(&result.song),
+            charts,
+            music_rate: if result.music_rate.is_finite() && result.music_rate > 0.0 {
+                result.music_rate
+            } else {
+                1.0
+            },
+            scroll_speed,
+        })
+    }
+
+    pub fn chart_hashes(&self) -> [&str; MAX_PLAYERS] {
+        self.charts.each_ref().map(|chart| {
+            chart.as_ref().map_or("", |chart| chart.short_hash.as_str())
+        })
+    }
+}
 
 fn course_summary_totals(run: &CourseRun) -> [stage_stats::CourseSummaryTotals; MAX_PLAYERS] {
     if run.course_type == CourseType::Endless {

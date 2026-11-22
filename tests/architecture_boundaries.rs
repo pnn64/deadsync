@@ -13759,6 +13759,21 @@ fn stage_results_are_independent_of_evaluation() {
         assert!(!session.contains(presentation), "session storage depends on {presentation}");
     }
     assert!(shell.contains("course_evaluation: evaluation_views::CourseEvaluationPages"));
+    let restart = production_source(&root.join("crates/deadsync-shell/src/restart.rs"));
+    for presentation in ["deadsync_theme_simply_love", "ScoreInfo", "SimplyLoveScreen"] {
+        assert!(!restart.contains(presentation), "restart policy depends on {presentation}");
+    }
+    assert!(contains_rust(&results, "pub struct RestartPayload {"));
+    assert!(contains_rust(&results, "Self::from_stage_result(result, speeds)"));
+    let actions = shell
+        .split_once("fn prepare_gameplay_restart(")
+        .and_then(|(_, rest)| rest.split_once("fn try_practice_reload("))
+        .expect("restart, reload and Practice entry should be available")
+        .0;
+    assert!(actions.contains("evaluation_restart"));
+    assert!(!actions.contains("score_info"));
+    assert!(contains_rust(&shell, "RestartPayload::from_gameplay_result(&gameplay.stage.gameplay, &stage)"));
+    assert!(contains_rust(&shell, "self.state.screens.evaluation_restart = restart"));
     let adapter = read_source(root.join("crates/deadsync-shell/src/session_results.rs"))
         .expect("result view adapter");
     assert!(!adapter.contains("stage_summary_from_score_info"));

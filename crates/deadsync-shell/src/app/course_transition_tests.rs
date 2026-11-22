@@ -339,9 +339,24 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         app.state.screens.evaluation_state.score_info[0].as_ref().unwrap().song.title,
                         "A",
                     );
+                    let completed_song = Arc::clone(&app.state.session.played_stages[0].song);
+                    app.state.screens.evaluation_state.score_info = [None, None];
+                    assert!(app.prepare_gameplay_restart());
+                    let restart = app.state.pending_stage.take().expect("restart selection");
+                    assert!(Arc::ptr_eq(&restart.song, &completed_song));
+                    assert_eq!(restart.return_screen, CurrentScreen::Gameplay);
+                    assert!(app.prepare_practice_from_eval());
+                    let practice = app.state.pending_stage.take().expect("practice selection");
+                    assert!(Arc::ptr_eq(&practice.song, &completed_song));
+                    assert_eq!(practice.return_screen, CurrentScreen::Practice);
+                    assert_eq!(practice.options, restart.options);
                     app.step_course_eval_page(1);
                     assert_eq!(
                         app.state.screens.evaluation_state.score_info[0].as_ref().unwrap().song.title,
+                        "PR845 transition",
+                    );
+                    assert_eq!(
+                        app.state.screens.evaluation_restart.as_ref().unwrap().song.title,
                         "PR845 transition",
                     );
                     app.state.clear_course_runtime();
