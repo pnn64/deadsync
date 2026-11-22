@@ -1,9 +1,10 @@
-use crate::{ActiveTheme, player_options::PlayerOptionsState};
+use crate::{ActiveTheme, app::EvaluationState, player_options::PlayerOptionsState};
+use deadsync_theme::evaluation::ThemeEvaluation;
 use deadsync_theme::player_options::{
     HeartRateDeviceView, HeartRateDevicesView, HeartRateReadingView, ThemePlayerOptions,
 };
 use deadsync_theme::views::{GameplayLivePresentation, HeartRatePlayerView, HeartRateView};
-use deadsync_theme_simply_love::screens::{evaluation, select_music};
+use deadsync_theme_simply_love::screens::select_music;
 
 /// Game-thread owner for heart-rate configuration invalidation.
 ///
@@ -140,9 +141,9 @@ fn readings_view() -> HeartRateView {
     HeartRateView { players }
 }
 
-pub(crate) fn refresh_evaluation(state: &mut evaluation::State, enabled: bool) -> bool {
+pub(crate) fn refresh_evaluation(state: &mut EvaluationState, enabled: bool) -> bool {
     let generation = readings_view_key(enabled, heart_rate_view_generation);
-    if evaluation::heart_rate_generation(state) == Some(generation) {
+    if ActiveTheme::evaluation_heart_rate_generation(state) == Some(generation) {
         return false;
     }
     let view = if enabled {
@@ -150,7 +151,7 @@ pub(crate) fn refresh_evaluation(state: &mut evaluation::State, enabled: bool) -
     } else {
         HeartRateView::default()
     };
-    evaluation::set_heart_rate_view(state, generation, view);
+    ActiveTheme::sync_evaluation_heart_rate(state, generation, view);
     true
 }
 

@@ -609,7 +609,10 @@ its existing defaults and converts them to that shared view.
 Stage and course Evaluation mount through the selected theme for entry, input,
 updates, and actor composition. The shell tracks the game result separately and
 uses it to resolve chart queries. The theme reports which leaderboard panes need
-data and receives the available results as a runtime view.
+data and receives the available results, heart-rate readings, and loaded result
+dialogs from the shell. The theme selects entry audio and carries animation,
+audio, and noteskin previews across course pages. The shell loads and plays the
+audio and tracks which course result is active.
 
 Video banners, screenshot labels, and StepManiaX result lighting use the
 completed stage's song, chart, and grade. The shell captures the automatic
@@ -617,5 +620,4 @@ screenshot criteria before giving the result to the theme, and the theme
 reports when it has finished showing animations and dialogs.
 
 Several screens and runtime requests still use concrete Simply Love types.
-Evaluation also uses Simply Love support code for course noteskin previews,
-entry audio, and other screen integrations.
+The shell builds Evaluation's view data using Simply Love input types.

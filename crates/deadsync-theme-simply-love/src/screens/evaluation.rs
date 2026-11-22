@@ -2198,8 +2198,11 @@ mod tests {
     #[test]
     fn ecs15_evaluation_uses_dedicated_pass_and_fail_cues() {
         use super::entry_sfx;
+        use crate::SimplyLoveTheme;
         use crate::visual_styles;
+        use crate::views::{SimplyLoveVisualPolicyView, VisualBackgroundView};
         use deadsync_config::theme::{SrpgVariant, VisualStyle};
+        use deadsync_theme::evaluation::ThemeEvaluation;
         assert_eq!(
             entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Ecs15),
             Some(visual_styles::ECS15_EVAL_PASSED_SFX.into())
@@ -2212,6 +2215,22 @@ mod tests {
             entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Srpg10),
             Some(visual_styles::SRPG10_EVAL_PASSED_SFX.into())
         );
+
+        crate::tests::init_paths();
+        let mut state = SimplyLoveTheme::init_evaluation(Default::default(), 0);
+        let ecs15 = SimplyLoveVisualPolicyView {
+            background: VisualBackgroundView::Ecs15,
+            ..Default::default()
+        };
+        let (_, cue) = SimplyLoveTheme::prepare_evaluation_audio(&mut state, true, ecs15);
+        assert_eq!(cue, Some(visual_styles::ECS15_EVAL_FAILED_SFX.into()));
+
+        let srpg10 = SimplyLoveVisualPolicyView {
+            srpg10_tint: true,
+            ..Default::default()
+        };
+        let (_, cue) = SimplyLoveTheme::prepare_evaluation_audio(&mut state, false, srpg10);
+        assert_eq!(cue, Some(visual_styles::SRPG10_EVAL_PASSED_SFX.into()));
     }
 }
 
@@ -3839,7 +3858,15 @@ pub fn entry_sfx(
     visual_style: deadsync_config::theme::VisualStyle,
     srpg_variant: deadsync_config::theme::SrpgVariant,
 ) -> Option<std::path::PathBuf> {
-    if visual_styles::srpg10_active(visual_style, srpg_variant) {
+    entry_sfx_for_style(
+        failed,
+        visual_styles::srpg10_active(visual_style, srpg_variant),
+        visual_styles::ecs15_active(visual_style, srpg_variant),
+    )
+}
+
+fn entry_sfx_for_style(failed: bool, srpg10: bool, ecs15: bool) -> Option<std::path::PathBuf> {
+    if srpg10 {
         Some(
             if failed {
                 visual_styles::SRPG10_EVAL_FAILED_SFX
@@ -3848,7 +3875,7 @@ pub fn entry_sfx(
             }
             .into(),
         )
-    } else if visual_styles::ecs15_active(visual_style, srpg_variant) {
+    } else if ecs15 {
         Some(
             if failed {
                 visual_styles::ECS15_EVAL_FAILED_SFX

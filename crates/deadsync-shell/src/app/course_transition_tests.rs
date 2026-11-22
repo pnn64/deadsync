@@ -334,7 +334,11 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     assert!(app.state.screens.course_evaluation.stages.is_empty());
                     assert_eq!(app.state.screens.course_evaluation.pages.len(), 2);
                     assert_eq!(app.state.screens.evaluation_origin, EvaluationOrigin::Course);
+                    app.state.screens.evaluation_state.screen_elapsed = 3.0;
+                    let clocks = ActiveTheme::evaluation_elapsed_times(&app.state.screens.evaluation_state);
                     app.step_course_eval_page(-1);
+                    assert_eq!(app.state.screens.evaluation_state.screen_elapsed, 3.0);
+                    assert_eq!(ActiveTheme::evaluation_elapsed_times(&app.state.screens.evaluation_state), clocks);
                     assert_eq!(
                         app.state.screens.evaluation_state.score_info[0].as_ref().unwrap().song.title,
                         "A",

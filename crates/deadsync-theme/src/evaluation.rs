@@ -1,8 +1,11 @@
 //! Presentation interface for a completed stage or course.
 
 use crate::{ThemeEffect, ThemeTransitions};
+use crate::views::HeartRateView;
 use deadlib_assets::AssetManager;
 use deadsync_core::{input::MAX_PLAYERS, session_flow::EvaluationOrigin};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub trait ThemeEvaluation: ThemeTransitions {
     type EvaluationState: Clone;
@@ -14,6 +17,7 @@ pub trait ThemeEvaluation: ThemeTransitions {
     type EvaluationRawKey;
     type EvaluationRawPad;
     type EvaluationVisualPolicy;
+    type EvaluationSide;
 
     fn init_evaluation(entry: Self::EvaluationEntry, color_index: i32) -> Self::EvaluationState;
     fn init_course_evaluation(
@@ -23,6 +27,22 @@ pub trait ThemeEvaluation: ThemeTransitions {
         context: Self::EvaluationContext,
         color_index: i32,
     ) -> Self::EvaluationState;
+    /// Installs the visit's shared animation, audio, and artwork on course pages.
+    fn prepare_course_evaluation<'a>(
+        active: &Self::EvaluationState,
+        summary: &mut Self::EvaluationState,
+        songs: impl Iterator<Item = &'a mut Self::EvaluationState>,
+        gameplay_elapsed: f32,
+    ) where
+        Self::EvaluationState: 'a;
+    /// Continues the active visit when the host changes the result page.
+    fn resume_evaluation_page(active: &Self::EvaluationState, page: &mut Self::EvaluationState);
+    /// Selects visit audio and returns deferred cues to preload and an entry cue to play.
+    fn prepare_evaluation_audio(
+        state: &mut Self::EvaluationState,
+        failed: bool,
+        visual_policy: Self::EvaluationVisualPolicy,
+    ) -> (impl Iterator<Item = &Path>, Option<PathBuf>);
     fn evaluation_color_index(state: &Self::EvaluationState) -> i32;
     fn evaluation_elapsed_times(state: &Self::EvaluationState) -> (f32, f32);
     fn sync_evaluation_elapsed(
@@ -56,6 +76,17 @@ pub trait ThemeEvaluation: ThemeTransitions {
         visual_policy: Self::EvaluationVisualPolicy,
     );
     fn sync_evaluation_runtime(state: &mut Self::EvaluationState, view: Self::EvaluationRuntime);
+    fn evaluation_heart_rate_generation(state: &Self::EvaluationState) -> Option<(bool, u64, u64)>;
+    fn sync_evaluation_heart_rate(
+        state: &mut Self::EvaluationState,
+        generation: (bool, u64, u64),
+        view: HeartRateView,
+    );
+    fn sync_evaluation_result_dialog(
+        state: &mut Self::EvaluationState,
+        side: Self::EvaluationSide,
+        texture_keys: Box<[Arc<str>]>,
+    );
     /// Whether the result can be captured with its presentation settled.
     fn evaluation_capture_ready(state: &Self::EvaluationState) -> bool;
     /// Returns the requested sides and whether online results can be shown on this page.

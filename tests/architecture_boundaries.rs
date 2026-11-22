@@ -13307,22 +13307,31 @@ fn evaluation_lifecycle_uses_the_installed_theme() {
     let app = read_source(shell.join("mod.rs")).expect("Evaluation entry source");
     let input = production_source(&shell.join("input_routing.rs"));
     let runtime = production_source(&shell.join("evaluation_views.rs"));
+    let heart_rate = production_source(&shell.join("../heart_rate.rs"));
     assert!(app.contains("type EvaluationState = <ActiveTheme as ThemeEvaluation>::EvaluationState"));
     assert!(app.contains("evaluation_state: EvaluationState"));
     assert!(runtime.contains("view: EvaluationState"));
     for call in [
         "init_evaluation",
         "init_course_evaluation",
+        "prepare_course_evaluation",
+        "prepare_evaluation_audio",
+        "resume_evaluation_page",
         "sync_evaluation_elapsed",
         "update_evaluation",
         "handle_evaluation_raw_key",
         "handle_evaluation_raw_pad",
         "push_evaluation_actors",
+        "sync_evaluation_result_dialog",
     ] {
         assert!(app.contains(&format!("ActiveTheme::{call}(")), "missing {call}");
     }
     assert!(input.contains("ActiveTheme::evaluation_test_input_pane_active("));
     assert!(runtime.contains("chart_queries(self.state.screens.evaluation_stage.as_ref())"));
+    assert!(heart_rate.contains("ActiveTheme::sync_evaluation_heart_rate("));
+    for member in [".sfx_paths", ".screen_elapsed", ".score_info"] {
+        assert!(!app.contains(&format!("evaluation_state{member}")));
+    }
 }
 
 #[test]
