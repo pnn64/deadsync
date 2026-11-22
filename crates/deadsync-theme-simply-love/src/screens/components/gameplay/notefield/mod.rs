@@ -562,7 +562,6 @@ pub(crate) fn compose_hud(
     request: &NotefieldComposeRequest<'_, SpriteSlot>,
     prepared: &PreparedNotefield<'_, SpriteSlot>,
     visual_effects: &'static crate::visual_styles::EffectAssets,
-    actor_resources: &ActorResourceArena,
     textures: &impl deadlib_present::texture::TextureContext,
     broken_run_lookup: &BrokenRunLookup,
     stream_progress_lookup: &StreamProgressLookup,
@@ -570,6 +569,7 @@ pub(crate) fn compose_hud(
     display_mods_text: &std::sync::Arc<str>,
     buffers: FieldHudBuffers<'_>,
 ) -> NotefieldHudComposeResult {
+    let actor_resources = buffers.resources;
     let player_idx = frame.player;
     let profile = &state.profiles()[player_idx].0;
     let hold_judgment_texture = judgment_assets.hold_judgment();

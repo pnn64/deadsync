@@ -657,10 +657,7 @@ mod looping_rooms {
                             &mut Vec::new(), &mut compose::TextLayoutCache::default(), &mut compose::ComposeScratch::default(),
                             FixtureFrameView {
                                 presentation: screen_gameplay::ActorViewOverride::default(),
-                                preview: Some(SongFrameContent {
-                                    apply_attacks: false,
-                                    show_song_visuals: true,
-                                }),
+                                preview: Some(SongFrameContent::preview(false, true)),
                             },
                             &FIXTURE_TEXTURES, Some(update.wall_seconds));
                         assert!(compare_draws(&expected.draws,

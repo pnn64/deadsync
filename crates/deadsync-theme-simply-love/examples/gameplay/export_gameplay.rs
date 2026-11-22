@@ -13,6 +13,7 @@ use deadsync_gameplay::{
     GameplayInputPlayStyle, GameplayInputPlayerSide, GameplaySession, GameplayViewport,
 };
 use deadsync_profile as profile;
+use deadsync_song_lua::gameplay_presentation::{FramePresentationContext, SongFrameContent};
 use deadsync_theme_simply_love::{self as theme, screens::gameplay, views::GameplayInitView};
 use std::{
     cell::RefCell,
@@ -733,13 +734,15 @@ fn compose(
     let mut actors: Vec<Actor> = Vec::new();
     let mut view = gameplay::ActorViewOverride::default();
     view.notefield.force_center_1player = center_single_notefield;
-    let segments = deadsync_song_lua::gameplay_presentation::compose_gameplay_frame(
+    let segments = state.compose_frame(
         &mut actors,
-        state,
-        assets,
-        view,
-        32.05,
-        Default::default(),
+        FramePresentationContext {
+            assets,
+            view,
+            uptime_seconds: 32.05,
+            policy: Default::default(),
+        },
+        SongFrameContent::PLAYBACK,
     );
     compose::build_passes(
         segments.segments(state.song_frame(), &actors),

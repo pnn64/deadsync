@@ -13880,36 +13880,24 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         NotefieldSettings, PreparedNotefield,
     };
     use deadsync_song_lua::gameplay_presentation::{
-        FieldHudBuffers, FieldPresentation, FramePresentationContext, GameplayFramePresenter,
-        GameplayFrameView, compose_gameplay_frame, compose_practice_frame,
+        FieldHudBuffers, FieldPresentation, FramePresentationContext, GameplayFrameBuffers,
+        GameplayFramePresenter, GameplayFrameView, SongFrameContent, compose_stage_frame,
     };
     use deadsync_song_lua::gameplay_session::StageNoteskins;
     use deadsync_song_lua::playback as shared;
 
-    struct FixturePresenter {
-        stage: ActiveGameplayStage,
-        hud_count: Option<usize>,
+    struct FixturePresenter<'a> {
+        noteskins: &'a GameplayNoteskinAssets,
         expect_song_content: bool,
-        capture_storage: std::cell::Cell<Option<*const CapturedActorScratch>>,
+        capture_storage: &'a std::cell::Cell<Option<*const CapturedActorScratch>>,
     }
 
-    impl GameplayFramePresenter for FixturePresenter {
+    impl GameplayFramePresenter for FixturePresenter<'_> {
         type Profile = deadsync_profile_gameplay::GameplayProfile;
         type Slot = SpriteSlot;
-        type NoteskinAssets = GameplayNoteskinAssets;
         type View = GameplayFrameView;
         type Policy = [f32; 4];
         type Scratch = usize;
-
-        fn stage(&self) -> &ActiveGameplayStage {
-            &self.stage
-        }
-
-        fn frame_storage(
-            &mut self,
-        ) -> (&mut ActiveGameplayStage, &mut Option<usize>) {
-            (&mut self.stage, &mut self.hud_count)
-        }
 
         fn draw_layers<'a>(
             &'a self,
@@ -13941,6 +13929,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         fn draw_field_hud(
             &self,
             _: FramePresentationContext<'_, Self::View, Self::Policy>,
+            gameplay: &GameplayCoreState,
             frame: &shared::FieldFrame<'_>,
             request: &NotefieldComposeRequest<'_, Self::Slot>,
             prepared: &PreparedNotefield<'_, Self::Slot>,
@@ -13951,8 +13940,8 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
                 assert_eq!(capture_storage, previous);
             }
             assert!(prepared.notes.is_some(), "the game prepared the actual noteskin");
-            assert!(std::ptr::eq(request.chart.notes, self.stage.notes()));
-            assert_eq!(frame.music_time_s, self.stage.current_music_time_seconds());
+            assert!(std::ptr::eq(request.chart.notes, gameplay.notes()));
+            assert_eq!(frame.music_time_s, gameplay.current_music_time_seconds());
             assert_eq!(request.geometry.player_idx, frame.player);
             assert_eq!(
                 request.settings,
@@ -13971,15 +13960,14 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
                     hide_tap_explosion_noteskin: false,
                 },
             );
-            let noteskins = &self.stage.noteskin_assets;
             let player = frame.player;
-            let base = noteskins.noteskin[player].as_deref().unwrap();
-            let receptor = noteskins.receptor_noteskin[player].as_deref().unwrap();
+            let base = self.noteskins.noteskin[player].as_deref().unwrap();
+            let receptor = self.noteskins.receptor_noteskin[player].as_deref().unwrap();
             assert!(std::ptr::eq(request.noteskin.base.unwrap(), base));
             assert!(std::ptr::eq(request.noteskin.mine.unwrap(), base));
             assert!(std::ptr::eq(request.noteskin.receptor.unwrap(), receptor));
             assert!(std::ptr::eq(request.noteskin.tap_explosion.unwrap(), base));
-            let visuals = self.stage.song_lua_visuals();
+            let visuals = gameplay.song_lua_visuals();
             if self.expect_song_content {
                 assert_eq!(request.visual.visual.drunk, 1.0);
                 assert!(std::ptr::eq(
@@ -14003,11 +13991,6 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
                 assert!(frame.judgment_texture.is_none());
             }
             NotefieldHudComposeResult::default()
-        }
-
-        fn finish_frame(&self, _: &mut Vec<Actor>) {
-            assert!(self.hud_count.is_some());
-            assert!(self.stage.song_scratch.is_some());
         }
     }
 
@@ -14039,7 +14022,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
     });
     let mut prepared = PreparedGameplayStage::from_gameplay(state, noteskin_assets);
     prepared.song_lua_sound_paths = media.sound_paths;
-    let (stage, _) = prepared.into_parts();
+    let (mut stage, _) = prepared.into_parts();
     let arena = stage.actor_resources();
     arena.lock_growth();
     let warmed = arena.stats();
@@ -14050,42 +14033,56 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         });
     }
     assert_eq!(arena.stats(), warmed);
-    let mut presenter = FixturePresenter {
-        stage,
-        hud_count: Some(0),
-        expect_song_content: true,
-        capture_storage: std::cell::Cell::new(None),
+    let noteskins = stage.noteskin_assets.clone();
+    let capture_storage = std::cell::Cell::new(None);
+    let presenter = |expect_song_content| FixturePresenter {
+        noteskins: &noteskins,
+        expect_song_content,
+        capture_storage: &capture_storage,
     };
-    presenter.stage.gameplay.update_profile(0, |profile| {
+    stage.gameplay.update_profile(0, |profile| {
         profile.hide_targets = true;
         profile.measure_lines = profile_data::MeasureLines::Off;
         profile.tap_explosion_noteskin = Some(profile_data::NoteSkin::none_choice());
     });
-    let hide_tap_explosion = presenter.stage.profiles()[0].tap_explosion_noteskin_hidden();
+    let hide_tap_explosion = stage.profiles()[0].tap_explosion_noteskin_hidden();
     assert!(
-        presenter.stage.noteskin_assets.selected_components_for_player(0, hide_tap_explosion)[3]
+        stage.noteskin_assets.selected_components_for_player(0, hide_tap_explosion)[3]
             .is_none()
     );
-    let song_frame = std::ptr::from_ref(presenter.stage.song_frame());
-    let song_time = presenter.stage.current_music_time_ns();
-    deadsync_gameplay::refresh_active_attack_masks(&mut presenter.stage.gameplay, 1.0);
-    for color in [[1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0]] {
+    let song_time = stage.current_music_time_ns();
+    let mut hud_counts = [0; 2];
+    let mut song = stage.song_scratch.take().expect("stage frame scratch");
+    let song_frame = std::ptr::from_ref(song.as_ref());
+    deadsync_gameplay::refresh_active_attack_masks(&mut stage.gameplay, 1.0);
+    for (hud_count, color) in hud_counts
+        .iter_mut()
+        .zip([[1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0]])
+    {
         let mut actors = Vec::new();
-        presenter.stage.actor_resources().begin_hit_stats(true);
-        let segments = compose_gameplay_frame(
+        stage.actor_resources().begin_hit_stats(true);
+        let segments = compose_stage_frame(
             &mut actors,
-            &mut presenter,
-            &assets,
-            GameplayFrameView::default(),
-            0.0,
-            color,
+            &stage,
+            &presenter(true),
+            GameplayFrameBuffers {
+                song: &mut song,
+                presentation: hud_count,
+            },
+            FramePresentationContext {
+                assets: &assets,
+                view: GameplayFrameView::default(),
+                uptime_seconds: 0.0,
+                policy: color,
+            },
+            SongFrameContent::PLAYBACK,
         );
-        assert!(segments.segments(presenter.stage.song_frame(), &actors).count() > 0);
+        assert!(segments.segments(&song, &actors).count() > 0);
         assert!(
-            presenter.stage.actor_resources().stats().texture_hits > 0,
+            stage.actor_resources().stats().texture_hits > 0,
             "the game draws the field with the stage's prewarmed textures with an empty HUD",
         );
-        assert_eq!(presenter.stage.render_targets().len(), 3);
+        assert_eq!(song.render_targets().len(), 3);
         assert!(actors.iter().any(|actor| {
             matches!(
                 actor,
@@ -14095,45 +14092,52 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
                 } if *tint == color
             )
         }));
-        assert_eq!(std::ptr::from_ref(presenter.stage.song_frame()), song_frame);
-        assert_eq!(presenter.stage.current_music_time_ns(), song_time);
+        assert_eq!(std::ptr::from_ref(song.as_ref()), song_frame);
+        assert_eq!(stage.current_music_time_ns(), song_time);
     }
-    assert_eq!(presenter.hud_count, Some(2));
+    assert_eq!(hud_counts, [1, 1]);
 
-    let mut practice = PracticeSession::new(&mut presenter.stage.gameplay, Default::default());
-    let assert_practice_frame =
-        |presenter: &mut FixturePresenter, practice: &PracticeSession, playing| {
-            presenter.expect_song_content = playing;
-            presenter.stage.gameplay.set_current_music_time_ns(song_time);
-            deadsync_gameplay::refresh_active_attack_masks(&mut presenter.stage.gameplay, 1.0);
+    let mut practice = PracticeSession::new(&mut stage.gameplay, Default::default());
+    let mut practice_hud_count = 0;
+    let mut assert_practice_frame =
+        |stage: &mut ActiveGameplayStage, practice: &PracticeSession, playing| {
+            stage.gameplay.set_current_music_time_ns(song_time);
+            deadsync_gameplay::refresh_active_attack_masks(&mut stage.gameplay, 1.0);
             let mut actors = Vec::new();
-            compose_practice_frame(
+            compose_stage_frame(
                 &mut actors,
-                presenter,
-                practice,
-                &assets,
-                GameplayFrameView::default(),
-                0.0,
-                [1.0; 4],
+                stage,
+                &presenter(playing),
+                GameplayFrameBuffers {
+                    song: &mut song,
+                    presentation: &mut practice_hud_count,
+                },
+                FramePresentationContext {
+                    assets: &assets,
+                    view: GameplayFrameView::default(),
+                    uptime_seconds: 0.0,
+                    policy: [1.0; 4],
+                },
+                SongFrameContent::for_practice(practice),
             );
             assert_eq!(
-                presenter.stage.render_targets().len(),
+                song.render_targets().len(),
                 if playing { 3 } else { 0 },
             );
-            assert_eq!(std::ptr::from_ref(presenter.stage.song_frame()), song_frame);
+            assert_eq!(std::ptr::from_ref(song.as_ref()), song_frame);
         };
     let snap = |_: &std::path::Path, seconds| seconds;
-    assert_practice_frame(&mut presenter, &practice, false);
+    assert_practice_frame(&mut stage, &practice, false);
     assert_eq!(
         practice.execute(
-            &mut presenter.stage.gameplay,
+            &mut stage.gameplay,
             PracticeEditorCommand::Play(PracticePlayRange::WholeSong),
             snap,
             |_, _| {},
         ),
         PracticeViewRequest::PlaybackStarted
     );
-    assert_practice_frame(&mut presenter, &practice, true);
+    assert_practice_frame(&mut stage, &practice, true);
 
     let now = std::time::Instant::now();
     let back = deadsync_input::InputEvent::new(
@@ -14147,10 +14151,11 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         now,
     );
     assert_eq!(
-        practice.handle_input(&mut presenter.stage.gameplay, &back, false, snap, |_, _| {}),
+        practice.handle_input(&mut stage.gameplay, &back, false, snap, |_, _| {}),
         PracticeViewRequest::PlaybackStopped
     );
-    assert_practice_frame(&mut presenter, &practice, false);
+    assert_practice_frame(&mut stage, &practice, false);
+    stage.song_scratch = Some(song);
 }
 
 fn prepare_fixture(

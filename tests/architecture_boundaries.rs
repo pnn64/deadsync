@@ -419,9 +419,11 @@ fn chart_lua_playback_has_no_theme_dependency() {
         &root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"),
     );
     assert!(theme.contains("impl GameplayFramePresenter for State"));
-    assert!(shell.contains("compose_gameplay_frame as push_actors"));
+    assert!(contains_rust(&shell, "state.compose_frame(actors, FramePresentationContext"));
+    assert!(contains_rust(&shell, "SongFrameContent::PLAYBACK"));
     assert!(contains_rust(&shell, "let (gameplay, session) = state.frame_parts()"));
-    assert!(contains_rust(&shell, "compose_practice_frame(actors, gameplay, session,"));
+    assert!(contains_rust(&shell, "gameplay.compose_frame(actors, FramePresentationContext"));
+    assert!(contains_rust(&shell, "SongFrameContent::for_practice(session)"));
     assert!(!shell.contains("gameplay::frame_layers(") && !shell.contains("gameplay::draw_field("));
     for former_override in ["apply_attacks:", "show_song_visuals:"] {
         assert!(!contains_rust(&theme, former_override));
@@ -432,17 +434,28 @@ fn chart_lua_playback_has_no_theme_dependency() {
     assert!(!contains_rust(&theme, "request.apply_attacks"));
     for handoff in [
         "pub trait GameplayFramePresenter",
+        "stage: &GameplayStage<GameplayCoreState<P::Profile, P::Slot>, N>",
+        "presenter: &P",
+        "buffers: GameplayFrameBuffers<'_, P::Scratch>",
         "stage.gameplay.setup.session",
         ".map(GameplayProfileData::hide_song_background)",
         "presenter.draw_layers(",
         "presenter.field_presentation(",
         "presenter.draw_field_hud(",
-        "stage.song_scratch = Some(song)",
         "if practice.is_playing()",
-        "SongFrameContent::PRACTICE_EDITOR",
+        "Self::PRACTICE_EDITOR",
     ] {
         assert!(contains_rust(&presentation, handoff), "missing presenter handoff {handoff}");
     }
+    for former_owner in ["presenter.stage(", "frame_storage(", "stage.song_scratch"] {
+        assert!(!presentation.contains(former_owner));
+    }
+    assert!(contains_rust(&theme, "compose_stage_frame(actors, &self.stage, self,"));
+    assert!(contains_rust(
+        &theme,
+        "self.stage.song_scratch = Some(song); self.frame_scratch = Some(presentation); push_song_lua_out(actors, self);",
+    ));
+    assert!(!theme.contains("replace_song_background_changes("));
     assert!(!presentation.contains("deadsync_theme"));
     for forbidden in [
         "deadsync-assets",
@@ -6292,7 +6305,6 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "runtime_view: GameplayPresentationView",
         "init_view: GameplayInitView",
         "runtime_view.policy.translated_titles",
-        "background_changes,",
         "scores.mini_indicator",
         "scores.scorebox_profiles",
         "self.itl_cmod_warning[player]",
@@ -6323,7 +6335,6 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "pub struct GameplayScoreInitView",
         "pub struct GameplayScoreRuntimeView",
         "pub hud: deadsync_profile::GameplayHudSnapshot",
-        "pub background_changes: Vec<deadsync_chart::SongBackgroundChange>",
         "pub lobby: SimplyLoveLobbyRuntimeView",
         "pub machine_font: deadsync_config::theme::MachineFont",
         "pub background_brightness: f32",

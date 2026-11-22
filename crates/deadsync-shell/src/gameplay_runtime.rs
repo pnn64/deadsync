@@ -19,6 +19,7 @@ use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::{
     gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
 };
+use deadsync_song_lua::gameplay_presentation::{FramePresentationContext, SongFrameContent};
 use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::{gameplay, practice};
@@ -322,7 +323,6 @@ pub(crate) fn init_view(
             })
         },
         scores: score_init_view(charts, profiles, session),
-        background_changes: Vec::new(),
     }
 }
 
@@ -881,7 +881,25 @@ fn apply_practice_output(
     changed_rate || effects.len() != start_len
 }
 
-pub(crate) use deadsync_song_lua::gameplay_presentation::compose_gameplay_frame as push_actors;
+pub(crate) fn push_actors(
+    actors: &mut Vec<deadlib_present::actors::Actor>,
+    state: &mut gameplay::State,
+    assets: &deadlib_assets::AssetManager,
+    view: gameplay::ActorViewOverride,
+    uptime_seconds: f64,
+    policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
+) -> deadsync_song_lua::playback::GameplayActorSegments {
+    state.compose_frame(
+        actors,
+        FramePresentationContext {
+            assets,
+            view,
+            uptime_seconds,
+            policy,
+        },
+        SongFrameContent::PLAYBACK,
+    )
+}
 
 pub(crate) fn push_practice_actors(
     actors: &mut Vec<deadlib_present::actors::Actor>,
@@ -894,14 +912,15 @@ pub(crate) fn push_practice_actors(
     actors.reserve(128);
     let view = practice::practice_view(state);
     let (gameplay, session) = state.frame_parts();
-    let segments = deadsync_song_lua::gameplay_presentation::compose_practice_frame(
+    let segments = gameplay.compose_frame(
         actors,
-        gameplay,
-        session,
-        assets,
-        view,
-        arrow_effect_time_s,
-        visual_policy,
+        FramePresentationContext {
+            assets,
+            view,
+            uptime_seconds: arrow_effect_time_s,
+            policy: visual_policy,
+        },
+        SongFrameContent::for_practice(session),
     );
     practice::push_overlay(actors, state);
     segments

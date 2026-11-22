@@ -42,7 +42,7 @@ pub(crate) mod tests {
     use deadsync_profile::compat as profile;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
     use deadsync_song_lua::gameplay_presentation::{
-        FramePresentationContext, SongFrameContent, compose_gameplay_preview, compose_practice_frame,
+        FramePresentationContext, SongFrameContent,
     };
     use deadsync_theme_simply_love::screens::gameplay as screen_gameplay;
 
@@ -864,9 +864,8 @@ pub(crate) mod tests {
         let uptime_seconds = game_time.unwrap_or(123.0);
         let policy = deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default();
         let segments = match preview {
-            Some(song_content) => compose_gameplay_preview(
+            Some(song_content) => state.compose_frame(
                 actors,
-                state,
                 FramePresentationContext {
                     assets,
                     view,
@@ -1674,10 +1673,10 @@ end
                                     hide_gameplay_hud,
                                     ..Default::default()
                                 },
-                                preview: Some(SongFrameContent {
+                                preview: Some(SongFrameContent::preview(
                                     apply_attacks,
                                     show_song_visuals,
-                                }),
+                                )),
                             };
                             let mut expected = compose_fixture_frame_with_view(
                                 &mut state,
@@ -3240,10 +3239,7 @@ M000
                         hide_gameplay_hud: true,
                         ..Default::default()
                     },
-                    preview: Some(SongFrameContent {
-                        apply_attacks: true,
-                        show_song_visuals: false,
-                    }),
+                    preview: Some(SongFrameContent::preview(true, false)),
                 };
                 let baseline_frame =
                     assert_repeatable_composition(&mut compose_scratch, |scratch| {
@@ -3308,10 +3304,7 @@ M000
                             &mut text_cache,
                             scratch,
                             FixtureFrameView {
-                                preview: Some(SongFrameContent {
-                                    apply_attacks: false,
-                                    show_song_visuals: false,
-                                }),
+                                preview: Some(SongFrameContent::preview(false, false)),
                                 ..view
                             },
                             &FIXTURE_TEXTURES,
@@ -4241,20 +4234,21 @@ return Def.ActorFrame{
                     &mut state.gameplay,
                     Default::default(),
                 );
-                let plain_edit_segments = compose_practice_frame(
+                let plain_edit_segments = state.compose_frame(
                     &mut plain_edit_actors,
-                    &mut state,
-                    &practice,
-                    &assets,
-                    screen_gameplay::ActorViewOverride {
-                        notefield: screen_gameplay::NotefieldViewOverride {
-                            edit_beat_bars: true,
+                    FramePresentationContext {
+                        assets: &assets,
+                        view: screen_gameplay::ActorViewOverride {
+                            notefield: screen_gameplay::NotefieldViewOverride {
+                                edit_beat_bars: true,
+                                ..Default::default()
+                            },
                             ..Default::default()
                         },
-                        ..Default::default()
+                        uptime_seconds: 123.0,
+                        policy: Default::default(),
                     },
-                    123.0,
-                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                    SongFrameContent::for_practice(&practice),
                 );
                 assert!(!plain_edit_segments.has_direct_field_proxy(state.song_frame()));
                 assert!(state.render_targets().is_empty());

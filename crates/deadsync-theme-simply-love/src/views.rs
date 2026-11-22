@@ -240,7 +240,6 @@ pub struct GameplayInitView {
     pub hud: deadsync_profile::GameplayHudSnapshot,
     pub judgment_palettes: [deadsync_theme::color::JudgmentPalette; 2],
     pub scores: GameplayScoreInitView,
-    pub background_changes: Vec<deadsync_chart::SongBackgroundChange>,
 }
 
 impl Default for GameplayInitView {
@@ -259,7 +258,6 @@ impl Default for GameplayInitView {
             },
             judgment_palettes: [crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE; 2],
             scores: GameplayScoreInitView::default(),
-            background_changes: Vec::new(),
         }
     }
 }

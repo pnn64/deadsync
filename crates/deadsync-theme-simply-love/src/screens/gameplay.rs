@@ -69,8 +69,8 @@ use deadsync_profile_gameplay::{
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score as score_data;
 use deadsync_song_lua::gameplay_presentation::{
-    FieldHudBuffers, FieldPresentation, FramePresentationContext, GameplayFramePresenter,
-    GameplayFrameView,
+    FieldHudBuffers, FieldPresentation, FramePresentationContext, GameplayFrameBuffers,
+    GameplayFramePresenter, GameplayFrameView, SongFrameContent, compose_stage_frame,
 };
 use deadsync_song_lua::gameplay_session::{self, SongLuaGameplayHost, SongLuaGameplaySession};
 use deadsync_song_lua::playback::song_meter_progress;
@@ -928,7 +928,7 @@ impl State {
 
     /// Prepare presentation for an independently constructed game stage.
     pub fn from_stage(
-        mut stage: ActiveGameplayStage,
+        stage: ActiveGameplayStage,
         assets: GameplayStageAssets,
         stage_intro_text: Arc<str>,
         replay_status_text: Option<Arc<str>>,
@@ -951,11 +951,7 @@ impl State {
             hud: hud_snapshot,
             judgment_palettes,
             scores,
-            background_changes,
         } = init_view;
-        if !background_changes.is_empty() {
-            stage.gameplay.replace_song_background_changes(background_changes);
-        }
         let gameplay = &stage.gameplay;
         let noteskin_assets = &stage.noteskin_assets;
         let scorebox_profile_snapshot = scores.scorebox_profiles;
@@ -1144,6 +1140,36 @@ impl State {
         self.stage.song_frame()
     }
 
+    /// Lend both owners' frame buffers to the game compositor for this draw.
+    pub fn compose_frame(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        context: FramePresentationContext<
+            '_,
+            ActorViewOverride,
+            crate::views::SimplyLoveVisualPolicyView,
+        >,
+        song_content: SongFrameContent,
+    ) -> deadsync_song_lua::playback::GameplayActorSegments {
+        let mut song = self.stage.song_scratch.take().expect("stage frame scratch");
+        let mut presentation = self.frame_scratch.take().expect("theme frame scratch");
+        let segments = compose_stage_frame(
+            actors,
+            &self.stage,
+            self,
+            GameplayFrameBuffers {
+                song: &mut song,
+                presentation: &mut presentation,
+            },
+            context,
+            song_content,
+        );
+        self.stage.song_scratch = Some(song);
+        self.frame_scratch = Some(presentation);
+        push_song_lua_out(actors, self);
+        segments
+    }
+
     pub fn render_targets(&self) -> &[deadlib_present::actors::RenderTarget] {
         self.stage.render_targets()
     }
@@ -1199,23 +1225,9 @@ impl State {
 impl GameplayFramePresenter for State {
     type Profile = GameplayProfile;
     type Slot = noteskin::SpriteSlot;
-    type NoteskinAssets = GameplayNoteskinAssets;
     type View = ActorViewOverride;
     type Policy = crate::views::SimplyLoveVisualPolicyView;
     type Scratch = Box<GameplayFrameScratch>;
-
-    fn stage(&self) -> &ActiveGameplayStage {
-        &self.stage
-    }
-
-    fn frame_storage(
-        &mut self,
-    ) -> (
-        &mut ActiveGameplayStage,
-        &mut Option<Self::Scratch>,
-    ) {
-        (&mut self.stage, &mut self.frame_scratch)
-    }
 
     fn draw_layers<'a>(
         &'a self,
@@ -1256,6 +1268,7 @@ impl GameplayFramePresenter for State {
     fn draw_field_hud(
         &self,
         context: FramePresentationContext<'_, Self::View, Self::Policy>,
+        gameplay: &GameplayCoreState,
         frame: &deadsync_song_lua::playback::FieldFrame<'_>,
         request: &deadsync_notefield::NotefieldComposeRequest<'_, Self::Slot>,
         prepared: &deadsync_notefield::PreparedNotefield<'_, Self::Slot>,
@@ -1263,7 +1276,7 @@ impl GameplayFramePresenter for State {
     ) -> deadsync_notefield::NotefieldHudComposeResult {
         let player = frame.player;
         notefield::compose_hud(
-            &self.stage.gameplay,
+            gameplay,
             self.notefield_judgment_assets(player),
             &self.notefield_combo_assets,
             self.notefield_plan(player),
@@ -1271,7 +1284,6 @@ impl GameplayFramePresenter for State {
             request,
             prepared,
             &context.policy.assets.effects,
-            self.stage.actor_resources(),
             context.assets.texture_context(),
             &self.notefield_broken_run_lookup[player],
             &self.notefield_stream_progress_lookup[player],
@@ -1279,10 +1291,6 @@ impl GameplayFramePresenter for State {
             self.display_mods_text(player),
             buffers,
         )
-    }
-
-    fn finish_frame(&self, actors: &mut Vec<Actor>) {
-        push_song_lua_out(actors, self);
     }
 }
 

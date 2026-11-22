@@ -2,11 +2,11 @@
 
 use crate::gameplay_session::{GameplayStage, StageNoteskins};
 use crate::playback::{
-    FieldFrame, FieldLayout, FrameOptions, GameplayActorSegments, GameplayCoreState, ScreenLayer,
-    compose_frame,
+    FieldFrame, FieldLayout, FrameOptions, FrameScratch, GameplayActorSegments, GameplayCoreState,
+    ScreenLayer, compose_frame,
 };
 use deadlib_assets::AssetManager;
-use deadlib_present::actors::{Actor, FlatDraw};
+use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw};
 use deadsync_core::hud_style::NotefieldHudStyle;
 use deadsync_gameplay::GameplayProfileData;
 use deadsync_gameplay::practice::PracticeSession;
@@ -26,12 +26,12 @@ pub struct GameplayFrameView {
 /// Song-authored content included in a frame.
 #[derive(Clone, Copy)]
 pub struct SongFrameContent {
-    pub apply_attacks: bool,
-    pub show_song_visuals: bool,
+    apply_attacks: bool,
+    show_song_visuals: bool,
 }
 
 impl SongFrameContent {
-    const PLAYBACK: Self = Self {
+    pub const PLAYBACK: Self = Self {
         apply_attacks: true,
         show_song_visuals: true,
     };
@@ -39,6 +39,22 @@ impl SongFrameContent {
         apply_attacks: false,
         show_song_visuals: false,
     };
+
+    pub fn for_practice(practice: &PracticeSession) -> Self {
+        if practice.is_playing() {
+            Self::PLAYBACK
+        } else {
+            Self::PRACTICE_EDITOR
+        }
+    }
+
+    #[cfg(feature = "test-support")]
+    pub const fn preview(apply_attacks: bool, show_song_visuals: bool) -> Self {
+        Self {
+            apply_attacks,
+            show_song_visuals,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -65,28 +81,22 @@ pub struct FieldHudBuffers<'a> {
     pub actors: &'a mut Vec<Actor>,
     pub draws: &'a mut Vec<FlatDraw>,
     pub capture: &'a mut CapturedActorScratch,
+    pub resources: &'a ActorResourceArena,
 }
 
-/// Screen and HUD drawing for a live stage. Draw hooks read the stage, while
-/// frame storage lets the compositor reuse both the stage and theme buffers.
+/// The current stage's playback buffer and the presenter's independent scratch.
+pub struct GameplayFrameBuffers<'a, S> {
+    pub song: &'a mut FrameScratch,
+    pub presentation: &'a mut S,
+}
+
+/// Read-only screen and HUD drawing with separate presentation buffers.
 pub trait GameplayFramePresenter {
     type Profile: GameplayProfileData;
     type Slot: NoteskinSlot + Clone;
-    type NoteskinAssets: StageNoteskins<Self::Slot>;
     type View: Copy + Into<GameplayFrameView>;
     type Policy: Copy;
     type Scratch;
-
-    fn stage(
-        &self,
-    ) -> &GameplayStage<GameplayCoreState<Self::Profile, Self::Slot>, Self::NoteskinAssets>;
-
-    fn frame_storage(
-        &mut self,
-    ) -> (
-        &mut GameplayStage<GameplayCoreState<Self::Profile, Self::Slot>, Self::NoteskinAssets>,
-        &mut Option<Self::Scratch>,
-    );
 
     fn draw_layers<'a>(
         &'a self,
@@ -108,94 +118,27 @@ pub trait GameplayFramePresenter {
     fn draw_field_hud(
         &self,
         context: FramePresentationContext<'_, Self::View, Self::Policy>,
+        gameplay: &GameplayCoreState<Self::Profile, Self::Slot>,
         frame: &FieldFrame<'_>,
         request: &NotefieldComposeRequest<'_, Self::Slot>,
         prepared: &PreparedNotefield<'_, Self::Slot>,
         buffers: FieldHudBuffers<'_>,
     ) -> NotefieldHudComposeResult;
-
-    fn finish_frame(&self, _actors: &mut Vec<Actor>) {}
 }
 
-/// Compose live Gameplay with the chart's attacks and song-authored visuals.
-pub fn compose_gameplay_frame<P: GameplayFramePresenter>(
+/// Compose gameplay with an independently supplied stage and presenter.
+pub fn compose_stage_frame<P, N>(
     actors: &mut Vec<Actor>,
-    presenter: &mut P,
-    assets: &AssetManager,
-    view: P::View,
-    uptime_seconds: f64,
-    policy: P::Policy,
-) -> GameplayActorSegments {
-    compose_stage_frame(
-        actors,
-        presenter,
-        FramePresentationContext {
-            assets,
-            view,
-            uptime_seconds,
-            policy,
-        },
-        SongFrameContent::PLAYBACK,
-    )
-}
-
-/// Practice shows the chart's attacks and song-authored visuals during playback.
-pub fn compose_practice_frame<P: GameplayFramePresenter>(
-    actors: &mut Vec<Actor>,
-    presenter: &mut P,
-    practice: &PracticeSession,
-    assets: &AssetManager,
-    view: P::View,
-    uptime_seconds: f64,
-    policy: P::Policy,
-) -> GameplayActorSegments {
-    let song_content = if practice.is_playing() {
-        SongFrameContent::PLAYBACK
-    } else {
-        SongFrameContent::PRACTICE_EDITOR
-    };
-    compose_stage_frame(
-        actors,
-        presenter,
-        FramePresentationContext {
-            assets,
-            view,
-            uptime_seconds,
-            policy,
-        },
-        song_content,
-    )
-}
-
-/// Render an explicit combination for frame comparison tests.
-#[cfg(feature = "test-support")]
-pub fn compose_gameplay_preview<P: GameplayFramePresenter>(
-    actors: &mut Vec<Actor>,
-    presenter: &mut P,
+    stage: &GameplayStage<GameplayCoreState<P::Profile, P::Slot>, N>,
+    presenter: &P,
+    buffers: GameplayFrameBuffers<'_, P::Scratch>,
     context: FramePresentationContext<'_, P::View, P::Policy>,
     song_content: SongFrameContent,
-) -> GameplayActorSegments {
-    compose_stage_frame(actors, presenter, context, song_content)
-}
-
-/// Borrow the stage and presentation buffers for one frame and restore both
-/// before final overlays.
-fn compose_stage_frame<P: GameplayFramePresenter>(
-    actors: &mut Vec<Actor>,
-    presenter: &mut P,
-    context: FramePresentationContext<'_, P::View, P::Policy>,
-    song_content: SongFrameContent,
-) -> GameplayActorSegments {
-    let (stage, presentation) = presenter.frame_storage();
-    let mut song = stage
-        .song_scratch
-        .take()
-        .expect("song scratch restored after every frame");
-    let mut presentation = presentation
-        .take()
-        .expect("presentation scratch restored after every frame");
-
-    let stage = presenter.stage();
+) -> GameplayActorSegments
+where
+    P: GameplayFramePresenter,
+    N: StageNoteskins<P::Slot>,
+{
     let session = &stage.gameplay.setup.session;
     let frame_view = context.view.into();
     let options = FrameOptions {
@@ -214,14 +157,14 @@ fn compose_stage_frame<P: GameplayFramePresenter>(
     };
     let textures = context.assets.texture_context();
     let actor_resources = stage.actor_resources();
-    let segments = compose_frame(
+    compose_frame(
         actors,
         &stage.gameplay,
         &stage.song_media,
-        &mut song,
+        buffers.song,
         context.assets,
         options,
-        presenter.draw_layers(&mut presentation, context),
+        presenter.draw_layers(buffers.presentation, context),
         |frame, cameras, field, field_flat, hud, hud_flat| {
             field.clear();
             field_flat.clear();
@@ -277,6 +220,7 @@ fn compose_stage_frame<P: GameplayFramePresenter>(
             );
             let hud_result = presenter.draw_field_hud(
                 context,
+                &stage.gameplay,
                 frame,
                 &request,
                 &prepared,
@@ -284,6 +228,7 @@ fn compose_stage_frame<P: GameplayFramePresenter>(
                     actors: hud,
                     draws: hud_flat,
                     capture: scratch.hud_capture_scratch(),
+                    resources: actor_resources,
                 },
             );
             BuiltNotefield {
@@ -299,10 +244,5 @@ fn compose_stage_frame<P: GameplayFramePresenter>(
                 hud_parts: hud_result.parts,
             }
         },
-    );
-    let (stage, scratch) = presenter.frame_storage();
-    stage.song_scratch = Some(song);
-    *scratch = Some(presentation);
-    presenter.finish_frame(actors);
-    segments
+    )
 }
