@@ -1,11 +1,12 @@
 use super::{App, CurrentScreen, music_session_view, prepare_music_profile_selection};
+use crate::ActiveTheme;
+use crate::screen_flow::profile_selection_target;
 use deadsync_config as config;
 use deadsync_profile::compat as profile;
 use deadsync_profile::requests::{ProfileRequest, ProfileSelection, select_profiles};
 use deadsync_profile::{PlayerSide, player_side_index};
-use deadsync_theme_simply_love::screens::{
-    manage_local_profiles, profile_selection_target, select_music,
-};
+use deadsync_theme::profile_picker::ThemeProfilePicker;
+use deadsync_theme_simply_love::screens::{manage_local_profiles, select_music};
 
 impl App {
     pub(super) fn handle_profile_request(&mut self, request: ProfileRequest) {
@@ -165,7 +166,8 @@ impl App {
                 selection.preferred_difficulties,
             );
             self.sync_select_music_runtime_view(self.select_music_policy);
-            let current_color_index = self.state.screens.select_profile_state.active_color_index;
+            let current_color_index =
+                ActiveTheme::profile_picker_color_index(&self.state.screens.select_profile_state);
             let sm = &mut self.state.screens.select_music_state;
             sm.active_color_index = current_color_index;
             select_music::apply_profile_preferences(sm, preference_updates);
@@ -174,7 +176,7 @@ impl App {
             self.state.session.preferred_difficulty_index =
                 selection.preferred_difficulties[player_side_index(selection.active_side)];
         }
-        if let Some(target) = profile_selection_target(
+        if let Some(target) = profile_selection_target::<ActiveTheme>(
             current_screen,
             fast_switch,
             show_groovestats_login,

@@ -1,6 +1,7 @@
 pub mod color;
 mod effect;
 pub mod main_menu;
+pub mod profile_picker;
 mod resources;
 mod runtime;
 mod screen;

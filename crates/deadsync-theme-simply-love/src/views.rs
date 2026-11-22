@@ -832,52 +832,7 @@ pub struct LocalProfileView {
     pub display_name: String,
 }
 
-/// Shell-prepared profile-picker catalog shared by Select Profile and the
-/// Select Music profile overlay.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ProfilePickerView {
-    pub game: deadsync_config::theme::GameFlag,
-    pub guest: ProfilePickerEntryView,
-    pub profiles: Vec<ProfilePickerEntryView>,
-    pub default_profiles: [deadsync_profile::ActiveProfile; 2],
-    pub three_key_navigation: bool,
-}
-
-impl Default for ProfilePickerView {
-    fn default() -> Self {
-        let options = deadsync_profile::PlayerOptionsData::default();
-        Self {
-            game: deadsync_config::theme::GameFlag::default(),
-            guest: ProfilePickerEntryView {
-                id: String::new(),
-                display_name: String::new(),
-                speed_mod: options.scroll_speed.to_string(),
-                avatar_key: None,
-                total_songs_played: 0,
-                scroll_option: options.scroll_option,
-                mini_indicator: options.mini_indicator,
-                noteskin: options.noteskin,
-                judgment: options.judgment_graphic,
-            },
-            profiles: Vec::new(),
-            default_profiles: std::array::from_fn(|_| deadsync_profile::ActiveProfile::Guest),
-            three_key_navigation: false,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ProfilePickerEntryView {
-    pub id: String,
-    pub display_name: String,
-    pub speed_mod: String,
-    pub avatar_key: Option<String>,
-    pub total_songs_played: u32,
-    pub scroll_option: deadsync_profile::ScrollOption,
-    pub mini_indicator: deadsync_profile::MiniIndicator,
-    pub noteskin: deadsync_profile::NoteSkin,
-    pub judgment: deadsync_profile::JudgmentGraphic,
-}
+pub use deadsync_profile::picker::{ProfilePickerEntryView, ProfilePickerView};
 
 /// Live session routing used throughout Select Music without reading the
 /// process-global profile session from theme code.

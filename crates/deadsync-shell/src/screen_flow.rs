@@ -1,8 +1,9 @@
 use deadsync_config::app_config::Config;
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::session_flow::{self, SessionNavigationPlan, SessionNavigationPolicy};
-use deadsync_theme::ThemeSessionFlow;
-#[cfg(test)]
 use deadsync_profile::PlayerSide;
+use deadsync_theme::ThemeSessionFlow;
+use deadsync_theme::profile_picker::ProfilePickerContext;
 #[cfg(test)]
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 #[cfg(test)]
@@ -48,6 +49,46 @@ pub(crate) fn evaluation_summary_return_to<T: ThemeSessionFlow>(
     )
 }
 
+pub(crate) fn profile_picker_context<T: ThemeSessionFlow>(
+    previous: T::Screen,
+    color_index: i32,
+    menu_start_side: PlayerSide,
+    joined_players: impl FnOnce() -> [bool; MAX_PLAYERS],
+) -> ProfilePickerContext {
+    let fast_switch = previous == T::SESSION_SCREENS.select_music;
+    let joined = if previous == T::SESSION_SCREENS.menu {
+        Some([
+            menu_start_side == PlayerSide::P1,
+            menu_start_side == PlayerSide::P2,
+        ])
+    } else if fast_switch {
+        Some(joined_players())
+    } else {
+        None
+    };
+    ProfilePickerContext {
+        color_index,
+        joined,
+        fast_switch,
+    }
+}
+
+pub(crate) fn profile_selection_target<T: ThemeSessionFlow>(
+    current_screen: T::Screen,
+    fast_switch: bool,
+    show_groovestats_login: bool,
+    show_arrowcloud_login: bool,
+) -> Option<T::Screen> {
+    session_flow::profile_selection_target(
+        T::SESSION_SCREENS,
+        T::PROFILE_LOGIN_SCREENS,
+        current_screen,
+        fast_switch,
+        show_groovestats_login,
+        show_arrowcloud_login,
+    )
+}
+
 pub(crate) fn preferred_play_style_for_joined(
     config: &Config,
     joined: [bool; 2],
@@ -67,7 +108,7 @@ mod tests {
     use deadlib_platform::input::RawKeyboardEvent;
     use deadlib_present::actors::Actor;
     use deadsync_core::input::InputSource;
-    use deadsync_core::session_flow::SessionScreens;
+    use deadsync_core::session_flow::{ProfileLoginScreens, SessionScreens};
     use deadsync_input::{InputEvent, VirtualAction};
     use deadsync_profile::PlayStyle;
     use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
@@ -109,6 +150,10 @@ mod tests {
             evaluation_summary: Some("set-results"),
             initials: None,
             gameover: Some("finished"),
+        };
+        const PROFILE_LOGIN_SCREENS: ProfileLoginScreens<Self::Screen> = ProfileLoginScreens {
+            groovestats: None,
+            arrowcloud: Some("link-account"),
         };
     }
 
@@ -189,6 +234,37 @@ mod tests {
                 deadlib_assets::present_dsl::SpriteBuilder::solid()
             ));
         }
+    }
+
+    #[test]
+    fn profile_picker_uses_game_session_and_theme_roles() {
+        let from_menu = profile_picker_context::<AlternateTheme>("home", 7, PlayerSide::P2, || {
+            panic!("startup uses the side that pressed Start");
+        });
+        assert_eq!(from_menu.joined, Some([false, true]));
+        assert_eq!(from_menu.color_index, 7);
+        assert!(!from_menu.fast_switch);
+
+        let from_songs =
+            profile_picker_context::<AlternateTheme>("songs", 7, PlayerSide::P1, || [true, true]);
+        assert_eq!(from_songs.joined, Some([true, true]));
+        assert!(from_songs.fast_switch);
+        assert_eq!(
+            profile_selection_target::<AlternateTheme>("songs", true, true, true),
+            None,
+        );
+        assert_eq!(
+            profile_selection_target::<AlternateTheme>("picker", true, true, true),
+            Some("songs"),
+        );
+        assert_eq!(
+            profile_selection_target::<AlternateTheme>("picker", false, true, true),
+            Some("link-account"),
+        );
+        assert_eq!(
+            profile_selection_target::<AlternateTheme>("picker", false, true, false),
+            Some("mode"),
+        );
     }
 
     #[test]

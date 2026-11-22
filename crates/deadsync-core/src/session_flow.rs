@@ -16,6 +16,34 @@ pub struct SessionScreens<S> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProfileLoginScreens<S> {
+    pub groovestats: Option<S>,
+    pub arrowcloud: Option<S>,
+}
+
+pub fn profile_selection_target<S: Copy + Eq>(
+    screens: SessionScreens<S>,
+    login: ProfileLoginScreens<S>,
+    current_screen: S,
+    fast_switch: bool,
+    show_groovestats_login: bool,
+    show_arrowcloud_login: bool,
+) -> Option<S> {
+    if fast_switch {
+        return (current_screen != screens.select_music).then_some(screens.select_music);
+    }
+    let startup = [
+        login.groovestats,
+        login.arrowcloud,
+        screens.select_color,
+        screens.select_style,
+        screens.select_play_mode,
+    ];
+    let enabled = [show_groovestats_login, show_arrowcloud_login, true, true, true];
+    Some(next_enabled_screen(&startup, &enabled).unwrap_or(screens.profile_load))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SessionNavigationPolicy {
     pub show_select_profile: bool,
     pub show_select_color: bool,

@@ -41,6 +41,7 @@ pub mod favorites_view;
 pub mod lock_wait;
 pub mod pad_config;
 pub mod pad_config_sync;
+pub mod picker;
 pub mod requests;
 pub mod update;
 

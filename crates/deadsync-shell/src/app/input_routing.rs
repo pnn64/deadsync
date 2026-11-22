@@ -9,6 +9,7 @@ use crate::input::{
 use deadsync_config as config;
 use deadsync_gameplay::RawKeyAction;
 use deadsync_input::{self as logical_input, InputEvent};
+use deadsync_theme::profile_picker::ThemeProfilePicker;
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
@@ -339,7 +340,7 @@ impl App {
         }
         if current_screen == CurrentScreen::SelectProfile {
             debug_assert!(self.theme_effect_scratch.is_empty());
-            screens::select_profile::handle_input(
+            ActiveTheme::handle_profile_picker_input(
                 &mut self.state.screens.select_profile_state,
                 &ev,
                 &mut self.theme_effect_scratch,

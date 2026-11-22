@@ -5,6 +5,7 @@ use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadsync_input::InputEvent;
 use deadsync_profile as profile_data;
+use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
 
 pub type State = profile_boxes::State;
 
@@ -86,6 +87,54 @@ pub fn get_actors(
     profile_boxes::get_actors(state, asset_manager, alpha_multiplier)
 }
 
+impl ThemeProfilePicker for crate::SimplyLoveTheme {
+    type ProfilePickerState = State;
+    type ProfilePickerView = ProfilePickerView;
+    type ProfilePickerInput = InputEvent;
+    type ProfilePickerAssets = AssetManager;
+    type ProfilePickerVisualPolicy = crate::views::SimplyLoveVisualPolicyView;
+
+    fn init_profile_picker(view: ProfilePickerView, context: ProfilePickerContext) -> State {
+        let mut state = init(view);
+        state.active_color_index = context.color_index;
+        set_fast_switch(&mut state, context.fast_switch);
+        if let Some([p1_joined, p2_joined]) = context.joined {
+            set_joined(&mut state, p1_joined, p2_joined);
+        }
+        state
+    }
+
+    fn profile_picker_color_index(state: &State) -> i32 {
+        state.active_color_index
+    }
+
+    fn set_profile_picker_color_index(state: &mut State, color_index: i32) {
+        state.active_color_index = color_index;
+    }
+
+    fn update_profile_picker(state: &mut State, delta_time: f32) {
+        update(state, delta_time);
+    }
+
+    fn handle_profile_picker_input(
+        state: &mut State,
+        input: &InputEvent,
+        effects: &mut Vec<ThemeEffect>,
+    ) {
+        handle_input(state, input, effects);
+    }
+
+    fn push_profile_picker_actors(
+        actors: &mut Vec<Actor>,
+        state: &State,
+        assets: &AssetManager,
+        alpha_multiplier: f32,
+        visual_policy: Self::ProfilePickerVisualPolicy,
+    ) {
+        push_actors(actors, state, assets, alpha_multiplier, visual_policy);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,13 +159,22 @@ mod tests {
 
     #[test]
     fn standalone_consumer_preserves_start_sound_before_profile_selection() {
-        let mut state = init(ProfilePickerView::default());
-        set_joined(&mut state, true, false);
+        use crate::SimplyLoveTheme as Theme;
+
+        let mut state = Theme::init_profile_picker(
+            ProfilePickerView::default(),
+            ProfilePickerContext {
+                color_index: 7,
+                joined: Some([false, true]),
+                fast_switch: false,
+            },
+        );
+        assert_eq!(Theme::profile_picker_color_index(&state), 7);
 
         let mut effects = Vec::new();
-        handle_input(
+        Theme::handle_profile_picker_input(
             &mut state,
-            &press(deadsync_input::VirtualAction::p1_start),
+            &press(deadsync_input::VirtualAction::p2_start),
             &mut effects,
         );
         assert_eq!(effects.len(), 2);
@@ -129,8 +187,8 @@ mod tests {
             &effects[1],
             ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Profile(
                 SimplyLoveProfileRequest::Select {
-                    p1_joined: true,
-                    p2_joined: false,
+                    p1_joined: false,
+                    p2_joined: true,
                     fast_switch: false,
                     ..
                 }

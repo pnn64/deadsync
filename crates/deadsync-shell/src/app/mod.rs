@@ -139,7 +139,7 @@ use deadsync_theme_simply_love::{
         self, content_browser, credits, evaluation, evaluation_summary, gameover, gameplay, init,
         initials, input as input_screen, manage_local_profiles, mappings, options,
         overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
-        select_course, select_mode, select_music, select_profile, select_style, test_lights,
+        select_course, select_mode, select_music, select_style, test_lights,
     },
     visual_styles,
 };
@@ -206,6 +206,7 @@ use deadsync_theme::views::{
     SmxAssignmentView,
 };
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
+use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
 use deadsync_theme::{
     AudioRequest, PlatformRequest, RevealPathKind, ThemeResources, ThemeScreenFlow,
     TransitionCompletion, UiCue,
@@ -635,7 +636,7 @@ pub struct ScreensState {
     smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview,
     player_options_state: Option<player_options::State>,
     init_state: init::State,
-    select_profile_state: select_profile::State,
+    select_profile_state: <ActiveTheme as ThemeProfilePicker>::ProfilePickerState,
     select_color_state: select_color::State,
     arrowcloud_login_state: screens::arrowcloud_login::State,
     groovestats_login_state: screens::groovestats_login::State,
@@ -1214,8 +1215,14 @@ impl ScreensState {
     ) -> Self {
         let menu_state = ActiveTheme::init_menu(color_index);
 
-        let mut select_profile_state = select_profile::init(crate::local_profiles::picker_view());
-        select_profile_state.active_color_index = color_index;
+        let select_profile_state = ActiveTheme::init_profile_picker(
+            crate::local_profiles::picker_view(),
+            ProfilePickerContext {
+                color_index,
+                joined: None,
+                fast_switch: false,
+            },
+        );
 
         let select_flow_view = crate::select_flow::runtime_view();
         let mut select_color_state = select_color::init(select_flow_view.clone());
@@ -1440,7 +1447,7 @@ impl ScreensState {
                 (None, false)
             }
             CurrentScreen::SelectProfile => {
-                select_profile::update(&mut self.select_profile_state, delta_time);
+                ActiveTheme::update_profile_picker(&mut self.select_profile_state, delta_time);
                 (None, false)
             }
             CurrentScreen::SelectColor => {
@@ -7916,7 +7923,7 @@ impl App {
                     );
                 }
             }
-            CurrentScreen::SelectProfile => select_profile::push_actors(
+            CurrentScreen::SelectProfile => ActiveTheme::push_profile_picker_actors(
                 &mut actors,
                 &self.state.screens.select_profile_state,
                 &self.asset_manager,
@@ -9138,25 +9145,22 @@ impl App {
                 prev,
             );
         } else if target == CurrentScreen::SelectProfile {
-            let current_color_index = self.state.screens.select_profile_state.active_color_index;
-            self.state.screens.select_profile_state =
-                select_profile::init(crate::local_profiles::picker_view());
-            self.state.screens.select_profile_state.active_color_index = current_color_index;
-            select_profile::set_fast_switch(
-                &mut self.state.screens.select_profile_state,
-                prev == CurrentScreen::SelectMusic,
+            let color_index =
+                ActiveTheme::profile_picker_color_index(&self.state.screens.select_profile_state);
+            let view = crate::local_profiles::picker_view();
+            let context = crate::screen_flow::profile_picker_context::<ActiveTheme>(
+                prev,
+                color_index,
+                self.state.session.menu_start_side,
+                || {
+                    let session = profile::get_session_snapshot();
+                    [
+                        session.side_joined(profile_data::PlayerSide::P1),
+                        session.side_joined(profile_data::PlayerSide::P2),
+                    ]
+                },
             );
-            if prev == CurrentScreen::Menu {
-                let p2 = self.state.session.menu_start_side == profile_data::PlayerSide::P2;
-                select_profile::set_joined(&mut self.state.screens.select_profile_state, !p2, p2);
-            } else if prev == CurrentScreen::SelectMusic {
-                let session = profile::get_session_snapshot();
-                select_profile::set_joined(
-                    &mut self.state.screens.select_profile_state,
-                    session.side_joined(profile_data::PlayerSide::P1),
-                    session.side_joined(profile_data::PlayerSide::P2),
-                );
-            }
+            self.state.screens.select_profile_state = ActiveTheme::init_profile_picker(view, context);
         } else if target == CurrentScreen::SelectStyle {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state =
@@ -9171,7 +9175,7 @@ impl App {
                     self.state.screens.select_color_state.active_color_index
                 }
                 CurrentScreen::SelectProfile => {
-                    self.state.screens.select_profile_state.active_color_index
+                    ActiveTheme::profile_picker_color_index(&self.state.screens.select_profile_state)
                 }
                 CurrentScreen::Menu => ActiveTheme::menu_color_index(&self.state.screens.menu_state),
                 _ => self.state.screens.select_play_mode_state.active_color_index,
@@ -9192,7 +9196,7 @@ impl App {
                     self.state.screens.select_color_state.active_color_index
                 }
                 CurrentScreen::SelectProfile => {
-                    self.state.screens.select_profile_state.active_color_index
+                    ActiveTheme::profile_picker_color_index(&self.state.screens.select_profile_state)
                 }
                 CurrentScreen::Menu => ActiveTheme::menu_color_index(&self.state.screens.menu_state),
                 _ => self.state.screens.profile_load_state.active_color_index,
@@ -9293,7 +9297,7 @@ impl App {
 
     fn sync_screen_color_index(&mut self, idx: i32) {
         ActiveTheme::set_menu_color_index(&mut self.state.screens.menu_state, idx);
-        self.state.screens.select_profile_state.active_color_index = idx;
+        ActiveTheme::set_profile_picker_color_index(&mut self.state.screens.select_profile_state, idx);
         self.state.screens.select_style_state.active_color_index = idx;
         self.state.screens.select_play_mode_state.active_color_index = idx;
         self.state.screens.profile_load_state.active_color_index = idx;

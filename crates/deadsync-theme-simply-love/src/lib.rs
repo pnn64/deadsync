@@ -134,6 +134,11 @@ impl deadsync_theme::ThemeSessionFlow for SimplyLoveTheme {
             gameover: Some(Screen::GameOver),
         }
     };
+    const PROFILE_LOGIN_SCREENS: deadsync_core::session_flow::ProfileLoginScreens<Self::Screen> =
+        deadsync_core::session_flow::ProfileLoginScreens {
+            groovestats: Some(screens::SimplyLoveScreen::GrooveStatsLogin),
+            arrowcloud: Some(screens::SimplyLoveScreen::ArrowCloudLogin),
+        };
 }
 
 impl deadsync_theme::ThemeResources for SimplyLoveTheme {

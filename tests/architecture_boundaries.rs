@@ -2978,6 +2978,8 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
     let theme = root.join("crates/deadsync-theme-simply-love/src");
     let picker = read_source(theme.join("screens/components/shared/profile_boxes.rs"))
         .expect("profile picker should be readable");
+    let catalog = read_source(root.join("crates/deadsync-profile/src/picker.rs"))
+        .expect("game profile catalog should be readable");
     let views =
         read_source(theme.join("views.rs")).expect("Simply Love views should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/local_profiles.rs"))
@@ -2986,6 +2988,7 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
         .expect("shell app should be readable");
     let select_music = read_source(theme.join("screens/select_music.rs"))
         .expect("Select Music should be readable");
+    let shell_input = production_source(&root.join("crates/deadsync-shell/src/app/input_routing.rs"));
 
     for runtime in [
         "deadsync_profile::compat",
@@ -3004,9 +3007,10 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
         );
     }
     assert!(
-        views.contains("pub struct ProfilePickerView")
-            && views.contains("pub struct ProfilePickerEntryView")
+        catalog.contains("pub struct ProfilePickerView")
+            && catalog.contains("pub struct ProfilePickerEntryView")
             && views.contains("pub profile_picker: ProfilePickerView")
+            && shell.contains("use deadsync_profile::picker::")
             && shell.contains("pub fn picker_view() -> ProfilePickerView")
             && shell.contains("profile::scan_local_profiles()")
             && shell.contains("total_songs_played_for_profile")
@@ -3015,6 +3019,12 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
             && shell_app.contains("select_music::sync_profile_picker("),
         "shell must prepare and Select Music must retain the shared profile-picker catalog"
     );
+    assert!(shell_app.contains("<ActiveTheme as ThemeProfilePicker>::ProfilePickerState"));
+    assert!(shell_app.contains("ActiveTheme::init_profile_picker("));
+    assert!(shell_app.contains("ActiveTheme::push_profile_picker_actors("));
+    assert!(shell_input.contains("ActiveTheme::handle_profile_picker_input("));
+    assert!(!shell_app.contains("select_profile::"));
+    assert!(!shell_input.contains("select_profile::"));
 }
 
 #[test]
@@ -7420,7 +7430,8 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
             && shell.contains("T::SESSION_SCREENS")
             && profile_requests.contains("profile_combo_carry(&profiles)")
             && profile_requests.contains("preferred_difficulty_indices(&profiles, session.play_style)")
-            && profile_executor.contains("profile_selection_target("),
+            && shell.contains("session_flow::profile_selection_target(")
+            && profile_executor.contains("profile_selection_target::<ActiveTheme>("),
         "theme navigation must receive prepared inputs from the game and shell"
     );
     let input = production_source(&root.join("crates/deadsync-shell/src/app/input_routing.rs"));

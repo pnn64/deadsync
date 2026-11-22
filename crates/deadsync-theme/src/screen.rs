@@ -57,6 +57,11 @@ pub trait ThemeScreenFlow: Theme {
 /// Optional startup and post-play screens supplied to the game's session flow.
 pub trait ThemeSessionFlow: ThemeScreenFlow {
     const SESSION_SCREENS: deadsync_core::session_flow::SessionScreens<Self::Screen>;
+    const PROFILE_LOGIN_SCREENS: deadsync_core::session_flow::ProfileLoginScreens<Self::Screen> =
+        deadsync_core::session_flow::ProfileLoginScreens {
+            groovestats: None,
+            arrowcloud: None,
+        };
 }
 
 #[cfg(test)]

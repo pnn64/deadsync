@@ -236,15 +236,16 @@ pub fn profile_selection_target(
     show_groovestats_login: bool,
     show_arrowcloud_login: bool,
 ) -> Option<SimplyLoveScreen> {
-    if fast_switch {
-        (current_screen != SimplyLoveScreen::SelectMusic).then_some(SimplyLoveScreen::SelectMusic)
-    } else if show_groovestats_login {
-        Some(SimplyLoveScreen::GrooveStatsLogin)
-    } else if show_arrowcloud_login {
-        Some(SimplyLoveScreen::ArrowCloudLogin)
-    } else {
-        Some(SimplyLoveScreen::SelectColor)
-    }
+    use deadsync_theme::ThemeSessionFlow;
+
+    deadsync_core::session_flow::profile_selection_target(
+        crate::SimplyLoveTheme::SESSION_SCREENS,
+        crate::SimplyLoveTheme::PROFILE_LOGIN_SCREENS,
+        current_screen,
+        fast_switch,
+        show_groovestats_login,
+        show_arrowcloud_login,
+    )
 }
 
 pub type SimplyLoveNavigationPlan =
