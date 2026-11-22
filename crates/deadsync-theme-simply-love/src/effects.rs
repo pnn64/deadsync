@@ -668,7 +668,7 @@ pub enum SimplyLoveTournamentConfigRequest {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveOptionsConfigRequest {
     Game(GameFlag),
-    ThemeSimplyLove,
+    Theme(deadsync_config::theme::ThemeFlag),
     Language(LanguageFlag),
     LogLevel(LogLevel),
     LogToFile(bool),

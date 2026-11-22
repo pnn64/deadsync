@@ -3603,6 +3603,18 @@ mod tests {
     }
 
     #[test]
+    fn openitg_title_theme_round_trips_in_runtime_options() {
+        let mut conf = SimpleIni::new();
+        conf.load_str("[Options]\nTheme=OpenITG\n");
+        let loaded = load_runtime_options(&conf, default_runtime_options());
+        assert_eq!(loaded.theme_flag, ThemeFlag::OpenItg);
+
+        let mut output = String::new();
+        push_runtime_worker_theme_option_lines(&mut output, loaded);
+        assert!(output.lines().any(|line| line == "Theme=OpenITG"));
+    }
+
+    #[test]
     fn load_runtime_options_keeps_defaults_for_bad_values() {
         let default = default_runtime_options();
         let mut conf = SimpleIni::new();

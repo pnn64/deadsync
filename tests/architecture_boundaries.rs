@@ -7245,19 +7245,28 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
         .expect("shell app should be readable");
     assert!(app.contains("crate::main_menu::runtime_view(self.state.coin.credits(coin))"));
     for hook in [
-        "menu_state: <ActiveTheme as ThemeMainMenu>::MenuState",
-        "ActiveTheme::init_menu(",
-        "ActiveTheme::sync_menu_runtime(",
-        "ActiveTheme::update_menu(",
+        "menu_state: crate::title_menu::InstalledMenu",
+        "InstalledMenu::new(theme, color_index)",
+        "menu_state.sync_runtime(",
+        "menu_state.update(",
         "MainMenuPhase::Entering",
-        "ActiveTheme::handle_menu_raw_key(",
-        "ActiveTheme::push_menu_actors(",
-        "ActiveTheme::push_menu_exit_overlay(",
+        "menu_state.handle_raw_key(",
+        "menu_state.push_actors(",
+        "menu_state.push_exit_overlay(",
     ] {
         assert!(app.contains(hook), "shell main menu is missing {hook}");
     }
     for concrete in ["screens::menu::", "menu_state.active_color_index", "menu_splash::build(", "fade.menu_exit_elapsed"] {
         assert!(!app.contains(concrete), "shell still applies menu presentation through {concrete}");
+    }
+    let factory = production_source(&root.join("crates/deadsync-shell/src/title_menu.rs"));
+    for hook in [
+        "crate::main_menu::handle_input::<ActiveTheme>(state, session, input)",
+        "crate::main_menu::handle_input::<OpenItgTheme>(",
+        "OpenItgTheme::push_menu_actors(",
+        "ThemeFlag::OpenItg => Self::OpenItg(",
+    ] {
+        assert!(contains_rust(&factory, hook), "installed title menu is missing {hook}");
     }
 }
 
@@ -7535,7 +7544,7 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).unwrap();
     let menu_runtime = production_source(&root.join("crates/deadsync-shell/src/main_menu.rs"));
-    assert!(input.contains("crate::main_menu::handle_input::<ActiveTheme>("));
+    assert!(input.contains("self.state.screens.menu_state.handle_input("));
     assert!(contains_rust(&menu_runtime, "session.remember_menu_start(input); T::handle_menu_input(state, input)"));
     for entry in [&app, &navigation] {
         assert!(entry.contains("self.state.session.menu_start_side"));

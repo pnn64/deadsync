@@ -1838,6 +1838,7 @@ dependencies = [
  "deadsync-smx",
  "deadsync-song-lua",
  "deadsync-theme",
+ "deadsync-theme-openitg",
  "deadsync-theme-simply-love",
  "deadsync-updater",
  "hashbrown 0.17.1",
@@ -1944,6 +1945,18 @@ dependencies = [
  "deadsync-core",
  "deadsync-rules",
  "deadsync-score",
+]
+
+[[package]]
+name = "deadsync-theme-openitg"
+version = "0.6.177"
+dependencies = [
+ "deadlib-platform",
+ "deadlib-present",
+ "deadsync-config",
+ "deadsync-core",
+ "deadsync-input",
+ "deadsync-theme",
 ]
 
 [[package]]

@@ -19,9 +19,7 @@ pub(super) fn execute_options(
 
     match request {
         Request::Game(flag) => config::runtime_update::update_game_flag(flag),
-        Request::ThemeSimplyLove => {
-            config::runtime_update::update_theme_flag(config::theme::ThemeFlag::SimplyLove)
-        }
+        Request::Theme(flag) => config::runtime_update::update_theme_flag(flag),
         Request::Language(flag) => {
             config::runtime_update::update_language_flag(flag);
             let locale = deadsync_assets::language::resolve_locale(flag);

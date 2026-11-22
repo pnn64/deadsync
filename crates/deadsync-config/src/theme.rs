@@ -429,7 +429,7 @@ impl SelectMusicStepArtistBoxMode {
 
 const fn select_music_step_artist_default_expanded(theme: ThemeFlag) -> bool {
     match theme {
-        ThemeFlag::SimplyLove => false,
+        ThemeFlag::SimplyLove | ThemeFlag::OpenItg => false,
     }
 }
 
@@ -1465,6 +1465,7 @@ impl FromStr for GameFlag {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeFlag {
     SimplyLove,
+    OpenItg,
 }
 
 impl ThemeFlag {
@@ -1472,6 +1473,7 @@ impl ThemeFlag {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::SimplyLove => "Simply Love",
+            Self::OpenItg => "OpenITG",
         }
     }
 }
@@ -1485,6 +1487,7 @@ impl FromStr for ThemeFlag {
         };
         match key.as_str() {
             "simplylove" => Ok(Self::SimplyLove),
+            "openitg" => Ok(Self::OpenItg),
             _ => Err(()),
         }
     }

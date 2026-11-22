@@ -3,6 +3,28 @@
 use crate::{ThemeEffect, ThemeInputResult, ThemeTransitions, TransitionState};
 use std::sync::Arc;
 
+/// Host actions available from the title screen.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MainMenuItem {
+    Play,
+    Options,
+    Content,
+    Exit,
+    Shutdown,
+}
+
+/// Arcade title screens expose only Play. Home menus expose the host actions.
+pub const fn main_menu_items(home: bool, allow_shutdown: bool) -> &'static [MainMenuItem] {
+    use MainMenuItem::*;
+    if !home {
+        &[Play]
+    } else if allow_shutdown {
+        &[Play, Options, Content, Exit, Shutdown]
+    } else {
+        &[Play, Options, Content, Exit]
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MainMenuGrooveError {
     Disabled,

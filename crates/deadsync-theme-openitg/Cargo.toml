@@ -1,0 +1,20 @@
+[package]
+name = "deadsync-theme-openitg"
+version.workspace = true
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadlib-platform = { path = "../deadlib-platform" }
+deadlib-present = { path = "../deadlib-present" }
+deadsync-config = { path = "../deadsync-config" }
+deadsync-input = { path = "../deadsync-input" }
+deadsync-theme = { path = "../deadsync-theme" }
+
+[dev-dependencies]
+deadsync-core = { path = "../deadsync-core" }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

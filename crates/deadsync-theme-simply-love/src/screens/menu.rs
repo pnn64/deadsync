@@ -4,7 +4,7 @@ use crate::i18n;
 use crate::i18n::{tr, tr_fmt};
 use deadsync_theme::FontRole;
 use deadsync_theme::{ThemeInputResult, TransitionState};
-use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
+use deadsync_theme::main_menu::{MainMenuFrame, MainMenuItem, MainMenuPhase, ThemeMainMenu, main_menu_items};
 // Screen navigation is handled in app
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::color;
@@ -51,31 +51,15 @@ const MAX_OPTION_COUNT: usize = OPTION_COUNT + 1;
 
 #[inline]
 const fn option_count(state: &State) -> usize {
-    if !matches!(
-        state.runtime_view.coin_mode,
-        deadsync_config::coin::CoinMode::Home
-    ) {
-        return 1;
-    }
-    if state.runtime_view.allow_shutdown_host {
-        OPTION_COUNT + 1
-    } else {
-        OPTION_COUNT
-    }
+    menu_items(state).len()
 }
 
 #[inline]
-fn shutdown_index(state: &State) -> Option<usize> {
-    if !matches!(
-        state.runtime_view.coin_mode,
-        deadsync_config::coin::CoinMode::Home
-    ) {
-        return None;
-    }
-    state
-        .runtime_view
-        .allow_shutdown_host
-        .then_some(OPTION_COUNT)
+const fn menu_items(state: &State) -> &'static [MainMenuItem] {
+    main_menu_items(
+        matches!(state.runtime_view.coin_mode, deadsync_config::coin::CoinMode::Home),
+        state.runtime_view.allow_shutdown_host,
+    )
 }
 
 // --- CONSTANTS UPDATED FOR NEW ANIMATION-DRIVEN LAYOUT ---
@@ -1097,16 +1081,13 @@ const fn set_selected(state: &mut State, selected_index: usize) {
 #[inline(always)]
 fn start_selected(state: &mut State, started_by_p2: bool) -> ThemeEffect {
     state.started_by_p2 = started_by_p2;
-    let effect = if Some(state.selected_index) == shutdown_index(state) {
-        ThemeEffect::Shutdown
-    } else {
-        match state.selected_index {
-            0 => ThemeEffect::Navigate(Screen::SelectProfile),
-            1 => ThemeEffect::Navigate(Screen::Options),
-            2 => ThemeEffect::Navigate(Screen::ContentBrowser),
-            3 => ThemeEffect::Exit,
-            _ => ThemeEffect::None,
-        }
+    let effect = match menu_items(state).get(state.selected_index) {
+        Some(MainMenuItem::Play) => ThemeEffect::Navigate(Screen::SelectProfile),
+        Some(MainMenuItem::Options) => ThemeEffect::Navigate(Screen::Options),
+        Some(MainMenuItem::Content) => ThemeEffect::Navigate(Screen::ContentBrowser),
+        Some(MainMenuItem::Exit) => ThemeEffect::Exit,
+        Some(MainMenuItem::Shutdown) => ThemeEffect::Shutdown,
+        None => ThemeEffect::None,
     };
     crate::effects::sfx_then("assets/sounds/start.ogg", effect)
 }

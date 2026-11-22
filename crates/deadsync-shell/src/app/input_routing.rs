@@ -440,8 +440,7 @@ impl App {
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
-                crate::main_menu::handle_input::<ActiveTheme>(
-                    &mut self.state.screens.menu_state,
+                self.state.screens.menu_state.handle_input(
                     &mut self.state.session,
                     &ev,
                 )

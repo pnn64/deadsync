@@ -128,7 +128,10 @@ fn dependency_violations(metadata: &Metadata, test_owner: Option<&str>) -> Vec<S
                 }
                 let mut next = path.clone();
                 next.push(dependency);
-                if points_upward(source_layer, layer(dependency)) {
+                if points_upward(source_layer, layer(dependency))
+                    || (matches!(source_layer, Layer::Theme)
+                        && dependency.starts_with("deadsync-theme-"))
+                {
                     failures.push(next.join(" -> "));
                 } else {
                     pending.push_back(next);

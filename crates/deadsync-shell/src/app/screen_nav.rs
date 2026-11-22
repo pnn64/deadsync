@@ -21,7 +21,6 @@ use deadsync_profile::compat as profile;
 use deadsync_theme::{
     Theme, ThemeScreenFlow, ThemeTransitionAudio, ThemeTransitions, TransitionKind,
 };
-use deadsync_theme::main_menu::ThemeMainMenu;
 use deadsync_theme_simply_love::screens::transition_audio::TransitionAudioContext;
 use deadsync_theme_simply_love::screens::transitions::PlayEntryTransition;
 use deadsync_theme_simply_love::views::OverscanAdjustmentView;
@@ -121,7 +120,7 @@ impl App {
 
     fn enter_arrowcloud_login(&mut self) {
         let config = config::runtime::get();
-        let color_index = ActiveTheme::menu_color_index(&self.state.screens.menu_state);
+        let color_index = self.state.screens.menu_state.color_index();
         let state = &mut self.state.screens.arrowcloud_login_state;
         state.active_color_index = color_index;
         let target = state
@@ -138,7 +137,7 @@ impl App {
 
     fn enter_groovestats_login(&mut self) {
         let config = config::runtime::get();
-        let color_index = ActiveTheme::menu_color_index(&self.state.screens.menu_state);
+        let color_index = self.state.screens.menu_state.color_index();
         let state = &mut self.state.screens.groovestats_login_state;
         state.active_color_index = color_index;
         let target = state
@@ -268,7 +267,7 @@ impl App {
             self.update_options_monitor_specs(event_loop);
         }
 
-        apply_actor_entry_transition(&mut self.state.shell, target_screen);
+        self.apply_selected_actor_entry(target_screen);
         self.sync_gameplay_input_capture();
         deadlib_present::runtime::clear_all();
     }
@@ -365,10 +364,10 @@ impl App {
                 if from == CurrentScreen::Init && target == CurrentScreen::Menu {
                     debug!("Instant navigation Init?Menu (out-transition handled by Init screen)");
                     self.state.session.menu_start_side = profile_data::PlayerSide::P1;
-                    ActiveTheme::reset_menu(&mut self.state.screens.menu_state);
+                    self.state.screens.menu_state.reset();
                 }
                 self.commit_screen_change(target);
-                apply_actor_entry_transition(&mut self.state.shell, target);
+                self.apply_selected_actor_entry(target);
                 self.sync_gameplay_input_capture();
                 deadlib_present::runtime::clear_all();
             }
@@ -384,8 +383,20 @@ impl App {
 
     fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
         debug!("Starting actor-only fade out to screen: {target:?}");
-        apply_actor_fade_out_transition(&mut self.state.shell, from, target);
+        if from == CurrentScreen::Menu {
+            self.state.shell.transition = self.state.screens.menu_state.actor_exit(target);
+        } else {
+            apply_actor_fade_out_transition(&mut self.state.shell, from, target);
+        }
         self.sync_gameplay_input_capture();
+    }
+
+    fn apply_selected_actor_entry(&mut self, target: CurrentScreen) {
+        if target == CurrentScreen::Menu {
+            self.state.shell.transition = self.state.screens.menu_state.actor_entry();
+        } else {
+            apply_actor_entry_transition(&mut self.state.shell, target);
+        }
     }
 
     fn start_global_fade(&mut self, target: CurrentScreen) {
@@ -503,12 +514,18 @@ impl App {
         screen: CurrentScreen,
         target: CurrentScreen,
     ) -> (Vec<Actor>, f32) {
+        if screen == CurrentScreen::Menu {
+            return self.state.screens.menu_state.exit_transition(target);
+        }
         let (actors, duration) = ActiveTheme::out_transition(screen, target);
         let duration = stage_exit_duration::<ActiveTheme>(screen).unwrap_or(duration);
         (actors, duration)
     }
 
     pub(super) fn get_in_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
+        if screen == CurrentScreen::Menu {
+            return self.state.screens.menu_state.entry_transition();
+        }
         let play = if screen == ActiveTheme::SCREENS.gameplay {
             Some((
                 self.state.screens.gameplay_state.as_ref(),

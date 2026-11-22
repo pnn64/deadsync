@@ -598,6 +598,12 @@ The title menu mounts through the selected theme's presentation interface. The
 shell prepares credit and service status, and the theme owns menu state, input
 feedback, animation, and actor composition.
 
+The `Theme` setting selects Simply Love or OpenITG at startup. Both title menus
+use the same session start, cabinet permissions, and navigation commands. The
+OpenITG title is the first screen mounted from the second theme. The other
+screens currently use Simply Love. See [the OpenITG progress record](openitg-theme.md)
+for the reference, implemented behavior, and fidelity checks.
+
 Player Options mounts through the selected theme for song and course entry,
 input, updates, and actor composition. The shell supplies device and asset
 views, manages preview work and uploads, and reads the submitted game settings

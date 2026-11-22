@@ -28,6 +28,7 @@ mod lighting;
 pub mod live_case;
 mod local_profiles;
 mod main_menu;
+mod title_menu;
 mod mappings;
 mod navigation;
 mod offset_prompt;
