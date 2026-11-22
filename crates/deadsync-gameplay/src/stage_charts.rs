@@ -28,18 +28,16 @@ fn resolve_chart(
     requested_steps: usize,
     preferred_steps: usize,
 ) -> (usize, usize) {
-    if let Some(chart) = song.chart_for_steps_index(chart_type, requested_steps) {
-        return (requested_steps, chart_index(song, chart));
-    }
-
-    if let Some(fallback_steps) = song.best_steps_index(chart_type, preferred_steps)
-        && let Some(chart) = song.chart_for_steps_index(chart_type, fallback_steps)
+    if let Some((steps, chart)) =
+        resolve_indexed_chart(song, chart_type, requested_steps, preferred_steps)
     {
-        warn!(
-            "Missing stepchart index {} for '{}'; using fallback index {}",
-            requested_steps, song.title, fallback_steps
-        );
-        return (fallback_steps, chart_index(song, chart));
+        if steps != requested_steps {
+            warn!(
+                "Missing stepchart index {} for '{}'; using fallback index {}",
+                requested_steps, song.title, steps
+            );
+        }
+        return (steps, chart_index(song, chart));
     }
 
     let chart_index = song
@@ -54,6 +52,21 @@ fn resolve_chart(
         song.title, chart.chart_type, chart.difficulty
     );
     (requested_steps, chart_index)
+}
+
+/// Resolve an indexed chart using the same preferred fallback as stage entry.
+pub(crate) fn resolve_indexed_chart<'a>(
+    song: &'a SongData,
+    chart_type: &str,
+    requested_steps: usize,
+    preferred_steps: usize,
+) -> Option<(usize, &'a ChartData)> {
+    if let Some(chart) = song.chart_for_steps_index(chart_type, requested_steps) {
+        return Some((requested_steps, chart));
+    }
+    let steps = song.best_steps_index(chart_type, preferred_steps)?;
+    song.chart_for_steps_index(chart_type, steps)
+        .map(|chart| (steps, chart))
 }
 
 #[must_use]

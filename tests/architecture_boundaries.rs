@@ -405,6 +405,9 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     let select_music = production_source(
         &root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     );
+    let chart_options = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/player_options/panes/main.rs"),
+    );
     let stage_start = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
     let shell_entry = production_source(&root.join("crates/deadsync-shell/src/gameplay_entry.rs"));
     assert!(chart_policy.contains("pub fn gameplay_chart_entry_plan("));
@@ -424,6 +427,10 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(app.contains("stage_start_for_song_selection(selection)"));
     assert!(song_selection.contains("pub fn synchronize_song_charts("));
     assert!(song_selection.contains("pub fn resolved_chart_slots("));
+    assert!(song_selection.contains("pub fn resolve_song_chart_slots("));
+    assert!(chart_options.contains("= change_song_chart("));
+    assert!(!chart_options.contains("state.chart_steps_index[player_idx] ="));
+    assert!(stage_start.contains("= resolve_song_chart_slots("));
     assert!(select_music.contains("= synchronize_song_charts("));
     assert!(select_music.contains("= select_music_join_charts("));
     assert!(chart_adapter.contains("pub fn select_music_join_charts("));

@@ -3,7 +3,7 @@ use super::{
     gameplay_play_style_from_profile, noteskin_catalog_view, player_options, profile, profile_data,
     select_course, select_music,
 };
-use deadsync_gameplay::song_launch::SongSelection;
+use deadsync_gameplay::song_launch::{SongSelection, resolve_song_chart_slots};
 use deadsync_gameplay::stage_launch::{StageLaunchRequest, StageLaunchTarget};
 use deadsync_profile_gameplay::stage_charts::stage_difficulty_indices;
 use deadsync_profile_gameplay::stage_replay::StageReplayRequest;
@@ -81,10 +81,18 @@ impl StageStart {
     }
 
     fn from_player_options(state: &player_options::State) -> Self {
+        let mut options = player_options::stage_options(state);
+        let (steps, chart_difficulty_index) = resolve_song_chart_slots(
+            &state.song,
+            gameplay_play_style_from_profile(options.play_style),
+            options.chart_steps_index,
+            state.chart_difficulty_index,
+        );
+        options.chart_steps_index = steps;
         Self {
             song: Arc::clone(&state.song),
-            chart_difficulty_index: state.chart_difficulty_index,
-            options: player_options::stage_options(state),
+            chart_difficulty_index,
+            options,
             color_index: state.active_color_index,
             return_screen: state.return_screen,
             fixed_stepchart_label: state
@@ -399,9 +407,15 @@ mod tests {
                     );
                     let (target, _) = app.prepare_global_fade_entry(CurrentScreen::PlayerOptions);
                     assert_eq!(target, CurrentScreen::PlayerOptions);
-                    let options = app.state.screens.player_options_state.as_ref().unwrap();
+                    let options = app.state.screens.player_options_state.as_mut().unwrap();
                     assert_eq!(options.chart_steps_index, [2, 2]);
                     assert_eq!(options.chart_difficulty_index, [2, 2]);
+
+                    options.chart_steps_index = [3, usize::MAX];
+                    options.chart_difficulty_index = [3, 2];
+                    let (start, _) = app.take_stage_start().unwrap();
+                    assert_eq!(start.options.chart_steps_index, [2, 2]);
+                    assert_eq!(start.chart_difficulty_index, [2, 2]);
                 },
             )
         });

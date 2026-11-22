@@ -202,11 +202,13 @@ payloads, and session changes together after loading succeeds.
 
 The game synchronizes the selected charts when both players share one chart or
 choose Versus charts with different music. The wheel sends its current and prior
-chart slots to the same policy used by stage launch. A Versus launch with
-conflicting picks and no prior slots uses P2's choice, matching the precedence
-when both wheel slots change at once. Preload and entry from the wheel into
-Player Options or Gameplay use the resolved slots. On late join, the game keeps
-the incumbent's selection and starts the new player on the first available chart
+chart slots to this policy, and Player Options sends the edited side and slot.
+The theme refreshes both chart cursors and any BPM text affected by the change.
+A Versus launch with conflicting picks and no prior slots uses P2's choice,
+matching the precedence when both wheel slots change at once. Preload, direct
+entry, and entry from Player Options compare the actual charts after applying
+the same fallback as stage entry. On late join, the game keeps the
+incumbent's selection and starts the new player on the first available chart
 while keeping their saved difficulty preference.
 
 `deadsync-profile-gameplay::stage_options` supplies the settings for stage

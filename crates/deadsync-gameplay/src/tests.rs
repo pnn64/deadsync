@@ -14627,7 +14627,10 @@ mod tests {
 
     #[test]
     fn versus_song_charts_share_music_with_both_players() {
-        use crate::song_launch::{SongSelection, synchronize_song_charts};
+        use crate::song_launch::{
+            SongSelection, change_song_chart, resolve_song_chart_slots, synchronize_song_charts,
+        };
+        use GameplayInputPlayerSide as Side;
 
         for style in [
             GameplayInputPlayStyle::Versus,
@@ -14668,6 +14671,18 @@ mod tests {
             assert_eq!(
                 synchronize_song_charts(&song, style, Some([3, 4]), [3, 5], preferred),
                 ([5, 5], preferred),
+            );
+            assert_eq!(
+                change_song_chart(&song, style, Side::P1, 3, [4, 4], [4, 4]),
+                ([3, 3], [3, 3]),
+            );
+            assert_eq!(
+                change_song_chart(&song, style, Side::P2, 5, [3, 4], preferred),
+                ([5, 5], preferred),
+            );
+            assert_eq!(
+                resolve_song_chart_slots(&song, style, [usize::MAX; MAX_PLAYERS], preferred),
+                ([4, 4], [4, 4]),
             );
             let selection = SongSelection {
                 song: Arc::new(song),

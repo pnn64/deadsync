@@ -2,12 +2,14 @@ use super::super::choice;
 use super::super::row::index_binding;
 use super::*;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
+use deadsync_gameplay::song_launch::change_song_chart;
 use deadsync_profile::{
     BackgroundFilter, ComboFont, HeldMissGraphic, HoldJudgmentGraphic, JudgmentGraphic,
     MINI_PERCENT_MAX, MINI_PERCENT_MIN, NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN,
     NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoCmodAlternative, NoteSkin, Perspective,
     TapExplosionMask, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
 };
+use deadsync_profile_gameplay::{gameplay_play_style_from_profile, gameplay_player_side_from_profile};
 
 // =============================== Bindings ===============================
 
@@ -484,6 +486,9 @@ const STEPCHART: CustomBinding = CustomBinding {
         else {
             return Outcome::NONE;
         };
+        if state.fixed_stepchart.is_some() {
+            return Outcome::persisted();
+        }
         let difficulty_idx = {
             let Some(row) = state.pane().row_map.get(row_id) else {
                 return Outcome::persisted();
@@ -496,9 +501,28 @@ const STEPCHART: CustomBinding = CustomBinding {
             };
             idx
         };
-        state.chart_steps_index[player_idx] = difficulty_idx;
-        if difficulty_idx < STANDARD_DIFFICULTY_COUNT {
-            state.chart_difficulty_index[player_idx] = difficulty_idx;
+        let previous_steps = state.chart_steps_index;
+        (state.chart_steps_index, state.chart_difficulty_index) = change_song_chart(
+            &state.song,
+            gameplay_play_style_from_profile(state.play_style),
+            gameplay_player_side_from_profile(profile_data::player_side_for_index(player_idx)),
+            difficulty_idx,
+            previous_steps,
+            state.chart_difficulty_index,
+        );
+        if state.chart_steps_index[P1] != previous_steps[P1] {
+            mark_music_rate_dirty(state);
+        }
+        let other_player = 1 - player_idx;
+        if state.chart_steps_index[other_player] != previous_steps[other_player] {
+            let pane = state.pane_mut();
+            if let Some(row) = pane.row_map.get_mut(row_id) {
+                row.selected_choice_index[other_player] = new_index;
+            }
+            let other_row = pane.selected_row[other_player];
+            if pane.row_map.display_order().get(other_row) == Some(&row_id) {
+                sync_inline_intent_from_row(state, other_player, other_row);
+            }
         }
         Outcome::persisted()
     },

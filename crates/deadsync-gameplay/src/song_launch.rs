@@ -1,6 +1,7 @@
 //! Song selection data used by the shared stage launch controller.
 
-use crate::GameplayInputPlayStyle;
+use crate::stage_charts::resolve_indexed_chart;
+use crate::{GameplayInputPlayStyle, GameplayInputPlayerSide, gameplay_player_side_index};
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use std::sync::Arc;
@@ -45,16 +46,55 @@ impl SongSelection {
         play_style: GameplayInputPlayStyle,
     ) -> ([usize; MAX_PLAYERS], [usize; MAX_PLAYERS]) {
         let (steps, preferred) = self.chart_slots(play_style);
-        if matches!(
-            play_style,
-            GameplayInputPlayStyle::Versus | GameplayInputPlayStyle::PumpVersus
-        ) && steps[0] != steps[1]
-        {
-            synchronize_song_charts(&self.song, play_style, None, steps, preferred)
-        } else {
-            (steps, preferred)
-        }
+        resolve_song_chart_slots(&self.song, play_style, steps, preferred)
     }
+}
+
+/// Resolve conflicting Versus picks in a submitted selection, using the actual
+/// indexed charts after fallback. The same policy accepts compatible picks as
+/// submitted, including requests that will use a legacy raw chart fallback.
+#[must_use]
+pub fn resolve_song_chart_slots(
+    song: &SongData,
+    play_style: GameplayInputPlayStyle,
+    steps: [usize; MAX_PLAYERS],
+    preferred: [usize; MAX_PLAYERS],
+) -> ([usize; MAX_PLAYERS], [usize; MAX_PLAYERS]) {
+    use GameplayInputPlayStyle as Style;
+
+    if !matches!(play_style, Style::Versus | Style::PumpVersus)
+        || (steps[0] == steps[1] && preferred[0] == preferred[1])
+    {
+        return (steps, preferred);
+    }
+    let chart_type = play_style.chart_type();
+    if let (Some((_, p1)), Some((p2_steps, p2))) = (
+        resolve_indexed_chart(song, chart_type, steps[0], preferred[0]),
+        resolve_indexed_chart(song, chart_type, steps[1], preferred[1]),
+    ) && p1.music_path != p2.music_path
+    {
+        return match_song_chart_slots(p2_steps, preferred, 1);
+    }
+    (steps, preferred)
+}
+
+/// Apply an explicit stepchart edit, then align the other slot when required.
+#[must_use]
+pub fn change_song_chart(
+    song: &SongData,
+    play_style: GameplayInputPlayStyle,
+    side: GameplayInputPlayerSide,
+    selected: usize,
+    mut steps: [usize; MAX_PLAYERS],
+    mut preferred: [usize; MAX_PLAYERS],
+) -> ([usize; MAX_PLAYERS], [usize; MAX_PLAYERS]) {
+    let slot = gameplay_player_side_index(side);
+    let previous_steps = steps;
+    steps[slot] = selected;
+    if selected < STANDARD_DIFFICULTY_COUNT {
+        preferred[slot] = selected;
+    }
+    synchronize_song_charts(song, play_style, Some(previous_steps), steps, preferred)
 }
 
 /// Partner styles share one chart. Versus can use two charts with the same
@@ -67,7 +107,7 @@ pub fn synchronize_song_charts(
     play_style: GameplayInputPlayStyle,
     previous_steps: Option<[usize; MAX_PLAYERS]>,
     steps: [usize; MAX_PLAYERS],
-    mut preferred: [usize; MAX_PLAYERS],
+    preferred: [usize; MAX_PLAYERS],
 ) -> ([usize; MAX_PLAYERS], [usize; MAX_PLAYERS]) {
     use GameplayInputPlayStyle as Style;
 
@@ -85,7 +125,14 @@ pub fn synchronize_song_charts(
     }
 
     let source = usize::from(previous_steps.is_none_or(|previous| previous[1] != steps[1]));
-    let selected = steps[source];
+    match_song_chart_slots(steps[source], preferred, source)
+}
+
+fn match_song_chart_slots(
+    selected: usize,
+    mut preferred: [usize; MAX_PLAYERS],
+    source: usize,
+) -> ([usize; MAX_PLAYERS], [usize; MAX_PLAYERS]) {
     if selected < STANDARD_DIFFICULTY_COUNT {
         preferred[1 - source] = selected;
     }
