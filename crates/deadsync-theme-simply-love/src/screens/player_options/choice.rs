@@ -286,7 +286,7 @@ pub fn apply_choice_delta(state: &mut State, player_idx: usize, delta: isize, wr
         .display_order()
         .get(row_idx)
         .and_then(|&id| state.pane().row_map.get(id))
-        && row_supports_inline_nav(row)
+        && row_uses_inline_navigation(state, row_idx)
     {
         if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.id) {
             change_choice_for_player(state, idx, delta, wrap);

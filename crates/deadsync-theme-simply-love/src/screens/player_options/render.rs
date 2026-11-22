@@ -412,7 +412,8 @@ pub fn push_actors(
         let mut sl_gray = deadlib_present::color::rgba_hex("#808080");
         sl_gray[3] *= a;
         // Some rows should display all choices inline
-        let show_all_choices_inline = row_shows_all_choices_inline(row.id);
+        let show_all_choices_inline = row_shows_all_choices_inline(row.id)
+            && !row_uses_single_value_layout(state, row, item_idx);
         let show_arcade_next_row = arcade_next_row_visible(state, item_idx);
         // Choice area: For single-choice rows (ShowOneInRow), use ItemsLongRowP1X positioning
         // For multi-choice rows (ShowAllInRow), use ItemsStartX positioning
@@ -1003,7 +1004,8 @@ pub(super) fn draw_inline_choices(
         rc.fc.state.pane().inline_choice_start[rc.row.id.index()],
         inline_choice_left_x_for_row(rc.fc.state, rc.item_idx),
     );
-    if viewport.has_previous {
+    let show_scroll_hints = !rc.fc.active[P1] || !rc.fc.active[P2];
+    if show_scroll_hints && viewport.has_previous {
         actors.push(act!(text: font("miso"): settext("<"):
             align(0.0, 0.5): xy(choice_inner_left, rc.current_row_y):
             zoom(value_zoom):
@@ -1011,7 +1013,7 @@ pub(super) fn draw_inline_choices(
             z(Z_ROW_FOREGROUND)
         ));
     }
-    if viewport.has_next {
+    if show_scroll_hints && viewport.has_next {
         let last_idx = viewport.end - 1;
         let [last_offset, _] = inline_choice_position_for_view(
             rc.row,
@@ -1115,8 +1117,17 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
         let item_col_left = rc.fc.row_left + TITLE_BG_WIDTH;
         choice_center_x = (rc.fc.row_width - TITLE_BG_WIDTH).mul_add(0.5, item_col_left);
     }
-    let choice_idx = rc.row.selected_choice_index[primary_player_idx]
-        .min(rc.row.choices.len().saturating_sub(1));
+    let single_value_fallback = row_uses_single_value_layout(rc.fc.state, rc.row, rc.item_idx);
+    let choice_index = |player_idx: usize| {
+        let selected = rc.row.selected_choice_index[player_idx];
+        if single_value_fallback && matches!(rc.row.behavior, RowBehavior::Bitmask(_)) {
+            focused_inline_choice_index(rc.fc.state, player_idx, rc.item_idx).unwrap_or(selected)
+        } else {
+            selected
+        }
+        .min(rc.row.choices.len().saturating_sub(1))
+    };
+    let choice_idx = choice_index(primary_player_idx);
     let choice_color = if rc.is_active {
         [1.0, 1.0, 1.0, rc.a]
     } else {
@@ -1161,19 +1172,27 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
     ));
     let line_thickness = underline_thickness();
     let underline_y = draw_h.mul_add(0.5, rc.current_row_y) + underline_offset();
-    let mut line_color =
-        color::decorative_rgba(player_color_index(rc.fc.state, primary_player_idx));
-    line_color[3] *= rc.a;
-    actors.push(act!(quad:
-        align(0.0, 0.5):
-        xy(draw_w.mul_add(-0.5, choice_center_x), underline_y):
-        zoomto(draw_w.ceil(), line_thickness):
-        diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-        z(Z_ROW_FOREGROUND)
-    ));
+    let bitmask_choice_active = |player_idx: usize, selected_idx: usize| {
+        !matches!(rc.row.behavior, RowBehavior::Bitmask(_))
+            || multi_select_mask(rc.fc.state, rc.row, player_idx).is_some_and(|mask| {
+                u16::checked_shl(1, selected_idx as u32).is_some_and(|bit| mask & bit != 0)
+            })
+    };
+    if bitmask_choice_active(primary_player_idx, choice_idx) {
+        let mut line_color =
+            color::decorative_rgba(player_color_index(rc.fc.state, primary_player_idx));
+        line_color[3] *= rc.a;
+        actors.push(act!(quad:
+            align(0.0, 0.5):
+            xy(draw_w.mul_add(-0.5, choice_center_x), underline_y):
+            zoomto(draw_w.ceil(), line_thickness):
+            diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+            z(Z_ROW_FOREGROUND)
+        ));
+    }
 
     if rc.fc.show_p2 && rc.row.id != RowId::MusicRate {
-        let p2_idx = rc.row.selected_choice_index[P2].min(rc.row.choices.len().saturating_sub(1));
+        let p2_idx = choice_index(P2);
         let (content, draw_w) = display(P2, p2_idx);
         let center_x = rc.fc.option_column_x[P2];
         actors.push(act!(text: font("miso"): settext(content):
@@ -1181,15 +1200,17 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
             diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
             z(Z_ROW_FOREGROUND)
         ));
-        let mut line_color = color::decorative_rgba(player_color_index(rc.fc.state, P2));
-        line_color[3] *= rc.a;
-        actors.push(act!(quad:
-            align(0.0, 0.5):
-            xy(draw_w.mul_add(-0.5, center_x), underline_y):
-            zoomto(draw_w.ceil(), line_thickness):
-            diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-            z(Z_ROW_FOREGROUND)
-        ));
+        if bitmask_choice_active(P2, p2_idx) {
+            let mut line_color = color::decorative_rgba(player_color_index(rc.fc.state, P2));
+            line_color[3] *= rc.a;
+            actors.push(act!(quad:
+                align(0.0, 0.5):
+                xy(draw_w.mul_add(-0.5, center_x), underline_y):
+                zoomto(draw_w.ceil(), line_thickness):
+                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                z(Z_ROW_FOREGROUND)
+            ));
+        }
     }
     draw_cursor_ring(actors, rc.fc.state, rc.fc.active, rc.item_idx, rc.a);
 }

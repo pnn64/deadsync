@@ -3518,14 +3518,28 @@ pub(super) mod tests {
                             let cursor = cursor_dest_for_player(&state, &assets, player).unwrap();
                             let row = state.pane().row_map.get_at(row_idx).unwrap();
                             let [x, y] = inline_choice_position(row, i);
-                            assert!(
-                                (cursor.0 - (left + x + row.choice_widths[i] * scale * 0.5)).abs()
-                                    < 0.001
-                            );
-                            assert!(
-                                (cursor.1 - (state.pane().row_tweens[row_idx].to_y + y)).abs()
-                                    < 0.001
-                            );
+                            if active[P1] && active[P2] {
+                                assert!(row_uses_single_value_layout(&state, row, row_idx));
+                                assert!(
+                                    (cursor.0 - player_option_column_x(player)).abs() < 0.001
+                                );
+                                assert!(
+                                    (cursor.1 - state.pane().row_tweens[row_idx].to_y).abs()
+                                        < 0.001
+                                );
+                            } else {
+                                assert!(
+                                    (cursor.0
+                                        - (left + x + row.choice_widths[i] * scale * 0.5))
+                                        .abs()
+                                        < 0.001
+                                );
+                                assert!(
+                                    (cursor.1 - (state.pane().row_tweens[row_idx].to_y + y))
+                                        .abs()
+                                        < 0.001
+                                );
+                            }
                             commit_inline_focus_selection(&mut state, player, row_idx);
                             assert!(super::super::choice::toggle_bitmask_row_generic(
                                 &mut state,
@@ -5905,6 +5919,76 @@ pub(super) mod tests {
         assert!(start > 0);
         assert!(last.start <= last_choice && last_choice < last.end);
         assert!(last.has_previous && !last.has_next);
+    }
+
+    #[test]
+    fn overflowing_single_choice_lists_use_per_player_values_in_versus() {
+        use super::super::inline_nav::{row_uses_inline_navigation, row_uses_single_value_layout};
+        use deadlib_present::actors::Actor;
+        use deadlib_present::space;
+        ensure_i18n();
+        space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+        space::set_current_window_px(1280, 720);
+
+        let (mut state, asset_manager) = setup_versus_state();
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let row_idx = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Perspective)
+            .expect("Perspective row present");
+        let row = state
+            .pane_mut()
+            .row_map
+            .get_mut(RowId::Perspective)
+            .unwrap();
+        row.selected_choice_index = [0, 1];
+        row.choice_widths = vec![200.0; row.choices.len()].into_boxed_slice();
+        let mut offset = 0.0;
+        row.choice_offsets = row
+            .choice_widths
+            .iter()
+            .map(|width| {
+                let current = offset;
+                offset += *width + super::super::render::INLINE_CHOICE_SPACING;
+                current
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        let row = state.pane().row_map.get(RowId::Perspective).unwrap();
+        assert!(row_uses_single_value_layout(&state, row, row_idx));
+        assert!(!row_uses_inline_navigation(&state, row_idx));
+        let selected = [row.choices[0].as_str(), row.choices[1].as_str()];
+        let actors = super::get_actors(&state, &asset_manager);
+        let texts = actors
+            .iter()
+            .filter_map(|actor| match actor {
+                Actor::Text { content, .. } => Some(content.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(!texts.contains(&"<"));
+        assert!(!texts.contains(&">"));
+        assert_eq!(
+            texts.iter().filter(|text| selected.contains(text)).count(),
+            2,
+            "two-player fallback should show one selected value per player"
+        );
+
+        state.active = [true, false];
+        assert!(!row_uses_single_value_layout(
+            &state,
+            state.pane().row_map.get(RowId::Perspective).unwrap(),
+            row_idx
+        ));
+        let actors = super::get_actors(&state, &asset_manager);
+        assert!(actors.iter().any(|actor| matches!(
+            actor,
+            Actor::Text { content, .. } if content.as_str() == ">"
+        )));
     }
 
     #[test]

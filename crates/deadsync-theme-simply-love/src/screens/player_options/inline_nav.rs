@@ -63,6 +63,30 @@ pub(super) fn inline_choice_available_width(left_x: f32) -> f32 {
     (right - left_x - INLINE_SPACING).max(0.0)
 }
 
+pub(super) fn row_uses_single_value_layout(state: &State, row: &Row, row_idx: usize) -> bool {
+    if !state.active[P1]
+        || !state.active[P2]
+        || !row_supports_inline_nav(row)
+        || !state.pane().choice_layout_ready
+        || row.choice_offsets.len() != row.choices.len()
+        || row.choice_widths.len() != row.choices.len()
+    {
+        return false;
+    }
+
+    let total_width = row.choice_offsets.last().copied().unwrap_or(0.0)
+        + row.choice_widths.last().copied().unwrap_or(0.0);
+    total_width > inline_choice_available_width(inline_choice_left_x_for_row(state, row_idx))
+}
+
+pub(super) fn row_uses_inline_navigation(state: &State, row_idx: usize) -> bool {
+    state.pane().row_map.get_at(row_idx).is_some_and(|row| {
+        row_supports_inline_nav(row)
+            && (matches!(row.behavior, RowBehavior::Bitmask(_))
+                || !row_uses_single_value_layout(state, row, row_idx))
+    })
+}
+
 pub(super) fn inline_choice_viewport(
     row: &Row,
     requested_start: usize,
@@ -241,7 +265,7 @@ pub(super) fn prepare_choice_layouts(state: &mut State, asset_manager: &AssetMan
 
 fn inline_row(state: &State, row_idx: usize) -> Option<&Row> {
     let row = state.pane().row_map.get_at(row_idx)?;
-    row_supports_inline_nav(row).then_some(row)
+    row_uses_inline_navigation(state, row_idx).then_some(row)
 }
 
 pub(super) fn focused_inline_choice_index(

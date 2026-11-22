@@ -404,7 +404,7 @@ pub(super) fn cursor_dest_for_player_with_visibility(
         return Some((center_x, y, ring_w, ring_h));
     }
 
-    if row_shows_all_choices_inline(row.id) {
+    if row_shows_all_choices_inline(row.id) && !row_uses_single_value_layout(state, row, row_idx) {
         if row.choices.is_empty() {
             return None;
         }
@@ -470,8 +470,15 @@ pub(super) fn cursor_dest_for_player_with_visibility(
         center_x = music_rate_center_x;
     }
 
-    let selected_idx =
-        row.selected_choice_index[player_idx].min(row.choices.len().saturating_sub(1));
+    let selected_idx = if matches!(row.behavior, RowBehavior::Bitmask(_))
+        && row_uses_single_value_layout(state, row, row_idx)
+    {
+        focused_inline_choice_index(state, player_idx, row_idx)
+            .unwrap_or(row.selected_choice_index[player_idx])
+    } else {
+        row.selected_choice_index[player_idx]
+    }
+    .min(row.choices.len().saturating_sub(1));
     let (draw_w, draw_h) = if arcade_row_focuses_next_row(state, player_idx, row_idx) {
         let [width, height] = arcade_next_row_size(state, asset_manager);
         (width, height)

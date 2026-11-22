@@ -476,7 +476,7 @@ pub(super) fn move_arcade_horizontal_focus(
     else {
         return false;
     };
-    let row_supports_inline = row_supports_inline_nav(row);
+    let row_supports_inline = row_uses_inline_navigation(state, row_idx);
     let num_choices = row.choices.len();
     let current_choice = row
         .selected_choice_index
@@ -609,7 +609,7 @@ pub(super) fn handle_start_event(
         .get(row_index)
         .and_then(|&id| state.pane().row_map.get(id))?;
     let id = row.id;
-    let row_supports_inline = row_supports_inline_nav(row);
+    let row_supports_inline = row_uses_inline_navigation(state, row_index);
     let row_toggles = row_toggles_with_start(row);
     if row_supports_inline {
         let changed = commit_inline_focus_selection(state, player_idx, row_index);
