@@ -14,6 +14,48 @@ fn contains_rust(source: &str, expected: &str) -> bool {
 }
 
 #[test]
+fn gameplay_noteskin_preparation_stays_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let owner = production_source(
+        &root.join("crates/deadsync-assets/src/gameplay_noteskin.rs"),
+    );
+    for contract in [
+        "pub struct GameplayNoteskinAssets",
+        "pub fn gameplay_noteskin_assets(",
+        "pub fn gameplay_data(",
+    ] {
+        assert!(
+            owner.contains(contract),
+            "game noteskin owner is missing {contract}"
+        );
+    }
+
+    let theme_path = root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs");
+    let theme = production_source(&theme_path);
+    assert!(contains_rust(
+        &theme,
+        "pub use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};",
+    ));
+    for file in production_rust_files(&root.join("crates/deadsync-theme-simply-love/src")) {
+        let source = production_source(&file);
+        for implementation in [
+            "struct GameplayNoteskinAssets",
+            "impl GameplayNoteskinAssets",
+            "fn gameplay_noteskin_assets(",
+            "fn noteskin_effects_from_assets(",
+            "fn gameplay_receptor_glow_behavior(",
+            "fn gameplay_receptor_step_behavior(",
+        ] {
+            assert!(
+                !source.contains(implementation),
+                "{} owns canonical noteskin preparation: {implementation}",
+                rel_path(&root, &file),
+            );
+        }
+    }
+}
+
+#[test]
 fn chart_lua_playback_has_no_theme_dependency() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest = read_source(root.join("crates/deadsync-song-lua/Cargo.toml"))

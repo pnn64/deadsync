@@ -176,7 +176,12 @@ fn production_crate_dependencies_follow_layer_direction() {
 #[test]
 fn game_controller_test_builds_stay_independent_of_themes_and_application() {
     let metadata = workspace_metadata();
-    for owner in ["deadsync-gameplay", "deadsync-online", "deadsync-song-lua"] {
+    for owner in [
+        "deadsync-assets",
+        "deadsync-gameplay",
+        "deadsync-online",
+        "deadsync-song-lua",
+    ] {
         let failures = dependency_violations(&metadata, Some(owner));
         assert!(
             failures.is_empty(),

@@ -4,8 +4,8 @@ use super::{
     hold_explosion_enabled, judgment_frame_size, prewarm_actor_resources,
 };
 use crate::notefield_style::notefield_style;
-use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::{ActorResourceArena, SpriteSource};
+use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{ActiveHold, hold_explosion_active, hold_head_render_flags};

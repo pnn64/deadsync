@@ -12,7 +12,10 @@ deadlib-render = { path = "../deadlib-render" }
 deadlib-video = { path = "../deadlib-video" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-config = { path = "../deadsync-config" }
+deadsync-core = { path = "../deadsync-core" }
+deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-noteskin = { path = "../deadsync-noteskin" }
+deadsync-profile = { path = "../deadsync-profile" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 chrono = "0.4.45"
 image = "0.25.10"

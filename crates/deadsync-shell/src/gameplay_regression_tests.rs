@@ -1,10 +1,8 @@
-use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     ActiveComboMilestone, ComboMilestoneKind, CourseDisplayCarry, CourseDisplayTiming,
     CourseDisplayTotals, GameplayConfig, GameplayMiniIndicatorData, GameplayNoteskinData,
-    GameplayNoteskinEffects, GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior,
-    GameplaySession, GameplayTween, GameplayViewport, LeadInTiming, MINE_EXPLOSION_DURATION,
-    RECEPTOR_STEP_WINDOWS, ReplayInputEdge, ReplayOffsetSnapshot, TAP_EXPLOSION_WINDOWS,
+    GameplaySession, GameplayViewport, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
     cached_hold_end_time_ns, refresh_active_attack_masks,
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -22,7 +20,7 @@ type State = deadsync_theme_simply_love::screens::gameplay::GameplayCoreState;
 pub(crate) mod tests {
     use super::*;
 
-    use super::{MAX_COLS, MAX_PLAYERS, ScrollSpeedSetting, refresh_active_attack_masks};
+    use super::{MAX_PLAYERS, ScrollSpeedSetting, refresh_active_attack_masks};
     use deadlib_present::{
         actors::{Actor, SpriteSource},
         compose::{self, TextureContext, TextureMeta},
@@ -32,14 +30,13 @@ pub(crate) mod tests {
         DrawOp,
         frame_compare::{compare_render_frames, compare_render_frames_semantic},
     };
-    use deadsync_assets::noteskin::{self, Noteskin};
+    use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
+    use deadsync_assets::noteskin;
     use deadsync_assets::song_lua::compile_song_lua;
     use deadsync_chart::SongData;
     use deadsync_chart::{ChartData, GameplayChartData};
     use deadsync_core::note::NoteType;
-    use deadsync_noteskin::{
-        NoteskinSlot, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
-    };
+    use deadsync_noteskin::{NoteskinSlot, Style};
     use deadsync_profile as profile_data;
     use deadsync_profile::compat as profile;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
@@ -71,7 +68,7 @@ pub(crate) mod tests {
                     .unwrap_or_else(|error| panic!("dance/{name} should load: {error}")),
             )
         };
-        let assets = screen_gameplay::GameplayNoteskinAssets {
+        let assets = GameplayNoteskinAssets {
             noteskin: [Some(load("lambda")), None],
             mine_noteskin: [Some(load("cel")), None],
             receptor_noteskin: [Some(load("ddr-note")), None],
@@ -200,171 +197,6 @@ pub(crate) mod tests {
         profile::set_session_player_side(player_side);
         profile::set_session_joined(p1_joined, p2_joined);
         f()
-    }
-
-    #[inline(always)]
-    fn test_gameplay_tween(tween: TweenType) -> super::GameplayTween {
-        match tween {
-            TweenType::Linear => super::GameplayTween::Linear,
-            TweenType::Accelerate => super::GameplayTween::Accelerate,
-            TweenType::Decelerate => super::GameplayTween::Decelerate,
-            TweenType::Smooth => super::GameplayTween::Smooth,
-        }
-    }
-
-    #[inline(always)]
-    fn test_gameplay_receptor_glow_behavior(
-        behavior: ReceptorGlowBehavior,
-    ) -> super::GameplayReceptorGlowBehavior {
-        super::GameplayReceptorGlowBehavior {
-            press_duration: behavior.press_duration,
-            press_alpha_start: behavior.press_alpha_start,
-            press_alpha_end: behavior.press_alpha_end,
-            press_zoom_start: behavior.press_zoom_start,
-            press_zoom_end: behavior.press_zoom_end,
-            press_tween: test_gameplay_tween(behavior.press_tween),
-            lift_finishes_press: behavior.lift_finishes_press,
-            lift_interrupts_press: behavior.lift_interrupts_press,
-            lift_alpha_start: behavior.lift_alpha_start,
-            lift_zoom_start: behavior.lift_zoom_start,
-            duration: behavior.duration,
-            alpha_start: behavior.alpha_start,
-            alpha_end: behavior.alpha_end,
-            zoom_start: behavior.zoom_start,
-            zoom_end: behavior.zoom_end,
-            tween: test_gameplay_tween(behavior.tween),
-            blend_add: behavior.blend_add,
-        }
-    }
-
-    #[inline(always)]
-    fn test_gameplay_receptor_step_behavior(
-        behavior: ReceptorStepBehavior,
-    ) -> super::GameplayReceptorStepBehavior {
-        super::GameplayReceptorStepBehavior {
-            duration: behavior.duration,
-            zoom_start: behavior.zoom_start,
-            zoom_end: behavior.zoom_end,
-            tween: test_gameplay_tween(behavior.tween),
-            interrupts: behavior.interrupts,
-        }
-    }
-
-    fn test_noteskin_data(
-        cols_per_player: usize,
-        num_players: usize,
-        player_profiles: &[profile_data::Profile; MAX_PLAYERS],
-        session: &super::GameplaySession,
-    ) -> super::GameplayNoteskinData {
-        let style = Style {
-            num_cols: cols_per_player,
-            num_players: 1,
-        };
-        let mut runtime_profiles = (*player_profiles).clone();
-        if session.p2_runtime_player() {
-            runtime_profiles[0] = runtime_profiles[1].clone();
-        }
-        let noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
-            if player >= num_players {
-                return None;
-            }
-            let skin = runtime_profiles[player].noteskin.to_string();
-            noteskin::load_itg_skin_cached(&style, &skin).ok()
-        });
-        let mine_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
-            if player >= num_players {
-                return None;
-            }
-            let skin = runtime_profiles[player]
-                .resolved_mine_noteskin()
-                .to_string();
-            noteskin::load_itg_skin_cached(&style, &skin)
-                .ok()
-                .or_else(|| noteskin[player].clone())
-        });
-        let receptor_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] =
-            std::array::from_fn(|player| {
-                if player >= num_players {
-                    return None;
-                }
-                let skin = runtime_profiles[player]
-                    .resolved_receptor_noteskin()
-                    .to_string();
-                noteskin::load_itg_skin_cached(&style, &skin)
-                    .ok()
-                    .or_else(|| noteskin[player].clone())
-            });
-        let tap_explosion_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] =
-            std::array::from_fn(|player| {
-                if player >= num_players {
-                    return None;
-                }
-                let Some(skin) = runtime_profiles[player].resolved_tap_explosion_noteskin() else {
-                    return None;
-                };
-                noteskin::load_itg_skin_cached(&style, skin.as_str())
-                    .ok()
-                    .or_else(|| noteskin[player].clone())
-            });
-        let mut effects = super::GameplayNoteskinEffects::default();
-        let cols = cols_per_player.min(MAX_COLS);
-        for player in 0..num_players.min(MAX_PLAYERS) {
-            let receptor_ns = receptor_noteskin[player]
-                .as_deref()
-                .or_else(|| noteskin[player].as_deref());
-            if let Some(ns) = receptor_ns {
-                effects.set_receptor_glow_behavior(
-                    player,
-                    test_gameplay_receptor_glow_behavior(ns.receptor_glow_behavior),
-                );
-                for col in 0..cols {
-                    for window in super::RECEPTOR_STEP_WINDOWS {
-                        effects.set_receptor_step_behavior(
-                            player,
-                            col,
-                            window,
-                            test_gameplay_receptor_step_behavior(
-                                ns.receptor_step_behavior_for_col(col, window),
-                            ),
-                        );
-                    }
-                }
-            }
-
-            let tap_ns = if runtime_profiles[player].tap_explosion_noteskin_hidden() {
-                None
-            } else {
-                tap_explosion_noteskin[player]
-                    .as_deref()
-                    .or_else(|| noteskin[player].as_deref())
-            };
-            if let Some(ns) = tap_ns {
-                for col in 0..cols {
-                    for window in super::TAP_EXPLOSION_WINDOWS {
-                        for bright in [false, true] {
-                            effects.set_tap_explosion_duration(
-                                player,
-                                col,
-                                window,
-                                bright,
-                                ns.tap_explosion_for_col_with_bright(col, window, bright)
-                                    .map(deadsync_noteskin::TapExplosion::duration),
-                            );
-                        }
-                    }
-                }
-            }
-
-            let duration = mine_noteskin[player]
-                .as_deref()
-                .or_else(|| noteskin[player].as_deref())
-                .and_then(|ns| ns.mine_hit_explosion.as_ref())
-                .map_or(super::MINE_EXPLOSION_DURATION, |explosion| {
-                    explosion.duration()
-                });
-            effects.set_mine_explosion_duration(player, duration);
-        }
-        super::GameplayNoteskinData { effects }
     }
 
     fn test_dir(name: &str) -> PathBuf {
@@ -7543,24 +7375,23 @@ return Def.ActorFrame{}
                             player_profiles[0].scroll_speed,
                             player_profiles[1].scroll_speed,
                         ];
-                        let noteskin_data = test_noteskin_data(
-                            session.play_style.cols_per_player(),
-                            session.play_style.player_count(),
-                            &player_profiles,
-                            &session,
-                        );
                         let runtime_profiles =
                             deadsync_profile_gameplay::gameplay_runtime_profile_data(
                                 &player_profiles,
                                 &session,
                             );
-                        let noteskin_assets = screen_gameplay::gameplay_noteskin_assets(
+                        let noteskin_assets = gameplay_noteskin_assets(
                             session.play_style.cols_per_player(),
                             session.play_style.player_count(),
                             &runtime_profiles,
                             song.simfile_path.parent().expect("song directory"),
                             &[None, None],
                             0.0,
+                        );
+                        let noteskin_data = noteskin_assets.gameplay_data(
+                            session.play_style.cols_per_player(),
+                            session.play_style.player_count(),
+                            &runtime_profiles,
                         );
                         let context = deadsync_profile_gameplay::song_lua_compile_context(
                             song.as_ref(),

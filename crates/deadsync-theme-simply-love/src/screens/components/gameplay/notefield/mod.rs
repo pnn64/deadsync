@@ -1,8 +1,8 @@
 use crate::color;
 use crate::screens::gameplay::GameplayCoreState as State;
-use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
 use deadlib_present::space::*;
+use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_gameplay::{

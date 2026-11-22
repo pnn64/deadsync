@@ -97,6 +97,16 @@ and the meter-eight boundary. Survival gains pass through unchanged so existing
 initialization applies its minimum and nonfinite handling. The shell retains its
 life-config wrapper and calls it with the existing reload-adjusted entry view.
 
+`deadsync-assets::gameplay_noteskin` owns gameplay noteskin preparation: chart
+overrides, profile-part migration, bundled-default fallback, per-part composition,
+and receptor startup beats. Its `GameplayNoteskinAssets` keeps the existing shared
+asset references and prepares the scalar `GameplayNoteskinData` consumed by the
+simulation. Receptor glow/step behavior and tap/mine explosion lifetimes therefore
+come from the same game-owned adapter for every theme. Hidden tap explosions,
+active-player limits, and copy-on-write changes to cached skins retain their
+existing behavior. Preparation still runs once during song loading; themes retain
+their render caches and HUD appearance.
+
 `deadsync-song-lua::gameplay_session` owns the live song scene, callback setup,
 Update/input/Draw ordering, output buffering, deferred reloads, and exit clocks.
 The shell calls its controller directly. The statically bound host adapter
@@ -230,6 +240,11 @@ Workspace callers are updated for these source-level changes:
 - Initialize gameplay through `init_gameplay_runtime`.
   `GameplayControlRuntimeState` now keeps one-shot target handling private and
   no longer supports struct-literal construction outside `deadsync-gameplay`.
+- Use `deadsync_assets::gameplay_noteskin` for the asset bundle and preparation
+  function. The Simply Love gameplay module reexports `GameplayNoteskinAssets`
+  and `gameplay_noteskin_assets` under their existing public paths. The bundle's
+  `gameplay_data` method is public so consumers can use the canonical effect
+  conversion without depending on a theme.
 - `State::song_lua` is now a `SongLuaGameplaySession`. Its scene accessors retain
   `as_ref`, `as_mut`, `is_some`, `is_none`, and `take`; direct `Option` pattern
   matches or assignments must use the session API. Existing theme update/input
@@ -264,13 +279,17 @@ target-specific, and build dependencies are included. Development dependencies
 are excluded because tests may exercise multiple layers together. Third-party
 dependency internals are not traversed.
 
-The gameplay, online, and song-Lua controller crates additionally have a
-test-build guard: their direct development dependencies and production closures
-must remain independent of themes and the application shell. This keeps
-controller behavior tests usable by any theme.
+The game asset crate and the gameplay, online, and song-Lua controller crates
+additionally have a test-build guard: their direct development dependencies and
+production closures must remain independent of themes and the application shell.
+This keeps their behavior tests usable by any theme.
 
 `tests/architecture_boundaries.rs` additionally checks source ownership and the
-specific APIs that protect canonical gameplay and notefield composition. Practice
+specific APIs that protect canonical gameplay and notefield composition. Noteskin
+guards preserve the public compatibility reexports while rejecting theme-owned
+preparation and effect conversion. Game asset tests cover override/fallback
+precedence, component migration, cached-skin isolation, and feedback timing;
+shell gameplay regressions use that same production preparation path. Practice
 guards keep editor state, input/repeat decisions, and rate audio commands in the
 game. Game-owned editor tests exercise the real gameplay core, including held
 input ordering, selection restoration, seeking, playback ranges, rate feedback,
@@ -296,6 +315,7 @@ rewards, actual chart-slot lookup, raw Survival gains, and initialization/carry.
 
 ```sh
 cargo test -p deadsync --test layer_dependencies --test architecture_boundaries
+cargo test -p deadsync-assets --lib gameplay_noteskin
 cargo test -p deadsync-gameplay --lib
 cargo test -p deadsync-gameplay --lib exit_route
 cargo test -p deadsync-gameplay --lib course_progress
@@ -315,11 +335,17 @@ The production crate graph follows these directions. Normal song-Lua lifecycle,
 callback input sequencing, practice playback/editor behavior, and gameplay lobby
 coordination now have game owners, as do Evaluation and Select Music lobby input
 barriers, disconnect handling, and remote song-selection synchronization. Simply
-Love still wraps gameplay state. Course continuation and restart destinations,
+Love still wraps gameplay state, while gameplay noteskin preparation and effect
+conversion now have a game owner. Course continuation and restart destinations,
 course progress, interruption, Endless renewal, course modes, and life selection
 now have game owners. Course preparation and result orchestration still run
 through the shell's course/session code; carry algorithms and score aggregation
 already have game owners.
+
+Course difficulty availability and stage-sequence construction still run in the
+Select Course theme screen, including Endless rerolls. The simfile crate already
+owns individual stage resolution; consolidating the complete sequence there is a
+remaining boundary before the shell can consume a theme-independent course plan.
 
 The shell still uses concrete theme screen types. Consolidate that integration
 behind a theme-neutral presentation interface after the remaining runtime work;
