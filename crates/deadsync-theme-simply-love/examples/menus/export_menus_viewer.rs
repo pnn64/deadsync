@@ -2,8 +2,8 @@ use askama::Template;
 use std::{collections::BTreeSet, path::Path};
 
 use super::{
-    MENUS, PLAYER_OPTIONS_PANES, PLAYER_VARIANT_MENUS, PLAYER_VARIANTS, Result, Size,
-    screenshot_options,
+    MENUS, PLAYER_OPTIONS_PANES, PLAYER_OPTIONS_VARIANTS, PLAYER_VARIANT_MENUS, PLAYER_VARIANTS,
+    Result, Size, screenshot_options,
 };
 
 #[derive(Template)]
@@ -55,15 +55,25 @@ pub(super) fn write_index(output: &Path, sizes: &[Size]) -> Result<()> {
                             }
                         }));
                     } else if menu == "player-options" {
-                        images.extend(PLAYER_OPTIONS_PANES.iter().map(|&(page, label, _)| {
-                            GalleryImage {
-                                resolution: size.name(),
-                                caption: format!("{} · 2P · {}", size.name(), label),
-                                src: format!("{}/player-options-2p-{page}.png", size.name()),
-                                disabled: false,
-                                variant: None,
+                        for &(suffix, player_label, _) in PLAYER_OPTIONS_VARIANTS {
+                            for &(page, pane_label, _) in PLAYER_OPTIONS_PANES {
+                                images.push(GalleryImage {
+                                    resolution: size.name(),
+                                    caption: format!(
+                                        "{} · {} · {}",
+                                        size.name(),
+                                        player_label,
+                                        pane_label
+                                    ),
+                                    src: format!(
+                                        "{}/player-options-{suffix}-{page}.png",
+                                        size.name()
+                                    ),
+                                    disabled: false,
+                                    variant: None,
+                                });
                             }
-                        }));
+                        }
                     } else if menu != "song-select" {
                         images.push(GalleryImage {
                             resolution: size.name(),

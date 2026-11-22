@@ -64,6 +64,11 @@ const PLAYER_VARIANTS: &[PlayerVariant] = &[
         joined: [true, true],
     },
 ];
+const PLAYER_OPTIONS_VARIANTS: &[(&str, &str, [bool; 2])] = &[
+    ("p1-solo", "P1 Solo", [true, false]),
+    ("p2-solo", "P2 Solo", [false, true]),
+    ("2p", "2P", [true, true]),
+];
 const CAPTURE_TIME: f32 = 2.0;
 
 #[derive(Clone, Copy)]
@@ -242,7 +247,7 @@ fn export(
         options.sizes.len()
             * (MENUS.len() - 3
                 + PLAYER_VARIANT_MENUS.len() * (PLAYER_VARIANTS.len() + 2)
-                + PLAYER_OPTIONS_PANES.len()
+                + PLAYER_OPTIONS_VARIANTS.len() * PLAYER_OPTIONS_PANES.len()
                 + screenshot_options::PAGES.len()),
         output.join("index.html").display()
     );
@@ -358,20 +363,22 @@ fn export_player_options(
 ) -> Result<()> {
     let folder = output.join(size.name());
     std::fs::create_dir_all(&folder)?;
-    let mut state = player_options_state(song);
-    for &(name, _, pane) in PLAYER_OPTIONS_PANES {
-        state.current_pane = pane;
-        screens::player_options::prepare_presentation(&mut state, assets);
-        let prepare_started = Instant::now();
-        let actors = screens::player_options::get_actors(&state, assets);
-        let frame = prepare_frame(&actors, backend, assets, metrics)?;
-        captures.draw(
-            backend,
-            &frame,
-            assets.textures(),
-            folder.join(format!("player-options-2p-{name}.png")),
-        )?;
-        timer.record_prepare(prepare_started.elapsed());
+    for &(suffix, _, joined) in PLAYER_OPTIONS_VARIANTS {
+        let mut state = player_options_state(song.clone(), joined);
+        for &(name, _, pane) in PLAYER_OPTIONS_PANES {
+            state.current_pane = pane;
+            screens::player_options::prepare_presentation(&mut state, assets);
+            let prepare_started = Instant::now();
+            let actors = screens::player_options::get_actors(&state, assets);
+            let frame = prepare_frame(&actors, backend, assets, metrics)?;
+            captures.draw(
+                backend,
+                &frame,
+                assets.textures(),
+                folder.join(format!("player-options-{suffix}-{name}.png")),
+            )?;
+            timer.record_prepare(prepare_started.elapsed());
+        }
     }
     Ok(())
 }
@@ -554,20 +561,32 @@ fn content_browser_actors(assets: &AssetManager) -> Vec<Actor> {
 }
 
 fn player_options_actors(song: Arc<deadsync_chart::SongData>, assets: &AssetManager) -> Vec<Actor> {
-    let mut state = player_options_state(song);
+    let mut state = player_options_state(song, [true, true]);
     screens::player_options::prepare_presentation(&mut state, assets);
     screens::player_options::get_actors(&state, assets)
 }
 
-fn player_options_state(song: Arc<deadsync_chart::SongData>) -> screens::player_options::State {
+fn player_options_state(
+    song: Arc<deadsync_chart::SongData>,
+    joined: [bool; 2],
+) -> screens::player_options::State {
     let chart_index = song
         .charts
         .iter()
         .position(|chart| chart.chart_type.eq_ignore_ascii_case("dance-single"))
         .unwrap_or(0);
     let init_view = views::PlayerOptionsInitView {
-        play_style: deadsync_profile::PlayStyle::Versus,
-        joined: [true, true],
+        play_style: if joined == [true, true] {
+            deadsync_profile::PlayStyle::Versus
+        } else {
+            deadsync_profile::PlayStyle::Single
+        },
+        player_side: if joined == [false, true] {
+            deadsync_profile::PlayerSide::P2
+        } else {
+            deadsync_profile::PlayerSide::P1
+        },
+        joined,
         ..Default::default()
     };
     let state = screens::player_options::init(
