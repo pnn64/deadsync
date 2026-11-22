@@ -67,7 +67,6 @@ pub(crate) use input_trace::GameplayInputTrace;
 #[cfg(test)]
 pub(crate) use interaction::ExitIntent;
 pub(crate) use interaction::ShellInteractionState;
-pub(crate) use navigation::{TransitionMusicPaths, transition_audio_plan};
 pub(crate) use runtime::ShellState;
 pub(crate) use session::SessionState;
 pub(crate) use stutter_diag::StutterDiagRecorder;

@@ -34,6 +34,7 @@ pub mod select_style;
 mod select_style_flow;
 pub mod smx_assign;
 pub mod test_lights;
+pub mod transition_audio;
 pub mod transitions;
 
 pub(crate) use crate::views::{DensityGraphSlot, DensityGraphSource};

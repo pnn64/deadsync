@@ -13,7 +13,8 @@ pub use runtime::{
 };
 pub use screen::{Theme, ThemeScreenFlow, ThemeScreenId, ThemeScreens};
 pub use transition::{
-    ThemeTransitions, TransitionCompletion, TransitionFrame, TransitionKind, TransitionState,
+    ThemeTransitionAudio, ThemeTransitions, TransitionAudio, TransitionCompletion, TransitionFrame,
+    TransitionKind, TransitionMusic, TransitionState,
 };
 
 // Keep the theme-facing API while game/engine consumers use the owning crates.

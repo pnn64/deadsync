@@ -12867,6 +12867,52 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
 }
 
 #[test]
+fn transition_audio_presentation_is_owned_by_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let contract = production_source(&root.join("crates/deadsync-theme/src/transition.rs"));
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/transition_audio.rs"),
+    );
+    let shell = production_source(&root.join("crates/deadsync-shell/src/transition_effects.rs"));
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/navigation.rs"));
+    let screen_nav = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    let fade = app
+        .split_once("fn handle_audio_and_profile_on_fade(")
+        .and_then(|(_, tail)| tail.split_once("fn begin_play_session("))
+        .expect("global fade handoff should be present")
+        .0;
+
+    assert!(contract.contains("pub trait ThemeTransitionAudio: Theme"));
+    assert!(contract.contains("pub enum TransitionMusic"));
+    assert!(theme.contains("impl ThemeTransitionAudio for SimplyLoveTheme"));
+    for cue in [
+        "resolve_menu_music_path(",
+        "gameover_music_asset_path(",
+        "assets/music/select_course (loop).ogg",
+        "assets/music/credits.ogg",
+    ] {
+        assert!(theme.contains(cue), "theme should select audio cue {cue}");
+        for adapter in [shell.as_str(), navigation.as_str(), screen_nav.as_str(), fade] {
+            assert!(!adapter.contains(cue), "shell still selects audio cue {cue}");
+        }
+    }
+    for handoff in [
+        "T::transition_audio(",
+        "let entering_gameplay = context.target == T::SCREENS.gameplay",
+        "if context.target == T::SCREENS.practice { TransitionMusic::Stop }",
+        "commands.push(Command::UpdateSessionMusicRate(options.music_rate))",
+        "if audio.stop_preview_on_exit { commands.push(Command::StopMusic); }",
+    ] {
+        assert!(contains_rust(&shell, handoff), "missing fade audio handoff {handoff}");
+    }
+    assert!(contains_rust(fade, "transition_effect_plan::<ActiveTheme>("));
+    assert!(contains_rust(&screen_nav, "ActiveTheme::transition_audio("));
+    assert!(contains_rust(&screen_nav, "!is_play_screen::<ActiveTheme>(current) && ActiveTheme::stop_screen_sfx_on_exit(current, target)"));
+}
+
+#[test]
 fn theme_screen_contract_has_explicit_owners() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let generic_screen = read_source(root.join("crates/deadsync-theme/src/screen.rs"))

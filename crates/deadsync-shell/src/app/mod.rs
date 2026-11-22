@@ -67,7 +67,7 @@ use crate::lighting::{
     lighting_frame_plan, lights_test_view, load_cabinet_light_chart, operator_menu_button_route,
     smx_pad_blackout, smx_pad_gif_frame_plan,
 };
-use crate::navigation::{TransitionMusicPaths, tick_gameplay_during_transition};
+use crate::navigation::tick_gameplay_during_transition;
 use crate::offset_prompt::{
     GameplayOffsetSavePrompt, GameplayOffsetSnapshot, OffsetPromptInput,
     gameplay_offset_prompt_needed, gameplay_offset_prompt_text, gameplay_offset_save_targets,
@@ -8909,14 +8909,18 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let config = config::runtime::get();
-        let player_options = if prev == CurrentScreen::PlayerOptions {
+        let from_player_options = prev == ActiveTheme::SCREENS.player_options;
+        let player_options = if from_player_options {
             let session = profile::get_session_snapshot();
             self.state
                 .screens
                 .player_options_state
                 .as_ref()
                 .map(|state| PlayerOptionsTransition {
-                    speed_mod: &state.speed_mod,
+                    scroll_speed: state
+                        .speed_mod
+                        .each_ref()
+                        .map(player_options::scroll_speed_for_mod),
                     chart_difficulty_index: state.chart_difficulty_index,
                     music_rate: state.music_rate,
                     play_style: session.play_style,
@@ -8925,34 +8929,19 @@ impl App {
         } else {
             None
         };
-        let plan = transition_effect_plan(TransitionEffectContext {
-            previous: prev,
-            target,
-            menu_music_enabled: config.menu_music,
-            gameover_music_enabled: visual_styles::gameover_music_asset_path(
-                config.visual_style,
-                config.srpg_variant,
-            )
-            .is_some(),
-            music_paths: TransitionMusicPaths {
-                menu: screen_nav::menu_music_path(config.visual_style, config.srpg_variant),
-                course: deadsync_assets::resolve_asset_path(
-                    "assets/music/select_course (loop).ogg",
-                ),
-                credits: deadsync_assets::resolve_asset_path("assets/music/credits.ogg"),
-                gameover: screen_nav::gameover_music_path(config.visual_style, config.srpg_variant),
+        let plan = transition_effect_plan::<ActiveTheme>(
+            TransitionEffectContext {
+                previous: prev,
+                target,
+                player_options,
+                select_music_preferred_difficulty: (prev == ActiveTheme::SCREENS.song_selection)
+                    .then_some(self.state.screens.select_music_state.preferred_difficulty_index),
             },
-            player_options,
-            select_music_preferred_difficulty: (prev == CurrentScreen::SelectMusic).then_some(
-                self.state
-                    .screens
-                    .select_music_state
-                    .preferred_difficulty_index,
-            ),
-        });
+            screen_nav::transition_audio_context(&config),
+        );
         // Lua Sound actors and their detached overlapping voices belong to the
         // outgoing gameplay screen, including an authored gameplay reload.
-        if plan.stop_screen_sfx || prev == CurrentScreen::Gameplay {
+        if plan.stop_screen_sfx {
             self.audio.stop_screen_sfx();
             self.ui_sfx.screen.clear();
         }
@@ -8962,7 +8951,7 @@ impl App {
             self.dynamic_media
                 .set_background(&mut self.asset_manager, backend, None, 0.0, false);
         }
-        if prev == CurrentScreen::PlayerOptions {
+        if from_player_options {
             for command in &plan.commands {
                 if let Command::UpdateScrollSpeed { side, setting } = command {
                     debug!("Saved scroll speed ({side:?}): {setting}");
@@ -8974,7 +8963,7 @@ impl App {
         }
         if let Some(preferred) = plan.preferred_difficulty_index {
             self.state.session.preferred_difficulty_index = preferred;
-            if prev == CurrentScreen::PlayerOptions {
+            if from_player_options {
                 debug!("Updated preferred difficulty index to {preferred} from PlayerOptions");
             }
         }

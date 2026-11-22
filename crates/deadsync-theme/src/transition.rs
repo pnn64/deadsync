@@ -1,4 +1,5 @@
 use crate::Theme;
+use std::path::PathBuf;
 
 /// Presentation transitions between screens supplied by a theme.
 pub trait ThemeTransitions: Theme {
@@ -14,6 +15,39 @@ pub trait ThemeTransitions: Theme {
         screen: Self::Screen,
         context: Self::EntryContext<'_>,
     ) -> (Vec<Self::Actor>, f32);
+}
+
+/// Presentation audio for a screen transition. The application owns stage audio.
+pub trait ThemeTransitionAudio: Theme {
+    type AudioContext;
+
+    fn transition_audio(
+        from: Self::Screen,
+        to: Self::Screen,
+        kind: TransitionKind,
+        context: Self::AudioContext,
+    ) -> TransitionAudio;
+
+    fn stop_screen_sfx_on_exit(from: Self::Screen, to: Self::Screen) -> bool;
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TransitionAudio {
+    pub music: TransitionMusic,
+    /// Finish the outgoing preview after the application commits selection settings.
+    pub stop_preview_on_exit: bool,
+}
+
+/// Music on the shared preview and presentation channel.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum TransitionMusic {
+    #[default]
+    Keep,
+    Stop,
+    Play {
+        path: PathBuf,
+        looping: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -425,6 +425,11 @@ and player options. The shell uses those IDs for stage transitions, course
 continuation, and keeping the temporary Practice rate across player options.
 Themes can choose other IDs and add screens while using the same stage routing.
 
+`ThemeTransitionAudio` supplies presentation music, preview continuity, and
+screen sound cleanup. Simply Love resolves tracks when a cue starts. The shell
+applies the theme's music plan in order with profile updates and retains control
+of audio and media on Gameplay and Practice routes.
+
 Gameplay and Practice use the full stage lifecycle for transitions. Their faded
 routes use game-owned entry, restart, and exit durations. The shell evaluates
 the gameplay tick condition before advancing the transition. Pending

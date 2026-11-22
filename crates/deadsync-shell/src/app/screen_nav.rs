@@ -3,44 +3,36 @@ use crate::ActiveTheme;
 use crate::interaction::ProcessExitRequest;
 use crate::navigation::{
     FadeCompletionEffect, NavigationTransitionStart, ProcessExitNavigationEffect,
-    actor_transition_music_commands, apply_actor_entry_transition, apply_actor_fade_out_transition,
-    apply_global_entry_transition, apply_global_fade_out_transition, course_plan_required,
-    fade_completion_plan, navigation_transition_effect_plan, practice_music_rate_on_screen_change,
-    process_exit_navigation_plan, screen_change_plan, stage_entry_duration, stage_exit_duration,
-    write_current_screen_file,
+    apply_actor_entry_transition, apply_actor_fade_out_transition, apply_global_entry_transition,
+    apply_global_fade_out_transition, course_plan_required, fade_completion_plan, is_play_screen,
+    navigation_transition_effect_plan, practice_music_rate_on_screen_change, process_exit_navigation_plan,
+    screen_change_plan, stage_entry_duration, stage_exit_duration, write_current_screen_file,
 };
 use crate::screen_flow::{navigation_route_plan, preferred_play_style_for_joined};
+use crate::transition_effects::transition_music_command;
 use deadlib_present::actors::Actor;
 use deadsync_config as config;
 use deadsync_gameplay::course_progress::CourseRenewal;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
-use deadsync_theme::{Theme, ThemeScreenFlow, ThemeTransitions};
+use deadsync_theme::{
+    Theme, ThemeScreenFlow, ThemeTransitionAudio, ThemeTransitions, TransitionKind,
+};
+use deadsync_theme_simply_love::screens::transition_audio::TransitionAudioContext;
 use deadsync_theme_simply_love::screens::transitions::PlayEntryTransition;
 use deadsync_theme_simply_love::views::OverscanAdjustmentView;
-use deadsync_theme_simply_love::{SimplyLoveQrLoginService, screens, visual_styles};
+use deadsync_theme_simply_love::{SimplyLoveQrLoginService, screens};
 use log::{debug, info, warn};
 use winit::event_loop::ActiveEventLoop;
 
-pub(super) fn menu_music_path(
-    style: config::theme::VisualStyle,
-    variant: config::theme::SrpgVariant,
-) -> std::path::PathBuf {
-    visual_styles::resolve_menu_music_path(
-        style,
-        variant,
-        deadsync_assets::audio_folder::random_music_path,
-        deadsync_assets::resolve_asset_path,
-    )
-}
-
-pub(super) fn gameover_music_path(
-    style: config::theme::VisualStyle,
-    variant: config::theme::SrpgVariant,
-) -> std::path::PathBuf {
-    visual_styles::gameover_music_asset_path(style, variant)
-        .map(deadsync_assets::resolve_asset_path)
-        .unwrap_or_default()
+pub(super) fn transition_audio_context(
+    config: &config::app_config::Config,
+) -> TransitionAudioContext {
+    TransitionAudioContext {
+        menu_music_enabled: config.menu_music,
+        style: config.visual_style,
+        variant: config.srpg_variant,
+    }
 }
 
 pub(super) fn overscan_view() -> OverscanAdjustmentView {
@@ -239,16 +231,15 @@ impl App {
         self.prepare_screen_state(prev, target_screen);
 
         let config = config::runtime::get();
-        let commands = actor_transition_music_commands(
+        let audio = ActiveTheme::transition_audio(
             prev,
             target_screen,
-            config.menu_music,
-            visual_styles::gameover_music_asset_path(config.visual_style, config.srpg_variant)
-                .is_some(),
-            menu_music_path(config.visual_style, config.srpg_variant),
-            gameover_music_path(config.visual_style, config.srpg_variant),
+            TransitionKind::Actors,
+            transition_audio_context(&config),
         );
-        self.run_commands(commands, event_loop);
+        if let Some(command) = transition_music_command(audio.music) {
+            self.execute_command(command, event_loop);
+        }
 
         if target_screen == CurrentScreen::ConfigurePads {
             // The full screen is reached only from Options (Song Select uses an
@@ -366,11 +357,8 @@ impl App {
             NavigationTransitionStart::ActorFade { from, target } => {
                 self.start_actor_fade(from, target);
             }
-            NavigationTransitionStart::GlobalFade {
-                target,
-                stop_screen_sfx,
-            } => {
-                self.start_global_fade(target, stop_screen_sfx);
+            NavigationTransitionStart::GlobalFade { target } => {
+                self.start_global_fade(target);
             }
         }
     }
@@ -381,13 +369,15 @@ impl App {
         self.sync_gameplay_input_capture();
     }
 
-    fn start_global_fade(&mut self, target: CurrentScreen, stop_screen_sfx: bool) {
+    fn start_global_fade(&mut self, target: CurrentScreen) {
         debug!("Starting global fade out to screen: {target:?}");
-        if stop_screen_sfx {
+        let current = self.state.screens.current_screen;
+        if !is_play_screen::<ActiveTheme>(current)
+            && ActiveTheme::stop_screen_sfx_on_exit(current, target)
+        {
             self.audio.stop_screen_sfx();
         }
-        let (_, out_duration) =
-            self.get_out_transition_for_route(self.state.screens.current_screen, target);
+        let (_, out_duration) = self.get_out_transition_for_route(current, target);
         apply_global_fade_out_transition(&mut self.state.shell, target, out_duration);
         self.sync_gameplay_input_capture();
     }

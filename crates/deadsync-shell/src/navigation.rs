@@ -5,21 +5,6 @@ use deadsync_gameplay::exit_route::GameplayExitDestination;
 use deadsync_theme::{
     ThemeScreenFlow, ThemeTransitions, TransitionKind, TransitionState as ThemeTransitionState,
 };
-use std::path::PathBuf;
-
-pub struct TransitionMusicPaths {
-    pub menu: PathBuf,
-    pub course: PathBuf,
-    pub credits: PathBuf,
-    pub gameover: PathBuf,
-}
-
-pub struct TransitionAudioPlan {
-    pub commands: Vec<Command>,
-    pub stop_screen_sfx: bool,
-    pub clear_play_background: bool,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ScreenChangePlan {
     pub leave_lobby: bool,
@@ -32,7 +17,7 @@ pub enum NavigationTransitionStart<S> {
     DirectEntry { target: S },
     Busy,
     ActorFade { from: S, target: S },
-    GlobalFade { target: S, stop_screen_sfx: bool },
+    GlobalFade { target: S },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -169,140 +154,6 @@ pub fn stage_entry_duration<T: ThemeScreenFlow>(
     }
 }
 
-/// Build audio commands for a completed actor-only screen transition.
-pub fn actor_transition_music_commands(
-    previous: Screen,
-    target: Screen,
-    menu_music_enabled: bool,
-    gameover_music_enabled: bool,
-    menu_path: PathBuf,
-    gameover_path: PathBuf,
-) -> Vec<Command> {
-    let target_menu_music =
-        menu_music_enabled && matches!(target, Screen::SelectColor | Screen::SelectStyle);
-    let previous_menu_music =
-        menu_music_enabled && matches!(previous, Screen::SelectColor | Screen::SelectStyle);
-    let target_gameover_music = target == Screen::GameOver && gameover_music_enabled;
-    let previous_gameover_music = previous == Screen::GameOver && gameover_music_enabled;
-    let keep_preview = matches!(
-        (previous, target),
-        (Screen::SelectMusic, Screen::PlayerOptions) | (Screen::PlayerOptions, Screen::SelectMusic)
-    );
-
-    if target_menu_music {
-        if previous_menu_music {
-            Vec::new()
-        } else {
-            vec![Command::PlayMusic {
-                path: menu_path,
-                looped: true,
-                volume: 1.0,
-            }]
-        }
-    } else if target_gameover_music {
-        if previous_gameover_music {
-            Vec::new()
-        } else {
-            vec![Command::PlayMusic {
-                path: gameover_path,
-                looped: false,
-                volume: 1.0,
-            }]
-        }
-    } else if previous_menu_music || !keep_preview {
-        vec![Command::StopMusic]
-    } else {
-        Vec::new()
-    }
-}
-
-pub fn transition_audio_plan(
-    previous: Screen,
-    target: Screen,
-    menu_music_enabled: bool,
-    gameover_music_enabled: bool,
-    paths: TransitionMusicPaths,
-) -> TransitionAudioPlan {
-    let mut commands = Vec::new();
-    let target_menu_music = menu_music_enabled
-        && matches!(
-            target,
-            Screen::SelectColor | Screen::SelectStyle | Screen::SelectPlayMode
-        );
-    let previous_menu_music = menu_music_enabled
-        && matches!(
-            previous,
-            Screen::SelectColor | Screen::SelectStyle | Screen::SelectPlayMode
-        );
-    let target_course_music = target == Screen::SelectCourse;
-    let previous_course_music = previous == Screen::SelectCourse;
-    let target_credits_music = target == Screen::Credits;
-    let previous_credits_music = previous == Screen::Credits;
-    let target_gameover_music = target == Screen::GameOver && gameover_music_enabled;
-    let previous_gameover_music = previous == Screen::GameOver && gameover_music_enabled;
-    let keep_preview = matches!(
-        (previous, target),
-        (Screen::SelectMusic, Screen::PlayerOptions) | (Screen::PlayerOptions, Screen::SelectMusic)
-    );
-
-    if target_menu_music {
-        if !previous_menu_music {
-            commands.push(Command::PlayMusic {
-                path: paths.menu,
-                looped: true,
-                volume: 1.0,
-            });
-        }
-    } else if target_course_music {
-        if !previous_course_music {
-            commands.push(Command::PlayMusic {
-                path: paths.course,
-                looped: true,
-                volume: 1.0,
-            });
-        }
-    } else if target_credits_music {
-        if !previous_credits_music {
-            commands.push(Command::PlayMusic {
-                path: paths.credits,
-                looped: true,
-                volume: 1.0,
-            });
-        }
-    } else if target_gameover_music {
-        if !previous_gameover_music {
-            commands.push(Command::PlayMusic {
-                path: paths.gameover,
-                looped: false,
-                volume: 1.0,
-            });
-        }
-    } else if (previous_menu_music || previous_course_music || previous_credits_music)
-        && target != Screen::Gameplay
-    {
-        commands.push(Command::StopMusic);
-    } else if target != Screen::Gameplay && !keep_preview {
-        commands.push(Command::StopMusic);
-    }
-
-    let clear_play_background = matches!(previous, Screen::Gameplay | Screen::Practice)
-        && !matches!(target, Screen::Gameplay | Screen::Practice);
-    if clear_play_background
-        && !target_menu_music
-        && !target_course_music
-        && !target_credits_music
-        && !target_gameover_music
-    {
-        commands.push(Command::StopMusic);
-    }
-
-    TransitionAudioPlan {
-        commands,
-        stop_screen_sfx: previous == Screen::Evaluation && target != Screen::Evaluation,
-        clear_play_background,
-    }
-}
-
 pub fn actor_fade_out_transition<T: ThemeTransitions>(
     from: T::Screen,
     target: T::Screen,
@@ -401,10 +252,7 @@ pub fn navigation_transition_start<T: ThemeScreenFlow + ThemeTransitions>(
             NavigationTransitionStart::Busy
         }
         TransitionKind::Actors => NavigationTransitionStart::ActorFade { from, target },
-        TransitionKind::Global => NavigationTransitionStart::GlobalFade {
-            target,
-            stop_screen_sfx: from == T::SCREENS.results && target != T::SCREENS.results,
-        },
+        TransitionKind::Global => NavigationTransitionStart::GlobalFade { target },
     }
 }
 
@@ -567,10 +415,7 @@ mod tests {
         ] {
             assert_eq!(
                 navigation_transition_start::<AlternateTheme>(from, to, &idle),
-                NavigationTransitionStart::GlobalFade {
-                    target: to,
-                    stop_screen_sfx: false
-                }
+                NavigationTransitionStart::GlobalFade { target: to }
             );
         }
         let entry = stage_entry_duration::<AlternateTheme>("dance", true).unwrap();
@@ -648,127 +493,6 @@ mod tests {
             ActiveTheme::transition_kind(Screen::Gameplay, Screen::Evaluation),
             TransitionKind::Global,
         );
-    }
-
-    #[test]
-    fn actor_transition_music_preserves_preview_and_avoids_restarts() {
-        assert!(
-            actor_transition_music_commands(
-                Screen::SelectMusic,
-                Screen::PlayerOptions,
-                true,
-                false,
-                "menu.ogg".into(),
-                "gameover.ogg".into(),
-            )
-            .is_empty()
-        );
-
-        assert!(matches!(
-            actor_transition_music_commands(
-                Screen::Menu,
-                Screen::SelectColor,
-                true,
-                false,
-                "menu.ogg".into(),
-                "gameover.ogg".into(),
-            )
-            .as_slice(),
-            [Command::PlayMusic { looped: true, .. }]
-        ));
-
-        assert!(
-            actor_transition_music_commands(
-                Screen::SelectColor,
-                Screen::SelectStyle,
-                true,
-                false,
-                "menu.ogg".into(),
-                "gameover.ogg".into(),
-            )
-            .is_empty()
-        );
-
-        assert!(matches!(
-            actor_transition_music_commands(
-                Screen::Menu,
-                Screen::GameOver,
-                false,
-                true,
-                "menu.ogg".into(),
-                "gameover.ogg".into(),
-            )
-            .as_slice(),
-            [Command::PlayMusic { looped: false, .. }]
-        ));
-
-        assert!(matches!(
-            actor_transition_music_commands(
-                Screen::Options,
-                Screen::Menu,
-                true,
-                false,
-                "menu.ogg".into(),
-                "gameover.ogg".into(),
-            )
-            .as_slice(),
-            [Command::StopMusic]
-        ));
-    }
-
-    fn music_paths() -> TransitionMusicPaths {
-        TransitionMusicPaths {
-            menu: "menu.ogg".into(),
-            course: "course.ogg".into(),
-            credits: "credits.ogg".into(),
-            gameover: "gameover.ogg".into(),
-        }
-    }
-
-    #[test]
-    fn transition_audio_plan_preserves_music_and_cleanup_policy() {
-        let menu = transition_audio_plan(
-            Screen::Menu,
-            Screen::SelectColor,
-            true,
-            false,
-            music_paths(),
-        );
-        assert!(matches!(
-            menu.commands.as_slice(),
-            [Command::PlayMusic { looped: true, .. }]
-        ));
-
-        let preview = transition_audio_plan(
-            Screen::SelectMusic,
-            Screen::PlayerOptions,
-            true,
-            false,
-            music_paths(),
-        );
-        assert!(preview.commands.is_empty());
-
-        let leaving_play = transition_audio_plan(
-            Screen::Gameplay,
-            Screen::Evaluation,
-            false,
-            false,
-            music_paths(),
-        );
-        assert!(leaving_play.clear_play_background);
-        assert!(matches!(
-            leaving_play.commands.as_slice(),
-            [Command::StopMusic, Command::StopMusic]
-        ));
-
-        let evaluation = transition_audio_plan(
-            Screen::Evaluation,
-            Screen::Menu,
-            false,
-            false,
-            music_paths(),
-        );
-        assert!(evaluation.stop_screen_sfx);
     }
 
     #[test]
@@ -1060,10 +784,7 @@ mod tests {
                 Screen::Init,
                 &TransitionState::Idle
             ),
-            NavigationTransitionStart::GlobalFade {
-                target: Screen::Init,
-                stop_screen_sfx: false,
-            }
+            NavigationTransitionStart::GlobalFade { target: Screen::Init }
         );
         assert_eq!(
             navigation_transition_start::<ActiveTheme>(
@@ -1071,10 +792,7 @@ mod tests {
                 Screen::Menu,
                 &TransitionState::Idle,
             ),
-            NavigationTransitionStart::GlobalFade {
-                target: Screen::Menu,
-                stop_screen_sfx: true,
-            }
+            NavigationTransitionStart::GlobalFade { target: Screen::Menu }
         );
     }
 
