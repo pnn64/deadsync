@@ -136,15 +136,14 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
         &course_path,
         Some("Hard"),
     );
-    let (mut plan, presentation, endless_source) =
-        select_course::selected_course_start_with_cycles(&app.state.screens.select_course_state)
-            .expect("real selected course plan");
-    assert_eq!(plan.stages.len(), 2);
+    let selection = &app.state.screens.select_course_state;
+    let choice = select_course::selected_course_choice(selection).expect("selected rating");
+    let mut start = select_course::course_catalog(selection).start(choice).expect("real selected course plan");
+    assert_eq!(start.plan.stages.len(), 2);
     // The previous cycle contains A. The fresh cycle must append A then B.
-    plan.stages.truncate(1);
+    start.plan.stages.truncate(1);
     let mut run =
-        build_course_run_from_selection(plan, presentation, endless_source, style.chart_type())
-            .unwrap();
+        build_course_run_from_selection(start, style.chart_type()).unwrap();
     run.run.progress = CourseProgress::new(1);
     app.state.session.begin_play_session(Instant::now());
     app.state.session.last_course_wheel_path = Some(course_path);

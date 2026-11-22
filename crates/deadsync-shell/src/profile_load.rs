@@ -2,10 +2,12 @@ use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile::PlayMode;
 use deadsync_profile::compat as profile;
+use deadsync_simfile::course_selection::PreparedCourseCatalog;
 use deadsync_simfile::runtime_cache::{get_course_cache, get_song_cache};
 use deadsync_theme_simply_love::screens::{select_course, select_music};
 use deadsync_theme_simply_love::views::{
-    SelectCourseContextView, SelectCourseInitView, SelectCoursePolicyView, SelectMusicInitView,
+    SelectCourseContextView, SelectCoursePolicyView, SelectCoursePresentationInitView,
+    SelectMusicInitView,
 };
 use log::warn;
 use std::path::PathBuf;
@@ -92,7 +94,7 @@ pub(crate) fn select_course_context_view(
     }
 }
 
-pub(crate) fn select_course_init_view() -> SelectCourseInitView {
+pub(crate) fn prepare_course_screen() -> select_course::State {
     let config = config::runtime::get();
     let context = select_course_context_view(&config);
     let translated_titles = config.translated_titles;
@@ -103,7 +105,7 @@ pub(crate) fn select_course_init_view() -> SelectCourseInitView {
     let courses = get_course_cache().clone();
     scores::prewarm_select_music_score_caches();
     let chart_type = context.play_style.chart_type();
-    let chart_grades = song_packs
+    let chart_grades: Vec<_> = song_packs
         .iter()
         .flat_map(|pack| pack.songs.iter())
         .flat_map(|song| song.charts.iter())
@@ -117,16 +119,22 @@ pub(crate) fn select_course_init_view() -> SelectCourseInitView {
             })
         })
         .collect();
-    SelectCourseInitView {
-        song_packs,
+    let catalog = PreparedCourseCatalog::new(
         courses,
-        played_chart_counts: scores::played_chart_counts_for_machine(),
-        chart_grades,
-        translated_titles,
-        last_course_path: last_course.course_path.map(PathBuf::from),
-        last_course_difficulty: last_course.difficulty_name,
-        context,
-    }
+        &song_packs,
+        &scores::played_chart_counts_for_machine(),
+        &chart_grades,
+        chart_type,
+    );
+    select_course::init_prepared(
+        catalog,
+        SelectCoursePresentationInitView {
+            translated_titles,
+            last_course_path: last_course.course_path.map(PathBuf::from),
+            last_course_difficulty: last_course.difficulty_name,
+            context,
+        },
+    )
 }
 
 fn prepare(request: PrepareRequest) -> PreparedState {
@@ -137,7 +145,7 @@ fn prepare(request: PrepareRequest) -> PreparedState {
             PreparedState::Music(Box::new(select_music::init(init)))
         }
         PrepareRequest::Course => {
-            PreparedState::Course(Box::new(select_course::init(select_course_init_view())))
+            PreparedState::Course(Box::new(prepare_course_screen()))
         }
     }
 }

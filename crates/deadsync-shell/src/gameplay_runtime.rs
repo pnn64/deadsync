@@ -353,13 +353,22 @@ pub(crate) fn present_stage(
     startup: GameplayStartup,
 ) -> GameplayState {
     let (stage, assets) = prepared.into_parts();
-    let pack_group = assets.score_pack_group(course_name.as_ref());
+    let pack_group = match course_name.as_ref() {
+        Some(name) if name.is_empty() => Arc::from("Untitled Course"),
+        name => assets.score_pack_group(name),
+    };
     let presentation = gameplay::GameplayPresentation::from_stage(
         &stage,
         assets,
         stage_intro_text,
         replay_status_text,
-        course_name.map(|name| gameplay::CourseDisplayInfo { name }),
+        course_name.map(|name| gameplay::CourseDisplayInfo {
+            name: if name.is_empty() {
+                Arc::from(deadsync_theme_simply_love::screens::select_course::course_title(&name))
+            } else {
+                name
+            },
+        }),
         course_banner_path,
         startup.presentation,
     );

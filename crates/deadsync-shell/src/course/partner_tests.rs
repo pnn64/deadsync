@@ -1,5 +1,5 @@
 use super::*;
-use deadsync_chart::course::{CourseCyclePlan, CourseStagePlan};
+use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan, CourseStagePlan};
 use deadsync_gameplay::CourseDisplayTotals;
 use deadsync_gameplay::CourseLifeConfig;
 use deadsync_gameplay::course_progress::{CourseProgress, CourseRenewal};
@@ -94,131 +94,96 @@ fn assert_totals(totals: &[CourseDisplayTotals; MAX_PLAYERS], multiplier: u32) {
     }
 }
 
-fn presentation(song: &Arc<SongData>) -> CoursePresentationView {
-    CoursePresentationView {
-        name: "Partner course".into(),
-        banner_path: None,
-        course_stepchart_label: "Hard 8".into(),
-        song_stub: Arc::clone(song),
-    }
-}
-
 #[test]
-fn startup_uses_game_stages_and_rules_independently_of_presentation() {
+fn startup_uses_resolved_game_stages_and_retains_course_metadata() {
     let kind = "dance-routine";
     let (song, parsed) = partner_song(kind);
-    let mut unrelated_stub = (*song).clone();
-    unrelated_stub.simfile_path = "presentation/unrelated.ssc".into();
-    unrelated_stub.charts.clear();
-    unrelated_stub.music_length_seconds = 5000.0;
-    unrelated_stub.total_length_seconds = 5000;
-    unrelated_stub.precise_last_second_seconds = 5000.0;
-    let variants = [
-        presentation(&song),
-        CoursePresentationView {
-            name: "Unrelated display name".into(),
-            banner_path: Some("presentation/other-banner.png".into()),
-            course_stepchart_label: "Edit 999".into(),
-            song_stub: Arc::new(unrelated_stub),
+    let mut summary_song = (*song).clone();
+    summary_song.simfile_path = "tests/partner-course.crs".into();
+    summary_song.title = "Partner course".into();
+    summary_song.banner_path = Some("tests/partner-banner.png".into());
+    summary_song.charts.clear();
+    summary_song.music_length_seconds = 5000.0;
+    summary_song.total_length_seconds = 5000;
+    summary_song.precise_last_second_seconds = 5000.0;
+    let summary_song = Arc::new(summary_song);
+    let mut selection = plan(&song, 2);
+    selection.course_type = CourseType::Oni;
+    selection.lives = 7;
+    selection.stages[0].gain_lives = -1;
+    selection.stages[0].gain_seconds = f32::from_bits(0x7fc0_1234);
+    let modifier_pointer = selection.stages[0].modifiers.as_ptr();
+    let score_pointer = selection.score_hash.as_ptr();
+    let difficulty_pointer = selection.course_difficulty_name.as_ptr();
+    // Missing hashes remain skippable without changing surviving payloads.
+    selection.stages.insert(
+        0,
+        CourseStagePlan {
+            song: song.clone(),
+            chart_hash: "missing".into(),
+            modifiers: "unresolved".into(),
+            gain_seconds: 1.0,
+            gain_lives: 99,
         },
-    ];
-    for display in variants {
-        let expected_display = display.clone();
-        let name_pointer = display.name.as_ptr();
-        let label_pointer = display.course_stepchart_label.as_ptr();
-        let mut selection = plan(&song, 2);
-        selection.course_type = CourseType::Oni;
-        selection.lives = 7;
-        selection.stages[0].gain_lives = -1;
-        selection.stages[0].gain_seconds = f32::from_bits(0x7fc0_1234);
-        let modifier_pointer = selection.stages[0].modifiers.as_ptr();
-        let score_pointer = selection.score_hash.as_ptr();
-        let difficulty_pointer = selection.course_difficulty_name.as_ptr();
-        // Missing hashes remain skippable without changing surviving payloads.
-        selection.stages.insert(
-            0,
-            CourseStagePlan {
-                song: song.clone(),
-                chart_hash: "missing".into(),
-                modifiers: "unresolved".into(),
-                gain_seconds: 1.0,
-                gain_lives: 99,
-            },
-        );
-        let mut loads = 0;
-        let course = build_course_run_from_selection_with_loader(
-            selection,
-            display,
-            None,
-            kind,
-            |loaded_song, indices, offset| {
-                loads += 1;
-                assert!(std::ptr::eq(loaded_song, song.as_ref()));
-                assert_eq!(indices, &[0]);
-                assert_eq!(offset, 0.0);
-                build_requested_gameplay_charts(&parsed, indices, offset)
-            },
-        )
-        .unwrap()
-        .expect("the two valid stages start a course");
+    );
+    let mut loads = 0;
+    let course = build_course_run_from_selection_with_loader(
+        PreparedCourseStart {
+            plan: selection,
+            song: Arc::clone(&summary_song),
+            endless_source: None,
+        },
+        kind,
+        |loaded_song, indices, offset| {
+            loads += 1;
+            assert!(std::ptr::eq(loaded_song, song.as_ref()));
+            assert_eq!(indices, &[0]);
+            assert_eq!(offset, 0.0);
+            build_requested_gameplay_charts(&parsed, indices, offset)
+        },
+    )
+    .unwrap()
+    .expect("the two valid stages start a course");
 
-        assert_eq!(loads, 2);
-        assert_eq!(course.run.path, Path::new("tests/partner-course.crs"));
-        assert_eq!(course.run.score_hash, "partner-course");
-        assert_eq!(course.run.score_hash.as_ptr(), score_pointer);
-        assert_eq!(course.run.course_difficulty_name, "Hard");
-        assert_eq!(course.run.course_difficulty_name.as_ptr(), difficulty_pointer);
-        assert_eq!(course.run.course_meter, Some(8));
-        assert_eq!(course.run.course_type, CourseType::Oni);
-        assert_eq!(course.run.lives, 7);
-        assert_eq!(course.run.stages.len(), 2);
-        for (index, stage) in course.run.stages.iter().enumerate() {
-            assert!(Arc::ptr_eq(&stage.song, &song));
-            // Hard is runtime slot 3; the loader uses source chart index 0.
-            assert_eq!(stage.steps_index, [3; MAX_PLAYERS]);
-            assert_eq!(stage.preferred_difficulty_index, [3; MAX_PLAYERS]);
-            assert_eq!(stage.modifiers, format!("stage-{index}"));
-        }
-        assert_eq!(course.run.stages[0].modifiers.as_ptr(), modifier_pointer);
-        assert_eq!(course.run.stages[0].gain_seconds.to_bits(), 0x7fc0_1234);
-        assert_eq!(course.run.stages[0].gain_lives, -1);
-        assert_totals(&course.run.course_display_totals, 2);
-        assert_eq!(
-            course.run.entry(false).life_config(kind),
-            [CourseLifeConfig::Battery {
-                total_lives: 7,
-                reward_lives: 2,
-            }; MAX_PLAYERS],
-        );
-        assert_eq!(course.run.progress, CourseProgress::default());
-        assert!(course.run.has_next_stage());
-        assert!(!course.run.is_finished(false));
-        assert_eq!(course.run.next_stage().unwrap().modifiers, "stage-0");
-        assert_eq!(course.run.renewal(), CourseRenewal::NotRequired);
-        assert!(course.stage_summaries.is_empty());
-        assert_eq!(
-            course.run.total_seconds(),
-            2.0 * song.precise_last_second()
-        );
-        assert_eq!(course.presentation.name, expected_display.name);
-        assert_eq!(course.presentation.name.as_ptr(), name_pointer);
-        assert_eq!(
-            course.presentation.banner_path,
-            expected_display.banner_path
-        );
-        assert_eq!(
-            course.presentation.course_stepchart_label,
-            expected_display.course_stepchart_label,
-        );
-        assert_eq!(
-            course.presentation.course_stepchart_label.as_ptr(),
-            label_pointer
-        );
-        assert!(Arc::ptr_eq(
-            &course.presentation.song_stub,
-            &expected_display.song_stub,
-        ));
+    assert_eq!(loads, 2);
+    assert_eq!(course.run.path, Path::new("tests/partner-course.crs"));
+    assert_eq!(course.run.score_hash, "partner-course");
+    assert_eq!(course.run.score_hash.as_ptr(), score_pointer);
+    assert_eq!(course.run.course_difficulty_name, "Hard");
+    assert_eq!(course.run.course_difficulty_name.as_ptr(), difficulty_pointer);
+    assert_eq!(course.run.course_meter, Some(8));
+    assert_eq!(course.run.course_type, CourseType::Oni);
+    assert_eq!(course.run.lives, 7);
+    assert_eq!(course.run.stages.len(), 2);
+    for (index, stage) in course.run.stages.iter().enumerate() {
+        assert!(Arc::ptr_eq(&stage.song, &song));
+        // Hard is runtime slot 3; the loader uses source chart index 0.
+        assert_eq!(stage.steps_index, [3; MAX_PLAYERS]);
+        assert_eq!(stage.preferred_difficulty_index, [3; MAX_PLAYERS]);
+        assert_eq!(stage.modifiers, format!("stage-{index}"));
     }
+    assert_eq!(course.run.stages[0].modifiers.as_ptr(), modifier_pointer);
+    assert_eq!(course.run.stages[0].gain_seconds.to_bits(), 0x7fc0_1234);
+    assert_eq!(course.run.stages[0].gain_lives, -1);
+    assert_totals(&course.run.course_display_totals, 2);
+    assert_eq!(
+        course.run.entry(false).life_config(kind),
+        [CourseLifeConfig::Battery {
+            total_lives: 7,
+            reward_lives: 2,
+        }; MAX_PLAYERS],
+    );
+    assert_eq!(course.run.progress, CourseProgress::default());
+    assert!(course.run.has_next_stage());
+    assert!(!course.run.is_finished(false));
+    assert_eq!(course.run.next_stage().unwrap().modifiers, "stage-0");
+    assert_eq!(course.run.renewal(), CourseRenewal::NotRequired);
+    assert!(course.stage_summaries.is_empty());
+    assert_eq!(
+        course.run.total_seconds(),
+        2.0 * song.precise_last_second()
+    );
+    assert!(Arc::ptr_eq(&course.song, &summary_song));
 }
 
 fn empty_course(song: &Arc<SongData>) -> CourseRun {

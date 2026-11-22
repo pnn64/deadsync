@@ -11,7 +11,7 @@ use deadsync_rules::course::CourseType;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::hash::Hasher;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use twox_hash::XxHash64;
 
@@ -94,12 +94,304 @@ impl CoursePreparation {
 /// Resolved gameplay stages and numeric facts for one retained course rating.
 pub struct PreparedCourseRating {
     pub stages: Vec<CourseStagePlan>,
+    chart_indices: Vec<usize>,
     pub totals: CourseTotals,
     pub rated_entry_count: usize,
     pub course_meter: Option<u32>,
     pub min_bpm: Option<f64>,
     pub max_bpm: Option<f64>,
     pub total_length_seconds: i32,
+}
+
+impl PreparedCourseRating {
+    /// The exact charts admitted by the resolver, in stage order.
+    pub fn charts(&self) -> impl Iterator<Item = (&SongData, &ChartData)> {
+        self.stages
+            .iter()
+            .zip(&self.chart_indices)
+            .map(|(stage, &index)| (stage.song.as_ref(), &stage.song.charts[index]))
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct CourseChoice<'a> {
+    pub path: &'a Path,
+    pub difficulty: Difficulty,
+}
+
+pub struct PreparedCourseStart {
+    pub plan: CourseSessionPlan,
+    pub song: Arc<SongData>,
+    pub endless_source: Option<EndlessCourseSource>,
+}
+
+/// One course and its resolved ratings, shared with the selection screen.
+pub struct PreparedCourse {
+    source: CourseFile,
+    path: PathBuf,
+    score_hash: String,
+    name: String,
+    banner_path: Option<PathBuf>,
+    ratings: Vec<Option<PreparedCourseRating>>,
+    default_rating_index: usize,
+    preparation: CoursePreparation,
+}
+
+impl PreparedCourse {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+    pub fn score_hash(&self) -> &str {
+        &self.score_hash
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn scripter(&self) -> &str {
+        &self.source.scripter
+    }
+    pub fn description(&self) -> &str {
+        &self.source.description
+    }
+    pub fn banner_path(&self) -> Option<&Path> {
+        self.banner_path.as_deref()
+    }
+    pub fn ratings(&self) -> &[Option<PreparedCourseRating>] {
+        &self.ratings
+    }
+    pub const fn default_rating_index(&self) -> usize {
+        self.default_rating_index
+    }
+    pub const fn has_random_entries(&self) -> bool {
+        self.preparation.has_random_entries
+    }
+    pub const fn has_most_played_entries(&self) -> bool {
+        self.preparation.has_most_played_entries
+    }
+
+    fn plan(
+        &self,
+        difficulty: Difficulty,
+        meter: Option<u32>,
+        stages: Vec<CourseStagePlan>,
+    ) -> CourseSessionPlan {
+        CourseSessionPlan {
+            path: self.path.clone(),
+            score_hash: self.score_hash.clone(),
+            course_difficulty_name: course::difficulty_label(difficulty).to_owned(),
+            course_meter: meter,
+            course_type: self.preparation.course_type,
+            lives: self.source.lives,
+            stages,
+        }
+    }
+
+    fn summary_song(&self) -> SongData {
+        let rating = self.ratings[self.default_rating_index]
+            .as_ref()
+            .expect("course default rating");
+        course_song_stub(
+            &self.path,
+            &self.name,
+            &self.source.scripter,
+            self.banner_path(),
+            rating.min_bpm,
+            rating.max_bpm,
+            rating.total_length_seconds,
+        )
+    }
+}
+
+/// A catalog resolves each rating once. Confirmation and display use that same resolution.
+pub struct PreparedCourseCatalog {
+    resolver: Arc<CourseResolver>,
+    courses: Vec<PreparedCourse>,
+    by_path: FxHashMap<PathBuf, usize>,
+}
+
+impl PreparedCourseCatalog {
+    pub fn new(
+        courses: Vec<(PathBuf, CourseFile)>,
+        song_packs: &[SongPack],
+        played_chart_counts: &[(String, u32)],
+        chart_grades: &[(String, u8)],
+        chart_type: &str,
+    ) -> Self {
+        let resolver = Arc::new(CourseResolver::new(
+            song_packs,
+            played_chart_counts,
+            chart_grades,
+            chart_type,
+        ));
+        let mut catalog = Self {
+            resolver,
+            courses: Vec::with_capacity(courses.len()),
+            by_path: FxHashMap::default(),
+        };
+        for (path, course) in courses {
+            let preparation = CoursePreparation::new(&course);
+            let seed = fresh_course_seed();
+            let mut ratings = Vec::from([const { None }; COURSE_RATING_ORDER.len()]);
+            for difficulty in preparation.difficulties() {
+                ratings[difficulty as usize] =
+                    catalog
+                        .resolver
+                        .prepare_rating(&path, &course, difficulty, seed, |_, _, _| {});
+            }
+            let default_rating_index = preparation.default_rating_index(&ratings);
+            let name = if course.name.trim().is_empty() {
+                path.file_stem()
+                    .and_then(|name| name.to_str())
+                    .filter(|name| !name.trim().is_empty())
+                    .unwrap_or_default()
+                    .to_owned()
+            } else {
+                course.name.clone()
+            };
+            catalog.by_path.insert(path.clone(), catalog.courses.len());
+            catalog.courses.push(PreparedCourse {
+                score_hash: course_score_hash(&path),
+                name,
+                banner_path: course::resolve_course_banner_path(&path, &course.banner),
+                path,
+                source: course,
+                ratings,
+                default_rating_index,
+                preparation,
+            });
+        }
+        catalog
+    }
+
+    pub fn courses(&self) -> &[PreparedCourse] {
+        &self.courses
+    }
+
+    fn rating(&self, choice: CourseChoice<'_>) -> Option<(&PreparedCourse, &PreparedCourseRating)> {
+        let course = &self.courses[*self.by_path.get(choice.path)?];
+        let rating = course.ratings[choice.difficulty as usize].as_ref()?;
+        Some((course, rating))
+    }
+
+    pub fn can_start(&self, choice: CourseChoice<'_>) -> bool {
+        self.rating(choice)
+            .is_some_and(|(_, rating)| !rating.stages.is_empty())
+    }
+
+    pub fn selected_cycle(&self, choice: CourseChoice<'_>) -> Option<CourseCyclePlan> {
+        let (course, rating) = self.rating(choice)?;
+        if rating.stages.is_empty() {
+            return None;
+        }
+        Some(CourseCyclePlan {
+            path: course.path.clone(),
+            stages: rating.stages.clone(),
+        })
+    }
+
+    pub fn selected_plan(&self, choice: CourseChoice<'_>) -> Option<CourseSessionPlan> {
+        let (course, rating) = self.rating(choice)?;
+        if rating.stages.is_empty() {
+            return None;
+        }
+        Some(course.plan(
+            choice.difficulty,
+            rating.course_meter,
+            rating.stages.clone(),
+        ))
+    }
+
+    pub fn start(&self, choice: CourseChoice<'_>) -> Option<PreparedCourseStart> {
+        let (course, rating) = self.rating(choice)?;
+        if rating.stages.is_empty() {
+            return None;
+        }
+        let plan = course.plan(
+            choice.difficulty,
+            rating.course_meter,
+            rating.stages.clone(),
+        );
+        let endless_source = EndlessCourseSource::for_selection(
+            &self.resolver,
+            &course.source,
+            choice.difficulty,
+            &plan,
+        );
+        Some(PreparedCourseStart {
+            plan,
+            song: Arc::new(course.summary_song()),
+            endless_source,
+        })
+    }
+
+    pub fn reroll_cycle(&self, choice: CourseChoice<'_>) -> Option<CourseCyclePlan> {
+        let (course, _) = self.rating(choice)?;
+        let stages = self.resolver.reroll_endless(
+            &course.path,
+            &course.source,
+            choice.difficulty,
+            fresh_course_seed(),
+        )?;
+        Some(CourseCyclePlan {
+            path: course.path.clone(),
+            stages,
+        })
+    }
+
+    pub fn reroll_plan(&self, choice: CourseChoice<'_>) -> Option<CourseSessionPlan> {
+        let (course, rating) = self.rating(choice)?;
+        let cycle = self.reroll_cycle(choice)?;
+        Some(course.plan(choice.difficulty, rating.course_meter, cycle.stages))
+    }
+}
+
+/// Build the neutral song record used for course wheel entries and completed summaries.
+pub fn course_song_stub(
+    path: &Path,
+    name: &str,
+    scripter: &str,
+    banner_path: Option<&Path>,
+    min_bpm: Option<f64>,
+    max_bpm: Option<f64>,
+    total_length_seconds: i32,
+) -> SongData {
+    let length = total_length_seconds.max(0);
+    SongData {
+        simfile_path: path.to_path_buf(),
+        title: name.to_owned(),
+        subtitle: String::new(),
+        translit_title: name.to_owned(),
+        translit_subtitle: String::new(),
+        artist: scripter.to_owned(),
+        translit_artist: String::new(),
+        genre: String::new(),
+        banner_path: banner_path.map(Path::to_path_buf),
+        background_path: None,
+        background_changes: Vec::new(),
+        background_layer2_changes: Vec::new(),
+        foreground_changes: Vec::new(),
+        background_lua_changes: Vec::new(),
+        foreground_lua_changes: Vec::new(),
+        has_lua: false,
+        cdtitle_path: None,
+        music_path: None,
+        display_bpm: String::new(),
+        offset: 0.0,
+        sample_start: None,
+        sample_length: None,
+        min_bpm: min_bpm.unwrap_or(0.0),
+        max_bpm: max_bpm.unwrap_or_else(|| min_bpm.unwrap_or(0.0)),
+        normalized_bpms: String::new(),
+        song_timing: None,
+        music_length_seconds: length as f32,
+        first_second: 0.0,
+        total_length_seconds: length,
+        precise_last_second_seconds: length as f32,
+        precise_note_first_second_seconds: None,
+        precise_note_last_second_seconds: Some(length as f32),
+        last_second_hint: 0.0,
+        charts: Vec::new(),
+    }
 }
 
 /// Immutable input for generating cycles after a course has been confirmed.
@@ -194,6 +486,7 @@ impl CourseResolver {
         mut on_stage: impl FnMut(&SongData, &ChartData, usize),
     ) -> Option<PreparedCourseRating> {
         let mut stages = Vec::with_capacity(course.entries.len());
+        let mut chart_indices = Vec::with_capacity(course.entries.len());
         let mut totals = CourseTotals::default();
         let mut rated_entry_count = 0usize;
         let mut meter_sum = 0u32;
@@ -214,6 +507,7 @@ impl CourseResolver {
             total_length_seconds = total_length_seconds.saturating_add(len.max(0));
             push_song_bpm_range(&mut min_bpm, &mut max_bpm, song_data);
             let entry_index = stages.len();
+            chart_indices.push(stage.chart_index);
             stages.push(CourseStagePlan {
                 song: song_data.clone(),
                 chart_hash: chart.short_hash.clone(),
@@ -243,6 +537,7 @@ impl CourseResolver {
         });
         Some(PreparedCourseRating {
             stages,
+            chart_indices,
             totals,
             rated_entry_count,
             course_meter,

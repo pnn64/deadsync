@@ -806,6 +806,15 @@ pub struct SelectCourseInitView {
     pub context: SelectCourseContextView,
 }
 
+/// Presentation inputs applied to the resolved game catalog.
+#[derive(Clone, Debug, Default)]
+pub struct SelectCoursePresentationInitView {
+    pub translated_titles: bool,
+    pub last_course_path: Option<PathBuf>,
+    pub last_course_difficulty: Option<String>,
+    pub context: SelectCourseContextView,
+}
+
 /// Shell-prepared local profile catalog used by Manage Local Profiles.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ManageLocalProfilesView {

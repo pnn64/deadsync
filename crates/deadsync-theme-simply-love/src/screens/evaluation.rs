@@ -2555,12 +2555,25 @@ impl ResultText {
     }
 
     fn from_score(score: &ScoreInfo) -> Self {
+        let untitled_course = score.is_course_summary() && score.song.title.is_empty();
+        let course_artist = (score.is_course_summary() && score.song.artist.trim().is_empty())
+            .then(|| tr("SelectCourse", "CourseScripter"));
+        let full_title = if untitled_course {
+            super::select_course::course_title("").into_owned()
+        } else {
+            score.song.display_full_title(false)
+        };
+        let translit_title = if untitled_course {
+            full_title.clone()
+        } else {
+            score.song.display_full_title(true)
+        };
         Self::new(
             score.chart.meter,
-            &score.song.artist,
+            course_artist.as_deref().unwrap_or(&score.song.artist),
             score.song.banner_path.as_deref(),
-            score.song.display_full_title(false),
-            score.song.display_full_title(true),
+            full_title,
+            translit_title,
         )
     }
 

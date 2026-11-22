@@ -48,14 +48,13 @@ fn course_startup_and_renewal_use_game_contracts() {
     }
     let course = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
     for contract in [
-        "selection: CourseSessionPlan",
-        "pub presentation: CoursePresentationView",
+        "start: PreparedCourseStart",
+        "pub song: Arc<SongData>",
         "pub run: CourseRun",
         "pub endless_source: Option<Arc<EndlessCourseSource>>",
-        "CourseRun::prepare(selection, chart_type, load)",
+        "CourseRun::prepare(start.plan, chart_type, load)",
         "course.run.append_endless_cycle(source.next_cycle(),",
-        "course_summary_stage(&course.run, &course.stage_summaries,",
-        "course.presentation.song_stub.as_ref()",
+        "course_summary_stage(&course.run, &course.stage_summaries, &course.song)",
     ] {
         assert!(
             contains_rust(&course, contract),
@@ -65,6 +64,7 @@ fn course_startup_and_renewal_use_game_contracts() {
     for forbidden in [
         "SelectedCoursePlan",
         "SelectedCourseView",
+        "CoursePresentationView",
         "fn course_stage_runtime_from_plan(",
         "fn add_course_stage_totals_with_loader(",
         "fn course_summary_totals(",
@@ -80,7 +80,10 @@ fn course_startup_and_renewal_use_game_contracts() {
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("application source should be readable");
     let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
-    assert!(app.contains("select_course::selected_course_start_with_cycles("));
+    assert!(app.contains("select_course::selected_course_choice(selection)"));
+    assert!(app.contains("select_course::course_catalog(selection).start(choice)"));
+    assert!(app.contains("Arc::from(course.song.title.as_str())"));
+    assert!(!app.contains("select_course::selected_course_start_with_cycles("));
     assert!(!app.contains("select_course::selected_course_plan("));
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     for delegation in [
@@ -125,6 +128,10 @@ fn course_selection_preparation_stays_below_the_theme() {
     for contract in [
         "pub struct CoursePreparation",
         "pub struct PreparedCourseRating",
+        "pub struct PreparedCourseCatalog",
+        "pub struct PreparedCourseStart",
+        "pub struct CourseChoice<'a>",
+        "pub fn course_song_stub(",
         "pub struct CourseResolver",
         "pub struct EndlessCourseSource",
         "pub fn prepare_rating(",
@@ -161,19 +168,28 @@ fn course_selection_preparation_stays_below_the_theme() {
         &root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
     );
     for delegation in [
-        "CourseResolver::new(",
-        "CoursePreparation::new(course)",
-        "preparation.difficulties()",
-        "resolver.prepare_rating(",
-        "preparation.default_rating_index(&ratings)",
-        "resolver.reroll_endless(",
-        "EndlessCourseSource::for_selection(",
+        "PreparedCourseCatalog::new(",
+        "catalog.courses()",
+        "rating.charts()",
+        "state.catalog.can_start(choice)",
+        "state.catalog.reroll_cycle(",
         "pub use deadsync_simfile::course_selection::course_score_hash;",
     ] {
         assert!(
             contains_rust(&theme, delegation),
-            "Select Course must use game preparation through {delegation}"
+            "Select Course must read prepared game data through {delegation}"
         );
+    }
+    for game_resolution in [
+        "CourseResolver::new(",
+        "CoursePreparation::new(&course)",
+        "preparation.difficulties()",
+        "resolver.prepare_rating(",
+        "preparation.default_rating_index(&ratings)",
+        "EndlessCourseSource::for_selection(",
+    ] {
+        assert!(contains_rust(&owner, game_resolution));
+        assert!(!contains_rust(&theme, game_resolution));
     }
     for implementation in [
         "fn build_song_lookup(",
@@ -204,6 +220,8 @@ fn course_selection_preparation_stays_below_the_theme() {
                 "struct EndlessCourseSource",
                 "struct CoursePreparation",
                 "struct PreparedCourseRating",
+                "struct PreparedCourseCatalog",
+                "struct PreparedCourseStart",
             ] {
                 assert!(
                     !source.contains(definition),
@@ -439,7 +457,7 @@ fn chart_lua_playback_has_no_theme_dependency() {
     assert!(!theme_storage.contains("ActiveGameplayStage"));
     assert!(!theme_storage.contains("GameplayLobbySession"));
     assert!(!theme_storage.contains("pack_group"));
-    assert!(contains_rust(&shell, "let pack_group = assets.score_pack_group("));
+    assert!(contains_rust(&shell, "name => assets.score_pack_group(name)"));
     assert!(contains_rust(&shell, "compose_actors(state, actors, FramePresentationContext"));
     assert!(contains_rust(&shell, "SongFrameContent::PLAYBACK"));
     assert!(contains_rust(&shell, "compose_actors(&mut state.gameplay, actors, FramePresentationContext"));
@@ -5721,6 +5739,7 @@ fn select_course_runtime_and_caches_are_shell_prepared() {
     for contract in [
         "pub struct SelectCoursePolicyView",
         "pub struct SelectCourseContextView",
+        "pub struct SelectCoursePresentationInitView",
         "pub song_packs: Vec<deadsync_chart::SongPack>",
         "pub courses: Vec<deadsync_simfile::runtime_cache::CourseData>",
         "pub last_course_path: Option<PathBuf>",
@@ -5739,6 +5758,8 @@ fn select_course_runtime_and_caches_are_shell_prepared() {
         "get_course_cache().clone()",
         ".last_played_course(context.play_style)",
         "scores::played_chart_counts_for_machine()",
+        "PreparedCourseCatalog::new(",
+        "select_course::init_prepared(",
     ] {
         assert!(
             service.contains(shell_owner),
@@ -5793,7 +5814,7 @@ fn profile_load_preparation_worker_is_shell_owned() {
         "scores::prewarm_select_music_score_caches",
         "scores::played_chart_counts_for_machine",
         "select_music::init(init)",
-        "select_course::init(select_course_init_view())",
+        "PreparedState::Course(Box::new(prepare_course_screen()))",
     ] {
         assert!(
             service.contains(runtime_owner),

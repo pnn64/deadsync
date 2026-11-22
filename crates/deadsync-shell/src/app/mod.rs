@@ -1192,7 +1192,7 @@ impl ScreensState {
         select_music_state.selected_steps_index = preferred_difficulty_index;
 
         let mut select_course_state =
-            select_course::init(crate::profile_load::select_course_init_view());
+            crate::profile_load::prepare_course_screen();
         select_course_state.active_color_index = color_index;
 
         let mut select_style_state = select_style::init(select_flow_view.clone());
@@ -6672,18 +6672,17 @@ impl App {
     }
 
     fn start_course_run_from_selected(&mut self) -> bool {
-        let Some((selection, presentation, endless_source)) =
-            select_course::selected_course_start_with_cycles(&self.state.screens.select_course_state)
+        let selection = &self.state.screens.select_course_state;
+        let Some(start) = select_course::selected_course_choice(selection)
+            .and_then(|choice| select_course::course_catalog(selection).start(choice))
         else {
             warn!("Unable to start course run: selected course has no playable stages.");
             return false;
         };
-        let course_path = selection.path.clone();
-        let course_difficulty_name = selection.course_difficulty_name.clone();
+        let course_path = start.plan.path.clone();
+        let course_difficulty_name = start.plan.course_difficulty_name.clone();
         let Some(course_run) = build_course_run_from_selection(
-            selection,
-            presentation,
-            endless_source,
+            start,
             profile::get_session_play_style().chart_type(),
         ) else {
             warn!("Unable to start course run: failed to resolve course stages.");
@@ -6706,7 +6705,10 @@ impl App {
         let Some(stage) = course_run.run.next_stage() else {
             return false;
         };
-        let label = course_run.presentation.course_stepchart_label.clone();
+        let label = select_course::course_stepchart_label(
+            &course_run.run.course_difficulty_name,
+            course_run.run.course_meter,
+        );
         if show_player_options {
             self.state.screens.player_options_state = Some(player_options::init(
                 stage.song.clone(),
@@ -9810,8 +9812,8 @@ impl App {
                     .as_ref()
                     .map_or((None, None), |course| {
                         (
-                            Some(Arc::from(course.presentation.name.as_str())),
-                            course.presentation.banner_path.clone(),
+                            Some(Arc::from(course.song.title.as_str())),
+                            course.song.banner_path.clone(),
                         )
                     });
                 let stage_intro_text: Arc<str> = if let Some((stage_num, total)) = course_intro {
@@ -10461,7 +10463,7 @@ impl App {
                     let current_color_index =
                         self.state.screens.select_course_state.active_color_index;
                     self.state.screens.select_course_state =
-                        select_course::init(crate::profile_load::select_course_init_view());
+                        crate::profile_load::prepare_course_screen();
                     self.state.screens.select_course_state.active_color_index = current_color_index;
                     select_course::trigger_immediate_refresh(
                         &mut self.state.screens.select_course_state,
@@ -11857,11 +11859,11 @@ mod tests {
         };
         let course = CourseRunState {
             endless_source: None,
-            presentation: deadsync_theme::views::CoursePresentationView {
-                name: "Test Course".to_string(),
-                banner_path: None,
-                course_stepchart_label: "Hard".to_string(),
-                song_stub: song_a.clone(),
+            song: {
+                let mut song = song_a.as_ref().clone();
+                song.title = "Test Course".into();
+                song.banner_path = None;
+                Arc::new(song)
             },
             run: CourseRun {
                 path: PathBuf::from("Courses/Test.crs"),
@@ -11939,11 +11941,11 @@ mod tests {
         // An Endless cycle of two songs that ended after the first.
         let course = CourseRunState {
             endless_source: None,
-            presentation: deadsync_theme::views::CoursePresentationView {
-                name: "Test Course".to_string(),
-                banner_path: None,
-                course_stepchart_label: "Hard".to_string(),
-                song_stub: song.clone(),
+            song: {
+                let mut song = song.as_ref().clone();
+                song.title = "Test Course".into();
+                song.banner_path = None;
+                Arc::new(song)
             },
             run: CourseRun {
                 path: PathBuf::from("Courses/Test.crs"),
@@ -12075,11 +12077,11 @@ mod tests {
         ];
         let course = CourseRunState {
             endless_source: None,
-            presentation: deadsync_theme::views::CoursePresentationView {
-                name: "Test Course".into(),
-                banner_path: None,
-                course_stepchart_label: "Hard".into(),
-                song_stub: song.clone(),
+            song: {
+                let mut song = song.as_ref().clone();
+                song.title = "Test Course".into();
+                song.banner_path = None;
+                Arc::new(song)
             },
             run: CourseRun {
                 path: PathBuf::from("Courses/Test.crs"),

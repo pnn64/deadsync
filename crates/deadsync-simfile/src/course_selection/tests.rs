@@ -484,3 +484,50 @@ fn endless_rerolls_share_seeded_resolution_and_reset_history_each_time() {
         }
     }
 }
+
+#[test]
+fn catalog_start_retains_rating_and_falls_back_to_the_confirmed_cycle() {
+    let packs = [pack("Pack", vec![song("Songs/Pack/Alpha/a.ssc", &["a"])])];
+    let path = PathBuf::from("Courses/retained.crs");
+    let mut course = course(vec![entry(CourseSong::RandomAny)]);
+    course.repeat = true;
+    course.name = "Original course title".into();
+    let mut catalog = PreparedCourseCatalog::new(
+        vec![(path.clone(), course)],
+        &packs,
+        &[],
+        &[],
+        "dance-single",
+    );
+    let choice = CourseChoice {
+        path: &path,
+        difficulty: Difficulty::Hard,
+    };
+    let expected = catalog
+        .selected_cycle(choice)
+        .expect("rating has a resolved stage");
+    let (resolved_song, resolved_chart) =
+        catalog.rating(choice).unwrap().1.charts().next().unwrap();
+    assert!(std::ptr::eq(
+        resolved_song,
+        expected.stages[0].song.as_ref()
+    ));
+    assert_eq!(resolved_chart.short_hash, expected.stages[0].chart_hash);
+
+    catalog.resolver = Arc::new(CourseResolver::new(&[], &[], &[], "dance-single"));
+    assert!(catalog.reroll_cycle(choice).is_none());
+    let started = catalog.start(choice).unwrap();
+    assert_eq!(started.song.title, "Original course title");
+    assert_eq!(started.plan.course_difficulty_name, "Hard");
+    assert_eq!(
+        started.plan.stages[0].chart_hash,
+        expected.stages[0].chart_hash
+    );
+    let fallback = started.endless_source.unwrap().next_cycle();
+    assert_eq!(fallback.path, expected.path);
+    assert_eq!(fallback.stages[0].chart_hash, expected.stages[0].chart_hash);
+    assert!(Arc::ptr_eq(
+        &fallback.stages[0].song,
+        &expected.stages[0].song
+    ));
+}

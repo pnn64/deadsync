@@ -15,7 +15,8 @@ use crate::screens::input as screen_input;
 use crate::views::SelectedCoursePlan;
 use crate::views::{
     MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView, SelectCourseContextView,
-    SelectCourseInitView, SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView,
+    SelectCourseInitView, SelectCoursePresentationInitView, SelectCourseRuntimeView,
+    SelectCourseScoreRequest, SelectCourseScoreView,
     SelectFlowPlayerView,
 };
 use deadlib_assets::AssetManager;
@@ -25,21 +26,21 @@ use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
-use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan, CourseStagePlan};
+use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan};
 use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score::default_scorebox_mode_text;
 use deadsync_simfile::course::{
-    self, COURSE_RATING_ORDER, CourseFile, CourseTotals, Difficulty, nearest_filled_slot,
+    self, COURSE_RATING_ORDER, CourseTotals, Difficulty, nearest_filled_slot,
 };
 pub use deadsync_simfile::course_selection::course_score_hash;
 use deadsync_simfile::course_selection::{
-    CoursePreparation, CourseResolver, EndlessCourseSource, fresh_course_seed,
+    CourseChoice, EndlessCourseSource, PreparedCourseCatalog, course_song_stub,
 };
 use deadsync_theme::FontRole;
-use deadsync_theme::views::{CoursePresentationView, CourseTypeView};
+use deadsync_theme::views::CoursePresentationView;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -197,7 +198,6 @@ impl CourseSongEntry {
 
 #[derive(Clone, Debug)]
 struct CourseMeta {
-    source: CourseFile,
     path: PathBuf,
     score_hash: String,
     name: String,
@@ -211,8 +211,6 @@ struct CourseMeta {
     total_length_seconds: i32,
     has_random_entries: bool,
     has_most_played_entries: bool,
-    course_type: CourseTypeView,
-    lives: i32,
 }
 
 #[derive(Clone, Debug)]
@@ -222,13 +220,11 @@ struct CourseRatingMeta {
     stats_text: CourseStatsText,
     course_difficulty_name: String,
     course_stepchart_label: String,
-    course_meter: Option<u32>,
     course_meter_text: Arc<str>,
     entry_count_text: Arc<str>,
     min_bpm: Option<f64>,
     max_bpm: Option<f64>,
     total_length_seconds: i32,
-    runtime_stages: Vec<CourseStagePlan>,
 }
 
 /// Immutable actor-ready stat text compiled with each course rating.
@@ -434,7 +430,6 @@ struct InitData {
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
-    resolver: Arc<CourseResolver>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -505,7 +500,7 @@ pub struct State {
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
-    resolver: Arc<CourseResolver>,
+    catalog: PreparedCourseCatalog,
     bg: visual_style_bg::State,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
@@ -536,20 +531,15 @@ fn course_group_name(path: &Path) -> String {
 }
 
 #[inline(always)]
-fn course_name(path: &Path, course: &CourseFile) -> String {
-    if course.name.trim().is_empty() {
-        path.file_stem()
-            .and_then(|n| n.to_str())
-            .filter(|s| !s.trim().is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| tr("SelectCourse", "UntitledCourse").to_string())
+pub fn course_title(name: &str) -> std::borrow::Cow<'_, str> {
+    if name.is_empty() {
+        tr("SelectCourse", "UntitledCourse").to_string().into()
     } else {
-        course.name.clone()
+        std::borrow::Cow::Borrowed(name)
     }
 }
 
-#[inline(always)]
-fn course_stepchart_label(difficulty_name: &str, meter: Option<u32>) -> String {
+pub fn course_stepchart_label(difficulty_name: &str, meter: Option<u32>) -> String {
     let idx = standard_difficulty_index(difficulty_name).unwrap_or(2);
     let display = color::DISPLAY_DIFFICULTY_NAMES[idx];
     if let Some(meter) = meter {
@@ -571,140 +561,69 @@ fn chart_step_artist(chart: &ChartData) -> String {
 }
 
 fn make_course_song(meta: &CourseMeta) -> SongData {
-    SongData {
-        simfile_path: meta.path.clone(),
-        title: meta.name.clone(),
-        subtitle: String::new(),
-        translit_title: meta.name.clone(),
-        translit_subtitle: String::new(),
-        artist: if meta.scripter.trim().is_empty() {
-            tr("SelectCourse", "CourseScripter").to_string()
-        } else {
-            meta.scripter.clone()
-        },
-        translit_artist: String::new(),
-        genre: String::new(),
-        banner_path: meta.banner_path.clone(),
-        background_path: None,
-        background_changes: Vec::new(),
-        background_layer2_changes: Vec::new(),
-        foreground_changes: Vec::new(),
-        background_lua_changes: Vec::new(),
-        foreground_lua_changes: Vec::new(),
-        has_lua: false,
-        cdtitle_path: None,
-        music_path: None,
-        display_bpm: String::new(),
-        offset: 0.0,
-        sample_start: None,
-        sample_length: None,
-        min_bpm: meta.min_bpm.unwrap_or(0.0),
-        max_bpm: meta.max_bpm.unwrap_or_else(|| meta.min_bpm.unwrap_or(0.0)),
-        normalized_bpms: String::new(),
-        song_timing: None,
-        music_length_seconds: meta.total_length_seconds.max(0) as f32,
-        first_second: 0.0,
-        total_length_seconds: meta.total_length_seconds.max(0),
-        precise_last_second_seconds: meta.total_length_seconds.max(0) as f32,
-        precise_note_first_second_seconds: None,
-        precise_note_last_second_seconds: Some(meta.total_length_seconds.max(0) as f32),
-        last_second_hint: 0.0,
-        charts: Vec::new(),
-    }
+    let default_artist = meta.scripter.trim().is_empty().then(|| tr("SelectCourse", "CourseScripter"));
+    course_song_stub(
+        &meta.path, &meta.name, default_artist.as_deref().unwrap_or(&meta.scripter), meta.banner_path.as_deref(),
+        meta.min_bpm, meta.max_bpm, meta.total_length_seconds,
+    )
 }
 
-fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
-    let translated_titles = init_view.translated_titles;
-    let resolver = Arc::new(CourseResolver::new(
-        &init_view.song_packs,
-        &init_view.played_chart_counts,
-        &init_view.chart_grades,
-        init_view.context.play_style.chart_type(),
-    ));
-
+fn build_init_data(
+    catalog: &PreparedCourseCatalog,
+    translated_titles: bool,
+) -> InitData {
     let mut grouped: HashMap<String, Vec<Arc<CourseMeta>>> = HashMap::new();
-    let mut course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>> = HashMap::new();
-
-    for (path, course) in &init_view.courses {
-        let preparation = CoursePreparation::new(course);
-        let random_seed = fresh_course_seed();
-        let mut ratings: Vec<Option<CourseRatingMeta>> = vec![None; COURSE_RATING_ORDER.len()];
-        for course_diff in preparation.difficulties() {
-            let mut entries = Vec::with_capacity(course.entries.len());
-            let Some(prepared) = resolver.prepare_rating(
-                path,
-                course,
-                course_diff,
-                random_seed,
-                |song_data, chart, entry_index| {
-                    entries.push(CourseSongEntry::new(
-                        song_data.display_full_title(translated_titles),
-                        chart.difficulty.to_ascii_lowercase(),
-                        chart.meter,
-                        entry_index,
-                        chart_step_artist(chart),
-                    ));
-                },
-            ) else {
-                continue;
-            };
-
-            let course_meter = prepared.course_meter;
-            let course_difficulty_name = course::difficulty_label(course_diff).to_string();
-            let course_stepchart_label =
-                course_stepchart_label(course_difficulty_name.as_str(), course_meter);
-            let course_meter_text =
-                course_meter.map_or_else(unknown_text, |meter| Arc::<str>::from(meter.to_string()));
-            let entry_count_text = Arc::<str>::from(entries.len().to_string());
-            let stats_text = CourseStatsText::new(&prepared.totals, prepared.rated_entry_count > 0);
-
-            ratings[course_diff as usize] = Some(CourseRatingMeta {
-                course_difficulty: course_diff,
+    let mut course_meta_by_path = HashMap::with_capacity(catalog.courses().len());
+    for prepared in catalog.courses() {
+        let ratings: Vec<_> = prepared.ratings().iter().zip(COURSE_RATING_ORDER).map(|(rating, difficulty)| {
+            let rating = rating.as_ref()?;
+            let entries: Vec<_> = rating.charts().enumerate().map(|(index, (song, chart))| {
+                CourseSongEntry::new(
+                    song.display_full_title(translated_titles),
+                    chart.difficulty.to_ascii_lowercase(),
+                    chart.meter,
+                    index,
+                    chart_step_artist(chart),
+                )
+            }).collect();
+            let course_difficulty_name = course::difficulty_label(difficulty).to_owned();
+            let course_meter = rating.course_meter;
+            let course_stepchart_label = course_stepchart_label(&course_difficulty_name, course_meter);
+            let course_meter_text = course_meter.map_or_else(unknown_text, |meter| Arc::from(meter.to_string()));
+            let entry_count_text = Arc::from(entries.len().to_string());
+            let stats_text = CourseStatsText::new(&rating.totals, rating.rated_entry_count > 0);
+            Some(CourseRatingMeta {
+                course_difficulty: difficulty,
                 entries,
                 stats_text,
                 course_difficulty_name,
                 course_stepchart_label,
-                course_meter,
                 course_meter_text,
                 entry_count_text,
-                min_bpm: prepared.min_bpm,
-                max_bpm: prepared.max_bpm,
-                total_length_seconds: prepared.total_length_seconds,
-                runtime_stages: prepared.stages,
-            });
-        }
-
-        let group_name = course_group_name(path);
-        let default_rating_index = preparation.default_rating_index(&ratings);
-        // Game preparation retains at least one rating for every course.
+                min_bpm: rating.min_bpm,
+                max_bpm: rating.max_bpm,
+                total_length_seconds: rating.total_length_seconds,
+            })
+        }).collect();
+        let default_rating_index = prepared.default_rating_index();
         let default_rating = ratings[default_rating_index]
-            .as_ref()
-            .expect("every course retains at least one rating");
-        let (meta_min_bpm, meta_max_bpm, meta_total_length_seconds) = (
-            default_rating.min_bpm,
-            default_rating.max_bpm,
-            default_rating.total_length_seconds.max(0),
-        );
+            .as_ref().expect("every course retains at least one rating");
         let meta = Arc::new(CourseMeta {
-            source: course.clone(),
-            path: path.clone(),
-            score_hash: course_score_hash(path),
-            name: course_name(path, course),
-            scripter: course.scripter.clone(),
-            description: Arc::from(course.description.as_str()),
-            banner_path: course::resolve_course_banner_path(path, &course.banner),
-            ratings,
+            path: prepared.path().to_path_buf(),
+            score_hash: prepared.score_hash().to_owned(),
+            name: course_title(prepared.name()).into_owned(),
+            scripter: prepared.scripter().to_owned(),
+            description: Arc::from(prepared.description()),
+            banner_path: prepared.banner_path().map(Path::to_path_buf),
             default_rating_index,
-            min_bpm: meta_min_bpm,
-            max_bpm: meta_max_bpm,
-            total_length_seconds: meta_total_length_seconds,
-            has_random_entries: preparation.has_random_entries,
-            has_most_played_entries: preparation.has_most_played_entries,
-            course_type: preparation.course_type,
-            lives: course.lives,
+            min_bpm: default_rating.min_bpm,
+            max_bpm: default_rating.max_bpm,
+            total_length_seconds: default_rating.total_length_seconds,
+            ratings,
+            has_random_entries: prepared.has_random_entries(),
+            has_most_played_entries: prepared.has_most_played_entries(),
         });
-
-        grouped.entry(group_name).or_default().push(meta.clone());
+        grouped.entry(course_group_name(&meta.path)).or_default().push(meta.clone());
         course_meta_by_path.insert(meta.path.clone(), meta);
     }
 
@@ -728,7 +647,6 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
         all_entries,
         course_meta_by_path,
         course_text_color_overrides,
-        resolver,
     }
 }
 
@@ -941,47 +859,45 @@ fn set_selected_course_rating_index(state: &mut State, idx: usize) {
 
 /// Whether the selected rating contains stages that can start a course.
 pub fn has_selected_course(state: &State) -> bool {
-    selected_playable_rating(state).is_some()
+    selected_course_choice(state).is_some_and(|choice| state.catalog.can_start(choice))
 }
 
-/// Game startup data and the independently retained course presentation.
-pub fn selected_course_start(state: &State) -> Option<(CourseSessionPlan, CoursePresentationView)> {
-    let (meta, rating) = selected_playable_rating(state)?;
-    Some(course_start(meta, rating, rating.runtime_stages.clone()))
-}
-
-/// Capture the same confirmed rating for startup and for subsequent Endless cycles.
-pub fn selected_course_start_with_cycles(
-    state: &State,
-) -> Option<(
-    CourseSessionPlan,
-    CoursePresentationView,
-    Option<EndlessCourseSource>,
-)> {
-    let (meta, rating) = selected_playable_rating(state)?;
-    let (plan, presentation) = course_start(meta, rating, rating.runtime_stages.clone());
-    let cycles = EndlessCourseSource::for_selection(
-        &state.resolver,
-        &meta.source,
-        rating.course_difficulty,
-        &plan,
-    );
-    Some((plan, presentation, cycles))
-}
-
-fn selected_playable_rating(state: &State) -> Option<(&CourseMeta, &CourseRatingMeta)> {
+pub fn selected_course_choice(state: &State) -> Option<CourseChoice<'_>> {
     let meta = selected_course_meta(state)?;
     let rating = selected_course_rating(state, meta)?;
-    (!rating.runtime_stages.is_empty()).then_some((meta, rating))
+    Some(CourseChoice { path: &meta.path, difficulty: rating.course_difficulty })
 }
 
-/// The selected stages without startup labels or summary presentation.
-pub fn selected_course_cycle(state: &State) -> Option<CourseCyclePlan> {
-    let (meta, rating) = selected_playable_rating(state)?;
-    Some(CourseCyclePlan {
-        path: meta.path.clone(),
-        stages: rating.runtime_stages.clone(),
+pub fn course_catalog(state: &State) -> &PreparedCourseCatalog {
+    &state.catalog
+}
+
+/// Game startup data and the legacy course presentation.
+pub fn selected_course_start(state: &State) -> Option<(CourseSessionPlan, CoursePresentationView)> {
+    let plan = state.catalog.selected_plan(selected_course_choice(state)?)?;
+    Some((plan, selected_course_presentation(state)?))
+}
+
+pub fn selected_course_start_with_cycles(
+    state: &State,
+) -> Option<(CourseSessionPlan, CoursePresentationView, Option<EndlessCourseSource>)> {
+    let start = state.catalog.start(selected_course_choice(state)?)?;
+    Some((start.plan, selected_course_presentation(state)?, start.endless_source))
+}
+
+fn selected_course_presentation(state: &State) -> Option<CoursePresentationView> {
+    let meta = selected_course_meta(state)?;
+    let rating = selected_course_rating(state, meta)?;
+    Some(CoursePresentationView {
+        name: meta.name.clone(),
+        banner_path: meta.banner_path.clone(),
+        song_stub: Arc::new(make_course_song(meta)),
+        course_stepchart_label: rating.course_stepchart_label.clone(),
     })
+}
+
+pub fn selected_course_cycle(state: &State) -> Option<CourseCyclePlan> {
+    state.catalog.selected_cycle(selected_course_choice(state)?)
 }
 
 pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
@@ -989,60 +905,14 @@ pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
     Some(SelectedCoursePlan::from_parts(plan, presentation))
 }
 
-fn course_start(
-    meta: &CourseMeta,
-    rating: &CourseRatingMeta,
-    stages: Vec<CourseStagePlan>,
-) -> (CourseSessionPlan, CoursePresentationView) {
-    (
-        CourseSessionPlan {
-            path: meta.path.clone(),
-            score_hash: meta.score_hash.clone(),
-            course_difficulty_name: rating.course_difficulty_name.clone(),
-            course_meter: rating.course_meter,
-            course_type: meta.course_type,
-            lives: meta.lives,
-            stages,
-        },
-        CoursePresentationView {
-            name: meta.name.clone(),
-            banner_path: meta.banner_path.clone(),
-            song_stub: Arc::new(make_course_song(meta)),
-            course_stepchart_label: rating.course_stepchart_label.clone(),
-        },
-    )
-}
-
-fn reroll_endless_stages(
-    resolver: &CourseResolver,
-    meta: &CourseMeta,
-    rating: &CourseRatingMeta,
-) -> Option<Vec<CourseStagePlan>> {
-    resolver.reroll_endless(
-        &meta.path,
-        &meta.source,
-        rating.course_difficulty,
-        fresh_course_seed(),
-    )
-}
-
 /// Fresh Endless stages without allocating course presentation metadata.
 pub fn reroll_selected_endless_cycle(state: &State) -> Option<CourseCyclePlan> {
-    let meta = selected_course_meta(state)?;
-    let rating = selected_course_rating(state, meta)?;
-    let stages = reroll_endless_stages(&state.resolver, meta, rating)?;
-    Some(CourseCyclePlan {
-        path: meta.path.clone(),
-        stages,
-    })
+    state.catalog.reroll_cycle(selected_course_choice(state)?)
 }
 
 pub fn reroll_selected_endless_plan(state: &State) -> Option<SelectedCoursePlan> {
-    let meta = selected_course_meta(state)?;
-    let rating = selected_course_rating(state, meta)?;
-    let stages = reroll_endless_stages(&state.resolver, meta, rating)?;
-    let (plan, presentation) = course_start(meta, rating, stages);
-    Some(SelectedCoursePlan::from_parts(plan, presentation))
+    let plan = state.catalog.reroll_plan(selected_course_choice(state)?)?;
+    Some(SelectedCoursePlan::from_parts(plan, selected_course_presentation(state)?))
 }
 
 #[inline(always)]
@@ -1068,7 +938,7 @@ fn selected_banner_source(state: &State) -> Option<BannerSource> {
     }
 }
 
-fn restore_last_course(state: &mut State, init_view: &SelectCourseInitView) {
+fn restore_last_course(state: &mut State, init_view: &SelectCoursePresentationInitView) {
     let Some(path) = init_view.last_course_path.as_deref() else {
         return;
     };
@@ -1083,7 +953,23 @@ pub fn sync_session_elapsed(state: &mut State, session_elapsed: f32) {
 
 #[must_use]
 pub fn init(init_view: SelectCourseInitView) -> State {
-    let init = build_init_data(&init_view);
+    let catalog = PreparedCourseCatalog::new(
+        init_view.courses,
+        &init_view.song_packs,
+        &init_view.played_chart_counts,
+        &init_view.chart_grades,
+        init_view.context.play_style.chart_type(),
+    );
+    init_prepared(catalog, SelectCoursePresentationInitView {
+        translated_titles: init_view.translated_titles,
+        last_course_path: init_view.last_course_path,
+        last_course_difficulty: init_view.last_course_difficulty,
+        context: init_view.context,
+    })
+}
+
+pub fn init_prepared(catalog: PreparedCourseCatalog, init_view: SelectCoursePresentationInitView) -> State {
+    let init = build_init_data(&catalog, init_view.translated_titles);
     let score_view = SelectCourseScoreView::default();
     let score_text = CourseScoreText::new(&score_view);
     let mut state = State {
@@ -1107,7 +993,7 @@ pub fn init(init_view: SelectCourseInitView) -> State {
         all_entries: init.all_entries,
         course_meta_by_path: init.course_meta_by_path,
         course_text_color_overrides: init.course_text_color_overrides,
-        resolver: init.resolver,
+        catalog,
         bg: visual_style_bg::State::new(),
         nav_key_held_direction: None,
         nav_key_held_since: None,

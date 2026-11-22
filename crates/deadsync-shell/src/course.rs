@@ -1,4 +1,3 @@
-use deadsync_chart::course::CourseSessionPlan;
 use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::course_run::CourseRun;
@@ -9,8 +8,7 @@ use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide};
 use deadsync_score::{self as score_data, stage_stats};
-use deadsync_simfile::course_selection::EndlessCourseSource;
-use deadsync_theme::views::CoursePresentationView;
+use deadsync_simfile::course_selection::{EndlessCourseSource, PreparedCourseStart};
 use deadsync_theme_simply_love::views::{CourseGraphStage, ScoreInfo};
 use std::sync::Arc;
 
@@ -18,7 +16,7 @@ use std::sync::Arc;
 pub struct CourseRunState {
     pub run: CourseRun,
     pub endless_source: Option<Arc<EndlessCourseSource>>,
-    pub presentation: CoursePresentationView,
+    pub song: Arc<SongData>,
     pub stage_summaries: Vec<stage_stats::StageSummary>,
 }
 
@@ -40,15 +38,11 @@ pub fn renew_endless_cycle(course: &mut CourseRunState, chart_type: &str) -> boo
 }
 
 pub fn build_course_run_from_selection(
-    selection: CourseSessionPlan,
-    presentation: CoursePresentationView,
-    endless_source: Option<EndlessCourseSource>,
+    start: PreparedCourseStart,
     chart_type: &str,
 ) -> Option<CourseRunState> {
     match build_course_run_from_selection_with_loader(
-        selection,
-        presentation,
-        endless_source,
+        start,
         chart_type,
         deadsync_simfile::app_runtime::load_gameplay_charts,
     ) {
@@ -61,31 +55,23 @@ pub fn build_course_run_from_selection(
 }
 
 fn build_course_run_from_selection_with_loader(
-    selection: CourseSessionPlan,
-    presentation: CoursePresentationView,
-    endless_source: Option<EndlessCourseSource>,
+    start: PreparedCourseStart,
     chart_type: &str,
     load: impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
 ) -> Result<Option<CourseRunState>, String> {
-    let Some(run) = CourseRun::prepare(selection, chart_type, load)? else {
+    let Some(run) = CourseRun::prepare(start.plan, chart_type, load)? else {
         return Ok(None);
     };
     Ok(Some(CourseRunState {
         run,
-        endless_source: endless_source.map(Arc::new),
-        presentation,
+        endless_source: start.endless_source.map(Arc::new),
+        song: start.song,
         stage_summaries: Vec::new(),
     }))
 }
 
 pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
-    course_summary_stage(
-        &course.run,
-        &course.stage_summaries,
-        course.presentation.name.as_str(),
-        course.presentation.banner_path.as_deref(),
-        course.presentation.song_stub.as_ref(),
-    )
+    course_summary_stage(&course.run, &course.stage_summaries, &course.song)
 }
 
 pub fn routine_shared_course_player(

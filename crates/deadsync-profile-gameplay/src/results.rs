@@ -10,7 +10,6 @@ use deadsync_rules::{judgment, timing as timing_stats};
 use deadsync_score::stage_stats::{self, PlayerStageSummary, StageSummary};
 use deadsync_score::{self as score_data, GrooveStatsEvalState, ItlEvalState};
 use std::collections::HashMap;
-use std::path::Path;
 
 fn course_summary_totals(run: &CourseRun) -> [stage_stats::CourseSummaryTotals; MAX_PLAYERS] {
     if run.course_type == CourseType::Endless {
@@ -30,14 +29,12 @@ fn course_summary_totals(run: &CourseRun) -> [stage_stats::CourseSummaryTotals; 
 pub fn course_summary_stage(
     run: &CourseRun,
     stage_summaries: &[StageSummary],
-    name: &str,
-    banner_path: Option<&Path>,
     song_stub: &SongData,
 ) -> Option<StageSummary> {
     stage_stats::build_course_summary_stage(stage_stats::CourseSummaryInput {
         path: run.path.as_path(),
-        name,
-        banner_path,
+        name: &song_stub.title,
+        banner_path: song_stub.banner_path.as_deref(),
         score_hash: run.score_hash.as_str(),
         difficulty_name: run.course_difficulty_name.as_str(),
         meter: run.course_meter,

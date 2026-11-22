@@ -1,10 +1,16 @@
 use super::*;
+use deadsync_chart::course::CourseStagePlan;
 use deadsync_chart::{SongPack, SyncPref};
 use deadsync_simfile::cache::build_song_meta;
-use deadsync_simfile::course::{CourseEntry, CourseSong, StepsSpec};
+use deadsync_simfile::course::{CourseEntry, CourseFile, CourseSong, StepsSpec};
 use deadsync_simfile::song::{ParseSongOptions, parse_song_bytes};
+use deadsync_theme::views::CourseTypeView;
 
 fn selected_state(repeat: bool) -> State {
+    selected_state_with_songs(repeat, true)
+}
+
+fn selected_state_with_songs(repeat: bool, include_songs: bool) -> State {
     let song_path = Path::new("Songs/Fixture/Track/chart.sm");
     let source = b"#TITLE:Track;\n#BPMS:0=120;\n\
         #NOTES:dance-single::Medium:4:0,0,0,0,0:\n1000\n0000\n0100\n0000\n;\n\
@@ -56,7 +62,7 @@ fn selected_state(repeat: bool) -> State {
             sync_pref: SyncPref::Default,
             directory: "Songs/Fixture".into(),
             banner_path: None,
-            songs: vec![song],
+            songs: include_songs.then_some(song).into_iter().collect(),
         }],
         courses: vec![(path.clone(), course)],
         last_course_path: Some(path.clone()),
@@ -86,6 +92,12 @@ fn assert_stages(actual: &[CourseStagePlan], expected: &[CourseStagePlan]) {
 fn startup_and_legacy_views_preserve_summary_metadata_without_affecting_cycles() {
     let mut state = selected_state(true);
     let original_cycle = selected_course_cycle(&state).unwrap();
+    let canonical = |state: &State| {
+        course_catalog(state)
+            .start(selected_course_choice(state).unwrap())
+            .unwrap()
+    };
+    let original = canonical(&state);
     let meta = Arc::make_mut(state.course_selection.meta.as_mut().unwrap());
     meta.name = "Localized course title".to_owned();
     meta.banner_path = Some("theme/course-banner.png".into());
@@ -98,6 +110,15 @@ fn startup_and_legacy_views_preserve_summary_metadata_without_affecting_cycles()
     rating.max_bpm = Some(150.0);
     rating.total_length_seconds = 222;
 
+    let prepared = canonical(&state);
+    assert_eq!(prepared.song.title, original.song.title);
+    assert_eq!(prepared.song.banner_path, original.song.banner_path);
+    assert_eq!(prepared.song.min_bpm, original.song.min_bpm);
+    assert_eq!(
+        prepared.song.total_length_seconds,
+        original.song.total_length_seconds
+    );
+    assert_stages(&prepared.plan.stages, &original.plan.stages);
     let (plan, presentation) = selected_course_start(&state).unwrap();
     assert_eq!(plan.path, original_cycle.path);
     assert_eq!(plan.score_hash, course_score_hash(&plan.path));
@@ -255,40 +276,12 @@ fn readiness_and_cycle_helpers_preserve_empty_rating_and_reroll_fallbacks() {
     assert!(reroll_selected_endless_cycle(&state).is_none());
     assert!(reroll_selected_endless_plan(&state).is_none());
 
-    state.course_selection.rating_index = Difficulty::Hard as usize;
-    let meta = Arc::make_mut(state.course_selection.meta.as_mut().unwrap());
-    meta.ratings[Difficulty::Hard as usize]
-        .as_mut()
-        .unwrap()
-        .runtime_stages
-        .clear();
-    assert!(!has_selected_course(&state));
-    assert!(selected_course_start(&state).is_none());
-    assert!(selected_course_cycle(&state).is_none());
-    assert!(selected_course_plan(&state).is_none());
-    assert_eq!(
-        reroll_selected_endless_cycle(&state).unwrap().stages.len(),
-        2
-    );
-    assert_eq!(
-        reroll_selected_endless_plan(&state).unwrap().stages.len(),
-        2
-    );
-
-    let mut state = selected_state(true);
-    let cached = selected_course_cycle(&state).unwrap();
-    state.resolver = Arc::new(CourseResolver::new(&[], &[], &[], "dance-single"));
-    assert!(reroll_selected_endless_cycle(&state).is_none());
-    assert!(reroll_selected_endless_plan(&state).is_none());
-    let fallback = reroll_selected_endless_cycle(&state)
-        .or_else(|| selected_course_cycle(&state))
-        .unwrap();
-    assert_eq!(fallback.path, cached.path);
-    assert_stages(&fallback.stages, &cached.stages);
-    let (_, _, source) = selected_course_start_with_cycles(&state).unwrap();
-    let retained_fallback = source.unwrap().next_cycle();
-    assert_eq!(retained_fallback.path, cached.path);
-    assert_stages(&retained_fallback.stages, &cached.stages);
+    let unresolved = selected_state_with_songs(true, false);
+    assert!(!has_selected_course(&unresolved));
+    assert!(selected_course_choice(&unresolved).is_some());
+    assert!(selected_course_start_with_cycles(&unresolved).is_none());
+    assert!(selected_course_cycle(&unresolved).is_none());
+    assert!(reroll_selected_endless_cycle(&unresolved).is_none());
 
     let state = selected_state(false);
     assert!(has_selected_course(&state));
