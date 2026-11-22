@@ -9143,7 +9143,7 @@ impl App {
                 prev == CurrentScreen::SelectMusic,
             );
             if prev == CurrentScreen::Menu {
-                let p2 = self.state.screens.menu_state.started_by_p2;
+                let p2 = self.state.session.menu_start_side == profile_data::PlayerSide::P2;
                 select_profile::set_joined(&mut self.state.screens.select_profile_state, !p2, p2);
             } else if prev == CurrentScreen::SelectMusic {
                 let session = profile::get_session_snapshot();
@@ -10118,7 +10118,7 @@ impl App {
                         .active_color_index
                 }
             };
-            let return_to = evaluation_summary_return_to(
+            let return_to = evaluation_summary_return_to::<ActiveTheme>(
                 prev,
                 std::mem::take(&mut self.state.session.pending_post_select_summary_exit),
             );
@@ -12220,7 +12220,7 @@ mod tests {
     #[test]
     fn evaluation_summary_return_to_stays_in_select_music_for_set_summary() {
         assert_eq!(
-            evaluation_summary_return_to(CurrentScreen::SelectMusic, false),
+            evaluation_summary_return_to::<ActiveTheme>(CurrentScreen::SelectMusic, false),
             CurrentScreen::SelectMusic,
         );
     }
@@ -12228,11 +12228,11 @@ mod tests {
     #[test]
     fn evaluation_summary_return_to_keeps_exit_flow_moving() {
         assert_eq!(
-            evaluation_summary_return_to(CurrentScreen::SelectMusic, true),
+            evaluation_summary_return_to::<ActiveTheme>(CurrentScreen::SelectMusic, true),
             CurrentScreen::Initials,
         );
         assert_eq!(
-            evaluation_summary_return_to(CurrentScreen::SelectCourse, true),
+            evaluation_summary_return_to::<ActiveTheme>(CurrentScreen::SelectCourse, true),
             CurrentScreen::Initials,
         );
     }

@@ -1,6 +1,8 @@
 use std::{path::PathBuf, time::Instant};
 
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile::PlayerSide;
 use deadsync_score::stage_stats;
 
 use crate::CourseRunState;
@@ -9,6 +11,7 @@ use crate::CourseRunState;
 pub struct SessionState {
     pub preferred_difficulty_index: usize,
     pub session_start_time: Option<Instant>,
+    pub menu_start_side: PlayerSide,
     pub played_stages: Vec<stage_stats::StageSummary>,
     pub pending_post_select_summary_exit: bool,
     pub course_individual_stage_indices: Vec<usize>,
@@ -27,6 +30,7 @@ impl SessionState {
         Self {
             preferred_difficulty_index,
             session_start_time: None,
+            menu_start_side: PlayerSide::P1,
             played_stages: Vec::new(),
             pending_post_select_summary_exit: false,
             course_individual_stage_indices: Vec::new(),
@@ -55,6 +59,16 @@ impl SessionState {
         self.course_run = None;
     }
 
+    pub const fn remember_menu_start(&mut self, input: &InputEvent) {
+        if input.pressed {
+            match input.action {
+                VirtualAction::p1_start => self.menu_start_side = PlayerSide::P1,
+                VirtualAction::p2_start => self.menu_start_side = PlayerSide::P2,
+                _ => {}
+            }
+        }
+    }
+
     /// Record authoritative data independently of any optional evaluation page.
     pub fn record_stage_result(&mut self, stage: stage_stats::StageSummary) {
         if let Some(course) = self.course_run.as_mut() {
@@ -75,6 +89,7 @@ impl SessionState {
 
     pub fn reset_for_menu(&mut self, combo_carry: [u32; MAX_PLAYERS]) {
         self.session_start_time = None;
+        self.menu_start_side = PlayerSide::P1;
         self.played_stages.clear();
         self.course_individual_stage_indices.clear();
         self.combo_carry = combo_carry;
@@ -109,6 +124,24 @@ mod tests {
         assert_eq!(state.session_start_time, Some(started));
         assert!(state.course_individual_stage_indices.is_empty());
         assert!(!state.begin_play_session(started));
+    }
+
+    #[test]
+    fn menu_start_side_follows_the_pressed_start_and_resets_on_entry() {
+        use deadsync_core::input::InputSource;
+
+        let mut state = SessionState::new(0, [0; MAX_PLAYERS]);
+        let now = Instant::now();
+        let input = |action, pressed| {
+            InputEvent::new(action, 0, pressed, InputSource::Keyboard, now, 0, now, now)
+        };
+        assert_eq!(state.menu_start_side, PlayerSide::P1);
+        state.remember_menu_start(&input(VirtualAction::p2_start, true));
+        state.remember_menu_start(&input(VirtualAction::p1_start, false));
+        state.remember_menu_start(&input(VirtualAction::p1_menu_up, true));
+        assert_eq!(state.menu_start_side, PlayerSide::P2);
+        state.reset_for_menu([0; MAX_PLAYERS]);
+        assert_eq!(state.menu_start_side, PlayerSide::P1);
     }
 
     #[test]

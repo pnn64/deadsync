@@ -303,7 +303,7 @@ impl App {
         let from = self.state.screens.current_screen;
         let cfg = config::runtime::get();
         self.lights.clear_button_pressed();
-        let plan = navigation_route_plan(
+        let plan = navigation_route_plan::<ActiveTheme>(
             &cfg,
             from,
             target,
@@ -314,12 +314,9 @@ impl App {
             self.state.session.pending_post_select_summary_exit = pending;
         }
         if plan.initialize_session_side {
-            let p2_started = self.state.screens.menu_state.started_by_p2;
-            profile::set_session_player_side(if p2_started {
-                profile_data::PlayerSide::P2
-            } else {
-                profile_data::PlayerSide::P1
-            });
+            let side = self.state.session.menu_start_side;
+            let p2_started = side == profile_data::PlayerSide::P2;
+            profile::set_session_player_side(side);
             profile::set_session_joined(!p2_started, p2_started);
         }
         if plan.apply_preferred_style {
@@ -357,6 +354,7 @@ impl App {
             NavigationTransitionStart::DirectEntry { target } => {
                 if from == CurrentScreen::Init && target == CurrentScreen::Menu {
                     debug!("Instant navigation Init?Menu (out-transition handled by Init screen)");
+                    self.state.session.menu_start_side = profile_data::PlayerSide::P1;
                     menu::reset_for_entry(&mut self.state.screens.menu_state);
                 }
                 self.commit_screen_change(target);

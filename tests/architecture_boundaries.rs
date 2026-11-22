@@ -7364,6 +7364,7 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
         .expect("game profile requests should be readable");
     let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
         .expect("shell profile executor should be readable");
+    let game_flow = production_source(&root.join("crates/deadsync-core/src/session_flow.rs"));
 
     for oversized_input in [
         "deadsync_config::app_config::Config",
@@ -7377,26 +7378,42 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
         );
     }
     for contract in [
-        "pub struct SimplyLoveNavigationPolicy",
+        "pub struct SessionNavigationPolicy",
         "pub show_select_profile: bool",
         "pub show_select_play_mode: bool",
         "pub show_eval_summary: bool",
         "pub show_name_entry: bool",
         "pub show_gameover: bool",
-        "pub preferred_difficulties: [usize; PLAYER_SLOTS]",
     ] {
-        assert!(flow.contains(contract), "Simply Love flow lacks {contract}");
+        assert!(game_flow.contains(contract), "game session flow lacks {contract}");
     }
+    assert!(flow.contains("pub preferred_difficulties: [usize; PLAYER_SLOTS]"));
+    assert!(flow.contains("deadsync_core::session_flow::resolve_navigation("));
+    for concrete in ["SimplyLove", "deadsync_theme"] {
+        assert!(!game_flow.contains(concrete));
+    }
+    let shell_flow = shell.split_once("const fn navigation_policy").unwrap().1;
+    let shell_flow = shell_flow.split_once("#[cfg(test)]").unwrap().0;
+    assert!(!shell_flow.contains("SimplyLove"));
     assert!(
         shell.contains("const fn navigation_policy(config: &Config)")
             && shell.contains("show_select_profile: config.machine_show_select_profile")
             && shell.contains("show_eval_summary: config.machine_show_eval_summary")
-            && shell.contains("resolve_navigation(")
+            && shell.contains("session_flow::resolve_navigation(")
+            && shell.contains("T::SESSION_SCREENS")
             && profile_requests.contains("profile_combo_carry(&profiles)")
             && profile_requests.contains("preferred_difficulty_indices(&profiles, session.play_style)")
             && profile_executor.contains("profile_selection_target("),
         "theme navigation must receive prepared inputs from the game and shell"
     );
+    let input = production_source(&root.join("crates/deadsync-shell/src/app/input_routing.rs"));
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).unwrap();
+    assert!(input.contains("self.state.session.remember_menu_start(&ev)"));
+    for entry in [&app, &navigation] {
+        assert!(entry.contains("self.state.session.menu_start_side"));
+        assert!(!entry.contains("menu_state.started_by_p2"));
+    }
 }
 
 #[test]

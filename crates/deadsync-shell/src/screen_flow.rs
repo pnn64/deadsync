@@ -1,19 +1,17 @@
 use deadsync_config::app_config::Config;
+use deadsync_core::session_flow::{self, SessionNavigationPlan, SessionNavigationPolicy};
+use deadsync_theme::ThemeSessionFlow;
 #[cfg(test)]
 use deadsync_profile::PlayerSide;
+#[cfg(test)]
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
-pub(crate) use deadsync_theme_simply_love::screens::evaluation_summary_return_to;
 #[cfg(test)]
 use deadsync_theme_simply_love::screens::{
     LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, SelectMusicJoinPlan,
     late_join_side, profile_selection_plan, select_music_join_plan,
 };
-use deadsync_theme_simply_love::screens::{
-    SimplyLoveNavigationPlan, SimplyLoveNavigationPolicy, resolve_navigation,
-};
-
-const fn navigation_policy(config: &Config) -> SimplyLoveNavigationPolicy {
-    SimplyLoveNavigationPolicy {
+const fn navigation_policy(config: &Config) -> SessionNavigationPolicy {
+    SessionNavigationPolicy {
         show_select_profile: config.machine_show_select_profile,
         show_select_color: config.machine_show_select_color,
         show_select_style: config.machine_show_select_style,
@@ -24,17 +22,29 @@ const fn navigation_policy(config: &Config) -> SimplyLoveNavigationPolicy {
     }
 }
 
-pub(crate) fn navigation_route_plan(
+pub(crate) fn navigation_route_plan<T: ThemeSessionFlow>(
     config: &Config,
-    from: Screen,
-    requested: Screen,
+    from: T::Screen,
+    requested: T::Screen,
     has_played_stages: bool,
-) -> SimplyLoveNavigationPlan {
-    resolve_navigation(
+) -> SessionNavigationPlan<T::Screen> {
+    session_flow::resolve_navigation(
+        T::SESSION_SCREENS,
         navigation_policy(config),
         from,
         requested,
         has_played_stages,
+    )
+}
+
+pub(crate) fn evaluation_summary_return_to<T: ThemeSessionFlow>(
+    previous: T::Screen,
+    pending_post_select_summary_exit: bool,
+) -> T::Screen {
+    session_flow::evaluation_summary_return_to(
+        T::SESSION_SCREENS,
+        previous,
+        pending_post_select_summary_exit,
     )
 }
 
@@ -52,8 +62,70 @@ pub(crate) fn preferred_play_style_for_joined(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ActiveTheme;
+    use deadsync_core::session_flow::SessionScreens;
     use deadsync_input::VirtualAction;
     use deadsync_profile::PlayStyle;
+    use deadsync_theme::{Theme, ThemeScreenFlow, ThemeScreenId, ThemeScreens};
+
+    struct AlternateTheme;
+
+    impl Theme for AlternateTheme {
+        type Screen = &'static str;
+        type RuntimeRequest = ();
+
+        fn screen_id(screen: Self::Screen) -> ThemeScreenId {
+            ThemeScreenId::new(screen)
+        }
+    }
+
+    impl ThemeScreenFlow for AlternateTheme {
+        const SCREENS: ThemeScreens<Self::Screen> = ThemeScreens {
+            menu: "home",
+            gameplay: "play",
+            practice: "editor",
+            results: "result",
+            song_selection: "songs",
+            course_selection: "courses",
+            player_options: "settings",
+        };
+    }
+
+    impl ThemeSessionFlow for AlternateTheme {
+        const SESSION_SCREENS: SessionScreens<Self::Screen> = SessionScreens {
+            menu: Self::SCREENS.menu,
+            select_music: Self::SCREENS.song_selection,
+            select_course: Self::SCREENS.course_selection,
+            select_profile: None,
+            select_color: None,
+            select_style: None,
+            select_play_mode: Some("mode"),
+            profile_load: "prepare",
+            evaluation_summary: Some("set-results"),
+            initials: None,
+            gameover: Some("finished"),
+        };
+    }
+
+    #[test]
+    fn session_navigation_applies_game_defaults_for_an_alternate_theme() {
+        let config = Config {
+            machine_show_select_play_mode: false,
+            machine_show_eval_summary: true,
+            ..Config::default()
+        };
+        let plan = navigation_route_plan::<AlternateTheme>(&config, "home", "mode", false);
+        assert_eq!(plan.target, "prepare");
+        assert!(plan.initialize_session_side);
+        assert!(plan.apply_preferred_style);
+        assert!(plan.apply_preferred_play_mode);
+
+        let plan = navigation_route_plan::<AlternateTheme>(&config, "courses", "home", true);
+        assert_eq!(plan.target, "set-results");
+        assert_eq!(plan.pending_post_select_summary_exit, Some(true));
+        assert_eq!(evaluation_summary_return_to::<AlternateTheme>("courses", false), "courses");
+        assert_eq!(evaluation_summary_return_to::<AlternateTheme>("courses", true), "finished");
+    }
 
     #[test]
     fn post_select_exit_enters_configured_summary_flow() {
@@ -61,11 +133,11 @@ mod tests {
             machine_show_eval_summary: true,
             ..Config::default()
         };
-        let plan = navigation_route_plan(&cfg, Screen::SelectMusic, Screen::Menu, true);
+        let plan = navigation_route_plan::<ActiveTheme>(&cfg, Screen::SelectMusic, Screen::Menu, true);
         assert_eq!(plan.target, Screen::EvaluationSummary);
         assert_eq!(plan.pending_post_select_summary_exit, Some(true));
 
-        let plan = navigation_route_plan(&cfg, Screen::SelectMusic, Screen::Menu, false);
+        let plan = navigation_route_plan::<ActiveTheme>(&cfg, Screen::SelectMusic, Screen::Menu, false);
         assert_eq!(plan.target, Screen::Menu);
         assert_eq!(plan.pending_post_select_summary_exit, None);
     }
@@ -79,7 +151,7 @@ mod tests {
             machine_show_select_play_mode: false,
             ..Config::default()
         };
-        let plan = navigation_route_plan(&cfg, Screen::Menu, Screen::SelectProfile, false);
+        let plan = navigation_route_plan::<ActiveTheme>(&cfg, Screen::Menu, Screen::SelectProfile, false);
         assert_eq!(plan.target, Screen::ProfileLoad);
         assert!(plan.apply_preferred_style);
         assert!(plan.apply_preferred_play_mode);
@@ -113,7 +185,7 @@ mod tests {
                     true,
                 );
                 let navigation =
-                    navigation_route_plan(&cfg, Screen::SelectProfile, Screen::SelectColor, false);
+                    navigation_route_plan::<ActiveTheme>(&cfg, Screen::SelectProfile, Screen::SelectColor, false);
                 assert_eq!(navigation.target, Screen::ProfileLoad);
                 assert!(navigation.apply_preferred_style);
                 assert_eq!(
@@ -154,7 +226,7 @@ mod tests {
 
     #[test]
     fn direct_summary_navigation_clears_pending_exit() {
-        let plan = navigation_route_plan(
+        let plan = navigation_route_plan::<ActiveTheme>(
             &Config::default(),
             Screen::Evaluation,
             Screen::EvaluationSummary,
@@ -166,15 +238,15 @@ mod tests {
     #[test]
     fn evaluation_summary_returns_to_wheel_until_exit_flow_is_pending() {
         assert_eq!(
-            evaluation_summary_return_to(Screen::SelectMusic, false),
+            evaluation_summary_return_to::<ActiveTheme>(Screen::SelectMusic, false),
             Screen::SelectMusic,
         );
         assert_eq!(
-            evaluation_summary_return_to(Screen::SelectCourse, false),
+            evaluation_summary_return_to::<ActiveTheme>(Screen::SelectCourse, false),
             Screen::SelectCourse,
         );
         assert_eq!(
-            evaluation_summary_return_to(Screen::SelectMusic, true),
+            evaluation_summary_return_to::<ActiveTheme>(Screen::SelectMusic, true),
             Screen::Initials,
         );
     }

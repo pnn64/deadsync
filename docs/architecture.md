@@ -565,6 +565,10 @@ selections, including the joined sides, active side, and play style. It returns
 the preferences and avatar paths that the shell uses to refresh the active theme.
 Simply Love chooses the next screen after a profile is selected.
 
+The game resolves session startup and post-play routes from the optional screen
+roles supplied by each theme. The shell records the side that pressed Start at
+the menu and uses it for profile selection and machine defaults.
+
 The shell still stores concrete screen state and routes concrete runtime
 requests. A replaceable theme needs those integration points as well as the
 transition interface.

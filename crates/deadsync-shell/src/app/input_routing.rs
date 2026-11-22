@@ -434,6 +434,7 @@ impl App {
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
+                self.state.session.remember_menu_start(&ev);
                 screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
             }
             CurrentScreen::SelectProfile => unreachable!("Select Profile uses the flat buffer"),

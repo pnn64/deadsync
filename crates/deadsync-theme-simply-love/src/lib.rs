@@ -115,6 +115,27 @@ impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme {
     }
 }
 
+impl deadsync_theme::ThemeSessionFlow for SimplyLoveTheme {
+    const SESSION_SCREENS: deadsync_core::session_flow::SessionScreens<Self::Screen> = {
+        use deadsync_theme::ThemeScreenFlow;
+        use screens::SimplyLoveScreen as Screen;
+
+        deadsync_core::session_flow::SessionScreens {
+            menu: Self::SCREENS.menu,
+            select_music: Self::SCREENS.song_selection,
+            select_course: Self::SCREENS.course_selection,
+            select_profile: Some(Screen::SelectProfile),
+            select_color: Some(Screen::SelectColor),
+            select_style: Some(Screen::SelectStyle),
+            select_play_mode: Some(Screen::SelectPlayMode),
+            profile_load: Screen::ProfileLoad,
+            evaluation_summary: Some(Screen::EvaluationSummary),
+            initials: Some(Screen::Initials),
+            gameover: Some(Screen::GameOver),
+        }
+    };
+}
+
 impl deadsync_theme::ThemeResources for SimplyLoveTheme {
     const SOUNDS: deadsync_theme::ThemeSounds = deadsync_theme::ThemeSounds {
         effects: SFX_PATHS,

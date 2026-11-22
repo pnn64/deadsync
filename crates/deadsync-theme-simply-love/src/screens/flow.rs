@@ -247,107 +247,9 @@ pub fn profile_selection_target(
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SimplyLoveNavigationPlan {
-    pub target: SimplyLoveScreen,
-    pub pending_post_select_summary_exit: Option<bool>,
-    pub apply_preferred_style: bool,
-    pub apply_preferred_play_mode: bool,
-    pub initialize_session_side: bool,
-}
-
-/// Shell-prepared visibility policy for Simply Love's optional flow screens.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SimplyLoveNavigationPolicy {
-    pub show_select_profile: bool,
-    pub show_select_color: bool,
-    pub show_select_style: bool,
-    pub show_select_play_mode: bool,
-    pub show_eval_summary: bool,
-    pub show_name_entry: bool,
-    pub show_gameover: bool,
-}
-
-impl Default for SimplyLoveNavigationPolicy {
-    fn default() -> Self {
-        Self {
-            show_select_profile: true,
-            show_select_color: true,
-            show_select_style: true,
-            show_select_play_mode: true,
-            show_eval_summary: true,
-            show_name_entry: true,
-            show_gameover: true,
-        }
-    }
-}
-
-#[inline(always)]
-const fn startup_screen_enabled(
-    policy: SimplyLoveNavigationPolicy,
-    screen: SimplyLoveScreen,
-) -> bool {
-    match screen {
-        SimplyLoveScreen::SelectProfile => policy.show_select_profile,
-        SimplyLoveScreen::SelectColor => policy.show_select_color,
-        SimplyLoveScreen::SelectStyle => policy.show_select_style,
-        SimplyLoveScreen::SelectPlayMode => policy.show_select_play_mode,
-        _ => true,
-    }
-}
-
-fn resolve_startup_target(
-    policy: SimplyLoveNavigationPolicy,
-    target: SimplyLoveScreen,
-) -> SimplyLoveScreen {
-    const ORDER: [SimplyLoveScreen; 4] = [
-        SimplyLoveScreen::SelectProfile,
-        SimplyLoveScreen::SelectColor,
-        SimplyLoveScreen::SelectStyle,
-        SimplyLoveScreen::SelectPlayMode,
-    ];
-    let Some(start_idx) = ORDER.iter().position(|screen| *screen == target) else {
-        return target;
-    };
-    ORDER
-        .iter()
-        .skip(start_idx)
-        .copied()
-        .find(|screen| startup_screen_enabled(policy, *screen))
-        .unwrap_or(SimplyLoveScreen::ProfileLoad)
-}
-
-#[inline(always)]
-const fn first_post_select_target(policy: SimplyLoveNavigationPolicy) -> SimplyLoveScreen {
-    if policy.show_eval_summary {
-        SimplyLoveScreen::EvaluationSummary
-    } else if policy.show_name_entry {
-        SimplyLoveScreen::Initials
-    } else if policy.show_gameover {
-        SimplyLoveScreen::GameOver
-    } else {
-        SimplyLoveScreen::Menu
-    }
-}
-
-#[inline(always)]
-const fn resolve_post_select_target(
-    policy: SimplyLoveNavigationPolicy,
-    target: SimplyLoveScreen,
-) -> SimplyLoveScreen {
-    match target {
-        SimplyLoveScreen::EvaluationSummary => first_post_select_target(policy),
-        SimplyLoveScreen::Initials if !policy.show_name_entry => {
-            if policy.show_gameover {
-                SimplyLoveScreen::GameOver
-            } else {
-                SimplyLoveScreen::Menu
-            }
-        }
-        SimplyLoveScreen::GameOver if !policy.show_gameover => SimplyLoveScreen::Menu,
-        _ => target,
-    }
-}
+pub type SimplyLoveNavigationPlan =
+    deadsync_core::session_flow::SessionNavigationPlan<SimplyLoveScreen>;
+pub use deadsync_core::session_flow::SessionNavigationPolicy as SimplyLoveNavigationPolicy;
 
 /// Resolve Simply Love's optional startup and post-play screens.
 #[must_use]
@@ -357,65 +259,15 @@ pub fn resolve_navigation(
     requested: SimplyLoveScreen,
     has_played_stages: bool,
 ) -> SimplyLoveNavigationPlan {
-    let mut target = requested;
-    let mut pending_post_select_summary_exit = None;
+    use deadsync_theme::ThemeSessionFlow;
 
-    if matches!(
+    deadsync_core::session_flow::resolve_navigation(
+        crate::SimplyLoveTheme::SESSION_SCREENS,
+        policy,
         from,
-        SimplyLoveScreen::SelectMusic | SimplyLoveScreen::SelectCourse
-    ) && target == SimplyLoveScreen::Menu
-        && has_played_stages
-    {
-        target = first_post_select_target(policy);
-        pending_post_select_summary_exit = Some(target == SimplyLoveScreen::EvaluationSummary);
-    } else if target == SimplyLoveScreen::EvaluationSummary {
-        pending_post_select_summary_exit = Some(false);
-    }
-
-    let startup_flow = matches!(
-        from,
-        SimplyLoveScreen::Menu
-            | SimplyLoveScreen::SelectProfile
-            | SimplyLoveScreen::SelectColor
-            | SimplyLoveScreen::SelectStyle
-            | SimplyLoveScreen::SelectPlayMode
-    ) && matches!(
-        target,
-        SimplyLoveScreen::SelectProfile
-            | SimplyLoveScreen::SelectColor
-            | SimplyLoveScreen::SelectStyle
-            | SimplyLoveScreen::SelectPlayMode
-            | SimplyLoveScreen::ProfileLoad
-    );
-    if startup_flow {
-        target = resolve_startup_target(policy, target);
-    }
-    target = resolve_post_select_target(policy, target);
-
-    SimplyLoveNavigationPlan {
-        target,
-        pending_post_select_summary_exit,
-        apply_preferred_style: startup_flow
-            && !policy.show_select_style
-            && matches!(
-                target,
-                SimplyLoveScreen::SelectPlayMode | SimplyLoveScreen::ProfileLoad
-            ),
-        apply_preferred_play_mode: startup_flow
-            && !policy.show_select_play_mode
-            && target == SimplyLoveScreen::ProfileLoad,
-        initialize_session_side: startup_flow
-            && from == SimplyLoveScreen::Menu
-            && target != SimplyLoveScreen::SelectProfile
-            && !policy.show_select_profile
-            && matches!(
-                target,
-                SimplyLoveScreen::SelectColor
-                    | SimplyLoveScreen::SelectStyle
-                    | SimplyLoveScreen::SelectPlayMode
-                    | SimplyLoveScreen::ProfileLoad
-            ),
-    }
+        requested,
+        has_played_stages,
+    )
 }
 
 #[inline(always)]
