@@ -33,7 +33,8 @@ pub(crate) mod tests {
     use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
     use deadsync_assets::gameplay_stage::{
         ActiveGameplayStage, GameplayHost, GameplayStageInput, GameplayStagePresenter,
-        PracticeStagePresenter, PreparedGameplayStage, prepare_gameplay_stage,
+        PracticeEditorPresentation, PracticeLivePresentation, PracticeStagePresenter,
+        PreparedGameplayStage, prepare_gameplay_stage,
     };
     use deadsync_assets::noteskin;
     use deadsync_assets::song_lua::compile_song_lua;
@@ -4514,6 +4515,19 @@ return Def.ActorFrame{
 
     struct AlternatePractice;
 
+    impl PracticeLivePresentation<AlternateGameplay> for AlternatePractice {
+        type Feedback<'a> = Self;
+        type Effect = deadsync_theme::ThemeEffect<&'static str, ()>;
+
+        fn editor_feedback(&mut self) -> Self {
+            Self
+        }
+    }
+
+    impl PracticeEditorPresentation<AlternateGameplay> for AlternatePractice {
+        fn emit(&mut self, _game: &State, _feedback: deadsync_gameplay::practice::editor::PracticeEditorFeedback) {}
+    }
+
     impl<L> PracticeStagePresenter<L, AlternateGameplay> for AlternatePractice {
         fn frame_view(
             &self,
@@ -4633,11 +4647,63 @@ return Def.ActorFrame{
                         });
                         assert_eq!(destination, Some("rehearsal"));
                         assert!(host.song_lua.is_ended());
-                        let practice = host.into_practice(Default::default(), |stage, _| {
+                        let mut practice = host.into_practice(Default::default(), |stage, _| {
                             assert!(stage.song_lua.is_ended());
                             AlternatePractice
                         });
                         assert!(!practice.session.is_playing());
+                        gameplay_runtime::enter_practice(&mut practice, &mut audio, &sounds, &mut clock);
+
+                        use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
+                        use deadsync_core::input::InputSource;
+                        use deadsync_input::{InputEvent, VirtualAction};
+                        use deadsync_theme::ThemeEffect;
+
+                        let mut effects = Vec::new();
+                        let timestamp = std::time::Instant::now();
+                        let mut raw_key = |code, pressed| {
+                            gameplay_runtime::handle_practice_raw_key::<AlternateGameplayTheme, _, _>(
+                                &mut practice,
+                                &RawKeyboardEvent { code, pressed, repeat: false, timestamp, host_nanos: 0 },
+                                &mut audio, &sounds, &mut clock, &mut effects,
+                            )
+                        };
+                        let previous_session_rate = profile::get_session_music_rate();
+                        let shifted = raw_key(KeyCode::ShiftLeft, true);
+                        let rate_changed = raw_key(KeyCode::BracketRight, true);
+                        let shift_released = raw_key(KeyCode::ShiftLeft, false);
+                        let persisted_rate = profile::get_session_music_rate();
+                        profile::set_session_music_rate(previous_session_rate);
+                        assert!(shifted && rate_changed && shift_released);
+                        assert!((persisted_rate - 1.01).abs() < 1e-6);
+                        assert_eq!(practice.gameplay.music_rate(), persisted_rate);
+                        assert!(effects.is_empty());
+
+                        let input = |action| InputEvent::new(
+                            action, 0, true, InputSource::Keyboard, timestamp, 0, timestamp, timestamp,
+                        );
+                        for action in [VirtualAction::p1_start, VirtualAction::p1_start] {
+                            gameplay_runtime::handle_practice_input::<AlternateGameplayTheme, _, _>(
+                                &mut practice, &input(action), &mut audio, &sounds, &mut clock, &mut effects,
+                            );
+                        }
+                        assert!(practice.session.is_playing());
+                        gameplay_runtime::update_practice(
+                            &mut practice, 0.016, &mut audio, &sounds, &mut clock, &mut score_cursor, &mut effects,
+                        );
+                        assert!(practice.session.is_playing());
+                        for action in [
+                            VirtualAction::p1_back,
+                            VirtualAction::p1_start,
+                            VirtualAction::p1_menu_up,
+                            VirtualAction::p1_start,
+                        ] {
+                            gameplay_runtime::handle_practice_input::<AlternateGameplayTheme, _, _>(
+                                &mut practice, &input(action), &mut audio, &sounds, &mut clock, &mut effects,
+                            );
+                        }
+                        assert!(!practice.session.is_playing());
+                        assert_eq!(effects, vec![ThemeEffect::Navigate("library")]);
                     },
                 );
             })

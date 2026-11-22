@@ -325,7 +325,7 @@ impl App {
         if current_screen == CurrentScreen::Practice {
             debug_assert!(self.theme_effect_scratch.is_empty());
             if let Some(state) = self.state.screens.practice_state.as_mut() {
-                crate::gameplay_runtime::handle_practice_input(
+                crate::gameplay_runtime::handle_practice_input::<crate::ActiveTheme, _, _>(
                     state,
                     &ev,
                     &mut self.audio,

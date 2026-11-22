@@ -164,7 +164,7 @@ mod tests {
                         } else {
                             let state = app.state.screens.practice_state.as_mut().unwrap();
                             let now = Instant::now();
-                            crate::gameplay_runtime::handle_practice_input(
+                            crate::gameplay_runtime::handle_practice_input::<ActiveTheme, _, _>(
                                 state,
                                 &InputEvent::new(
                                     VirtualAction::p1_menu_down,

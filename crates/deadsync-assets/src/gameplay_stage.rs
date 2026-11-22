@@ -7,7 +7,10 @@ use std::sync::Arc;
 use deadlib_present::actors::Actor;
 use deadsync_chart::{ChartData, GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_gameplay::practice::{PracticeHost, PracticeSession, editor::PracticeEditorConfig};
+use deadsync_gameplay::practice::editor::{PracticeEditorConfig, PracticeEditorFeedback};
+use deadsync_gameplay::practice::{
+    PracticeHost, PracticePlaybackUpdate, PracticeSession, PracticeViewRequest,
+};
 use deadsync_gameplay::{
     CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, GameplayConfig,
     GameplayMiniIndicatorData, GameplayProfileData, GameplaySession, GameplayViewport, LeadInTiming,
@@ -71,6 +74,26 @@ pub trait PracticeStagePresenter<L, P: GameplayStagePresenter<L>> {
         gameplay: &GameplayHost<L, P>,
         session: &PracticeSession,
     );
+}
+
+/// Presentation hooks for a live, game-owned practice session.
+pub trait PracticeLivePresentation<P> {
+    type Feedback<'a>: PracticeEditorPresentation<P>
+    where
+        Self: 'a;
+    type Effect;
+
+    fn editor_feedback(&mut self) -> Self::Feedback<'_>;
+    fn advance_visuals(&mut self, _delta_time: f32) {}
+    fn apply_playback_update(&mut self, _update: PracticePlaybackUpdate) {}
+    fn apply_view_request(&mut self, _request: PracticeViewRequest) {}
+    fn append_effects(&mut self, _effects: &mut Vec<Self::Effect>) {}
+}
+
+/// Receives read-only game facts while the editor operates and refreshes the HUD afterward.
+pub trait PracticeEditorPresentation<P>: Sized {
+    fn emit(&mut self, game: &GameplayCoreState, feedback: PracticeEditorFeedback);
+    fn finish(self, _stage: &ActiveGameplayStage, _gameplay_hud: &mut P) {}
 }
 
 impl<L, P> GameplayHost<L, P> {

@@ -14,7 +14,9 @@ use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadlib_render_core::{BlendMode, MeshVertex};
-use deadsync_assets::gameplay_stage::{ActiveGameplayStage, PracticeStagePresenter};
+use deadsync_assets::gameplay_stage::{
+    ActiveGameplayStage, PracticeEditorPresentation, PracticeLivePresentation, PracticeStagePresenter,
+};
 use deadsync_gameplay::practice::editor::{
     PracticeEditorConfig, PracticeEditorFeedback, PracticeEditorFlash, PracticeEditorSound,
 };
@@ -396,6 +398,31 @@ impl PracticePresentation {
     }
 }
 
+impl PracticeLivePresentation<gameplay_screen::GameplayPresentation> for PracticePresentation {
+    type Feedback<'a> = EditorPresentation<'a>;
+    type Effect = ThemeEffect;
+
+    fn editor_feedback(&mut self) -> Self::Feedback<'_> {
+        self.editor_feedback()
+    }
+
+    fn advance_visuals(&mut self, delta_time: f32) {
+        advance_flash(self, delta_time);
+    }
+
+    fn apply_playback_update(&mut self, update: PracticePlaybackUpdate) {
+        apply_playback_update(self, update);
+    }
+
+    fn apply_view_request(&mut self, request: PracticeViewRequest) {
+        apply_view_request(self, request);
+    }
+
+    fn append_effects(&mut self, effects: &mut Vec<Self::Effect>) {
+        append_presentation_effects(self, ThemeEffect::None, effects);
+    }
+}
+
 fn append_pending_effects(
     pending_rates: impl ExactSizeIterator<Item = f32>,
     pending_sfx: &mut Vec<&'static str>,
@@ -430,6 +457,16 @@ pub struct EditorPresentation<'a> {
     flash: &'a mut Option<(Arc<str>, f32)>,
     pending_sfx: &'a mut Vec<&'static str>,
     music_rate_text_dirty: bool,
+}
+
+impl PracticeEditorPresentation<gameplay_screen::GameplayPresentation> for EditorPresentation<'_> {
+    fn emit(&mut self, game: &gameplay_screen::GameplayCoreState, feedback: PracticeEditorFeedback) {
+        self.emit(game, feedback);
+    }
+
+    fn finish(self, stage: &ActiveGameplayStage, gameplay_hud: &mut gameplay_screen::GameplayPresentation) {
+        self.finish(stage, gameplay_hud);
+    }
 }
 
 impl EditorPresentation<'_> {

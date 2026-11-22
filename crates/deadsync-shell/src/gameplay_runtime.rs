@@ -1,8 +1,8 @@
-use crate::{ActiveTheme, ThemeScreen};
+use crate::ThemeScreen;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadsync_assets::gameplay_stage::{
     ActiveGameplayStage, GameplayCoreState, GameplayHost, GameplayStageAssets, GameplayStagePresenter,
-    PracticeStagePresenter, PreparedGameplayStage,
+    PracticeEditorPresentation, PracticeLivePresentation, PracticeStagePresenter, PreparedGameplayStage,
 };
 use deadsync_chart::ChartData;
 use deadsync_config as config;
@@ -32,11 +32,10 @@ use deadsync_profile_gameplay::stage_scores::{
 };
 use deadsync_song_lua::gameplay_presentation::{FramePresentationContext, SongFrameContent};
 use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
-use deadsync_theme::ThemeScreenFlow;
+use deadsync_theme::{ThemeEffect, ThemeScreenFlow};
 use deadsync_theme::views::{
     GameplayLivePresentation, GameplayStageView, SmxSensorPadView, SmxSensorPanelView,
 };
-use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::{gameplay, practice};
 use deadsync_theme_simply_love::views::{
     GameplayInitView, GameplayPolicyView, GameplayRuntimeView,
@@ -825,17 +824,20 @@ pub(crate) fn handle_input<P: GameplayLivePresentation<GameplayCoreState>>(
     action
 }
 
-pub(crate) fn update_practice(
-    state: &mut PracticeState,
+pub(crate) fn update_practice<P, Q>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
     delta_time: f32,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
     score_cursor: &mut ScoreRuntimeCursor,
-    effects: &mut Vec<ThemeEffect>,
-) {
+    effects: &mut Vec<Q::Effect>,
+) where
+    P: GameplayLivePresentation<GameplayCoreState>,
+    Q: PracticeLivePresentation<P>,
+{
     let audio_snapshot = snapshot(music_clock);
-    practice::advance_flash(&mut state.presentation, delta_time);
+    state.presentation.advance_visuals(delta_time);
     let mut feedback = state.presentation.editor_feedback();
     let playback = state.session.update(
         &mut state.gameplay.stage.gameplay,
@@ -846,14 +848,14 @@ pub(crate) fn update_practice(
         |game, event| feedback.emit(game, event),
     );
     feedback.finish(&state.gameplay.stage, &mut state.gameplay.presentation);
-    practice::apply_playback_update(&mut state.presentation, playback);
+    state.presentation.apply_playback_update(playback);
     score_cursor.sync_if_dirty(&mut state.gameplay);
     drain(&mut state.gameplay, audio, sounds, music_clock);
-    apply_practice_output(state, ThemeEffect::None, effects);
+    apply_practice_output(state, None, effects);
 }
 
-pub(crate) fn enter_practice(
-    state: &mut PracticeState,
+pub(crate) fn enter_practice<P, Q>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
@@ -862,14 +864,17 @@ pub(crate) fn enter_practice(
     drain(&mut state.gameplay, audio, sounds, music_clock);
 }
 
-pub(crate) fn handle_practice_input(
-    state: &mut PracticeState,
+pub(crate) fn handle_practice_input<T, P, Q>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
     ev: &InputEvent,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
-    effects: &mut Vec<ThemeEffect>,
-) {
+    effects: &mut Vec<ThemeEffect<T::Screen, T::RuntimeRequest>>,
+) where
+    T: ThemeScreenFlow,
+    Q: PracticeLivePresentation<P, Effect = ThemeEffect<T::Screen, T::RuntimeRequest>>,
+{
     let mut feedback = state.presentation.editor_feedback();
     let request = state.session.handle_input(
         &mut state.gameplay.stage.gameplay,
@@ -878,19 +883,23 @@ pub(crate) fn handle_practice_input(
         |game, event| feedback.emit(game, event),
     );
     feedback.finish(&state.gameplay.stage, &mut state.gameplay.presentation);
-    let effect = practice_request_effect(&mut state.presentation, request);
+    state.presentation.apply_view_request(request);
     drain(&mut state.gameplay, audio, sounds, music_clock);
-    apply_practice_output(state, effect, effects);
+    apply_practice_output(state, practice_navigation::<T>(request), effects);
 }
 
-pub(crate) fn handle_practice_raw_key(
-    state: &mut PracticeState,
+pub(crate) fn handle_practice_raw_key<T, P, Q>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
     ev: &RawKeyboardEvent,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
-    effects: &mut Vec<ThemeEffect>,
-) -> bool {
+    effects: &mut Vec<ThemeEffect<T::Screen, T::RuntimeRequest>>,
+) -> bool
+where
+    T: ThemeScreenFlow,
+    Q: PracticeLivePresentation<P, Effect = ThemeEffect<T::Screen, T::RuntimeRequest>>,
+{
     let mut feedback = state.presentation.editor_feedback();
     let (consumed, request) = state.session.handle_raw_key(
         &mut state.gameplay.stage.gameplay,
@@ -899,40 +908,37 @@ pub(crate) fn handle_practice_raw_key(
         |game, event| feedback.emit(game, event),
     );
     feedback.finish(&state.gameplay.stage, &mut state.gameplay.presentation);
-    let effect = practice_request_effect(&mut state.presentation, request);
+    state.presentation.apply_view_request(request);
     drain(&mut state.gameplay, audio, sounds, music_clock);
-    apply_practice_output(state, effect, effects) || consumed
+    apply_practice_output(state, practice_navigation::<T>(request), effects);
+    consumed
 }
 
-fn practice_request_effect(
-    presentation: &mut practice::PracticePresentation,
+fn practice_navigation<T: ThemeScreenFlow>(
     request: PracticeViewRequest,
-) -> ThemeEffect {
-    practice::apply_view_request(presentation, request);
+) -> Option<ThemeEffect<T::Screen, T::RuntimeRequest>> {
     match request {
         PracticeViewRequest::Navigate(PracticeDestination::PlayerOptions) => {
-            ThemeEffect::Navigate(ActiveTheme::SCREENS.player_options)
+            Some(ThemeEffect::Navigate(T::SCREENS.player_options))
         }
         PracticeViewRequest::Navigate(PracticeDestination::SelectMusic) => {
-            ThemeEffect::Navigate(ActiveTheme::SCREENS.song_selection)
+            Some(ThemeEffect::Navigate(T::SCREENS.song_selection))
         }
-        _ => ThemeEffect::None,
+        _ => None,
     }
 }
 
-fn apply_practice_output(
-    state: &mut PracticeState,
-    effect: ThemeEffect,
-    effects: &mut Vec<ThemeEffect>,
-) -> bool {
+fn apply_practice_output<P, Q: PracticeLivePresentation<P>>(
+    state: &mut PracticeHost<GameplayHost<GameplayLobbySession, P>, Q>,
+    navigation: Option<Q::Effect>,
+    effects: &mut Vec<Q::Effect>,
+) {
     let rates = state.session.drain_music_rates();
-    let changed_rate = rates.len() != 0;
     for rate in rates {
         profile::set_session_music_rate(rate);
     }
-    let start_len = effects.len();
-    practice::append_presentation_effects(&mut state.presentation, effect, effects);
-    changed_rate || effects.len() != start_len
+    state.presentation.append_effects(effects);
+    effects.extend(navigation);
 }
 
 pub(crate) fn push_actors<L, P: GameplayStagePresenter<L>>(

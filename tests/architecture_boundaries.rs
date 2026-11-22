@@ -3053,13 +3053,14 @@ fn practice_runtime_is_shell_prepared() {
         "state.session.handle_input(",
         "state.session.handle_raw_key(",
         "state.session.restore(&state.gameplay.stage.gameplay, snapshot.editor)",
-        "practice::apply_view_request(presentation, request)",
+        "state.presentation.apply_view_request(request)",
         "PracticeViewRequest::Navigate(PracticeDestination::PlayerOptions)",
-        "ThemeEffect::Navigate(ActiveTheme::SCREENS.player_options)",
-        "ThemeEffect::Navigate(ActiveTheme::SCREENS.song_selection)",
+        "ThemeEffect::Navigate(T::SCREENS.player_options)",
+        "ThemeEffect::Navigate(T::SCREENS.song_selection)",
         "let rates = state.session.drain_music_rates();",
         "profile::set_session_music_rate(rate)",
-        "practice::append_presentation_effects(&mut state.presentation, effect, effects)",
+        "state.presentation.append_effects(effects)",
+        "effects.extend(navigation)",
     ] {
         assert!(contains_rust(&shell, handoff), "missing Practice handoff {handoff}");
     }
@@ -3073,6 +3074,16 @@ fn practice_runtime_is_shell_prepared() {
     ] {
         assert!(!shell.contains(compatibility));
     }
+    let live = shell
+        .split_once("pub(crate) fn update_practice")
+        .and_then(|(_, rest)| rest.split_once("pub(crate) fn push_actors"))
+        .expect("shell must keep a live Practice adapter")
+        .0;
+    assert!(contains_rust(live, "Q: PracticeLivePresentation<P>"));
+    for concrete in ["state: &mut PracticeState", "practice::", "SimplyLove", "ActiveTheme"] {
+        assert!(!live.contains(concrete), "live Practice still requires {concrete}");
+    }
+    assert!(stage_host.contains("pub trait PracticeLivePresentation<P>"));
     assert!(!shell.contains("SimplyLoveProfileRequest::SetMusicRate"));
 }
 

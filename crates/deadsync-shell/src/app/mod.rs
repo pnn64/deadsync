@@ -8602,7 +8602,7 @@ impl App {
                 }
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 let consumed = if let Some(state) = self.state.screens.practice_state.as_mut() {
-                    crate::gameplay_runtime::handle_practice_raw_key(
+                    crate::gameplay_runtime::handle_practice_raw_key::<ActiveTheme, _, _>(
                         state,
                         &raw_key,
                         &mut self.audio,
@@ -8613,11 +8613,10 @@ impl App {
                 } else {
                     false
                 };
-                let has_effect = !self.theme_effect_scratch.is_empty();
                 if let Err(e) = self.drain_theme_effects(event_loop) {
                     log::error!("Failed to handle Practice raw key action: {e}");
                 }
-                if consumed || has_effect {
+                if consumed {
                     return true;
                 }
             }
