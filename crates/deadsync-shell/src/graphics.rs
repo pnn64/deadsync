@@ -5,7 +5,10 @@ use std::time::Instant;
 use deadlib_assets::{AssetManager, AssetManifest, TextureAssetSpec};
 use deadlib_platform::display::{self, FullscreenType, MonitorSpec};
 use deadlib_present::space::{self, Metrics};
-use deadlib_render::{Backend, create_backend, render_size_for_physical, render_size_for_window};
+use deadlib_render::{
+    Backend, BackendOptions, VulkanInstanceNames, create_backend_with_options,
+    render_size_for_physical, render_size_for_window,
+};
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_config::app_config::DisplayMode;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
@@ -170,14 +173,20 @@ pub fn initialize_renderer(
     space::set_current_window_px(size.width, size.height);
     space::set_current_metrics(metrics);
 
-    let mut backend = create_backend(
+    let mut backend = create_backend_with_options(
         config.backend_type,
         window.clone(),
         metrics.projection(),
-        config.vsync_enabled,
-        config.present_mode_policy,
-        config.gfx_debug_enabled,
-        config.high_dpi,
+        BackendOptions {
+            vsync_enabled: config.vsync_enabled,
+            present_mode_policy: config.present_mode_policy,
+            gfx_debug_enabled: config.gfx_debug_enabled,
+            high_dpi_enabled: config.high_dpi,
+            vulkan_instance_names: VulkanInstanceNames {
+                application_name: c"DeadSync",
+                engine_name: c"DeadSync Engine",
+            },
+        },
     )?;
     if config.backend_type == BackendType::Software {
         backend.configure_software_threads(software_thread_count(config.software_renderer_threads));

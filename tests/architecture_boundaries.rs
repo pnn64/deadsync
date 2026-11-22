@@ -38,6 +38,39 @@ fn renderer_and_shell_cues_use_theme_resources() {
 }
 
 #[test]
+fn engine_initialization_receives_host_identity_and_log_path() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let vulkan = read_source(root.join("crates/deadlib-render-backend-vulkan/src/lib.rs"))
+        .expect("Vulkan backend source");
+    let render = production_source(&root.join("crates/deadlib-render/src/lib.rs"));
+    let shell = production_source(&root.join("crates/deadsync-shell/src/graphics.rs"));
+    assert!(vulkan.contains(".application_name(names.application_name)"));
+    assert!(vulkan.contains(".engine_name(names.engine_name)"));
+    assert!(render.contains("options.vulkan_instance_names"));
+    assert!(shell.contains("create_backend_with_options("));
+    assert!(shell.contains("application_name: c\"DeadSync\""));
+    assert!(shell.contains("engine_name: c\"DeadSync Engine\""));
+    assert!(!vulkan.contains("c\"DeadSync"));
+
+    for backend in ["metal", "wgpu"] {
+        let source = read_source(root.join(format!("crates/deadlib-render-backend-{backend}/src/lib.rs")))
+            .expect("graphics backend source");
+        assert!(!source.contains("set_label(\"DeadSync"));
+        assert!(!source.contains("label: Some(\"deadsync"));
+    }
+
+    let logger = production_source(&root.join("crates/deadlib-platform/src/logging.rs"));
+    let executable = production_source(&root.join("src/main.rs"));
+    assert!(logger.contains("LOG_FILE_PATH.get_or_init(|| log_file_path)"));
+    assert!(logger.contains("rotate_log_files(path, MAX_LOG_FILES)"));
+    assert!(!logger.contains("\"deadsync.log\""));
+    assert!(contains_rust(
+        &executable,
+        "logging::init(config::runtime_load::bootstrap_log_to_file(), dirs.log_path(),",
+    ));
+}
+
+#[test]
 fn confirmed_song_and_course_launches_share_game_policy() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let game = production_source(&root.join("crates/deadsync-gameplay/src/stage_launch.rs"));

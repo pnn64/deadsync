@@ -10,8 +10,8 @@ use deadlib_render_core::{
     SamplerCache, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData,
     TMeshCacheKey, TextureHandle, TexturedMeshBufferCache,
     TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshUploads, TexturedMeshVertex,
-    Yuv420Upload, draw_storage_stats, is_render_target_texture, render_target_base_handle,
-    resolve_textured_mesh_geometries, texture_sampler_desc,
+    VulkanInstanceNames, Yuv420Upload, draw_storage_stats, is_render_target_texture,
+    render_target_base_handle, resolve_textured_mesh_geometries, texture_sampler_desc,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -502,9 +502,29 @@ pub fn init(
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
+    init_with_instance_names(
+        window,
+        projection,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+        VulkanInstanceNames::default(),
+    )
+}
+
+/// Initializes the backend using the host's Vulkan instance names.
+pub fn init_with_instance_names(
+    window: &Window,
+    projection: Matrix4,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+    gfx_debug_enabled: bool,
+    names: VulkanInstanceNames<'_>,
+) -> Result<State, Box<dyn Error>> {
     info!("Initializing Vulkan backend...");
     let entry = Entry::linked();
-    let (instance, debug_utils_enabled) = create_instance(&entry, window, gfx_debug_enabled)?;
+    let (instance, debug_utils_enabled) =
+        create_instance(&entry, window, gfx_debug_enabled, names)?;
     let (debug_loader, debug_messenger) =
         setup_debug_messenger(&entry, &instance, debug_utils_enabled)?;
     let surface = create_surface(&entry, &instance, window)?;
@@ -3911,19 +3931,22 @@ fn supports_instance_layer(entry: &Entry, layer: &ffi::CStr) -> Result<bool, vk:
         .any(|prop| unsafe { ffi::CStr::from_ptr(prop.layer_name.as_ptr()) == layer }))
 }
 
+fn application_info(names: VulkanInstanceNames<'_>) -> vk::ApplicationInfo<'_> {
+    vk::ApplicationInfo::default()
+        .application_name(names.application_name)
+        .application_version(vk::make_api_version(0, 1, 0, 0))
+        .engine_name(names.engine_name)
+        .engine_version(vk::make_api_version(0, 1, 0, 0))
+        .api_version(vk::API_VERSION_1_3)
+}
+
 fn create_instance(
     entry: &Entry,
     window: &Window,
     gfx_debug_enabled: bool,
+    names: VulkanInstanceNames<'_>,
 ) -> Result<(Instance, bool), Box<dyn Error>> {
-    let app_name = c"DeadSync";
-    let app_info = vk::ApplicationInfo::default()
-        .application_name(app_name)
-        .application_version(vk::make_api_version(0, 1, 0, 0))
-        .engine_name(c"DeadSync Engine")
-        .engine_version(vk::make_api_version(0, 1, 0, 0))
-        .api_version(vk::API_VERSION_1_3);
-
+    let app_info = application_info(names);
     let mut extension_names =
         ash_window::enumerate_required_extensions(window.display_handle()?.as_raw())?.to_vec();
     let mut debug_utils_enabled = false;
@@ -5367,6 +5390,23 @@ pub fn set_present_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn application_info_uses_host_instance_names() {
+        let app = ffi::CString::new("Planetarium").unwrap();
+        let engine = ffi::CString::new("Observatory Engine").unwrap();
+        let info = application_info(VulkanInstanceNames {
+            application_name: app.as_c_str(),
+            engine_name: engine.as_c_str(),
+        });
+        assert_eq!(info.p_application_name, app.as_ptr());
+        assert_eq!(info.p_engine_name, engine.as_ptr());
+        assert_eq!(info.api_version, vk::API_VERSION_1_3);
+
+        let names = VulkanInstanceNames::default();
+        assert_eq!(names.application_name, c"Application");
+        assert_eq!(names.engine_name, c"DeadLib");
+    }
 
     #[cfg(windows)]
     #[test]

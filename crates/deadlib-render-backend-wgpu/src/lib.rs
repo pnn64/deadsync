@@ -617,7 +617,7 @@ fn init(
         wgpu::Limits::default()
     };
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("deadsync wgpu device"),
+        label: Some("wgpu render device"),
         required_features,
         required_limits,
         memory_hints: wgpu::MemoryHints::Performance,

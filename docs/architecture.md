@@ -36,6 +36,11 @@ theme to describe an input or store a setting:
   game's provider type. Native backends ask the host whether another provider
   claimed a device. DeadSync supplies its existing live StepManiaX ownership
   predicate, with no change to device slots or hot-plug ordering.
+- The shell supplies DeadSync's Vulkan instance names through
+  `deadlib-render::BackendOptions` at startup and renderer recreation.
+  The engine provides generic defaults and labels its own GPU resources.
+  The executable supplies the log path from `AppDirs` to
+  `deadlib-platform::logging`, which handles rotation at that path.
 
 ## Gameplay policy and presentation
 

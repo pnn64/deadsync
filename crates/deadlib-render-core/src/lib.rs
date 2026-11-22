@@ -12,6 +12,7 @@ pub use frame::{
 };
 
 use glam::Mat4 as Matrix4;
+use std::ffi::CStr;
 use std::ops::Deref;
 use std::{collections::HashMap, sync::Arc};
 
@@ -20,6 +21,22 @@ pub type TextureHandle = u64;
 /// Engine cameras output OpenGL clip coordinates (-w <= z <= w). Backends
 /// whose clip depth is 0 <= z <= w must remap z to (z + w) / 2 before clipping.
 pub type ProjectionMatrix = Matrix4;
+
+/// Host names reported to Vulkan when creating a native instance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VulkanInstanceNames<'a> {
+    pub application_name: &'a CStr,
+    pub engine_name: &'a CStr,
+}
+
+impl Default for VulkanInstanceNames<'_> {
+    fn default() -> Self {
+        Self {
+            application_name: c"Application",
+            engine_name: c"DeadLib",
+        }
+    }
+}
 
 /// Independent depth comparison and writing, as selected by the drawing actor.
 /// The six states index pipelines created before frame recording.
