@@ -23,9 +23,10 @@ pub(crate) struct Spec {
 
 impl Spec {
     pub fn parse(bytes: &[u8], pos: &mut usize) -> Result<Self, Error> {
+        const MAX_FLAGS: usize = 5;
         let mut s = Self::default();
         let start = *pos;
-        while let Some(&c) = bytes.get(*pos) {
+        for &c in bytes[start..].iter().take(MAX_FLAGS + 1) {
             match c {
                 b'-' => s.left = true,
                 b'+' => s.plus = true,
@@ -36,7 +37,7 @@ impl Spec {
             }
             *pos += 1;
         }
-        if *pos - start >= 6 {
+        if *pos - start > MAX_FLAGS {
             return Err(fail("invalid format (repeated flags)"));
         }
         for _ in 0..2 {
