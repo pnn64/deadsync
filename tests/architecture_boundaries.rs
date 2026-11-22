@@ -51,6 +51,10 @@ fn course_startup_and_renewal_use_game_contracts() {
         "selection: CourseSessionPlan",
         "selection: CourseCyclePlan",
         "pub presentation: CoursePresentationView",
+        "pub run: CourseRun",
+        "CourseRun::prepare(selection, chart_type, load)",
+        "course.run.append_endless_cycle(",
+        "course_summary_stage(&course.run, &course.stage_summaries,",
         "course.presentation.song_stub.as_ref()",
     ] {
         assert!(
@@ -58,10 +62,16 @@ fn course_startup_and_renewal_use_game_contracts() {
             "shell course composition is missing {contract}"
         );
     }
-    for legacy_view in ["SelectedCoursePlan", "SelectedCourseView"] {
+    for forbidden in [
+        "SelectedCoursePlan",
+        "SelectedCourseView",
+        "fn course_stage_runtime_from_plan(",
+        "fn add_course_stage_totals_with_loader(",
+        "fn course_summary_totals(",
+    ] {
         assert!(
-            !course.contains(legacy_view),
-            "course startup and renewal must not consume {legacy_view}"
+            !course.contains(forbidden),
+            "shell course composition contains game policy or a combined view: {forbidden}"
         );
     }
 
@@ -138,9 +148,9 @@ fn course_selection_preparation_stays_below_the_theme() {
         &concrete_views,
         "pub type CourseStagePlan = CourseStageView;",
     ));
-    let shell = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
+    let runtime = production_source(&root.join("crates/deadsync-gameplay/src/course_run.rs"));
     assert!(contains_rust(
-        &shell,
+        &runtime,
         "use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan, CourseStagePlan};",
     ));
 
@@ -12127,7 +12137,7 @@ fn course_type_is_owned_by_game_rules() {
     let selection = production_source(
         &root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
     );
-    let shell = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
+    let runtime = production_source(&root.join("crates/deadsync-gameplay/src/course_run.rs"));
 
     assert!(
         contains_rust(&rules_root, "pub mod course;")
@@ -12146,15 +12156,15 @@ fn course_type_is_owned_by_game_rules() {
         "parser and theme compatibility paths must reexport the same game-owned type"
     );
     assert!(
-        contains_rust(&shell, "use deadsync_rules::course::CourseType;")
-            && contains_rust(&shell, "pub course_type: CourseType,"),
+        contains_rust(&runtime, "use deadsync_rules::course::CourseType;")
+            && contains_rust(&runtime, "pub course_type: CourseType,"),
         "the course runtime must refer directly to the canonical game rule"
     );
     for (name, source) in [
         ("parser", &parser),
         ("theme", &theme),
         ("selection", &selection),
-        ("shell", &shell),
+        ("runtime", &runtime),
     ] {
         for duplicate in ["enum CourseType {", "enum CourseTypeView {"] {
             assert!(
@@ -12176,7 +12186,7 @@ fn course_type_is_owned_by_game_rules() {
 fn course_life_selection_stays_in_gameplay() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let life = production_source(&root.join("crates/deadsync-gameplay/src/life.rs"));
-    let course = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
+    let course = production_source(&root.join("crates/deadsync-gameplay/src/course_run.rs"));
     for contract in [
         "pub struct CourseLifeStage<'a>",
         "pub song: &'a SongData",
@@ -12228,21 +12238,21 @@ fn course_life_selection_stays_in_gameplay() {
     );
 
     let adapter = course
-        .split_once("pub fn course_life_config_for_stage(")
-        .and_then(|(_, rest)| rest.split_once("fn course_stage_runtime_from_plan("))
+        .split_once("pub fn life_config(")
+        .and_then(|(_, rest)| rest.split_once("pub fn lead_in_timing("))
         .map(|(body, _)| body)
-        .expect("the shell must retain its course-life compatibility adapter");
+        .expect("course entry must expose life configuration");
     for fact in [
-        "course.next_stage().map(|stage| CourseLifeStage {",
+        "self.next_stage().map(|stage| CourseLifeStage {",
         "song: stage.song.as_ref()",
         "steps_index: stage.steps_index",
         "gain_lives: stage.gain_lives",
         "gain_seconds: stage.gain_seconds",
-        "course_life_config(course.course_type, course.lives, stage, chart_type)",
+        "course_life_config(self.run.course_type, self.run.lives, stage, chart_type)",
     ] {
         assert!(
             contains_rust(adapter, fact),
-            "the shell must delegate life selection using live stage facts through {fact}"
+            "course entry must delegate life selection using live stage facts through {fact}"
         );
     }
     for policy in [
@@ -12256,7 +12266,7 @@ fn course_life_selection_stays_in_gameplay() {
     ] {
         assert!(
             !contains_rust(adapter, policy),
-            "the borrowed shell adapter must not own life policy or cloning through {policy}"
+            "the borrowed course entry must not own life policy or cloning through {policy}"
         );
     }
 
@@ -12269,11 +12279,8 @@ fn course_life_selection_stays_in_gameplay() {
         .map(|(body, _)| body)
         .expect("screen entry must prepare course life from its reload-adjusted entry view");
     let entry: String = screen_entry.chars().filter(|ch| !ch.is_whitespace()).collect();
-    let adjusted = entry
-        .find("course.progress=course.progress.for_entry(lua_reload)")
-        .expect("Lua reload must adjust the entry view's progress");
     let borrowed = entry
-        .find("letentry_course=entry_course.as_ref()")
+        .find("letentry_course=course_run.map(|run|run.entry(lua_reload))")
         .expect("course life must consume the prepared entry view");
     let selected = entry
         .find("letcourse_life_config=entry_course.map_or(")
@@ -12283,9 +12290,7 @@ fn course_life_selection_stays_in_gameplay() {
         .map(|(body, _)| body)
         .expect("course life selection call must complete in the entry scope");
     assert!(
-        adjusted < borrowed
-            && borrowed < selected
-            && contains_rust(life_entry, "course_life_config_for_stage(course,"),
+        borrowed < selected && contains_rust(life_entry, "|entry| entry.life_config("),
         "life selection must use the entry course after applying Lua reload progress"
     );
 }
@@ -12294,7 +12299,7 @@ fn course_life_selection_stays_in_gameplay() {
 fn course_progress_policy_stays_in_gameplay() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let progress = production_source(&root.join("crates/deadsync-gameplay/src/course_progress.rs"));
-    let course = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
+    let course = production_source(&root.join("crates/deadsync-gameplay/src/course_run.rs"));
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     // App declares out-of-line test modules before its production methods.
     // Read the complete file and inspect the specific lifecycle scopes below.
@@ -12339,23 +12344,22 @@ fn course_progress_policy_stays_in_gameplay() {
         );
     }
     assert!(
-        course.contains("deadsync_gameplay::course_progress::")
+        course.contains("crate::course_progress::")
             && contains_rust(&course, "pub progress: CourseProgress")
             && !contains_rust(&course, "pub next_stage_index:")
             && !contains_rust(&course, "pub interrupted:"),
-        "CourseRunState must retain metadata while delegating progress to its game owner"
+        "CourseRun must retain game metadata while delegating progress to its controller"
     );
     let wrappers = course
-        .split_once("impl CourseRunState {")
-        .and_then(|(_, rest)| rest.split_once("pub fn course_life_config_for_stage("))
+        .split_once("pub fn has_next_stage(")
+        .and_then(|(_, rest)| rest.split_once("pub fn entry("))
         .map(|(body, _)| body)
-        .expect("course runtime compatibility methods must remain available");
+        .expect("the game must expose course progress queries");
     for delegation in [
         "self.progress.has_next_stage(",
-        "self.progress.stage_index(",
+        "self.entry(false).next_stage()",
         "self.progress.is_finished(",
         "self.progress.renewal(",
-        "self.stages.get(index)",
     ] {
         assert!(
             contains_rust(wrappers, delegation),
@@ -12364,20 +12368,20 @@ fn course_progress_policy_stays_in_gameplay() {
     }
     let wrapper_facts: String = wrappers.chars().filter(|ch| !ch.is_whitespace()).collect();
     assert!(
-        wrapper_facts.matches("self.stages.len()").count() == 4
-            && wrapper_facts.matches("self.course_type==CourseType::Endless").count() == 4
+        wrapper_facts.matches("self.stages.len()").count() == 3
+            && wrapper_facts.matches("self.course_type==CourseType::Endless").count() == 3
             && !wrappers.contains("next_stage_index")
             && !wrappers.contains("interrupted"),
         "course availability, selection, completion and renewal must use live catalog facts"
     );
     let append = course
-        .split_once("fn append_endless_cycle_with_loader(")
-        .and_then(|(_, rest)| rest.split_once("pub fn build_course_run_from_selection("))
+        .split_once("pub fn append_endless_cycle(")
+        .and_then(|(_, rest)| rest.split_once("fn append_stages("))
         .map(|(body, _)| body)
-        .expect("the shell must retain its course loading boundary");
+        .expect("the game must own cycle authorization");
     assert!(
         contains_rust(append, ".can_append_endless_cycle(")
-            && contains_rust(append, "selection.path != course.path")
+            && contains_rust(append, "selection.path != self.path")
             && !append.contains("course.interrupted"),
         "cycle loading must retain path validation and use game-owned append authorization"
     );
@@ -12388,11 +12392,11 @@ fn course_progress_policy_stays_in_gameplay() {
         .map(|(body, _)| body)
         .expect("course renewal must remain before screen commitment");
     for decision in [
-        "course.renewal()",
+        "course.run.renewal()",
         "CourseRenewal::NotRequired",
         "CourseRenewal::AppendCycle",
         "CourseRenewal::InvalidCursor",
-        "course.progress.interrupt()",
+        "course.run.progress.interrupt()",
         "self.pending_song_lua_reload.is_some()",
     ] {
         assert!(
@@ -12442,7 +12446,7 @@ fn course_progress_policy_stays_in_gameplay() {
         .map(|(body, _)| body)
         .expect("course load-failure boundary");
     assert!(
-        contains_rust(failed_load, ".interrupt_loading(course.stage_summaries.len())")
+        contains_rust(failed_load, ".run.progress.interrupt_loading(course.stage_summaries.len())")
             && !failed_load.contains("course.stage_summaries.is_empty()")
             && !failed_load.contains("course.interrupted"),
         "the game must decide whether recorded history permits course-loading interruption"
@@ -12452,17 +12456,16 @@ fn course_progress_policy_stays_in_gameplay() {
         .and_then(|(_, rest)| rest.split_once("impl ApplicationHandler<UserEvent> for App {"))
         .map(|(body, _)| body)
         .expect("screen entry must prepare gameplay from a course entry view");
-    let entry_view = screen_entry
-        .split_once("let mut entry_course = self.state.session.course_run.clone();")
-        .and_then(|(_, rest)| rest.split_once("let entry_course = entry_course.as_ref();"))
-        .map(|(body, _)| body)
-        .expect("course entry must retain a separate view of canonical progress");
     assert!(
-        contains_rust(entry_view, "course.progress = course.progress.for_entry(lua_reload)")
-            && contains_rust(screen_entry, "course.progress.uses_next_stage_lead_in()")
-            && !contains_rust(&app, "course.next_stage_index =")
-            && !contains_rust(&app, "course.interrupted ="),
-        "reload entry views and lead-in policy must use game-owned progress without raw mutations"
+        contains_rust(&course, "progress: self.progress.for_entry(lua_reload)")
+            && contains_rust(&course, "self.progress.stage_index(self.run.stages.len(),")
+            && contains_rust(&course, "self.run.stages.get(index)")
+            && contains_rust(&course, "self.progress.uses_next_stage_lead_in()")
+            && contains_rust(screen_entry, "course_run.map(|run| run.entry(lua_reload))")
+            && contains_rust(screen_entry, "entry_course.and_then(CourseEntry::lead_in_timing)")
+            && !contains_rust(screen_entry, "course_run.clone()")
+            && !contains_rust(&app, "course.run.progress ="),
+        "entry must borrow the stages and use game-owned reload and lead-in policy"
     );
 }
 
@@ -12597,7 +12600,7 @@ fn gameplay_exit_routing_stays_below_the_theme() {
         "self.state.session.course_run.as_ref()",
         "restart_pending: self.state.session.restart_pending",
         "course_active: course.is_some()",
-        "course_has_next_stage: course.is_some_and(CourseRunState::has_next_stage)",
+        "course_has_next_stage: course.is_some_and(|course| course.run.has_next_stage())",
         "resolve_gameplay_exit_route(",
         "effect_for_gameplay_exit(route)",
         "route.consume_restart_pending",
@@ -12923,6 +12926,14 @@ fn stage_results_are_independent_of_evaluation() {
         .expect("gameplay result owner");
     assert!(results.contains("pub fn stage_result"));
     assert!(results.contains("GameplayRuntimeState"));
+    for course_contract in [
+        "fn course_summary_totals(",
+        "pub fn course_summary_stage(",
+        "pub fn routine_shared_course_result(",
+        "pub fn course_summary_records",
+    ] {
+        assert!(results.contains(course_contract), "missing game result adapter {course_contract}");
+    }
     for forbidden in [
         "deadsync_theme",
         "deadlib_present",

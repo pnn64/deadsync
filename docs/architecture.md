@@ -78,14 +78,12 @@ and Endless flag, so appended cycles and changes to the course mode are observed
 immediately. The value contains no stage metadata, result history, or theme types.
 
 The canonical cursor advances only after successful gameplay entry. A song-Lua
-replacement uses a separate entry view with a saturating cursor rewind; it does
-not advance canonical progress or record the outgoing stage. The game also
-selects whether that entry uses the next-stage lead-in. Endless lookup retains
-modulo availability, while entry requires a new cycle at the prepared boundary
-and rejects skipped, unprepared history. Loading interruption recovers recorded
-course results without marking players failed. The shell retains chart loading,
-transactional cycle append, notices, and result/evaluation assembly; failed
-appends preserve the existing stages, progress, and totals.
+replacement borrows the existing stages with a saturating cursor rewind. The
+view preserves canonical progress and leaves the outgoing stage unrecorded. The
+game also selects the next-stage lead-in. Endless lookup retains modulo
+availability, while entry requires a new cycle at the prepared boundary and
+rejects skipped, unprepared history. Loading interruption recovers recorded
+course results without marking players failed.
 
 `deadsync-rules::course::CourseType` is the shared course mode. The simfile parser
 classifies its file data into that game type, and theme views carry the same value.
@@ -123,6 +121,18 @@ on loader failures. Direct renewal and fallback paths no longer construct unused
 labels or a summary song template. Readiness checks borrow the selected rating
 without cloning its stage vector. Legacy theme selection functions remain
 adapters, and their consuming split/recombine operations move existing storage.
+
+`deadsync-gameplay::course_run::CourseRun` resolves the selected stage plans into
+playable stages and computes their per-player totals. Startup and Endless
+renewal share the same preparation path. The shell supplies the chart loader
+and reports errors. Partner styles load each distinct chart payload once per
+stage, and a failed renewal rolls back appended stages and preserves totals.
+
+`deadsync-profile-gameplay::results` assembles the course summary and selects
+which sides save a score. Finite courses use the prepared trail totals and
+Endless uses the recorded stage totals. Routine saves the two participants'
+shared result for the master side. The shell retains the recorded stages,
+supplies display metadata for the summary, and adapts the output for evaluation.
 
 `deadsync-gameplay::course_life_config` owns course life-model selection and Oni
 rewards alongside life initialization, damage, and carry. Its `CourseLifeStage`
@@ -268,16 +278,14 @@ Workspace callers are updated for these source-level changes:
   `resolve_effect_route` context, result, and function remain compatible adapters
   around the game policy. Raw semantic runtime effects have no `ThemeFlowEvent`
   until routing maps them to navigation.
-- The shell's internal `CourseRunState` stores a `CourseProgress` value instead of
-  public cursor/interruption fields. Entry, reload, and loading-failure paths use
-  its game-owned operations; existing `has_next_stage`, `next_stage`, and
-  `is_finished` shell query signatures are retained.
+- The shell's internal `CourseRunState` contains the game-owned `CourseRun`,
+  display metadata, and recorded results. Call the run for completion,
+  availability and renewal, and borrow `CourseRun::entry` for the reload-adjusted
+  stage, timing, and life configuration.
 - Course modes have one definition in `deadsync_rules::course::CourseType`.
   `deadsync_simfile::course::CourseType` and
   `deadsync_theme::views::CourseTypeView` remain enum reexports, preserving
-  existing qualified and glob variant imports. The shell's
-  `course_life_config_for_stage` signature remains compatible and delegates to
-  the game using borrowed stage facts.
+  existing qualified and glob variant imports.
 - Use `deadsync_chart::course::CourseStagePlan` for resolved course stages.
   `deadsync_theme::views::CourseStageView` and Simply Love's `CourseStagePlan`
   retain their public names as aliases of that same type, with unchanged fields.
@@ -359,7 +367,7 @@ entry/renewal ordering in the shell. Scalar game tests cover finite and Endless
 boundaries, interruption, cursor saturation, and reload views. Shell regressions
 retain real chart loading, append rollback, and accumulated-result coverage.
 Course-mode and life-selection guards require the canonical game type, public
-compatibility paths, borrowed shell adapter, lazy chart lookup, and reload entry
+compatibility paths, borrowed course entry, lazy chart lookup, and reload entry
 ordering. Game regressions cover life-model selection, authored and automatic
 rewards, actual chart-slot lookup, raw Survival gains, and initialization/carry.
 Course-preparation guards require game-owned resolver and stage types, theme
@@ -371,8 +379,10 @@ Endless transition coverage.
 Startup guards require the game session/cycle contracts and separate retained
 presentation, while rejecting legacy combined views in shell loading paths.
 Regression tests check lossless storage transfer, presentation-independent
-runtime results, early cycle rejection without loading, and unchanged public
-selection and renewal behavior.
+runtime results, early cycle rejection without loading, and public selection and
+renewal behavior. The game verifies that Lua replacements borrow their original
+stage and preserve canonical progress. Shell integration tests use real parsed
+partner charts and verify rollback and course score ownership.
 
 ```sh
 cargo test -p deadsync --test layer_dependencies --test architecture_boundaries
@@ -380,6 +390,7 @@ cargo test -p deadsync-assets --lib gameplay_noteskin
 cargo test -p deadsync-gameplay --lib
 cargo test -p deadsync-gameplay --lib exit_route
 cargo test -p deadsync-gameplay --lib course_progress
+cargo test -p deadsync-gameplay --lib course_run
 cargo test -p deadsync-gameplay --lib course_life_config_tests
 cargo test -p deadsync-simfile --lib course::tests::course_type_follows_itg_precedence
 cargo test -p deadsync-simfile --lib course_selection
@@ -401,14 +412,9 @@ barriers, disconnect handling, and remote song-selection synchronization. Simply
 Love still wraps gameplay state, while gameplay noteskin preparation and effect
 conversion now have a game owner. Course continuation and restart destinations,
 course progress, interruption, Endless renewal, course modes, life selection,
-difficulty availability, and complete stage-sequence preparation now have game
-owners. The shell still orchestrates runtime chart loading and result assembly;
-carry algorithms and score aggregation already have game owners.
-
-Course startup and renewal now use game-owned contracts, with display metadata
-retained separately. `CourseRunState` remains an application aggregate: reusable
-runtime stage preparation and result orchestration can move below the composition
-root in a later pass without changing the public theme selection adapters.
+difficulty availability, runtime stage preparation, and course score aggregation
+now have game owners. `CourseRunState` keeps application-owned result history
+and display metadata alongside the game run.
 
 The shell still uses concrete theme screen types. Consolidate that integration
 behind a theme-neutral presentation interface after the remaining runtime work;

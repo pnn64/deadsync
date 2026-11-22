@@ -78,7 +78,7 @@ impl<EvaluationPage> SessionState<EvaluationPage> {
 
     pub fn take_final_course(&mut self, failed: bool) -> Option<CourseRunState> {
         let course = self.course_run.as_ref()?;
-        if !course.is_finished(failed) {
+        if !course.run.is_finished(failed) {
             return None;
         }
         let course = self

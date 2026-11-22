@@ -29,11 +29,14 @@ use crate::command::Command;
 use crate::course::{
     CourseRunState, append_endless_cycle, build_course_graph_stages,
     build_course_run_from_selection, build_course_summary_score_info, build_course_summary_stage,
-    course_display_timing_for_run, course_life_config_for_stage, course_summary_records,
     routine_shared_course_player,
 };
 #[cfg(test)]
-use crate::course::{CourseStageRuntime, score_info_from_stage};
+use crate::course::score_info_from_stage;
+use deadsync_gameplay::course_run::CourseEntry;
+use deadsync_profile_gameplay::results::course_summary_records;
+#[cfg(test)]
+use deadsync_gameplay::course_run::{CourseRun, CourseStageRuntime};
 use crate::diagnostics::timing_health;
 use crate::dynamic_media::{BgVideoTiming, DynamicMedia};
 use crate::frame_pacing_trace::{GameplayPacingPhases, GameplayStorageSample};
@@ -238,8 +241,6 @@ const fn resumes_music_wheel(from: CurrentScreen) -> bool {
 /// Imperative effects to be executed by the shell.
 /* -------------------- transition timing constants -------------------- */
 const MENU_ACTORS_FADE_DURATION: f32 = 0.65;
-const COURSE_MIN_SECONDS_TO_STEP_NEXT_SONG: f32 = 4.0;
-const COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG: f32 = 0.0;
 const GAMEPLAY_PRELOAD_POLL_INTERVAL: Duration = Duration::from_millis(16);
 const GAMEPLAY_OFFSET_PROMPT_Z_BACKDROP: i16 = 31990;
 const GAMEPLAY_OFFSET_PROMPT_Z_CURSOR: i16 = 31991;
@@ -3200,7 +3201,7 @@ impl App {
             self.audio.play_sfx(&sound);
         }
         if let Some(course) = self.state.session.course_run.as_mut() {
-            course.progress.finish_entry(finish.lua_reload);
+            course.run.progress.finish_entry(finish.lua_reload);
         }
         commands
     }
@@ -3268,7 +3269,7 @@ impl App {
         let Some(course) = self.state.session.course_run.as_mut() else {
             return false;
         };
-        if !course.progress.interrupt_loading(course.stage_summaries.len()) {
+        if !course.run.progress.interrupt_loading(course.stage_summaries.len()) {
             return false;
         }
         error!("Unable to prepare next course stage: {error}");
@@ -5684,7 +5685,7 @@ impl App {
                         from_gameplay,
                         restart_pending: self.state.session.restart_pending,
                         course_active: course.is_some(),
-                        course_has_next_stage: course.is_some_and(CourseRunState::has_next_stage),
+                        course_has_next_stage: course.is_some_and(|course| course.run.has_next_stage()),
                         all_joined_players_failed,
                     },
                 )
@@ -7068,7 +7069,7 @@ impl App {
         let Some(course_run) = self.state.session.course_run.as_ref() else {
             return false;
         };
-        let Some(stage) = course_run.next_stage() else {
+        let Some(stage) = course_run.run.next_stage() else {
             return false;
         };
         let init = if prewarm_noteskin_catalog {
@@ -7474,7 +7475,7 @@ impl App {
         for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
             if let Some(player) = records[profile_data::player_side_index(side)] {
                 scores::save_local_summary_score_for_side(
-                    &course.score_hash,
+                    &course.run.score_hash,
                     side,
                     summary.music_rate,
                     player,
@@ -10117,25 +10118,21 @@ impl App {
             let mut course_display_carry = None;
             // The session cursor already points past the active stage. A Lua
             // screen replacement reloads that stage without recording it.
-            let mut entry_course = self.state.session.course_run.clone();
-            if let Some(course) = &mut entry_course {
-                course.progress = course.progress.for_entry(lua_reload);
-            }
-            let entry_course = entry_course.as_ref();
-            let course_display_totals = entry_course.map(|course| course.course_display_totals);
-            let course_display_timing = entry_course.map(course_display_timing_for_run);
+            let course_run = self.state.session.course_run.as_ref().map(|course| &course.run);
+            let entry_course = course_run.map(|run| run.entry(lua_reload));
+            let course_display_totals = course_run.map(|run| run.course_display_totals);
+            let course_display_timing = entry_course.map(CourseEntry::display_timing);
             let course_modifiers = entry_course
-                .and_then(CourseRunState::next_stage)
+                .and_then(CourseEntry::next_stage)
                 .map(|stage| Arc::<str>::from(stage.modifiers.as_str()));
             let course_life_config = entry_course.map_or(
                 [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
-                |course| {
-                    course_life_config_for_stage(
-                        course,
-                        profile::get_session_play_style().chart_type(),
-                    )
-                },
+                |entry| entry.life_config(profile::get_session_play_style().chart_type()),
             );
+            let lead_in_timing = entry_course.and_then(CourseEntry::lead_in_timing);
+            let course_intro = entry_course.map(|entry| {
+                (entry.stage_number(), entry.finite_stage_count())
+            });
             if prev == CurrentScreen::Gameplay
                 && !lua_reload
                 && self.state.session.course_run.is_some()
@@ -10396,12 +10393,6 @@ impl App {
                 };
 
                 let color_index = po_state.active_color_index;
-                let lead_in_timing = entry_course.and_then(|course| {
-                    course.progress.uses_next_stage_lead_in().then_some(LeadInTiming {
-                        min_seconds_to_step: COURSE_MIN_SECONDS_TO_STEP_NEXT_SONG,
-                        min_seconds_to_music: COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG,
-                    })
-                });
                 let (course_display_info, course_banner_path) = self
                     .state
                     .session
@@ -10415,14 +10406,12 @@ impl App {
                             course.presentation.banner_path.clone(),
                         )
                     });
-                let stage_intro_text: Arc<str> = if let Some(course) = entry_course
-                {
-                    let stage_num = course.progress.next_stage_index().saturating_add(1);
-                    if course.course_type == deadsync_theme::views::CourseTypeView::Endless {
-                        Arc::from(format!("STAGE {stage_num}"))
-                    } else {
-                        let total = course.stages.len().max(1);
+                let stage_intro_text: Arc<str> = if let Some((stage_num, total)) = course_intro {
+                    if let Some(total) = total {
+                        let total = total.max(1);
                         Arc::from(format!("STAGE {stage_num} / {total}"))
+                    } else {
+                        Arc::from(format!("STAGE {stage_num}"))
                     }
                 } else if cfg.keyboard_features && self.state.session.gameplay_restart_count > 0 {
                     Arc::from(format!(
@@ -11033,8 +11022,8 @@ impl App {
                 .as_ref()
                 .map(|course| {
                     (
-                        course.path.clone(),
-                        Some(course.course_difficulty_name.clone()),
+                        course.run.path.clone(),
+                        Some(course.run.course_difficulty_name.clone()),
                     )
                 })
                 .or_else(|| {
@@ -12529,21 +12518,23 @@ mod tests {
             mines_total: 6,
         };
         let course = CourseRunState {
-            path: PathBuf::from("Courses/Test.crs"),
-            score_hash: "course-hash".to_string(),
-            course_difficulty_name: "Hard".to_string(),
-            course_meter: Some(12),
-            course_type: deadsync_theme::views::CourseTypeView::Nonstop,
-            lives: -1,
             presentation: deadsync_theme::views::CoursePresentationView {
                 name: "Test Course".to_string(),
                 banner_path: None,
                 course_stepchart_label: "Hard".to_string(),
                 song_stub: song_a.clone(),
             },
-            stages: vec![test_course_stage(song_a.clone()), test_course_stage(song_b)],
-            course_display_totals,
-            progress: CourseProgress::new(1),
+            run: CourseRun {
+                path: PathBuf::from("Courses/Test.crs"),
+                score_hash: "course-hash".to_string(),
+                course_difficulty_name: "Hard".to_string(),
+                course_meter: Some(12),
+                course_type: deadsync_rules::course::CourseType::Nonstop,
+                lives: -1,
+                stages: vec![test_course_stage(song_a.clone()), test_course_stage(song_b)],
+                course_display_totals,
+                progress: CourseProgress::new(1),
+            },
             stage_summaries: vec![stage_stats::StageSummary {
                 song: song_a,
                 music_rate: 1.0,
@@ -12608,30 +12599,32 @@ mod tests {
         };
         // An Endless cycle of two songs that ended after the first.
         let course = CourseRunState {
-            path: PathBuf::from("Courses/Test.crs"),
-            score_hash: "routine-course-hash".to_string(),
-            course_difficulty_name: "Hard".to_string(),
-            course_meter: Some(12),
-            course_type: deadsync_theme::views::CourseTypeView::Endless,
-            lives: -1,
             presentation: deadsync_theme::views::CoursePresentationView {
                 name: "Test Course".to_string(),
                 banner_path: None,
                 course_stepchart_label: "Hard".to_string(),
                 song_stub: song.clone(),
             },
-            stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
-            course_display_totals: [
-                CourseDisplayTotals {
-                    possible_grade_points: 200,
-                    ..CourseDisplayTotals::default()
-                },
-                CourseDisplayTotals {
-                    possible_grade_points: 100,
-                    ..CourseDisplayTotals::default()
-                },
-            ],
-            progress: CourseProgress::new(1),
+            run: CourseRun {
+                path: PathBuf::from("Courses/Test.crs"),
+                score_hash: "routine-course-hash".to_string(),
+                course_difficulty_name: "Hard".to_string(),
+                course_meter: Some(12),
+                course_type: deadsync_rules::course::CourseType::Endless,
+                lives: -1,
+                stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
+                course_display_totals: [
+                    CourseDisplayTotals {
+                        possible_grade_points: 200,
+                        ..CourseDisplayTotals::default()
+                    },
+                    CourseDisplayTotals {
+                        possible_grade_points: 100,
+                        ..CourseDisplayTotals::default()
+                    },
+                ],
+                progress: CourseProgress::new(1),
+            },
             stage_summaries: vec![stage],
         };
         let summary = build_course_summary_stage(&course).expect("course summary");
@@ -12741,21 +12734,23 @@ mod tests {
             },
         ];
         let course = CourseRunState {
-            path: PathBuf::from("Courses/Test.crs"),
-            score_hash: "course-hash".into(),
-            course_difficulty_name: "Hard".into(),
-            course_meter: Some(12),
-            course_type: deadsync_theme::views::CourseTypeView::Nonstop,
-            lives: -1,
             presentation: deadsync_theme::views::CoursePresentationView {
                 name: "Test Course".into(),
                 banner_path: None,
                 course_stepchart_label: "Hard".into(),
                 song_stub: song.clone(),
             },
-            stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
-            course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
-            progress: CourseProgress::new(1),
+            run: CourseRun {
+                path: PathBuf::from("Courses/Test.crs"),
+                score_hash: "course-hash".into(),
+                course_difficulty_name: "Hard".into(),
+                course_meter: Some(12),
+                course_type: deadsync_rules::course::CourseType::Nonstop,
+                lives: -1,
+                stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
+                course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
+                progress: CourseProgress::new(1),
+            },
             stage_summaries: Vec::new(),
         };
         let mut session = ShellSessionState::<()>::new(0, [0; MAX_PLAYERS]);
@@ -12766,6 +12761,7 @@ mod tests {
             .course_run
             .as_mut()
             .expect("active course")
+            .run
             .progress
             .finish_entry(false);
         session.record_stage_result(stages[1].clone());

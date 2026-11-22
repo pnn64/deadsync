@@ -1,12 +1,83 @@
 //! Completed gameplay results, independent of screen construction and rendering.
 use crate::GameplayProfile;
+use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::course_run::CourseRun;
 use deadsync_gameplay::{GameplayRuntimeState, build_crossover_rows};
 use deadsync_profile as profile_data;
+use deadsync_rules::course::CourseType;
 use deadsync_rules::{judgment, timing as timing_stats};
-use deadsync_score::stage_stats::{PlayerStageSummary, StageSummary};
+use deadsync_score::stage_stats::{self, PlayerStageSummary, StageSummary};
 use deadsync_score::{self as score_data, GrooveStatsEvalState, ItlEvalState};
 use std::collections::HashMap;
+use std::path::Path;
+
+fn course_summary_totals(run: &CourseRun) -> [stage_stats::CourseSummaryTotals; MAX_PLAYERS] {
+    if run.course_type == CourseType::Endless {
+        [stage_stats::CourseSummaryTotals::default(); MAX_PLAYERS]
+    } else {
+        run.course_display_totals
+            .map(|total| stage_stats::CourseSummaryTotals {
+                possible_grade_points: total.possible_grade_points,
+                total_steps: total.total_steps,
+                holds_total: total.holds_total,
+                rolls_total: total.rolls_total,
+                mines_total: total.mines_total,
+            })
+    }
+}
+
+pub fn course_summary_stage(
+    run: &CourseRun,
+    stage_summaries: &[StageSummary],
+    name: &str,
+    banner_path: Option<&Path>,
+    song_stub: &SongData,
+) -> Option<StageSummary> {
+    stage_stats::build_course_summary_stage(stage_stats::CourseSummaryInput {
+        path: run.path.as_path(),
+        name,
+        banner_path,
+        score_hash: run.score_hash.as_str(),
+        difficulty_name: run.course_difficulty_name.as_str(),
+        meter: run.course_meter,
+        song_stub,
+        course_total_seconds: run.total_seconds(),
+        totals: course_summary_totals(run),
+        stage_summaries,
+    })
+}
+
+/// The shared result saved for the master participant in a Routine course.
+pub fn routine_shared_course_result(
+    run: &CourseRun,
+    summary: &StageSummary,
+    play_style: profile_data::PlayStyle,
+) -> Option<PlayerStageSummary> {
+    if !play_style.is_routine() {
+        return None;
+    }
+    let [Some(first), Some(second)] = &summary.players else {
+        return None;
+    };
+    Some(stage_stats::routine_shared_course_player(
+        first,
+        second,
+        course_summary_totals(run),
+    ))
+}
+
+/// The result each side saves for a course: StageStats::CommitScores saves
+/// one shared Routine result, for the master player.
+pub fn course_summary_records<'a>(
+    summary: &'a StageSummary,
+    routine_shared: Option<&'a PlayerStageSummary>,
+) -> [Option<&'a PlayerStageSummary>; MAX_PLAYERS] {
+    match routine_shared {
+        Some(shared) => std::array::from_fn(|idx| (idx == 0).then_some(shared)),
+        None => summary.players.each_ref().map(Option::as_ref),
+    }
+}
 
 /// Capture each completed player's original chart result before the runtime is
 /// discarded. Online eligibility is supplied by the shell after score saving.

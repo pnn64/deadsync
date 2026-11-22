@@ -45,6 +45,7 @@ use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
 pub mod course_progress;
+pub mod course_run;
 pub mod exit_route;
 pub mod practice;
 

@@ -1,178 +1,23 @@
-use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan, CourseStagePlan};
+use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan};
 use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_gameplay::course_progress::{CourseProgress, CourseRenewal};
-use deadsync_gameplay::{
-    CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, CourseLifeStage,
-    course_display_timing_for_stages, course_display_totals_for_chart,
-    course_display_totals_for_chart_side, course_life_config,
+use deadsync_gameplay::course_run::CourseRun;
+use deadsync_profile_gameplay::results::{
+    course_summary_records, course_summary_stage, routine_shared_course_result,
 };
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide};
-use deadsync_rules::course::CourseType;
 use deadsync_score::{self as score_data, stage_stats};
 use deadsync_theme::views::CoursePresentationView;
 use deadsync_theme_simply_love::views::{CourseGraphStage, ScoreInfo};
-use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct CourseStageRuntime {
-    pub song: Arc<SongData>,
-    pub steps_index: [usize; MAX_PLAYERS],
-    pub preferred_difficulty_index: [usize; MAX_PLAYERS],
-    pub modifiers: String,
-    pub gain_seconds: f32,
-    pub gain_lives: i32,
-}
-
-#[derive(Clone)]
 pub struct CourseRunState {
-    pub path: PathBuf,
-    pub score_hash: String,
-    pub course_difficulty_name: String,
-    pub course_meter: Option<u32>,
-    pub course_type: CourseType,
-    pub lives: i32,
+    pub run: CourseRun,
     pub presentation: CoursePresentationView,
-    pub stages: Vec<CourseStageRuntime>,
-    pub course_display_totals: [CourseDisplayTotals; MAX_PLAYERS],
-    pub progress: CourseProgress,
     pub stage_summaries: Vec<stage_stats::StageSummary>,
-}
-
-impl CourseRunState {
-    pub fn has_next_stage(&self) -> bool {
-        self.progress.has_next_stage(
-            self.stages.len(),
-            self.course_type == CourseType::Endless,
-        )
-    }
-
-    pub fn next_stage(&self) -> Option<&CourseStageRuntime> {
-        let index = self.progress.stage_index(
-            self.stages.len(),
-            self.course_type == CourseType::Endless,
-        )?;
-        self.stages.get(index)
-    }
-
-    pub fn is_finished(&self, failed: bool) -> bool {
-        self.progress.is_finished(
-            self.stages.len(),
-            self.course_type == CourseType::Endless,
-            failed,
-        )
-    }
-
-    pub fn renewal(&self) -> CourseRenewal {
-        self.progress.renewal(
-            self.stages.len(),
-            self.course_type == CourseType::Endless,
-        )
-    }
-}
-
-pub fn course_life_config_for_stage(
-    course: &CourseRunState,
-    chart_type: &str,
-) -> [CourseLifeConfig; MAX_PLAYERS] {
-    let stage = course.next_stage().map(|stage| CourseLifeStage {
-        song: stage.song.as_ref(),
-        steps_index: stage.steps_index,
-        gain_lives: stage.gain_lives,
-        gain_seconds: stage.gain_seconds,
-    });
-    course_life_config(course.course_type, course.lives, stage, chart_type)
-}
-
-fn course_stage_runtime_from_plan(
-    plan: CourseStagePlan,
-    chart_type: &str,
-) -> Option<CourseStageRuntime> {
-    let steps_idx = plan
-        .song
-        .steps_index_for_chart_hash(chart_type, plan.chart_hash.as_str())?;
-    Some(CourseStageRuntime {
-        song: plan.song,
-        steps_index: [steps_idx; MAX_PLAYERS],
-        preferred_difficulty_index: [steps_idx; MAX_PLAYERS],
-        modifiers: plan.modifiers,
-        gain_seconds: plan.gain_seconds,
-        gain_lives: plan.gain_lives,
-    })
-}
-
-/// Loading can fail if a simfile disappears or changes after course selection.
-/// Keep the loader explicit so this boundary can be exercised without global
-/// scan configuration or external song packs.
-fn add_course_stage_totals_with_loader(
-    totals: &mut [CourseDisplayTotals; MAX_PLAYERS],
-    stage: &CourseStageRuntime,
-    chart_type: &str,
-    load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
-) -> Result<(), String> {
-    use deadsync_gameplay::GameplayInputPlayStyle as Style;
-    let partner_style = [
-        ("dance-couple", Style::Couple),
-        ("pump-couple", Style::PumpCouple),
-        ("dance-routine", Style::Routine),
-        ("pump-routine", Style::PumpRoutine),
-    ]
-    .into_iter()
-    .find_map(|(name, style)| name.eq_ignore_ascii_case(chart_type).then_some(style));
-    let mut updated = *totals;
-    let mut loaded: Option<(usize, GameplayChartData)> = None;
-    for (player_idx, total) in updated.iter_mut().enumerate() {
-        let steps_index = stage.steps_index[player_idx];
-        let context = || {
-            format!(
-                "{}: {chart_type} chart at steps index {steps_index}",
-                stage.song.simfile_path.display()
-            )
-        };
-        let chart = stage
-            .song
-            .chart_for_steps_index(chart_type, steps_index)
-            .ok_or_else(|| format!("{} is missing", context()))?;
-        let add = if let Some(style) = partner_style {
-            let index = stage
-                .song
-                .charts
-                .iter()
-                .position(|entry| std::ptr::eq(entry, chart))
-                .ok_or_else(|| format!("{} is not in its song", context()))?;
-            if loaded
-                .as_ref()
-                .is_none_or(|(loaded_index, _)| *loaded_index != index)
-            {
-                let mut payloads = load(&stage.song, &[index], 0.0)
-                    .map_err(|error| format!("Cannot load {}: {error}", context()))?;
-                if payloads.len() != 1 {
-                    return Err(format!(
-                        "Loader returned {} payloads for {} (expected one)",
-                        payloads.len(),
-                        context()
-                    ));
-                }
-                loaded = payloads.pop().map(|payload| (index, payload));
-            }
-            let (_, payload) = loaded.as_ref().expect("one validated payload was loaded");
-            course_display_totals_for_chart_side(chart, payload, style, player_idx)
-        } else {
-            course_display_totals_for_chart(chart)
-        };
-        total.possible_grade_points = total
-            .possible_grade_points
-            .saturating_add(add.possible_grade_points);
-        total.total_steps = total.total_steps.saturating_add(add.total_steps);
-        total.holds_total = total.holds_total.saturating_add(add.holds_total);
-        total.rolls_total = total.rolls_total.saturating_add(add.rolls_total);
-        total.mines_total = total.mines_total.saturating_add(add.mines_total);
-    }
-    *totals = updated;
-    Ok(())
 }
 
 pub fn append_endless_cycle(
@@ -180,11 +25,10 @@ pub fn append_endless_cycle(
     selection: CourseCyclePlan,
     chart_type: &str,
 ) -> bool {
-    match append_endless_cycle_with_loader(
-        course,
+    match course.run.append_endless_cycle(
         selection,
         chart_type,
-        &mut deadsync_simfile::app_runtime::load_gameplay_charts,
+        deadsync_simfile::app_runtime::load_gameplay_charts,
     ) {
         Ok(appended) => appended,
         Err(error) => {
@@ -192,40 +36,6 @@ pub fn append_endless_cycle(
             false
         }
     }
-}
-
-fn append_endless_cycle_with_loader(
-    course: &mut CourseRunState,
-    selection: CourseCyclePlan,
-    chart_type: &str,
-    load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
-) -> Result<bool, String> {
-    if !course
-        .progress
-        .can_append_endless_cycle(course.course_type == CourseType::Endless)
-        || selection.path != course.path
-    {
-        return Ok(false);
-    }
-    let previous_len = course.stages.len();
-    let mut totals = course.course_display_totals;
-    for stage in selection
-        .stages
-        .into_iter()
-        .filter_map(|plan| course_stage_runtime_from_plan(plan, chart_type))
-    {
-        if let Err(error) =
-            add_course_stage_totals_with_loader(&mut totals, &stage, chart_type, load)
-        {
-            // The only mutations so far are appended stages. Drop those on
-            // failure, retaining the original stages, cursor and totals.
-            course.stages.truncate(previous_len);
-            return Err(error);
-        }
-        course.stages.push(stage);
-    }
-    course.course_display_totals = totals;
-    Ok(course.stages.len() != previous_len)
 }
 
 pub fn build_course_run_from_selection(
@@ -237,7 +47,7 @@ pub fn build_course_run_from_selection(
         selection,
         presentation,
         chart_type,
-        &mut deadsync_simfile::app_runtime::load_gameplay_charts,
+        deadsync_simfile::app_runtime::load_gameplay_charts,
     ) {
         Ok(course) => course,
         Err(error) => {
@@ -251,125 +61,34 @@ fn build_course_run_from_selection_with_loader(
     selection: CourseSessionPlan,
     presentation: CoursePresentationView,
     chart_type: &str,
-    load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
+    load: impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
 ) -> Result<Option<CourseRunState>, String> {
-    let mut stages = Vec::with_capacity(selection.stages.len());
-    let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
-    for stage in selection.stages {
-        if let Some(runtime) = course_stage_runtime_from_plan(stage, chart_type) {
-            add_course_stage_totals_with_loader(
-                &mut course_display_totals,
-                &runtime,
-                chart_type,
-                load,
-            )?;
-            stages.push(runtime);
-        }
-    }
-    if stages.is_empty() {
+    let Some(run) = CourseRun::prepare(selection, chart_type, load)? else {
         return Ok(None);
-    }
-
+    };
     Ok(Some(CourseRunState {
-        path: selection.path,
-        score_hash: selection.score_hash,
-        course_difficulty_name: selection.course_difficulty_name,
-        course_meter: selection.course_meter,
-        course_type: selection.course_type,
-        lives: selection.lives,
+        run,
         presentation,
-        stages,
-        course_display_totals,
-        progress: CourseProgress::default(),
         stage_summaries: Vec::new(),
     }))
 }
 
-fn course_stage_seconds(stage: &CourseStageRuntime) -> f32 {
-    let seconds = stage.song.precise_last_second();
-    if seconds.is_finite() {
-        seconds.max(0.0)
-    } else {
-        0.0
-    }
-}
-
-pub fn course_total_seconds(course: &CourseRunState) -> f32 {
-    course.stages.iter().map(course_stage_seconds).sum()
-}
-
-pub fn course_display_timing_for_run(course: &CourseRunState) -> CourseDisplayTiming {
-    course_display_timing_for_stages(
-        &course.stages,
-        course.progress.next_stage_index(),
-        |stage| stage.song.music_length_seconds,
+pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
+    course_summary_stage(
+        &course.run,
+        &course.stage_summaries,
+        course.presentation.name.as_str(),
+        course.presentation.banner_path.as_deref(),
+        course.presentation.song_stub.as_ref(),
     )
 }
 
-fn course_summary_totals(
-    course: &CourseRunState,
-) -> [stage_stats::CourseSummaryTotals; MAX_PLAYERS] {
-    if course.course_type == CourseType::Endless {
-        [stage_stats::CourseSummaryTotals::default(); MAX_PLAYERS]
-    } else {
-        course
-            .course_display_totals
-            .map(|total| stage_stats::CourseSummaryTotals {
-                possible_grade_points: total.possible_grade_points,
-                total_steps: total.total_steps,
-                holds_total: total.holds_total,
-                rolls_total: total.rolls_total,
-                mines_total: total.mines_total,
-            })
-    }
-}
-
-pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
-    let totals = course_summary_totals(course);
-    stage_stats::build_course_summary_stage(stage_stats::CourseSummaryInput {
-        path: course.path.as_path(),
-        name: course.presentation.name.as_str(),
-        banner_path: course.presentation.banner_path.as_deref(),
-        score_hash: course.score_hash.as_str(),
-        difficulty_name: course.course_difficulty_name.as_str(),
-        meter: course.course_meter,
-        song_stub: course.presentation.song_stub.as_ref(),
-        course_total_seconds: course_total_seconds(course),
-        totals,
-        stage_summaries: course.stage_summaries.as_slice(),
-    })
-}
-
-/// The Routine course result both participants share, which the course saves
-/// for the master player only.
 pub fn routine_shared_course_player(
     course: &CourseRunState,
     summary: &stage_stats::StageSummary,
     play_style: PlayStyle,
 ) -> Option<stage_stats::PlayerStageSummary> {
-    if !play_style.is_routine() {
-        return None;
-    }
-    let [Some(first), Some(second)] = &summary.players else {
-        return None;
-    };
-    Some(stage_stats::routine_shared_course_player(
-        first,
-        second,
-        course_summary_totals(course),
-    ))
-}
-
-/// The result each side saves for a course: StageStats::CommitScores saves
-/// one shared Routine result, for the master player.
-pub fn course_summary_records<'a>(
-    summary: &'a stage_stats::StageSummary,
-    routine_shared: Option<&'a stage_stats::PlayerStageSummary>,
-) -> [Option<&'a stage_stats::PlayerStageSummary>; MAX_PLAYERS] {
-    match routine_shared {
-        Some(shared) => std::array::from_fn(|idx| (idx == 0).then_some(shared)),
-        None => summary.players.each_ref().map(Option::as_ref),
-    }
+    routine_shared_course_result(&course.run, summary, play_style)
 }
 
 pub fn score_info_from_stage(
@@ -527,8 +246,8 @@ pub fn build_course_graph_stages(
     course: &CourseRunState,
     chart_type: &str,
 ) -> [Vec<CourseGraphStage>; MAX_PLAYERS] {
-    let mut out = std::array::from_fn(|_| Vec::with_capacity(course.stages.len()));
-    for stage in &course.stages {
+    let mut out = std::array::from_fn(|_| Vec::with_capacity(course.run.stages.len()));
+    for stage in &course.run.stages {
         let build = |index| {
             stage
                 .song

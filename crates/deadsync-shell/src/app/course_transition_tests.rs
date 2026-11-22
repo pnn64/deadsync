@@ -143,7 +143,7 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
     // The previous cycle contains A. The fresh cycle must append A then B.
     plan.stages.truncate(1);
     let mut run = build_course_run_from_selection(plan, presentation, style.chart_type()).unwrap();
-    run.progress = CourseProgress::new(1);
+    run.run.progress = CourseProgress::new(1);
     app.state.session.begin_play_session(Instant::now());
     app.state.session.last_course_wheel_path = Some(course_path);
     app.state.session.course_run = Some(run);
@@ -197,6 +197,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                                 .course_run
                                 .as_mut()
                                 .unwrap()
+                                .run
                                 .progress = CourseProgress::new(2)
                         }
                         _ => unreachable!(),
@@ -252,12 +253,13 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
                     .course_run
                     .as_ref()
                     .unwrap()
+                    .run
                     .course_display_totals;
                 let (target, _) = app.prepare_global_fade_entry(CurrentScreen::Gameplay);
                 assert_eq!(target, CurrentScreen::Gameplay);
                 let run = app.state.session.course_run.as_ref().unwrap();
-                assert_eq!(run.stages.len(), 3);
-                for (after, before) in run.course_display_totals.iter().zip(before) {
+                assert_eq!(run.run.stages.len(), 3);
+                for (after, before) in run.run.course_display_totals.iter().zip(before) {
                     assert_eq!(
                         after.possible_grade_points,
                         3 * before.possible_grade_points
@@ -272,6 +274,7 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
                         .course_run
                         .as_ref()
                         .unwrap()
+                        .run
                         .progress
                         .next_stage_index(),
                     2
@@ -306,14 +309,15 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
                             .course_run
                             .as_ref()
                             .unwrap()
+                            .run
                             .progress
                             .next_stage_index(),
                         expected_cursor
                     );
                 }
                 let run = app.state.session.course_run.as_ref().unwrap();
-                assert_eq!(run.stages.len(), 5);
-                for (after, before) in run.course_display_totals.iter().zip(before) {
+                assert_eq!(run.run.stages.len(), 5);
+                for (after, before) in run.run.course_display_totals.iter().zip(before) {
                     assert_eq!(
                         after.possible_grade_points,
                         5 * before.possible_grade_points
@@ -396,6 +400,7 @@ fn interrupted_endless_saves_accumulated_routine_score_and_all_evaluation_pages(
                     .course_run
                     .as_ref()
                     .unwrap()
+                    .run
                     .score_hash
                     .clone();
                 // Finish the previous cycle and both songs of the next cycle.
@@ -468,9 +473,9 @@ fn course_stage_load_failures_preserve_recorded_results_and_evaluation_pages() {
                         let stages_played = app.state.coin.bookkeeping().stages_played;
                         let course = app.state.session.course_run.as_mut().unwrap();
                         if !endless {
-                            course.course_type = deadsync_theme::views::CourseTypeView::Nonstop;
+                            course.run.course_type = deadsync_rules::course::CourseType::Nonstop;
                         }
-                        let score_hash = course.score_hash.clone();
+                        let score_hash = course.run.score_hash.clone();
                         // Nonzero earned points distinguish the accumulated result
                         // from a saved empty result or the next, unplayed song.
                         for player in course.stage_summaries[0].players.iter_mut().flatten() {
@@ -587,6 +592,7 @@ fn preparation_failure_without_completed_course_songs_keeps_existing_exit() {
                         .course_run
                         .as_ref()
                         .unwrap()
+                        .run
                         .progress
                         .is_interrupted()
                 );

@@ -71,7 +71,7 @@ impl App {
         let Some(course) = self.state.session.course_run.as_mut() else {
             return target;
         };
-        let renewed = match course.renewal() {
+        let renewed = match course.run.renewal() {
             CourseRenewal::AppendCycle => {
                 select_course::reroll_selected_endless_cycle(&self.state.screens.select_course_state)
                     .or_else(|| {
@@ -92,7 +92,7 @@ impl App {
         if renewed {
             return target;
         }
-        course.progress.interrupt();
+        course.run.progress.interrupt();
         warn!("Unable to renew Endless course; finishing with the recorded course result.");
         self.state.shell.interaction.show_message(
             "Unable to prepare next course stage".to_string(),
