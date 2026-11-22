@@ -350,7 +350,7 @@ pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
 }
 
 #[inline(never)]
-fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
+pub(crate) fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
     let (blocks, tail) = bytes.as_chunks::<32>();
     for (index, block) in blocks.iter().enumerate() {
         // Reduce the whole block so LLVM can compare its bytes in parallel.

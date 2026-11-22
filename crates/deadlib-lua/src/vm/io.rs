@@ -148,8 +148,18 @@ impl Vm {
         let _ = self.io.flush_stdout();
     }
 }
+#[inline(always)]
 pub(super) fn c_bytes(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
+    let end = if bytes.len() >= 64 {
+        bytes[..8]
+            .iter()
+            .position(|&b| b == 0)
+            .or_else(|| crate::pattern::find_byte_in_blocks(bytes, 0))
+            .unwrap_or(bytes.len())
+    } else {
+        bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())
+    };
+    &bytes[..end]
 }
 pub(super) fn integer(n: f64) -> i64 {
     if !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&n) {
