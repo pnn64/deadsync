@@ -488,16 +488,14 @@ impl Vm {
                     unreachable!("search cursor")
                 };
                 let mut start = cursor as usize;
-                while path.get(start) == Some(&b';') {
-                    start += 1
+                if path.get(start) == Some(&b';') {
+                    start += crate::pattern::byte_run(&path[start..], b';');
                 }
                 if start == path.len() {
                     return self.return_frame(frame, base + 3, 1);
                 }
-                let end = path[start..]
-                    .iter()
-                    .position(|&b| b == b';')
-                    .map_or(path.len(), |n| start + n);
+                let end = crate::pattern::find_byte(&path[start..], b';')
+                    .map_or(path.len(), |offset| start + offset);
                 self.registers[base + 4] = Value::Number(end as f64);
                 let Value::String(name_id) = self.registers[base + 8] else {
                     unreachable!("search name string")
