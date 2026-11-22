@@ -242,14 +242,6 @@ pub fn gameplay_score_leader_alphas(state: &GameplayCoreState) -> [f32; MAX_PLAY
 pub struct ActorViewOverride {
     pub notefield: NotefieldViewOverride,
     pub hide_gameplay_hud: bool,
-    /// Whether chart-attack modifiers may affect the rendered player and
-    /// notefield. Practice editing disables this while loop playback keeps the
-    /// normal gameplay attack path.
-    pub apply_attacks: bool,
-    /// Whether song-owned backgrounds, foregrounds, and Lua may participate in
-    /// composition. ITGmania unloads them while ScreenPractice is editing and
-    /// reloads them for playback.
-    pub show_song_visuals: bool,
     /// Alpha multiplier applied to SMX overlay actors (FSR sensor display and pad
     /// input display). Used to fade them in with the screen transition.
     pub smx_overlay_alpha: f32,
@@ -261,8 +253,6 @@ impl Default for ActorViewOverride {
         Self {
             notefield: view.notefield,
             hide_gameplay_hud: view.hide_gameplay_hud,
-            apply_attacks: view.apply_attacks,
-            show_song_visuals: view.show_song_visuals,
             smx_overlay_alpha: 1.0,
         }
     }
@@ -273,8 +263,6 @@ impl From<ActorViewOverride> for GameplayFrameView {
         Self {
             notefield: view.notefield,
             hide_gameplay_hud: view.hide_gameplay_hud,
-            apply_attacks: view.apply_attacks,
-            show_song_visuals: view.show_song_visuals,
         }
     }
 }
@@ -4838,8 +4826,8 @@ pub fn draw_field(
         combo_visible,
         request.judgment_transform,
         request.combo_transform,
-        view.show_song_visuals,
-        view.apply_attacks,
+        request.show_song_visuals,
+        request.apply_attacks,
         request.capture,
         request.wrapper,
         request.wrapper_visible,

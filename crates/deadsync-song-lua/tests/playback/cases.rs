@@ -13824,9 +13824,11 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         assert_eq!(target_sizes(&scratches[0]), target_sizes(&scratches[1]));
     }
 
+    use deadsync_gameplay::practice::editor::{PracticeEditorCommand, PracticePlayRange};
+    use deadsync_gameplay::practice::{PracticeSession, PracticeViewRequest};
     use deadsync_song_lua::gameplay_presentation::{
         FieldRenderBuffers, FramePresentationContext, GameplayFramePresenter, GameplayFrameView,
-        compose_gameplay_frame,
+        compose_gameplay_frame, compose_practice_frame,
     };
     use deadsync_song_lua::gameplay_session::{GameplayStage, SongLuaGameplaySession};
     use deadsync_song_lua::playback as shared;
@@ -13834,6 +13836,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
     struct FixturePresenter {
         stage: GameplayStage<GameplayCoreState>,
         hud_count: Option<usize>,
+        expect_song_content: bool,
     }
 
     impl GameplayFramePresenter for FixturePresenter {
@@ -13875,9 +13878,11 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         fn draw_field(
             &self,
             _: FramePresentationContext<'_, Self::View, Self::Policy>,
-            _: shared::FieldFrame,
+            request: shared::FieldFrame,
             _: FieldRenderBuffers<'_>,
         ) -> deadsync_notefield::BuiltNotefield {
+            assert_eq!(request.apply_attacks, self.expect_song_content);
+            assert_eq!(request.show_song_visuals, self.expect_song_content);
             deadsync_notefield::BuiltNotefield {
                 layout_center_x: 200.0,
                 field_camera: None,
@@ -13905,6 +13910,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
             media.sound_paths,
         ),
         hud_count: Some(0),
+        expect_song_content: true,
     };
     let song_frame = std::ptr::from_ref(presenter.stage.song_frame());
     let song_time = presenter.stage.current_music_time_ns();
@@ -13933,6 +13939,57 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         assert_eq!(presenter.stage.current_music_time_ns(), song_time);
     }
     assert_eq!(presenter.hud_count, Some(2));
+
+    let mut practice = PracticeSession::new(&mut presenter.stage.gameplay, Default::default());
+    let assert_practice_frame =
+        |presenter: &mut FixturePresenter, practice: &PracticeSession, playing| {
+            presenter.expect_song_content = playing;
+            presenter.stage.gameplay.set_current_music_time_ns(song_time);
+            let mut actors = Vec::new();
+            compose_practice_frame(
+                &mut actors,
+                presenter,
+                practice,
+                &assets,
+                GameplayFrameView::default(),
+                0.0,
+                [1.0; 4],
+            );
+            assert_eq!(
+                presenter.stage.render_targets().len(),
+                if playing { 3 } else { 0 },
+            );
+            assert_eq!(std::ptr::from_ref(presenter.stage.song_frame()), song_frame);
+        };
+    let snap = |_: &std::path::Path, seconds| seconds;
+    assert_practice_frame(&mut presenter, &practice, false);
+    assert_eq!(
+        practice.execute(
+            &mut presenter.stage.gameplay,
+            PracticeEditorCommand::Play(PracticePlayRange::WholeSong),
+            snap,
+            |_, _| {},
+        ),
+        PracticeViewRequest::PlaybackStarted
+    );
+    assert_practice_frame(&mut presenter, &practice, true);
+
+    let now = std::time::Instant::now();
+    let back = deadsync_input::InputEvent::new(
+        deadsync_input::VirtualAction::p1_back,
+        0,
+        true,
+        deadsync_core::input::InputSource::Keyboard,
+        now,
+        0,
+        now,
+        now,
+    );
+    assert_eq!(
+        practice.handle_input(&mut presenter.stage.gameplay, &back, false, snap, |_, _| {}),
+        PracticeViewRequest::PlaybackStopped
+    );
+    assert_practice_frame(&mut presenter, &practice, false);
 }
 
 fn prepare_fixture(

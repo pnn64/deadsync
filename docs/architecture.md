@@ -173,9 +173,12 @@ separately.
 `deadsync-song-lua::gameplay_presentation` drives frame composition through
 `GameplayFramePresenter`. The presenter supplies screen layers, notefield
 actors, and any final overlays. The game builds frame options from the live
-session and saved player settings, preserves capture order, and restores the
-stage and theme buffers before final overlays. Gameplay, Practice, and the
-gameplay exporter use the same entry point.
+session and saved player settings. Gameplay and the exporter include chart
+attacks and song-authored visuals. Practice includes them during playback
+and suppresses them during editing, using the live Practice session. The
+presenter receives that decision with each notefield draw request and supplies
+layout and HUD options. Both modes share capture order and restore the stage and
+theme buffers before final overlays.
 
 `deadsync-gameplay::stage_charts` resolves chart fallback and assigns charts to
 solo, Versus, and partner players. Preload, Player Options entry, and direct

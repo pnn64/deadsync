@@ -289,6 +289,10 @@ impl State {
     pub fn drain_music_rates(&mut self) -> std::vec::Drain<'_, f32> {
         self.session.drain_music_rates()
     }
+
+    pub fn frame_parts(&mut self) -> (&mut gameplay_screen::State, &PracticeSession) {
+        (&mut self.gameplay, &self.session)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -844,8 +848,7 @@ pub fn push_overlay(actors: &mut Vec<Actor>, state: &mut State) {
 }
 
 pub fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
-    let playback_visuals = state.session.is_playing();
-    let mut notefield = if playback_visuals {
+    let mut notefield = if state.session.is_playing() {
         gameplay_screen::NotefieldViewOverride::default()
     } else {
         practice_notefield_view(state)
@@ -854,8 +857,6 @@ pub fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
     gameplay_screen::ActorViewOverride {
         notefield,
         hide_gameplay_hud: true,
-        apply_attacks: playback_visuals,
-        show_song_visuals: playback_visuals,
         ..Default::default()
     }
 }

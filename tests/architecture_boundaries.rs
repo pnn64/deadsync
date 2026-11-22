@@ -402,9 +402,19 @@ fn chart_lua_playback_has_no_theme_dependency() {
     let presentation = production_source(
         &root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"),
     );
+    let practice = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"),
+    );
     assert!(theme.contains("impl GameplayFramePresenter for State"));
     assert!(shell.contains("compose_gameplay_frame as push_actors"));
+    assert!(contains_rust(&shell, "let (gameplay, session) = state.frame_parts()"));
+    assert!(contains_rust(&shell, "compose_practice_frame(actors, gameplay, session,"));
     assert!(!shell.contains("gameplay::frame_layers(") && !shell.contains("gameplay::draw_field("));
+    for former_override in ["apply_attacks:", "show_song_visuals:"] {
+        assert!(!contains_rust(&theme, former_override));
+        assert!(!contains_rust(&practice, former_override));
+    }
+    assert!(contains_rust(&theme, "request.show_song_visuals, request.apply_attacks,"));
     for handoff in [
         "pub trait GameplayFramePresenter",
         "stage.gameplay.setup.session",
@@ -412,6 +422,8 @@ fn chart_lua_playback_has_no_theme_dependency() {
         "presenter.draw_layers(",
         "presenter.draw_field(",
         "stage.song_scratch = Some(song)",
+        "if practice.is_playing()",
+        "SongFrameContent::PRACTICE_EDITOR",
     ] {
         assert!(contains_rust(&presentation, handoff), "missing presenter handoff {handoff}");
     }

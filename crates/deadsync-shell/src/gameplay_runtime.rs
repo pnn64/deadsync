@@ -893,9 +893,11 @@ pub(crate) fn push_practice_actors(
     use deadsync_theme_simply_love::screens::practice;
     actors.reserve(128);
     let view = practice::practice_view(state);
-    let segments = push_actors(
+    let (gameplay, session) = state.frame_parts();
+    let segments = deadsync_song_lua::gameplay_presentation::compose_practice_frame(
         actors,
-        &mut state.gameplay,
+        gameplay,
+        session,
         assets,
         view,
         arrow_effect_time_s,

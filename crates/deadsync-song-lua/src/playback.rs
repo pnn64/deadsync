@@ -14928,6 +14928,8 @@ pub struct FieldLayout {
 pub struct FieldFrame {
     pub player: usize,
     pub placement: FieldPlacement,
+    pub apply_attacks: bool,
+    pub show_song_visuals: bool,
     pub judgment_visible: bool,
     pub combo_visible: bool,
     pub judgment_transform: Option<deadsync_notefield::HudActorTransform>,
@@ -15615,6 +15617,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     player_position: Some(player_position),
                     player: player_idx,
                     placement,
+                    apply_attacks,
+                    show_song_visuals,
                     judgment_visible,
                     combo_visible,
                     judgment_transform,

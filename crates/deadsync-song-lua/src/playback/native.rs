@@ -56,6 +56,8 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
             FieldFrame {
                 player,
                 placement,
+                apply_attacks: view.apply_attacks,
+                show_song_visuals: view.show_song_visuals,
                 judgment_visible: true,
                 combo_visible: true,
                 judgment_transform: None,

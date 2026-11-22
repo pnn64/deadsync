@@ -41,6 +41,9 @@ pub(crate) mod tests {
     use deadsync_profile as profile_data;
     use deadsync_profile::compat as profile;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use deadsync_song_lua::gameplay_presentation::{
+        FramePresentationContext, SongFrameContent, compose_gameplay_preview, compose_practice_frame,
+    };
     use deadsync_theme_simply_love::screens::gameplay as screen_gameplay;
 
 
@@ -807,6 +810,21 @@ pub(crate) mod tests {
         )
     }
 
+    #[derive(Clone, Copy)]
+    struct FixtureFrameView {
+        presentation: screen_gameplay::ActorViewOverride,
+        preview: Option<SongFrameContent>,
+    }
+
+    impl From<screen_gameplay::ActorViewOverride> for FixtureFrameView {
+        fn from(presentation: screen_gameplay::ActorViewOverride) -> Self {
+            Self {
+                presentation,
+                preview: None,
+            }
+        }
+    }
+
     #[expect(
         clippy::too_many_arguments,
         reason = "the render-frame fixture keeps actor composition inputs explicit"
@@ -818,7 +836,7 @@ pub(crate) mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
-        view: screen_gameplay::ActorViewOverride,
+        view: impl Into<FixtureFrameView>,
         texture_ctx: &T,
     ) -> deadlib_render_core::RenderFrame {
         compose_fixture_frame_with_view_and_clock(
@@ -834,19 +852,33 @@ pub(crate) mod tests {
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
         scratch: &mut compose::ComposeScratch,
-        view: screen_gameplay::ActorViewOverride,
+        view: impl Into<FixtureFrameView>,
         texture_ctx: &T,
         game_time: Option<f64>,
     ) -> deadlib_render_core::RenderFrame {
         actors.clear();
-        let segments = crate::gameplay_runtime::push_actors(
-            actors,
-            state,
-            assets,
-            view,
-            game_time.unwrap_or(123.0),
-            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
-        );
+        let FixtureFrameView {
+            presentation: view,
+            preview,
+        } = view.into();
+        let uptime_seconds = game_time.unwrap_or(123.0);
+        let policy = deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default();
+        let segments = match preview {
+            Some(song_content) => compose_gameplay_preview(
+                actors,
+                state,
+                FramePresentationContext {
+                    assets,
+                    view,
+                    uptime_seconds,
+                    policy,
+                },
+                song_content,
+            ),
+            None => {
+                crate::gameplay_runtime::push_actors(actors, state, assets, view, uptime_seconds, policy)
+            }
+        };
         let actor_segments = segments.segments(state.song_frame(), actors);
         compose::build_passes(
             actor_segments,
@@ -1637,11 +1669,15 @@ end
                             (false, false, false),
                             (true, false, false),
                         ] {
-                            let view = screen_gameplay::ActorViewOverride {
-                                hide_gameplay_hud,
-                                show_song_visuals,
-                                apply_attacks,
-                                ..Default::default()
+                            let view = FixtureFrameView {
+                                presentation: screen_gameplay::ActorViewOverride {
+                                    hide_gameplay_hud,
+                                    ..Default::default()
+                                },
+                                preview: Some(SongFrameContent {
+                                    apply_attacks,
+                                    show_song_visuals,
+                                }),
                             };
                             let mut expected = compose_fixture_frame_with_view(
                                 &mut state,
@@ -3161,7 +3197,7 @@ M000
     }
 
     #[test]
-    fn actor_view_can_suppress_active_attack_visuals() {
+    fn diagnostic_frame_can_suppress_active_attack_visuals() {
         let simfile = write_fixture("f0-practice-attack", generated_model_effects_simfile());
         with_session(
             profile_data::PlayStyle::Single,
@@ -3192,14 +3228,19 @@ M000
                 let mut actors = Vec::with_capacity(512);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
-                let view = screen_gameplay::ActorViewOverride {
-                    notefield: screen_gameplay::NotefieldViewOverride {
-                        hide_display_mods: true,
+                let view = FixtureFrameView {
+                    presentation: screen_gameplay::ActorViewOverride {
+                        notefield: screen_gameplay::NotefieldViewOverride {
+                            hide_display_mods: true,
+                            ..Default::default()
+                        },
+                        hide_gameplay_hud: true,
                         ..Default::default()
                     },
-                    hide_gameplay_hud: true,
-                    show_song_visuals: false,
-                    ..Default::default()
+                    preview: Some(SongFrameContent {
+                        apply_attacks: true,
+                        show_song_visuals: false,
+                    }),
                 };
                 let baseline_frame =
                     assert_repeatable_composition(&mut compose_scratch, |scratch| {
@@ -3245,8 +3286,11 @@ M000
                             &mut actors,
                             &mut text_cache,
                             scratch,
-                            screen_gameplay::ActorViewOverride {
-                                apply_attacks: false,
+                            FixtureFrameView {
+                                preview: Some(SongFrameContent {
+                                    apply_attacks: false,
+                                    show_song_visuals: false,
+                                }),
                                 ..view
                             },
                             &FIXTURE_TEXTURES,
@@ -4172,17 +4216,20 @@ return Def.ActorFrame{
                 assert!(edit_segments.has_direct_field_proxy(state.song_frame()));
 
                 let mut plain_edit_actors = Vec::with_capacity(512);
-                let plain_edit_segments = crate::gameplay_runtime::push_actors(
+                let practice = deadsync_gameplay::practice::PracticeSession::new(
+                    &mut state.gameplay,
+                    Default::default(),
+                );
+                let plain_edit_segments = compose_practice_frame(
                     &mut plain_edit_actors,
                     &mut state,
+                    &practice,
                     &assets,
                     screen_gameplay::ActorViewOverride {
                         notefield: screen_gameplay::NotefieldViewOverride {
                             edit_beat_bars: true,
                             ..Default::default()
                         },
-                        apply_attacks: false,
-                        show_song_visuals: false,
                         ..Default::default()
                     },
                     123.0,
