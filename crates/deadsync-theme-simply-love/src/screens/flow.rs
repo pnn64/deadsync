@@ -1,5 +1,8 @@
 use deadsync_input::VirtualAction;
-use deadsync_profile::{PLAYER_SLOTS, PlayStyle, PlayerSide, player_side_index};
+use deadsync_profile::{
+    PLAYER_SLOTS, PlayStyle, PlayerSide, joined_player_mask, late_join_play_style,
+    player_side_index,
+};
 
 /// Concrete screen identity for Simply Love.
 ///
@@ -169,7 +172,7 @@ pub fn late_join_side(
     action: VirtualAction,
     context: LateJoinContext,
 ) -> Option<PlayerSide> {
-    if !pressed || !context.screen_allows_join || context.play_style.is_double() {
+    if !pressed || !context.screen_allows_join {
         return None;
     }
     if !matches!(
@@ -187,9 +190,8 @@ pub fn late_join_side(
         VirtualAction::p2_start => PlayerSide::P2,
         _ => return None,
     };
-    let side_index = player_side_index(side);
-    let joined_count = context.joined.into_iter().filter(|joined| *joined).count();
-    (joined_count == 1 && !context.joined[side_index]).then_some(side)
+    let joined_mask = joined_player_mask(context.joined[0], context.joined[1]);
+    late_join_play_style(context.play_style, joined_mask, side).map(|_| side)
 }
 
 #[must_use]

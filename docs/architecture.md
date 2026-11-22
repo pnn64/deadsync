@@ -429,6 +429,8 @@ to draw their own covers and HUD effects.
 
 ## Remaining separation
 
+Continue the layer separation within the existing workspace crates.
+
 The production crate graph follows these directions. Gameplay and Practice
 startup, normal song-Lua lifecycle, callback input sequencing, practice
 playback/editor behavior, and gameplay lobby coordination now have game owners,
@@ -439,6 +441,10 @@ Endless renewal, course modes, life selection, difficulty availability, runtime
 stage preparation, and course score aggregation now have game owners.
 `CourseRunState` keeps application-owned result history and display metadata
 alongside the game run.
+
+`deadsync-profile` decides whether a second player can join a one-player session
+and which Versus style applies. The shell handles the credit and session update.
+Simply Love controls where to accept join input and how to update its screens.
 
 The shell still stores concrete screen state and routes concrete runtime
 requests. A replaceable theme needs those integration points as well as the

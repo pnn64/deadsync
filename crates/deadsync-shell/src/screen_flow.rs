@@ -2,13 +2,13 @@ use deadsync_config::app_config::Config;
 #[cfg(test)]
 use deadsync_profile::PlayerSide;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
-pub(crate) use deadsync_theme_simply_love::screens::{
-    LateJoinContext, ProfileSelectionContext, evaluation_summary_return_to, late_join_side,
-    profile_selection_plan,
-};
 #[cfg(test)]
 use deadsync_theme_simply_love::screens::{
-    SelectMusicJoinContext, SelectMusicJoinPlan, select_music_join_plan,
+    LateJoinContext, SelectMusicJoinContext, SelectMusicJoinPlan, late_join_side,
+    select_music_join_plan,
+};
+pub(crate) use deadsync_theme_simply_love::screens::{
+    ProfileSelectionContext, evaluation_summary_return_to, profile_selection_plan,
 };
 use deadsync_theme_simply_love::screens::{
     SimplyLoveNavigationPlan, SimplyLoveNavigationPolicy, resolve_navigation,

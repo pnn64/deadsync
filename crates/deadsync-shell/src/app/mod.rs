@@ -83,8 +83,7 @@ use crate::restart::{
 };
 use crate::runtime::ShellState;
 use crate::screen_flow::{
-    LateJoinContext, ProfileSelectionContext, evaluation_summary_return_to, late_join_side,
-    profile_selection_plan,
+    ProfileSelectionContext, evaluation_summary_return_to, profile_selection_plan,
 };
 use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 use crate::session::SessionState as ShellSessionState;
@@ -7677,27 +7676,18 @@ impl App {
             | CurrentScreen::SelectPlayMode => true,
             _ => false,
         };
-        if !screen_allows_join
-            || !ev.pressed
-            || !matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start)
-        {
+        if !screen_allows_join || !ev.pressed {
             return false;
         }
+        let join_side = match ev.action {
+            VirtualAction::p1_start => profile_data::PlayerSide::P1,
+            VirtualAction::p2_start => profile_data::PlayerSide::P2,
+            _ => return false,
+        };
         let session = profile::get_session_snapshot();
-        let joined = [
-            session.side_joined(profile_data::PlayerSide::P1),
-            session.side_joined(profile_data::PlayerSide::P2),
-        ];
-        let Some(join_side) = late_join_side(
-            ev.pressed,
-            ev.action,
-            LateJoinContext {
-                screen,
-                screen_allows_join,
-                play_style: session.play_style,
-                joined,
-            },
-        ) else {
+        let Some(joined_style) =
+            profile_data::late_join_play_style(session.play_style, session.joined_mask, join_side)
+        else {
             return false;
         };
 
@@ -7713,11 +7703,6 @@ impl App {
         debug_assert!(self.theme_effect_scratch.is_empty());
 
         profile::set_session_joined(true, true);
-        let joined_style = if session.play_style.is_pump() {
-            profile_data::PlayStyle::PumpVersus
-        } else {
-            profile_data::PlayStyle::Versus
-        };
         profile::set_session_play_style(joined_style);
         let show_select_profile = config::runtime::get().machine_show_select_profile;
         let join_profile = if show_select_profile {
