@@ -14,7 +14,7 @@ use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadlib_render_core::{BlendMode, MeshVertex};
-use deadsync_assets::gameplay_stage::ActiveGameplayStage;
+use deadsync_assets::gameplay_stage::{ActiveGameplayStage, PracticeStagePresenter};
 use deadsync_gameplay::practice::editor::{
     PracticeEditorConfig, PracticeEditorFeedback, PracticeEditorFlash, PracticeEditorSound,
 };
@@ -29,6 +29,7 @@ use deadsync_gameplay::{
 use deadsync_input::InputEvent;
 use deadsync_input::practice::PracticeKeyEvent;
 use deadsync_notefield::{TimingLabelStyle, TimingSegmentLabel as PracticeTimingLabel};
+use deadsync_online::gameplay_lobby::GameplayLobbySession;
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingSegments};
@@ -731,6 +732,23 @@ pub fn practice_view(
         notefield,
         hide_gameplay_hud: true,
         ..Default::default()
+    }
+}
+
+impl PracticeStagePresenter<GameplayLobbySession, gameplay_screen::GameplayPresentation>
+    for PracticePresentation
+{
+    fn frame_view(&self, session: &PracticeSession) -> gameplay_screen::ActorViewOverride {
+        practice_view(session, self)
+    }
+
+    fn append_practice_overlay(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        gameplay: &gameplay_screen::State,
+        session: &PracticeSession,
+    ) {
+        push_overlay(actors, gameplay, session, self);
     }
 }
 

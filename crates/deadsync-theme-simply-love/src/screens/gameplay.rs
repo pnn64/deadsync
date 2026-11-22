@@ -38,8 +38,9 @@ use deadlib_render_core::{BlendMode, MeshVertex};
 pub use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
 pub use deadsync_assets::gameplay_stage::GameplayCoreState;
 use deadsync_assets::gameplay_stage::{
-    ActiveGameplayStage, GameplayHost, GameplayStageAssets, GameplayStageInput, PreparedGameplaySongLua,
-    PreparedGameplayStage, attach_prepared_song_lua, prepare_gameplay_stage,
+    ActiveGameplayStage, GameplayHost, GameplayStageAssets, GameplayStageInput,
+    GameplayStagePresenter, PreparedGameplaySongLua, PreparedGameplayStage,
+    attach_prepared_song_lua, prepare_gameplay_stage,
 };
 use deadsync_assets::noteskin;
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
@@ -1163,18 +1164,28 @@ pub fn compose_frame(
     >,
     song_content: SongFrameContent,
 ) -> deadsync_song_lua::playback::GameplayActorSegments {
-    let segments = state.stage.with_frame_scratch(|stage, song| {
-        state.presentation.compose_frame(
-            stage,
-            &state.lobby_session,
-            song,
-            actors,
-            context,
-            song_content,
-        )
-    });
-    push_song_lua_out(actors, &state.stage);
-    segments
+    state.compose_gameplay_frame(actors, context, song_content)
+}
+
+impl GameplayStagePresenter<GameplayLobbySession> for GameplayPresentation {
+    type View = ActorViewOverride;
+    type Policy = crate::views::SimplyLoveVisualPolicyView;
+
+    fn compose_stage_frame(
+        &mut self,
+        stage: &ActiveGameplayStage,
+        lobby: &GameplayLobbySession,
+        song: &mut deadsync_song_lua::playback::FrameScratch,
+        actors: &mut Vec<Actor>,
+        context: FramePresentationContext<'_, Self::View, Self::Policy>,
+        content: SongFrameContent,
+    ) -> deadsync_song_lua::playback::GameplayActorSegments {
+        self.compose_frame(stage, lobby, song, actors, context, content)
+    }
+
+    fn append_song_lua_exit(&self, actors: &mut Vec<Actor>, fade_progress: f32) {
+        push_song_lua_fade(actors, fade_progress);
+    }
 }
 
 pub fn twitch_chat_layout(state: &impl GameplayScreenView) -> super::components::shared::twitch_chat::GameplayLayout {
@@ -3159,8 +3170,12 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 pub fn push_song_lua_out(actors: &mut Vec<Actor>, stage: &ActiveGameplayStage) {
-    let Some(out) = stage.song_lua.out_transition() else { return; };
-    let alpha = if out.phase == 0 { 0.0 } else { 1.0 - out.left / TRANSITION_OUT_FADE_DURATION };
+    if let Some(out) = stage.song_lua.out_transition() {
+        push_song_lua_fade(actors, out.fade_progress());
+    }
+}
+
+fn push_song_lua_fade(actors: &mut Vec<Actor>, alpha: f32) {
     actors.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
         zoomto(screen_width(), screen_height()):

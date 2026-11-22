@@ -31,7 +31,10 @@ pub(crate) mod tests {
         frame_compare::{compare_render_frames, compare_render_frames_semantic},
     };
     use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
-    use deadsync_assets::gameplay_stage::{GameplayStageInput, prepare_gameplay_stage};
+    use deadsync_assets::gameplay_stage::{
+        ActiveGameplayStage, GameplayHost, GameplayStageInput, GameplayStagePresenter,
+        PracticeStagePresenter, prepare_gameplay_stage,
+    };
     use deadsync_assets::noteskin;
     use deadsync_assets::song_lua::compile_song_lua;
     use deadsync_chart::SongData;
@@ -42,7 +45,11 @@ pub(crate) mod tests {
     use deadsync_profile::compat as profile;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
     use deadsync_song_lua::gameplay_presentation::{
-        FramePresentationContext, SongFrameContent,
+        FieldHudBuffers, FieldPresentation, FramePresentationContext, GameplayFrameBuffers,
+        GameplayFramePresenter, GameplayFrameView, SongFrameContent, compose_stage_frame,
+    };
+    use deadsync_song_lua::playback::{
+        FieldFrame, FieldLayout, FrameScratch, GameplayActorSegments, ScreenLayer,
     };
     use deadsync_theme_simply_love::screens::gameplay as screen_gameplay;
 
@@ -4370,8 +4377,173 @@ return Def.ActorFrame{
                 );
                 assert!(!plain_edit_segments.has_direct_field_proxy(state.song_frame()));
                 assert!(state.render_targets().is_empty());
+
+                assert_alternate_stage_presentation(state, practice, &assets);
             },
         );
+    }
+
+    const ALTERNATE_GAMEPLAY_MARKER: i16 = 22_800;
+    const ALTERNATE_PRACTICE_MARKER: i16 = 22_801;
+
+    fn alternate_marker(z: i16) -> Actor {
+        deadlib_present::__act_from_builder!(
+            (xy(8.0, 8.0): setsize(12.0, 12.0): diffuse(0.2, 0.7, 0.4, 1.0): z(z))
+            deadlib_assets::present_dsl::SpriteBuilder::solid()
+        )
+    }
+
+    struct AlternateGameplay;
+
+    impl GameplayFramePresenter for AlternateGameplay {
+        type Profile = GameplayProfile;
+        type Slot = noteskin::SpriteSlot;
+        type View = GameplayFrameView;
+        type Policy = ();
+        type Scratch = ();
+
+        fn draw_layers<'a>(
+            &'a self,
+            _scratch: &'a mut (),
+            _context: FramePresentationContext<'a, GameplayFrameView, ()>,
+        ) -> impl FnMut(ScreenLayer, &mut Vec<Actor>, FieldLayout) + 'a {
+            |layer, actors, _| {
+                if matches!(layer, ScreenLayer::System) {
+                    actors.push(alternate_marker(ALTERNATE_GAMEPLAY_MARKER));
+                }
+            }
+        }
+
+        fn field_presentation(
+            &self,
+            _context: FramePresentationContext<'_, GameplayFrameView, ()>,
+            _player: usize,
+        ) -> FieldPresentation<'_> {
+            FieldPresentation::default()
+        }
+
+        fn draw_field_hud(
+            &self,
+            _context: FramePresentationContext<'_, GameplayFrameView, ()>,
+            _gameplay: &State,
+            _frame: &FieldFrame<'_>,
+            _request: &deadsync_notefield::NotefieldComposeRequest<'_, Self::Slot>,
+            _prepared: &deadsync_notefield::PreparedNotefield<'_, Self::Slot>,
+            _buffers: FieldHudBuffers<'_>,
+        ) -> deadsync_notefield::NotefieldHudComposeResult {
+            Default::default()
+        }
+    }
+
+    impl<L> GameplayStagePresenter<L> for AlternateGameplay {
+        type View = GameplayFrameView;
+        type Policy = ();
+
+        fn compose_stage_frame(
+            &mut self,
+            stage: &ActiveGameplayStage,
+            _lobby: &L,
+            song: &mut FrameScratch,
+            actors: &mut Vec<Actor>,
+            context: FramePresentationContext<'_, GameplayFrameView, ()>,
+            content: SongFrameContent,
+        ) -> GameplayActorSegments {
+            compose_stage_frame(
+                actors,
+                stage,
+                self,
+                GameplayFrameBuffers {
+                    song,
+                    presentation: &mut (),
+                },
+                context,
+                content,
+            )
+        }
+    }
+
+    struct AlternatePractice;
+
+    impl<L> PracticeStagePresenter<L, AlternateGameplay> for AlternatePractice {
+        fn frame_view(
+            &self,
+            _session: &deadsync_gameplay::practice::PracticeSession,
+        ) -> GameplayFrameView {
+            GameplayFrameView::default()
+        }
+
+        fn append_practice_overlay(
+            &mut self,
+            actors: &mut Vec<Actor>,
+            _gameplay: &GameplayHost<L, AlternateGameplay>,
+            _session: &deadsync_gameplay::practice::PracticeSession,
+        ) {
+            actors.push(alternate_marker(ALTERNATE_PRACTICE_MARKER));
+        }
+    }
+
+    fn assert_alternate_stage_presentation(
+        state: screen_gameplay::State,
+        session: deadsync_gameplay::practice::PracticeSession,
+        assets: &deadlib_assets::AssetManager,
+    ) {
+        let GameplayHost {
+            stage,
+            lobby_session,
+            pack_group,
+            score_refresh,
+            ..
+        } = state;
+        let mut alternate = deadsync_gameplay::practice::PracticeHost {
+            gameplay: GameplayHost {
+                stage,
+                lobby_session,
+                pack_group,
+                score_refresh,
+                presentation: AlternateGameplay,
+            },
+            session,
+            presentation: AlternatePractice,
+        };
+        let gameplay_snapshot = |stage: &ActiveGameplayStage| {
+            let player = &stage.players()[0];
+            (
+                stage.current_music_time_display(),
+                player.life,
+                player.combo,
+                player.earned_grade_points,
+            )
+        };
+        let initial = gameplay_snapshot(&alternate.gameplay.stage);
+        let mut actors = Vec::new();
+        let segments = crate::gameplay_runtime::push_actors(
+            &mut actors,
+            &mut alternate.gameplay,
+            assets,
+            GameplayFrameView::default(),
+            123.0,
+            (),
+        );
+        assert!(segments.has_direct_field_proxy(alternate.gameplay.song_frame()));
+        assert!(actors.iter().any(|actor| matches!(
+            actor,
+            Actor::Sprite { z: ALTERNATE_GAMEPLAY_MARKER, .. }
+        )));
+
+        actors.clear();
+        let segments = crate::gameplay_runtime::push_practice_actors(
+            &mut actors,
+            &mut alternate,
+            assets,
+            123.0,
+            (),
+        );
+        assert!(!segments.has_direct_field_proxy(alternate.gameplay.song_frame()));
+        assert!(matches!(
+            actors.last(),
+            Some(Actor::Sprite { z: ALTERNATE_PRACTICE_MARKER, .. })
+        ));
+        assert_eq!(gameplay_snapshot(&alternate.gameplay.stage), initial);
     }
 
     fn assert_proxy_note_draws(simfile: &Path, skin: &str, music_time: f32) {

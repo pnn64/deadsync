@@ -1,6 +1,9 @@
 use crate::{ActiveTheme, ThemeScreen};
 use deadlib_platform::input::RawKeyboardEvent;
-use deadsync_assets::gameplay_stage::{GameplayHost, PreparedGameplayStage, attach_prepared_song_lua};
+use deadsync_assets::gameplay_stage::{
+    GameplayHost, GameplayStagePresenter, PracticeStagePresenter, PreparedGameplayStage,
+    attach_prepared_song_lua,
+};
 use deadsync_chart::ChartData;
 use deadsync_config as config;
 use deadsync_gameplay::{
@@ -857,16 +860,15 @@ fn apply_practice_output(
     changed_rate || effects.len() != start_len
 }
 
-pub(crate) fn push_actors(
+pub(crate) fn push_actors<L, P: GameplayStagePresenter<L>>(
     actors: &mut Vec<deadlib_present::actors::Actor>,
-    state: &mut GameplayState,
+    state: &mut GameplayHost<L, P>,
     assets: &deadlib_assets::AssetManager,
-    view: gameplay::ActorViewOverride,
+    view: P::View,
     uptime_seconds: f64,
-    policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
+    policy: P::Policy,
 ) -> deadsync_song_lua::playback::GameplayActorSegments {
-    compose_actors(
-        state,
+    state.compose_gameplay_frame(
         actors,
         FramePresentationContext {
             assets,
@@ -878,41 +880,20 @@ pub(crate) fn push_actors(
     )
 }
 
-fn compose_actors(
-    state: &mut GameplayState,
+pub(crate) fn push_practice_actors<L, P, Q>(
     actors: &mut Vec<deadlib_present::actors::Actor>,
-    context: FramePresentationContext<
-        '_,
-        gameplay::ActorViewOverride,
-        deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
-    >,
-    content: SongFrameContent,
-) -> deadsync_song_lua::playback::GameplayActorSegments {
-    let segments = state.stage.with_frame_scratch(|stage, song| {
-        state.presentation.compose_frame(
-            stage,
-            &state.lobby_session,
-            song,
-            actors,
-            context,
-            content,
-        )
-    });
-    gameplay::push_song_lua_out(actors, &state.stage);
-    segments
-}
-
-pub(crate) fn push_practice_actors(
-    actors: &mut Vec<deadlib_present::actors::Actor>,
-    state: &mut PracticeState,
+    state: &mut PracticeHost<GameplayHost<L, P>, Q>,
     assets: &deadlib_assets::AssetManager,
     arrow_effect_time_s: f64,
-    visual_policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
-) -> deadsync_song_lua::playback::GameplayActorSegments {
+    visual_policy: P::Policy,
+) -> deadsync_song_lua::playback::GameplayActorSegments
+where
+    P: GameplayStagePresenter<L>,
+    Q: PracticeStagePresenter<L, P>,
+{
     actors.reserve(128);
-    let view = practice::practice_view(&state.session, &state.presentation);
-    let segments = compose_actors(
-        &mut state.gameplay,
+    let view = state.presentation.frame_view(&state.session);
+    let segments = state.gameplay.compose_gameplay_frame(
         actors,
         FramePresentationContext {
             assets,
@@ -922,7 +903,9 @@ pub(crate) fn push_practice_actors(
         },
         SongFrameContent::for_practice(&state.session),
     );
-    practice::push_overlay(actors, &state.gameplay, &state.session, &mut state.presentation);
+    state
+        .presentation
+        .append_practice_overlay(actors, &state.gameplay, &state.session);
     segments
 }
 

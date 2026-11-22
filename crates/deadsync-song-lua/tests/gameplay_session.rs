@@ -642,19 +642,26 @@ return Def.ActorFrame {
     );
     no_errors(&host.frame(0.0, -250_000_000).1);
     let end = host.game.music_end_time_ns();
-    let mut saw_outro = false;
+    let mut fade_progress = None;
+    let mut saw_partial_fade = false;
     let mut handed_off = false;
     for frame in -1..=80 {
         host.lua("DrawsBefore = Draws");
         let (effects, output) = host.frame(0.025, end + frame * 25_000_000);
         no_errors(&output);
-        saw_outro |= host.session.out_transition().is_some();
+        if let Some(out) = host.session.out_transition() {
+            let progress = out.fade_progress();
+            if let Some(previous) = fade_progress.replace(progress) {
+                assert!(progress >= previous);
+            } else {
+                assert_eq!(progress, 0.0);
+            }
+            saw_partial_fade |= (0.0..1.0).contains(&progress) && progress > 0.0;
+        }
         if !effects.is_empty() {
             assert_eq!(effects, [Effect::Pop(game::GameplayExit::Complete)]);
-            assert!(
-                saw_outro,
-                "core completion must allow the owned Lua outro to run"
-            );
+            assert_eq!(fade_progress, Some(1.0), "the fade completes before handoff");
+            assert!(saw_partial_fade);
             handed_off = true;
             break;
         }

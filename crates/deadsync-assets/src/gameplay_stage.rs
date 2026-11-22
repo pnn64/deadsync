@@ -4,8 +4,10 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use deadlib_present::actors::Actor;
 use deadsync_chart::{ChartData, GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::practice::PracticeSession;
 use deadsync_gameplay::{
     CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, GameplayConfig,
     GameplayMiniIndicatorData, GameplayProfileData, GameplaySession, GameplayViewport, LeadInTiming,
@@ -20,8 +22,9 @@ use deadsync_profile_gameplay::{
 use deadsync_profile_gameplay::stage_scores::GameplayScoreRefresh;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_song_lua::SongLuaLiveScene;
+use deadsync_song_lua::gameplay_presentation::{FramePresentationContext, SongFrameContent};
 use deadsync_song_lua::gameplay_session::{GameplayStage, SongLuaGameplaySession};
-use deadsync_song_lua::playback::song_lua_sound_paths;
+use deadsync_song_lua::playback::{FrameScratch, GameplayActorSegments, song_lua_sound_paths};
 
 use crate::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
 use crate::noteskin::SpriteSlot;
@@ -40,9 +43,63 @@ pub struct GameplayHost<L, P> {
     pub presentation: P,
 }
 
+/// Presentation hooks for the retained stage's gameplay frame.
+pub trait GameplayStagePresenter<L> {
+    type View: Copy;
+    type Policy: Copy;
+
+    fn compose_stage_frame(
+        &mut self,
+        stage: &ActiveGameplayStage,
+        lobby: &L,
+        song: &mut FrameScratch,
+        actors: &mut Vec<Actor>,
+        context: FramePresentationContext<'_, Self::View, Self::Policy>,
+        content: SongFrameContent,
+    ) -> GameplayActorSegments;
+
+    fn append_song_lua_exit(&self, _actors: &mut Vec<Actor>, _fade_progress: f32) {}
+}
+
+/// Presentation hooks for the practice editor around a normal stage frame.
+pub trait PracticeStagePresenter<L, P: GameplayStagePresenter<L>> {
+    fn frame_view(&self, session: &PracticeSession) -> P::View;
+
+    fn append_practice_overlay(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        gameplay: &GameplayHost<L, P>,
+        session: &PracticeSession,
+    );
+}
+
 impl<L, P> GameplayHost<L, P> {
     pub fn stage_and_lobby(&mut self) -> (&mut ActiveGameplayStage, &mut L) {
         (&mut self.stage, &mut self.lobby_session)
+    }
+}
+
+impl<L, P: GameplayStagePresenter<L>> GameplayHost<L, P> {
+    pub fn compose_gameplay_frame(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        context: FramePresentationContext<'_, P::View, P::Policy>,
+        content: SongFrameContent,
+    ) -> GameplayActorSegments {
+        let segments = self.stage.with_frame_scratch(|stage, song| {
+            self.presentation.compose_stage_frame(
+                stage,
+                &self.lobby_session,
+                song,
+                actors,
+                context,
+                content,
+            )
+        });
+        if let Some(exit) = self.stage.song_lua.out_transition() {
+            self.presentation.append_song_lua_exit(actors, exit.fade_progress());
+        }
+        segments
     }
 }
 

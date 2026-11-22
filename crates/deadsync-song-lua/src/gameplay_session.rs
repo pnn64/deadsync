@@ -39,6 +39,17 @@ pub struct SongLuaOutView {
     pub left: f32,
 }
 
+impl SongLuaOutView {
+    /// Normalized progress through the fade, after the initial hold.
+    pub const fn fade_progress(self) -> f32 {
+        if self.phase == 0 {
+            0.0
+        } else {
+            1.0 - self.left / SONG_LUA_OUT_FADE_DURATION
+        }
+    }
+}
+
 /// Ordered output of a gameplay frame. Presentation destinations are resolved
 /// before the live scene ends.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

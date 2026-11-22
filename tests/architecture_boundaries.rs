@@ -529,11 +529,11 @@ fn chart_lua_playback_has_no_theme_dependency() {
     assert!(!theme_storage.contains("GameplayLobbySession"));
     assert!(!theme_storage.contains("pack_group"));
     assert!(contains_rust(&shell, "name => assets.score_pack_group(name)"));
-    assert!(contains_rust(&shell, "compose_actors(state, actors, FramePresentationContext"));
+    assert!(contains_rust(&shell, "state.compose_gameplay_frame(actors, FramePresentationContext"));
     assert!(contains_rust(&shell, "SongFrameContent::PLAYBACK"));
-    assert!(contains_rust(&shell, "compose_actors(&mut state.gameplay, actors, FramePresentationContext"));
+    assert!(contains_rust(&shell, "state.gameplay.compose_gameplay_frame(actors, FramePresentationContext"));
     assert!(contains_rust(&shell, "SongFrameContent::for_practice(&state.session)"));
-    assert!(contains_rust(&shell, "practice::push_overlay(actors, &state.gameplay, &state.session, &mut state.presentation)"));
+    assert!(contains_rust(&shell, ".append_practice_overlay(actors, &state.gameplay, &state.session)"));
     assert!(!shell.contains("gameplay::frame_layers(") && !shell.contains("gameplay::draw_field("));
     for former_override in ["apply_attacks:", "show_song_visuals:"] {
         assert!(!contains_rust(&theme, former_override));
@@ -561,10 +561,15 @@ fn chart_lua_playback_has_no_theme_dependency() {
         assert!(!presentation.contains(former_owner));
     }
     assert!(contains_rust(&theme, "compose_stage_frame(actors, stage, &GameplayPresenter {"));
-    assert!(contains_rust(
-        &shell,
-        "state.stage.with_frame_scratch(|stage, song| { state.presentation.compose_frame(",
-    ));
+    let host = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    assert!(contains_rust(&host, "pub trait GameplayStagePresenter<L>"));
+    assert!(contains_rust(&host, "pub trait PracticeStagePresenter<L, P: GameplayStagePresenter<L>>"));
+    assert!(contains_rust(&host, "self.stage.with_frame_scratch(|stage, song| { self.presentation.compose_stage_frame("));
+    assert!(contains_rust(&host, "self.presentation.append_song_lua_exit(actors, exit.fade_progress())"));
+    let frame_adapter = shell.split_once("pub(crate) fn push_actors<").unwrap().1;
+    let frame_adapter = frame_adapter.split("#[cfg(test)]").next().unwrap();
+    assert!(!frame_adapter.contains("deadsync_theme_simply_love"));
+    assert!(!frame_adapter.contains("gameplay::push_song_lua_out"));
     let controller =
         production_source(&root.join("crates/deadsync-song-lua/src/gameplay_session.rs"));
     assert!(contains_rust(&controller, "let result = compose(self, &mut scratch); self.song_scratch = Some(scratch);"));
