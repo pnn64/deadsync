@@ -41,12 +41,100 @@ fn practice_session_audio(seconds: f32) -> GameplayAudioSnapshot {
 }
 
 #[test]
-fn practice_session_routes_playback_input_even_with_a_theme_menu_visible() {
+fn practice_session_dispatches_menu_actions_without_a_presenter() {
+    use crate::practice::editor::{PracticeEditorFeedback, PracticeEditorSound};
+    use crate::practice::{
+        PracticeDestination, PracticeMenuKind, PracticeSession, PracticeViewRequest,
+    };
+    use deadsync_input::practice::{PracticeKey, PracticeKeyEvent};
+
+    let mut game = practice_session_game(true);
+    let mut session = PracticeSession::new(&mut game, Default::default());
+    let input = |session: &mut PracticeSession, game: &mut State, action| {
+        let mut sounds = Vec::new();
+        let request = session.handle_input(
+            game,
+            &test_input_event(action),
+            practice_session_snap,
+            |_, event| {
+                if let PracticeEditorFeedback::Sound(sound) = event {
+                    sounds.push(sound);
+                }
+            },
+        );
+        (request, sounds)
+    };
+    let open_close = PracticeEditorSound::MenuOpenClose;
+    let moved = PracticeEditorSound::MenuMove;
+    assert_eq!(
+        input(&mut session, &mut game, VirtualAction::p1_start),
+        (PracticeViewRequest::None, vec![open_close])
+    );
+    assert_eq!(
+        input(&mut session, &mut game, VirtualAction::p1_menu_up),
+        (PracticeViewRequest::None, vec![moved])
+    );
+    let menu = session.menu().unwrap();
+    assert_eq!(
+        (menu.kind, menu.selected),
+        (
+            PracticeMenuKind::Main,
+            PracticeMenuKind::Main.row_count() - 1
+        )
+    );
+    assert_eq!(
+        input(&mut session, &mut game, VirtualAction::p1_start),
+        (
+            PracticeViewRequest::Navigate(PracticeDestination::SelectMusic),
+            vec![open_close]
+        )
+    );
+    assert!(session.menu().is_none());
+
+    let help = PracticeKeyEvent {
+        key: PracticeKey::Help,
+        pressed: true,
+        repeat: false,
+        timestamp: Instant::now(),
+    };
+    assert!(
+        session
+            .handle_raw_key(&mut game, &help, practice_session_snap, |_, _| {})
+            .0
+    );
+    assert_eq!(session.menu().unwrap().kind, PracticeMenuKind::Help);
+    assert_eq!(
+        input(&mut session, &mut game, VirtualAction::p1_start),
+        (PracticeViewRequest::None, vec![open_close])
+    );
+    assert!(session.menu().is_none() && !session.is_playing());
+
+    input(&mut session, &mut game, VirtualAction::p1_start);
+    assert_eq!(
+        input(&mut session, &mut game, VirtualAction::p1_start),
+        (PracticeViewRequest::PlaybackStarted, vec![open_close])
+    );
+    assert!(session.menu().is_none() && session.is_playing());
+    assert!(
+        game.drain_audio_commands()
+            .any(|command| matches!(command, GameplayAudioCommand::PlayMusic { .. }))
+    );
+}
+
+#[test]
+fn practice_session_routes_playback_input_even_with_a_menu_open() {
     use crate::practice::editor::{PracticeEditorCommand, PracticePlayRange};
     use crate::practice::{PracticeSession, PracticeViewRequest};
 
     let mut game = practice_session_game(true);
     let mut session = PracticeSession::new(&mut game, Default::default());
+    session.handle_input(
+        &mut game,
+        &test_input_event(VirtualAction::p1_start),
+        practice_session_snap,
+        |_, _| {},
+    );
+    assert!(session.menu().is_some());
     assert_eq!(
         session.execute(
             &mut game,
@@ -66,7 +154,6 @@ fn practice_session_routes_playback_input_even_with_a_theme_menu_visible() {
                     pressed,
                     InputSource::Keyboard
                 ),
-                true,
                 practice_session_snap,
                 |_, _| {},
             ),
@@ -79,7 +166,6 @@ fn practice_session_routes_playback_input_even_with_a_theme_menu_visible() {
         session.handle_input(
             &mut game,
             &test_input_event(VirtualAction::p2_back),
-            true,
             practice_session_snap,
             |_, _| {},
         ),
@@ -121,7 +207,6 @@ fn practice_session_seeks_the_edit_clock_without_presentation() {
             session.update(
                 game,
                 0.016,
-                false,
                 GameplayAudioSnapshot::default(),
                 || panic!("the edit cursor drives the stage clock"),
                 practice_session_no_music_snap,
@@ -164,19 +249,24 @@ fn practice_session_queues_rate_changes_without_a_presentation_consumer() {
                         repeat: false,
                         timestamp: Instant::now()
                     },
-                    false,
                     practice_session_no_music_snap,
                     feedback,
                 )
                 .0
         );
     }
+    session.handle_input(
+        &mut game,
+        &test_input_event(VirtualAction::p1_start),
+        practice_session_no_music_snap,
+        feedback,
+    );
+    assert!(session.menu().is_some());
     let elapsed = game.boundary.total_elapsed_in_screen;
     assert_eq!(
         session.update(
             &mut game,
             1.0,
-            true,
             GameplayAudioSnapshot::default(),
             || panic!("editing does not sample the gameplay clock"),
             practice_session_no_music_snap,

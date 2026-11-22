@@ -1,7 +1,7 @@
 use super::{MusicStartSnap, PracticePlayback, PracticePlaybackInput, PracticePlaybackUpdate};
 use crate::practice::editor::{
     PracticeEditor, PracticeEditorCommand, PracticeEditorConfig, PracticeEditorFeedback,
-    PracticeEditorRequest, PracticeEditorSnapshot,
+    PracticeEditorRequest, PracticeEditorSnapshot, PracticeEditorSound, PracticePlayRange,
 };
 use crate::{GameplayAudioSnapshot, GameplayProfileData, GameplayRuntimeState};
 use deadsync_input::{InputEvent, practice::PracticeKeyEvent};
@@ -11,18 +11,66 @@ const DISPLAY_SCROLL_TIME_CONSTANT: f32 = 0.07;
 const DISPLAY_SCROLL_SNAP_EPSILON: f32 = 0.001;
 const DISPLAY_SCROLL_MAX_SMOOTH_BEATS: f32 = 64.0;
 
-/// Presentation work requested after the practice controller handles input.
+/// A navigation target chosen by the practice controller.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PracticeDestination {
+    PlayerOptions,
+    SelectMusic,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PracticeMainMenuItem {
+    PlayWholeSong,
+    PlayCurrentToEnd,
+    PlaySelection,
+    SetSelectionStart,
+    SetSelectionEnd,
+    PlayerOptions,
+    Exit,
+}
+
+impl PracticeMainMenuItem {
+    pub const ALL: [Self; 7] = [
+        Self::PlayWholeSong,
+        Self::PlayCurrentToEnd,
+        Self::PlaySelection,
+        Self::SetSelectionStart,
+        Self::SetSelectionEnd,
+        Self::PlayerOptions,
+        Self::Exit,
+    ];
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PracticeMenuKind {
+    Main,
+    Help,
+}
+
+impl PracticeMenuKind {
+    pub const fn row_count(self) -> usize {
+        match self {
+            Self::Main => PracticeMainMenuItem::ALL.len(),
+            Self::Help => 14,
+        }
+    }
+}
+
+/// Read-only menu position for a practice presenter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PracticeMenu {
+    pub kind: PracticeMenuKind,
+    pub selected: usize,
+}
+
+/// Effects of practice input that the caller presents or routes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PracticeViewRequest {
     None,
-    OpenMainMenu,
-    OpenHelpMenu,
-    CloseMenu,
-    ActivateMenu,
-    StepMenu(isize),
     ChangeEditScrollSpeed(isize),
     PlaybackStarted,
     PlaybackStopped,
+    Navigate(PracticeDestination),
 }
 
 /// Owns the handoff between practice editing and chart playback.
@@ -30,6 +78,7 @@ pub enum PracticeViewRequest {
 pub struct PracticeSession {
     editor: PracticeEditor,
     playback: PracticePlayback,
+    menu: Option<PracticeMenu>,
     display_beat: f32,
     pending_music_rates: Vec<f32>,
 }
@@ -49,6 +98,7 @@ impl PracticeSession {
         Self {
             editor,
             playback,
+            menu: None,
             display_beat,
             pending_music_rates: Vec::with_capacity(4),
         }
@@ -62,6 +112,10 @@ impl PracticeSession {
     #[must_use]
     pub const fn is_playing(&self) -> bool {
         self.playback.is_playing()
+    }
+
+    pub const fn menu(&self) -> Option<PracticeMenu> {
+        self.menu
     }
 
     pub const fn clear_navigation_holds(&mut self) {
@@ -79,6 +133,7 @@ impl PracticeSession {
         snapshot: PracticeEditorSnapshot,
     ) {
         self.playback.restore_editing();
+        self.menu = None;
         self.editor.restore(game, snapshot);
     }
 
@@ -128,7 +183,6 @@ impl PracticeSession {
         &mut self,
         game: &mut Game<P, O, C, D>,
         delta_time: f32,
-        menu_open: bool,
         audio_snapshot: GameplayAudioSnapshot,
         fallback_host_nanos: impl FnOnce() -> u64,
         snap_music_start: MusicStartSnap,
@@ -140,7 +194,7 @@ impl PracticeSession {
         if !self.playback.is_playing() {
             game.advance_screen_elapsed(delta_time);
             self.editor
-                .update_navigation_holds(game, delta_time, menu_open, feedback);
+                .update_navigation_holds(game, delta_time, self.menu.is_some(), feedback);
             self.update_display_scroll(game, delta_time);
             return PracticePlaybackUpdate::Editing;
         }
@@ -159,9 +213,8 @@ impl PracticeSession {
         &mut self,
         game: &mut Game<P, O, C, D>,
         event: &InputEvent,
-        menu_open: bool,
         snap_music_start: MusicStartSnap,
-        feedback: impl FnMut(&Game<P, O, C, D>, PracticeEditorFeedback),
+        mut feedback: impl FnMut(&Game<P, O, C, D>, PracticeEditorFeedback),
     ) -> PracticeViewRequest {
         match self
             .playback
@@ -178,30 +231,29 @@ impl PracticeSession {
         let request = self.editor.handle_input(
             game,
             event,
-            menu_open,
-            capture_music_rates(&mut self.pending_music_rates, feedback),
+            self.menu.is_some(),
+            capture_music_rates(&mut self.pending_music_rates, &mut feedback),
         );
-        self.apply_editor_request(game, request, snap_music_start)
+        self.apply_editor_request(game, request, snap_music_start, &mut feedback)
     }
 
     pub fn handle_raw_key<P: GameplayProfileData, O, C, D>(
         &mut self,
         game: &mut Game<P, O, C, D>,
         event: &PracticeKeyEvent,
-        menu_open: bool,
         snap_music_start: MusicStartSnap,
-        feedback: impl FnMut(&Game<P, O, C, D>, PracticeEditorFeedback),
+        mut feedback: impl FnMut(&Game<P, O, C, D>, PracticeEditorFeedback),
     ) -> (bool, PracticeViewRequest) {
         let result = self.editor.handle_raw_key(
             game,
             event,
             self.playback.is_playing(),
-            menu_open,
-            capture_music_rates(&mut self.pending_music_rates, feedback),
+            self.menu.is_some(),
+            capture_music_rates(&mut self.pending_music_rates, &mut feedback),
         );
         (
             result.consumed,
-            self.apply_editor_request(game, result.request, snap_music_start),
+            self.apply_editor_request(game, result.request, snap_music_start, &mut feedback),
         )
     }
 
@@ -210,14 +262,14 @@ impl PracticeSession {
         game: &mut Game<P, O, C, D>,
         command: PracticeEditorCommand,
         snap_music_start: MusicStartSnap,
-        feedback: impl FnMut(&Game<P, O, C, D>, PracticeEditorFeedback),
+        mut feedback: impl FnMut(&Game<P, O, C, D>, PracticeEditorFeedback),
     ) -> PracticeViewRequest {
         let request = self.editor.execute(
             game,
             command,
-            capture_music_rates(&mut self.pending_music_rates, feedback),
+            capture_music_rates(&mut self.pending_music_rates, &mut feedback),
         );
-        self.apply_editor_request(game, request, snap_music_start)
+        self.apply_editor_request(game, request, snap_music_start, &mut feedback)
     }
 
     fn apply_editor_request<P: GameplayProfileData, O, C, D>(
@@ -225,20 +277,51 @@ impl PracticeSession {
         game: &mut Game<P, O, C, D>,
         request: PracticeEditorRequest,
         snap_music_start: MusicStartSnap,
+        feedback: &mut impl FnMut(&Game<P, O, C, D>, PracticeEditorFeedback),
     ) -> PracticeViewRequest {
         match request {
             PracticeEditorRequest::None => PracticeViewRequest::None,
-            PracticeEditorRequest::OpenMainMenu => {
+            PracticeEditorRequest::OpenMainMenu | PracticeEditorRequest::OpenHelpMenu => {
                 self.clear_navigation_holds();
-                PracticeViewRequest::OpenMainMenu
+                let kind = if request == PracticeEditorRequest::OpenMainMenu {
+                    PracticeMenuKind::Main
+                } else {
+                    PracticeMenuKind::Help
+                };
+                if self
+                    .menu
+                    .replace(PracticeMenu { kind, selected: 0 })
+                    .is_none()
+                {
+                    feedback(
+                        game,
+                        PracticeEditorFeedback::Sound(PracticeEditorSound::MenuOpenClose),
+                    );
+                }
+                PracticeViewRequest::None
             }
-            PracticeEditorRequest::OpenHelpMenu => {
-                self.clear_navigation_holds();
-                PracticeViewRequest::OpenHelpMenu
+            PracticeEditorRequest::CloseMenu => {
+                self.menu = None;
+                feedback(
+                    game,
+                    PracticeEditorFeedback::Sound(PracticeEditorSound::MenuOpenClose),
+                );
+                PracticeViewRequest::None
             }
-            PracticeEditorRequest::CloseMenu => PracticeViewRequest::CloseMenu,
-            PracticeEditorRequest::ActivateMenu => PracticeViewRequest::ActivateMenu,
-            PracticeEditorRequest::StepMenu(delta) => PracticeViewRequest::StepMenu(delta),
+            PracticeEditorRequest::ActivateMenu => {
+                self.activate_menu_item(game, snap_music_start, feedback)
+            }
+            PracticeEditorRequest::StepMenu(delta) => {
+                if let Some(menu) = &mut self.menu {
+                    let len = menu.kind.row_count() as isize;
+                    menu.selected = (menu.selected as isize + delta).rem_euclid(len) as usize;
+                    feedback(
+                        game,
+                        PracticeEditorFeedback::Sound(PracticeEditorSound::MenuMove),
+                    );
+                }
+                PracticeViewRequest::None
+            }
             PracticeEditorRequest::ChangeEditScrollSpeed(delta) => {
                 PracticeViewRequest::ChangeEditScrollSpeed(delta)
             }
@@ -259,6 +342,51 @@ impl PracticeSession {
                 PracticeViewRequest::PlaybackStopped
             }
         }
+    }
+
+    fn activate_menu_item<P: GameplayProfileData, O, C, D>(
+        &mut self,
+        game: &mut Game<P, O, C, D>,
+        snap_music_start: MusicStartSnap,
+        feedback: &mut impl FnMut(&Game<P, O, C, D>, PracticeEditorFeedback),
+    ) -> PracticeViewRequest {
+        let Some(menu) = self.menu.take() else {
+            return PracticeViewRequest::None;
+        };
+        feedback(
+            game,
+            PracticeEditorFeedback::Sound(PracticeEditorSound::MenuOpenClose),
+        );
+        if menu.kind == PracticeMenuKind::Help {
+            return PracticeViewRequest::None;
+        }
+
+        self.clear_navigation_holds();
+        let command = match PracticeMainMenuItem::ALL[menu.selected] {
+            PracticeMainMenuItem::PlayWholeSong => {
+                PracticeEditorCommand::Play(PracticePlayRange::WholeSong)
+            }
+            PracticeMainMenuItem::PlayCurrentToEnd => {
+                PracticeEditorCommand::Play(PracticePlayRange::CurrentToEnd)
+            }
+            PracticeMainMenuItem::PlaySelection => {
+                PracticeEditorCommand::Play(PracticePlayRange::Selection)
+            }
+            PracticeMainMenuItem::SetSelectionStart => PracticeEditorCommand::SetSelectionStart,
+            PracticeMainMenuItem::SetSelectionEnd => PracticeEditorCommand::SetSelectionEnd,
+            PracticeMainMenuItem::PlayerOptions => {
+                return PracticeViewRequest::Navigate(PracticeDestination::PlayerOptions);
+            }
+            PracticeMainMenuItem::Exit => {
+                return PracticeViewRequest::Navigate(PracticeDestination::SelectMusic);
+            }
+        };
+        let request = self.editor.execute(
+            game,
+            command,
+            capture_music_rates(&mut self.pending_music_rates, &mut *feedback),
+        );
+        self.apply_editor_request(game, request, snap_music_start, feedback)
     }
 }
 

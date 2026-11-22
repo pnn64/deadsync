@@ -137,7 +137,7 @@ use deadsync_theme_simply_love::{
     screens::{
         self, content_browser, credits, evaluation, evaluation_summary, gameover, gameplay, init,
         initials, input as input_screen, manage_local_profiles, mappings, menu, options,
-        overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
+        overscan_adjustment, player_options, profile_load, sandbox, select_color,
         select_course, select_mode, select_music, select_profile, select_style, test_lights,
     },
     visual_styles,
@@ -578,7 +578,7 @@ pub struct ScreensState {
     current_screen: CurrentScreen,
     menu_state: menu::State,
     gameplay_state: Option<crate::gameplay_runtime::GameplayState>,
-    practice_state: Option<practice::State>,
+    practice_state: Option<crate::gameplay_runtime::PracticeState>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     options_state: options::State,
     content_browser_state: content_browser::State,
@@ -672,8 +672,8 @@ struct PracticeInitFinish {
     started: Instant,
     payload_ms: f64,
     config: config::app_config::Config,
-    runtime: deadsync_theme_simply_love::views::PracticeRuntimeView,
-    edit_snapshot: Option<practice::EditSnapshot>,
+    init: crate::gameplay_runtime::PracticeInit,
+    edit_snapshot: Option<crate::gameplay_runtime::PracticeEditSnapshot>,
 }
 
 struct GameplayPreload {
@@ -9334,7 +9334,7 @@ impl App {
                             .screens
                             .practice_state
                             .as_ref()
-                            .map(practice::edit_snapshot)
+                            .map(crate::gameplay_runtime::practice_edit_snapshot)
                     })
                     .flatten();
                 let song_arc = Arc::clone(&start.song);
@@ -9442,8 +9442,8 @@ impl App {
                     &gameplay_session,
                     &mut self.state.screens.gameplay_score_cursor,
                 );
-                let practice_runtime_view =
-                    crate::gameplay_runtime::practice_view(&cfg, &gameplay_init_view);
+                let practice_init =
+                    crate::gameplay_runtime::practice_init(&cfg, &gameplay_init_view);
                 let init_started = Instant::now();
                 let metrics = self.state.shell.metrics;
                 let viewport = gameplay_viewport(metrics);
@@ -9526,7 +9526,7 @@ impl App {
                     started: init_started,
                     payload_ms,
                     config: cfg,
-                    runtime: practice_runtime_view,
+                    init: practice_init,
                     edit_snapshot,
                 };
                 if has_song_lua {

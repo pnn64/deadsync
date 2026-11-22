@@ -441,9 +441,9 @@ fn chart_lua_playback_has_no_theme_dependency() {
     assert!(contains_rust(&shell, "let pack_group = assets.score_pack_group("));
     assert!(contains_rust(&shell, "compose_actors(state, actors, FramePresentationContext"));
     assert!(contains_rust(&shell, "SongFrameContent::PLAYBACK"));
-    assert!(contains_rust(&shell, "let (gameplay, session) = state.frame_parts()"));
-    assert!(contains_rust(&shell, "compose_actors(gameplay, actors, FramePresentationContext"));
-    assert!(contains_rust(&shell, "SongFrameContent::for_practice(session)"));
+    assert!(contains_rust(&shell, "compose_actors(&mut state.gameplay, actors, FramePresentationContext"));
+    assert!(contains_rust(&shell, "SongFrameContent::for_practice(&state.session)"));
+    assert!(contains_rust(&shell, "practice::push_overlay(actors, &state.gameplay, &state.session, &mut state.presentation)"));
     assert!(!shell.contains("gameplay::frame_layers(") && !shell.contains("gameplay::draw_field("));
     for former_override in ["apply_attacks:", "show_song_visuals:"] {
         assert!(!contains_rust(&theme, former_override));
@@ -645,6 +645,8 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
     );
 
     for contract in [
+        "pub struct PracticeHost<G, P>",
+        "pub session: PracticeSession",
         "pub struct PracticePlayback",
         "pub enum PracticePlaybackUpdate",
         "pub enum PracticePlaybackInput",
@@ -709,7 +711,7 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
             "the game session must own practice playback through {delegation}"
         );
     }
-    assert!(contains_rust(&theme, "session: PracticeSession"));
+    assert!(contains_rust(&theme, "pub type State = PracticeHost<"));
     assert!(contains_rust(&theme, "session.update("));
     assert!(contains_rust(&theme, "session.handle_input("));
     assert!(
@@ -784,14 +786,20 @@ fn practice_editor_decisions_stay_below_the_theme() {
         "editor feedback must expose immutable game facts without allocating an event queue"
     );
     let state = theme
-        .split_once("pub struct State {")
+        .split_once("pub struct PracticePresentation {")
         .and_then(|(_, rest)| rest.split_once("\n}"))
         .map(|(body, _)| body)
         .expect("practice presentation state should be present");
-    assert!(contains_rust(state, "session: PracticeSession"));
     assert!(contains_rust(&session, "editor: PracticeEditor"));
+    assert!(contains_rust(&session, "menu: Option<PracticeMenu>"));
+    assert!(contains_rust(&session, "self.menu.is_some()"));
+    assert!(contains_rust(&session, "self.activate_menu_item(game, snap_music_start, feedback)"));
+    assert!(contains_rust(&session, "PracticeMainMenuItem::PlaySelection"));
+    assert!(contains_rust(&theme, "state.session.menu()"));
     for former_state in [
         "runtime: PracticeRuntimeView",
+        "session: PracticeSession",
+        "menu:",
         "cursor_beat:",
         "display_beat:",
         "selection_anchor:",
@@ -823,6 +831,9 @@ fn practice_editor_decisions_stay_below_the_theme() {
         "GameplayAudioCommand::SetMusicRate",
         ".update_navigation_holds(",
         ".update_music_rate_hold(",
+        "PracticeEditorCommand::Play(",
+        "fn activate_menu_item(",
+        "fn step_menu(",
     ] {
         assert!(
             !contains_rust(&theme, former_policy),
@@ -831,7 +842,7 @@ fn practice_editor_decisions_stay_below_the_theme() {
     }
     for delegation in [
         "PracticeEditorConfig",
-        "PracticeEditorSnapshot",
+        "PracticeMainMenuItem::ALL",
         "session.handle_raw_key(",
     ] {
         assert!(
@@ -2919,29 +2930,34 @@ fn practice_runtime_is_shell_prepared() {
     assert!(
         views.contains("pub struct PracticeRuntimeView")
             && practice.contains("hud: profile_data::GameplayHudSnapshot")
-            && practice.contains("session: PracticeSession")
+            && practice.contains("pub type State = PracticeHost<")
             && practice.contains("SimplyLoveProfileRequest::SetMusicRate")
             && editor.contains("GameplayAudioCommand::SetMusicRate")
             && editor.contains("PracticeEditorFeedback::PersistMusicRate")
             && session.contains("PracticeEditorFeedback::PersistMusicRate(rate) => rates.push(rate)")
-            && shell.contains("pub(crate) fn practice_view(")
+            && shell.contains("pub(crate) fn practice_init(")
+            && shell.contains("editor: PracticeEditorConfig")
+            && !shell.contains("PracticeRuntimeView")
             && shell.contains("hud: gameplay.hud.clone()")
-            && shell_app.contains("runtime: practice_runtime_view")
-            && loading.contains("crate::gameplay_runtime::prepare_practice(gs, finish.runtime)")
-            && shell.contains("let session = PracticeSession::new(")
-            && shell.contains("practice::init_with_session(gameplay, runtime.hud, session)"),
+            && shell_app.contains("init: practice_init")
+            && loading.contains("crate::gameplay_runtime::prepare_practice(gs, finish.init)")
+            && shell.contains("let mut session = PracticeSession::new(")
+            && shell.contains("let presentation = practice::PracticePresentation::new("),
         "shell must prepare Practice policy/HUD state and execute game-decided rate persistence"
     );
     for handoff in [
-        "session.on_enter(game)",
-        "session.update(",
-        "session.handle_input(",
-        "session.handle_raw_key(",
-        "session.execute(",
-        "practice::apply_view_request(state, request)",
-        "let rates = state.drain_music_rates();",
+        "state.session.on_enter(&mut state.gameplay.stage.gameplay)",
+        "state.session.update(",
+        "state.session.handle_input(",
+        "state.session.handle_raw_key(",
+        "state.session.restore(&state.gameplay.stage.gameplay, snapshot.editor)",
+        "practice::apply_view_request(presentation, request)",
+        "PracticeViewRequest::Navigate(PracticeDestination::PlayerOptions)",
+        "ThemeEffect::Navigate(ActiveTheme::SCREENS.player_options)",
+        "ThemeEffect::Navigate(ActiveTheme::SCREENS.song_selection)",
+        "let rates = state.session.drain_music_rates();",
         "profile::set_session_music_rate(rate)",
-        "practice::append_presentation_effects(state, effect, effects)",
+        "practice::append_presentation_effects(&mut state.presentation, effect, effects)",
     ] {
         assert!(contains_rust(&shell, handoff), "missing Practice handoff {handoff}");
     }
@@ -2950,6 +2966,8 @@ fn practice_runtime_is_shell_prepared() {
         "practice::advance(",
         "practice::process_input(",
         "practice::process_key(",
+        "practice::with_session(",
+        "state.menu_open()",
     ] {
         assert!(!shell.contains(compatibility));
     }
@@ -6517,7 +6535,7 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
 
     let initial_score_sync = runtime
         .split_once("pub(crate) fn sync_initial_scores")
-        .and_then(|(_, rest)| rest.split_once("pub(crate) fn practice_view"))
+        .and_then(|(_, rest)| rest.split_once("pub(crate) struct PracticeInit"))
         .map(|(body, _)| body)
         .expect("initial Gameplay score sync should be present");
     assert!(

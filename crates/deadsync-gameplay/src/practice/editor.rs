@@ -79,7 +79,7 @@ pub enum PracticeEditorCommand {
     ClearSelection,
 }
 
-/// Decisions the presentation applies to its menus, layout or playback owner.
+/// Decisions the practice session applies to its menus, layout or playback.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum PracticeEditorRequest {
     #[default]
@@ -118,6 +118,8 @@ pub enum PracticeEditorSound {
     Marker,
     Snap,
     Invalid,
+    MenuOpenClose,
+    MenuMove,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -2309,11 +2309,11 @@ pub fn set_heart_rate_view(state: &mut State, generation: (u64, u64), view: Hear
 
 /// Refresh song-rate-derived presentation only on an explicit Practice rate
 /// change. Ordinary gameplay never calls this from the frame loop.
-pub fn sync_music_rate_text(state: &mut State) {
-    let rate = state.music_rate();
-    let max_nps = std::array::from_fn(|player| state.charts()[player].max_nps as f32);
-    state.presentation.rate_text = cached_rate_text(rate);
-    state.presentation.gameplay_stats_text.sync_music_rate(max_nps, rate);
+pub fn sync_music_rate_text(stage: &ActiveGameplayStage, presentation: &mut GameplayPresentation) {
+    let rate = stage.music_rate();
+    let max_nps = std::array::from_fn(|player| stage.charts()[player].max_nps as f32);
+    presentation.rate_text = cached_rate_text(rate);
+    presentation.gameplay_stats_text.sync_music_rate(max_nps, rate);
 }
 
 pub fn runtime_profile_side(state: &impl GameplayScreenView, player_idx: usize) -> profile_data::PlayerSide {

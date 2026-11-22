@@ -14151,7 +14151,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         now,
     );
     assert_eq!(
-        practice.handle_input(&mut stage.gameplay, &back, false, snap, |_, _| {}),
+        practice.handle_input(&mut stage.gameplay, &back, snap, |_, _| {}),
         PracticeViewRequest::PlaybackStopped
     );
     assert_practice_frame(&mut stage, &practice, false);

@@ -181,7 +181,7 @@ mod tests {
                                 &mut app.music_clock,
                                 &mut Vec::new(),
                             );
-                            let before = format!("{:?}", practice::edit_snapshot(state));
+                            let before = format!("{:?}", crate::gameplay_runtime::practice_edit_snapshot(state));
                             assert!(app.prepare_restart_stage(
                                 song.clone(),
                                 [song.charts[0].short_hash.as_str(); MAX_PLAYERS],
@@ -196,7 +196,7 @@ mod tests {
                             );
                             assert_loading_frame(&mut app);
                             finish_pending_stage(&mut app);
-                            let after = practice::edit_snapshot(
+                            let after = crate::gameplay_runtime::practice_edit_snapshot(
                                 app.state.screens.practice_state.as_ref().unwrap(),
                             );
                             assert_eq!(
@@ -389,9 +389,9 @@ impl App {
         // Reconcile chart timing and any video fallback once after the
         // deferred command installs the initial media.
         gs.presentation.background_path_dirty = true;
-        let mut practice_state = crate::gameplay_runtime::prepare_practice(gs, finish.runtime);
+        let mut practice_state = crate::gameplay_runtime::prepare_practice(gs, finish.init);
         if let Some(snapshot) = finish.edit_snapshot {
-            practice::restore_edit_snapshot(&mut practice_state, snapshot);
+            crate::gameplay_runtime::restore_practice_edit_snapshot(&mut practice_state, snapshot);
         }
         self.state.screens.practice_state = Some(practice_state);
         if let Some(ps) = self.state.screens.practice_state.as_mut() {
