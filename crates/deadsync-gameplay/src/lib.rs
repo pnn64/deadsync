@@ -50,6 +50,7 @@ pub mod exit_route;
 pub mod practice;
 pub mod song_backgrounds;
 pub mod song_launch;
+pub mod stage_launch;
 pub mod stage_charts;
 
 // ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.

@@ -1,12 +1,29 @@
 use super::{
-    ActiveTheme, App, Arc, CurrentScreen, MAX_PLAYERS, SongData, SongLaunchRequest,
-    SongLaunchTarget, StageOptions, TransitionState, gameplay_play_style_from_profile,
-    noteskin_catalog_view, player_options, profile, profile_data, select_music,
+    ActiveTheme, App, Arc, CurrentScreen, MAX_PLAYERS, SongData, StageOptions, TransitionState,
+    gameplay_play_style_from_profile, noteskin_catalog_view, player_options, profile, profile_data,
+    select_course, select_music,
 };
 use deadsync_gameplay::song_launch::SongSelection;
+use deadsync_gameplay::stage_launch::{StageLaunchRequest, StageLaunchTarget};
 use deadsync_profile_gameplay::stage_charts::stage_difficulty_indices;
 use deadsync_profile_gameplay::stage_replay::StageReplayRequest;
+use deadsync_simfile::course_selection::ConfirmedCourse;
 use deadsync_theme::ThemeScreenFlow;
+
+pub(super) enum StageSelection {
+    Song(SongSelection),
+    Course(ConfirmedCourse),
+}
+
+pub(super) fn stage_launch_target(screen: CurrentScreen) -> Option<StageLaunchTarget> {
+    if screen == ActiveTheme::SCREENS.gameplay {
+        Some(StageLaunchTarget::Gameplay)
+    } else if screen == ActiveTheme::SCREENS.player_options {
+        Some(StageLaunchTarget::PlayerOptions)
+    } else {
+        None
+    }
+}
 
 /// A one-shot request to enter Gameplay or Practice.
 pub(super) struct StageStart {
@@ -80,49 +97,71 @@ impl StageStart {
 }
 
 impl App {
-    pub(super) fn request_song_launch(&mut self, request: SongLaunchRequest) {
-        if self.state.screens.current_screen == ActiveTheme::SCREENS.song_selection {
-            self.state.screens.song_launch.request(request);
-            self.sync_song_launch_prompt();
+    pub(super) fn request_stage_launch(
+        &mut self,
+        source: CurrentScreen,
+        request: StageLaunchRequest<StageSelection>,
+    ) {
+        if self.state.screens.current_screen == source {
+            self.state.screens.stage_launch.request(request);
+            self.sync_stage_launch_prompt();
         }
     }
 
-    fn sync_song_launch_prompt(&mut self) {
-        select_music::sync_song_launch_prompt(
-            &mut self.state.screens.select_music_state,
-            self.state.screens.song_launch.prompt(),
-        );
+    fn sync_stage_launch_prompt(&mut self) {
+        let screens = &mut self.state.screens;
+        let prompt = screens.stage_launch.prompt();
+        if screens.current_screen == ActiveTheme::SCREENS.song_selection {
+            select_music::sync_song_launch_prompt(&mut screens.select_music_state, prompt);
+        } else if screens.current_screen == ActiveTheme::SCREENS.course_selection {
+            select_course::sync_stage_launch_prompt(&mut screens.select_course_state, prompt);
+        }
     }
 
-    pub(super) fn clear_song_launch(&mut self) {
-        self.state.screens.song_launch = Default::default();
-        self.sync_song_launch_prompt();
+    pub(super) fn clear_stage_launch(&mut self) {
+        self.state.screens.stage_launch = Default::default();
+        self.sync_stage_launch_prompt();
     }
 
-    pub(super) fn advance_song_launch(&mut self, delta_time: f32) -> Option<CurrentScreen> {
-        if self.state.screens.current_screen != ActiveTheme::SCREENS.song_selection
+    pub(super) fn advance_stage_launch(&mut self, delta_time: f32) -> Option<CurrentScreen> {
+        let current = self.state.screens.current_screen;
+        let song_selection = current == ActiveTheme::SCREENS.song_selection;
+        if (!song_selection && current != ActiveTheme::SCREENS.course_selection)
             || !matches!(self.state.shell.transition, TransitionState::Idle)
         {
             return None;
         }
         // A content reload can replace the wheel during the confirmation. Keep
         // the confirmed choice and wait for the active load to finish.
-        let target = if self.content_reload.is_busy() {
+        let target = if song_selection && self.content_reload.is_busy() {
             None
         } else {
-            self.state.screens.song_launch.advance(delta_time)
+            self.state.screens.stage_launch.advance(delta_time)
         };
-        self.sync_song_launch_prompt();
+        self.sync_stage_launch_prompt();
         match target? {
-            SongLaunchTarget::Gameplay => {
-                select_music::stop_song_launch_preview(
-                    &mut self.state.screens.select_music_state,
-                    &mut self.theme_effect_scratch,
-                );
+            StageLaunchTarget::Gameplay => {
+                if song_selection {
+                    select_music::stop_song_launch_preview(
+                        &mut self.state.screens.select_music_state,
+                        &mut self.theme_effect_scratch,
+                    );
+                }
                 Some(ActiveTheme::SCREENS.gameplay)
             }
-            SongLaunchTarget::PlayerOptions => Some(ActiveTheme::SCREENS.player_options),
+            StageLaunchTarget::PlayerOptions => Some(ActiveTheme::SCREENS.player_options),
         }
+    }
+
+    pub(super) fn take_ready_song_selection(
+        &mut self,
+        target: StageLaunchTarget,
+    ) -> Option<SongSelection> {
+        let StageSelection::Song(selection) = self.state.screens.stage_launch.take_ready(target)?
+        else {
+            return None;
+        };
+        Some(selection)
     }
 
     pub(super) fn stage_start_for_song_selection(&self, selection: SongSelection) -> StageStart {
@@ -151,7 +190,7 @@ impl App {
         else {
             return false;
         };
-        self.clear_song_launch();
+        self.clear_stage_launch();
         let mut start = self.stage_start_for_song_selection(selection);
         start.replay = Some(replay);
         self.state.pending_stage = Some(start);
@@ -228,7 +267,7 @@ mod tests {
     use crate::app::course_transition_tests::{finish_pending_stage, on_app_thread, test_app};
     use crate::gameplay_regression_tests::tests::with_session;
     use deadsync_core::input::InputSource;
-    use deadsync_gameplay::song_launch::{OPTIONS_ENTRY_SECONDS, OPTIONS_WINDOW_SECONDS};
+    use deadsync_gameplay::stage_launch::{OPTIONS_ENTRY_SECONDS, OPTIONS_WINDOW_SECONDS};
     use deadsync_score::ReplayEdge;
     use deadsync_theme::AudioRequest;
 
@@ -261,7 +300,10 @@ mod tests {
                 _ => None,
             })
             .expect("confirming the wheel emits a song launch request");
-        app.request_song_launch(request);
+        app.request_stage_launch(
+            ActiveTheme::SCREENS.song_selection,
+            request.map_selection(StageSelection::Song),
+        );
         song
     }
 
@@ -277,15 +319,19 @@ mod tests {
                     let root = tempfile::tempdir().unwrap();
                     let mut app = test_app(root.path());
                     let song = confirm_test_song(&mut app, root.path());
-                    let preload = app.state.screens.song_launch.preload_selection().unwrap();
+                    let Some(StageSelection::Song(preload)) =
+                        app.state.screens.stage_launch.preload_selection()
+                    else {
+                        panic!("song confirmation should supply its selection for preload");
+                    };
                     assert!(Arc::ptr_eq(&preload.song, &song));
                     assert_eq!(preload.steps[0], 3);
                     app.state.screens.select_music_state.entries.clear();
                     app.state.screens.select_music_state.selected_steps_index = 2;
 
-                    assert_eq!(app.advance_song_launch(OPTIONS_WINDOW_SECONDS / 2.0), None);
+                    assert_eq!(app.advance_stage_launch(OPTIONS_WINDOW_SECONDS / 2.0), None);
                     assert_eq!(
-                        app.advance_song_launch(OPTIONS_WINDOW_SECONDS / 2.0),
+                        app.advance_stage_launch(OPTIONS_WINDOW_SECONDS / 2.0),
                         Some(CurrentScreen::Gameplay)
                     );
                     assert!(matches!(
@@ -294,15 +340,15 @@ mod tests {
                             AudioRequest::StopMusic
                         ))]
                     ));
-                    assert_eq!(app.advance_song_launch(1.0), None);
+                    assert_eq!(app.advance_stage_launch(1.0), None);
 
                     let (target, _) = app.prepare_global_fade_entry(CurrentScreen::Gameplay);
                     assert_eq!(target, CurrentScreen::Gameplay);
                     assert!(
                         !app.state
                             .screens
-                            .song_launch
-                            .ready_for(SongLaunchTarget::Gameplay)
+                            .stage_launch
+                            .ready_for(StageLaunchTarget::Gameplay)
                     );
                     finish_pending_stage(&mut app);
                     let state = app.state.screens.gameplay_state.as_ref().unwrap();
@@ -326,15 +372,24 @@ mod tests {
                     let root = tempfile::tempdir().unwrap();
                     let mut app = test_app(root.path());
                     let song = confirm_test_song(&mut app, root.path());
-                    assert_eq!(app.advance_song_launch(OPTIONS_WINDOW_SECONDS - 0.25), None);
-                    app.request_song_launch(SongLaunchRequest::PlayerOptions);
-                    assert!(app.state.screens.song_launch.preload_selection().is_none());
+                    assert_eq!(
+                        app.advance_stage_launch(OPTIONS_WINDOW_SECONDS - 0.25),
+                        None
+                    );
+                    app.request_stage_launch(
+                        ActiveTheme::SCREENS.song_selection,
+                        StageLaunchRequest::PlayerOptions,
+                    );
+                    assert!(app.state.screens.stage_launch.preload_selection().is_none());
                     app.state.screens.select_music_state = select_music::init_placeholder();
 
-                    assert_eq!(app.advance_song_launch(OPTIONS_ENTRY_SECONDS / 2.0), None);
-                    app.request_song_launch(SongLaunchRequest::PlayerOptions);
+                    assert_eq!(app.advance_stage_launch(OPTIONS_ENTRY_SECONDS / 2.0), None);
+                    app.request_stage_launch(
+                        ActiveTheme::SCREENS.song_selection,
+                        StageLaunchRequest::PlayerOptions,
+                    );
                     assert_eq!(
-                        app.advance_song_launch(OPTIONS_ENTRY_SECONDS / 2.0),
+                        app.advance_stage_launch(OPTIONS_ENTRY_SECONDS / 2.0),
                         Some(CurrentScreen::PlayerOptions)
                     );
                     assert!(app.theme_effect_scratch.is_empty());
@@ -348,8 +403,8 @@ mod tests {
                     assert!(
                         !app.state
                             .screens
-                            .song_launch
-                            .ready_for(SongLaunchTarget::PlayerOptions)
+                            .stage_launch
+                            .ready_for(StageLaunchTarget::PlayerOptions)
                     );
                 },
             )

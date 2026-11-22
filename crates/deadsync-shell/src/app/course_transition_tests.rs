@@ -1,6 +1,7 @@
 use super::*;
 use crate::gameplay_regression_tests::tests::{build_compiled_test_state, with_session};
 use deadsync_chart::{SongPack, SyncPref};
+use deadsync_core::input::InputSource;
 use deadsync_gameplay::course_progress::CourseProgress;
 use deadsync_gameplay::{GameplayInputPlayStyle, GameplaySession, GameplayViewport};
 use deadsync_simfile::{
@@ -92,7 +93,11 @@ pub(super) fn test_app(root: &std::path::Path) -> App {
     )
 }
 
-fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<SongData> {
+fn prepare_course_wheel(
+    app: &mut App,
+    root: &std::path::Path,
+    pump: bool,
+) -> (PathBuf, Arc<SongData>, Arc<SongData>) {
     let a = fixture(root, "A", pump);
     let b = fixture(root, "B", pump);
     let course_path = root.join("endless.crs");
@@ -136,6 +141,12 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
         &course_path,
         Some("Hard"),
     );
+    (course_path, a, b)
+}
+
+fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<SongData> {
+    let (course_path, a, b) = prepare_course_wheel(app, root, pump);
+    let style = profile::get_session_play_style();
     let selection = &app.state.screens.select_course_state;
     let choice = select_course::selected_course_choice(selection).expect("selected rating");
     let mut start = select_course::course_catalog(selection).start(choice).expect("real selected course plan");
@@ -166,6 +177,99 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
     app.state.screens.gameplay_state = Some(stage);
     app.state.screens.current_screen = CurrentScreen::Gameplay;
     b
+}
+
+fn press_course_start(app: &mut App) {
+    let now = Instant::now();
+    let event = InputEvent::new(
+        VirtualAction::p1_start,
+        0,
+        true,
+        InputSource::Keyboard,
+        now,
+        0,
+        now,
+        now,
+    );
+    let mut effects = Vec::new();
+    select_course::handle_input(
+        &mut app.state.screens.select_course_state,
+        &event,
+        &mut effects,
+    );
+    let mut effects = effects.into_iter();
+    assert!(matches!(
+        effects.next(),
+        Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+            AudioRequest::PlaySfx("assets/sounds/start.ogg")
+        )))
+    ));
+    let Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::CourseLaunch(request))) = effects.next()
+    else {
+        panic!("course Start should signal launch intent");
+    };
+    assert!(effects.next().is_none());
+    app.request_stage_launch(
+        ActiveTheme::SCREENS.course_selection,
+        request.map_selection(StageSelection::Course),
+    );
+}
+
+#[test]
+fn course_launch_uses_confirmed_rating_after_wheel_replacement() {
+    on_app_thread(|| {
+        with_session(
+            profile_data::PlayStyle::Routine,
+            profile_data::PlayerSide::P1,
+            true,
+            true,
+            || {
+                for options in [false, true] {
+                    let root = tempfile::tempdir().unwrap();
+                    let mut app = test_app(root.path());
+                    let (course_path, first_song, _) =
+                        prepare_course_wheel(&mut app, root.path(), false);
+                    app.state.screens.current_screen = CurrentScreen::SelectCourse;
+                    app.state.shell.transition = TransitionState::Idle;
+                    let rating =
+                        select_course::selected_course_choice(&app.state.screens.select_course_state)
+                            .unwrap()
+                            .difficulty;
+                    press_course_start(&mut app);
+                    assert_eq!(app.advance_stage_launch(1.25), None);
+                    let (remaining, target) = if options {
+                        press_course_start(&mut app);
+                        (1.35, CurrentScreen::PlayerOptions)
+                    } else {
+                        (0.25, CurrentScreen::Gameplay)
+                    };
+
+                    app.state.screens.select_course_state = select_course::init(Default::default());
+                    assert!(!select_course::has_selected_course(&app.state.screens.select_course_state));
+                    assert_eq!(app.advance_stage_launch(remaining), Some(target));
+                    assert!(app.theme_effect_scratch.is_empty());
+                    assert!(!app.reject_missing_course_plan(CurrentScreen::SelectCourse, target));
+                    assert_eq!(app.prepare_global_fade_entry(target).0, target);
+
+                    let course = app.state.session.course_run.as_ref().unwrap();
+                    assert_eq!(course.run.path, course_path);
+                    assert_eq!(
+                        course.run.course_difficulty_name,
+                        deadsync_simfile::course::difficulty_label(rating)
+                    );
+                    assert!(course.endless_source.is_some());
+                    if options {
+                        let options = app.state.screens.player_options_state.as_ref().unwrap();
+                        assert!(Arc::ptr_eq(&options.song, &first_song));
+                    } else {
+                        finish_pending_stage(&mut app);
+                        let gameplay = app.state.screens.gameplay_state.as_ref().unwrap();
+                        assert!(Arc::ptr_eq(&gameplay.song_arc(), &first_song));
+                    }
+                }
+            },
+        );
+    });
 }
 
 #[test]

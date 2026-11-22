@@ -1,3 +1,4 @@
+use super::stage_start::{StageSelection, stage_launch_target};
 use super::{App, Command, CurrentScreen, menu, select_color, select_course};
 use crate::ActiveTheme;
 use crate::interaction::ProcessExitRequest;
@@ -13,7 +14,6 @@ use crate::transition_effects::transition_music_command;
 use deadlib_present::actors::Actor;
 use deadsync_config as config;
 use deadsync_gameplay::course_progress::CourseRenewal;
-use deadsync_gameplay::song_launch::SongLaunchTarget;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_theme::{
@@ -88,17 +88,25 @@ impl App {
         ActiveTheme::SCREENS.results
     }
 
-    fn reject_missing_course_plan(
+    pub(super) fn reject_missing_course_plan(
         &mut self,
         previous: CurrentScreen,
         target: CurrentScreen,
     ) -> bool {
-        if !course_plan_required::<ActiveTheme>(previous, target)
-            || select_course::has_selected_course(&self.state.screens.select_course_state)
-        {
+        if !course_plan_required::<ActiveTheme>(previous, target) {
+            return false;
+        }
+        let stage_launch = &self.state.screens.stage_launch;
+        let confirmed = stage_launch_target(target).and_then(|target| stage_launch.ready_selection(target));
+        let has_plan = match confirmed {
+            Some(StageSelection::Course(selection)) => selection.can_start(),
+            _ => select_course::has_selected_course(&self.state.screens.select_course_state),
+        };
+        if has_plan {
             return false;
         }
         warn!("Unable to enter {target:?}: selected course has no playable stages.");
+        self.clear_stage_launch();
         self.state.session.course_run = None;
         self.state.screens.player_options_state = None;
         self.state.pending_stage = None;
@@ -151,17 +159,12 @@ impl App {
     #[inline(always)]
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
-        if prev == ActiveTheme::SCREENS.song_selection && target != prev {
-            let ready_target = if target == ActiveTheme::SCREENS.gameplay {
-                Some(SongLaunchTarget::Gameplay)
-            } else if target == ActiveTheme::SCREENS.player_options {
-                Some(SongLaunchTarget::PlayerOptions)
-            } else {
-                None
-            };
-            if !ready_target.is_some_and(|target| self.state.screens.song_launch.ready_for(target)) {
-                self.clear_song_launch();
-            }
+        if (prev == ActiveTheme::SCREENS.song_selection || prev == ActiveTheme::SCREENS.course_selection)
+            && target != prev
+            && !stage_launch_target(target)
+                .is_some_and(|target| self.state.screens.stage_launch.ready_for(target))
+        {
+            self.clear_stage_launch();
         }
         if !is_play_screen::<ActiveTheme>(target) {
             self.state.pending_stage = None;

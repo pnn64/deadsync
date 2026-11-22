@@ -28,7 +28,7 @@ mod updater;
 
 use self::lua_loading::SongLuaLoading;
 use self::screenshot::auto_screenshot_eval_results;
-use self::stage_start::StageStart;
+use self::stage_start::{StageSelection, StageStart};
 use crate::{ActiveTheme, ThemeScreen as CurrentScreen, TransitionState};
 use crate::command::Command;
 use crate::course::{
@@ -186,9 +186,7 @@ use deadsync_lights::cabinet_chart::{
     cabinet_light_chart_from_loaded, cabinet_light_key, cabinet_light_plan,
 };
 use deadsync_lights::{self as lights, HideFlags};
-use deadsync_gameplay::song_launch::{
-    SongLaunch, SongLaunchPrompt, SongLaunchRequest, SongLaunchTarget,
-};
+use deadsync_gameplay::stage_launch::{StageLaunch, StageLaunchPrompt, StageLaunchTarget};
 use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};
 use deadsync_profile_gameplay::stage_options::StageOptions;
 #[cfg(test)]
@@ -609,7 +607,7 @@ pub struct ScreensState {
     select_play_mode_state: select_mode::State,
     profile_load_state: profile_load::State,
     select_music_state: select_music::State,
-    song_launch: SongLaunch,
+    stage_launch: StageLaunch<StageSelection>,
     select_course_state: select_course::State,
     sandbox_state: sandbox::State,
     evaluation_state: evaluation::State,
@@ -1290,7 +1288,7 @@ impl ScreensState {
             select_play_mode_state,
             profile_load_state,
             select_music_state,
-            song_launch: SongLaunch::default(),
+            stage_launch: StageLaunch::default(),
             select_course_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
@@ -2849,7 +2847,8 @@ impl App {
         {
             return;
         }
-        let Some(selection) = self.state.screens.song_launch.preload_selection() else {
+        let Some(StageSelection::Song(selection)) = self.state.screens.stage_launch.preload_selection()
+        else {
             return;
         };
         let session = profile::get_session_snapshot();
@@ -2961,7 +2960,7 @@ impl App {
             return;
         };
         if self.state.screens.current_screen == CurrentScreen::SelectMusic
-            && self.state.screens.song_launch.prompt() == SongLaunchPrompt::EnteringOptions
+            && self.state.screens.stage_launch.prompt() == StageLaunchPrompt::EnteringOptions
         {
             // A Start press selected Player Options before the normal prompt
             // deadline. Do not let a completed speculative preload redirect it.
@@ -4789,7 +4788,7 @@ impl App {
                     &mut self.theme_effect_scratch,
                 );
                 let _ = self.drain_theme_effects(event_loop);
-                if let Some(target) = self.advance_song_launch(logic_dt) {
+                if let Some(target) = self.advance_stage_launch(logic_dt) {
                     let _ = self.drain_theme_effects(event_loop);
                     self.handle_immediate_navigation(target, event_loop);
                 }
@@ -5620,7 +5619,17 @@ impl App {
                     unreachable!("gameplay actions must be normalized before runtime execution")
                 }
                 SimplyLoveRuntimeRequest::SongLaunch(request) => {
-                    self.request_song_launch(request);
+                    self.request_stage_launch(
+                        ActiveTheme::SCREENS.song_selection,
+                        request.map_selection(StageSelection::Song),
+                    );
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::CourseLaunch(request) => {
+                    self.request_stage_launch(
+                        ActiveTheme::SCREENS.course_selection,
+                        request.map_selection(StageSelection::Course),
+                    );
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::StartReplay(replay) => {
@@ -6654,11 +6663,16 @@ impl App {
         persist_gameplay_combo_carry(&mut self.state.session, gs.autoplay_used(), player_combos);
     }
 
-    fn start_course_run_from_selected(&mut self) -> bool {
-        let selection = &self.state.screens.select_course_state;
-        let Some(start) = select_course::selected_course_choice(selection)
-            .and_then(|choice| select_course::course_catalog(selection).start(choice))
-        else {
+    fn start_course_run_from_selected(&mut self, target: StageLaunchTarget) -> bool {
+        let start = match self.state.screens.stage_launch.take_ready(target) {
+            Some(StageSelection::Course(selection)) => selection.start(),
+            _ => {
+                let selection = &self.state.screens.select_course_state;
+                select_course::selected_course_choice(selection)
+                    .and_then(|choice| select_course::course_catalog(selection).start(choice))
+            }
+        };
+        let Some(start) = start else {
             warn!("Unable to start course run: selected course has no playable stages.");
             return false;
         };
@@ -9158,7 +9172,7 @@ impl App {
             self.profile_load.start(play_mode, select_music);
         } else if target == CurrentScreen::PlayerOptions {
             if prev == CurrentScreen::SelectCourse {
-                if !self.start_course_run_from_selected() {
+                if !self.start_course_run_from_selected(StageLaunchTarget::PlayerOptions) {
                     self.state.screens.player_options_state = None;
                     return;
                 }
@@ -9169,12 +9183,7 @@ impl App {
                 }
             } else {
                 let selection = (prev == ActiveTheme::SCREENS.song_selection)
-                    .then(|| {
-                        self.state
-                            .screens
-                            .song_launch
-                            .take_ready(SongLaunchTarget::PlayerOptions)
-                    })
+                    .then(|| self.take_ready_song_selection(StageLaunchTarget::PlayerOptions))
                     .flatten()
                     .or_else(|| {
                         select_music::selected_song_choice(&self.state.screens.select_music_state)
@@ -9221,7 +9230,7 @@ impl App {
             && self.state.pending_stage.is_none()
         {
             if prev == CurrentScreen::SelectCourse {
-                if !self.start_course_run_from_selected() {
+                if !self.start_course_run_from_selected(StageLaunchTarget::Gameplay) {
                     warn!("Unable to start gameplay: selected course has no playable stages.");
                     return;
                 }
@@ -9231,10 +9240,7 @@ impl App {
                 }
             } else {
                 let selection = self
-                    .state
-                    .screens
-                    .song_launch
-                    .take_ready(SongLaunchTarget::Gameplay)
+                    .take_ready_song_selection(StageLaunchTarget::Gameplay)
                     .or_else(|| {
                         select_music::selected_song_choice(&self.state.screens.select_music_state)
                     })

@@ -1,7 +1,7 @@
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
 use crate::color;
-use crate::effects::sfx;
+use crate::effects::{sfx, sfx_then};
 use crate::fonts::machine_font_key;
 use crate::i18n;
 use crate::i18n::tr;
@@ -29,6 +29,7 @@ use deadlib_present::space::{
 use deadsync_chart::course::{CourseCyclePlan, CourseSessionPlan};
 use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData};
+use deadsync_gameplay::stage_launch::{StageLaunchPrompt, StageLaunchRequest};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score::default_scorebox_mode_text;
@@ -52,15 +53,10 @@ use super::select_music::MusicWheelEntry;
 
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
-const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
 const ENTERING_OPTIONS_FADE_OUT_SECONDS: f32 = 0.125;
 const ENTERING_OPTIONS_HIBERNATE_SECONDS: f32 = 0.1;
 const ENTERING_OPTIONS_FADE_IN_SECONDS: f32 = 0.125;
 const ENTERING_OPTIONS_HOLD_SECONDS: f32 = 1.0;
-const ENTERING_OPTIONS_TOTAL_SECONDS: f32 = ENTERING_OPTIONS_FADE_OUT_SECONDS
-    + ENTERING_OPTIONS_HIBERNATE_SECONDS
-    + ENTERING_OPTIONS_FADE_IN_SECONDS
-    + ENTERING_OPTIONS_HOLD_SECONDS;
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
@@ -438,13 +434,6 @@ enum NavDirection {
     Right,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum OutPromptState {
-    None,
-    PressStartForOptions { elapsed: f32 },
-    EnteringOptions { elapsed: f32 },
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum ThreeKeyFocus {
     #[default]
@@ -500,7 +489,7 @@ pub struct State {
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
-    catalog: PreparedCourseCatalog,
+    catalog: Arc<PreparedCourseCatalog>,
     bg: visual_style_bg::State,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
@@ -508,7 +497,7 @@ pub struct State {
     pub banner_high_quality_requested: bool,
     prev_selected_index: usize,
     time_since_selection_change: f32,
-    out_prompt: OutPromptState,
+    launch_prompt: StageLaunchPrompt,
     exit_prompt: ExitPromptState,
     selected_rating_index_by_path: HashMap<PathBuf, usize>,
     last_rating_nav_dir_p1: Option<PadDir>,
@@ -993,7 +982,7 @@ pub fn init_prepared(catalog: PreparedCourseCatalog, init_view: SelectCoursePres
         all_entries: init.all_entries,
         course_meta_by_path: init.course_meta_by_path,
         course_text_color_overrides: init.course_text_color_overrides,
-        catalog,
+        catalog: Arc::new(catalog),
         bg: visual_style_bg::State::new(),
         nav_key_held_direction: None,
         nav_key_held_since: None,
@@ -1001,7 +990,7 @@ pub fn init_prepared(catalog: PreparedCourseCatalog, init_view: SelectCoursePres
         banner_high_quality_requested: false,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
-        out_prompt: OutPromptState::None,
+        launch_prompt: StageLaunchPrompt::Hidden,
         exit_prompt: ExitPromptState::None,
         selected_rating_index_by_path: HashMap::new(),
         last_rating_nav_dir_p1: None,
@@ -1248,7 +1237,7 @@ fn append_rating_cancel_sounds(effects: &mut Vec<ThemeEffect>, undo_sound: Optio
 }
 
 pub fn handle_confirm(state: &mut State) -> ThemeEffect {
-    if state.out_prompt != OutPromptState::None {
+    if state.launch_prompt != StageLaunchPrompt::Hidden {
         return ThemeEffect::None;
     }
     if state.entries.is_empty() {
@@ -1259,13 +1248,16 @@ pub fn handle_confirm(state: &mut State) -> ThemeEffect {
     state.menu_lr_undo = 0;
     state.three_key_focus = ThreeKeyFocus::Wheel;
 
-    match state.entries.get(state.selected_index) {
-        Some(MusicWheelEntry::Song(_)) => {
-            state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
-            sfx("assets/sounds/start.ogg")
-        }
-        _ => ThemeEffect::None,
-    }
+    let Some(selection) = selected_course_choice(state).and_then(|choice| state.catalog.confirm(choice))
+    else {
+        return ThemeEffect::None;
+    };
+    sfx_then(
+        "assets/sounds/start.ogg",
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::CourseLaunch(
+            StageLaunchRequest::Confirm(selection),
+        )),
+    )
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
@@ -1351,20 +1343,17 @@ fn handle_input_impl(
         return handle_exit_prompt_input(state, ev, effects);
     }
 
-    if state.out_prompt != OutPromptState::None {
+    if state.launch_prompt != StageLaunchPrompt::Hidden {
         let start_pressed = matches!(
             three_key_action,
             Some((_, screen_input::ThreeKeyMenuAction::Confirm))
         ) || (ev.pressed
             && matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start));
-        if start_pressed
-            && matches!(
-                state.out_prompt,
-                OutPromptState::PressStartForOptions { .. }
-            )
-        {
-            state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
-            return sfx("assets/sounds/start.ogg");
+        if start_pressed && state.launch_prompt == StageLaunchPrompt::OfferOptions {
+            effects.push(sfx("assets/sounds/start.ogg"));
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::CourseLaunch(
+                StageLaunchRequest::PlayerOptions,
+            ));
         }
         return ThemeEffect::None;
     }
@@ -1554,28 +1543,8 @@ fn update_impl(state: &mut State, dt: f32, effects: &mut Vec<ThemeEffect>) {
     state.labels.sync();
     let dt = dt.max(0.0);
 
-    match state.out_prompt {
-        OutPromptState::PressStartForOptions { elapsed } => {
-            let elapsed = elapsed + dt;
-            if elapsed >= SHOW_OPTIONS_MESSAGE_SECONDS {
-                state.out_prompt = OutPromptState::None;
-                effects.push(ThemeEffect::NavigateNoFade(Screen::Gameplay));
-                return;
-            }
-            state.out_prompt = OutPromptState::PressStartForOptions { elapsed };
-            return;
-        }
-        OutPromptState::EnteringOptions { elapsed } => {
-            let elapsed = elapsed + dt;
-            if elapsed >= ENTERING_OPTIONS_TOTAL_SECONDS {
-                state.out_prompt = OutPromptState::None;
-                effects.push(ThemeEffect::NavigateNoFade(Screen::PlayerOptions));
-                return;
-            }
-            state.out_prompt = OutPromptState::EnteringOptions { elapsed };
-            return;
-        }
-        OutPromptState::None => {}
+    if state.launch_prompt != StageLaunchPrompt::Hidden {
+        return;
     }
 
     if let ExitPromptState::Active {
@@ -1681,8 +1650,11 @@ pub fn trigger_immediate_refresh(state: &mut State) {
     state.time_since_selection_change = BANNER_UPDATE_DELAY_SECONDS;
     state.last_requested_banner_source = None;
     state.banner_high_quality_requested = false;
-    state.out_prompt = OutPromptState::None;
     state.exit_prompt = ExitPromptState::None;
+}
+
+pub fn sync_stage_launch_prompt(state: &mut State, prompt: StageLaunchPrompt) {
+    state.launch_prompt = prompt;
 }
 
 #[inline(always)]
@@ -2326,7 +2298,7 @@ pub fn push_actors(
     }
 
     // Match ScreenSelectMusic out-prompt visual treatment.
-    if state.out_prompt != OutPromptState::None {
+    if state.launch_prompt != StageLaunchPrompt::Hidden {
         actors.push(act!(quad:
             align(0.0, 0.0): xy(0.0, 0.0):
             zoomto(screen_width(), screen_height()):
@@ -2337,8 +2309,8 @@ pub fn push_actors(
             linear(TRANSITION_OUT_DURATION): cropbottom(-0.5): alpha(1.0)
         ));
 
-        match state.out_prompt {
-            OutPromptState::PressStartForOptions { .. } => {
+        match state.launch_prompt {
+            StageLaunchPrompt::OfferOptions => {
                 actors.push(act!(text:
                     font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
                     settext(Arc::clone(&state.labels.options_prompt)):
@@ -2349,7 +2321,7 @@ pub fn push_actors(
                     z(1401)
                 ));
             }
-            OutPromptState::EnteringOptions { .. } => {
+            StageLaunchPrompt::EnteringOptions => {
                 actors.push(act!(text:
                     font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
                     settext(Arc::clone(&state.labels.options_prompt)):
@@ -2373,7 +2345,7 @@ pub fn push_actors(
                     sleep(ENTERING_OPTIONS_HOLD_SECONDS)
                 ));
             }
-            OutPromptState::None => {}
+            StageLaunchPrompt::Hidden => {}
         }
     }
 

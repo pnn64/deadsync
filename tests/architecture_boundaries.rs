@@ -14,38 +14,43 @@ fn contains_rust(source: &str, expected: &str) -> bool {
 }
 
 #[test]
-fn confirmed_song_launch_uses_game_policy() {
+fn confirmed_song_and_course_launches_share_game_policy() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let game = production_source(&root.join("crates/deadsync-gameplay/src/song_launch.rs"));
+    let game = production_source(&root.join("crates/deadsync-gameplay/src/stage_launch.rs"));
     for contract in [
-        "pub struct SongSelection",
-        "pub struct SongLaunch",
-        "pub enum SongLaunchRequest",
-        "pub enum SongLaunchPrompt",
+        "pub struct StageLaunch<T>",
+        "pub enum StageLaunchRequest<T>",
+        "pub enum StageLaunchPrompt",
         "pub fn advance(",
         "pub fn take_ready(",
     ] {
         assert!(game.contains(contract), "missing game launch contract {contract}");
     }
     assert!(!game.contains("deadsync_theme"));
-    let theme = production_source(
-        &root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
-    );
-    assert!(theme.contains("song_launch_prompt: SongLaunchPrompt"));
-    assert!(theme.contains("SongLaunchRequest::Confirm("));
-    assert!(theme.contains("SongLaunchRequest::PlayerOptions"));
-    for policy in [
-        "OPTIONS_WINDOW_SECONDS",
-        "SHOW_OPTIONS_MESSAGE_SECONDS",
-        "OPTIONS_ENTRY_SECONDS",
-        "gameplay_preload_due",
-        "NavigateNoFade(Screen::Gameplay)",
-        "NavigateNoFade(Screen::PlayerOptions)",
+    for (screen, prompt, request) in [
+        ("select_music", "SongLaunchPrompt", "SongLaunchRequest"),
+        ("select_course", "StageLaunchPrompt", "StageLaunchRequest"),
     ] {
-        assert!(!theme.contains(policy), "theme owns launch policy {policy}");
+        let theme = production_source(
+            &root.join(format!("crates/deadsync-theme-simply-love/src/screens/{screen}.rs")),
+        );
+        assert!(theme.contains(&format!("launch_prompt: {prompt}")));
+        assert!(theme.contains(&format!("{request}::Confirm(")));
+        assert!(theme.contains(&format!("{request}::PlayerOptions")));
+        for policy in [
+            "OPTIONS_WINDOW_SECONDS",
+            "SHOW_OPTIONS_MESSAGE_SECONDS",
+            "OPTIONS_ENTRY_SECONDS",
+            "ENTERING_OPTIONS_TOTAL_SECONDS",
+            "gameplay_preload_due",
+            "NavigateNoFade(Screen::Gameplay)",
+            "NavigateNoFade(Screen::PlayerOptions)",
+        ] {
+            assert!(!theme.contains(policy), "{screen} owns launch policy {policy}");
+        }
     }
     let shell = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
-    assert!(shell.contains("song_launch.advance(delta_time)"));
+    assert!(shell.contains("stage_launch.advance(delta_time)"));
     assert!(shell.contains("Some(ActiveTheme::SCREENS.gameplay)"));
     assert!(shell.contains("Some(ActiveTheme::SCREENS.player_options)"));
 }
@@ -117,6 +122,7 @@ fn course_startup_and_renewal_use_game_contracts() {
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("application source should be readable");
     let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
+    assert!(app.contains("Some(StageSelection::Course(selection)) => selection.start()"));
     assert!(app.contains("select_course::selected_course_choice(selection)"));
     assert!(app.contains("select_course::course_catalog(selection).start(choice)"));
     assert!(app.contains("Arc::from(course.song.title.as_str())"));
@@ -125,6 +131,7 @@ fn course_startup_and_renewal_use_game_contracts() {
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     for delegation in [
         "super::renew_endless_cycle(",
+        "Some(StageSelection::Course(selection)) => selection.can_start()",
         "select_course::has_selected_course(",
     ] {
         assert!(navigation.contains(delegation), "missing {delegation}");
@@ -382,9 +389,9 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         &app,
         "use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};"
     ));
-    assert!(app.contains("song_launch.preload_selection()"));
-    assert!(app.contains(".take_ready(SongLaunchTarget::Gameplay)"));
-    assert!(app.contains(".take_ready(SongLaunchTarget::PlayerOptions)"));
+    assert!(app.contains("stage_launch.preload_selection()"));
+    assert!(app.contains(".take_ready_song_selection(StageLaunchTarget::Gameplay)"));
+    assert!(app.contains(".take_ready_song_selection(StageLaunchTarget::PlayerOptions)"));
     assert!(app.contains("stage_start_for_song_selection(selection)"));
     assert!(!shell_entry.contains("fn resolve_chart("));
     assert!(!shell_entry.contains("fn apply_song_lua_reload"));

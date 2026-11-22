@@ -119,6 +119,41 @@ pub struct CourseChoice<'a> {
     pub difficulty: Difficulty,
 }
 
+/// A course rating retained from the same catalog that supplied the wheel.
+#[derive(Clone)]
+pub struct ConfirmedCourse {
+    catalog: Arc<PreparedCourseCatalog>,
+    course_index: usize,
+    difficulty: Difficulty,
+}
+
+impl ConfirmedCourse {
+    fn choice(&self) -> CourseChoice<'_> {
+        CourseChoice {
+            path: self.catalog.courses[self.course_index].path(),
+            difficulty: self.difficulty,
+        }
+    }
+
+    pub fn can_start(&self) -> bool {
+        self.catalog.can_start(self.choice())
+    }
+
+    pub fn start(&self) -> Option<PreparedCourseStart> {
+        self.catalog.start(self.choice())
+    }
+}
+
+impl std::fmt::Debug for ConfirmedCourse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let choice = self.choice();
+        f.debug_struct("ConfirmedCourse")
+            .field("path", &choice.path)
+            .field("difficulty", &choice.difficulty)
+            .finish()
+    }
+}
+
 pub struct PreparedCourseStart {
     pub plan: CourseSessionPlan,
     pub song: Arc<SongData>,
@@ -276,6 +311,15 @@ impl PreparedCourseCatalog {
     pub fn can_start(&self, choice: CourseChoice<'_>) -> bool {
         self.rating(choice)
             .is_some_and(|(_, rating)| !rating.stages.is_empty())
+    }
+
+    pub fn confirm(self: &Arc<Self>, choice: CourseChoice<'_>) -> Option<ConfirmedCourse> {
+        let course_index = *self.by_path.get(choice.path)?;
+        Some(ConfirmedCourse {
+            catalog: Arc::clone(self),
+            course_index,
+            difficulty: choice.difficulty,
+        })
     }
 
     pub fn selected_cycle(&self, choice: CourseChoice<'_>) -> Option<CourseCyclePlan> {
