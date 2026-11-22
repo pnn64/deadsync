@@ -8,7 +8,7 @@ use crate::ErrorKind;
 use std::{
     cmp::Ordering,
     sync::{
-        Mutex, RwLock,
+        Mutex, RwLock, RwLockReadGuard,
         atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering},
     },
 };
@@ -17,15 +17,8 @@ static DECIMAL: Mutex<Decimal> = Mutex::new(Decimal::Dot);
 static DECIMAL_DOT: AtomicBool = AtomicBool::new(true);
 static COLLATE_C: AtomicBool = AtomicBool::new(true);
 static REVISION: AtomicU64 = AtomicU64::new(0);
-// Publish the class/case table and its C-locale flag as one snapshot.
-struct Ctype {
-    values: [u32; 256],
-    is_c: bool,
-}
-static CTYPE: RwLock<Ctype> = RwLock::new(Ctype {
-    values: [0; 256],
-    is_c: true,
-});
+static CTYPE_C: AtomicBool = AtomicBool::new(true);
+static CTYPE: RwLock<[u32; 256]> = RwLock::new([0; 256]);
 
 #[cfg(all(windows, target_env = "msvc"))]
 #[allow(unsafe_code)]
@@ -56,12 +49,12 @@ pub(crate) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Vec<u8>
                 DECIMAL_DOT.store(&**decimal == b".", AtomicOrdering::Release);
             }
             if let Some((ctype, ctype_c)) = cache.ctype {
-                *CTYPE
+                let mut values = CTYPE
                     .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Ctype {
-                    values: ctype,
-                    is_c: ctype_c,
-                };
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                *values = ctype;
+                CTYPE_C.store(ctype_c, AtomicOrdering::Release);
+                drop(values);
                 REVISION.fetch_add(1, AtomicOrdering::Release);
             }
             if let Some(collate_c) = cache.collate_c {
@@ -186,12 +179,18 @@ pub(crate) fn try_localize_owned_from(
     }
     Ok(())
 }
-fn mask(byte: u8) -> u32 {
-    CTYPE
+fn ctype() -> Option<RwLockReadGuard<'static, [u32; 256]>> {
+    if CTYPE_C.load(AtomicOrdering::Acquire) {
+        return None;
+    }
+    let values = CTYPE
         .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .values[usize::from(byte)]
-        >> 16
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // A locale change can publish C before this reader acquires the lock.
+    (!CTYPE_C.load(AtomicOrdering::Relaxed)).then_some(values)
+}
+fn mask(byte: u8) -> u32 {
+    ctype().map_or(0, |values| values[usize::from(byte)] >> 16)
 }
 pub(crate) fn is_alpha(byte: u8) -> bool {
     byte.is_ascii_alphabetic() || (byte >= 128 && mask(byte) & 0x103 != 0)
@@ -202,7 +201,7 @@ pub(crate) fn is_alnum(byte: u8) -> bool {
 pub(crate) fn is_digit(byte: u8) -> bool {
     byte.is_ascii_digit() || (byte >= 128 && mask(byte) & 4 != 0)
 }
-fn ascii_space(byte: u8) -> bool {
+pub(crate) fn ascii_space(byte: u8) -> bool {
     (byte == b' ') | (byte.wrapping_sub(b'\t') <= b'\r' - b'\t')
 }
 pub(crate) fn is_space(byte: u8) -> bool {
@@ -212,7 +211,7 @@ pub(crate) fn is_control(byte: u8) -> bool {
     byte.is_ascii_control() || (byte >= 128 && mask(byte) & 32 != 0)
 }
 
-const fn ascii_class_bits(class: u8) -> [u64; 2] {
+pub(crate) const fn ascii_class_bits(class: u8) -> [u64; 2] {
     let mut bits = [0; 2];
     let mut byte = 0u8;
     while byte < 128 {
@@ -255,18 +254,12 @@ pub(crate) fn add_class_bits(set: &mut [u64; 4], code: u8) {
         }
     };
     let mut bits = [lo, hi, 0, 0];
-    if flags != 0 {
-        let ctype = CTYPE
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !ctype.is_c {
-            for (word, values) in bits[2..]
-                .iter_mut()
-                .zip(ctype.values[128..].as_chunks::<64>().0)
-            {
-                for (bit, &value) in values.iter().enumerate() {
-                    *word |= u64::from(value & (flags << 16) != 0) << bit;
-                }
+    if flags != 0
+        && let Some(ctype) = ctype()
+    {
+        for (word, values) in bits[2..].iter_mut().zip(ctype[128..].as_chunks::<64>().0) {
+            for (bit, &value) in values.iter().enumerate() {
+                *word |= u64::from(value & (flags << 16) != 0) << bit;
             }
         }
     }
@@ -276,31 +269,38 @@ pub(crate) fn add_class_bits(set: &mut [u64; 4], code: u8) {
     }
 }
 pub(crate) fn map_case(bytes: &mut [u8], upper: bool) {
-    let ctype = CTYPE
-        .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if ctype.is_c {
-        if upper {
-            bytes.make_ascii_uppercase();
-        } else {
-            bytes.make_ascii_lowercase();
-        }
-    } else {
+    let table = ctype();
+    if let Some(values) = table.as_deref() {
         let shift = if upper { 8 } else { 0 };
-        for byte in bytes {
-            *byte = (ctype.values[usize::from(*byte)] >> shift) as u8;
+        if bytes.len() < 1024
+            || !bytes.is_ascii()
+            || values[..128].iter().enumerate().any(|(index, &value)| {
+                let byte = index as u8;
+                let ascii = if upper {
+                    byte.to_ascii_uppercase()
+                } else {
+                    byte.to_ascii_lowercase()
+                };
+                (value >> shift) as u8 != ascii
+            })
+        {
+            for byte in bytes {
+                *byte = (values[usize::from(*byte)] >> shift) as u8;
+            }
+            return;
         }
+    }
+    if upper {
+        bytes.make_ascii_uppercase();
+    } else {
+        bytes.make_ascii_lowercase();
     }
 }
 pub(crate) fn lower(byte: u8) -> u8 {
-    let ctype = CTYPE
-        .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if ctype.is_c {
-        byte.to_ascii_lowercase()
-    } else {
-        ctype.values[usize::from(byte)] as u8
-    }
+    ctype().map_or_else(
+        || byte.to_ascii_lowercase(),
+        |values| values[usize::from(byte)] as u8,
+    )
 }
 pub(crate) fn compare(left: &[u8], right: &[u8]) -> Result<Ordering, Error> {
     if COLLATE_C.load(AtomicOrdering::Acquire) {
@@ -331,7 +331,15 @@ fn terminated(bytes: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(result)
 }
 
-pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
+#[inline]
+pub(crate) fn trim_number_text(bytes: &[u8]) -> &[u8] {
+    let ascii_prefix = if bytes.len() >= 128 && ascii_space(bytes[0]) {
+        crate::pattern::scan_boundary(bytes, |byte| !ascii_space(byte))
+    } else {
+        0
+    };
+    let bytes = &bytes[ascii_prefix..];
+    // The skipped ASCII whitespace cannot contain the C-string terminator.
     let nul = if bytes.len() < 32 {
         bytes.iter().position(|&byte| byte == 0)
     } else {
@@ -351,7 +359,11 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
             .rposition(|&byte| !is_space(byte))
             .map_or(0, |i| i + 1)
     };
-    let bytes = &bytes[..end];
+    &bytes[..end]
+}
+
+pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
+    let bytes = trim_number_text(bytes);
     if DECIMAL_DOT.load(AtomicOrdering::Acquire) {
         return parse_normalized(bytes);
     }
@@ -359,7 +371,12 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
         return None;
     }
     let point = decimal();
-    if point.is_empty() || !bytes.windows(point.len()).any(|window| window == &*point) {
+    let has_point = match &*point {
+        [] => false,
+        [byte] => crate::pattern::find_byte(bytes, *byte).is_some(),
+        point => bytes.windows(point.len()).any(|window| window == point),
+    };
+    if !has_point {
         return parse_normalized(bytes);
     }
     crate::numeric::localized_number(bytes, &point)
@@ -389,6 +406,13 @@ fn parse_normalized(bytes: &[u8]) -> Option<f64> {
         _ => (false, bytes),
     };
     if let [b'0', b'x' | b'X', hex @ ..] = unsigned {
+        let hex = if hex.len() >= 64 && hex[0] == b'0' {
+            // Leading integer zeros leave both the significand and radix
+            // position unchanged. Keep one so the digit check still applies.
+            &hex[crate::pattern::byte_run(hex, b'0') - 1..]
+        } else {
+            hex
+        };
         return crate::numeric::hex_number(hex.iter().copied(), negative);
     }
     if let Some(integer) = crate::lexer::short_decimal_integer(unsigned) {
@@ -398,7 +422,7 @@ fn parse_normalized(bytes: &[u8]) -> Option<f64> {
     // digits and clamps the textual exponent before adjusting for the radix
     // position. Short inputs cannot expose either difference from core's parser.
     if cfg!(all(windows, target_env = "msvc")) && bytes.len() > 768 {
-        return crate::numeric::localized_number(bytes, b".");
+        return crate::numeric::decimal_number(unsigned.iter().copied(), negative);
     }
     std::str::from_utf8(bytes).ok()?.parse().ok()
 }

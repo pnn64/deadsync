@@ -261,18 +261,9 @@ impl Vm {
         if !(2..=36).contains(&radix) {
             return Err(self.argument_error(1, b"base out of range"));
         }
+        let radix = radix as u8;
         let text = &self.strings.bytes[slot_index(string.0)];
-        let text = &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())];
-        let whitespace = |c: &u8| crate::locale::is_space(*c);
-        let first = text
-            .iter()
-            .position(|c| !whitespace(c))
-            .unwrap_or(text.len());
-        let last = text
-            .iter()
-            .rposition(|c| !whitespace(c))
-            .map_or(first, |i| i + 1);
-        let text = &text[first..last];
+        let text = crate::locale::trim_number_text(text);
         let (negative, text) = match text.first() {
             Some(b'-') => (true, &text[1..]),
             Some(b'+') => (false, &text[1..]),
@@ -286,36 +277,51 @@ impl Vm {
         if text.is_empty() {
             return Ok(Value::Nil);
         }
+        let text = if text.len() >= 64 && text.starts_with(b"00000000") {
+            &text[crate::pattern::byte_run(text, b'0')..]
+        } else {
+            text
+        };
         let maximum = if std::mem::size_of::<std::ffi::c_ulong>() == 4 {
             u64::from(u32::MAX)
         } else {
             u64::MAX
         };
         let mut value = 0u64;
-        let mut overflow = false;
-        for &byte in text {
+        let mut digits = text.iter();
+        while let Some(&byte) = digits.next() {
             let digit = match byte {
                 b'0'..=b'9' => byte - b'0',
                 b'a'..=b'z' => byte - b'a' + 10,
                 b'A'..=b'Z' => byte - b'A' + 10,
                 _ => return Ok(Value::Nil),
             };
-            if i32::from(digit) >= radix {
+            if digit >= radix {
                 return Ok(Value::Nil);
             }
-            match value
-                .checked_mul(radix as u64)
+            let Some(next) = value
+                .checked_mul(u64::from(radix))
                 .and_then(|v| v.checked_add(u64::from(digit)))
                 .filter(|&v| v <= maximum)
-            {
-                Some(n) => value = n,
-                None => {
-                    value = maximum;
-                    overflow = true;
-                }
-            }
+            else {
+                // strtoul has already saturated, but an invalid trailing
+                // byte still makes the conversion fail.
+                let tail = digits.as_slice();
+                let decimal = radix.min(10);
+                let alpha = radix.saturating_sub(10);
+                let end = crate::pattern::scan_boundary(tail, |byte| {
+                    (byte.wrapping_sub(b'0') >= decimal)
+                        & ((byte | 0x20).wrapping_sub(b'a') >= alpha)
+                });
+                return Ok(if end == tail.len() {
+                    Value::Number(maximum as f64)
+                } else {
+                    Value::Nil
+                });
+            };
+            value = next;
         }
-        if negative && !overflow {
+        if negative {
             value = value.wrapping_neg() & maximum;
         }
         Ok(Value::Number(value as f64))

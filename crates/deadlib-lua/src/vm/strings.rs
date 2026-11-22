@@ -1,6 +1,8 @@
 //! Byte strings, pattern callbacks, iterators and Lua 5.1 formatting.
 use super::*;
-use crate::pattern::{Capture, Matched, Pattern, Work, byte_run, find_byte, find_pair};
+use crate::pattern::{
+    Capture, Matched, Pattern, Work, byte_run, find_byte, find_dense_literal, has_magic,
+};
 #[cfg(test)]
 mod allocation_tests;
 #[cfg(test)]
@@ -287,12 +289,16 @@ impl Vm {
         }
         if id == STR_CHAR {
             let mut bytes = self.try_take_buffer(count)?;
-            for index in 0..count {
-                let n = self.integer_argument(base, count, index, None)? as i32;
-                if !(0..=255).contains(&n) {
-                    return Err(self.argument_error(index, b"invalid value"));
+            if count != 0 {
+                bytes.resize(count, 0);
+                let args = &self.registers[base + 1..base + 1 + count];
+                for (index, (&value, destination)) in args.iter().zip(&mut bytes).enumerate() {
+                    let number = self
+                        .number(value)
+                        .ok_or_else(|| self.argument_type_error(base, count, index, "number"))?;
+                    *destination = u8::try_from(lua_integer(number) as i32)
+                        .map_err(|_| self.argument_error(index, b"invalid value"))?;
                 }
-                bytes.push(n as u8);
             }
             self.registers[base] = self.try_finish_buffer(bytes)?;
             return Ok(1);
@@ -354,8 +360,12 @@ impl Vm {
             }
             STR_REP => {
                 let repeat = (self.integer_argument(base, count, 1, None)? as i32).max(0) as usize;
-                if len == 0 || repeat == 0 {
-                    self.registers[base] = self.try_intern(b"")?;
+                if len == 0 || repeat <= 1 {
+                    self.registers[base] = if repeat == 1 {
+                        self.string_slice(source, 0..len)?
+                    } else {
+                        self.try_intern(b"")?
+                    };
                     return Ok(1);
                 }
                 let size = len
@@ -394,26 +404,7 @@ impl Vm {
                     .clamp(0, len as i64) as usize;
                 let raw = self.strings.bytes[slot_index(pattern.0)].as_ref();
                 let plain = id == STR_FIND
-                    && (self.argument(base, count, 3).is_truthy()
-                        || raw
-                            .iter()
-                            .copied()
-                            .find(|&byte| {
-                                matches!(
-                                    byte,
-                                    0 | b'^'
-                                        | b'$'
-                                        | b'*'
-                                        | b'+'
-                                        | b'?'
-                                        | b'.'
-                                        | b'('
-                                        | b'['
-                                        | b'%'
-                                        | b'-'
-                                )
-                            })
-                            .is_none_or(|byte| byte == 0));
+                    && (self.argument(base, count, 3).is_truthy() || !has_magic(raw));
                 if plain {
                     let text = &self.strings.bytes[slot_index(source.0)][start..];
                     let found = 'literal: {
@@ -430,6 +421,9 @@ impl Vm {
                         // occurs less often in a small sample of the haystack.
                         let mut anchor = 0;
                         if text.len() >= 1024 {
+                            if text.starts_with(raw) {
+                                break 'literal Some(0);
+                            }
                             let last = raw.len() - 1;
                             let (first_hits, last_hits) =
                                 text[..64].iter().fold((0u8, 0u8), |(first, end), &byte| {
@@ -438,14 +432,11 @@ impl Vm {
                                         end + u8::from(byte == raw[last]),
                                     )
                                 });
-                            if first_hits.min(last_hits) >= 4
-                                && let [a, b] = raw
-                            {
-                                // Both anchors would produce many false candidates.
-                                break 'literal find_pair(text, [*a, *b]);
-                            }
                             if last_hits < first_hits {
                                 anchor = last;
+                            }
+                            if first_hits.min(last_hits) >= 4 {
+                                break 'literal find_dense_literal(text, raw, anchor);
                             }
                         }
                         let mut cursor = anchor;
@@ -837,6 +828,21 @@ impl Vm {
                     self.substitution_push(index, value)?;
                     self.substitution_value(index)?
                 } else {
+                    if c == b'%' {
+                        let tail = &self.strings.bytes[slot][pos..];
+                        if tail.starts_with(b"%%") {
+                            let output = &mut self.substitutions[index].output;
+                            let room = io::LINE_BUFFER - output.len();
+                            if room > 1 {
+                                // Leave the next flush to substitution_byte.
+                                let limit = tail.len().min(2 * (room - 1));
+                                let extra = byte_run(&tail[..limit], b'%') / 2;
+                                output.resize(output.len() + 1 + extra, b'%');
+                                pos += 2 * extra;
+                                continue;
+                            }
+                        }
+                    }
                     self.substitution_byte(index, c)?
                 }
             };

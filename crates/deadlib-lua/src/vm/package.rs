@@ -451,9 +451,11 @@ impl Vm {
         match frame.pc {
             0 => {
                 let name = self.package_name(frame)?;
-                let bytes = self.concat_bytes(name)?;
-                let search = &bytes;
-                let replaced = replace(search, b'.', if cfg!(windows) { b"\\" } else { b"/" })?;
+                let mut replaced = self.concat_bytes(name)?;
+                let separator = if cfg!(windows) { b'\\' } else { b'/' };
+                for byte in &mut replaced {
+                    *byte = if *byte == b'.' { separator } else { *byte };
+                }
                 self.reserve_registers(base + 11)?;
                 self.resize_registers(self.registers.len().max(base + 11));
                 self.registers[base] = name;
@@ -486,16 +488,14 @@ impl Vm {
                     unreachable!("search cursor")
                 };
                 let mut start = cursor as usize;
-                while path.get(start) == Some(&b';') {
-                    start += 1
+                if path.get(start) == Some(&b';') {
+                    start += crate::pattern::byte_run(&path[start..], b';');
                 }
                 if start == path.len() {
                     return self.return_frame(frame, base + 3, 1);
                 }
-                let end = path[start..]
-                    .iter()
-                    .position(|&b| b == b';')
-                    .map_or(path.len(), |n| start + n);
+                let end = crate::pattern::find_byte(&path[start..], b';')
+                    .map_or(path.len(), |offset| start + offset);
                 self.registers[base + 4] = Value::Number(end as f64);
                 let Value::String(name_id) = self.registers[base + 8] else {
                     unreachable!("search name string")

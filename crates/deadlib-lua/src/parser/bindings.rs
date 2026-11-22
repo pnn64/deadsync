@@ -1,4 +1,5 @@
 //! Lexical capture limits while parsing, including unfinished reader input.
+use super::hash;
 use crate::memory::text::Text;
 use crate::{
     Error, ErrorKind,
@@ -59,11 +60,6 @@ impl Bindings {
             free: NONE,
         })
     }
-}
-fn hash(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
-        (h ^ u64::from(*b)).wrapping_mul(0x100_0000_01b3)
-    })
 }
 impl Bindings {
     /// Return to the state of `try_new`, keeping storage.

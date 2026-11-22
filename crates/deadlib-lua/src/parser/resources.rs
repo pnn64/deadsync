@@ -6,6 +6,7 @@
 use super::{
     Ast, ConstantOperand, Expr, ExprId,
     bindings::{Bindings, Reference},
+    hash,
 };
 use crate::lexer::Kind;
 use crate::{
@@ -87,11 +88,6 @@ pub(super) struct Context<'a> {
     pub ast: &'a Ast,
     pub input: &'a [u8],
     pub bindings: &'a Bindings,
-}
-fn hash(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
-        (h ^ u64::from(*b)).wrapping_mul(0x100_0000_01b3)
-    })
 }
 impl Key {
     fn constant(self, cx: &Context<'_>) -> Result<crate::bytecode::Constant, Error> {

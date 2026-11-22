@@ -214,6 +214,27 @@ mod resources;
 mod resume;
 pub(crate) use resume::{Parser, Spare};
 
+#[inline]
+fn hash(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    let tail = if bytes.len() >= 32 {
+        hash ^= bytes.len() as u64;
+        let (words, tail) = bytes.as_chunks::<8>();
+        for &word in words {
+            hash = (hash ^ u64::from_le_bytes(word))
+                .rotate_left(27)
+                .wrapping_mul(0x9e37_79b1_85eb_ca87);
+        }
+        hash ^= hash >> 32;
+        tail
+    } else {
+        bytes
+    };
+    tail.iter().fold(hash, |h, &byte| {
+        (h ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+    })
+}
+
 pub(crate) fn parse(source: &[u8]) -> Result<Ast, Error> {
     Parser::try_new()?
         .resume(source, true)

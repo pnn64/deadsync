@@ -1,5 +1,9 @@
 //! Buffered native streams. Lua values never contain operating-system handles.
-use crate::{memory::bytes::ByteOutput, pattern::find_byte};
+use crate::{
+    locale::{ascii_space, is_space},
+    memory::{Buffer, bytes::ByteOutput},
+    pattern::{find_byte, scan_boundary},
+};
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
@@ -63,7 +67,7 @@ pub(in crate::vm) struct Stream {
     pub text: bool,
     read: Vec<u8>,
     position: usize,
-    peek: Option<(u8, u8)>,
+    peek: Option<u8>,
     control_eof: bool,
     eof: bool,
     raw_len: usize,
@@ -141,15 +145,17 @@ impl Stream {
                 while source < count {
                     let byte = self.read[source];
                     source += 1;
-                    if byte == 26 {
-                        self.control_eof = true;
-                        break;
-                    }
                     if byte == b'\r' {
                         if source < count && self.read[source] == b'\n' {
-                            source += 1;
-                            self.read[destination] = b'\n';
-                            destination += 1;
+                            let pairs = 1 + self.read[source + 1..]
+                                .as_chunks::<2>()
+                                .0
+                                .iter()
+                                .take_while(|&&bytes| bytes == *b"\r\n")
+                                .count();
+                            source += pairs * 2 - 1;
+                            self.read[destination..destination + pairs].fill(b'\n');
+                            destination += pairs;
                             continue;
                         }
                         if source == count {
@@ -168,6 +174,17 @@ impl Stream {
                                 }
                             }
                         }
+                    } else if byte == 26 {
+                        self.control_eof = true;
+                        break;
+                    } else if source < count && !matches!(self.read[source], b'\r' | 26) {
+                        let start = source - 1;
+                        source += scan_boundary(&self.read[source..], |b| (b == b'\r') | (b == 26));
+                        if destination != start {
+                            self.read.copy_within(start..source, destination);
+                        }
+                        destination += source - start;
+                        continue;
                     }
                     self.read[destination] = byte;
                     destination += 1;
@@ -182,20 +199,103 @@ impl Stream {
         self.position += 1;
         Ok(Some(byte))
     }
-    fn decoded(&mut self) -> Result<Option<(u8, u8)>, i32> {
-        Ok(self.raw()?.map(|byte| (byte, 1)))
-    }
     pub fn peek(&mut self) -> Result<Option<u8>, i32> {
         if self.peek.is_none() {
-            self.peek = self.decoded()?;
+            self.peek = self.raw()?;
         }
-        Ok(self.peek.map(|p| p.0))
+        Ok(self.peek)
     }
     pub fn get(&mut self) -> Result<Option<u8>, i32> {
-        Ok(match self.peek.take() {
-            Some(p) => Some(p.0),
-            None => self.decoded()?.map(|p| p.0),
-        })
+        match self.peek.take() {
+            byte @ Some(_) => Ok(byte),
+            None => self.raw(),
+        }
+    }
+    pub(super) fn skip_space(&mut self) -> Result<(), i32> {
+        while self.peek()?.is_some_and(is_space) {
+            self.peek = None;
+            let tail = &self.read[self.position..];
+            if tail.len() >= 64 && ascii_space(tail[0]) && ascii_space(tail[7]) {
+                // Only skip bytes whose classification is independent of LC_CTYPE.
+                self.position += scan_boundary(tail, |byte| !ascii_space(byte));
+            }
+        }
+        Ok(())
+    }
+    pub(super) fn read_digits(
+        &mut self,
+        out: &mut Buffer<u8>,
+        mut digits: i32,
+        keep: impl Fn(u8) -> bool,
+    ) -> Result<i32, i32> {
+        while let Some(byte) = self.peek()?.filter(|&byte| keep(byte)) {
+            out.try_push(byte).map_err(|_| 12)?;
+            self.peek = None;
+            digits += 1;
+            let tail = &self.read[self.position..];
+            // Keep the same growth points, with the next byte in lookahead
+            // if allocation fails. Let the scalar increment handle overflow.
+            let count_room = (i64::from(i32::MAX) - i64::from(digits)) as usize;
+            let available = tail.len().min(out.capacity() - out.len()).min(count_room);
+            if available >= 32 && keep(tail[0]) && keep(tail[7]) {
+                let count = scan_boundary(&tail[..available], |byte| !keep(byte));
+                out.extend_from_slice(&tail[..count]);
+                self.position += count;
+                digits += count as i32;
+            }
+        }
+        Ok(digits)
+    }
+    pub(super) fn read_nan_payload(&mut self, out: &mut Buffer<u8>) -> Result<(), i32> {
+        let keep = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_';
+        while let Some(byte) = self.peek()?.filter(|&byte| keep(byte)) {
+            out.try_push(byte).map_err(|_| 12)?;
+            self.peek = None;
+            let tail = &self.read[self.position..];
+            // Only copy buffered bytes that fit without growing the output.
+            let available = tail.len().min(out.capacity() - out.len());
+            if available >= 32 && keep(tail[0]) && keep(tail[7]) {
+                let count = scan_boundary(&tail[..available], |byte| !keep(byte));
+                out.extend_from_slice(&tail[..count]);
+                self.position += count;
+            }
+        }
+        Ok(())
+    }
+    /// Skip at most `limit` bytes, returning true at a delimiter or EOF.
+    /// When `consume` is false, a found delimiter remains in lookahead.
+    pub(in crate::vm) fn skip_until(
+        &mut self,
+        delimiter: u8,
+        mut limit: usize,
+        consume: bool,
+    ) -> Result<bool, i32> {
+        while limit != 0 {
+            if self.peek.is_none() && self.readable && self.position < self.read.len() {
+                let available = &self.read[self.position..];
+                let bytes = &available[..available.len().min(limit)];
+                if let Some(offset) = find_byte(bytes, delimiter) {
+                    self.position += offset + 1;
+                    self.peek = (!consume).then_some(delimiter);
+                    return Ok(true);
+                }
+                self.position += bytes.len();
+                limit -= bytes.len();
+            } else {
+                let Some(byte) = self.peek()? else {
+                    return Ok(true);
+                };
+                let matched = byte == delimiter;
+                if !matched || consume {
+                    self.peek = None;
+                }
+                if matched {
+                    return Ok(true);
+                }
+                limit -= 1;
+            }
+        }
+        Ok(false)
     }
     pub fn clear_eof(&mut self) {
         self.eof = false;
@@ -204,7 +304,7 @@ impl Stream {
     pub fn discard_number_sentinel(&mut self) {
         // UCRT's floating-input adapter cannot put back NUL or signed EOF.
         // Only drop existing lookahead; some NaN paths never fetch a suffix.
-        if matches!(self.peek, Some((0 | 255, _))) {
+        if matches!(self.peek, Some(0 | 255)) {
             self.peek = None;
         }
     }
@@ -323,16 +423,14 @@ impl Stream {
         if matches!(self.resource, Some(Resource::Output)) {
             return super::stdout_write(bytes).map_err(errno);
         }
-        let additional = bytes
-            .len()
-            .checked_add(if cfg!(windows) && self.text {
-                bytes.iter().filter(|&&byte| byte == b'\n').count()
-            } else {
-                0
-            })
-            .ok_or(12)?;
+        let newlines = if cfg!(windows) && self.text {
+            bytes.iter().filter(|&&byte| byte == b'\n').count()
+        } else {
+            0
+        };
+        let additional = bytes.len().checked_add(newlines).ok_or(12)?;
         self.write.try_reserve(additional).map_err(|_| 12)?;
-        if cfg!(windows) && self.text {
+        if newlines > bytes.len() / 8 {
             for &byte in bytes {
                 if byte == b'\n' {
                     self.write.push(b'\r');
@@ -340,15 +438,17 @@ impl Stream {
                 self.write.push(byte);
             }
         } else {
-            self.write.extend_from_slice(bytes);
-        }
-        // Standard stdout has already used the shared Lua buffer above.
-        if matches!(self.resource, Some(Resource::Output | Resource::Error)) {
-            match self.resource {
-                Some(Resource::Output) => super::stdio::write_all(1, &self.write),
-                _ => super::stdio::write_all(2, &self.write),
+            let mut remaining = bytes;
+            for _ in 0..newlines {
+                let at = find_byte(remaining, b'\n').expect("counted newline in remaining text");
+                self.write.extend_from_slice(&remaining[..at]);
+                self.write.extend_from_slice(b"\r\n");
+                remaining = &remaining[at + 1..];
             }
-            .map_err(errno)?;
+            self.write.extend_from_slice(remaining);
+        }
+        if matches!(self.resource, Some(Resource::Error)) {
+            super::stdio::write_all(2, &self.write).map_err(errno)?;
             self.write.clear();
             if self.buffering == 0 {
                 self.flush()?;
@@ -430,5 +530,35 @@ impl Drop for Stream {
         if self.resource.is_some() && !matches!(self.resource, Some(Resource::Output)) {
             let _ = self.close();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memory::tests::with_memory;
+
+    #[test]
+    fn numeric_run_leaves_the_first_uncopied_byte_on_growth_failure() {
+        with_memory(|memory, attempts, reject| {
+            let mut file = Stream::closed();
+            file.readable = true;
+            file.read = vec![b'1'; 64];
+            file.read.extend_from_slice(b"2;");
+            let mut bytes = Buffer::new_in(memory.clone());
+            bytes.try_reserve_exact(64).unwrap();
+            reject.set(attempts.get() + 1);
+            let digit = |byte: u8| byte.is_ascii_digit();
+
+            assert_eq!(file.read_digits(&mut bytes, 0, digit), Err(12));
+            assert_eq!(&*bytes, &file.read[..64]);
+            assert_eq!(file.position, 65);
+            assert_eq!(file.peek(), Ok(Some(b'2')));
+
+            reject.set(0);
+            assert_eq!(file.read_digits(&mut bytes, 0, digit), Ok(1));
+            assert_eq!(&*bytes, &file.read[..65]);
+            assert_eq!(file.get(), Ok(Some(b';')));
+        });
     }
 }

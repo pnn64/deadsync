@@ -143,15 +143,24 @@ impl Key {
 }
 
 fn array_index(value: Value) -> Option<usize> {
-    if let Value::Number(n) = value
-        && n >= 1.0
-        && n <= f64::from(u32::MAX)
-    {
-        let index = n as u32;
-        (f64::from(index) == n).then_some(index as usize - 1)
-    } else {
-        None
-    }
+    let Value::Number(n) = value else {
+        return None;
+    };
+    let index = n as u32;
+    (index != 0 && f64::from(index) == n).then_some(index.wrapping_sub(1) as usize)
+}
+
+fn array_range(first: i64, last: i64) -> Option<std::ops::Range<usize>> {
+    let start = u32::try_from(first).ok()?.checked_sub(1)? as usize;
+    let end = u32::try_from(last).ok()? as usize;
+    Some(start..end)
+}
+
+fn array_scalar(value: Value) -> bool {
+    matches!(
+        value,
+        Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_)
+    )
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -370,10 +379,9 @@ impl Table {
         }
     }
     // All storage was reserved before tombstones or traversal positions change.
-    fn rebuild(&mut self, slots: usize) {
-        let old_len = self.entries.len();
-        self.entries.retain(|entry| entry.value != Value::Nil);
-        if self.entries.len() != old_len {
+    fn rebuild(&mut self, slots: usize, live: usize) {
+        if live < self.entries.len() {
+            self.entries.retain(|entry| entry.value != Value::Nil);
             self.invalidate_trace();
         }
         self.slots.resize(slots, 0);
@@ -444,11 +452,45 @@ impl Table {
         };
         self.get_key(key)
     }
+    #[inline]
+    pub(crate) fn get_integer(&self, index: i64) -> Value {
+        // Array keys use the same one-based u32 range as array_index.
+        let offset = (index as u64).wrapping_sub(1);
+        if offset < u64::from(u32::MAX)
+            && let Some(value) = self.array.get(offset as usize)
+        {
+            return *value;
+        }
+        self.get_key(Key::Number((index as f64).to_bits()))
+    }
     /// Return the inclusive range of one-based indices when it fits in the array.
     pub(crate) fn array_slice(&self, first: i64, last: i64) -> Option<&[Value]> {
-        let start = u32::try_from(first).ok()?.checked_sub(1)? as usize;
-        let end = u32::try_from(last).ok()? as usize;
-        self.array.get(start..end)
+        self.array.get(array_range(first, last)?)
+    }
+    /// Insert at the start of a scalar array range or remove its first value.
+    /// Existing scalar slots can be overwritten without allocation or GC work.
+    pub(crate) fn shift_scalar_array(
+        &mut self,
+        first: i64,
+        last: i64,
+        insert: Option<Value>,
+    ) -> Option<Value> {
+        let array = self.array.get_mut(array_range(first, last)?)?;
+        let previous = *array.first()?;
+        if insert.is_some_and(|value| !array_scalar(value))
+            || !array.iter().copied().all(array_scalar)
+        {
+            return None;
+        }
+        let end = array.len() - 1;
+        if let Some(value) = insert {
+            array.copy_within(..end, 1);
+            array[0] = value;
+        } else {
+            array.copy_within(1.., 0);
+            array[end] = Value::Nil;
+        }
+        Some(previous)
     }
     /// String keys are already interned; field access need not classify them
     /// as a possible array index or reconstruct a generic Lua table key.
@@ -499,10 +541,7 @@ impl Table {
     /// tracing. This cannot grow storage or change table traversal positions.
     #[inline]
     pub(crate) fn set_existing_array_scalar(&mut self, key: Value, value: Value) -> bool {
-        if !matches!(
-            value,
-            Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_)
-        ) {
+        if !array_scalar(value) {
             return false;
         }
         if let Some(index) = array_index(key)
@@ -639,7 +678,7 @@ impl Table {
             .try_reserve(slots.saturating_sub(self.slots.len()))
             .map_err(|_| Error::memory())?;
         if rebuild {
-            self.rebuild(slots);
+            self.rebuild(slots, live);
         }
         let slot = if rebuild {
             self.slot(k).expect("table rebuild creates slots").0
@@ -727,11 +766,18 @@ impl Table {
         hi
     }
     pub(crate) fn max_numeric_key(&self) -> f64 {
-        let mut maximum = self
-            .array
-            .iter()
-            .rposition(|value| *value != Value::Nil)
-            .map_or(0.0, |index| (index + 1) as f64);
+        let mut maximum = if let Some((Value::Nil, rest)) = self.array.split_last() {
+            let live = |value: &Value| !matches!(value, Value::Nil);
+            if rest.len() >= 63 && !rest[rest.len() - 7..].iter().any(live) {
+                Self::last_array_key(&rest[..rest.len() - 7]) as f64
+            } else {
+                rest.iter()
+                    .rposition(live)
+                    .map_or(0.0, |index| (index + 1) as f64)
+            }
+        } else {
+            self.array.len() as f64
+        };
         for entry in &self.entries {
             if let Key::Number(bits) = entry.key
                 && entry.value != Value::Nil
@@ -740,6 +786,24 @@ impl Table {
             }
         }
         maximum
+    }
+
+    #[inline(never)]
+    fn last_array_key(array: &[Value]) -> usize {
+        let live = |value: &Value| !matches!(value, Value::Nil);
+        let (head, blocks) = array.as_rchunks::<16>();
+        // Check every tag in a block before finding its last live slot.
+        let (start, values) = match blocks
+            .iter()
+            .rposition(|block| block.iter().fold(false, |found, value| found | live(value)))
+        {
+            Some(index) => (head.len() + index * 16, blocks[index].as_slice()),
+            None => (0, head),
+        };
+        values
+            .iter()
+            .rposition(live)
+            .map_or(0, |index| start + index + 1)
     }
     pub fn next(&self, key: Value) -> Result<Option<(Value, Value)>, Error> {
         self.next_entry(key)
@@ -802,6 +866,18 @@ mod allocation_tests {
     use crate::allocation_probe::probe;
     fn hash_key(n: i32) -> Value {
         Value::Number(-f64::from(n))
+    }
+    #[test]
+    fn max_numeric_key_keeps_live_values_across_block_edges() {
+        let mut table = Table::with_capacity(129, 0).unwrap();
+        for index in [1, 9, 10, 25, 26, 64, 65, 121, 128, 129] {
+            let index = f64::from(index);
+            let key = Value::Number(index);
+            table.set(key, Value::Boolean(false)).unwrap();
+            assert_eq!(table.max_numeric_key(), index);
+            table.set(key, Value::Nil).unwrap();
+            assert_eq!(table.max_numeric_key(), 0.0);
+        }
     }
     #[test]
     fn key_equality_preserves_each_variant_and_numeric_signed_zero() {
@@ -869,6 +945,36 @@ mod allocation_tests {
         }
         assert_eq!(array_index(Value::Nil), None);
         assert_eq!(array_index(Value::Boolean(true)), None);
+    }
+    #[test]
+    fn integer_lookup_preserves_array_and_hash_keys() {
+        let mut table = Table::with_capacity(3, 16).unwrap();
+        table
+            .set(Value::Number(-0.0), Value::Boolean(true))
+            .unwrap();
+        for (ordinal, index) in [
+            i64::MIN,
+            -i64::from(u32::MAX),
+            -1,
+            1,
+            3,
+            4,
+            i64::from(u32::MAX),
+            1 << 32,
+            (1 << 32) + 1,
+            (1 << 53) + 1,
+            i64::MAX,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let value = Value::Number(ordinal as f64);
+            table.set(Value::Number(index as f64), value).unwrap();
+            assert_eq!(table.get_integer(index), value);
+        }
+        assert_eq!(table.get_integer(0), Value::Boolean(true));
+        assert_eq!(table.get_integer(2), Value::Nil);
+        assert_eq!(table.get_integer(5), Value::Nil);
     }
     #[test]
     fn numeric_hash_keys_and_array_keys_preserve_next_order() {

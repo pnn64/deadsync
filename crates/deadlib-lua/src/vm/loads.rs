@@ -119,12 +119,12 @@ impl FileReader {
             };
         }
         if self.phase == 1 {
-            for _ in 0..io::LINE_BUFFER {
-                if matches!(stream.get().map_err(|e| (e, false))?, None | Some(b'\n')) {
-                    self.phase = 2;
-                    prefix.extend_bytes(b"\n").map_err(|_| (12, false))?;
-                    break;
-                }
+            if stream
+                .skip_until(b'\n', io::LINE_BUFFER, true)
+                .map_err(|e| (e, false))?
+            {
+                self.phase = 2;
+                prefix.extend_bytes(b"\n").map_err(|_| (12, false))?;
             }
             return Ok(false);
         }
@@ -143,20 +143,13 @@ impl FileReader {
             }
         }
         if self.phase == 3 {
-            for _ in 0..io::LINE_BUFFER {
-                match stream.peek().map_err(|e| (e, false))? {
-                    Some(27) | None => {
-                        self.phase = 4;
-                        break;
-                    }
-                    _ => {
-                        stream.get().map_err(|e| (e, false))?;
-                    }
-                }
-            }
-            if self.phase == 3 {
+            if !stream
+                .skip_until(27, io::LINE_BUFFER, false)
+                .map_err(|e| (e, false))?
+            {
                 return Ok(false);
             }
+            self.phase = 4;
         }
         Ok(true)
     }

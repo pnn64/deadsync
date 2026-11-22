@@ -69,6 +69,23 @@ fn unaligned_input_slices_match_an_independent_content_map() {
 }
 
 #[test]
+fn full_substrings_and_captures_keep_the_interned_identity() {
+    let mut vm = Vm::new();
+    let program = compile(b"local s=...; return s:sub(1,-1), s:match('^(.*)$'), s:sub(2)").unwrap();
+    for bytes in [b"".as_slice(), b"\0", &[b'x'; 4096], b"\0\xffbinary"] {
+        let source = vm.intern(bytes);
+        let root = vm.pin(source).unwrap();
+        vm.collect_garbage().unwrap();
+        let suffix = vm.intern(bytes.get(1..).unwrap_or_default());
+        assert_eq!(
+            vm.execute_with_args(&program, &[source]).unwrap(),
+            &[source, source, suffix]
+        );
+        vm.unpin(root).unwrap();
+    }
+}
+
+#[test]
 fn string_keys_survive_growth_sweeping_and_slot_reuse() {
     let mut vm = Vm::new();
     let table = vm.new_table();

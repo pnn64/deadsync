@@ -57,6 +57,63 @@ fn windows_text_translation_control_z_and_seek_positions_match_reference() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn windows_text_reads_translate_across_scan_and_refill_boundaries() {
+    let program = compile(
+        br#"
+        local path=os.tmpname()
+        for _,len in ipairs{30,31,32,33,4094,4095,4096,4097} do
+            local prefix=string.rep('x',len)
+            for _,case in ipairs{
+                {'\r\nA\rB\r\nC\026ignored','\nA\rB\nC'},
+                {'\rA\0\255\r\nB','\rA\0\255\nB'},
+                {string.rep('\r\n',4100)..'\rX',string.rep('\n',4100)..'\rX'},
+                {'\r','\r'}
+            } do
+                local f=assert(io.open(path,'wb'));assert(f:write(prefix,case[1]));f:close()
+                f=assert(io.open(path,'r'));assert(f:read(0)=='')
+                assert(f:read('*a')==prefix..case[2]);f:close()
+            end
+        end
+        return assert(os.remove(path))
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        Vm::new().execute(&program).unwrap(),
+        &[Value::Boolean(true)]
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_text_writes_preserve_sparse_and_dense_newlines() {
+    let program = compile(
+        br#"
+        local path=os.tmpname()
+        local prefix=string.rep('x',4095)
+        local sparse=prefix..'\0\255\n'..prefix
+        local dense=string.rep('\r\n\n',128)
+        local expected='plain'..prefix..'\0\255\r\n'..prefix..
+                       string.rep('\r\r\n\r\n',128)..'tail'
+        for _,mode in ipairs{'no','full','line'} do
+            local f=assert(io.open(path,'w'));assert(f:setvbuf(mode,32))
+            assert(f:write('plain',sparse,dense,'tail'))
+            assert(f:seek()==#expected);assert(f:close())
+            f=assert(io.open(path,'rb'))
+            assert(f:read('*a')==expected);assert(f:close())
+        end
+        return assert(os.remove(path))
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        Vm::new().execute(&program).unwrap(),
+        &[Value::Boolean(true)]
+    );
+}
+
 #[test]
 fn access_errors_and_open_failures_preserve_result_tuples() {
     compare_file(
@@ -124,6 +181,37 @@ fn cli_stdin_and_mixed_stdout_keep_text_translation_and_write_order() {
             b"1\t2\t\r\tlast\r\nxy\nz\n".as_slice()
         }
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn cli_stdout_translates_newlines_across_scan_and_buffer_boundaries() {
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_deadlua"))
+        .args([
+            "-e",
+            r#"for _,mode in ipairs{'no','full'} do
+                assert(io.stdout:setvbuf(mode,4096))
+                for _,len in ipairs{0,15,16,17,31,32,33,4095,4096,4097} do
+                    assert(io.write(string.rep('x',len)..'\0\255\r\n\n'))
+                end
+            end
+            assert(io.flush())"#,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let mut expected = Vec::new();
+    for _ in 0..2 {
+        for len in [0, 15, 16, 17, 31, 32, 33, 4095, 4096, 4097] {
+            expected.resize(expected.len() + len, b'x');
+            expected.extend_from_slice(b"\0\xff\r\r\n\r\n");
+        }
+    }
+    assert_eq!(result.stdout, expected);
 }
 
 #[test]

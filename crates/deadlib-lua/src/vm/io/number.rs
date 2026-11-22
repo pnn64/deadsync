@@ -42,9 +42,7 @@ pub(super) fn read_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<O
 }
 fn scan_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<Option<f64>, i32> {
     file.flush()?;
-    while file.peek()?.is_some_and(crate::locale::is_space) {
-        file.get()?;
-    }
+    file.skip_space()?;
     if file.peek()?.is_some_and(|b| matches!(b, b'+' | b'-')) {
         take(file, bytes)?;
     }
@@ -83,12 +81,7 @@ fn scan_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<Option<f64>,
             if file.peek()? == Some(b'(') {
                 take(file, bytes)?;
                 let start = bytes.len();
-                while file
-                    .peek()?
-                    .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_')
-                {
-                    take(file, bytes)?;
-                }
+                file.read_nan_payload(bytes)?;
                 let tail = file.peek()?;
                 if tail != Some(b')') {
                     if cfg!(all(target_os = "linux", target_env = "gnu")) && tail.is_some() {
@@ -144,10 +137,7 @@ fn scan_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<Option<f64>,
     };
     #[cfg(not(windows))]
     let hex = {
-        while file.peek()?.is_some_and(|b| b.is_ascii_digit()) {
-            take(file, bytes)?;
-            digits += 1;
-        }
+        digits = file.read_digits(bytes, digits, |b| b.is_ascii_digit())?;
         digits == 1
             && bytes[sign] == b'0'
             && file.peek()?.is_some_and(|b| b.eq_ignore_ascii_case(&b'x'))
@@ -156,16 +146,14 @@ fn scan_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<Option<f64>,
         take(file, bytes)?;
         digits = 0;
     }
-    while file.peek()?.is_some_and(|b| {
+    let digit = |b: u8| {
         if hex {
             b.is_ascii_hexdigit()
         } else {
             b.is_ascii_digit()
         }
-    }) {
-        take(file, bytes)?;
-        digits += 1;
-    }
+    };
+    digits = file.read_digits(bytes, digits, digit)?;
     let point = crate::locale::decimal();
     let has_point = file.peek()? == point.first().copied();
     if has_point {
@@ -176,16 +164,7 @@ fn scan_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<Option<f64>,
             }
             take(file, bytes)?;
         }
-        while file.peek()?.is_some_and(|b| {
-            if hex {
-                b.is_ascii_hexdigit()
-            } else {
-                b.is_ascii_digit()
-            }
-        }) {
-            take(file, bytes)?;
-            digits += 1;
-        }
+        digits = file.read_digits(bytes, digits, digit)?;
     }
     if digits == 0 {
         // glibc accepts a hexadecimal prefix followed only by its decimal
@@ -210,10 +189,7 @@ fn scan_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<Option<f64>,
         if file.peek()?.is_some_and(|b| matches!(b, b'+' | b'-')) {
             take(file, bytes)?;
         }
-        while file.peek()?.is_some_and(|b| b.is_ascii_digit()) {
-            take(file, bytes)?;
-            exponent_digits += 1;
-        }
+        exponent_digits = file.read_digits(bytes, 0, |b| b.is_ascii_digit())?;
     }
     // glibc scanf consumes a started exponent even if it has no digits, but
     // converts the preceding mantissa. Keep the consumed bytes in the buffer.

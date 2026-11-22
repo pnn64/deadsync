@@ -175,7 +175,12 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
     if let Some(integer) = short_decimal_integer(bytes) {
         return Some(integer);
     }
-    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
+    let nul = if bytes.len() < 32 {
+        bytes.iter().position(|&b| b == 0)
+    } else {
+        crate::pattern::find_byte(bytes, 0)
+    };
+    let bytes = &bytes[..nul.unwrap_or(bytes.len())];
     let text = std::str::from_utf8(bytes)
         .ok()?
         .trim_matches(|c: char| matches!(c, '\t'..='\r' | ' '));
@@ -188,6 +193,13 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
         .strip_prefix("0x")
         .or_else(|| unsigned.strip_prefix("0X"))
     {
+        let hex = if hex.len() >= 64 && hex.as_bytes()[0] == b'0' {
+            // Keep one digit so an all-zero mantissa still parses as a number.
+            let padding = crate::pattern::byte_run(hex.as_bytes(), b'0') - 1;
+            &hex[padding..]
+        } else {
+            hex
+        };
         // Retain 64 significant bits plus a sticky bit, then round once to binary64.
         let (digits, exp) = if let Some((a, b)) = hex.split_once(['p', 'P']) {
             (a, b.parse::<i32>().ok()?)
@@ -290,6 +302,27 @@ mod tests {
                 expected.map(f64::to_bits),
                 "{input:?}"
             );
+        }
+    }
+
+    #[test]
+    fn hexadecimal_padding_keeps_zero_signs_exponents_and_invalid_tails() {
+        for len in [63, 64, 65, 4096] {
+            let zeros = "0".repeat(len);
+            for (suffix, expected) in [
+                ("", Some(-0.0)),
+                ("2AP2", Some(-168.0)),
+                ("p-8", Some(-0.0)),
+                ("p", None),
+                ("z", None),
+            ] {
+                let input = format!("-0x{zeros}{suffix}");
+                assert_eq!(
+                    parse_number(input.as_bytes()).map(f64::to_bits),
+                    expected.map(f64::to_bits),
+                    "{len} zeros before {suffix:?}"
+                );
+            }
         }
     }
 }

@@ -2,7 +2,7 @@
 use super::{Kind, Token, parse_number};
 use crate::memory::fallible::{self, SliceExt, VecExt};
 use crate::memory::text::Text;
-use crate::pattern::scan_boundary;
+use crate::pattern::{byte_run, scan_boundary};
 use crate::{Error, ErrorKind};
 
 #[derive(Clone, Copy, Debug)]
@@ -85,6 +85,30 @@ fn scan_token_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
         .iter()
         .position(|&byte| boundary(byte))
         .unwrap_or_else(|| prefix.len() + scan_boundary(rest, boundary))
+}
+
+fn word_boundary(byte: u8) -> bool {
+    !(byte.is_ascii_alphanumeric() | (byte == b'_'))
+}
+
+fn number_boundary(byte: u8) -> bool {
+    !(byte.is_ascii_digit() | (byte == b'.'))
+}
+
+fn locale_token_end(
+    bytes: &[u8],
+    ascii_boundary: impl Fn(u8) -> bool,
+    non_ascii: impl Fn(u8) -> bool,
+) -> usize {
+    let mut end = scan_token_boundary(bytes, &ascii_boundary);
+    while bytes
+        .get(end)
+        .is_some_and(|&byte| byte >= 128 && non_ascii(byte))
+    {
+        end += 1;
+        end += scan_token_boundary(&bytes[end..], &ascii_boundary);
+    }
+    end
 }
 
 fn quoted_boundary(bytes: &[u8], quote: u8) -> usize {
@@ -194,6 +218,20 @@ impl Scanner {
     pub(crate) fn heap_bytes(&self) -> usize {
         self.text.capacity() + self.token.text.heap_bytes()
     }
+    fn skip_horizontal_space(&mut self, input: &[u8]) {
+        let tail = &input[self.pos + 1..];
+        self.pos += 1 + scan_token_boundary(tail, |byte| {
+            !((byte == b' ') | (byte == b'\t') | (byte.wrapping_sub(11) <= 1))
+        });
+    }
+    fn skip_bracket_equals(&mut self, input: &[u8]) -> usize {
+        if input.get(self.pos) != Some(&b'=') {
+            return 0;
+        }
+        let count = byte_run(&input[self.pos..], b'=');
+        self.pos += count;
+        count
+    }
     fn newline(&mut self, input: &[u8], closed: bool) -> Result<bool, Error> {
         if self.pos + 1 == input.len() && !closed {
             return Ok(false);
@@ -263,10 +301,7 @@ impl Scanner {
         loop {
             match input.get(self.pos) {
                 Some(b' ' | b'\t' | 11 | 12) => {
-                    let tail = &input[self.pos + 1..];
-                    self.pos += 1 + scan_token_boundary(tail, |byte| {
-                        !((byte == b' ') | (byte == b'\t') | (byte.wrapping_sub(11) <= 1))
-                    });
+                    self.skip_horizontal_space(input);
                 }
                 Some(b'\n' | b'\r') => {
                     self.newline(input, true)?;
@@ -278,14 +313,13 @@ impl Scanner {
         let Some(&c) = input.get(start) else {
             return Ok(false);
         };
-        let word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
         let mut text = Text::default();
         let mut number = 0.0;
         let next = input.get(start + 1).copied();
         let (kind, end) = match c {
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 let tail = &input[start + 1..];
-                let end = start + 1 + scan_token_boundary(tail, |byte| !word(byte));
+                let end = start + 1 + scan_token_boundary(tail, word_boundary);
                 if input.get(end).is_some_and(|&b| b >= 128) {
                     return Ok(false);
                 }
@@ -297,22 +331,15 @@ impl Scanner {
                 (kind, end)
             }
             b'0'..=b'9' => {
-                let mut end = start + 1;
-                while input
-                    .get(end)
-                    .is_some_and(|&b| b.is_ascii_digit() || b == b'.')
-                {
-                    end += 1;
-                }
+                let tail = &input[start + 1..];
+                let mut end = start + 1 + scan_token_boundary(tail, number_boundary);
                 if matches!(input.get(end), Some(b'e' | b'E' | 0)) {
                     end += 1;
                     if matches!(input.get(end), Some(b'+' | b'-' | 0)) {
                         end += 1;
                     }
                 }
-                while input.get(end).copied().is_some_and(word) {
-                    end += 1;
-                }
+                end += scan_token_boundary(&input[end..], word_boundary);
                 if input.get(end).is_some_and(|&b| b >= 128) {
                     return Ok(false);
                 }
@@ -436,7 +463,10 @@ impl Scanner {
                         continue;
                     };
                     match c {
-                        b' ' | b'\t' | 11 | 12 => self.pos += 1,
+                        b' ' | b'\t' | 11 | 12 => {
+                            self.skip_horizontal_space(input);
+                            self.start = self.pos - 1;
+                        }
                         b'\n' | b'\r' => {
                             if !self.newline(input, closed)? {
                                 return Ok(None);
@@ -572,12 +602,11 @@ impl Scanner {
                     }
                 }
                 State::Word => {
-                    while input
-                        .get(self.pos)
-                        .is_some_and(|c| crate::locale::is_alnum(*c) || *c == b'_')
-                    {
-                        self.pos += 1;
-                    }
+                    self.pos += locale_token_end(
+                        &input[self.pos..],
+                        word_boundary,
+                        crate::locale::is_alnum,
+                    );
                     if self.pos == input.len() && !closed {
                         return Ok(None);
                     }
@@ -589,12 +618,11 @@ impl Scanner {
                     self.emit(kind);
                 }
                 State::Number => {
-                    while input
-                        .get(self.pos)
-                        .is_some_and(|c| crate::locale::is_digit(*c) || *c == b'.')
-                    {
-                        self.pos += 1;
-                    }
+                    self.pos += locale_token_end(
+                        &input[self.pos..],
+                        number_boundary,
+                        crate::locale::is_digit,
+                    );
                     if self.pos == input.len() && !closed {
                         return Ok(None);
                     }
@@ -612,12 +640,11 @@ impl Scanner {
                     self.state = State::NumberTail;
                 }
                 State::NumberTail => {
-                    while input
-                        .get(self.pos)
-                        .is_some_and(|c| crate::locale::is_alnum(*c) || *c == b'_')
-                    {
-                        self.pos += 1;
-                    }
+                    self.pos += locale_token_end(
+                        &input[self.pos..],
+                        word_boundary,
+                        crate::locale::is_alnum,
+                    );
                     if self.pos == input.len() && !closed {
                         return Ok(None);
                     }
@@ -627,14 +654,8 @@ impl Scanner {
                         })?;
                     self.emit(Kind::Number);
                 }
-                State::Bracket {
-                    comment,
-                    mut equals,
-                } => {
-                    while input.get(self.pos) == Some(&b'=') {
-                        self.pos += 1;
-                        equals += 1;
-                    }
+                State::Bracket { comment, equals } => {
+                    let equals = equals + self.skip_bracket_equals(input);
                     self.state = State::Bracket { comment, equals };
                     if self.pos == input.len() && !closed {
                         return Ok(None);
@@ -717,10 +738,7 @@ impl Scanner {
                     equals,
                     mut seen,
                 } => {
-                    while input.get(self.pos) == Some(&b'=') {
-                        self.pos += 1;
-                        seen += 1;
-                    }
+                    seen += self.skip_bracket_equals(input);
                     self.state = State::LongClose {
                         comment,
                         equals,
@@ -739,7 +757,13 @@ impl Scanner {
                     } else {
                         if !comment {
                             self.text.try_push(b']')?;
-                            self.text.try_extend(std::iter::repeat_n(b'=', seen))?;
+                            while seen != 0 {
+                                // Grow at the same byte as an individual push.
+                                fallible::reserve(&mut self.text, 1)?;
+                                let count = seen.min(self.text.capacity() - self.text.len());
+                                self.text.resize(self.text.len() + count, b'=');
+                                seen -= count;
+                            }
                         }
                         self.state = State::Long { comment, equals };
                     }
@@ -911,6 +935,26 @@ mod tests {
     }
 
     #[test]
+    fn long_numerals_match_streamed_tokens_and_diagnostics() {
+        for len in [7, 8, 9, 31, 32, 33, 39, 40, 41, 63, 64, 65] {
+            let zeroes = vec![b'0'; len];
+            for (prefix, suffix) in [
+                (b"".as_slice(), b"42.25".as_slice()),
+                (b"42e+", b"1"),
+                (b"0x", b"2a"),
+                (b"0x", b"z"),
+                (b"", b"42\0+1"),
+                (b"", b"42\xff"),
+            ] {
+                let source = [prefix, &zeroes, suffix, b"; return"].concat();
+                let closed = tokens(&source, &[source.len()]);
+                let ends = (0..=source.len()).collect::<Vec<_>>();
+                assert_eq!(tokens(&source, &ends), closed, "{source:?}");
+            }
+        }
+    }
+
+    #[test]
     fn line_comments_stop_at_the_first_newline_across_blocks() {
         for len in [31, 32, 33, 63, 64, 65] {
             for newline in [b"\n".as_slice(), b"\r", b"\r\n", b"\n\r"] {
@@ -1012,6 +1056,19 @@ mod tests {
                 tokens(input, &(0..=input.len()).collect::<Vec<_>>()),
                 tokens(input, &[input.len()])
             );
+        }
+    }
+
+    #[test]
+    fn rejected_long_closer_keeps_equals_across_reader_splits() {
+        let equals = "=".repeat(96);
+        let source = format!("[{equals}[before]{equals}xafter]{equals}]");
+        let input = source.as_bytes();
+        let complete = tokens(input, &[input.len()]).unwrap();
+        assert_eq!(complete[0].0, Kind::String);
+        assert_eq!(complete[0].3, format!("before]{equals}xafter").into_bytes());
+        for split in 0..=input.len() {
+            assert_eq!(tokens(input, &[split, input.len()]).unwrap(), complete);
         }
     }
 

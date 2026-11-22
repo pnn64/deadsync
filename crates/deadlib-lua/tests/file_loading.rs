@@ -126,6 +126,35 @@ fn initial_hash_lines_and_text_translation_keep_source_lines() {
 }
 
 #[test]
+fn headers_cross_prelude_and_stream_buffer_boundaries() {
+    let mut vm = Vm::new();
+    let dump = compile(b"return string.dump(function() return 42 end)").unwrap();
+    let Value::String(dumped) = vm.execute(&dump).unwrap()[0] else {
+        panic!("binary chunk");
+    };
+    let binary = [b"\r\n".as_slice(), vm.string_bytes(dumped).unwrap()].concat();
+    let run = compile(b"return dofile(...)").unwrap();
+    let cases: &[(&[u8], &[Value])] = &[
+        (b"", &[]),
+        (
+            b"\r\nreturn 17, debug.getinfo(1,'l').currentline",
+            &[Value::Number(17.0), Value::Number(2.0)],
+        ),
+        (&binary, &[Value::Number(42.0)]),
+    ];
+    for len in [
+        30, 31, 32, 510, 511, 512, 4094, 4095, 4096, 8190, 8191, 8192,
+    ] {
+        let body = vec![b'x'; len];
+        for &(suffix, expected) in cases {
+            let file = Fixture::new(&[b"#".as_slice(), &body, suffix].concat());
+            let path = vm.intern(file.0.to_str().unwrap().as_bytes());
+            assert_eq!(vm.execute_with_args(&run, &[path]).unwrap(), expected);
+        }
+    }
+}
+
+#[test]
 fn missing_files_and_bad_arguments_keep_errors_and_handler_order() {
     let file = Fixture::new(b"return 17");
     file.compare(r#"

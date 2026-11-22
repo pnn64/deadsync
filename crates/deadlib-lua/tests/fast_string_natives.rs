@@ -79,6 +79,25 @@ return 42
 }
 
 #[test]
+fn string_char_preserves_variadic_bytes_coercions_and_error_order() {
+    check_with_and_without_budget(
+        br#"
+local bytes={}
+for i=1,2048 do bytes[i]=(i*37)%256 end
+local text=string.char(unpack(bytes))
+assert(#text==2048 and string.char()=='')
+for i=1,#text do assert(text:byte(i)==bytes[i]) end
+assert(string.char(-0.9,'255',' 1.9 ')=='\0\255\1')
+local ok,err=pcall(string.char,1,256,false)
+assert(not ok and err:find('#2',1,true) and err:find('invalid value',1,true))
+ok,err=pcall(string.char,1,false,256)
+assert(not ok and err:find('#2',1,true) and err:find('number expected',1,true))
+return 42
+"#,
+    );
+}
+
+#[test]
 fn hooks_observe_string_natives_with_empty_byte_returns() {
     let source = br#"
 local len,byte=string.len,string.byte

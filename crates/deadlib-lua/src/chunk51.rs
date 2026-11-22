@@ -289,10 +289,27 @@ impl Decoder {
                 | Task::Names(_, 0) => {
                     self.tasks.pop();
                 }
-                Task::Code(id, n) => {
-                    let word = u32::from_ne_bytes(read!(4).try_into().unwrap());
-                    self.chunk.prototypes[id].code.try_push(word)?;
-                    *self.tasks.last_mut().unwrap() = Task::Code(id, n - 1);
+                Task::Code(id, n) | Task::Lines(id, n) => {
+                    let first = u32::from_ne_bytes(read!(4).try_into().unwrap());
+                    let p = &mut self.chunk.prototypes[id];
+                    let is_code = matches!(task, Task::Code(..));
+                    let out = if is_code { &mut p.code } else { &mut p.lines };
+                    out.try_push(first)?;
+
+                    // Copy only whole words that fit without growing the vector.
+                    // The scalar push keeps the original allocation points.
+                    let (words, _) = input[self.position..].as_chunks::<4>();
+                    let ready = (n - 1).min(words.len()).min(out.capacity() - out.len());
+                    if ready != 0 {
+                        out.extend(words[..ready].iter().copied().map(u32::from_ne_bytes));
+                        self.position += ready * 4;
+                    }
+                    let remaining = n - 1 - ready;
+                    *self.tasks.last_mut().unwrap() = if is_code {
+                        Task::Code(id, remaining)
+                    } else {
+                        Task::Lines(id, remaining)
+                    };
                 }
                 Task::Constants(id, n) => {
                     let kind = read!(1)[0];
@@ -330,11 +347,6 @@ impl Decoder {
                 Task::Children(id, n) => {
                     *self.tasks.last_mut().unwrap() = Task::Children(id, n - 1);
                     self.tasks.try_push(Task::Function(Some(id)))?;
-                }
-                Task::Lines(id, n) => {
-                    let line = u32::from_ne_bytes(read!(4).try_into().unwrap());
-                    self.chunk.prototypes[id].lines.try_push(line)?;
-                    *self.tasks.last_mut().unwrap() = Task::Lines(id, n - 1);
                 }
                 Task::Locals(id, n) => {
                     self.chunk.prototypes[id]

@@ -72,6 +72,7 @@ enum Kind {
     Reference,
     End,
     Error,
+    Literal,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
@@ -87,7 +88,7 @@ enum Repeat {
 struct Instruction {
     kind: Kind,
     repeat: Repeat,
-    padding: u16,
+    width: u16,
     arg: u32,
 }
 #[derive(Debug)]
@@ -107,7 +108,17 @@ impl LeadingByte<'_> {
     pub(crate) fn find_in(self, bytes: &[u8]) -> Option<usize> {
         match self {
             Self::Literal(byte) => find_byte(bytes, byte),
-            Self::Class(set) => bytes.iter().position(|&byte| set_has(set, byte)),
+            Self::Class(set) => {
+                if bytes.len() >= 64 {
+                    if set_has(set, bytes[0]) {
+                        return Some(0);
+                    }
+                    if let Some(end) = range_set_run(bytes, &set.map(|word| !word)) {
+                        return (end < bytes.len()).then_some(end);
+                    }
+                }
+                bytes.iter().position(|&byte| set_has(set, byte))
+            }
         }
     }
 }
@@ -195,6 +206,38 @@ pub(crate) fn scan_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usiz
             .unwrap_or(tail.len())
 }
 
+/// Whether string.find should interpret the needle as a Lua pattern.
+pub(crate) fn has_magic(bytes: &[u8]) -> bool {
+    let special = |byte| {
+        matches!(
+            byte,
+            0 | b'^' | b'$' | b'*' | b'+' | b'?' | b'.' | b'(' | b'[' | b'%' | b'-'
+        )
+    };
+    let rest = if bytes.len() >= 128 {
+        let (prefix, tail) = bytes.split_at(8);
+        if let Some(&byte) = prefix.iter().find(|&&byte| special(byte)) {
+            return byte != 0;
+        }
+        // The ranges also flag some ordinary punctuation. Verify from the
+        // first potential byte so a preceding NUL still selects plain search.
+        let start = scan_boundary(tail, |byte| {
+            (byte == 0)
+                | (byte == b'?')
+                | (byte.wrapping_sub(b'$') <= b'.' - b'$')
+                | (byte.wrapping_sub(b'[') <= b'^' - b'[')
+        });
+        &tail[start..]
+    } else {
+        bytes
+    };
+    rest.iter()
+        .find(|&&byte| special(byte))
+        .is_some_and(|&byte| byte != 0)
+}
+
+const ASCII_SPACE_BITS: u64 = crate::locale::ascii_class_bits(b's')[0];
+
 #[inline(never)]
 fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     if bytes.first().is_some_and(|&byte| !set_has(set, byte)) {
@@ -207,7 +250,28 @@ fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
         .filter(|&(_, bits)| bits != 0);
     let (index, bits) = words.next()?;
     if words.next().is_some() {
-        return None;
+        let [ascii_low, ascii_high] = const { crate::locale::ascii_class_bits(b'w') };
+        if *set == [ascii_low, ascii_high, 0, 0] {
+            return Some(scan_boundary(bytes, |byte| !byte.is_ascii_alphanumeric()));
+        }
+        if *set == [!ascii_low, !ascii_high, u64::MAX, u64::MAX] {
+            return Some(ascii_word_boundary(bytes));
+        }
+        let [hex_low, hex_high] = const { crate::locale::ascii_class_bits(b'x') };
+        let hex_digit =
+            |byte: u8| (byte.wrapping_sub(b'0') <= 9) | ((byte | 0x20).wrapping_sub(b'a') <= 5);
+        if *set == [hex_low, hex_high, 0, 0] {
+            return Some(scan_boundary(bytes, |byte| !hex_digit(byte)));
+        }
+        if *set == [!hex_low, !hex_high, u64::MAX, u64::MAX] {
+            return Some(scan_boundary(bytes, hex_digit));
+        }
+        return excluded_set_run(bytes, set);
+    }
+    if index == 0 && bits == ASCII_SPACE_BITS {
+        return Some(scan_boundary(bytes, |byte| {
+            !crate::locale::ascii_space(byte)
+        }));
     }
     let offset = bits.trailing_zeros();
     let normalized = bits >> offset;
@@ -229,6 +293,72 @@ fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     } else {
         scan_boundary(bytes, |byte| byte.wrapping_sub(first) > width)
     })
+}
+
+fn ascii_word_boundary(bytes: &[u8]) -> usize {
+    const LANES: u64 = 0x0101_0101_0101_0101;
+    const HIGH: u64 = LANES * 0x80;
+    let (words, tail) = bytes.as_chunks::<8>();
+    for (index, &word) in words.iter().enumerate() {
+        let word = u64::from_le_bytes(word);
+        // Setting the high bit prevents borrows between byte lanes.
+        let padded = word | HIGH;
+        let lower = padded | (LANES * 0x20);
+        let digits = padded.wrapping_sub(LANES * u64::from(b'0'))
+            & !padded.wrapping_sub(LANES * u64::from(b'9' + 1));
+        let letters = lower.wrapping_sub(LANES * u64::from(b'a'))
+            & !lower.wrapping_sub(LANES * u64::from(b'z' + 1));
+        let hits = (digits | letters) & !word & HIGH;
+        if hits != 0 {
+            return index * 8 + (hits.trailing_zeros() / 8) as usize;
+        }
+    }
+    bytes.len() - tail.len()
+        + tail
+            .iter()
+            .position(u8::is_ascii_alphanumeric)
+            .unwrap_or(tail.len())
+}
+
+#[inline(never)]
+fn excluded_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
+    let mut holes = set
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|&(_, bits)| bits != u64::MAX);
+    let Some((index, bits)) = holes.next() else {
+        return Some(bytes.len());
+    };
+    if holes.next().is_some() {
+        return None;
+    }
+    let missing = !bits;
+    if index == 0 && missing == ASCII_SPACE_BITS {
+        return Some(scan_boundary(bytes, crate::locale::ascii_space));
+    }
+    let base = (index * 64) as u8;
+    let offset = missing.trailing_zeros();
+    let first = base + offset as u8;
+    match missing & (missing - 1) {
+        0 => Some(find_byte(bytes, first).unwrap_or(bytes.len())),
+        second if second.is_power_of_two() => {
+            let second = base + second.trailing_zeros() as u8;
+            Some(scan_boundary(bytes, |byte| {
+                (byte == first) | (byte == second)
+            }))
+        }
+        _ => {
+            let run = missing >> offset;
+            if run & run.wrapping_add(1) != 0 {
+                return None;
+            }
+            let width = run.ilog2() as u8;
+            Some(scan_boundary(bytes, |byte| {
+                byte.wrapping_sub(first) <= width
+            }))
+        }
+    }
 }
 
 pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
@@ -257,7 +387,7 @@ pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
 }
 
 #[inline(never)]
-fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
+pub(crate) fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
     let (blocks, tail) = bytes.as_chunks::<32>();
     for (index, block) in blocks.iter().enumerate() {
         // Reduce the whole block so LLVM can compare its bytes in parallel.
@@ -277,29 +407,46 @@ fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
 }
 
 #[inline(never)]
-pub(crate) fn find_pair(bytes: &[u8], needle: [u8; 2]) -> Option<usize> {
-    if bytes.starts_with(&needle) {
-        return Some(0);
-    }
-    let shifted = bytes.get(1..)?;
-    let (left, left_tail) = bytes[..shifted.len()].as_chunks::<32>();
-    let (right, right_tail) = shifted.as_chunks::<32>();
-    let matches = |(&a, &b): (&u8, &u8)| (a == needle[0]) & (b == needle[1]);
-    for (index, (a, b)) in left.iter().zip(right).enumerate() {
-        // The shifted slice includes pairs that straddle block boundaries.
-        if a.iter().zip(b).fold(false, |hit, pair| hit | matches(pair)) {
-            return a
+fn rfind_byte(bytes: &[u8], byte: u8) -> Option<usize> {
+    let (head, blocks) = bytes.as_rchunks::<32>();
+    for (index, block) in blocks.iter().enumerate().rev() {
+        if block
+            .iter()
+            .fold(false, |hit, &candidate| hit | (candidate == byte))
+        {
+            return block
                 .iter()
-                .zip(b)
-                .position(matches)
-                .map(|offset| index * 32 + offset);
+                .rposition(|&candidate| candidate == byte)
+                .map(|offset| head.len() + index * 32 + offset);
         }
     }
-    left_tail
-        .iter()
-        .zip(right_tail)
-        .position(matches)
-        .map(|offset| left.len() * 32 + offset)
+    head.iter().rposition(|&candidate| candidate == byte)
+}
+
+#[inline(never)]
+pub(crate) fn find_dense_literal(bytes: &[u8], needle: &[u8], anchor: usize) -> Option<usize> {
+    let count = bytes.len().checked_sub(needle.len())? + 1;
+    let middle = (needle.len() - usize::from(anchor != 0)) / 2;
+    let (left, left_tail) = bytes[anchor..anchor + count].as_chunks::<32>();
+    let (right, right_tail) = bytes[middle..middle + count].as_chunks::<32>();
+    let (first, second) = (needle[anchor], needle[middle]);
+    let matches = |(&a, &b): (&u8, &u8)| (a == first) & (b == second);
+    let verify = |start, a: &[u8], b: &[u8]| {
+        a.iter()
+            .zip(b)
+            .zip(bytes[start..].windows(needle.len()))
+            .position(|(pair, window)| matches(pair) && window == needle)
+            .map(|offset| start + offset)
+    };
+    for (index, (a, b)) in left.iter().zip(right).enumerate() {
+        // Check both bytes in parallel before comparing any full windows.
+        if a.iter().zip(b).fold(false, |hit, pair| hit | matches(pair))
+            && let Some(found) = verify(index * 32, a, b)
+        {
+            return Some(found);
+        }
+    }
+    verify(left.len() * 32, left_tail, right_tail)
 }
 
 pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
@@ -327,6 +474,10 @@ pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
 
 fn balance_end(source: &[u8], pos: usize, left: u8, right: u8) -> Option<usize> {
     let rest = source.get(pos..)?.strip_prefix(&[left])?;
+    // The closing byte takes precedence, so equal delimiters cannot nest.
+    if left == right {
+        return find_byte(rest, right).map(|offset| pos + 2 + offset);
+    }
     let (blocks, tail) = rest.as_chunks::<32>();
     let scan = |bytes: &[u8], depth: &mut usize| {
         for (index, &byte) in bytes.iter().enumerate() {
@@ -418,7 +569,7 @@ impl Pattern {
         let pattern = &pattern[..find_byte(pattern, 0).unwrap_or(pattern.len())];
         let anchored = anchor && pattern.first() == Some(&b'^');
         let mut p = usize::from(anchored);
-        let mut code = Buffer::new_in(memory.clone());
+        let mut code = Buffer::<Instruction>::new_in(memory.clone());
         code.try_reserve_exact(pattern.len())
             .map_err(|_| Error::memory())?;
         let mut sets = Buffer::new_in(memory);
@@ -543,12 +694,25 @@ impl Pattern {
             if repeat != Repeat::One {
                 p += 1;
             }
-            code.push(Instruction {
-                kind,
-                repeat,
-                padding: 0,
-                arg,
-            });
+            if kind == Kind::Byte
+                && repeat == Repeat::One
+                && let Some(last) = code.last_mut()
+                && matches!(last.kind, Kind::Byte | Kind::Literal)
+                && last.repeat == Repeat::One
+                && last.width < 4
+            {
+                // The low byte remains the leading literal for unanchored search.
+                last.arg |= arg << (last.width * 8);
+                last.width += 1;
+                last.kind = Kind::Literal;
+            } else {
+                code.push(Instruction {
+                    kind,
+                    repeat,
+                    width: 1,
+                    arg,
+                });
+            }
             if kind == Kind::Error {
                 break;
             }
@@ -568,15 +732,24 @@ impl Pattern {
             _ => unreachable!("repeated pattern atom"),
         }
     }
-    /// The mandatory literal or class at the start of a match. Other bytes fail the
-    /// first instruction without reaching any later instruction or error.
+    fn literal_byte(&self, pc: usize) -> Option<u8> {
+        let next = self.code.get(pc)?;
+        (next.repeat == Repeat::One && matches!(next.kind, Kind::Byte | Kind::Literal))
+            .then_some(next.arg as u8)
+    }
+    /// The mandatory literal or class after any leading capture instructions.
+    /// Leading captures only record positions in compiler-assigned work slots.
     pub(crate) fn leading_byte(&self) -> Option<LeadingByte<'_>> {
-        let first = self.code.first()?;
+        let first = self.code.iter().find(|instruction| {
+            !matches!(instruction.kind, Kind::Open | Kind::Close | Kind::Position)
+        })?;
         if !matches!(first.repeat, Repeat::One | Repeat::Plus) {
             return None;
         }
         match first.kind {
-            Kind::Byte => Some(LeadingByte::Literal(first.arg as u8)),
+            Kind::Byte | Kind::Literal | Kind::Balance => {
+                Some(LeadingByte::Literal(first.arg as u8))
+            }
             Kind::Set => Some(LeadingByte::Class(&self.sets[first.arg as usize])),
             _ => None,
         }
@@ -587,7 +760,13 @@ impl Pattern {
         start: usize,
         work: &mut Work,
     ) -> Result<Option<Matched>, Error> {
-        let first = self.leading_byte().filter(|_| !self.anchored);
+        if self.anchored {
+            if start > source.len() {
+                return Ok(None);
+            }
+            return self.match_at(source, start, work);
+        }
+        let first = self.leading_byte();
         let mut pos = start;
         while pos <= source.len() {
             if let Some(first) = first {
@@ -598,9 +777,6 @@ impl Pattern {
             }
             if let Some(found) = self.match_at(source, pos, work)? {
                 return Ok(Some(found));
-            }
-            if self.anchored {
-                break;
             }
             pos += 1;
         }
@@ -631,6 +807,20 @@ impl Pattern {
             let i = self.code[pc];
             let mut matched = true;
             match i.kind {
+                Kind::Literal => {
+                    let width = usize::from(i.width);
+                    let bytes = i.arg.to_le_bytes();
+                    matched = source.get(pos..).is_some_and(|tail| {
+                        if width == 4 {
+                            tail.starts_with(&bytes)
+                        } else {
+                            tail.starts_with(&bytes[..width])
+                        }
+                    });
+                    if matched {
+                        pos += width;
+                    }
+                }
                 Kind::Byte | Kind::Any | Kind::Set => {
                     let one = || source.get(pos).is_some_and(|&b| self.atom(pc, b));
                     match i.repeat {
@@ -783,14 +973,31 @@ impl Pattern {
                 match choice.alternative {
                     Alternative::Once => {}
                     Alternative::Shorter(min) => {
-                        if choice.pos > min {
-                            choice.pos -= 1;
+                        if pos - min >= 64
+                            && let Some(needle) = self.literal_byte(pc)
+                            && source[pos] != needle
+                        {
+                            // All shorter lengths are valid for the repetition.
+                            // The next literal decides which ones can match.
+                            pos = min + rfind_byte(&source[min..pos], needle).unwrap_or(0);
+                        }
+                        if pos > min {
+                            choice.pos = pos - 1;
                             work.choices.push(choice);
                         }
                     }
                     Alternative::Longer(atom) => {
-                        if source.get(choice.pos).is_some_and(|&b| self.atom(atom, b)) {
-                            choice.pos += 1;
+                        let tail = &source[pos..];
+                        if tail.len() >= 64
+                            && self.code[atom].kind == Kind::Any
+                            && let Some(needle) = self.literal_byte(pc)
+                        {
+                            // The mandatory literal rejects every skipped position
+                            // before any capture or deferred error can be reached.
+                            pos += find_byte(tail, needle).unwrap_or(tail.len());
+                        }
+                        if source.get(pos).is_some_and(|&b| self.atom(atom, b)) {
+                            choice.pos = pos + 1;
                             work.choices.push(choice);
                         }
                     }
@@ -805,8 +1012,90 @@ impl Pattern {
 #[cfg(test)]
 mod byte_search_tests {
     use super::{
-        Memory, Pattern, Work, balance_end, byte_run, find_byte, find_pair, range_set_run, set_has,
+        Memory, Pattern, Work, balance_end, byte_run, find_byte, find_dense_literal, has_magic,
+        range_set_run, set_has,
     };
+
+    #[test]
+    fn magic_scan_keeps_the_first_special_byte_across_blocks() {
+        for index in [0, 7, 8, 31, 32, 39, 40, 63, 64, 127, 128, 159] {
+            let mut bytes = [b'x'; 161];
+            for byte in 0..=u8::MAX {
+                bytes[index] = byte;
+                bytes[160] = b'x';
+                assert_eq!(has_magic(&bytes), b"^$*+?.([%-".contains(&byte));
+                bytes[160] = b'$';
+                assert_eq!(has_magic(&bytes), byte != 0);
+            }
+        }
+    }
+
+    #[test]
+    fn packed_literals_preserve_backtracking_and_deferred_errors() {
+        let mut work = Work::default();
+        let memory = Memory::default();
+        let pattern = Pattern::compile(b"^.*(abcd\xff)z?END$", true, memory.clone()).unwrap();
+        let source = b"headabcd\xffzEND";
+        let found = pattern.find(source, 0, &mut work).unwrap().unwrap();
+        assert_eq!((found.start, found.end), (0, source.len()));
+        assert_eq!(found.capture(0).unwrap().range().unwrap(), 4..9);
+        assert!(
+            pattern
+                .find(b"headabcX\xffzEND", 0, &mut work)
+                .unwrap()
+                .is_none()
+        );
+        let deferred = Pattern::compile(b"^abcdef%", true, memory).unwrap();
+        assert!(deferred.find(b"abcde", 0, &mut work).unwrap().is_none());
+        assert!(deferred.find(b"abcdef", 0, &mut work).is_err());
+    }
+
+    #[test]
+    fn minimal_dot_preserves_capture_undo_and_deferred_errors() {
+        let compile = |bytes: &[u8]| Pattern::compile(bytes, true, Memory::default()).unwrap();
+        let mut work = Work::default();
+        let mut source = [b'x'; 136];
+        source[64..72].copy_from_slice(b"|endbad_");
+        source[128..].copy_from_slice(b"|endtail");
+
+        let pattern = compile(b"^(.-|end)()tail$");
+        let found = pattern.find(&source, 0, &mut work).unwrap().unwrap();
+        assert_eq!(found.end, source.len());
+        assert_eq!(found.capture(0).unwrap().range().unwrap(), 0..132);
+        let position = found.capture(1).unwrap();
+        assert!(position.position());
+        assert_eq!(position.start, 132);
+
+        let deferred = compile(b"^.-|end%");
+        assert!(
+            deferred
+                .find(&source[..67], 0, &mut work)
+                .unwrap()
+                .is_none()
+        );
+        assert!(deferred.find(&source, 0, &mut work).is_err());
+    }
+
+    #[test]
+    fn greedy_scan_keeps_capture_order_and_the_minimum_length() {
+        let compile = |bytes: &[u8]| Pattern::compile(bytes, true, Memory::default()).unwrap();
+        let mut work = Work::default();
+        let mut source = [b'x'; 256];
+        source[..8].copy_from_slice(b"|headend");
+        source[64..72].copy_from_slice(b"|headend");
+        source[128..136].copy_from_slice(b"|headbad");
+
+        let pattern = compile(b"^(.*|head)()end");
+        let found = pattern.find(&source, 0, &mut work).unwrap().unwrap();
+        assert_eq!(found.end, 72);
+        assert_eq!(found.capture(0).unwrap().range().unwrap(), 0..69);
+        assert!(found.capture(1).unwrap().position());
+        assert_eq!(found.capture(1).unwrap().start, 69);
+
+        source[64..].fill(b'x');
+        let plus = compile(b"^.+|head");
+        assert!(plus.find(&source, 0, &mut work).unwrap().is_none());
+    }
 
     #[test]
     fn required_class_skips_only_positions_that_cannot_match() {
@@ -839,19 +1128,29 @@ mod byte_search_tests {
     }
 
     #[test]
-    fn pair_search_keeps_first_match_across_blocks_and_binary_tails() {
-        for needle in [[0, 255], [255, 0], [b':'; 2]] {
+    fn dense_literal_search_keeps_first_match_across_blocks_and_binary_tails() {
+        for needle in [
+            b"\0\xff".as_slice(),
+            b"\xff\0",
+            b"::",
+            b"\0a\0b\xff",
+            b"xxxYx",
+        ] {
             for len in 0..=68 {
                 let mut bytes = vec![b'x'; len];
                 if let Some(last) = bytes.last_mut() {
                     *last = needle[0];
                 }
-                assert_eq!(find_pair(&bytes, needle), None);
-                for start in 0..len.saturating_sub(1) {
+                assert_eq!(find_dense_literal(&bytes, needle, 0), None);
+                for start in 0..(len + 1).saturating_sub(needle.len()) {
                     let mut subject = bytes.clone();
-                    subject[start..start + 2].copy_from_slice(&needle);
-                    let expected = subject.windows(2).position(|pair| pair == needle);
-                    assert_eq!(find_pair(&subject, needle), expected);
+                    subject[start..start + needle.len()].copy_from_slice(needle);
+                    let expected = subject
+                        .windows(needle.len())
+                        .position(|window| window == needle);
+                    for anchor in [0, needle.len() - 1] {
+                        assert_eq!(find_dense_literal(&subject, needle, anchor), expected);
+                    }
                 }
             }
         }
@@ -908,6 +1207,72 @@ mod byte_search_tests {
         }
         assert_eq!(range_set_run(&[0; 64], &[0b101, 0, 0, 0]), None);
         assert_eq!(range_set_run(&[63; 64], &[1 << 63, 1, 0, 0]), None);
+    }
+
+    #[test]
+    fn ascii_alphanumeric_runs_match_bitmap_membership() {
+        let [low, high] = const { crate::locale::ascii_class_bits(b'w') };
+        let set = [low, high, 0, 0];
+        let mut bytes = [b'x'; 129];
+        for index in [0, 1, 31, 32, 63, 64, 128] {
+            for byte in 0..=u8::MAX {
+                bytes[index] = byte;
+                let expected = if set_has(&set, byte) {
+                    bytes.len()
+                } else {
+                    index
+                };
+                assert_eq!(range_set_run(&bytes, &set), Some(expected));
+            }
+            bytes[index] = b'x';
+        }
+    }
+
+    #[test]
+    fn ascii_class_runs_match_bitmap_membership() {
+        for (class, member, nonmember) in
+            [(b's', b' ', b'x'), (b'x', b'A', b'x'), (b'w', b'A', b'~')]
+        {
+            let [low, high] = crate::locale::ascii_class_bits(class);
+            let set = [low, high, 0, 0];
+            for (set, fill) in [(set, member), (set.map(|word| !word), nonmember)] {
+                let mut bytes = [fill; 65];
+                for index in 24..=34 {
+                    for byte in 0..=u8::MAX {
+                        bytes[index] = byte;
+                        let end = if set_has(&set, byte) {
+                            bytes.len()
+                        } else {
+                            index
+                        };
+                        assert_eq!(range_set_run(&bytes, &set), Some(end));
+                    }
+                    bytes[index] = fill;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn negated_set_runs_stop_at_the_first_excluded_byte() {
+        for excluded in [b"".as_slice(), b"\0", b"\r\n", b"\xff", b"0123456789"] {
+            let mut set = [u64::MAX; 4];
+            for &byte in excluded {
+                set[usize::from(byte / 64)] &= !(1 << (byte % 64));
+            }
+            for index in [0, 1, 31, 32, 33, 63, 64, 72] {
+                let mut bytes = [b'A'; 73];
+                for byte in 0..=u8::MAX {
+                    bytes[index] = byte;
+                    let end = if excluded.contains(&byte) {
+                        index
+                    } else {
+                        bytes.len()
+                    };
+                    assert_eq!(range_set_run(&bytes, &set), Some(end));
+                }
+            }
+        }
     }
 
     #[test]
