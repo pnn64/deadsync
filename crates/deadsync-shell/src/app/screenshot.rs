@@ -62,10 +62,10 @@ impl App {
     pub(super) fn update_evaluation_capture(&mut self, mask: u8) {
         let screens = &mut self.state.screens;
         let on_evaluation = screens.current_screen == CurrentScreen::Evaluation;
-        let intro_settled = on_evaluation && screens.stage_presentation.evaluation_intro_settled(
-            screens.evaluation_state.screen_elapsed,
-            super::evaluation::overview_pane_selected(&screens.evaluation_state),
-        );
+        let intro_settled = on_evaluation && {
+            let view = ActiveTheme::evaluation_capture_view(&screens.evaluation_state);
+            screens.stage_presentation.evaluation_intro_settled(view.elapsed, view.overview)
+        };
         let capture = &mut screens.evaluation_capture;
         let plan = auto_screenshot_frame_plan(
             AutoScreenshotFrameContext {

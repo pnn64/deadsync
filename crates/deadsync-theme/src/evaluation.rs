@@ -8,6 +8,11 @@ use deadsync_core::{input::MAX_PLAYERS, session_flow::EvaluationOrigin};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+pub struct EvaluationCaptureView {
+    pub elapsed: f32,
+    pub overview: bool,
+}
+
 pub trait ThemeEvaluation: ThemeTransitions {
     type EvaluationState: Clone;
     type EvaluationNoteskin;
@@ -93,6 +98,7 @@ pub trait ThemeEvaluation: ThemeTransitions {
         texture_keys: Box<[Arc<str>]>,
     );
     /// Whether the result can be captured with its presentation settled.
+    fn evaluation_capture_view(state: &Self::EvaluationState) -> EvaluationCaptureView;
     fn evaluation_capture_ready(state: &Self::EvaluationState) -> bool;
     /// Returns the requested sides and whether online results can be shown on this page.
     fn evaluation_leaderboard_requests(

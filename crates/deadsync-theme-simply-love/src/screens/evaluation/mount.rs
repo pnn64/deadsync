@@ -1,7 +1,7 @@
 use super::*;
 use crate::views::VisualBackgroundView;
 use deadsync_core::session_flow::EvaluationOrigin;
-use deadsync_theme::evaluation::ThemeEvaluation;
+use deadsync_theme::evaluation::{EvaluationCaptureView, ThemeEvaluation};
 use deadsync_theme::stage::EvaluationOverviewPresentation;
 use deadsync_theme::views::HeartRateView;
 use std::path::{Path, PathBuf};
@@ -170,6 +170,13 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
         texture_keys: Box<[Arc<str>]>,
     ) {
         sync_arrowcloud_result_dialog(state, side, texture_keys);
+    }
+
+    fn evaluation_capture_view(state: &State) -> EvaluationCaptureView {
+        EvaluationCaptureView {
+            elapsed: state.screen_elapsed,
+            overview: overview_pane_selected(state),
+        }
     }
 
     fn evaluation_capture_ready(state: &State) -> bool {

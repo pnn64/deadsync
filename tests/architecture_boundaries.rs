@@ -13450,6 +13450,7 @@ fn evaluation_media_uses_host_results_and_theme_capture_readiness() {
         "options::is_smx_config_view(&self.state.screens.options_state), self.state.screens.evaluation_stage.as_ref()",
     ));
     assert!(screenshot.contains("ActiveTheme::evaluation_capture_ready("));
+    assert!(screenshot.contains("ActiveTheme::evaluation_capture_view("));
     assert!(screenshot.contains(".evaluation_stage"));
     assert!(!screenshot.contains("deadsync_theme_simply_love"));
     assert!(!screenshot.contains(".score_info"));
