@@ -1957,6 +1957,7 @@ dependencies = [
  "deadsync-config",
  "deadsync-core",
  "deadsync-input",
+ "deadsync-rules",
  "deadsync-theme",
  "glam",
 ]

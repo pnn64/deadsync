@@ -116,10 +116,9 @@ impl App {
             self.state.screens.stage_launch.request(request);
             if launch_was_hidden
                 && self.state.screens.stage_launch.prompt() == StageLaunchPrompt::OfferOptions
-                && self.state.screens.menu_state.theme_flag()
-                    == deadsync_config::theme::ThemeFlag::OpenItg
+                && let Some(selection) = self.state.screens.selection_presentation.as_mut()
             {
-                self.openitg_banner_motion.confirm(super::Instant::now());
+                selection.confirm_wheel(super::Instant::now());
             }
             self.sync_stage_launch_prompt();
         }
@@ -137,7 +136,9 @@ impl App {
 
     pub(super) fn clear_stage_launch(&mut self) {
         self.state.screens.stage_launch = Default::default();
-        self.openitg_banner_motion.cancel_confirmation();
+        if let Some(selection) = self.state.screens.selection_presentation.as_mut() {
+            selection.cancel_wheel_confirmation();
+        }
         self.sync_stage_launch_prompt();
     }
 
@@ -277,7 +278,7 @@ impl App {
 mod tests {
     use super::super::{SimplyLoveRuntimeRequest, ThemeEffect};
     use super::*;
-    use crate::app::course_transition_tests::{finish_pending_stage, on_app_thread, test_app};
+    use crate::app::course_transition_tests::{finish_pending_stage, on_app_thread, test_app, test_app_with_theme};
     use crate::gameplay_regression_tests::tests::with_session;
     use deadsync_core::input::InputSource;
     use deadsync_gameplay::stage_launch::{OPTIONS_ENTRY_SECONDS, OPTIONS_WINDOW_SECONDS};
@@ -389,9 +390,7 @@ mod tests {
                 false,
                 || {
                     let root = tempfile::tempdir().unwrap();
-                    let mut app = test_app(root.path());
-                    app.state.screens.menu_state =
-                        crate::title_menu::InstalledMenu::new(ThemeFlag::OpenItg, 2);
+                    let mut app = test_app_with_theme(root.path(), ThemeFlag::OpenItg);
                     let (cover, duration) =
                         app.get_in_transition_for_screen(CurrentScreen::Gameplay);
                     assert!(!cover.is_empty());
@@ -415,13 +414,13 @@ mod tests {
                         duration,
                     };
                     assert_eq!(
-                        crate::openitg::gameplay_hud_motion(game, &entering, false),
+                        app.state.screens.stage_presentation.gameplay_motion(super::super::screen_nav::stage_motion_view(game, &entering, false)),
                         GameplayHudMotion::Entering {
                             elapsed_seconds: 0.75
                         },
                     );
                     assert_eq!(
-                        crate::openitg::gameplay_hud_motion(game, &entering, true),
+                        app.state.screens.stage_presentation.gameplay_motion(super::super::screen_nav::stage_motion_view(game, &entering, true)),
                         GameplayHudMotion::Settled,
                     );
                     let leaving = TransitionState::FadingOut {
@@ -435,7 +434,7 @@ mod tests {
                         target: CurrentScreen::Evaluation,
                     };
                     assert_eq!(
-                        crate::openitg::gameplay_hud_motion(game, &leaving, false),
+                        app.state.screens.stage_presentation.gameplay_motion(super::super::screen_nav::stage_motion_view(game, &leaving, false)),
                         GameplayHudMotion::Leaving {
                             elapsed_seconds: 0.25
                         },
@@ -444,7 +443,7 @@ mod tests {
                     let game = app.state.screens.gameplay_state.as_mut().unwrap();
                     game.presentation.hide_song_intro = true;
                     assert_eq!(
-                        crate::openitg::gameplay_hud_motion(game, &entering, false),
+                        app.state.screens.stage_presentation.gameplay_motion(super::super::screen_nav::stage_motion_view(game, &entering, false)),
                         GameplayHudMotion::Settled,
                     );
                     game.presentation.hide_song_intro = false;
@@ -455,8 +454,7 @@ mod tests {
                     assert!(!restart.is_empty());
                     assert_eq!(duration, GAMEPLAY_RESTART_TRANSITION_SECONDS);
                     app.state.session.gameplay_restart_count = 0;
-                    app.state.screens.menu_state =
-                        crate::title_menu::InstalledMenu::new(ThemeFlag::SimplyLove, 2);
+                    app.state.screens.stage_presentation = crate::mounted_theme::mount_stage(ThemeFlag::SimplyLove);
                     let (entry, duration) =
                         app.get_in_transition_for_screen(CurrentScreen::Gameplay);
                     assert!(!entry.is_empty());
@@ -587,7 +585,7 @@ mod tests {
                 || {
                     for flag in [ThemeFlag::SimplyLove, ThemeFlag::OpenItg] {
                         let root = tempfile::tempdir().unwrap();
-                        let mut app = test_app(root.path());
+                        let mut app = test_app_with_theme(root.path(), flag);
                         deadsync_theme_simply_love::i18n::init_for_tests();
                         let font = deadsync_theme_simply_love::asset_manifest()
                             .fonts
@@ -601,8 +599,6 @@ mod tests {
                         )
                         .unwrap();
                         app.asset_manager.register_font("miso", font.font);
-                        app.state.screens.menu_state =
-                            crate::title_menu::InstalledMenu::new(flag, 2);
                         let song = confirm_test_song(&mut app, root.path());
                         app.request_stage_launch(
                             ActiveTheme::SCREENS.song_selection,

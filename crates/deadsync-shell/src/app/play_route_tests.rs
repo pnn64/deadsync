@@ -263,10 +263,9 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     }
 
     complete_stage(app, event_loop);
-    assert_eq!(
-        app.state.screens.openitg_gameplay_outro,
-        openitg.then_some(deadsync_theme_openitg::GameplayOutro::Cleared),
-    );
+    let outro = app.state.screens.gameplay_outro.as_ref();
+    assert_eq!(outro.is_some(), openitg);
+    assert!(outro.is_none_or(|outro| outro.cue().is_none() && outro.duration() == 0.8));
     settle(app, event_loop, CurrentScreen::Evaluation);
     assert_eq!(app.state.session.played_stages.len(), 1);
     let result = &app.state.session.played_stages[0];
@@ -335,7 +334,10 @@ fn check_failed_stage_outro(app: &mut App, event_loop: &ActiveEventLoop) {
     assert!(game.force_fail_player(0));
     assert!(game.all_joined_players_failed());
     app.handle_gameplay_action(GameplayAction::Navigate(GameplayExit::Complete), event_loop);
-    assert_eq!(app.state.screens.openitg_gameplay_outro, Some(deadsync_theme_openitg::GameplayOutro::Failed));
+    assert_eq!(
+        app.state.screens.gameplay_outro.as_ref().and_then(|outro| outro.cue()),
+        Some(deadsync_theme::UiCue::StageFailed),
+    );
     assert!(matches!(app.state.shell.transition, TransitionState::FadingOut {
         duration: 7.5, target: CurrentScreen::Evaluation, ..
     }));
@@ -351,7 +353,7 @@ fn check_failed_stage_outro(app: &mut App, event_loop: &ActiveEventLoop) {
         )));
     }
     settle(app, event_loop, CurrentScreen::Evaluation);
-    assert_eq!(app.state.screens.openitg_gameplay_outro, None);
+    assert!(app.state.screens.gameplay_outro.is_none());
     assert_eq!(app.state.session.played_stages.len(), 2);
     assert!(stage_stats::all_players_failed(&app.state.session.played_stages[1], [false, true]));
 }

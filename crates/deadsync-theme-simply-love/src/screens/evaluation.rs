@@ -3,7 +3,7 @@ mod mount;
 #[cfg(test)]
 use graph_build::life_record_lerp_at;
 use graph_build::{
-    GRAPH_LIFE_SAMPLE_COUNT, LifeRecordSampler, build_course_density_graph_mesh,
+    GRAPH_LIFE_SAMPLE_COUNT, build_course_density_graph_mesh,
     course_graph_raw_seconds, course_graph_stage_seconds, graph_display_life_layout,
     graph_display_life_points, valid_music_rate,
 };
@@ -28,6 +28,8 @@ use deadlib_present::cache::{
 };
 use deadlib_present::space::{is_wide, widescale};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_rules::life::LifeRecordSampler;
+use deadsync_theme::stage::EvaluationOverviewPresentation;
 use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_config::theme::GameFlag;
 use deadsync_score as score_data;
@@ -1438,6 +1440,7 @@ mod tests {
                 max_bpm: 120.0,
             }),
             song_last_second,
+            step_seconds: song_last_second,
         }
     }
 
@@ -2693,12 +2696,6 @@ fn result_dialog_page_text(page: usize, page_count: usize) -> Arc<str> {
     Arc::from(format!("{} / {page_count}", page + 1))
 }
 
-#[derive(Clone)]
-struct OverviewLifeMesh {
-    size: [f32; 2],
-    vertices: Option<Arc<[MeshVertex]>>,
-}
-
 pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
@@ -2740,7 +2737,6 @@ pub struct State {
     /// Screen-owned immutable mesh, warmed during evaluation initialization so
     /// graph-pane changes only share its vertex payload.
     pub life_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
-    overview_life_mesh: RefCell<[Option<OverviewLifeMesh>; MAX_PLAYERS]>,
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -2844,7 +2840,6 @@ impl Clone for State {
             event_actor_cache: RefCell::new(eval_panes::EventActorCache::default()),
             density_graph_mesh: self.density_graph_mesh.clone(),
             life_graph_mesh: self.life_graph_mesh.clone(),
-            overview_life_mesh: RefCell::new(self.overview_life_mesh.borrow().clone()),
             timing_hist_mesh: self.timing_hist_mesh.clone(),
             timing_hist_mesh_ex: self.timing_hist_mesh_ex.clone(),
             timing_hist_mesh_hard_ex: self.timing_hist_mesh_hard_ex.clone(),
@@ -3349,7 +3344,6 @@ pub fn init(
         event_actor_cache: RefCell::new(eval_panes::EventActorCache::default()),
         density_graph_mesh,
         life_graph_mesh,
-        overview_life_mesh: RefCell::default(),
         timing_hist_mesh,
         timing_hist_mesh_ex,
         timing_hist_mesh_hard_ex,
@@ -3667,7 +3661,6 @@ pub fn init_from_score_info(
         event_actor_cache: RefCell::new(eval_panes::EventActorCache::default()),
         density_graph_mesh,
         life_graph_mesh,
-        overview_life_mesh: RefCell::default(),
         timing_hist_mesh,
         timing_hist_mesh_ex,
         timing_hist_mesh_hard_ex,
@@ -5595,50 +5588,17 @@ pub fn overview_pane_selected(state: &State) -> bool {
             })
 }
 
-fn overview_life_graph(
-    state: &State,
-    player: usize,
-    origin: [f32; 2],
-    size: [f32; 2],
-    tint: [f32; 4],
-    z: i16,
-) -> Option<Actor> {
-    let score = state.score_info.get(player)?.as_ref()?;
-    let mut meshes = state.overview_life_mesh.borrow_mut();
-    let cache = &mut meshes[player];
-    if cache.as_ref().is_none_or(|entry| entry.size != size) {
-        *cache = Some(OverviewLifeMesh {
-            size,
-            vertices: build_eval_life_graph_mesh(score, size[0], size[1]),
-        });
-    }
-    let vertices = Arc::clone(cache.as_ref()?.vertices.as_ref()?);
-    Some(Actor::Mesh {
-        align: [0.0; 2],
-        offset: origin,
-        size: size.map(SizeSpec::Px),
-        tint,
-        vertex_color_encoding: Default::default(),
-        vertices,
-        visible: true,
-        blend: BlendMode::Alpha,
-        z,
-    })
-}
-
 fn push_overview(
     actors: &mut Vec<Actor>,
     state: &State,
     assets: &AssetManager,
-    draw: fn(&mut Vec<Actor>, EvaluationOverview<'_, Actor>),
+    presentation: &mut dyn EvaluationOverviewPresentation<Actor>,
 ) -> bool {
     let Some(index) = state.score_info.iter().position(Option::is_some) else {
         return false;
     };
     let text = &state.result_text[index];
-    let life_graph =
-        |slot, origin, size, tint, z| overview_life_graph(state, slot, origin, size, tint, z);
-    draw(
+    presentation.push_overview(
         actors,
         EvaluationOverview {
             title: text.full_title(state.context.policy.translated_titles),
@@ -5680,13 +5640,13 @@ fn push_overview(
                         combo_runs: &score.combo_runs,
                         graph_seconds: [score.graph_first_second, score.graph_last_second],
                         course_graph_stages: &score.course_graph_stages,
+                        steps_life: &score.steps_life,
                         personal_rank: score.personal_record_highlight_rank,
                         machine_rank: score.machine_record_highlight_rank,
                         disqualified: score.disqualified,
                     }
                 })
             }),
-            life_graph: &life_graph,
         },
     );
     true
@@ -5709,7 +5669,7 @@ pub fn push_actors_with_overview(
     state: &State,
     asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
-    draw_overview: Option<fn(&mut Vec<Actor>, EvaluationOverview<'_, Actor>)>,
+    draw_overview: Option<&mut dyn EvaluationOverviewPresentation<Actor>>,
 ) {
     if let Some(draw) = draw_overview
         && overview_pane_selected(state)

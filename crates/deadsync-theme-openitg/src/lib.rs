@@ -13,14 +13,16 @@ mod presentation;
 mod profile_picker;
 mod resources;
 mod select_music;
+mod selection_presentation;
 mod stage_loading;
+mod stage_mount;
 mod system_options;
 
 use deadlib_present::actors::Actor;
 use deadsync_theme::{Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, TransitionKind, UiCue};
 
-pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, push_evaluation_overview};
 pub use demonstration::{OpenItgTrainingFeedback, push_training_underlay};
+pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, OpenItgEvaluation};
 pub use gameplay::GAMEPLAY_HUD;
 pub use gameplay_outro::GameplayOutro;
 pub use intro::{OpenItgDemonstration, OpenItgIntro, OpenItgIntroMedia};
@@ -32,7 +34,9 @@ pub use select_music::{
     WHEEL_BANNER_FADE, WHEEL_TO_PLAYER_OPTIONS_SECONDS, WheelBannerFrame, WheelBannerMotion,
     push_select_course_actors, push_select_music_actors,
 };
+pub use selection_presentation::OpenItgSelectionPresentation;
 pub use stage_loading::push_stage_loading_actors;
+pub use stage_mount::OpenItgStagePresentation;
 pub use system_options::OpenItgSystemOptions;
 
 type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;

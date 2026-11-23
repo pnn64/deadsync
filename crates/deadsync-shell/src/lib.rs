@@ -29,6 +29,7 @@ pub mod live_case;
 mod local_profiles;
 mod main_menu;
 mod mounted_player_options;
+mod mounted_theme;
 mod openitg;
 mod title_menu;
 mod mappings;

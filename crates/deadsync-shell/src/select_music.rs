@@ -310,7 +310,7 @@ pub(crate) fn policy_view(config: &config::app_config::Config) -> SelectMusicPol
         interaction: SelectMusicInteractionPolicyView {
             wheel_switch_speed: config.music_wheel_switch_speed,
             wheel_style: config.select_music_wheel_style,
-            show_random_entries: config.theme_flag == config::theme::ThemeFlag::OpenItg,
+            show_random_entries: false,
             hide_inactive_series: config.hide_inactive_series,
             initial_sort: config
                 .select_music_default_sort

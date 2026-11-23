@@ -239,6 +239,7 @@ fn test_player_summary(
         graph_first_second: 0.0,
         graph_last_second: 60.0,
         life_history: vec![(1.0, 1.0)],
+        steps_life: Default::default(),
         fail_time: Some(40.0),
         show_w0: true,
         show_ex_score: true,

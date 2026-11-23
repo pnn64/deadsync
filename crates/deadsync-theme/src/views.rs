@@ -11,6 +11,7 @@ use deadsync_rules::timing::{
     ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, WindowCounts,
 };
 pub use deadsync_score::Grade;
+pub use deadsync_score::stage_stats::StageLifeTimeline;
 use deadsync_score::{
     CachedPlayerLeaderboardData, ColumnJudgmentList, GrooveStatsEvalState, ItlEvalState,
     LeaderboardEntry,
@@ -613,6 +614,7 @@ impl SelectedCourseView {
 pub struct CourseGraphStageView {
     pub chart: Arc<ChartData>,
     pub song_last_second: f32,
+    pub step_seconds: f32,
 }
 
 /// Final score snapshot consumed by evaluation screens and course summaries.
@@ -662,6 +664,7 @@ pub struct EvaluationView<N, S> {
     pub graph_last_second: f32,
     pub music_rate: f32,
     pub life_history: Vec<(f32, f32)>,
+    pub steps_life: StageLifeTimeline,
     pub fail_time: Option<f32>,
     pub window_counts: WindowCounts,
     pub window_counts_10ms: WindowCounts,
@@ -721,9 +724,8 @@ impl<N, S> Default for EvaluationStageView<N, S> {
     }
 }
 
-/// The result overview for the active evaluation page. The shared visit
-/// supplies completed results and the cached life-graph geometry.
-pub struct EvaluationOverview<'a, A> {
+/// Completed results for the active evaluation page.
+pub struct EvaluationOverview<'a> {
     pub title: &'a Arc<str>,
     pub artist: &'a Arc<str>,
     pub banner_key: Option<&'a Arc<str>>,
@@ -732,7 +734,6 @@ pub struct EvaluationOverview<'a, A> {
     pub double_side_style: bool,
     pub elapsed: f32,
     pub players: [Option<EvaluationPlayerOverview<'a>>; MAX_PLAYERS],
-    pub life_graph: &'a dyn Fn(usize, [f32; 2], [f32; 2], [f32; 4], i16) -> Option<A>,
 }
 
 pub struct EvaluationPlayerOverview<'a> {
@@ -755,6 +756,7 @@ pub struct EvaluationPlayerOverview<'a> {
     pub combo_runs: &'a [ComboRun],
     pub graph_seconds: [f32; 2],
     pub course_graph_stages: &'a [CourseGraphStageView],
+    pub steps_life: &'a StageLifeTimeline,
     pub personal_rank: Option<u32>,
     pub machine_rank: Option<u32>,
     pub disqualified: bool,

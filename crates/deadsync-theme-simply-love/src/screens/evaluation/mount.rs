@@ -2,6 +2,7 @@ use super::*;
 use crate::views::VisualBackgroundView;
 use deadsync_core::session_flow::EvaluationOrigin;
 use deadsync_theme::evaluation::ThemeEvaluation;
+use deadsync_theme::stage::EvaluationOverviewPresentation;
 use deadsync_theme::views::HeartRateView;
 use std::path::{Path, PathBuf};
 
@@ -142,8 +143,9 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
         state: &State,
         assets: &AssetManager,
         visual_policy: Self::EvaluationVisualPolicy,
+        overview: Option<&mut dyn EvaluationOverviewPresentation<Actor>>,
     ) {
-        push_actors(actors, state, assets, visual_policy);
+        push_actors_with_overview(actors, state, assets, visual_policy, overview);
     }
 
     fn sync_evaluation_runtime(state: &mut State, view: EvaluationRuntimeView) {

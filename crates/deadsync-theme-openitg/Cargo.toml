@@ -11,6 +11,7 @@ deadlib-present = { path = "../deadlib-present" }
 deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-input = { path = "../deadsync-input" }
+deadsync-rules = { path = "../deadsync-rules" }
 deadsync-theme = { path = "../deadsync-theme" }
 glam = "0.34.3"
 

@@ -66,6 +66,10 @@ fn fixture(root: &std::path::Path, name: &str, pump: bool) -> Arc<SongData> {
 }
 
 pub(super) fn test_app(root: &std::path::Path) -> App {
+    test_app_with_theme(root, config::theme::ThemeFlag::SimplyLove)
+}
+
+pub(super) fn test_app_with_theme(root: &std::path::Path, theme_flag: config::theme::ThemeFlag) -> App {
     crate::tests::init_paths();
     let dirs = AppDirs {
         data_dir: root.join("data"),
@@ -79,6 +83,7 @@ pub(super) fn test_app(root: &std::path::Path) -> App {
     dirs.ensure_dirs_exist();
     let cfg = config::app_config::Config {
         video_renderer: BackendType::Software,
+        theme_flag,
         ..Default::default()
     };
     App::new(
@@ -220,10 +225,8 @@ fn press_course_start(app: &mut App) {
 fn openitg_course_wheel_draws_the_prepared_rating_and_tracklist() {
     on_app_thread(|| {
         let root = tempfile::tempdir().unwrap();
-        let mut app = test_app(root.path());
+        let mut app = test_app_with_theme(root.path(), config::theme::ThemeFlag::OpenItg);
         let (_, first_song, second_song) = prepare_course_wheel(&mut app, root.path(), false);
-        app.state.screens.menu_state =
-            crate::title_menu::InstalledMenu::new(config::theme::ThemeFlag::OpenItg, 2);
         app.state.screens.current_screen = CurrentScreen::SelectCourse;
         app.state.shell.transition = TransitionState::Idle;
         let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);

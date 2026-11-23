@@ -862,8 +862,8 @@ keys are retained across frames. DeadSync's five-star grade uses a five-model
 layout with the native gold star. The grade slides in over 0.5 seconds and
 settles at 3.0 seconds. The result lettering sweeps across after 0.25 seconds,
 the stats slide in from 3.0 to 3.3 seconds, and the fallback banner caption
-finishes fading at 3.8 seconds. Automated captures wait for the complete
-reveal.
+finishes fading at 3.8 seconds. Automated captures also allow the optional
+Barely marker to settle at 4.45 seconds.
 
 Jump totals use completed judgments and the playable tap and hold-head rows.
 Finite course summaries add the planned jumps on unplayed songs to the
@@ -879,17 +879,32 @@ practice handoffs, and onward routing. Timing, records, online detail panels,
 and other auxiliary panes retain their existing presentation and controls.
 Evaluation uses original artwork and the shared record cues. The native
 pass and fail entry redirects are silent. The stage failure cue plays
-during the outro. Life-graph coloring by judgment quality and the remaining
-reference audio comparison are open.
+during the outro.
 
 The native 640×480 Quartz capture uses P1 Single, Hard 5, and AutoPlay.
 It shows an empty graph, the Jumps row above Holds, and the chart title above
 the fallback banner. DeadSync Vulkan captures compared that same result at
 640×480 and verified the entry at both 640×480 and 854×480. Separate solo,
 versus, and failed results exercised the grade materials, combo strips, and
-both result sweeps. The shared sampler still supplies the cached life line.
-The textured life fill, judgment-based color bands, and native record callouts
-remain open.
+both result sweeps.
+
+OpenITG draws 199 textured slices from 200 life samples on the elapsed-steps
+clock. Finalized tap rows record the first times below Fantastic, Excellent,
+and Great on that same clock. The original P1 and P2 textures supply each
+color and the plain fill takes over after the first Decent, Way Off, or Miss.
+OpenITG retains the prepared geometry for the current result, including across
+window resizes. Course summaries join the records on the elapsed-steps clock
+and place dividers using the planned songs' step durations.
+
+The shared rules crate provides the life interpolation used by gameplay
+statistics and both themes. Simply Love keeps its music-time chart anchor and
+100-sample line. OpenITG uses the steps-time samples and adds the original
+Barely arrow when a clear dips below 10 percent life without reaching zero.
+Native OpenGL and DeadSync Vulkan captures used the same populated two-player
+life timeline at 640×480 and 854×480. They show the same slice boundaries,
+life silhouette, and Barely placement. Twelve sampled fill pixels across
+the two players matched exactly at each width. The native record callouts,
+award sprites, and Evaluation music loop remain open.
 
 The round and modifier placements were checked in 18 paired Vulkan captures
 at 640×480 and 854×480. The captures covered Quartz, solo, and versus at 3.0,

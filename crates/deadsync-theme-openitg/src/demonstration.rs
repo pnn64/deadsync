@@ -1,3 +1,5 @@
+pub(crate) mod training;
+
 use deadlib_present::actors::{Actor, TextAlign};
 use deadlib_present::render::BlendMode;
 use deadlib_present::space::{current_metrics, menu_perspective, screen_height, screen_width};

@@ -29,7 +29,6 @@ mod smx_runtime;
 mod stage_start;
 mod updater;
 
-pub(crate) use attract_demo::AttractDemo;
 
 use self::evaluation_views::CourseEvaluationPage;
 use self::lua_loading::SongLuaLoading;
@@ -142,7 +141,7 @@ use deadsync_theme_simply_love::views::{
 };
 use deadsync_theme_simply_love::{
     screens::{
-        self, content_browser, credits, evaluation, evaluation_summary, gameover, gameplay, init,
+        self, content_browser, credits, evaluation_summary, gameover, gameplay, init,
         initials, input as input_screen, manage_local_profiles, mappings, options,
         overscan_adjustment, practice, profile_load, sandbox, select_color,
         select_course, select_mode, select_music, select_style, test_lights,
@@ -630,12 +629,13 @@ pub struct ScreensState {
     current_screen: CurrentScreen,
     menu_state: crate::title_menu::InstalledMenu,
     gameplay_state: Option<GameplayState>,
-    openitg_gameplay_outro: Option<deadsync_theme_openitg::GameplayOutro>,
+    gameplay_outro: Option<Box<dyn deadsync_theme::stage::StageOutroPresentation<Actor>>>,
+    stage_presentation: Box<dyn deadsync_theme::stage::StagePresentation<Actor>>,
     practice_state: Option<PracticeState>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor,
     options_state: options::State,
-    openitg_system_options: Option<deadsync_theme_openitg::OpenItgSystemOptions>,
+    system_options_presentation: Option<Box<dyn deadsync_theme::system_options::SystemOptionsPresentation<Actor>>>,
     content_browser_state: content_browser::State,
     credits_state: credits::State,
     manage_local_profiles_state: manage_local_profiles::State,
@@ -653,14 +653,14 @@ pub struct ScreensState {
     smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview,
     player_options_state: Option<crate::player_options::PlayerOptionsState>,
     init_state: init::State,
-    openitg_intro: Option<crate::openitg::IntroRuntime>,
+    attract: Option<attract_demo::AttractRuntime>,
     select_profile_state: <ActiveTheme as ThemeProfilePicker>::ProfilePickerState,
     select_color_state: select_color::State,
     arrowcloud_login_state: screens::arrowcloud_login::State,
     groovestats_login_state: screens::groovestats_login::State,
     select_style_state: select_style::State,
     select_play_mode_state: select_mode::State,
-    openitg_play_selection: deadsync_theme_openitg::PlaySelectionCarousel,
+    selection_presentation: Option<Box<dyn deadsync_theme::selection::SelectionPresentation<Actor>>>,
     profile_load_state: profile_load::State,
     select_music_state: select_music::State,
     stage_launch: StageLaunch<StageSelection>,
@@ -1193,18 +1193,13 @@ fn options_init_view(
     dirs: &AppDirs,
     audio: AudioOptionsView,
     bookkeeping: crate::coin::Bookkeeping,
-    theme: config::theme::ThemeFlag,
+    layout: deadsync_theme::system_options::SystemOptionsLayout,
 ) -> OptionsInitView {
-    let openitg = theme == config::theme::ThemeFlag::OpenItg;
     OptionsInitView {
         config: config::runtime::get(),
-        split_graphics: openitg,
-        service_order: if openitg {
-            deadsync_theme_openitg::OpenItgSystemOptions::SERVICE_ORDER
-        } else {
-            &[]
-        },
-        page_timing: openitg.then_some(deadsync_theme_openitg::OpenItgSystemOptions::TIMING),
+        split_graphics: layout.split_graphics,
+        service_order: layout.service_order,
+        page_timing: layout.timing,
         judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog(
             ActiveTheme::JUDGMENT_PRESET,
         ))
@@ -1279,8 +1274,12 @@ impl ScreensState {
         let app_paths = app_paths_view(dirs);
         let init_songs_root = app_paths.songs.path.clone();
         let init_courses_root = app_paths.courses.path;
+        let system_options_presentation = crate::mounted_theme::mount_system_options(theme);
+        let options_layout = system_options_presentation
+            .as_ref()
+            .map_or_else(Default::default, |presentation| presentation.layout());
         let mut options_state =
-            options::init(options_init_view(dirs, audio_options, bookkeeping, theme));
+            options::init(options_init_view(dirs, audio_options, bookkeeping, options_layout));
         options_state.active_color_index = color_index;
 
         let mut content_browser_state = content_browser::init();
@@ -1334,8 +1333,7 @@ impl ScreensState {
             gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor::default(),
             gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor::default(),
             options_state,
-            openitg_system_options: (theme == config::theme::ThemeFlag::OpenItg)
-                .then(deadsync_theme_openitg::OpenItgSystemOptions::default),
+            system_options_presentation,
             content_browser_state,
             credits_state,
             manage_local_profiles_state,
@@ -1354,16 +1352,17 @@ impl ScreensState {
             smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview::default(),
             player_options_state: None,
             init_state,
-            openitg_intro: (theme == config::theme::ThemeFlag::OpenItg)
-                .then(crate::openitg::IntroRuntime::default),
-            openitg_gameplay_outro: None,
+            attract: crate::mounted_theme::mount_attract(theme)
+                .map(attract_demo::AttractRuntime::new),
+            gameplay_outro: None,
+            stage_presentation: crate::mounted_theme::mount_stage(theme),
             select_profile_state,
             select_color_state,
             arrowcloud_login_state,
             groovestats_login_state,
             select_style_state,
             select_play_mode_state,
-            openitg_play_selection: deadsync_theme_openitg::PlaySelectionCarousel::default(),
+            selection_presentation: crate::mounted_theme::mount_selection(theme),
             profile_load_state,
             select_music_state,
             stage_launch: StageLaunch::default(),
@@ -1410,7 +1409,7 @@ impl ScreensState {
                 (None, false)
             }
             CurrentScreen::Init => {
-                let effect = if let Some(intro) = self.openitg_intro.as_mut()
+                let effect = if let Some(intro) = self.attract.as_mut()
                     && !init::is_loading(&self.init_state)
                 {
                     if intro.timeline.demonstration().is_none() && intro.timeline.advance(delta_time) {
@@ -1714,7 +1713,6 @@ pub struct App {
     /// The reader's noteskin for the Content Browser's chart preview.
     browser_skin: browser_skin::Service,
     dynamic_media: DynamicMedia,
-    openitg_banner_motion: deadsync_theme_openitg::WheelBannerMotion,
     /// Lazily started after the opt-in feature first receives data. The single
     /// bounded worker decodes off the frame thread and fixed texture keys bound
     /// registry growth for the app lifetime.
@@ -3117,9 +3115,8 @@ impl App {
         mut gs: GameplayState,
         finish: &GameplayInitFinish,
     ) -> Vec<Command> {
-        if self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg {
-            gs.presentation
-                .set_hud(deadsync_theme_openitg::GAMEPLAY_HUD);
+        if let Some(hud) = self.state.screens.stage_presentation.gameplay_hud() {
+            gs.presentation.set_hud(hud);
         }
         self.gameplay_live_textures.reset();
         // ITGmania destroys the previous Player sounds before a restart or
@@ -4084,8 +4081,10 @@ impl App {
     }
 
     fn coin_select_music_init_view(&self, mut view: SelectMusicInitView) -> SelectMusicInitView {
-        view.policy.interaction.show_random_entries =
-            self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg;
+        view.policy.interaction.show_random_entries = self.state.screens
+            .selection_presentation
+            .as_ref()
+            .is_some_and(|selection| selection.show_random_entries());
         let options = config::runtime::get().coin;
         let session = profile::get_session_snapshot();
         let premium_free = matches!(session.play_mode, profile_data::PlayMode::PremiumFree);
@@ -4593,15 +4592,15 @@ impl App {
             &mut self.theme_effect_scratch,
         );
         let _ = self.drain_theme_effects(event_loop);
-        self.sync_openitg_intro_media();
-        self.step_openitg_demonstration(dt);
+        self.sync_attract_media();
+        self.step_attract_demonstration(dt);
         if let Some(target) = self.advance_stage_launch(dt) {
             let _ = self.drain_theme_effects(event_loop);
             self.handle_immediate_navigation(target, event_loop);
         }
     }
 
-    fn sync_openitg_intro_media(&mut self) {
+    fn sync_attract_media(&mut self) {
         let screens = &mut self.state.screens;
         if screens.current_screen != CurrentScreen::Init || init::is_loading(&screens.init_state) {
             return;
@@ -4609,7 +4608,7 @@ impl App {
         let Some(backend) = self.backend.as_mut() else {
             return;
         };
-        let Some(intro) = screens.openitg_intro.as_mut() else {
+        let Some(intro) = screens.attract.as_mut() else {
             return;
         };
         let Some(media) = intro.update_media() else {
@@ -4625,7 +4624,7 @@ impl App {
         );
         intro.video_key = (key != "__black").then(|| Arc::from(key));
         debug!(
-            "OpenITG attract media movie={:?} music={:?} video_active={}",
+            "Attract media movie={:?} music={:?} video_active={}",
             media.movie, media.music, self.dynamic_media.has_gameplay_video()
         );
         if let Some(path) = media.music {
@@ -4923,7 +4922,7 @@ impl App {
             // Keep gameplay stepping under evaluation fades so late judgments
             // and HUD animations settle while transition input remains blocked.
             self.step_gameplay(delta_time, true, event_loop);
-            if self.state.screens.openitg_gameplay_outro.is_some_and(|outro| outro.cue().is_some())
+            if self.state.screens.gameplay_outro.as_ref().is_some_and(|outro| outro.stop_tail_audio_when_frozen())
                 && !tick_gameplay_during_transition::<ActiveTheme>(
                     self.state.screens.current_screen,
                     &self.state.shell.transition,
@@ -5180,7 +5179,7 @@ impl App {
                 } else {
                     None
                 };
-                let ui_video_time = self.state.screens.openitg_intro.as_ref()
+                let ui_video_time = self.state.screens.attract.as_ref()
                     .filter(|_| current_screen == CurrentScreen::Init)
                     .map_or(total_elapsed, |intro| intro.timeline.playback_time());
                 self.dynamic_media.queue_video_frames(
@@ -5253,7 +5252,7 @@ impl App {
             CurrentScreen::Init => self
                 .state
                 .screens
-                .openitg_intro
+                .attract
                 .as_ref()
                 .and_then(|intro| intro.demo.as_ref())
                 .map(|demo| &demo.stage),
@@ -5528,11 +5527,12 @@ impl App {
     }
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
-        if let Some(presentation) = &mut self.state.screens.openitg_system_options {
+        let mut layout = deadsync_theme::system_options::SystemOptionsLayout::default();
+        if let Some(presentation) = &mut self.state.screens.system_options_presentation {
             presentation.reset();
+            layout = presentation.layout();
         }
-        let theme = self.state.screens.menu_state.theme_flag();
-        if from == CurrentScreen::OverscanAdjustment && theme == config::theme::ThemeFlag::OpenItg {
+        if from == CurrentScreen::OverscanAdjustment && layout.return_overscan_to_graphics {
             options::open_graphics_submenu(&mut self.state.screens.options_state);
             return;
         }
@@ -5544,7 +5544,7 @@ impl App {
             &self.dirs,
             audio_requests::options_view(&self.audio),
             self.state.coin.bookkeeping(),
-            theme,
+            layout,
         ));
         self.state.screens.options_state.active_color_index = current_color_index;
         if let Some(selected) = main_selection {
@@ -5593,10 +5593,8 @@ impl App {
         // Share Rips as the machine starts with it; every later change comes
         // with the config snapshot in the frame loop.
         deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
-        let installed_sounds = match config.theme_flag {
-            config::theme::ThemeFlag::SimplyLove => deadsync_theme::ThemeSounds::default(),
-            config::theme::ThemeFlag::OpenItg => deadsync_theme_openitg::OpenItgTheme::SOUNDS,
-        };
+        let installed_sounds =
+            crate::mounted_theme::supplemental_resources(config.theme_flag).sounds;
         let ui_sfx = audio_requests::UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, installed_sounds);
         let audio_options = audio_requests::options_view(&audio);
         let state = AppState::new(
@@ -5642,7 +5640,6 @@ impl App {
             option_previews: option_previews::Service::default(),
             browser_skin: browser_skin::Service::default(),
             dynamic_media: DynamicMedia::new(),
-            openitg_banner_motion: Default::default(),
             arrowcloud_result_dialog: None,
             arrowcloud_result_ready_scratch: Vec::with_capacity(MAX_PLAYERS),
             audio,
@@ -7309,7 +7306,7 @@ impl App {
         );
         self.ui_sfx.prepare_screen(&mut self.audio, deferred_sfx);
         let entry_sfx = entry_sfx
-            .filter(|_| self.state.screens.menu_state.theme_flag() != config::theme::ThemeFlag::OpenItg)
+            .filter(|_| self.state.screens.stage_presentation.evaluation_entry_sfx_enabled())
             .and_then(|path| {
                 self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
                     path.to_string_lossy().as_ref(),
@@ -7762,7 +7759,7 @@ impl App {
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
         ) || (self.state.screens.current_screen == CurrentScreen::Init
-            && self.state.screens.openitg_intro.is_some())
+            && self.state.screens.attract.is_some())
         {
             return;
         }
@@ -7903,25 +7900,18 @@ impl App {
         let visual_policy = policy.visual;
 
         if let Some(loading) = self.song_lua_loading() {
-            let progress = loading.progress.fraction();
-            if self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg {
-                let session = &self.state.session;
-                deadsync_theme_openitg::push_stage_loading_actors(
-                    &mut actors,
-                    &loading.title,
-                    session.active_stage_number(),
-                    session.course_run.is_some(),
-                    loading.presentation_elapsed(),
-                    progress,
-                );
-            } else {
-                screens::components::shared::song_lua_loading::push(
-                    &mut actors,
-                    loading.title.clone(),
-                    progress,
-                    loading.color_index,
-                );
-            }
+            let session = &self.state.session;
+            self.state.screens.stage_presentation.push_loading(
+                &mut actors,
+                deadsync_theme::stage::StageLoadingView {
+                    title: &loading.title,
+                    stage_number: session.active_stage_number(),
+                    course: session.course_run.is_some(),
+                    color_index: loading.color_index,
+                    elapsed: loading.presentation_elapsed(),
+                    progress: loading.progress.fraction(),
+                },
+            );
             return (actors, CLEAR, None);
         }
 
@@ -7941,7 +7931,7 @@ impl App {
                 );
             }
             CurrentScreen::Gameplay => {
-                let stage_covered = self.state.screens.openitg_gameplay_outro.is_some_and(|outro| {
+                let stage_covered = self.state.screens.gameplay_outro.as_ref().is_some_and(|outro| {
                     matches!(self.state.shell.transition,
                         TransitionState::FadingOut { elapsed, .. } if outro.covers_stage(elapsed))
                 });
@@ -7951,13 +7941,13 @@ impl App {
                         gs.presentation.hide_song_intro,
                         &self.state.shell.transition,
                     );
-                    let hud_motion = if self.state.screens.menu_state.theme_flag()
-                        == config::theme::ThemeFlag::OpenItg
-                    {
-                        crate::openitg::gameplay_hud_motion(
-                            gs,
-                            &self.state.shell.transition,
-                            self.state.session.gameplay_restart_count > 0,
+                    let hud_motion = if gs.presentation.has_hud() {
+                        self.state.screens.stage_presentation.gameplay_motion(
+                            screen_nav::stage_motion_view(
+                                gs,
+                                &self.state.shell.transition,
+                                self.state.session.gameplay_restart_count > 0,
+                            ),
                         )
                     } else {
                         Default::default()
@@ -8000,7 +7990,7 @@ impl App {
                     change.workshop,
                 );
                 let options_state = &self.state.screens.options_state;
-                if let Some(presentation) = &mut self.state.screens.openitg_system_options {
+                if let Some(presentation) = &mut self.state.screens.system_options_presentation {
                     use deadsync_theme::views::SystemOptionsPhase;
 
                     let (phase, overlay_alpha) = match self.state.shell.transition {
@@ -8020,7 +8010,7 @@ impl App {
                         phase,
                         arrow_effect_time_s,
                         &self.asset_manager,
-                        |renderer| {
+                        &mut |renderer| {
                             options::push_actors_with_layout(
                                 &mut actors,
                                 options_state,
@@ -8110,21 +8100,18 @@ impl App {
             }
             CurrentScreen::SelectProfile => {
                 let state = &self.state.screens.select_profile_state;
-                match self.state.screens.menu_state.theme_flag() {
-                    config::theme::ThemeFlag::SimplyLove => {
-                        ActiveTheme::push_profile_picker_actors(
-                            &mut actors,
-                            state,
-                            &self.asset_manager,
-                            screen_alpha_multiplier,
-                            visual_policy,
-                        );
-                    }
-                    config::theme::ThemeFlag::OpenItg => {
-                        ActiveTheme::with_profile_picker_view(state, screen_alpha_multiplier, |view| {
-                            deadsync_theme_openitg::push_profile_picker_actors(&mut actors, view, false);
-                        });
-                    }
+                if let Some(selection) = &self.state.screens.selection_presentation {
+                    ActiveTheme::with_profile_picker_view(state, screen_alpha_multiplier, |view| {
+                        selection.profile_picker()(&mut actors, view, false);
+                    });
+                } else {
+                    ActiveTheme::push_profile_picker_actors(
+                        &mut actors,
+                        state,
+                        &self.asset_manager,
+                        screen_alpha_multiplier,
+                        visual_policy,
+                    );
                 }
             }
             CurrentScreen::SelectColor => select_color::push_actors(
@@ -8147,103 +8134,86 @@ impl App {
             ),
             CurrentScreen::SelectStyle => {
                 let screens = &mut self.state.screens;
-                match screens.menu_state.theme_flag() {
-                    config::theme::ThemeFlag::SimplyLove => select_style::push_actors(
-                        &mut actors,
-                        &screens.select_style_state,
-                        visual_policy,
-                    ),
-                    config::theme::ThemeFlag::OpenItg => select_style::with_play_selection_view(
-                        &screens.select_style_state,
-                        |view| {
-                            screens.openitg_play_selection.push_actors(
-                                &mut actors,
-                                view,
-                                arrow_effect_time_s,
-                            )
-                        },
-                    ),
+                if let Some(selection) = &mut screens.selection_presentation {
+                    select_style::with_play_selection_view(&screens.select_style_state, |view| {
+                        selection.push_play_selection(&mut actors, view, arrow_effect_time_s);
+                    });
+                } else {
+                    select_style::push_actors(&mut actors, &screens.select_style_state, visual_policy);
                 }
             }
             CurrentScreen::SelectPlayMode => {
                 let screens = &mut self.state.screens;
-                match screens.menu_state.theme_flag() {
-                    config::theme::ThemeFlag::SimplyLove => select_mode::push_actors(
+                if let Some(selection) = &mut screens.selection_presentation {
+                    select_mode::with_play_selection_view(&screens.select_play_mode_state, |view| {
+                        selection.push_play_selection(&mut actors, view, arrow_effect_time_s);
+                    });
+                } else {
+                    select_mode::push_actors(
                         &mut actors,
                         &screens.select_play_mode_state,
                         &self.asset_manager,
                         visual_policy,
-                    ),
-                    config::theme::ThemeFlag::OpenItg => select_mode::with_play_selection_view(
-                        &screens.select_play_mode_state,
-                        |view| {
-                            screens.openitg_play_selection.push_actors(
-                                &mut actors,
-                                view,
-                                arrow_effect_time_s,
-                            )
-                        },
-                    ),
+                    );
                 }
             }
             CurrentScreen::ProfileLoad => {
                 let state = &self.state.screens.profile_load_state;
-                match self.state.screens.menu_state.theme_flag() {
-                    config::theme::ThemeFlag::SimplyLove => {
-                        profile_load::push_actors(&mut actors, state, visual_policy);
-                    }
-                    config::theme::ThemeFlag::OpenItg => {
-                        deadsync_theme_openitg::push_profile_load_actors(
-                            &mut actors,
-                            &deadsync_theme_simply_love::i18n::tr("Common", "Loading"),
-                            profile_load::elapsed_seconds(state),
-                        );
-                    }
+                if let Some(selection) = &self.state.screens.selection_presentation {
+                    selection.push_profile_load(
+                        &mut actors,
+                        &deadsync_theme_simply_love::i18n::tr("Common", "Loading"),
+                        profile_load::elapsed_seconds(state),
+                    );
+                } else {
+                    profile_load::push_actors(&mut actors, state, visual_policy);
                 }
             }
             CurrentScreen::SelectMusic => {
                 let state = &self.state.screens.select_music_state;
                 let stage_number = self.state.session.played_stages.len() + 1;
-                match self.state.screens.menu_state.theme_flag() {
-                    config::theme::ThemeFlag::SimplyLove => select_music::push_actors(
-                        &mut actors, state, &self.asset_manager, stage_number, visual_policy,
-                    ),
-                    config::theme::ThemeFlag::OpenItg => {
-                        let loaded_banner = self.dynamic_media.loaded_banner_key()
-                            .filter(|_| policy.show_select_music_banners);
-                        let view = select_music::select_music_view(
-                            state, stage_number, loaded_banner,
-                        );
-                        let banner = self.openitg_banner_frame(policy.show_select_music_banners);
-                        deadsync_theme_openitg::push_select_music_actors(&mut actors, view, banner);
-                        select_music::push_select_music_overlays(
-                            &mut actors,
-                            state,
-                            &self.asset_manager,
-                            visual_policy,
-                            false,
-                            Some(deadsync_theme_openitg::push_profile_picker_actors),
-                        );
-                    }
-                }
-            }
-            CurrentScreen::SelectCourse => {
-                let state = &self.state.screens.select_course_state;
-                match self.state.screens.menu_state.theme_flag() {
-                    config::theme::ThemeFlag::SimplyLove => select_course::push_actors(
+                if let Some(selection) = &self.state.screens.selection_presentation {
+                    let loaded_banner = self.dynamic_media.loaded_banner_key()
+                        .filter(|_| policy.show_select_music_banners);
+                    let view = select_music::select_music_view(state, stage_number, loaded_banner);
+                    selection.push_music(
+                        &mut actors,
+                        view,
+                        self.wheel_media_frame(policy.show_select_music_banners),
+                    );
+                    select_music::push_select_music_overlays(
                         &mut actors,
                         state,
                         &self.asset_manager,
                         visual_policy,
-                    ),
-                    config::theme::ThemeFlag::OpenItg => {
-                        let loaded_banner = self.dynamic_media.loaded_banner_key()
-                            .filter(|_| policy.show_select_music_banners);
-                        let view = select_course::select_course_view(state, loaded_banner);
-                        let banner = self.openitg_banner_frame(policy.show_select_music_banners);
-                        deadsync_theme_openitg::push_select_course_actors(&mut actors, view, banner);
-                        select_course::push_exit_prompt(&mut actors, state, visual_policy);
-                    }
+                        false,
+                        Some(selection.profile_picker()),
+                    );
+                } else {
+                    select_music::push_actors(
+                        &mut actors, state, &self.asset_manager, stage_number, visual_policy,
+                    );
+                }
+            }
+            CurrentScreen::SelectCourse => {
+                let state = &self.state.screens.select_course_state;
+                if let Some(selection) = &self.state.screens.selection_presentation {
+                    let loaded_banner = self.dynamic_media.loaded_banner_key()
+                        .filter(|_| policy.show_select_music_banners);
+                    let view = select_course::select_course_view(state, loaded_banner);
+                    selection.push_course(
+                        &mut actors,
+                        view,
+                        self.wheel_media_frame(policy.show_select_music_banners),
+                    );
+                    select_course::push_exit_prompt(&mut actors, state, visual_policy);
+                } else {
+                    select_course::push_actors(
+                        &mut actors,
+                        state,
+                        &self.asset_manager,
+                        visual_policy,
+                    );
                 }
             }
             CurrentScreen::Sandbox => sandbox::push_actors(
@@ -8253,32 +8223,24 @@ impl App {
             ),
             CurrentScreen::Init => {
                 let screens = &mut self.state.screens;
-                if let Some(intro) = &mut screens.openitg_intro
+                if let Some(intro) = &mut screens.attract
                     && !init::is_loading(&screens.init_state)
                 {
                     if let Some(demo) = intro.demo.as_mut() {
-                        let hide_gameplay_hud = demo.is_training();
-                        if hide_gameplay_hud {
-                            deadsync_theme_openitg::push_training_underlay(
-                                &mut actors,
-                                demo.training_feedback(),
-                            );
-                        }
+                        let music_time = demo.stage.current_music_time_display();
+                        intro.timeline.push_demo_underlay(&mut actors, music_time);
                         gameplay_segments = Some(crate::gameplay_runtime::push_actors(
                             &mut actors,
                             &mut demo.stage,
                             &self.asset_manager,
                             gameplay::ActorViewOverride {
-                                hide_gameplay_hud,
+                                hide_gameplay_hud: demo.request.hide_gameplay_hud,
                                 ..Default::default()
                             },
                             arrow_effect_time_s,
                             visual_policy,
                         ));
-                        intro.timeline.push_demonstration_overlay(
-                            &mut actors,
-                            demo.stage.current_music_time_display(),
-                        );
+                        intro.timeline.push_demo_overlay(&mut actors, music_time);
                     } else {
                         intro.timeline.push_actors(&mut actors, intro.video_key.as_ref());
                     }
@@ -8287,20 +8249,14 @@ impl App {
                 }
             }
             CurrentScreen::Evaluation => {
-                let state = &self.state.screens.evaluation_state;
-                if self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg {
-                    evaluation::push_actors_with_overview(
-                        &mut actors,
-                        state,
-                        &self.asset_manager,
-                        visual_policy,
-                        Some(deadsync_theme_openitg::push_evaluation_overview),
-                    );
-                } else {
-                    ActiveTheme::push_evaluation_actors(
-                        &mut actors, state, &self.asset_manager, visual_policy,
-                    );
-                }
+                let screens = &mut self.state.screens;
+                ActiveTheme::push_evaluation_actors(
+                    &mut actors,
+                    &screens.evaluation_state,
+                    &self.asset_manager,
+                    visual_policy,
+                    screens.stage_presentation.evaluation_overview(),
+                );
             }
             CurrentScreen::EvaluationSummary => {
                 let stages = PostSelectStageView::new(
@@ -8402,7 +8358,7 @@ impl App {
 
         match &self.state.shell.transition {
             TransitionState::FadingOut { target, elapsed, .. } => {
-                if let Some(outro) = self.state.screens.openitg_gameplay_outro {
+                if let Some(outro) = self.state.screens.gameplay_outro.as_ref() {
                     outro.push_actors(&mut actors, *elapsed);
                 } else {
                     let (out_actors, _) =
@@ -9354,7 +9310,7 @@ impl App {
 
     fn prepare_screen_state(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if prev == CurrentScreen::Init && target != CurrentScreen::Init
-            && let Some(intro) = self.state.screens.openitg_intro.as_mut()
+            && let Some(intro) = self.state.screens.attract.as_mut()
         {
             self.audio.stop_music();
             if intro.demo.is_some() {
@@ -9363,7 +9319,7 @@ impl App {
             if let Some(backend) = self.backend.as_mut() {
                 self.dynamic_media.set_background(&mut self.asset_manager, backend, None, 0.0, false);
             }
-            *intro = crate::openitg::IntroRuntime::default();
+            intro.reset();
         }
         // A preview's audio stops with the screen; its download stops here,
         // and so does a pack sync measure that is still running. So does a
@@ -9392,10 +9348,11 @@ impl App {
             init::replay_intro(&mut self.state.screens.init_state);
             self.state.screens.init_state.active_color_index = active_color_index;
             if prev == CurrentScreen::Menu
-                && let Some(intro) = self.state.screens.openitg_intro.as_mut()
+                && let Some(intro) = self.state.screens.attract.as_mut()
             {
+                let (song_limit, course_limit) = intro.timeline.record_limits();
                 intro.timeline.start_idle(
-                    deadsync_profile_gameplay::cabinet_records::recent_records(40, 15),
+                    deadsync_profile_gameplay::cabinet_records::recent_records(song_limit, course_limit),
                 );
             }
         } else if target == CurrentScreen::Options {
@@ -9479,13 +9436,17 @@ impl App {
             );
             self.state.screens.select_profile_state = ActiveTheme::init_profile_picker(view, context);
         } else if target == CurrentScreen::SelectStyle {
-            self.state.screens.openitg_play_selection = Default::default();
+            if let Some(selection) = self.state.screens.selection_presentation.as_mut() {
+                selection.enter_play_selection();
+            }
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state =
                 select_style::init(crate::select_flow::runtime_view());
             self.state.screens.select_style_state.active_color_index = current_color_index;
         } else if target == CurrentScreen::SelectPlayMode {
-            self.state.screens.openitg_play_selection = Default::default();
+            if let Some(selection) = self.state.screens.selection_presentation.as_mut() {
+                selection.enter_play_selection();
+            }
             let current_color_index = match prev {
                 CurrentScreen::SelectStyle => {
                     self.state.screens.select_style_state.active_color_index
@@ -11259,6 +11220,7 @@ const fn frame_screen_step_plan(context: FrameScreenStepContext) -> FrameScreenS
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+    use deadsync_theme_simply_love::screens::evaluation;
 
     #[test]
     fn screen_step_follows_transition_gate() {
@@ -11956,6 +11918,7 @@ mod tests {
             graph_last_second: song.precise_last_second(),
             music_rate,
             life_history: Vec::new(),
+            steps_life: Default::default(),
             fail_time: None,
             window_counts: timing_rules::WindowCounts::default(),
             window_counts_10ms: timing_rules::WindowCounts::default(),
@@ -12165,6 +12128,7 @@ mod tests {
             graph_first_second: 0.0,
             graph_last_second: 60.0,
             life_history: vec![(0.0, 1.0), (60.0, 0.0)],
+            steps_life: Default::default(),
             fail_time: Some(60.0),
             show_w0: true,
             show_ex_score: true,

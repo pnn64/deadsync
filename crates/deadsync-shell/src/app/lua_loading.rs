@@ -95,9 +95,8 @@ mod tests {
                     app.gameplay_preload.as_mut().unwrap().enter_requested = true;
                     assert!(!app.accepts_live_input());
                     assert_loading_frame(&mut app);
-                    app.state.screens.menu_state = crate::title_menu::InstalledMenu::new(
-                        config::theme::ThemeFlag::OpenItg, 0,
-                    );
+                    app.state.screens.stage_presentation =
+                        crate::mounted_theme::mount_stage(config::theme::ThemeFlag::OpenItg);
                     let (actors, _, segments) = app.get_current_actors(0.0, app.frame_policy);
                     assert!(segments.is_none());
                     assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite {

@@ -4106,6 +4106,7 @@ mod runtime_regression_tests {
         state.chart_runtime.row_indices.judged_row_cursor = [0; MAX_PLAYERS];
         state.clock.song_position.current_music_time_ns = song_time_ns_from_seconds(1.096);
         state.boundary.total_elapsed_in_screen = 12.0;
+        state.players_runtime.players[0].stage_life_record.steps_seconds = 0.625;
 
         state.set_final_note_result(
             0,
@@ -4158,6 +4159,10 @@ mod runtime_regression_tests {
             .expect("row-final judgment should update the judgment sprite");
         assert_eq!(last.judgment.grade, JudgeGrade::Decent);
         assert_eq!(last.judgment.time_error_ms, 96.0);
+        assert_eq!(
+            state.players_runtime.players[0].life_judgment_times.thresholds(),
+            [0.625; 3],
+        );
         assert_eq!(last.started_at_screen_s, 12.0);
     }
 

@@ -1,73 +1,11 @@
 //! Connects mounted OpenITG screens to the application flow and services.
 
-use std::sync::Arc;
-
 use crate::ThemeScreen as Screen;
-use crate::TransitionState;
-use deadsync_gameplay::ExitTransitionKind;
-use deadsync_theme::views::GameplayHudMotion;
 use deadsync_theme::{AudioRequest, ThemeEffect};
-use deadsync_theme_openitg::{
-    OpenItgIntro, OpenItgIntroMedia, OpenItgRuntimeRequest, OpenItgScreen,
-};
+use deadsync_theme_openitg::{OpenItgRuntimeRequest, OpenItgScreen};
 use deadsync_theme_simply_love::{SimplyLoveEffect, SimplyLoveRuntimeRequest};
 
 pub(crate) type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;
-
-#[derive(Default)]
-pub(crate) struct IntroRuntime {
-    pub timeline: OpenItgIntro,
-    pub video_key: Option<Arc<str>>,
-    pub demo: Option<Box<crate::app::AttractDemo>>,
-    current_media: Option<OpenItgIntroMedia>,
-}
-
-impl IntroRuntime {
-    pub fn update_media(&mut self) -> Option<OpenItgIntroMedia> {
-        let media = self.timeline.media();
-        if self.current_media == Some(media) {
-            return None;
-        }
-        self.current_media = Some(media);
-        Some(media)
-    }
-}
-
-pub(crate) fn gameplay_hud_motion(
-    state: &deadsync_theme_simply_love::screens::gameplay::State,
-    transition: &TransitionState,
-    restarting: bool,
-) -> GameplayHudMotion {
-    if let Some(out) = state.stage.song_lua.out_transition() {
-        return GameplayHudMotion::Leaving {
-            elapsed_seconds: out.elapsed_seconds(),
-        };
-    }
-    if let Some(out) = state.exit_prompt_state().exit_transition
-        && out.kind == ExitTransitionKind::Out
-    {
-        return GameplayHudMotion::Leaving {
-            elapsed_seconds: out.started_at.elapsed().as_secs_f32(),
-        };
-    }
-    match *transition {
-        TransitionState::FadingOut {
-            elapsed,
-            target: Screen::Evaluation,
-            ..
-        } => GameplayHudMotion::Leaving {
-            elapsed_seconds: elapsed,
-        },
-        TransitionState::FadingIn { elapsed, .. }
-            if !restarting && !state.presentation.hide_song_intro =>
-        {
-            GameplayHudMotion::Entering {
-                elapsed_seconds: elapsed,
-            }
-        }
-        _ => GameplayHudMotion::Settled,
-    }
-}
 
 pub(crate) const fn host_screen(screen: OpenItgScreen) -> Screen {
     match screen {

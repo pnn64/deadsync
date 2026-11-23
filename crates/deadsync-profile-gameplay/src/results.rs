@@ -123,6 +123,7 @@ pub fn course_summary_stage(
         meter: run.course_meter,
         song_stub,
         course_total_seconds: run.total_seconds(),
+        course_step_seconds: run.stages.iter().map(|stage| stage_stats::song_step_seconds(&stage.song)).sum(),
         totals: course_summary_totals(run),
         unplayed_jumps: run.stages[stage_summaries.len().min(run.stages.len())..]
             .iter()
@@ -338,6 +339,11 @@ pub fn stage_result<A, C, D>(
                 .saturating_add(column.w5)
         });
         let side = gs.setup.session.runtime_player_side(player_idx);
+        let step_samples = if disqualified && p.judgment_counts.iter().all(|&count| count == 0) {
+            &[]
+        } else {
+            p.stage_life_record.samples.as_slice()
+        };
         let golf_par = deadsync_chart::golf::par(
             &gs.song().simfile_path,
             &gs.charts()[player_idx].difficulty,
@@ -384,6 +390,12 @@ pub fn stage_result<A, C, D>(
             graph_first_second,
             graph_last_second,
             life_history: p.life_history.clone(),
+            steps_life: stage_stats::StageLifeTimeline {
+                samples: step_samples.into(),
+                judgment_times: p.life_judgment_times,
+                possible_seconds: stage_stats::song_step_seconds(gs.song()),
+                elapsed_seconds: p.stage_life_record.steps_seconds,
+            },
             fail_time: p.fail_time,
             show_w0: (prof.show_fa_plus_window && prof.show_fa_plus_pane) || prof.show_ex_score,
             show_fa_plus_pane: prof.show_fa_plus_pane,

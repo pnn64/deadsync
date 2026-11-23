@@ -173,6 +173,7 @@ fn score_info_from_stage_with_record(
             1.0
         },
         life_history: player.life_history.clone(),
+        steps_life: player.steps_life.clone(),
         fail_time: player.fail_time.or_else(|| {
             (player.grade == score_data::Grade::Failed).then_some(stage.duration_seconds)
         }),
@@ -255,6 +256,7 @@ pub fn build_course_graph_stages(
                 .map(|chart| CourseGraphStageView {
                     chart: Arc::new(chart.clone()),
                     song_last_second: stage.song.precise_last_second(),
+                    step_seconds: stage_stats::song_step_seconds(&stage.song),
                 })
         };
         let first = build(stage.steps_index[0]);

@@ -1,4 +1,5 @@
 mod grade;
+mod life_graph;
 
 use std::sync::{Arc, LazyLock};
 
@@ -21,8 +22,7 @@ use crate::resources::{
 const STATS_START_SECONDS: f32 = 3.0;
 const STATS_ENTER_SECONDS: f32 = 0.3;
 const CAPTION_FADE_SECONDS: f32 = 0.5;
-pub const EVALUATION_OVERVIEW_SETTLED_SECONDS: f32 =
-    STATS_START_SECONDS + STATS_ENTER_SECONDS + CAPTION_FADE_SECONDS;
+pub const EVALUATION_OVERVIEW_SETTLED_SECONDS: f32 = 4.45;
 
 const GRADE_ENTER_SECONDS: f32 = 0.5;
 const GRADE_SETTLE_START: f32 = 2.5;
@@ -105,61 +105,90 @@ impl Seat {
     }
 }
 
-pub fn push_evaluation_overview(actors: &mut Vec<Actor>, page: EvaluationOverview<'_, Actor>) {
-    let viewport = [screen_width(), screen_height()];
-    let layout = Layout::centered(viewport[0], viewport[1]);
-    let elapsed = page.elapsed.max(0.0);
-    let stats_progress = decelerate(elapsed - STATS_START_SECONDS, STATS_ENTER_SECONDS);
-    let solo_double = page.double_side_style && page.players.iter().flatten().count() == 1;
+#[derive(Default)]
+pub struct OpenItgEvaluation {
+    life: [Option<life_graph::LifeGraph>; 2],
+}
 
-    push_arcade_backdrop(actors, viewport, elapsed * 0.5);
-    push_header(actors, layout, elapsed);
-    push_result_reveal(actors, layout, &page, elapsed);
-    if stats_progress > 0.0 {
-        push_banner(actors, layout, &page, stats_progress, elapsed);
-        if let Some(stage_number) = page.stage_number {
-            push_round(
-                actors,
-                layout,
-                stage_number,
-                (1.0 - stats_progress) * viewport[0] * 0.5,
-            );
-        }
-        push_footer(actors, layout, &page, elapsed);
+impl OpenItgEvaluation {
+    pub fn reset(&mut self) {
+        self.life = [None, None];
     }
 
-    for (slot, player) in page.players.iter().enumerate() {
-        let Some(player) = player else { continue };
-        let seat = Seat::new(player.p2, solo_double);
-        if stats_progress > 0.0 {
-            let remaining = (1.0 - stats_progress) * seat.outward;
-            let distance = if solo_double { WIDTH } else { WIDTH * 0.5 };
-            let body_shift = remaining * distance;
-            push_difficulty(actors, layout, seat, player, remaining * (WIDTH * 0.5));
-            push_player_stats(actors, layout, seat, player, body_shift);
-            if let Some(graph) = (page.life_graph)(
-                slot,
-                layout.position(seat.panel_x + body_shift, LIFE_Y),
-                layout.size(LIFE_SIZE),
-                seat.tint,
-                8,
-            ) {
-                actors.push(graph);
-            }
-            push_course_boundaries(actors, layout, player, seat.panel_x + body_shift);
-            push_combo_runs(actors, layout, player, seat.panel_x + body_shift);
+    fn graph(
+        &mut self,
+        slot: usize,
+        timeline: &deadsync_theme::views::StageLifeTimeline,
+    ) -> &life_graph::LifeGraph {
+        let graph = &mut self.life[slot];
+        if graph.as_ref().is_none_or(|graph| !graph.matches(timeline)) {
+            *graph = Some(life_graph::LifeGraph::new(timeline));
         }
-        let arrived = decelerate(elapsed, GRADE_ENTER_SECONDS);
-        let settle = decelerate(elapsed - GRADE_SETTLE_START, GRADE_ENTER_SECONDS);
-        let grade_x = (seat.grade_x - seat.grade_hold_x).mul_add(settle, seat.grade_hold_x);
-        let x = (1.0 - arrived).mul_add(seat.outward * 300.0, grade_x);
-        let y = 22.0_f32.mul_add(settle, 180.0);
-        let scale = (-1.5_f32).mul_add(settle, 2.5);
-        grade::push_grade(actors, layout, [x, y], scale, player.grade, elapsed);
+        graph.as_ref().unwrap()
+    }
+    pub fn push_overview(&mut self, actors: &mut Vec<Actor>, page: EvaluationOverview<'_>) {
+        let viewport = [screen_width(), screen_height()];
+        let layout = Layout::centered(viewport[0], viewport[1]);
+        let elapsed = page.elapsed.max(0.0);
+        let stats_progress = decelerate(elapsed - STATS_START_SECONDS, STATS_ENTER_SECONDS);
+        let solo_double = page.double_side_style && page.players.iter().flatten().count() == 1;
+
+        push_arcade_backdrop(actors, viewport, elapsed * 0.5);
+        push_header(actors, layout, elapsed);
+        push_result_reveal(actors, layout, &page, elapsed);
+        if stats_progress > 0.0 {
+            push_banner(actors, layout, &page, stats_progress, elapsed);
+            if let Some(stage_number) = page.stage_number {
+                push_round(
+                    actors,
+                    layout,
+                    stage_number,
+                    (1.0 - stats_progress) * viewport[0] * 0.5,
+                );
+            }
+            push_footer(actors, layout, &page, elapsed);
+        }
+
+        for (slot, player) in page.players.iter().enumerate() {
+            let Some(player) = player else { continue };
+            let seat = Seat::new(player.p2, solo_double);
+            if stats_progress > 0.0 {
+                let remaining = (1.0 - stats_progress) * seat.outward;
+                let distance = if solo_double { WIDTH } else { WIDTH * 0.5 };
+                let body_shift = remaining * distance;
+                push_difficulty(actors, layout, seat, player, remaining * (WIDTH * 0.5));
+                push_player_stats(actors, layout, seat, player, body_shift);
+                let graph = self.graph(slot, player.steps_life);
+                let life_x = seat.panel_x + body_shift;
+                graph.push(actors, layout, [life_x, LIFE_Y], LIFE_SIZE, player.p2);
+                if player.grade != Grade::Failed {
+                    graph.push_barely(
+                        actors,
+                        layout,
+                        [life_x, LIFE_Y + LIFE_SIZE[1] * 0.5],
+                        LIFE_SIZE[0],
+                        elapsed,
+                    );
+                }
+                push_course_boundaries(actors, layout, player, seat.panel_x + body_shift);
+                push_combo_runs(actors, layout, player, seat.panel_x + body_shift);
+            }
+            let arrived = decelerate(elapsed, GRADE_ENTER_SECONDS);
+            let settle = decelerate(elapsed - GRADE_SETTLE_START, GRADE_ENTER_SECONDS);
+            let grade_x = (seat.grade_x - seat.grade_hold_x).mul_add(settle, seat.grade_hold_x);
+            let x = (1.0 - arrived).mul_add(seat.outward * 300.0, grade_x);
+            let y = 22.0_f32.mul_add(settle, 180.0);
+            let scale = (-1.5_f32).mul_add(settle, 2.5);
+            grade::push_grade(actors, layout, [x, y], scale, player.grade, elapsed);
+        }
     }
 }
 
-pub(crate) fn push_arcade_backdrop(actors: &mut Vec<Actor>, [width, height]: [f32; 2], motion: f32) {
+pub(crate) fn push_arcade_backdrop(
+    actors: &mut Vec<Actor>,
+    [width, height]: [f32; 2],
+    motion: f32,
+) {
     push_red_backdrop(actors, [width, height], motion, -30);
     for (y, phase, speed, opacity) in [
         (120.0, 0.2, 0.12, 0.2),
@@ -187,7 +216,7 @@ pub(crate) fn push_arcade_backdrop(actors: &mut Vec<Actor>, [width, height]: [f3
 fn push_result_reveal(
     actors: &mut Vec<Actor>,
     layout: Layout,
-    page: &EvaluationOverview<'_, Actor>,
+    page: &EvaluationOverview<'_>,
     elapsed: f32,
 ) {
     if !(0.25..3.2).contains(&elapsed) {
@@ -242,16 +271,16 @@ fn push_course_boundaries(
     player: &EvaluationPlayerOverview<'_>,
     x: f32,
 ) {
-    let [first, last] = player.graph_seconds;
-    if last <= first {
+    let duration = player.steps_life.possible_seconds;
+    if !duration.is_finite() || duration <= 0.0 {
         return;
     }
     let stages = player.course_graph_stages;
     let mut elapsed = 0.0;
     for stage in &stages[..stages.len().saturating_sub(1)] {
-        elapsed += stage.song_last_second.max(0.0);
-        if elapsed > first && elapsed < last {
-            let center = x + LIFE_SIZE[0] * ((elapsed - first) / (last - first));
+        elapsed += stage.step_seconds.max(0.0);
+        if elapsed > 0.0 && elapsed < duration {
+            let center = x + LIFE_SIZE[0] * (elapsed / duration);
             actors.push(layout.panel(
                 center - 1.0,
                 LIFE_Y,
@@ -378,7 +407,7 @@ fn push_round(actors: &mut Vec<Actor>, layout: Layout, round: usize, shift: f32)
 fn push_footer(
     actors: &mut Vec<Actor>,
     layout: Layout,
-    page: &EvaluationOverview<'_, Actor>,
+    page: &EvaluationOverview<'_>,
     elapsed: f32,
 ) {
     let alpha = ((elapsed - STATS_START_SECONDS) / 0.5).clamp(0.0, 1.0);
@@ -419,7 +448,7 @@ fn push_footer(
 fn push_banner(
     actors: &mut Vec<Actor>,
     layout: Layout,
-    page: &EvaluationOverview<'_, Actor>,
+    page: &EvaluationOverview<'_>,
     progress: f32,
     elapsed: f32,
 ) {
@@ -757,8 +786,27 @@ mod tests {
     use super::*;
     use deadlib_present::actors::SpriteSource;
     use deadlib_present::space::{Metrics, with_current_metrics};
-    use std::cell::RefCell;
     use std::sync::Arc;
+
+    static TEST_LIFE: LazyLock<deadsync_theme::views::StageLifeTimeline> =
+        LazyLock::new(|| deadsync_theme::views::StageLifeTimeline {
+            samples: Arc::from([(0.0, 0.5), (80.0, 0.8)]),
+            possible_seconds: 120.0,
+            elapsed_seconds: 120.0,
+            ..Default::default()
+        });
+
+    fn has_life_graph(actors: &[Actor], p2: bool, x: f32) -> bool {
+        let key = if p2 {
+            "openitg/evaluation-life-ffc-p2.png"
+        } else {
+            "openitg/evaluation-life-ffc-p1.png"
+        };
+        actors.iter().any(|actor| matches!(actor,
+            Actor::TexturedMesh { texture, offset, size: [SizeSpec::Px(271.0), SizeSpec::Px(39.0)], z: 8, .. }
+                if texture.texture_key() == Some(key) && (offset[0] - x).abs() < 0.001 && offset[1] == 239.0
+        ))
+    }
 
     fn player(mods: &Arc<str>) -> EvaluationPlayerOverview<'_> {
         EvaluationPlayerOverview {
@@ -781,6 +829,7 @@ mod tests {
             combo_runs: &[],
             graph_seconds: [0.0, 120.0],
             course_graph_stages: &[],
+            steps_life: &TEST_LIFE,
             personal_rank: Some(1),
             machine_rank: Some(3),
             disqualified: false,
@@ -831,8 +880,7 @@ mod tests {
         for (width, delta) in [(640.0, 0.0), (854.0, 107.0)] {
             with_current_metrics(Metrics::centered(width, 480.0), || {
                 let mut actors = Vec::new();
-                let graphs = RefCell::new(Vec::new());
-                push_evaluation_overview(
+                OpenItgEvaluation::default().push_overview(
                     &mut actors,
                     EvaluationOverview {
                         title: &title,
@@ -855,10 +903,6 @@ mod tests {
                                 ..player(&mods)
                             }),
                         ],
-                        life_graph: &|slot, origin, size, tint, z| {
-                            graphs.borrow_mut().push((slot, origin, size, tint, z));
-                            None
-                        },
                     },
                 );
                 assert!(actors.iter().any(|actor| matches!(actor,
@@ -866,13 +910,8 @@ mod tests {
                         texture, depth_test: true, .. }
                         if *offset == [320.0 + delta, 114.0] && texture.texture_key() == Some("stage-banner")
                 )));
-                assert_eq!(
-                    graphs.borrow().as_slice(),
-                    &[
-                        (0, [39.0 + delta, 239.0], LIFE_SIZE, P1, 8),
-                        (1, [329.0 + delta, 239.0], LIFE_SIZE, P2, 8),
-                    ]
-                );
+                assert!(has_life_graph(&actors, false, 39.0 + delta));
+                assert!(has_life_graph(&actors, true, 329.0 + delta));
                 assert!(has_texture(&actors, "openitg/gameplay-stage-1.png"));
                 assert!(has_text(&actors, "C500, Overhead", [220.0 + delta, 183.0]));
                 assert!(has_text(&actors, "C500, Overhead", [502.0 + delta, 183.0]));
@@ -917,7 +956,7 @@ mod tests {
                 (3.0, [86.0, 202.0]),
             ] {
                 let mut actors = Vec::new();
-                push_evaluation_overview(
+                OpenItgEvaluation::default().push_overview(
                     &mut actors,
                     EvaluationOverview {
                         title: &title,
@@ -928,9 +967,6 @@ mod tests {
                         double_side_style: false,
                         elapsed,
                         players: [Some(player(&empty)), None],
-                        life_graph: &|_, _, _, _, _| {
-                            panic!("life graph should wait for the stats slide")
-                        },
                     },
                 );
                 assert!(actors.iter().any(|actor| matches!(actor,
@@ -947,10 +983,14 @@ mod tests {
                 );
                 assert!(!has_text(&actors, "97.65%", [220.0, 212.0]));
                 assert!(!has_texture(&actors, "openitg/gameplay-stage-1.png"));
+                assert!(
+                    !actors
+                        .iter()
+                        .any(|actor| matches!(actor, Actor::TexturedMesh { z: 8, .. }))
+                );
             }
             let mut actors = Vec::new();
-            let graph_x = std::cell::Cell::new(0.0);
-            push_evaluation_overview(
+            OpenItgEvaluation::default().push_overview(
                 &mut actors,
                 EvaluationOverview {
                     title: &title,
@@ -961,13 +1001,9 @@ mod tests {
                     double_side_style: false,
                     elapsed: 3.15,
                     players: [Some(player(&empty)), None],
-                    life_graph: &|_, origin, _, _, _| {
-                        graph_x.set(origin[0]);
-                        None
-                    },
                 },
             );
-            assert!((graph_x.get() - (-41.0)).abs() < 0.001);
+            assert!(has_life_graph(&actors, false, -41.0));
             assert!(actors.iter().any(|actor| matches!(actor,
                 Actor::Sprite { source: SpriteSource::TextureStatic("openitg/gameplay-stage-1.png"), offset, .. }
                     if (offset[0] - (-56.0 + 498.0 * 0.08)).abs() < 0.001
@@ -982,7 +1018,7 @@ mod tests {
         let mods = Arc::from("2.30x");
         with_current_metrics(Metrics::centered(640.0, 480.0), || {
             let mut actors = Vec::new();
-            push_evaluation_overview(
+            OpenItgEvaluation::default().push_overview(
                 &mut actors,
                 EvaluationOverview {
                     title: &title,
@@ -1003,15 +1039,9 @@ mod tests {
                         }),
                         None,
                     ],
-                    life_graph: &|slot, origin, size, tint, _| {
-                        assert_eq!(
-                            (slot, origin, size, tint),
-                            (0, [182.0, 239.0], LIFE_SIZE, P2)
-                        );
-                        None
-                    },
                 },
             );
+            assert!(has_life_graph(&actors, true, 182.0));
             assert!(has_text(&actors, "COURSE RESULTS", [36.0, 76.0]));
             assert!(has_text(&actors, "Course Name", [320.0, 65.0]));
             assert!(has_text(&actors, "Expert", [497.0, 90.0]));

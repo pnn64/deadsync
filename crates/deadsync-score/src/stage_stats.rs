@@ -3,6 +3,7 @@ use std::{path::Path, sync::Arc};
 use deadsync_chart::{ChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_rules::judgment;
+use deadsync_rules::life::LifeJudgmentTimes;
 use deadsync_rules::timing::{
     ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, TimingStatsAccum, WindowCounts,
 };
@@ -19,6 +20,25 @@ pub struct StageSummary {
     pub duration_seconds: f32,
     /// Physical sides (P1, P2), including P2-only play in slot 1.
     pub players: [Option<PlayerStageSummary>; MAX_PLAYERS],
+}
+
+/// A life record in elapsed steps time. A course keeps the same clock across songs.
+#[derive(Clone, Debug, Default)]
+pub struct StageLifeTimeline {
+    pub samples: Arc<[(f32, f32)]>,
+    pub judgment_times: LifeJudgmentTimes,
+    pub possible_seconds: f32,
+    pub elapsed_seconds: f32,
+}
+
+impl StageLifeTimeline {
+    pub fn sample(&self, seconds: f32) -> f32 {
+        deadsync_rules::life::sample_steps_life(&self.samples, seconds)
+    }
+}
+
+pub fn song_step_seconds(song: &SongData) -> f32 {
+    (song.precise_last_second() - song.precise_first_second()).max(0.0)
 }
 
 #[derive(Clone, Debug)]
@@ -65,6 +85,7 @@ pub struct PlayerStageSummary {
     pub graph_first_second: f32,
     pub graph_last_second: f32,
     pub life_history: Vec<(f32, f32)>,
+    pub steps_life: StageLifeTimeline,
     pub fail_time: Option<f32>,
     pub show_w0: bool,
     pub show_ex_score: bool,
@@ -94,6 +115,7 @@ pub struct CourseSummaryInput<'a> {
     pub meter: Option<u32>,
     pub song_stub: &'a SongData,
     pub course_total_seconds: f32,
+    pub course_step_seconds: f32,
     pub totals: [CourseSummaryTotals; MAX_PLAYERS],
     pub unplayed_jumps: [u32; MAX_PLAYERS],
     pub stage_summaries: &'a [StageSummary],
@@ -255,11 +277,18 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         let mut graph_first_second = 0.0_f32;
         let mut graph_last_second = duration_seconds.max(0.001);
         let mut life_history = Vec::with_capacity(life_capacity);
+        let mut step_samples = Vec::new();
+        let mut life_judgments = LifeJudgmentTimes::default();
+        let mut steps_elapsed = 0.0;
         let mut fail_time = None;
         let mut elapsed = 0.0_f32;
         let mut first_player: Option<&PlayerStageSummary> = None;
         for stage in input.stage_summaries {
             let stage_offset = elapsed;
+            let steps_offset = steps_elapsed;
+            if let Some(player) = stage.players.iter().flatten().next() {
+                steps_elapsed += player.steps_life.elapsed_seconds;
+            }
             let Some(player) = stage.players[idx].as_ref() else {
                 elapsed += stage.duration_seconds.max(0.0);
                 continue;
@@ -328,6 +357,10 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             for &(time, life) in &player.life_history {
                 life_history.push((time + stage_offset, life));
             }
+            step_samples.extend(
+                player.steps_life.samples.iter().map(|&(time, life)| (time + steps_offset, life)),
+            );
+            life_judgments.merge_shifted(player.steps_life.judgment_times, steps_offset);
             if fail_time.is_none() {
                 fail_time = player.fail_time.map(|time| time + stage_offset);
             }
@@ -336,6 +369,9 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         let Some(first_player) = first_player else {
             continue;
         };
+        if step_samples.windows(2).any(|pair| pair[0].0 > pair[1].0) {
+            step_samples.sort_by(|left, right| left.0.total_cmp(&right.0));
+        }
         if possible_grade_points <= 0 {
             possible_grade_points = played_possible_grade_points;
         }
@@ -450,6 +486,12 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             graph_first_second,
             graph_last_second,
             life_history,
+            steps_life: StageLifeTimeline {
+                samples: step_samples.into(),
+                judgment_times: life_judgments,
+                possible_seconds: input.course_step_seconds,
+                elapsed_seconds: steps_elapsed,
+            },
             fail_time,
             show_w0,
             show_fa_plus_pane,
@@ -790,6 +832,7 @@ mod tests {
             graph_first_second: 0.0,
             graph_last_second: 60.0,
             life_history: vec![(1.0, 1.0)],
+            steps_life: Default::default(),
             fail_time: Some(40.0),
             show_w0: true,
             show_ex_score: true,
@@ -852,6 +895,7 @@ mod tests {
             course_total_seconds: song_a.precise_last_second()
                 + song_b.precise_last_second()
                 + 0.25,
+            course_step_seconds: song_step_seconds(&song_a) + song_step_seconds(&song_b),
             totals: [
                 CourseSummaryTotals {
                     possible_grade_points: 1000,
@@ -890,6 +934,55 @@ mod tests {
     }
 
     #[test]
+    fn course_life_timeline_keeps_one_steps_clock_and_never_restarts_the_colored_prefix() {
+        use judgment::JudgeGrade;
+        let song = test_song("Songs/Test/a.ssc", "a", 60.0);
+        let stage = |played, samples, judgments: &[(JudgeGrade, f32)]| {
+            let mut player = test_player_summary(test_chart("chart"), Grade::Tier09, 400, 500);
+            player.steps_life.samples = samples;
+            player.steps_life.possible_seconds = 60.0;
+            player.steps_life.elapsed_seconds = played;
+            for &(grade, second) in judgments {
+                player.steps_life.judgment_times.record(grade, second);
+            }
+            StageSummary {
+                song: Arc::clone(&song),
+                duration_seconds: 66.0,
+                music_rate: 1.0,
+                players: [None, Some(player)],
+            }
+        };
+        let stages = [
+            stage(55.0, Arc::from([(5.0, 0.5), (54.0, 0.8)]), &[(JudgeGrade::Excellent, 8.0)]),
+            stage(59.0, Arc::from([(1.0, 0.5), (57.0, 0.7)]), &[
+                (JudgeGrade::Excellent, 1.0),
+                (JudgeGrade::Great, 3.0),
+                (JudgeGrade::Miss, 7.0),
+            ]),
+        ];
+        let summary = build_course_summary_stage(CourseSummaryInput {
+            path: Path::new("Courses/Test.crs"),
+            name: "Test Course",
+            banner_path: None,
+            score_hash: "course-life",
+            difficulty_name: "Hard",
+            meter: None,
+            song_stub: song.as_ref(),
+            course_total_seconds: 180.0,
+            course_step_seconds: 180.0,
+            totals: Default::default(),
+            unplayed_jumps: [0, 0],
+            stage_summaries: &stages,
+        }).unwrap();
+        assert!(summary.players[0].is_none());
+        let timeline = &summary.players[1].as_ref().unwrap().steps_life;
+        assert_eq!(timeline.judgment_times.thresholds(), [8.0, 58.0, 62.0]);
+        assert_eq!(timeline.elapsed_seconds, 114.0);
+        assert_eq!(timeline.possible_seconds, 180.0);
+        assert_eq!(&*timeline.samples, &[(5.0, 0.5), (54.0, 0.8), (56.0, 0.5), (112.0, 0.7)]);
+    }
+
+    #[test]
     fn routine_shared_course_player_scores_both_participants_over_the_course() {
         let song = test_song("Songs/Test/a.ssc", "a", 60.0);
         let stage = |p1: (Grade, i32), p2: (Grade, i32)| StageSummary {
@@ -915,6 +1008,7 @@ mod tests {
                 meter: None,
                 song_stub: song.as_ref(),
                 course_total_seconds: 120.0,
+                course_step_seconds: 120.0,
                 totals,
                 unplayed_jumps: [0, 0],
                 stage_summaries: stages.as_slice(),
@@ -1022,6 +1116,7 @@ mod tests {
             meter: Some(12),
             song_stub: song.as_ref(),
             course_total_seconds: 120.0,
+            course_step_seconds: 120.0,
             totals: [CourseSummaryTotals::default(); MAX_PLAYERS],
             unplayed_jumps: [0, 0],
             stage_summaries: &stages,

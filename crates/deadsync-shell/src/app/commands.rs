@@ -98,10 +98,13 @@ impl App {
             return;
         };
         let had_path = path.is_some();
-        let fade = (self.frame_policy.show_select_music_banners
+        let fade = if self.frame_policy.show_select_music_banners
             && matches!(self.state.shell.transition, super::TransitionState::Idle)
-            && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg)
-            .then_some(deadsync_theme_openitg::WHEEL_BANNER_FADE);
+        {
+            self.state.screens.selection_presentation.as_ref().and_then(|selection| selection.banner_crossfade())
+        } else {
+            None
+        };
         let key = self
             .dynamic_media
             .set_banner(&mut self.asset_manager, backend, path, fade)
@@ -119,10 +122,10 @@ impl App {
         }
     }
 
-    pub(super) fn openitg_banner_frame(
+    pub(super) fn wheel_media_frame(
         &self,
         show_banners: bool,
-    ) -> deadsync_theme_openitg::WheelBannerFrame<'_> {
+    ) -> deadsync_theme::selection::WheelMediaFrame<'_> {
         let now = Instant::now();
         let exit_elapsed = match self.state.shell.transition {
             super::TransitionState::FadingOut { elapsed, .. }
@@ -134,8 +137,7 @@ impl App {
         } else {
             Default::default()
         };
-        self.openitg_banner_motion
-            .frame(now, outgoing, exit_elapsed)
+        deadsync_theme::selection::WheelMediaFrame { now, outgoing, exit_elapsed }
     }
 
     fn set_cdtitle(&mut self, path: Option<PathBuf>) {

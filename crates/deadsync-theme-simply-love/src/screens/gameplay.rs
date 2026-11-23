@@ -1201,6 +1201,10 @@ impl GameplayPresentation {
         self.hud = Some(hud);
     }
 
+    pub const fn has_hud(&self) -> bool {
+        self.hud.is_some()
+    }
+
     pub fn prewarm_combo_milestones(&self, visual_policy: crate::views::SimplyLoveVisualPolicyView) {
         self.notefield_combo_assets.prewarm(&visual_policy.assets.effects);
     }

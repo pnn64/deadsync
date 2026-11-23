@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
+use deadsync_theme::attract::{AttractDemoChart, AttractDemoRequest, AttractMedia, AttractPresentation};
 use deadsync_theme::views::{AttractCourseRecord, AttractRecord, AttractRecords};
 
+use crate::demonstration::{push_training_underlay, training::TrainingCues};
 use crate::presentation::{Layout, WIDTH, italic, push_red_backdrop, quad, sprite};
 use crate::resources::{MENU_HEADING_FONT, MENU_NORMAL_FONT};
 
@@ -105,6 +107,7 @@ pub struct OpenItgIntro {
     phase: Phase,
     elapsed: f32,
     records: AttractRecords,
+    training: Option<TrainingCues>,
 }
 
 impl OpenItgIntro {
@@ -128,6 +131,7 @@ impl OpenItgIntro {
             None => return,
         };
         self.elapsed = 0.0;
+        self.training = None;
     }
 
     pub fn advance(&mut self, delta_time: f32) -> bool {
@@ -227,6 +231,69 @@ impl OpenItgIntro {
             Phase::Logo => push_logo_layers(actors, layout, self.elapsed, 1.0, 0),
             _ => {}
         }
+    }
+}
+
+impl AttractPresentation<Actor> for OpenItgIntro {
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    fn record_limits(&self) -> (usize, usize) {
+        (40, 15)
+    }
+
+    fn start_idle(&mut self, records: AttractRecords) {
+        self.start_idle(records);
+    }
+
+    fn advance(&mut self, delta_time: f32) -> bool {
+        self.advance(delta_time)
+    }
+
+    fn media(&self) -> AttractMedia {
+        let media = self.media();
+        AttractMedia { movie: media.movie, music: media.music, loop_music: media.loop_music }
+    }
+
+    fn playback_time(&self) -> f32 {
+        self.playback_time()
+    }
+
+    fn demonstration(&self) -> Option<AttractDemoRequest> {
+        let training = self.demonstration()? == OpenItgDemonstration::Training;
+        Some(AttractDemoRequest {
+            game: "dance",
+            chart_type: "dance-single",
+            max_difficulty: if training { 0 } else { 2 },
+            force_uncentered_notefield: training,
+            hide_gameplay_hud: training,
+        })
+    }
+
+    fn prepare_demonstration(&mut self, chart: Option<AttractDemoChart<'_>>) {
+        if self.demonstration() == Some(OpenItgDemonstration::Training) {
+            self.training = chart.map(|chart| TrainingCues::new(chart.notes, chart.note_times, chart.timing));
+        }
+    }
+
+    fn finish_demonstration(&mut self) {
+        self.finish_demonstration();
+    }
+
+    fn push_actors(&self, actors: &mut Vec<Actor>, video_key: Option<&Arc<str>>) {
+        self.push_actors(actors, video_key);
+    }
+
+    fn push_demo_underlay(&self, actors: &mut Vec<Actor>, music_time: f32) {
+        if self.demonstration() == Some(OpenItgDemonstration::Training) {
+            let feedback = self.training.as_ref().map_or_else(Default::default, |cues| cues.sample(music_time));
+            push_training_underlay(actors, feedback);
+        }
+    }
+
+    fn push_demo_overlay(&self, actors: &mut Vec<Actor>, music_time: f32) {
+        self.push_demonstration_overlay(actors, music_time);
     }
 }
 

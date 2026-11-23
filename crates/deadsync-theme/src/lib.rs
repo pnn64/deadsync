@@ -1,13 +1,17 @@
+pub mod attract;
 pub mod color;
 mod effect;
 pub mod evaluation;
 pub mod main_menu;
 pub mod player_options;
 pub mod profile_picker;
-pub mod select_music;
 mod resources;
 mod runtime;
 mod screen;
+pub mod select_music;
+pub mod selection;
+pub mod stage;
+pub mod system_options;
 mod transition;
 pub mod views;
 

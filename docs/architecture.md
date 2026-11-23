@@ -15,6 +15,12 @@ game crates can use engine crates. The `deadsync` executable and `deadsync-shell
 are the composition roots that select and connect the concrete implementation.
 Neither is a dependency of engine, game, or theme crates.
 
+`deadsync-shell/src/mounted_theme.rs` selects the supplemental assets and the
+stage, selection, System Options, and attract presentations. Their shared
+interfaces live in `deadsync-theme`. The shell passes game state, elapsed time,
+input intent, and ready media to the installed presentation. Theme implementations
+own layout, animation, resource choices, and any presentation state they retain.
+
 ## Shared contracts
 
 Shared data belongs below its consumers, so game code does not need to import a
@@ -762,3 +768,5 @@ reports when it has finished showing animations and dialogs.
 Several screens and runtime requests still use concrete Simply Love types.
 The Evaluation mount still uses Simply Love's presentation context, runtime
 views, and auxiliary pane controller.
+The shell's screen and effect types and several shared controllers also come
+from Simply Love through `ActiveTheme`.

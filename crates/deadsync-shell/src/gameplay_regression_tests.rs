@@ -2896,6 +2896,9 @@ M000
                     player.mines_avoided = 2;
                     player.calories_burned = 3.25 + runtime as f32;
                     player.life_history = vec![(0.0, 1.0), (5.0, 0.75)];
+                    player.stage_life_record.steps_seconds = 5.0;
+                    player.stage_life_record.samples = vec![(0.0, 1.0), (5.0, 0.75)];
+                    player.life_judgment_times.record(JudgeGrade::Excellent, 2.0);
                     state.progress.window_counts.canonical[runtime] =
                         deadsync_rules::timing::WindowCounts {
                             w0: 1,
@@ -2934,6 +2937,8 @@ M000
                     assert_eq!(result.rolls_held, 1);
                     assert_eq!(result.mines_avoided, 2);
                     assert_eq!(result.life_history, [(0.0, 1.0), (5.0, 0.75)]);
+                    assert_eq!(&*result.steps_life.samples, &[(0.0, 1.0), (5.0, 0.75)]);
+                    assert_eq!(result.steps_life.judgment_times.thresholds()[0], 2.0);
                     assert!(!result.disqualified);
                 }
                 let mut context = EvaluationContextView {
@@ -2967,6 +2972,7 @@ M000
                     assert_eq!(score.column_judgments, result.column_judgments);
                     assert_eq!(score.scatter.len(), result.scatter.len());
                     assert_eq!(score.histogram.bins, result.histogram.bins);
+                    assert!(Arc::ptr_eq(&score.steps_life.samples, &result.steps_life.samples));
                 }
                 let mut screen = evaluation::init(view, context);
                 assert_eq!(screen.stage_duration_seconds, 12.5);
@@ -2976,18 +2982,19 @@ M000
                 space::with_current_metrics(space::Metrics::centered(854.0, 480.0), || {
                     let assets = deadlib_assets::AssetManager::new();
                     let mut actors = Vec::new();
+                    let mut openitg = deadsync_theme_openitg::OpenItgEvaluation::default();
                     evaluation::push_actors_with_overview(
                         &mut actors,
                         &screen,
                         &assets,
                         Default::default(),
-                        Some(deadsync_theme_openitg::push_evaluation_overview),
+                        Some(&mut openitg),
                     );
                     assert!(actor_tree_has_text(&actors, "CHECK YOUR STATS"));
                     assert!(actor_tree_has_text(&actors, "   27"));
                     assert_eq!(actor_tree_has_text(&actors, "   28"), style.is_versus());
                     let graph = actors.iter().find_map(|actor| match actor {
-                        Actor::Mesh { vertices, .. } => Some(Arc::clone(vertices)),
+                        Actor::TexturedMesh { vertices, z: 8, .. } => Some(Arc::clone(vertices)),
                         _ => None,
                     }).expect("overview life graph");
                     actors.clear();
@@ -2996,10 +3003,10 @@ M000
                         &screen,
                         &assets,
                         Default::default(),
-                        Some(deadsync_theme_openitg::push_evaluation_overview),
+                        Some(&mut openitg),
                     );
                     assert!(actors.iter().any(|actor| matches!(actor,
-                        Actor::Mesh { vertices, .. } if Arc::ptr_eq(&graph, vertices)
+                        Actor::TexturedMesh { vertices, z: 8, .. } if Arc::ptr_eq(&graph, vertices)
                     )));
                 });
                 // Session storage does not need the screen and remains unchanged by it.

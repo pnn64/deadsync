@@ -41,6 +41,18 @@ pub use effects::{
 
 pub struct SimplyLoveTheme;
 
+impl deadsync_theme::stage::StagePresentation<deadlib_present::actors::Actor> for SimplyLoveTheme {
+    fn push_loading(
+        &self,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        view: deadsync_theme::stage::StageLoadingView<'_>,
+    ) {
+        screens::components::shared::song_lua_loading::push(
+            actors, view.title.clone(), view.progress, view.color_index,
+        );
+    }
+}
+
 impl SimplyLoveTheme {
     #[must_use]
     pub const fn gameplay_exit_screen(

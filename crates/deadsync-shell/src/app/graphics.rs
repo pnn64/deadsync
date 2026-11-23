@@ -22,7 +22,6 @@ use deadsync_theme::{
     DisplayModeChoice, FullscreenChoice, GraphicsRequest, PresentPolicyChoice, RendererChoice,
     ThemeResources,
 };
-use deadsync_theme_openitg::OpenItgTheme;
 use deadsync_theme_simply_love::screens::{options, select_music};
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
 use log::{debug, error, info};
@@ -287,9 +286,9 @@ impl App {
             },
         );
         let mut manifest = ActiveTheme::asset_manifest();
-        let openitg = self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg;
-        if openitg {
-            manifest.embedded_pngs = OpenItgTheme::asset_manifest().embedded_pngs;
+        let supplemental = crate::mounted_theme::supplemental_resources(self.state.screens.menu_state.theme_flag());
+        if !supplemental.embedded_pngs.is_empty() {
+            manifest.embedded_pngs = supplemental.embedded_pngs;
         }
         let mut startup = start_renderer_runtime(
             &mut self.state.shell,
@@ -300,11 +299,11 @@ impl App {
             manifest,
             Instant::now(),
         )?;
-        if openitg {
+        if !supplemental.fonts.is_empty() {
             deadsync_assets::fonts::load_initial_fonts(
                 &mut self.asset_manager,
                 &mut startup.backend,
-                OpenItgTheme::asset_manifest().fonts,
+                supplemental.fonts,
             )?;
         }
         self.apply_graphics_display_sync(startup_display_sync(
@@ -623,7 +622,7 @@ mod tests {
         let hud = deadsync_theme_openitg::GAMEPLAY_HUD;
         let tap = hud.default_tap_atlas;
         let hold = hud.default_hold_atlas;
-        let manifest = OpenItgTheme::asset_manifest();
+        let manifest = deadsync_theme_openitg::OpenItgTheme::asset_manifest();
         for (key, [width, height], cols, rows) in [
             (tap.key, tap.frame_size, tap.frame_cols as u32, tap.frame_rows as u32),
             (hold.key, hold.frame_size, 1, 2),

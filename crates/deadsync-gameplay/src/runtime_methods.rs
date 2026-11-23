@@ -1982,6 +1982,9 @@ where
                 );
             }
             if plan.apply_life_change {
+                p.life_judgment_times.record(
+                    final_judgment.grade, p.stage_life_record.steps_seconds,
+                );
                 self.apply_player_life_event(
                     player,
                     current_music_time,

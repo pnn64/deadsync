@@ -29,8 +29,11 @@ fn renderer_and_shell_cues_use_theme_resources() {
     let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
     let screenshot = production_source(&shell.join("app/screenshot.rs"));
     assert!(graphics_app.contains("ActiveTheme::asset_manifest()"));
-    assert!(graphics_app.contains("OpenItgTheme::asset_manifest().embedded_pngs"));
-    assert!(app.contains("deadsync_theme_openitg::OpenItgTheme::SOUNDS"));
+    let mounting = production_source(&shell.join("mounted_theme.rs"));
+    assert!(graphics_app.contains("manifest.embedded_pngs = supplemental.embedded_pngs"));
+    assert!(graphics_app.contains("supplemental.fonts"));
+    assert!(mounting.contains("let manifest = OpenItgTheme::asset_manifest()"));
+    assert!(mounting.contains("sounds: OpenItgTheme::SOUNDS"));
     assert!(contains_rust(app, "UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, installed_sounds)"));
     assert!(app.contains("AudioRequest::PlayUiCue(UiCue::Confirm)"));
     assert!(screenshot.contains("UiCue::Screenshot"));
@@ -6081,8 +6084,8 @@ fn profile_load_preparation_worker_is_shell_owned() {
         "self.profile_load.poll()",
         "let target = match prepared",
         "profile_load::sync_ready(&mut self.state.screens.profile_load_state, target)",
-        "deadsync_theme_openitg::push_profile_load_actors(",
-        "deadsync_theme_openitg::push_select_course_actors(",
+        "selection.push_profile_load(",
+        "selection.push_course(",
     ] {
         assert!(
             app.contains(integration),
@@ -7530,10 +7533,43 @@ fn both_music_wheels_use_the_game_catalog_and_keep_auxiliary_screens() {
     assert!(wheel.contains("wheel_entry_index(p.selected_index,"));
     assert!(openitg.contains("SelectMusicView<'_>"));
     assert!(app.contains("select_music::select_music_view("));
-    assert!(app.contains("deadsync_theme_openitg::push_select_music_actors("));
+    assert!(app.contains("selection.push_music("));
     assert!(app.contains("select_music::push_select_music_overlays("));
     assert!(selection.contains("push_select_music_overlays(actors, state, asset_manager, visual_policy, true, None)"));
-    assert!(app.contains("Some(deadsync_theme_openitg::push_profile_picker_actors)"));
+    assert!(app.contains("Some(selection.profile_picker())"));
+}
+
+#[test]
+fn application_dispatches_mounted_presentations_through_shared_contracts() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    let mounting = production_source(&shell.join("mounted_theme.rs"));
+    let app = read_source(shell.join("app/mod.rs")).expect("application source");
+    let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
+
+    for (interface, implementation) in [
+        ("StagePresentation", "OpenItgStagePresentation"),
+        ("SelectionPresentation", "OpenItgSelectionPresentation"),
+        ("SystemOptionsPresentation", "OpenItgSystemOptions"),
+        ("AttractPresentation", "OpenItgIntro"),
+    ] {
+        assert!(mounting.contains(interface));
+        assert!(mounting.contains(implementation));
+        assert!(!app.contains(implementation));
+    }
+
+    for source in [
+        app.to_owned(),
+        production_source(&shell.join("app/attract_demo.rs")),
+        production_source(&shell.join("app/commands.rs")),
+        production_source(&shell.join("app/graphics.rs")),
+        production_source(&shell.join("app/screen_nav.rs")),
+        production_source(&shell.join("app/stage_start.rs")),
+        production_source(&shell.join("app/screenshot.rs")),
+    ] {
+        assert!(!source.contains("deadsync_theme_openitg"));
+        assert!(!source.contains("ThemeFlag::OpenItg"));
+    }
 }
 
 #[test]

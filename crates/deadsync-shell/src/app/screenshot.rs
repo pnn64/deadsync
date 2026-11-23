@@ -62,18 +62,16 @@ impl App {
     pub(super) fn update_evaluation_capture(&mut self, mask: u8) {
         let screens = &mut self.state.screens;
         let on_evaluation = screens.current_screen == CurrentScreen::Evaluation;
-        let overview_revealing = on_evaluation
-            && screens.menu_state.theme_flag() == deadsync_config::theme::ThemeFlag::OpenItg
-            && screens.evaluation_state.screen_elapsed
-                < deadsync_theme_openitg::EVALUATION_OVERVIEW_SETTLED_SECONDS
-            && super::evaluation::overview_pane_selected(&screens.evaluation_state);
+        let intro_settled = on_evaluation && screens.stage_presentation.evaluation_intro_settled(
+            screens.evaluation_state.screen_elapsed,
+            super::evaluation::overview_pane_selected(&screens.evaluation_state),
+        );
         let capture = &mut screens.evaluation_capture;
         let plan = auto_screenshot_frame_plan(
             AutoScreenshotFrameContext {
                 screen: screens.current_screen,
                 already_taken: capture.taken,
-                ready: on_evaluation
-                    && !overview_revealing
+                ready: intro_settled
                     && ActiveTheme::evaluation_capture_ready(&screens.evaluation_state),
                 mask: if on_evaluation { mask } else { 0 },
             },

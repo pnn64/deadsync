@@ -4,6 +4,7 @@ mod help;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
+use deadsync_theme::system_options::{SystemOptionsLayout, SystemOptionsPresentation};
 use deadsync_theme::views::{
     SystemOptionsPage, SystemOptionsPageKind, SystemOptionsPhase, SystemOptionsRenderer,
     SystemOptionsRow, SystemOptionsServiceRow, SystemOptionsTiming,
@@ -46,19 +47,30 @@ impl OpenItgSystemOptions {
         service_seconds: 0.5,
         settings_seconds: PANEL_SECONDS,
     };
+}
+
+impl SystemOptionsPresentation<Actor> for OpenItgSystemOptions {
+    fn layout(&self) -> SystemOptionsLayout {
+        SystemOptionsLayout {
+            split_graphics: true,
+            service_order: Self::SERVICE_ORDER,
+            timing: Some(Self::TIMING),
+            return_overscan_to_graphics: true,
+        }
+    }
 
     /// Start a fresh Options visit while retaining the row allocation.
-    pub fn reset(&mut self) {
+    fn reset(&mut self) {
         self.page_id = None;
     }
 
-    pub fn with_renderer<R>(
+    fn with_renderer(
         &mut self,
         phase: SystemOptionsPhase,
         now_seconds: f64,
         assets: &AssetManager,
-        draw: impl FnOnce(SystemOptionsRenderer<'_, Actor>) -> R,
-    ) -> R {
+        draw: &mut dyn FnMut(SystemOptionsRenderer<'_, Actor>),
+    ) {
         let mut page = |actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>| {
             self.push_page(actors, page, assets, now_seconds);
         };
@@ -66,9 +78,11 @@ impl OpenItgSystemOptions {
             phase,
             background: push_background,
             page: &mut page,
-        })
+        });
     }
+}
 
+impl OpenItgSystemOptions {
     fn retarget_rows(&mut self, page: &SystemOptionsPage<'_>, first: usize, end: usize, now: f64) {
         let progress = page.selected as f32 / page.row_count.max(1) as f32;
         if self.page_id != Some(page.id) || self.rows.len() != page.row_count + 1 {

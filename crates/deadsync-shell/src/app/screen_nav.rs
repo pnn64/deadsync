@@ -48,6 +48,36 @@ pub(super) fn overscan_view() -> OverscanAdjustmentView {
     }
 }
 
+pub(super) fn stage_motion_view(
+    state: &super::GameplayState,
+    transition: &TransitionState<CurrentScreen>,
+    restarting: bool,
+) -> deadsync_theme::stage::StageMotionView {
+    use deadsync_gameplay::ExitTransitionKind;
+    use deadsync_theme::stage::StageMotionView;
+    use deadsync_theme::views::GameplayHudMotion;
+
+    let chart_outro = state.stage.song_lua.out_transition().map(|out| out.elapsed_seconds());
+    let give_up_outro = if chart_outro.is_none() {
+        state.exit_prompt_state().exit_transition
+            .filter(|out| out.kind == ExitTransitionKind::Out)
+            .map(|out| out.started_at.elapsed().as_secs_f32())
+    } else {
+        None
+    };
+    let transition = match *transition {
+        TransitionState::FadingOut { elapsed, target: CurrentScreen::Evaluation, .. } => {
+            GameplayHudMotion::Leaving { elapsed_seconds: elapsed }
+        }
+        TransitionState::FadingIn { elapsed, .. } => GameplayHudMotion::Entering { elapsed_seconds: elapsed },
+        _ => GameplayHudMotion::Settled,
+    };
+    StageMotionView {
+        chart_outro, give_up_outro, transition, restarting,
+        hide_intro: state.presentation.hide_song_intro,
+    }
+}
+
 impl App {
     /// Resolve a failed Endless renewal before committing a screen change.
     /// Replaying by modulo here would reuse an old cycle without its totals.
@@ -161,7 +191,10 @@ impl App {
     #[inline(always)]
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
-        self.state.screens.openitg_gameplay_outro = None;
+        self.state.screens.gameplay_outro = None;
+        if prev == CurrentScreen::Evaluation && target != prev {
+            self.state.screens.stage_presentation.leave_evaluation();
+        }
         if (prev == ActiveTheme::SCREENS.song_selection || prev == ActiveTheme::SCREENS.course_selection)
             && target != prev
             && !stage_launch_target(target)
@@ -212,9 +245,9 @@ impl App {
                 self.dynamic_media.expire_outgoing_banners(&mut self.asset_manager, backend, None);
             }
             if matches!(target, CurrentScreen::SelectMusic | CurrentScreen::SelectCourse)
-                && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg
+                && let Some(selection) = self.state.screens.selection_presentation.as_mut()
             {
-                self.openitg_banner_motion.enter(super::Instant::now());
+                selection.enter_wheel(super::Instant::now());
             }
         }
         self.state.screens.current_screen = target;
@@ -396,7 +429,7 @@ impl App {
         debug!("Starting actor-only fade out to screen: {target:?}");
         if from == CurrentScreen::Menu {
             self.state.shell.transition = self.state.screens.menu_state.actor_exit(target);
-        } else if let Some(duration) = self.openitg_options_transition_seconds(from) {
+        } else if let Some(duration) = self.options_transition_seconds(from) {
             self.state.shell.transition = TransitionState::ActorsFadeOut {
                 elapsed: 0.0,
                 duration,
@@ -411,7 +444,7 @@ impl App {
     fn apply_selected_actor_entry(&mut self, target: CurrentScreen) {
         if target == CurrentScreen::Menu {
             self.state.shell.transition = self.state.screens.menu_state.actor_entry();
-        } else if let Some(duration) = self.openitg_options_transition_seconds(target) {
+        } else if let Some(duration) = self.options_transition_seconds(target) {
             self.state.shell.transition = TransitionState::ActorsFadeIn {
                 elapsed: 0.0,
                 duration,
@@ -430,27 +463,27 @@ impl App {
             self.audio.stop_screen_sfx();
         }
         let (_, out_duration) = self.get_out_transition_for_route(current, target);
-        let outro = if current == CurrentScreen::Gameplay
-            && target == CurrentScreen::Evaluation
-            && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg
-        {
-            self.state.screens.gameplay_state.as_ref().filter(|stage| stage.stage.song_lua.is_none())
-                .map(|stage| deadsync_theme_openitg::GameplayOutro::from_result(
-                    stage.all_joined_players_failed(),
-                    &stage.song().simfile_path,
-                ))
+        let screens = &self.state.screens;
+        let outro = if current == CurrentScreen::Gameplay && target == CurrentScreen::Evaluation {
+            screens.gameplay_state.as_ref().and_then(|stage| {
+                screens.stage_presentation.gameplay_outro(deadsync_theme::stage::StageOutroView {
+                    failed: stage.all_joined_players_failed(),
+                    simfile: &stage.song().simfile_path,
+                    authored_transition: stage.stage.song_lua.is_some(),
+                })
+            })
         } else {
             None
         };
-        let out_duration = outro.map_or(out_duration, |outro| {
+        let out_duration = outro.as_ref().map_or(out_duration, |outro| {
             if let Some(cue) = outro.cue() {
                 self.ui_sfx.play_cue(&mut self.audio, cue);
             }
             let duration = out_duration.max(outro.duration());
-            debug!("OpenITG gameplay outro {outro:?} for {duration:.2} s");
+            debug!("Theme gameplay outro for {duration:.2} s");
             duration
         });
-        self.state.screens.openitg_gameplay_outro = outro;
+        self.state.screens.gameplay_outro = outro;
         apply_global_fade_out_transition(&mut self.state.shell, target, out_duration);
         self.sync_gameplay_input_capture();
     }
@@ -552,9 +585,8 @@ impl App {
         (self.state.screens.current_screen, commands)
     }
 
-    fn openitg_options_transition_seconds(&self, screen: CurrentScreen) -> Option<f32> {
-        (screen == CurrentScreen::Options
-            && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg)
+    fn options_transition_seconds(&self, screen: CurrentScreen) -> Option<f32> {
+        (screen == CurrentScreen::Options && self.state.screens.system_options_presentation.is_some())
             .then(|| self.state.screens.options_state.page_transition_seconds())
     }
 
@@ -566,14 +598,15 @@ impl App {
         if screen == CurrentScreen::Menu {
             return self.state.screens.menu_state.exit_transition(target);
         }
-        if let Some(duration) = self.openitg_options_transition_seconds(screen) {
+        if let Some(duration) = self.options_transition_seconds(screen) {
             return (Vec::new(), duration);
         }
         if target == CurrentScreen::PlayerOptions
             && matches!(screen, CurrentScreen::SelectMusic | CurrentScreen::SelectCourse)
-            && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg
+            && let Some(duration) = self.state.screens.selection_presentation.as_ref()
+                .and_then(|selection| selection.player_options_exit_seconds())
         {
-            return (Vec::new(), deadsync_theme_openitg::WHEEL_TO_PLAYER_OPTIONS_SECONDS);
+            return (Vec::new(), duration);
         }
         if screen == CurrentScreen::PlayerOptions
             && let Some(options) = self.state.screens.player_options_state.as_ref()
@@ -589,7 +622,7 @@ impl App {
         if screen == CurrentScreen::Menu {
             return self.state.screens.menu_state.entry_transition();
         }
-        if let Some(duration) = self.openitg_options_transition_seconds(screen) {
+        if let Some(duration) = self.options_transition_seconds(screen) {
             return (Vec::new(), duration);
         }
         if screen == CurrentScreen::PlayerOptions
@@ -617,16 +650,13 @@ impl App {
             policy: super::simply_love_visual_policy(&config::runtime::get()),
         });
         let restarting = play.is_some_and(|(_, restart)| restart);
-        let (actors, duration) = if screen == CurrentScreen::Gameplay
-            && !restarting
-            && play.is_some_and(|(gameplay, _)| gameplay.is_some())
-            && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg
-        {
-            use deadsync_theme_openitg::{OpenItgScreen, OpenItgTheme};
-            OpenItgTheme::in_transition(OpenItgScreen::Gameplay, ())
-        } else {
-            ActiveTheme::in_transition(screen, context)
-        };
+        let (actors, duration) = (screen == CurrentScreen::Gameplay)
+            .then(|| self.state.screens.stage_presentation.gameplay_entry(
+                restarting,
+                play.is_some_and(|(gameplay, _)| gameplay.is_some()),
+            ))
+            .flatten()
+            .unwrap_or_else(|| ActiveTheme::in_transition(screen, context));
         let duration = stage_entry_duration::<ActiveTheme>(screen, restarting).unwrap_or(duration);
         (actors, duration)
     }

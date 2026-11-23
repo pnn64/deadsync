@@ -153,6 +153,7 @@ pub(crate) fn evaluation_view(
                 graph_last_second: player.graph_last_second,
                 music_rate: stage.music_rate,
                 life_history: player.life_history.clone(),
+                steps_life: player.steps_life.clone(),
                 fail_time: player.fail_time,
                 window_counts: player.window_counts,
                 window_counts_10ms: player.window_counts_10ms,

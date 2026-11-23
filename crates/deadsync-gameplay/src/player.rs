@@ -146,6 +146,7 @@ pub struct PlayerRuntime {
 
     pub life_history: Vec<(f32, f32)>,
     pub stage_life_record: StageLifeRecord,
+    pub life_judgment_times: deadsync_rules::life::LifeJudgmentTimes,
     pub alive_seconds: f32,
     pub life_record_source: LifeRecordSource,
 
@@ -314,6 +315,7 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         course_submit_life: None,
         life_history: Vec::with_capacity(caps.life_history),
         stage_life_record: StageLifeRecord::with_capacity(caps.life_history),
+        life_judgment_times: Default::default(),
         alive_seconds: 0.0,
         life_record_source: LifeRecordSource::Meter,
         error_bar_mono_ticks: [None; 15],

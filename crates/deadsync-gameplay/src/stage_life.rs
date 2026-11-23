@@ -68,18 +68,6 @@ impl StageLifeRecord {
 
     /// PlayerStageStats::GetLifeRecordLerpAt and RageUtil's float SCALE order.
     pub fn sample(&self, seconds: f32) -> f32 {
-        if self.samples.is_empty() {
-            return 0.0;
-        }
-        let later = self.samples.partition_point(|&(time, _)| !(seconds < time));
-        let earlier = later.saturating_sub(1);
-        let (from, before) = self.samples[earlier];
-        let Some(&(to, after)) = self.samples.get(later) else {
-            return before;
-        };
-        if from == to {
-            return before;
-        }
-        (seconds - from) * (after - before) / (to - from) + before
+        deadsync_rules::life::sample_steps_life(&self.samples, seconds)
     }
 }

@@ -1,6 +1,7 @@
 //! Presentation interface for a completed stage or course.
 
 use crate::{ThemeEffect, ThemeTransitions};
+use crate::stage::EvaluationOverviewPresentation;
 use crate::views::{EvaluationStageView, EvaluationView, HeartRateView};
 use deadlib_assets::AssetManager;
 use deadsync_core::{input::MAX_PLAYERS, session_flow::EvaluationOrigin};
@@ -77,6 +78,7 @@ pub trait ThemeEvaluation: ThemeTransitions {
         state: &Self::EvaluationState,
         assets: &AssetManager,
         visual_policy: Self::EvaluationVisualPolicy,
+        overview: Option<&mut dyn EvaluationOverviewPresentation<Self::Actor>>,
     );
     fn sync_evaluation_runtime(state: &mut Self::EvaluationState, view: Self::EvaluationRuntime);
     fn evaluation_heart_rate_generation(state: &Self::EvaluationState) -> Option<(bool, u64, u64)>;
