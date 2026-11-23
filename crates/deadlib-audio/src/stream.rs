@@ -911,9 +911,29 @@ pub fn load_and_resample_sfx(
 ) -> Result<Arc<[i16]>, Box<dyn std::error::Error + Send + Sync>> {
     let opened = decode::open_file(path, options)?;
     let mut reader = opened.reader;
-    let in_ch = opened.channels;
-    let in_hz = opened.sample_rate_hz;
-    let frames_total_hint = opened.frames_total_hint;
+    resample_sfx(opened.channels, opened.sample_rate_hz, opened.frames_total_hint, output, |out| {
+        reader.read_dec_packet_into(out)
+    })
+}
+
+/// Decodes bundled WAV bytes at preparation time and maps them to the output format.
+pub fn load_and_resample_wav_sfx(
+    bytes: &[u8],
+    output: OutputFormat,
+) -> Result<Arc<[i16]>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut reader = decode::wav::open_bytes(bytes)?;
+    resample_sfx(reader.channels(), reader.sample_rate_hz(), Some(reader.frames_total()), output, |out| {
+        reader.read_dec_packet_into(out)
+    })
+}
+
+fn resample_sfx(
+    in_ch: usize,
+    in_hz: u32,
+    frames_total_hint: Option<u64>,
+    output: OutputFormat,
+    mut read_packet: impl FnMut(&mut Vec<i16>) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>,
+) -> Result<Arc<[i16]>, Box<dyn std::error::Error + Send + Sync>> {
     let out_ch = output.channels;
     let out_hz = output.sample_rate_hz;
     let output_capacity = sfx_output_capacity(frames_total_hint, in_hz, output);
@@ -921,7 +941,7 @@ pub fn load_and_resample_sfx(
     if in_hz == out_hz {
         let mut pkt_buf = Vec::new();
         let mut decoded_data = Vec::with_capacity(output_capacity);
-        while reader.read_dec_packet_into(&mut pkt_buf)? {
+        while read_packet(&mut pkt_buf)? {
             if !pkt_buf.is_empty() {
                 if in_ch == out_ch {
                     decoded_data.extend_from_slice(&pkt_buf);
@@ -943,7 +963,7 @@ pub fn load_and_resample_sfx(
     let mut resampled_data = Vec::with_capacity(output_capacity);
     let mut resampler_lead_frames = compat_lead_frames(ratio);
 
-    while reader.read_dec_packet_into(&mut pkt_buf)? {
+    while read_packet(&mut pkt_buf)? {
         if pkt_buf.is_empty() {
             continue;
         }

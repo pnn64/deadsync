@@ -29,7 +29,9 @@ fn renderer_and_shell_cues_use_theme_resources() {
     let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
     let screenshot = production_source(&shell.join("app/screenshot.rs"));
     assert!(graphics_app.contains("ActiveTheme::asset_manifest()"));
-    assert!(app.contains("UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS)"));
+    assert!(graphics_app.contains("OpenItgTheme::asset_manifest().embedded_pngs"));
+    assert!(app.contains("deadsync_theme_openitg::OpenItgTheme::SOUNDS"));
+    assert!(contains_rust(app, "UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, installed_sounds)"));
     assert!(app.contains("AudioRequest::PlayUiCue(UiCue::Confirm)"));
     assert!(screenshot.contains("UiCue::Screenshot"));
     for cue_file in [app, &screenshot] {

@@ -3776,6 +3776,7 @@ pub(super) mod tests {
             deadsync_theme::ThemeAssetManifest {
                 fonts: &crate::resources::FONT_ASSETS,
                 textures: std::iter::empty(),
+                embedded_pngs: &[],
                 texture_needs_repeat_sampler: crate::resources::texture_needs_repeat_sampler,
             },
         )

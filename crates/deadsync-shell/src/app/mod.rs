@@ -5463,7 +5463,11 @@ impl App {
         // Share Rips as the machine starts with it; every later change comes
         // with the config snapshot in the frame loop.
         deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
-        let ui_sfx = audio_requests::UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS);
+        let installed_sounds = match config.theme_flag {
+            config::theme::ThemeFlag::SimplyLove => deadsync_theme::ThemeSounds::default(),
+            config::theme::ThemeFlag::OpenItg => deadsync_theme_openitg::OpenItgTheme::SOUNDS,
+        };
+        let ui_sfx = audio_requests::UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, installed_sounds);
         let audio_options = audio_requests::options_view(&audio);
         let state = AppState::new(
             &dirs,

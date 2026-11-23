@@ -1,5 +1,5 @@
 use crate::mix::ASSIST_TICK_BUS;
-use deadlib_audio::stream::{OutputFormat, load_and_resample_sfx};
+use deadlib_audio::stream::{OutputFormat, load_and_resample_sfx, load_and_resample_wav_sfx};
 use deadlib_audio_core::{MixBus, MixControls, QueuedSfx, SfxPan, SfxSender, SfxVoiceControl};
 use log::{debug, warn};
 use std::collections::HashMap;
@@ -9,6 +9,12 @@ use std::sync::Arc;
 /// Validated session-lifetime sound data resolved before a hot submission.
 #[derive(Clone)]
 pub struct SfxId(Arc<[i16]>);
+
+impl SfxId {
+    pub(crate) fn from_wav(bytes: &[u8], output: OutputFormat) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        load_and_resample_wav_sfx(bytes, output).map(Self)
+    }
+}
 
 /// Session-lifetime SFX cache owned by the application thread's audio control.
 ///

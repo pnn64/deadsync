@@ -604,6 +604,15 @@ The title menu mounts through the selected theme's presentation interface. The
 shell prepares credit and service status, and the theme owns menu state, input
 feedback, animation, and actor composition.
 
+The shell prepares UI cues from the selected theme at startup. The OpenITG
+manifest supplies embedded WAVs. The shared audio loader resamples them for
+the output device and retains the same handles used by file-backed cues.
+Shared controllers submit wheel movements by cue. Their existing named menu
+effects resolve to the matching installed cue through the fallback manifest.
+Other effects used on those screens and their supporting assets still come
+from the current Simply Love manifest. The graphics loader reads embedded PNGs
+from the asset manifest on startup and renderer recreation.
+
 The `Theme` setting selects Simply Love or OpenITG at startup. Both title menus
 use the same session start, cabinet permissions, and navigation commands.
 OpenITG mounts its title, System Options, Profile Picker, Select Style, Select

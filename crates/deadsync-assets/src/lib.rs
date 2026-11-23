@@ -83,5 +83,10 @@ where
         manifest.texture_needs_repeat_sampler,
     );
     assets.load_textures(backend, jobs)?;
+    for &png in manifest.embedded_pngs {
+        if let Err(error) = assets.load_embedded_png(backend, png) {
+            log::warn!("Could not load bundled texture '{}': {error}", png.key);
+        }
+    }
     fonts::load_initial_fonts(assets, backend, manifest.fonts)
 }

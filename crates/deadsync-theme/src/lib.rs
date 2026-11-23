@@ -12,7 +12,7 @@ mod transition;
 pub mod views;
 
 pub use effect::{ThemeEffect, ThemeFlowEvent, ThemeInputResult};
-pub use resources::{ThemeResources, ThemeSounds, UiCue};
+pub use resources::{ThemeResources, ThemeSounds, UiCue, UiSound};
 pub use runtime::{
     AudioCut, AudioOutputModeChoice, AudioRequest, AudioVolumeTarget, DisplayModeChoice,
     FullscreenChoice, GraphicsRequest, PlatformRequest, PresentPolicyChoice, RendererChoice,

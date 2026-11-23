@@ -678,6 +678,22 @@ pub const SFX_PATHS: &[&str] = &[
 /// it is under a second long.
 pub const CONTENT_BROWSER_TEAR_SFX: &str = "assets/sounds/tear.wav";
 
+pub(crate) const UI_CUES: [(deadsync_theme::UiCue, deadsync_theme::UiSound); 10] = {
+    use deadsync_theme::{UiCue, UiSound::File};
+    [
+        (UiCue::Change, File("assets/sounds/change.ogg")),
+        (UiCue::Confirm, File("assets/sounds/start.ogg")),
+        (UiCue::Screenshot, File("assets/sounds/screenshot.ogg")),
+        (UiCue::Wheel, File("assets/sounds/change.ogg")),
+        (UiCue::NextRow, File("assets/sounds/next_row.ogg")),
+        (UiCue::PreviousRow, File("assets/sounds/prev_row.ogg")),
+        (UiCue::Value, File("assets/sounds/change_value.ogg")),
+        (UiCue::Easier, File("assets/sounds/easier.ogg")),
+        (UiCue::Harder, File("assets/sounds/harder.ogg")),
+        (UiCue::Expand, File("assets/sounds/expand.ogg")),
+    ]
+};
+
 pub const SRPG10_TITLE_LOGO: &str = "srpg10_logo_main.png";
 pub const SRPG10_EVAL_FAILED_SFX: &str = "assets/sounds/srpg10_eval_failed.ogg";
 pub const SRPG10_EVAL_PASSED_SFX: &str = "assets/sounds/srpg10_eval_passed.ogg";

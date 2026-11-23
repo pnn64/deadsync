@@ -7,6 +7,7 @@ mod play_selection;
 mod player_options;
 mod presentation;
 mod profile_picker;
+mod resources;
 mod select_music;
 mod system_options;
 
@@ -14,7 +15,7 @@ use deadlib_present::actors::Actor;
 use deadsync_theme::{Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, TransitionKind, UiCue};
 
 pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, push_evaluation_overview};
-pub use gameplay::{GAMEPLAY_HUD, TAP_RESULTS_PNG};
+pub use gameplay::GAMEPLAY_HUD;
 pub use menu::MenuState;
 pub use play_selection::{PlaySelectionCarousel, push_profile_load_actors};
 pub use player_options::push_player_options_actors;

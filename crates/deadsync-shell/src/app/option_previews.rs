@@ -626,6 +626,7 @@ return Def.Sprite {
             deadlib_assets::AssetManifest {
                 fonts: &[],
                 textures: [deadlib_assets::texture_asset("alternate-tile.png")],
+                embedded_pngs: &[],
                 texture_needs_repeat_sampler: |key| key == "alternate-tile.png",
             },
         )

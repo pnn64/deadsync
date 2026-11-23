@@ -25,15 +25,13 @@ pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     },
 };
 
-pub const TAP_RESULTS_PNG: &[u8] = include_bytes!("../assets/tap-results.png");
-
 static FIELD_FEEDBACK: FieldFeedbackStyle = FieldFeedbackStyle {
     judgment_y: [-30.0, 30.0],
     judgment_centered_add: [-20.0, 20.0],
     combo_y: [50.0, 0.0],
     combo_centered_add: [40.0, -30.0],
     combo_label: "COMBO",
-    combo_label_font: "game",
+    combo_label_font: "miso",
     combo_label_y: 2.0,
     combo_number_zoom: 0.9,
     combo_number_zoom_step: 0.001,

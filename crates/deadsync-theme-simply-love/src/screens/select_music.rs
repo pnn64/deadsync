@@ -4457,7 +4457,7 @@ fn music_wheel_change(state: &mut State, dist: isize, sound: WheelChangeSound) {
             && music_wheel_hold_spin_speed(state.policy.interaction.wheel_switch_speed)
                 < MUSIC_WHEEL_MAX_SOUND_SPEED
     {
-        queue_sfx(state, "assets/sounds/change.ogg");
+        queue_audio(state, AudioRequest::PlayUiCue(deadsync_theme::UiCue::Wheel));
     }
 }
 
@@ -11549,7 +11549,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         state.policy.interaction.wheel_switch_speed,
         dt,
     ) || selection_changed && !wheel_change_handled {
-        queue_sfx(state, "assets/sounds/change.ogg");
+        queue_audio(state, AudioRequest::PlayUiCue(deadsync_theme::UiCue::Wheel));
     }
     if selection_changed {
         state.prev_selected_index = state.selected_index;

@@ -148,9 +148,7 @@ impl deadsync_theme::color::ThemeJudgmentPalette for SimplyLoveTheme {
 impl deadsync_theme::ThemeResources for SimplyLoveTheme {
     const SOUNDS: deadsync_theme::ThemeSounds = deadsync_theme::ThemeSounds {
         effects: SFX_PATHS,
-        change: Some("assets/sounds/change.ogg"),
-        confirm: Some("assets/sounds/start.ogg"),
-        screenshot: Some("assets/sounds/screenshot.ogg"),
+        cues: &resources::UI_CUES,
     };
 
     fn asset_manifest()
@@ -202,6 +200,7 @@ pub fn asset_manifest()
     deadsync_theme::ThemeAssetManifest {
         fonts: &resources::FONT_ASSETS,
         textures: resources::initial_texture_assets(),
+        embedded_pngs: &[],
         texture_needs_repeat_sampler: resources::texture_needs_repeat_sampler,
     }
 }

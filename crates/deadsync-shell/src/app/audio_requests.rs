@@ -1,7 +1,9 @@
 use deadsync_audio_stream::{AudioControl, SfxId};
 use deadsync_config as config;
 use deadsync_theme::views::{AudioOptionsView, AudioOutputDeviceView};
-use deadsync_theme::{AudioOutputModeChoice, AudioRequest, AudioVolumeTarget, ThemeSounds, UiCue};
+use deadsync_theme::{
+    AudioOutputModeChoice, AudioRequest, AudioVolumeTarget, ThemeSounds, UiCue, UiSound,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -17,30 +19,48 @@ pub(super) struct UiSfx {
 }
 
 impl UiSfx {
-    pub fn prepare(audio: &mut AudioControl, sounds: ThemeSounds) -> Self {
-        Self::prepare_paths(sounds, |path| {
-            audio.prepare_sfx(&deadsync_assets::resolve_asset_path(path))
+    pub fn prepare(
+        audio: &mut AudioControl,
+        fallback: ThemeSounds,
+        installed: ThemeSounds,
+    ) -> Self {
+        Self::prepare_sounds(fallback, installed, |sound| match sound {
+            UiSound::File(path) => audio.prepare_sfx(&deadsync_assets::resolve_asset_path(path)),
+            UiSound::EmbeddedWav { name, bytes } => audio.prepare_embedded_sfx(name, bytes),
         })
     }
 
-    fn prepare_paths(
-        sounds: ThemeSounds,
-        mut prepare: impl FnMut(&'static str) -> Option<SfxId>,
+    fn prepare_sounds(
+        fallback: ThemeSounds,
+        installed: ThemeSounds,
+        mut load: impl FnMut(UiSound) -> Option<SfxId>,
     ) -> Self {
-        let mut fixed = HashMap::with_capacity(sounds.effects.len());
-        for &path in sounds.effects {
-            if let Some(sound) = prepare(path) {
-                fixed.insert(path, sound);
-            }
-        }
+        let mut files = HashMap::new();
+        let mut prepare = |sound| match sound {
+            UiSound::File(path) => files.entry(path).or_insert_with(|| load(sound)).clone(),
+            UiSound::EmbeddedWav { .. } => load(sound),
+        };
         let cues = UiCue::ALL.map(|cue| {
-            let path = sounds.cue(cue)?;
-            if sounds.effects.contains(&path) {
-                fixed.get(path).cloned()
-            } else {
-                prepare(path)
-            }
+            installed
+                .cue(cue)
+                .and_then(&mut prepare)
+                .or_else(|| fallback.cue(cue).and_then(&mut prepare))
         });
+        let fixed = fallback
+            .effects
+            .iter()
+            .chain(installed.effects)
+            .filter_map(|&path| {
+                let sound = match fallback
+                    .cue_for_path(path)
+                    .or_else(|| installed.cue_for_path(path))
+                {
+                    Some(cue) => cues[cue.index()].clone(),
+                    None => prepare(UiSound::File(path)),
+                };
+                sound.map(|sound| (path, sound))
+            })
+            .collect();
         Self {
             fixed,
             cues,
@@ -230,9 +250,10 @@ mod tests {
     impl ThemeResources for AlternateTheme {
         const SOUNDS: ThemeSounds = ThemeSounds {
             effects: &["alternate/menu.ogg"],
-            change: Some("alternate/move.ogg"),
-            confirm: Some("alternate/menu.ogg"),
-            screenshot: None,
+            cues: &[
+                (UiCue::Change, UiSound::File("alternate/move.ogg")),
+                (UiCue::Confirm, UiSound::File("alternate/menu.ogg")),
+            ],
         };
 
         fn asset_manifest()
@@ -240,6 +261,7 @@ mod tests {
             ThemeAssetManifest {
                 fonts: &[],
                 textures: std::iter::once(deadlib_assets::texture_asset("alternate/tile.png")),
+                embedded_pngs: &[],
                 texture_needs_repeat_sampler: |key| key == "alternate/tile.png",
             }
         }
@@ -248,11 +270,14 @@ mod tests {
     #[test]
     fn alternate_theme_supplies_shell_cues_and_renderer_manifest() {
         let mut paths = Vec::new();
-        UiSfx::prepare_paths(AlternateTheme::SOUNDS, |path| {
+        UiSfx::prepare_sounds(ThemeSounds::default(), AlternateTheme::SOUNDS, |sound| {
+            let UiSound::File(path) = sound else {
+                panic!("expected file fixture")
+            };
             paths.push(path);
             None
         });
-        assert_eq!(paths, ["alternate/menu.ogg", "alternate/move.ogg"]);
+        assert_eq!(paths, ["alternate/move.ogg", "alternate/menu.ogg"]);
 
         let root = tempfile::tempdir().unwrap();
         let dirs = deadsync_config::dirs::AppDirs {
@@ -272,6 +297,46 @@ mod tests {
         };
         assert_eq!(job.key, "alternate/tile.png");
         assert_eq!(job.sampler.wrap, deadlib_render_core::SamplerWrap::Repeat);
+    }
+
+    #[test]
+    fn openitg_embedded_cues_decode_like_wav_files_at_device_rates() {
+        use deadlib_audio::stream::{
+            OutputFormat, load_and_resample_sfx, load_and_resample_wav_sfx,
+        };
+        use deadsync_theme_openitg::OpenItgTheme;
+
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("cue.wav");
+        let mut input_samples = Vec::new();
+        for cue in UiCue::ALL
+            .into_iter()
+            .filter(|cue| *cue != UiCue::Screenshot)
+        {
+            let Some(UiSound::EmbeddedWav { bytes, .. }) = OpenItgTheme::SOUNDS.cue(cue) else {
+                panic!("{cue:?} should own embedded audio");
+            };
+            assert!(!input_samples.contains(&bytes));
+            input_samples.push(bytes);
+            std::fs::write(&path, bytes).unwrap();
+            for (sample_rate_hz, channels) in [(24_000, 1), (44_100, 2), (48_000, 2)] {
+                let format = OutputFormat {
+                    sample_rate_hz,
+                    channels,
+                };
+                let embedded = load_and_resample_wav_sfx(bytes, format).unwrap();
+                let file = load_and_resample_sfx(&path, format, Default::default()).unwrap();
+                assert_eq!(
+                    embedded.as_ref(),
+                    file.as_ref(),
+                    "{cue:?} at {sample_rate_hz}"
+                );
+                assert!(embedded.iter().any(|&sample| sample.abs() > 500));
+                for frame in embedded.chunks_exact(channels) {
+                    assert!(frame.iter().all(|&sample| sample == frame[0]));
+                }
+            }
+        }
     }
 
     #[test]

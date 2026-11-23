@@ -22,6 +22,7 @@ use deadsync_theme::{
     DisplayModeChoice, FullscreenChoice, GraphicsRequest, PresentPolicyChoice, RendererChoice,
     ThemeResources,
 };
+use deadsync_theme_openitg::OpenItgTheme;
 use deadsync_theme_simply_love::screens::{options, select_music};
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
 use log::{debug, error, info};
@@ -285,13 +286,17 @@ impl App {
                 software_renderer_threads: self.software_renderer_threads,
             },
         );
+        let mut manifest = ActiveTheme::asset_manifest();
+        if self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg {
+            manifest.embedded_pngs = OpenItgTheme::asset_manifest().embedded_pngs;
+        }
         let startup = start_renderer_runtime(
             &mut self.state.shell,
             event_loop,
             startup_config,
             &mut self.asset_manager,
             &mut self.dynamic_media,
-            ActiveTheme::asset_manifest(),
+            manifest,
             Instant::now(),
         )?;
         self.apply_graphics_display_sync(startup_display_sync(
@@ -301,25 +306,7 @@ impl App {
         ));
         self.sync_fullscreen_mode();
         let window = startup.window;
-        let mut backend = startup.backend;
-        if self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg {
-            let upload = (|| -> Result<(), Box<dyn Error>> {
-                let atlas = image::load_from_memory_with_format(
-                    deadsync_theme_openitg::TAP_RESULTS_PNG,
-                    image::ImageFormat::Png,
-                )?
-                .into_rgba8();
-                self.asset_manager.update_texture_for_key(
-                    &mut backend,
-                    deadsync_theme_openitg::GAMEPLAY_HUD.default_tap_atlas.key,
-                    &atlas,
-                )?;
-                Ok(())
-            })();
-            if let Err(error) = upload {
-                log::warn!("OpenITG tap result atlas could not be loaded: {error}");
-            }
-        }
+        let backend = startup.backend;
         // Renderer reinit reloads font geometry and replaces the texture registry,
         // so discard cached layouts and their generation-bound page handles.
         self.ui_text_layout_cache.clear();
@@ -626,8 +613,10 @@ mod tests {
     #[test]
     fn embedded_tap_atlas_matches_the_gameplay_frame_grid() {
         let spec = deadsync_theme_openitg::GAMEPLAY_HUD.default_tap_atlas;
+        let manifest = OpenItgTheme::asset_manifest();
+        let png = manifest.embedded_pngs.iter().find(|png| png.key == spec.key).unwrap();
         let atlas = image::load_from_memory_with_format(
-            deadsync_theme_openitg::TAP_RESULTS_PNG,
+            png.bytes,
             image::ImageFormat::Png,
         )
         .expect("embedded tap atlas decodes")

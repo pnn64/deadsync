@@ -2105,6 +2105,7 @@ end
             deadsync_theme::ThemeAssetManifest {
                 fonts: &[],
                 textures: texture_assets.iter().copied(),
+                embedded_pngs: &[],
                 texture_needs_repeat_sampler: (deadsync_theme_simply_love::asset_manifest()
                     .texture_needs_repeat_sampler),
             },

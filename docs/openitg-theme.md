@@ -30,7 +30,7 @@ legacy DirectX 9 development headers and libraries. The build host has the
 
 - The theme renders original DeadSync graphics with the reference column and
   animation timings. It uses shared text rendering, the bundled Miso font,
-  and DeadSync's common interaction cues.
+  and original OpenITG theme movement and confirmation cues.
 - Home mode offers Play, Options, Find Content, Exit, and Shutdown when enabled.
   Free and Pay mode expose Play and use the same host credit rules as Simply
   Love. Both title implementations use the shared menu availability contract.
@@ -58,9 +58,8 @@ eight rows at y=127 with 28 px spacing, the scrollbar near `(34, 242)`, and
 the Done row at y=353. The original panel graphics use these anchors at
 640×480 and center the layout at 854×480. The panel slides between submenus
 on DeadSync's existing transition clock. The menu presents supported
-DeadSync actions in their current order, with DeadSync's cues and persistence
-semantics. Reference cursor tweens, header motion, cues, and modal styling
-remain open.
+DeadSync actions in their current order, with shared persistence semantics.
+Reference cursor tweens, header motion, and modal styling remain open.
 
 Tests cover the viewport and Done row, prepared values, disabled and
 multiselect rows, an edited volume appearing in the alternate renderer, and
@@ -86,8 +85,8 @@ start at x=53, rows begin at y=127 with 28 px spacing, and Exit sits at y=353
 on the 640×480 layout. The layout uses those anchors and fits DeadSync's
 ten-slot scrolling window between the first row and Exit. The shared editor
 supplies the row order and navigation, including the optional arcade bindings.
-The reference's 16-row grouping, scrollbar, artwork, and cue comparisons remain
-open. Timing scaling and workout overrides remain governed by DeadSync's rules.
+The reference's 16-row grouping, scrollbar, and artwork remain open. Timing
+scaling and workout overrides remain governed by DeadSync's rules.
 
 Tests cover P2-only perspective edits, profile requests, stage recovery and
 resubmission, and noteskin preview requests through both layouts. Actor checks
@@ -183,6 +182,34 @@ Circular indexing now gives short wheels the same wrap order in navigation,
 media requests, score requests, and drawing. An index-only benchmark on lists
 of 3, 128, 701, and 10,000 entries measured medians of 4.78 ns before and
 5.60 ns after the fix. Full-frame timing remains to be measured.
+
+## Theme resources and menu cues
+
+The effective home and patch overlays inherit the default theme's core cue
+routing. `ScreenSelectMaster.cpp` plays a title movement cue and the common
+confirmation. `ScreenOptions.cpp` plays different row and value cues. The
+music wheel has its own movement and section expansion sounds. Difficulty
+changes use their own feedback, and Player Options retains the song preview.
+
+The OpenITG theme bundles original WAVs for those interactions. Each cue is
+prepared once at startup for the output device and played by its retained
+handle. Both themes use the same wheel, option, and chart controllers. The
+OpenITG tap atlas also loads from the selected theme's manifest. Menus and
+overlays still use Simply Love's fallback assets for effects outside the
+installed cue set. The title entry stinger, sort and lock feedback, Evaluation
+entry audio, and comparisons with the reference audio remain open.
+
+All nine cues match the file-backed decoder sample for sample at 24 kHz mono,
+44.1 kHz stereo, and 48 kHz stereo. The Windows packager's development-build
+smoke archive contains the nine WAVs and the tap atlas inside the executable.
+Separate portable starts prepare the OpenITG cues only for the OpenITG setting.
+
+Before and after the resource change, both themes rendered the same 600-frame
+fixture at 854×480 using Vulkan through wgpu and WASAPI shared at 48 kHz.
+OpenITG averaged 8.56 ms in both runs. Simply Love averaged 8.57 ms before
+and 8.56 ms after. All four runs reported zero audio underruns. The gameplay
+captures show the embedded atlas in use and expose overlapping Fantastic text
+in both OpenITG runs.
 
 ## Profile Load and Select Course
 
@@ -344,7 +371,7 @@ Judgment proxy using its intended capture path. A dedicated regression checks
 that both themes can draw two root Judgment proxies from a retained HUD
 range. The live Lua fixture checks marker positions and counts using the
 renderer’s packed RageColor values.
-The full shell suite passed with 449 tests passing and 11 ignored.
+The full shell suite passed with 450 tests passing and 11 ignored.
 
 Separate Windows captures at 854×480 show the chart's root Judgment proxy
 draw at its authored offset in both themes. In the 600-frame baked-Lua case,

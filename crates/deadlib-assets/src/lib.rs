@@ -47,11 +47,19 @@ pub use registry::{
 pub use texture_store::{BoundTexture, TextureStore};
 pub use upload::TextureUploadImage;
 
+/// A PNG bundled into its consumer's executable.
+#[derive(Clone, Copy)]
+pub struct EmbeddedPng {
+    pub key: &'static str,
+    pub bytes: &'static [u8],
+}
+
 /// Application-supplied asset catalog, independent of game or theme policy.
 /// The caller resolves resource paths and selects texture sampling requirements.
 pub struct AssetManifest<T> {
     pub fonts: &'static [FontAssetSpec],
     pub textures: T,
+    pub embedded_pngs: &'static [EmbeddedPng],
     pub texture_needs_repeat_sampler: fn(&str) -> bool,
 }
 
