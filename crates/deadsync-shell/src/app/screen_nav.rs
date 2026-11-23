@@ -205,6 +205,16 @@ impl App {
         }
         if prev != target {
             self.mark_screen_entry_runtime_dirty(target);
+            if matches!(prev, CurrentScreen::SelectMusic | CurrentScreen::SelectCourse)
+                && let Some(backend) = self.backend.as_mut()
+            {
+                self.dynamic_media.expire_outgoing_banners(&mut self.asset_manager, backend, None);
+            }
+            if matches!(target, CurrentScreen::SelectMusic | CurrentScreen::SelectCourse)
+                && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg
+            {
+                self.openitg_banner_motion.enter(super::Instant::now());
+            }
         }
         self.state.screens.current_screen = target;
         self.sync_gameplay_input_capture();

@@ -5,7 +5,7 @@ use super::{
 };
 use crate::player_options::PlayerOptionsState;
 use deadsync_gameplay::song_launch::{SongSelection, resolve_song_chart_slots};
-use deadsync_gameplay::stage_launch::{StageLaunchRequest, StageLaunchTarget};
+use deadsync_gameplay::stage_launch::{StageLaunchPrompt, StageLaunchRequest, StageLaunchTarget};
 use deadsync_profile_gameplay::stage_charts::stage_difficulty_indices;
 use deadsync_profile_gameplay::stage_replay::StageReplayRequest;
 use deadsync_simfile::course_selection::ConfirmedCourse;
@@ -111,7 +111,16 @@ impl App {
         request: StageLaunchRequest<StageSelection>,
     ) {
         if self.state.screens.current_screen == source {
+            let launch_was_hidden =
+                self.state.screens.stage_launch.prompt() == StageLaunchPrompt::Hidden;
             self.state.screens.stage_launch.request(request);
+            if launch_was_hidden
+                && self.state.screens.stage_launch.prompt() == StageLaunchPrompt::OfferOptions
+                && self.state.screens.menu_state.theme_flag()
+                    == deadsync_config::theme::ThemeFlag::OpenItg
+            {
+                self.openitg_banner_motion.confirm(super::Instant::now());
+            }
             self.sync_stage_launch_prompt();
         }
     }
@@ -128,6 +137,7 @@ impl App {
 
     pub(super) fn clear_stage_launch(&mut self) {
         self.state.screens.stage_launch = Default::default();
+        self.openitg_banner_motion.cancel_confirmation();
         self.sync_stage_launch_prompt();
     }
 

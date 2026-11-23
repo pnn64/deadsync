@@ -1675,6 +1675,7 @@ pub struct App {
     /// The reader's noteskin for the Content Browser's chart preview.
     browser_skin: browser_skin::Service,
     dynamic_media: DynamicMedia,
+    openitg_banner_motion: deadsync_theme_openitg::WheelBannerMotion,
     /// Lazily started after the opt-in feature first receives data. The single
     /// bounded worker decodes off the frame thread and fixed texture keys bound
     /// registry growth for the app lifetime.
@@ -4922,6 +4923,11 @@ impl App {
             {
                 match current_screen {
                     CurrentScreen::SelectMusic => {
+                        self.dynamic_media.expire_outgoing_banners(
+                            &mut self.asset_manager,
+                            backend,
+                            Some(redraw_started),
+                        );
                         let state = &screens.select_music_state;
                         let desired_path = if show_select_music_video_banners
                             && show_select_music_banners
@@ -4948,6 +4954,11 @@ impl App {
                         );
                     }
                     CurrentScreen::SelectCourse => {
+                        self.dynamic_media.expire_outgoing_banners(
+                            &mut self.asset_manager,
+                            backend,
+                            Some(redraw_started),
+                        );
                         let state = &screens.select_course_state;
                         let desired_path = if show_select_music_video_banners
                             && show_select_music_banners
@@ -5512,6 +5523,7 @@ impl App {
             option_previews: option_previews::Service::default(),
             browser_skin: browser_skin::Service::default(),
             dynamic_media: DynamicMedia::new(),
+            openitg_banner_motion: Default::default(),
             arrowcloud_result_dialog: None,
             arrowcloud_result_ready_scratch: Vec::with_capacity(MAX_PLAYERS),
             audio,
@@ -8021,10 +8033,13 @@ impl App {
                         &mut actors, state, &self.asset_manager, stage_number, visual_policy,
                     ),
                     config::theme::ThemeFlag::OpenItg => {
+                        let loaded_banner = self.dynamic_media.loaded_banner_key()
+                            .filter(|_| policy.show_select_music_banners);
                         let view = select_music::select_music_view(
-                            state, stage_number, self.dynamic_media.loaded_banner_key(),
+                            state, stage_number, loaded_banner,
                         );
-                        deadsync_theme_openitg::push_select_music_actors(&mut actors, view);
+                        let banner = self.openitg_banner_frame(policy.show_select_music_banners);
+                        deadsync_theme_openitg::push_select_music_actors(&mut actors, view, banner);
                         select_music::push_select_music_overlays(
                             &mut actors,
                             state,
@@ -8046,11 +8061,11 @@ impl App {
                         visual_policy,
                     ),
                     config::theme::ThemeFlag::OpenItg => {
-                        let view = select_course::select_course_view(
-                            state,
-                            self.dynamic_media.loaded_banner_key(),
-                        );
-                        deadsync_theme_openitg::push_select_course_actors(&mut actors, view);
+                        let loaded_banner = self.dynamic_media.loaded_banner_key()
+                            .filter(|_| policy.show_select_music_banners);
+                        let view = select_course::select_course_view(state, loaded_banner);
+                        let banner = self.openitg_banner_frame(policy.show_select_music_banners);
+                        deadsync_theme_openitg::push_select_course_actors(&mut actors, view, banner);
                         select_course::push_exit_prompt(&mut actors, state, visual_policy);
                     }
                 }

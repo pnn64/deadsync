@@ -20,7 +20,10 @@ pub use menu::MenuState;
 pub use play_selection::{PlaySelectionCarousel, push_profile_load_actors};
 pub use player_options::push_player_options_actors;
 pub use profile_picker::push_profile_picker_actors;
-pub use select_music::{push_select_course_actors, push_select_music_actors};
+pub use select_music::{
+    WHEEL_BANNER_FADE, WheelBannerFrame, WheelBannerMotion, push_select_course_actors,
+    push_select_music_actors,
+};
 pub use system_options::SYSTEM_OPTIONS;
 
 type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;

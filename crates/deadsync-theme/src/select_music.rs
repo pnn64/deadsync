@@ -9,6 +9,13 @@ use std::sync::Arc;
 pub const SELECT_MUSIC_WHEEL_ROWS: usize = 17;
 pub const SELECT_MUSIC_DIFFICULTY_ROWS: usize = 5;
 pub const SELECT_COURSE_TRACK_ROWS: usize = 6;
+pub const WHEEL_OUTGOING_BANNERS: usize = 4;
+
+#[derive(Clone, Copy)]
+pub struct WheelBannerFade<'a> {
+    pub texture: &'a Arc<str>,
+    pub elapsed_seconds: f32,
+}
 
 #[derive(Clone, Copy)]
 pub struct SelectMusicWheelRow<'a> {

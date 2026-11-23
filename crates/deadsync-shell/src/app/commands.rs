@@ -97,19 +97,45 @@ impl App {
         let Some(backend) = self.backend.as_mut() else {
             return;
         };
-        let key = if let Some(path) = path {
-            self.dynamic_media
-                .set_banner(&mut self.asset_manager, backend, Some(path))
-        } else {
-            self.dynamic_media
-                .destroy_banner(&mut self.asset_manager, backend);
-            Arc::<str>::from(fallback_banner_key(color_index))
-        };
+        let had_path = path.is_some();
+        let fade = (self.frame_policy.show_select_music_banners
+            && matches!(self.state.shell.transition, super::TransitionState::Idle)
+            && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg)
+            .then_some(deadsync_theme_openitg::WHEEL_BANNER_FADE);
+        let key = self
+            .dynamic_media
+            .set_banner(&mut self.asset_manager, backend, path, fade)
+            .unwrap_or_else(|| {
+                if had_path {
+                    Arc::from("banner1.png")
+                } else {
+                    Arc::from(fallback_banner_key(color_index))
+                }
+            });
         if course {
             self.state.screens.select_course_state.current_banner_key = key;
         } else {
             self.state.screens.select_music_state.current_banner_key = key;
         }
+    }
+
+    pub(super) fn openitg_banner_frame(
+        &self,
+        show_banners: bool,
+    ) -> deadsync_theme_openitg::WheelBannerFrame<'_> {
+        let now = Instant::now();
+        let exit_elapsed = match self.state.shell.transition {
+            super::TransitionState::FadingOut { elapsed, .. }
+            | super::TransitionState::ActorsFadeOut { elapsed, .. } => elapsed,
+            _ => 0.0,
+        };
+        let outgoing = if show_banners {
+            self.dynamic_media.outgoing_banner_views(now)
+        } else {
+            Default::default()
+        };
+        self.openitg_banner_motion
+            .frame(now, outgoing, exit_elapsed)
     }
 
     fn set_cdtitle(&mut self, path: Option<PathBuf>) {

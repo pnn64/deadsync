@@ -17,6 +17,7 @@ use deadsync_assets::media_cache;
 use deadsync_chart::{SongBackgroundChange, SongData};
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
+use deadsync_theme::select_music::{WHEEL_OUTGOING_BANNERS, WheelBannerFade};
 use log::{debug, warn};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
@@ -25,7 +26,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex, mpsc},
     thread::{self, JoinHandle},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 /// Lazily started, session-owned transport for blocking media preparation.
@@ -196,6 +197,18 @@ struct DynamicBannerState {
     path: PathBuf,
 }
 
+struct OutgoingBanner {
+    key: Arc<str>,
+    replaced_at: Instant,
+    lifetime: Duration,
+}
+
+impl OutgoingBanner {
+    fn elapsed(&self, now: Instant) -> Duration {
+        now.saturating_duration_since(self.replaced_at)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BannerVideoPrepState {
     Pending(bool),
@@ -351,6 +364,7 @@ fn sync_bg_video_timing(state: &mut DynamicBackgroundState, timing: BgVideoTimin
 
 pub struct DynamicMedia {
     current_dynamic_banner: Option<DynamicBannerState>,
+    outgoing_banners: SmallVec<[OutgoingBanner; WHEEL_OUTGOING_BANNERS]>,
     active_banner_videos: FxHashMap<String, DynamicVideoState>,
     /// Screen-local banner preparation states. Entries are retained after a
     /// failure only while that exact path/mode remains desired, preventing
@@ -378,6 +392,7 @@ impl DynamicMedia {
     pub fn new() -> Self {
         Self {
             current_dynamic_banner: None,
+            outgoing_banners: SmallVec::new(),
             active_banner_videos: FxHashMap::default(),
             banner_video_preps: FxHashMap::default(),
             banner_video_prep: MediaPrepWorker::new(
@@ -436,6 +451,7 @@ impl DynamicMedia {
         if let Some(state) = self.current_dynamic_banner.take() {
             keys.push(state.key.to_string());
         }
+        keys.extend(self.outgoing_banners.drain(..).map(|banner| banner.key.to_string()));
         keys.extend(self.active_banner_videos.drain().map(|(key, state)| {
             retire_dynamic_video_state(state);
             key
@@ -473,10 +489,6 @@ impl DynamicMedia {
         for key in dynamic::dedupe_dynamic_keys(keys) {
             self.release_texture_key(assets, backend, key);
         }
-    }
-
-    pub fn destroy_banner(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
-        self.destroy_current_dynamic_banner(assets, backend);
     }
 
     pub fn set_cdtitle(
@@ -608,48 +620,100 @@ impl DynamicMedia {
         self.current_dynamic_banner.as_ref().map(|banner| &banner.key)
     }
 
-    pub fn set_banner(
+    pub(crate) fn outgoing_banner_views(
+        &self,
+        now: Instant,
+    ) -> [Option<WheelBannerFade<'_>>; WHEEL_OUTGOING_BANNERS] {
+        std::array::from_fn(|index| {
+            let banner = self.outgoing_banners.get(index)?;
+            let elapsed = banner.elapsed(now);
+            (elapsed < banner.lifetime).then_some(WheelBannerFade {
+                texture: &banner.key,
+                elapsed_seconds: elapsed.as_secs_f32(),
+            })
+        })
+    }
+
+    /// Retire expired banner textures, or all outgoing textures when changing screens.
+    pub(crate) fn expire_outgoing_banners(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
-        path_opt: Option<PathBuf>,
-    ) -> Arc<str> {
-        const FALLBACK_KEY: &str = "banner1.png";
+        now: Option<Instant>,
+    ) {
+        // Replacement time and lifetime are ordered within a wheel visit.
+        while self.outgoing_banners.first().is_some_and(|banner| {
+            now.is_none_or(|now| banner.elapsed(now) >= banner.lifetime)
+        }) {
+            let banner = self.outgoing_banners.remove(0);
+            self.release_texture_key(assets, backend, banner.key);
+        }
+    }
 
-        if let Some(path) = path_opt {
-            let key = path_texture_key(&path);
-            if let Some(current) = self.current_dynamic_banner.as_ref()
-                && current.path == path
-                && assets.has_texture_key(&current.key)
-            {
-                return current.key.clone();
+    pub(crate) fn set_banner(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        path: Option<PathBuf>,
+        fade_lifetime: Option<Duration>,
+    ) -> Option<Arc<str>> {
+        if let Some(current) = self.current_dynamic_banner.as_ref()
+            && Some(current.path.as_path()) == path.as_deref()
+            && assets.has_texture_key(&current.key)
+        {
+            return Some(current.key.clone());
+        }
+        let previous = self.current_dynamic_banner.take();
+        let outgoing = match (previous, fade_lifetime) {
+            (Some(previous), Some(lifetime)) => Some((previous.key, lifetime)),
+            (Some(previous), None) => {
+                self.release_texture_key(assets, backend, previous.key);
+                None
             }
-            self.destroy_current_dynamic_banner(assets, backend);
+            (None, _) => None,
+        };
+        self.current_dynamic_banner = path.and_then(|path| self.load_dynamic_banner(assets, backend, path));
+        if let Some((key, lifetime)) = outgoing {
+            let evicted = (self.outgoing_banners.len() == WHEEL_OUTGOING_BANNERS)
+                .then(|| self.outgoing_banners.remove(0));
+            self.outgoing_banners.push(OutgoingBanner {
+                key,
+                replaced_at: Instant::now(),
+                lifetime,
+            });
+            if let Some(evicted) = evicted {
+                self.release_texture_key(assets, backend, evicted.key);
+            }
+        }
+        self.loaded_banner_key().cloned()
+    }
+
+    fn load_dynamic_banner(
+        &self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        path: PathBuf,
+    ) -> Option<DynamicBannerState> {
+        let key = path_texture_key(&path);
+        let reusable = self.outgoing_banners.iter().find(|banner| {
+            banner.key.as_ref() == key && assets.has_texture_key(&banner.key)
+        });
+        let key = if let Some(banner) = reusable {
+            Arc::clone(&banner.key)
+        } else {
             match set_banner_texture_for_path(assets, backend, &path) {
-                Ok(key) => {
-                    let key = Arc::<str>::from(key);
-                    self.current_dynamic_banner = Some(DynamicBannerState {
-                        key: key.clone(),
-                        path,
-                    });
-                    key
-                }
+                Ok(key) => Arc::from(key),
                 Err(DynamicImageTextureError::Load(e)) => {
-                    warn!(
-                        "Failed to load banner '{}': {e}. Using fallback.",
-                        path.display()
-                    );
-                    Arc::<str>::from(FALLBACK_KEY)
+                    warn!("Failed to load banner '{}': {e}. Using fallback.", path.display());
+                    return None;
                 }
                 Err(DynamicImageTextureError::Create(e)) => {
                     warn!("Failed to create GPU texture for banner '{key}': {e}. Using fallback.");
-                    Arc::<str>::from(FALLBACK_KEY)
+                    return None;
                 }
             }
-        } else {
-            self.destroy_current_dynamic_banner(assets, backend);
-            Arc::<str>::from(FALLBACK_KEY)
-        }
+        };
+        Some(DynamicBannerState { key, path })
     }
 
     pub fn sync_active_banner_video(
@@ -1283,6 +1347,7 @@ impl DynamicMedia {
         self.current_dynamic_banner
             .as_ref()
             .is_some_and(|state| state.key.as_ref() == key)
+            || self.outgoing_banners.iter().any(|banner| banner.key.as_ref() == key)
             || self.active_banner_videos.contains_key(key)
             || self
                 .current_dynamic_cdtitle
@@ -1330,12 +1395,6 @@ impl DynamicMedia {
     ) {
         if let Some((_handle, texture)) = self.take_releasable_texture(assets, key.as_ref()) {
             backend.retire_texture(texture);
-        }
-    }
-
-    fn destroy_current_dynamic_banner(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
-        if let Some(state) = self.current_dynamic_banner.take() {
-            self.release_texture_key(assets, backend, state.key);
         }
     }
 
@@ -1931,6 +1990,39 @@ mod tests {
         let removed = media.take_releasable_texture(&mut assets, &key);
 
         assert!(removed.is_none());
+        assert!(!assets.has_texture_key(&key));
+    }
+
+    #[test]
+    fn outgoing_banner_owns_its_texture_until_expiry_even_after_reselection() {
+        let mut assets = AssetManager::new();
+        let mut media = DynamicMedia::new();
+        let key = Arc::<str>::from("banner.png");
+        assets.reserve_texture_handle(key.to_string());
+        let replaced_at = Instant::now();
+        let lifetime = Duration::from_millis(500);
+        media.outgoing_banners.push(OutgoingBanner {
+            key: Arc::clone(&key),
+            replaced_at,
+            lifetime,
+        });
+        media.take_releasable_texture(&mut assets, &key);
+        assert!(assets.has_texture_key(&key));
+        let outgoing = media.outgoing_banner_views(replaced_at + lifetime / 2);
+        let sample = outgoing[0].unwrap();
+        assert!(Arc::ptr_eq(sample.texture, &key));
+        assert_eq!(sample.elapsed_seconds, 0.25);
+        assert!(media.outgoing_banner_views(replaced_at + lifetime)[0].is_none());
+
+        media.current_dynamic_banner = Some(DynamicBannerState {
+            key: Arc::clone(&key),
+            path: PathBuf::from(key.as_ref()),
+        });
+        let previous = media.outgoing_banners.pop().unwrap();
+        media.take_releasable_texture(&mut assets, &previous.key);
+        assert!(assets.has_texture_key(&key));
+        media.current_dynamic_banner = None;
+        media.take_releasable_texture(&mut assets, &key);
         assert!(!assets.has_texture_key(&key));
     }
 

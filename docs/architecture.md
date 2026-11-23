@@ -642,7 +642,10 @@ same prepared difficulty window. The alternate base layout borrows song, chart,
 player, banner, and preview beat data from the existing controller. The OpenITG
 song and course wheels use the shared presentation camera for projected cards
 and labels. The notefield uses the same perspective calculation with its own
-camera parameters. The shell prepares one score snapshot per physical side for
+camera parameters. The shell media manager retains recently replaced banner
+textures for the transition lifetime requested by the theme. OpenITG animates
+those layers and derives its exit motion from the shared launch confirmation.
+The shell prepares one score snapshot per physical side for
 both themes. The shared view checks the current chart hash before exposing its
 local machine record or personal best.
 The course browser uses the same wheel geometry with the prepared course

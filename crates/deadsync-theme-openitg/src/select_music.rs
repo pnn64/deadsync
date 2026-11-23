@@ -1,5 +1,8 @@
 //! Music-wheel presentation over the application's current browsing view.
 
+mod banner;
+pub use banner::{WHEEL_BANNER_FADE, WheelBannerFrame, WheelBannerMotion};
+
 use crate::presentation::{ACCENT, HEIGHT, INK, Layout, MUTED, WIDTH, quad};
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
@@ -25,8 +28,6 @@ const WHEEL_ANGLE_PER_ROW: f32 = TAU * 0.42 / SELECT_MUSIC_WHEEL_ROWS as f32;
 const WHEEL_CARD_SIZE: [f32; 2] = [368.0, 32.0];
 const WHEEL_HIGHLIGHT_Z: i16 = -52;
 const DETAILS_LEFT: f32 = 264.0;
-const BANNER_CENTER: [f32; 2] = [478.0, 112.0];
-const BANNER_SIZE: [f32; 2] = [300.0, 128.0];
 const DIFFICULTY_CENTER: [f32; 2] = [460.0, 242.0];
 const DIFFICULTY_PITCH: f32 = 20.5;
 const TEXT_CACHE_LIMIT: usize = 4096;
@@ -118,9 +119,13 @@ impl WheelCameras {
 }
 
 /// Draws the browsing wheel, banner, currently available charts, and launch feedback.
-pub fn push_select_music_actors(actors: &mut Vec<Actor>, view: SelectMusicView<'_>) {
+pub fn push_select_music_actors(
+    actors: &mut Vec<Actor>,
+    view: SelectMusicView<'_>,
+    banner: WheelBannerFrame<'_>,
+) {
     let layout = push_backdrop(actors);
-    push_banner(actors, layout, &view);
+    push_banner(actors, layout, &view, banner);
     push_wheel(
         actors,
         layout,
@@ -142,12 +147,7 @@ pub fn push_select_music_actors(actors: &mut Vec<Actor>, view: SelectMusicView<'
 fn push_backdrop(actors: &mut Vec<Actor>) -> Layout {
     let (width, height) = (screen_width(), screen_height());
     let layout = Layout::centered(width, height);
-    actors.push(quad(
-        [0.0, 0.0],
-        [width, height],
-        [0.035, 0.048, 0.072, 1.0],
-        -100,
-    ));
+    actors.push(quad([0.0, 0.0], [width, height], banner::WHEEL_MATTE, -100));
     let canvas = [0.063, 0.087, 0.126, 1.0];
     actors.push(layout.panel(0.0, 0.0, [WIDTH, HEIGHT], canvas, -99));
     actors.push(layout.panel(0.0, 0.0, [WIDTH, 44.0], canvas, -5));
@@ -204,58 +204,76 @@ fn details_plate(layout: Layout) -> Actor {
     }
 }
 
-fn push_banner_plate(actors: &mut Vec<Actor>, layout: Layout, texture: Option<&Arc<str>>) {
-    let banner_left = BANNER_CENTER[0] - BANNER_SIZE[0] * 0.5;
-    let banner_top = BANNER_CENTER[1] - BANNER_SIZE[1] * 0.5;
+fn push_details_frame(actors: &mut Vec<Actor>, layout: Layout) {
     actors.push(details_plate(layout));
-    actors.push(layout.panel(
-        banner_left,
-        banner_top,
-        BANNER_SIZE,
-        [0.10, 0.16, 0.23, 1.0],
-        -7,
-    ));
-    if let Some(key) = texture {
-        actors.push(layout.image(BANNER_CENTER, BANNER_SIZE, key, -6));
-    }
-    actors.push(layout.panel(
-        276.0,
-        banner_top + BANNER_SIZE[1] - 8.0,
-        [352.0, 50.0],
-        [0.04, 0.07, 0.11, 1.0],
-        0,
-    ));
+    actors.push(layout.panel(276.0, 168.0, [352.0, 50.0], [0.04, 0.07, 0.11, 1.0], 0));
 }
 
-fn push_banner(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'_>) {
-    push_banner_plate(actors, layout, view.banner_texture);
+fn push_banner(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    view: &SelectMusicView<'_>,
+    frame: WheelBannerFrame<'_>,
+) {
+    push_details_frame(actors, layout);
+    let section = view.rows[SELECT_MUSIC_WHEEL_ROWS / 2];
+    banner::push(
+        actors,
+        layout,
+        frame,
+        view.banner_texture,
+        |actors, moving| {
+            if let Some(song) = &view.song {
+                actors.push(moving.bounded_label(
+                    [banner::CENTER[0], 105.0],
+                    0.5,
+                    280.0,
+                    shared_text(song.title),
+                    1.48,
+                    opaque(INK),
+                ));
+                if !song.subtitle.is_empty() {
+                    actors.push(moving.bounded_label(
+                        [banner::CENTER[0], 130.0],
+                        0.5,
+                        280.0,
+                        shared_text(song.subtitle),
+                        0.75,
+                        opaque(MUTED),
+                    ));
+                }
+            } else if let Some(section) = section {
+                actors.push(moving.bounded_label(
+                    banner::CENTER,
+                    0.5,
+                    280.0,
+                    shared_text(section.title),
+                    1.1,
+                    opaque(INK),
+                ));
+            }
+        },
+    );
     if let Some(song) = &view.song {
-        let fallback = view.banner_texture.is_none();
-        actors.push(layout.bounded_label(
-            if fallback {
-                [BANNER_CENTER[0], 105.0]
-            } else {
-                [280.0, 182.0]
-            },
-            if fallback { 0.5 } else { 0.0 },
-            332.0,
-            shared_text(song.title),
-            if fallback { 1.48 } else { 1.05 },
-            opaque(INK),
-        ));
-        if !song.subtitle.is_empty() {
+        if view.banner_texture.is_some() {
             actors.push(layout.bounded_label(
-                if fallback {
-                    [BANNER_CENTER[0], 130.0]
-                } else {
-                    [280.0, 194.0]
-                },
-                if fallback { 0.5 } else { 0.0 },
+                [280.0, 182.0],
+                0.0,
                 332.0,
-                shared_text(song.subtitle),
-                0.75,
-                opaque(MUTED),
+                shared_text(song.title),
+                1.05,
+                opaque(INK),
             ));
+            if !song.subtitle.is_empty() {
+                actors.push(layout.bounded_label(
+                    [280.0, 194.0],
+                    0.0,
+                    332.0,
+                    shared_text(song.subtitle),
+                    0.75,
+                    opaque(MUTED),
+                ));
+            }
         }
         actors.push(layout.label([280.0, 201.0], 0.0, "ARTIST".into(), 0.66, opaque(MUTED)));
         actors.push(layout.bounded_label(
@@ -277,10 +295,10 @@ fn push_banner(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'
                 opaque(INK),
             ));
         }
-    } else if let Some(section) = &view.rows[SELECT_MUSIC_WHEEL_ROWS / 2] {
+    } else if let (Some(section), Some(_)) = (section, view.banner_texture) {
         actors.push(layout.bounded_label(
-            BANNER_CENTER,
-            0.5,
+            [280.0, 182.0],
+            0.0,
             332.0,
             shared_text(section.title),
             1.10,
@@ -583,9 +601,14 @@ fn push_prompt(actors: &mut Vec<Actor>, layout: Layout, prompt: SelectMusicPromp
 }
 
 /// Present the course variant of the music wheel using its current rating and records.
-pub fn push_select_course_actors(actors: &mut Vec<Actor>, view: SelectCourseView<'_>) {
+pub fn push_select_course_actors(
+    actors: &mut Vec<Actor>,
+    view: SelectCourseView<'_>,
+    banner: WheelBannerFrame<'_>,
+) {
     let layout = push_backdrop(actors);
-    push_banner_plate(actors, layout, view.banner_texture);
+    push_details_frame(actors, layout);
+    banner::push(actors, layout, banner, view.banner_texture, |_, _| {});
     push_wheel(
         actors,
         layout,
@@ -789,6 +812,7 @@ mod tests {
                 push_select_music_actors(
                     &mut actors,
                     view(&banner, SelectMusicPrompt::EnteringOptions),
+                    WheelBannerFrame::default(),
                 );
                 assert!(actors.iter().any(|actor| matches!(actor,
                     Actor::Sprite { align, offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], .. }

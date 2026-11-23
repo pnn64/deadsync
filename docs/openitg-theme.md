@@ -171,8 +171,33 @@ The native 640×480 Quartz capture confirms the tilted rows and the fixed
 selection area. Vulkan captures of the DeadSync Quartz view checked the same
 title, artist, BPM, and Hard 5 chart at 640×480 and 854×480. Additional
 two-player captures check catalog labels, records, and the highlight during
-movement. The artwork and proportions use DeadSync's presentation. Native
-banner transitions and the Chance and Random entries remain open.
+movement. The artwork and proportions use DeadSync's presentation. Chance
+and Random remain open.
+
+OpenITG's song and course banners slide in with a 750 ms deceleration and
+slide out with a 750 ms acceleration. The first accepted confirmation starts
+the exit. The stage-launch controller still handles the second Start and
+decides when to enter Player Options or Gameplay. The effective patch's
+`FadingBanner` commands drive a 500 ms corner-by-corner fade of the outgoing
+image over the replacement. DeadSync keeps up to four outgoing textures
+through that animation and reuses them when revisiting a banner. Video
+banners retain the texture they last displayed.
+
+Vulkan captures at 640×480 and 854×480 verify corner order at 0, 125, 250, and
+375 ms with two contrasting fixture textures. The wide entry and exit
+captures keep the side margins clear. A Vulkan media check verifies repeated
+selection, the four-texture bound, expiration, and clearing the outgoing
+layers on screen change. Motion timing is verified against the effective
+source metrics. A timestamp-matched native animation capture and the native
+low-to-full-resolution cache upgrade remain open. DeadSync's text fallback
+is shown under an outgoing image and gives way directly to the first loaded
+image.
+
+In the 854×480 two-player fixture, median actor build time went from 44.0
+to 45.6 µs when settled and from 53.6 to 57.4 µs while scrolling with one
+outgoing image. Median CPU composition stayed within 143–146 µs, with one
+additional draw in the fade. These measurements use warm actor and
+composition buffers and dev-profile libraries.
 
 Each joined side's chart pane shows steps, jumps, hands, holds, rolls, and
 judgable mines. The machine record and holder and the personal best use the
