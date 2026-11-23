@@ -71,24 +71,35 @@ the bundled fonts and dev-profile theme libraries.
 ## Player Options
 
 Choose Player Options through the usual second Start on a confirmed song. The
-OpenITG screen shows the selected stepchart and edits X/C/M mode, scroll speed,
-and music rate. Each active side has its own row focus. The editor submits the
-game's stage settings and uses the same profile and preview-rate services as
-Simply Love. Chart selection, course validation, practice, and failed-load
-recovery follow the shared application flow.
+OpenITG layout presents the same four editor panes and row choices as Simply
+Love. Both layouts support chart changes where allowed, X/C/M speed and music
+rate, perspective, noteskin and judgment previews, modifier toggles, and
+setting search. Each joined side has its own focus. Both layouts use the same
+profile updates, stage submission, course validation, and failed-load recovery.
 
 The effective reference uses the `ScreenPlayerOptions` section in patch
 `default/metrics.ini` and the parent `ScreenOptions` metrics. The row labels
 start at x=53, rows begin at y=127 with 28 px spacing, and Exit sits at y=353
-on the 640×480 layout. The implemented rows use those anchors and original
-graphics. Stepchart information is read-only here. Later rows, including
-perspective, noteskins, and effects, are pending. The reference's timing
-scaling and workout overrides belong to game rules. The editor retains
-DeadSync's existing behavior for rate and profile changes.
+on the 640×480 layout. The layout uses those anchors and fits DeadSync's
+ten-slot scrolling window between the first row and Exit. The shared editor
+supplies the row order and navigation, including the optional arcade bindings.
+The reference's 16-row grouping, scrollbar, artwork, and cue comparisons remain
+open. Timing scaling and workout overrides remain governed by DeadSync's rules.
 
-Focused tests cover recovery and resubmission from both themes, P2 profile
-saves, two-player confirmation, and matched session and audio rate changes.
-The actor checks cover row anchors at 640×480 and 854×480.
+Tests cover P2-only perspective edits, profile requests, stage recovery and
+resubmission, and noteskin preview requests through both layouts. Actor checks
+cover separate versus focus and enabled choices, the arcade next-row affordance,
+and row anchors at 640×480 and 854×480.
+
+At 854×480, nine warm runs of 8,000 actor builds with dev-profile theme libraries
+measured Simply Love at 60.6 µs before the change and 60.2 µs afterward in solo,
+and 78.7 µs and 79.3 µs in versus. The OpenITG layout measured 38.8 µs in solo
+and 48.9 µs in versus. These timings cover settled main-pane actor construction
+with bundled fonts.
+
+The broader shell run still hits `late_foreground_keeps_shared_gameplay_tracks`,
+which reproduces at the same assertion on `703cb0d25`. A follow-up run confirmed
+that the failure poisons the shared session lock for `live_lua_screen_frames`.
 
 ## Select Music
 

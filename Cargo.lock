@@ -1954,13 +1954,9 @@ dependencies = [
  "deadlib-assets",
  "deadlib-platform",
  "deadlib-present",
- "deadsync-chart",
  "deadsync-config",
  "deadsync-core",
  "deadsync-input",
- "deadsync-profile",
- "deadsync-profile-gameplay",
- "deadsync-rules",
  "deadsync-theme",
 ]
 

@@ -54,8 +54,6 @@ pub(crate) fn host_effect(effect: Effect) -> SimplyLoveEffect {
             OpenItgRuntimeRequest::Cue(cue) => {
                 SimplyLoveRuntimeRequest::Audio(AudioRequest::PlayUiCue(cue))
             }
-            OpenItgRuntimeRequest::Audio(request) => SimplyLoveRuntimeRequest::Audio(request),
-            OpenItgRuntimeRequest::Profile(request) => SimplyLoveRuntimeRequest::Profile(request),
         }),
     }
 }

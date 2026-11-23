@@ -84,7 +84,7 @@ pub use profile::{
     SpeedMod, SpeedModType, apply_no_cmod_alternative, convert_speed_mod_to_type,
     effective_scroll_speed_with_alt, no_cmod_alt_speed_mod_type, scroll_speed_for_mod,
 };
-pub use render::{get_actors, push_actors};
+pub use render::{get_actors, push_actors, push_actors_with_layout};
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
 pub use deadsync_theme::player_options::{

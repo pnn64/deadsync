@@ -9,15 +9,12 @@ mod select_music;
 mod system_options;
 
 use deadlib_present::actors::Actor;
-use deadsync_profile::requests::ProfileRequest;
-use deadsync_theme::{
-    AudioRequest, Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, TransitionKind, UiCue,
-};
+use deadsync_theme::{Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, TransitionKind, UiCue};
 
 pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, push_evaluation_overview};
 pub use gameplay::{GAMEPLAY_HUD, TAP_RESULTS_PNG};
 pub use menu::MenuState;
-pub use player_options::PlayerOptionsState;
+pub use player_options::push_player_options_actors;
 pub use select_music::push_select_music_actors;
 pub use system_options::SYSTEM_OPTIONS;
 
@@ -39,12 +36,10 @@ pub enum OpenItgScreen {
     PlayerOptions,
 }
 
-/// Audio and profile changes for the application to execute.
+/// UI sound requests for the application to execute.
 #[derive(Clone, Debug)]
 pub enum OpenItgRuntimeRequest {
     Cue(UiCue),
-    Audio(AudioRequest),
-    Profile(ProfileRequest),
 }
 
 /// The OpenITG-inspired theme.

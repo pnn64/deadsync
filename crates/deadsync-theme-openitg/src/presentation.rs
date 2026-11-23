@@ -56,16 +56,6 @@ impl Layout {
         self.text(position, alignment, content, zoom, rgba).build(0)
     }
 
-    pub(crate) fn column_text(
-        self,
-        position: [f32; 2],
-        width: f32,
-        content: TextContent,
-        rgba: [f32; 4],
-    ) -> Actor {
-        self.bounded_label(position, 0.5, width, content, 1.0, rgba)
-    }
-
     pub(crate) fn bounded_label(
         self,
         position: [f32; 2],

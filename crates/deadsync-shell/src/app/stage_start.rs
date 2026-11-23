@@ -403,7 +403,7 @@ mod tests {
                     let (target, _) = app.prepare_global_fade_entry(CurrentScreen::PlayerOptions);
                     assert_eq!(target, CurrentScreen::PlayerOptions);
                     let options = app.state.screens.player_options_state.as_mut().unwrap()
-                        .simply_love_mut().expect("Simply Love chart edit fixture");
+                        .editor_mut();
                     assert_eq!(options.chart_steps_index, [2, 2]);
                     assert_eq!(options.chart_difficulty_index, [2, 2]);
 
@@ -471,6 +471,8 @@ mod tests {
     #[test]
     fn both_player_options_mounts_restore_and_submit_the_same_stage_selection() {
         use deadsync_config::theme::ThemeFlag;
+        use deadsync_input::{InputEvent, VirtualAction};
+        use deadsync_profile::Perspective;
         use deadsync_rules::scroll::ScrollSpeedSetting;
 
         on_app_thread(|| {
@@ -483,7 +485,21 @@ mod tests {
                     for flag in [ThemeFlag::SimplyLove, ThemeFlag::OpenItg] {
                         let root = tempfile::tempdir().unwrap();
                         let mut app = test_app(root.path());
-                        app.state.screens.menu_state = crate::title_menu::InstalledMenu::new(flag, 2);
+                        deadsync_theme_simply_love::i18n::init_for_tests();
+                        let font = deadsync_theme_simply_love::asset_manifest()
+                            .fonts
+                            .iter()
+                            .find(|font| font.name == "miso")
+                            .unwrap();
+                        let bundle = &app.dirs.exe_dir;
+                        let font = deadlib_assets::parse_font_with_asset_context(
+                            &bundle.join(font.ini_path),
+                            vec![bundle.join("assets")],
+                        )
+                        .unwrap();
+                        app.asset_manager.register_font("miso", font.font);
+                        app.state.screens.menu_state =
+                            crate::title_menu::InstalledMenu::new(flag, 2);
                         let song = confirm_test_song(&mut app, root.path());
                         app.request_stage_launch(
                             ActiveTheme::SCREENS.song_selection,
@@ -497,21 +513,61 @@ mod tests {
                             app.prepare_global_fade_entry(CurrentScreen::PlayerOptions).0,
                             CurrentScreen::PlayerOptions,
                         );
-                        let (mut start, old) = app.take_stage_start().unwrap();
-                        assert_eq!(
-                            matches!(old, Some(PlayerOptionsState::OpenItg { .. })),
-                            flag == ThemeFlag::OpenItg,
-                        );
+                        let (mut start, _) = app.take_stage_start().unwrap();
 
-                        let speeds = [ScrollSpeedSetting::CMod(605.0), ScrollSpeedSetting::MMod(775.0)];
+                        let speeds = [
+                            ScrollSpeedSetting::CMod(605.0),
+                            ScrollSpeedSetting::MMod(775.0),
+                        ];
                         start.options.scroll_speeds = speeds;
                         start.options.music_rate = 1.25;
                         app.recover_player_options(start, None);
+                        let editor = app.state.screens.player_options_state.as_mut().unwrap();
+                        let mut effects = Vec::new();
+                        for action in [
+                            VirtualAction::p2_down,
+                            VirtualAction::p2_down,
+                            VirtualAction::p2_down,
+                            VirtualAction::p2_down,
+                            VirtualAction::p2_right,
+                        ] {
+                            for pressed in [true, false] {
+                                let now = std::time::Instant::now();
+                                let event = InputEvent::new(
+                                    action, 0, pressed, InputSource::Keyboard, now, 0, now, now,
+                                );
+                                editor.handle_input(&app.asset_manager, &event, &mut effects);
+                            }
+                        }
+                        assert!(effects.iter().any(|effect| matches!(effect,
+                            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Profile(
+                                profile_data::requests::ProfileRequest::UpdatePlayerOptions {
+                                    side: profile_data::PlayerSide::P2, options, ..
+                                }
+                            )) if options.perspective == Perspective::Hallway
+                        )));
+                        let mut actors = Vec::new();
+                        editor.push_actors(&mut actors, &app.asset_manager, Default::default());
+                        let has_text = |text| actors.iter().any(|actor| matches!(actor,
+                            deadlib_present::actors::Actor::Text { content, .. } if content.as_str() == text
+                        ));
+                        assert!(has_text("Hallway"));
+                        assert_eq!(has_text("PLAYER OPTIONS"), flag == ThemeFlag::OpenItg);
+                        let mut previews = Vec::new();
+                        deadsync_theme_simply_love::screens::player_options::take_noteskin_preview_requests(
+                            editor.editor_mut(),
+                            &mut previews,
+                        );
+                        assert!(previews.iter().any(|preview| preview.parts & 1 != 0));
                         let (resubmitted, _) = app.take_stage_start().unwrap();
                         assert!(Arc::ptr_eq(&resubmitted.song, &song));
                         assert_eq!(resubmitted.options.chart_steps_index, [3; MAX_PLAYERS]);
                         assert_eq!(resubmitted.options.scroll_speeds, speeds);
                         assert_eq!(resubmitted.options.music_rate, 1.25);
+                        assert_eq!(
+                            resubmitted.options.player_options[1].perspective,
+                            Perspective::Hallway,
+                        );
                         assert_eq!(resubmitted.return_screen, CurrentScreen::SelectMusic);
                     }
                 },

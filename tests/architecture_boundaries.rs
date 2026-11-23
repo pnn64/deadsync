@@ -4171,10 +4171,12 @@ fn player_options_runtime_reads_are_shell_prepared() {
     assert!(shell.contains("state.update(delta_time, asset_manager, effects)"));
     assert!(shell.contains("po_state.handle_raw_key("));
     assert!(input.contains("state.handle_input("));
-    for hook in ["init_player_options", "push_player_options_actors", "handle_player_options_input", "player_options_stage"] {
+    for hook in ["init_player_options", "handle_player_options_input", "player_options_stage"] {
         assert!(mount.contains(&format!("ActiveTheme::{hook}(")));
-        assert!(mount.contains(&format!("OpenItgTheme::{hook}(")));
+        assert!(!mount.contains(&format!("OpenItgTheme::{hook}(")));
     }
+    assert!(mount.contains("ActiveTheme::push_player_options_actors("));
+    assert!(mount.contains("player_options::push_actors_with_layout("));
     assert!(previews.contains("ActiveTheme::take_player_options_noteskin_requests("));
     assert!(heart_rate.contains("ActiveTheme::sync_player_options_heart_rate("));
     assert!(!shell.contains("screens::player_options::"));

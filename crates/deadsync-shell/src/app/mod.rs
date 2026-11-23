@@ -4675,9 +4675,8 @@ impl App {
             );
             if self.state.screens.current_screen == CurrentScreen::PlayerOptions
                 && let Some(state) = self.state.screens.player_options_state.as_mut()
-                && let Some(state) = state.simply_love_mut()
             {
-                self.heart_rate.refresh_player_options(state);
+                self.heart_rate.refresh_player_options(state.editor_mut());
             }
             if self.state.screens.current_screen == CurrentScreen::Evaluation {
                 crate::heart_rate::refresh_evaluation(
@@ -5102,11 +5101,10 @@ impl App {
         }
         if self.state.screens.current_screen == CurrentScreen::PlayerOptions
             && let Some(state) = self.state.screens.player_options_state.as_mut()
-            && let Some(state) = state.simply_love_mut()
             && let Some(backend) = self.backend.as_mut()
         {
             self.option_previews
-                .update(state, &mut self.asset_manager, backend);
+                .update(state.editor_mut(), &mut self.asset_manager, backend);
         } else {
             self.option_previews.idle();
         }

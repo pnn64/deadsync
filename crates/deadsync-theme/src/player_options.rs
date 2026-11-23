@@ -35,6 +35,41 @@ pub struct PlayerOptionsSelection<'a, Screen> {
     pub music_rate: f32,
 }
 
+/// Prepared rows and player focus borrowed for one Player Options frame.
+pub struct PlayerOptionsPage<'a, T, A> {
+    pub title: &'static str,
+    pub active: [bool; MAX_PLAYERS],
+    pub selected_rows: [usize; MAX_PLAYERS],
+    pub row_count: usize,
+    pub visible_slots: usize,
+    pub alpha: f32,
+    pub row: &'a dyn Fn(usize) -> Option<PlayerOptionsRow<'a, T>>,
+    pub help: &'a dyn Fn(usize, usize) -> Option<&'a Arc<str>>,
+    /// Draw the row's live samples at the given screen-space player centers and Y.
+    pub draw_preview: &'a dyn Fn(&mut Vec<A>, usize, [f32; MAX_PLAYERS], f32),
+}
+
+pub struct PlayerOptionsRow<'a, T> {
+    pub label: &'a T,
+    pub detail: Option<&'a T>,
+    pub slot: f32,
+    pub slots: usize,
+    pub alpha: f32,
+    pub exit: bool,
+    pub values: [Option<&'a T>; MAX_PLAYERS],
+    pub next_row: [bool; MAX_PLAYERS],
+    pub inline: Option<PlayerOptionsInline<'a, T>>,
+    pub has_preview: bool,
+}
+
+pub struct PlayerOptionsInline<'a, T> {
+    pub choices: &'a [T],
+    pub focused: [Option<usize>; MAX_PLAYERS],
+    pub selected: [usize; MAX_PLAYERS],
+    /// Choice-index masks for rows that allow multiple simultaneous selections.
+    pub enabled: [Option<u16>; MAX_PLAYERS],
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HeartRateDeviceView {
     pub id: String,

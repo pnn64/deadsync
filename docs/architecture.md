@@ -623,17 +623,15 @@ recorded maximum combo travels with each stage and aggregates by maximum on
 course pages. Auxiliary panes and visit overlays remain with the existing
 controller, and theme selection stays out of result routing and persistence.
 
-Player Options mounts through the selected theme for song and course entry,
-input, updates, and actor composition. The shell supplies device and asset
-views, manages preview work and uploads, and reads the submitted game settings
-through the interface. Recovery restores the submitted scroll speeds through
-the same entry path. `deadsync-profile-gameplay` defines the session and settings
-view used for startup and recovery. Simply Love's standalone initializer keeps
-its existing defaults and converts them to that shared view.
-Both editors use the game's scroll speed and rate adjustment rules and its
-physical-side and persistence rules. Both submit the same `StageOptions` type
-through the shell's stage launch, including when a load failure reopens the
-options screen.
+The shell mounts one Player Options editor for song and course entry. Theme
+selection chooses the layout and screen transitions. The alternate layout
+borrows rows, focus, and help through `deadsync-theme` and draws the same live
+samples at its own positions. Input, updates, search, profile requests, and
+preview preparation use the existing editor in Simply Love. The shell supplies
+device and asset views and manages preview uploads for both layouts.
+`deadsync-profile-gameplay` defines the session and settings view, stage scroll
+and rate rules, and the `StageOptions` submitted for gameplay, practice, and
+recovery after a load failure.
 
 Stage and course Evaluation mount through the selected theme for entry, input,
 updates, and actor composition. The shell tracks the game result separately and

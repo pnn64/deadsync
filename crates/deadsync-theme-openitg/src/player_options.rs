@@ -1,400 +1,61 @@
-//! Player Options layout and controls over the shared stage settings.
+//! Player Options presentation for the shared editor.
 
 use crate::presentation::{ACCENT, HEIGHT, INK, Layout, MUTED, WIDTH, quad};
-use crate::{Effect, OpenItgRuntimeRequest, OpenItgScreen, OpenItgTheme};
-use deadlib_assets::AssetManager;
-use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
-use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_profile::requests::ProfileRequest;
-use deadsync_profile::{MAX_HEART_RATE_MAX, MAX_HEART_RATE_MIN, migrate_noteskin_parts};
-use deadsync_profile_gameplay::stage_options::{
-    PlayerOptionsView, StageOptions, adjust_music_rate, adjust_scroll_speed,
-    player_options_active_sides, player_options_persist_side, reference_bpm_for_song,
-};
-use deadsync_rules::scroll::{ScrollSpeedMode, ScrollSpeedSetting};
-use deadsync_theme::player_options::{
-    PlayerOptionsEntry, PlayerOptionsSelection, ThemePlayerOptions,
-};
-use deadsync_theme::{AudioRequest, UiCue};
-use std::cell::OnceCell;
-use std::sync::Arc;
+use deadsync_theme::player_options::{PlayerOptionsInline, PlayerOptionsPage, PlayerOptionsRow};
 
 pub(super) const TRANSITION_SECONDS: f32 = 0.3;
+
 const FIRST_ROW_Y: f32 = 127.0;
 const ROW_PITCH: f32 = 28.0;
 const EXIT_Y: f32 = 353.0;
-const EXIT: usize = ROWS.len() - 1;
+const ROW_X: f32 = 36.0;
+const ROW_WIDTH: f32 = 568.0;
+const LABEL_X: f32 = 53.0;
+const INLINE_LEFT: f32 = 210.0;
+const INLINE_RIGHT: f32 = 594.0;
+const PLAYER_HUES: [[f32; 3]; MAX_PLAYERS] = [ACCENT, [0.48, 0.94, 0.51]];
+const PLAYER_NAMES: [&str; MAX_PLAYERS] = ["P1", "P2"];
+
+type Page<'a> = PlayerOptionsPage<'a, TextContent, Actor>;
+type Row<'a> = PlayerOptionsRow<'a, TextContent>;
 
 #[derive(Clone, Copy)]
-enum Row {
-    SpeedType,
-    Speed,
-    Rate,
-    Chart,
-    Exit,
-}
-
-const ROWS: [Row; 5] = [Row::SpeedType, Row::Speed, Row::Rate, Row::Chart, Row::Exit];
-
-impl Row {
-    fn label(self) -> &'static str {
-        match self {
-            Self::SpeedType => "Speed Type",
-            Self::Speed => "Scroll Speed",
-            Self::Rate => "Music Rate",
-            Self::Chart => "Stepchart",
-            Self::Exit => "Exit",
-        }
-    }
-
-    fn y(self, index: usize) -> f32 {
-        if matches!(self, Self::Exit) {
-            EXIT_Y
-        } else {
-            FIRST_ROW_Y + index as f32 * ROW_PITCH
-        }
-    }
-}
-
-/// Retains the editable settings and each active player's focus.
-pub struct PlayerOptionsState {
-    song: Arc<SongData>,
-    steps: [usize; MAX_PLAYERS],
-    preferred: [usize; MAX_PLAYERS],
-    color_index: i32,
-    return_screen: OpenItgScreen,
-    fixed_stepchart_label: Option<Arc<str>>,
-    chart_labels: OnceCell<[TextContent; MAX_PLAYERS]>,
-    view: PlayerOptionsView,
-    scroll_speeds: [ScrollSpeedSetting; MAX_PLAYERS],
+struct Seats {
     active: [bool; MAX_PLAYERS],
-    focus: [usize; MAX_PLAYERS],
+    values: [f32; MAX_PLAYERS],
+    previews: [f32; MAX_PLAYERS],
 }
 
-impl PlayerOptionsState {
-    fn ready_to_play(&self) -> bool {
-        self.active
-            .iter()
-            .zip(self.focus)
-            .all(|(active, focus)| !*active || focus == EXIT)
-    }
-
-    fn move_focus(&mut self, player: usize, delta: isize, effects: &mut Vec<Effect>) {
-        self.focus[player] =
-            (self.focus[player] as isize + delta).rem_euclid(ROWS.len() as isize) as usize;
-        effects.push(Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Change)));
-    }
-
-    fn start(&mut self, player: usize, effects: &mut Vec<Effect>) {
-        if self.focus[player] != EXIT {
-            if self.view.policy.arcade_navigation {
-                self.move_focus(player, 1, effects);
-            } else {
-                self.focus[player] = EXIT;
-                effects.push(Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Change)));
+impl Seats {
+    fn new(active: [bool; MAX_PLAYERS]) -> Self {
+        if active == [true; MAX_PLAYERS] {
+            Self {
+                active,
+                values: [337.0, 515.0],
+                previews: [389.0, 557.0],
             }
-            return;
-        }
-
-        if self.ready_to_play() {
-            let play = if self.return_screen == OpenItgScreen::Practice {
-                OpenItgScreen::Practice
-            } else {
-                OpenItgScreen::Gameplay
-            };
-            effects.push(Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Confirm)));
-            effects.push(Effect::Navigate(play));
-        }
-    }
-
-    fn adjust(&mut self, player: usize, delta: isize, effects: &mut Vec<Effect>) {
-        let previous_speed = self.scroll_speeds[player];
-        let speed = match ROWS[self.focus[player]] {
-            Row::SpeedType => {
-                let modes = [
-                    ScrollSpeedMode::XMod,
-                    ScrollSpeedMode::CMod,
-                    ScrollSpeedMode::MMod,
-                ];
-                let current = match previous_speed {
-                    ScrollSpeedSetting::XMod(_) => 0,
-                    ScrollSpeedSetting::CMod(_) => 1,
-                    ScrollSpeedSetting::MMod(_) => 2,
-                };
-                let mode = modes[(current + delta).rem_euclid(modes.len() as isize) as usize];
-                let chart = self
-                    .song
-                    .chart_for_steps_index(self.view.play_style.chart_type(), self.steps[0]);
-                let bpm = reference_bpm_for_song(&self.song, chart);
-                let rate = if self.view.music_rate.is_finite() && self.view.music_rate > 0.0 {
-                    self.view.music_rate
-                } else {
-                    1.0
-                };
-                previous_speed.converted_to(mode, bpm, rate)
-            }
-            Row::Speed => adjust_scroll_speed(previous_speed, delta),
-            Row::Rate => {
-                let rate = adjust_music_rate(self.view.music_rate, delta);
-                if rate.to_bits() != self.view.music_rate.to_bits() {
-                    self.view.music_rate = rate;
-                    effects.push(Effect::Runtime(OpenItgRuntimeRequest::Profile(
-                        ProfileRequest::SetMusicRate(rate),
-                    )));
-                    effects.push(Effect::Runtime(OpenItgRuntimeRequest::Audio(
-                        AudioRequest::SetMusicRate(rate),
-                    )));
-                    effects.push(Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Change)));
-                }
-                return;
-            }
-            Row::Chart | Row::Exit => return,
-        };
-        if speed == previous_speed {
-            return;
-        }
-
-        self.scroll_speeds[player] = speed;
-        let edited = &mut self.view.players[player];
-        edited.options.scroll_speed = speed;
-        if let Some(side) =
-            player_options_persist_side(self.view.play_style, self.view.player_side, player)
-        {
-            effects.push(Effect::Runtime(OpenItgRuntimeRequest::Profile(
-                ProfileRequest::UpdatePlayerOptions {
-                    side,
-                    options: Box::new(edited.options.clone()),
-                    judgment_palette_id: edited.judgment_palette_id.clone(),
-                    heart_rate_device_id: edited.heart_rate_device_id.clone(),
-                    max_heart_rate: edited.max_heart_rate,
-                },
-            )));
-        }
-        effects.push(Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Change)));
-    }
-
-    fn value(&self, row: Row, player: usize) -> TextContent {
-        let speed = self.scroll_speeds[player];
-        match row {
-            Row::SpeedType => match speed {
-                ScrollSpeedSetting::XMod(_) => "X-Mod",
-                ScrollSpeedSetting::CMod(_) => "C-Mod",
-                ScrollSpeedSetting::MMod(_) => "M-Mod",
-            }
-            .into(),
-            Row::Speed => {
-                TextContent::inline_format(format_args!("{speed}")).unwrap_or_else(|| "-".into())
-            }
-            Row::Rate => TextContent::inline_format(format_args!("{:.2}x", self.view.music_rate))
-                .unwrap_or_else(|| "-".into()),
-            Row::Chart => self
-                .chart_labels
-                .get_or_init(|| std::array::from_fn(|index| self.chart_label(index)))[player]
-                .clone(),
-            Row::Exit => "Play".into(),
-        }
-    }
-
-    fn chart_label(&self, player: usize) -> TextContent {
-        if let Some(label) = &self.fixed_stepchart_label {
-            return TextContent::Shared(Arc::clone(label));
-        }
-        let Some(chart) = self
-            .song
-            .chart_for_steps_index(self.view.play_style.chart_type(), self.steps[player])
-        else {
-            return "-".into();
-        };
-        TextContent::inline_format(format_args!("{} {}", chart.difficulty, chart.meter))
-            .unwrap_or_else(|| {
-                TextContent::Shared(Arc::from(format!("{} {}", chart.difficulty, chart.meter)))
-            })
-    }
-}
-
-impl ThemePlayerOptions for OpenItgTheme {
-    type PlayerOptionsState = PlayerOptionsState;
-    type PlayerOptionsView = PlayerOptionsView;
-    type PlayerOptionsStage = StageOptions;
-    type PlayerOptionsInput = InputEvent;
-    type PlayerOptionsRawKey = RawKeyboardEvent;
-    type PlayerOptionsVisualPolicy = ();
-    type PlayerOptionsNoteskin = ();
-
-    fn init_player_options(
-        entry: PlayerOptionsEntry<OpenItgScreen, PlayerOptionsView>,
-    ) -> PlayerOptionsState {
-        let mut view = entry.view;
-        for player in &mut view.players {
-            migrate_noteskin_parts(&mut player.options);
-            player.max_heart_rate = player
-                .max_heart_rate
-                .clamp(MAX_HEART_RATE_MIN, MAX_HEART_RATE_MAX);
-        }
-        let active = player_options_active_sides(view.play_style, view.player_side, view.joined);
-        let scroll_speeds = entry.scroll_speeds.unwrap_or_else(|| {
-            view.players
-                .each_ref()
-                .map(|player| player.options.scroll_speed)
-        });
-        PlayerOptionsState {
-            song: entry.song,
-            steps: entry.steps,
-            preferred: entry.preferred,
-            color_index: entry.color_index,
-            return_screen: entry.return_screen,
-            fixed_stepchart_label: entry.fixed_stepchart_label.map(Arc::from),
-            chart_labels: OnceCell::new(),
-            view,
-            scroll_speeds,
-            active,
-            focus: [0; MAX_PLAYERS],
-        }
-    }
-
-    fn player_options_selection(
-        state: &PlayerOptionsState,
-    ) -> PlayerOptionsSelection<'_, OpenItgScreen> {
-        PlayerOptionsSelection {
-            song: &state.song,
-            steps: state.steps,
-            preferred: state.preferred,
-            color_index: state.color_index,
-            return_screen: state.return_screen,
-            fixed_stepchart_label: state.fixed_stepchart_label.as_deref(),
-            scroll_speeds: state.scroll_speeds,
-            music_rate: state.view.music_rate,
-        }
-    }
-
-    fn player_options_stage(state: &PlayerOptionsState) -> StageOptions {
-        StageOptions {
-            play_style: state.view.play_style,
-            chart_steps_index: state.steps,
-            music_rate: state.view.music_rate,
-            player_options: state
-                .view
-                .players
-                .each_ref()
-                .map(|player| player.options.clone()),
-            scroll_speeds: state.scroll_speeds,
-            judgment_palette_ids: state
-                .view
-                .players
-                .each_ref()
-                .map(|player| player.judgment_palette_id.clone()),
-            heart_rate_device_ids: state
-                .view
-                .players
-                .each_ref()
-                .map(|player| player.heart_rate_device_id.clone()),
-        }
-    }
-
-    fn player_options_song_mut(state: &mut PlayerOptionsState) -> &mut Arc<SongData> {
-        state.chart_labels.take();
-        &mut state.song
-    }
-
-    fn prepare_player_options(_state: &mut PlayerOptionsState, _assets: &AssetManager) {}
-
-    fn update_player_options(
-        _state: &mut PlayerOptionsState,
-        _dt: f32,
-        _assets: &AssetManager,
-        _effects: &mut Vec<Effect>,
-    ) {
-    }
-
-    fn handle_player_options_input(
-        state: &mut PlayerOptionsState,
-        _assets: &AssetManager,
-        input: &InputEvent,
-        effects: &mut Vec<Effect>,
-    ) {
-        if input.pressed {
-            handle_action(state, input.action, effects);
-        }
-    }
-
-    fn handle_player_options_raw_key(
-        state: &mut PlayerOptionsState,
-        key: Option<&RawKeyboardEvent>,
-        _text: Option<&str>,
-        _ctrl_held: bool,
-        effects: &mut Vec<Effect>,
-    ) -> bool {
-        if key.is_some_and(|key| key.code == KeyCode::Escape && key.pressed && !key.repeat) {
-            effects.push(Effect::Navigate(state.return_screen));
-            true
         } else {
-            false
+            Self {
+                active,
+                values: [395.0; MAX_PLAYERS],
+                previews: [459.0; MAX_PLAYERS],
+            }
         }
     }
-
-    fn push_player_options_actors(
-        actors: &mut Vec<Actor>,
-        state: &PlayerOptionsState,
-        _assets: &AssetManager,
-        (): (),
-    ) {
-        push_options(actors, state);
-    }
 }
 
-#[derive(Clone, Copy)]
-enum Control {
-    Row(isize),
-    Value(isize),
-    Start,
-    Back,
-    PreviousArcadeRow,
-}
-
-fn handle_action(state: &mut PlayerOptionsState, action: VirtualAction, effects: &mut Vec<Effect>) {
-    use VirtualAction::*;
-    let (player, control) = match action {
-        p1_up | p1_menu_up => (0, Control::Row(-1)),
-        p2_up | p2_menu_up => (1, Control::Row(-1)),
-        p1_down | p1_menu_down => (0, Control::Row(1)),
-        p2_down | p2_menu_down => (1, Control::Row(1)),
-        p1_left | p1_menu_left => (0, Control::Value(-1)),
-        p2_left | p2_menu_left => (1, Control::Value(-1)),
-        p1_right | p1_menu_right => (0, Control::Value(1)),
-        p2_right | p2_menu_right => (1, Control::Value(1)),
-        p1_start => (0, Control::Start),
-        p2_start => (1, Control::Start),
-        p1_back => (0, Control::Back),
-        p2_back => (1, Control::Back),
-        p1_select => (0, Control::PreviousArcadeRow),
-        p2_select => (1, Control::PreviousArcadeRow),
-        _ => return,
-    };
-    if !state.active[player] {
-        return;
-    }
-    match control {
-        Control::Row(delta) => state.move_focus(player, delta, effects),
-        Control::Value(delta) => state.adjust(player, delta, effects),
-        Control::Start => state.start(player, effects),
-        Control::Back => effects.push(Effect::Navigate(state.return_screen)),
-        Control::PreviousArcadeRow if state.view.policy.arcade_navigation => {
-            state.move_focus(player, -1, effects)
-        }
-        Control::PreviousArcadeRow => {}
-    }
-}
-
-fn push_options(actors: &mut Vec<Actor>, state: &PlayerOptionsState) {
+pub fn push_player_options_actors(
+    actors: &mut Vec<Actor>,
+    page: PlayerOptionsPage<'_, TextContent, Actor>,
+) {
     let (width, height) = (screen_width(), screen_height());
     let layout = Layout::centered(width, height);
-    let ink = [INK[0], INK[1], INK[2], 1.0];
-    let muted = [MUTED[0], MUTED[1], MUTED[2], 1.0];
-    let accent = [ACCENT[0], ACCENT[1], ACCENT[2], 1.0];
+    let seats = Seats::new(page.active);
+    let pitch = ROW_PITCH * (8.0 / page.visible_slots.max(8) as f32);
+    let alpha = page.alpha.clamp(0.0, 1.0);
 
     actors.push(quad(
         [0.0, 0.0],
@@ -403,273 +64,616 @@ fn push_options(actors: &mut Vec<Actor>, state: &PlayerOptionsState) {
         -20,
     ));
     actors.push(layout.panel(0.0, 0.0, [WIDTH, HEIGHT], [0.063, 0.087, 0.126, 1.0], -19));
-    actors.push(layout.label([36.0, 38.0], 0.0, "PLAYER OPTIONS".into(), 1.8, ink));
-    actors.push(layout.panel(36.0, 70.0, [568.0, 1.0], [0.32, 0.40, 0.48, 1.0], -17));
-
-    let positions = if state.active == [true, true] {
-        [337.0, 515.0]
-    } else {
-        [395.0, 395.0]
-    };
-    for (player, &x) in positions.iter().enumerate() {
-        if state.active[player] {
-            let label = if player == 0 { "P1" } else { "P2" };
-            actors.push(layout.label([x, 92.0], 0.5, label.into(), 1.1, accent));
-        }
-    }
-    for (index, row) in ROWS.iter().copied().enumerate() {
-        let y = row.y(index);
-        actors.push(layout.panel(36.0, y - 13.0, [568.0, 26.0], [0.09, 0.13, 0.19, 1.0], -18));
-        actors.push(layout.label([53.0, y], 0.0, row.label().into(), 1.0, muted));
-        for (player, &x) in positions.iter().enumerate() {
-            if state.active[player] {
-                let focused = state.focus[player] == index;
-                if focused {
-                    actors.push(layout.panel(
-                        x - 79.0,
-                        y - 12.0,
-                        [158.0, 24.0],
-                        [0.24, 0.30, 0.38, 1.0],
-                        -10,
-                    ));
-                    actors.push(layout.panel(x - 79.0, y - 12.0, [2.0, 24.0], accent, -9));
-                }
-                actors.push(layout.column_text(
-                    [x, y],
-                    152.0,
-                    state.value(row, player),
-                    if focused { ink } else { muted },
-                ));
-            }
+    actors.push(layout.label([36.0, 38.0], 0.0, page.title.into(), 1.8, rgba(INK, alpha)));
+    actors.push(layout.panel(
+        36.0,
+        70.0,
+        [568.0, 1.0],
+        rgba([0.32, 0.40, 0.48], alpha),
+        -17,
+    ));
+    for (player, name) in PLAYER_NAMES.into_iter().enumerate() {
+        if seats.active[player] {
+            actors.push(layout.label(
+                [seats.values[player], 92.0],
+                0.5,
+                name.into(),
+                1.1,
+                rgba(PLAYER_HUES[player], alpha),
+            ));
         }
     }
 
-    actors.push(layout.panel(36.0, 426.0, [568.0, 1.0], [0.32, 0.40, 0.48, 1.0], -17));
-    actors.push(layout.label([36.0, 447.0], 0.0, "BACK".into(), 1.0, muted));
-    let start_help = if state.ready_to_play() {
-        "START: PLAY"
-    } else if state.view.policy.arcade_navigation {
-        "START: NEXT ROW"
+    for index in 0..page.row_count {
+        let Some(row) = (page.row)(index) else {
+            continue;
+        };
+        if row.alpha <= 0.001 && !row.exit {
+            continue;
+        }
+        let focused = std::array::from_fn(|player| {
+            seats.active[player] && page.selected_rows[player] == index
+        });
+        if row.exit {
+            draw_exit(actors, layout, &row, focused, alpha);
+            continue;
+        }
+
+        let y = row.slot.mul_add(pitch, FIRST_ROW_Y);
+        let height = pitch * row.slots.max(1) as f32 - 2.0;
+        let fill = if focused.contains(&true) {
+            [0.14, 0.19, 0.27]
+        } else {
+            [0.09, 0.13, 0.19]
+        };
+        actors.push(layout.panel(
+            ROW_X,
+            y - height * 0.5,
+            [ROW_WIDTH, height],
+            rgba(fill, row.alpha),
+            -18,
+        ));
+        draw_row_focus(actors, layout, y, height, focused, row.alpha);
+        draw_row_label(actors, layout, y, &row, focused.contains(&true));
+        if let Some(inline) = row.inline.as_ref() {
+            draw_inline(actors, layout, y, pitch, &row, inline, seats, focused);
+        } else {
+            draw_values(actors, layout, y, &row, seats, focused);
+        }
+        if row.has_preview {
+            let [p1_x, _] = layout.position(seats.previews[0], y);
+            let [p2_x, preview_y] = layout.position(seats.previews[1], y);
+            (page.draw_preview)(actors, index, [p1_x, p2_x], preview_y);
+        }
+    }
+    draw_help(actors, layout, &page, alpha);
+}
+
+const fn rgba([red, green, blue]: [f32; 3], alpha: f32) -> [f32; 4] {
+    [red, green, blue, alpha]
+}
+
+fn draw_row_label(actors: &mut Vec<Actor>, layout: Layout, y: f32, row: &Row<'_>, focused: bool) {
+    let label_y = if row.detail.is_some() { y - 4.5 } else { y };
+    actors.push(layout.bounded_label(
+        [LABEL_X, label_y],
+        0.0,
+        INLINE_LEFT - LABEL_X - 10.0,
+        row.label.clone(),
+        0.94,
+        rgba(if focused { INK } else { MUTED }, row.alpha),
+    ));
+    if let Some(detail) = row.detail {
+        actors.push(layout.bounded_label(
+            [LABEL_X, y + 6.0],
+            0.0,
+            INLINE_LEFT - LABEL_X - 10.0,
+            detail.clone(),
+            0.66,
+            rgba(MUTED, row.alpha),
+        ));
+    }
+}
+
+fn draw_row_focus(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    y: f32,
+    height: f32,
+    focused: [bool; MAX_PLAYERS],
+    alpha: f32,
+) {
+    for (player, x) in [ROW_X, ROW_X + ROW_WIDTH - 3.0].into_iter().enumerate() {
+        if focused[player] {
+            actors.push(layout.panel(
+                x,
+                y - height * 0.5,
+                [3.0, height],
+                rgba(PLAYER_HUES[player], alpha),
+                -16,
+            ));
+        }
+    }
+}
+
+fn draw_exit(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    row: &Row<'_>,
+    focused: [bool; MAX_PLAYERS],
+    alpha: f32,
+) {
+    let fill = if focused.contains(&true) {
+        [0.22, 0.30, 0.39]
     } else {
-        "START: EXIT ROW"
+        [0.10, 0.15, 0.22]
     };
-    actors.push(layout.label([604.0, 447.0], 1.0, start_help.into(), 0.9, accent));
+    actors.push(layout.panel(
+        ROW_X,
+        EXIT_Y - 13.0,
+        [ROW_WIDTH, 26.0],
+        rgba(fill, alpha),
+        -18,
+    ));
+    draw_row_focus(actors, layout, EXIT_Y, 26.0, focused, alpha);
+    let label = row
+        .values
+        .iter()
+        .flatten()
+        .copied()
+        .next()
+        .unwrap_or(row.label);
+    actors.push(layout.bounded_label(
+        [320.0, EXIT_Y],
+        0.5,
+        400.0,
+        label.clone(),
+        1.04,
+        rgba(INK, alpha),
+    ));
+}
+
+fn draw_values(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    y: f32,
+    row: &Row<'_>,
+    seats: Seats,
+    focused: [bool; MAX_PLAYERS],
+) {
+    for player in 0..MAX_PLAYERS {
+        if !seats.active[player] {
+            continue;
+        }
+        let Some(text) = row.values[player] else {
+            continue;
+        };
+        let content_x = seats.values[player];
+        let (x, width) = if row.has_preview {
+            (content_x - 33.0, 82.0)
+        } else {
+            (content_x, 150.0)
+        };
+        let focus_color = rgba(PLAYER_HUES[player], row.alpha);
+        if focused[player] && !row.next_row[player] {
+            actors.push(layout.panel(x - width * 0.5, y + 7.0, [width, 2.0], focus_color, -15));
+        }
+        actors.push(layout.bounded_label(
+            [x, y],
+            0.5,
+            width,
+            text.clone(),
+            0.95,
+            rgba(if focused[player] { INK } else { MUTED }, row.alpha),
+        ));
+    }
+    if row
+        .next_row
+        .iter()
+        .zip(focused)
+        .any(|(&next, focused)| next && focused)
+    {
+        draw_next_row(actors, layout, y, row, focused);
+    }
+}
+
+fn draw_inline(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    y: f32,
+    pitch: f32,
+    row: &Row<'_>,
+    inline: &PlayerOptionsInline<'_, TextContent>,
+    seats: Seats,
+    focused: [bool; MAX_PLAYERS],
+) {
+    let next_column = row
+        .next_row
+        .iter()
+        .zip(focused)
+        .any(|(&next, focused)| next && focused);
+    let first = INLINE_LEFT + if next_column { 72.0 } else { 0.0 };
+    let count = inline.choices.len();
+    if count == 0 {
+        if next_column {
+            draw_next_row(actors, layout, y, row, focused);
+        }
+        return;
+    }
+    let columns = count.div_ceil(row.slots.max(1));
+    let width = (INLINE_RIGHT - first) / columns as f32;
+    let fits = inline
+        .choices
+        .iter()
+        .all(|text| (text.as_str().chars().count() as f32).mul_add(8.0, 8.0) <= width);
+    if next_column {
+        draw_next_row(actors, layout, y, row, focused);
+    }
+    if !fits {
+        draw_compact_choices(actors, layout, y, row, inline, seats, focused);
+        return;
+    }
+
+    let lines = count.div_ceil(columns);
+    let start_y = y - ((lines - 1) as f32 * pitch * 0.5);
+    for (index, choice) in inline.choices.iter().enumerate() {
+        let x = (index % columns) as f32 * width + first + width * 0.5;
+        let y = (index / columns) as f32 * pitch + start_y;
+        let choice_focused = std::array::from_fn(|player| {
+            focused[player]
+                && !row.next_row[player]
+                && inline.focused[player].unwrap_or(inline.selected[player]) == index
+        });
+        let choice_enabled =
+            std::array::from_fn(|player| seats.active[player] && enabled(inline, player, index));
+        let tint = if choice_focused.contains(&true) || choice_enabled.contains(&true) {
+            INK
+        } else {
+            MUTED
+        };
+        actors.push(layout.bounded_label(
+            [x, y],
+            0.5,
+            width - 8.0,
+            choice.clone(),
+            0.9,
+            rgba(tint, row.alpha),
+        ));
+        draw_choice_marks(
+            actors,
+            layout,
+            [x, y],
+            (width - 12.0).min(56.0),
+            choice_enabled,
+            choice_focused,
+            row.alpha,
+        );
+    }
+}
+
+fn draw_compact_choices(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    y: f32,
+    row: &Row<'_>,
+    inline: &PlayerOptionsInline<'_, TextContent>,
+    seats: Seats,
+    focused: [bool; MAX_PLAYERS],
+) {
+    for player in 0..MAX_PLAYERS {
+        if !seats.active[player] {
+            continue;
+        }
+        let focus = focused[player] && !row.next_row[player];
+        let choice = (if focus { inline.focused[player] } else { None })
+            .unwrap_or(inline.selected[player])
+            .min(inline.choices.len() - 1);
+        let choice_on = enabled(inline, player, choice);
+        let x = seats.values[player];
+        actors.push(layout.bounded_label(
+            [x, y],
+            0.5,
+            120.0,
+            inline.choices[choice].clone(),
+            0.92,
+            rgba(if focus || choice_on { INK } else { MUTED }, row.alpha),
+        ));
+        if inline.enabled[player].is_some() {
+            let status = if choice_on { "ON" } else { "OFF" };
+            actors.push(layout.bounded_label(
+                [x + 62.0, y],
+                0.0,
+                22.0,
+                status.into(),
+                0.65,
+                rgba(PLAYER_HUES[player], row.alpha),
+            ));
+        }
+        draw_choice_marks(
+            actors,
+            layout,
+            [x, y],
+            56.0,
+            std::array::from_fn(|side| side == player && choice_on),
+            std::array::from_fn(|side| side == player && focus),
+            row.alpha,
+        );
+    }
+}
+
+fn enabled(inline: &PlayerOptionsInline<'_, TextContent>, player: usize, choice: usize) -> bool {
+    match inline.enabled[player] {
+        Some(mask) => choice < u16::BITS as usize && mask & (1_u16 << choice) != 0,
+        None => inline.selected[player] == choice,
+    }
+}
+
+fn draw_next_row(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    y: f32,
+    row: &Row<'_>,
+    focused: [bool; MAX_PLAYERS],
+) {
+    let position = [235.0, y];
+    actors.push(layout.bounded_label(
+        position,
+        0.5,
+        50.0,
+        "NEXT ROW".into(),
+        0.8,
+        rgba(INK, row.alpha),
+    ));
+    draw_choice_marks(
+        actors,
+        layout,
+        position,
+        46.0,
+        [false; MAX_PLAYERS],
+        std::array::from_fn(|player| focused[player] && row.next_row[player]),
+        row.alpha,
+    );
+}
+
+fn draw_choice_marks(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    [x, y]: [f32; 2],
+    width: f32,
+    enabled: [bool; MAX_PLAYERS],
+    focused: [bool; MAX_PLAYERS],
+    alpha: f32,
+) {
+    for player in 0..MAX_PLAYERS {
+        let mark_x = x + if player == 0 { -width * 0.5 } else { 1.0 };
+        let mark_width = (width * 0.5 - 1.0).max(1.0);
+        if enabled[player] {
+            actors.push(layout.panel(
+                mark_x,
+                y + 7.0,
+                [mark_width, 2.0],
+                rgba(PLAYER_HUES[player], alpha),
+                -14,
+            ));
+        }
+        if focused[player] {
+            actors.push(layout.panel(
+                mark_x,
+                y - 9.0,
+                [mark_width, 2.0],
+                rgba(PLAYER_HUES[player], alpha),
+                -14,
+            ));
+        }
+    }
+}
+
+fn draw_help(actors: &mut Vec<Actor>, layout: Layout, page: &Page<'_>, alpha: f32) {
+    actors.push(layout.panel(
+        36.0,
+        370.0,
+        [568.0, 1.0],
+        rgba([0.32, 0.40, 0.48], alpha),
+        -17,
+    ));
+    let split = page.active == [true; MAX_PLAYERS];
+    for player in 0..MAX_PLAYERS {
+        if !page.active[player] {
+            continue;
+        }
+        let line_count = (0..)
+            .take_while(|&line| (page.help)(player, line).is_some())
+            .count();
+        if line_count == 0 {
+            continue;
+        }
+        let (x, width) = if split {
+            (53.0 + player as f32 * 278.0, 256.0)
+        } else {
+            (53.0, 534.0)
+        };
+        let height = (65.0 / line_count as f32).min(30.0);
+        for (line, text) in (0..)
+            .map_while(|line| (page.help)(player, line))
+            .enumerate()
+        {
+            let y = (line as f32).mul_add(height, 383.0);
+            actors.push(layout.paragraph(
+                [x, y],
+                [width, (height - 2.0).max(1.0)],
+                TextContent::from(text),
+                0.82,
+                rgba(PLAYER_HUES[player], alpha),
+            ));
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_profile::{PlayStyle, PlayerSide};
-    use deadsync_profile_gameplay::stage_options::{
-        PlayerOptionsPlayerView, PlayerOptionsPolicyView,
-    };
+    use deadlib_present::space::{Metrics, with_current_metrics};
+    use std::cell::Cell;
+    use std::sync::Arc;
 
-    fn song() -> Arc<SongData> {
-        Arc::new(SongData {
-            simfile_path: "test.sm".into(),
-            title: "Options fixture".into(),
-            subtitle: String::new(),
-            translit_title: String::new(),
-            translit_subtitle: String::new(),
-            artist: String::new(),
-            translit_artist: String::new(),
-            genre: String::new(),
-            banner_path: None,
-            background_path: None,
-            background_changes: Vec::new(),
-            background_layer2_changes: Vec::new(),
-            foreground_changes: Vec::new(),
-            background_lua_changes: Vec::new(),
-            foreground_lua_changes: Vec::new(),
-            has_lua: false,
-            cdtitle_path: None,
-            music_path: None,
-            display_bpm: String::new(),
-            offset: 0.0,
-            sample_start: None,
-            sample_length: None,
-            min_bpm: 120.0,
-            max_bpm: 120.0,
-            normalized_bpms: String::new(),
-            song_timing: None,
-            music_length_seconds: 0.0,
-            first_second: 0.0,
-            total_length_seconds: 0,
-            precise_last_second_seconds: 0.0,
-            precise_note_first_second_seconds: None,
-            precise_note_last_second_seconds: None,
-            last_second_hint: 0.0,
-            charts: Vec::new(),
+    fn row(label: &TextContent) -> Row<'_> {
+        Row {
+            label,
+            detail: None,
+            slot: 0.0,
+            slots: 1,
+            alpha: 1.0,
+            exit: false,
+            values: [None; MAX_PLAYERS],
+            next_row: [false; MAX_PLAYERS],
+            inline: None,
+            has_preview: false,
+        }
+    }
+
+    fn has_text(actors: &[Actor], text: &str, position: [f32; 2]) -> bool {
+        actors.iter().any(|actor| matches!(actor,
+            Actor::Text { content, offset, .. } if content.as_str() == text && *offset == position
+        ))
+    }
+
+    fn has_mark(actors: &[Actor], position: [f32; 2], tint: [f32; 4]) -> bool {
+        actors.iter().any(|actor| {
+            matches!(actor,
+                Actor::Sprite { offset, tint: color, z: -14, .. }
+                    if *offset == position && *color == tint
+            )
         })
     }
 
-    fn entry(
-        play_style: PlayStyle,
-        player_side: PlayerSide,
-        joined: [bool; MAX_PLAYERS],
-    ) -> PlayerOptionsEntry<OpenItgScreen, PlayerOptionsView> {
-        PlayerOptionsEntry {
-            song: song(),
-            steps: [3, 3],
-            preferred: [3, 3],
-            color_index: 2,
-            return_screen: OpenItgScreen::CourseSelection,
-            fixed_stepchart_label: Some("Hard 9".into()),
-            noteskin_catalog: Default::default(),
-            smx_gif_catalog: Default::default(),
-            heart_rate_devices: Default::default(),
-            view: PlayerOptionsView {
-                policy: PlayerOptionsPolicyView {
-                    arcade_navigation: true,
-                    ..Default::default()
-                },
-                play_style,
-                player_side,
-                joined,
-                music_rate: 1.0,
-                players: std::array::from_fn(|_| PlayerOptionsPlayerView::default()),
-                judgment_palettes: Vec::new(),
-            },
-            scroll_speeds: None,
-        }
-    }
-
     #[test]
-    fn restored_effective_speed_and_p2_profile_save_stay_on_their_original_side() {
-        let mut entry = entry(PlayStyle::Single, PlayerSide::P2, [false, true]);
-        entry.scroll_speeds = Some([
-            ScrollSpeedSetting::CMod(400.0),
-            ScrollSpeedSetting::MMod(805.0),
-        ]);
-        entry.view.players[1].options.scroll_speed = ScrollSpeedSetting::CMod(400.0);
-        entry.view.players[1].judgment_palette_id = Some("p2-palette".into());
-        let mut state = OpenItgTheme::init_player_options(entry);
-        let restored = OpenItgTheme::player_options_stage(&state);
-        assert_eq!(restored.scroll_speeds[1], ScrollSpeedSetting::MMod(805.0));
-        assert_eq!(
-            restored.player_options[1].scroll_speed,
-            ScrollSpeedSetting::CMod(400.0)
-        );
-        let mut effects = Vec::new();
-        handle_action(&mut state, VirtualAction::p1_menu_right, &mut effects);
-        assert!(effects.is_empty());
-        handle_action(&mut state, VirtualAction::p2_menu_down, &mut effects);
-        effects.clear();
-        handle_action(&mut state, VirtualAction::p2_menu_right, &mut effects);
-        let [
-            Effect::Runtime(OpenItgRuntimeRequest::Profile(ProfileRequest::UpdatePlayerOptions {
-                side,
-                options,
-                judgment_palette_id,
-                ..
-            })),
-            Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Change)),
-        ] = effects.as_slice()
-        else {
-            panic!("expected a profile change and selection cue");
-        };
-        assert_eq!(*side, PlayerSide::P2);
-        assert_eq!(options.scroll_speed, ScrollSpeedSetting::MMod(810.0));
-        assert_eq!(judgment_palette_id.as_deref(), Some("p2-palette"));
-        assert_eq!(
-            OpenItgTheme::player_options_stage(&state).scroll_speeds,
-            [
-                ScrollSpeedSetting::CMod(400.0),
-                ScrollSpeedSetting::MMod(810.0)
-            ]
-        );
-    }
-
-    #[test]
-    fn versus_arcade_start_waits_for_both_exit_rows() {
-        let mut state = OpenItgTheme::init_player_options(entry(
-            PlayStyle::Versus,
-            PlayerSide::P1,
-            [true, true],
-        ));
-        let mut effects = Vec::new();
-        for _ in 0..ROWS.len() - 1 {
-            handle_action(&mut state, VirtualAction::p1_start, &mut effects);
-        }
-        assert_eq!(state.focus, [EXIT, 0]);
-        effects.clear();
-        handle_action(&mut state, VirtualAction::p1_start, &mut effects);
-        assert!(effects.is_empty());
-        handle_action(&mut state, VirtualAction::p2_menu_up, &mut effects);
-        effects.clear();
-        handle_action(&mut state, VirtualAction::p2_start, &mut effects);
-        assert!(matches!(
-            effects.as_slice(),
-            [
-                Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Confirm)),
-                Effect::Navigate(OpenItgScreen::Gameplay)
-            ]
-        ));
-    }
-
-    #[test]
-    fn player_options_preserves_reference_row_anchors_at_native_and_wide_sizes() {
-        use deadlib_present::space::{Metrics, with_current_metrics};
-
-        let state = OpenItgTheme::init_player_options(entry(
-            PlayStyle::Versus,
-            PlayerSide::P1,
-            [true, true],
-        ));
-        for (width, shift) in [(640.0, 0.0), (854.0, 107.0)] {
-            with_current_metrics(Metrics::centered(width, HEIGHT), || {
+    fn p2_solo_wide_layout_retains_prepared_values_exit_help_and_preview_anchor() {
+        let speed = TextContent::from("Scroll Speed");
+        let speed_value = TextContent::inline_str("2.50x").unwrap();
+        let skin = TextContent::from("Noteskin");
+        let skin_value = TextContent::from("Leaf");
+        let exit = TextContent::from("Exit");
+        let help = Arc::<str>::from("Choose the noteskin for this player.");
+        for (width, delta) in [(640.0, 0.0), (854.0, 107.0)] {
+            with_current_metrics(Metrics::centered(width, 480.0), || {
                 let mut actors = Vec::new();
-                push_options(&mut actors, &state);
-                for (label, expected) in [
-                    ("Speed Type", [53.0 + shift, 127.0]),
-                    ("Scroll Speed", [53.0 + shift, 155.0]),
-                    ("Exit", [53.0 + shift, 353.0]),
-                    ("P1", [337.0 + shift, 92.0]),
-                    ("P2", [515.0 + shift, 92.0]),
-                ] {
-                    assert!(
-                        actors.iter().any(|actor| matches!(actor,
-                            Actor::Text { content: TextContent::Static(text), offset, .. }
-                                if *text == label && *offset == expected
-                        )),
-                        "missing {label} at {expected:?}"
-                    );
-                }
+                let preview = Cell::new(None);
+                push_player_options_actors(
+                    &mut actors,
+                    PlayerOptionsPage {
+                        title: "PLAYER OPTIONS",
+                        active: [false, true],
+                        selected_rows: [0, 2],
+                        row_count: 4,
+                        visible_slots: 10,
+                        alpha: 1.0,
+                        row: &|index| match index {
+                            0 => Some(Row {
+                                values: [None, Some(&speed_value)],
+                                ..row(&speed)
+                            }),
+                            1 => None,
+                            2 => Some(Row {
+                                slot: 5.0,
+                                values: [None, Some(&skin_value)],
+                                has_preview: true,
+                                ..row(&skin)
+                            }),
+                            3 => Some(Row {
+                                slot: 9.0,
+                                alpha: 0.0,
+                                exit: true,
+                                ..row(&exit)
+                            }),
+                            _ => None,
+                        },
+                        help: &|player, line| (player == 1 && line == 0).then_some(&help),
+                        draw_preview: &|_, index, xs, y| preview.set(Some((index, xs, y))),
+                    },
+                );
+                assert!(has_text(&actors, "PLAYER OPTIONS", [36.0 + delta, 38.0]));
+                assert!(has_text(&actors, "P2", [395.0 + delta, 92.0]));
+                assert!(!has_text(&actors, "P1", [395.0 + delta, 92.0]));
+                assert!(has_text(&actors, "Scroll Speed", [53.0 + delta, 127.0]));
+                assert!(has_text(&actors, "2.50x", [395.0 + delta, 127.0]));
+                assert!(has_text(&actors, "Leaf", [362.0 + delta, 239.0]));
+                assert!(has_text(&actors, "Exit", [320.0 + delta, 353.0]));
+                assert!(has_text(&actors, &help, [53.0 + delta, 383.0]));
+                assert_eq!(preview.get(), Some((2, [459.0 + delta; 2], 239.0)));
             });
         }
     }
 
     #[test]
-    fn rate_edits_send_the_same_value_to_the_session_and_audio() {
-        let mut state = OpenItgTheme::init_player_options(entry(
-            PlayStyle::Single,
-            PlayerSide::P1,
-            [true, false],
-        ));
-        let mut effects = Vec::new();
-        handle_action(&mut state, VirtualAction::p1_menu_down, &mut effects);
-        handle_action(&mut state, VirtualAction::p1_menu_down, &mut effects);
-        effects.clear();
-        handle_action(&mut state, VirtualAction::p1_menu_right, &mut effects);
-        let [
-            Effect::Runtime(OpenItgRuntimeRequest::Profile(ProfileRequest::SetMusicRate(session))),
-            Effect::Runtime(OpenItgRuntimeRequest::Audio(AudioRequest::SetMusicRate(audio))),
-            Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Change)),
-        ] = effects.as_slice()
-        else {
-            panic!("expected paired session and audio changes");
-        };
-        assert_eq!(session, audio);
-        assert!((*session - 1.01).abs() < 0.001);
-        assert_eq!(
-            *session,
-            OpenItgTheme::player_options_stage(&state).music_rate
-        );
-        effects.clear();
-        handle_action(&mut state, VirtualAction::p1_back, &mut effects);
-        assert!(matches!(
-            effects.as_slice(),
-            [Effect::Navigate(OpenItgScreen::CourseSelection)]
-        ));
+    fn versus_inline_focus_and_enabled_masks_are_independent() {
+        let scroll = TextContent::from("Scroll");
+        let choices = ["Normal", "Reverse", "Split"].map(TextContent::from);
+        with_current_metrics(Metrics::centered(640.0, 480.0), || {
+            let mut actors = Vec::new();
+            push_player_options_actors(
+                &mut actors,
+                PlayerOptionsPage {
+                    title: "ADVANCED OPTIONS",
+                    active: [true, true],
+                    selected_rows: [0, 0],
+                    row_count: 1,
+                    visible_slots: 8,
+                    alpha: 1.0,
+                    row: &|_| {
+                        Some(Row {
+                            slot: 0.5,
+                            slots: 2,
+                            inline: Some(PlayerOptionsInline {
+                                choices: &choices,
+                                focused: [Some(1), Some(2)],
+                                selected: [1, 0],
+                                enabled: [Some(0b101), Some(0b010)],
+                            }),
+                            ..row(&scroll)
+                        })
+                    },
+                    help: &|_, _| None,
+                    draw_preview: &|_, _, _, _| {
+                        panic!("inline text row does not request a preview")
+                    },
+                },
+            );
+            assert!(has_text(&actors, "Normal", [306.0, 127.0]));
+            assert!(has_text(&actors, "Reverse", [498.0, 127.0]));
+            assert!(has_text(&actors, "Split", [306.0, 155.0]));
+            let p1 = rgba(PLAYER_HUES[0], 1.0);
+            let p2 = rgba(PLAYER_HUES[1], 1.0);
+            assert!(has_mark(&actors, [278.0, 134.0], p1));
+            assert!(has_mark(&actors, [278.0, 162.0], p1));
+            assert!(has_mark(&actors, [499.0, 134.0], p2));
+            assert!(has_mark(&actors, [470.0, 118.0], p1));
+            assert!(has_mark(&actors, [307.0, 146.0], p2));
+            assert!(!has_mark(&actors, [470.0, 134.0], p1));
+        });
+    }
+
+    #[test]
+    fn arcade_next_row_retains_values_during_the_pane_fade() {
+        let rate = TextContent::from("Music Rate");
+        let bpm = TextContent::from("180 BPM");
+        let rate_value = TextContent::from("1.50x");
+        with_current_metrics(Metrics::centered(640.0, 480.0), || {
+            let mut actors = Vec::new();
+            push_player_options_actors(
+                &mut actors,
+                PlayerOptionsPage {
+                    title: "DISPLAY OPTIONS",
+                    active: [true, true],
+                    selected_rows: [0, 0],
+                    row_count: 1,
+                    visible_slots: 10,
+                    alpha: 0.5,
+                    row: &|_| {
+                        Some(Row {
+                            detail: Some(&bpm),
+                            alpha: 0.25,
+                            values: [Some(&rate_value), None],
+                            next_row: [true, false],
+                            ..row(&rate)
+                        })
+                    },
+                    help: &|_, _| None,
+                    draw_preview: &|_, _, _, _| {},
+                },
+            );
+            assert!(has_text(&actors, "Music Rate", [53.0, 122.5]));
+            assert!(has_text(&actors, "180 BPM", [53.0, 133.0]));
+            assert!(has_text(&actors, "1.50x", [337.0, 127.0]));
+            assert!(has_text(&actors, "NEXT ROW", [235.0, 127.0]));
+            assert!(has_mark(
+                &actors,
+                [212.0, 118.0],
+                rgba(PLAYER_HUES[0], 0.25)
+            ));
+            assert!(actors.iter().any(|actor| matches!(actor,
+                Actor::Text { content, color, .. }
+                    if content.as_str() == "DISPLAY OPTIONS" && color[3] == 0.5
+            )));
+        });
     }
 }
