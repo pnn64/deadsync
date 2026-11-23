@@ -233,8 +233,25 @@ pub struct GraphicsOptionsView {
 /// Presentation hooks for the shared service-options controller.
 pub struct SystemOptionsRenderer<A> {
     pub service_order: &'static [SystemOptionsServiceRow],
+    pub timing: SystemOptionsTiming,
     pub background: fn(&mut Vec<A>),
     pub page: fn(&mut Vec<A>, SystemOptionsPage<'_>),
+}
+
+/// Time to finish entering or leaving a settings page, in seconds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SystemOptionsTiming {
+    pub service_seconds: f32,
+    pub settings_seconds: f32,
+}
+
+/// Elapsed seconds in the current page transition.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum SystemOptionsPhase {
+    #[default]
+    Steady,
+    Entering(f32),
+    Leaving(f32),
 }
 
 /// Existing actions a service menu can place first. Listed input tools move
@@ -267,8 +284,7 @@ pub struct SystemOptionsPage<'a> {
     pub row: &'a dyn Fn(usize) -> Option<SystemOptionsRow>,
     pub description: Option<Arc<str>>,
     pub detail: Option<Arc<str>>,
-    /// Signed horizontal travel in screen widths during a page transition.
-    pub slide: f32,
+    pub phase: SystemOptionsPhase,
 }
 
 pub struct SystemOptionsRow {

@@ -3,19 +3,26 @@ use deadsync_config::options::{
     auto_screenshot_bit_from_choice, groovestats_scorebox_bit_from_choice,
     select_music_chart_info_bit_from_choice,
 };
-use deadsync_theme::views::{SystemOptionsPage, SystemOptionsPageKind, SystemOptionsRow};
+use deadsync_theme::views::{
+    SystemOptionsPage, SystemOptionsPageKind, SystemOptionsPhase, SystemOptionsRow,
+};
 
 pub(super) fn push_page(
     actors: &mut Vec<Actor>,
     state: &State,
     assets: &AssetManager,
     draw: fn(&mut Vec<Actor>, SystemOptionsPage<'_>),
+    screen_phase: SystemOptionsPhase,
 ) {
-    let t = state.submenu_fade_t.clamp(0.0, 1.0);
-    let slide = match state.submenu_transition {
-        SubmenuTransition::FadeOutToSubmenu | SubmenuTransition::FadeOutToMain => t * t,
-        SubmenuTransition::FadeInSubmenu | SubmenuTransition::FadeInMain => -(1.0 - t).powi(2),
-        SubmenuTransition::None => 0.0,
+    let elapsed = || state.submenu_fade_t * state.page_transition_seconds();
+    let phase = match state.submenu_transition {
+        SubmenuTransition::FadeOutToSubmenu | SubmenuTransition::FadeOutToMain => {
+            SystemOptionsPhase::Leaving(elapsed())
+        }
+        SubmenuTransition::FadeInSubmenu | SubmenuTransition::FadeInMain => {
+            SystemOptionsPhase::Entering(elapsed())
+        }
+        SubmenuTransition::None => screen_phase,
     };
     match state.view {
         OptionsView::Main => {
@@ -44,7 +51,7 @@ pub(super) fn push_page(
                     },
                     description,
                     detail,
-                    slide,
+                    phase,
                 },
             );
         }
@@ -95,7 +102,7 @@ pub(super) fn push_page(
                     },
                     description,
                     detail,
-                    slide,
+                    phase,
                 },
             );
         }

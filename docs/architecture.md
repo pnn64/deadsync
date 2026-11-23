@@ -639,7 +639,9 @@ An alternate page renderer lazily reads the controller's visible row order,
 current values, and availability through `deadsync-theme`. OpenITG supplies its
 service menu order through that contract. The controller uses the same tool
 requests for direct and nested input launchers. The shell uses the originating
-page to restore service-list focus when a direct tool closes. OpenITG's basic and
+page to restore service-list focus when a direct tool closes. Options uses the
+mounted theme's transition durations and passes elapsed time to its renderer.
+The renderer owns the panel and heading motion. OpenITG's basic and
 advanced Graphics pages share the same pending display settings as the combined
 Simply Love editor. The controller emits one graphics request when the user
 leaves Graphics. The shell applies it through the shared graphics change plan.

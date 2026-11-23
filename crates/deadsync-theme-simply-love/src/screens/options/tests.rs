@@ -55,6 +55,7 @@ fn options_init_view(
         config,
         split_graphics: false,
         service_order: &[],
+        page_timing: None,
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
         ),
@@ -391,6 +392,7 @@ fn smx_gif_choices_come_from_shell_catalog() {
         config: config::app_config::Config::default(),
         split_graphics: false,
         service_order: &[],
+        page_timing: None,
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
         ),
@@ -1106,6 +1108,7 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
         },
         split_graphics: false,
         service_order: &[],
+        page_timing: None,
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
         ),
@@ -2924,10 +2927,16 @@ fn volume_rows_emit_shell_request_before_feedback_sound() {
 
 #[test]
 fn alternate_service_page_reads_live_choices_and_yields_to_reload() {
-    use deadsync_theme::views::{SystemOptionsPage, SystemOptionsRenderer};
+    use deadsync_theme::views::{
+        SystemOptionsPage, SystemOptionsPhase, SystemOptionsRenderer, SystemOptionsTiming,
+    };
 
     let renderer = SystemOptionsRenderer {
         service_order: &[],
+        timing: SystemOptionsTiming {
+            service_seconds: SUBMENU_FADE_DURATION,
+            settings_seconds: SUBMENU_FADE_DURATION,
+        },
         background: |actors| actors.push(act!(text: font("miso"): settext("SERVICE BACKGROUND"))),
         page: |actors, page: SystemOptionsPage<'_>| {
             assert_eq!(page.title, "SOUND OPTIONS");
@@ -2953,7 +2962,7 @@ fn alternate_service_page_reads_live_choices_and_yields_to_reload() {
             &assets,
             1.0,
             crate::views::SimplyLoveVisualPolicyView::default(),
-            Some(&renderer),
+            Some((&renderer, SystemOptionsPhase::Steady)),
         );
         actors
     };
@@ -2969,6 +2978,43 @@ fn alternate_service_page_reads_live_choices_and_yields_to_reload() {
     assert!(text_present(&takeover, "SERVICE BACKGROUND"));
     assert!(!text_present(&takeover, "51%"));
     assert!(takeover.len() > 1);
+}
+
+#[test]
+fn alternate_page_motion_uses_elapsed_seconds_and_waits_for_mounted_timing() {
+    use deadsync_theme::views::{SystemOptionsPhase, SystemOptionsTiming};
+
+    let assets = AssetManager::new();
+    let mut state = init();
+    state.page_timing = Some(SystemOptionsTiming {
+        service_seconds: 0.5,
+        settings_seconds: 0.3,
+    });
+    press(&mut state, &assets, VirtualAction::p1_start);
+    let step = |state: &mut State, dt| {
+        update(state, dt, &assets, &Default::default(), &mut Vec::new());
+    };
+    step(&mut state, 0.25);
+    assert!(state.is_main_view());
+    super::page_view::push_page(
+        &mut Vec::new(),
+        &state,
+        &assets,
+        |_, page| assert_eq!(page.phase, SystemOptionsPhase::Leaving(0.25)),
+        SystemOptionsPhase::Steady,
+    );
+    step(&mut state, 0.25);
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::System));
+    step(&mut state, 0.15);
+    super::page_view::push_page(
+        &mut Vec::new(),
+        &state,
+        &assets,
+        |_, page| assert_eq!(page.phase, SystemOptionsPhase::Entering(0.15)),
+        SystemOptionsPhase::Steady,
+    );
+    step(&mut state, 0.15);
+    assert_eq!(state.submenu_transition, SubmenuTransition::None);
 }
 
 #[test]

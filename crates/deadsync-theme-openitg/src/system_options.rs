@@ -1,8 +1,8 @@
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_theme::views::{
-    SystemOptionsPage, SystemOptionsPageKind, SystemOptionsRenderer, SystemOptionsRow,
-    SystemOptionsServiceRow,
+    SystemOptionsPage, SystemOptionsPageKind, SystemOptionsPhase, SystemOptionsRenderer,
+    SystemOptionsRow, SystemOptionsServiceRow, SystemOptionsTiming,
 };
 
 use crate::presentation::{ACCENT, INK, Layout, quad};
@@ -18,11 +18,18 @@ pub const SYSTEM_OPTIONS: SystemOptionsRenderer<Actor> = SystemOptionsRenderer {
         SystemOptionsServiceRow::ConfigureMappings,
         SystemOptionsServiceRow::ReloadSongsCourses,
     ],
+    timing: SystemOptionsTiming {
+        service_seconds: 0.5,
+        settings_seconds: PANEL_SECONDS,
+    },
     background: push_background,
     page: push_page,
 };
 
 const ROWS_SHOWN: usize = 8;
+const PANEL_SECONDS: f32 = 0.3;
+const SERVICE_HEADER_ENTRY_SECONDS: f32 = 0.3;
+const SERVICE_HEADER_EXIT_SECONDS: f32 = 0.2;
 const FIRST_ROW_Y: f32 = 127.0;
 const ROW_PITCH: f32 = 28.0;
 // The native preset occupies slot 1. Its three resolution rows share slot 3.
@@ -60,17 +67,63 @@ fn push_panel(actors: &mut Vec<Actor>, layout: Layout) {
     actors.push(layout.panel(39.0, 368.0, [562.0, 1.0], STROKE, -20));
 }
 
+fn push_service_header(actors: &mut Vec<Actor>, layout: Layout, phase: SystemOptionsPhase) {
+    let (stretch_x, stretch_y, alpha) = match phase {
+        SystemOptionsPhase::Entering(elapsed) if elapsed < SERVICE_HEADER_ENTRY_SECONDS => {
+            let t = (elapsed / SERVICE_HEADER_ENTRY_SECONDS).clamp(0.0, 1.0);
+            // OpenITG's BounceEnd curve overshoots before settling at unit zoom.
+            let angle = (std::f32::consts::PI - 1.1).mul_add(1.0 - t, 1.1);
+            let progress = angle.sin() / 0.89;
+            (progress, (-5.0f32).mul_add(progress, 6.0), 1.0)
+        }
+        SystemOptionsPhase::Leaving(elapsed) => {
+            let t = (elapsed / SERVICE_HEADER_EXIT_SECONDS).clamp(0.0, 1.0);
+            let t = t * t;
+            (1.0 + t, 1.0 - t, 1.0 - t)
+        }
+        _ => (1.0, 1.0, 1.0),
+    };
+    if stretch_x <= 0.0 || alpha <= 0.0 {
+        return;
+    }
+    let [zoom_x, zoom_y] = layout.size([1.9 * stretch_x, 1.9 * stretch_y]);
+    let mut color = WHITE;
+    color[3] = alpha;
+    let mut text = layout.text([36.0, 38.0], 0.0, "SERVICE OPTIONS".into(), 1.9, color);
+    text.zoomx(zoom_x);
+    text.zoomy(zoom_y);
+    text.maxwidth(layout.size([568.0 * stretch_x, 0.0])[0]);
+    text.shadowlength(layout.size([4.0, 0.0])[0]);
+    actors.push(text.build(0));
+}
+
 fn push_page(actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>) {
     let width = screen_width();
-    let layout =
-        Layout::centered(width, screen_height()).translated_x(page.slide.clamp(-1.0, 1.0) * width);
-    push_panel(actors, layout);
-    let (title, title_zoom) = if page.kind == SystemOptionsPageKind::ServiceMenu {
-        ("SERVICE OPTIONS", 1.9)
-    } else {
-        (page.title, 1.55)
+    let origin = Layout::centered(width, screen_height());
+    let slide = match page.phase {
+        SystemOptionsPhase::Steady => 0.0,
+        SystemOptionsPhase::Entering(elapsed) => {
+            -(1.0 - (elapsed / PANEL_SECONDS).clamp(0.0, 1.0)).powi(2)
+        }
+        SystemOptionsPhase::Leaving(elapsed) => (elapsed / PANEL_SECONDS).clamp(0.0, 1.0).powi(2),
     };
-    actors.push(layout.bounded_label([36.0, 38.0], 0.0, 568.0, title.into(), title_zoom, WHITE));
+    if slide.abs() >= 1.0 {
+        return;
+    }
+    let layout = origin.translated_x(slide * width);
+    push_panel(actors, layout);
+    if page.kind == SystemOptionsPageKind::ServiceMenu {
+        push_service_header(actors, origin, page.phase);
+    } else {
+        actors.push(layout.bounded_label(
+            [36.0, 38.0],
+            0.0,
+            568.0,
+            page.title.into(),
+            1.55,
+            WHITE,
+        ));
+    }
 
     let end_offset = page.row_count.saturating_sub(ROWS_SHOWN);
     let first = page.selected.saturating_sub(ROWS_SHOWN / 2).min(end_offset);
@@ -271,7 +324,7 @@ mod tests {
             row,
             description: Some(Arc::from("Configure the selected setting.")),
             detail: None,
-            slide: 0.0,
+            phase: SystemOptionsPhase::Steady,
         }
     }
 
@@ -309,7 +362,7 @@ mod tests {
                     SystemOptionsPage {
                         title: "GRAPHICS OPTIONS",
                         kind: SystemOptionsPageKind::Settings,
-                        slide: -0.25,
+                        phase: SystemOptionsPhase::Entering(PANEL_SECONDS / 2.0),
                         ..page(&|_| Some(action("Renderer")), 1, 0)
                     },
                 );
@@ -320,6 +373,55 @@ mod tests {
                 ));
             });
         }
+    }
+
+    #[test]
+    fn service_header_scales_in_place_while_the_panel_slides() {
+        with_current_metrics(Metrics::centered(640.0, 480.0), || {
+            let mut actors = Vec::new();
+            let row = |_| Some(action("Graphics"));
+            push_page(
+                &mut actors,
+                SystemOptionsPage {
+                    phase: SystemOptionsPhase::Entering(0.21),
+                    ..page(&row, 1, 0)
+                },
+            );
+            assert!(actors.iter().any(|actor| matches!(actor,
+                Actor::Text { content, offset, scale, .. }
+                    if content.as_str() == "SERVICE OPTIONS"
+                        && *offset == [36.0, 38.0] && scale[0] > 1.9 && scale[1] < 1.9
+            )));
+            assert!(actors.iter().any(|actor| matches!(actor,
+                Actor::Sprite { offset, .. } if (offset[0] - (15.0 - 57.6)).abs() < 0.01
+                    && offset[1] == 90.0
+            )));
+
+            actors.clear();
+            push_page(
+                &mut actors,
+                SystemOptionsPage {
+                    phase: SystemOptionsPhase::Leaving(0.1),
+                    ..page(&row, 1, 0)
+                },
+            );
+            assert!(actors.iter().any(|actor| matches!(actor,
+                Actor::Text { content, offset, color, scale, .. }
+                    if content.as_str() == "SERVICE OPTIONS" && *offset == [36.0, 38.0]
+                        && color[3] == 0.75 && (scale[0] - 2.375).abs() < 0.001
+                        && (scale[1] - 1.425).abs() < 0.001
+            )));
+            actors.clear();
+            push_page(
+                &mut actors,
+                SystemOptionsPage {
+                    phase: SystemOptionsPhase::Leaving(0.25),
+                    ..page(&row, 1, 0)
+                },
+            );
+            assert!(!has_text(&actors, "SERVICE OPTIONS", [36.0, 38.0]));
+            assert!(!actors.is_empty());
+        });
     }
 
     #[test]

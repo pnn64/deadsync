@@ -19,7 +19,7 @@ use deadsync_gameplay::course_progress::CourseRenewal;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_theme::{
-    Theme, ThemeScreenFlow, ThemeTransitionAudio, ThemeTransitions, TransitionKind,
+    Theme, ThemeScreenFlow, ThemeTransitionAudio, ThemeTransitions, TransitionKind, TransitionState,
 };
 use deadsync_theme_simply_love::screens::transition_audio::TransitionAudioContext;
 use deadsync_theme_simply_love::screens::transitions::PlayEntryTransition;
@@ -395,6 +395,12 @@ impl App {
         debug!("Starting actor-only fade out to screen: {target:?}");
         if from == CurrentScreen::Menu {
             self.state.shell.transition = self.state.screens.menu_state.actor_exit(target);
+        } else if let Some(duration) = self.openitg_options_transition_seconds(from) {
+            self.state.shell.transition = TransitionState::ActorsFadeOut {
+                elapsed: 0.0,
+                duration,
+                target,
+            };
         } else {
             apply_actor_fade_out_transition(&mut self.state.shell, from, target);
         }
@@ -404,6 +410,11 @@ impl App {
     fn apply_selected_actor_entry(&mut self, target: CurrentScreen) {
         if target == CurrentScreen::Menu {
             self.state.shell.transition = self.state.screens.menu_state.actor_entry();
+        } else if let Some(duration) = self.openitg_options_transition_seconds(target) {
+            self.state.shell.transition = TransitionState::ActorsFadeIn {
+                elapsed: 0.0,
+                duration,
+            };
         } else {
             apply_actor_entry_transition(&mut self.state.shell, target);
         }
@@ -519,6 +530,12 @@ impl App {
         (self.state.screens.current_screen, commands)
     }
 
+    fn openitg_options_transition_seconds(&self, screen: CurrentScreen) -> Option<f32> {
+        (screen == CurrentScreen::Options
+            && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg)
+            .then(|| self.state.screens.options_state.page_transition_seconds())
+    }
+
     pub(super) fn get_out_transition_for_route(
         &self,
         screen: CurrentScreen,
@@ -526,6 +543,9 @@ impl App {
     ) -> (Vec<Actor>, f32) {
         if screen == CurrentScreen::Menu {
             return self.state.screens.menu_state.exit_transition(target);
+        }
+        if let Some(duration) = self.openitg_options_transition_seconds(screen) {
+            return (Vec::new(), duration);
         }
         if screen == CurrentScreen::PlayerOptions
             && let Some(options) = self.state.screens.player_options_state.as_ref()
@@ -540,6 +560,9 @@ impl App {
     pub(super) fn get_in_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         if screen == CurrentScreen::Menu {
             return self.state.screens.menu_state.entry_transition();
+        }
+        if let Some(duration) = self.openitg_options_transition_seconds(screen) {
+            return (Vec::new(), duration);
         }
         if screen == CurrentScreen::PlayerOptions
             && let Some(options) = self.state.screens.player_options_state.as_ref()

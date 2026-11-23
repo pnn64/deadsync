@@ -86,10 +86,17 @@ and aspect ratio remains open.
 The effective `ScreenOptions` reference places the heading at `(36, 38)`,
 eight rows at y=127 with 28 px spacing, the scrollbar near `(34, 242)`, and
 the Done row at y=353. The OpenITG panel uses these anchors at 640×480 and
-centers the layout at 854×480. The panel slides between submenus
-on DeadSync's existing transition clock. Both layouts use the same settings
-validation and persistence.
-Reference cursor tweens, header motion, and modal styling remain open.
+centers the layout at 854×480. The inherited Frame commands slide it in with
+0.3 s deceleration and out with 0.3 s acceleration. The service heading
+bounces in over 0.3 s and widens, flattens, and fades over 0.2 s at exit,
+following the `ScreenOptionsMenu header.xml` commands. The heading keeps its
+own anchor while the rows move with the panel.
+
+The OpenITG service page uses the 0.5 s navigation interval from
+`_options to options`. Settings pages use the 0.3 s panel interval. The same
+phase drives Options entry, exit, and submenu switches. Both layouts use the
+same settings validation and persistence. Native heading fonts and transforms,
+cursor and row tweens, explanation reveals, and modal styling remain open.
 
 Tests cover the viewport and Done row, prepared values, disabled and
 multiselect rows, an edited volume appearing in the alternate renderer, and
@@ -100,6 +107,12 @@ search results, and the shell's return selection. Vulkan captures at 640×480
 and 854×480 show the service order, focused Test Input, remaining nested Input
 rows, and Basic Graphics positions through the shared controller. The
 reference positions and service order were checked against the home metrics.
+Timed Vulkan captures at both widths show service entry at 75, 150, 225, and
+300 ms, the local exit at 100 ms, and the following Basic Graphics entry at
+150 ms at 640×480. Tests check that the service title keeps its anchor while
+the panel moves and that the controller keeps the source page active for
+the mounted duration. The tall early heading can clip above the viewport
+with the current font.
 
 At 854×480, nine warm actor-construction runs of 12,000 frames per layout
 measured medians of 32.6 μs for Simply Love and 19.1 μs for OpenITG on the
@@ -115,6 +128,12 @@ The service order and spacing changes measured 19.0 μs on the OpenITG
 service menu and 18.6–18.9 μs on Basic Graphics. The same fixture previously
 measured 18.5–18.9 μs and 18.5–18.6 μs, respectively. Simply Love's service menu
 measured 31.2–31.8 μs, compared with 30.6–31.4 μs in the previous build.
+
+With the heading motion mounted, warm steady service actor construction
+measured 19.4–19.6 μs against 19.1–19.2 μs before the change, with 30 actors
+in both cases. Warm composition at 854×480 measured 34.4 μs and 29 draw ops,
+against 31.1 μs and 27 draw ops before the heading shadow. The sampled
+animated frames measured 34.0–34.3 μs with the same 29 draw ops.
 
 ## Player Options
 

@@ -193,6 +193,7 @@ pub struct State {
     pub(super) twitch_channel_invalid: bool,
     pub(super) main_visible_items: Vec<&'static Item>,
     pub(super) service_order: &'static [deadsync_theme::views::SystemOptionsServiceRow],
+    pub(super) page_timing: Option<deadsync_theme::views::SystemOptionsTiming>,
     pub(super) app_paths: AppPathsView,
     pub(super) audio_options: AudioOptionsView,
     pub(super) song_packs: Vec<OptionsSongPackView>,
@@ -354,6 +355,17 @@ impl State {
     pub const fn is_main_view(&self) -> bool {
         matches!(self.view, OptionsView::Main)
     }
+
+    /// Duration of the mounted page's entry or exit.
+    pub fn page_transition_seconds(&self) -> f32 {
+        self.page_timing.map_or(SUBMENU_FADE_DURATION, |timing| {
+            if self.is_main_view() {
+                timing.service_seconds
+            } else {
+                timing.settings_seconds
+            }
+        })
+    }
 }
 
 fn nearest_u8_index(values: &[u8], target: u8) -> usize {
@@ -378,6 +390,7 @@ pub fn init(view: OptionsInitView) -> State {
         config: cfg,
         split_graphics,
         service_order,
+        page_timing,
         judgment_palettes,
         updater_capabilities,
         app_paths,
@@ -450,6 +463,7 @@ pub fn init(view: OptionsInitView) -> State {
         twitch_channel_invalid: false,
         main_visible_items,
         service_order,
+        page_timing,
         app_paths,
         audio_options,
         song_packs,

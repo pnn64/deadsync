@@ -1188,14 +1188,13 @@ fn options_init_view(
     bookkeeping: crate::coin::Bookkeeping,
     theme: config::theme::ThemeFlag,
 ) -> OptionsInitView {
+    let renderer = (theme == config::theme::ThemeFlag::OpenItg)
+        .then_some(&deadsync_theme_openitg::SYSTEM_OPTIONS);
     OptionsInitView {
         config: config::runtime::get(),
         split_graphics: theme == config::theme::ThemeFlag::OpenItg,
-        service_order: if theme == config::theme::ThemeFlag::OpenItg {
-            deadsync_theme_openitg::SYSTEM_OPTIONS.service_order
-        } else {
-            &[]
-        },
+        service_order: renderer.map_or(&[], |renderer| renderer.service_order),
+        page_timing: renderer.map(|renderer| renderer.timing),
         judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog(
             ActiveTheme::JUDGMENT_PRESET,
         ))
@@ -7874,14 +7873,33 @@ impl App {
                     change.ffmpeg,
                     change.workshop,
                 );
-                let renderer = (self.state.screens.menu_state.theme_flag()
-                    == config::theme::ThemeFlag::OpenItg)
-                    .then_some(&deadsync_theme_openitg::SYSTEM_OPTIONS);
+                let (renderer, overlay_alpha) = if self.state.screens.menu_state.theme_flag()
+                    == config::theme::ThemeFlag::OpenItg
+                {
+                    use deadsync_theme::views::SystemOptionsPhase;
+
+                    let (phase, overlay_alpha) = match self.state.shell.transition {
+                        TransitionState::Idle => (SystemOptionsPhase::Steady, 1.0),
+                        TransitionState::ActorsFadeIn { elapsed, duration }
+                        | TransitionState::FadingIn { elapsed, duration } => (
+                            SystemOptionsPhase::Entering(elapsed),
+                            (elapsed / duration).clamp(0.0, 1.0),
+                        ),
+                        TransitionState::ActorsFadeOut { elapsed, duration, .. }
+                        | TransitionState::FadingOut { elapsed, duration, .. } => (
+                            SystemOptionsPhase::Leaving(elapsed),
+                            1.0 - (elapsed / duration).clamp(0.0, 1.0),
+                        ),
+                    };
+                    (Some((&deadsync_theme_openitg::SYSTEM_OPTIONS, phase)), overlay_alpha)
+                } else {
+                    (None, screen_alpha_multiplier)
+                };
                 options::push_actors_with_layout(
                     &mut actors,
                     &self.state.screens.options_state,
                     &self.asset_manager,
-                    screen_alpha_multiplier,
+                    overlay_alpha,
                     visual_policy,
                     renderer,
                 );

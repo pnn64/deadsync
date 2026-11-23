@@ -1094,6 +1094,7 @@ pub struct OptionsInitView {
     /// Mount basic and advanced pages over the same graphics settings.
     pub split_graphics: bool,
     pub service_order: &'static [deadsync_theme::views::SystemOptionsServiceRow],
+    pub page_timing: Option<deadsync_theme::views::SystemOptionsTiming>,
     pub judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog,
     pub updater_capabilities: SimplyLoveUpdaterCapabilities,
     pub app_paths: deadsync_theme::views::AppPathsView,

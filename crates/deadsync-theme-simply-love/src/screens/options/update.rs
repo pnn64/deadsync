@@ -328,17 +328,16 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
 
     let mut pending_action: Option<ThemeEffect> = None;
     // ------------------------- local submenu fade ------------------------- //
+    if state.submenu_transition != SubmenuTransition::None {
+        let duration = state.page_transition_seconds();
+        let step = if duration > 0.0 { dt / duration } else { 1.0 };
+        state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
+    }
     match state.submenu_transition {
         SubmenuTransition::None => {
             state.content_alpha = 1.0;
         }
         SubmenuTransition::FadeOutToSubmenu => {
-            let step = if SUBMENU_FADE_DURATION > 0.0 {
-                dt / SUBMENU_FADE_DURATION
-            } else {
-                1.0
-            };
-            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
             state.content_alpha = 1.0 - state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
                 // Apply deferred settings before leaving the submenu.
@@ -385,12 +384,6 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
             }
         }
         SubmenuTransition::FadeInSubmenu => {
-            let step = if SUBMENU_FADE_DURATION > 0.0 {
-                dt / SUBMENU_FADE_DURATION
-            } else {
-                1.0
-            };
-            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
             state.content_alpha = state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
                 state.submenu_transition = SubmenuTransition::None;
@@ -440,12 +433,6 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
             let refresh_rate_change = leaving_graphics
                 .then(|| selected_refresh_rate_millihertz(state))
                 .filter(|rate| *rate != state.refresh_rate_at_load);
-            let step = if SUBMENU_FADE_DURATION > 0.0 {
-                dt / SUBMENU_FADE_DURATION
-            } else {
-                1.0
-            };
-            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
             state.content_alpha = 1.0 - state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
                 // Return to the main options list and fade it in.
@@ -562,12 +549,6 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
             }
         }
         SubmenuTransition::FadeInMain => {
-            let step = if SUBMENU_FADE_DURATION > 0.0 {
-                dt / SUBMENU_FADE_DURATION
-            } else {
-                1.0
-            };
-            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
             state.content_alpha = state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
                 state.submenu_transition = SubmenuTransition::None;
