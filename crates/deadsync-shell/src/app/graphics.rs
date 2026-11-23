@@ -287,10 +287,11 @@ impl App {
             },
         );
         let mut manifest = ActiveTheme::asset_manifest();
-        if self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg {
+        let openitg = self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg;
+        if openitg {
             manifest.embedded_pngs = OpenItgTheme::asset_manifest().embedded_pngs;
         }
-        let startup = start_renderer_runtime(
+        let mut startup = start_renderer_runtime(
             &mut self.state.shell,
             event_loop,
             startup_config,
@@ -299,6 +300,13 @@ impl App {
             manifest,
             Instant::now(),
         )?;
+        if openitg {
+            deadsync_assets::fonts::load_initial_fonts(
+                &mut self.asset_manager,
+                &mut startup.backend,
+                OpenItgTheme::asset_manifest().fonts,
+            )?;
+        }
         self.apply_graphics_display_sync(startup_display_sync(
             &self.state.shell,
             startup.fullscreen_type,

@@ -1,7 +1,10 @@
-use crate::presentation::{ACCENT, HEIGHT, INK, Layout, MUTED, WIDTH, quad};
+use crate::presentation::{HEIGHT, Layout, WIDTH, quad};
+use crate::resources::{TITLE_BACKDROP, TITLE_CHROME, TITLE_FONT, TITLE_GLINT, TITLE_STREAK};
 use crate::{Effect, OpenItgRuntimeRequest, OpenItgScreen, OpenItgTheme};
 use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::dsl::SpriteBuilder;
+use deadlib_present::render::BlendMode;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_config::coin::CoinMode;
 use deadsync_config::theme::GameFlag;
@@ -16,6 +19,8 @@ const FIRST_ROW_Y: f32 = 112.0;
 const ROW_PITCH: f32 = 36.0;
 const FOCUS_SECONDS: f32 = 0.5;
 const ATTRACT_SECONDS: f32 = 30.0;
+const FRAME_REVEAL_SECONDS: f32 = 1.0;
+const BACKDROP_PERIOD: f32 = 8.0;
 pub(super) const ENTRY_SECONDS: f32 = 0.3;
 pub(super) const EXIT_SECONDS: f32 = 0.3;
 
@@ -26,6 +31,7 @@ pub struct MenuState {
     color_index: i32,
     view: RuntimeView,
     entry_elapsed: f32,
+    backdrop_elapsed: f32,
     focus_elapsed: f32,
     idle_elapsed: f32,
     nav_chords: [MenuLrChord; 2],
@@ -113,7 +119,8 @@ impl ThemeMainMenu for OpenItgTheme {
         if delta_time <= 0.0 || !delta_time.is_finite() {
             return Effect::None;
         }
-        state.entry_elapsed = (state.entry_elapsed + delta_time).min(ENTRY_SECONDS);
+        state.entry_elapsed = (state.entry_elapsed + delta_time).min(FRAME_REVEAL_SECONDS);
+        state.backdrop_elapsed = (state.backdrop_elapsed + delta_time) % BACKDROP_PERIOD;
         state.focus_elapsed = (state.focus_elapsed + delta_time) % FOCUS_SECONDS;
         if phase == MainMenuPhase::Active {
             state.idle_elapsed += delta_time;
@@ -202,6 +209,48 @@ fn item_label(item: MainMenuItem) -> &'static str {
     }
 }
 
+fn title_text(
+    layout: Layout,
+    position: [f32; 2],
+    alignment: f32,
+    content: TextContent,
+    zoom: f32,
+    ink: [f32; 4],
+    z: i16,
+) -> Actor {
+    let mut text = layout.text(position, alignment, content, zoom, ink);
+    text.font(TITLE_FONT);
+    text.shadowlength(layout.size([2.0, 0.0])[0]);
+    text.z(z);
+    text.build(0)
+}
+
+fn italic(mut actor: Actor) -> Actor {
+    if let Actor::Text {
+        local_transform, ..
+    } = &mut actor
+    {
+        local_transform.y_axis.x = -0.22;
+    }
+    actor
+}
+
+fn title_image(
+    key: &'static str,
+    [x, y]: [f32; 2],
+    [width, height]: [f32; 2],
+    alpha: f32,
+    z: i16,
+) -> SpriteBuilder {
+    let mut sprite = SpriteBuilder::static_texture(key);
+    sprite.align(0.5, 0.5);
+    sprite.xy(x, y);
+    sprite.size(width, height);
+    sprite.diffuse([1.0, 1.0, 1.0, alpha]);
+    sprite.z(z);
+    sprite
+}
+
 fn push_title(
     actors: &mut Vec<Actor>,
     state: &MenuState,
@@ -209,57 +258,103 @@ fn push_title(
 ) {
     let width = screen_width();
     let height = screen_height();
+    let center = [width * 0.5, height * 0.5];
     let layout = Layout::centered(width, height);
     let (alpha, flash) = transition_alpha(state, &frame);
-    let ink = [INK[0], INK[1], INK[2], alpha];
-    let muted = [MUTED[0], MUTED[1], MUTED[2], alpha];
-    let accent = [ACCENT[0], ACCENT[1], ACCENT[2], alpha];
+    let white = [1.0, 1.0, 1.0, alpha];
 
-    actors.push(quad(
-        [0.0, 0.0],
-        [width, height],
-        [0.035, 0.048, 0.072, alpha],
-        -20,
-    ));
-    actors.push(layout.panel(0.0, 0.0, [WIDTH, HEIGHT], [0.063, 0.087, 0.126, alpha], -19));
-    actors.push(layout.panel(36.0, 70.0, [568.0, 1.0], [0.32, 0.40, 0.48, alpha], -17));
-    actors.push(layout.panel(36.0, 426.0, [568.0, 1.0], [0.32, 0.40, 0.48, alpha], -17));
-    actors.push(layout.label([36.0, 38.0], 0.0, "DEADSYNC".into(), 2.2, ink));
-
-    // Stepped bars form an original, static rhythm motif beside the menu.
-    for (index, length) in [70.0, 122.0, 98.0, 140.0, 76.0].into_iter().enumerate() {
-        let x = 564.0 - length;
-        let y = 127.0 + 34.0 * index as f32;
-        let bar = if index == 2 {
-            [0.38, 0.25, 0.13, alpha]
-        } else {
-            [0.12, 0.21, 0.29, alpha]
-        };
-        actors.push(layout.panel(x, y, [length, 19.0], bar, -18));
-        actors.push(layout.panel(564.0, y, [5.0, 19.0], [0.31, 0.48, 0.60, alpha], -18));
+    let backdrop_scale = (width / WIDTH).max(height / HEIGHT) * 1.07;
+    let phase = state.backdrop_elapsed * (std::f32::consts::TAU / BACKDROP_PERIOD);
+    let (sin, cos) = phase.sin_cos();
+    let origin = [
+        center[0] + 12.0 * backdrop_scale * sin,
+        center[1] + 8.0 * backdrop_scale * cos,
+    ];
+    actors.push(
+        title_image(
+            TITLE_BACKDROP,
+            origin,
+            [WIDTH * backdrop_scale, HEIGHT * backdrop_scale],
+            alpha,
+            -24,
+        )
+        .build(0),
+    );
+    let reveal = (state.entry_elapsed / FRAME_REVEAL_SECONDS).clamp(0.0, 1.0);
+    let vertical_scale = height / HEIGHT;
+    let mut chrome = title_image(
+        TITLE_CHROME,
+        center,
+        [width, 346.0 * vertical_scale],
+        alpha,
+        -23,
+    );
+    chrome.cropright(1.0 - reveal);
+    actors.push(chrome.build(0));
+    for y in [42.0, 446.0] {
+        let mut streak = title_image(
+            TITLE_STREAK,
+            [center[0], y * vertical_scale],
+            [width, 34.0 * vertical_scale],
+            alpha,
+            -23,
+        );
+        streak.cropright(1.0 - reveal);
+        actors.push(streak.build(0));
     }
 
-    let pulse = 1.0 - (2.0 * state.focus_elapsed / FOCUS_SECONDS - 1.0).abs();
+    if reveal < 1.0 {
+        let x = reveal.mul_add(width + 128.0, -64.0);
+        for (y, direction) in [(64.0, 1.0), (416.0, -1.0)] {
+            let mut glint = title_image(
+                TITLE_GLINT,
+                [x, y * vertical_scale],
+                [128.0 * vertical_scale; 2],
+                alpha * 0.65,
+                -22,
+            );
+            glint.blend(BlendMode::Add);
+            glint.rotationz(direction * 360.0 * reveal);
+            actors.push(glint.build(0));
+        }
+    }
+    actors.push(italic(title_text(
+        layout,
+        [330.0, 267.0],
+        0.5,
+        "DEADSYNC".into(),
+        2.64,
+        [0.85, 0.75, 0.66, alpha * 0.24],
+        -20,
+    )));
+    actors.push(italic(title_text(
+        layout,
+        [36.0, 39.0],
+        0.0,
+        "MAIN MENU".into(),
+        1.13,
+        white,
+        16,
+    )));
+
+    let pulse = 0.5 - 0.5 * (state.focus_elapsed * (std::f32::consts::TAU / FOCUS_SECONDS)).cos();
     for (index, item) in state.items().iter().copied().enumerate() {
         let y = FIRST_ROW_Y + index as f32 * ROW_PITCH;
-        let selected = index == state.selected;
-        if selected {
-            actors.push(layout.panel(94.0, y - 14.0, [250.0, 28.0], [0.16, 0.24, 0.30, alpha], 0));
-            actors.push(layout.panel(
-                94.0,
-                y - 14.0,
-                [3.0, 28.0],
-                [
-                    ACCENT[0],
-                    ACCENT[1],
-                    ACCENT[2],
-                    alpha * (0.66 + 0.34 * pulse),
-                ],
-                1,
-            ));
-        }
-        let (zoom, color) = if selected { (1.1, ink) } else { (1.0, muted) };
-        actors.push(layout.label([120.0, y], 0.0, item_label(item).into(), zoom, color));
+        let (zoom, color) = if index == state.selected {
+            let shade = 0.5 + 0.5 * pulse;
+            (1.1, [shade, 0.5 * shade, 0.5 * shade, alpha])
+        } else {
+            (1.0, white)
+        };
+        actors.push(title_text(
+            layout,
+            [120.0, y],
+            0.0,
+            item_label(item).into(),
+            zoom,
+            color,
+            12,
+        ));
     }
 
     let prompt = if state.view.can_start {
@@ -267,22 +362,60 @@ fn push_title(
     } else {
         "INSERT COIN"
     };
-    let footer_y = HEIGHT - 33.0;
-    actors.push(layout.label([36.0, footer_y], 0.0, prompt.into(), 1.0, accent));
-    if state.view.coin_mode == CoinMode::Pay {
-        actors.push(layout.label([460.0, footer_y], 1.0, "CREDITS".into(), 0.9, muted));
-        actors.push(layout.label(
-            [604.0, footer_y],
-            1.0,
-            TextContent::inline_u32(state.view.credits),
-            0.9,
-            ink,
+    let footer_y = HEIGHT - 16.0;
+    for (x, alignment) in [(36.0, 0.0), (604.0, 1.0)] {
+        actors.push(title_text(
+            layout,
+            [x, footer_y],
+            alignment,
+            prompt.into(),
+            0.63,
+            white,
+            16,
         ));
-    } else if state.view.event_mode {
-        actors.push(layout.label([604.0, footer_y], 1.0, "EVENT MODE".into(), 0.9, muted));
+    }
+    if state.view.coin_mode == CoinMode::Home {
+        let controls = if state.view.dedicated_three_key_nav {
+            "Use Left or Right to choose, then press Start"
+        } else {
+            "Use Up or Down to choose, then press Start"
+        };
+        actors.push(title_text(
+            layout,
+            [320.0, 445.0],
+            0.5,
+            controls.into(),
+            0.70,
+            white,
+            16,
+        ));
+    }
+    let status = if state.view.coin_mode == CoinMode::Pay {
+        TextContent::inline_format(format_args!("CREDITS {}", state.view.credits))
+    } else {
+        state.view.event_mode.then(|| "EVENT MODE".into())
+    };
+    if let Some(status) = status {
+        actors.push(title_text(
+            layout,
+            [320.0, footer_y],
+            0.5,
+            status,
+            0.59,
+            white,
+            16,
+        ));
     }
     if frame.update_banner_tag.is_some() {
-        actors.push(layout.label([604.0, 38.0], 1.0, "UPDATE AVAILABLE".into(), 0.75, accent));
+        actors.push(title_text(
+            layout,
+            [604.0, 39.0],
+            1.0,
+            "UPDATE AVAILABLE".into(),
+            0.59,
+            [1.0, 0.80, 0.50, alpha],
+            16,
+        ));
     }
     if flash > 0.0 {
         actors.push(quad(
@@ -379,8 +512,16 @@ mod tests {
                     },
                 );
                 assert!(actors.iter().any(|actor| matches!(actor,
-                    Actor::Text { content: TextContent::Static("Play"), offset, scale, .. }
+                    Actor::Text { content: TextContent::Static("Play"), font: TITLE_FONT, offset, scale, .. }
                         if *offset == [x, FIRST_ROW_Y] && *scale == [1.1; 2]
+                )));
+                assert!(actors.iter().any(|actor| matches!(
+                    actor,
+                    Actor::Text {
+                        content: TextContent::Static("MAIN MENU"),
+                        font: TITLE_FONT,
+                        ..
+                    }
                 )));
             });
         }

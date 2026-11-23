@@ -32,17 +32,28 @@ the title, style selection, song wheel, gameplay, and Evaluation.
 
 ## Title screen
 
-- The theme renders original DeadSync graphics with the reference column and
-  animation timings. It uses shared text rendering, the bundled Miso font,
-  and original OpenITG theme movement and confirmation cues.
+- The title uses the native outlined Eurostile bitmap font and metrics from
+  `default/Fonts/_eurostile outline`. The font is bundled in
+  `assets/fonts/openitg` and loaded through the standard font loader.
+  The title's chrome frame, red streaks, and rotating flares come from the
+  effective `ScreenTitleMenu underlay` and `ScreenWithMenuElements underlay`.
+- The native title uses the `ScreenLogo background` movie and timed bitmap
+  layers. DeadSync uses its sprite and text renderer with an original
+  panning red backdrop and a DeadSync wordmark. The chrome reveals from
+  the left over one second. The selected label uses the reference's red
+  pulse and 110% scale.
 - Home mode offers Play, Options, Find Content, Exit, and Shutdown when enabled.
   Free and Pay mode expose Play and use the same host credit rules as Simply
   Love. Both title implementations use the shared menu availability contract.
-- The reference's Dance, Battle, Marathon, Fitness, Edit, and Records rows
-  differ from the current DeadSync actions. The reference logo, background,
-  typography, and audio also differ. The two 640×480 captures confirm the
-  shared first-row anchor and pitch. The native menu runs directly from Dance
-  Mode through style to the song wheel. DeadSync keeps its separate mode step.
+- The native menu runs from Dance Mode through style to the song wheel.
+  DeadSync's Play route includes the existing mode step. The native logos,
+  movie playback, and title audio remain fidelity differences.
+
+Vulkan captures at 640×480 and 854×480 cover the mid-entry sweep, the
+settled Play row, and focus on Options after a menu input. In two paired
+dev-profile runs at 854×480, warmed actor construction and composition
+took 27.3–29.3 μs of process CPU time before the redesign and 35.2 μs
+afterward. The moving title used 20 draw operations per frame, up from 14.
 
 The focused tests exercise configuration round-tripping, both titles' P2
 session entry, arcade final-credit Start, home navigation, and actor placement
