@@ -225,7 +225,6 @@ pub trait GameplayProfileData: Clone {
     fn fantastic_feedback_options(&self) -> FantasticFeedbackOptions;
     fn error_bar_options(&self) -> GameplayErrorBarOptions;
     fn measure_counter_threshold(&self) -> Option<usize>;
-    fn step_statistics_density_graph(&self) -> bool;
     fn note_field_offset_x(&self) -> f32;
     fn noteskin_name(&self) -> String;
     fn mini_percent(&self) -> f32;
@@ -240,7 +239,6 @@ pub trait GameplayProfileData: Clone {
     fn crossover_cue_duration_ms(&self) -> u16;
     fn crossover_cue_quantization(&self) -> u8;
     fn crossover_cue_brackets(&self) -> bool;
-    fn nps_graph_at_top(&self) -> bool;
     fn carry_combo_between_songs(&self) -> bool;
     fn calculated_weight_pounds(&self) -> i32;
     fn hide_lifebar(&self) -> bool;

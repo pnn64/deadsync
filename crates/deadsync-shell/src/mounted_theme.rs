@@ -73,3 +73,25 @@ pub(crate) fn mount_attract(theme: ThemeFlag) -> Option<Box<dyn AttractPresentat
         ThemeFlag::OpenItg => Some(Box::new(deadsync_theme_openitg::OpenItgIntro::default())),
     }
 }
+
+pub(crate) type ChatPresentation = dyn deadsync_theme::views::TwitchChatPresentation<
+    Actor,
+    deadsync_online::twitch::Entry,
+    deadsync_config::streaming::TwitchOptions,
+>;
+
+pub(crate) fn mount_twitch_chat() -> Box<ChatPresentation> {
+    Box::new(deadsync_theme_simply_love::screens::components::shared::twitch_chat::Overlay::default())
+}
+
+pub(crate) fn gameplay_presenter(
+    prepared: &mut deadsync_assets::gameplay_stage::PreparedGameplayStage,
+    init: deadsync_theme_simply_love::views::GameplayInitView,
+) -> impl FnOnce(
+    &deadsync_assets::gameplay_stage::ActiveGameplayStage,
+    deadsync_assets::gameplay_stage::GameplayStageAssets,
+    &deadsync_theme::views::GameplayStageView,
+    deadsync_theme_simply_love::views::GameplayScoreInitView,
+) -> deadsync_theme_simply_love::screens::gameplay::GameplayPresentation + use<> {
+    deadsync_theme_simply_love::SimplyLoveTheme::gameplay_presenter(prepared, init)
+}

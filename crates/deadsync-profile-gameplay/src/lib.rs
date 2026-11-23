@@ -1129,11 +1129,6 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
         self.measure_counter.notes_threshold()
     }
 
-    fn step_statistics_density_graph(&self) -> bool {
-        self.step_statistics
-            .contains(deadsync_profile::StepStatisticsMask::DENSITY_GRAPH)
-    }
-
     fn note_field_offset_x(&self) -> f32 {
         self.note_field_offset_x as f32
     }
@@ -1184,10 +1179,6 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
 
     fn golf_scoring_enabled(&self) -> bool {
         self.show_golf_score || self.show_golf_results
-    }
-
-    fn nps_graph_at_top(&self) -> bool {
-        self.nps_graph_at_top
     }
 
     fn carry_combo_between_songs(&self) -> bool {

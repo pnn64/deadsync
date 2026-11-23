@@ -936,106 +936,10 @@ where
 
     let hud_prep_ms = hud_prep_started.elapsed().as_secs_f64() * 1000.0;
 
-    let graph_prep_started = Instant::now();
-    let wants_density_graph = player_profiles
-        .iter()
-        .take(num_players)
-        .any(GameplayProfileData::step_statistics_density_graph);
-    let gameplay_play_style = step_stats_play_style(play_style);
-    let wide = viewport.is_wide();
-    let sw = viewport.width();
-    let sh = viewport.height().max(1.0_f32);
-    let density_graph_enabled = sw >= sh && wants_density_graph;
-    let density_graph_graph_h = if density_graph_enabled {
-        105.0_f32
-    } else {
-        0.0_f32
-    };
-    let density_graph_graph_w = if density_graph_enabled {
-        step_stats_density_graph_width(
-            gameplay_play_style,
-            cols_per_player,
-            num_players,
-            sw,
-            sh,
-            wide,
-            config.center_1player_notefield,
-        )
-    } else {
-        0.0_f32
-    };
     let density_graph_first_second = timing.get_time_for_beat(0.0).min(0.0_f32);
     let density_graph_last_second = song.precise_last_second();
     let density_graph_duration =
         (density_graph_last_second - density_graph_first_second).max(0.001_f32);
-
-    const DENSITY_GRAPH_MAX_SECONDS: f32 = 4.0 * 60.0;
-    let density_graph_scaled_width =
-        if density_graph_enabled && density_graph_duration > DENSITY_GRAPH_MAX_SECONDS {
-            (density_graph_graph_w * (density_graph_duration / DENSITY_GRAPH_MAX_SECONDS))
-                .round()
-                .max(density_graph_graph_w)
-        } else {
-            density_graph_graph_w
-        };
-    let density_graph_u_window =
-        if density_graph_enabled && density_graph_duration > DENSITY_GRAPH_MAX_SECONDS {
-            (DENSITY_GRAPH_MAX_SECONDS / density_graph_duration).clamp(0.0_f32, 1.0_f32)
-        } else {
-            1.0_f32
-        };
-    let density_graph_u0 = 0.0_f32;
-    let density_graph_top_h = 30.0_f32;
-    let density_graph_top_w: [f32; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if p >= num_players || !player_profiles[p].nps_graph_at_top() {
-            return 0.0;
-        }
-        step_stats_upper_density_graph_width(gameplay_play_style)
-    });
-    let density_graph_top_scale_y: [f32; MAX_PLAYERS] = {
-        let mut scale = [1.0_f32; MAX_PLAYERS];
-        if num_players == 2
-            && player_profiles[0].nps_graph_at_top()
-            && player_profiles[1].nps_graph_at_top()
-        {
-            let p1_peak = charts[0].max_nps as f32;
-            let p2_peak = charts[1].max_nps as f32;
-            if p1_peak.is_finite() && p2_peak.is_finite() && p1_peak > 0.0 && p2_peak > 0.0 {
-                if p1_peak < p2_peak {
-                    scale[0] = (p1_peak / p2_peak).clamp(0.0, 1.0);
-                } else if p2_peak < p1_peak {
-                    scale[1] = (p2_peak / p1_peak).clamp(0.0, 1.0);
-                }
-            }
-        }
-        scale
-    };
-    let mut density_graph_life_update_rate = 0.25_f32;
-    if density_graph_enabled && !timing.has_bpm_changes() {
-        let bpm = timing.first_bpm();
-        if bpm.is_finite() && bpm >= 60.0_f32 {
-            let interval_8th = (60.0_f32 / bpm) * 0.5_f32;
-            if interval_8th.is_finite() && interval_8th > 0.0_f32 {
-                density_graph_life_update_rate =
-                    interval_8th * (density_graph_life_update_rate / interval_8th).ceil();
-            }
-        }
-    }
-    if !density_graph_life_update_rate.is_finite() || density_graph_life_update_rate <= 0.0_f32 {
-        density_graph_life_update_rate = 0.25_f32;
-    }
-    let density_graph_life_next_update_elapsed = 0.0_f32;
-    let density_graph_life_capacity =
-        density_graph_life_capacity(density_graph_duration, density_graph_life_update_rate);
-    let density_graph_life_points: [Vec<[f32; 2]>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if density_graph_enabled && p < num_players {
-            Vec::with_capacity(density_graph_life_capacity)
-        } else {
-            Vec::new()
-        }
-    });
-    let density_graph_life_dirty: [bool; MAX_PLAYERS] = [false; MAX_PLAYERS];
-    let graph_prep_ms = graph_prep_started.elapsed().as_secs_f64() * 1000.0;
 
     let finalize_started = Instant::now();
     let in_course_stage = course_display_totals.is_some();
@@ -1273,18 +1177,7 @@ where
                 first_second: density_graph_first_second,
                 last_second: density_graph_last_second,
                 duration: density_graph_duration,
-                graph_w: density_graph_graph_w,
-                graph_h: density_graph_graph_h,
-                scaled_width: density_graph_scaled_width,
-                u0: density_graph_u0,
-                u_window: density_graph_u_window,
-                life_update_rate: density_graph_life_update_rate,
-                life_next_update_elapsed: density_graph_life_next_update_elapsed,
-                life_points: density_graph_life_points,
-                life_dirty: density_graph_life_dirty,
-                top_h: density_graph_top_h,
-                top_w: density_graph_top_w,
-                top_scale_y: density_graph_top_scale_y,
+                ..GameplayDensityGraphState::default()
             },
             toggle_flash: GameplayToggleFlashState::default(),
         },
@@ -1371,19 +1264,17 @@ where
     let total_ms = init_started.elapsed().as_secs_f64() * 1000.0;
     if total_ms >= 50.0 {
         log::info!(
-            "Gameplay init timing: song='{}' notes={} players={} density_graph={} setup_ms={setup_ms:.3} note_build_ms={note_build_ms:.3} transform_ms={transform_ms:.3} cache_ms={cache_build_ms:.3} timing_ms={timing_prep_ms:.3} hud_ms={hud_prep_ms:.3} graph_ms={graph_prep_ms:.3} finalize_ms={finalize_ms:.3} elapsed_ms={total_ms:.3}",
+            "Gameplay init timing: song='{}' notes={} players={} setup_ms={setup_ms:.3} note_build_ms={note_build_ms:.3} transform_ms={transform_ms:.3} cache_ms={cache_build_ms:.3} timing_ms={timing_prep_ms:.3} hud_ms={hud_prep_ms:.3} finalize_ms={finalize_ms:.3} elapsed_ms={total_ms:.3}",
             state.source.song.title,
             state.chart_runtime.notes.len(),
             state.setup.num_players,
-            density_graph_enabled,
         );
     } else {
         log::debug!(
-            "Gameplay init timing: song='{}' notes={} players={} density_graph={} setup_ms={setup_ms:.3} note_build_ms={note_build_ms:.3} transform_ms={transform_ms:.3} cache_ms={cache_build_ms:.3} timing_ms={timing_prep_ms:.3} hud_ms={hud_prep_ms:.3} graph_ms={graph_prep_ms:.3} finalize_ms={finalize_ms:.3} elapsed_ms={total_ms:.3}",
+            "Gameplay init timing: song='{}' notes={} players={} setup_ms={setup_ms:.3} note_build_ms={note_build_ms:.3} transform_ms={transform_ms:.3} cache_ms={cache_build_ms:.3} timing_ms={timing_prep_ms:.3} hud_ms={hud_prep_ms:.3} finalize_ms={finalize_ms:.3} elapsed_ms={total_ms:.3}",
             state.source.song.title,
             state.chart_runtime.notes.len(),
             state.setup.num_players,
-            density_graph_enabled,
         );
     }
     state

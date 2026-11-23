@@ -540,7 +540,7 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(contains_rust(&host, "pub score_refresh: GameplayScoreRefresh"));
     assert!(contains_rust(&host, "pub presentation: P"));
     assert!(contains_rust(&app, "type GameplayState = GameplayHost<"));
-    assert!(app.contains("ActiveTheme::gameplay_presenter(presentation_init)"));
+    assert!(app.contains("crate::mounted_theme::gameplay_presenter(&mut prepared, presentation_init)"));
     for concrete in [
         "deadsync_theme_simply_love", "SimplyLove", "crate::ActiveTheme", "crate::ThemeScreen",
         "GameplayStageView",
@@ -5373,7 +5373,7 @@ fn select_music_feature_policy_is_shell_prepared() {
         "pub scorebox_in_step_pane: bool",
         "pub show_stage_display: bool",
         "pub show_gameplay_timer: bool",
-        "pub step_artist_expanded: bool",
+        "pub step_artist_box_mode:",
         "pub breakdown_style:",
         "pub pattern_info_mode:",
         "pub chart_info_peak_nps: bool",
@@ -5449,7 +5449,7 @@ fn select_music_feature_policy_is_shell_prepared() {
             && screen.contains("state.policy.interaction.song_search_shortcut")
             && screen.contains("state.policy.presentation")
             && screen.contains("presentation.show_scorebox")
-            && screen.contains("presentation.step_artist_expanded")
+            && screen.contains("presentation.step_artist_box_mode")
             && screen.contains("presentation.default_sync_offset")
     );
 }
@@ -7039,7 +7039,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
         .expect("Shared theme views should be readable");
     assert!(
         views.contains("pub struct EvaluationStageView<N, S>")
-            && views.contains("pub score_info: [Option<EvaluationView<N, S>>; MAX_PLAYERS]")
+            && views.contains("pub score_info: EvaluationScores<N, S>")
     );
     let runtime_views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
@@ -7613,6 +7613,38 @@ fn selection_theme_owns_density_mesh_and_fallback_artwork() {
     assert!(theme.contains("fn resolve_wheel_banner("));
     assert!(theme.contains("fn set_density_graph("));
     assert!(theme.contains("build_density_histogram_mesh("));
+}
+
+#[test]
+fn gameplay_graph_geometry_is_supplied_by_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates");
+    let game = root.join("deadsync-gameplay/src");
+    let init = production_source(&game.join("runtime_init.rs"));
+    let graph = production_source(&game.join("density_graph.rs"));
+    assert!(!init.contains("step_stats_density_graph_width"));
+    assert!(!init.contains("nps_graph_at_top"));
+    assert!(!graph.contains("StepStatsPlayStyle"));
+    assert!(graph.contains("pub struct DensityGraphLayout"));
+
+    let theme = root.join("deadsync-theme-simply-love/src");
+    let layout = production_source(&theme.join("step_stats.rs"));
+    let gameplay = production_source(&theme.join("screens/gameplay.rs"));
+    assert!(layout.contains("fn density_graph_layout("));
+    assert!(layout.contains("fn step_stats_density_graph_width("));
+    assert!(gameplay.contains("prepared.configure_density_graph(crate::step_stats::density_graph_layout)"));
+}
+
+#[test]
+fn twitch_service_does_not_own_overlay_presentation() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates");
+    let shell = root.join("deadsync-shell/src");
+    let twitch = production_source(&shell.join("twitch.rs"));
+    let mounting = production_source(&shell.join("mounted_theme.rs"));
+    assert!(!twitch.contains("deadsync_theme_simply_love"));
+    assert!(!twitch.contains("placement("));
+    assert!(!twitch.contains("Set Twitch Channel"));
+    assert!(twitch.contains("fn snapshot("));
+    assert!(mounting.contains("TwitchChatPresentation"));
 }
 
 #[test]
@@ -13453,6 +13485,17 @@ fn evaluation_lifecycle_uses_the_installed_theme() {
     let heart_rate = production_source(&shell.join("../heart_rate.rs"));
     assert!(app.contains("type EvaluationState = <ActiveTheme as ThemeEvaluation>::EvaluationState"));
     assert!(app.contains("evaluation_state: EvaluationState"));
+    let draw = app.split_once("let departure_elapsed = match").unwrap().1
+        .split_once("CurrentScreen::EvaluationSummary =>").unwrap().0;
+    assert!(draw.contains("presentation.push_overview("));
+    assert!(draw.contains("page.view("));
+    assert!(draw.contains("ActiveTheme::push_evaluation_overlays("));
+    let legacy = production_source(&root.join(
+        "crates/deadsync-theme-simply-love/src/screens/evaluation/mount.rs",
+    ));
+    assert!(!legacy.contains("EvaluationOverviewPresentation"));
+    let shared = production_source(&root.join("crates/deadsync-theme/src/evaluation.rs"));
+    assert!(shared.contains("scores: Arc::clone(scores)"));
     assert!(runtime.contains("view: EvaluationState"));
     for call in [
         "init_evaluation",

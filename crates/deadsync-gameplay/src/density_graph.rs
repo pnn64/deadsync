@@ -1,89 +1,13 @@
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum StepStatsPlayStyle {
-    #[default]
-    Single,
-    Double,
-    Versus,
-}
-
-#[inline(always)]
-#[must_use]
-pub const fn step_stats_play_style(play_style: GameplayInputPlayStyle) -> StepStatsPlayStyle {
-    match play_style {
-        GameplayInputPlayStyle::Single | GameplayInputPlayStyle::PumpSingle => {
-            StepStatsPlayStyle::Single
-        }
-        GameplayInputPlayStyle::Double
-        | GameplayInputPlayStyle::PumpDouble
-        | GameplayInputPlayStyle::Routine
-        | GameplayInputPlayStyle::PumpRoutine => StepStatsPlayStyle::Double,
-        GameplayInputPlayStyle::Versus
-        | GameplayInputPlayStyle::PumpVersus
-        | GameplayInputPlayStyle::Couple
-        | GameplayInputPlayStyle::PumpCouple => StepStatsPlayStyle::Versus,
-    }
-}
-
-#[must_use]
-pub fn step_stats_notefield_width(cols_per_player: usize) -> Option<f32> {
-    if cols_per_player == 0 {
-        return None;
-    }
-    // Simply Love GetNotefieldWidth() parity: this is a style width, not the
-    // rendered field width. Mini and Spacing must not move step statistics.
-    Some(cols_per_player as f32 * 64.0)
-}
-
-#[must_use]
-pub fn step_stats_upper_density_graph_width(play_style: StepStatsPlayStyle) -> f32 {
-    // zmod UpperNPSGraph parity:
-    //   width = GetNotefieldWidth()
-    //   if OnePlayerTwoSides then width = width / 2
-    //   width = width - 30
-    let mut width = match play_style {
-        StepStatsPlayStyle::Double => 512.0_f32,
-        StepStatsPlayStyle::Single | StepStatsPlayStyle::Versus => 256.0_f32,
-    };
-    if play_style == StepStatsPlayStyle::Double {
-        width *= 0.5_f32;
-    }
-    (width - 30.0_f32).max(0.0_f32)
-}
-
-#[must_use]
-pub fn step_stats_density_graph_width(
-    play_style: StepStatsPlayStyle,
-    cols_per_player: usize,
-    num_players: usize,
-    screen_w: f32,
-    screen_h: f32,
-    _wide: bool,
-    center_1player_notefield: bool,
-) -> f32 {
-    let is_ultrawide = screen_w / screen_h.max(1.0_f32) > (21.0_f32 / 9.0_f32);
-    let note_field_is_centered = match play_style {
-        StepStatsPlayStyle::Double => true,
-        StepStatsPlayStyle::Single => num_players == 1 && center_1player_notefield,
-        StepStatsPlayStyle::Versus => false,
-    };
-
-    let mut sidepane_width = screen_w * 0.5_f32;
-    if !is_ultrawide && note_field_is_centered && screen_w >= screen_h {
-        let nf_width = step_stats_notefield_width(cols_per_player)
-            .unwrap_or(256.0_f32)
-            .max(1.0_f32);
-        sidepane_width = ((screen_w - nf_width) * 0.5_f32).max(1.0_f32);
-    }
-    if is_ultrawide && num_players > 1 {
-        sidepane_width = (screen_w * 0.2_f32).max(1.0_f32);
-    }
-
-    // Simply Love StepStatistics/DensityGraph.lua: double squeezes the graph
-    // to 95% of the side pane and positions it in the right dark pane.
-    if play_style == StepStatsPlayStyle::Double {
-        return (sidepane_width * 0.95_f32).max(1.0_f32);
-    }
-    sidepane_width.round().max(1.0_f32)
+/// Display geometry and scrolling chosen by the theme for one stage.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct DensityGraphLayout {
+    pub width: f32,
+    pub height: f32,
+    pub visible_seconds: f32,
+    pub cursor_fraction: f32,
+    pub top_height: f32,
+    pub top_width: [f32; MAX_PLAYERS],
+    pub top_scale_y: [f32; MAX_PLAYERS],
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -95,6 +19,7 @@ pub struct DensityGraphWindow {
     pub graph_h: f32,
     pub scaled_width: f32,
     pub u_window: f32,
+    pub cursor_fraction: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -130,6 +55,7 @@ pub struct GameplayDensityGraphState {
     pub scaled_width: f32,
     pub u0: f32,
     pub u_window: f32,
+    pub cursor_fraction: f32,
     pub life_update_rate: f32,
     pub life_next_update_elapsed: f32,
     pub life_points: [Vec<[f32; 2]>; MAX_PLAYERS],
@@ -150,6 +76,7 @@ impl Default for GameplayDensityGraphState {
             scaled_width: 0.0,
             u0: 0.0,
             u_window: 1.0,
+            cursor_fraction: 0.0,
             life_update_rate: 0.25,
             life_next_update_elapsed: 0.0,
             life_points: std::array::from_fn(|_| Vec::new()),
@@ -178,14 +105,15 @@ pub fn density_graph_u0_for_time(window: DensityGraphWindow, current_music_time:
     if max_seconds <= 0.0_f32 {
         return 0.0;
     }
-    if current_music_time > max_seconds.mul_add(-0.75_f32, window.last_second) {
+    let cursor_fraction = window.cursor_fraction;
+    if current_music_time > max_seconds.mul_add(cursor_fraction - 1.0, window.last_second) {
         return max_u0;
     }
 
-    let seconds_past_one_fourth =
-        max_seconds.mul_add(-0.25_f32, current_music_time - window.first_second);
-    if seconds_past_one_fourth > 0.0_f32 {
-        return (seconds_past_one_fourth / duration).clamp(0.0_f32, max_u0);
+    let seconds_past_cursor =
+        max_seconds.mul_add(-cursor_fraction, current_music_time - window.first_second);
+    if seconds_past_cursor > 0.0_f32 {
+        return (seconds_past_cursor / duration).clamp(0.0_f32, max_u0);
     }
     0.0
 }

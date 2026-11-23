@@ -105,15 +105,17 @@ pub fn replay_status_text(name: &str, score_10000: f64) -> Arc<str> {
 
 impl crate::SimplyLoveTheme {
     pub fn gameplay_presenter(
+        prepared: &mut PreparedGameplayStage,
         mut init: GameplayInitView,
     ) -> impl FnOnce(
         &ActiveGameplayStage,
         GameplayStageAssets,
         &deadsync_theme::views::GameplayStageView,
         crate::views::GameplayScoreInitView,
-    ) -> GameplayPresentation {
+    ) -> GameplayPresentation + use<> {
         use deadsync_theme::views::GameplayStageIntro;
 
+        prepared.configure_density_graph(crate::step_stats::density_graph_layout);
         move |stage, assets, view, scores| {
             init.scores = scores;
             let intro = match view.intro {
@@ -878,13 +880,14 @@ pub fn from_gameplay(
 }
 
 pub fn present_stage(
-    prepared: PreparedGameplayStage,
+    mut prepared: PreparedGameplayStage,
     stage_intro_text: Arc<str>,
     replay_status_text: Option<Arc<str>>,
     course_display_info: Option<CourseDisplayInfo>,
     course_banner_path: Option<PathBuf>,
     init_view: GameplayInitView,
 ) -> State {
+    prepared.configure_density_graph(crate::step_stats::density_graph_layout);
     let (stage, assets) = prepared.into_parts();
     from_stage(
         stage,
@@ -1284,7 +1287,7 @@ impl deadsync_theme::views::GameplayLivePresentation<GameplayCoreState> for Game
     }
 }
 
-pub fn twitch_chat_layout(state: &impl GameplayScreenView) -> super::components::shared::twitch_chat::GameplayLayout {
+pub fn twitch_chat_layout(state: &impl GameplayScreenView) -> deadsync_theme::views::GameplayChatLayout {
     let style = state.presentation().hud_snapshot.play_style;
     let p2 = state.presentation().hud_snapshot.player_side == profile_data::PlayerSide::P2;
     let centered = style.is_double() || state.presentation().runtime_view.policy.center_single_notefield;
@@ -1298,7 +1301,7 @@ pub fn twitch_chat_layout(state: &impl GameplayScreenView) -> super::components:
         }
         + sign * state.profiles()[0].note_field_offset_x.clamp(0, 50) as f32;
     let half_width = state.presentation().notefield_width(0) * state.field_zoom_for_player(0) * 0.5;
-    super::components::shared::twitch_chat::GameplayLayout {
+    deadsync_theme::views::GameplayChatLayout {
         two_players: state.num_players() > 1,
         p2,
         centered,

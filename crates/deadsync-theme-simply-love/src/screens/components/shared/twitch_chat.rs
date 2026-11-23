@@ -1,7 +1,7 @@
 //! Presentation compatible with Martin Natano's Simply Love Twitch module.
 //! Original copyright and permission notice: deadsync-online/src/twitch-LICENSE.
 use crate::{act, color};
-use deadsync_theme::Screen;
+use deadsync_theme::{Screen, views::GameplayChatLayout};
 use deadlib_assets::AssetManager;
 use deadlib_present::{
     actors::{Actor, DynamicText, TextAttribute, TextAttributes, TextContent},
@@ -23,23 +23,13 @@ pub struct Rect {
     pub h: f32,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct GameplayLayout {
-    pub two_players: bool,
-    pub p2: bool,
-    pub centered: bool,
-    pub field_left: f32,
-    pub field_right: f32,
-    pub statistics: bool,
-}
-
 /// Logical coordinates follow the original module, constrained to free field space.
 pub fn placement(
     screen: Screen,
     w: f32,
     h: f32,
     sides: [bool; 2],
-    gameplay: Option<GameplayLayout>,
+    gameplay: Option<GameplayChatLayout>,
     tournament: bool,
 ) -> Option<Rect> {
     let cx = w * 0.5;
@@ -257,11 +247,6 @@ pub struct Overlay {
 }
 
 impl Overlay {
-    pub fn clear(&mut self) {
-        self.key = None;
-        self.text = None;
-    }
-
     pub fn push(
         &mut self,
         actors: &mut Vec<Actor>,
@@ -331,6 +316,41 @@ impl Overlay {
             actors.push(act!(quad: align(0.0,0.0): xy(rect.x,rect.y): zoomto(rect.w,rect.h): diffuse(0.0,0.0,0.0,187.0/255.0): z(900)));
             actors.push(text.clone());
         }
+    }
+}
+
+impl deadsync_theme::views::TwitchChatPresentation<Actor, Entry, TwitchOptions> for Overlay {
+    fn push_chat(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        assets: &AssetManager,
+        view: deadsync_theme::views::TwitchChatView<'_, Entry, TwitchOptions>,
+    ) {
+        if view.screen == Screen::Gameplay && !view.options.show_gameplay {
+            return;
+        }
+        let Some(rect) = placement(
+            view.screen,
+            deadlib_present::space::screen_width(),
+            deadlib_present::space::screen_height(),
+            view.sides,
+            view.gameplay,
+            view.tournament,
+        ) else {
+            return;
+        };
+        static CHANNEL_HINT: std::sync::LazyLock<[Arc<Entry>; 1]> = std::sync::LazyLock::new(|| [
+            Arc::new(Entry::Status {
+                text: "Set Twitch Channel in Streaming Services.".into(),
+                notice: None,
+            }),
+        ]);
+        let entries = if view.options.channel.is_empty() {
+            &CHANNEL_HINT[..]
+        } else {
+            view.entries
+        };
+        self.push(actors, entries, view.revision, rect, view.options, assets);
     }
 }
 
@@ -435,7 +455,7 @@ mod tests {
                         w,
                         480.0,
                         [true, true],
-                        Some(GameplayLayout {
+                        Some(GameplayChatLayout {
                             two_players: true,
                             p2: false,
                             centered: false,
@@ -450,7 +470,7 @@ mod tests {
             }
             for p2 in [false, true] {
                 for statistics in [false, true] {
-                    let game = GameplayLayout {
+                    let game = GameplayChatLayout {
                         two_players: false,
                         p2,
                         centered: true,

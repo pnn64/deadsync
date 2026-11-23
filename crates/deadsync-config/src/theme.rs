@@ -416,21 +416,6 @@ impl SelectMusicStepArtistBoxMode {
             Self::Expanded => "Expanded",
         }
     }
-
-    #[must_use]
-    pub const fn is_expanded(self, theme: ThemeFlag) -> bool {
-        match self {
-            Self::Default => select_music_step_artist_default_expanded(theme),
-            Self::Legacy => false,
-            Self::Expanded => true,
-        }
-    }
-}
-
-const fn select_music_step_artist_default_expanded(theme: ThemeFlag) -> bool {
-    match theme {
-        ThemeFlag::SimplyLove | ThemeFlag::OpenItg => false,
-    }
 }
 
 impl FromStr for SelectMusicStepArtistBoxMode {
@@ -3311,13 +3296,6 @@ MachineEvaluationStyle=Default\n\
                 Ok(value)
             );
         }
-    }
-
-    #[test]
-    fn step_artist_box_default_tracks_theme() {
-        assert!(!SelectMusicStepArtistBoxMode::Default.is_expanded(ThemeFlag::SimplyLove));
-        assert!(!SelectMusicStepArtistBoxMode::Legacy.is_expanded(ThemeFlag::SimplyLove));
-        assert!(SelectMusicStepArtistBoxMode::Expanded.is_expanded(ThemeFlag::SimplyLove));
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use deadlib_present::space::Metrics;
+use deadsync_gameplay::GameplayInputPlayStyle;
 use deadsync_profile::PlayerSide;
 use glam::Mat4;
 
@@ -688,6 +689,143 @@ pub fn double_density_graph_rect(
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum StepStatsPlayStyle {
+    #[default]
+    Single,
+    Double,
+    Versus,
+}
+
+#[inline(always)]
+#[must_use]
+const fn step_stats_play_style(play_style: GameplayInputPlayStyle) -> StepStatsPlayStyle {
+    match play_style {
+        GameplayInputPlayStyle::Single | GameplayInputPlayStyle::PumpSingle => {
+            StepStatsPlayStyle::Single
+        }
+        GameplayInputPlayStyle::Double
+        | GameplayInputPlayStyle::PumpDouble
+        | GameplayInputPlayStyle::Routine
+        | GameplayInputPlayStyle::PumpRoutine => StepStatsPlayStyle::Double,
+        GameplayInputPlayStyle::Versus
+        | GameplayInputPlayStyle::PumpVersus
+        | GameplayInputPlayStyle::Couple
+        | GameplayInputPlayStyle::PumpCouple => StepStatsPlayStyle::Versus,
+    }
+}
+
+#[must_use]
+fn step_stats_notefield_width(cols_per_player: usize) -> Option<f32> {
+    if cols_per_player == 0 {
+        return None;
+    }
+    // Simply Love GetNotefieldWidth() parity: this is a style width, not the
+    // rendered field width. Mini and Spacing must not move step statistics.
+    Some(cols_per_player as f32 * 64.0)
+}
+
+#[must_use]
+fn step_stats_upper_density_graph_width(play_style: StepStatsPlayStyle) -> f32 {
+    // zmod UpperNPSGraph parity:
+    //   width = GetNotefieldWidth()
+    //   if OnePlayerTwoSides then width = width / 2
+    //   width = width - 30
+    let mut width = match play_style {
+        StepStatsPlayStyle::Double => 512.0_f32,
+        StepStatsPlayStyle::Single | StepStatsPlayStyle::Versus => 256.0_f32,
+    };
+    if play_style == StepStatsPlayStyle::Double {
+        width *= 0.5_f32;
+    }
+    (width - 30.0_f32).max(0.0_f32)
+}
+
+#[must_use]
+fn step_stats_density_graph_width(
+    play_style: StepStatsPlayStyle,
+    cols_per_player: usize,
+    num_players: usize,
+    screen_w: f32,
+    screen_h: f32,
+    center_1player_notefield: bool,
+) -> f32 {
+    let is_ultrawide = screen_w / screen_h.max(1.0_f32) > (21.0_f32 / 9.0_f32);
+    let note_field_is_centered = match play_style {
+        StepStatsPlayStyle::Double => true,
+        StepStatsPlayStyle::Single => num_players == 1 && center_1player_notefield,
+        StepStatsPlayStyle::Versus => false,
+    };
+
+    let mut sidepane_width = screen_w * 0.5_f32;
+    if !is_ultrawide && note_field_is_centered && screen_w >= screen_h {
+        let nf_width = step_stats_notefield_width(cols_per_player)
+            .unwrap_or(256.0_f32)
+            .max(1.0_f32);
+        sidepane_width = ((screen_w - nf_width) * 0.5_f32).max(1.0_f32);
+    }
+    if is_ultrawide && num_players > 1 {
+        sidepane_width = (screen_w * 0.2_f32).max(1.0_f32);
+    }
+
+    // Simply Love StepStatistics/DensityGraph.lua: double squeezes the graph
+    // to 95% of the side pane and positions it in the right dark pane.
+    if play_style == StepStatsPlayStyle::Double {
+        return (sidepane_width * 0.95_f32).max(1.0_f32);
+    }
+    sidepane_width.round().max(1.0_f32)
+}
+
+/// Resolve the stage's optional Step Statistics and upper NPS graph geometry.
+pub fn density_graph_layout(
+    gameplay: &deadsync_assets::gameplay_stage::GameplayCoreState,
+) -> deadsync_gameplay::DensityGraphLayout {
+    let viewport = gameplay.setup.viewport;
+    let width = viewport.width();
+    let height = viewport.height().max(1.0);
+    let num_players = gameplay.num_players();
+    let profiles = gameplay.profiles();
+    let show_density = width >= height
+        && profiles[..num_players].iter().any(|profile| {
+            profile.step_statistics.contains(deadsync_profile::StepStatisticsMask::DENSITY_GRAPH)
+        });
+    let style = step_stats_play_style(gameplay.setup.session.play_style);
+    let show_top = profiles.each_ref().map(|profile| profile.nps_graph_at_top);
+    let top_scale_y = if num_players == 2 && show_top == [true, true] {
+        let [p1, p2] = gameplay.charts().each_ref().map(|chart| chart.max_nps as f32);
+        if p1.is_finite() && p2.is_finite() && p1 > 0.0 && p2 > 0.0 {
+            [(p1 / p2).clamp(0.0, 1.0), (p2 / p1).clamp(0.0, 1.0)]
+        } else {
+            [1.0; 2]
+        }
+    } else {
+        [1.0; 2]
+    };
+
+    deadsync_gameplay::DensityGraphLayout {
+        width: if show_density {
+            step_stats_density_graph_width(
+                style, gameplay.cols_per_player(), num_players, width, height,
+                gameplay.setup.config.center_1player_notefield,
+            )
+        } else {
+            0.0
+        },
+        height: if show_density { 105.0 } else { 0.0 },
+        visible_seconds: 4.0 * 60.0,
+        cursor_fraction: 0.25,
+        top_height: 30.0,
+        top_width: std::array::from_fn(|p| {
+            if p < num_players && show_top[p] {
+                step_stats_upper_density_graph_width(style)
+            } else {
+                0.0
+            }
+        }),
+        top_scale_y,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1101,4 +1239,100 @@ mod tests {
         assert!((timing.row_height - 20.0 * 0.9).abs() < 0.001);
         assert_eq!(timing.max_column_width, None);
     }
+}
+
+#[cfg(test)]
+mod density_layout_tests {
+    use super::*;
+
+    #[track_caller]
+    fn assert_near(actual: f32, expected: f32) {
+        assert!((actual - expected).abs() < 0.0001, "{actual} != {expected}");
+    }
+
+    #[test]
+    fn step_stats_notefield_width_matches_sl_style_widths() {
+        assert_eq!(step_stats_notefield_width(4), Some(256.0));
+        assert_eq!(step_stats_notefield_width(8), Some(512.0));
+        assert_eq!(step_stats_notefield_width(0), None);
+    }
+
+    #[test]
+    fn step_stats_upper_density_width_matches_zmod_policy() {
+        assert_near(
+            step_stats_upper_density_graph_width(StepStatsPlayStyle::Single),
+            226.0,
+        );
+        assert_near(
+            step_stats_upper_density_graph_width(StepStatsPlayStyle::Versus),
+            226.0,
+        );
+        assert_near(
+            step_stats_upper_density_graph_width(StepStatsPlayStyle::Double),
+            226.0,
+        );
+    }
+
+    #[test]
+    fn step_stats_density_graph_width_matches_sl_double() {
+        let width = step_stats_density_graph_width(
+            StepStatsPlayStyle::Double,
+            8,
+            1,
+            854.0,
+            480.0,
+            false,
+        );
+        let expected = ((854.0 - 512.0) * 0.5) * 0.95;
+        assert_near(width, expected);
+    }
+
+    #[test]
+    fn step_stats_density_graph_width_handles_centered_and_ultrawide() {
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
+                640.0,
+                480.0,
+                true,
+            ),
+            192.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
+                854.0,
+                480.0,
+                true,
+            ),
+            299.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
+                640.0,
+                640.0,
+                true,
+            ),
+            192.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Versus,
+                4,
+                2,
+                2560.0,
+                1080.0,
+                false,
+            ),
+            512.0,
+        );
+    }
+
 }

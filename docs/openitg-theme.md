@@ -990,6 +990,15 @@ and zero buffer growth events. The full shell, gameplay, and score suites
 passed. The final overview layout also passed the OpenITG unit tests and the
 configured play route and gameplay parity regressions.
 
+The mounted Evaluation overview reads the same prepared results as the
+existing Evaluation panes. Course paging shares score, timing, and life
+records. The OpenITG overview supplies the English fallback for an unnamed
+course. Eight Vulkan captures at 640×480 and 854×480 were pixel-identical
+before and after the refactor, covering the settled overview and three
+departure times. In the same two-player CPU fixture, Simply Love measured
+37.1 µs per frame in both builds and OpenITG measured 72.3 µs before and
+70.3 µs after. Actor counts remained at 40 and 114 respectively.
+
 ## Configured play route
 
 The Windows shell test `configured_themes_complete_song_route` loads each

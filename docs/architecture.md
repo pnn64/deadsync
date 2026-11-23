@@ -37,6 +37,12 @@ its departure cue, readiness time, duration, and overlay through
 The result view borrows that elapsed time for animation while the visit
 clock holds its original value.
 
+The shell prepares one immutable score snapshot for each song or course
+result. The mounted Evaluation overview and the Simply Love panes borrow
+those records. Course paging shares the same records, including the timing
+and life histories. The score crate resolves the displayed Routine grade
+from the combined percentage and the participants' failure states.
+
 Both Player Options layouts consume the same editor and submit
 `deadsync-profile-gameplay::stage_options::StageOptions`. The mounted layout
 supplies its viewport and transitions. The game resolves stage scroll speed,
@@ -46,10 +52,20 @@ Content reload and bulk ReplayGain workers publish progress through
 bars, background movie, wheel fallback banners, and density mesh in its theme
 crate.
 
+Simply Love resolves its Step Statistics and upper NPS graph dimensions,
+scroll window, and scale from the prepared stage. The stage allocates the
+optional graph's life sample buffers before play and samples the same game
+life and timing data. The shell forwards the saved step artist preference
+to Select Music for the layout to interpret. Twitch connection state stays
+with the shell service. The mounted overlay reads a borrowed chat snapshot
+and owns placement, text, and its actor cache.
+
 The shell still uses the Simply Love controller for parts of Player Options,
 Select Music, System Options, and Evaluation. Those controllers remain
 shared by both routes today. Their game behavior and presentation need
 separate interfaces before they can be replaced independently.
+Both configurations also mount the Simply Love gameplay frame composer
+and Twitch overlay. The mounted stage supplies the OpenITG HUD.
 
 ## Shared contracts
 

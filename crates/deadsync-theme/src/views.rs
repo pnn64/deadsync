@@ -705,7 +705,7 @@ impl<N, S> EvaluationView<N, S> {
 /// Completed-stage data supplied to the result screen at entry.
 #[derive(Clone)]
 pub struct EvaluationStageView<N, S> {
-    pub score_info: [Option<EvaluationView<N, S>>; MAX_PLAYERS],
+    pub score_info: EvaluationScores<N, S>,
     pub stage_number: Option<usize>,
     /// The shared Routine score displayed alongside individual results.
     pub routine_shared_score_percent: Option<f64>,
@@ -716,7 +716,7 @@ pub struct EvaluationStageView<N, S> {
 impl<N, S> Default for EvaluationStageView<N, S> {
     fn default() -> Self {
         Self {
-            score_info: [const { None }; MAX_PLAYERS],
+            score_info: Arc::new([const { None }; MAX_PLAYERS]),
             stage_number: None,
             routine_shared_score_percent: None,
             stage_duration_seconds: 0.0,
@@ -724,6 +724,9 @@ impl<N, S> Default for EvaluationStageView<N, S> {
         }
     }
 }
+
+/// Shared, immutable score records for one result page.
+pub type EvaluationScores<N, S> = Arc<[Option<EvaluationView<N, S>>; MAX_PLAYERS]>;
 
 /// Completed results for the active evaluation page.
 pub struct EvaluationOverview<'a> {
@@ -1064,4 +1067,35 @@ mod tests {
         assert_eq!(OverlayStyle::from_key("minimal"), OverlayStyle::Minimal);
         assert_eq!(OverlayStyle::from_key("unknown"), OverlayStyle::Detailed);
     }
+}
+
+/// Field occupancy provided to an optional chat overlay during gameplay.
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayChatLayout {
+    pub two_players: bool,
+    pub p2: bool,
+    pub centered: bool,
+    pub field_left: f32,
+    pub field_right: f32,
+    pub statistics: bool,
+}
+
+/// Borrowed chat snapshot and current screen facts for overlay composition.
+pub struct TwitchChatView<'a, Message, Options> {
+    pub screen: crate::Screen,
+    pub gameplay: Option<GameplayChatLayout>,
+    pub tournament: bool,
+    pub sides: [bool; MAX_PLAYERS],
+    pub entries: &'a [Arc<Message>],
+    pub revision: u64,
+    pub options: Options,
+}
+
+pub trait TwitchChatPresentation<A, Message, Options> {
+    fn push_chat(
+        &mut self,
+        actors: &mut Vec<A>,
+        assets: &deadlib_assets::AssetManager,
+        view: TwitchChatView<'_, Message, Options>,
+    );
 }

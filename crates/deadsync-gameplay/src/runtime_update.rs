@@ -680,6 +680,54 @@ where
         )
     }
 
+    /// Prepare the optional display graph during stage setup before sampling begins.
+    pub fn configure_density_graph(&mut self, layout: DensityGraphLayout) {
+        let mut life_update_rate = 0.25_f32;
+        if layout.width > 0.0 && layout.height > 0.0 && !self.timing().has_bpm_changes() {
+            let bpm = self.timing().first_bpm();
+            if bpm.is_finite() && bpm >= 60.0 {
+                let interval_8th = (60.0_f32 / bpm) * 0.5;
+                if interval_8th.is_finite() && interval_8th > 0.0 {
+                    life_update_rate = interval_8th * (life_update_rate / interval_8th).ceil();
+                }
+            }
+        }
+        if !life_update_rate.is_finite() || life_update_rate <= 0.0 {
+            life_update_rate = 0.25;
+        }
+
+        let graph = &mut self.display.density_graph;
+        let active = layout.width > 0.0 && layout.height > 0.0;
+        let scrolls = active && layout.visible_seconds > 0.0 && graph.duration > layout.visible_seconds;
+        graph.graph_w = layout.width;
+        graph.graph_h = layout.height;
+        graph.scaled_width = if scrolls {
+            (layout.width * (graph.duration / layout.visible_seconds))
+                .round()
+                .max(layout.width)
+        } else {
+            layout.width
+        };
+        graph.u_window = if scrolls {
+            (layout.visible_seconds / graph.duration).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        graph.cursor_fraction = layout.cursor_fraction.clamp(0.0, 1.0);
+        graph.top_h = layout.top_height;
+        graph.top_w = layout.top_width;
+        graph.top_scale_y = layout.top_scale_y;
+        graph.life_update_rate = life_update_rate;
+        if active {
+            let capacity = density_graph_life_capacity(graph.duration, life_update_rate);
+            for points in &mut graph.life_points[..self.setup.num_players] {
+                points.reserve_exact(capacity.saturating_sub(points.len()));
+            }
+            self.control.update_trace.density_life_capacity =
+                graph.life_points.each_ref().map(Vec::capacity);
+        }
+    }
+
     pub fn update_density_graph(
         &mut self,
         current_music_time: f32,
@@ -698,6 +746,7 @@ where
                 graph_h,
                 scaled_width,
                 u_window: self.display.density_graph.u_window,
+                cursor_fraction: self.display.density_graph.cursor_fraction,
             },
             current_music_time,
         );

@@ -29,7 +29,6 @@ use deadlib_present::cache::{
 use deadlib_present::space::{is_wide, widescale};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_rules::life::LifeRecordSampler;
-use deadsync_theme::stage::EvaluationOverviewPresentation;
 use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_config::theme::GameFlag;
 use deadsync_score as score_data;
@@ -47,7 +46,7 @@ use deadsync_online::lobby_wait::{
 };
 use deadsync_theme::FontRole;
 use deadsync_assets::noteskin::Noteskin;
-use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, EvaluationStageView};
+use deadsync_theme::views::{EvaluationScores, EvaluationStageView};
 use log::warn;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -2700,8 +2699,8 @@ pub struct State {
     // has not published another sample since the previous evaluation.
     heart_rate_generation: Option<(bool, u64, u64)>,
     pub stage_duration_seconds: f32,
-    stage_number: Option<usize>,
-    pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    pub score_info: EvaluationScores<Arc<Noteskin>, profile_data::PlayerSide>,
+    course_noteskins: [Option<Arc<Noteskin>>; MAX_PLAYERS],
     routine_shared_score_percent: Option<f64>,
     /// Routine's shared grade, shown for both participants.
     routine_shared_grade: Option<score_data::Grade>,
@@ -2807,8 +2806,8 @@ impl Clone for State {
             heart_rate_view: self.heart_rate_view,
             heart_rate_generation: self.heart_rate_generation,
             stage_duration_seconds: self.stage_duration_seconds,
-            stage_number: self.stage_number,
-            score_info: self.score_info.clone(),
+            score_info: Arc::clone(&self.score_info),
+            course_noteskins: self.course_noteskins.clone(),
             routine_shared_score_percent: self.routine_shared_score_percent,
             routine_shared_grade: self.routine_shared_grade,
             nice_scores: self.nice_scores,
@@ -2920,11 +2919,7 @@ fn routine_shared_grade(
             .iter()
             .flatten()
             .any(|si| si.grade == score_data::Grade::Failed);
-        if failed {
-            score_data::Grade::Failed
-        } else {
-            score_data::score_to_grade(percent * 10000.0)
-        }
+        score_data::stage_stats::routine_result_grade(percent, failed)
     })
 }
 
@@ -2964,7 +2959,7 @@ pub fn init(
 ) -> State {
     let EvaluationStageView {
         score_info,
-        stage_number,
+        stage_number: _,
         routine_shared_score_percent,
         stage_duration_seconds,
         fail_stream_progress,
@@ -3311,8 +3306,8 @@ pub fn init(
         heart_rate_view: heart_rate::HeartRateView::default(),
         heart_rate_generation: None,
         stage_duration_seconds,
-        stage_number,
         score_info,
+        course_noteskins: [None, None],
         routine_shared_score_percent,
         routine_shared_grade,
         nice_scores,
@@ -3387,11 +3382,12 @@ pub fn init(
 
 #[must_use]
 pub fn init_from_score_info(
-    score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    score_info: impl Into<EvaluationScores<Arc<Noteskin>, profile_data::PlayerSide>>,
     routine_shared_score_percent: Option<f64>,
     stage_duration_seconds: f32,
     context: EvaluationContextView,
 ) -> State {
+    let score_info = score_info.into();
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let play_style = context.play_style;
@@ -3628,8 +3624,8 @@ pub fn init_from_score_info(
         heart_rate_view: heart_rate::HeartRateView::default(),
         heart_rate_generation: None,
         stage_duration_seconds,
-        stage_number: None,
         score_info,
+        course_noteskins: [None, None],
         routine_shared_score_percent,
         routine_shared_grade,
         nice_scores,
@@ -5560,75 +5556,6 @@ pub fn overview_pane_selected(state: &State) -> bool {
             })
 }
 
-fn push_overview(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    assets: &AssetManager,
-    presentation: &mut dyn EvaluationOverviewPresentation<Actor>,
-    departure_elapsed: Option<f32>,
-) -> bool {
-    let Some(index) = state.score_info.iter().position(Option::is_some) else {
-        return false;
-    };
-    let text = &state.result_text[index];
-    presentation.push_overview(
-        actors,
-        assets,
-        EvaluationOverview {
-            title: text.full_title(state.context.policy.translated_titles),
-            artist: &text.artist,
-            banner_key: text
-                .banner_key
-                .as_ref()
-                .filter(|key| assets.has_texture_key(key)),
-            course_summary: state.score_info[index]
-                .as_ref()
-                .is_some_and(ScoreInfo::is_course_summary),
-            stage_number: state.stage_number,
-            double_side_style: state.context.play_style.is_double(),
-            elapsed: state.screen_elapsed,
-            departure_elapsed,
-            players: state.score_info.each_ref().map(|score| {
-                score.as_ref().map(|score| {
-                    let shared = state.routine_shared_score_percent;
-                    EvaluationPlayerOverview {
-                        p2: score.side == profile_data::PlayerSide::P2,
-                        grade: state.routine_shared_grade.unwrap_or(score.grade),
-                        percent: shared.unwrap_or(score.score_percent) * 100.0,
-                        individual_percent: shared.map(|_| score.score_percent * 100.0),
-                        ex_percent: score
-                            .show_ex_score
-                            .then_some(score.ex_score_percent.max(0.0)),
-                        hard_ex_percent: score
-                            .show_hard_ex_score
-                            .then_some(score.hard_ex_score_percent.max(0.0)),
-                        difficulty: score.chart.difficulty.as_str(),
-                        meter: score.chart.meter,
-                        mods: &score.mods_text,
-                        judgments: score.judgment_counts,
-                        row_window_counts: score.window_counts,
-                        score_valid: score.score_valid,
-                        dropped_hold_or_roll: score.dropped_hold_or_roll,
-                        jumps: score.jumps,
-                        holds: [score.holds_held, score.holds_total],
-                        mines: [score.mines_avoided, score.mines_total],
-                        hands: [score.hands_achieved, score.hands_total],
-                        rolls: [score.rolls_held, score.rolls_total],
-                        max_combo: score.max_combo,
-                        combo_runs: &score.combo_runs,
-                        graph_seconds: [score.graph_first_second, score.graph_last_second],
-                        course_graph_stages: &score.course_graph_stages,
-                        steps_life: &score.steps_life,
-                        machine_rank: score.machine_record_highlight_rank,
-                        disqualified: score.disqualified,
-                    }
-                })
-            }),
-        },
-    );
-    true
-}
-
 /// # Panics
 ///
 /// Panics if an internal state invariant is violated.
@@ -5638,26 +5565,6 @@ pub fn push_actors(
     asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
-    push_actors_with_overview(actors, state, asset_manager, visual_policy, None, None);
-}
-
-pub fn push_actors_with_overview(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    asset_manager: &AssetManager,
-    visual_policy: crate::views::SimplyLoveVisualPolicyView,
-    draw_overview: Option<&mut dyn EvaluationOverviewPresentation<Actor>>,
-    departure_elapsed: Option<f32>,
-) {
-    if let Some(draw) = draw_overview
-        && (departure_elapsed.is_some() || overview_pane_selected(state))
-        && push_overview(actors, state, asset_manager, draw, departure_elapsed)
-    {
-        push_heart_rates(actors, state);
-        push_submission_overlay(actors, state, asset_manager);
-        push_visit_overlays(actors, state, asset_manager, false);
-        return;
-    }
     let policy = &state.context.policy;
     let sl_header_alpha = eval_panes::eval_style_alpha(policy.transparent_panels, 1.0, 0.5);
     let sl_panel_alpha = eval_panes::eval_style_alpha(policy.transparent_panels, 1.0, 0.75);
@@ -6444,7 +6351,7 @@ pub fn push_actors_with_overview(
                     if let Some(text) = state.timing_arrows_text[player_idx].as_ref() {
                         eval_panes::push_timing_arrows_pane(
                             actors,
-                            si,
+                            si.noteskin.as_deref().or(state.course_noteskins[player_idx].as_deref()),
                             text,
                             controller,
                             state.screen_elapsed,

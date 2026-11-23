@@ -1262,96 +1262,6 @@ mod tests {
     }
 
     #[test]
-    fn step_stats_notefield_width_matches_sl_style_widths() {
-        assert_eq!(step_stats_notefield_width(4), Some(256.0));
-        assert_eq!(step_stats_notefield_width(8), Some(512.0));
-        assert_eq!(step_stats_notefield_width(0), None);
-    }
-
-    #[test]
-    fn step_stats_upper_density_width_matches_zmod_policy() {
-        assert_near(
-            step_stats_upper_density_graph_width(StepStatsPlayStyle::Single),
-            226.0,
-        );
-        assert_near(
-            step_stats_upper_density_graph_width(StepStatsPlayStyle::Versus),
-            226.0,
-        );
-        assert_near(
-            step_stats_upper_density_graph_width(StepStatsPlayStyle::Double),
-            226.0,
-        );
-    }
-
-    #[test]
-    fn step_stats_density_graph_width_matches_sl_double() {
-        let width = step_stats_density_graph_width(
-            StepStatsPlayStyle::Double,
-            8,
-            1,
-            854.0,
-            480.0,
-            true,
-            false,
-        );
-        let expected = ((854.0 - 512.0) * 0.5) * 0.95;
-        assert_near(width, expected);
-    }
-
-    #[test]
-    fn step_stats_density_graph_width_handles_centered_and_ultrawide() {
-        assert_near(
-            step_stats_density_graph_width(
-                StepStatsPlayStyle::Single,
-                4,
-                1,
-                640.0,
-                480.0,
-                false,
-                true,
-            ),
-            192.0,
-        );
-        assert_near(
-            step_stats_density_graph_width(
-                StepStatsPlayStyle::Single,
-                4,
-                1,
-                854.0,
-                480.0,
-                true,
-                true,
-            ),
-            299.0,
-        );
-        assert_near(
-            step_stats_density_graph_width(
-                StepStatsPlayStyle::Single,
-                4,
-                1,
-                640.0,
-                640.0,
-                false,
-                true,
-            ),
-            192.0,
-        );
-        assert_near(
-            step_stats_density_graph_width(
-                StepStatsPlayStyle::Versus,
-                4,
-                2,
-                2560.0,
-                1080.0,
-                true,
-                false,
-            ),
-            512.0,
-        );
-    }
-
-    #[test]
     fn density_life_points_skip_duplicate_and_update_same_time() {
         let mut points = vec![[1.0, 0.25]];
 
@@ -1405,6 +1315,7 @@ mod tests {
             graph_h: 40.0,
             scaled_width: 400.0,
             u_window: 0.5,
+            cursor_fraction: 0.25,
         };
 
         assert_near(density_graph_u0_for_time(window, 10.0), 0.0);

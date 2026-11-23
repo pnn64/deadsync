@@ -180,7 +180,7 @@ pub(crate) fn evaluation_view(
             });
     }
     EvaluationStageView {
-        score_info,
+        score_info: score_info.into(),
         stage_number: Some(stage_number),
         routine_shared_score_percent: gs.routine_shared_stage_itg_score_percent(),
         fail_stream_progress,

@@ -1,6 +1,5 @@
 use crate::act;
 use crate::fonts::machine_font_key_for_text;
-use crate::views::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadsync_config::theme::MachineFont;
 use deadsync_profile as profile_data;
@@ -245,24 +244,6 @@ fn promote_timing_arrow_previews(actors: &mut [Actor]) {
 
 /// Appends animated previews directly and shares the immutable 37-actor table.
 pub(crate) fn push_timing_arrows_pane(
-    out: &mut Vec<Actor>,
-    score_info: &ScoreInfo,
-    text: &TimingArrowsText,
-    controller: profile_data::PlayerSide,
-    preview_elapsed: f32,
-    machine_font: MachineFont,
-) {
-    push_retained_timing_arrows_pane(
-        out,
-        score_info.noteskin.as_deref(),
-        text,
-        controller,
-        preview_elapsed,
-        machine_font,
-    );
-}
-
-fn push_retained_timing_arrows_pane(
     out: &mut Vec<Actor>,
     noteskin: Option<&deadsync_assets::noteskin::Noteskin>,
     text: &TimingArrowsText,

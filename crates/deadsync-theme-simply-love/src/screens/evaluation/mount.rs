@@ -2,7 +2,6 @@ use super::*;
 use crate::views::VisualBackgroundView;
 use deadsync_core::session_flow::EvaluationOrigin;
 use deadsync_theme::evaluation::{EvaluationCaptureView, ThemeEvaluation};
-use deadsync_theme::stage::EvaluationOverviewPresentation;
 use deadsync_theme::views::HeartRateView;
 use std::path::{Path, PathBuf};
 
@@ -28,7 +27,7 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
     }
 
     fn init_course_evaluation(
-        scores: [Option<ScoreInfo>; MAX_PLAYERS],
+        scores: EvaluationScores<Arc<Noteskin>, profile_data::PlayerSide>,
         routine_shared_score_percent: Option<f64>,
         duration_seconds: f32,
         context: EvaluationContextView,
@@ -64,12 +63,12 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
             song.screen_elapsed = active.screen_elapsed;
             song.sfx_paths = active.sfx_paths.clone();
             sync_elapsed(song, active.session_elapsed, gameplay_elapsed);
-            for player in summary.score_info.iter_mut().flatten() {
-                if player.noteskin.is_none() {
-                    player.noteskin = song
-                        .score_info
-                        .iter()
-                        .flatten()
+            for (player, fallback) in summary.score_info.iter().zip(&mut summary.course_noteskins) {
+                if let Some(player) = player
+                    && player.noteskin.is_none()
+                    && fallback.is_none()
+                {
+                    *fallback = song.score_info.iter().flatten()
                         .filter(|record| record.side == player.side)
                         .find_map(|record| record.noteskin.clone());
                 }
@@ -146,10 +145,14 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
         state: &State,
         assets: &AssetManager,
         visual_policy: Self::EvaluationVisualPolicy,
-        overview: Option<&mut dyn EvaluationOverviewPresentation<Actor>>,
-        departure_elapsed: Option<f32>,
     ) {
-        push_actors_with_overview(actors, state, assets, visual_policy, overview, departure_elapsed);
+        push_actors(actors, state, assets, visual_policy);
+    }
+
+    fn push_evaluation_overlays(actors: &mut Vec<Actor>, state: &State, assets: &AssetManager) {
+        push_heart_rates(actors, state);
+        push_submission_overlay(actors, state, assets);
+        push_visit_overlays(actors, state, assets, false);
     }
 
     fn sync_evaluation_runtime(state: &mut State, view: EvaluationRuntimeView) {

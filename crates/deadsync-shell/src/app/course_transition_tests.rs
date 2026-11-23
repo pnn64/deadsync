@@ -380,7 +380,17 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         "A",
                     );
                     let completed_song = Arc::clone(&app.state.session.played_stages[0].song);
-                    app.state.screens.evaluation_state.score_info = [None, None];
+                    assert!(Arc::ptr_eq(
+                        &app.state.screens.course_evaluation.pages[1].view.score_info,
+                        &app.state.screens.evaluation_state.score_info,
+                    ));
+                    app.state.screens.evaluation_state.score_info = Arc::new([None, None]);
+                    if theme == ThemeFlag::OpenItg {
+                        let page = app.state.screens.evaluation_overview.as_ref().expect("mounted song overview");
+                        let view = page.view(&app.asset_manager, false, 5.0, None);
+                        assert_eq!(view.title.as_ref(), "A");
+                        assert!(view.players[0].is_some());
+                    }
                     let stage = app.state.screens.evaluation_stage.as_ref().unwrap();
                     let first = stage.players().next().unwrap();
                     let title = screenshot::current_song_title(&app.state).unwrap();
@@ -427,6 +437,18 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     assert_eq!(practice.return_screen, CurrentScreen::Practice);
                     assert_eq!(practice.options, restart.options);
                     app.step_course_eval_page(1);
+                    if theme == ThemeFlag::OpenItg {
+                        let page = app.state.screens.evaluation_overview.as_ref().expect("mounted course overview");
+                        let view = page.view(&app.asset_manager, false, 5.0, None);
+                        assert!(view.course_summary);
+                        assert_eq!(view.title.as_ref(), "PR845 transition");
+                        let first = view.players[0].as_ref().expect("P1's Routine result");
+                        let second = view.players[1].as_ref().expect("P2's Routine result");
+                        assert_eq!(first.percent, second.percent);
+                        assert_eq!(first.grade, second.grade);
+                        assert!(first.individual_percent.is_some());
+                        assert!(second.individual_percent.is_some());
+                    }
                     assert_eq!(
                         app.state.screens.evaluation_state.score_info[0].as_ref().unwrap().song.title,
                         "PR845 transition",

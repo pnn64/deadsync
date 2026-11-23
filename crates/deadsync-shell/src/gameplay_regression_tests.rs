@@ -509,10 +509,11 @@ pub(crate) mod tests {
         config_override: Option<GameplayConfig>,
         runtime_fallback: bool,
     ) -> screen_gameplay::State {
-        let (prepared, scene, mut init) = prepare_stage_fixture(
+        let (mut prepared, scene, mut init) = prepare_stage_fixture(
             simfile, viewport, session, player_profiles, renderer, until_beat,
             live_diagnostic, configure_compile_clocks, config_override, runtime_fallback,
         );
+        prepared.configure_density_graph(deadsync_theme_simply_love::step_stats::density_graph_layout);
         let scores = std::mem::take(&mut init.scores);
         crate::gameplay_runtime::present_stage(
             prepared,
@@ -2974,22 +2975,34 @@ M000
                     assert_eq!(score.histogram.bins, result.histogram.bins);
                     assert!(Arc::ptr_eq(&score.steps_life.samples, &result.steps_life.samples));
                 }
-                let mut screen = evaluation::init(view, context);
+                let overview = deadsync_theme::evaluation::EvaluationOverviewPage::new(
+                    &view.score_info,
+                    view.routine_shared_score_percent,
+                    view.stage_number,
+                    style.is_double(),
+                    |side| *side == profile_data::PlayerSide::P2,
+                ).expect("prepared overview");
+                let scores = Arc::clone(&view.score_info);
+                let screen = evaluation::init(view, context);
+                assert!(Arc::ptr_eq(&scores, &screen.score_info));
+                assert!(Arc::ptr_eq(&scores, &screen.clone().score_info));
                 assert_eq!(screen.stage_duration_seconds, 12.5);
                 assert!(!evaluation::all_joined_players_failed(&screen));
                 assert!(evaluation::overview_pane_selected(&screen));
-                screen.screen_elapsed = deadsync_theme_openitg::EVALUATION_OVERVIEW_SETTLED_SECONDS;
                 space::with_current_metrics(space::Metrics::centered(854.0, 480.0), || {
                     let assets = deadlib_assets::AssetManager::new();
                     let mut actors = Vec::new();
                     let mut openitg = deadsync_theme_openitg::OpenItgEvaluation::default();
-                    evaluation::push_actors_with_overview(
+                    let frame = overview.view(
+                        &assets, false, deadsync_theme_openitg::EVALUATION_OVERVIEW_SETTLED_SECONDS, None,
+                    );
+                    let player = frame.players[0].as_ref().expect("result slot zero");
+                    assert_eq!(player.p2, side == profile_data::PlayerSide::P2);
+                    assert!(std::ptr::eq(player.steps_life, &scores[0].as_ref().unwrap().steps_life));
+                    openitg.push_overview(
                         &mut actors,
-                        &screen,
                         &assets,
-                        Default::default(),
-                        Some(&mut openitg),
-                        None,
+                        frame,
                     );
                     assert!(actor_tree_has_text(&actors, "CHECK YOUR STATS"));
                     assert!(actor_tree_has_text(&actors, "   27"));
@@ -2999,13 +3012,10 @@ M000
                         _ => None,
                     }).expect("overview life graph");
                     actors.clear();
-                    evaluation::push_actors_with_overview(
+                    openitg.push_overview(
                         &mut actors,
-                        &screen,
                         &assets,
-                        Default::default(),
-                        Some(&mut openitg),
-                        None,
+                        overview.view(&assets, false, deadsync_theme_openitg::EVALUATION_OVERVIEW_SETTLED_SECONDS, None),
                     );
                     assert!(actors.iter().any(|actor| matches!(actor,
                         Actor::TexturedMesh { vertices, z: 8, .. } if Arc::ptr_eq(&graph, vertices)

@@ -48,7 +48,7 @@ use deadsync_gameplay::music_wheel::MusicWheelEntry;
 use deadsync_profile_gameplay::results::{EvaluationStage, course_summary_records};
 #[cfg(test)]
 use deadsync_gameplay::course_run::{CourseRun, CourseStageRuntime};
-use crate::diagnostics::timing_health;
+use crate::diagnostics::{TimingHealth, timing_health};
 use crate::dynamic_media::{BgVideoTiming, DynamicMedia};
 use crate::frame_pacing_trace::{GameplayPacingPhases, GameplayStorageSample};
 use crate::frame_stats::{
@@ -137,7 +137,7 @@ use deadsync_simfile::{app_runtime as song_loading, sync_offset};
 use deadsync_theme_simply_love::color;
 use deadsync_theme_simply_love::views::{
     BookkeepingView, GameplayInitView, GameplayPolicyView, GameplayRuntimeView, OptionsInitView,
-    OptionsPackSyncView, OptionsSongPackView, SelectMusicInitView, TimingHealth,
+    OptionsPackSyncView, OptionsSongPackView, SelectMusicInitView,
 };
 use deadsync_theme_simply_love::{
     screens::{
@@ -666,6 +666,7 @@ pub struct ScreensState {
     select_course_state: select_course::State,
     sandbox_state: sandbox::State,
     evaluation_state: EvaluationState,
+    evaluation_overview: Option<evaluation_views::ResultOverview>,
     evaluation_origin: EvaluationOrigin,
     evaluation_stage: Option<EvaluationStage>,
     evaluation_capture: EvaluationCapture,
@@ -827,9 +828,10 @@ pub(crate) const fn scorebox_pane_filter(
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
     routine_shared: Option<&stage_stats::PlayerStageSummary>,
-    course_graph_stages: &[Vec<deadsync_theme_simply_love::views::CourseGraphStage>; MAX_PLAYERS],
+    course_graph_stages: &[Vec<deadsync_theme::views::CourseGraphStageView>; MAX_PLAYERS],
     active_color_index: i32,
     config: &config::app_config::Config,
+    mounted_overview: bool,
 ) -> CourseEvaluationPage {
     let profile = profile_data::runtime_music_profile_snapshot(
         config.enable_groovestats,
@@ -843,17 +845,21 @@ fn build_course_summary_eval_state(
             profile.as_ref().map(|(side, profile)| (*side, profile.scroll_speed))
         }),
     );
-    let score_info = build_course_summary_score_info(
+    let scores = build_course_summary_score_info(
         stage,
         routine_shared,
         course_graph_stages,
         profile.scorebox.play_style,
         &profiles,
+    ).into();
+    let routine_percent = routine_shared.map(|shared| shared.score_percent);
+    let overview = evaluation_views::prepare_overview(
+        mounted_overview, &scores, routine_percent, None, profile.scorebox.play_style,
     );
-    let capture = EvaluationCapture::from_scores(&score_info);
+    let capture = EvaluationCapture::from_scores(&scores);
     let state = ActiveTheme::init_course_evaluation(
-        score_info,
-        routine_shared.map(|shared| shared.score_percent),
+        scores,
+        routine_percent,
         stage.duration_seconds,
         evaluation_context_view(
             evaluation_views::EvaluationFramePolicy::from_config(config).context(),
@@ -863,6 +869,7 @@ fn build_course_summary_eval_state(
     );
     CourseEvaluationPage {
         view: state,
+        overview,
         stage: evaluation_stage,
         capture,
     }
@@ -1331,6 +1338,7 @@ impl ScreensState {
             select_course_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
+            evaluation_overview: None,
             evaluation_origin: EvaluationOrigin::Song,
             evaluation_stage: None,
             evaluation_capture: EvaluationCapture::default(),
@@ -1853,6 +1861,8 @@ pub struct App {
     apply_replaygain: crate::apply_replaygain::Service,
     heart_rate: crate::heart_rate::Runtime,
     twitch: crate::twitch::Runtime,
+    twitch_chat: Box<crate::mounted_theme::ChatPresentation>,
+    twitch_chat_sides: Option<(CurrentScreen, [bool; MAX_PLAYERS])>,
     qr_login: crate::qr_login::Service,
     score_import: crate::score_import::Service,
     sync_analysis: crate::sync_analysis::Service,
@@ -5671,6 +5681,8 @@ impl App {
             apply_replaygain: crate::apply_replaygain::Service::default(),
             heart_rate: crate::heart_rate::Runtime::default(),
             twitch: crate::twitch::Runtime::default(),
+            twitch_chat: crate::mounted_theme::mount_twitch_chat(),
+            twitch_chat_sides: None,
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
             sync_analysis: crate::sync_analysis::Service::new(dirs.null_or_die_cache_file()),
@@ -7304,6 +7316,7 @@ impl App {
                 &course_graph_stages,
                 ActiveTheme::evaluation_color_index(&self.state.screens.evaluation_state),
                 config,
+                self.state.screens.stage_presentation.evaluation_overview().is_some(),
             );
             ActiveTheme::prepare_course_evaluation(
                 &self.state.screens.evaluation_state,
@@ -7312,6 +7325,7 @@ impl App {
                 gameplay_elapsed,
             );
             self.state.screens.evaluation_state = course_page.view.clone();
+            self.state.screens.evaluation_overview = course_page.overview.clone();
             self.state.screens.evaluation_stage = course_page.stage.clone();
             self.state.screens.evaluation_capture = course_page.capture;
 
@@ -7390,13 +7404,14 @@ impl App {
     }
 
     fn step_course_eval_page(&mut self, delta: i32) {
-        let Some(CourseEvaluationPage { view: mut page, stage, capture }) =
+        let Some(CourseEvaluationPage { view: mut page, overview, stage, capture }) =
             self.state.screens.course_evaluation.step(delta)
         else {
             return;
         };
         ActiveTheme::resume_evaluation_page(&self.state.screens.evaluation_state, &mut page);
         self.state.screens.evaluation_state = page;
+        self.state.screens.evaluation_overview = overview;
         self.state.screens.evaluation_stage = stage;
         self.state.screens.evaluation_capture = capture;
         self.mark_evaluation_runtime_dirty();
@@ -8224,14 +8239,36 @@ impl App {
                         if screens.evaluation_departure.is_some() => Some(elapsed),
                     _ => None,
                 };
-                ActiveTheme::push_evaluation_actors(
-                    &mut actors,
-                    &screens.evaluation_state,
-                    &self.asset_manager,
-                    visual_policy,
-                    screens.stage_presentation.evaluation_overview(),
-                    departure_elapsed,
-                );
+                let overview = screens.evaluation_overview.as_ref().and_then(|page| {
+                    let frame = ActiveTheme::evaluation_capture_view(&screens.evaluation_state);
+                    (frame.overview || departure_elapsed.is_some()).then_some((page, frame.elapsed))
+                });
+                if let Some((page, elapsed)) = overview
+                    && let Some(presentation) = screens.stage_presentation.evaluation_overview()
+                {
+                    presentation.push_overview(
+                        &mut actors,
+                        &self.asset_manager,
+                        page.view(
+                            &self.asset_manager,
+                            self.evaluation_policy.context().translated_titles,
+                            elapsed,
+                            departure_elapsed,
+                        ),
+                    );
+                    ActiveTheme::push_evaluation_overlays(
+                        &mut actors,
+                        &screens.evaluation_state,
+                        &self.asset_manager,
+                    );
+                } else {
+                    ActiveTheme::push_evaluation_actors(
+                        &mut actors,
+                        &screens.evaluation_state,
+                        &self.asset_manager,
+                        visual_policy,
+                    );
+                }
             }
             CurrentScreen::EvaluationSummary => {
                 let stages = PostSelectStageView::new(
@@ -8278,16 +8315,30 @@ impl App {
         }
 
         if self.frame_config.twitch.enabled {
-            self.twitch.push(
+            let screen = self.state.screens.current_screen;
+            let sides = match self.twitch_chat_sides {
+                Some((previous, sides)) if previous == screen => sides,
+                _ => {
+                    let session = profile::get_session_snapshot();
+                    let sides = [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2]
+                        .map(|side| session.side_joined(side));
+                    self.twitch_chat_sides = Some((screen, sides));
+                    sides
+                }
+            };
+            let (entries, revision) = self.twitch.snapshot();
+            self.twitch_chat.push_chat(
                 &mut actors,
-                self.state.screens.current_screen,
-                self.state
-                    .screens
-                    .gameplay_state
-                    .as_ref()
-                    .map(gameplay::twitch_chat_layout),
-                self.frame_config.tournament.enabled,
                 &self.asset_manager,
+                deadsync_theme::views::TwitchChatView {
+                    screen,
+                    gameplay: self.state.screens.gameplay_state.as_ref().map(gameplay::twitch_chat_layout),
+                    tournament: self.frame_config.tournament.enabled,
+                    sides,
+                    entries,
+                    revision,
+                    options: self.frame_config.twitch,
+                },
             );
         }
 
@@ -9850,7 +9901,7 @@ impl App {
                         replay: None,
                         course: None,
                     };
-                    let present = ActiveTheme::gameplay_presenter(presentation_init);
+                    let present = crate::mounted_theme::gameplay_presenter(&mut prepared, presentation_init);
                     let gs = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
@@ -9950,10 +10001,18 @@ impl App {
                 let _ = self.record_stage_result(stage.clone(), failed, &config, false);
                 let (init_view, context) =
                     Self::evaluation_entry(&gameplay_results, &stage, stage_number, &config);
+                let overview = evaluation_views::prepare_overview(
+                    self.state.screens.stage_presentation.evaluation_overview().is_some(),
+                    &init_view.score_info,
+                    init_view.routine_shared_score_percent,
+                    init_view.stage_number,
+                    context.play_style,
+                );
                 let capture = EvaluationCapture::from_scores(&init_view.score_info);
                 let eval_state = ActiveTheme::init_evaluation(init_view, context, color_idx);
                 self.state.screens.course_evaluation.stages.push(CourseEvaluationPage {
                     view: eval_state,
+                    overview,
                     stage: evaluation_stage,
                     capture,
                 });
@@ -10283,7 +10342,7 @@ impl App {
                     prepared.resolve_song_backgrounds(init_config.random_background_mode);
                     let course_title = course.as_ref().map(|course| course.title.as_str());
                     let view = GameplayStageView { intro, replay, course: course.clone() };
-                    let present = ActiveTheme::gameplay_presenter(presentation_init);
+                    let present = crate::mounted_theme::gameplay_presenter(&mut prepared, presentation_init);
                     let mut state = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
@@ -10375,6 +10434,13 @@ impl App {
                 }
                 ((Default::default(), Default::default()), None, false, completed)
             };
+            self.state.screens.evaluation_overview = evaluation_views::prepare_overview(
+                self.state.screens.stage_presentation.evaluation_overview().is_some(),
+                &init_view.score_info,
+                init_view.routine_shared_score_percent,
+                init_view.stage_number,
+                context.play_style,
+            );
             self.state.screens.evaluation_capture = EvaluationCapture::from_scores(&init_view.score_info);
             self.state.screens.evaluation_state =
                 ActiveTheme::init_evaluation(init_view, context, color_idx);
@@ -10396,6 +10462,7 @@ impl App {
                     .stages
                     .push(CourseEvaluationPage {
                         view: self.state.screens.evaluation_state.clone(),
+                        overview: self.state.screens.evaluation_overview.clone(),
                         stage: self.state.screens.evaluation_stage.clone(),
                         capture: self.state.screens.evaluation_capture,
                     });

@@ -12,7 +12,7 @@ use deadsync_theme::attract::{
 use deadsync_theme::views::GameplayLivePresentation;
 
 use super::{
-    ActiveTheme, App, CurrentScreen, GameplayInitView, GameplayLobbySession, GameplaySession,
+    App, CurrentScreen, GameplayInitView, GameplayLobbySession, GameplaySession,
     GameplaySfx, GameplayStageInput, GameplayStageIntro, GameplayStageView, GameplayState,
     LeadInTiming, config, gameplay_config_from_config, gameplay_viewport, init,
     prepare_gameplay_stage, prewarm_gameplay_assets, prewarm_gameplay_sfx, profile_data,
@@ -174,7 +174,7 @@ impl App {
         if request.force_uncentered_notefield {
             gameplay_config.center_1player_notefield = false;
         }
-        let (prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
+        let (mut prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
             song,
             charts: [Arc::clone(&metadata), metadata],
             gameplay_charts: [Arc::clone(&chart), chart],
@@ -201,7 +201,7 @@ impl App {
             song_lua_data: Default::default(),
             mini_indicator: Default::default(),
         });
-        let present = ActiveTheme::gameplay_presenter(GameplayInitView::default());
+        let present = crate::mounted_theme::gameplay_presenter(&mut prepared, GameplayInitView::default());
         let view = GameplayStageView {
             intro: GameplayStageIntro::Demonstration,
             replay: None,

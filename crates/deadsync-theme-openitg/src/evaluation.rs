@@ -617,7 +617,11 @@ fn push_banner(
             layout,
             [320.0, 65.0 - rise],
             0.5,
-            page.title.into(),
+            if page.course_summary && page.title.is_empty() {
+                "Untitled Course".into()
+            } else {
+                page.title.into()
+            },
             0.55,
             [1.0, 1.0, 1.0, alpha],
         );

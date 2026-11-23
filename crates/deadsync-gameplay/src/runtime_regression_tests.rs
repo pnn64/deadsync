@@ -34,7 +34,6 @@ mod runtime_regression_tests {
         target_score: GameplayTargetScoreSetting,
         target_score_kind: GameplayTargetScoreKind,
         target_score_miss_policy: GameplayTargetScoreMissPolicy,
-        density_graph: bool,
         golf_enabled: bool,
         combo_milestones_enabled: bool,
     }
@@ -61,7 +60,6 @@ mod runtime_regression_tests {
                 target_score: GameplayTargetScoreSetting::default(),
                 target_score_kind: GameplayTargetScoreKind::Itg,
                 target_score_miss_policy: GameplayTargetScoreMissPolicy::Nothing,
-                density_graph: false,
                 golf_enabled: false,
                 combo_milestones_enabled: true,
             }
@@ -177,10 +175,6 @@ mod runtime_regression_tests {
             None
         }
 
-        fn step_statistics_density_graph(&self) -> bool {
-            self.density_graph
-        }
-
         fn note_field_offset_x(&self) -> f32 {
             0.0
         }
@@ -222,10 +216,6 @@ mod runtime_regression_tests {
         }
 
         fn crossover_cue_brackets(&self) -> bool {
-            false
-        }
-
-        fn nps_graph_at_top(&self) -> bool {
             false
         }
 
@@ -1691,8 +1681,15 @@ mod runtime_regression_tests {
             long_average_enabled: true,
             ..GameplayErrorBarOptions::default()
         };
-        profiles[0].density_graph = true;
-        let state = regression_state_with_profiles(profiles);
+        let mut state = regression_state_with_profiles(profiles);
+        assert_eq!(state.display.density_graph.life_points[0].capacity(), 0);
+        state.configure_density_graph(DensityGraphLayout {
+            width: 400.0,
+            height: 100.0,
+            visible_seconds: 240.0,
+            cursor_fraction: 0.25,
+            ..DensityGraphLayout::default()
+        });
         let note_range = state.chart_runtime.note_ranges.range(0);
         let row_range = state.chart_runtime.row_indices.row_entry_ranges[0];
         let note_count = note_range.1 - note_range.0;

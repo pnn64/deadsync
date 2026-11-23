@@ -1185,7 +1185,7 @@ impl Default for SelectMusicInteractionPolicyView {
     }
 }
 
-/// Shell-prepared visibility and layout policy for Select Music composition.
+/// Saved display preferences and available services for Select Music.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SelectMusicPresentationPolicyView {
     pub show_golf_pars: bool,
@@ -1194,7 +1194,7 @@ pub struct SelectMusicPresentationPolicyView {
     pub scorebox_in_step_pane: bool,
     pub show_stage_display: bool,
     pub show_gameplay_timer: bool,
-    pub step_artist_expanded: bool,
+    pub step_artist_box_mode: deadsync_config::theme::SelectMusicStepArtistBoxMode,
     pub breakdown_style: deadsync_config::theme::BreakdownStyle,
     pub pattern_info_mode: deadsync_config::theme::SelectMusicPatternInfoMode,
     pub chart_info_peak_nps: bool,
@@ -1230,7 +1230,7 @@ impl Default for SelectMusicPresentationPolicyView {
             show_stage_display: deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_STAGE_DISPLAY,
             show_gameplay_timer:
                 deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_GAMEPLAY_TIMER,
-            step_artist_expanded: false,
+            step_artist_box_mode: deadsync_config::theme::SelectMusicStepArtistBoxMode::Default,
             breakdown_style: deadsync_config::theme::BreakdownStyle::Sl,
             pattern_info_mode: deadsync_config::theme::SelectMusicPatternInfoMode::Tech,
             chart_info_peak_nps:

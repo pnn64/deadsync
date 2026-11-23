@@ -330,7 +330,7 @@ impl App {
             return;
         }
         let view = ActiveTheme::evaluation_capture_view(&screens.evaluation_state);
-        let departure = if view.overview {
+        let departure = if view.overview && screens.evaluation_overview.is_some() {
             screens.stage_presentation.evaluation_departure()
         } else {
             None

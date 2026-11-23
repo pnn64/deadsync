@@ -13282,7 +13282,10 @@ pub fn push_actors(
 
     let cycle_elapsed = state.session_elapsed - state.step_artist_cycle_base;
 
-    let step_artist_expanded = presentation.step_artist_expanded && !is_versus;
+    let step_artist_expanded = !is_versus && matches!(
+        presentation.step_artist_box_mode,
+        deadsync_config::theme::SelectMusicStepArtistBoxMode::Expanded
+    );
     let step_artist_layout = if step_artist_expanded {
         step_artist_bar::StepArtistBarLayout::Expanded
     } else {

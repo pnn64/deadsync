@@ -22,6 +22,16 @@ pub struct StageSummary {
     pub players: [Option<PlayerStageSummary>; MAX_PLAYERS],
 }
 
+/// Grade shown with the shared ITG percentage on a Routine result page.
+#[must_use]
+pub fn routine_result_grade(score_percent: f64, participant_failed: bool) -> Grade {
+    if participant_failed {
+        Grade::Failed
+    } else {
+        score_to_grade(score_percent * 10000.0)
+    }
+}
+
 /// A life record in elapsed steps time. A course keeps the same clock across songs.
 #[derive(Clone, Debug, Default)]
 pub struct StageLifeTimeline {
