@@ -74,8 +74,10 @@ passes the current chart type in its request.
 
 The shell still depends on the default theme for the Player Options editor,
 parts of Select Music, System Options, Evaluation, and the gameplay frame
-composer. The executable mounts the existing Twitch overlay. The installed
-stage presentation supplies each theme's HUD where available.
+composer's types. The executable mounts the composer and Twitch overlay.
+Gameplay, Practice and the attract demonstration use the supplied construction
+hooks on the shared stage. The installed stage presentation supplies each
+theme's HUD where available.
 
 ### DDR Extreme
 
@@ -86,8 +88,8 @@ under `[Options]` in `deadsync.ini` and restart.
 The theme mounts an intro and idle records screen, title menu, profile
 picker, style and mode selection, song and course wheels, System Options,
 Player Options, profile and stage loading views, and results overview. Its font
-is packaged under `assets/fonts/ddr-extreme`. The theme embeds its two feedback samples
-in the executable. The shell supplies the chart catalog, preview clock,
+is packaged under `assets/fonts/ddr-extreme`. The theme embeds its UI feedback
+samples and gameplay feedback atlases. The shell supplies the chart catalog, preview clock,
 profile rows, and completed score records through the same interfaces
 used by OpenITG.
 
@@ -97,8 +99,10 @@ Extreme displays that completed result on P2's panel and returns to the
 wheel. The intro, title, profile picker, song wheel, loading view, and
 results were rendered at 640×480 and 854×480 with Vulkan through wgpu.
 
-The gameplay HUD and auxiliary results panes currently use the fallback
-presentation.
+DDR Extreme's gameplay HUD draws the life gauges, score, difficulty, progress,
+tap and hold feedback, and stage badge from the live stage. Its clear and fail
+outros use the shared transition clock and defer to authored song transitions.
+The auxiliary gameplay and results panels still use the fallback presentation.
 
 ## Shared contracts
 

@@ -6,9 +6,10 @@ use deadsync_theme::attract::{
     AttractDemoChart, AttractDemoRequest, AttractMedia, AttractPresentation,
 };
 use deadsync_theme::stage::{
-    EvaluationDeparture, EvaluationOverviewPresentation, StageLoadingView, StagePresentation,
+    EvaluationDeparture, EvaluationOverviewPresentation, StageLoadingView, StageOutroPresentation,
+    StageOutroView, StagePresentation,
 };
-use deadsync_theme::views::{AttractRecords, EvaluationOverview};
+use deadsync_theme::views::{AttractRecords, EvaluationOverview, GameplayHud};
 use std::fmt::Write;
 
 #[derive(Default)]
@@ -26,6 +27,25 @@ impl StagePresentation<Actor> for ExtremeStage {
         if filled > 0.0 {
             scene.rect(actors, [70.0, 341.0], [filled, 12.0], AMBER, 1.0, 1);
         }
+    }
+
+    fn gameplay_hud(&self) -> Option<GameplayHud<Actor>> {
+        Some(crate::gameplay::HUD)
+    }
+
+    fn gameplay_entry(&self, restarting: bool, prepared: bool) -> Option<Vec<Actor>> {
+        (!restarting && prepared).then(Vec::new)
+    }
+
+    fn gameplay_outro(
+        &self,
+        view: StageOutroView<'_>,
+    ) -> Option<Box<dyn StageOutroPresentation<Actor>>> {
+        (!view.authored_transition).then(|| {
+            Box::new(crate::gameplay::Outro {
+                failed: view.failed,
+            }) as Box<_>
+        })
     }
 
     fn evaluation_overview(&mut self) -> Option<&mut dyn EvaluationOverviewPresentation<Actor>> {
@@ -109,7 +129,10 @@ impl EvaluationOverviewPresentation<Actor> for ExtremeStage {
                 actors,
                 [x + 15.0, 366.0],
                 [0.66, 235.0],
-                number_text(format_args!("HOLDS  {}/{}", player.holds[0], player.holds[1])),
+                number_text(format_args!(
+                    "HOLDS  {}/{}",
+                    player.holds[0], player.holds[1]
+                )),
                 MUTED,
             );
         }
@@ -123,7 +146,7 @@ impl EvaluationOverviewPresentation<Actor> for ExtremeStage {
     }
 }
 
-fn number_text(args: std::fmt::Arguments<'_>) -> TextContent {
+pub(crate) fn number_text(args: std::fmt::Arguments<'_>) -> TextContent {
     let mut text = InlineText::default();
     if text.write_fmt(args).is_ok() {
         TextContent::Inline(text)

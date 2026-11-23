@@ -679,14 +679,16 @@ impl App {
             policy: super::SimplyLoveVisualPolicyView::from_config(&config::runtime::get()),
         });
         let restarting = play.is_some_and(|(_, restart)| restart);
-        let (actors, duration) = (screen == CurrentScreen::Gameplay)
-            .then(|| self.state.screens.stage_presentation.gameplay_entry(
+        let duration = stage_entry_duration(screen, restarting);
+        if screen == CurrentScreen::Gameplay
+            && let Some(actors) = self.state.screens.stage_presentation.gameplay_entry(
                 restarting,
                 play.is_some_and(|(gameplay, _)| gameplay.is_some()),
-            ))
-            .flatten()
-            .unwrap_or_else(|| ActiveTheme::in_transition(screen, context));
-        let duration = stage_entry_duration(screen, restarting).unwrap_or(duration);
-        (actors, duration)
+            )
+        {
+            return (actors, duration.expect("gameplay entry uses the stage clock"));
+        }
+        let (actors, visual_duration) = ActiveTheme::in_transition(screen, context);
+        (actors, duration.unwrap_or(visual_duration))
     }
 }

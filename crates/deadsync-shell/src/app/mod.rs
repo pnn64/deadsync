@@ -35,7 +35,9 @@ use self::lua_loading::SongLuaLoading;
 use self::screenshot::EvaluationCapture;
 use self::stage_start::{StageSelection, StageStart};
 use crate::{ActiveTheme, ThemeScreen as CurrentScreen, TransitionState};
-use crate::mounted_theme::{PlayerOptionsLayoutFactory, SupplementalResources, ThemeMount};
+use crate::mounted_theme::{
+    GameplayPresentationMount, PlayerOptionsLayoutFactory, SupplementalResources, ThemeMount,
+};
 use crate::command::Command;
 use crate::course::{
     CourseRunState, build_course_graph_stages, build_course_run_from_selection,
@@ -1631,6 +1633,7 @@ impl AppState {
 pub struct App {
     dirs: AppDirs,
     theme_resources: SupplementalResources,
+    gameplay_presentation: GameplayPresentationMount,
     screenshots_dir: PathBuf,
     input: logical_input::keymap::InputState,
     window: Option<Arc<Window>>,
@@ -5580,6 +5583,7 @@ impl App {
         // with the config snapshot in the frame loop.
         deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
         let theme_resources = theme.resources;
+        let gameplay_presentation = theme.gameplay;
         let twitch_chat = (theme.chat)();
         let ui_sfx = audio_requests::UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, theme_resources.sounds);
         let audio_options = audio_requests::options_view(&audio);
@@ -5594,6 +5598,7 @@ impl App {
         );
         Self {
             theme_resources,
+            gameplay_presentation,
             input: logical_input::with_keymap(|km| {
                 logical_input::keymap::InputState::new(km, config.input_debounce_seconds)
             }),
@@ -9835,6 +9840,7 @@ impl App {
 
                 let mut gameplay_session = gameplay_session();
                 let presentation_init = gameplay_presentation_init(&cfg, &player_profiles);
+                let presentation = self.gameplay_presentation;
                 let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
                     lobby_views::refresh(),
                     &charts,
@@ -9916,13 +9922,15 @@ impl App {
                         replay: None,
                         course: None,
                     };
-                    let present = crate::mounted_theme::gameplay_presenter(&mut prepared, presentation_init);
+                    (presentation.prepare)(&mut prepared);
                     let gs = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
                         None,
                         gameplay_startup,
-                        |stage, assets, scores| present(stage, assets, &view, scores),
+                        |stage, assets, scores| {
+                            (presentation.build)(stage, assets, &view, presentation_init, scores)
+                        },
                     );
                     Ok(gs)
                 };
@@ -10253,6 +10261,7 @@ impl App {
                 );
                 let mut gameplay_session = gameplay_session();
                 let presentation_init = gameplay_presentation_init(&cfg, &player_profiles);
+                let presentation = self.gameplay_presentation;
                 let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
                     self.gameplay_lobby.refresh_now(),
                     &charts,
@@ -10357,13 +10366,15 @@ impl App {
                     prepared.resolve_song_backgrounds(init_config.random_background_mode);
                     let course_title = course.as_ref().map(|course| course.title.as_str());
                     let view = GameplayStageView { intro, replay, course: course.clone() };
-                    let present = crate::mounted_theme::gameplay_presenter(&mut prepared, presentation_init);
+                    (presentation.prepare)(&mut prepared);
                     let mut state = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
                         course_title,
                         gameplay_startup,
-                        |stage, assets, scores| present(stage, assets, &view, scores),
+                        |stage, assets, scores| {
+                            (presentation.build)(stage, assets, &view, presentation_init, scores)
+                        },
                     );
                     state.song_lua.restore_held_inputs(held_inputs);
                     Ok(state)

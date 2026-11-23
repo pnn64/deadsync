@@ -104,59 +104,58 @@ pub fn replay_status_text(name: &str, score_10000: f64) -> Arc<str> {
 }
 
 impl crate::SimplyLoveTheme {
-    pub fn gameplay_presenter(
-        prepared: &mut PreparedGameplayStage,
+    pub fn prepare_gameplay_presentation(prepared: &mut PreparedGameplayStage) {
+        prepared.configure_density_graph(crate::step_stats::density_graph_layout);
+    }
+
+    pub fn build_gameplay_presentation(
+        stage: &ActiveGameplayStage,
+        assets: GameplayStageAssets,
+        view: &deadsync_theme::views::GameplayStageView,
         mut init: GameplayInitView,
-    ) -> impl FnOnce(
-        &ActiveGameplayStage,
-        GameplayStageAssets,
-        &deadsync_theme::views::GameplayStageView,
-        crate::views::GameplayScoreInitView,
-    ) -> GameplayPresentation + use<> {
+        scores: crate::views::GameplayScoreInitView,
+    ) -> GameplayPresentation {
         use deadsync_theme::views::GameplayStageIntro;
 
-        prepared.configure_density_graph(crate::step_stats::density_graph_layout);
-        move |stage, assets, view, scores| {
-            init.scores = scores;
-            let intro = match view.intro {
-                GameplayStageIntro::Song { .. } => {
-                    deadsync_simfile::event_intro::song_event_name(stage.song())
-                        .map(Arc::from)
-                        .unwrap_or_else(|| Arc::from("EVENT"))
-                }
-                GameplayStageIntro::Course { number, total: Some(total) } => {
-                    let total = total.max(1);
-                    Arc::from(format!("STAGE {number} / {total}"))
-                }
-                GameplayStageIntro::Course { number, total: None } => {
-                    Arc::from(format!("STAGE {number}"))
-                }
-                GameplayStageIntro::Restart(count) => Arc::from(format!("RESTART {count}")),
-                GameplayStageIntro::Practice => Arc::from("PRACTICE MODE"),
-                GameplayStageIntro::Demonstration => Arc::from(""),
-            };
-            let status = if matches!(view.intro, GameplayStageIntro::Practice) {
-                Some(Arc::from("Practice Mode"))
-            } else {
-                view.replay
-                    .as_ref()
-                    .map(|replay| replay_status_text(&replay.name, replay.score_10000))
-            };
-            let course = view.course.as_ref().map(|course| CourseDisplayInfo {
-                name: if course.title.is_empty() {
-                    Arc::from(super::select_course::course_title(&course.title))
-                } else {
-                    Arc::from(course.title.as_str())
-                },
-            });
-            let banner = view.course.as_ref().and_then(|course| course.banner_path.clone());
-            let mut presentation =
-                GameplayPresentation::from_stage(stage, assets, intro, status, course, banner, init);
-            if let GameplayStageIntro::Song { round } = view.intro {
-                presentation.stage_round = round;
+        init.scores = scores;
+        let intro = match view.intro {
+            GameplayStageIntro::Song { .. } => {
+                deadsync_simfile::event_intro::song_event_name(stage.song())
+                    .map(Arc::from)
+                    .unwrap_or_else(|| Arc::from("EVENT"))
             }
-            presentation
+            GameplayStageIntro::Course { number, total: Some(total) } => {
+                let total = total.max(1);
+                Arc::from(format!("STAGE {number} / {total}"))
+            }
+            GameplayStageIntro::Course { number, total: None } => {
+                Arc::from(format!("STAGE {number}"))
+            }
+            GameplayStageIntro::Restart(count) => Arc::from(format!("RESTART {count}")),
+            GameplayStageIntro::Practice => Arc::from("PRACTICE MODE"),
+            GameplayStageIntro::Demonstration => Arc::from(""),
+        };
+        let status = if matches!(view.intro, GameplayStageIntro::Practice) {
+            Some(Arc::from("Practice Mode"))
+        } else {
+            view.replay
+                .as_ref()
+                .map(|replay| replay_status_text(&replay.name, replay.score_10000))
+        };
+        let course = view.course.as_ref().map(|course| CourseDisplayInfo {
+            name: if course.title.is_empty() {
+                Arc::from(super::select_course::course_title(&course.title))
+            } else {
+                Arc::from(course.title.as_str())
+            },
+        });
+        let banner = view.course.as_ref().and_then(|course| course.banner_path.clone());
+        let mut presentation =
+            GameplayPresentation::from_stage(stage, assets, intro, status, course, banner, init);
+        if let GameplayStageIntro::Song { round } = view.intro {
+            presentation.stage_round = round;
         }
+        presentation
     }
 }
 

@@ -201,7 +201,8 @@ impl App {
             song_lua_data: Default::default(),
             mini_indicator: Default::default(),
         });
-        let present = crate::mounted_theme::gameplay_presenter(&mut prepared, GameplayInitView::default());
+        let presentation = self.gameplay_presentation;
+        (presentation.prepare)(&mut prepared);
         let view = GameplayStageView {
             intro: GameplayStageIntro::Demonstration,
             replay: None,
@@ -216,7 +217,9 @@ impl App {
             ),
             GameplayScoreRefresh::default(),
             None,
-            |stage, assets| present(stage, assets, &view, Default::default()),
+            |stage, assets| {
+                (presentation.build)(stage, assets, &view, GameplayInitView::default(), Default::default())
+            },
         );
         if let Some(hud) = self.state.screens.stage_presentation.gameplay_hud() {
             stage.presentation.set_hud(hud);

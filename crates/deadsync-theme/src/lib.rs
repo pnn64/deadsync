@@ -33,8 +33,8 @@ pub use transition::{
 pub use deadlib_assets::AssetManifest as ThemeAssetManifest;
 pub use deadsync_core::hud_style::{
     ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
-    ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle, MiniIndicatorStyle,
-    NotefieldHudStyle,
+    ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, FieldFeedbackStyle, HoldFeedbackStyle,
+    JudgmentFeedbackStyle, MiniIndicatorStyle, NotefieldHudStyle, TapFeedbackTween,
 };
 
 /// Semantic font roles a concrete theme maps to its bundled font resources.

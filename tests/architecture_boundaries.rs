@@ -540,7 +540,11 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(contains_rust(&host, "pub score_refresh: GameplayScoreRefresh"));
     assert!(contains_rust(&host, "pub presentation: P"));
     assert!(contains_rust(&app, "type GameplayState = GameplayHost<"));
-    assert!(app.contains("crate::mounted_theme::gameplay_presenter(&mut prepared, presentation_init)"));
+    assert!(app.contains("(presentation.prepare)(&mut prepared)"));
+    assert!(app.contains("(presentation.build)(stage, assets, &view, presentation_init, scores)"));
+    assert!(!app.contains("SimplyLoveTheme::build_gameplay_presentation"));
+    let registry = production_source(&root.join("src/theme_registry.rs"));
+    assert!(registry.contains("build: SimplyLoveTheme::build_gameplay_presentation"));
     for concrete in [
         "deadsync_theme_simply_love", "SimplyLove", "crate::ActiveTheme", "crate::ThemeScreen",
         "GameplayStageView",
@@ -13804,7 +13808,8 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
         "ActiveTheme::out_transition(screen, target)",
         "ActiveTheme::in_transition(screen, context)",
         "stage_exit_duration(screen).unwrap_or(duration)",
-        "stage_entry_duration(screen, restarting).unwrap_or(duration)",
+        "let duration = stage_entry_duration(screen, restarting)",
+        "duration.unwrap_or(visual_duration)",
     ] {
         assert!(contains_rust(&adapter, handoff), "missing shell transition handoff {handoff}");
     }

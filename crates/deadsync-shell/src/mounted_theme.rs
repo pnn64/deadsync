@@ -3,12 +3,20 @@
 pub use crate::title_menu::InstalledMenu;
 use deadlib_present::actors::Actor;
 use deadlib_present::actors::TextContent;
+use deadsync_assets::gameplay_stage::{
+    ActiveGameplayStage, GameplayStageAssets, PreparedGameplayStage,
+};
+use deadsync_profile_gameplay::stage_scores::GameplayScoreSnapshots;
 use deadsync_theme::ThemeSounds;
 use deadsync_theme::attract::AttractPresentation;
 use deadsync_theme::player_options::PlayerOptionsLayout;
 use deadsync_theme::selection::SelectionPresentation;
 use deadsync_theme::stage::StagePresentation;
 use deadsync_theme::system_options::SystemOptionsPresentation;
+use deadsync_theme::views::GameplayStageView;
+use deadsync_theme_simply_love::{
+    screens::gameplay::GameplayPresentation, views::GameplayInitView,
+};
 
 #[derive(Clone, Copy, Default)]
 pub struct SupplementalResources {
@@ -23,6 +31,7 @@ pub struct ThemeMount {
     pub title: fn(i32) -> InstalledMenu,
     pub resources: SupplementalResources,
     pub stage: Box<dyn StagePresentation<Actor>>,
+    pub gameplay: GameplayPresentationMount,
     pub selection: Option<Box<dyn SelectionPresentation<Actor>>>,
     pub player_options: Option<PlayerOptionsLayoutFactory>,
     pub system_options: Option<Box<dyn SystemOptionsPresentation<Actor>>>,
@@ -36,15 +45,16 @@ pub type ChatPresentation = dyn deadsync_theme::views::TwitchChatPresentation<
         deadsync_config::streaming::TwitchOptions,
     >;
 
-pub(crate) fn gameplay_presenter(
-    prepared: &mut deadsync_assets::gameplay_stage::PreparedGameplayStage,
-    init: deadsync_theme_simply_love::views::GameplayInitView,
-) -> impl FnOnce(
-    &deadsync_assets::gameplay_stage::ActiveGameplayStage,
-    deadsync_assets::gameplay_stage::GameplayStageAssets,
-    &deadsync_theme::views::GameplayStageView,
-    deadsync_theme_simply_love::views::GameplayScoreInitView,
-) -> deadsync_theme_simply_love::screens::gameplay::GameplayPresentation
-+ use<> {
-    deadsync_theme_simply_love::SimplyLoveTheme::gameplay_presenter(prepared, init)
+/// Stage construction calls these hooks on the loader thread, before live Lua is attached.
+/// The current gameplay host still carries the fallback composer's state type.
+#[derive(Clone, Copy)]
+pub struct GameplayPresentationMount {
+    pub prepare: fn(&mut PreparedGameplayStage),
+    pub build: fn(
+        &ActiveGameplayStage,
+        GameplayStageAssets,
+        &GameplayStageView,
+        GameplayInitView,
+        GameplayScoreSnapshots,
+    ) -> GameplayPresentation,
 }

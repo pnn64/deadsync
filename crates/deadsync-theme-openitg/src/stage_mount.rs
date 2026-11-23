@@ -1,10 +1,10 @@
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadsync_theme::stage::{
-    EvaluationDeparture, EvaluationOverviewPresentation, StageLoadingView, StageMotionView,
-    StageOutroPresentation, StageOutroView, StagePresentation,
+    EvaluationDeparture, EvaluationOverviewPresentation, StageLoadingView, StageOutroPresentation,
+    StageOutroView, StagePresentation,
 };
-use deadsync_theme::views::{EvaluationOverview, GameplayHud, GameplayHudMotion};
+use deadsync_theme::views::{EvaluationOverview, GameplayHud};
 use deadsync_theme::{Screen, ThemeTransitions, UiCue};
 
 use crate::{
@@ -33,20 +33,8 @@ impl StagePresentation<Actor> for OpenItgStagePresentation {
         Some(GAMEPLAY_HUD)
     }
 
-    fn gameplay_motion(&self, view: StageMotionView) -> GameplayHudMotion {
-        if let Some(elapsed_seconds) = view.chart_outro.or(view.give_up_outro) {
-            return GameplayHudMotion::Leaving { elapsed_seconds };
-        }
-        match view.transition {
-            GameplayHudMotion::Entering { .. } if view.restarting || view.hide_intro => {
-                GameplayHudMotion::Settled
-            }
-            motion => motion,
-        }
-    }
-
-    fn gameplay_entry(&self, restarting: bool, prepared: bool) -> Option<(Vec<Actor>, f32)> {
-        (!restarting && prepared).then(|| OpenItgTheme::in_transition(Screen::Gameplay, ()))
+    fn gameplay_entry(&self, restarting: bool, prepared: bool) -> Option<Vec<Actor>> {
+        (!restarting && prepared).then(|| OpenItgTheme::in_transition(Screen::Gameplay, ()).0)
     }
 
     fn gameplay_outro(

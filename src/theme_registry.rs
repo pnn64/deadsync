@@ -1,6 +1,8 @@
 //! The executable connects installed themes to the application runtime.
 
-use super::mounted_theme::{ChatPresentation, InstalledMenu, SupplementalResources, ThemeMount};
+use super::mounted_theme::{
+    ChatPresentation, GameplayPresentationMount, InstalledMenu, SupplementalResources, ThemeMount,
+};
 use deadsync_config::theme::ThemeFlag;
 use deadsync_theme::ThemeResources;
 use deadsync_theme_ddr_extreme::{
@@ -13,12 +15,18 @@ use deadsync_theme_openitg::{
 };
 use deadsync_theme_simply_love::SimplyLoveTheme;
 
+const GAMEPLAY_COMPOSER: GameplayPresentationMount = GameplayPresentationMount {
+    prepare: SimplyLoveTheme::prepare_gameplay_presentation,
+    build: SimplyLoveTheme::build_gameplay_presentation,
+};
+
 pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
     match theme {
         ThemeFlag::SimplyLove => ThemeMount {
             title: |index| InstalledMenu::mount::<SimplyLoveTheme>(index, |policy| policy),
             resources: SupplementalResources::default(),
             stage: Box::new(SimplyLoveTheme),
+            gameplay: GAMEPLAY_COMPOSER,
             selection: None,
             player_options: None,
             system_options: None,
@@ -29,6 +37,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             title: |index| InstalledMenu::mount::<OpenItgTheme>(index, |_| ()),
             resources: resources::<OpenItgTheme>(),
             stage: Box::new(OpenItgStagePresentation::default()),
+            gameplay: GAMEPLAY_COMPOSER,
             selection: Some(Box::new(OpenItgSelectionPresentation::default())),
             player_options: Some(|| Box::new(OpenItgPlayerOptions::default())),
             system_options: Some(Box::new(OpenItgSystemOptions::default())),
@@ -39,6 +48,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             title: |index| InstalledMenu::mount::<DdrExtremeTheme>(index, |_| ()),
             resources: resources::<DdrExtremeTheme>(),
             stage: Box::new(ExtremeStage),
+            gameplay: GAMEPLAY_COMPOSER,
             selection: Some(Box::new(ExtremeSelection)),
             player_options: Some(|| Box::new(ExtremePlayerOptions)),
             system_options: Some(Box::new(ExtremeSystemOptions)),

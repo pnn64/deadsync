@@ -244,9 +244,9 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert_eq!(actor_tree_has_text(&actors, "PICK MODIFIERS"), openitg);
     if extreme {
-        assert!(has_extreme_options_text(&actors, "PLAYER OPTIONS"));
-        assert!(has_extreme_options_text(&actors, "PLAYER 2"));
-        assert!(!has_extreme_options_text(&actors, "PLAYER 1"));
+        assert!(has_extreme_text(&actors, "PLAYER OPTIONS"));
+        assert!(has_extreme_text(&actors, "PLAYER 2"));
+        assert!(!has_extreme_text(&actors, "PLAYER 1"));
     }
     if openitg {
         let (cover, duration) = app.get_in_transition_for_screen(CurrentScreen::PlayerOptions);
@@ -262,13 +262,25 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     assert_eq!(gameplay.setup.session.joined_sides, [false, true]);
     if openitg {
         check_openitg_gameplay_hud(app);
+    } else if extreme {
+        check_extreme_gameplay_hud(app);
     }
 
     complete_stage(app, event_loop);
     let outro = app.state.screens.gameplay_outro.as_ref();
-    assert_eq!(outro.is_some(), openitg);
-    assert!(outro.is_none_or(|outro| outro.cue().is_none() && outro.duration() == 0.8));
+    assert_eq!(outro.is_some(), openitg || extreme);
+    assert!(outro.is_none_or(|outro| {
+        outro.cue().is_none() && outro.duration() == if extreme { 0.92 } else { 0.8 }
+    }));
     let outgoing_track = deadlib_audio_core::active_music_track_id();
+    if extreme {
+        for _ in 0..3 {
+            menu_frame(app, event_loop);
+        }
+        let (actors, _, gameplay) = app.get_current_actors(0.0, app.frame_policy);
+        assert!(gameplay.is_none());
+        assert!(has_extreme_text(&actors, "STAGE CLEAR"));
+    }
     settle(app, event_loop, CurrentScreen::Evaluation);
     let evaluation_track = outgoing_track + u64::from(openitg);
     assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
@@ -366,6 +378,10 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
             preview.simfile_path,
         );
         check_failed_stage_outro(app, event_loop);
+    } else if extreme {
+        press(app, event_loop, VirtualAction::p2_start);
+        settle(app, event_loop, CurrentScreen::Gameplay);
+        check_extreme_failed_outro(app, event_loop);
     }
 }
 
@@ -374,14 +390,14 @@ fn check_extreme_system_options(app: &mut App, event_loop: &ActiveEventLoop) {
     press(app, event_loop, VirtualAction::p2_start);
     settle(app, event_loop, CurrentScreen::Options);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
-    assert!(has_extreme_options_text(&actors, "OPTIONS"));
-    assert!(has_extreme_options_text(&actors, "System Options"));
+    assert!(has_extreme_text(&actors, "OPTIONS"));
+    assert!(has_extreme_text(&actors, "System Options"));
     press(app, event_loop, VirtualAction::p2_start);
     for _ in 0..8 {
         menu_frame(app, event_loop);
     }
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
-    assert!(has_extreme_options_text(&actors, "DDR Extreme"));
+    assert!(has_extreme_text(&actors, "DDR Extreme"));
     press(app, event_loop, VirtualAction::p2_back);
     for _ in 0..8 {
         menu_frame(app, event_loop);
@@ -391,10 +407,46 @@ fn check_extreme_system_options(app: &mut App, event_loop: &ActiveEventLoop) {
     settle(app, event_loop, CurrentScreen::Menu);
 }
 
-fn has_extreme_options_text(actors: &[Actor], expected: &str) -> bool {
+fn has_extreme_text(actors: &[Actor], expected: &str) -> bool {
     actors.iter().any(|actor| matches!(actor,
         Actor::Text { content, font: "ddr-extreme/signal", .. } if content.as_str() == expected
     ))
+}
+
+fn check_extreme_gameplay_hud(app: &mut App) {
+    let saved = std::mem::replace(
+        &mut app.state.shell.transition,
+        TransitionState::FadingIn { elapsed: 0.75, duration: 2.0 },
+    );
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(has_extreme_text(&actors, "READY"));
+    app.state.shell.transition = saved;
+
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(has_extreme_text(&actors, "P2"));
+    assert!(!has_extreme_text(&actors, "P1"));
+    assert!(has_extreme_text(&actors, "STANDBY"));
+    assert!(has_extreme_text(&actors, SONG_TITLE));
+    assert!(!has_extreme_text(&actors, "READY"));
+}
+
+fn check_extreme_failed_outro(app: &mut App, event_loop: &ActiveEventLoop) {
+    use deadsync_gameplay::{GameplayAction, GameplayExit};
+
+    let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
+    assert!(game.force_fail_player(0));
+    app.handle_gameplay_action(GameplayAction::Navigate(GameplayExit::Complete), event_loop);
+    let outro = app.state.screens.gameplay_outro.as_ref().expect("mounted outro");
+    assert_eq!(outro.cue(), Some(deadsync_theme::UiCue::StageFailed));
+    assert!(outro.stop_tail_audio_when_frozen());
+    for _ in 0..3 {
+        menu_frame(app, event_loop);
+    }
+    let (actors, _, gameplay) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(gameplay.is_none());
+    assert!(has_extreme_text(&actors, "STAGE FAILED"));
+    settle(app, event_loop, CurrentScreen::Evaluation);
+    assert!(stage_stats::all_players_failed(&app.state.session.played_stages[1], [false, true]));
 }
 
 fn check_failed_stage_outro(app: &mut App, event_loop: &ActiveEventLoop) {

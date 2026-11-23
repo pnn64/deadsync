@@ -65,11 +65,20 @@ pub trait StagePresentation<A> {
         None
     }
 
-    fn gameplay_motion(&self, _view: StageMotionView) -> GameplayHudMotion {
-        GameplayHudMotion::Settled
+    fn gameplay_motion(&self, view: StageMotionView) -> GameplayHudMotion {
+        if let Some(elapsed_seconds) = view.chart_outro.or(view.give_up_outro) {
+            return GameplayHudMotion::Leaving { elapsed_seconds };
+        }
+        match view.transition {
+            GameplayHudMotion::Entering { .. } if view.restarting || view.hide_intro => {
+                GameplayHudMotion::Settled
+            }
+            motion => motion,
+        }
     }
 
-    fn gameplay_entry(&self, _restarting: bool, _prepared: bool) -> Option<(Vec<A>, f32)> {
+    /// Override the entry actors while retaining the stage's lead-in duration.
+    fn gameplay_entry(&self, _restarting: bool, _prepared: bool) -> Option<Vec<A>> {
         None
     }
 

@@ -31,15 +31,19 @@ impl Scene {
     }
 
     pub(crate) fn cover(self, actors: &mut Vec<Actor>) {
-        actors.push(quad(
-            [0.0, 0.0],
-            [screen_width(), screen_height()],
-            color(PITCH, self.alpha),
-            -100,
-        ));
+        self.fill_screen(actors, PITCH, -100);
         for y in [23.0, 456.0] {
             self.rect(actors, [28.0, y], [584.0, 1.0], MUTED, 0.35, -80);
         }
+    }
+
+    pub(crate) fn fill_screen(self, actors: &mut Vec<Actor>, ink: [f32; 3], z: i16) {
+        actors.push(quad(
+            [0.0, 0.0],
+            [screen_width(), screen_height()],
+            color(ink, self.alpha),
+            z,
+        ));
     }
 
     pub(crate) fn rect(
@@ -96,7 +100,7 @@ impl Scene {
         }
     }
 
-    fn text_builder(
+    pub(crate) fn text_builder(
         self,
         at: [f32; 2],
         zoom: f32,

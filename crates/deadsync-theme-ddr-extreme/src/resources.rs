@@ -1,5 +1,5 @@
 use crate::DdrExtremeTheme;
-use deadlib_assets::{FontAssetSpec, TextureAssetSpec};
+use deadlib_assets::{EmbeddedPng, FontAssetSpec, TextureAssetSpec};
 use deadsync_theme::{ThemeAssetManifest, ThemeResources, ThemeSounds, UiCue, UiSound};
 
 pub(crate) const FONT: &str = "ddr-extreme/signal";
@@ -24,6 +24,13 @@ impl ThemeResources for DdrExtremeTheme {
             (UiCue::PreviousRow, MOVE),
             (UiCue::Value, MOVE),
             (UiCue::OpenPlayerOptions, CONFIRM),
+            (
+                UiCue::StageFailed,
+                UiSound::EmbeddedWav {
+                    name: "ddr-extreme/stage-failed.wav",
+                    bytes: include_bytes!("../assets/stage-failed.wav"),
+                },
+            ),
         ],
     };
 
@@ -35,7 +42,16 @@ impl ThemeResources for DdrExtremeTheme {
                 fallback_font_name: Some("cjk"),
             }],
             textures: std::iter::empty(),
-            embedded_pngs: &[],
+            embedded_pngs: &[
+                EmbeddedPng {
+                    key: crate::gameplay::HUD.default_tap_atlas.key,
+                    bytes: include_bytes!("../assets/tap-results.png"),
+                },
+                EmbeddedPng {
+                    key: crate::gameplay::HUD.default_hold_atlas.key,
+                    bytes: include_bytes!("../assets/hold-results.png"),
+                },
+            ],
             texture_needs_repeat_sampler: |_| false,
         }
     }

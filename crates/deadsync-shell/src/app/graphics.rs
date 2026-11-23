@@ -619,28 +619,30 @@ impl App {
 mod tests {
     #[test]
     fn embedded_judgment_atlases_match_the_gameplay_frame_grids() {
-        let hud = deadsync_theme_openitg::GAMEPLAY_HUD;
-        let tap = hud.default_tap_atlas;
-        let hold = hud.default_hold_atlas;
-        let manifest = deadsync_theme_openitg::OpenItgTheme::asset_manifest();
-        for (key, [width, height], cols, rows) in [
-            (tap.key, tap.frame_size, tap.frame_cols as u32, tap.frame_rows as u32),
-            (hold.key, hold.frame_size, 1, 2),
-        ] {
-            let png = manifest.embedded_pngs.iter().find(|png| png.key == key).unwrap();
-            let atlas = image::load_from_memory_with_format(png.bytes, image::ImageFormat::Png)
-                .expect("embedded judgment atlas decodes")
-                .into_rgba8();
-            let cell_width = (2.0 * width) as u32;
-            let cell_height = (2.0 * height) as u32;
-            assert_eq!(atlas.dimensions(), (cell_width * cols, cell_height * rows));
-            for row in 0..rows {
-                for col in 0..cols {
-                    let x = col * cell_width;
-                    let y = row * cell_height;
-                    assert!((y..y + cell_height).any(|y| {
-                        (x..x + cell_width).any(|x| atlas.get_pixel(x, y)[3] != 0)
-                    }));
+        for flag in deadsync_config::theme::ThemeFlag::CHOICES {
+            let mount = crate::theme_registry::mount(flag);
+            let Some(hud) = mount.stage.gameplay_hud() else { continue; };
+            let tap = hud.default_tap_atlas;
+            let hold = hud.default_hold_atlas;
+            for (key, [width, height], cols, rows) in [
+                (tap.key, tap.frame_size, tap.frame_cols as u32, tap.frame_rows as u32),
+                (hold.key, hold.frame_size, 1, 2),
+            ] {
+                let png = mount.resources.embedded_pngs.iter().find(|png| png.key == key).unwrap();
+                let atlas = image::load_from_memory_with_format(png.bytes, image::ImageFormat::Png)
+                    .expect("embedded judgment atlas decodes")
+                    .into_rgba8();
+                let cell_width = (2.0 * width) as u32;
+                let cell_height = (2.0 * height) as u32;
+                assert_eq!(atlas.dimensions(), (cell_width * cols, cell_height * rows));
+                for row in 0..rows {
+                    for col in 0..cols {
+                        let x = col * cell_width;
+                        let y = row * cell_height;
+                        assert!((y..y + cell_height).any(|y| {
+                            (x..x + cell_width).any(|x| atlas.get_pixel(x, y)[3] != 0)
+                        }));
+                    }
                 }
             }
         }
