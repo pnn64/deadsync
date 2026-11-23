@@ -11387,6 +11387,19 @@ return Def.ActorFrame {
             .abs()
             < 1e-6
     );
+
+    scene_exec(
+        &scene,
+        r#"
+local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+local sprite = player:GetChild('Judgment'):GetChild('JudgmentWithOffsets')
+sprite:Load('judgment fixture 2x7.png'):setstate(13)
+assert(sprite:GetNumStates() == 14 and sprite:GetState() == 13)
+sprite:setstate(14)
+assert(sprite:GetState() == 13)
+"#,
+    )
+    .expect("a judgment texture loaded by a chart uses its sprite frames");
 }
 
 #[test]

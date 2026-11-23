@@ -200,7 +200,10 @@ supplies the evaluated Player state. The presenter supplies HUD assets and
 layout. The system overlay draws outside song cameras and captures, while
 the gameplay exit prompt participates in the song's Overlay.
 Eligible Judgment proxies borrow the retained HUD draw range. Judgment proxies
-inside render-target captures use the prepared actor source.
+inside render-target captures use the prepared actor source. The song Lua host
+loads the frame metadata when it binds a judgment texture to a generated actor.
+A tap judgment actor created without a texture exposes logical frame indices
+until a chart loads a sprite sheet.
 
 Stage preparation prewarms the notefield model cache against the selected
 noteskins and sizes the hold mesh and field capture buffers. The stage retains

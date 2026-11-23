@@ -319,10 +319,12 @@ Windows portable smoke archive embeds the hold and tap atlases alongside the
 nine audio cues. Both theme configurations reached the event loop from that
 archive.
 
-Two focused song-Lua hold snapshots fail with the same differences against the
-pre-change build. A release-state probe on that build also returns sprite frame
-0 where the live actor test expects frame 1. Those Lua compatibility gaps
-remain open.
+The shared song-Lua host now loads the sprite frames for generated tap and hold
+judgment actors when it binds their textures. The 16 live actor regression cases
+pass, including the released-hold frame, tap grades, early and late offsets,
+and authored callbacks that run between feedback phases. The wider live-scene
+suite passes 141 of 152 cases. Both judgment-tree cases now pass. The 11
+remaining failures also occur on the pre-change build.
 
 In an optimized two-player combo draw benchmark, nine runs of one million
 frames gave medians of 65.1 ns for Simply Love before the change, 71.4 ns for
@@ -405,6 +407,14 @@ Separate Windows captures at 854×480 show the chart's root Judgment proxy
 draw at its authored offset in both themes. In the 600-frame baked-Lua case,
 OpenITG averaged 8.56 ms before and after. Simply Love measured 8.72 ms before
 and 8.56 ms after. All four Vulkan and WASAPI runs recorded zero audio underruns.
+
+With song Lua set to Runtime, the 600-frame Quartz comparison averaged 8.57 ms
+in Simply Love on both builds. An OpenITG repeat after the test build finished
+averaged 8.74 ms before and 8.60 ms after. Its 95th percentile was 8.78 ms before
+and 8.67 ms after. These captures recorded zero audio underruns and zero buffer
+growth events. On the same executable, the corresponding OpenITG baked frame
+shows Quartz's authored Judgment proxy beside the built-in award. The Runtime
+capture still omits the proxy.
 
 ## Windows release verification
 
