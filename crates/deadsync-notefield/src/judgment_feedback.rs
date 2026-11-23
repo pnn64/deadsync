@@ -4,20 +4,21 @@ use crate::{
 };
 use deadlib_present::actors::{FlatDraw, FlatSprite, SpriteSource};
 use deadlib_render_core::BlendMode;
+use deadsync_core::hud_style::{JudgmentFeedbackStyle, TapFeedbackTween};
 use deadsync_core::input::MAX_COLS;
 use deadsync_gameplay::{
     HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, HeldMissRenderInfo,
     HoldJudgmentRenderInfo, JudgmentRenderInfo, VisualEffects,
 };
 use deadsync_rules::note::HoldResult;
-use deadsync_core::hud_style::JudgmentFeedbackStyle;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum TapJudgmentAnimation {
     #[default]
     Default,
     Still,
     Itg,
+    Tween(&'static TapFeedbackTween),
 }
 
 impl TapJudgmentAnimation {
@@ -25,6 +26,7 @@ impl TapJudgmentAnimation {
         match self {
             Self::Default | Self::Still => 0.9,
             Self::Itg => 1.0,
+            Self::Tween(tween) => tween.end_s,
         }
     }
 }
@@ -115,7 +117,7 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
         return;
     };
     let elapsed = (request.elapsed_screen - feedback.render.started_at_screen_s).max(0.0);
-    let Some(zoom) = tap_judgment_zoom(
+    let Some(scale) = tap_judgment_scale(
         elapsed,
         request.tap_zoom.unwrap_or(request.judgment_zoom),
         request.judgment_animation,
@@ -137,7 +139,7 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
         z,
         feedback.rotation_deg,
         frame_index,
-        zoom,
+        scale,
         1.0,
     );
     if let Some(overlay_row) = feedback.overlay_row {
@@ -148,7 +150,7 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
             z,
             feedback.rotation_deg,
             (overlay_row * columns + col) as u32,
-            zoom,
+            scale,
             request.style.split_overlay_alpha,
         );
     }
@@ -164,26 +166,38 @@ pub(crate) fn tap_judgment_active(
     (elapsed_screen - render.started_at_screen_s).max(0.0) < animation.duration()
 }
 
-fn tap_judgment_zoom(elapsed: f32, zoom_mod: f32, animation: TapJudgmentAnimation) -> Option<f32> {
+fn tap_judgment_scale(
+    elapsed: f32,
+    zoom_mod: f32,
+    animation: TapJudgmentAnimation,
+) -> Option<[f32; 2]> {
     if elapsed >= animation.duration() {
         return None;
     }
-    let (start_zoom, settle_duration, shrink_start) = match animation {
-        TapJudgmentAnimation::Default => (0.8, 0.1, 0.7),
-        TapJudgmentAnimation::Still => return Some(0.75 * zoom_mod),
-        TapJudgmentAnimation::Itg => (1.0, 0.2, 0.8),
-    };
-    let zoom = if elapsed < settle_duration {
+    let (start_scale, resting_scale, settle_duration, shrink_start, shrink_duration) =
+        match animation {
+            TapJudgmentAnimation::Default => ([0.8_f32; 2], 0.75, 0.1, 0.7, 0.2),
+            TapJudgmentAnimation::Still => return Some([0.75 * zoom_mod; 2]),
+            TapJudgmentAnimation::Itg => ([1.0; 2], 0.75, 0.2, 0.8, 0.2),
+            TapJudgmentAnimation::Tween(tween) => (
+                tween.initial_scale,
+                1.0,
+                tween.settle_s,
+                tween.shrink_start_s,
+                tween.end_s - tween.shrink_start_s,
+            ),
+        };
+    let scale = if elapsed < settle_duration {
         let t = elapsed / settle_duration;
         let ease = (1.0 - t).mul_add(-(1.0 - t), 1.0);
-        (0.75_f32 - start_zoom).mul_add(ease, start_zoom)
+        start_scale.map(|start| (resting_scale - start).mul_add(ease, start))
     } else if elapsed < shrink_start {
-        0.75
+        [resting_scale; 2]
     } else {
-        let t = (elapsed - shrink_start) / 0.2;
-        0.75 * t.mul_add(-t, 1.0)
+        let t = (elapsed - shrink_start) / shrink_duration;
+        [resting_scale * t.mul_add(-t, 1.0); 2]
     };
-    Some(zoom * zoom_mod)
+    Some(scale.map(|axis| axis * zoom_mod))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -194,14 +208,17 @@ fn append_tap_sprite(
     z: i16,
     rotation_deg: f32,
     frame_index: u32,
-    zoom: f32,
+    scale: [f32; 2],
     alpha: f32,
 ) {
     append_sprite(
         draws,
         sprite.source.clone(),
         xy,
-        [sprite.frame_size[0] * zoom, sprite.frame_size[1] * zoom],
+        [
+            sprite.frame_size[0] * scale[0],
+            sprite.frame_size[1] * scale[1],
+        ],
         z,
         rotation_deg,
         frame_uv(frame_index, sprite.frame_cols, sprite.frame_rows),
@@ -679,17 +696,35 @@ mod tests {
             ),
         ] {
             for (elapsed, expected) in samples {
-                let zoom = tap_judgment_zoom(elapsed, 1.5, animation).unwrap();
+                let [zoom, zoom_y] = tap_judgment_scale(elapsed, 1.5, animation).unwrap();
+                assert_eq!(zoom, zoom_y);
                 assert!(
                     (zoom - expected * 1.5).abs() < 0.00001,
                     "{animation:?} at {elapsed}"
                 );
             }
             assert_eq!(
-                tap_judgment_zoom(animation.duration(), 1.5, animation),
+                tap_judgment_scale(animation.duration(), 1.5, animation),
                 None
             );
         }
+    }
+
+    #[test]
+    fn stretch_settles_each_axis_then_shrinks() {
+        let animation = TapJudgmentAnimation::Tween(&TapFeedbackTween {
+            initial_scale: [1.3, 1.7],
+            settle_s: 0.1,
+            shrink_start_s: 1.1,
+            end_s: 1.3,
+        });
+        assert_eq!(tap_judgment_scale(0.0, 1.0, animation), Some([1.3, 1.7]));
+        assert_eq!(tap_judgment_scale(0.1, 1.0, animation), Some([1.0; 2]));
+        assert_eq!(tap_judgment_scale(1.09, 1.0, animation), Some([1.0; 2]));
+        let scale = tap_judgment_scale(1.2, 1.0, animation).unwrap();
+        assert!((scale[0] - 0.75).abs() < 0.000_01);
+        assert_eq!(scale[0], scale[1]);
+        assert_eq!(tap_judgment_scale(1.3, 1.0, animation), None);
     }
 
     #[test]

@@ -301,7 +301,25 @@ impl App {
         ));
         self.sync_fullscreen_mode();
         let window = startup.window;
-        let backend = startup.backend;
+        let mut backend = startup.backend;
+        if self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg {
+            let upload = (|| -> Result<(), Box<dyn Error>> {
+                let atlas = image::load_from_memory_with_format(
+                    deadsync_theme_openitg::TAP_RESULTS_PNG,
+                    image::ImageFormat::Png,
+                )?
+                .into_rgba8();
+                self.asset_manager.update_texture_for_key(
+                    &mut backend,
+                    deadsync_theme_openitg::GAMEPLAY_HUD.default_tap_atlas.key,
+                    &atlas,
+                )?;
+                Ok(())
+            })();
+            if let Err(error) = upload {
+                log::warn!("OpenITG tap result atlas could not be loaded: {error}");
+            }
+        }
         // Renderer reinit reloads font geometry and replaces the texture registry,
         // so discard cached layouts and their generation-bound page handles.
         self.ui_text_layout_cache.clear();
@@ -605,6 +623,36 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn embedded_tap_atlas_matches_the_gameplay_frame_grid() {
+        let spec = deadsync_theme_openitg::GAMEPLAY_HUD.default_tap_atlas;
+        let atlas = image::load_from_memory_with_format(
+            deadsync_theme_openitg::TAP_RESULTS_PNG,
+            image::ImageFormat::Png,
+        )
+        .expect("embedded tap atlas decodes")
+        .into_rgba8();
+        let cell_width = (2.0 * spec.frame_size[0]) as u32;
+        let cell_height = (2.0 * spec.frame_size[1]) as u32;
+        assert_eq!(
+            atlas.dimensions(),
+            (
+                cell_width * spec.frame_cols as u32,
+                cell_height * spec.frame_rows as u32
+            )
+        );
+        for row in 0..spec.frame_rows as u32 {
+            for col in 0..spec.frame_cols as u32 {
+                let x = col * cell_width;
+                let y = row * cell_height;
+                assert!(
+                    (y..y + cell_height)
+                        .any(|y| { (x..x + cell_width).any(|x| atlas.get_pixel(x, y)[3] != 0) })
+                );
+            }
+        }
+    }
+
     #[test]
     fn software_thread_choices_include_auto_and_available_range() {
         let choices = super::build_software_thread_choices();

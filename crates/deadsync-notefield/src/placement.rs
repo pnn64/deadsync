@@ -1020,6 +1020,7 @@ mod tests {
 
     fn style() -> NotefieldHudStyle {
         NotefieldHudStyle {
+            field_feedback: None,
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
             combo_normal_y: 30.0,

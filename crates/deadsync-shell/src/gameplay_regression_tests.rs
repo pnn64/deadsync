@@ -7406,6 +7406,26 @@ return Def.ActorFrame {
                     &mut text_cache,
                     &mut compose_scratch,
                 );
+
+                state.presentation.set_hud(deadsync_theme_openitg::GAMEPLAY_HUD);
+                actors.clear();
+                let segments = crate::gameplay_runtime::push_actors(
+                    &mut actors,
+                    &mut state,
+                    &assets,
+                    screen_gameplay::ActorViewOverride::default(),
+                    123.0,
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                );
+                assert_eq!(segments.direct_combo_proxy_count(state.song_frame()), 2);
+                let _ = assert_repeatable_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
             },
         );
     }

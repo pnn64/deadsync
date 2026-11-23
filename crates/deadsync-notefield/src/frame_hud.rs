@@ -49,6 +49,8 @@ pub struct ComboHudFrame<'a> {
     pub combo_color: [f32; 4],
     pub font: Option<&'static str>,
     pub number_text_slot: u8,
+    pub label_text_slot: u8,
+    pub recent_tap_age: Option<f32>,
     pub transform: Option<HudActorTransform>,
 }
 
@@ -109,6 +111,7 @@ pub struct MiniHudFrame {
 pub struct TapJudgmentHudFrame<'a> {
     pub render: &'a JudgmentRenderInfo,
     pub sprite: TapJudgmentSprite,
+    pub animation: crate::TapJudgmentAnimation,
     pub transform: Option<HudActorTransform>,
 }
 
@@ -430,8 +433,11 @@ fn compose_combo<S>(
     };
     let field = prepared.field;
     let native = frame.transform.is_some();
+    let field_feedback = request.hud_style.field_feedback;
+    let reverse = usize::from(field.hud_reverse);
     let feedback = ComboFeedbackRequest {
         style: request.hud_style.combo_feedback,
+        field_feedback,
         show,
         milestone_assets,
         milestones: frame.milestones,
@@ -441,6 +447,15 @@ fn compose_combo<S>(
             [
                 field.playfield_center_x + request.options.combo_offset[0],
                 request.geometry.screen_center_y + request.options.combo_offset[1],
+            ]
+        } else if let Some(style) = field_feedback {
+            [
+                field.combo_x,
+                request.geometry.screen_center_y
+                    + field.notefield_offset_y
+                    + style.combo_y[reverse]
+                    + field.centered_percent.clamp(0.0, 1.0) * style.combo_centered_add[reverse]
+                    + request.options.combo_offset[1],
             ]
         } else {
             [field.combo_x, field.hud_layout.zmod_layout.combo_y]
@@ -458,6 +473,8 @@ fn compose_combo<S>(
         combo_color,
         font: frame.font,
         number_text_slot: frame.number_text_slot,
+        label_text_slot: frame.label_text_slot,
+        recent_tap_age: frame.recent_tap_age,
     };
     compose_combo_milestones(draws, &feedback);
     compose_combo_number(draws, &feedback);
@@ -592,7 +609,10 @@ fn compose_judgment<S>(
         draws,
         JudgmentFeedbackRequest {
             style: request.hud_style.judgment_feedback,
-            judgment_animation: options.judgment_animation,
+            judgment_animation: frame
+                .tap
+                .as_ref()
+                .map_or(options.judgment_animation, |tap| tap.animation),
             blind: prepared.blind_active,
             elapsed_screen: request.visual.elapsed_screen_s,
             tap,
@@ -601,6 +621,17 @@ fn compose_judgment<S>(
                 [
                     field.playfield_center_x + options.judgment_offset[0],
                     request.geometry.screen_center_y + options.judgment_offset[1],
+                ]
+            } else if let Some(style) = request.hud_style.field_feedback {
+                let reverse = usize::from(field.hud_reverse);
+                [
+                    field.judgment_x,
+                    request.geometry.screen_center_y
+                        + field.notefield_offset_y
+                        + style.judgment_y[reverse]
+                        + field.centered_percent.clamp(0.0, 1.0)
+                            * style.judgment_centered_add[reverse]
+                        + options.judgment_offset[1],
                 ]
             } else {
                 [field.judgment_x, field.hud_layout.judgment_y]

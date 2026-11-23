@@ -97,8 +97,7 @@ and `(616, 270)`, with a 272 px bottom-up fill. Score text anchors are
 `(160, 56)` and `(478, 56)` for one-side charts, and `(200, 56)` and
 `(440, 56)` for doubles. The original widget art uses those positions on a
 640×480 canvas centered at wider resolutions. Slide-in timing, animated life
-glow, song and stage banners, judgment and combo styling, and specialized
-score and life modes remain open.
+glow, song and stage banners, and specialized score and life modes remain open.
 
 Actor tests cover native and wide layouts, failed life, and EX score tint.
 A song Lua fixture captures the OpenITG score with Underlay hidden and still
@@ -110,6 +109,32 @@ nine runs of 400,000 frames, the median was 1.05 μs for the Simply Love digits
 and 0.75 μs for the OpenITG inline label. Both used optimized widget code with
 shared dev-profile rendering dependencies and a reused actor buffer. Scene
 composition, GPU timing, and live frame pacing remain to be measured.
+
+### Judgment and combo
+
+Gameplay uses the shared notefield to draw an original tap atlas and a combo
+label. The OpenITG default graphic has two timing columns and seven grade
+rows. The shell loads it from bytes embedded in the theme crate when it starts
+or recreates the renderer. Profile-selected custom graphics and song Lua
+textures use their existing asset and animation paths.
+
+The default tap uses the reference’s 0.1-second stretch and settle, one-second
+hold, and 0.2-second shrink. The feedback layout uses the existing field center
+and Reverse and Centered inputs. At 640×480 and zero Centered, the tap marker
+anchors at y=210 normally and y=270 in Reverse. The combo number anchors at
+y=290 and y=240 respectively. The label is placed below the number to space
+the shared fonts. The number grows with the displayed count and pulses for
+0.05 seconds after a tap, using the stage’s existing feedback timestamp.
+
+The canonical HUD keeps the combo digits, label, and judgment sprite in their
+existing player and Lua capture ranges. Draw-range tests exercise both direct
+and captured output. Reference-specific alternating tap tilt, beginner timing
+wording, hold artwork, and the full-combo color cycle remain open.
+
+In an optimized two-player combo draw benchmark, nine runs of one million
+frames gave medians of 65.1 ns for Simply Love before the change, 71.4 ns for
+Simply Love with the shared style input, and 247.2 ns for OpenITG with the
+additional label and pulse. These timings cover draw command construction.
 
 System Options and Evaluation still use Simply Love.
 End-to-end parity across two complete presentations, visual comparison against

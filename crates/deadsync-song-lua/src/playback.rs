@@ -16673,9 +16673,9 @@ const ERROR_BAR_HUD_FLAT_DRAW_CAPACITY: usize =
 // Tap plus split overlay and one held-miss plus hold-result sprite per column.
 const JUDGMENT_HUD_FLAT_DRAW_CAPACITY: usize = 2 + MAX_COLS * 2;
 // One unique active hundred milestone emits four sprites, one unique thousand
-// milestone emits two, and the visible combo contributes one prepared digit
-// run; gameplay retains at most one milestone of each kind.
-const COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 7;
+// milestone emits two, and the visible combo adds a digit run and an optional
+// label. Gameplay retains at most one milestone of each kind.
+const COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 8;
 // Five lookahead/current counters, one broken-run counter, one run timer, and
 // one mini score indicator.
 const ZMOD_HUD_FLAT_DRAW_CAPACITY: usize =

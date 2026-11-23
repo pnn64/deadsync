@@ -11741,7 +11741,8 @@ fn combo_presentation_stays_on_the_direct_hud_path() {
     assert!(hud.contains("compose_combo_milestones(draws, &feedback);"));
     assert!(hud.contains("compose_combo_number(draws, &feedback);"));
     assert!(hud.contains("draws.drain(draw_start..).map(actor_from_flat_draw)"));
-    assert!(playback.contains("COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 7"));
+    assert!(combo.contains("draws.push(FlatDraw::PreparedInline(FlatPreparedInline {"));
+    assert!(playback.contains("COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 8"));
     assert!(adapter.contains("ResolvedComboMilestoneAssets"));
     assert!(!adapter.contains("fn combo_number_text"));
     assert!(gameplay.contains("notefield_combo_assets"));

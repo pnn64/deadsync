@@ -607,9 +607,11 @@ borrows song, chart, player, and banner data from the existing controller.
 The shell continues to use that controller for input, previews, and launching
 stages. At stage entry it can install alternate HUD drawing functions through
 `deadsync-theme`. The gameplay composer supplies the already resolved life and
-percentage score at the established HUD and Lua score capture sites. See [the
-OpenITG progress record](openitg-theme.md) for the reference, implemented
-behavior, and fidelity checks.
+percentage score at the established HUD and Lua score capture sites. The shared
+notefield accepts a theme-selected tap graphic, feedback metrics, and combo
+label. It emits them inside the canonical draw ranges for Lua player and HUD
+child captures. See [the OpenITG progress record](openitg-theme.md) for the
+reference, implemented behavior, and fidelity checks.
 
 Player Options mounts through the selected theme for song and course entry,
 input, updates, and actor composition. The shell supplies device and asset

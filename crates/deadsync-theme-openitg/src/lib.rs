@@ -12,7 +12,7 @@ use deadsync_theme::{
     AudioRequest, Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, TransitionKind, UiCue,
 };
 
-pub use gameplay::GAMEPLAY_HUD;
+pub use gameplay::{GAMEPLAY_HUD, TAP_RESULTS_PNG};
 pub use menu::MenuState;
 pub use player_options::PlayerOptionsState;
 pub use select_music::push_select_music_actors;

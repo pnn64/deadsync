@@ -1,12 +1,44 @@
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
-use deadsync_theme::views::{GameplayHud, GameplayLifeView, GameplayScoreView};
+use deadsync_core::hud_style::{FieldFeedbackStyle, TapFeedbackTween};
+use deadsync_theme::views::{GameplayHud, GameplayLifeView, GameplayScoreView, GameplayTapAtlas};
 
 use crate::presentation::Layout;
 
 pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     standard_life: push_life_bar,
     percentage_score: push_score,
+    field_feedback: &FIELD_FEEDBACK,
+    default_tap_atlas: GameplayTapAtlas {
+        key: "openitg/tap-results",
+        frame_size: [128.0, 38.0],
+        frame_cols: 2,
+        frame_rows: 7,
+        tween: &TapFeedbackTween {
+            initial_scale: [1.3, 1.7],
+            settle_s: 0.1,
+            shrink_start_s: 1.1,
+            end_s: 1.3,
+        },
+    },
+};
+
+pub const TAP_RESULTS_PNG: &[u8] = include_bytes!("../assets/tap-results.png");
+
+static FIELD_FEEDBACK: FieldFeedbackStyle = FieldFeedbackStyle {
+    judgment_y: [-30.0, 30.0],
+    judgment_centered_add: [-20.0, 20.0],
+    combo_y: [50.0, 0.0],
+    combo_centered_add: [40.0, -30.0],
+    combo_label: "COMBO",
+    combo_label_font: "game",
+    combo_label_y: 2.0,
+    combo_number_zoom: 0.9,
+    combo_number_zoom_step: 0.001,
+    combo_number_zoom_limit: 400,
+    combo_label_zoom: 0.65,
+    combo_pulse_duration: 0.05,
+    combo_pulse_scale: 1.2,
 };
 
 fn push_life_bar(actors: &mut Vec<Actor>, life: GameplayLifeView) {

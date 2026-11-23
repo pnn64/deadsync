@@ -916,6 +916,7 @@ mod tests {
 
     fn style() -> NotefieldHudStyle {
         NotefieldHudStyle {
+            field_feedback: None,
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
             combo_normal_y: 30.0,
@@ -1279,6 +1280,7 @@ mod tests {
             NotefieldHudFrameView, TapJudgmentHudFrame, TapJudgmentSprite, compose_notefield_hud,
         };
         use deadlib_present::actors::{Actor, TextContent};
+        use deadsync_core::hud_style::FieldFeedbackStyle;
         use deadsync_gameplay::JudgmentRenderInfo;
         use deadsync_rules::judgment::{Judgment, TimingWindow};
 
@@ -1295,8 +1297,25 @@ mod tests {
             },
             started_at_screen_s: 0.0,
         };
-        for player_capture in [false, true] {
+        static LABEL_STYLE: FieldFeedbackStyle = FieldFeedbackStyle {
+            judgment_y: [-30.0, 30.0],
+            judgment_centered_add: [-20.0, 20.0],
+            combo_y: [50.0, 0.0],
+            combo_centered_add: [40.0, -30.0],
+            combo_label: "Combo",
+            combo_label_font: "label",
+            combo_label_y: 2.0,
+            combo_number_zoom: 0.9,
+            combo_number_zoom_step: 0.001,
+            combo_number_zoom_limit: 400,
+            combo_label_zoom: 0.65,
+            combo_pulse_duration: 0.05,
+            combo_pulse_scale: 1.2,
+        };
+        for (player_capture, styled) in [(false, false), (true, false), (false, true), (true, true)]
+        {
             let mut req = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            req.hud_style.field_feedback = styled.then_some(&LABEL_STYLE);
             req.options.combo_visible = true;
             req.capture_requests.player = player_capture;
             req.capture_requests.direct_combo = !player_capture;
@@ -1312,6 +1331,8 @@ mod tests {
                     combo_color: [1.0; 4],
                     font: Some("combo"),
                     number_text_slot: 0,
+                    label_text_slot: 0,
+                    recent_tap_age: Some(0.0),
                     transform: None,
                 }),
                 error_bar: None,
@@ -1325,6 +1346,7 @@ mod tests {
                 judgment: Some(JudgmentHudFrame {
                     tap: Some(TapJudgmentHudFrame {
                         render: &render,
+                        animation: req.options.judgment_animation,
                         transform: None,
                         sprite: TapJudgmentSprite {
                             source: SpriteSource::Texture("judgment".into()),
@@ -1349,26 +1371,47 @@ mod tests {
                 &frame,
                 &mut CapturedActorScratch::with_capacities(32, 16),
             );
+            let combo_count = 1 + usize::from(styled);
             if player_capture {
                 assert!(draws.is_empty());
                 assert_eq!(result.parts.underlay_actors, 1);
-                assert_eq!(result.parts.combo_actors, 1);
+                assert_eq!(result.parts.combo_actors, combo_count);
                 assert!(matches!(&actors[0], Actor::Text { font, .. } if *font == "widget"));
-                assert!(matches!(&actors[1], Actor::Text { font, .. } if *font == "combo"));
+                if styled {
+                    assert!(
+                        matches!(&actors[1], Actor::Text { content, .. } if content.as_str() == "Combo")
+                    );
+                }
                 assert!(
-                    matches!(&actors[2], Actor::Sprite { source: SpriteSource::Texture(key), .. } if key.as_ref() == "judgment")
+                    matches!(&actors[combo_count], Actor::Text { font, .. } if *font == "combo")
+                );
+                assert!(
+                    matches!(&actors[combo_count + 1], Actor::Sprite { source: SpriteSource::Texture(key), .. } if key.as_ref() == "judgment")
                 );
             } else {
                 assert_eq!(result.parts.underlay_actors, 1);
                 assert_eq!(result.parts.underlay_draws, 0);
-                assert_eq!(result.parts.combo_draws, 1);
+                assert_eq!(result.parts.combo_draws, combo_count);
                 assert!(matches!(&actors[0], Actor::Text { font, .. } if *font == "widget"));
-                assert!(matches!(&draws[0], FlatDraw::PreparedU32(draw) if draw.font == "combo"));
+                if styled {
+                    assert!(
+                        matches!(&draws[0], FlatDraw::PreparedInline(draw) if draw.text.as_str() == "Combo")
+                    );
+                    assert!(matches!(&draws[1], FlatDraw::PreparedU32(draw)
+                        if draw.offset[1] == req.geometry.screen_center_y + 50.0
+                            && (draw.scale[0] - 1.2).abs() < 0.0001));
+                }
                 assert!(
-                    matches!(&draws[1], FlatDraw::Sprite(draw) if matches!(&draw.source, SpriteSource::Texture(key) if key.as_ref() == "judgment"))
+                    matches!(&draws[combo_count - 1], FlatDraw::PreparedU32(draw) if draw.font == "combo")
                 );
-                assert_eq!(result.combo_draw_range, Some(0..1));
-                assert_eq!(result.judgment_draw_range, Some(1..2));
+                assert!(
+                    matches!(&draws[combo_count], FlatDraw::Sprite(draw) if matches!(&draw.source, SpriteSource::Texture(key) if key.as_ref() == "judgment"))
+                );
+                assert_eq!(result.combo_draw_range, Some(0..combo_count));
+                assert_eq!(
+                    result.judgment_draw_range,
+                    Some(combo_count..combo_count + 1)
+                );
             }
         }
     }
@@ -1445,6 +1488,7 @@ mod tests {
                 judgment: Some(JudgmentHudFrame {
                     tap: Some(TapJudgmentHudFrame {
                         render: &render,
+                        animation: req.options.judgment_animation,
                         sprite: TapJudgmentSprite {
                             source: SpriteSource::Texture("tap".into()),
                             frame_size: [80.0, 40.0],

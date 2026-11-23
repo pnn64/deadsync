@@ -1,4 +1,4 @@
-use crate::screens::gameplay::GameplayCoreState as State;
+use crate::screens::gameplay::{GameplayCoreState as State, State as GameplayHost};
 use deadlib_present::actors::{InlineText, TextAlign};
 use deadlib_present::compose::{ComposeScratch, TextLayoutCache, prewarm_u32_text_slot};
 use deadlib_present::font;
@@ -10,9 +10,9 @@ use deadsync_profile as profile_data;
 
 use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
 use super::super::{
-    FRAME_TEXT_COMBO_BASE, FRAME_TEXT_COUNTDOWN_BASE, FRAME_TEXT_COUNTER_BASE,
-    FRAME_TEXT_EDIT_MEASURE_BASE, FRAME_TEXT_ERROR_BASE, FRAME_TEXT_MINI_BASE,
-    FRAME_TEXT_VERTEX_BUFFERS,
+    FRAME_TEXT_COMBO_BASE, FRAME_TEXT_COMBO_LABEL_BASE, FRAME_TEXT_COUNTDOWN_BASE,
+    FRAME_TEXT_COUNTER_BASE, FRAME_TEXT_EDIT_MEASURE_BASE, FRAME_TEXT_ERROR_BASE,
+    FRAME_TEXT_MINI_BASE, FRAME_TEXT_VERTEX_BUFFERS,
 };
 use super::text::{cached_int_i32, preferred_mods_text};
 use super::{
@@ -66,7 +66,7 @@ pub fn prewarm_frame_text_scratch(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
     fonts: &font::FontMap,
-    state: &State,
+    state: &GameplayHost,
     edit_measure_text: bool,
 ) {
     let mini_glyphs = InlineText::copy_from("+-.%0123456789")
@@ -91,6 +91,24 @@ pub fn prewarm_frame_text_scratch(
                 FRAME_TEXT_COMBO_BASE + player as u8,
                 TextAlign::Center,
             );
+            if let Some(style) = state
+                .presentation
+                .notefield_plan(player)
+                .hud_style
+                .field_feedback
+                && let Some(label) = InlineText::copy_from(style.combo_label)
+            {
+                deadlib_present::compose::prewarm_prepared_inline_text_slot(
+                    cache,
+                    scratch,
+                    fonts,
+                    style.combo_label_font,
+                    label,
+                    FRAME_TEXT_COMBO_LABEL_BASE + player as u8,
+                    TextAlign::Center,
+                    FRAME_TEXT_VERTEX_BUFFERS,
+                );
+            }
         }
         let countdown_slot = FRAME_TEXT_COUNTDOWN_BASE
             + player as u8 * deadsync_notefield::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER;

@@ -241,6 +241,17 @@ pub struct GameplayReplayView {
 pub struct GameplayHud<A> {
     pub standard_life: fn(&mut Vec<A>, GameplayLifeView),
     pub percentage_score: fn(&mut Vec<A>, GameplayScoreView),
+    pub field_feedback: &'static deadsync_core::hud_style::FieldFeedbackStyle,
+    pub default_tap_atlas: GameplayTapAtlas,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayTapAtlas {
+    pub key: &'static str,
+    pub frame_size: [f32; 2],
+    pub frame_cols: usize,
+    pub frame_rows: usize,
+    pub tween: &'static deadsync_core::hud_style::TapFeedbackTween,
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -1173,6 +1173,9 @@ impl GameplayPresentation {
     }
 
     pub fn set_hud(&mut self, hud: GameplayHud<Actor>) {
+        for plan in &mut self.notefield_plans {
+            plan.install_feedback(&hud);
+        }
         self.hud = Some(hud);
     }
 
