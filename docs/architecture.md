@@ -178,6 +178,12 @@ clocks at their existing media boundaries, and plays scheduled Lua sounds
 after draining gameplay audio. Themes supply HUD and field presentation
 separately.
 
+`deadsync-theme::views::GameplayHud` receives read-only stage facts for the
+standard life meter, percentage score, song meter, difficulty, and stage
+badge. The shared layer order keeps those actors reachable through the
+existing song Lua hooks. The presenter may also supply fallback background
+art for songs without media.
+
 `deadsync-song-lua::gameplay_presentation` drives frame composition through
 `GameplayFramePresenter`. The presenter supplies screen layers, notefield
 actors, and any final overlays. The game builds frame options from the live

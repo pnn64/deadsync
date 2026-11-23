@@ -565,7 +565,7 @@ const DIFFICULTY_STYLES: [(&str, &str, [f32; 4]); 6] = [
     ("Edit", "EDIT", WHITE),
 ];
 
-fn difficulty_style(difficulty: &str) -> (usize, &str, [f32; 4]) {
+pub(crate) fn difficulty_style(difficulty: &str) -> (usize, &str, [f32; 4]) {
     DIFFICULTY_STYLES
         .iter()
         .enumerate()

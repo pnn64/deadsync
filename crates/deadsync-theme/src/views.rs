@@ -387,7 +387,7 @@ pub struct GameplayStageView {
 
 #[derive(Clone, Copy)]
 pub enum GameplayStageIntro {
-    Song,
+    Song { round: Option<usize> },
     Course { number: usize, total: Option<usize> },
     Restart(u32),
     Practice,
@@ -402,6 +402,12 @@ pub struct GameplayReplayView {
 pub struct GameplayHud<A> {
     pub standard_life: fn(&mut Vec<A>, GameplayLifeView),
     pub percentage_score: fn(&mut Vec<A>, GameplayScoreView),
+    pub song_meter: fn(&mut Vec<A>, GameplaySongMeterView<'_>),
+    pub difficulty: fn(&mut Vec<A>, GameplayDifficultyView<'_>),
+    pub stage_badge: fn(&mut Vec<A>, GameplayStageBadgeView<'_>),
+    pub fallback_background: fn(&mut Vec<A>, f32),
+    pub unjoined_seat: fn(&mut Vec<A>, bool),
+    pub autoplay_label: fn(&mut Vec<A>),
     pub field_feedback: &'static deadsync_core::hud_style::FieldFeedbackStyle,
     pub default_tap_atlas: GameplayTapAtlas,
     pub default_hold_atlas: GameplayHoldAtlas,
@@ -440,7 +446,29 @@ pub struct GameplayLifeView {
     pub level: f32,
     pub failed: bool,
     pub hot: bool,
+    pub song_beat: f32,
     pub percent_label: Option<f32>,
+    pub motion: GameplayHudMotion,
+}
+
+pub struct GameplaySongMeterView<'a> {
+    pub title: &'a Arc<str>,
+    pub rate: &'a Arc<str>,
+    pub progress: f32,
+    pub motion: GameplayHudMotion,
+}
+
+pub struct GameplayDifficultyView<'a> {
+    pub p2: bool,
+    pub difficulty: &'a str,
+    pub description: &'a str,
+    pub meter: u32,
+    pub motion: GameplayHudMotion,
+}
+
+pub struct GameplayStageBadgeView<'a> {
+    pub text: &'a Arc<str>,
+    pub round: Option<usize>,
     pub motion: GameplayHudMotion,
 }
 

@@ -566,19 +566,25 @@ steady-state actor-build timings using dev-profile libraries.
 
 ## Gameplay HUD
 
-The OpenITG theme draws a vertical Standard life bar and a two-decimal
-percentage score from the same stage values used by Simply Love. The shell
-selects these widgets once at stage entry. Draws occur inside the existing
-HUD and Lua score proxy layers, with the same profile visibility, physical
-player side, and gameplay state.
+OpenITG uses the native song meter artwork, difficulty tabs, stage badges,
+life meter textures, and Futurist Metallic score font. The shell selects these
+widgets at stage entry. They draw in the existing HUD, stage, and Lua score
+proxy layers using the shared song progress, physical player side, life, and
+score. The native fallback background uses the stage's background brightness
+when the song has no backdrop or active background change. The playfield
+continues to apply the configured profile background filter. An altered
+music rate is shown under the song meter.
 
 The effective `ScreenGameplay` metrics place the life frames 24 units in from
 the outside edges at y=270, with a 272-unit bottom-up fill. The frame leaves a
-16-unit inset above the painted area, corresponding to the transparent tip in
-the rotated reference graphic. One-side scores use the screen quarters with
-offsets of −20 for P1 and +18 for P2. Doubles uses offsets of ±140 from screen
-center. Both forms place the score at y=56. Animated life glow, song and stage
-banners, and specialized score and life modes remain open.
+16-unit inset above the painted area from the actual transparent texture
+border. The stream scrolls with song beats and uses the hot texture at full
+life. Single and versus use the screen quarter anchors for the score. Doubles
+uses anchors 140 units from center. The font draws at y=56 with the native
+20-unit inward offsets. The stage badge draws at bottom center after entry,
+with artwork for event and the numbered and final stages. Danger glow,
+the center-to-footer stage animation, and specialized score and life displays
+remain open.
 
 The effective Gameplay entry backdrop resolves to `_short`, an empty
 animation. Once stage loading finishes, the OpenITG playfield is visible
@@ -589,21 +595,27 @@ During the results transition they accelerate off by the same distance over 0.8
 seconds. Loading and restart use the shared covers. The shell applies song Lua's
 intro suppression and supplies the stage clock that also governs input and audio.
 
-Paired 600-frame Windows development runs at 854×480 used the same chart,
-configuration, and audio. OpenITG averaged 8.56 ms per frame before the change
-and 8.57 ms afterward. Mean draw time was 2.09 ms and 2.05 ms respectively.
-The settled life and score regions matched pixel for pixel.
+Vulkan and WASAPI fixture captures show the native HUD artwork at 640×480
+in regular and Event Mode and at 854×480 in single and versus. The regular
+launch displays Round 1 and Event Mode uses its own badge. The wide versus
+capture shows the mirrored difficulty tab and independent life and score
+positions. The native comparison uses the same Quartz chart. Note graphics
+follow the installed noteskin and the fixture's profile filter is visible.
 
 Actor tests cover native and wide layouts, entry and exit positions, failed
 life, and EX score tint. A song Lua fixture captures the animated OpenITG score
 with Underlay hidden and still draws the canonical player proxy. The existing
 independent footer fade test fails at 0.75 seconds on the known baseline.
 
-An actor-construction benchmark drew two scores per frame at 854×480. Across
-nine runs of 400,000 frames, the median was 1.05 μs for the Simply Love digits
-and 0.75 μs for the OpenITG inline label. Both used optimized widget code with
-shared dev-profile rendering dependencies and a reused actor buffer. Scene
-composition, GPU timing, and live frame pacing remain to be measured.
+The theme tests check meter fill and marker position, life geometry, score
+placement, and the round badge. The paired stage test feeds both themes the
+same inputs and compares score, life, and completion throughout play.
+
+Two alternating 600-frame solo runs at 854×480 held the chart, configuration,
+and audio fixed. Mean frame time was 8.56 ms before the artwork and
+8.61–8.62 ms after. Mean draw time moved from 1.80–1.87 ms to 1.91–1.92 ms.
+Actor-build p95 was 237–280 μs before and 277–301 μs after. Render storage
+recorded zero growth events in all four runs.
 
 ### Judgment and combo
 

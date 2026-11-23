@@ -1,16 +1,26 @@
-use deadlib_present::actors::{Actor, TextContent};
-use deadlib_present::space::{screen_height, screen_width};
+use std::sync::{Arc, OnceLock};
+
+use deadlib_present::actors::{Actor, InlineText, TextContent};
+use deadlib_present::color::rgba_hex;
+use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 use deadsync_core::hud_style::{FieldFeedbackStyle, HoldFeedbackStyle, TapFeedbackTween};
 use deadsync_theme::views::{
-    GameplayHoldAtlas, GameplayHud, GameplayHudMotion, GameplayLifeView, GameplayScoreView,
-    GameplayTapAtlas,
+    GameplayDifficultyView, GameplayHoldAtlas, GameplayHud, GameplayHudMotion, GameplayLifeView,
+    GameplayScoreView, GameplaySongMeterView, GameplayStageBadgeView, GameplayTapAtlas,
 };
 
-use crate::presentation::{Layout, WIDTH};
+use crate::presentation::{Layout, WIDTH, sprite};
+use crate::resources::{GAMEPLAY_SCORE_FONT, MENU_NORMAL_FONT};
 
 pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     standard_life: push_life_bar,
     percentage_score: push_score,
+    song_meter: push_song_meter,
+    difficulty: push_difficulty,
+    stage_badge: push_stage_badge,
+    fallback_background: push_fallback_background,
+    unjoined_seat: push_unjoined_seat,
+    autoplay_label: push_autoplay_label,
     field_feedback: &FIELD_FEEDBACK,
     default_tap_atlas: GameplayTapAtlas {
         key: "openitg/tap-results",
@@ -70,6 +80,7 @@ fn slide_offset(motion: GameplayHudMotion) -> f32 {
 }
 
 fn push_life_bar(actors: &mut Vec<Actor>, life: GameplayLifeView) {
+    const ROTATION: f32 = 90.0;
     let width = screen_width();
     let canvas = Layout::centered(width, screen_height());
     let slide = slide_offset(life.motion);
@@ -80,37 +91,59 @@ fn push_life_bar(actors: &mut Vec<Actor>, life: GameplayLifeView) {
         (0.0, 0.0, 24.0 - slide)
     };
     let layout = canvas.translated_x(screen_edge - canvas.position(canvas_edge, 0.0)[0]);
-    let frame = if life.failed {
-        [0.39, 0.23, 0.26, 1.0]
-    } else {
-        [0.56, 0.65, 0.72, 1.0]
-    };
-    // The reference frame has a transparent 16 px tip in its rotated orientation.
-    actors.push(layout.panel(x - 20.0, 129.0, [40.0, 298.0], frame, 90));
-    actors.push(layout.panel(x - 17.0, 132.0, [34.0, 292.0], [0.07, 0.11, 0.16, 1.0], 91));
-    actors.push(layout.panel(x - 9.0, 134.0, [18.0, 272.0], [0.12, 0.18, 0.23, 1.0], 92));
+    let center = layout.position(x, 270.0);
+    let mut background = sprite(
+        "openitg/gameplay-life-background.png",
+        center,
+        layout.size([272.0, 18.0]),
+        [1.0; 4],
+        90,
+    );
+    background.rotationz(ROTATION);
+    actors.push(background.build(0));
 
-    if !life.failed && life.level > 0.0 {
-        let height = 272.0 * life.level.min(1.0);
-        let fill = if life.hot {
-            [1.0, 0.31, 0.11, 1.0]
+    if !life.failed {
+        // Two strips of the same texture move along the bar every two song beats.
+        let key = if life.hot {
+            "openitg/gameplay-life-hot.png"
         } else {
-            [0.17, 0.77, 0.87, 1.0]
+            "openitg/gameplay-life-normal.png"
         };
-        actors.push(layout.panel(x - 9.0, 406.0 - height, [18.0, height], fill, 93));
-        actors.push(layout.panel(
-            x - 6.0,
-            406.0 - height,
-            [3.0, height],
-            [1.0, 1.0, 1.0, 0.3],
-            94,
-        ));
+        let phase = (life.song_beat * 0.25).rem_euclid(0.5);
+        for offset in [-0.5, 0.0, 0.5] {
+            let strip = phase + offset;
+            let start = strip.max(0.0);
+            let end = (strip + 0.5).min(life.level.min(1.0));
+            if end > start {
+                let y = 406.0 - (start + end) * 136.0;
+                let mut stream = sprite(
+                    key,
+                    layout.position(x, y),
+                    layout.size([(end - start) * 272.0, 18.0]),
+                    [1.0, 1.0, 1.0, 0.85],
+                    91,
+                );
+                stream.rotationz(ROTATION);
+                stream.customtexturerect([(start - strip) * 2.0, 0.0, (end - strip) * 2.0, 1.0]);
+                actors.push(stream.build(0));
+            }
+        }
     }
+    let mut frame = sprite(
+        "openitg/gameplay-life-frame.png",
+        center,
+        layout.size([314.0, 40.0]),
+        [1.0; 4],
+        92,
+    );
+    frame.rotationz(ROTATION);
+    actors.push(frame.build(0));
 
     if let Some(percent) = life.percent_label {
         let text = TextContent::inline_format(format_args!("{percent:.1}%"));
         if let Some(text) = text {
             let mut label = layout.text([x, 415.0], 0.5, text, 0.6, [0.92, 0.97, 1.0, 1.0]);
+            label.font(MENU_NORMAL_FONT);
             label.z(94);
             actors.push(label.build(0));
         }
@@ -128,26 +161,234 @@ fn push_score(actors: &mut Vec<Actor>, score: GameplayScoreView) {
     let layout = Layout::centered(width, screen_height()).translated_x(shift);
     let rgba = if score.ex {
         score.rgba
-    } else if score.p2 {
-        [0.40, 0.96, 0.37, score.rgba[3]]
     } else {
-        [0.98, 0.75, 0.10, score.rgba[3]]
+        const P1: [f32; 4] = rgba_hex("#FBBE03");
+        const P2: [f32; 4] = rgba_hex("#56FF48");
+        let mut rgba = if score.p2 { P2 } else { P1 };
+        rgba[3] = score.rgba[3];
+        rgba
     };
     let centi = (score.percent.max(0.0) * 100.0) as u32;
     let whole = centi / 100;
     let fraction = centi % 100;
     if let Some(text) = TextContent::inline_format(format_args!("{whole}.{fraction:02}%")) {
         let y = 56.0 - slide_offset(score.motion);
-        let mut label = layout.text([WIDTH * 0.5 + offset, y], 0.5, text, 1.1, rgba);
+        let inset = if score.p2 { -20.0 } else { 20.0 };
+        // The native percentage pads a single-digit score with one blank glyph.
+        let half_space = if whole < 10 { 12.0 } else { 0.0 };
+        let mut label = layout.text(
+            [WIDTH * 0.5 + offset + inset + half_space, y],
+            0.5,
+            text,
+            1.0,
+            rgba,
+        );
+        label.font(GAMEPLAY_SCORE_FONT);
+        label.shadowlength(4.0);
         label.z(90);
         actors.push(label.build(0));
     }
 }
 
+fn push_song_meter(actors: &mut Vec<Actor>, meter: GameplaySongMeterView<'_>) {
+    const X: f32 = WIDTH * 0.5;
+    const STREAM_WIDTH: f32 = 390.0;
+    let layout = Layout::centered(screen_width(), screen_height());
+    let y = 24.0 - slide_offset(meter.motion);
+    let center = layout.position(X, y);
+    if meter.progress > 0.0 {
+        let mut stream = sprite(
+            "openitg/gameplay-meter-stream.png",
+            center,
+            layout.size([STREAM_WIDTH, 18.0]),
+            [1.0; 4],
+            90,
+        );
+        stream.cropright(1.0 - meter.progress);
+        actors.push(stream.build(0));
+    }
+    let tip_x = X + (meter.progress - 0.5) * STREAM_WIDTH;
+    actors.push(
+        sprite(
+            "openitg/gameplay-tip.png",
+            layout.position(tip_x, y),
+            layout.size([4.0, 16.0]),
+            [1.0, 1.0, 1.0, 0.8],
+            90,
+        )
+        .build(0),
+    );
+    actors.push(
+        sprite(
+            "openitg/gameplay-meter-frame.png",
+            center,
+            layout.size([408.0, 34.0]),
+            [1.0; 4],
+            91,
+        )
+        .build(0),
+    );
+    let mut title = layout.text([X, y + 1.0], 0.5, meter.title.into(), 0.5, [1.0; 4]);
+    title.font(MENU_NORMAL_FONT);
+    title.maxwidth(layout.size([STREAM_WIDTH - 8.0, 0.0])[0]);
+    title.z(92);
+    actors.push(title.build(0));
+    if !meter.rate.is_empty() {
+        let mut rate = layout.text([X, y + 27.0], 0.5, meter.rate.into(), 0.5, [1.0; 4]);
+        rate.font(MENU_NORMAL_FONT);
+        rate.z(92);
+        actors.push(rate.build(0));
+    }
+}
+
+fn push_difficulty(actors: &mut Vec<Actor>, view: GameplayDifficultyView<'_>) {
+    const LABELS: [&str; 6] = ["Novice", "Easy", "Medium", "Hard", "Expert", "Edit"];
+    const COLORS: [[f32; 4]; 6] = [
+        rgba_hex("#E2ABF5"),
+        rgba_hex("#B2FFB5"),
+        rgba_hex("#F2F2AA"),
+        rgba_hex("#EBA4AB"),
+        rgba_hex("#AADCF2"),
+        rgba_hex("#F7F7F7"),
+    ];
+    let (row, _, _) = crate::select_music::difficulty_style(view.difficulty);
+    let label = LABELS[row];
+    let width = screen_width();
+    let direction = if view.p2 { -1.0 } else { 1.0 };
+    let position = if view.p2 { 0.91 } else { 0.09 };
+    let shift = (position - 0.5) * width - direction * slide_offset(view.motion) * width / 300.0;
+    let layout = Layout::centered(width, screen_height()).translated_x(shift);
+    let x = WIDTH * 0.5;
+    let mut frame = sprite(
+        "openitg/gameplay-difficulty.png",
+        layout.position(x, 25.0),
+        layout.size([114.0, 40.0]),
+        [1.0; 4],
+        90,
+    );
+    frame.customtexturerect([0.0, row as f32 / 6.0, 1.0, (row + 1) as f32 / 6.0]);
+    frame.zoomx(direction);
+    actors.push(frame.build(0));
+    let text = if row == 5 && !view.description.is_empty() {
+        let end = view.description.floor_char_boundary(InlineText::CAPACITY);
+        TextContent::inline_str(&view.description[..end]).unwrap_or_else(|| label.into())
+    } else {
+        label.into()
+    };
+    let rgba = COLORS[row];
+    let mut name = layout.text([x - direction * 14.0, 25.0], 0.5, text, 0.5, rgba);
+    name.font(MENU_NORMAL_FONT);
+    name.maxwidth(layout.size([61.0, 0.0])[0]);
+    name.shadowlength(2.0);
+    name.z(91);
+    actors.push(name.build(0));
+    let text = TextContent::inline_u32(view.meter);
+    let mut meter = layout.text([x + direction * 30.0, 25.0], 0.5, text, 0.5, rgba);
+    meter.font(MENU_NORMAL_FONT);
+    meter.shadowlength(2.0);
+    meter.z(91);
+    actors.push(meter.build(0));
+}
+
+fn push_stage_badge(actors: &mut Vec<Actor>, view: GameplayStageBadgeView<'_>) {
+    let artwork = match (view.round, view.text.as_ref()) {
+        (Some(1), _) | (None, "STAGE 1") => Some(("openitg/gameplay-stage-1.png", [498.0, 236.0])),
+        (Some(2), _) | (None, "STAGE 2") => Some(("openitg/gameplay-stage-2.png", [554.0, 232.0])),
+        (Some(3), _) | (None, "STAGE 3") => Some(("openitg/gameplay-stage-3.png", [562.0, 236.0])),
+        (Some(4), _) | (None, "STAGE 4") => Some(("openitg/gameplay-stage-4.png", [556.0, 226.0])),
+        (Some(5), _) | (None, "STAGE 5") => Some(("openitg/gameplay-stage-5.png", [556.0, 236.0])),
+        (Some(6), _) | (None, "STAGE 6") => Some(("openitg/gameplay-stage-6.png", [552.0, 228.0])),
+        (None, "FINAL STAGE") => Some(("openitg/gameplay-stage-final.png", [470.0, 284.0])),
+        (None, "EVENT") => Some(("openitg/gameplay-stage-event.png", [430.0, 280.0])),
+        _ => None,
+    };
+    let layout = Layout::centered(screen_width(), screen_height());
+    let y = 440.0
+        + if matches!(view.motion, GameplayHudMotion::Leaving { .. }) {
+            slide_offset(view.motion) * 1.5
+        } else {
+            0.0
+        };
+    if let Some((texture, size)) = artwork {
+        actors.push(
+            sprite(
+                texture,
+                layout.position(WIDTH * 0.5, y),
+                layout.size(size.map(|axis| axis * 0.25)),
+                [1.0; 4],
+                105,
+            )
+            .build(0),
+        );
+    } else {
+        let text = view
+            .round
+            .and_then(|round| TextContent::inline_format(format_args!("ROUND {round}")))
+            .unwrap_or_else(|| view.text.into());
+        let mut label = layout.text([WIDTH * 0.5, y], 0.5, text, 0.65, [1.0; 4]);
+        label.font(MENU_NORMAL_FONT);
+        label.shadowlength(2.0);
+        label.z(105);
+        actors.push(label.build(0));
+    }
+}
+
+fn push_fallback_background(actors: &mut Vec<Actor>, brightness: f32) {
+    static KEY: OnceLock<Arc<str>> = OnceLock::new();
+    let height = screen_height();
+    let mut image = deadlib_assets::present_dsl::cover_sprite(
+        KEY.get_or_init(|| Arc::from("openitg/gameplay-fallback.png"))
+            .clone(),
+        screen_center_x(),
+        height * 0.5,
+        screen_width(),
+        height,
+        1.0,
+        -100,
+    );
+    if let Actor::Sprite { tint, .. } = &mut image {
+        *tint = [1.0, 1.0, 1.0, brightness];
+    }
+    actors.push(image);
+}
+
+fn push_unjoined_seat(actors: &mut Vec<Actor>, p2: bool) {
+    let width = screen_width();
+    let height = screen_height();
+    let layout = Layout::centered(width, height);
+    let scale = layout.size([1.0, 1.0])[0];
+    let mut label = layout.text(
+        [WIDTH * 0.5, 468.0],
+        if p2 { 1.0 } else { 0.0 },
+        "NOT PRESENT".into(),
+        0.5,
+        [1.0; 4],
+    );
+    let x = if p2 {
+        width - 42.0 * scale
+    } else {
+        42.0 * scale
+    };
+    label.xy(x, height - 9.0 * scale);
+    label.valign(1.0);
+    label.font(MENU_NORMAL_FONT);
+    label.z(110);
+    actors.push(label.build(0));
+}
+
+fn push_autoplay_label(actors: &mut Vec<Actor>) {
+    let layout = Layout::centered(screen_width(), screen_height());
+    let mut label = layout.text([WIDTH * 0.5, 382.0], 0.5, "AutoPlay".into(), 0.85, [1.0; 4]);
+    label.font(MENU_NORMAL_FONT);
+    label.shadowlength(2.0);
+    label.z(110);
+    actors.push(label.build(0));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_present::actors::SizeSpec;
+    use deadlib_present::actors::{SizeSpec, SpriteSource};
     use deadlib_present::space::{Metrics, with_current_metrics};
 
     #[test]
@@ -160,6 +401,7 @@ mod tests {
                         level: 0.25,
                         failed: false,
                         hot: false,
+                        song_beat: 0.0,
                         percent_label: Some(25.0),
                         motion: GameplayHudMotion::Settled,
                     };
@@ -169,17 +411,18 @@ mod tests {
                         &actors[0],
                         Actor::Sprite {
                             offset,
-                            size: [SizeSpec::Px(40.0), SizeSpec::Px(298.0)],
+                            size: [SizeSpec::Px(272.0), SizeSpec::Px(18.0)],
                             ..
-                        } if *offset == [x - 20.0, 129.0]
+                        } if *offset == [x, 270.0]
                     ));
                     assert!(matches!(
-                        &actors[3],
+                        &actors[1],
                         Actor::Sprite {
                             offset,
-                            size: [SizeSpec::Px(18.0), SizeSpec::Px(68.0)],
+                            size: [SizeSpec::Px(68.0), SizeSpec::Px(18.0)],
+                            rot_z_deg: 90.0,
                             ..
-                        } if *offset == [x - 9.0, 338.0]
+                        } if *offset == [x, 372.0]
                     ));
                     assert!(matches!(
                         actors.last(),
@@ -196,21 +439,68 @@ mod tests {
                             ..life
                         },
                     );
-                    assert_eq!(actors.len(), 3);
+                    assert_eq!(actors.len(), 2);
                 }
             });
         }
     }
 
     #[test]
+    fn song_meter_crops_its_stream_and_places_the_tip_at_the_same_progress() {
+        with_current_metrics(Metrics::centered(640.0, 480.0), || {
+            let mut actors = Vec::new();
+            push_song_meter(
+                &mut actors,
+                GameplaySongMeterView {
+                    title: &Arc::from("Quartz"),
+                    rate: &Arc::from(""),
+                    progress: 0.75,
+                    motion: GameplayHudMotion::Settled,
+                },
+            );
+            assert!(matches!(
+                &actors[0],
+                Actor::Sprite {
+                    cropright: 0.25,
+                    ..
+                }
+            ));
+            assert!(matches!(
+                &actors[1],
+                Actor::Sprite { offset, .. } if *offset == [417.5, 24.0]
+            ));
+        });
+    }
+
+    #[test]
+    fn round_badge_uses_the_cabinet_stage_number() {
+        with_current_metrics(Metrics::centered(640.0, 480.0), || {
+            let mut actors = Vec::new();
+            push_stage_badge(
+                &mut actors,
+                GameplayStageBadgeView {
+                    text: &Arc::from("EVENT"),
+                    round: Some(1),
+                    motion: GameplayHudMotion::Settled,
+                },
+            );
+            assert!(matches!(
+                &actors[0],
+                Actor::Sprite { source: SpriteSource::TextureStatic("openitg/gameplay-stage-1.png"), offset, .. }
+                    if *offset == [320.0, 440.0]
+            ));
+        });
+    }
+
+    #[test]
     fn percentage_follows_screen_width_and_keeps_stage_score_and_ex_tint() {
         for (width, p2, doubles, x) in [
-            (640.0, false, false, 140.0),
-            (640.0, true, false, 498.0),
-            (854.0, false, false, 193.5),
-            (854.0, true, false, 658.5),
-            (854.0, false, true, 287.0),
-            (854.0, true, true, 567.0),
+            (640.0, false, false, 160.0),
+            (640.0, true, false, 478.0),
+            (854.0, false, false, 213.5),
+            (854.0, true, false, 638.5),
+            (854.0, false, true, 307.0),
+            (854.0, true, true, 547.0),
         ] {
             with_current_metrics(Metrics::centered(width, 480.0), || {
                 let mut actors = Vec::new();
@@ -275,7 +565,7 @@ mod tests {
                     100.0,
                 ),
             ] {
-                for (p2, x, direction) in [(false, 4.0, -1.0), (true, 596.0, 1.0)] {
+                for (p2, x, direction) in [(false, 24.0, -1.0), (true, 616.0, 1.0)] {
                     let mut actors = Vec::new();
                     push_life_bar(
                         &mut actors,
@@ -284,6 +574,7 @@ mod tests {
                             level: 0.5,
                             failed: false,
                             hot: false,
+                            song_beat: 0.0,
                             percent_label: None,
                             motion,
                         },

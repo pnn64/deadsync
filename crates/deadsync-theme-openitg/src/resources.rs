@@ -9,6 +9,7 @@ pub(crate) const TITLE_STREAK: &str = "openitg/title-streak.png";
 pub(crate) const TITLE_FONT: &str = "openitg/title";
 pub(crate) const MENU_HEADING_FONT: &str = "openitg/eurostile-glow";
 pub(crate) const MENU_NORMAL_FONT: &str = "openitg/eurostile";
+pub(crate) const GAMEPLAY_SCORE_FONT: &str = "openitg/futurist-metalic";
 
 macro_rules! png {
     ($name:literal) => {
@@ -61,9 +62,31 @@ impl ThemeResources for OpenItgTheme {
                     ini_path: "assets/fonts/openitg/_eurostile normal.ini",
                     fallback_font_name: Some(TITLE_FONT),
                 },
+                FontAssetSpec {
+                    name: GAMEPLAY_SCORE_FONT,
+                    ini_path: "assets/fonts/openitg/_futurist metalic.ini",
+                    fallback_font_name: Some(MENU_NORMAL_FONT),
+                },
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("gameplay-difficulty"),
+                png!("gameplay-fallback"),
+                png!("gameplay-life-background"),
+                png!("gameplay-life-frame"),
+                png!("gameplay-life-hot"),
+                png!("gameplay-life-normal"),
+                png!("gameplay-meter-frame"),
+                png!("gameplay-meter-stream"),
+                png!("gameplay-stage-1"),
+                png!("gameplay-stage-2"),
+                png!("gameplay-stage-3"),
+                png!("gameplay-stage-4"),
+                png!("gameplay-stage-5"),
+                png!("gameplay-stage-6"),
+                png!("gameplay-stage-event"),
+                png!("gameplay-stage-final"),
+                png!("gameplay-tip"),
                 EmbeddedPng {
                     key: TITLE_BACKDROP,
                     bytes: include_bytes!("../assets/title-backdrop.png"),

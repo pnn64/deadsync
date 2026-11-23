@@ -10033,7 +10033,10 @@ impl App {
                 } else if cfg.keyboard_features && self.state.session.gameplay_restart_count > 0 {
                     GameplayStageIntro::Restart(self.state.session.gameplay_restart_count)
                 } else {
-                    GameplayStageIntro::Song
+                    GameplayStageIntro::Song {
+                        round: (!cfg.coin.event_mode())
+                            .then(|| self.state.session.active_stage_number()),
+                    }
                 };
                 let combo_carry = self.state.session.combo_carry;
                 let stage_options = start.options;

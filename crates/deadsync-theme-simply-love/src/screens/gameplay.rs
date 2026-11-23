@@ -117,9 +117,11 @@ impl crate::SimplyLoveTheme {
         move |stage, assets, view, scores| {
             init.scores = scores;
             let intro = match view.intro {
-                GameplayStageIntro::Song => deadsync_simfile::event_intro::song_event_name(stage.song())
-                    .map(Arc::from)
-                    .unwrap_or_else(|| Arc::from("EVENT")),
+                GameplayStageIntro::Song { .. } => {
+                    deadsync_simfile::event_intro::song_event_name(stage.song())
+                        .map(Arc::from)
+                        .unwrap_or_else(|| Arc::from("EVENT"))
+                }
                 GameplayStageIntro::Course { number, total: Some(total) } => {
                     let total = total.max(1);
                     Arc::from(format!("STAGE {number} / {total}"))
@@ -145,7 +147,12 @@ impl crate::SimplyLoveTheme {
                 },
             });
             let banner = view.course.as_ref().and_then(|course| course.banner_path.clone());
-            GameplayPresentation::from_stage(stage, assets, intro, status, course, banner, init)
+            let mut presentation =
+                GameplayPresentation::from_stage(stage, assets, intro, status, course, banner, init);
+            if let GameplayStageIntro::Song { round } = view.intro {
+                presentation.stage_round = round;
+            }
+            presentation
         }
     }
 }
@@ -470,7 +477,10 @@ impl DensityGraphRenderState {
     }
 }
 
-use deadsync_theme::views::{GameplayHud, GameplayHudMotion, GameplayLifeView, GameplayScoreView};
+use deadsync_theme::views::{
+    GameplayDifficultyView, GameplayHud, GameplayHudMotion, GameplayLifeView, GameplayScoreView,
+    GameplaySongMeterView, GameplayStageBadgeView,
+};
 pub use deadsync_theme::views::{SMX_SENSOR_PANEL_COUNT, SmxSensorPadView, SmxSensorPanelView};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -664,6 +674,7 @@ pub struct GameplayPresentation {
     pub step_stats_extra_resolved: [crate::step_stats_gifs::ResolvedStepStatsExtra; MAX_PLAYERS],
     pub song_full_title: Arc<str>,
     pub stage_intro_text: Arc<str>,
+    stage_round: Option<usize>,
     pub hide_song_intro: bool,
     pub replay_status_text: Option<Arc<str>>,
     pub course_display_info: Option<CourseDisplayInfo>,
@@ -1074,6 +1085,7 @@ impl GameplayPresentation {
             step_stats_extra_resolved,
             song_full_title,
             stage_intro_text,
+            stage_round: None,
             hide_song_intro,
             replay_status_text,
             course_display_info,
@@ -1661,12 +1673,29 @@ fn intro_text_target_x(
         .mul_add(side_sign, screen_center_x())
 }
 
-fn push_stage_label(actors: &mut Vec<Actor>, state: &impl GameplayScreenView, asset_manager: &AssetManager) {
-    let intro_text = state.presentation().stage_intro_text.as_ref();
+fn push_stage_label(
+    actors: &mut Vec<Actor>,
+    state: &impl GameplayScreenView,
+    asset_manager: &AssetManager,
+    motion: GameplayHudMotion,
+) {
+    let presentation = state.presentation();
+    let intro_text = presentation.stage_intro_text.as_ref();
     let is_restart_label = intro_text.starts_with("RESTART ");
     if intro_text.is_empty()
         || (!is_restart_label && state.total_elapsed_in_screen() < INTRO_TEXT_SETTLE_SECONDS)
     {
+        return;
+    }
+    if let Some(hud) = &presentation.hud {
+        (hud.stage_badge)(
+            actors,
+            GameplayStageBadgeView {
+                text: &presentation.stage_intro_text,
+                round: presentation.stage_round,
+                motion,
+            },
+        );
         return;
     }
     let text_x = intro_text_target_x(
@@ -2850,17 +2879,23 @@ fn sync_overlay_text(state: &impl GameplayScreenView) -> Option<(Arc<str>, usize
 
 fn push_sync_overlay(actors: &mut Vec<Actor>, state: &impl GameplayScreenView) {
     let status_line_count = if let Some((status_text, line_count)) = sync_overlay_text(state) {
-        actors.push(act!(text:
-            font("miso"):
-            settext(status_text):
-            align(0.5, 0.5):
-            xy(screen_center_x(), screen_center_y() + 150.0):
-            horizalign(center):
-            shadowlength(2.0):
-            strokecolor(0.0, 0.0, 0.0, 1.0):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            z(TOP_SCREEN_HUD_Z)
-        ));
+        if let Some(hud) = &state.presentation().hud
+            && status_text.as_ref() == "AutoPlay"
+        {
+            (hud.autoplay_label)(actors);
+        } else {
+            actors.push(act!(text:
+                font("miso"):
+                settext(status_text):
+                align(0.5, 0.5):
+                xy(screen_center_x(), screen_center_y() + 150.0):
+                horizalign(center):
+                shadowlength(2.0):
+                strokecolor(0.0, 0.0, 0.0, 1.0):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(TOP_SCREEN_HUD_Z)
+            ));
+        }
         line_count
     } else {
         0
@@ -3281,10 +3316,18 @@ fn push_current_bgchange_media(
     w: f32,
     h: f32,
 ) {
-    if &*state.presentation().background_texture_key == "__black" {
+    let presentation = state.presentation();
+    let change = state.song_backgrounds().active_change();
+    if &*presentation.background_texture_key == "__black" {
+        if let Some(hud) = &presentation.hud
+            && presentation.song_background_key.is_none()
+            && change.is_none()
+            && bg_brightness > 0.0
+        {
+            (hud.fallback_background)(actors, bg_brightness);
+        }
         return;
     }
-    let change = state.song_backgrounds().active_change();
     if change.is_some_and(|change| change.effect_is("SongBgWithMovieViz")) {
         if let Some(key) = state.presentation().song_background_key.as_ref() {
             actors.push(background_media_sprite(
@@ -3719,6 +3762,9 @@ pub fn frame_layers<'a>(
             }
         }
         ScreenLayer::Header => {
+            if presentation.hud.is_some() {
+                return;
+            }
             let header_rgba = gameplay_header_rgba(policy.background_color);
             presentation_skeleton.push(STATIC_HEADER, actors, |actors| {
                 actors.push(act!(quad:
@@ -3922,8 +3968,26 @@ pub fn frame_layers<'a>(
                 let profile = &state.profiles()[player_idx];
                 // Difficulty Box
                 let y = DIFFICULTY_METER_Y;
-                let static_slot = [STATIC_DIFFICULTY_P1, STATIC_DIFFICULTY_P2][player_idx.min(1)];
-                presentation_skeleton.push(static_slot, actors, |actors| {
+                let chart = &state.charts()[player_idx];
+                let hud_golf = presentation.hud.as_ref().and_then(|_| {
+                    crate::screens::components::gameplay::golf::score(state, player_idx)
+                });
+                if let Some(hud) = &presentation.hud
+                    && hud_golf.is_none()
+                {
+                    (hud.difficulty)(
+                        actors,
+                        GameplayDifficultyView {
+                            p2: player_side == profile_data::PlayerSide::P2,
+                            difficulty: &chart.difficulty,
+                            description: &chart.description,
+                            meter: chart.meter,
+                            motion: view.hud_motion,
+                        },
+                    );
+                } else {
+                    let static_slot = [STATIC_DIFFICULTY_P1, STATIC_DIFFICULTY_P2][player_idx.min(1)];
+                    presentation_skeleton.push(static_slot, actors, |actors| {
                 let diff_x = difficulty_meter_x(
                     state,
                     profile,
@@ -3933,8 +3997,9 @@ pub fn frame_layers<'a>(
                     presentation.notefield_width(player_idx),
                     diff_x,
                 );
-                let chart = &state.charts()[player_idx];
-                if let Some((_, par)) = crate::screens::components::gameplay::golf::score(state, player_idx) {
+                if let Some((_, par)) = hud_golf.or_else(|| {
+                    crate::screens::components::gameplay::golf::score(state, player_idx)
+                }) {
                     crate::screens::components::gameplay::golf::push_par_badge(
                         actors, presentation.machine_font(), par, [diff_x, y],
                     );
@@ -3975,7 +4040,8 @@ pub fn frame_layers<'a>(
                         z(90)
                     ));
                 }
-            });
+                    });
+                }
 
                 // Score Display
                 let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
@@ -4122,8 +4188,8 @@ pub fn frame_layers<'a>(
                     }
                 }
             }
-            // Current BPM Display (1:1 with Simply Love)
-            {
+            // Simply Love shows live BPM in its own header.
+            if presentation.hud.is_none() {
                 let display_bpm = display_bpm(state.current_bpm_display(), state.music_rate());
                 let bpm_text = bpm_text.resolve(display_bpm, policy.show_bpm_decimal);
                 // Final world-space positions derived from analyzing the SM Lua transforms.
@@ -4159,8 +4225,22 @@ pub fn frame_layers<'a>(
                     ));
                 }
             }
-            // Song Title Box (SongMeter)
-            {
+            let progress = song_meter_progress(
+                song_time_ns_to_seconds(state.current_music_time_ns()),
+                state.song().precise_first_second(),
+                state.song().precise_last_second(),
+            );
+            if let Some(hud) = &presentation.hud {
+                (hud.song_meter)(
+                    actors,
+                    GameplaySongMeterView {
+                        title: &presentation.song_full_title,
+                        rate: &presentation.rate_text,
+                        progress,
+                        motion: view.hud_motion,
+                    },
+                );
+            } else {
                 let w = widescale(310.0, 417.0);
                 let h = 22.0;
                 let box_cx = screen_center_x();
@@ -4181,11 +4261,6 @@ pub fn frame_layers<'a>(
                     horizalign(center): z(93)
                 ));
             });
-                let progress = song_meter_progress(
-                    song_time_ns_to_seconds(state.current_music_time_ns()),
-                    state.song().precise_first_second(),
-                    state.song().precise_last_second(),
-                );
                 if progress > f32::EPSILON {
                     actors.push(act!(quad:
                     align(0.0, 0.5): xy(box_left + 2.0, box_cy): zoomto((w - 4.0) * progress, h - 4.0):
@@ -4269,6 +4344,7 @@ pub fn frame_layers<'a>(
                                 level: life_for_render,
                                 failed: dead,
                                 hot: is_hot,
+                                song_beat: state.current_beat(),
                                 percent_label: (profile.show_life_percent
                                     && show_standard_life_percent)
                                     .then_some(actual_life * 100.0),
@@ -4650,9 +4726,15 @@ pub fn frame_layers<'a>(
                 0.5,
             );
         }
-        ScreenLayer::Stage => push_stage_label(actors, state, asset_manager),
+        ScreenLayer::Stage => push_stage_label(actors, state, asset_manager, view.hud_motion),
         ScreenLayer::System => {
             push_system_profile_footer(actors, state, visual_policy, presentation_skeleton);
+            if let Some(hud) = &presentation.hud
+                && play_style.is_single()
+                && state.num_players() == 1
+            {
+                (hud.unjoined_seat)(actors, !runtime_player_is_p2);
+            }
             push_sync_overlay(actors, state);
         }
     }
