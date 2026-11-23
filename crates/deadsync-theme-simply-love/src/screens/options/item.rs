@@ -85,6 +85,7 @@ pub enum ItemId {
     GfxHideMouseCursor,
     GfxVisualDelay,
     GfxOverscanAdjustment,
+    GfxAdvanced,
 
     // Input Options submenu (launcher)
     InpConfigureMappings,

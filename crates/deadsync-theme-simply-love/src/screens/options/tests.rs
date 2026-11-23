@@ -44,8 +44,16 @@ fn init_with_config_and_audio(
     config: config::app_config::Config,
     audio_options: AudioOptionsView,
 ) -> State {
-    super::init(OptionsInitView {
+    super::init(options_init_view(config, audio_options))
+}
+
+fn options_init_view(
+    config: config::app_config::Config,
+    audio_options: AudioOptionsView,
+) -> OptionsInitView {
+    OptionsInitView {
         config,
+        split_graphics: false,
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
         ),
@@ -69,7 +77,20 @@ fn init_with_config_and_audio(
         smx_gifs: deadsync_theme::views::SmxGifCatalogView::default(),
         score_import_profiles: Vec::new(),
         bookkeeping: crate::views::BookkeepingView::default(),
-    })
+    }
+}
+
+fn init_with_split_graphics() -> State {
+    let mut view = options_init_view(
+        config::app_config::Config::default(),
+        AudioOptionsView::default(),
+    );
+    view.split_graphics = true;
+    view.graphics.width = 1280;
+    view.graphics.height = 720;
+    view.graphics.aspect_ratio = 16.0 / 9.0;
+    view.graphics.vsync = true;
+    super::init(view)
 }
 
 #[test]
@@ -367,6 +388,7 @@ fn pack_sync_policy_comes_from_prepared_profile_and_current_options() {
 fn smx_gif_choices_come_from_shell_catalog() {
     let state = super::init(OptionsInitView {
         config: config::app_config::Config::default(),
+        split_graphics: false,
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
         ),
@@ -1080,6 +1102,7 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
             note_scroll_clock: config::audio::NoteScrollClock::FrameStable,
             ..config::app_config::Config::default()
         },
+        split_graphics: false,
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
         ),
@@ -3536,11 +3559,11 @@ fn borrowed_row_layout_does_not_clone_shared_geometry() {
 
 #[test]
 fn folders_submenu_is_registered() {
-    assert!(SubmenuKind::ALL.contains(&SubmenuKind::Folders));
+    assert!(SubmenuKind::STORED.contains(&SubmenuKind::Folders));
     assert_eq!(submenu_rows(SubmenuKind::Folders).len(), 8);
     // FOLDERS_OPTIONS_ITEMS has 8 folder entries plus the Exit row.
     assert_eq!(submenu_items(SubmenuKind::Folders).len(), 9);
-    assert_eq!(submenu_title(SubmenuKind::Folders), "FOLDERS");
+    assert_eq!(submenu_title(&init(), SubmenuKind::Folders), "FOLDERS");
 }
 
 #[test]
@@ -3920,6 +3943,14 @@ fn replaygain_progress_replaces_completed_song_scan_progress() {
 /// Run pending submenu fades to completion (cap iterations so a stuck transition
 /// fails the test rather than hanging).
 fn settle_submenu(state: &mut State, asset_manager: &AssetManager) {
+    settle_submenu_with_effects(state, asset_manager, &mut Vec::new());
+}
+
+fn settle_submenu_with_effects(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    effects: &mut Vec<ThemeEffect>,
+) {
     for _ in 0..16 {
         if matches!(state.submenu_transition, SubmenuTransition::None) {
             return;
@@ -3929,7 +3960,7 @@ fn settle_submenu(state: &mut State, asset_manager: &AssetManager) {
             SUBMENU_FADE_DURATION + 0.001,
             asset_manager,
             &SmxAssignmentView::default(),
-            &mut Vec::new(),
+            effects,
         );
     }
     panic!("submenu transition did not settle");
@@ -4063,6 +4094,172 @@ fn graphics_aspect_change_is_independent_of_resolution() {
             })
         )] if (*ratio - 4.0 / 3.0).abs() <= f32::EPSILON
     ));
+}
+
+#[test]
+fn split_graphics_applies_both_pages_once_on_exit() {
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_split_graphics();
+    let mut effects = Vec::new();
+    let basic = SubmenuKind::GraphicsBasic;
+    let advanced = SubmenuKind::Graphics;
+    state.selected = visible_items(&state)
+        .iter()
+        .position(|item| item.id == ItemId::GraphicsOptions)
+        .expect("Graphics Options should be listed");
+    activate_current_selection(&mut state, &asset_manager);
+    settle_submenu_with_effects(&mut state, &asset_manager, &mut effects);
+    assert_eq!(state.view, OptionsView::Submenu(basic));
+    assert_eq!(state.submenu_parent_kind, None);
+    let visible: Vec<_> = submenu_visible_row_indices(&state, basic, GRAPHICS_OPTIONS_ROWS)
+        .into_iter()
+        .map(|index| GRAPHICS_OPTIONS_ROWS[index].id)
+        .collect();
+    assert_eq!(
+        visible,
+        [
+            SubRowId::DisplayMode,
+            SubRowId::DisplayAspectRatio,
+            SubRowId::DisplayResolution,
+            SubRowId::AdvancedGraphics,
+        ]
+    );
+
+    select_visible_row(&mut state, basic, SubRowId::DisplayAspectRatio);
+    effects.extend(press(&mut state, &asset_manager, VirtualAction::p1_right));
+    let link = select_visible_row(&mut state, basic, SubRowId::AdvancedGraphics);
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
+    settle_submenu_with_effects(&mut state, &asset_manager, &mut effects);
+    assert_eq!(state.view, OptionsView::Submenu(advanced));
+    assert_eq!(state.submenu_parent_kind, Some(basic));
+    assert_eq!(selected_aspect_ratio(&state), 16.0 / 10.0);
+
+    select_visible_row(&mut state, advanced, SubRowId::PresentMode);
+    effects.extend(press(&mut state, &asset_manager, VirtualAction::p1_right));
+    state.sub_selected = submenu_total_rows(&state, advanced) - 1;
+    activate_current_selection(&mut state, &asset_manager);
+    settle_submenu_with_effects(&mut state, &asset_manager, &mut effects);
+    assert_eq!(state.view, OptionsView::Submenu(basic));
+    assert_eq!(state.submenu_parent_kind, None);
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, basic, state.sub_selected),
+        Some(link)
+    );
+    assert_eq!(
+        selected_present_config(&state),
+        (false, PresentPolicyChoice::Mailbox)
+    );
+    assert_eq!(selected_aspect_ratio(&state), 16.0 / 10.0);
+    assert!(effects.iter().all(|effect| !matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Graphics(_))
+    )));
+
+    cancel_current_view(&mut state);
+    settle_submenu_with_effects(&mut state, &asset_manager, &mut effects);
+    assert_eq!(state.view, OptionsView::Main);
+    let requests: Vec<_> = effects
+        .iter()
+        .filter_map(|effect| match effect {
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Graphics(request)) => {
+                Some(*request)
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(matches!(
+        requests.as_slice(),
+        [deadsync_theme::GraphicsRequest {
+            aspect_ratio: Some(aspect_ratio),
+            vsync: Some(false),
+            ..
+        }] if *aspect_ratio == 16.0 / 10.0
+    ));
+}
+
+#[test]
+fn split_graphics_overscan_return_preserves_pending_display_choices() {
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_split_graphics();
+    let basic = SubmenuKind::GraphicsBasic;
+    let advanced = SubmenuKind::Graphics;
+    let monitor_specs = vec![
+        GraphicsMonitorView {
+            name: "Cabinet".to_owned(),
+            modes: Vec::new(),
+        },
+        GraphicsMonitorView {
+            name: "Projector".to_owned(),
+            modes: [(1280, 720, 60_000), (1600, 900, 75_000)]
+                .map(|(width, height, refresh_rate_millihertz)| {
+                    deadsync_theme::views::GraphicsVideoModeView {
+                        width,
+                        height,
+                        refresh_rate_millihertz,
+                    }
+                })
+                .to_vec(),
+        },
+    ];
+    update_monitor_specs(&mut state, monitor_specs.clone());
+    state.view = OptionsView::Submenu(basic);
+    let row = select_visible_row(&mut state, basic, SubRowId::DisplayMode);
+    let choices = row_choices(&state, basic, GRAPHICS_OPTIONS_ROWS, row);
+    assert_eq!(choices.len(), 3);
+    assert_eq!(choices[0].as_ref(), "Cabinet");
+    assert_eq!(choices[1].as_ref(), "Projector");
+    press(&mut state, &asset_manager, VirtualAction::p1_left);
+    assert_eq!(selected_display_monitor(&state), 1);
+    assert_eq!(
+        selected_display_mode(&state),
+        DisplayModeChoice::Fullscreen(FullscreenChoice::Exclusive)
+    );
+
+    let row = select_visible_row(&mut state, basic, SubRowId::DisplayResolution);
+    let choices = row_choices(&state, basic, GRAPHICS_OPTIONS_ROWS, row);
+    assert_eq!(choices, ["1280x720", "1600x900"]);
+    press(&mut state, &asset_manager, VirtualAction::p1_right);
+    assert_eq!(selected_resolution(&state), (1600, 900));
+    assert_eq!(state.refresh_rate_choices, [0, 75_000]);
+
+    select_visible_row(&mut state, basic, SubRowId::AdvancedGraphics);
+    activate_current_selection(&mut state, &asset_manager);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(advanced));
+    select_visible_row(&mut state, advanced, SubRowId::RefreshRate);
+    press(&mut state, &asset_manager, VirtualAction::p1_right);
+    let overscan = select_visible_row(&mut state, advanced, SubRowId::OverscanAdjustment);
+    assert!(matches!(
+        activate_current_selection(&mut state, &asset_manager),
+        ThemeEffect::Navigate(Screen::OverscanAdjustment)
+    ));
+
+    open_graphics_submenu(&mut state);
+    update_monitor_specs(&mut state, monitor_specs);
+    assert_eq!(state.view, OptionsView::Submenu(advanced));
+    assert_eq!(state.submenu_parent_kind, Some(basic));
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, advanced, state.sub_selected),
+        Some(overscan)
+    );
+    assert_eq!(
+        selected_display_mode(&state),
+        DisplayModeChoice::Fullscreen(FullscreenChoice::Exclusive)
+    );
+    assert_eq!(selected_display_monitor(&state), 1);
+    assert_eq!(selected_resolution(&state), (1600, 900));
+    assert_eq!(selected_refresh_rate_millihertz(&state), 75_000);
+
+    // The fallback display remains editable while the host has no monitor modes.
+    let mut fallback = init_with_split_graphics();
+    fallback.view = OptionsView::Submenu(basic);
+    select_visible_row(&mut fallback, basic, SubRowId::DisplayMode);
+    press(&mut fallback, &asset_manager, VirtualAction::p1_left);
+    update_monitor_specs(&mut fallback, Vec::new());
+    assert_eq!(
+        selected_display_mode(&fallback),
+        DisplayModeChoice::Fullscreen(FullscreenChoice::Exclusive)
+    );
 }
 
 #[test]
@@ -4421,6 +4618,58 @@ fn search_jump_out_of_graphics_goes_through_main_list() {
         submenu_visible_row_to_actual(&state, SubmenuKind::Machine, state.sub_selected),
         Some(row)
     );
+}
+
+#[test]
+fn split_graphics_search_links_both_pages_without_applying_pending_changes() {
+    search_i18n();
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_split_graphics();
+    let basic = SubmenuKind::GraphicsBasic;
+    let advanced = SubmenuKind::Graphics;
+    let aspect = row_target(basic, SubRowId::DisplayAspectRatio);
+    let present = row_target(advanced, SubRowId::PresentMode);
+    let hidden = [
+        row_target(advanced, SubRowId::DisplayAspectRatio),
+        row_target(basic, SubRowId::PresentMode),
+    ];
+    let matches = search::rebuild_matches(&state, "");
+    assert!(matches.iter().any(|entry| entry.target == aspect));
+    assert!(matches.iter().any(|entry| entry.target == present));
+    assert!(matches.iter().all(|entry| !hidden.contains(&entry.target)));
+
+    search::jump(&mut state, present);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(advanced));
+    assert_eq!(state.submenu_parent_kind, Some(basic));
+    cancel_current_view(&mut state);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(basic));
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, basic, state.sub_selected),
+        row_position(GRAPHICS_OPTIONS_ROWS, SubRowId::AdvancedGraphics)
+    );
+
+    search::jump(&mut state, aspect);
+    press(&mut state, &asset_manager, VirtualAction::p1_right);
+    search::jump(&mut state, present);
+    assert_eq!(state.submenu_transition, SubmenuTransition::FadeOutToSubmenu);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.submenu_parent_kind, Some(basic));
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, advanced, state.sub_selected),
+        row_position(GRAPHICS_OPTIONS_ROWS, SubRowId::PresentMode)
+    );
+
+    search::jump(&mut state, aspect);
+    assert_eq!(state.submenu_transition, SubmenuTransition::FadeOutToSubmenu);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(basic));
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, basic, state.sub_selected),
+        row_position(GRAPHICS_OPTIONS_ROWS, SubRowId::DisplayAspectRatio)
+    );
+    assert_eq!(selected_aspect_ratio(&state), 16.0 / 10.0);
 }
 
 #[test]

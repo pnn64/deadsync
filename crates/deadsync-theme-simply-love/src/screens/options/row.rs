@@ -52,6 +52,7 @@ pub enum SubRowId {
     HideMouseCursor,
     VisualDelay,
     OverscanAdjustment,
+    AdvancedGraphics,
     // Sound Options
     SoundDevice,
     AudioOutputMode,

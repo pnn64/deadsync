@@ -39,10 +39,12 @@ pub enum SubmenuKind {
     ScoreImport,
     Folders,
     Downloads,
+    GraphicsBasic,
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 25] = [
+    // Logical graphics pages share one set of editable values and cursors.
+    pub(super) const STORED: [Self; 25] = [
         Self::Coin,
         Self::Bookkeeping,
         Self::System,
@@ -69,11 +71,18 @@ impl SubmenuKind {
         Self::Folders,
         Self::Downloads,
     ];
-    pub(super) const COUNT: usize = Self::ALL.len();
+    pub(super) const COUNT: usize = Self::STORED.len();
 
     #[inline]
     pub(super) const fn index(self) -> usize {
-        self as usize
+        match self {
+            Self::GraphicsBasic => Self::Graphics as usize,
+            _ => self as usize,
+        }
+    }
+
+    pub(super) const fn is_graphics(self) -> bool {
+        matches!(self, Self::Graphics | Self::GraphicsBasic)
     }
 }
 
@@ -205,6 +214,7 @@ pub struct State {
     pub(super) nav_lr_held_for: Duration,
     pub(super) nav_lr_next_repeat_at: Duration,
     pub(super) view: OptionsView,
+    pub(super) split_graphics: bool,
     pub(super) submenu_transition: SubmenuTransition,
     pub(super) pending_submenu_kind: Option<SubmenuKind>,
     pub(super) pending_submenu_parent_kind: Option<SubmenuKind>,
@@ -360,6 +370,7 @@ fn nearest_u16_index(values: &[u16], target: u16) -> usize {
 pub fn init(view: OptionsInitView) -> State {
     let OptionsInitView {
         config: cfg,
+        split_graphics,
         judgment_palettes,
         updater_capabilities,
         app_paths,
@@ -486,11 +497,12 @@ pub fn init(view: OptionsInitView) -> State {
         updater_i18n_revision: u64::MAX,
         pending_audio: smallvec::SmallVec::new(),
         view: OptionsView::Main,
+        split_graphics,
         sub_selected: 0,
         sub_prev_selected: 0,
         sub_inline_x: f32::NAN,
         sub: SubmenuStates::new(|i| {
-            let len = submenu_rows(SubmenuKind::ALL[i]).len();
+            let len = submenu_rows(SubmenuKind::STORED[i]).len();
             SubmenuState {
                 choice_indices: vec![0; len],
                 cursor_indices: vec![0; len],

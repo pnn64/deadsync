@@ -703,7 +703,7 @@ fn push_legacy_page(
     /* ------------------------------ TOP BAR ------------------------------- */
     let title_text = match state.view {
         OptionsView::Main => "OPTIONS",
-        OptionsView::Submenu(kind) => submenu_title(kind),
+        OptionsView::Submenu(kind) => submenu_title(state, kind),
     };
     actors.push(top_bar_actor(state, title_text, visual_policy));
     search::push_hint(actors, state);

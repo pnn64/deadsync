@@ -1182,9 +1182,11 @@ fn options_init_view(
     dirs: &AppDirs,
     audio: AudioOptionsView,
     bookkeeping: crate::coin::Bookkeeping,
+    theme: config::theme::ThemeFlag,
 ) -> OptionsInitView {
     OptionsInitView {
         config: config::runtime::get(),
+        split_graphics: theme == config::theme::ThemeFlag::OpenItg,
         judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog(
             ActiveTheme::JUDGMENT_PRESET,
         ))
@@ -1259,7 +1261,8 @@ impl ScreensState {
         let app_paths = app_paths_view(dirs);
         let init_songs_root = app_paths.songs.path.clone();
         let init_courses_root = app_paths.courses.path;
-        let mut options_state = options::init(options_init_view(dirs, audio_options, bookkeeping));
+        let mut options_state =
+            options::init(options_init_view(dirs, audio_options, bookkeeping, theme));
         options_state.active_color_index = color_index;
 
         let mut content_browser_state = content_browser::init();
@@ -5420,6 +5423,11 @@ impl App {
     }
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
+        let theme = self.state.screens.menu_state.theme_flag();
+        if from == CurrentScreen::OverscanAdjustment && theme == config::theme::ThemeFlag::OpenItg {
+            options::open_graphics_submenu(&mut self.state.screens.options_state);
+            return;
+        }
         let main_selection = options_entry_restores_main_selection(from)
             .then_some(self.state.screens.options_state.selected);
         let current_color_index = self.state.screens.options_state.active_color_index;
@@ -5427,6 +5435,7 @@ impl App {
             &self.dirs,
             audio_requests::options_view(&self.audio),
             self.state.coin.bookkeeping(),
+            theme,
         ));
         self.state.screens.options_state.active_color_index = current_color_index;
         if let Some(selected) = main_selection {

@@ -58,22 +58,45 @@ graphics and input changes, and sends requests to the shell. Both layouts
 read the same formatted values and multiselect bits. Search, reload, pack
 and updater workflows, and confirmation dialogs use their existing overlays.
 
+Graphics Options opens a basic page with display mode, aspect ratio, resolution,
+and the Advanced Graphic Options link. The advanced page contains renderer,
+refresh rate, presentation, and performance settings. Both pages edit a single
+set of pending display settings. Back or Done from Advanced returns focus to
+its launcher, and leaving the basic page applies the pending settings together.
+Settings search can jump between the pages during an edit. Overscan returns to
+its row in Advanced and preserves pending display changes. Simply Love presents
+the combined Graphics Options page.
+
+The route follows `ScreenGraphicOptionsBasic` in the home theme's
+`metrics.ini`. The Graphic Quality preset in `Scripts/SimpleGraphics.lua`
+controls legacy color depths, texture limits, caches, and filtering. That
+preset and the reference's explicit row spacing remain open.
+
 The effective `ScreenOptions` reference places the heading at `(36, 38)`,
 eight rows at y=127 with 28 px spacing, the scrollbar near `(34, 242)`, and
-the Done row at y=353. The original panel graphics use these anchors at
-640×480 and center the layout at 854×480. The panel slides between submenus
+the Done row at y=353. The OpenITG panel uses these anchors at 640×480 and
+centers the layout at 854×480. The panel slides between submenus
 on DeadSync's existing transition clock. The menu presents supported
 DeadSync actions in their current order, with shared persistence semantics.
 Reference cursor tweens, header motion, and modal styling remain open.
 
 Tests cover the viewport and Done row, prepared values, disabled and
 multiselect rows, an edited volume appearing in the alternate renderer, and
-the reload modal taking over that renderer.
+the reload modal taking over that renderer. Graphics tests cover both return
+paths, a single deferred apply, settings search, and pending display changes
+surviving an Overscan round trip. Vulkan captures at both supported fixture
+sizes exercise the route through the shared controller and show the launcher
+focus, the advanced title, and the centered row layout.
 
 At 854×480, nine warm actor-construction runs of 12,000 frames per layout
 measured medians of 32.6 μs for Simply Love and 19.1 μs for OpenITG on the
 service menu, and 59.8 μs and 30.2 μs on Graphics Options. The fixture used
 the bundled fonts and dev-profile theme libraries.
+
+Two repetitions of the same warm actor-construction benchmark measured
+19.4–19.5 μs for Basic and 27.1–27.5 μs for Advanced. The previous combined
+OpenITG page took 28.9–29.1 μs. Simply Love's combined page measured
+57.7–57.9 μs before the split and 57.9–59.8 μs with the new controller.
 
 ## Player Options
 

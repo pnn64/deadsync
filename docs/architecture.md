@@ -636,15 +636,19 @@ OpenITG mounts its title, System Options, Profile Picker, Select Style, Select
 Play Mode, Player Options, and base Select Music layouts. The existing Options
 controller and shell still handle input, settings edits, and modal workflows.
 An alternate page renderer lazily reads the controller's visible row order,
-current values, and availability through `deadsync-theme`. The music wheel
-shares the game's catalog entries and circular index, and both layouts use the
-same prepared difficulty window. The alternate base layout borrows song, chart,
-player, banner, and preview beat data from the existing controller. The OpenITG
-song and course wheels use the shared presentation camera for projected cards
-and labels. The notefield uses the same perspective calculation with its own
-camera parameters. The shell media manager retains recently replaced banner
-textures for the transition lifetime requested by the theme. OpenITG animates
-those layers and derives its exit motion from the shared launch confirmation.
+current values, and availability through `deadsync-theme`. OpenITG's basic and
+advanced Graphics pages share the same pending display settings as the combined
+Simply Love editor. The controller emits one graphics request when the user
+leaves Graphics. The shell applies it through the shared graphics change plan.
+The music wheel shares the game's catalog entries and circular index, and both
+layouts use the same prepared difficulty window. The alternate base layout
+borrows song, chart, player, banner, and preview beat data from the existing
+controller. The OpenITG song and course wheels use the shared presentation
+camera for projected cards and labels. The notefield uses the same perspective
+calculation with its own camera parameters. The shell media manager retains
+recently replaced banner textures for the transition lifetime requested by the
+theme. OpenITG animates those layers and derives its exit motion from the
+shared launch confirmation.
 OpenITG requests two random-selection rows. The game-owned candidate pool
 uses the active sort and style, and either action reaches the same chart
 selection and stage launch path as a song row. The shell prepares one score

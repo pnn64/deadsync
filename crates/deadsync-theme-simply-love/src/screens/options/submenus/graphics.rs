@@ -145,6 +145,12 @@ pub(in crate::screens::options) const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[localized_choice("Common", "Open")],
         inline: false,
     },
+    SubRow {
+        id: SubRowId::AdvancedGraphics,
+        label: lookup_key("OptionsGraphics", "AdvancedGraphics"),
+        choices: &[],
+        inline: false,
+    },
 ];
 
 pub(in crate::screens::options) const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
@@ -274,6 +280,14 @@ pub(in crate::screens::options) const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGraphicsHelp",
             "OverscanAdjustmentHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GfxAdvanced,
+        name: lookup_key("OptionsGraphics", "AdvancedGraphics"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "AdvancedGraphicsHelp",
         ))],
     },
     Item {
@@ -767,20 +781,28 @@ pub(in crate::screens::options) fn ensure_display_mode_choices(state: &mut State
 }
 
 pub fn update_monitor_specs(state: &mut State, specs: Vec<GraphicsMonitorView>) {
+    // Returning from the overscan tool can refresh hardware before the
+    // display edits on the graphics pages have been applied.
+    let (mode, monitor) = if state.split_graphics
+        && matches!(state.view, OptionsView::Submenu(kind) if kind.is_graphics())
+    {
+        let mode = selected_display_mode(state);
+        let monitor = if state.monitor_specs.is_empty() && mode == state.display_mode_at_load {
+            state.display_monitor_at_load
+        } else {
+            selected_display_monitor(state)
+        };
+        (mode, monitor)
+    } else {
+        (state.display_mode_at_load, state.display_monitor_at_load)
+    };
     if state.monitor_specs.is_empty() {
         // The initial menu has no hardware modes yet; seed from the saved rate
         // when monitor discovery completes.
         state.refresh_rate_choices.clear();
     }
     state.monitor_specs = specs;
-    ensure_display_mode_choices(state);
-    // Keep the Display Mode row aligned with the actual current mode after monitors refresh.
-    set_display_mode_row_selection(
-        state,
-        state.monitor_specs.len(),
-        state.display_mode_at_load,
-        state.display_monitor_at_load,
-    );
+    set_display_mode_row_selection(state, state.monitor_specs.len(), mode, monitor);
     let (width, height) = selected_resolution(state);
     rebuild_resolution_choices(state, width, height);
     if state.max_fps_at_load == 0 && !max_fps_enabled(state) {

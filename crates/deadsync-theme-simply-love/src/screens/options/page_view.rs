@@ -71,7 +71,7 @@ pub(super) fn push_page(
             draw(
                 actors,
                 SystemOptionsPage {
-                    title: submenu_title(kind),
+                    title: submenu_title(state, kind),
                     main_menu: false,
                     selected,
                     row_count,

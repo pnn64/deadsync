@@ -163,7 +163,7 @@ fn collect_row_choices<T: ChoiceText>(
         }
     }
     if let Some(row) = rows.get(row_idx)
-        && matches!(kind, SubmenuKind::Graphics)
+        && kind.is_graphics()
     {
         if row.id == SubRowId::SoftwareRendererThreads {
             return string_choice_texts(&state.software_thread_labels);

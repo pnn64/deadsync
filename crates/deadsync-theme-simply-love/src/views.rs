@@ -1091,6 +1091,8 @@ pub struct OptionsPackSyncView {
 #[derive(Clone, Debug)]
 pub struct OptionsInitView {
     pub config: deadsync_config::app_config::Config,
+    /// Mount basic and advanced pages over the same graphics settings.
+    pub split_graphics: bool,
     pub judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog,
     pub updater_capabilities: SimplyLoveUpdaterCapabilities,
     pub app_paths: deadsync_theme::views::AppPathsView,

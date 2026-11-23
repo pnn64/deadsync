@@ -213,7 +213,16 @@ pub const fn is_smx_config_view(state: &State) -> bool {
 }
 
 pub fn open_graphics_submenu(state: &mut State) {
+    let restore = (state.split_graphics && state.view == OptionsView::Submenu(SubmenuKind::Graphics))
+        .then_some(state.sub_selected);
     open_submenu_now(state, SubmenuKind::Graphics);
+    state.submenu_parent_kind = submenu_parent_kind_of(state, SubmenuKind::Graphics);
+    if let Some(selected) = restore {
+        let last = submenu_total_rows(state, SubmenuKind::Graphics).saturating_sub(1);
+        let selected = selected.min(last);
+        state.sub_selected = selected;
+        state.sub_prev_selected = selected;
+    }
 }
 
 fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
@@ -342,10 +351,23 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 }
                 // Switch view to the target submenu, then fade it in.
                 let target_kind = state.pending_submenu_kind.unwrap_or(SubmenuKind::System);
+                let returning_to_basic = target_kind == SubmenuKind::GraphicsBasic
+                    && state.view == OptionsView::Submenu(SubmenuKind::Graphics);
                 state.view = OptionsView::Submenu(target_kind);
                 state.pending_submenu_kind = None;
                 state.submenu_parent_kind = state.pending_submenu_parent_kind.take();
-                let landing = search::take_jump_row(state, target_kind).unwrap_or(0);
+                let landing = search::take_jump_row(state, target_kind).unwrap_or_else(|| {
+                    if returning_to_basic {
+                        cached_submenu_visible_rows(state, target_kind)
+                            .iter()
+                            .position(|&index| {
+                                GRAPHICS_OPTIONS_ROWS[index].id == SubRowId::AdvancedGraphics
+                            })
+                            .unwrap_or(0)
+                    } else {
+                        0
+                    }
+                });
                 state.sub_selected = landing;
                 state.sub_prev_selected = landing;
                 state.sub_inline_x = f32::NAN;
@@ -378,7 +400,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
         }
         SubmenuTransition::FadeOutToMain => {
             let leaving_graphics =
-                matches!(state.view, OptionsView::Submenu(SubmenuKind::Graphics));
+                matches!(state.view, OptionsView::Submenu(kind) if kind.is_graphics());
             let (
                 desired_renderer,
                 desired_display_mode,
