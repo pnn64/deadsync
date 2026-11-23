@@ -1,19 +1,21 @@
+use crate::evaluation::{self, ExtremeEvaluation};
 use crate::scene::{AMBER, MINT, MUTED, PAPER, Scene};
-use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, InlineText, TextContent};
 use deadsync_theme::UiCue;
 use deadsync_theme::attract::{
     AttractDemoChart, AttractDemoRequest, AttractMedia, AttractPresentation,
 };
 use deadsync_theme::stage::{
-    EvaluationDeparture, EvaluationOverviewPresentation, StageLoadingView, StageOutroPresentation,
-    StageOutroView, StagePresentation,
+    EvaluationAudio, EvaluationDeparture, EvaluationFallbackSounds, EvaluationOverviewPresentation,
+    StageLoadingView, StageOutroPresentation, StageOutroView, StagePresentation,
 };
-use deadsync_theme::views::{AttractRecords, EvaluationOverview, GameplayHud};
+use deadsync_theme::views::{AttractRecords, GameplayHud};
 use std::fmt::Write;
 
 #[derive(Default)]
-pub struct ExtremeStage;
+pub struct ExtremeStage {
+    evaluation: ExtremeEvaluation,
+}
 
 impl StagePresentation<Actor> for ExtremeStage {
     fn push_loading(&self, actors: &mut Vec<Actor>, view: StageLoadingView<'_>) {
@@ -49,100 +51,31 @@ impl StagePresentation<Actor> for ExtremeStage {
     }
 
     fn evaluation_overview(&mut self) -> Option<&mut dyn EvaluationOverviewPresentation<Actor>> {
-        Some(self)
+        Some(&mut self.evaluation)
     }
 
     fn evaluation_departure(&self) -> Option<EvaluationDeparture<Actor>> {
         Some(EvaluationDeparture {
-            input_ready_seconds: 0.3,
-            duration: 0.22,
+            input_ready_seconds: evaluation::SETTLED_SECONDS,
+            duration: evaluation::DEPARTURE_SECONDS,
             cue: Some(UiCue::Confirm),
-            push_overlay: |_, _| {},
+            push_overlay: evaluation::push_departure,
         })
     }
-}
 
-impl EvaluationOverviewPresentation<Actor> for ExtremeStage {
-    fn push_overview(
-        &mut self,
-        actors: &mut Vec<Actor>,
-        _assets: &AssetManager,
-        page: EvaluationOverview<'_>,
-    ) {
-        let alpha = page
-            .departure_elapsed
-            .map_or(1.0, |elapsed| 1.0 - elapsed / 0.22);
-        let scene = Scene::new(alpha);
-        scene.cover(actors);
-        scene.text(actors, [48.0, 57.0], [0.78, 520.0], "STAGE RESULTS", MINT);
-        if page.course_summary && page.title.is_empty() {
-            scene.text(
-                actors,
-                [48.0, 107.0],
-                [1.65, 544.0],
-                "UNTITLED COURSE",
-                PAPER,
-            );
-        } else {
-            scene.text(actors, [48.0, 107.0], [1.65, 544.0], page.title, PAPER);
+    fn evaluation_audio(&self) -> EvaluationAudio {
+        EvaluationAudio {
+            music_loop: Some("assets/media/ddr-extreme/evaluation.ogg"),
+            fallback_sounds: EvaluationFallbackSounds::None,
         }
+    }
 
-        let count = page.players.iter().flatten().count();
-        for (column, player) in page.players.iter().flatten().enumerate() {
-            let x = if count > 1 {
-                48.0 + column as f32 * 279.0
-            } else {
-                186.0
-            };
-            let accent = if player.p2 { AMBER } else { MINT };
-            scene.rect(actors, [x, 151.0], [265.0, 252.0], accent, 0.09, 0);
-            scene.rect(actors, [x, 151.0], [265.0, 3.0], accent, 1.0, 1);
-            scene.text(
-                actors,
-                [x + 15.0, 175.0],
-                [0.65, 220.0],
-                if player.p2 { "PLAYER 2" } else { "PLAYER 1" },
-                accent,
-            );
-            scene.text(
-                actors,
-                [x + 15.0, 225.0],
-                [2.1, 235.0],
-                player.grade.gif_suffix(),
-                PAPER,
-            );
-            scene.text(
-                actors,
-                [x + 15.0, 283.0],
-                [1.35, 235.0],
-                number_text(format_args!("{:.2}%", player.percent)),
-                accent,
-            );
-            scene.text(
-                actors,
-                [x + 15.0, 326.0],
-                [0.66, 235.0],
-                number_text(format_args!("COMBO  {}", player.max_combo)),
-                PAPER,
-            );
-            scene.text(
-                actors,
-                [x + 15.0, 366.0],
-                [0.66, 235.0],
-                number_text(format_args!(
-                    "HOLDS  {}/{}",
-                    player.holds[0], player.holds[1]
-                )),
-                MUTED,
-            );
-        }
-        scene.text(
-            actors,
-            [48.0, 434.0],
-            [0.56, 520.0],
-            "START TO CONTINUE",
-            MUTED,
-        );
+    fn evaluation_intro_settled(&self, elapsed: f32, overview: bool) -> bool {
+        !overview || elapsed >= evaluation::SETTLED_SECONDS
+    }
+
+    fn leave_evaluation(&mut self) {
+        self.evaluation = ExtremeEvaluation::default();
     }
 }
 
@@ -185,8 +118,8 @@ impl AttractPresentation<Actor> for ExtremeAttract {
     fn media(&self) -> AttractMedia {
         AttractMedia {
             movie: None,
-            music: None,
-            loop_music: false,
+            music: Some("assets/media/ddr-extreme/attract.ogg"),
+            loop_music: true,
         }
     }
 

@@ -282,11 +282,17 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
         assert!(has_extreme_text(&actors, "STAGE CLEAR"));
     }
     settle(app, event_loop, CurrentScreen::Evaluation);
-    let evaluation_track = outgoing_track + u64::from(openitg);
+    let evaluation_track = outgoing_track + u64::from(openitg || extreme);
     assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
-    if openitg {
-        let relative_path = app.state.screens.stage_presentation.evaluation_music_loop().unwrap();
+    if openitg || extreme {
+        let relative_path = app.state.screens.stage_presentation.evaluation_audio().music_loop.unwrap();
         assert!(deadsync_assets::resolve_asset_path(relative_path).is_file());
+    }
+    if extreme {
+        let soundtrack = app.state.screens.attract.as_ref().unwrap().timeline.media();
+        assert!(soundtrack.loop_music);
+        assert!(deadsync_assets::resolve_asset_path(soundtrack.music.unwrap()).is_file());
+        assert!(app.state.screens.evaluation_state.sfx_paths.iter().next().is_none());
     }
     assert_eq!(app.state.session.played_stages.len(), 1);
     let result = &app.state.session.played_stages[0];
@@ -297,7 +303,12 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     assert_eq!(player.combo_runs.len(), 1);
     assert_eq!(player.combo_runs[0].count, 6);
     assert!(app.state.screens.evaluation_stage.is_some());
-    if openitg {
+    if openitg || extreme {
+        if extreme {
+            app.state.screens.evaluation_state.screen_elapsed = 0.2;
+            let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+            assert!(!has_extreme_text(&actors, "START TO CONTINUE"));
+        }
         press(app, event_loop, VirtualAction::p2_start);
         press(app, event_loop, VirtualAction::p2_back);
         assert!(matches!(app.state.shell.transition, TransitionState::Idle));
@@ -313,6 +324,10 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     assert_eq!(actor_tree_has_text(&actors, "STAGE RESULTS"), extreme);
     if extreme {
         assert!(actor_tree_has_text(&actors, "PLAYER 2"));
+        assert!(!has_extreme_text(&actors, "PLAYER 1"));
+        for label in ["FANTASTIC", "MISS", "HOLDS", "MAX COMBO", "LIFE", "START TO CONTINUE"] {
+            assert!(has_extreme_text(&actors, label), "missing result label {label}");
+        }
     }
     assert_eq!(
         actors.iter().any(|actor| matches!(actor,
@@ -342,7 +357,8 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     } else if extreme {
         let exit = app.state.screens.evaluation_departure.as_ref().unwrap();
         assert_eq!(exit.cue, Some(deadsync_theme::UiCue::Confirm));
-        assert_eq!(exit.duration, 0.22);
+        assert_eq!(exit.duration, 0.32);
+        assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
     } else {
         assert!(app.state.screens.evaluation_departure.is_none());
     }

@@ -7300,21 +7300,23 @@ impl App {
 
         // The cue follows the completed stage, even when its screen is replaced
         // by the course summary below. Result bookkeeping has already finished.
-        let (deferred_sfx, entry_sfx) = ActiveTheme::prepare_evaluation_audio(
-            &mut self.state.screens.evaluation_state,
-            failed,
-            SimplyLoveVisualPolicyView::from_config(config),
-        );
-        self.ui_sfx.prepare_screen(&mut self.audio, deferred_sfx);
-        let entry_sfx = entry_sfx
-            .filter(|_| self.state.screens.stage_presentation.evaluation_entry_sfx_enabled())
-            .and_then(|path| {
-                self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
+        use deadsync_theme::stage::EvaluationFallbackSounds;
+        let audio = self.state.screens.stage_presentation.evaluation_audio();
+        if audio.fallback_sounds != EvaluationFallbackSounds::None {
+            let (deferred_sfx, entry_sfx) = ActiveTheme::prepare_evaluation_audio(
+                &mut self.state.screens.evaluation_state,
+                failed,
+                SimplyLoveVisualPolicyView::from_config(config),
+            );
+            self.ui_sfx.prepare_screen(&mut self.audio, deferred_sfx);
+            if audio.fallback_sounds == EvaluationFallbackSounds::All
+                && let Some(path) = entry_sfx
+                && let Some(sound) = self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
                     path.to_string_lossy().as_ref(),
                 ))
-            });
-        if let Some(sound) = entry_sfx {
-            self.audio.play_screen_sfx(&sound);
+            {
+                self.audio.play_screen_sfx(&sound);
+            }
         }
 
         let gameplay_elapsed =
@@ -7348,6 +7350,7 @@ impl App {
             self.state.screens.evaluation_overview = course_page.overview.clone();
             self.state.screens.evaluation_stage = course_page.stage.clone();
             self.state.screens.evaluation_capture = course_page.capture;
+            self.prepare_current_evaluation_banner();
 
             let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
             pages.push(course_page);
@@ -7434,9 +7437,19 @@ impl App {
         self.state.screens.evaluation_overview = overview;
         self.state.screens.evaluation_stage = stage;
         self.state.screens.evaluation_capture = capture;
+        self.prepare_current_evaluation_banner();
         self.mark_evaluation_runtime_dirty();
         self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
         self.ui_sfx.play_cue(&mut self.audio, UiCue::Change);
+    }
+
+    fn prepare_current_evaluation_banner(&mut self) {
+        if let Some(backend) = self.backend.as_mut()
+            && let Some(path) = self.state.screens.evaluation_stage.as_ref()
+                .and_then(|stage| stage.song.banner_path.as_deref())
+        {
+            media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+        }
     }
 
     fn apply_select_music_join(&mut self, join_side: profile_data::PlayerSide) {
@@ -9277,7 +9290,7 @@ impl App {
             if prev == target {
                 TransitionMusic::Keep
             } else {
-                self.state.screens.stage_presentation.evaluation_music_loop().map_or(
+                self.state.screens.stage_presentation.evaluation_audio().music_loop.map_or(
                     TransitionMusic::Stop,
                     |asset| TransitionMusic::Play {
                         path: deadsync_assets::resolve_asset_path(asset),

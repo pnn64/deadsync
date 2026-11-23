@@ -1,5 +1,6 @@
 //! DDR Extreme's original arcade presentation for the shared DeadSync game.
 
+mod evaluation;
 mod gameplay;
 mod menu;
 mod options;

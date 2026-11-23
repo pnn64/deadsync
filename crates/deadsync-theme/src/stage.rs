@@ -58,6 +58,21 @@ pub struct EvaluationDeparture<A> {
     pub push_overlay: fn(&mut Vec<A>, f32),
 }
 
+/// Result-screen audio for one visit, including any cues from the fallback panes.
+#[derive(Clone, Copy, Default)]
+pub struct EvaluationAudio {
+    pub music_loop: Option<&'static str>,
+    pub fallback_sounds: EvaluationFallbackSounds,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum EvaluationFallbackSounds {
+    #[default]
+    All,
+    DeferredOnly,
+    None,
+}
+
 pub trait StagePresentation<A> {
     fn push_loading(&self, actors: &mut Vec<A>, view: StageLoadingView<'_>);
 
@@ -97,16 +112,11 @@ pub trait StagePresentation<A> {
         None
     }
 
-    /// Bundled music to loop for the duration of an Evaluation visit.
-    fn evaluation_music_loop(&self) -> Option<&'static str> {
-        None
+    fn evaluation_audio(&self) -> EvaluationAudio {
+        EvaluationAudio::default()
     }
 
     fn evaluation_intro_settled(&self, _elapsed: f32, _overview: bool) -> bool {
-        true
-    }
-
-    fn evaluation_entry_sfx_enabled(&self) -> bool {
         true
     }
 

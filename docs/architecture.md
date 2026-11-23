@@ -49,6 +49,9 @@ result. The mounted Evaluation overview and the Simply Love panes borrow
 those records. Course paging shares the same records, including the timing
 and life histories. The score crate resolves the displayed Routine grade
 from the combined percentage and the participants' failure states.
+The shell prepares the visible song or course banner through the same cache
+when a result page opens. The mounted stage chooses its results music and
+which cues the fallback panes may play during the visit.
 
 All Player Options layouts consume the same editor and submit
 `deadsync-profile-gameplay::stage_options::StageOptions`. The mounted layout
@@ -102,6 +105,9 @@ results were rendered at 640×480 and 854×480 with Vulkan through wgpu.
 DDR Extreme's gameplay HUD draws the life gauges, score, difficulty, progress,
 tap and hold feedback, and stage badge from the live stage. Its clear and fail
 outros use the shared transition clock and defer to authored song transitions.
+The results overview displays the recorded judgments, combo, holds, rolls, mines,
+and life history for each side. The attract sequence and results visit use
+original loops bundled under `assets/media/ddr-extreme`.
 The auxiliary gameplay and results panels still use the fallback presentation.
 
 ## Shared contracts

@@ -1,8 +1,8 @@
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadsync_theme::stage::{
-    EvaluationDeparture, EvaluationOverviewPresentation, StageLoadingView, StageOutroPresentation,
-    StageOutroView, StagePresentation,
+    EvaluationAudio, EvaluationDeparture, EvaluationFallbackSounds, EvaluationOverviewPresentation,
+    StageLoadingView, StageOutroPresentation, StageOutroView, StagePresentation,
 };
 use deadsync_theme::views::{EvaluationOverview, GameplayHud};
 use deadsync_theme::{Screen, ThemeTransitions, UiCue};
@@ -58,16 +58,15 @@ impl StagePresentation<Actor> for OpenItgStagePresentation {
         })
     }
 
-    fn evaluation_music_loop(&self) -> Option<&'static str> {
-        Some("assets/media/openitg/evaluation.ogg")
+    fn evaluation_audio(&self) -> EvaluationAudio {
+        EvaluationAudio {
+            music_loop: Some("assets/media/openitg/evaluation.ogg"),
+            fallback_sounds: EvaluationFallbackSounds::DeferredOnly,
+        }
     }
 
     fn evaluation_intro_settled(&self, elapsed: f32, overview: bool) -> bool {
         !overview || elapsed >= EVALUATION_OVERVIEW_SETTLED_SECONDS
-    }
-
-    fn evaluation_entry_sfx_enabled(&self) -> bool {
-        false
     }
 
     fn leave_evaluation(&mut self) {

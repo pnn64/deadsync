@@ -13869,7 +13869,8 @@ fn transition_audio_presentation_is_owned_by_the_theme() {
         assert!(contains_rust(&shell, handoff), "missing fade audio handoff {handoff}");
     }
     assert!(contains_rust(fade, "transition_effect_plan::<ActiveTheme>("));
-    assert!(fade.contains(".evaluation_music_loop()"));
+    assert!(contains_rust(fade, ".evaluation_audio().music_loop"));
+    assert!(app.contains("EvaluationFallbackSounds::None"));
     let openitg_stage = production_source(&root.join("crates/deadsync-theme-openitg/src/stage_mount.rs"));
     let loop_path = "assets/media/openitg/evaluation.ogg";
     assert!(openitg_stage.contains(loop_path));

@@ -47,7 +47,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
         ThemeFlag::DdrExtreme => ThemeMount {
             title: |index| InstalledMenu::mount::<DdrExtremeTheme>(index, |_| ()),
             resources: resources::<DdrExtremeTheme>(),
-            stage: Box::new(ExtremeStage),
+            stage: Box::new(ExtremeStage::default()),
             gameplay: GAMEPLAY_COMPOSER,
             selection: Some(Box::new(ExtremeSelection)),
             player_options: Some(|| Box::new(ExtremePlayerOptions)),

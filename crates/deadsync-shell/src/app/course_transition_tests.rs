@@ -314,7 +314,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
             for (failure, theme) in [
                 ("payload", ThemeFlag::SimplyLove),
                 ("plan", ThemeFlag::OpenItg),
-                ("cursor", ThemeFlag::SimplyLove),
+                ("cursor", ThemeFlag::DdrExtreme),
             ] {
                 let style = if pump {
                     profile_data::PlayStyle::PumpRoutine
@@ -386,7 +386,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         &app.state.screens.evaluation_state.score_info,
                     ));
                     app.state.screens.evaluation_state.score_info = Arc::new([None, None]);
-                    if theme == ThemeFlag::OpenItg {
+                    if theme != ThemeFlag::SimplyLove {
                         let page = app.state.screens.evaluation_overview.as_ref().expect("mounted song overview");
                         let view = page.view(&app.asset_manager, false, 5.0, None);
                         assert_eq!(view.title.as_ref(), "A");
@@ -438,7 +438,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     assert_eq!(practice.return_screen, CurrentScreen::Practice);
                     assert_eq!(practice.options, restart.options);
                     app.step_course_eval_page(1);
-                    if theme == ThemeFlag::OpenItg {
+                    if theme != ThemeFlag::SimplyLove {
                         let page = app.state.screens.evaluation_overview.as_ref().expect("mounted course overview");
                         let view = page.view(&app.asset_manager, false, 5.0, None);
                         assert!(view.course_summary);
@@ -473,7 +473,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         TransitionState::FadingOut { target: CurrentScreen::SelectCourse, .. }
                             | TransitionState::ActorsFadeOut { target: CurrentScreen::SelectCourse, .. }
                     ));
-                    assert_eq!(app.state.screens.evaluation_departure.is_some(), theme == ThemeFlag::OpenItg);
+                    assert_eq!(app.state.screens.evaluation_departure.is_some(), theme != ThemeFlag::SimplyLove);
                 });
             }
         }
