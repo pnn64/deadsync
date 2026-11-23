@@ -1,10 +1,11 @@
 use deadlib_present::actors::{Actor, TextAlign};
 use deadlib_present::render::BlendMode;
-use deadlib_present::space::{screen_height, screen_width};
+use deadlib_present::space::{current_metrics, menu_perspective, screen_height, screen_width};
+use glam::{Mat4, Vec3};
 
 use crate::OpenItgDemonstration;
 use crate::presentation::{Layout, WIDTH, quad, sprite};
-use crate::resources::TUTORIAL_FONT;
+use crate::resources::{TITLE_FONT, TUTORIAL_FONT};
 
 const INSTRUCTIONS: [&str; 6] = [
     "Color Arrows\nscroll from\nlow to high.",
@@ -14,13 +15,163 @@ const INSTRUCTIONS: [&str; 6] = [
     "For arrows\nfacing Left,\nstep on the\nLeft Panel.",
     "For arrows\nfacing Up,\nstep on the\nUp Panel.",
 ];
+const INSTRUCTION_ZOOM: f32 = 0.8;
+
+/// The scheduled chart crossings under the current music clock.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OpenItgTrainingFeedback {
+    /// Most recent crossing as a left, down, up, right panel mask and its age.
+    pub step: Option<(u8, f32)>,
+    pub panel_ages: [Option<f32>; 4],
+    pub light_ages: [Option<f32>; 4],
+    pub dot_progress: [Option<f32>; 3],
+}
+
+pub fn push_training_underlay(actors: &mut Vec<Actor>, feedback: OpenItgTrainingFeedback) {
+    let layout = Layout::centered(screen_width(), screen_height());
+    let center = layout.position(320.0, 210.0);
+    const DEPTH: i16 = -94;
+    actors.push(
+        sprite(
+            "openitg/demo-light-frame.png",
+            center,
+            layout.size([76.0, 268.0]),
+            [1.0; 4],
+            DEPTH,
+        )
+        .build(0),
+    );
+    for (index, (key, age)) in [
+        "openitg/demo-light-green.png",
+        "openitg/demo-light-yellow.png",
+        "openitg/demo-light-yellow.png",
+        "openitg/demo-light-red.png",
+    ]
+    .into_iter()
+    .zip(feedback.light_ages)
+    .enumerate()
+    {
+        if let Some(age) = age.filter(|age| *age < 0.2) {
+            let alpha = 1.0 - age / 0.2;
+            let size = 64.0 * (1.0 + 0.4 * alpha);
+            let mut light = sprite(
+                key,
+                layout.position(320.0, 114.0 + 64.0 * index as f32),
+                layout.size([size; 2]),
+                [1.0, 1.0, 1.0, alpha],
+                DEPTH + 1,
+            );
+            light.rotationz(-45.0 * index as f32);
+            light.blend(BlendMode::Add);
+            actors.push(light.build(0));
+        }
+    }
+    for (index, progress) in feedback.dot_progress.into_iter().enumerate() {
+        if let Some(progress) = progress {
+            let y = 178.0 + 64.0 * (index as f32 - progress);
+            actors.push(
+                sprite(
+                    "openitg/demo-light-dot.png",
+                    layout.position(320.0, y),
+                    layout.size([16.0; 2]),
+                    [1.0, 1.0, 1.0, 0.5],
+                    DEPTH + 2,
+                )
+                .build(0),
+            );
+        }
+    }
+    if let Some((panels, age)) = feedback.step.filter(|(_, age)| *age < 0.6) {
+        let label = match panels {
+            1 => "Left!",
+            2 => "Down!",
+            4 => "Up!",
+            8 => "Right!",
+            _ => "Jump!",
+        };
+        let zoom = 1.0 + 0.4 * (1.0 - age / 0.2).max(0.0);
+        let mut text = layout.text([320.0, 114.0], 0.5, label.into(), zoom, [1.0; 4]);
+        text.font(TITLE_FONT);
+        text.maxwidth(layout.size([70.0, 0.0])[0]);
+        text.z(DEPTH + 3);
+        actors.push(text.build(0));
+    }
+    push_pad(
+        actors,
+        layout,
+        [160.0, 280.0],
+        1.2,
+        0.8,
+        feedback
+            .panel_ages
+            .map(|age| age.map_or(0.0, |age| (1.0 - age / 0.3).max(0.0))),
+        DEPTH,
+    );
+}
+
+fn push_pad(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    [x, y]: [f32; 2],
+    zoom: f32,
+    opacity: f32,
+    panels: [f32; 4],
+    depth: i16,
+) {
+    let origin = layout.position(x, y);
+    let viewport = [screen_width(), screen_height()];
+    let camera = menu_perspective(viewport, origin, 45.0).map(|(projection, view)| {
+        let metrics = current_metrics();
+        let pivot = Vec3::new(origin[0], origin[1], 0.0);
+        let world_to_layout = Mat4::from_translation(Vec3::new(-metrics.left, metrics.top, 0.0))
+            * Mat4::from_scale(Vec3::new(1.0, -1.0, 1.0));
+        projection
+            * view
+            * Mat4::from_translation(pivot)
+            * Mat4::from_rotation_x((-20.0_f32).to_radians())
+            * Mat4::from_translation(-pivot)
+            * world_to_layout
+    });
+    if let Some(view_proj) = camera {
+        actors.push(Actor::CameraPush { view_proj });
+    }
+    actors.push(
+        sprite(
+            "openitg/demo-platform.png",
+            layout.position(x, 7.0_f32.mul_add(zoom, y)),
+            layout.size([144.0 * zoom, 158.0 * zoom]),
+            [0.6, 0.6, 0.6, opacity],
+            depth,
+        )
+        .build(0),
+    );
+    for ([dx, dy], alpha) in [[-45.0_f32, 0.0], [0.0, 45.0], [0.0, -45.0], [45.0, 0.0]]
+        .into_iter()
+        .zip(panels)
+    {
+        if alpha > 0.0 {
+            let size = 52.0 * zoom * (1.0 + 0.1 * alpha);
+            let mut glow = sprite(
+                "openitg/demo-panel-glow.png",
+                layout.position(dx.mul_add(zoom, x), dy.mul_add(zoom, y)),
+                layout.size([size; 2]),
+                [1.0, 1.0, 1.0, alpha],
+                depth + 1,
+            );
+            glow.blend(BlendMode::Add);
+            actors.push(glow.build(0));
+        }
+    }
+    if camera.is_some() {
+        actors.push(Actor::CameraPop);
+    }
+}
 
 pub(crate) fn push_actors(
     actors: &mut Vec<Actor>,
     demonstration: OpenItgDemonstration,
     elapsed: f32,
     music_time: f32,
-    training_lights: [f32; 4],
 ) {
     let [width, height] = [screen_width(), screen_height()];
     let center = [width * 0.5, height * 0.5];
@@ -53,52 +204,26 @@ pub(crate) fn push_actors(
     let quarter_width = width / layout.size([4.0, 0.0])[0];
     let field_x = WIDTH * 0.5 - quarter_width;
     let instruction_x = WIDTH * 0.5 + quarter_width + 10.0;
-    actors.push(
-        sprite(
-            "openitg/demo-light-frame.png",
-            layout.position(320.0, 210.0),
-            layout.size([76.0, 268.0]),
-            [1.0; 4],
-            121,
-        )
-        .build(0),
-    );
-    for (index, (key, alpha)) in [
-        "openitg/demo-light-green.png",
-        "openitg/demo-light-yellow.png",
-        "openitg/demo-light-yellow.png",
-        "openitg/demo-light-red.png",
-    ]
-    .into_iter()
-    .zip(training_lights)
-    .enumerate()
-    {
-        if alpha > 0.0 {
-            let size = 64.0 * (1.0 + 0.4 * alpha);
-            let mut light = sprite(
-                key,
-                layout.position(320.0, 114.0 + 64.0 * index as f32),
-                layout.size([size; 2]),
-                [1.0, 1.0, 1.0, alpha],
-                122,
-            );
-            light.rotationz(45.0 * index as f32);
-            light.blend(BlendMode::Add);
-            actors.push(light.build(0));
-        }
-    }
-
     for (index, instruction) in INSTRUCTIONS.into_iter().enumerate() {
         let time = elapsed - (5.0 + 6.0 * index as f32);
         if !(0.0..5.8).contains(&time) {
             continue;
         }
         let slide = 1.0 - (time / 0.5).clamp(0.0, 1.0);
+        // Four blank lines in the reference center these captions above the pad.
+        let caption_y = if index >= 4 {
+            240.0 - 2.0 * 44.0 * INSTRUCTION_ZOOM
+        } else {
+            240.0
+        };
         let mut text = layout.text(
-            [instruction_x + 2.0 * quarter_width * slide * slide, 240.0],
+            [
+                instruction_x + 2.0 * quarter_width * slide * slide,
+                caption_y,
+            ],
             0.5,
             instruction.into(),
-            0.8,
+            INSTRUCTION_ZOOM,
             [1.0, 1.0, 1.0, ((5.8 - time) / 0.3).clamp(0.0, 1.0)],
         );
         text.font(TUTORIAL_FONT);
@@ -111,8 +236,8 @@ pub(crate) fn push_actors(
         } else {
             0.0
         };
-        let alpha =
-            ((time - 1.0) / 0.3).clamp(0.0, 1.0) * ((5.6 - time) / 0.3).clamp(0.0, 1.0) * blink;
+        let fade = ((time - 1.0) / 0.3).clamp(0.0, 1.0) * ((5.6 - time) / 0.3).clamp(0.0, 1.0);
+        let alpha = fade * blink;
         let (key, position, size, rotation) = match index {
             0 => (
                 "openitg/demo-focus-square.png",
@@ -136,10 +261,15 @@ pub(crate) fn push_actors(
                 "openitg/demo-arrow.png",
                 [instruction_x - 70.0, 320.0],
                 [58.0, 60.0],
-                if index == 4 { 0.0 } else { 90.0 },
+                if index == 4 { 0.0 } else { -90.0 },
             ),
             _ => continue,
         };
+        if fade > 0.0 && index >= 4 {
+            let mut panels = [0.0; 4];
+            panels[if index == 4 { 0 } else { 2 }] = alpha;
+            push_pad(actors, layout, [530.0, 320.0], 0.8, fade, panels, 123);
+        }
         if alpha > 0.0 {
             let mut focus = sprite(
                 key,
@@ -156,7 +286,7 @@ pub(crate) fn push_actors(
     let black_alpha = ((4.0 - elapsed) / 0.5).clamp(0.0, 1.0);
     if black_alpha > 0.0 {
         actors.push(quad(
-            center,
+            [0.0, 0.0],
             [width, height],
             [0.0, 0.0, 0.0, black_alpha],
             125,

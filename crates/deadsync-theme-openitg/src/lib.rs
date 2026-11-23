@@ -18,6 +18,7 @@ use deadlib_present::actors::Actor;
 use deadsync_theme::{Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, TransitionKind, UiCue};
 
 pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, push_evaluation_overview};
+pub use demonstration::{OpenItgTrainingFeedback, push_training_underlay};
 pub use gameplay::GAMEPLAY_HUD;
 pub use intro::{OpenItgDemonstration, OpenItgIntro, OpenItgIntroMedia};
 pub use menu::MenuState;

@@ -8227,6 +8227,12 @@ impl App {
                 {
                     if let Some(demo) = intro.demo.as_mut() {
                         let hide_gameplay_hud = demo.is_training();
+                        if hide_gameplay_hud {
+                            deadsync_theme_openitg::push_training_underlay(
+                                &mut actors,
+                                demo.training_feedback(),
+                            );
+                        }
                         gameplay_segments = Some(crate::gameplay_runtime::push_actors(
                             &mut actors,
                             &mut demo.stage,
@@ -8241,7 +8247,6 @@ impl App {
                         intro.timeline.push_demonstration_overlay(
                             &mut actors,
                             demo.stage.current_music_time_display(),
-                            demo.training_lights(),
                         );
                     } else {
                         intro.timeline.push_actors(&mut actors, intro.video_key.as_ref());

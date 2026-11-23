@@ -419,9 +419,12 @@ After 30 seconds of inactivity on the title menu, the theme plays up to
 song audio, charts, and the shared stage and notefield in an isolated
 single-player session. A demonstration ends early when its chart completes
 or is skipped when the catalog has no eligible chart. The training phase
-uses the native instructions, focus graphics, and traffic lights. The
-lights follow the chart's timing at each note and three preceding beats.
-Both stages are unattended and leave profiles, scores, and credits alone.
+uses the native instructions, traffic lights, and perspective-tilted dance
+pads. Playable note crossings light the matching panels and show a direction
+or Jump! for simultaneous steps. The three preview lights forecast whole-beat
+crossings and their dots travel across the actual beat interval. The Left and
+Up instructions animate a second pad under the caption. Both demonstrations
+are unattended and leave profiles, scores, and credits alone.
 
 Recent song scores appear next with the native ranking music. The shared cabinet query
 resolves up to 40 recently played charts against the loaded catalog and
@@ -436,20 +439,23 @@ Rows scroll through the five-row opening at 0.4 seconds per row. The ranking
 music continues across all pages before the intro resumes. Existing course
 records are keyed by course path and supply one cabinet best per course.
 Remaining differences include ranking difficulty columns and Survival times,
-promotional lists, tutorial pad highlights and moving light dots, native
-demonstration style rotation, course attacks, and authored movie and Lua
-background cues during demonstrations.
+promotional lists, native demonstration style rotation, course attacks,
+and authored movie and Lua background cues during demonstrations.
 
 An isolated Windows portable run entered all three movie phases with live
 video, decoded the original company and intro tracks, and played both
 demonstrations on the Quartz fixture before the ranking track. Both demos
 finished at the end of the 24-second chart. First and second stage preparation
-took about 226 ms and 99 ms in the debug build. The save directory hashes
-matched before and after. Tests cover the timeline, intro overlays, idle
-music routing, and the display of a prepared local record. The demo title,
-tutorial font, focus graphics, and traffic lights were also checked in
-offscreen Vulkan captures at 640×480 and 854×480 against the reference assets
-and metrics.
+took about 362 ms and 90 ms in the debug build. The game logged 66 autoplay
+judgments and all 20 save files matched by hash before and after. Tests cover
+the timeline, intro overlays, idle music, a prepared record, and training
+cues across a BPM change. Offscreen Vulkan captures at 640×480 and 854×480
+checked the opening fade, moving light dots, a two-panel jump, and both
+teaching captions against the archived actor definitions. The pad, panel
+highlight, and dot textures match the local OpenITG files byte for byte.
+At 854×480, warmed training actor construction and composition took about
+12 µs before adding the pads and dots and 30 µs with both pads visible.
+The measurement excludes game simulation and GPU work.
 Vulkan captures at 640×480 and 854×480 used real local score files written
 by the score store and showed a completed Marathon, a failed Survival run,
 and an unplayed Marathon. In the three-course fixture, catalog and score

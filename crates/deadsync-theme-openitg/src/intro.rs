@@ -166,10 +166,9 @@ impl OpenItgIntro {
         &self,
         actors: &mut Vec<Actor>,
         music_time: f32,
-        training_lights: [f32; 4],
     ) {
         if let Some(demo) = self.demonstration() {
-            crate::demonstration::push_actors(actors, demo, self.elapsed, music_time, training_lights);
+            crate::demonstration::push_actors(actors, demo, self.elapsed, music_time);
         }
     }
 
