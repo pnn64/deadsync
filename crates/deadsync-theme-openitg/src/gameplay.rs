@@ -1,7 +1,9 @@
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_core::hud_style::{FieldFeedbackStyle, TapFeedbackTween};
-use deadsync_theme::views::{GameplayHud, GameplayLifeView, GameplayScoreView, GameplayTapAtlas};
+use deadsync_theme::views::{
+    GameplayHud, GameplayHudMotion, GameplayLifeView, GameplayScoreView, GameplayTapAtlas,
+};
 
 use crate::presentation::{Layout, WIDTH};
 
@@ -41,14 +43,32 @@ static FIELD_FEEDBACK: FieldFeedbackStyle = FieldFeedbackStyle {
     combo_pulse_scale: 1.2,
 };
 
+fn slide_offset(motion: GameplayHudMotion) -> f32 {
+    const DISTANCE: f32 = 100.0;
+    const ENTER_DELAY: f32 = 0.5;
+    const SLIDE_SECONDS: f32 = 0.8;
+    match motion {
+        GameplayHudMotion::Settled => 0.0,
+        GameplayHudMotion::Entering { elapsed_seconds } => {
+            let remaining = 1.0 - ((elapsed_seconds - ENTER_DELAY) / SLIDE_SECONDS).clamp(0.0, 1.0);
+            DISTANCE * remaining * remaining
+        }
+        GameplayHudMotion::Leaving { elapsed_seconds } => {
+            let progress = (elapsed_seconds / SLIDE_SECONDS).clamp(0.0, 1.0);
+            DISTANCE * progress * progress
+        }
+    }
+}
+
 fn push_life_bar(actors: &mut Vec<Actor>, life: GameplayLifeView) {
     let width = screen_width();
     let canvas = Layout::centered(width, screen_height());
+    let slide = slide_offset(life.motion);
     // ScreenGameplay anchors each bar to the outside edge of its player's side.
     let (screen_edge, canvas_edge, x) = if life.p2 {
-        (width, WIDTH, WIDTH - 24.0)
+        (width, WIDTH, WIDTH - 24.0 + slide)
     } else {
-        (0.0, 0.0, 24.0)
+        (0.0, 0.0, 24.0 - slide)
     };
     let layout = canvas.translated_x(screen_edge - canvas.position(canvas_edge, 0.0)[0]);
     let frame = if life.failed {
@@ -108,7 +128,8 @@ fn push_score(actors: &mut Vec<Actor>, score: GameplayScoreView) {
     let whole = centi / 100;
     let fraction = centi % 100;
     if let Some(text) = TextContent::inline_format(format_args!("{whole}.{fraction:02}%")) {
-        let mut label = layout.text([WIDTH * 0.5 + offset, 56.0], 0.5, text, 1.1, rgba);
+        let y = 56.0 - slide_offset(score.motion);
+        let mut label = layout.text([WIDTH * 0.5 + offset, y], 0.5, text, 1.1, rgba);
         label.z(90);
         actors.push(label.build(0));
     }
@@ -131,6 +152,7 @@ mod tests {
                         failed: false,
                         hot: false,
                         percent_label: Some(25.0),
+                        motion: GameplayHudMotion::Settled,
                     };
                     let mut actors = Vec::new();
                     push_life_bar(&mut actors, life);
@@ -189,6 +211,7 @@ mod tests {
                     percent: 98.7899,
                     rgba: [0.2, 0.5, 1.0, 0.65],
                     ex: true,
+                    motion: GameplayHudMotion::Settled,
                 };
                 push_score(&mut actors, score);
                 assert!(matches!(
@@ -198,5 +221,87 @@ mod tests {
                 ));
             });
         }
+    }
+
+    #[test]
+    fn life_and_score_follow_the_same_entry_and_exit_clock() {
+        use GameplayHudMotion::{Entering, Leaving};
+
+        with_current_metrics(Metrics::centered(640.0, 480.0), || {
+            for (motion, shift) in [
+                (
+                    Entering {
+                        elapsed_seconds: 0.0,
+                    },
+                    100.0,
+                ),
+                (
+                    Entering {
+                        elapsed_seconds: 0.5,
+                    },
+                    100.0,
+                ),
+                (
+                    Entering {
+                        elapsed_seconds: 0.7,
+                    },
+                    56.25,
+                ),
+                (
+                    Entering {
+                        elapsed_seconds: 1.3,
+                    },
+                    0.0,
+                ),
+                (
+                    Leaving {
+                        elapsed_seconds: 0.2,
+                    },
+                    6.25,
+                ),
+                (
+                    Leaving {
+                        elapsed_seconds: 0.8,
+                    },
+                    100.0,
+                ),
+            ] {
+                for (p2, x, direction) in [(false, 4.0, -1.0), (true, 596.0, 1.0)] {
+                    let mut actors = Vec::new();
+                    push_life_bar(
+                        &mut actors,
+                        GameplayLifeView {
+                            p2,
+                            level: 0.5,
+                            failed: false,
+                            hot: false,
+                            percent_label: None,
+                            motion,
+                        },
+                    );
+                    push_score(
+                        &mut actors,
+                        GameplayScoreView {
+                            p2,
+                            doubles: false,
+                            percent: 50.0,
+                            rgba: [1.0; 4],
+                            ex: false,
+                            motion,
+                        },
+                    );
+                    assert!(matches!(
+                        &actors[0],
+                        Actor::Sprite { offset, .. }
+                            if (offset[0] - (x + direction * shift)).abs() < 0.001
+                    ));
+                    assert!(matches!(
+                        actors.last(),
+                        Some(Actor::Text { offset, .. })
+                            if (offset[1] - (56.0 - shift)).abs() < 0.001
+                    ));
+                }
+            }
+        });
     }
 }

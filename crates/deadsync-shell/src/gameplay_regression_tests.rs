@@ -5042,6 +5042,8 @@ return Def.ActorFrame{
 
     #[test]
     fn openitg_hud_uses_live_score_in_lua_proxy() {
+        use deadsync_theme::views::GameplayHudMotion;
+
         let simfile = write_hidden_score_proxy_fixture("openitg-score-proxy");
         with_session(
             profile_data::PlayStyle::Single,
@@ -5071,7 +5073,10 @@ return Def.ActorFrame{
                     &mut actors,
                     &mut state,
                     &fixture_assets(),
-                    screen_gameplay::ActorViewOverride::default(),
+                    screen_gameplay::ActorViewOverride {
+                        hud_motion: GameplayHudMotion::Leaving { elapsed_seconds: 0.4 },
+                        ..Default::default()
+                    },
                     123.0,
                     deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );

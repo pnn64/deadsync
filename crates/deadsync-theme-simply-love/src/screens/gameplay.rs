@@ -284,6 +284,7 @@ pub fn gameplay_score_leader_alphas(state: &GameplayCoreState) -> [f32; MAX_PLAY
 pub struct ActorViewOverride {
     pub notefield: NotefieldViewOverride,
     pub hide_gameplay_hud: bool,
+    pub hud_motion: GameplayHudMotion,
     /// Alpha multiplier applied to SMX overlay actors (FSR sensor display and pad
     /// input display). Used to fade them in with the screen transition.
     pub smx_overlay_alpha: f32,
@@ -295,6 +296,7 @@ impl Default for ActorViewOverride {
         Self {
             notefield: view.notefield,
             hide_gameplay_hud: view.hide_gameplay_hud,
+            hud_motion: GameplayHudMotion::Settled,
             smx_overlay_alpha: 1.0,
         }
     }
@@ -468,7 +470,7 @@ impl DensityGraphRenderState {
     }
 }
 
-use deadsync_theme::views::{GameplayHud, GameplayLifeView, GameplayScoreView};
+use deadsync_theme::views::{GameplayHud, GameplayHudMotion, GameplayLifeView, GameplayScoreView};
 pub use deadsync_theme::views::{SMX_SENSOR_PANEL_COUNT, SmxSensorPadView, SmxSensorPanelView};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1177,6 +1179,10 @@ impl GameplayPresentation {
             plan.install_feedback(&hud);
         }
         self.hud = Some(hud);
+    }
+
+    pub fn prewarm_combo_milestones(&self, visual_policy: crate::views::SimplyLoveVisualPolicyView) {
+        self.notefield_combo_assets.prewarm(&visual_policy.assets.effects);
     }
 
     pub fn judgment_palette(&self, player: usize) -> deadsync_theme::color::JudgmentPalette {
@@ -3058,8 +3064,6 @@ pub fn in_transition(
         );
         return (vec![cover], duration);
     };
-    state.presentation.notefield_combo_assets
-        .prewarm(&visual_policy.assets.effects);
     if state.presentation.hide_song_intro {
         return (Vec::new(), duration);
     }
@@ -4042,6 +4046,7 @@ pub fn frame_layers<'a>(
                                 percent: score_value,
                                 rgba: score_color,
                                 ex: show_ex_score,
+                                motion: view.hud_motion,
                             },
                         );
                     } else {
@@ -4267,6 +4272,7 @@ pub fn frame_layers<'a>(
                                 percent_label: (profile.show_life_percent
                                     && show_standard_life_percent)
                                     .then_some(actual_life * 100.0),
+                                motion: view.hud_motion,
                             },
                         );
                         continue;
@@ -4611,6 +4617,7 @@ pub fn frame_layers<'a>(
                         percent: value,
                         rgba: color,
                         ex: profile.show_ex_score,
+                        motion: view.hud_motion,
                     },
                 );
                 return;

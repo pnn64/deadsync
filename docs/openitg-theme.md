@@ -135,13 +135,27 @@ the outside edges at y=270, with a 272-unit bottom-up fill. The frame leaves a
 16-unit inset above the painted area, corresponding to the transparent tip in
 the rotated reference graphic. One-side scores use the screen quarters with
 offsets of −20 for P1 and +18 for P2. Doubles uses offsets of ±140 from screen
-center. Both forms place the score at y=56. Slide-in timing, animated life
-glow, song and stage banners, and specialized score and life modes remain open.
+center. Both forms place the score at y=56. Animated life glow, song and stage
+banners, and specialized score and life modes remain open.
 
-Actor tests cover native and wide layouts, failed life, and EX score tint.
-A song Lua fixture captures the OpenITG score with Underlay hidden and still
-draws the canonical player proxy. The existing independent footer fade test
-fails at 0.75 seconds in both the earlier Windows build and this build.
+The effective Gameplay entry backdrop resolves to `_short`, an empty
+animation. Once stage loading finishes, the OpenITG playfield is visible
+during the shared two-second entry. The life bars hold 100 units outside their
+settled x positions and the score holds 100 units above its settled y for 0.5
+seconds. Both slide into place over 0.8 seconds with quadratic deceleration.
+During the results transition they accelerate off by the same distance over 0.8
+seconds. Loading and restart use the shared covers. The shell applies song Lua's
+intro suppression and supplies the stage clock that also governs input and audio.
+
+Paired 600-frame Windows development runs at 854×480 used the same chart,
+configuration, and audio. OpenITG averaged 8.56 ms per frame before the change
+and 8.57 ms afterward. Mean draw time was 2.09 ms and 2.05 ms respectively.
+The settled life and score regions matched pixel for pixel.
+
+Actor tests cover native and wide layouts, entry and exit positions, failed
+life, and EX score tint. A song Lua fixture captures the animated OpenITG score
+with Underlay hidden and still draws the canonical player proxy. The existing
+independent footer fade test fails at 0.75 seconds on the known baseline.
 
 An actor-construction benchmark drew two scores per frame at 854×480. Across
 nine runs of 400,000 frames, the median was 1.05 μs for the Simply Love digits

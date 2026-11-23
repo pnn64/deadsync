@@ -364,6 +364,99 @@ mod tests {
     }
 
     #[test]
+    fn gameplay_intro_uses_the_installed_theme_on_the_shared_stage_clock() {
+        use deadsync_config::theme::ThemeFlag;
+        use deadsync_gameplay::{
+            GAMEPLAY_ENTRY_TRANSITION_SECONDS, GAMEPLAY_RESTART_TRANSITION_SECONDS,
+        };
+        use deadsync_theme::views::GameplayHudMotion;
+
+        on_app_thread(|| {
+            with_session(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P1,
+                true,
+                false,
+                || {
+                    let root = tempfile::tempdir().unwrap();
+                    let mut app = test_app(root.path());
+                    app.state.screens.menu_state =
+                        crate::title_menu::InstalledMenu::new(ThemeFlag::OpenItg, 2);
+                    let (cover, duration) =
+                        app.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    assert!(!cover.is_empty());
+                    assert_eq!(duration, GAMEPLAY_ENTRY_TRANSITION_SECONDS);
+
+                    confirm_test_song(&mut app, root.path());
+                    assert_eq!(
+                        app.advance_stage_launch(OPTIONS_WINDOW_SECONDS),
+                        Some(CurrentScreen::Gameplay)
+                    );
+                    app.prepare_global_fade_entry(CurrentScreen::Gameplay);
+                    finish_pending_stage(&mut app);
+
+                    let (entry, duration) =
+                        app.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    assert!(entry.is_empty());
+                    assert_eq!(duration, GAMEPLAY_ENTRY_TRANSITION_SECONDS);
+                    let game = app.state.screens.gameplay_state.as_ref().unwrap();
+                    let entering = TransitionState::FadingIn {
+                        elapsed: 0.75,
+                        duration,
+                    };
+                    assert_eq!(
+                        crate::openitg::gameplay_hud_motion(game, &entering, false),
+                        GameplayHudMotion::Entering {
+                            elapsed_seconds: 0.75
+                        },
+                    );
+                    assert_eq!(
+                        crate::openitg::gameplay_hud_motion(game, &entering, true),
+                        GameplayHudMotion::Settled,
+                    );
+                    let leaving = TransitionState::FadingOut {
+                        elapsed: 0.25,
+                        duration: app
+                            .get_out_transition_for_route(
+                                CurrentScreen::Gameplay,
+                                CurrentScreen::Evaluation,
+                            )
+                            .1,
+                        target: CurrentScreen::Evaluation,
+                    };
+                    assert_eq!(
+                        crate::openitg::gameplay_hud_motion(game, &leaving, false),
+                        GameplayHudMotion::Leaving {
+                            elapsed_seconds: 0.25
+                        },
+                    );
+
+                    let game = app.state.screens.gameplay_state.as_mut().unwrap();
+                    game.presentation.hide_song_intro = true;
+                    assert_eq!(
+                        crate::openitg::gameplay_hud_motion(game, &entering, false),
+                        GameplayHudMotion::Settled,
+                    );
+                    game.presentation.hide_song_intro = false;
+
+                    app.state.session.gameplay_restart_count = 1;
+                    let (restart, duration) =
+                        app.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    assert!(!restart.is_empty());
+                    assert_eq!(duration, GAMEPLAY_RESTART_TRANSITION_SECONDS);
+                    app.state.session.gameplay_restart_count = 0;
+                    app.state.screens.menu_state =
+                        crate::title_menu::InstalledMenu::new(ThemeFlag::SimplyLove, 2);
+                    let (entry, duration) =
+                        app.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    assert!(!entry.is_empty());
+                    assert_eq!(duration, GAMEPLAY_ENTRY_TRANSITION_SECONDS);
+                },
+            )
+        });
+    }
+
+    #[test]
     fn versus_song_launch_uses_one_music_choice_in_gameplay_and_options() {
         on_app_thread(|| {
             with_session(

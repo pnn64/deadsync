@@ -555,8 +555,17 @@ impl App {
             restart,
             policy: super::simply_love_visual_policy(&config::runtime::get()),
         });
-        let (actors, duration) = ActiveTheme::in_transition(screen, context);
         let restarting = play.is_some_and(|(_, restart)| restart);
+        let (actors, duration) = if screen == CurrentScreen::Gameplay
+            && !restarting
+            && play.is_some_and(|(gameplay, _)| gameplay.is_some())
+            && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg
+        {
+            use deadsync_theme_openitg::{OpenItgScreen, OpenItgTheme};
+            OpenItgTheme::in_transition(OpenItgScreen::Gameplay, ())
+        } else {
+            ActiveTheme::in_transition(screen, context)
+        };
         let duration = stage_entry_duration::<ActiveTheme>(screen, restarting).unwrap_or(duration);
         (actors, duration)
     }

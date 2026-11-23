@@ -285,6 +285,15 @@ pub struct GameplayTapAtlas {
     pub tween: &'static deadsync_core::hud_style::TapFeedbackTween,
 }
 
+/// Stage transition time available to gameplay presenters.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum GameplayHudMotion {
+    #[default]
+    Settled,
+    Entering { elapsed_seconds: f32 },
+    Leaving { elapsed_seconds: f32 },
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct GameplayLifeView {
     /// The physical side even when a single player occupies runtime slot zero.
@@ -293,6 +302,7 @@ pub struct GameplayLifeView {
     pub failed: bool,
     pub hot: bool,
     pub percent_label: Option<f32>,
+    pub motion: GameplayHudMotion,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -303,6 +313,7 @@ pub struct GameplayScoreView {
     /// Profile-selected EX tint and multiplayer emphasis alpha.
     pub rgba: [f32; 4],
     pub ex: bool,
+    pub motion: GameplayHudMotion,
 }
 
 /// Optional HUD updates from the live stage. None of these hooks control play.

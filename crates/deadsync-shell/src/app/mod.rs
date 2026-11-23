@@ -1007,6 +1007,8 @@ fn prewarm_gameplay_text_layout_cache(
     compose_scratch.clear_retained_frames();
 
     state.stage.prewarm_song_texture_bindings(assets);
+    let visual_policy = simply_love_visual_policy(config);
+    state.presentation.prewarm_combo_milestones(visual_policy);
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
     // Build the representative opening frame in the App-owned actor buffer.
@@ -1020,7 +1022,7 @@ fn prewarm_gameplay_text_layout_cache(
         assets,
         gameplay::ActorViewOverride::default(),
         arrow_effect_time_seconds(started),
-        simply_love_visual_policy(config),
+        visual_policy,
     );
     let actor_segments = segments.segments(state.song_frame(), actor_scratch);
     let mut render = compose::build_passes(
@@ -7778,11 +7780,23 @@ impl App {
                         gs.presentation.hide_song_intro,
                         &self.state.shell.transition,
                     );
+                    let hud_motion = if self.state.screens.menu_state.theme_flag()
+                        == config::theme::ThemeFlag::OpenItg
+                    {
+                        crate::openitg::gameplay_hud_motion(
+                            gs,
+                            &self.state.shell.transition,
+                            self.state.session.gameplay_restart_count > 0,
+                        )
+                    } else {
+                        Default::default()
+                    };
                     gameplay_segments = Some(crate::gameplay_runtime::push_actors(
                         &mut actors,
                         gs,
                         &self.asset_manager,
                         gameplay::ActorViewOverride {
+                            hud_motion,
                             smx_overlay_alpha,
                             ..Default::default()
                         },
