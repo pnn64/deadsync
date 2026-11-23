@@ -324,28 +324,34 @@ and dev-profile libraries.
 
 ## Select Style and Play Mode
 
-The style and mode screens present the shared controller's current choices,
-confirmation progress, and joined players on a rotating selector. The effective
-`ScreenSelectStyle2` and `ScreenSelectPlayMode` metrics supply the radius, depth
-spacing, dimming, and 0.3 s per item. The layout centers the 640×480 canvas in
-wider viewports. It uses original pad and meter illustrations, a flat projection
-of the reference ring, and the existing DeadSync selection and confirmation
-cues. Labels stay readable on the far side of the ring.
+Style and Play Mode use the supplied default theme's backdrop textures,
+characters, choice artwork, side arrows, explanation frame, and Eurostile
+normal and blue glow bitmap fonts. They share the title screen's red streaks
+and outlined font. The effective `ScreenSelectStyle2` and `ScreenSelectPlayMode`
+metrics supply the field of view, radius, depth spacing, dimming, and 0.3 s per
+item. The perspective ring passes in front of and behind the character, with
+the 640×480 composition centered in wider viewports.
 
-DeadSync's flow shows Style first and retains its Regular and Marathon modes.
-Premium Free appears when the configured session permits it. Mode descriptions
-use the configured language and wrap to the panel. The three short style
-explanations are in English. Color selection uses the existing screen. The
-reference's perspective, artwork,
-explanation panels, and transitions still need comparison against a live build.
+The dance pad preview is a texture rasterized from the supplied `_platform
+home single` model and materials at its authored tilt. The original uses a
+live rotating model with environmental reflection. Pump choices continue to
+show a five-panel layout. The supplied **Dance** logo represents DeadSync's
+Regular mode. DeadSync's controllers still supply the choices, joined players,
+and confirmation timing, including Marathon and conditional Premium Free.
+Mode descriptions and non-English choice labels come from the shared view.
 
-Actor checks cover the native and wide anchors, available modes, joined-player
-status, wraparound, and changing selection mid-animation. At 854×480, two
-runs of seven 8,000-frame batches measured median actor construction at
-26–29 µs before and 26–27 µs after for Simply Love Style, and 57–62 µs before
-and 58–59 µs after for Simply Love Mode. The OpenITG layouts measured about
-21 µs for Style and 15 µs for Mode. The benchmark covers steady-state actor
-construction with dev-profile libraries and bundled fonts.
+The native 640×480 Style capture was compared with DeadSync Vulkan captures.
+DeadSync captures at 640×480 and 854×480 check both screens at entry, through a
+carousel step, and on each settled choice. Play Mode was compared with the
+source theme assets and metrics. Actor checks cover the native and wide
+anchors, available modes, joined-player status, wraparound, and changing
+selection mid-animation.
+
+At 854×480, two runs of seven 6,000-frame batches measured median CPU time
+for actor construction and composition during movement. Style went from
+57 µs to 36–39 µs per frame and Play Mode went from 44–47 µs to 36 µs. The
+fixture used dev-profile libraries, warm composition buffers, and fonts
+staged under the packaged asset paths. GPU time was outside this measurement.
 
 ## Select Music
 

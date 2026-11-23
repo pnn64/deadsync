@@ -169,6 +169,29 @@ pub(crate) fn quad(position: [f32; 2], size: [f32; 2], rgba: [f32; 4], z: i16) -
     actor.build(0)
 }
 
+pub(crate) fn sprite(
+    key: &'static str,
+    [x, y]: [f32; 2],
+    [width, height]: [f32; 2],
+    rgba: [f32; 4],
+    z: i16,
+) -> SpriteBuilder {
+    let mut sprite = SpriteBuilder::static_texture(key);
+    sprite.align(0.5, 0.5);
+    sprite.xy(x, y);
+    sprite.size(width, height);
+    sprite.diffuse(rgba);
+    sprite.z(z);
+    sprite
+}
+
+pub(crate) fn italic(mut actor: Actor, shear: f32) -> Actor {
+    if let Actor::Text { local_transform, .. } = &mut actor {
+        local_transform.y_axis.x = shear;
+    }
+    actor
+}
+
 pub(crate) fn black_fade(duration: f32, arriving: bool) -> Actor {
     const SITE: u64 = runtime::site_base(file!(), line!(), column!());
     let (start, end) = if arriving { (1.0, 0.0) } else { (0.0, 1.0) };

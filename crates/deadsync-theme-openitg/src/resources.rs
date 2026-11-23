@@ -7,6 +7,17 @@ pub(crate) const TITLE_CHROME: &str = "openitg/title-chrome.png";
 pub(crate) const TITLE_GLINT: &str = "openitg/title-glint.png";
 pub(crate) const TITLE_STREAK: &str = "openitg/title-streak.png";
 pub(crate) const TITLE_FONT: &str = "openitg/title";
+pub(crate) const MENU_HEADING_FONT: &str = "openitg/eurostile-glow";
+pub(crate) const MENU_NORMAL_FONT: &str = "openitg/eurostile";
+
+macro_rules! png {
+    ($name:literal) => {
+        EmbeddedPng {
+            key: concat!("openitg/", $name, ".png"),
+            bytes: include_bytes!(concat!("../assets/", $name, ".png")),
+        }
+    };
+}
 macro_rules! wav {
     ($stem:literal) => {
         UiSound::EmbeddedWav {
@@ -34,11 +45,23 @@ impl ThemeResources for OpenItgTheme {
 
     fn asset_manifest() -> ThemeAssetManifest<impl Iterator<Item = TextureAssetSpec>> {
         ThemeAssetManifest {
-            fonts: &[FontAssetSpec {
-                name: TITLE_FONT,
-                ini_path: "assets/fonts/openitg/_eurostile outline.ini",
-                fallback_font_name: Some("miso"),
-            }],
+            fonts: &[
+                FontAssetSpec {
+                    name: TITLE_FONT,
+                    ini_path: "assets/fonts/openitg/_eurostile outline.ini",
+                    fallback_font_name: Some("miso"),
+                },
+                FontAssetSpec {
+                    name: MENU_HEADING_FONT,
+                    ini_path: "assets/fonts/openitg/_eurostile blue glow.ini",
+                    fallback_font_name: Some(TITLE_FONT),
+                },
+                FontAssetSpec {
+                    name: MENU_NORMAL_FONT,
+                    ini_path: "assets/fonts/openitg/_eurostile normal.ini",
+                    fallback_font_name: Some(TITLE_FONT),
+                },
+            ],
             textures: std::iter::empty(),
             embedded_pngs: &[
                 EmbeddedPng {
@@ -57,6 +80,22 @@ impl ThemeResources for OpenItgTheme {
                     key: TITLE_STREAK,
                     bytes: include_bytes!("../assets/title-streak.png"),
                 },
+                png!("selection-backdrop"),
+                png!("selection-arrows"),
+                png!("selection-dots"),
+                png!("selection-cursor"),
+                png!("selection-style-character"),
+                png!("selection-mode-character"),
+                png!("selection-explanation"),
+                png!("selection-single"),
+                png!("selection-versus"),
+                png!("selection-double"),
+                png!("selection-dance"),
+                png!("selection-left-foot"),
+                png!("selection-right-foot"),
+                png!("selection-marathon"),
+                png!("selection-flag"),
+                png!("selection-platform"),
                 EmbeddedPng {
                     key: GAMEPLAY_HUD.default_tap_atlas.key,
                     bytes: include_bytes!("../assets/tap-results.png"),

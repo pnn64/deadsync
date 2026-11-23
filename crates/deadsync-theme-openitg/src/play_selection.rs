@@ -1,14 +1,19 @@
 //! Style and mode carousels for the existing DeadSync session flow.
 
-use crate::presentation::{ACCENT, HEIGHT, INK, Layout, MUTED, WIDTH, quad};
+use crate::presentation::{ACCENT, HEIGHT, INK, Layout, WIDTH, italic, quad, sprite};
+use crate::resources::{MENU_HEADING_FONT, MENU_NORMAL_FONT, TITLE_FONT, TITLE_STREAK};
 use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::anim::bounceend_p;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_theme::views::{PlaySelectionKind, PlaySelectionView};
 use std::f32::consts::TAU;
 use std::sync::Arc;
 
 const ITEM_SECONDS: f32 = 0.3;
-const PLAYER_TWO: [f32; 3] = [0.48, 0.94, 0.51];
+const WHITE: [f32; 4] = [1.0; 4];
+const RADIUS: f32 = 200.0;
+const STYLE_FOCAL_LENGTH: f32 = 415.6922; // 60-degree FOV at a logical height of 480 px.
+const MODE_FOCAL_LENGTH: f32 = 240.0; // 90-degree FOV.
 
 /// Present the pending catalog load using the shared screen's elapsed time.
 pub fn push_profile_load_actors(actors: &mut Vec<Actor>, label: &Arc<str>, elapsed_seconds: f32) {
@@ -34,6 +39,7 @@ pub struct PlaySelectionCarousel {
     selected: usize,
     from: f32,
     started_at: f64,
+    entered_at: f64,
 }
 
 impl PlaySelectionCarousel {
@@ -54,6 +60,7 @@ impl PlaySelectionCarousel {
                 selected,
                 from: selected as f32,
                 started_at: time,
+                entered_at: time,
             };
         } else if self.selected != selected {
             let previous = self.selected as f32;
@@ -77,57 +84,31 @@ impl PlaySelectionCarousel {
         let center = self.select_at(count, view.selected, time);
         let (width, height) = (screen_width(), screen_height());
         let layout = Layout::centered(width, height);
-        actors.push(quad(
-            [0.0, 0.0],
-            [width, height],
-            [0.025, 0.037, 0.064, 1.0],
-            -20,
-        ));
-        actors.push(layout.panel(0.0, 0.0, [WIDTH, HEIGHT], [0.047, 0.075, 0.119, 1.0], -19));
-        actors.push(layout.panel(32.0, 80.0, [576.0, 1.0], [0.24, 0.35, 0.46, 1.0], -18));
-        actors.push(layout.label([32.0, 49.0], 0.0, view.title.into(), 1.78, rgba(INK)));
+        let elapsed = (time - self.entered_at).max(0.0) as f32;
+        let style = matches!(view.kind, PlaySelectionKind::Style { .. });
+        push_selection_backdrop(actors, [width, height], elapsed);
+        push_selection_header(actors, layout, view.title, elapsed);
 
-        // The far side of the ring is dimmer and drawn behind the near side.
-        let [base_y, depth_scale, dim] = match view.kind {
-            PlaySelectionKind::Style { .. } => [232.0, 1.0 / 2.2, 0.15],
-            PlaySelectionKind::Mode => [240.0, 1.0 / 2.8, 0.30],
-        };
         let mut cards = [Card::default(); 3];
         debug_assert!(count <= cards.len());
         let cards = &mut cards[..count];
         for (index, card) in cards.iter_mut().enumerate() {
-            let (side, depth) = ((index as f32 - center) * TAU / count as f32).sin_cos();
-            let near = depth.max(0.0);
-            *card = Card {
-                index,
-                x: side.mul_add(200.0, 320.0),
-                y: (depth * 200.0).mul_add(depth_scale, base_y),
-                zoom: near.mul_add(0.3, 0.7),
-                light: near.mul_add(1.0 - dim, dim),
-                depth,
-            };
+            *card = Card::new(index, (index as f32 - center) * TAU / count as f32, style);
         }
         cards.sort_unstable_by(|a, b| a.depth.total_cmp(&b.depth));
         for (layer, card) in cards.iter().enumerate() {
-            card.push(actors, layout, &view, 4 + layer as i16 * 4);
+            // The actor at z=-100 stands between the front and rear of the ring.
+            let z = (if card.depth < 0.5 { 2 } else { 14 }) + layer as i16 * 2;
+            card.push(actors, layout, &view, z);
         }
-
-        actors.push(layout.panel(100.0, 369.0, [440.0, 59.0], [0.018, 0.029, 0.054, 1.0], 1));
-        actors.push(layout.panel(100.0, 369.0, [440.0, 1.0], rgba(ACCENT), 2));
+        push_character(actors, layout, style, elapsed);
         let description = selected.description.map_or_else(
-            || {
-                TextContent::Static(
-                    [
-                        "One player uses one pad.",
-                        "Each player uses a pad.",
-                        "One player uses both pads.",
-                    ][view.selected],
-                )
-            },
+            || style_description(view.kind, view.selected).into(),
             TextContent::from,
         );
-        actors.push(layout.paragraph([114.0, 382.0], [412.0, 38.0], description, 0.93, rgba(INK)));
+        push_explanation(actors, layout, description, elapsed, style);
         push_players(actors, layout, &view);
+        self.push_arrows(actors, [width, height], time, elapsed, view.exit_progress);
 
         let exit = view.exit_progress.clamp(0.0, 1.0);
         if exit > 0.0 {
@@ -137,6 +118,188 @@ impl PlaySelectionCarousel {
                 [0.0, 0.0, 0.0, exit],
                 100,
             ));
+        }
+    }
+}
+
+const fn style_description(kind: PlaySelectionKind, index: usize) -> &'static str {
+    match kind {
+        PlaySelectionKind::Style { pump: true } => [
+            "One player uses 5 panels",
+            "Two players use 10 panels",
+            "One player uses both pads",
+        ][index],
+        _ => [
+            "One Player uses 4 Panels",
+            "Two Players use 8 Panels",
+            "One Player uses 8 Panels",
+        ][index],
+    }
+}
+
+fn push_selection_backdrop(actors: &mut Vec<Actor>, [width, height]: [f32; 2], elapsed: f32) {
+    for (y, rotation) in [(0.25 * height, 0.0), (0.75 * height, 180.0)] {
+        let mut half = sprite(
+            "openitg/selection-backdrop.png",
+            [width / 2.0, y],
+            [width, height / 2.0],
+            WHITE,
+            -24,
+        );
+        half.rotationz(rotation);
+        actors.push(half.build(0));
+    }
+    let scale = height / HEIGHT;
+    for (index, y) in [91.0, 127.0, 172.0, 308.0, 350.0, 391.0]
+        .into_iter()
+        .enumerate()
+    {
+        let arrows = index % 2 == 0;
+        let phase = elapsed * (0.44 + 0.07 * index as f32);
+        let x = width / 2.0 + phase.sin() * 52.0 * scale;
+        let key = if arrows {
+            "openitg/selection-arrows.png"
+        } else {
+            "openitg/selection-dots.png"
+        };
+        actors.push(
+            sprite(
+                key,
+                [x, y * scale],
+                [
+                    width + 112.0 * scale,
+                    if arrows { 18.0 } else { 9.0 } * scale,
+                ],
+                [0.86, 0.58, 0.58, if arrows { 0.19 } else { 0.22 }],
+                -23,
+            )
+            .build(0),
+        );
+    }
+    for y in [42.0, 446.0] {
+        let mut band = sprite(
+            TITLE_STREAK,
+            [width / 2.0, y * scale],
+            [width, 34.0 * scale],
+            WHITE,
+            -22,
+        );
+        band.cropright(1.0 - elapsed.min(1.0));
+        actors.push(band.build(0));
+    }
+}
+
+fn push_selection_header(actors: &mut Vec<Actor>, layout: Layout, title: &Arc<str>, elapsed: f32) {
+    let content = if title.eq_ignore_ascii_case("select style") {
+        "PICK A STYLE".into()
+    } else if title.eq_ignore_ascii_case("select mode") {
+        "PICK A GAME".into()
+    } else {
+        title.into()
+    };
+    let phase = bounceend_p((elapsed / 0.3).clamp(0.0, 1.0));
+    let mut text = layout.text([32.0, 39.0], 0.0, content, 1.0, WHITE);
+    text.font(MENU_HEADING_FONT);
+    text.zoomx(layout.size([phase, 0.0])[0]);
+    text.zoomy(layout.size([0.0, (6.0 - 5.0 * phase).max(0.0)])[1]);
+    text.shadowlength(layout.size([4.0, 0.0])[0]);
+    text.z(32);
+    actors.push(italic(text.build(0), -0.16));
+}
+
+fn push_character(actors: &mut Vec<Actor>, layout: Layout, style: bool, elapsed: f32) {
+    let (key, position, size) = if style {
+        (
+            "openitg/selection-style-character.png",
+            [384.5, 288.4],
+            [365.0, 524.0],
+        )
+    } else {
+        (
+            "openitg/selection-mode-character.png",
+            [320.0, 275.3],
+            [345.0, 476.0],
+        )
+    };
+    let mut character = sprite(
+        key,
+        layout.position(position[0], position[1]),
+        layout.size(size),
+        [1.0, 1.0, 1.0, (elapsed / 0.3).clamp(0.0, 1.0)],
+        10,
+    );
+    let glow = 1.0 - ((elapsed - 0.3) / 0.3).abs().min(1.0);
+    character.glow([1.0, 1.0, 1.0, glow]);
+    actors.push(character.build(0));
+}
+
+fn push_explanation(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    description: TextContent,
+    elapsed: f32,
+    style: bool,
+) {
+    let alpha = (elapsed / 0.5).clamp(0.0, 1.0);
+    actors.push(
+        sprite(
+            "openitg/selection-explanation.png",
+            layout.position(402.0, 374.0),
+            layout.size([356.0, 58.0]),
+            [1.0, 1.0, 1.0, alpha],
+            24,
+        )
+        .build(0),
+    );
+    let zoom = if style { 1.0 } else { 0.72 };
+    let mut text = layout.text(
+        [240.0, 374.0],
+        0.0,
+        description,
+        zoom,
+        [1.0, 1.0, 1.0, alpha],
+    );
+    text.font(MENU_NORMAL_FONT);
+    if !style {
+        text.wrapwidthpixels(326.0 / zoom);
+    }
+    text.maxheight(layout.size([0.0, 47.0])[1]);
+    text.maxwidth(layout.size([326.0, 0.0])[0]);
+    text.shadowlength(layout.size([2.0, 0.0])[0]);
+    text.z(25);
+    actors.push(italic(text.build(0), -0.21));
+}
+
+impl PlaySelectionCarousel {
+    fn push_arrows(
+        &self,
+        actors: &mut Vec<Actor>,
+        [width, height]: [f32; 2],
+        time: f64,
+        elapsed: f32,
+        exiting: f32,
+    ) {
+        let scale = height / HEIGHT;
+        let entry = (1.0 - elapsed / 0.5).clamp(0.0, 1.0);
+        let shift = RADIUS * (entry * entry + exiting * exiting) * scale;
+        let delta = self.selected as f32 - self.from;
+        let blink = (1.0 - ((time - self.started_at) / 0.2) as f32).clamp(0.0, 1.0);
+        for (x, direction, rotation) in [
+            (64.0 * scale - shift, -1.0, 0.0),
+            (width - 64.0 * scale + shift, 1.0, 180.0),
+        ] {
+            let pulse = if delta * direction > 0.0 { blink } else { 0.0 };
+            let size = [58.0, 98.0].map(|v| v * scale * (1.0 + 0.2 * pulse));
+            let mut arrow = sprite(
+                "openitg/selection-cursor.png",
+                [x, height / 2.0],
+                size,
+                WHITE,
+                22,
+            );
+            arrow.rotationz(rotation);
+            arrow.glow([1.0, 1.0, 1.0, pulse * 0.65]);
+            actors.push(arrow.build(0));
         }
     }
 }
@@ -152,121 +315,173 @@ struct Card {
 }
 
 impl Card {
-    fn push(&self, actors: &mut Vec<Actor>, layout: Layout, view: &PlaySelectionView<'_>, z: i16) {
-        let Self {
+    fn new(index: usize, angle: f32, style: bool) -> Self {
+        let (side, depth) = angle.sin_cos();
+        let (focal, y, divisor, dim) = if style {
+            (STYLE_FOCAL_LENGTH, -8.0, 2.2, 0.15)
+        } else {
+            (MODE_FOCAL_LENGTH, 0.0, 2.8, 0.30)
+        };
+        let perspective = focal / (focal + RADIUS * (1.0 - depth));
+        let focus = (depth * 2.0 - 1.0).clamp(0.0, 1.0);
+        Self {
             index,
-            x,
-            y,
-            zoom,
-            light,
-            ..
-        } = *self;
-        let selected = index == view.selected;
-        let tint = |color: [f32; 3]| rgba(color.map(|channel| channel * light));
-        let edge = if selected { ACCENT } else { [0.47, 0.59, 0.74] };
-        let left = x - 77.0 * zoom;
-        let top = y - 41.0 * zoom;
-        actors.push(layout.panel(left, top, [154.0 * zoom, 82.0 * zoom], tint(edge), z));
-        actors.push(layout.panel(
-            left + 1.0,
-            top + 1.0,
-            [154.0 * zoom - 2.0, 82.0 * zoom - 2.0],
-            tint([0.088, 0.151, 0.235]),
-            z + 1,
-        ));
-        match view.kind {
-            PlaySelectionKind::Style { pump } => {
-                let pad_y = y - 10.0 * zoom;
-                let shift = 20.0 * zoom;
-                let left_pad = if index == 0 { x } else { x - shift };
-                push_pad(
-                    actors,
-                    layout,
-                    [left_pad, pad_y],
-                    zoom,
-                    pump,
-                    tint(ACCENT),
-                    z + 2,
-                );
-                if index != 0 {
-                    let second = if index == 1 { PLAYER_TWO } else { ACCENT };
-                    push_pad(
-                        actors,
-                        layout,
-                        [x + shift, pad_y],
-                        zoom,
-                        pump,
-                        tint(second),
-                        z + 2,
-                    );
-                }
-            }
-            PlaySelectionKind::Mode => {
-                let bars = [3, 5, 4][index];
-                let left = x - (bars as f32 * 9.0 - 3.0) * zoom / 2.0;
-                for bar in 0..bars {
-                    let height = (10.0 + 5.0 * bar as f32) * zoom;
-                    actors.push(layout.panel(
-                        left + bar as f32 * 9.0 * zoom,
-                        y + 5.0 * zoom - height,
-                        [6.0 * zoom, height],
-                        tint(ACCENT),
-                        z + 2,
-                    ));
-                }
-            }
+            x: 320.0 + side * RADIUS * perspective,
+            y: 240.0 + (y + depth * RADIUS / divisor) * perspective,
+            zoom: (0.7 + 0.3 * focus) * perspective,
+            light: dim + (1.0 - dim) * focus,
+            depth,
         }
-        let mut label = layout.text(
-            [x, y + 24.0 * zoom],
-            0.5,
-            view.choices[index].label.into(),
-            zoom,
-            rgba(INK.map(|channel| channel * light.max(0.55))),
-        );
-        label.maxwidth(layout.size([140.0 * zoom, 0.0])[0]);
-        label.z(z + 3);
-        actors.push(label.build(0));
+    }
+
+    fn push(&self, actors: &mut Vec<Actor>, layout: Layout, view: &PlaySelectionView<'_>, z: i16) {
+        let light = self.light;
+        let tint = [light, light, light, 1.0];
+        let image = |key, x, y, size: [f32; 2], layer| {
+            sprite(
+                key,
+                layout.position(x, y),
+                layout.size(size.map(|v| v * self.zoom)),
+                tint,
+                z + layer,
+            )
+        };
+        let label = view.choices[self.index].label;
+        let art = match view.kind {
+            PlaySelectionKind::Style { pump } => {
+                let pad_y = self.y + 31.0 * self.zoom;
+                let (shift, size) = [
+                    (0.0, [224.0, 118.0]),
+                    (80.0, [168.0, 88.5]),
+                    (77.0, [196.0, 103.25]),
+                ][self.index];
+                let pad_light = 0.5 + 0.5 * light;
+                let pad_size = layout.size(size.map(|v| v * self.zoom));
+                for offset in [-shift, shift]
+                    .into_iter()
+                    .take(if shift > 0.0 { 2 } else { 1 })
+                {
+                    let x = self.x + offset * self.zoom;
+                    if pump {
+                        push_pump_pad(actors, layout, [x, pad_y], self.zoom, tint, z);
+                    } else {
+                        actors.push(
+                            sprite(
+                                "openitg/selection-platform.png",
+                                layout.position(x, pad_y + 9.0 * self.zoom),
+                                pad_size,
+                                [pad_light, pad_light, pad_light, 1.0],
+                                z,
+                            )
+                            .build(0),
+                        );
+                    }
+                }
+                let (english, key, size) = [
+                    ("1 Player", "openitg/selection-single.png", [430.0, 164.0]),
+                    ("2 Players", "openitg/selection-versus.png", [488.0, 158.0]),
+                    ("Double", "openitg/selection-double.png", [338.0, 154.0]),
+                ][self.index];
+                label.eq_ignore_ascii_case(english).then_some((
+                    key,
+                    size,
+                    self.y - 50.0 * self.zoom,
+                ))
+            }
+            PlaySelectionKind::Mode => match self.index {
+                0 => {
+                    let x = self.x - 150.0 * self.zoom;
+                    let y = self.y + 30.0 * self.zoom;
+                    for key in [
+                        "openitg/selection-left-foot.png",
+                        "openitg/selection-right-foot.png",
+                    ] {
+                        actors.push(image(key, x, y, [128.0, 150.0], 0).build(0));
+                    }
+                    label.eq_ignore_ascii_case("regular").then_some((
+                        "openitg/selection-dance.png",
+                        [248.0, 64.0],
+                        self.y,
+                    ))
+                }
+                1 => {
+                    actors.push(
+                        image(
+                            "openitg/selection-flag.png",
+                            self.x - 150.0 * self.zoom,
+                            self.y + 30.0 * self.zoom,
+                            [154.0; 2],
+                            0,
+                        )
+                        .build(0),
+                    );
+                    label.eq_ignore_ascii_case("marathon").then_some((
+                        "openitg/selection-marathon.png",
+                        [388.0, 64.0],
+                        self.y,
+                    ))
+                }
+                _ => None,
+            },
+        };
+        if let Some((key, size, y)) = art {
+            actors.push(image(key, self.x, y, size, 1).build(0));
+        } else {
+            let y = if matches!(view.kind, PlaySelectionKind::Style { .. }) {
+                self.y - 50.0 * self.zoom
+            } else {
+                self.y
+            };
+            let mut text = layout.text([self.x, y], 0.5, label.into(), 1.55 * self.zoom, tint);
+            text.font(TITLE_FONT);
+            text.maxwidth(layout.size([408.0 * self.zoom, 0.0])[0]);
+            text.z(z + 1);
+            actors.push(italic(text.build(0), -0.16));
+        }
     }
 }
 
-fn push_pad(
+fn push_pump_pad(
     actors: &mut Vec<Actor>,
     layout: Layout,
     [x, y]: [f32; 2],
     zoom: f32,
-    pump: bool,
-    color: [f32; 4],
+    tint: [f32; 4],
     z: i16,
 ) {
-    let pitch = 10.0 * zoom;
-    let active = if pump {
-        [0, 2, 4, 6, 8].as_slice()
-    } else {
-        [1, 3, 5, 7].as_slice()
-    };
+    let pitch = 13.0 * zoom;
     actors.push(layout.panel(
         x - 1.6 * pitch,
         y - 1.6 * pitch,
         [3.2 * pitch; 2],
-        [0.022, 0.032, 0.051, 1.0],
+        [0.28 * tint[0], 0.22 * tint[1], 0.20 * tint[2], 1.0],
         z,
     ));
-    for &tile in active {
+    for tile in [0, 2, 4, 6, 8] {
         let dx = tile % 3;
         let dy = tile / 3;
         actors.push(layout.panel(
             x + (dx as f32 - 1.42) * pitch,
             y + (dy as f32 - 1.42) * pitch,
             [0.84 * pitch; 2],
-            color,
+            [tint[0], 0.72 * tint[1], 0.25 * tint[2], 1.0],
             z + 1,
         ));
     }
 }
 
 fn push_players(actors: &mut Vec<Actor>, layout: Layout, view: &PlaySelectionView<'_>) {
-    actors.push(layout.panel(0.0, 442.0, [WIDTH, 38.0], [0.018, 0.029, 0.054, 1.0], 0));
-    for ((name, x, color), joined) in [("P1", 32.0, ACCENT), ("P2", 344.0, PLAYER_TWO)]
+    let mut help = layout.text(
+        [320.0, 445.0],
+        0.5,
+        "Use Left or Right to choose, then press Start".into(),
+        0.68,
+        WHITE,
+    );
+    help.font(MENU_NORMAL_FONT);
+    help.z(30);
+    actors.push(help.build(0));
+    for ((x, align), joined) in [(36.0, 0.0), (604.0, 1.0)]
         .into_iter()
         .zip(view.player_names)
     {
@@ -275,15 +490,11 @@ fn push_players(actors: &mut Vec<Actor>, layout: Layout, view: &PlaySelectionVie
                 .unwrap_or_else(|| TextContent::Owned(display_name.to_owned())),
             None => view.join_prompt.into(),
         };
-        actors.push(layout.label([x, 461.0], 0.0, name.into(), 0.94, rgba(color)));
-        actors.push(layout.bounded_label(
-            [x + 34.0, 461.0],
-            0.0,
-            225.0,
-            status,
-            0.94,
-            rgba(if joined.is_some() { INK } else { MUTED }),
-        ));
+        let mut text = layout.text([x, 465.0], align, status, 0.63, WHITE);
+        text.font(TITLE_FONT);
+        text.maxwidth(layout.size([260.0, 0.0])[0]);
+        text.z(30);
+        actors.push(text.build(0));
     }
 }
 
@@ -316,7 +527,7 @@ mod tests {
         let mut carousel = PlaySelectionCarousel::default();
         let labels = ["Regular", "Marathon", "Premium Free"].map(Arc::<str>::from);
         let description = Arc::<str>::from("Play a regular session.");
-        let title = Arc::<str>::from("Select Play Mode");
+        let title = Arc::<str>::from("SELECT MODE");
         let join_prompt = Arc::<str>::from("Press Start");
         let choices = labels.each_ref().map(|label| PlaySelectionChoice {
             label,
@@ -348,7 +559,10 @@ mod tests {
                     _ => None,
                 })
             };
-            assert_eq!(text("Regular").unwrap()[0], width / 2.0);
+            assert!(actors.iter().any(|actor| matches!(actor,
+                Actor::Sprite { source: deadlib_present::actors::SpriteSource::TextureStatic("openitg/selection-dance.png"), offset, .. }
+                    if offset[0] == width / 2.0
+            )));
             assert_eq!(text("Premium Free").is_some(), count == 3);
             assert!(text("Player One").unwrap()[0] < width / 2.0);
             assert!(text("Press Start").unwrap()[0] > width / 2.0);

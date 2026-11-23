@@ -699,8 +699,9 @@ reference, implemented behavior, and fidelity checks.
 
 Select Style and Select Play Mode use their existing input and confirmation
 controllers for both themes. The shell passes a borrowed `PlaySelectionView`
-to the OpenITG carousel. The carousel owns its animation position, while the
-controllers supply the available choices, selected index, and joined players.
+to the OpenITG carousel. The theme owns the carousel animation, projection,
+and presentation assets. The controllers supply the available choices,
+selected index, and joined players.
 
 `deadsync-profile::picker` owns the per-side join and confirmation state,
 including duplicate local-profile validation and late join. The standalone

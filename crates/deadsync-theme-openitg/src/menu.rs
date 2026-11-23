@@ -1,4 +1,4 @@
-use crate::presentation::{HEIGHT, Layout, WIDTH, quad};
+use crate::presentation::{HEIGHT, Layout, WIDTH, italic, quad, sprite};
 use crate::resources::{TITLE_BACKDROP, TITLE_CHROME, TITLE_FONT, TITLE_GLINT, TITLE_STREAK};
 use crate::{Effect, OpenItgRuntimeRequest, OpenItgScreen, OpenItgTheme};
 use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
@@ -225,16 +225,6 @@ fn title_text(
     text.build(0)
 }
 
-fn italic(mut actor: Actor) -> Actor {
-    if let Actor::Text {
-        local_transform, ..
-    } = &mut actor
-    {
-        local_transform.y_axis.x = -0.22;
-    }
-    actor
-}
-
 fn title_image(
     key: &'static str,
     [x, y]: [f32; 2],
@@ -242,13 +232,7 @@ fn title_image(
     alpha: f32,
     z: i16,
 ) -> SpriteBuilder {
-    let mut sprite = SpriteBuilder::static_texture(key);
-    sprite.align(0.5, 0.5);
-    sprite.xy(x, y);
-    sprite.size(width, height);
-    sprite.diffuse([1.0, 1.0, 1.0, alpha]);
-    sprite.z(z);
-    sprite
+    sprite(key, [x, y], [width, height], [1.0, 1.0, 1.0, alpha], z)
 }
 
 fn push_title(
@@ -318,24 +302,30 @@ fn push_title(
             actors.push(glint.build(0));
         }
     }
-    actors.push(italic(title_text(
-        layout,
-        [330.0, 267.0],
-        0.5,
-        "DEADSYNC".into(),
-        2.64,
-        [0.85, 0.75, 0.66, alpha * 0.24],
-        -20,
-    )));
-    actors.push(italic(title_text(
-        layout,
-        [36.0, 39.0],
-        0.0,
-        "MAIN MENU".into(),
-        1.13,
-        white,
-        16,
-    )));
+    actors.push(italic(
+        title_text(
+            layout,
+            [330.0, 267.0],
+            0.5,
+            "DEADSYNC".into(),
+            2.64,
+            [0.85, 0.75, 0.66, alpha * 0.24],
+            -20,
+        ),
+        -0.22,
+    ));
+    actors.push(italic(
+        title_text(
+            layout,
+            [36.0, 39.0],
+            0.0,
+            "MAIN MENU".into(),
+            1.13,
+            white,
+            16,
+        ),
+        -0.22,
+    ));
 
     let pulse = 0.5 - 0.5 * (state.focus_elapsed * (std::f32::consts::TAU / FOCUS_SECONDS)).cos();
     for (index, item) in state.items().iter().copied().enumerate() {
