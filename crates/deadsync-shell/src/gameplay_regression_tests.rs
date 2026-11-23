@@ -4921,9 +4921,8 @@ return Def.ActorFrame{
         }
     }
 
-    #[test]
-    fn hidden_score_proxy_keeps_overlay_fade() {
-        let simfile = write_fixture("hidden-score-fade", generated_pipeline_song_lua_simfile());
+    fn write_hidden_score_proxy_fixture(name: &str) -> PathBuf {
+        let simfile = write_fixture(name, generated_pipeline_song_lua_simfile());
         let dir = simfile.parent().expect("song directory").join("lua");
         fs::create_dir_all(&dir).expect("Lua directory");
         fs::write(
@@ -4953,6 +4952,12 @@ return Def.ActorFrame{
 "#,
         )
         .expect("score/fade Lua");
+        simfile
+    }
+
+    #[test]
+    fn hidden_score_proxy_keeps_overlay_fade() {
+        let simfile = write_hidden_score_proxy_fixture("hidden-score-fade");
         with_session(
             profile_data::PlayStyle::Single,
             profile_data::PlayerSide::P1,
@@ -4997,6 +5002,49 @@ return Def.ActorFrame{
                     // Overlay. The score proxy must not make Overlay own it.
                     assert_eq!(top_screen_text_draw(&actors, "EVENT", 0, 1.0).unwrap().1, 1.0);
                 }
+            },
+        );
+    }
+
+    #[test]
+    fn openitg_hud_uses_live_score_in_lua_proxy() {
+        let simfile = write_hidden_score_proxy_fixture("openitg-score-proxy");
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+                space::set_current_window_px(1280, 720);
+                let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                let mode = deadsync_profile_gameplay::score_display_mode_from_profile(
+                    profiles[0].score_display_mode,
+                );
+                let mut state = build_compiled_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                state.presentation.set_hud(deadsync_theme_openitg::GAMEPLAY_HUD);
+                set_fixture_time(&mut state, 0.75);
+                let score = state.gameplay.display_gameplay_itg_score_percent(0, mode);
+                let expected = format!("{:.2}%", (score * 100.0).trunc() / 100.0);
+                let mut actors = Vec::new();
+                let segments = crate::gameplay_runtime::push_actors(
+                    &mut actors,
+                    &mut state,
+                    &fixture_assets(),
+                    screen_gameplay::ActorViewOverride::default(),
+                    123.0,
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                );
+                assert_eq!(segments.direct_field_proxy_count(state.song_frame()), 1);
+                assert!(actor_tree_has_text(&actors, &expected));
+                assert!(!actor_tree_has_text(&actors, &state.song().title));
+                assert_eq!(state.gameplay.display_gameplay_itg_score_percent(0, mode), score);
             },
         );
     }

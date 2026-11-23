@@ -85,7 +85,7 @@ impl Layout {
         deadlib_assets::present_dsl::cover_sprite(key.clone(), x, y, width, height, self.scale, z)
     }
 
-    fn text(
+    pub(crate) fn text(
         self,
         [x, y]: [f32; 2],
         alignment: f32,

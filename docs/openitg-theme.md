@@ -84,6 +84,33 @@ media requests, score requests, and drawing. An index-only benchmark on lists
 of 3, 128, 701, and 10,000 entries measured medians of 4.78 ns before and
 5.60 ns after the fix. Full-frame timing remains to be measured.
 
-System Options, gameplay presentation, and Evaluation still use Simply Love.
+## Gameplay HUD
+
+The OpenITG theme draws a vertical Standard life bar and a two-decimal
+percentage score from the same stage values used by Simply Love. The shell
+selects these widgets once at stage entry. Draws occur inside the existing
+HUD and Lua score proxy layers, with the same profile visibility, physical
+player side, and gameplay state.
+
+The effective `ScreenGameplay` metrics place the life frames at `(24, 270)`
+and `(616, 270)`, with a 272 px bottom-up fill. Score text anchors are
+`(160, 56)` and `(478, 56)` for one-side charts, and `(200, 56)` and
+`(440, 56)` for doubles. The original widget art uses those positions on a
+640×480 canvas centered at wider resolutions. Slide-in timing, animated life
+glow, song and stage banners, judgment and combo styling, and specialized
+score and life modes remain open.
+
+Actor tests cover native and wide layouts, failed life, and EX score tint.
+A song Lua fixture captures the OpenITG score with Underlay hidden and still
+draws the canonical player proxy. The existing independent footer fade test
+fails at 0.75 seconds in both the earlier Windows build and this build.
+
+An actor-construction benchmark drew two scores per frame at 854×480. Across
+nine runs of 400,000 frames, the median was 1.05 μs for the Simply Love digits
+and 0.75 μs for the OpenITG inline label. Both used optimized widget code with
+shared dev-profile rendering dependencies and a reused actor buffer. Scene
+composition, GPU timing, and live frame pacing remain to be measured.
+
+System Options and Evaluation still use Simply Love.
 End-to-end parity across two complete presentations, visual comparison against
 a running reference, and distribution validation remain open.

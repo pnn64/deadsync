@@ -468,6 +468,7 @@ impl DensityGraphRenderState {
     }
 }
 
+use deadsync_theme::views::{GameplayHud, GameplayLifeView, GameplayScoreView};
 pub use deadsync_theme::views::{SMX_SENSOR_PANEL_COUNT, SmxSensorPadView, SmxSensorPanelView};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -708,6 +709,7 @@ pub struct GameplayPresentation {
     /// construction reads it without allocation, synchronization, misses,
     /// eviction, or maintenance beyond constant work per active player.
     life_meter_visuals: [LifeMeterVisual; MAX_PLAYERS],
+    hud: Option<GameplayHud<Actor>>,
     /// One song-static logical width for the Stage/Event label. The game thread
     /// warms it during the transition, reads it without synchronization during
     /// gameplay, and drops it with the screen. There is no growth or eviction;
@@ -1093,6 +1095,7 @@ impl GameplayPresentation {
             rate_text,
             life_percent_text,
             life_meter_visuals,
+            hud: None,
             intro_text_width: Cell::new(None),
             notefield_judgment_assets,
             notefield_combo_assets,
@@ -1167,6 +1170,10 @@ impl GameplayPresentation {
 
     pub const fn machine_font(&self) -> deadsync_config::theme::MachineFont {
         self.runtime_view.policy.machine_font
+    }
+
+    pub fn set_hud(&mut self, hud: GameplayHud<Actor>) {
+        self.hud = Some(hud);
     }
 
     pub fn judgment_palette(&self, player: usize) -> deadsync_theme::color::JudgmentPalette {
@@ -4004,10 +4011,9 @@ pub fn frame_layers<'a>(
 
                 if !profile.hide_score && !hide_score_for_top_graph && !score_in_versus_step_stats {
                     let show_ex_score = profile.show_ex_score;
-                    let show_hard_ex_score = show_ex_score
-                        && profile.show_hard_ex_score
-                        && crate::screens::components::gameplay::golf::score(state, player_idx)
-                            .is_none();
+                    let (score_value, mut score_color, is_golf) =
+                        score_value_color(state, player_idx);
+                    let show_hard_ex_score = show_ex_score && profile.show_hard_ex_score && !is_golf;
                     let score_mode = score_display_mode_from_profile(profile.score_display_mode);
                     // EX and H.EX share one score snapshot.
                     let ex_score = show_ex_score.then(|| {
@@ -4016,26 +4022,45 @@ pub fn frame_layers<'a>(
                             player_blue_window_ms(state, player_idx),
                         )
                     });
-                    let (score_value, mut score_color) = score_value_color(state, player_idx);
                     score_color[3] *= score_alphas[player_idx];
 
                     let is_p2_side = player_side == profile_data::PlayerSide::P2;
-                    // Arrow Cloud parity: EX remains the "normal" score position/anchor.
-                    // H.EX is placed at a different x on P2 so it appears to the left of EX.
-                    push_score_counter(
-                        actors,
-                        asset_manager.fonts(),
-                        ScoreCounterParams {
-                            value: score_value,
-                            font: machine_font_key(presentation.machine_font(), FontRole::Numbers),
-                            position: [score_x, score_y],
-                            align: [1.0, 1.0],
-                            text_align: TextAlign::Right,
-                            zoom: score_zoom,
-                            color: score_color,
-                            z: 90,
-                        },
-                    );
+                    if let Some(hud) = &presentation.hud
+                        && step_stats_score_pos.is_none()
+                        && !single_score_swapped
+                        && !show_hard_ex_score
+                        && !is_golf
+                    {
+                        (hud.percentage_score)(
+                            actors,
+                            GameplayScoreView {
+                                p2: is_p2_side,
+                                doubles: play_style.is_double(),
+                                percent: score_value,
+                                rgba: score_color,
+                                ex: show_ex_score,
+                            },
+                        );
+                    } else {
+                        // EX keeps the normal anchor. On P2 H.EX is placed to its left.
+                        push_score_counter(
+                            actors,
+                            asset_manager.fonts(),
+                            ScoreCounterParams {
+                                value: score_value,
+                                font: machine_font_key(
+                                    presentation.machine_font(),
+                                    FontRole::Numbers,
+                                ),
+                                position: [score_x, score_y],
+                                align: [1.0, 1.0],
+                                text_align: TextAlign::Right,
+                                zoom: score_zoom,
+                                color: score_color,
+                                z: 90,
+                            },
+                        );
+                    }
 
                     crate::screens::components::gameplay::golf::push_details(
                         actors,
@@ -4226,6 +4251,23 @@ pub fn frame_layers<'a>(
                     let life_visual = presentation.life_meter_visuals[player_idx];
                     let life_for_render = life_visual.rendered_life(profile.lifemeter_type);
                     let is_hot = life_visual.is_hot;
+                    if let Some(hud) = &presentation.hud
+                        && profile.lifemeter_type == profile_data::LifeMeterType::Standard
+                    {
+                        (hud.standard_life)(
+                            actors,
+                            GameplayLifeView {
+                                p2: side == profile_data::PlayerSide::P2,
+                                level: life_for_render,
+                                failed: dead,
+                                hot: is_hot,
+                                percent_label: (profile.show_life_percent
+                                    && show_standard_life_percent)
+                                    .then_some(actual_life * 100.0),
+                            },
+                        );
+                        continue;
+                    }
                     let percent_visual = life_visual.percent_visual();
                     let life_percent_text = visible_life_percent_text(
                         &presentation.life_percent_text,
@@ -4546,13 +4588,30 @@ pub fn frame_layers<'a>(
             if player >= state.num_players() {
                 return;
             }
-            let (value, color) = score_value_color(state, player);
+            let (value, color, is_golf) = score_value_color(state, player);
             let width = screen_width().clamp(640.0, 854.0);
             let p2 = if play_style.is_versus() {
                 player == 1
             } else {
                 runtime_player_is_p2
             };
+            let profile = &state.profiles()[player];
+            if let Some(hud) = &presentation.hud
+                && !is_golf
+                && !(profile.show_ex_score && profile.show_hard_ex_score)
+            {
+                (hud.percentage_score)(
+                    actors,
+                    GameplayScoreView {
+                        p2,
+                        doubles: play_style.is_double(),
+                        percent: value,
+                        rgba: color,
+                        ex: profile.show_ex_score,
+                    },
+                );
+                return;
+            }
             push_score_counter(
                 actors,
                 asset_manager.fonts(),
@@ -4589,11 +4648,12 @@ pub fn frame_layers<'a>(
     }
 }
 
-fn score_value_color(state: &impl GameplayScreenView, player: usize) -> (f64, [f32; 4]) {
+fn score_value_color(state: &impl GameplayScreenView, player: usize) -> (f64, [f32; 4], bool) {
     if let Some((score, _)) = crate::screens::components::gameplay::golf::score(state, player) {
         return (
             score.displayed(),
             crate::screens::components::gameplay::golf::COLOR,
+            true,
         );
     }
     let profile = &state.profiles()[player];
@@ -4605,11 +4665,13 @@ fn score_value_color(state: &impl GameplayScreenView, player: usize) -> (f64, [f
             state
                 .presentation().judgment_palette(player)
                 .color(deadsync_theme::color::JudgmentColorRole::FantasticBlue),
+            false,
         )
     } else {
         (
             state.display_gameplay_itg_score_percent(player, mode),
             [1.0; 4],
+            false,
         )
     }
 }

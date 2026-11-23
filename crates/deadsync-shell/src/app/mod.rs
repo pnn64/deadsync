@@ -3074,6 +3074,10 @@ impl App {
         mut gs: GameplayState,
         finish: &GameplayInitFinish,
     ) -> Vec<Command> {
+        if self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg {
+            gs.presentation
+                .set_hud(deadsync_theme_openitg::GAMEPLAY_HUD);
+        }
         self.gameplay_live_textures.reset();
         // ITGmania destroys the previous Player sounds before a restart or
         // the next course stage. Gameplay-to-gameplay skips screen exit.

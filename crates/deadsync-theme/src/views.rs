@@ -237,6 +237,32 @@ pub struct GameplayReplayView {
     pub score_10000: f64,
 }
 
+/// Draw the standard gameplay HUD from values already resolved by the stage.
+pub struct GameplayHud<A> {
+    pub standard_life: fn(&mut Vec<A>, GameplayLifeView),
+    pub percentage_score: fn(&mut Vec<A>, GameplayScoreView),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayLifeView {
+    /// The physical side even when a single player occupies runtime slot zero.
+    pub p2: bool,
+    pub level: f32,
+    pub failed: bool,
+    pub hot: bool,
+    pub percent_label: Option<f32>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayScoreView {
+    pub p2: bool,
+    pub doubles: bool,
+    pub percent: f64,
+    /// Profile-selected EX tint and multiplayer emphasis alpha.
+    pub rgba: [f32; 4],
+    pub ex: bool,
+}
+
 /// Optional HUD updates from the live stage. None of these hooks control play.
 pub trait GameplayLivePresentation<G> {
     fn update_gameplay_visuals(&mut self, _game: &G, _delta_time: f32) {}

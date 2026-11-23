@@ -599,14 +599,17 @@ shell prepares credit and service status, and the theme owns menu state, input
 feedback, animation, and actor composition.
 
 The `Theme` setting selects Simply Love or OpenITG at startup. Both title menus
-use the same session start, cabinet permissions, and navigation commands. The
+use the same session start, cabinet permissions, and navigation commands.
 OpenITG mounts its title, Player Options, and base Select Music layouts. The
 music wheel shares the game's catalog entries and circular index, and both
 layouts use the same prepared difficulty window. The alternate base layout
 borrows song, chart, player, and banner data from the existing controller.
 The shell continues to use that controller for input, previews, and launching
-stages. See [the OpenITG progress record](openitg-theme.md) for the reference,
-implemented behavior, and fidelity checks.
+stages. At stage entry it can install alternate HUD drawing functions through
+`deadsync-theme`. The gameplay composer supplies the already resolved life and
+percentage score at the established HUD and Lua score capture sites. See [the
+OpenITG progress record](openitg-theme.md) for the reference, implemented
+behavior, and fidelity checks.
 
 Player Options mounts through the selected theme for song and course entry,
 input, updates, and actor composition. The shell supplies device and asset
