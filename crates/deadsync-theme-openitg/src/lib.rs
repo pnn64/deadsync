@@ -5,6 +5,7 @@ mod menu;
 mod player_options;
 mod presentation;
 mod select_music;
+mod system_options;
 
 use deadlib_present::actors::Actor;
 use deadsync_profile::requests::ProfileRequest;
@@ -16,6 +17,7 @@ pub use gameplay::{GAMEPLAY_HUD, TAP_RESULTS_PNG};
 pub use menu::MenuState;
 pub use player_options::PlayerOptionsState;
 pub use select_music::push_select_music_actors;
+pub use system_options::SYSTEM_OPTIONS;
 
 type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;
 

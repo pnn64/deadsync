@@ -26,7 +26,7 @@ pub struct AudioPlaybackView {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AppPathView {
     pub path: PathBuf,
-    pub display: String,
+    pub display: Arc<str>,
 }
 
 /// Stable identifiers for application paths exposed to theme UI.
@@ -130,6 +130,36 @@ pub struct GraphicsOptionsView {
     pub high_dpi: bool,
     pub software_thread_choices: Vec<u8>,
     pub software_threads: u8,
+}
+
+/// Presentation hooks for the shared service-options controller.
+pub struct SystemOptionsRenderer<A> {
+    pub background: fn(&mut Vec<A>),
+    pub page: fn(&mut Vec<A>, SystemOptionsPage<'_>),
+}
+
+pub struct SystemOptionsPage<'a> {
+    pub title: &'static str,
+    pub main_menu: bool,
+    /// Selection in the visible controller order. `row_count` selects Done.
+    pub selected: usize,
+    pub row_count: usize,
+    pub row: &'a dyn Fn(usize) -> Option<SystemOptionsRow>,
+    pub description: Option<Arc<str>>,
+    pub detail: Option<Arc<str>>,
+    /// Signed horizontal travel in screen widths during a page transition.
+    pub slide: f32,
+}
+
+pub struct SystemOptionsRow {
+    pub label: Arc<str>,
+    pub choices: Option<Arc<[Arc<str>]>>,
+    pub selected_choice: usize,
+    pub inline: bool,
+    pub disabled: bool,
+    /// Active bits of a multi-select row, in its choice order.
+    pub enabled_choices: Option<u64>,
+    pub choice_tint: Option<[f32; 4]>,
 }
 
 /// Audio timing telemetry translated by the shell for theme diagnostics.

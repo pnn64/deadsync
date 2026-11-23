@@ -117,6 +117,7 @@ use update::*;
 mod input;
 use input::*;
 mod render;
+mod page_view;
 mod search;
 mod text_wrap;
 use render::*;
@@ -127,6 +128,7 @@ pub use input::handle_input;
 pub use layout::clear_submenu_row_layout_cache;
 pub use render::{
     clear_description_layout_cache, clear_render_cache, get_actors, push_actors,
+    push_actors_with_layout,
     sync_updater_panels,
 };
 pub use state::{State, init};

@@ -26,6 +26,13 @@ impl Layout {
         }
     }
 
+    pub(crate) fn translated_x(self, offset: f32) -> Self {
+        Self {
+            left: self.left + offset,
+            ..self
+        }
+    }
+
     fn position(self, x: f32, y: f32) -> [f32; 2] {
         [self.left + x * self.scale, self.top + y * self.scale]
     }
@@ -71,6 +78,21 @@ impl Layout {
     ) -> Actor {
         let mut text = self.text(position, alignment, content, zoom, rgba);
         text.maxwidth(width * self.scale);
+        text.build(0)
+    }
+
+    pub(crate) fn paragraph(
+        self,
+        position: [f32; 2],
+        [width, height]: [f32; 2],
+        content: TextContent,
+        zoom: f32,
+        rgba: [f32; 4],
+    ) -> Actor {
+        let mut text = self.text(position, 0.0, content, zoom, rgba);
+        text.valign(0.0);
+        text.wrapwidthpixels(width / zoom);
+        text.maxheight(height * self.scale);
         text.build(0)
     }
 

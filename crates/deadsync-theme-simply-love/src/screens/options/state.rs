@@ -252,7 +252,7 @@ pub struct State {
     pub(super) smx_bg_pack_choices: Vec<String>,
     pub(super) smx_judge_pack_choices: Vec<String>,
     pub(super) smx_assignment: SmxAssignmentView,
-    pub(super) smx_assignment_status: String,
+    pub(super) smx_assignment_status: Arc<str>,
     pub(super) score_import_profiles: Vec<crate::SimplyLoveScoreImportProfile>,
     pub(super) score_import_profile_choices: Vec<String>,
     pub(super) score_import_profile_ids: Vec<Option<String>>,
@@ -402,7 +402,7 @@ pub fn init(view: OptionsInitView) -> State {
     let music_volume_pct = i32::from(audio_options.music_volume.min(100));
     #[cfg(target_os = "linux")]
     let linux_backend_choices = build_linux_backend_choices(&audio_options);
-    let smx_assignment_status = smx_assignment_status(&smx_assignment);
+    let smx_assignment_status = Arc::from(smx_assignment_status(&smx_assignment));
     let system_scroll_speed_values =
         system_scroll_speed_values(machine_player_options.scroll_speed);
     let machine_scroll_speed_idx = system_scroll_speed_values

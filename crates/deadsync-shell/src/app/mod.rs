@@ -1085,7 +1085,7 @@ fn arrow_effect_time_seconds(at: Instant) -> f64 {
 
 fn app_path_view(path: PathBuf) -> AppPathView {
     AppPathView {
-        display: deadlib_platform::dirs::path_shorthand(&path),
+        display: Arc::from(deadlib_platform::dirs::path_shorthand(&path)),
         path,
     }
 }
@@ -7818,12 +7818,16 @@ impl App {
                     change.ffmpeg,
                     change.workshop,
                 );
-                options::push_actors(
+                let renderer = (self.state.screens.menu_state.theme_flag()
+                    == config::theme::ThemeFlag::OpenItg)
+                    .then_some(&deadsync_theme_openitg::SYSTEM_OPTIONS);
+                options::push_actors_with_layout(
                     &mut actors,
                     &self.state.screens.options_state,
                     &self.asset_manager,
                     screen_alpha_multiplier,
                     visual_policy,
+                    renderer,
                 );
             }
             CurrentScreen::ContentBrowser => content_browser::push_actors(

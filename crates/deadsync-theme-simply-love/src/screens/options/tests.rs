@@ -18,7 +18,7 @@ pub(super) fn init() -> State {
 fn test_app_paths() -> AppPathsView {
     let view = |path: &str| AppPathView {
         path: path.into(),
-        display: path.to_owned(),
+        display: Arc::from(path),
     };
     AppPathsView {
         data: view("/data"),
@@ -2894,6 +2894,54 @@ fn volume_rows_emit_shell_request_before_feedback_sound() {
             deadsync_theme::AudioRequest::PlaySfx(path)
         )) if *path == "assets/sounds/change_value.ogg"
     ));
+}
+
+#[test]
+fn alternate_service_page_reads_live_choices_and_yields_to_reload() {
+    use deadsync_theme::views::{SystemOptionsPage, SystemOptionsRenderer};
+
+    let renderer = SystemOptionsRenderer {
+        background: |actors| actors.push(act!(text: font("miso"): settext("SERVICE BACKGROUND"))),
+        page: |actors, page: SystemOptionsPage<'_>| {
+            assert_eq!(page.title, "SOUND OPTIONS");
+            let row = (page.row)(page.selected).expect("focused system options row");
+            let values = row.choices.expect("master volume value");
+            let value = Arc::clone(&values[row.selected_choice]);
+            actors.push(act!(text: font("miso"): settext(value)));
+        },
+    };
+    let assets = AssetManager::new();
+    let mut state = init_with_audio(AudioOptionsView {
+        master_volume: 50,
+        ..AudioOptionsView::default()
+    });
+    state.view = OptionsView::Submenu(SubmenuKind::Sound);
+    select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::MasterVolume);
+
+    let render = |state: &State| {
+        let mut actors = Vec::new();
+        push_actors_with_layout(
+            &mut actors,
+            state,
+            &assets,
+            1.0,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+            Some(&renderer),
+        );
+        actors
+    };
+    let text_present = |actors: &[Actor], expected: &str| {
+        actors.iter().any(|actor| matches!(actor, Actor::Text { content, .. } if content.as_str() == expected))
+    };
+    assert!(text_present(&render(&state), "50%"));
+    let _ = apply_choice_effects(&mut state, &assets, 1, NavWrap::Wrap);
+    assert!(text_present(&render(&state), "51%"));
+
+    state.reload_ui = Some(ReloadUiState::new());
+    let takeover = render(&state);
+    assert!(text_present(&takeover, "SERVICE BACKGROUND"));
+    assert!(!text_present(&takeover, "51%"));
+    assert!(takeover.len() > 1);
 }
 
 #[test]

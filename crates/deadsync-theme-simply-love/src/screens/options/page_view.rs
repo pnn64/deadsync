@@ -1,0 +1,149 @@
+use super::*;
+use deadsync_config::options::{
+    auto_screenshot_bit_from_choice, groovestats_scorebox_bit_from_choice,
+    select_music_chart_info_bit_from_choice,
+};
+use deadsync_theme::views::{SystemOptionsPage, SystemOptionsRow};
+
+pub(super) fn push_page(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    assets: &AssetManager,
+    draw: fn(&mut Vec<Actor>, SystemOptionsPage<'_>),
+) {
+    let t = state.submenu_fade_t.clamp(0.0, 1.0);
+    let slide = match state.submenu_transition {
+        SubmenuTransition::FadeOutToSubmenu | SubmenuTransition::FadeOutToMain => t * t,
+        SubmenuTransition::FadeInSubmenu | SubmenuTransition::FadeInMain => -(1.0 - t).powi(2),
+        SubmenuTransition::None => 0.0,
+    };
+    match state.view {
+        OptionsView::Main => {
+            let rows = visible_items(state);
+            let row_count = rows.len().saturating_sub(1);
+            let selected = state.selected.min(row_count);
+            let (description, detail) = page_help(state, rows.get(selected).copied());
+            draw(
+                actors,
+                SystemOptionsPage {
+                    title: "OPTIONS",
+                    main_menu: true,
+                    selected,
+                    row_count,
+                    row: &|index| {
+                        let item = rows.get(..row_count)?.get(index)?;
+                        Some(SystemOptionsRow {
+                            label: item.name.get(),
+                            choices: None,
+                            selected_choice: 0,
+                            inline: false,
+                            disabled: false,
+                            enabled_choices: None,
+                            choice_tint: None,
+                        })
+                    },
+                    description,
+                    detail,
+                    slide,
+                },
+            );
+        }
+        OptionsView::Submenu(kind) => {
+            let rows = submenu_rows(kind);
+            let items = submenu_items(kind);
+            let visible_rows =
+                (!is_launcher_submenu(kind)).then(|| cached_submenu_visible_rows(state, kind));
+            let row_count = visible_rows.as_ref().map_or(rows.len(), |rows| rows.len());
+            let actual_index = |index: usize| {
+                if index >= row_count {
+                    return None;
+                }
+                visible_rows
+                    .as_ref()
+                    .map_or(Some(index), |rows| rows.get(index).copied())
+            };
+            let selected = state.sub_selected.min(row_count);
+            let selected_item = actual_index(selected)
+                .and_then(|index| items.get(index))
+                .or_else(|| items.last());
+            let (description, detail) = page_help(state, selected_item);
+            let choices = submenu_choice_indices(state, kind);
+            draw(
+                actors,
+                SystemOptionsPage {
+                    title: submenu_title(kind),
+                    main_menu: false,
+                    selected,
+                    row_count,
+                    row: &|index| {
+                        let index = actual_index(index)?;
+                        let row = rows.get(index)?;
+                        let values = borrow_submenu_row_layout(state, assets, kind, index)
+                            .map(|layout| Arc::clone(&layout.texts));
+                        let count = values.as_ref().map_or(0, |values| values.len());
+                        let selected_choice = choices
+                            .get(index)
+                            .copied()
+                            .unwrap_or(0)
+                            .min(count.saturating_sub(1));
+                        Some(SystemOptionsRow {
+                            label: row.label.get(),
+                            choices: values,
+                            selected_choice,
+                            inline: row.inline,
+                            disabled: is_submenu_row_disabled(state, kind, row.id),
+                            enabled_choices: enabled_choice_bits(state, kind, row.id, count),
+                            choice_tint: (row.id == SubRowId::PreferredColor)
+                                .then(|| color::decorative_rgba(selected_choice as i32)),
+                        })
+                    },
+                    description,
+                    detail,
+                    slide,
+                },
+            );
+        }
+    }
+}
+
+fn page_help(state: &State, item: Option<&Item>) -> (Option<Arc<str>>, Option<Arc<str>>) {
+    let Some(item) = item else {
+        return (None, None);
+    };
+    let description = item.help.iter().find_map(|entry| match entry {
+        HelpEntry::Paragraph(text) => Some(text.get()),
+        _ => None,
+    });
+    let detail = item.help.iter().find_map(|entry| match entry {
+        HelpEntry::AppPath(kind) => Some(Arc::clone(&state.app_paths.get(*kind).display)),
+        HelpEntry::SmxAssignmentStatus => Some(Arc::clone(&state.smx_assignment_status)),
+        _ => None,
+    });
+    (description, detail)
+}
+
+pub(super) fn enabled_choice_bits(
+    state: &State,
+    kind: SubmenuKind,
+    row: SubRowId,
+    count: usize,
+) -> Option<u64> {
+    let (mask, bit): (_, fn(usize) -> u8) = match (kind, row) {
+        (SubmenuKind::SelectMusic, SubRowId::ChartInfo) => (
+            select_music_chart_info_enabled_mask(state),
+            select_music_chart_info_bit_from_choice,
+        ),
+        (SubmenuKind::GrooveStats, SubRowId::GrooveStatsScoreboxBoards) => (
+            groovestats_scorebox_enabled_mask(state),
+            groovestats_scorebox_bit_from_choice,
+        ),
+        (SubmenuKind::Gameplay, SubRowId::AutoScreenshot) => (
+            auto_screenshot_enabled_mask(state),
+            auto_screenshot_bit_from_choice,
+        ),
+        _ => return None,
+    };
+    Some((0..count.min(u64::BITS as usize)).fold(0, |bits, choice| {
+        bits | (u64::from(mask & bit(choice) != 0) << choice)
+    }))
+}

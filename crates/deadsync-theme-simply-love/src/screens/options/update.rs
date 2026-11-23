@@ -255,7 +255,7 @@ pub(super) fn sync_smx_assignment(state: &mut State, view: &SmxAssignmentView) {
         return;
     }
     state.smx_assignment.clone_from(view);
-    state.smx_assignment_status = smx_assignment_status(view);
+    state.smx_assignment_status = Arc::from(smx_assignment_status(view));
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
         SMX_CONFIG_OPTIONS_ROWS,

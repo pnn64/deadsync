@@ -2,9 +2,9 @@
 
 Choose **OpenITG** in **Options → System → Theme**, then restart DeadSync.
 The equivalent setting is `Theme=OpenITG` under `[Options]` in `deadsync.ini`.
-Simply Love is the default. The selection mounts that theme's title, Player
-Options, and base Select Music layout. Both themes use the same DeadSync
-session flow.
+Simply Love is the default. The selection mounts that theme's title, System
+Options, Player Options, base Select Music layout, and supported gameplay HUD
+widgets. Both themes use the same DeadSync session flow.
 
 ## Reference
 
@@ -40,6 +40,32 @@ session entry, arcade final-credit Start, home navigation, and actor placement
 at 640×480 and 854×480. Architecture checks cover both title mounts. Cargo's
 locked dependency graph confirms the concrete themes have no dependencies on
 each other.
+
+## System Options
+
+The OpenITG presentation covers the service menu and its nested settings
+pages. The existing controller selects the rows, applies edits, validates
+graphics and input changes, and sends requests to the shell. Both layouts
+read the same formatted values and multiselect bits. Search, reload, pack
+and updater workflows, and confirmation dialogs use their existing overlays.
+
+The effective `ScreenOptions` reference places the heading at `(36, 38)`,
+eight rows at y=127 with 28 px spacing, the scrollbar near `(34, 242)`, and
+the Done row at y=353. The original panel graphics use these anchors at
+640×480 and center the layout at 854×480. The panel slides between submenus
+on DeadSync's existing transition clock. The menu presents supported
+DeadSync actions in their current order, with DeadSync's cues and persistence
+semantics. Reference cursor tweens, header motion, cues, and modal styling
+remain open.
+
+Tests cover the viewport and Done row, prepared values, disabled and
+multiselect rows, an edited volume appearing in the alternate renderer, and
+the reload modal taking over that renderer.
+
+At 854×480, nine warm actor-construction runs of 12,000 frames per layout
+measured medians of 32.6 μs for Simply Love and 19.1 μs for OpenITG on the
+service menu, and 59.8 μs and 30.2 μs on Graphics Options. The fixture used
+the bundled fonts and dev-profile theme libraries.
 
 ## Player Options
 
@@ -136,6 +162,6 @@ frames gave medians of 65.1 ns for Simply Love before the change, 71.4 ns for
 Simply Love with the shared style input, and 247.2 ns for OpenITG with the
 additional label and pulse. These timings cover draw command construction.
 
-System Options and Evaluation still use Simply Love.
+Evaluation still uses Simply Love.
 End-to-end parity across two complete presentations, visual comparison against
 a running reference, and distribution validation remain open.
