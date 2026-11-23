@@ -1,3 +1,4 @@
+mod choice_layout;
 mod help;
 
 use deadlib_assets::AssetManager;
@@ -9,6 +10,7 @@ use deadsync_theme::views::{
 };
 
 use crate::presentation::{ACCENT, INK, Layout, quad};
+use choice_layout::{ChoiceLayout, CursorLabel, TextMetrics};
 use help::OptionsHelp;
 
 #[derive(Default)]
@@ -16,8 +18,10 @@ pub struct OpenItgSystemOptions {
     page_id: Option<usize>,
     first: usize,
     rows: Vec<LinearMotion<2>>,
+    choices: Vec<ChoiceLayout>,
     rows_move_until: f64,
-    cursor: Option<LinearMotion<2>>,
+    cursor: Option<LinearMotion<3>>,
+    cursor_label: CursorLabel,
     thumb: LinearMotion<1>,
     help: OptionsHelp,
 }
@@ -66,6 +70,8 @@ impl OpenItgSystemOptions {
             self.page_id = Some(page.id);
             self.rows
                 .resize(page.row_count + 1, LinearMotion::default());
+            self.choices
+                .resize_with(page.row_count, ChoiceLayout::default);
             for (index, row) in self.rows.iter_mut().enumerate() {
                 *row = LinearMotion::at(row_destination(page, first, end, index));
             }
@@ -140,6 +146,9 @@ const DONE_Y: f32 = 353.0;
 const LABEL_X: f32 = 53.0;
 const VALUE_X: f32 = 160.0;
 const VALUE_END_X: f32 = 595.0;
+const ITEM_GAP: f32 = 14.0;
+const INLINE_ZOOM: f32 = 0.9;
+const ROW_ZOOM: f32 = 0.97;
 
 const WINE: [f32; 4] = [0.109, 0.026, 0.040, 1.0];
 const STROKE: [f32; 4] = [0.39, 0.15, 0.16, 1.0];
@@ -269,6 +278,7 @@ impl OpenItgSystemOptions {
         let focus_y = self.rows[page.selected].target[0];
         push_row_band(actors, layout, focus_y, true);
         let moving = now < self.rows_move_until;
+        let metrics = TextMetrics::new(assets.fonts());
         let range = if moving {
             0..page.row_count
         } else {
@@ -291,9 +301,17 @@ impl OpenItgSystemOptions {
                 if !focused || y != focus_y {
                     push_row_band(actors, layout, y, false);
                 }
-                let cursor_x = push_row(actors, layout, y, &row, focused);
-                if focused && !row.disabled {
-                    cursor_target = Some([cursor_x, focus_y]);
+                if let Some([center, width]) = push_row(
+                    actors,
+                    layout,
+                    y,
+                    &row,
+                    focused,
+                    &mut self.choices[index],
+                    &mut self.cursor_label,
+                    metrics,
+                ) {
+                    cursor_target = Some([center.round(), focus_y, marker_width(width)]);
                 }
                 if alpha < 1.0 {
                     for actor in &mut actors[row_start..] {
@@ -322,14 +340,14 @@ impl OpenItgSystemOptions {
                 }
             }
             if focused_done {
-                cursor_target = Some([312.5, DONE_Y]);
+                cursor_target = Some([320.0, DONE_Y, marker_width(metrics.width("DONE"))]);
             }
         }
         if let Some(target) = cursor_target {
             let cursor = self.cursor.get_or_insert(LinearMotion::at(target));
             cursor.retarget(target, now, CURSOR_SECONDS);
-            let [x, y] = cursor.sample(now, CURSOR_SECONDS);
-            actors.push(layout.panel(x, y + 8.0, [15.0, 2.0], AMBER, -15));
+            let [center, y, width] = cursor.sample(now, CURSOR_SECONDS);
+            actors.push(layout.panel(center - width * 0.5, y + 8.0, [width, 2.0], AMBER, -15));
         } else {
             self.cursor = None;
         }
@@ -367,7 +385,10 @@ fn push_row(
     y: f32,
     row: &SystemOptionsRow,
     focused: bool,
-) -> f32 {
+    choice_layout: &mut ChoiceLayout,
+    cursor_label: &mut CursorLabel,
+    metrics: TextMetrics<'_>,
+) -> Option<[f32; 2]> {
     let color = if row.disabled {
         DIM
     } else if focused {
@@ -375,7 +396,7 @@ fn push_row(
     } else {
         MUTED
     };
-    let choices = row.choices.as_deref().filter(|choices| !choices.is_empty());
+    let choices = row.choices.as_ref().filter(|choices| !choices.is_empty());
     let (label_x, label_width) = if choices.is_some() {
         (LABEL_X, VALUE_X - LABEL_X - 13.0)
     } else {
@@ -386,24 +407,26 @@ fn push_row(
         0.0,
         label_width,
         TextContent::Shared(row.label.clone()),
-        0.97,
+        ROW_ZOOM,
         color,
     ));
-    let mut cursor_x = label_x;
+    let show_cursor = focused && !row.disabled;
+    let mut cursor = None;
     if let Some(choices) = choices {
         let selected = row.selected_choice.min(choices.len() - 1);
         let value_limit = if row.disabled { 534.0 } else { VALUE_END_X };
-        let cell_width = (value_limit - VALUE_X) / choices.len() as f32;
-        let fits_inline = row.inline
-            && choices.len() > 1
-            && row.choice_tint.is_none()
-            && choices
-                .iter()
-                .all(|choice| (choice.chars().count() as f32).mul_add(9.0, 12.0) <= cell_width);
+        let fits_inline = if row.inline && choices.len() > 1 && row.choice_tint.is_none() {
+            choice_layout.update(choices, metrics);
+            choice_layout.total_width() * INLINE_ZOOM + ITEM_GAP * (choices.len() - 1) as f32
+                <= value_limit - VALUE_X
+        } else {
+            false
+        };
         if fits_inline {
-            cursor_x = (selected as f32).mul_add(cell_width, VALUE_X);
-            for (index, choice) in choices.iter().enumerate() {
-                let x = (index as f32).mul_add(cell_width, VALUE_X);
+            let mut x = VALUE_X;
+            for (index, (choice, width)) in choices.iter().zip(choice_layout.widths()).enumerate() {
+                let width = width * INLINE_ZOOM;
+                let center = x + width * 0.5;
                 let enabled = match row.enabled_choices {
                     Some(mask) => choice_enabled(mask, index),
                     None => index == selected,
@@ -415,17 +438,26 @@ fn push_row(
                 } else {
                     MUTED
                 };
-                actors.push(layout.bounded_label(
-                    [x, y],
-                    0.0,
-                    cell_width - 10.0,
+                actors.push(layout.label(
+                    [center, y],
+                    0.5,
                     TextContent::Shared(choice.clone()),
-                    0.9,
+                    INLINE_ZOOM,
                     color,
                 ));
-                if enabled && !(focused && index == selected && !row.disabled) {
-                    actors.push(layout.panel(x, y + 8.0, [15.0, 2.0], STROKE, -15));
+                if show_cursor && index == selected {
+                    cursor = Some([center, width]);
+                } else if enabled {
+                    let width = marker_width(width);
+                    actors.push(layout.panel(
+                        center - width * 0.5,
+                        y + 8.0,
+                        [width, 2.0],
+                        STROKE,
+                        -15,
+                    ));
                 }
+                x += width + ITEM_GAP;
             }
         } else {
             let mut value_x = VALUE_X;
@@ -433,21 +465,26 @@ fn push_row(
                 actors.push(layout.panel(VALUE_X, y - 6.0, [14.0, 12.0], tint, -15));
                 value_x += 22.0;
             }
-            cursor_x = value_x;
+            let width_limit = value_limit
+                - value_x
+                - if row.enabled_choices.is_some() {
+                    56.0
+                } else {
+                    14.0
+                };
             actors.push(layout.bounded_label(
                 [value_x, y],
                 0.0,
-                value_limit
-                    - value_x
-                    - if row.enabled_choices.is_some() {
-                        56.0
-                    } else {
-                        14.0
-                    },
+                width_limit,
                 TextContent::Shared(choices[selected].clone()),
-                0.97,
+                ROW_ZOOM,
                 color,
             ));
+            if show_cursor {
+                let width =
+                    (cursor_label.width(&choices[selected], metrics) * ROW_ZOOM).min(width_limit);
+                cursor = Some([value_x + width * 0.5, width]);
+            }
             if let Some(mask) = row.enabled_choices {
                 let (status, tint) = if choice_enabled(mask, selected) {
                     ("ON", AMBER)
@@ -461,11 +498,19 @@ fn push_row(
                 actors.push(layout.label([VALUE_END_X, y], 0.5, ">".into(), 0.8, AMBER));
             }
         }
+    } else if show_cursor {
+        let width = (cursor_label.width(&row.label, metrics) * ROW_ZOOM).min(label_width);
+        cursor = Some([label_x + width * 0.5, width]);
     }
     if row.disabled {
         actors.push(layout.label([582.0, y], 1.0, "LOCKED".into(), 0.73, DIM));
     }
-    cursor_x
+    cursor
+}
+
+fn marker_width(text_width: f32) -> f32 {
+    let pixels = text_width.round() as u32;
+    (pixels + (pixels & 1) + 4) as f32
 }
 
 fn choice_enabled(mask: u64, index: usize) -> bool {
@@ -660,7 +705,7 @@ mod tests {
                     Actor::Sprite {
                         offset,
                         tint,
-                        size: [SizeSpec::Px(15.0), SizeSpec::Px(2.0)],
+                        size: [_, SizeSpec::Px(2.0)],
                         ..
                     } if *tint == AMBER => Some(offset[1]),
                     _ => None,
@@ -694,7 +739,7 @@ mod tests {
             let mut visual = OpenItgSystemOptions::default();
             let assets = AssetManager::new();
             let mut actors = Vec::new();
-            let mut cursor_x = |id, choice, now| {
+            let mut cursor_geometry = |id, choice, now| {
                 let row = |_| {
                     Some(SystemOptionsRow {
                         choices: Some(Arc::clone(&choices)),
@@ -719,19 +764,69 @@ mod tests {
                         Actor::Sprite {
                             offset,
                             tint,
-                            size: [SizeSpec::Px(15.0), SizeSpec::Px(2.0)],
+                            size: [SizeSpec::Px(width), SizeSpec::Px(2.0)],
                             ..
-                        } if *tint == AMBER => Some(offset[0]),
+                        } if *tint == AMBER => Some([offset[0] + width * 0.5, *width]),
                         _ => None,
                     })
                     .unwrap()
             };
 
-            assert_eq!(cursor_x(1, 0, 0.0), 160.0);
-            assert_eq!(cursor_x(1, 2, 0.1), 160.0);
-            assert!((cursor_x(1, 2, 0.175) - 305.0).abs() < 0.01);
-            assert_eq!(cursor_x(2, 2, 0.18), 450.0);
+            assert_eq!(cursor_geometry(1, 0, 0.0), [171.0, 26.0]);
+            assert_eq!(cursor_geometry(1, 2, 0.1), [171.0, 26.0]);
+            assert_eq!(cursor_geometry(1, 2, 0.175), [208.5, 30.0]);
+            assert_eq!(cursor_geometry(2, 2, 0.18), [246.0, 34.0]);
         });
+    }
+
+    #[test]
+    fn inline_choices_and_the_marker_follow_bitmap_text_widths() {
+        let assets_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets");
+        let font = deadlib_assets::parse_font_with_asset_context(
+            &assets_root.join("fonts/miso/_miso light.ini"),
+            vec![assets_root.clone()],
+        )
+        .expect("bundled font");
+        let mut assets = AssetManager::new();
+        assets.register_font("miso", font.font);
+        let metrics = TextMetrics::new(assets.fonts());
+        let narrow_width = metrics.width("iii") * INLINE_ZOOM;
+        let wide_width = metrics.width("WWW") * INLINE_ZOOM;
+        assert!(narrow_width < wide_width);
+        let narrow_center = VALUE_X + narrow_width * 0.5;
+        let wide_center = VALUE_X + narrow_width + ITEM_GAP + wide_width * 0.5;
+        let choices = Arc::from([Arc::from("iii"), Arc::from("WWW")]);
+        let row = |_| {
+            Some(SystemOptionsRow {
+                choices: Some(Arc::clone(&choices)),
+                selected_choice: 1,
+                inline: true,
+                ..action("Quality")
+            })
+        };
+        for (width, delta) in [(640.0, 0.0), (854.0, 107.0)] {
+            with_current_metrics(Metrics::centered(width, 480.0), || {
+                let mut actors = Vec::new();
+                OpenItgSystemOptions::default().push_page(
+                    &mut actors,
+                    page(&row, 1, 0),
+                    &assets,
+                    0.0,
+                );
+                assert!(has_text(
+                    &actors,
+                    "iii",
+                    [narrow_center + delta, FIRST_ROW_Y]
+                ));
+                assert!(has_text(&actors, "WWW", [wide_center + delta, FIRST_ROW_Y]));
+                let marker = marker_width(wide_width);
+                let left = wide_center.round() - marker * 0.5 + delta;
+                assert!(actors.iter().any(|actor| matches!(actor,
+                    Actor::Sprite { offset, tint, size: [SizeSpec::Px(w), SizeSpec::Px(2.0)], .. }
+                        if *tint == AMBER && *w == marker && *offset == [left, FIRST_ROW_Y + 8.0]
+                )));
+            });
+        }
     }
 
     #[test]

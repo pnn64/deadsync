@@ -102,8 +102,12 @@ the scrollbar thumb over 200 ms. A new input retargets each movement from
 its displayed position. The selection band moves to the destination row at
 once, and the scrollbar follows the selected row through the Done item.
 The durations and retargeting follow `ScreenOptions.cpp`, `OptionRow.cpp`,
-and `DualScrollBar.cpp`. Native cursor artwork, exact cursor widths and
-scrollbar graphics, heading fonts and transforms, and modal styling remain open.
+and `DualScrollBar.cpp`. The cursor follows the width of the focused label,
+including Done. Inline choices start at x=160 and use the reference's 14 px
+gap between measured text widths. A row falls back to its selected value
+when the choices exceed the available width. The width of the original
+DeadSync underline also tweens when focus moves. Native cursor and scrollbar
+artwork, heading fonts and transforms, and modal styling remain open.
 
 The selected explanation starts at `(54, 381)` and reveals its wrapped text
 in glyph order over 500 ms, following the default theme's `ScreenOptions`
@@ -134,6 +138,13 @@ show the same row, cursor, and thumb positions immediately before and after
 the mid-scroll retarget. The highlight and help switch to the new selection
 at that frame. Basic Graphics captures show the cursor moving between aspect
 ratio values while the new value is active.
+
+Paired Basic Graphics captures at 640×480 and 854×480 show the change
+from 16:9 to 16:10 at the start, at 75 ms, and at 150 ms. The focused
+underline travels from the first label to the second and widens from 30 to
+36 px.
+An actor test with the bundled font checks the gap between equal-length
+labels with different glyph widths at both resolutions.
 
 Vulkan captures at 640×480 and 854×480 show Test Input at 125, 250, and
 500 ms after focus changes. Each additional glyph appears at its final
@@ -175,6 +186,13 @@ composition measured 32.8–33.2 μs, compared with 33.6–34.2 μs. At the half
 point of a reveal, composition measured 93.9–97.1 μs while building the
 visible glyphs in reusable scratch storage. All composition samples had
 28 draw ops.
+
+With measured choice widths, two paired 854×480 runs with aspect ratio
+focused measured 19.4 μs for actor construction, compared with 19.1–19.4 μs
+before the change. CPU composition measured 31.7–32.2 μs, compared with
+30.6–31.4 μs, with 29 draw ops in every sample. Service actor construction
+measured 20.4–20.6 μs, compared with 19.7–20.0 μs. Steady service composition
+measured 34.1–36.3 μs, compared with 33.0–33.2 μs, with 28 draw ops.
 
 ## Player Options
 

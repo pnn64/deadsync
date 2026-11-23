@@ -642,8 +642,10 @@ requests for direct and nested input launchers. The shell uses the originating
 page to restore service-list focus when a direct tool closes. Options uses the
 mounted theme's transition durations and passes elapsed time to its renderer.
 The renderer owns the panel, heading, and focus motion. Its retained row
-positions are keyed by the controller's page and row order. The shell
-passes the frame clock and resets presentation on Options entry.
+positions are keyed by the controller's page and row order. The renderer
+also measures and caches displayed choice widths using the current font
+chain. The shell passes the frame clock and resets presentation on Options
+entry.
 OpenITG retains the current explanation and its reveal timing. It uses the
 engine bitmap text layout to measure wrapped paragraphs and reveal a glyph
 prefix while keeping the full paragraph's placement.
