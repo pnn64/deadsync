@@ -15682,7 +15682,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     || (requests.player && !direct_player_candidates[player_idx]),
                 direct_note_field: requests.note_field && direct_note_field_candidates[player_idx],
                 judgment: requests.judgment && !direct_judgment_candidates[player_idx],
-                direct_judgment: requests.judgment && !direct_judgment_candidates[player_idx],
+                direct_judgment: requests.judgment && direct_judgment_candidates[player_idx],
                 combo: requests.combo && !direct_combo_candidates[player_idx],
                 direct_combo: requests.combo && direct_combo_candidates[player_idx],
             };

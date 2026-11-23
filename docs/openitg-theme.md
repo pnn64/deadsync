@@ -305,11 +305,17 @@ same dance-single fixture at 854×480 with Vulkan through wgpu and WASAPI
 shared audio. Mean frame time was 8.56 ms in all four runs. The 95th percentile
 ranged from 8.61 to 8.66 ms, with zero audio underruns.
 
-The shell suite still has three failures reproduced in an older shell binary.
-`live_lua_screen_frames` misses its background marker. The Song Lua frame
-repeatability and top-screen AFT tests hit the retained Judgment draw-range
-assertion. Because these failures poison the shared session lock, the affected
-tests were rerun separately. The other cases passed across those runs.
+The Song Lua frame repeatability and top-screen AFT tests pass with each
+Judgment proxy using its intended capture path. A dedicated regression checks
+that both themes can draw two root Judgment proxies from a retained HUD
+range. The live Lua fixture checks marker positions and counts using the
+renderer’s packed RageColor values.
+The full shell suite passed with 448 tests passing and 11 ignored.
+
+Separate Windows captures at 854×480 show the chart's root Judgment proxy
+draw at its authored offset in both themes. In the 600-frame baked-Lua case,
+OpenITG averaged 8.56 ms before and after. Simply Love measured 8.72 ms before
+and 8.56 ms after. All four Vulkan and WASAPI runs recorded zero audio underruns.
 
 ## Windows release verification
 

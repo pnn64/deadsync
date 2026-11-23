@@ -199,6 +199,8 @@ Native playback takes the stage's prepared position, and scripted playback
 supplies the evaluated Player state. The presenter supplies HUD assets and
 layout. The system overlay draws outside song cameras and captures, while
 the gameplay exit prompt participates in the song's Overlay.
+Eligible Judgment proxies borrow the retained HUD draw range. Judgment proxies
+inside render-target captures use the prepared actor source.
 
 Stage preparation prewarms the notefield model cache against the selected
 noteskins and sizes the hold mesh and field capture buffers. The stage retains

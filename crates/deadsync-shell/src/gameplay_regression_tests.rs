@@ -1563,8 +1563,11 @@ return Def.ActorFrame { Name = 'Foreground',
                 for (color, x) in [([0.37, 0.19, 0.63, 1.0], 80.0 * tick as f32 + 10.0),
                     ([0.81, 0.17, 0.29, 1.0], 10.0 * progress as f32 + 10.0),
                     ([0.23, 0.71, 0.41, 1.0], 20.0 * tick as f32 + 10.0)] {
+                    // Song Lua sprites submit RageColor bytes, while the
+                    // fixture declares its identifying tint in Lua floats.
+                    let tint = color.map(|channel| f32::from((channel * 256.0) as u8) / 255.0);
                     let markers: Vec<_> = frame.sprite_instances.iter().filter(|instance|
-                        (0..4).all(|axis| (instance.tint[axis] - color[axis]).abs() < 1e-5)).collect();
+                        (0..4).all(|axis| (instance.tint[axis] - tint[axis]).abs() < 1e-5)).collect();
                     assert_eq!(markers.len(), 1, "live marker {color:?} at {now}");
                     // Renderer instances use the centered world coordinate system.
                     assert!((markers[0].center[0] + 320.0 - x).abs() < 1e-4, "rendered parent pose at {now}: {:?}", markers[0].center);
@@ -4284,8 +4287,8 @@ return Def.ActorFrame{
         simfile
     }
 
-    fn write_direct_combo_proxy_fixture() -> PathBuf {
-        let simfile = write_fixture("f6-direct-combo", generated_pipeline_song_lua_simfile());
+    fn write_direct_hud_proxy_fixture(name: &str, child: &str) -> PathBuf {
+        let simfile = write_fixture(name, generated_pipeline_song_lua_simfile());
         let lua_dir = simfile
             .parent()
             .expect("fixture simfile should have a song directory")
@@ -4297,25 +4300,65 @@ return Def.ActorFrame{
 return Def.ActorFrame{
     Def.ActorProxy{
         OnCommand=function(self)
-            local combo = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("Combo")
-            self:SetTarget(combo)
+            local hud = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("HUD_CHILD")
+            self:SetTarget(hud)
             self:x(SCREEN_CENTER_X)
             self:y(SCREEN_CENTER_Y)
         end,
     },
     Def.ActorProxy{
         OnCommand=function(self)
-            local combo = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("Combo")
-            self:SetTarget(combo)
+            local hud = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("HUD_CHILD")
+            self:SetTarget(hud)
             self:x(SCREEN_CENTER_X + 96)
             self:y(SCREEN_CENTER_Y + 48)
         end,
     },
 }
-"#,
+"#
+            .replace("HUD_CHILD", child),
         )
         .unwrap();
         simfile
+    }
+
+    #[test]
+    fn root_judgment_proxies_reuse_retained_draws_in_both_themes() {
+        let simfile = write_direct_hud_proxy_fixture("direct-judgment", "Judgment");
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+                let mut state = build_compiled_test_state(
+                    &simfile,
+                    GameplayViewport::design(),
+                    GameplaySession::default(),
+                    std::array::from_fn(|_| profile_data::Profile::default()),
+                );
+                set_fixture_time(&mut state, 2.5);
+                add_sprite_core_feedback(&mut state, 0, 0, 100);
+                let assets = fixture_assets();
+                let mut actors = Vec::new();
+                for hud in [None, Some(deadsync_theme_openitg::GAMEPLAY_HUD)] {
+                    if let Some(hud) = hud {
+                        state.presentation.set_hud(hud);
+                    }
+                    actors.clear();
+                    let segments = crate::gameplay_runtime::push_actors(
+                        &mut actors,
+                        &mut state,
+                        &assets,
+                        screen_gameplay::ActorViewOverride::default(),
+                        123.0,
+                        deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                    );
+                    assert_eq!(segments.direct_proxy_count(), 2);
+                }
+            },
+        );
     }
 
     #[test]
@@ -7723,7 +7766,7 @@ return Def.ActorFrame {
 
     #[test]
     fn duplicate_root_combo_proxies_use_repeatable_direct_segments() {
-        let simfile = write_direct_combo_proxy_fixture();
+        let simfile = write_direct_hud_proxy_fixture("f6-direct-combo", "Combo");
         with_session(
             profile_data::PlayStyle::Single,
             profile_data::PlayerSide::P1,
