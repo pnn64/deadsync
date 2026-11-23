@@ -1,3 +1,4 @@
+use crate::resources::{MENU_HEADING_FONT, MENU_NORMAL_FONT};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder, TweenSteps};
 use deadlib_present::font::{self, Font, FontMap};
@@ -293,6 +294,136 @@ pub(crate) fn push_red_streaks(
         band.cropright(1.0 - reveal);
         actors.push(band.build(0));
     }
+}
+
+pub(crate) fn push_options_panel(actors: &mut Vec<Actor>, layout: Layout, bottom: f32, alpha: f32) {
+    let extra = bottom - 426.0;
+    for (key, y, z) in [
+        ("openitg/options-page.png", 257.0, -24),
+        ("openitg/options-frame.png", 258.0, -17),
+    ] {
+        if extra <= 0.0 {
+            actors.push(
+                sprite(
+                    key,
+                    layout.position(320.0, y),
+                    layout.size([610.0, 336.0]),
+                    [1.0, 1.0, 1.0, alpha],
+                    z,
+                )
+                .build(0),
+            );
+            continue;
+        }
+        // The divider stays at its source height when longer help needs more room.
+        const TOP: f32 = 286.0;
+        let start = y - 168.0;
+        for (offset, height, v0, v1) in [
+            (0.0, TOP, 0.0, TOP / 336.0),
+            (TOP, 336.0 - TOP + extra, TOP / 336.0, 1.0),
+        ] {
+            let mut section = sprite(
+                key,
+                layout.position(320.0, start + offset + height * 0.5),
+                layout.size([610.0, height]),
+                [1.0, 1.0, 1.0, alpha],
+                z,
+            );
+            section.customtexturerect([0.0, v0, 1.0, v1]);
+            actors.push(section.build(0));
+        }
+    }
+}
+
+pub(crate) fn options_label(
+    layout: Layout,
+    position: [f32; 2],
+    align: f32,
+    max_width: f32,
+    content: TextContent,
+    zoom: f32,
+    color: [f32; 4],
+) -> Actor {
+    let mut label = layout.text(position, align, content, zoom, color);
+    label.font(MENU_NORMAL_FONT);
+    label.maxwidth(layout.size([max_width, 0.0])[0]);
+    label.shadowlength(layout.size([1.0, 0.0])[0]);
+    label.build(0)
+}
+
+pub(crate) fn push_options_highlight(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    y: f32,
+    height: f32,
+    alpha: f32,
+) {
+    let top = (y - height * 0.5).max(104.0);
+    let bottom = (y + height * 0.5).min(370.0);
+    if bottom <= top {
+        return;
+    }
+    // Inset the first highlight inside the top panel corners.
+    let width = (top - 104.0).mul_add(3.0, 566.0).min(WIDTH);
+    actors.push(
+        sprite(
+            "openitg/options-highlight.png",
+            layout.position(320.0, (top + bottom) * 0.5 + 1.0),
+            layout.size([width, bottom - top]),
+            [1.0, 1.0, 1.0, alpha],
+            -18,
+        )
+        .build(0),
+    );
+}
+
+pub(crate) fn push_options_cursor(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    [x, y]: [f32; 2],
+    width: f32,
+    player: usize,
+    cursor: bool,
+    alpha: f32,
+) {
+    let (key, cap, z) = if cursor {
+        ("openitg/options-cursor.png", 14.0, -14)
+    } else {
+        ("openitg/options-underline.png", 8.0, -13)
+    };
+    let start = (width + cap) * 0.5;
+    let v = 0.5 * player as f32;
+    for (cell, (x, w)) in [(x - start, cap), (x, width), (x + start, cap)]
+        .into_iter()
+        .enumerate()
+    {
+        let mut part = sprite(
+            key,
+            layout.position(x, y),
+            layout.size([w, 26.0]),
+            [1.0, 1.0, 1.0, alpha],
+            z,
+        );
+        part.customtexturerect([cell as f32 / 3.0, v, (cell + 1) as f32 / 3.0, v + 0.5]);
+        actors.push(part.build(0));
+    }
+}
+
+pub(crate) fn push_options_heading(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    title: &'static str,
+    stretch: [f32; 2],
+    alpha: f32,
+) {
+    let mut heading = layout.text([36.0, 38.0], 0.0, title.into(), 1.0, [1.0, 1.0, 1.0, alpha]);
+    heading.font(MENU_HEADING_FONT);
+    let [x, y] = layout.size(stretch);
+    heading.zoomx(x);
+    heading.zoomy(y);
+    heading.maxwidth(layout.size([568.0 * stretch[0], 0.0])[0]);
+    heading.shadowlength(layout.size([4.0, 0.0])[0]);
+    actors.push(italic(heading.build(0), -0.16));
 }
 
 pub(crate) fn black_fade(duration: f32, arriving: bool) -> Actor {

@@ -4,15 +4,16 @@ use deadsync_theme::views::{SystemOptionsPage, SystemOptionsPhase};
 
 use crate::option_explanation::{Explanation, ExplanationPlacement, fit_zoom};
 use crate::presentation::Layout;
+use crate::resources::MENU_NORMAL_FONT;
 
 pub(super) const DEFAULT_PANEL_BOTTOM: f32 = 426.0;
-const MAX_PANEL_BOTTOM: f32 = 470.0;
+const MAX_PANEL_BOTTOM: f32 = 477.0;
 const PLACEMENT: [f32; 2] = [54.0, 381.0];
 const HELP_WIDTH: f32 = 548.0;
-const BASE_ZOOM: f32 = 0.86;
+const BASE_ZOOM: f32 = 0.54;
 const WRAP_WIDTH: i32 = (HELP_WIDTH / BASE_ZOOM) as i32;
-const PADDING: f32 = 7.0;
-const DETAIL_GAP: f32 = 6.0;
+const PADDING: f32 = 26.0;
+const DETAIL_GAP: f32 = 8.0;
 
 #[derive(Default)]
 pub(super) struct OptionsHelp {
@@ -22,6 +23,7 @@ pub(super) struct OptionsHelp {
     zoom: f32,
     detail_y: f32,
     panel_bottom: f32,
+    font_chain: Option<u64>,
 }
 
 impl OptionsHelp {
@@ -47,7 +49,12 @@ impl OptionsHelp {
         if detail_changed {
             self.detail = page.detail.as_ref().map(Explanation::new);
         }
-        if new_page || description_changed || detail_changed {
+        let font_chain = assets
+            .fonts()
+            .get(MENU_NORMAL_FONT)
+            .map(|font| font.chain_key);
+        if new_page || description_changed || detail_changed || self.font_chain != font_chain {
+            self.font_chain = font_chain;
             self.fit(assets);
         }
     }
@@ -55,7 +62,7 @@ impl OptionsHelp {
     fn fit(&mut self, assets: &AssetManager) {
         let measure = |text: &Option<Explanation>| {
             text.as_ref().map_or([0; 2], |text| {
-                text.measure(assets.fonts(), "miso", WRAP_WIDTH)
+                text.measure(assets.fonts(), MENU_NORMAL_FONT, WRAP_WIDTH)
             })
         };
         let [description, detail] = [measure(&self.description), measure(&self.detail)];
@@ -71,8 +78,12 @@ impl OptionsHelp {
             BASE_ZOOM,
         );
         self.detail_y = PLACEMENT[1] + description[1] as f32 * self.zoom + gap;
-        self.panel_bottom = (self.detail_y + detail[1] as f32 * self.zoom + PADDING)
-            .clamp(DEFAULT_PANEL_BOTTOM, MAX_PANEL_BOTTOM);
+        let end = self.detail_y + detail[1] as f32 * self.zoom;
+        self.panel_bottom = if end - PLACEMENT[1] <= 28.0 {
+            DEFAULT_PANEL_BOTTOM
+        } else {
+            (end + PADDING).clamp(DEFAULT_PANEL_BOTTOM, MAX_PANEL_BOTTOM)
+        };
     }
 
     pub(super) fn panel_bottom(&self) -> f32 {
@@ -110,7 +121,7 @@ impl OptionsHelp {
             align: TextAlign::Left,
             zoom: self.zoom,
             wrap_width: WRAP_WIDTH,
-            font: "miso",
+            font: MENU_NORMAL_FONT,
         }
     }
 }

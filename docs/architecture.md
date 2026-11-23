@@ -641,8 +641,10 @@ service menu order through that contract. The controller uses the same tool
 requests for direct and nested input launchers. The shell uses the originating
 page to restore service-list focus when a direct tool closes. Options uses the
 mounted theme's transition durations and passes elapsed time to its renderer.
-The renderer owns the panel, heading, and focus motion. Its retained row
-positions are keyed by the controller's page and row order. The renderer
+The renderer owns the panel, heading, and focus motion. OpenITG's system and
+player options share the native panel assets, title font, and three-piece
+cursor drawing. Retained row positions are keyed by the controller's page
+and row order. The system options renderer
 also measures and caches displayed choice widths using the current font
 chain. The shell passes the frame clock and resets presentation on Options
 entry.

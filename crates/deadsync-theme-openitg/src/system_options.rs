@@ -9,7 +9,12 @@ use deadsync_theme::views::{
     SystemOptionsRow, SystemOptionsServiceRow, SystemOptionsTiming,
 };
 
-use crate::presentation::{ACCENT, INK, Layout, LinearMotion, TextMetrics, quad};
+use crate::presentation::{
+    ACCENT, Layout, LinearMotion, TextMetrics, options_label, push_options_cursor,
+    push_options_heading, push_options_highlight, push_options_panel, push_red_backdrop,
+    push_red_streaks,
+};
+use crate::resources::MENU_NORMAL_FONT;
 use choice_layout::{ChoiceLayout, CursorLabel};
 use help::OptionsHelp;
 
@@ -105,17 +110,15 @@ const LABEL_X: f32 = 53.0;
 const VALUE_X: f32 = 160.0;
 const VALUE_END_X: f32 = 595.0;
 const ITEM_GAP: f32 = 14.0;
-const INLINE_ZOOM: f32 = 0.9;
-const ROW_ZOOM: f32 = 0.97;
+const INLINE_ZOOM: f32 = 0.59;
+const ROW_ZOOM: f32 = 0.62;
+const DONE_ZOOM: f32 = 0.69;
 
-const WINE: [f32; 4] = [0.109, 0.026, 0.040, 1.0];
 const STROKE: [f32; 4] = [0.39, 0.15, 0.16, 1.0];
-const ROW: [f32; 4] = [0.17, 0.046, 0.063, 1.0];
-const FOCUSED_ROW: [f32; 4] = [0.39, 0.218, 0.101, 1.0];
-const MUTED: [f32; 4] = [0.76, 0.66, 0.67, 1.0];
+const MUTED: [f32; 4] = [0.79, 0.72, 0.72, 1.0];
 const DIM: [f32; 4] = [0.55, 0.46, 0.48, 1.0];
 const AMBER: [f32; 4] = [ACCENT[0], ACCENT[1], ACCENT[2], 1.0];
-const WHITE: [f32; 4] = [INK[0], INK[1], INK[2], 1.0];
+const WHITE: [f32; 4] = [1.0; 4];
 
 fn row_destination(
     page: &SystemOptionsPage<'_>,
@@ -143,28 +146,15 @@ fn row_destination(
 
 fn push_background(actors: &mut Vec<Actor>) {
     let (width, height) = (screen_width(), screen_height());
-    actors.push(quad(
-        [0.0, 0.0],
-        [width, height],
-        [0.036, 0.015, 0.023, 1.0],
-        -23,
-    ));
-}
-
-fn push_panel(actors: &mut Vec<Actor>, layout: Layout, bottom: f32) {
-    actors.push(layout.panel(15.0, 90.0, [610.0, bottom - 90.0], WINE, -22));
-    actors.push(layout.panel(15.0, 90.0, [610.0, 2.0], STROKE, -21));
-    actors.push(layout.panel(15.0, bottom - 2.0, [610.0, 2.0], STROKE, -21));
-    actors.push(layout.panel(15.0, 92.0, [2.0, bottom - 94.0], STROKE, -21));
-    actors.push(layout.panel(623.0, 92.0, [2.0, bottom - 94.0], STROKE, -21));
-    actors.push(layout.panel(39.0, 368.0, [562.0, 1.0], STROKE, -20));
+    push_red_backdrop(actors, [width, height], 0.0, -30);
+    push_red_streaks(actors, [width, height], 1.0, -28);
 }
 
 fn push_service_header(actors: &mut Vec<Actor>, layout: Layout, phase: SystemOptionsPhase) {
     let (stretch_x, stretch_y, alpha) = match phase {
         SystemOptionsPhase::Entering(elapsed) if elapsed < SERVICE_HEADER_ENTRY_SECONDS => {
             let t = (elapsed / SERVICE_HEADER_ENTRY_SECONDS).clamp(0.0, 1.0);
-            // OpenITG's BounceEnd curve overshoots before settling at unit zoom.
+            // The original bounce-end tween uses the overshooting sine segment.
             let angle = (std::f32::consts::PI - 1.1).mul_add(1.0 - t, 1.1);
             let progress = angle.sin() / 0.89;
             (progress, (-5.0f32).mul_add(progress, 6.0), 1.0)
@@ -179,15 +169,13 @@ fn push_service_header(actors: &mut Vec<Actor>, layout: Layout, phase: SystemOpt
     if stretch_x <= 0.0 || alpha <= 0.0 {
         return;
     }
-    let [zoom_x, zoom_y] = layout.size([1.9 * stretch_x, 1.9 * stretch_y]);
-    let mut color = WHITE;
-    color[3] = alpha;
-    let mut text = layout.text([36.0, 38.0], 0.0, "SERVICE OPTIONS".into(), 1.9, color);
-    text.zoomx(zoom_x);
-    text.zoomy(zoom_y);
-    text.maxwidth(layout.size([568.0 * stretch_x, 0.0])[0]);
-    text.shadowlength(layout.size([4.0, 0.0])[0]);
-    actors.push(text.build(0));
+    push_options_heading(
+        actors,
+        layout,
+        "SERVICE OPTIONS",
+        [stretch_x, stretch_y],
+        alpha,
+    );
 }
 
 impl OpenItgSystemOptions {
@@ -215,18 +203,12 @@ impl OpenItgSystemOptions {
         let layout = origin.translated_x(slide * width);
         self.help
             .update(assets, &page, self.page_id != Some(page.id), now);
-        push_panel(actors, layout, self.help.panel_bottom());
+        let bottom = self.help.panel_bottom();
+        push_options_panel(actors, layout, bottom, 1.0);
         if page.kind == SystemOptionsPageKind::ServiceMenu {
             push_service_header(actors, origin, page.phase);
         } else {
-            actors.push(layout.bounded_label(
-                [36.0, 38.0],
-                0.0,
-                568.0,
-                page.title.into(),
-                1.55,
-                WHITE,
-            ));
+            push_options_heading(actors, layout, page.title, [1.0; 2], 1.0);
         }
 
         let end_offset = page.row_count.saturating_sub(ROWS_SHOWN);
@@ -234,9 +216,15 @@ impl OpenItgSystemOptions {
         let end = (first + ROWS_SHOWN).min(page.row_count);
         self.retarget_rows(&page, first, end, now);
         let focus_y = self.rows[page.selected].target[0];
-        push_row_band(actors, layout, focus_y, true);
+        push_options_highlight(
+            actors,
+            layout,
+            focus_y,
+            if focus_y == DONE_Y { 33.0 } else { 30.0 },
+            1.0,
+        );
         let moving = now < self.rows_move_until;
-        let metrics = TextMetrics::new(assets.fonts(), "miso");
+        let metrics = TextMetrics::new(assets.fonts(), MENU_NORMAL_FONT);
         let range = if moving {
             0..page.row_count
         } else {
@@ -256,9 +244,6 @@ impl OpenItgSystemOptions {
             }
             if let Some(row) = (page.row)(index) {
                 let row_start = actors.len();
-                if !focused || y != focus_y {
-                    push_row_band(actors, layout, y, false);
-                }
                 if let Some([center, width]) = push_row(
                     actors,
                     layout,
@@ -282,14 +267,13 @@ impl OpenItgSystemOptions {
         let [_, done_alpha] = self.rows[page.row_count].sample(now, ROW_SECONDS);
         if done_alpha > 0.0 || focused_done {
             let done_start = actors.len();
-            if !focused_done {
-                push_row_band(actors, layout, DONE_Y, false);
-            }
-            actors.push(layout.label(
+            actors.push(options_label(
+                layout,
                 [320.0, DONE_Y],
                 0.5,
+                180.0,
                 "DONE".into(),
-                1.0,
+                DONE_ZOOM,
                 if focused_done { WHITE } else { MUTED },
             ));
             if done_alpha < 1.0 {
@@ -298,14 +282,18 @@ impl OpenItgSystemOptions {
                 }
             }
             if focused_done {
-                cursor_target = Some([320.0, DONE_Y, marker_width(metrics.width("DONE"))]);
+                cursor_target = Some([
+                    320.0,
+                    DONE_Y,
+                    marker_width(metrics.width("DONE") * DONE_ZOOM),
+                ]);
             }
         }
         if let Some(target) = cursor_target {
             let cursor = self.cursor.get_or_insert(LinearMotion::at(target));
             cursor.retarget(target, now, CURSOR_SECONDS);
             let [center, y, width] = cursor.sample(now, CURSOR_SECONDS);
-            actors.push(layout.panel(center - width * 0.5, y + 8.0, [width, 2.0], AMBER, -15));
+            push_options_cursor(actors, layout, [center, y], width, 0, true, 1.0);
         } else {
             self.cursor = None;
         }
@@ -319,21 +307,22 @@ impl OpenItgSystemOptions {
             actors.push(layout.panel(33.0, top + thumb_offset, [2.0, thumb_height], AMBER, -14));
         }
         self.help.push(actors, layout, [WHITE, MUTED], now);
-    }
-}
-
-fn push_row_band(actors: &mut Vec<Actor>, layout: Layout, y: f32, focused: bool) {
-    let fill = if focused { FOCUSED_ROW } else { ROW };
-    let height = if focused && y == DONE_Y {
-        24.0 * (30.0 / 27.0)
-    } else {
-        24.0
-    };
-    let top = y - height * 0.5;
-    let z = if focused { -16 } else { -17 };
-    actors.push(layout.panel(35.0, top, [561.0, height], fill, z));
-    if focused {
-        actors.push(layout.panel(35.0, top, [3.0, height], AMBER, -15));
+        if bottom <= 437.0 {
+            let hint = if page.kind == SystemOptionsPageKind::ServiceMenu {
+                "Press Start to open the selected option"
+            } else {
+                "Use Left or Right to change a setting"
+            };
+            actors.push(options_label(
+                layout,
+                [320.0, 446.0],
+                0.5,
+                550.0,
+                hint.into(),
+                0.62,
+                WHITE,
+            ));
+        }
     }
 }
 
@@ -360,7 +349,8 @@ fn push_row(
     } else {
         (VALUE_X, VALUE_END_X - VALUE_X)
     };
-    actors.push(layout.bounded_label(
+    actors.push(options_label(
+        layout,
         [label_x, y],
         0.0,
         label_width,
@@ -396,9 +386,11 @@ fn push_row(
                 } else {
                     MUTED
                 };
-                actors.push(layout.label(
+                actors.push(options_label(
+                    layout,
                     [center, y],
                     0.5,
+                    width + 2.0,
                     TextContent::Shared(choice.clone()),
                     INLINE_ZOOM,
                     color,
@@ -406,14 +398,15 @@ fn push_row(
                 if show_cursor && index == selected {
                     cursor = Some([center, width]);
                 } else if enabled {
-                    let width = marker_width(width);
-                    actors.push(layout.panel(
-                        center - width * 0.5,
-                        y + 8.0,
-                        [width, 2.0],
-                        STROKE,
-                        -15,
-                    ));
+                    push_options_cursor(
+                        actors,
+                        layout,
+                        [center, y],
+                        marker_width(width),
+                        0,
+                        false,
+                        1.0,
+                    );
                 }
                 x += width + ITEM_GAP;
             }
@@ -430,7 +423,8 @@ fn push_row(
                 } else {
                     14.0
                 };
-            actors.push(layout.bounded_label(
+            actors.push(options_label(
+                layout,
                 [value_x, y],
                 0.0,
                 width_limit,
@@ -449,11 +443,35 @@ fn push_row(
                 } else {
                     ("OFF", MUTED)
                 };
-                actors.push(layout.label([value_limit - 16.0, y], 1.0, status.into(), 0.8, tint));
+                actors.push(options_label(
+                    layout,
+                    [value_limit - 16.0, y],
+                    1.0,
+                    39.0,
+                    status.into(),
+                    0.52,
+                    tint,
+                ));
             }
             if focused && !row.disabled && choices.len() > 1 {
-                actors.push(layout.label([VALUE_X - 10.0, y], 0.5, "<".into(), 0.8, AMBER));
-                actors.push(layout.label([VALUE_END_X, y], 0.5, ">".into(), 0.8, AMBER));
+                actors.push(options_label(
+                    layout,
+                    [VALUE_X - 10.0, y],
+                    0.5,
+                    13.0,
+                    "<".into(),
+                    0.53,
+                    WHITE,
+                ));
+                actors.push(options_label(
+                    layout,
+                    [VALUE_END_X, y],
+                    0.5,
+                    13.0,
+                    ">".into(),
+                    0.53,
+                    AMBER,
+                ));
             }
         }
     } else if show_cursor {
@@ -461,7 +479,15 @@ fn push_row(
         cursor = Some([label_x + width * 0.5, width]);
     }
     if row.disabled {
-        actors.push(layout.label([582.0, y], 1.0, "LOCKED".into(), 0.73, DIM));
+        actors.push(options_label(
+            layout,
+            [582.0, y],
+            1.0,
+            80.0,
+            "LOCKED".into(),
+            0.52,
+            DIM,
+        ));
     }
     cursor
 }
@@ -478,8 +504,8 @@ fn choice_enabled(mask: u64, index: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_present::actors::SizeSpec;
     use deadlib_present::actors::TextAttributes;
+    use deadlib_present::actors::{SizeSpec, SpriteSource};
     use deadlib_present::space::{Metrics, with_current_metrics};
     use std::cell::RefCell;
     use std::sync::Arc;
@@ -523,6 +549,19 @@ mod tests {
         })
     }
 
+    fn cursor_center(actor: &Actor) -> Option<([f32; 2], f32)> {
+        match actor {
+            Actor::Sprite {
+                source: SpriteSource::TextureStatic("openitg/options-cursor.png"),
+                offset,
+                size: [SizeSpec::Px(width), SizeSpec::Px(26.0)],
+                uv_rect: Some(uv),
+                ..
+            } if *uv == [1.0 / 3.0, 0.0, 2.0 / 3.0, 0.5] => Some((*offset, *width)),
+            _ => None,
+        }
+    }
+
     fn push_page(actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>) {
         OpenItgSystemOptions::default().push_page(actors, page, &AssetManager::new(), 0.0);
     }
@@ -535,8 +574,8 @@ mod tests {
                 push_background(&mut actors);
                 push_page(&mut actors, page(&|_| Some(action("Graphics")), 1, 0));
                 assert!(actors.iter().any(|actor| matches!(actor,
-                    Actor::Sprite { offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], .. }
-                        if *offset == [15.0 + delta, 90.0] && *w == 610.0 && *h == 336.0
+                    Actor::Sprite { source: SpriteSource::TextureStatic("openitg/options-frame.png"), offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], .. }
+                        if *offset == [320.0 + delta, 258.0] && *w == 610.0 && *h == 336.0
                 )));
                 assert!(has_text(&actors, "SERVICE OPTIONS", [36.0 + delta, 38.0]));
                 assert!(has_text(&actors, "Graphics", [160.0 + delta, 127.0]));
@@ -580,11 +619,11 @@ mod tests {
             assert!(actors.iter().any(|actor| matches!(actor,
                 Actor::Text { content, offset, scale, .. }
                     if content.as_str() == "SERVICE OPTIONS"
-                        && *offset == [36.0, 38.0] && scale[0] > 1.9 && scale[1] < 1.9
+                        && *offset == [36.0, 38.0] && scale[0] > 1.0 && scale[1] < 1.0
             )));
             assert!(actors.iter().any(|actor| matches!(actor,
-                Actor::Sprite { offset, .. } if (offset[0] - (15.0 - 57.6)).abs() < 0.01
-                    && offset[1] == 90.0
+                Actor::Sprite { source: SpriteSource::TextureStatic("openitg/options-frame.png"), offset, .. }
+                    if (offset[0] - (320.0 - 57.6)).abs() < 0.01 && offset[1] == 258.0
             )));
 
             actors.clear();
@@ -598,8 +637,8 @@ mod tests {
             assert!(actors.iter().any(|actor| matches!(actor,
                 Actor::Text { content, offset, color, scale, .. }
                     if content.as_str() == "SERVICE OPTIONS" && *offset == [36.0, 38.0]
-                        && color[3] == 0.75 && (scale[0] - 2.375).abs() < 0.001
-                        && (scale[1] - 1.425).abs() < 0.001
+                        && color[3] == 0.75 && (scale[0] - 1.25).abs() < 0.001
+                        && (scale[1] - 0.75).abs() < 0.001
             )));
             actors.clear();
             push_page(
@@ -627,7 +666,8 @@ mod tests {
             assert_eq!(*visited.borrow(), (4..12).collect::<Vec<_>>());
             assert!(!has_text(&actors, "DONE", [320.0, 353.0]));
             assert!(actors.iter().any(|actor| matches!(actor,
-                Actor::Sprite { offset, tint, .. } if *offset == [35.0, 227.0] && *tint == AMBER
+                Actor::Sprite { source: SpriteSource::TextureStatic("openitg/options-highlight.png"), offset, .. }
+                    if *offset == [320.0, 240.0]
             )));
             actors.clear();
             visited.borrow_mut().clear();
@@ -659,33 +699,25 @@ mod tests {
                     } if content.as_str() == "1" => Some(offset[1]),
                     _ => None,
                 });
-                let cursor = actors.iter().find_map(|actor| match actor {
-                    Actor::Sprite {
-                        offset,
-                        tint,
-                        size: [_, SizeSpec::Px(2.0)],
-                        ..
-                    } if *tint == AMBER => Some(offset[1]),
-                    _ => None,
-                });
+                let cursor = actors.iter().find_map(cursor_center).unwrap().0[1];
                 let thumb = actors.iter().find_map(|actor| match actor {
                     Actor::Sprite { offset, tint, .. } if offset[0] == 33.0 && *tint == AMBER => {
                         Some(offset[1])
                     }
                     _ => None,
                 });
-                [y.unwrap_or(-1.0), cursor.unwrap(), thumb.unwrap()]
+                [y.unwrap_or(-1.0), cursor, thumb.unwrap()]
             };
 
             frame(3, 1.0);
-            assert_eq!(frame(5, 1.02)[..2], [155.0, 219.0]);
+            assert_eq!(frame(5, 1.02)[..2], [155.0, 211.0]);
             let moving = frame(5, 1.095);
             assert!((moving[0] - 141.0).abs() < 0.01);
-            assert!((moving[1] - 233.0).abs() < 0.01);
+            assert!((moving[1] - 225.0).abs() < 0.01);
             assert!((moving[2] - 206.0).abs() < 0.01);
             assert_eq!(frame(6, 1.095), moving);
             let settled = frame(6, 1.4);
-            assert_eq!(settled[..2], [-1.0, 247.0]);
+            assert_eq!(settled[..2], [-1.0, 239.0]);
             assert!((settled[2] - 256.4).abs() < 0.01);
         });
     }
@@ -718,22 +750,15 @@ mod tests {
                 );
                 actors
                     .iter()
-                    .find_map(|actor| match actor {
-                        Actor::Sprite {
-                            offset,
-                            tint,
-                            size: [SizeSpec::Px(width), SizeSpec::Px(2.0)],
-                            ..
-                        } if *tint == AMBER => Some([offset[0] + width * 0.5, *width]),
-                        _ => None,
-                    })
+                    .find_map(cursor_center)
+                    .map(|([x, _], width)| [x, width])
                     .unwrap()
             };
 
-            assert_eq!(cursor_geometry(1, 0, 0.0), [171.0, 26.0]);
-            assert_eq!(cursor_geometry(1, 2, 0.1), [171.0, 26.0]);
-            assert_eq!(cursor_geometry(1, 2, 0.175), [208.5, 30.0]);
-            assert_eq!(cursor_geometry(2, 2, 0.18), [246.0, 34.0]);
+            assert_eq!(cursor_geometry(1, 0, 0.0), [167.0, 18.0]);
+            assert_eq!(cursor_geometry(1, 2, 0.1), [167.0, 18.0]);
+            assert_eq!(cursor_geometry(1, 2, 0.175), [196.5, 21.0]);
+            assert_eq!(cursor_geometry(2, 2, 0.18), [226.0, 24.0]);
         });
     }
 
@@ -741,13 +766,13 @@ mod tests {
     fn inline_choices_and_the_marker_follow_bitmap_text_widths() {
         let assets_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets");
         let font = deadlib_assets::parse_font_with_asset_context(
-            &assets_root.join("fonts/miso/_miso light.ini"),
+            &assets_root.join("fonts/openitg/_eurostile normal.ini"),
             vec![assets_root.clone()],
         )
         .expect("bundled font");
         let mut assets = AssetManager::new();
-        assets.register_font("miso", font.font);
-        let metrics = TextMetrics::new(assets.fonts(), "miso");
+        assets.register_font(MENU_NORMAL_FONT, font.font);
+        let metrics = TextMetrics::new(assets.fonts(), MENU_NORMAL_FONT);
         let narrow_width = metrics.width("iii") * INLINE_ZOOM;
         let wide_width = metrics.width("WWW") * INLINE_ZOOM;
         assert!(narrow_width < wide_width);
@@ -778,11 +803,10 @@ mod tests {
                 ));
                 assert!(has_text(&actors, "WWW", [wide_center + delta, FIRST_ROW_Y]));
                 let marker = marker_width(wide_width);
-                let left = wide_center.round() - marker * 0.5 + delta;
-                assert!(actors.iter().any(|actor| matches!(actor,
-                    Actor::Sprite { offset, tint, size: [SizeSpec::Px(w), SizeSpec::Px(2.0)], .. }
-                        if *tint == AMBER && *w == marker && *offset == [left, FIRST_ROW_Y + 8.0]
-                )));
+                assert_eq!(
+                    actors.iter().find_map(cursor_center),
+                    Some(([wide_center.round() + delta, FIRST_ROW_Y], marker)),
+                );
             });
         }
     }

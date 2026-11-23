@@ -114,8 +114,10 @@ and aspect ratio remains open.
 
 The effective `ScreenOptions` reference places the heading at `(36, 38)`,
 eight rows at y=127 with 28 px spacing, the scrollbar near `(34, 242)`, and
-the Done row at y=353. The OpenITG panel uses these anchors at 640×480 and
-centers the layout at 854×480. The inherited Frame commands slide it in with
+the Done row at y=353. Service Options and its settings pages share the
+original frame, separator lines, Eurostile fonts, and red menu backdrop with
+Player Options. The panel uses the native anchors at 640×480 and centers
+the layout at 854×480. The inherited Frame commands slide it in with
 0.3 s deceleration and out with 0.3 s acceleration. The service heading
 bounces in over 0.3 s and widens, flattens, and fades over 0.2 s at exit,
 following the `ScreenOptionsMenu header.xml` commands. The heading keeps its
@@ -134,9 +136,10 @@ The durations and retargeting follow `ScreenOptions.cpp`, `OptionRow.cpp`,
 and `DualScrollBar.cpp`. The cursor follows the width of the focused label,
 including Done. Inline choices start at x=160 and use the reference's 14 px
 gap between measured text widths. A row falls back to its selected value
-when the choices exceed the available width. The width of the original
-DeadSync underline also tweens when focus moves. Native cursor and scrollbar
-artwork, heading fonts and transforms, and modal styling remain open.
+when the choices exceed the available width. The width of the native
+three-piece gold cursor also tweens when focus moves. Enabled inline values
+use the matching underline. The scrollbar uses a solid track and thumb.
+Auxiliary modals and tools retain their current presentation.
 
 The selected explanation starts at `(54, 381)` and reveals its wrapped text
 in glyph order over 500 ms, following the default theme's `ScreenOptions`
@@ -158,8 +161,10 @@ Timed Vulkan captures at both widths show service entry at 75, 150, 225, and
 300 ms, the local exit at 100 ms, and the following Basic Graphics entry at
 150 ms at 640×480. Tests check that the service title keeps its anchor while
 the panel moves and that the controller keeps the source page active for
-the mounted duration. The tall early heading can clip above the viewport
-with the current font.
+the mounted duration. The Eurostile and frame pass checks a 150 ms entry
+and the settled service and Graphics pages at both sizes. Placement follows
+the effective theme sources. A comparison against a running native Service
+Options screen remains open.
 
 Focus-motion tests cover a second input during a viewport scroll, a horizontal
 choice change, and reset on a new page. Vulkan captures at 640×480 and 854×480
@@ -169,11 +174,17 @@ at that frame. Basic Graphics captures show the cursor moving between aspect
 ratio values while the new value is active.
 
 Paired Basic Graphics captures at 640×480 and 854×480 show the change
-from 16:9 to 16:10 at the start, at 75 ms, and at 150 ms. The focused
-underline travels from the first label to the second and widens from 30 to
-36 px.
+from 16:9 to 16:10. The gold cursor travels between the two labels and
+widens with the measured text while the new value is active.
 An actor test with the bundled font checks the gap between equal-length
 labels with different glyph widths at both resolutions.
+
+At 854×480, the original artwork pass increased median process CPU time
+for actor construction from 20 to 23 µs for Service and from 20 to 27 µs
+for Basic Graphics. The Simply Love service fixture measured 31 µs in both
+builds. Settled Service CPU composition went from 31 to 39 µs and from
+28 to 37 draw operations. These measures used dev-profile theme libraries
+and reused composition buffers.
 
 Vulkan captures at 640×480 and 854×480 show Test Input at 125, 250, and
 500 ms after focus changes. Each additional glyph appears at its final

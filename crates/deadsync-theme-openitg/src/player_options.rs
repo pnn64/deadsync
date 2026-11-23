@@ -3,9 +3,10 @@
 mod help;
 
 use crate::presentation::{
-    Layout, LinearMotion, TextMetrics, WIDTH, italic, push_red_backdrop, push_red_streaks, sprite,
+    Layout, LinearMotion, TextMetrics, options_label, push_options_cursor, push_options_heading,
+    push_options_highlight, push_options_panel, push_red_backdrop, push_red_streaks, sprite,
 };
-use crate::resources::{MENU_HEADING_FONT, MENU_NORMAL_FONT};
+use crate::resources::MENU_NORMAL_FONT;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::anim::bounceend_p;
 use deadlib_present::font::FontMap;
@@ -138,7 +139,7 @@ fn push_page(
     push_red_backdrop(actors, [width, height], now.rem_euclid(60.0) as f32, -30);
     push_red_streaks(actors, [width, height], 1.0, -28);
     let panel_bottom = help.panel_bottom();
-    draw_panel(actors, layout, panel_bottom, alpha);
+    push_options_panel(actors, layout, panel_bottom, alpha);
     draw_heading(actors, layout, page.title, elapsed, alpha);
     draw_seats(actors, layout, seats, alpha);
 
@@ -159,7 +160,7 @@ fn push_page(
 
         let y = row.slot.mul_add(pitch, FIRST_ROW_Y);
         if focused.contains(&true) {
-            draw_row_focus(
+            push_options_highlight(
                 actors,
                 layout,
                 y,
@@ -184,7 +185,7 @@ fn push_page(
     draw_scrollbar(actors, layout, thumbs, alpha);
     help.push(actors, layout, alpha, now);
     if panel_bottom <= 437.0 {
-        actors.push(option_label(
+        actors.push(options_label(
             layout,
             [320.0, 446.0],
             0.5,
@@ -193,45 +194,6 @@ fn push_page(
             0.62,
             rgba(INK, alpha),
         ));
-    }
-}
-
-fn draw_panel(actors: &mut Vec<Actor>, layout: Layout, bottom: f32, alpha: f32) {
-    let extra = bottom - 426.0;
-    for (key, y, z) in [
-        ("openitg/options-page.png", 257.0, -24),
-        ("openitg/options-frame.png", 258.0, -17),
-    ] {
-        if extra <= 0.0 {
-            actors.push(
-                sprite(
-                    key,
-                    layout.position(320.0, y),
-                    layout.size([610.0, 336.0]),
-                    rgba(INK, alpha),
-                    z,
-                )
-                .build(0),
-            );
-            continue;
-        }
-        // The divider stays at its source height when longer help needs more room.
-        const TOP: f32 = 286.0;
-        let start = y - 168.0;
-        for (offset, height, v0, v1) in [
-            (0.0, TOP, 0.0, TOP / 336.0),
-            (TOP, 336.0 - TOP + extra, TOP / 336.0, 1.0),
-        ] {
-            let mut section = sprite(
-                key,
-                layout.position(320.0, start + offset + height * 0.5),
-                layout.size([610.0, height]),
-                rgba(INK, alpha),
-                z,
-            );
-            section.customtexturerect([0.0, v0, 1.0, v1]);
-            actors.push(section.build(0));
-        }
     }
 }
 
@@ -248,13 +210,7 @@ fn draw_heading(
         pane
     };
     let t = bounceend_p((elapsed / TRANSITION_SECONDS).clamp(0.0, 1.0));
-    let mut heading = layout.text([36.0, 38.0], 0.0, title.into(), 1.0, rgba(INK, alpha));
-    heading.font(MENU_HEADING_FONT);
-    let [x, y] = layout.size([t, (6.0 - 5.0 * t).max(0.0)]);
-    heading.zoomx(x);
-    heading.zoomy(y);
-    heading.shadowlength(layout.size([4.0, 0.0])[0]);
-    actors.push(italic(heading.build(0), -0.16));
+    push_options_heading(actors, layout, title, [t, (6.0 - 5.0 * t).max(0.0)], alpha);
 }
 
 fn draw_seats(actors: &mut Vec<Actor>, layout: Layout, seats: Seats, alpha: f32) {
@@ -287,7 +243,7 @@ fn draw_seats(actors: &mut Vec<Actor>, layout: Layout, seats: Seats, alpha: f32)
             )
             .build(0),
         );
-        actors.push(option_label(
+        actors.push(options_label(
             layout,
             [x - 16.0, 79.0],
             0.5,
@@ -336,25 +292,9 @@ const fn rgba([red, green, blue]: [f32; 3], alpha: f32) -> [f32; 4] {
     [red, green, blue, alpha]
 }
 
-fn option_label(
-    layout: Layout,
-    position: [f32; 2],
-    align: f32,
-    max_width: f32,
-    content: TextContent,
-    zoom: f32,
-    color: [f32; 4],
-) -> Actor {
-    let mut label = layout.text(position, align, content, zoom, color);
-    label.font(MENU_NORMAL_FONT);
-    label.maxwidth(layout.size([max_width, 0.0])[0]);
-    label.shadowlength(layout.size([1.0, 0.0])[0]);
-    label.build(0)
-}
-
 fn draw_row_label(actors: &mut Vec<Actor>, layout: Layout, y: f32, row: &Row<'_>, focused: bool) {
     let label_y = if row.detail.is_some() { y - 4.5 } else { y };
-    actors.push(option_label(
+    actors.push(options_label(
         layout,
         [LABEL_X, label_y],
         0.0,
@@ -364,7 +304,7 @@ fn draw_row_label(actors: &mut Vec<Actor>, layout: Layout, y: f32, row: &Row<'_>
         rgba(if focused { INK } else { MUTED }, row.alpha),
     ));
     if let Some(detail) = row.detail {
-        actors.push(option_label(
+        actors.push(options_label(
             layout,
             [LABEL_X, y + 6.0],
             0.0,
@@ -376,26 +316,6 @@ fn draw_row_label(actors: &mut Vec<Actor>, layout: Layout, y: f32, row: &Row<'_>
     }
 }
 
-fn draw_row_focus(actors: &mut Vec<Actor>, layout: Layout, y: f32, height: f32, alpha: f32) {
-    let top = (y - height * 0.5).max(104.0);
-    let bottom = (y + height * 0.5).min(370.0);
-    if bottom <= top {
-        return;
-    }
-    // Inset the first highlight inside the top panel corners.
-    let width = (top - 104.0).mul_add(3.0, 566.0).min(WIDTH);
-    actors.push(
-        sprite(
-            "openitg/options-highlight.png",
-            layout.position(320.0, (top + bottom) * 0.5 + 1.0),
-            layout.size([width, bottom - top]),
-            rgba(INK, alpha),
-            -18,
-        )
-        .build(0),
-    );
-}
-
 fn draw_exit(
     actors: &mut Vec<Actor>,
     layout: Layout,
@@ -404,7 +324,7 @@ fn draw_exit(
     alpha: f32,
 ) {
     if focused.contains(&true) {
-        draw_row_focus(actors, layout, EXIT_Y, 33.0, alpha);
+        push_options_highlight(actors, layout, EXIT_Y, 33.0, alpha);
         draw_choice_marks(
             actors,
             layout,
@@ -422,7 +342,7 @@ fn draw_exit(
         .copied()
         .next()
         .unwrap_or(row.label);
-    actors.push(option_label(
+    actors.push(options_label(
         layout,
         [320.0, EXIT_Y],
         0.5,
@@ -456,7 +376,7 @@ fn draw_values(
             (content_x, 150.0)
         };
         if focused[player] && !row.next_row[player] {
-            draw_choice_sprite(
+            push_options_cursor(
                 actors,
                 layout,
                 [x, y],
@@ -466,7 +386,7 @@ fn draw_values(
                 row.alpha,
             );
         }
-        actors.push(option_label(
+        actors.push(options_label(
             layout,
             [x, y],
             0.5,
@@ -543,7 +463,7 @@ fn draw_inline(
         } else {
             MUTED
         };
-        actors.push(option_label(
+        actors.push(options_label(
             layout,
             [x, y],
             0.5,
@@ -586,7 +506,7 @@ fn draw_compact_choices(
             .min(inline.choices.len() - 1);
         let choice_on = enabled(inline, player, choice);
         let x = seats.values[player];
-        actors.push(option_label(
+        actors.push(options_label(
             layout,
             [x, y],
             0.5,
@@ -597,7 +517,7 @@ fn draw_compact_choices(
         ));
         if inline.enabled[player].is_some() {
             let status = if choice_on { "ON" } else { "OFF" };
-            actors.push(option_label(
+            actors.push(options_label(
                 layout,
                 [x + 62.0, y],
                 0.0,
@@ -634,7 +554,7 @@ fn draw_next_row(
     focused: [bool; MAX_PLAYERS],
 ) {
     let position = [235.0, y];
-    actors.push(option_label(
+    actors.push(options_label(
         layout,
         position,
         0.5,
@@ -671,10 +591,10 @@ fn draw_choice_marks(
             } else {
                 0.0
             };
-            draw_choice_sprite(actors, layout, [x, y + shift], width, player, true, alpha);
+            push_options_cursor(actors, layout, [x, y + shift], width, player, true, alpha);
         }
         if enabled[player] {
-            draw_choice_sprite(actors, layout, [x, y], width, player, false, alpha);
+            push_options_cursor(actors, layout, [x, y], width, player, false, alpha);
         }
     }
 }
@@ -683,38 +603,6 @@ fn marker_width(metrics: TextMetrics<'_>, choice: &TextContent, max_width: f32, 
     (metrics.width(choice.as_str()) * zoom)
         .min(max_width)
         .max(8.0)
-}
-
-fn draw_choice_sprite(
-    actors: &mut Vec<Actor>,
-    layout: Layout,
-    [x, y]: [f32; 2],
-    width: f32,
-    player: usize,
-    cursor: bool,
-    alpha: f32,
-) {
-    let (key, cap, z) = if cursor {
-        ("openitg/options-cursor.png", 14.0, -14)
-    } else {
-        ("openitg/options-underline.png", 8.0, -13)
-    };
-    let start = (width + cap) * 0.5;
-    let v = 0.5 * player as f32;
-    for (cell, (x, w)) in [(x - start, cap), (x, width), (x + start, cap)]
-        .into_iter()
-        .enumerate()
-    {
-        let mut part = sprite(
-            key,
-            layout.position(x, y),
-            layout.size([w, 26.0]),
-            rgba(INK, alpha),
-            z,
-        );
-        part.customtexturerect([cell as f32 / 3.0, v, (cell + 1) as f32 / 3.0, v + 0.5]);
-        actors.push(part.build(0));
-    }
 }
 
 #[cfg(test)]
