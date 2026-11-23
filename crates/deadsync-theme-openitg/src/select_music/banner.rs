@@ -12,9 +12,9 @@ use std::time::{Duration, Instant};
 pub const WHEEL_BANNER_FADE: Duration = Duration::from_millis(500);
 const MOTION_SECONDS: f32 = 0.75;
 pub(super) const CENTER: [f32; 2] = [478.0, 112.0];
-const SIZE: [f32; 2] = [300.0, 128.0];
-const PLATE_TINT: [f32; 4] = [0.10, 0.16, 0.23, 1.0];
-pub(super) const WHEEL_MATTE: [f32; 4] = [0.035, 0.048, 0.072, 1.0];
+pub(super) const SIZE: [f32; 2] = [300.0, 128.0];
+const PLATE_TINT: [f32; 4] = [0.19, 0.046, 0.042, 1.0];
+const WHEEL_MATTE: [f32; 4] = [0.11, 0.026, 0.025, 1.0];
 
 thread_local! {
     static FADE_VERTICES: RefCell<[Arc<Vec<TexturedMeshVertex>>; WHEEL_OUTGOING_BANNERS]> =
@@ -163,7 +163,9 @@ pub(super) fn push(
     let [x, y] = moving.position(CENTER[0], CENTER[1]);
     let pivot = Vec3::new(metrics.left + x, metrics.top - y, 0.0);
     let yaw = (20.0 * frame.orientation).to_radians();
-    let roll = (-0.6 * frame.orientation).to_radians();
+    // Include the settled projection's slope in the flat banner plane so
+    // the moving image follows the rails at the opening.
+    let roll = (-6.5 * frame.orientation).to_radians();
     let view_proj = metrics.projection()
         * Mat4::from_translation(pivot)
         * Mat4::from_rotation_z(roll)
@@ -196,7 +198,7 @@ pub(super) fn push(
                 [right, top],
                 [width, layout.size([0.0, HEIGHT])[1]],
                 WHEEL_MATTE,
-                17,
+                -4,
             ));
         }
     }

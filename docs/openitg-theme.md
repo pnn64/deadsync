@@ -367,16 +367,27 @@ and `MusicWheel` metrics and `WheelBase.cpp`. The layout uses the source
 wheel center `(212, 222)`, a radius-200 arc, a 20° parent yaw, and a 58°
 horizontal perspective centered at `(320, 222)`. The cards and their labels
 tilt together. The shared view retains 17 rows so the edge cards can enter as
-the source's 15-row window moves. A fixed selection border pulses on the
-preview beat. The wheel uses a curved detail divider, an inset banner, an
-artist and BPM rail, and the 20.5 px difficulty-row pitch. The option offer
-appears in the footer so the confirmed song stays visible.
+the source's 15-row window moves. The supplied song, section, and action
+textures wrap around the wheel, with the native gold highlight pulsing on the
+preview beat. The shared red backdrop and header and footer streaks continue
+from Style and Play Mode. The supplied curved silver frame uses a 58° camera
+and 20° yaw. Eurostile labels, the fallback banner, the artist and BPM
+rail, segmented difficulty meters, and the 20.5 px row pitch follow the
+reference. The footer reports the available DeadSync Start action.
 
 The native 640×480 Quartz capture confirms the tilted rows and the fixed
 selection area. Vulkan captures of the DeadSync Quartz view checked the same
 title, artist, BPM, and Hard 5 chart at 640×480 and 854×480. Additional
 two-player captures check catalog labels, records, and the highlight during
-movement. The artwork and proportions use DeadSync's presentation.
+movement. DeadSync centers the 640×480 wheel at wider sizes. The source
+banner aperture and popularity indicator remain fidelity gaps.
+
+In the 854×480 two-player fixture, the sum of the median actor construction
+and CPU composition times went from 187 to 210 µs per settled frame and
+from 194 to 224 µs during scrolling. The segmented meters, chart text, and
+additional artwork bring the fixture from 132 to 166 actors and from 94
+to 106 draw operations. These timings use dev-profile libraries and warmed
+composition buffers.
 
 The OpenITG song wheel includes Chance and Random in that order whenever
 the active sort contains a playable chart for the current style. The
@@ -428,21 +439,20 @@ outgoing image. Median CPU composition stayed within 143–146 µs, with one
 additional draw in the fade. These measurements use warm actor and
 composition buffers and dev-profile libraries.
 
-Each joined side's chart pane shows steps, jumps, hands, holds, rolls, and
-judgable mines. The machine record and holder and the personal best use the
-same local ITG snapshots as Simply Love. When the selected chart changes, the
-previous record disappears until the matching snapshot is ready. The panes
-appear for joined sides and display personal bests when the profile has one.
+Each joined side's chart pane uses the supplied red frame and shows the chart
+level, steps, jumps, hands, holds, rolls, and judgable mines. The machine
+record and holder and the personal best use the same local ITG snapshots as
+Simply Love. When the selected chart changes, the previous record disappears
+until the matching snapshot is ready.
 The effective patched `ScreenSelectMusic` enables panes while hiding the older
 integer score fields. `PaneDisplay.cpp` supplies the six counts and two local
 records. The source's pane entry and exit animation and separate song
 popularity indicator remain open.
 
-Vulkan captures at 640×480 and 854×480 verified the title and two-player
-music wheel with the bundled Miso font, with a fixture supplying both local
-records. The title, wheel rows, and chart counts render with letter and number
-glyphs. The configured play route also checks the P2 pane against the chart's
-actual tap count and checks that its font contains the displayed characters.
+Vulkan captures at 640×480 and 854×480 checked the two-player music wheel
+with the bundled Eurostile font and fixtures supplying both local records.
+The configured play route checks the P2 pane against the chart's actual tap
+count and checks that its font contains the displayed characters.
 At 854×480, two sets of seven 8,000-frame batches measured median actor
 construction at 22.5–23.3 µs before and 35.7–36.6 µs with both panes and
 their records. The layout builds 90 actors for this fixture, up from 60.
@@ -777,6 +787,10 @@ The optimized Windows x86-64 build passed `cargo build --release --locked --offl
 --bin deadsync`. The archive created by `scripts/package-windows-release.ps1`
 passed its checksum check and contains the standard assets, songs, and courses.
 The OpenITG tap judgment graphic is embedded in the archived executable.
+
+The Windows debug build verified portable startup with the bundled OpenITG
+fonts. Cargo's flat and nested build output layouts both stage assets beside
+the profile executable, including custom profile output paths.
 
 Fresh extractions reached the event loop on ordinary portable startup. The
 `--perf-case` harness then rendered a synthetic dance-single chart using Vulkan

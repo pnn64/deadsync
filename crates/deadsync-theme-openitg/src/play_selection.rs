@@ -1,7 +1,9 @@
 //! Style and mode carousels for the existing DeadSync session flow.
 
-use crate::presentation::{ACCENT, HEIGHT, INK, Layout, WIDTH, italic, quad, sprite};
-use crate::resources::{MENU_HEADING_FONT, MENU_NORMAL_FONT, TITLE_FONT, TITLE_STREAK};
+use crate::presentation::{
+    ACCENT, HEIGHT, INK, Layout, italic, push_red_backdrop, push_red_streaks, quad, sprite,
+};
+use crate::resources::{MENU_HEADING_FONT, MENU_NORMAL_FONT, TITLE_FONT};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::anim::bounceend_p;
 use deadlib_present::space::{screen_height, screen_width};
@@ -86,7 +88,8 @@ impl PlaySelectionCarousel {
         let layout = Layout::centered(width, height);
         let elapsed = (time - self.entered_at).max(0.0) as f32;
         let style = matches!(view.kind, PlaySelectionKind::Style { .. });
-        push_selection_backdrop(actors, [width, height], elapsed);
+        push_red_backdrop(actors, [width, height], elapsed, -24);
+        push_red_streaks(actors, [width, height], elapsed.min(1.0), -22);
         push_selection_header(actors, layout, view.title, elapsed);
 
         let mut cards = [Card::default(); 3];
@@ -134,58 +137,6 @@ const fn style_description(kind: PlaySelectionKind, index: usize) -> &'static st
             "Two Players use 8 Panels",
             "One Player uses 8 Panels",
         ][index],
-    }
-}
-
-fn push_selection_backdrop(actors: &mut Vec<Actor>, [width, height]: [f32; 2], elapsed: f32) {
-    for (y, rotation) in [(0.25 * height, 0.0), (0.75 * height, 180.0)] {
-        let mut half = sprite(
-            "openitg/selection-backdrop.png",
-            [width / 2.0, y],
-            [width, height / 2.0],
-            WHITE,
-            -24,
-        );
-        half.rotationz(rotation);
-        actors.push(half.build(0));
-    }
-    let scale = height / HEIGHT;
-    for (index, y) in [91.0, 127.0, 172.0, 308.0, 350.0, 391.0]
-        .into_iter()
-        .enumerate()
-    {
-        let arrows = index % 2 == 0;
-        let phase = elapsed * (0.44 + 0.07 * index as f32);
-        let x = width / 2.0 + phase.sin() * 52.0 * scale;
-        let key = if arrows {
-            "openitg/selection-arrows.png"
-        } else {
-            "openitg/selection-dots.png"
-        };
-        actors.push(
-            sprite(
-                key,
-                [x, y * scale],
-                [
-                    width + 112.0 * scale,
-                    if arrows { 18.0 } else { 9.0 } * scale,
-                ],
-                [0.86, 0.58, 0.58, if arrows { 0.19 } else { 0.22 }],
-                -23,
-            )
-            .build(0),
-        );
-    }
-    for y in [42.0, 446.0] {
-        let mut band = sprite(
-            TITLE_STREAK,
-            [width / 2.0, y * scale],
-            [width, 34.0 * scale],
-            WHITE,
-            -22,
-        );
-        band.cropright(1.0 - elapsed.min(1.0));
-        actors.push(band.build(0));
     }
 }
 

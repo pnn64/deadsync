@@ -71,6 +71,7 @@ fn run_child(theme: &str) {
     };
     let (generation, cfg) = config::runtime::snapshot();
     assert_eq!(cfg.theme_flag, expected_theme);
+    let paths = dirs.asset_paths(None);
     let mut app = App::new(
         dirs,
         0,
@@ -83,6 +84,20 @@ fn run_child(theme: &str) {
         None,
     );
     app.asset_manager = fixture_assets();
+    if expected_theme == ThemeFlag::OpenItg {
+        use deadsync_theme::ThemeResources;
+        let fonts = deadlib_assets::parse_font_asset_specs(
+            deadsync_theme_openitg::OpenItgTheme::asset_manifest()
+                .fonts
+                .iter()
+                .copied(),
+            &paths.texture_roots,
+            |path| paths.resolve_asset_path(path),
+        )
+        .expect("bundled OpenITG fonts load");
+        app.asset_manager
+            .register_fonts(fonts.into_iter().map(|asset| (asset.name, asset.font)));
+    }
     assert_eq!(app.state.screens.menu_state.theme_flag(), expected_theme);
 
     let mut route = RouteTest { app: Some(app) };
@@ -156,6 +171,10 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     assert_eq!(actor_tree_has_text(&actors, "CHANCE"), openitg);
     assert_eq!(actor_tree_has_text(&actors, "RANDOM"), openitg);
     if openitg {
+        let width = deadlib_present::space::screen_width();
+        let height = deadlib_present::space::screen_height();
+        let scale = (width / 640.0).min(height / 480.0);
+        let p2_steps = [width * 0.5 + 104.0 * scale, height * 0.5 + 121.0 * scale];
         let font = actors
             .iter()
             .find_map(|actor| match actor {
@@ -164,14 +183,19 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
                     offset,
                     font,
                     ..
-                } if content.as_str() == "TAPS 6" && offset[0] > 400.0 => Some(*font),
+                } if content.as_str() == "6"
+                    && (offset[0] - p2_steps[0]).abs() < 0.01
+                    && (offset[1] - p2_steps[1]).abs() < 0.01 =>
+                {
+                    Some(*font)
+                }
                 _ => None,
             })
             .expect("the selected chart renders its tap count on P2's side");
         assert!(
             app.asset_manager
                 .with_font(font, |font| {
-                    "TAPS 6"
+                    "Steps 6"
                         .chars()
                         .all(|character| font.glyph_map.contains_key(&character))
                 })

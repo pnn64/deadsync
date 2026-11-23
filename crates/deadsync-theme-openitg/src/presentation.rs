@@ -186,10 +186,79 @@ pub(crate) fn sprite(
 }
 
 pub(crate) fn italic(mut actor: Actor, shear: f32) -> Actor {
-    if let Actor::Text { local_transform, .. } = &mut actor {
+    if let Actor::Text {
+        local_transform, ..
+    } = &mut actor
+    {
         local_transform.y_axis.x = shear;
     }
     actor
+}
+
+pub(crate) fn push_red_backdrop(
+    actors: &mut Vec<Actor>,
+    [width, height]: [f32; 2],
+    elapsed: f32,
+    z: i16,
+) {
+    for (y, rotation) in [(0.25 * height, 0.0), (0.75 * height, 180.0)] {
+        let mut half = sprite(
+            "openitg/selection-backdrop.png",
+            [width / 2.0, y],
+            [width, height / 2.0],
+            [1.0; 4],
+            z,
+        );
+        half.rotationz(rotation);
+        actors.push(half.build(0));
+    }
+    let scale = height / HEIGHT;
+    for (index, y) in [91.0, 127.0, 172.0, 308.0, 350.0, 391.0]
+        .into_iter()
+        .enumerate()
+    {
+        let arrows = index % 2 == 0;
+        let phase = elapsed * (0.44 + 0.07 * index as f32);
+        let x = width / 2.0 + phase.sin() * 52.0 * scale;
+        let key = if arrows {
+            "openitg/selection-arrows.png"
+        } else {
+            "openitg/selection-dots.png"
+        };
+        actors.push(
+            sprite(
+                key,
+                [x, y * scale],
+                [
+                    width + 112.0 * scale,
+                    if arrows { 18.0 } else { 9.0 } * scale,
+                ],
+                [0.86, 0.58, 0.58, if arrows { 0.19 } else { 0.22 }],
+                z + 1,
+            )
+            .build(0),
+        );
+    }
+}
+
+pub(crate) fn push_red_streaks(
+    actors: &mut Vec<Actor>,
+    [width, height]: [f32; 2],
+    reveal: f32,
+    z: i16,
+) {
+    let scale = height / HEIGHT;
+    for y in [42.0, 446.0] {
+        let mut band = sprite(
+            crate::resources::TITLE_STREAK,
+            [width / 2.0, y * scale],
+            [width, 34.0 * scale],
+            [1.0; 4],
+            z,
+        );
+        band.cropright(1.0 - reveal);
+        actors.push(band.build(0));
+    }
 }
 
 pub(crate) fn black_fade(duration: f32, arriving: bool) -> Actor {
