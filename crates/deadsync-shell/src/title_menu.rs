@@ -1,16 +1,16 @@
 //! Connects the installed title presentation to the shared session flow.
 
+use crate::openitg::{host_effect, screen_for_host};
 use crate::{ActiveTheme, SessionState, ThemeScreen as Screen, TransitionState};
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
 use deadsync_config::theme::ThemeFlag;
 use deadsync_input::InputEvent;
+use deadsync_theme::ThemeTransitions;
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
-use deadsync_theme::{AudioRequest, ThemeEffect, ThemeTransitions, UiCue};
 use deadsync_theme_openitg::{OpenItgScreen, OpenItgTheme};
 use deadsync_theme_simply_love::{
-    SimplyLoveEffect, SimplyLoveInputResult, SimplyLoveRuntimeRequest,
-    views::SimplyLoveVisualPolicyView,
+    SimplyLoveEffect, SimplyLoveInputResult, views::SimplyLoveVisualPolicyView,
 };
 
 pub(crate) enum InstalledMenu {
@@ -26,6 +26,13 @@ impl InstalledMenu {
         }
     }
 
+    pub(crate) const fn theme_flag(&self) -> ThemeFlag {
+        match self {
+            Self::SimplyLove(_) => ThemeFlag::SimplyLove,
+            Self::OpenItg(_) => ThemeFlag::OpenItg,
+        }
+    }
+
     pub(crate) fn entry_transition(&self) -> (Vec<Actor>, f32) {
         match self {
             Self::SimplyLove(_) => ActiveTheme::in_transition(Screen::Menu, None),
@@ -37,7 +44,7 @@ impl InstalledMenu {
         match self {
             Self::SimplyLove(_) => ActiveTheme::out_transition(Screen::Menu, target),
             Self::OpenItg(_) => {
-                OpenItgTheme::out_transition(OpenItgScreen::Menu, openitg_screen(target))
+                OpenItgTheme::out_transition(OpenItgScreen::Menu, screen_for_host(target))
             }
         }
     }
@@ -173,45 +180,6 @@ impl InstalledMenu {
     }
 }
 
-fn host_screen(screen: OpenItgScreen) -> Screen {
-    match screen {
-        OpenItgScreen::Menu => Screen::Menu,
-        OpenItgScreen::Attract => Screen::Init,
-        OpenItgScreen::Play => Screen::SelectProfile,
-        OpenItgScreen::Options => Screen::Options,
-        OpenItgScreen::Content => Screen::ContentBrowser,
-        OpenItgScreen::Sandbox => Screen::Sandbox,
-    }
-}
-
-fn host_effect(effect: ThemeEffect<OpenItgScreen, UiCue>) -> SimplyLoveEffect {
-    match effect {
-        ThemeEffect::None => ThemeEffect::None,
-        ThemeEffect::Batch(effects) => {
-            ThemeEffect::batch(effects.into_iter().map(host_effect).collect())
-        }
-        ThemeEffect::Navigate(screen) => ThemeEffect::Navigate(host_screen(screen)),
-        ThemeEffect::NavigateNoFade(screen) => ThemeEffect::NavigateNoFade(host_screen(screen)),
-        ThemeEffect::LeaveEvaluation => ThemeEffect::LeaveEvaluation,
-        ThemeEffect::Exit => ThemeEffect::Exit,
-        ThemeEffect::Shutdown => ThemeEffect::Shutdown,
-        ThemeEffect::Runtime(cue) => ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
-            AudioRequest::PlayUiCue(cue),
-        )),
-    }
-}
-
-fn openitg_screen(screen: Screen) -> OpenItgScreen {
-    match screen {
-        Screen::Init => OpenItgScreen::Attract,
-        Screen::SelectProfile | Screen::SelectPlayMode | Screen::SelectStyle => OpenItgScreen::Play,
-        Screen::Options => OpenItgScreen::Options,
-        Screen::ContentBrowser => OpenItgScreen::Content,
-        Screen::Sandbox => OpenItgScreen::Sandbox,
-        _ => OpenItgScreen::Menu,
-    }
-}
-
 fn openitg_transition(
     transition: &TransitionState,
 ) -> deadsync_theme::TransitionState<OpenItgScreen> {
@@ -227,7 +195,7 @@ fn openitg_transition(
         } => FadingOut {
             elapsed,
             duration,
-            target: openitg_screen(target),
+            target: screen_for_host(target),
         },
         ActorsFadeOut {
             elapsed,
@@ -236,7 +204,7 @@ fn openitg_transition(
         } => ActorsFadeOut {
             elapsed,
             duration,
-            target: openitg_screen(target),
+            target: screen_for_host(target),
         },
     }
 }
@@ -246,6 +214,7 @@ mod tests {
     use super::*;
     use deadsync_core::input::{InputSource, MAX_PLAYERS};
     use deadsync_input::VirtualAction;
+    use deadsync_theme::ThemeEffect;
     use std::time::Instant;
 
     #[test]
@@ -267,7 +236,11 @@ mod tests {
             let mut effects = Vec::new();
             menu.handle_input(&mut session, &start)
                 .append_to(&mut effects);
-            assert!(effects.iter().any(|effect| matches!(effect, ThemeEffect::Navigate(Screen::SelectProfile))));
+            assert!(
+                effects
+                    .iter()
+                    .any(|effect| matches!(effect, ThemeEffect::Navigate(Screen::SelectProfile)))
+            );
             assert_eq!(session.menu_start_side, deadsync_profile::PlayerSide::P2);
         }
     }

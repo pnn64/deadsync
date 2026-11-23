@@ -9,9 +9,7 @@ use deadsync_profile_gameplay::stage_options::{
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme::color::ThemeJudgmentPalette;
-use deadsync_theme::player_options::ThemePlayerOptions;
-
-pub(crate) type PlayerOptionsState = <crate::ActiveTheme as ThemePlayerOptions>::PlayerOptionsState;
+pub(crate) use crate::mounted_player_options::PlayerOptionsState;
 
 pub(crate) fn init_view() -> PlayerOptionsView {
     let config = deadsync_config::runtime::get();

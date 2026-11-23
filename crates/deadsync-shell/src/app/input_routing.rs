@@ -10,7 +10,6 @@ use deadsync_config as config;
 use deadsync_gameplay::RawKeyAction;
 use deadsync_input::{self as logical_input, InputEvent};
 use deadsync_theme::evaluation::ThemeEvaluation;
-use deadsync_theme::player_options::ThemePlayerOptions;
 use deadsync_theme::profile_picker::ThemeProfilePicker;
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens;
@@ -410,8 +409,7 @@ impl App {
         if current_screen == CurrentScreen::PlayerOptions {
             debug_assert!(self.theme_effect_scratch.is_empty());
             if let Some(state) = self.state.screens.player_options_state.as_mut() {
-                ActiveTheme::handle_player_options_input(
-                    state,
+                state.handle_input(
                     &self.asset_manager,
                     &ev,
                     &mut self.theme_effect_scratch,

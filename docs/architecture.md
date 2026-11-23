@@ -600,9 +600,9 @@ feedback, animation, and actor composition.
 
 The `Theme` setting selects Simply Love or OpenITG at startup. Both title menus
 use the same session start, cabinet permissions, and navigation commands. The
-OpenITG title is the first screen mounted from the second theme. The other
-screens currently use Simply Love. See [the OpenITG progress record](openitg-theme.md)
-for the reference, implemented behavior, and fidelity checks.
+OpenITG mounts its title and Player Options screens. Other screens currently
+use Simply Love. See [the OpenITG progress record](openitg-theme.md) for the
+reference, implemented behavior, and fidelity checks.
 
 Player Options mounts through the selected theme for song and course entry,
 input, updates, and actor composition. The shell supplies device and asset
@@ -611,6 +611,10 @@ through the interface. Recovery restores the submitted scroll speeds through
 the same entry path. `deadsync-profile-gameplay` defines the session and settings
 view used for startup and recovery. Simply Love's standalone initializer keeps
 its existing defaults and converts them to that shared view.
+Both editors use the game's scroll speed and rate adjustment rules and its
+physical-side and persistence rules. Both submit the same `StageOptions` type
+through the shell's stage launch, including when a load failure reopens the
+options screen.
 
 Stage and course Evaluation mount through the selected theme for entry, input,
 updates, and actor composition. The shell tracks the game result separately and

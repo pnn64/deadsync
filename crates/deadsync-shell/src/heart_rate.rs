@@ -1,4 +1,4 @@
-use crate::{ActiveTheme, app::EvaluationState, player_options::PlayerOptionsState};
+use crate::{ActiveTheme, app::EvaluationState, mounted_player_options::SimplyLovePlayerOptionsState};
 use deadsync_theme::evaluation::ThemeEvaluation;
 use deadsync_theme::player_options::{
     HeartRateDeviceView, HeartRateDevicesView, HeartRateReadingView, ThemePlayerOptions,
@@ -50,7 +50,7 @@ impl Runtime {
         true
     }
 
-    pub(crate) fn refresh_player_options(&mut self, state: &mut PlayerOptionsState) -> bool {
+    pub(crate) fn refresh_player_options(&mut self, state: &mut SimplyLovePlayerOptionsState) -> bool {
         let key = (
             deadsync_heart_rate::discovery_generation(),
             deadsync_heart_rate::player_readings_generation(),

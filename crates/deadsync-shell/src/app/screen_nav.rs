@@ -517,6 +517,11 @@ impl App {
         if screen == CurrentScreen::Menu {
             return self.state.screens.menu_state.exit_transition(target);
         }
+        if screen == CurrentScreen::PlayerOptions
+            && let Some(options) = self.state.screens.player_options_state.as_ref()
+        {
+            return options.exit_transition(target);
+        }
         let (actors, duration) = ActiveTheme::out_transition(screen, target);
         let duration = stage_exit_duration::<ActiveTheme>(screen).unwrap_or(duration);
         (actors, duration)
@@ -525,6 +530,11 @@ impl App {
     pub(super) fn get_in_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         if screen == CurrentScreen::Menu {
             return self.state.screens.menu_state.entry_transition();
+        }
+        if screen == CurrentScreen::PlayerOptions
+            && let Some(options) = self.state.screens.player_options_state.as_ref()
+        {
+            return options.entry_transition();
         }
         let play = if screen == ActiveTheme::SCREENS.gameplay {
             Some((

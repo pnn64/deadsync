@@ -5,7 +5,7 @@
 //! survive screen exits; only unneeded entries are evicted while browsing options.
 //! Existing session textures are borrowed and never counted as eviction candidates.
 
-use crate::{ActiveTheme, player_options::PlayerOptionsState};
+use crate::{ActiveTheme, mounted_player_options::SimplyLovePlayerOptionsState};
 use deadlib_assets::AssetManager;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
@@ -120,7 +120,7 @@ impl Service {
 
     pub(super) fn update(
         &mut self,
-        state: &mut PlayerOptionsState,
+        state: &mut SimplyLovePlayerOptionsState,
         assets: &mut AssetManager,
         backend: &mut Backend,
     ) {

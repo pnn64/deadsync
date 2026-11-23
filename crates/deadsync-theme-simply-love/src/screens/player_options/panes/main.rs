@@ -308,11 +308,8 @@ const TAP_EXPLOSION_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
 
 const MUSIC_RATE: CustomBinding = CustomBinding {
     apply: |state, _player_idx, row_id, delta, _wrap| {
-        let increment = 0.01f32;
         let previous_bits = state.music_rate.to_bits();
-        state.music_rate = (delta as f32).mul_add(increment, state.music_rate);
-        state.music_rate = (state.music_rate / increment).round() * increment;
-        state.music_rate = state.music_rate.clamp(0.05, 3.00);
+        state.music_rate = deadsync_profile_gameplay::stage_options::adjust_music_rate(state.music_rate, delta);
         if state.music_rate.to_bits() != previous_bits {
             mark_music_rate_dirty(state);
         }
@@ -342,13 +339,9 @@ const SPEED_MOD: CustomBinding = CustomBinding {
         let (speed_mod, changed) = {
             let speed_mod = &mut state.speed_mod[player_idx];
             let previous_bits = speed_mod.value.to_bits();
-            let (upper, increment) = match speed_mod.mod_type {
-                SpeedModType::X => (20.0, 0.05),
-                SpeedModType::C | SpeedModType::M => (2000.0, 5.0),
-            };
-            speed_mod.value = (delta as f32).mul_add(increment, speed_mod.value);
-            speed_mod.value = (speed_mod.value / increment).round() * increment;
-            speed_mod.value = speed_mod.value.clamp(increment, upper);
+            *speed_mod = deadsync_profile_gameplay::stage_options::adjust_scroll_speed(
+                scroll_speed_for_mod(speed_mod), delta,
+            ).into();
             (
                 speed_mod.clone(),
                 speed_mod.value.to_bits() != previous_bits,

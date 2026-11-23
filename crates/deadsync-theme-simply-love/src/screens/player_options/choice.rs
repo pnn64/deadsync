@@ -12,11 +12,13 @@ use deadsync_profile::PlayerSide;
 /// internally via their `apply_for_player` methods below, so the
 /// dispatcher itself never reads it.
 pub(super) const fn persist_ctx(state: &State, player_idx: usize) -> (bool, PlayerSide) {
-    let play_style = state.play_style;
-    let persisted_idx = state.persisted_player_idx;
-    let should_persist = play_style.is_versus() || player_idx == persisted_idx;
     let side = deadsync_profile::player_side_for_index(player_idx);
-    (should_persist, side)
+    let owner = deadsync_profile_gameplay::stage_options::player_options_persist_side(
+        state.play_style,
+        deadsync_profile::player_side_for_index(state.persisted_player_idx),
+        player_idx,
+    );
+    (owner.is_some(), side)
 }
 
 // ========================= Self-contained binding application =========================

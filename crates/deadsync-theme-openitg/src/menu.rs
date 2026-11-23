@@ -1,7 +1,7 @@
-use crate::{OpenItgScreen, OpenItgTheme};
+use crate::presentation::{ACCENT, HEIGHT, INK, Layout, MUTED, WIDTH, quad};
+use crate::{Effect, OpenItgRuntimeRequest, OpenItgScreen, OpenItgTheme};
 use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, TextContent};
-use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_config::coin::CoinMode;
 use deadsync_config::theme::GameFlag;
@@ -9,23 +9,15 @@ use deadsync_input::{InputEvent, MenuLrChord, VirtualAction};
 use deadsync_theme::main_menu::{
     MainMenuFrame, MainMenuItem, MainMenuPhase, MainMenuRuntimeView, ThemeMainMenu, main_menu_items,
 };
-use deadsync_theme::{ThemeEffect, ThemeInputResult, TransitionState, UiCue};
+use deadsync_theme::{ThemeInputResult, TransitionState, UiCue};
 
 type RuntimeView = MainMenuRuntimeView<GameFlag, CoinMode>;
-type Effect = ThemeEffect<OpenItgScreen, UiCue>;
-
-const WIDTH: f32 = 640.0;
-const HEIGHT: f32 = 480.0;
 const FIRST_ROW_Y: f32 = 112.0;
 const ROW_PITCH: f32 = 36.0;
 const FOCUS_SECONDS: f32 = 0.5;
 const ATTRACT_SECONDS: f32 = 30.0;
 pub(super) const ENTRY_SECONDS: f32 = 0.3;
 pub(super) const EXIT_SECONDS: f32 = 0.3;
-
-const INK: [f32; 3] = [0.92, 0.95, 0.99];
-const MUTED: [f32; 3] = [0.57, 0.65, 0.74];
-const ACCENT: [f32; 3] = [1.0, 0.69, 0.25];
 
 /// Retained selection and animation state for the title screen.
 #[derive(Default)]
@@ -55,7 +47,7 @@ impl MenuState {
         }
         self.selected = next;
         self.focus_elapsed = 0.0;
-        Effect::Runtime(UiCue::Change)
+        Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Change))
     }
 
     fn activate(&self) -> Effect {
@@ -68,7 +60,10 @@ impl MenuState {
             MainMenuItem::Exit => Effect::Exit,
             MainMenuItem::Shutdown => Effect::Shutdown,
         };
-        Effect::sequence(Effect::Runtime(UiCue::Confirm), destination)
+        Effect::sequence(
+            Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Confirm)),
+            destination,
+        )
     }
 
     fn cancel_chord(&mut self, input: &InputEvent) -> bool {
@@ -158,7 +153,7 @@ impl ThemeMainMenu for OpenItgTheme {
     fn handle_menu_raw_key(
         state: &mut MenuState,
         key: &RawKeyboardEvent,
-    ) -> ThemeInputResult<OpenItgScreen, UiCue> {
+    ) -> ThemeInputResult<OpenItgScreen, OpenItgRuntimeRequest> {
         state.idle_elapsed = 0.0;
         if !key.pressed || key.repeat {
             return ThemeInputResult::ignored();
@@ -177,67 +172,6 @@ impl ThemeMainMenu for OpenItgTheme {
     ) {
         push_title(actors, state, frame);
     }
-}
-
-#[derive(Clone, Copy)]
-struct Layout {
-    left: f32,
-    top: f32,
-    scale: f32,
-}
-
-impl Layout {
-    fn centered(width: f32, height: f32) -> Self {
-        let scale = (width / WIDTH).min(height / HEIGHT);
-        Self {
-            left: (width - WIDTH * scale) * 0.5,
-            top: (height - HEIGHT * scale) * 0.5,
-            scale,
-        }
-    }
-
-    fn position(self, x: f32, y: f32) -> [f32; 2] {
-        [self.left + x * self.scale, self.top + y * self.scale]
-    }
-
-    fn panel(self, x: f32, y: f32, size: [f32; 2], rgba: [f32; 4], z: i16) -> Actor {
-        quad(
-            self.position(x, y),
-            size.map(|value| value * self.scale),
-            rgba,
-            z,
-        )
-    }
-
-    fn label(
-        self,
-        [x, y]: [f32; 2],
-        alignment: f32,
-        content: TextContent,
-        zoom: f32,
-        rgba: [f32; 4],
-    ) -> Actor {
-        let [x, y] = self.position(x, y);
-        let mut actor = TextBuilder::new();
-        actor.xy(x, y);
-        actor.halign(alignment);
-        actor.zoom(zoom * self.scale);
-        actor.font("game");
-        actor.settext(content);
-        actor.diffuse(rgba);
-        actor.z(16);
-        actor.build(0)
-    }
-}
-
-fn quad(position: [f32; 2], size: [f32; 2], rgba: [f32; 4], z: i16) -> Actor {
-    let mut actor = SpriteBuilder::solid();
-    actor.align(0.0, 0.0);
-    actor.xy(position[0], position[1]);
-    actor.size(size[0], size[1]);
-    actor.diffuse(rgba);
-    actor.z(z);
-    actor.build(0)
 }
 
 fn transition_alpha(state: &MenuState, frame: &MainMenuFrame<'_, OpenItgScreen, ()>) -> (f32, f32) {
@@ -336,9 +270,14 @@ fn push_title(
     let footer_y = HEIGHT - 33.0;
     actors.push(layout.label([36.0, footer_y], 0.0, prompt.into(), 1.0, accent));
     if state.view.coin_mode == CoinMode::Pay {
-        let credits = TextContent::inline_format(format_args!("CREDITS {}", state.view.credits))
-            .unwrap_or_else(|| "CREDITS".into());
-        actors.push(layout.label([604.0, footer_y], 1.0, credits, 0.9, ink));
+        actors.push(layout.label([460.0, footer_y], 1.0, "CREDITS".into(), 0.9, muted));
+        actors.push(layout.label(
+            [604.0, footer_y],
+            1.0,
+            TextContent::inline_u32(state.view.credits),
+            0.9,
+            ink,
+        ));
     } else if state.view.event_mode {
         actors.push(layout.label([604.0, footer_y], 1.0, "EVENT MODE".into(), 0.9, muted));
     }
@@ -360,6 +299,7 @@ mod tests {
     use super::*;
     use deadlib_present::space::{Metrics, with_current_metrics};
     use deadsync_core::input::InputSource;
+    use deadsync_theme::ThemeFlowEvent;
     use std::time::Instant;
 
     fn press(state: &mut MenuState, action: VirtualAction) -> Effect {
@@ -368,25 +308,33 @@ mod tests {
         OpenItgTheme::handle_menu_input(state, &event)
     }
 
+    fn assert_activation(effect: Effect, destination: ThemeFlowEvent<OpenItgScreen>) {
+        let Effect::Batch(effects) = effect else {
+            panic!("expected confirming cue and destination")
+        };
+        assert!(matches!(
+            &effects[0],
+            Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Confirm))
+        ));
+        assert_eq!(effects[1].flow_event(), Some(destination));
+    }
+
     #[test]
     fn home_menu_can_select_options_and_exit() {
         let mut state = OpenItgTheme::init_menu(0);
-        assert_eq!(
+        assert!(matches!(
             press(&mut state, VirtualAction::p1_menu_right),
-            Effect::Runtime(UiCue::Change)
-        );
-        assert_eq!(
+            Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Change))
+        ));
+        assert_activation(
             press(&mut state, VirtualAction::p1_start),
-            Effect::sequence(
-                Effect::Runtime(UiCue::Confirm),
-                Effect::Navigate(OpenItgScreen::Options)
-            )
+            ThemeFlowEvent::Navigate(OpenItgScreen::Options),
         );
         press(&mut state, VirtualAction::p1_menu_left);
         press(&mut state, VirtualAction::p1_menu_left);
-        assert_eq!(
+        assert_activation(
             press(&mut state, VirtualAction::p1_start),
-            Effect::sequence(Effect::Runtime(UiCue::Confirm), Effect::Exit)
+            ThemeFlowEvent::Exit,
         );
     }
 
@@ -403,13 +351,13 @@ mod tests {
                 ..RuntimeView::default()
             },
         );
-        assert_eq!(press(&mut state, VirtualAction::p2_menu_left), Effect::None);
-        assert_eq!(
+        assert!(matches!(
+            press(&mut state, VirtualAction::p2_menu_left),
+            Effect::None
+        ));
+        assert_activation(
             press(&mut state, VirtualAction::p2_start),
-            Effect::sequence(
-                Effect::Runtime(UiCue::Confirm),
-                Effect::Navigate(OpenItgScreen::Play)
-            )
+            ThemeFlowEvent::Navigate(OpenItgScreen::Play),
         );
     }
 

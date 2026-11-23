@@ -1,11 +1,19 @@
 //! OpenITG-inspired presentation for DeadSync's shared game and session flow.
 
 mod menu;
+mod player_options;
+mod presentation;
 
 use deadlib_present::actors::Actor;
-use deadsync_theme::{Theme, ThemeScreenId, ThemeTransitions, TransitionKind, UiCue};
+use deadsync_profile::requests::ProfileRequest;
+use deadsync_theme::{
+    AudioRequest, Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, TransitionKind, UiCue,
+};
 
 pub use menu::MenuState;
+pub use player_options::PlayerOptionsState;
+
+type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;
 
 /// Presentation identifiers for the title menu and its destinations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,6 +24,19 @@ pub enum OpenItgScreen {
     Options,
     Content,
     Sandbox,
+    Gameplay,
+    Practice,
+    SongSelection,
+    CourseSelection,
+    PlayerOptions,
+}
+
+/// Audio and profile changes for the application to execute.
+#[derive(Clone, Debug)]
+pub enum OpenItgRuntimeRequest {
+    Cue(UiCue),
+    Audio(AudioRequest),
+    Profile(ProfileRequest),
 }
 
 /// The OpenITG-inspired theme.
@@ -23,7 +44,7 @@ pub struct OpenItgTheme;
 
 impl Theme for OpenItgTheme {
     type Screen = OpenItgScreen;
-    type RuntimeRequest = UiCue;
+    type RuntimeRequest = OpenItgRuntimeRequest;
 
     fn screen_id(screen: Self::Screen) -> ThemeScreenId {
         ThemeScreenId::new(match screen {
@@ -33,6 +54,11 @@ impl Theme for OpenItgTheme {
             OpenItgScreen::Options => "ScreenOptionsMenu",
             OpenItgScreen::Content => "ScreenContentBrowser",
             OpenItgScreen::Sandbox => "ScreenSandbox",
+            OpenItgScreen::Gameplay => "ScreenGameplay",
+            OpenItgScreen::Practice => "ScreenPractice",
+            OpenItgScreen::SongSelection => "ScreenSelectMusic",
+            OpenItgScreen::CourseSelection => "ScreenSelectCourse",
+            OpenItgScreen::PlayerOptions => "ScreenPlayerOptions",
         })
     }
 }
@@ -42,7 +68,9 @@ impl ThemeTransitions for OpenItgTheme {
     type EntryContext<'a> = ();
 
     fn transition_kind(from: Self::Screen, to: Self::Screen) -> TransitionKind {
-        if from == OpenItgScreen::Menu || to == OpenItgScreen::Menu {
+        if matches!(from, OpenItgScreen::Menu | OpenItgScreen::PlayerOptions)
+            || matches!(to, OpenItgScreen::Menu | OpenItgScreen::PlayerOptions)
+        {
             TransitionKind::Actors
         } else {
             TransitionKind::Direct
@@ -50,14 +78,18 @@ impl ThemeTransitions for OpenItgTheme {
     }
 
     fn actor_entry_duration(screen: Self::Screen) -> Option<f32> {
-        (screen == OpenItgScreen::Menu).then_some(menu::ENTRY_SECONDS)
+        match screen {
+            OpenItgScreen::Menu => Some(menu::ENTRY_SECONDS),
+            OpenItgScreen::PlayerOptions => Some(player_options::TRANSITION_SECONDS),
+            _ => None,
+        }
     }
 
     fn actor_exit_duration(screen: Self::Screen) -> f32 {
-        if screen == OpenItgScreen::Menu {
-            menu::EXIT_SECONDS
-        } else {
-            0.0
+        match screen {
+            OpenItgScreen::Menu => menu::EXIT_SECONDS,
+            OpenItgScreen::PlayerOptions => player_options::TRANSITION_SECONDS,
+            _ => 0.0,
         }
     }
 
@@ -66,14 +98,23 @@ impl ThemeTransitions for OpenItgTheme {
     }
 
     fn out_transition(from: Self::Screen, _to: Self::Screen) -> (Vec<Self::Actor>, f32) {
-        // The title actors fade themselves using the shared clock.
-        (Vec::new(), Self::actor_exit_duration(from))
+        let duration = Self::actor_exit_duration(from);
+        let actors = if from == OpenItgScreen::PlayerOptions {
+            vec![presentation::black_fade(duration, false)]
+        } else {
+            // The title actors fade themselves using the shared clock.
+            Vec::new()
+        };
+        (actors, duration)
     }
 
     fn in_transition(screen: Self::Screen, (): Self::EntryContext<'_>) -> (Vec<Self::Actor>, f32) {
-        (
-            Vec::new(),
-            Self::actor_entry_duration(screen).unwrap_or_default(),
-        )
+        let duration = Self::actor_entry_duration(screen).unwrap_or_default();
+        let actors = if screen == OpenItgScreen::PlayerOptions {
+            vec![presentation::black_fade(duration, true)]
+        } else {
+            Vec::new()
+        };
+        (actors, duration)
     }
 }

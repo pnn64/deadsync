@@ -1,5 +1,5 @@
 use super::{App, SmxFramePolicy};
-use crate::{ActiveTheme, TransitionState};
+use crate::TransitionState;
 use crate::pad_config::{
     PadConfigFsrTarget, apply_pad_commands, pad_config_fsr_plan, pad_config_profile_cursor,
     pad_config_profile_entries,
@@ -11,7 +11,6 @@ use crate::smx_config::{
 };
 use deadsync_config as config;
 use deadsync_profile::{compat as profile, pad_config as pad_profile_data, pad_config_sync};
-use deadsync_theme::player_options::ThemePlayerOptions;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::screens::{self, options};
 
@@ -314,7 +313,7 @@ impl App {
                     .screens
                     .player_options_state
                     .as_ref()
-                    .map(ActiveTheme::player_options_pad_light_preview)
+                    .map(crate::player_options::PlayerOptionsState::pad_light_preview)
             })
             .flatten()
             .filter(|p| p.iter().any(Option::is_some));

@@ -10,7 +10,7 @@ use deadsync_profile_gameplay::stage_charts::stage_difficulty_indices;
 use deadsync_profile_gameplay::stage_replay::StageReplayRequest;
 use deadsync_simfile::course_selection::ConfirmedCourse;
 use deadsync_theme::ThemeScreenFlow;
-use deadsync_theme::player_options::{PlayerOptionsEntry, ThemePlayerOptions};
+use deadsync_theme::player_options::PlayerOptionsEntry;
 
 pub(super) enum StageSelection {
     Song(SongSelection),
@@ -83,8 +83,8 @@ impl StageStart {
     }
 
     fn from_player_options(state: &PlayerOptionsState) -> Self {
-        let selection = ActiveTheme::player_options_selection(state);
-        let mut options = ActiveTheme::player_options_stage(state);
+        let selection = state.selection();
+        let mut options = state.stage();
         let (steps, chart_difficulty_index) = resolve_song_chart_slots(
             selection.song,
             gameplay_play_style_from_profile(options.play_style),
@@ -242,7 +242,8 @@ impl App {
                 player.judgment_palette_id = palette;
                 player.heart_rate_device_id = monitor;
             }
-            ActiveTheme::init_player_options(PlayerOptionsEntry {
+            let theme = self.state.screens.menu_state.theme_flag();
+            PlayerOptionsState::new(theme, PlayerOptionsEntry {
                 song: start.song,
                 steps: chart_steps_index,
                 preferred: start.chart_difficulty_index,
@@ -256,7 +257,7 @@ impl App {
                 scroll_speeds: Some(scroll_speeds),
             })
         });
-        ActiveTheme::prepare_player_options(&mut screen, &self.asset_manager);
+        screen.prepare(&self.asset_manager);
         self.commit_screen_change(ActiveTheme::SCREENS.player_options);
         self.state.screens.player_options_state = Some(screen);
     }
@@ -401,7 +402,8 @@ mod tests {
                     );
                     let (target, _) = app.prepare_global_fade_entry(CurrentScreen::PlayerOptions);
                     assert_eq!(target, CurrentScreen::PlayerOptions);
-                    let options = app.state.screens.player_options_state.as_mut().unwrap();
+                    let options = app.state.screens.player_options_state.as_mut().unwrap()
+                        .simply_love_mut().expect("Simply Love chart edit fixture");
                     assert_eq!(options.chart_steps_index, [2, 2]);
                     assert_eq!(options.chart_difficulty_index, [2, 2]);
 
@@ -451,16 +453,67 @@ mod tests {
 
                     let (target, _) = app.prepare_global_fade_entry(CurrentScreen::PlayerOptions);
                     assert_eq!(target, CurrentScreen::PlayerOptions);
-                    let options = app.state.screens.player_options_state.as_ref().unwrap();
-                    assert!(Arc::ptr_eq(&options.song, &song));
-                    assert_eq!(options.chart_steps_index, [3; MAX_PLAYERS]);
-                    assert_eq!(options.chart_difficulty_index, [3; MAX_PLAYERS]);
+                    let options = app.state.screens.player_options_state.as_ref().unwrap().selection();
+                    assert!(Arc::ptr_eq(options.song, &song));
+                    assert_eq!(options.steps, [3; MAX_PLAYERS]);
+                    assert_eq!(options.preferred, [3; MAX_PLAYERS]);
                     assert!(
                         !app.state
                             .screens
                             .stage_launch
                             .ready_for(StageLaunchTarget::PlayerOptions)
                     );
+                },
+            )
+        });
+    }
+
+    #[test]
+    fn both_player_options_mounts_restore_and_submit_the_same_stage_selection() {
+        use deadsync_config::theme::ThemeFlag;
+        use deadsync_rules::scroll::ScrollSpeedSetting;
+
+        on_app_thread(|| {
+            with_session(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P2,
+                false,
+                true,
+                || {
+                    for flag in [ThemeFlag::SimplyLove, ThemeFlag::OpenItg] {
+                        let root = tempfile::tempdir().unwrap();
+                        let mut app = test_app(root.path());
+                        app.state.screens.menu_state = crate::title_menu::InstalledMenu::new(flag, 2);
+                        let song = confirm_test_song(&mut app, root.path());
+                        app.request_stage_launch(
+                            ActiveTheme::SCREENS.song_selection,
+                            StageLaunchRequest::PlayerOptions,
+                        );
+                        assert_eq!(
+                            app.advance_stage_launch(OPTIONS_ENTRY_SECONDS),
+                            Some(CurrentScreen::PlayerOptions),
+                        );
+                        assert_eq!(
+                            app.prepare_global_fade_entry(CurrentScreen::PlayerOptions).0,
+                            CurrentScreen::PlayerOptions,
+                        );
+                        let (mut start, old) = app.take_stage_start().unwrap();
+                        assert_eq!(
+                            matches!(old, Some(PlayerOptionsState::OpenItg { .. })),
+                            flag == ThemeFlag::OpenItg,
+                        );
+
+                        let speeds = [ScrollSpeedSetting::CMod(605.0), ScrollSpeedSetting::MMod(775.0)];
+                        start.options.scroll_speeds = speeds;
+                        start.options.music_rate = 1.25;
+                        app.recover_player_options(start, None);
+                        let (resubmitted, _) = app.take_stage_start().unwrap();
+                        assert!(Arc::ptr_eq(&resubmitted.song, &song));
+                        assert_eq!(resubmitted.options.chart_steps_index, [3; MAX_PLAYERS]);
+                        assert_eq!(resubmitted.options.scroll_speeds, speeds);
+                        assert_eq!(resubmitted.options.music_rate, 1.25);
+                        assert_eq!(resubmitted.return_screen, CurrentScreen::SelectMusic);
+                    }
                 },
             )
         });

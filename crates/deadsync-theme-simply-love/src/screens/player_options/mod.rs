@@ -362,8 +362,8 @@ fn init_state(
     for options in &mut player_options {
         profile_data::migrate_noteskin_parts(options);
     }
-    let active = active_players(play_style, player_side, joined);
-    let persisted_player_idx = persisted_player_idx(play_style, player_side);
+    let active = deadsync_profile_gameplay::stage_options::player_options_active_sides(play_style, player_side, joined);
+    let persisted_player_idx = deadsync_profile_gameplay::stage_options::player_options_primary_slot(play_style, player_side);
     let cols_per_player = play_style.cols_per_player();
     let (heart_rate_choices, heart_rate_choice_ids) = if policy.heart_rate_monitors {
         heart_rate_choices(&heart_rate_devices, &heart_rate_device_ids)
@@ -726,62 +726,6 @@ pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS]
 }
 
 #[inline(always)]
-const fn active_players(
-    play_style: profile_data::PlayStyle,
-    side: profile_data::PlayerSide,
-    joined: [bool; PLAYER_SLOTS],
-) -> [bool; PLAYER_SLOTS] {
-    let joined_count = joined[P1] as usize + joined[P2] as usize;
-    match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
-        | profile_data::PlayStyle::Couple
-        | profile_data::PlayStyle::PumpCouple
-        | profile_data::PlayStyle::Routine
-        | profile_data::PlayStyle::PumpRoutine => {
-            if joined_count > 0 {
-                joined
-            } else {
-                [true, true]
-            }
-        }
-        profile_data::PlayStyle::Single
-        | profile_data::PlayStyle::Double
-        | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble => {
-            if joined_count == 1 {
-                joined
-            } else {
-                match side {
-                    profile_data::PlayerSide::P1 => [true, false],
-                    profile_data::PlayerSide::P2 => [false, true],
-                }
-            }
-        }
-    }
-}
-
-#[inline(always)]
 const fn pane_uses_arcade_next_row(pane: OptionsPane) -> bool {
     !matches!(pane, OptionsPane::Main)
-}
-
-#[inline(always)]
-const fn persisted_player_idx(
-    play_style: profile_data::PlayStyle,
-    side: profile_data::PlayerSide,
-) -> usize {
-    match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
-        | profile_data::PlayStyle::Couple
-        | profile_data::PlayStyle::PumpCouple
-        | profile_data::PlayStyle::Routine
-        | profile_data::PlayStyle::PumpRoutine => P1,
-        profile_data::PlayStyle::Single
-        | profile_data::PlayStyle::Double
-        | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble => match side {
-            profile_data::PlayerSide::P1 => P1,
-            profile_data::PlayerSide::P2 => P2,
-        },
-    }
 }

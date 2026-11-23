@@ -256,7 +256,7 @@ mod tests {
                     assert!(app.state.pending_stage.is_none());
                     assert!(app.pending_gameplay_init.is_none());
                     let recovered = app.state.screens.player_options_state.as_ref().unwrap();
-                    let recovered = ActiveTheme::player_options_selection(recovered);
+                    let recovered = recovered.selection();
                     assert!(Arc::ptr_eq(recovered.song, &song));
                     assert_eq!(recovered.return_screen, CurrentScreen::Practice);
                     assert_eq!(recovered.color_index, 5);

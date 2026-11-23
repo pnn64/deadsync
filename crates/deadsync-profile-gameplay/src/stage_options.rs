@@ -6,7 +6,7 @@ use deadsync_core::color::JudgmentPalette;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{
     MAX_HEART_RATE_DEFAULT, NoCmodAlternative, PlayStyle, PlayerOptionsData, PlayerSide, Profile,
-    migrate_noteskin_parts,
+    migrate_noteskin_parts, player_side_for_index, player_side_index,
 };
 use deadsync_rules::scroll::{ScrollSpeedMode, ScrollSpeedSetting};
 
@@ -92,6 +92,77 @@ pub struct PlayerOptionsView {
     pub music_rate: f32,
     pub players: [PlayerOptionsPlayerView; MAX_PLAYERS],
     pub judgment_palettes: Vec<JudgmentPaletteChoiceView>,
+}
+
+/// Physical sides that can edit this stage, including solo play on P2.
+pub const fn player_options_active_sides(
+    play_style: PlayStyle,
+    side: PlayerSide,
+    joined: [bool; MAX_PLAYERS],
+) -> [bool; MAX_PLAYERS] {
+    if play_style.player_count() > 1 {
+        if joined[0] || joined[1] {
+            joined
+        } else {
+            [true; MAX_PLAYERS]
+        }
+    } else if joined[0] != joined[1] {
+        joined
+    } else {
+        match side {
+            PlayerSide::P1 => [true, false],
+            PlayerSide::P2 => [false, true],
+        }
+    }
+}
+
+/// The owner of the stored settings in styles with one persistent profile.
+pub const fn player_options_primary_slot(play_style: PlayStyle, player_side: PlayerSide) -> usize {
+    if play_style.player_count() > 1 {
+        0
+    } else {
+        player_side_index(player_side)
+    }
+}
+
+/// Returns the profile to save for an edit on the given physical slot.
+pub const fn player_options_persist_side(
+    play_style: PlayStyle,
+    player_side: PlayerSide,
+    slot: usize,
+) -> Option<PlayerSide> {
+    if slot < MAX_PLAYERS
+        && (play_style.is_versus() || slot == player_options_primary_slot(play_style, player_side))
+    {
+        Some(player_side_for_index(slot))
+    } else {
+        None
+    }
+}
+
+fn adjust_quantized(value: f32, delta: isize, step: f32, min: f32, max: f32) -> f32 {
+    let adjusted = (delta as f32).mul_add(step, value);
+    ((adjusted / step).round() * step).clamp(min, max)
+}
+
+/// Adjusts the current scroll modifier on the canonical stage options grid.
+pub fn adjust_scroll_speed(setting: ScrollSpeedSetting, delta: isize) -> ScrollSpeedSetting {
+    match setting {
+        ScrollSpeedSetting::XMod(value) => {
+            ScrollSpeedSetting::XMod(adjust_quantized(value, delta, 0.05, 0.05, 20.0))
+        }
+        ScrollSpeedSetting::CMod(value) => {
+            ScrollSpeedSetting::CMod(adjust_quantized(value, delta, 5.0, 5.0, 2000.0))
+        }
+        ScrollSpeedSetting::MMod(value) => {
+            ScrollSpeedSetting::MMod(adjust_quantized(value, delta, 5.0, 5.0, 2000.0))
+        }
+    }
+}
+
+/// Adjusts the draft stage music rate in hundredths.
+pub fn adjust_music_rate(rate: f32, delta: isize) -> f32 {
+    adjust_quantized(rate, delta, 0.01, 0.05, 3.0)
 }
 
 /// The settings submitted to start a stage, including options edited for this play.

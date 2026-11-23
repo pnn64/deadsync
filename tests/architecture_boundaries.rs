@@ -4148,7 +4148,7 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && !preload.contains("heart_rate::devices_view(")
             && shell.matches("self.take_stage_start()").count() == 2
             && shell.matches("self.recover_player_options(start, options_screen)").count() == 2
-            && contains_rust(&stage_start, "ActiveTheme::player_options_stage(state)")
+            && contains_rust(&stage_start, "state.stage()")
             && contains_rust(&stage_start, "StageOptions::from_profiles(")
             && !shell.contains("player_options::init_for_gameplay")
             && !live_case.contains("player_options::init_for_gameplay")
@@ -4165,12 +4165,16 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && profile_executor.contains("profile::update_player_options_for_side")
             && profile_update.contains("pub fn update_player_options_for_side")
     );
-    assert!(adapter.contains("<crate::ActiveTheme as ThemePlayerOptions>::PlayerOptionsState"));
-    assert!(shell.contains("ActiveTheme::init_player_options(PlayerOptionsEntry"));
-    assert!(shell.contains("ActiveTheme::push_player_options_actors("));
-    assert!(shell.contains("ActiveTheme::update_player_options("));
-    assert!(shell.contains("ActiveTheme::handle_player_options_raw_key("));
-    assert!(input.contains("ActiveTheme::handle_player_options_input("));
+    let mount = production_source(&root.join("crates/deadsync-shell/src/mounted_player_options.rs"));
+    assert!(shell.contains("PlayerOptionsState::new("));
+    assert!(shell.contains("pos.push_actors("));
+    assert!(shell.contains("state.update(delta_time, asset_manager, effects)"));
+    assert!(shell.contains("po_state.handle_raw_key("));
+    assert!(input.contains("state.handle_input("));
+    for hook in ["init_player_options", "push_player_options_actors", "handle_player_options_input", "player_options_stage"] {
+        assert!(mount.contains(&format!("ActiveTheme::{hook}(")));
+        assert!(mount.contains(&format!("OpenItgTheme::{hook}(")));
+    }
     assert!(previews.contains("ActiveTheme::take_player_options_noteskin_requests("));
     assert!(heart_rate.contains("ActiveTheme::sync_player_options_heart_rate("));
     assert!(!shell.contains("screens::player_options::"));

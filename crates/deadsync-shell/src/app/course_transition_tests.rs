@@ -260,7 +260,7 @@ fn course_launch_uses_confirmed_rating_after_wheel_replacement() {
                     assert!(course.endless_source.is_some());
                     if options {
                         let options = app.state.screens.player_options_state.as_ref().unwrap();
-                        assert!(Arc::ptr_eq(&options.song, &first_song));
+                        assert!(Arc::ptr_eq(options.selection().song, &first_song));
                     } else {
                         finish_pending_stage(&mut app);
                         let gameplay = app.state.screens.gameplay_state.as_ref().unwrap();

@@ -210,7 +210,7 @@ use deadsync_theme::views::{
 use deadsync_theme::color::ThemeJudgmentPalette;
 use deadsync_theme::evaluation::ThemeEvaluation;
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase};
-use deadsync_theme::player_options::{PlayerOptionsEntry, ThemePlayerOptions};
+use deadsync_theme::player_options::PlayerOptionsEntry;
 use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
 use deadsync_theme::{
     AudioRequest, PlatformRequest, RevealPathKind, ThemeResources, ThemeScreenFlow,
@@ -1436,7 +1436,7 @@ impl ScreensState {
             }
             CurrentScreen::PlayerOptions => {
                 if let Some(state) = self.player_options_state.as_mut() {
-                    ActiveTheme::update_player_options(state, delta_time, asset_manager, effects);
+                    state.update(delta_time, asset_manager, effects);
                 }
                 (None, false)
             }
@@ -4670,6 +4670,7 @@ impl App {
             );
             if self.state.screens.current_screen == CurrentScreen::PlayerOptions
                 && let Some(state) = self.state.screens.player_options_state.as_mut()
+                && let Some(state) = state.simply_love_mut()
             {
                 self.heart_rate.refresh_player_options(state);
             }
@@ -5096,6 +5097,7 @@ impl App {
         }
         if self.state.screens.current_screen == CurrentScreen::PlayerOptions
             && let Some(state) = self.state.screens.player_options_state.as_mut()
+            && let Some(state) = state.simply_love_mut()
             && let Some(backend) = self.backend.as_mut()
         {
             self.option_previews
@@ -6525,7 +6527,7 @@ impl App {
                     .screens
                     .player_options_state
                     .as_mut()
-                    .map(ActiveTheme::player_options_song_mut);
+                    .map(crate::player_options::PlayerOptionsState::song_mut);
                 let pending_song = self.state.pending_stage.as_mut().map(|stage| &mut stage.song);
                 for song in [screen_song, pending_song].into_iter().flatten() {
                     let _ = deadsync_simfile::runtime_cache::replace_song_arc_if_same_simfile(
@@ -6732,8 +6734,9 @@ impl App {
             course_run.run.course_meter,
         );
         if show_player_options {
+            let theme = self.state.screens.menu_state.theme_flag();
             self.state.screens.player_options_state =
-                Some(ActiveTheme::init_player_options(PlayerOptionsEntry {
+                Some(crate::player_options::PlayerOptionsState::new(theme, PlayerOptionsEntry {
                     song: Arc::clone(&stage.song),
                     steps: stage.steps_index,
                     preferred: stage.preferred_difficulty_index,
@@ -7877,9 +7880,8 @@ impl App {
             ),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &self.state.screens.player_options_state {
-                    ActiveTheme::push_player_options_actors(
+                    pos.push_actors(
                         &mut actors,
-                        pos,
                         &self.asset_manager,
                         visual_policy,
                     );
@@ -8371,8 +8373,7 @@ impl App {
                     return;
                 };
                 debug_assert!(self.theme_effect_scratch.is_empty());
-                ActiveTheme::handle_player_options_raw_key(
-                    po_state,
+                po_state.handle_raw_key(
                     None,
                     Some(text),
                     ctrl_held,
@@ -8552,8 +8553,7 @@ impl App {
                 // open, then Backspace/Enter/Escape/arrows/Tab while open.
                 if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
                     debug_assert!(self.theme_effect_scratch.is_empty());
-                    let consumed = ActiveTheme::handle_player_options_raw_key(
-                        po_state,
+                    let consumed = po_state.handle_raw_key(
                         Some(&raw_key),
                         None,
                         ctrl_held,
@@ -8573,7 +8573,7 @@ impl App {
                     .player_options_state
                     .as_ref()
                     .is_some_and(|state| {
-                        ActiveTheme::player_options_selection(state).return_screen
+                        state.selection().return_screen
                             == ActiveTheme::SCREENS.song_selection
                     });
                 if returns_to_select_music {
@@ -8899,7 +8899,7 @@ impl App {
                 .player_options_state
                 .as_ref()
                 .map(|state| {
-                    let selection = ActiveTheme::player_options_selection(state);
+                    let selection = state.selection();
                     (selection.scroll_speeds, selection.preferred, selection.music_rate)
                 })
                 .or_else(|| {
@@ -9194,8 +9194,9 @@ impl App {
                 } else {
                     ActiveTheme::SCREENS.song_selection
                 };
+                let theme = self.state.screens.menu_state.theme_flag();
                 self.state.screens.player_options_state =
-                    Some(ActiveTheme::init_player_options(PlayerOptionsEntry {
+                    Some(crate::player_options::PlayerOptionsState::new(theme, PlayerOptionsEntry {
                         song: selection.song,
                         steps: chart_steps_index,
                         preferred: preferred_difficulty_index,
@@ -9248,7 +9249,7 @@ impl App {
         if target == CurrentScreen::PlayerOptions
             && let Some(state) = self.state.screens.player_options_state.as_mut()
         {
-            ActiveTheme::prepare_player_options(state, &self.asset_manager);
+            state.prepare(&self.asset_manager);
         }
     }
 
@@ -10197,7 +10198,7 @@ impl App {
                         .preferred_difficulty_index = preferred;
 
                     if let Some(po) = self.state.screens.player_options_state.as_ref() {
-                        let po = ActiveTheme::player_options_selection(po);
+                        let po = po.selection();
                         match profile_session.play_style {
                             profile_data::PlayStyle::Versus
                             | profile_data::PlayStyle::PumpVersus
