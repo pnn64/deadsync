@@ -3,6 +3,7 @@
 mod evaluation;
 mod gameplay;
 mod menu;
+mod play_selection;
 mod player_options;
 mod presentation;
 mod select_music;
@@ -14,6 +15,7 @@ use deadsync_theme::{Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, Transi
 pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, push_evaluation_overview};
 pub use gameplay::{GAMEPLAY_HUD, TAP_RESULTS_PNG};
 pub use menu::MenuState;
+pub use play_selection::PlaySelectionCarousel;
 pub use player_options::push_player_options_actors;
 pub use select_music::push_select_music_actors;
 pub use system_options::SYSTEM_OPTIONS;

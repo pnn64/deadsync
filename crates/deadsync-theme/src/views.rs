@@ -17,6 +17,30 @@ use deadsync_score::{
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// Which entry into the shared play flow the selector presents.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaySelectionKind {
+    Style { pump: bool },
+    Mode,
+}
+
+/// A visible choice supplied by the current style or mode controller.
+pub struct PlaySelectionChoice<'a> {
+    pub label: &'a Arc<str>,
+    pub description: Option<&'a Arc<str>>,
+}
+
+/// The visible choices and selection for the current play flow screen.
+pub struct PlaySelectionView<'a> {
+    pub kind: PlaySelectionKind,
+    pub title: &'a Arc<str>,
+    pub choices: &'a [PlaySelectionChoice<'a>],
+    pub selected: usize,
+    pub player_names: [Option<&'a str>; MAX_PLAYERS],
+    pub join_prompt: &'a Arc<str>,
+    pub exit_progress: f32,
+}
+
 /// Shell-prepared audio clock values used by theme preview presentation.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct AudioPlaybackView {

@@ -18,6 +18,7 @@ use deadsync_config::theme::GameFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::AudioRequest;
 use deadsync_theme::FontRole;
+use deadsync_theme::views::{PlaySelectionChoice, PlaySelectionKind, PlaySelectionView};
 
 /* ------------------------------ layout ------------------------------- */
 // Simply Love: ScreenSelectStyle underlay/choice.lua
@@ -73,6 +74,32 @@ pub fn set_selected_index(state: &mut State, index: usize) {
 
 pub fn sync_runtime_view(state: &mut State, runtime: SelectFlowRuntimeView) {
     state.runtime = runtime;
+}
+
+pub fn with_play_selection_view(state: &State, draw: impl FnOnce(PlaySelectionView<'_>)) {
+    let title = tr("ScreenTitles", "SelectStyle");
+    let labels = [Choice::Single, Choice::Versus, Choice::Double].map(choice_label);
+    let choices = labels.each_ref().map(|label| PlaySelectionChoice {
+        label,
+        description: None,
+    });
+    let join_prompt = tr("Common", "PressStart");
+    draw(PlaySelectionView {
+        kind: PlaySelectionKind::Style {
+            pump: state.runtime.game == GameFlag::Pump,
+        },
+        title: &title,
+        choices: &choices,
+        selected: state.flow.selected_index(),
+        player_names: state
+            .runtime
+            .players
+            .each_ref()
+            .map(|player| player.joined.then_some(player.display_name.as_str())),
+        join_prompt: &join_prompt,
+        exit_progress: exit_anim_t(state.flow.exit_chosen_anim())
+            / style_flow::CONFIRM_EXIT_SECONDS,
+    });
 }
 
 #[must_use]

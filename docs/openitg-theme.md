@@ -3,9 +3,9 @@
 Choose **OpenITG** in **Options → System → Theme**, then restart DeadSync.
 The equivalent setting is `Theme=OpenITG` under `[Options]` in `deadsync.ini`.
 Simply Love is the default. The selection mounts that theme's title, System
-Options, Player Options, base Select Music layout, supported gameplay HUD
-widgets, and Evaluation overview. Both themes use the same DeadSync session
-flow.
+Options, Select Style, Select Play Mode, Player Options, base Select Music
+layout, supported gameplay HUD widgets, and Evaluation overview. Both themes
+use the same DeadSync session flow.
 
 ## Reference
 
@@ -100,6 +100,36 @@ with bundled fonts.
 The broader shell run still hits `late_foreground_keeps_shared_gameplay_tracks`,
 which reproduces at the same assertion on `703cb0d25`. A follow-up run confirmed
 that the failure poisons the shared session lock for `live_lua_screen_frames`.
+
+## Select Style and Play Mode
+
+The style and mode screens present the shared controller's current choices,
+confirmation progress, and joined players on a rotating selector. The effective
+`ScreenSelectStyle2` and `ScreenSelectPlayMode` metrics supply the radius, depth
+spacing, dimming, and 0.3 s per item. The layout centers the 640×480 canvas in
+wider viewports. It uses original pad and meter illustrations, a flat projection
+of the reference ring, and the existing DeadSync selection and confirmation
+cues. Labels stay readable on the far side of the ring.
+
+DeadSync's flow shows Style first and retains its Regular and Marathon modes.
+Premium Free appears when the configured session permits it. Mode descriptions
+use the configured language and wrap to the panel. The three short style
+explanations are in English. Profile selection, color selection, and profile
+loading use the existing screens. The reference's perspective, artwork,
+explanation panels, and transitions still need comparison against a live build.
+
+Actor checks cover the native and wide anchors, available modes, joined-player
+status, wraparound, and changing selection mid-animation. At 854×480, two
+runs of seven 8,000-frame batches measured median actor construction at
+26–29 µs before and 26–27 µs after for Simply Love Style, and 57–62 µs before
+and 58–59 µs after for Simply Love Mode. The OpenITG layouts measured about
+21 µs for Style and 15 µs for Mode. The benchmark covers steady-state actor
+construction with dev-profile libraries and bundled fonts.
+
+The ordinary-song compositor comparison still reports a camera mismatch for
+Single/P1 with song visuals visible. Three shell test binaries built before
+this change reproduce that assertion. The cross-theme result and live Lua
+score checks pass.
 
 ## Select Music
 

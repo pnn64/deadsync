@@ -647,6 +647,7 @@ pub struct ScreensState {
     groovestats_login_state: screens::groovestats_login::State,
     select_style_state: select_style::State,
     select_play_mode_state: select_mode::State,
+    openitg_play_selection: deadsync_theme_openitg::PlaySelectionCarousel,
     profile_load_state: profile_load::State,
     select_music_state: select_music::State,
     stage_launch: StageLaunch<StageSelection>,
@@ -1334,6 +1335,7 @@ impl ScreensState {
             groovestats_login_state,
             select_style_state,
             select_play_mode_state,
+            openitg_play_selection: deadsync_theme_openitg::PlaySelectionCarousel::default(),
             profile_load_state,
             select_music_state,
             stage_launch: StageLaunch::default(),
@@ -7932,18 +7934,46 @@ impl App {
                 visual_policy,
             ),
             CurrentScreen::SelectStyle => {
-                select_style::push_actors(
-                    &mut actors,
-                    &self.state.screens.select_style_state,
-                    visual_policy,
-                );
+                let screens = &mut self.state.screens;
+                match screens.menu_state.theme_flag() {
+                    config::theme::ThemeFlag::SimplyLove => select_style::push_actors(
+                        &mut actors,
+                        &screens.select_style_state,
+                        visual_policy,
+                    ),
+                    config::theme::ThemeFlag::OpenItg => select_style::with_play_selection_view(
+                        &screens.select_style_state,
+                        |view| {
+                            screens.openitg_play_selection.push_actors(
+                                &mut actors,
+                                view,
+                                arrow_effect_time_s,
+                            )
+                        },
+                    ),
+                }
             }
-            CurrentScreen::SelectPlayMode => select_mode::push_actors(
-                &mut actors,
-                &self.state.screens.select_play_mode_state,
-                &self.asset_manager,
-                visual_policy,
-            ),
+            CurrentScreen::SelectPlayMode => {
+                let screens = &mut self.state.screens;
+                match screens.menu_state.theme_flag() {
+                    config::theme::ThemeFlag::SimplyLove => select_mode::push_actors(
+                        &mut actors,
+                        &screens.select_play_mode_state,
+                        &self.asset_manager,
+                        visual_policy,
+                    ),
+                    config::theme::ThemeFlag::OpenItg => select_mode::with_play_selection_view(
+                        &screens.select_play_mode_state,
+                        |view| {
+                            screens.openitg_play_selection.push_actors(
+                                &mut actors,
+                                view,
+                                arrow_effect_time_s,
+                            )
+                        },
+                    ),
+                }
+            }
             CurrentScreen::ProfileLoad => {
                 profile_load::push_actors(
                     &mut actors,
@@ -9153,11 +9183,13 @@ impl App {
             );
             self.state.screens.select_profile_state = ActiveTheme::init_profile_picker(view, context);
         } else if target == CurrentScreen::SelectStyle {
+            self.state.screens.openitg_play_selection = Default::default();
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state =
                 select_style::init(crate::select_flow::runtime_view());
             self.state.screens.select_style_state.active_color_index = current_color_index;
         } else if target == CurrentScreen::SelectPlayMode {
+            self.state.screens.openitg_play_selection = Default::default();
             let current_color_index = match prev {
                 CurrentScreen::SelectStyle => {
                     self.state.screens.select_style_state.active_color_index

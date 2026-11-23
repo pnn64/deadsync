@@ -600,10 +600,11 @@ feedback, animation, and actor composition.
 
 The `Theme` setting selects Simply Love or OpenITG at startup. Both title menus
 use the same session start, cabinet permissions, and navigation commands.
-OpenITG mounts its title, System Options, Player Options, and base Select
-Music layouts. The existing Options controller and shell still handle input,
-settings edits, and modal workflows. An alternate page renderer lazily reads
-the controller's visible row order, current values, and availability through
+OpenITG mounts its title, System Options, Select Style, Select Play Mode,
+Player Options, and base Select Music layouts. The existing Options controller
+and shell still handle input, settings edits, and modal workflows. An alternate
+page renderer lazily reads the controller's visible row order, current values,
+and availability through
 `deadsync-theme`. The music wheel shares the game's catalog entries and circular
 index, and both layouts use the same prepared difficulty window. The alternate base layout
 borrows song, chart, player, and banner data from the existing controller.
@@ -615,6 +616,11 @@ notefield accepts a theme-selected tap graphic, feedback metrics, and combo
 label. It emits them inside the canonical draw ranges for Lua player and HUD
 child captures. See [the OpenITG progress record](openitg-theme.md) for the
 reference, implemented behavior, and fidelity checks.
+
+Select Style and Select Play Mode use their existing input and confirmation
+controllers for both themes. The shell passes a borrowed `PlaySelectionView`
+to the OpenITG carousel. The carousel owns its animation position, while the
+controllers supply the available choices, selected index, and joined players.
 
 The evaluation visit receives completed stages before the shell chooses the
 overview renderer. The overview view borrows prepared artwork and exposes the
