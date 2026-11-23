@@ -11592,7 +11592,7 @@ mod tests {
 
     #[test]
     fn music_preferences_snap_missing_medium() {
-        let chart_type = profile::get_session_play_style().chart_type();
+        let chart_type = SelectMusicSessionView::default().play_style.chart_type();
         let mut song = test_song("song.ssc", 0.0, ["hard", "unused"]);
         song.charts = vec![test_chart_with(chart_type, "Hard", "hard")];
 
