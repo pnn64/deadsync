@@ -411,6 +411,9 @@ pub struct GameplayHud<A> {
     pub song_meter: fn(&mut Vec<A>, GameplaySongMeterView<'_>),
     pub difficulty: fn(&mut Vec<A>, GameplayDifficultyView<'_>),
     pub stage_badge: fn(&mut Vec<A>, GameplayStageBadgeView<'_>),
+    /// Display threshold for the theme's warning. It has no effect on stage life or failure.
+    pub danger_threshold: f32,
+    pub background_warning: fn(&mut Vec<A>, GameplayBackgroundWarningView),
     pub fallback_background: fn(&mut Vec<A>, f32),
     pub unjoined_seat: fn(&mut Vec<A>, bool),
     pub autoplay_label: fn(&mut Vec<A>),
@@ -476,6 +479,16 @@ pub struct GameplayStageBadgeView<'a> {
     pub text: &'a Arc<str>,
     pub round: Option<usize>,
     pub motion: GameplayHudMotion,
+}
+
+/// Facts for the warning artwork behind the playfield.
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayBackgroundWarningView {
+    pub p2: bool,
+    pub both_sides: bool,
+    pub failed: bool,
+    pub danger_seconds: f32,
+    pub brightness: f32,
 }
 
 #[derive(Clone, Copy, Debug)]

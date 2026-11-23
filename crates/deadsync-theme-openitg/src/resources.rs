@@ -103,6 +103,8 @@ impl ThemeResources for OpenItgTheme {
                 png!("demo-light-yellow"),
                 png!("demo-logo"),
                 png!("gameplay-difficulty"),
+                png!("gameplay-danger-glow"),
+                png!("gameplay-danger-text"),
                 png!("gameplay-fallback"),
                 png!("gameplay-life-background"),
                 png!("gameplay-life-frame"),

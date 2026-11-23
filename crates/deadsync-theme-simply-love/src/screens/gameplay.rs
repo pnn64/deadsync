@@ -479,8 +479,8 @@ impl DensityGraphRenderState {
 }
 
 use deadsync_theme::views::{
-    GameplayDifficultyView, GameplayHud, GameplayHudMotion, GameplayLifeView, GameplayScoreView,
-    GameplaySongMeterView, GameplayStageBadgeView,
+    GameplayBackgroundWarningView, GameplayDifficultyView, GameplayHud, GameplayHudMotion,
+    GameplayLifeView, GameplayScoreView, GameplaySongMeterView, GameplayStageBadgeView,
 };
 pub use deadsync_theme::views::{SMX_SENSOR_PANEL_COUNT, SmxSensorPadView, SmxSensorPanelView};
 
@@ -723,6 +723,8 @@ pub struct GameplayPresentation {
     /// construction reads it without allocation, synchronization, misses,
     /// eviction, or maintenance beyond constant work per active player.
     life_meter_visuals: [LifeMeterVisual; MAX_PLAYERS],
+    /// The warning animation only advances while its player's low-life cue is active.
+    warning_seconds: [f32; MAX_PLAYERS],
     hud: Option<GameplayHud<Actor>>,
     /// One song-static logical width for the Stage/Event label. The game thread
     /// warms it during the transition, reads it without synchronization during
@@ -935,7 +937,11 @@ impl GameplayPresentation {
     /// Borrow the life animation cache for a game-owned update.
     pub fn life_meter_update(&mut self) -> impl FnOnce(&GameplayCoreState, f32) + '_ {
         let visuals = &mut self.life_meter_visuals;
-        move |game, delta| update_life_meter_visuals(game, visuals, delta)
+        let warning = self
+            .hud
+            .as_ref()
+            .map(|hud| (hud.danger_threshold, &mut self.warning_seconds));
+        move |game, delta| update_life_meter_visuals(game, visuals, warning, delta)
     }
 
     #[cfg(feature = "test-support")]
@@ -1110,6 +1116,7 @@ impl GameplayPresentation {
             rate_text,
             life_percent_text,
             life_meter_visuals,
+            warning_seconds: [0.0; MAX_PLAYERS],
             hud: None,
             intro_text_width: Cell::new(None),
             notefield_judgment_assets,
@@ -1425,11 +1432,7 @@ impl SongLuaGameplayHost for GameplayEffects<'_> {
     }
 
     fn update_gameplay_visuals(&mut self, delta_time: f32) {
-        update_life_meter_visuals(
-            &self.0.stage.gameplay,
-            &mut self.0.presentation.life_meter_visuals,
-            delta_time,
-        );
+        self.0.presentation.life_meter_update()(&self.0.stage.gameplay, delta_time);
     }
 
     fn gameplay_effect(action: GameplayAction) -> ThemeEffect {
@@ -1682,10 +1685,7 @@ fn push_stage_label(
 ) {
     let presentation = state.presentation();
     let intro_text = presentation.stage_intro_text.as_ref();
-    let is_restart_label = intro_text.starts_with("RESTART ");
-    if intro_text.is_empty()
-        || (!is_restart_label && state.total_elapsed_in_screen() < INTRO_TEXT_SETTLE_SECONDS)
-    {
+    if intro_text.is_empty() {
         return;
     }
     if let Some(hud) = &presentation.hud {
@@ -1697,6 +1697,11 @@ fn push_stage_label(
                 motion,
             },
         );
+        return;
+    }
+    if !intro_text.starts_with("RESTART ")
+        && state.total_elapsed_in_screen() < INTRO_TEXT_SETTLE_SECONDS
+    {
         return;
     }
     let text_x = intro_text_target_x(
@@ -2231,13 +2236,29 @@ pub fn update_with_input(
 fn update_life_meter_visuals(
     game: &GameplayCoreState,
     visuals: &mut [LifeMeterVisual; MAX_PLAYERS],
+    mut warning: Option<(f32, &mut [f32; MAX_PLAYERS])>,
     delta_time: f32,
 ) {
-    for (runtime, visual) in game.players().iter().zip(visuals).take(game.num_players()) {
+    for (index, (runtime, visual)) in game
+        .players()
+        .iter()
+        .zip(visuals)
+        .take(game.num_players())
+        .enumerate()
+    {
         let life = runtime.life;
         let dead = runtime.is_failing || life <= 0.0;
         visual.update(life, dead, delta_time);
+        if let Some((threshold, seconds)) = warning.as_mut()
+            && shows_life_warning(&game.profiles()[index], life, dead, *threshold)
+        {
+            seconds[index] += delta_time.max(0.0);
+        }
     }
+}
+
+fn shows_life_warning(profile: &GameplayProfile, life: f32, dead: bool, threshold: f32) -> bool {
+    !dead && life < threshold && !profile.hide_lifebar && !profile.hide_danger
 }
 
 pub fn smx_sensor_pad_view(state: &impl GameplayScreenView, store_idx: usize) -> Option<SmxSensorPadView> {
@@ -3685,6 +3706,37 @@ pub fn frame_layers<'a>(
             }
         }
         ScreenLayer::Danger => {
+            if let Some(hud) = &presentation.hud {
+                if policy.background_brightness <= 0.0 {
+                    return;
+                }
+                let both_sides = play_style.is_double() || play_style.is_routine();
+                let count = if play_style.is_routine() {
+                    1
+                } else {
+                    state.num_players()
+                };
+                for player_idx in 0..count {
+                    let profile = &state.profiles()[player_idx];
+                    let player = &state.players()[player_idx];
+                    let failed = player.is_failing || player.life <= 0.0;
+                    if (!profile.hide_lifebar && failed)
+                        || shows_life_warning(profile, player.life, failed, hud.danger_threshold)
+                    {
+                        (hud.background_warning)(
+                            actors,
+                            GameplayBackgroundWarningView {
+                                p2: is_p2_single || player_idx > 0,
+                                both_sides,
+                                failed,
+                                danger_seconds: presentation.warning_seconds[player_idx],
+                                brightness: policy.background_brightness,
+                            },
+                        );
+                    }
+                }
+                return;
+            }
             let sw = screen_width();
             let sh = screen_height();
             let cx = screen_center_x();

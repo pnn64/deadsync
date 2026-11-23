@@ -654,10 +654,22 @@ the outside edges at y=270, with a 272-unit bottom-up fill. The frame leaves a
 border. The stream scrolls with song beats and uses the hot texture at full
 life. Single and versus use the screen quarter anchors for the score. Doubles
 uses anchors 140 units from center. The font draws at y=56 with the native
-20-unit inward offsets. The stage badge draws at bottom center after entry,
-with artwork for event and the numbered and final stages. Danger glow,
-the center-to-footer stage animation, and specialized score and life displays
-remain open.
+20-unit inward offsets. The stage badge uses the original Event, numbered,
+and Final Stage artwork. It holds at full size in the center for 1.2 seconds,
+then shrinks to 25% and moves to 40 units above the bottom over 0.3 seconds.
+Its result-transition exit accelerates 150 units downward over 0.8 seconds.
+
+The gameplay underlay uses the original low-health lettering and glow sweep.
+A live player below 30% life shows the warning on their physical side. Its
+red backdrop pulses between 30% and 80% opacity over one second. Doubles
+spans both sides, and a failed player's underlay dims in black. The animation
+clock advances only during the warning. The shared presenter reads life,
+failed state, and profile visibility settings from the same stage as Simply
+Love. The threshold and animation affect presentation only. The artwork
+stays in the existing Underlay capture used by song Lua.
+
+Specialized score and life displays and native course-stage artwork remain
+open.
 
 The effective Gameplay entry backdrop resolves to `_short`, an empty
 animation. Once stage loading finishes, the OpenITG playfield is visible
@@ -676,7 +688,11 @@ positions. The native comparison uses the same Quartz chart. Note graphics
 follow the installed noteskin and the fixture's profile filter is visible.
 
 Actor tests cover native and wide layouts, entry and exit positions, failed
-life, and EX score tint. A song Lua fixture captures the animated OpenITG score
+life, and EX score tint. Offscreen Vulkan captures at 640×480 and 854×480
+show the badge at center, in motion, and in the footer, plus P1 and P2
+warnings and a failed doubles field. The configured play route checks P2's
+opening badge, the warning at 25% life, and the profile Hide Danger setting.
+A song Lua fixture captures the animated OpenITG score
 with Underlay hidden and still draws the canonical player proxy. The existing
 independent footer fade test fails at 0.75 seconds on the known baseline.
 
@@ -689,6 +705,11 @@ and audio fixed. Mean frame time was 8.56 ms before the artwork and
 8.61–8.62 ms after. Mean draw time moved from 1.80–1.87 ms to 1.91–1.92 ms.
 Actor-build p95 was 237–280 μs before and 277–301 μs after. Render storage
 recorded zero growth events in all four runs.
+
+With the badge and low-health artwork installed, two alternating 600-frame
+pairs of the same healthy 854×480 stage averaged 8.33–8.35 ms before and
+8.33 ms after. Draw time stayed between 1.79 and 1.83 ms. All four runs
+recorded zero audio underruns and zero render-storage growth events.
 
 ### Judgment and combo
 

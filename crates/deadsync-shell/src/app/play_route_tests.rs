@@ -245,6 +245,9 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     let gameplay = app.state.screens.gameplay_state.as_ref().unwrap();
     assert_eq!(gameplay.song().title, SONG_TITLE);
     assert_eq!(gameplay.setup.session.joined_sides, [false, true]);
+    if openitg {
+        check_openitg_gameplay_hud(app);
+    }
 
     complete_stage(app, event_loop);
     settle(app, event_loop, CurrentScreen::Evaluation);
@@ -296,6 +299,55 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
             preview.simfile_path,
         );
     }
+}
+
+fn check_openitg_gameplay_hud(app: &mut App) {
+    use deadlib_present::actors::SpriteSource;
+    use deadlib_present::space::{screen_center_x, screen_height, screen_width};
+
+    let previous_transition = std::mem::replace(
+        &mut app.state.shell.transition,
+        TransitionState::FadingIn {
+            elapsed: 1.0,
+            duration: 2.0,
+        },
+    );
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    let y = screen_height() * 0.5;
+    assert!(actors.iter().any(|actor| matches!(
+        actor,
+        Actor::Sprite { source: SpriteSource::TextureStatic(key), offset, .. }
+            if key.starts_with("openitg/gameplay-stage-") && *offset == [screen_center_x(), y]
+    )));
+    app.state.shell.transition = previous_transition;
+
+    let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
+    let full_life = game.players()[0].life;
+    game.update_player(0, |player| player.life = 0.25);
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    let scale = (screen_width() / 640.0).min(screen_height() / 480.0);
+    let p2_x = screen_center_x() + 160.0 * scale;
+    assert!(actors.iter().any(|actor| matches!(
+        actor,
+        Actor::Sprite {
+            source: SpriteSource::TextureStatic("openitg/gameplay-danger-text.png"),
+            offset, ..
+        } if *offset == [p2_x, y]
+    )));
+    let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
+    let was_hidden = game.profiles()[0].hide_danger;
+    game.update_profile(0, |profile| profile.hide_danger = true);
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(!actors.iter().any(|actor| matches!(
+        actor,
+        Actor::Sprite {
+            source: SpriteSource::TextureStatic("openitg/gameplay-danger-text.png"),
+            ..
+        }
+    )));
+    let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
+    game.update_player(0, |player| player.life = full_life);
+    game.update_profile(0, |profile| profile.hide_danger = was_hidden);
 }
 
 fn press(app: &mut App, event_loop: &ActiveEventLoop, action: VirtualAction) {

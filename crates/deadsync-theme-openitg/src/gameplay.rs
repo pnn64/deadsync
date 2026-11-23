@@ -1,12 +1,14 @@
 use std::sync::{Arc, OnceLock};
 
 use deadlib_present::actors::{Actor, InlineText, TextContent};
+use deadlib_present::dsl::SpriteBuilder;
 use deadlib_present::color::rgba_hex;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 use deadsync_core::hud_style::{FieldFeedbackStyle, HoldFeedbackStyle, TapFeedbackTween};
 use deadsync_theme::views::{
-    GameplayDifficultyView, GameplayHoldAtlas, GameplayHud, GameplayHudMotion, GameplayLifeView,
-    GameplayScoreView, GameplaySongMeterView, GameplayStageBadgeView, GameplayTapAtlas,
+    GameplayBackgroundWarningView, GameplayDifficultyView, GameplayHoldAtlas, GameplayHud,
+    GameplayHudMotion, GameplayLifeView, GameplayScoreView, GameplaySongMeterView,
+    GameplayStageBadgeView, GameplayTapAtlas,
 };
 
 use crate::presentation::{Layout, WIDTH, sprite};
@@ -18,6 +20,8 @@ pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     song_meter: push_song_meter,
     difficulty: push_difficulty,
     stage_badge: push_stage_badge,
+    danger_threshold: 0.3,
+    background_warning: push_background_warning,
     fallback_background: push_fallback_background,
     unjoined_seat: push_unjoined_seat,
     autoplay_label: push_autoplay_label,
@@ -302,19 +306,31 @@ fn push_stage_badge(actors: &mut Vec<Actor>, view: GameplayStageBadgeView<'_>) {
         (None, "EVENT") => Some(("openitg/gameplay-stage-event.png", [430.0, 280.0])),
         _ => None,
     };
-    let layout = Layout::centered(screen_width(), screen_height());
-    let y = 440.0
-        + if matches!(view.motion, GameplayHudMotion::Leaving { .. }) {
-            slide_offset(view.motion) * 1.5
-        } else {
-            0.0
-        };
+    let height = screen_height();
+    let layout = Layout::centered(screen_width(), height);
+    let footer_y = height - layout.size([0.0, 40.0])[1];
+    let (y, zoom) = match view.motion {
+        GameplayHudMotion::Entering { elapsed_seconds } => {
+            let progress = ((elapsed_seconds - 1.2) / 0.3).clamp(0.0, 1.0);
+            let center_y = height * 0.5;
+            (
+                (footer_y - center_y).mul_add(progress, center_y),
+                1.0 - 0.75 * progress,
+            )
+        }
+        GameplayHudMotion::Leaving { .. } => (
+            footer_y + layout.size([0.0, slide_offset(view.motion) * 1.5])[1],
+            0.25,
+        ),
+        GameplayHudMotion::Settled => (footer_y, 0.25),
+    };
+    let center_x = screen_center_x();
     if let Some((texture, size)) = artwork {
         actors.push(
             sprite(
                 texture,
-                layout.position(WIDTH * 0.5, y),
-                layout.size(size.map(|axis| axis * 0.25)),
+                [center_x, y],
+                layout.size(size.map(|axis| axis * zoom)),
                 [1.0; 4],
                 105,
             )
@@ -325,11 +341,68 @@ fn push_stage_badge(actors: &mut Vec<Actor>, view: GameplayStageBadgeView<'_>) {
             .round
             .and_then(|round| TextContent::inline_format(format_args!("ROUND {round}")))
             .unwrap_or_else(|| view.text.into());
-        let mut label = layout.text([WIDTH * 0.5, y], 0.5, text, 0.65, [1.0; 4]);
+        let mut label = layout.text([0.0, 0.0], 0.5, text, 2.6 * zoom, [1.0; 4]);
+        label.xy(center_x, y);
+        label.maxwidth(screen_width());
         label.font(MENU_NORMAL_FONT);
         label.shadowlength(2.0);
         label.z(105);
         actors.push(label.build(0));
+    }
+}
+
+fn push_background_warning(actors: &mut Vec<Actor>, view: GameplayBackgroundWarningView) {
+    let width = screen_width();
+    let height = screen_height();
+    let half = width * 0.5;
+    let (x, w, fade_left, fade_right) = if view.both_sides {
+        (0.0, width, 0.1, 0.1)
+    } else if view.p2 {
+        (half, half, 0.1, 0.0)
+    } else {
+        (0.0, half, 0.0, 0.1)
+    };
+    let brightness = view.brightness.clamp(0.0, 1.0);
+    let color = if view.failed {
+        [0.0, 0.0, 0.0, 0.5]
+    } else {
+        let phase = view.danger_seconds.rem_euclid(1.0) * std::f32::consts::TAU;
+        [brightness, 0.0, 0.0, 0.55 - 0.25 * phase.cos()]
+    };
+    let mut backdrop = SpriteBuilder::solid();
+    backdrop.align(0.0, 0.0);
+    backdrop.xy(x, 0.0);
+    backdrop.size(w, height);
+    backdrop.fadeleft(fade_left);
+    backdrop.faderight(fade_right);
+    backdrop.diffuse(color);
+    backdrop.z(-99);
+    actors.push(backdrop.build(0));
+    if view.failed {
+        return;
+    }
+
+    let layout = Layout::centered(width, height);
+    let x = match (view.both_sides, view.p2) {
+        (true, _) => WIDTH * 0.5,
+        (false, true) => WIDTH * 0.5 + 160.0,
+        (false, false) => WIDTH * 0.5 - 160.0,
+    };
+    let position = [layout.position(x, 0.0)[0], height * 0.5];
+    let size = layout.size([244.0, 64.0]);
+    let tint = [brightness, brightness, brightness, 1.0];
+    actors.push(
+        sprite("openitg/gameplay-danger-text.png", position, size, tint, -99).build(0),
+    );
+    let pulse_time = view.danger_seconds.rem_euclid(2.0);
+    if (0.5..1.2).contains(&pulse_time) {
+        let scan = (pulse_time - 0.5) / 0.7;
+        let mut glow = sprite("openitg/gameplay-danger-glow.png", position, size, tint, -99);
+        glow.cropleft((1.3 * scan - 0.3).max(0.0));
+        glow.cropright((1.0 - 1.3 * scan).max(0.0));
+        glow.fadeleft(0.1);
+        glow.faderight(0.1);
+        actors.push(glow.build(0));
     }
 }
 
@@ -488,6 +561,76 @@ mod tests {
                 &actors[0],
                 Actor::Sprite { source: SpriteSource::TextureStatic("openitg/gameplay-stage-1.png"), offset, .. }
                     if *offset == [320.0, 440.0]
+            ));
+        });
+    }
+
+    #[test]
+    fn stage_badge_moves_from_the_center_to_the_footer() {
+        for width in [640.0, 854.0] {
+            with_current_metrics(Metrics::centered(width, 480.0), || {
+                for (elapsed_seconds, expected_y, expected_width) in [
+                    (0.0, 240.0, 498.0),
+                    (1.2, 240.0, 498.0),
+                    (1.35, 340.0, 311.25),
+                    (1.5, 440.0, 124.5),
+                ] {
+                    let mut actors = Vec::new();
+                    push_stage_badge(
+                        &mut actors,
+                        GameplayStageBadgeView {
+                            text: &Arc::from("EVENT"),
+                            round: Some(1),
+                            motion: GameplayHudMotion::Entering { elapsed_seconds },
+                        },
+                    );
+                    assert!(matches!(
+                        actors.as_slice(),
+                        [Actor::Sprite { offset, size: [SizeSpec::Px(w), _], .. }]
+                            if offset[0] == width * 0.5
+                                && (offset[1] - expected_y).abs() < 0.001
+                                && (*w - expected_width).abs() < 0.001
+                    ));
+                }
+            });
+        }
+    }
+
+    #[test]
+    fn warning_uses_the_physical_side_and_failed_dimming_uses_both_sides() {
+        with_current_metrics(Metrics::centered(854.0, 480.0), || {
+            let view = GameplayBackgroundWarningView {
+                p2: true,
+                both_sides: false,
+                failed: false,
+                danger_seconds: 0.75,
+                brightness: 0.8,
+            };
+            let mut actors = Vec::new();
+            push_background_warning(&mut actors, view);
+            assert!(matches!(
+                actors.as_slice(),
+                [
+                    Actor::Sprite { offset: [427.0, 0.0], fadeleft: 0.1, tint, .. },
+                    Actor::Sprite { offset: [587.0, 240.0], source: SpriteSource::TextureStatic("openitg/gameplay-danger-text.png"), .. },
+                    Actor::Sprite { source: SpriteSource::TextureStatic("openitg/gameplay-danger-glow.png"), .. }
+                ] if *tint == [0.8, 0.0, 0.0, 0.55]
+            ));
+            actors.clear();
+            push_background_warning(
+                &mut actors,
+                GameplayBackgroundWarningView { both_sides: true, failed: true, ..view },
+            );
+            assert!(matches!(
+                actors.as_slice(),
+                [Actor::Sprite {
+                    offset: [0.0, 0.0],
+                    size: [SizeSpec::Px(854.0), SizeSpec::Px(480.0)],
+                    fadeleft: 0.1,
+                    faderight: 0.1,
+                    tint: [0.0, 0.0, 0.0, 0.5],
+                    ..
+                }]
             ));
         });
     }
