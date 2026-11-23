@@ -283,6 +283,15 @@ with 25.4 μs and 33.2 μs. Settled Visual Delay composition measured 62.5 μs
 in both builds. At 250 ms the new renderer built a partial glyph mesh for
 P2 and measured 148.4 μs. Both samples used 39 draw ops.
 
+The renderer now reuses cached glyph geometry across the reveal. In two
+paired dev-profile runs at 854×480, warmed composition of a changing P2
+reveal used 148–164 μs of process CPU time per frame before the change and
+63–78 μs afterward. The settled samples measured 62.5 μs. All 12 Vulkan
+Player Options captures matched byte for byte, including the 125, 250, and
+500 ms versus frames and the solo P2 frames at both widths. Eight System
+Options captures covering the reveal and Configure Pads also matched at
+640×480 and 854×480.
+
 ## Profile Picker
 
 The standalone profile picker and the music wheel's fast-switch and late-join

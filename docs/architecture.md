@@ -648,7 +648,9 @@ chain. The shell passes the frame clock and resets presentation on Options
 entry.
 OpenITG retains the current explanation and its reveal timing. It uses the
 engine bitmap text layout to measure wrapped paragraphs and reveal a glyph
-prefix while keeping the full paragraph's placement.
+prefix while keeping the full paragraph's placement. The engine reuses the
+cached layout's geometry for atlas pages that are fully revealed and copies
+the visible vertices of partially revealed pages into recycled frame buffers.
 The Player Options mount supplies the viewport size, exit-row placement mode,
 and row animation time to the shared editor. The editor exposes the joined
 seats' positions in the selectable row order with the prepared rows. OpenITG

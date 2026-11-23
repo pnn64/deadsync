@@ -4296,6 +4296,15 @@ fn glyph_has_fill_quad(glyph: &CachedGlyph) -> bool {
 }
 
 #[inline(always)]
+fn glyph_mesh_page(glyph: &CachedGlyph, stroke: bool) -> Option<TextPageId> {
+    if stroke {
+        glyph.stroke_page
+    } else {
+        glyph_has_fill_quad(glyph).then_some(glyph.texture_page)
+    }
+}
+
+#[inline(always)]
 fn start_x_logical(align: actors::TextAlign, block_w_logical: f32, line_w_logical: f32) -> i32 {
     let align_value = match align {
         actors::TextAlign::Left => 0.0,
@@ -4793,14 +4802,7 @@ fn visit_text_mesh_quads(
         let line_glyphs =
             &glyphs[line.glyph_start..line.glyph_start.saturating_add(line.glyph_len)];
         for glyph in line_glyphs {
-            let texture_page = if stroke {
-                glyph.stroke_page
-            } else if glyph_has_fill_quad(glyph) {
-                Some(glyph.texture_page)
-            } else {
-                None
-            };
-            if let Some(texture_page) = texture_page {
+            if let Some(texture_page) = glyph_mesh_page(glyph, stroke) {
                 visit(
                     texture_page,
                     pen_x_logical as f32 + glyph.offset[0],
@@ -4964,14 +4966,7 @@ fn build_transient_text_mesh_builders(
         let glyph_end = (line.glyph_start + line.glyph_len).min(visible_glyphs);
         let line_glyphs = &layout.glyphs[line.glyph_start..glyph_end];
         for glyph in line_glyphs {
-            let texture_page = if stroke {
-                glyph.stroke_page
-            } else if glyph_has_fill_quad(glyph) {
-                Some(glyph.texture_page)
-            } else {
-                None
-            };
-            let Some(texture_page) = texture_page else {
+            let Some(texture_page) = glyph_mesh_page(glyph, stroke) else {
                 pen_x_logical += glyph.advance_i32;
                 continue;
             };
@@ -6674,6 +6669,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
             prepared_meshes,
             text.align_text,
             false,
+            None,
             &placement,
             [1.0; 4],
             Matrix4::IDENTITY,
@@ -6689,6 +6685,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
                 prepared_meshes,
                 text.align_text,
                 true,
+                None,
                 &placement,
                 stroke_color,
                 Matrix4::IDENTITY,
@@ -7692,8 +7689,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             .and_then(|meshes| meshes.batches(*align_text, false))
                             .is_none();
                     if !transient_frame_inline
-                        && !partial_text
-                        && attributes.is_empty()
+                        && attributes.as_slice().is_empty()
                         && !*jitter
                         && text_distortion <= 1e-6
                     {
@@ -7703,6 +7699,10 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             prepared_meshes,
                             *align_text,
                             false,
+                            partial_text.then(|| TextMeshReveal {
+                                glyphs: &layout.glyphs[..visible_glyphs],
+                                recycled_vertices: &mut scratch.recycled_text_mesh_vertices,
+                            }),
                             &placement,
                             [1.0; 4],
                             *local_transform,
@@ -7729,6 +7729,10 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                                 prepared_meshes,
                                 *align_text,
                                 true,
+                                partial_text.then(|| TextMeshReveal {
+                                    glyphs: &layout.glyphs[..visible_glyphs],
+                                    recycled_vertices: &mut scratch.recycled_text_mesh_vertices,
+                                }),
                                 &placement,
                                 stroke_rgba,
                                 *local_transform,
@@ -7819,6 +7823,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                                     prepared_meshes,
                                     *align_text,
                                     true,
+                                    None,
                                     &placement,
                                     stroke_rgba,
                                     *local_transform,
@@ -8838,6 +8843,11 @@ const fn quantize_up_even_i32(v: i32) -> i32 {
     }
 }
 
+struct TextMeshReveal<'a> {
+    glyphs: &'a [CachedGlyph],
+    recycled_vertices: &'a mut Vec<Vec<renderer::TexturedMeshVertex>>,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn push_resolved_text_mesh_batches<T: TextureContext + ?Sized>(
     out: &mut FrameBuilder,
@@ -8845,6 +8855,7 @@ fn push_resolved_text_mesh_batches<T: TextureContext + ?Sized>(
     prepared_meshes: Option<&PreparedTextMeshes>,
     align: actors::TextAlign,
     stroke: bool,
+    mut reveal: Option<TextMeshReveal<'_>>,
     placement: &TextLayoutPlacement,
     tint: [f32; 4],
     local_transform: Matrix4,
@@ -8852,7 +8863,9 @@ fn push_resolved_text_mesh_batches<T: TextureContext + ?Sized>(
     texture_generation: u64,
     texture_ctx: &T,
 ) {
-    if let Some(batches) = prepared_meshes.and_then(|meshes| meshes.batches(align, stroke)) {
+    if reveal.is_none()
+        && let Some(batches) = prepared_meshes.and_then(|meshes| meshes.batches(align, stroke))
+    {
         push_prepared_text_mesh_batches(
             out,
             layout,
@@ -8871,17 +8884,70 @@ fn push_resolved_text_mesh_batches<T: TextureContext + ?Sized>(
     } else {
         layout.fill_batches(align)
     };
-    push_text_mesh_batches(
-        out,
-        layout,
-        batches,
-        placement,
-        tint,
-        local_transform,
-        m,
-        texture_generation,
-        texture_ctx,
-    );
+    if batches.is_empty() || tint[3] <= 0.0 {
+        return;
+    }
+    let transform = Matrix4::from_translation(Vector3::new(
+        m.left + placement.block_center_x,
+        m.top - placement.block_center_y,
+        0.0,
+    )) * Matrix4::from_scale(Vector3::new(placement.sx, -placement.sy, 1.0))
+        * local_transform;
+
+    out.reserve(batches.len());
+    for batch in batches {
+        let revealed = reveal.as_mut().map(|reveal| {
+            let vertex_count = 6 * reveal
+                .glyphs
+                .iter()
+                .filter(|glyph| glyph_mesh_page(glyph, stroke) == Some(batch.texture_page))
+                .count();
+            (vertex_count, &mut *reveal.recycled_vertices)
+        });
+        let (vertices, geom_cache_key) = match revealed {
+            // Batches follow the order in which their pages first appear in the text.
+            Some((0, _)) => break,
+            Some((vertex_count, recycled_vertices)) if vertex_count < batch.vertices.len() => {
+                let mut vertices = take_recycled_text_mesh_vertices(recycled_vertices);
+                vertices.extend_from_slice(&batch.vertices[..vertex_count]);
+                (
+                    renderer::TexturedMeshVertices::Transient(vertices),
+                    renderer::INVALID_TMESH_CACHE_KEY,
+                )
+            }
+            _ => (
+                renderer::TexturedMeshVertices::Shared(Arc::clone(&batch.vertices)),
+                batch.geom_cache_key,
+            ),
+        };
+        out.push_textured_mesh(
+            layout
+                .texture_page(batch.texture_page)
+                .texture_handle(texture_generation, texture_ctx),
+            0,
+            0,
+            BlendMode::Alpha,
+            0,
+            TexturedMeshPayload {
+                instance: renderer::TexturedMeshInstanceRaw::new(
+                    transform,
+                    tint,
+                    [1.0, 1.0],
+                    [0.0, 0.0],
+                    [0.0, 0.0],
+                    false,
+                ),
+                vertices,
+                geom_cache_key,
+                depth_test: false,
+                depth_write: false,
+                depth_test_on_fail: false,
+                clear_depth: false,
+                clear_depth_after: false,
+                sampler: None,
+            },
+        );
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -8899,6 +8965,7 @@ fn push_prepared_text_mesh_batches<T: TextureContext + ?Sized>(
     if batches.is_empty() || tint[3] <= 0.0 {
         return;
     }
+
     let transform = Matrix4::from_translation(Vector3::new(
         m.left + placement.block_center_x,
         m.top - placement.block_center_y,
@@ -8926,60 +8993,6 @@ fn push_prepared_text_mesh_batches<T: TextureContext + ?Sized>(
                     false,
                 ),
                 vertices: renderer::TexturedMeshVertices::Reusable(Arc::clone(&batch.vertices)),
-                geom_cache_key: batch.geom_cache_key,
-                depth_test: false,
-                depth_write: false,
-                depth_test_on_fail: false,
-                clear_depth: false,
-                clear_depth_after: false,
-                sampler: None,
-            },
-        );
-    }
-}
-
-fn push_text_mesh_batches<T: TextureContext + ?Sized>(
-    out: &mut FrameBuilder,
-    layout: &CachedTextLayout,
-    batches: &[CachedTextMeshBatch],
-    placement: &TextLayoutPlacement,
-    tint: [f32; 4],
-    local_transform: Matrix4,
-    m: &Metrics,
-    texture_generation: u64,
-    texture_ctx: &T,
-) {
-    if batches.is_empty() || tint[3] <= 0.0 {
-        return;
-    }
-
-    let transform = Matrix4::from_translation(Vector3::new(
-        m.left + placement.block_center_x,
-        m.top - placement.block_center_y,
-        0.0,
-    )) * Matrix4::from_scale(Vector3::new(placement.sx, -placement.sy, 1.0))
-        * local_transform;
-
-    out.reserve(batches.len());
-    for batch in batches {
-        out.push_textured_mesh(
-            layout
-                .texture_page(batch.texture_page)
-                .texture_handle(texture_generation, texture_ctx),
-            0,
-            0,
-            BlendMode::Alpha,
-            0,
-            TexturedMeshPayload {
-                instance: renderer::TexturedMeshInstanceRaw::new(
-                    transform,
-                    tint,
-                    [1.0, 1.0],
-                    [0.0, 0.0],
-                    [0.0, 0.0],
-                    false,
-                ),
-                vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&batch.vertices)),
                 geom_cache_key: batch.geom_cache_key,
                 depth_test: false,
                 depth_write: false,
@@ -12461,32 +12474,67 @@ mod tests {
     fn glyph_reveal_keeps_the_full_layout_and_draws_a_prefix_across_lines() {
         let a = Arc::<str>::from("fill_a");
         let b = Arc::<str>::from("fill_b");
-        let fonts = font::FontMap::from_iter([(
-            "test",
-            test_split_stroke_font(&a, &b, &a, &b),
-        )]);
-        let font = fonts.get("test").expect("test font");
-        let layout = build_cached_text_layout(font, &fonts, "AB\nABA", 10, -1, 31);
-        let reveal = TextAttributes::GlyphReveal(0.5);
-        let visible = reveal.visible_glyphs(layout.glyphs.len());
-        assert_eq!(visible, 3);
-        let mut builders = Vec::new();
-        build_transient_text_mesh_builders(
-            &layout,
-            visible,
-            TextAlign::Center,
-            &[],
-            None,
-            0.0,
-            false,
-            &mut builders,
-            &mut Vec::new(),
-            &mut TextAttrScratch::default(),
-        );
-        for (builder, full) in builders.iter().zip(layout.fill_batches(TextAlign::Center)) {
-            assert_eq!(&builder.vertices, &full.vertices[..builder.vertices.len()]);
+        let stroke_a = Arc::<str>::from("stroke_a");
+        let stroke_b = Arc::<str>::from("stroke_b");
+        let mut font = test_split_stroke_font(&a, &b, &stroke_a, &stroke_b);
+        font.ascii_glyphs[usize::from(b' ')] = Some(test_glyph(&b));
+        let fonts = font::FontMap::from_iter([("test", font)]);
+        let metrics = Metrics::centered(100.0, 100.0);
+        let mut actor = test_stroked_text_actor();
+        let Actor::Text {
+            content, align_text, ..
+        } = &mut actor
+        else {
+            unreachable!("test text actor remains text");
+        };
+        *content = TextContent::Shared(Arc::from(" A\nABA"));
+        *align_text = TextAlign::Center;
+        let mut cache = TextLayoutCache::default();
+        let mut scratch = ComposeScratch::default();
+        let mut draw = |actor: &Actor| {
+            build_screen_cached_with_scratch(
+                std::slice::from_ref(actor),
+                [0.0; 4],
+                &metrics,
+                &fonts,
+                0.0,
+                &mut cache,
+                &mut scratch,
+            )
+        };
+        let full = draw(&actor);
+        assert_eq!(full.ops.len(), 4);
+        for (fraction, a_vertices, b_vertices) in [(0.2, 0, 0), (0.6, 12, 0), (0.8, 12, 6)] {
+            let Actor::Text { attributes, .. } = &mut actor else {
+                unreachable!("test text actor remains text");
+            };
+            *attributes = TextAttributes::GlyphReveal(fraction);
+            let frame = draw(&actor);
+            let mut index = 0;
+            for full_index in 0..full.ops.len() {
+                let (full_run, full_instance, full_geometry) = tmesh_draw(&full, full_index);
+                let count = match full_geometry.vertices.len() {
+                    18 => a_vertices,
+                    6 => b_vertices,
+                    len => panic!("unexpected full text batch length {len}"),
+                };
+                if count == 0 {
+                    continue;
+                }
+                let (run, instance, geometry) = tmesh_draw(&frame, index);
+                assert_eq!(run.texture_handle, full_run.texture_handle);
+                assert_eq!(instance, full_instance);
+                assert_eq!(geometry.vertices.as_ref(), &full_geometry.vertices[..count]);
+                let expected_key = if count == full_geometry.vertices.len() {
+                    full_geometry.cache_key
+                } else {
+                    INVALID_TMESH_CACHE_KEY
+                };
+                assert_eq!(geometry.cache_key, expected_key);
+                index += 1;
+            }
+            assert_eq!(frame.ops.len(), index);
         }
-        assert_eq!(builders.iter().map(|batch| batch.vertices.len()).sum::<usize>(), 18);
     }
 
     #[test]
