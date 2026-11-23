@@ -5083,6 +5083,326 @@ return Def.ActorFrame{
         );
     }
 
+    #[test]
+    fn simply_love_and_openitg_produce_identical_gameplay_results() {
+        use deadlib_present::actors::SizeSpec;
+        use deadsync_core::input::InputSource;
+        use deadsync_gameplay::{
+            GameplayAction, GameplayAudioSnapshot, GameplayExit, GameplayStreamClockSnapshot,
+        };
+        use deadsync_input::{InputEvent, VirtualAction};
+        use deadsync_profile_gameplay::results::stage_result;
+        use deadsync_score::{
+            Grade,
+            stage_stats::{PlayerStageSummary, all_players_failed},
+        };
+        use deadsync_theme::ThemeEffect;
+        use deadsync_theme_simply_love::SimplyLoveRuntimeRequest;
+        use std::time::{Duration, Instant};
+
+        let simfile = write_fixture(
+            "theme-gameplay-parity",
+            "\
+#TITLE:Theme gameplay parity;
+#MUSIC:music.wav;
+#OFFSET:0;
+#BPMS:0=120;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DIFFICULTY:Challenge;
+#METER:5;
+#NOTES:
+0000
+1000
+0100
+0010
+,
+1000
+0100
+0010
+0001
+,
+1000
+0100
+0010
+0001
+,
+1000
+0100
+0010
+0001
+;",
+        );
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                space::set_current_metrics(space::Metrics::centered(640.0, 480.0));
+                space::set_current_window_px(640, 480);
+                let assets = fixture_assets();
+                let actions = [
+                    VirtualAction::p1_left,
+                    VirtualAction::p1_down,
+                    VirtualAction::p1_up,
+                    VirtualAction::p1_right,
+                ];
+                let now = Instant::now();
+                let epoch = now.checked_sub(Duration::from_secs(30)).unwrap_or(now);
+                let host_epoch = 1_000_000_000_000;
+
+                for should_fail in [false, true] {
+                    let build = || {
+                        build_test_state(
+                            &simfile,
+                            GameplayViewport::new(640.0, 480.0),
+                            GameplaySession::default(),
+                            std::array::from_fn(|_| profile_data::Profile {
+                                noteskin: profile_data::NoteSkin::new("lambda"),
+                                lifemeter_type: profile_data::LifeMeterType::Standard,
+                                ..Default::default()
+                            }),
+                        )
+                    };
+                    let mut states = [Box::new(build()), Box::new(build())];
+                    states[1]
+                        .presentation
+                        .set_hud(deadsync_theme_openitg::GAMEPLAY_HUD);
+                    let chart: Vec<_> = states[0]
+                        .notes()
+                        .iter()
+                        .zip(states[0].note_time_cache_ns())
+                        .map(|(note, &time)| (time, note.column))
+                        .collect();
+                    assert_eq!(chart.len(), 15);
+
+                    let mut previous = chart[0].0 - 60_000_000;
+                    for state in &mut states {
+                        state.set_current_music_time_ns(previous);
+                    }
+                    let mut actors = Vec::new();
+                    let mut effects = Vec::new();
+                    let mut completed = false;
+                    let mut tick = |states: &mut [Box<screen_gameplay::State>; 2],
+                                    music_ns: i64,
+                                    edge: Option<(usize, bool, i64)>,
+                                    check_presenters: bool| {
+                        let dt = (music_ns - previous) as f32 / 1_000_000_000.0;
+                        assert!(dt > 0.0);
+                        previous = music_ns;
+                        let host_ns = host_epoch + music_ns as u64;
+                        let audio = GameplayAudioSnapshot {
+                            stream_clock: GameplayStreamClockSnapshot {
+                                music_nanos: music_ns,
+                                music_seconds_per_second: 1.0,
+                                has_music_mapping: true,
+                                valid_at: epoch + Duration::from_nanos(music_ns as u64),
+                                valid_at_host_nanos: host_ns,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        };
+                        let mut completion = [false; 2];
+                        for (theme, state) in states.iter_mut().enumerate() {
+                            effects.clear();
+                            if let Some((column, pressed, captured_ns)) = edge {
+                                let timestamp = epoch + Duration::from_nanos(captured_ns as u64);
+                                let event = InputEvent {
+                                    action: actions[column],
+                                    input_slot: column as u32,
+                                    pressed,
+                                    source: InputSource::Keyboard,
+                                    timestamp,
+                                    timestamp_host_nanos: host_epoch + captured_ns as u64,
+                                    stored_at: timestamp,
+                                    emitted_at: timestamp,
+                                };
+                                screen_gameplay::handle_input(state, &event, &mut effects);
+                            }
+                            screen_gameplay::update(state, dt, audio, || host_ns, &mut effects);
+                            completion[theme] = effects.iter().any(|effect| {
+                                matches!(
+                                    effect,
+                                    ThemeEffect::Runtime(SimplyLoveRuntimeRequest::GameplayAction(
+                                        GameplayAction::Navigate(GameplayExit::Complete)
+                                            | GameplayAction::NavigateNoFade(
+                                                GameplayExit::Complete
+                                            )
+                                    ))
+                                )
+                            });
+                            assert_eq!(state.current_music_time_ns(), music_ns);
+                            assert!(state.stage.take_output().errors.is_empty());
+
+                            actors.clear();
+                            let segments = crate::gameplay_runtime::push_actors(
+                                &mut actors,
+                                state,
+                                &assets,
+                                Default::default(),
+                                host_ns as f64 / 1_000_000_000.0,
+                                Default::default(),
+                            );
+                            assert!(segments.segments(state.song_frame(), &actors).count() > 0);
+                            if check_presenters {
+                                let openitg_life = actors.iter().any(|actor| matches!(actor,
+                                Actor::Sprite { offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], z: 90, .. }
+                                    if *offset == [4.0, 113.0] && *w == 40.0 && *h == 314.0
+                            ));
+                                assert_eq!(
+                                    openitg_life,
+                                    theme == 1,
+                                    "both concrete HUDs must render"
+                                );
+                            }
+                        }
+                        assert_eq!(completion[0], completion[1], "completion at {music_ns}");
+                        completed |= completion[0];
+
+                        let [left, right] = states;
+                        let judgment = |result: Option<Judgment>| {
+                            result.map(|hit| {
+                                (
+                                    hit.grade,
+                                    hit.window,
+                                    hit.time_error_music_ns,
+                                    hit.miss_because_held,
+                                )
+                            })
+                        };
+                        assert_eq!(left.notes().len(), right.notes().len());
+                        for (index, (a, b)) in left.notes().iter().zip(right.notes()).enumerate() {
+                            assert_eq!(
+                                judgment(a.result),
+                                judgment(b.result),
+                                "note {index} at {music_ns}"
+                            );
+                        }
+                        let l = &left.players()[0];
+                        let r = &right.players()[0];
+                        assert_eq!(l.life.to_bits(), r.life.to_bits(), "life at {music_ns}");
+                        assert_eq!(l.life_history, r.life_history);
+                        assert_eq!(
+                            (l.combo, l.recorded_max_combo, l.miss_combo),
+                            (r.combo, r.recorded_max_combo, r.miss_combo)
+                        );
+                        assert_eq!(
+                            (l.is_failing, l.stage_failed, l.fail_time),
+                            (r.is_failing, r.stage_failed, r.fail_time)
+                        );
+                        assert_eq!(l.judgment_counts, r.judgment_counts);
+                        assert_eq!(l.earned_grade_points, r.earned_grade_points);
+                        assert_eq!(
+                            left.song_completed_naturally(),
+                            right.song_completed_naturally()
+                        );
+                    };
+
+                    tick(&mut states, chart[0].0 - 50_000_000, None, true);
+                    for (index, &(note_ns, column)) in chart.iter().enumerate() {
+                        let offset_ns = match index {
+                            0 => -7_000_000,
+                            1 => 30_000_000,
+                            _ => 0,
+                        };
+                        // The third note receives an input on the wrong lane in both traces.
+                        let hit_column = if index == 2 {
+                            (column + 1) % actions.len()
+                        } else {
+                            column
+                        };
+                        if !should_fail || index < 3 {
+                            let pressed_ns = note_ns + offset_ns;
+                            tick(
+                                &mut states,
+                                pressed_ns + 8_000_000,
+                                Some((hit_column, true, pressed_ns)),
+                                false,
+                            );
+                            if index == 2 {
+                                assert!(states[0].notes()[index].result.is_none());
+                            } else {
+                                let hit = states[0].notes()[index]
+                                    .result
+                                    .expect("input should score this note");
+                                let expected = if index == 1 {
+                                    JudgeGrade::Excellent
+                                } else {
+                                    JudgeGrade::Fantastic
+                                };
+                                assert_eq!(
+                                    (hit.grade, hit.time_error_music_ns),
+                                    (expected, offset_ns)
+                                );
+                            }
+                            let released_ns = pressed_ns + 25_000_000;
+                            tick(
+                                &mut states,
+                                released_ns + 8_000_000,
+                                Some((hit_column, false, released_ns)),
+                                false,
+                            );
+                            assert!(!states[0].lane_pressed(hit_column));
+                        }
+                        let life_before_miss_scan = states[0].players()[0].life;
+                        // The miss scan waits for the widest judgment window, including rolls.
+                        tick(&mut states, note_ns + 400_000_000, None, false);
+                        if index == 2 {
+                            assert_eq!(
+                                states[0].notes()[index].result.unwrap().grade,
+                                JudgeGrade::Miss
+                            );
+                            // The next update finalizes the missed row and applies its life change.
+                            tick(&mut states, note_ns + 450_000_000, None, false);
+                            assert!(states[0].players()[0].life < life_before_miss_scan);
+                        }
+                    }
+                    let finish_ns =
+                        states[0].music_end_time_ns().max(chart.last().unwrap().0) + 1_100_000_000;
+                    tick(&mut states, finish_ns, None, false);
+                    assert!(completed);
+                    assert!(states.iter().all(|state| state.song_completed_naturally()));
+
+                    let results = states
+                        .each_ref()
+                        .map(|state| stage_result(&state.gameplay, Default::default()));
+                    let fingerprint = |record: &PlayerStageSummary| {
+                        (
+                            record.grade,
+                            record.score_percent.to_bits(),
+                            record.ex_score_percent.to_bits(),
+                            record.hard_ex_score_percent.to_bits(),
+                            record.earned_grade_points,
+                            record.possible_grade_points,
+                            record.max_combo,
+                            record.judgment_counts,
+                            record.notes_hit,
+                            record.fail_time,
+                        )
+                    };
+                    let [left, right] = results
+                        .each_ref()
+                        .map(|result| result.players[0].as_ref().unwrap());
+                    assert_eq!(fingerprint(left), fingerprint(right));
+                    assert_eq!(left.life_history, right.life_history);
+                    assert_eq!(
+                        results[0].duration_seconds.to_bits(),
+                        results[1].duration_seconds.to_bits()
+                    );
+                    for result in &results {
+                        assert_eq!(all_players_failed(result, [true, false]), should_fail);
+                        let record = result.players[0].as_ref().unwrap();
+                        assert_eq!(record.grade == Grade::Failed, should_fail);
+                        assert_eq!(record.max_combo, if should_fail { 2 } else { 12 });
+                        assert_eq!(record.fail_time.is_some(), should_fail);
+                        assert!(result.players[1].is_none());
+                    }
+                }
+            },
+        );
+    }
+
     #[cfg(target_os = "windows")]
     #[test]
     #[ignore = "long song-fixture playback and GPU readback regression"]

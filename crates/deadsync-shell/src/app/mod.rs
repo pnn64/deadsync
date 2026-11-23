@@ -136,15 +136,13 @@ use deadsync_theme_simply_love::views::{
 };
 use deadsync_theme_simply_love::{
     screens::{
-        self, content_browser, credits, evaluation_summary, gameover, gameplay, init,
+        self, content_browser, credits, evaluation, evaluation_summary, gameover, gameplay, init,
         initials, input as input_screen, manage_local_profiles, mappings, options,
         overscan_adjustment, practice, profile_load, sandbox, select_color,
         select_course, select_mode, select_music, select_style, test_lights,
     },
     visual_styles,
 };
-#[cfg(test)]
-use deadsync_theme_simply_love::screens::evaluation;
 use winit::{
     application::ApplicationHandler,
     event::{StartCause, WindowEvent},

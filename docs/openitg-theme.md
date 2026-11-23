@@ -201,6 +201,38 @@ At 854×480, nine warm runs of 8,000 settled-frame actor builds measured
 34.9 μs for Simply Love and 22.3 μs for OpenITG in solo, and 33.2 μs and
 39.3 μs in versus. The OpenITG versus overview builds 96 top-level actors
 for its two panels. The benchmark covers actor construction with bundled
-fonts and dev-profile theme libraries. GPU timing remains open.
-End-to-end parity across two complete presentations, visual comparison against
-a running reference, and distribution validation remain open.
+fonts and dev-profile theme libraries. Evaluation GPU timing remains open.
+
+## Gameplay parity verification
+
+The shell regression test `simply_love_and_openitg_produce_identical_gameplay_results`
+feeds the same timestamped keyboard edges and audio clock into two copies of a
+dance-single stage. It renders both HUDs and checks the judgments, life history,
+combo, and failure state each frame. The passing and failing runs include an
+early Fantastic, a late Excellent, and a wrong-lane press followed by a Miss.
+At completion the test compares the recorded maximum combo, grade points,
+ITG and EX scores, and fail time.
+
+## Windows release verification
+
+The optimized Windows x86-64 build passed `cargo build --release --locked --offline
+--bin deadsync`. The archive created by `scripts/package-windows-release.ps1`
+passed its checksum check and contains the standard assets, songs, and courses.
+The OpenITG tap judgment graphic is embedded in the archived executable.
+
+Fresh extractions reached the event loop on ordinary portable startup. The
+`--perf-case` harness then rendered a synthetic dance-single chart using Vulkan
+through wgpu and WASAPI shared audio. Both widescreen cases used the same
+executable, chart, audio, and configuration apart from the theme setting.
+Each case recorded 600 frames at a 120 FPS cap and saved a gameplay capture.
+
+| Theme | Window size | Mean frame | Mean draw |
+| --- | --- | ---: | ---: |
+| Simply Love | 854×480 | 8.35 ms | 1.13 ms |
+| OpenITG | 854×480 | 8.35 ms | 1.10 ms |
+| OpenITG | 640×480 | 8.38 ms | 1.13 ms |
+
+The captures show the bundled noteskin and the distinct HUDs. The OpenITG life
+bar overlaps the left receptor during a hit flash at both sizes. The interactive
+menu-to-Evaluation walkthrough, comparisons against a running reference, and
+distribution checks on other platforms remain open.
