@@ -661,7 +661,8 @@ fn rebuild_displayed_entries(state: &mut State) {
                         && (state.context.policy.show_most_played_courses
                             || !meta.has_most_played_entries)
                 }),
-            _ => true,
+            MusicWheelEntry::PackHeader { .. } => true,
+            MusicWheelEntry::Random(_) => false,
         };
         if include {
             state.entries.push(entry.clone());
@@ -738,7 +739,7 @@ fn sync_course_selection(state: &mut State) {
         .get(state.selected_index)
         .and_then(|entry| match entry {
             MusicWheelEntry::Song(song) => state.course_meta_by_path.get(&song.simfile_path),
-            MusicWheelEntry::PackHeader { .. } => None,
+            MusicWheelEntry::PackHeader { .. } | MusicWheelEntry::Random(_) => None,
         })
         .cloned();
     let rating_index = meta
@@ -913,7 +914,7 @@ fn selected_banner_path(state: &State) -> Option<&Path> {
     match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(song)) => song.banner_path.as_deref(),
         Some(MusicWheelEntry::PackHeader { banner_path, .. }) => banner_path.as_deref(),
-        None => None,
+        Some(MusicWheelEntry::Random(_)) | None => None,
     }
 }
 

@@ -23,6 +23,13 @@ pub struct SelectMusicWheelRow<'a> {
     /// Sections carry a song count. A song has no count.
     pub song_count: Option<usize>,
     pub expanded: bool,
+    pub action: Option<SelectMusicWheelAction>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SelectMusicWheelAction {
+    RevealSong,
+    PreviewedSong,
 }
 
 #[derive(Clone, Copy)]
@@ -59,6 +66,7 @@ pub struct SelectMusicView<'a> {
     /// The focused row is the center slot. The window wraps with the game wheel.
     pub rows: [Option<SelectMusicWheelRow<'a>>; SELECT_MUSIC_WHEEL_ROWS],
     pub wheel_offset: f32,
+    pub wheel_locked: bool,
     /// Preview beat or the browsing clock when no preview is active.
     pub selection_beat: f32,
     pub song: Option<SelectMusicSongView<'a>>,

@@ -171,8 +171,32 @@ The native 640×480 Quartz capture confirms the tilted rows and the fixed
 selection area. Vulkan captures of the DeadSync Quartz view checked the same
 title, artist, BPM, and Hard 5 chart at 640×480 and 854×480. Additional
 two-player captures check catalog labels, records, and the highlight during
-movement. The artwork and proportions use DeadSync's presentation. Chance
-and Random remain open.
+movement. The artwork and proportions use DeadSync's presentation.
+
+The OpenITG song wheel includes Chance and Random in that order whenever
+the active sort contains a playable chart for the current style. The
+effective English metrics call these native wheel actions `TYPE_RANDOM`
+and `TYPE_PORTAL`. Chance reveals a song from the active sort and locks
+the wheel around it. A subsequent Start confirms the song, with the usual
+option to enter Player Options. Random previews a resolved song while the
+Random row stays focused. Its chart panes, banner, and confirmation use the
+same choice until focus leaves the row.
+
+The game prepares one candidate pool for the active sort and play style.
+It prefers the joined players' standard difficulties and gives Random the
+open section when possible. The pool is refreshed on sort or style changes.
+The input route verifies Chance through Player Options and Evaluation and
+Random through direct launch. Vulkan Quartz fixtures at 640×480 and 854×480
+check both labels, the resolved chart pane, and the dimmed neighbors on the
+Chance lock. The native animated labels, idle music, and locked-wheel cue
+remain open.
+
+In the dev profile, choosing from 20,000 songs dropped from a median of
+37.7 ms with chart inspection on each choice to 1.14 ms with a prepared
+pool. Preparing a different sort at that size took 37.7 ms. The 854×480
+two-player fixture measured 43.5–43.7 µs for settled actor construction
+and 53.0–53.7 µs while moving across the two builds. The Quartz fixture
+with the two actions built in 32.6 µs when settled and 41.2 µs while moving.
 
 OpenITG's song and course banners slide in with a 750 ms deceleration and
 slide out with a 750 ms acceleration. The first accepted confirmation starts

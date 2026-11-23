@@ -4,7 +4,7 @@ use crate::i18n;
 use crate::i18n::{tr, tr_fmt};
 use deadlib_assets::AssetManager;
 pub use deadsync_gameplay::music_wheel::MusicWheelEntry;
-use deadsync_gameplay::music_wheel::wheel_entry_index;
+use deadsync_gameplay::music_wheel::{RandomSongPool, WheelRandomAction, wheel_entry_index};
 use deadsync_config::null_or_die::GraphOrigin;
 use deadsync_config::theme::{
     BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicSeriesSource,
@@ -15,7 +15,7 @@ use deadsync_theme::FontRole;
 use deadsync_theme::select_music::{
     SELECT_MUSIC_DIFFICULTY_ROWS, SELECT_MUSIC_WHEEL_ROWS, SelectMusicDifficultyRow,
     SelectMusicPlayerView, SelectMusicPrompt, SelectMusicSongView, SelectMusicView,
-    SelectMusicWheelRow,
+    SelectMusicWheelAction, SelectMusicWheelRow,
 };
 use deadsync_theme::views::ScoreboxSideView;
 use null_or_die::GraphOrientation;
@@ -623,9 +623,9 @@ struct PreviewMarker {
 }
 
 #[inline(always)]
-fn sl_selection_anim_beat(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
-    match entry_opt {
-        Some(MusicWheelEntry::Song(song)) => preview_song_sec(state).map_or_else(
+fn sl_selection_anim_beat(song: Option<&Arc<SongData>>, state: &State) -> f32 {
+    match song {
+        Some(song) => preview_song_sec(state).map_or_else(
             || state.session_elapsed * song.max_bpm.max(1.0) as f32 / 60.0,
             |sec| {
                 if state
@@ -648,7 +648,7 @@ fn sl_selection_anim_beat(entry_opt: Option<&MusicWheelEntry>, state: &State) ->
 /// or steady fallbacks when nothing is previewing. Used by the app to beat-lock
 /// SMX pad background animations on song select.
 pub fn selection_anim_beat(state: &State) -> f32 {
-    sl_selection_anim_beat(state.entries.get(state.selected_index), state)
+    sl_selection_anim_beat(focused_song(state), state)
 }
 
 fn prepare_scorebox_presentation(
@@ -704,7 +704,10 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     if let Some(srpg_shop) = view.srpg_shop {
         state.srpg_shop_snapshot = srpg_shop;
     }
-    if let Some(settings) = view.settings {
+    if let Some(mut settings) = view.settings {
+        // The mounted screen keeps its theme policy until the next application start.
+        settings.policy.interaction.show_random_entries =
+            state.policy.interaction.show_random_entries;
         state.arrow_bounce_offset = settings.arrow_bounce_offset;
         state.policy = settings.policy;
         pad_config::set_fsr_enabled(&mut state.pad_config_overlay, state.policy.fsr_profiles);
@@ -1313,6 +1316,7 @@ impl FolderStatsCache {
                         pack_by_song.insert(Arc::as_ptr(song) as usize, pack_index);
                     }
                 }
+                MusicWheelEntry::Random(_) => {}
             }
         }
         let summaries = std::iter::repeat_with(FolderStatsPackSummaries::default)
@@ -1627,6 +1631,9 @@ pub struct State {
     /// Per-side online fetch timeline on the selection-animation clock.
     scorebox_fetch_phase: [crate::scorebox::ScoreboxFetchPhase; 2],
     pub wheel_offset_from_selection: f32,
+    chance_lock_velocity: Option<f32>,
+    random_song_pool: Option<RandomSongPool>,
+    portal_song: Option<Arc<SongData>>,
     pub current_banner_key: Arc<str>,
     pub current_cdtitle_key: Option<Arc<str>>,
     pub current_graph_mesh: Option<Arc<[MeshVertex]>>,
@@ -2201,7 +2208,12 @@ fn wheel_steps_index(
 
 fn select_wheel_steps(state: &mut State, song: &SongData) {
     let chart_type = state.session.play_style.chart_type();
-    let section = state.expanded_pack_name.as_deref();
+    let section = state.expanded_pack_name.as_deref().filter(|_| {
+        !matches!(
+            state.entries.get(state.selected_index),
+            Some(MusicWheelEntry::Random(_))
+        )
+    });
     if let Some(index) = wheel_steps_index(
         song,
         chart_type,
@@ -2231,6 +2243,20 @@ fn rebuild_displayed_entries(state: &mut State) {
         state.policy.interaction.wheel_style,
         state.policy.interaction.hide_inactive_series,
     );
+    if state.policy.interaction.show_random_entries {
+        let pool = state
+            .random_song_pool
+            .get_or_insert_with(RandomSongPool::default);
+        pool.sync(&state.all_entries, state.session.play_style.chart_type());
+        if !pool.is_empty() {
+            state.entries.extend([
+                MusicWheelEntry::Random(WheelRandomAction::Reveal),
+                MusicWheelEntry::Random(WheelRandomAction::Portal),
+            ]);
+        }
+    }
+    state.chance_lock_velocity = None;
+    state.portal_song = None;
     if state.entries.is_empty() {
         state.wheel_offset_from_selection = 0.0;
     }
@@ -2332,6 +2358,7 @@ fn fill_displayed_entries(
                     entries.push(entry.clone());
                 }
             }
+            MusicWheelEntry::Random(_) => entries.push(entry.clone()),
         }
     }
 }
@@ -2341,6 +2368,46 @@ fn selected_song_arc(state: &State) -> Option<Arc<SongData>> {
     match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(song)) => Some(song.clone()),
         _ => None,
+    }
+}
+
+/// The currently playable song, including the stable preview of a Random row.
+#[must_use]
+pub fn focused_song(state: &State) -> Option<&Arc<SongData>> {
+    match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Song(song)) => Some(song),
+        Some(MusicWheelEntry::Random(WheelRandomAction::Portal)) => state.portal_song.as_ref(),
+        _ => None,
+    }
+}
+
+fn choose_random_song(state: &State, action: WheelRandomAction) -> Option<Arc<SongData>> {
+    let session = state.session;
+    let preferred = std::array::from_fn(|side| {
+        session.joined[side].then_some(if side == 1 && session.play_style.is_versus() {
+            state.p2_preferred_difficulty_index
+        } else {
+            state.preferred_difficulty_index
+        })
+    });
+    let section = match action {
+        WheelRandomAction::Portal => state.expanded_pack_name.as_deref(),
+        WheelRandomAction::Reveal => None,
+    };
+    state
+        .random_song_pool
+        .as_ref()?
+        .pick(preferred, section, rand::random())
+        .cloned()
+}
+
+fn prepare_portal_song(state: &mut State) {
+    if state.portal_song.is_some() {
+        return;
+    }
+    if let Some(song) = choose_random_song(state, WheelRandomAction::Portal) {
+        select_wheel_steps(state, &song);
+        state.portal_song = Some(song);
     }
 }
 
@@ -2356,7 +2423,7 @@ fn song_choice(state: &State, song: Arc<SongData>) -> SongSelection {
 }
 
 pub fn selected_song_choice(state: &State) -> Option<SongSelection> {
-    selected_song_arc(state).map(|song| song_choice(state, song))
+    focused_song(state).map(|song| song_choice(state, Arc::clone(song)))
 }
 
 fn reload_selected_song(state: &State) -> Option<ThemeEffect> {
@@ -2423,7 +2490,7 @@ fn close_song_delete_prompt(state: &mut State) {
 /// The song currently highlighted on the music wheel, if the cursor is on a
 /// song (not a pack header). Used to resolve its per-song SMX pad background.
 pub fn highlighted_song(state: &State) -> Option<Arc<SongData>> {
-    selected_song_arc(state)
+    focused_song(state).cloned()
 }
 
 fn difficulty_rows<'a>(
@@ -2487,11 +2554,22 @@ pub(super) fn select_wheel_rows<'a>(
                 title: song.display_title(translated),
                 song_count: None,
                 expanded: false,
+                action: None,
             },
             MusicWheelEntry::PackHeader { name, song_count, .. } => SelectMusicWheelRow {
                 title: name,
                 song_count: Some(*song_count),
                 expanded: is_expanded(entry),
+                action: None,
+            },
+            MusicWheelEntry::Random(action) => SelectMusicWheelRow {
+                title: "",
+                song_count: None,
+                expanded: false,
+                action: Some(match action {
+                    WheelRandomAction::Reveal => SelectMusicWheelAction::RevealSong,
+                    WheelRandomAction::Portal => SelectMusicWheelAction::PreviewedSong,
+                }),
             },
         })
     })
@@ -2514,10 +2592,7 @@ pub fn select_music_view<'a>(
             })
         }
     });
-    let song = match state.entries.get(state.selected_index) {
-        Some(MusicWheelEntry::Song(song)) => Some(song),
-        _ => None,
-    };
+    let song = focused_song(state);
     let play_style = state.session.play_style;
     let charts = immediate_selected_charts(state, play_style);
     let (difficulty_rows, step_indexes) = difficulty_rows(state, song);
@@ -2533,6 +2608,7 @@ pub fn select_music_view<'a>(
     SelectMusicView {
         rows,
         wheel_offset: state.wheel_offset_from_selection,
+        wheel_locked: state.chance_lock_velocity.is_some(),
         selection_beat: selection_anim_beat(state),
         song: song.map(|song| SelectMusicSongView {
             title: song.display_title(translated),
@@ -2599,6 +2675,7 @@ fn group_name_for_song(
                     return current_pack_key.map(Arc::clone);
                 }
             }
+            MusicWheelEntry::Random(_) => {}
         }
     }
     None
@@ -2624,7 +2701,7 @@ fn series_name_for_song(
             MusicWheelEntry::Song(song) if Arc::ptr_eq(song, target_song) => {
                 return current_series.map(Arc::clone);
             }
-            MusicWheelEntry::Song(_) => {}
+            MusicWheelEntry::Song(_) | MusicWheelEntry::Random(_) => {}
         }
     }
     None
@@ -2662,7 +2739,7 @@ fn selected_group_header_for_folder_stats(
             .pack_by_key
             .get(pack_key.as_ref())
             .copied(),
-        MusicWheelEntry::PackHeader { .. } => None,
+        MusicWheelEntry::PackHeader { .. } | MusicWheelEntry::Random(_) => None,
         MusicWheelEntry::Song(song) => state
             .folder_stats
             .pack_by_song
@@ -2674,7 +2751,7 @@ fn selected_group_header_for_folder_stats(
         MusicWheelEntry::PackHeader {
             name, banner_path, ..
         } => Some((pack_index, name.as_ref(), banner_path.as_ref())),
-        MusicWheelEntry::Song(_) => None,
+        MusicWheelEntry::Song(_) | MusicWheelEntry::Random(_) => None,
     }
 }
 
@@ -2715,7 +2792,7 @@ fn build_folder_stats_summary(
         .iter()
         .filter_map(|entry| match entry {
             MusicWheelEntry::Song(song) => Some(song.as_ref()),
-            MusicWheelEntry::PackHeader { .. } => None,
+            MusicWheelEntry::PackHeader { .. } | MusicWheelEntry::Random(_) => None,
         });
     let summary = score_data::folder_stats_summary(songs, target_chart_type, difficulty, |hash| {
         history_score(history, hash)
@@ -2768,7 +2845,7 @@ fn first_header_name(entries: &[MusicWheelEntry]) -> Option<Arc<str>> {
         MusicWheelEntry::PackHeader { name, pack_key, .. } => {
             Some(Arc::clone(pack_key.as_ref().unwrap_or(name)))
         }
-        MusicWheelEntry::Song(_) => None,
+        MusicWheelEntry::Song(_) | MusicWheelEntry::Random(_) => None,
     })
 }
 
@@ -2790,7 +2867,7 @@ fn songs_from_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Arc<SongData>>
         .iter()
         .filter_map(|e| match e {
             MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
+            MusicWheelEntry::PackHeader { .. } | MusicWheelEntry::Random(_) => None,
         })
         .collect()
 }
@@ -3417,6 +3494,7 @@ fn build_favorites_view_entries_with_label(
                     loose_songs.push(song.clone());
                 }
             }
+            MusicWheelEntry::Random(_) => {}
         }
     }
     if current_pack_is_favorited && let Some(header_index) = current_header_index {
@@ -3467,7 +3545,7 @@ fn build_favorites_view_entries_with_label(
 fn favorite_header_name(entries: &[MusicWheelEntry], index: usize) -> &str {
     match entries.get(index) {
         Some(MusicWheelEntry::PackHeader { name, .. }) => name,
-        Some(MusicWheelEntry::Song(_)) | None => "",
+        Some(MusicWheelEntry::Song(_) | MusicWheelEntry::Random(_)) | None => "",
     }
 }
 
@@ -4005,7 +4083,9 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         playlist_views: init_view.playlists,
         history: init_view.history,
         active_playlist_id: None,
-        entries: Vec::with_capacity(cached_sort_capacity),
+        entries: Vec::with_capacity(
+            cached_sort_capacity + 2 * usize::from(interaction.show_random_entries),
+        ),
         wheel_content_generation: next_wheel_content_generation(),
         selected_index: 0,
         selected_steps_index: initial_diff_index,
@@ -4017,6 +4097,9 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         scorebox_cycle_clocks: Default::default(),
         scorebox_fetch_phase: Default::default(),
         wheel_offset_from_selection: 0.0,
+        chance_lock_velocity: None,
+        random_song_pool: None,
+        portal_song: None,
         song_launch_prompt: SongLaunchPrompt::Hidden,
         exit_prompt: ExitPromptState::None,
         song_delete_prompt: None,
@@ -4269,6 +4352,9 @@ pub fn init_placeholder() -> State {
         scorebox_cycle_clocks: Default::default(),
         scorebox_fetch_phase: Default::default(),
         wheel_offset_from_selection: 0.0,
+        chance_lock_velocity: None,
+        random_song_pool: None,
+        portal_song: None,
         song_launch_prompt: SongLaunchPrompt::Hidden,
         exit_prompt: ExitPromptState::None,
         song_delete_prompt: None,
@@ -4436,6 +4522,13 @@ fn music_wheel_change(state: &mut State, dist: isize, sound: WheelChangeSound) {
     if dist == 0 {
         return;
     }
+    if let Some(velocity) = &mut state.chance_lock_velocity {
+        if !matches!(sound, WheelChangeSound::Silent) {
+            *velocity = 7.0 * dist.signum() as f32;
+            queue_sfx(state, "assets/sounds/expand.ogg");
+        }
+        return;
+    }
     state.music_wheel_moved = true;
     let num_entries = state.entries.len();
     if num_entries == 0 {
@@ -4446,7 +4539,11 @@ fn music_wheel_change(state: &mut State, dist: isize, sound: WheelChangeSound) {
     }
 
     let direction = dist.signum();
-    state.selected_index = wheel_entry_index(state.selected_index, direction, num_entries);
+    let index = wheel_entry_index(state.selected_index, direction, num_entries);
+    if index != state.selected_index {
+        state.portal_song = None;
+        state.selected_index = index;
+    }
     state.wheel_offset_from_selection += direction as f32;
     state.time_since_selection_change = 0.0;
     // Audio belongs to the wheel movement, not the final selected index of the
@@ -4534,7 +4631,7 @@ fn maybe_prewarm_replaygain_for_pack(
                     paths.push(path);
                 }
             }
-            MusicWheelEntry::Song(_) => {}
+            MusicWheelEntry::Song(_) | MusicWheelEntry::Random(_) => {}
         }
     }
     state.last_replaygain_prewarmed_pack = Some(pack);
@@ -4946,7 +5043,7 @@ fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::Pla
             );
             finish_favorite_toggle(state, is_now_favorite);
         }
-        Some(MusicWheelEntry::PackHeader { .. }) | None => {}
+        Some(MusicWheelEntry::PackHeader { .. } | MusicWheelEntry::Random(_)) | None => {}
     }
 }
 
@@ -5162,7 +5259,8 @@ fn hide_select_music_menu(state: &mut State) {
 
 #[inline(always)]
 fn try_open_select_music_menu(state: &mut State) -> bool {
-    if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
+    if state.chance_lock_velocity.is_none()
+        && state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
         == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
         && chord_times_are_simultaneous(
             state.menu_chord_left_pressed_at,
@@ -5190,7 +5288,7 @@ fn try_open_select_music_menu_with_select_start(
     select_held: bool,
     pressed: bool,
 ) -> bool {
-    if !pressed || !select_held {
+    if !pressed || !select_held || state.chance_lock_velocity.is_some() {
         return false;
     }
     // Simply Love parity: holding Select and pressing Start opens SortMenu.
@@ -7779,7 +7877,7 @@ fn local_lobby_song_selection(state: &State) -> LocalSongSelection {
 }
 
 fn build_local_lobby_song_info(state: &State) -> Option<lobby_data::LobbySongInfo> {
-    let song = selected_song_arc(state)?;
+    let song = focused_song(state)?;
     lobby_selection::local_song_info(song.as_ref(), local_lobby_song_selection(state))
 }
 
@@ -8537,7 +8635,7 @@ fn selected_pack_sync_paths(state: &State, target_pack_key: &str) -> Vec<PathBuf
             MusicWheelEntry::Song(song) if current_pack_key == Some(target_pack_key) => {
                 paths.push(song.simfile_path.clone());
             }
-            MusicWheelEntry::Song(_) => {}
+            MusicWheelEntry::Song(_) | MusicWheelEntry::Random(_) => {}
         }
     }
     unique_sync_paths(&paths)
@@ -10043,6 +10141,9 @@ fn collapse_expanded_pack(state: &mut State, pack: Arc<str>) {
 }
 
 fn close_open_section_one_level(state: &mut State) {
+    if state.chance_lock_velocity.is_some() {
+        return;
+    }
     if let Some(pack) = state.expanded_pack_name.take() {
         collapse_expanded_pack(state, pack);
         return;
@@ -10076,10 +10177,34 @@ fn close_open_section_one_level(state: &mut State) {
 /// the double-tap Up/Down and Select+Left/Right paths. No-op on pack headers
 /// or when no playable chart exists in that direction.
 fn step_difficulty_for_side(state: &mut State, side: profile_data::PlayerSide, easier: bool) {
-    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+    let play_style = state.session.play_style;
+    match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Random(WheelRandomAction::Reveal)) => {
+            let last = STANDARD_DIFFICULTY_COUNT - 1;
+            let preferred = steps_index_for_side(
+                play_style,
+                side,
+                state.preferred_difficulty_index,
+                state.p2_preferred_difficulty_index,
+            )
+            .min(last);
+            let next = if easier {
+                preferred.saturating_sub(1)
+            } else {
+                (preferred + 1).min(last)
+            };
+            if next != preferred {
+                set_steps_index_for_side(state, play_style, side, next);
+                queue_difficulty_sound(state, easier);
+            }
+            return;
+        }
+        Some(MusicWheelEntry::Random(WheelRandomAction::Portal)) => prepare_portal_song(state),
+        _ => {}
+    }
+    let Some(song) = focused_song(state) else {
         return;
     };
-    let play_style = state.session.play_style;
     let target_chart_type = play_style.chart_type();
     let list_len = song.steps_len(target_chart_type);
     let cur = steps_index_for_side(
@@ -10110,15 +10235,17 @@ fn step_difficulty_for_side(state: &mut State, side: profile_data::PlayerSide, e
     if let Some(new_idx) = new_idx {
         set_steps_index_for_side(state, play_style, side, new_idx);
         state.step_artist_cycle_base = state.session_elapsed;
-        queue_sfx(
-            state,
-            if easier {
-                "assets/sounds/easier.ogg"
-            } else {
-                "assets/sounds/harder.ogg"
-            },
-        );
+        queue_difficulty_sound(state, easier);
     }
+}
+
+fn queue_difficulty_sound(state: &mut State, easier: bool) {
+    let cue = if easier {
+        "assets/sounds/easier.ogg"
+    } else {
+        "assets/sounds/harder.ogg"
+    };
+    queue_sfx(state, cue);
 }
 
 pub fn handle_pad_dir(
@@ -10245,7 +10372,7 @@ fn handle_pad_dir_impl(
                 let is_up = matches!(dir, PadDir::Up);
                 if matches!(
                     state.entries.get(state.selected_index),
-                    Some(MusicWheelEntry::Song(_))
+                    Some(MusicWheelEntry::Song(_) | MusicWheelEntry::Random(_))
                 ) {
                     let now = timestamp;
 
@@ -10326,7 +10453,7 @@ fn handle_pad_dir_p2(
         let is_up = matches!(dir, PadDir::Up);
         if matches!(
             state.entries.get(state.selected_index),
-            Some(MusicWheelEntry::Song(_))
+            Some(MusicWheelEntry::Song(_) | MusicWheelEntry::Random(_))
         ) {
             let now = timestamp;
 
@@ -10390,21 +10517,25 @@ fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
         return ThemeEffect::None;
     }
     match state.entries.get(state.selected_index).cloned() {
-        Some(MusicWheelEntry::Song(song)) => {
-            publish_lobby_confirmed_song_selection(state);
-            queue_sfx(state, "assets/sounds/start.ogg");
-            // ITGmania parity: force sample preview to start on selection finalize.
-            if state.policy.media.show_previews && !state.preview_music_muted {
-                sync_preview_song(
-                    state,
-                    Some(&song),
-                    state.policy.media.preview_loop,
-                    state.policy.media.preview_starts_immediately,
-                );
+        Some(MusicWheelEntry::Song(song)) => confirm_song(state, song),
+        Some(MusicWheelEntry::Random(WheelRandomAction::Portal)) => {
+            prepare_portal_song(state);
+            if let Some(song) = focused_song(state).cloned() {
+                confirm_song(state, song)
+            } else {
+                ThemeEffect::None
             }
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongLaunch(
-                SongLaunchRequest::Confirm(song_choice(state, song)),
-            ))
+        }
+        Some(MusicWheelEntry::Random(WheelRandomAction::Reveal)) => {
+            if let Some(song) = choose_random_song(state, WheelRandomAction::Reveal) {
+                focus_song_from_search(state, &song);
+                select_wheel_steps(state, &song);
+                state.wheel_offset_from_selection = 0.3;
+                state.chance_lock_velocity = Some(0.0);
+                state.wheel_change_sound_handled = true;
+                queue_sfx(state, "assets/sounds/start.ogg");
+            }
+            ThemeEffect::None
         }
         Some(entry @ MusicWheelEntry::PackHeader { .. }) if entry.is_series_header() => {
             let MusicWheelEntry::PackHeader { name, .. } = entry else {
@@ -10494,6 +10625,22 @@ fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
         }
         None => ThemeEffect::None,
     }
+}
+
+fn confirm_song(state: &mut State, song: Arc<SongData>) -> ThemeEffect {
+    publish_lobby_confirmed_song_selection(state);
+    queue_sfx(state, "assets/sounds/start.ogg");
+    if state.policy.media.show_previews && !state.preview_music_muted {
+        sync_preview_song(
+            state,
+            Some(&song),
+            state.policy.media.preview_loop,
+            state.policy.media.preview_starts_immediately,
+        );
+    }
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SongLaunch(
+        SongLaunchRequest::Confirm(song_choice(state, song)),
+    ))
 }
 
 /// Maps a raw keyboard press to a Select Music menu action using the
@@ -10783,6 +10930,9 @@ fn handle_raw_key_event_impl(
     alt_held: bool,
     logo_held: bool,
 ) -> ThemeInputResult {
+    if state.chance_lock_velocity.is_some() {
+        return ThemeInputResult::ignored();
+    }
     if handle_srpg_shop_raw_key(state, key) {
         return ThemeInputResult::consumed(ThemeEffect::None);
     }
@@ -11531,8 +11681,21 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         update_overlay_nav_hold(state);
     }
 
-    let wheel_moving = advance_nav_hold(state, dt);
-    if wheel_moving {
+    let wheel_moving = state.chance_lock_velocity.is_none() && advance_nav_hold(state, dt);
+    if let Some(velocity) = &mut state.chance_lock_velocity
+        && dt > 0.0
+    {
+        let dt = dt.clamp(0.0, 0.1);
+        let offset = state.wheel_offset_from_selection.clamp(-0.3, 0.3);
+        *velocity = (*velocity - 7.0 * offset) * (1.0 - 4.0 * dt);
+        let offset = velocity.mul_add(dt, offset).clamp(-0.3, 0.3);
+        if offset.abs() < 0.01 && velocity.abs() < 0.01 {
+            *velocity = 0.0;
+            state.wheel_offset_from_selection = 0.0;
+        } else {
+            state.wheel_offset_from_selection = offset;
+        }
+    } else if wheel_moving {
         match state.nav_key_held_direction {
             Some(dir) => music_wheel_update_hold_scroll(state, dt, dir),
             None => music_wheel_settle_offset(state, dt),
@@ -11558,10 +11721,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         state.cdtitle_spin_elapsed = 0.0;
         state.cdtitle_anim_elapsed = 0.0;
 
-        if matches!(
-            state.entries.get(state.selected_index),
-            Some(MusicWheelEntry::PackHeader { .. })
-        ) {
+        if focused_song(state).is_none() {
             state.displayed_chart_p1 = None;
             state.displayed_chart_p2 = None;
         }
@@ -11572,10 +11732,14 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         }
     }
 
-    let selected_song_for_cache = match state.entries.get(state.selected_index) {
-        Some(MusicWheelEntry::Song(song)) => Some(song.clone()),
-        _ => None,
-    };
+    if matches!(
+        state.entries.get(state.selected_index),
+        Some(MusicWheelEntry::Random(WheelRandomAction::Portal))
+    ) && allow_gs_fetch_for_selection(state)
+    {
+        prepare_portal_song(state);
+    }
+    let selected_song_for_cache = focused_song(state).cloned();
     if let Some(song) = selected_song_for_cache {
         let play_style = state.session.play_style;
         ensure_chart_cache_for_song(
@@ -11597,10 +11761,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
 
     // Keep banner/CDTitle aligned to the restored wheel selection even while
     // overlays are visible; only preview/GS fetches are paused under overlays.
-    let selected_song = match state.entries.get(state.selected_index) {
-        Some(MusicWheelEntry::Song(song)) => Some(song.clone()),
-        _ => None,
-    };
+    let selected_song = focused_song(state).cloned();
     clear_stale_preview(
         state,
         selected_song.as_ref(),
@@ -11928,7 +12089,15 @@ pub fn refresh_from_song_packs(state: &mut State, song_packs: Vec<SongPack>) {
     refresh_after_reload(state, song_packs);
 }
 
+pub fn release_chance_lock(state: &mut State) {
+    if state.chance_lock_velocity.take().is_some() {
+        state.wheel_offset_from_selection = 0.0;
+        clear_nav_hold(state);
+    }
+}
+
 pub fn reset_preview_after_gameplay(state: &mut State, history: SelectMusicHistoryView) {
+    release_chance_lock(state);
     state.history = history;
     state.folder_stats.clear_summaries();
     let was_recent_sort = state.sort_mode == WheelSortMode::Recent;
@@ -11954,7 +12123,7 @@ pub fn reset_preview_after_gameplay(state: &mut State, history: SelectMusicHisto
 }
 
 pub fn prime_displayed_chart_data(state: &mut State) {
-    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+    let Some(song) = focused_song(state) else {
         state.displayed_chart_p1 = None;
         state.displayed_chart_p2 = None;
         return;
@@ -12050,8 +12219,9 @@ fn format_chart_length_hashed(key: i32) -> Arc<str> {
 
 #[inline(always)]
 fn allow_gs_fetch_for_selection(state: &State) -> bool {
-    state.nav_key_held_direction.is_none()
-        && state.wheel_offset_from_selection.abs() < 0.0001
+    (state.chance_lock_velocity.is_some()
+        || (state.nav_key_held_direction.is_none()
+            && state.wheel_offset_from_selection.abs() < 0.0001))
         && state.time_since_selection_change >= PREVIEW_DELAY_SECONDS
 }
 
@@ -12507,7 +12677,7 @@ const fn solo_runtime_side(
 
 #[inline(always)]
 fn selected_chart_cache_matches(state: &State, play_style: profile_data::PlayStyle) -> bool {
-    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+    let Some(song) = focused_song(state) else {
         return false;
     };
     state
@@ -12521,7 +12691,7 @@ fn immediate_selected_charts(
     state: &State,
     play_style: profile_data::PlayStyle,
 ) -> [Option<&ChartData>; 2] {
-    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+    let Some(song) = focused_song(state) else {
         return [None, None];
     };
     if !selected_chart_cache_matches(state, play_style) {
@@ -13036,7 +13206,9 @@ pub fn push_actors(
                 format_padded_time((total_sec / f64::from(music_rate)) as f32),
             )
         }
-        None => (cached_str_ref(""), cached_str_ref(""), cached_str_ref("")),
+        Some(MusicWheelEntry::Random(_)) | None => {
+            (cached_str_ref(""), cached_str_ref(""), cached_str_ref(""))
+        }
     };
 
     let info_box_children = state
@@ -13835,7 +14007,7 @@ pub fn push_actors(
     }
 
     // Music Wheel
-    let selection_animation_beat = sl_selection_anim_beat(entry_opt, state);
+    let selection_animation_beat = selection_anim_beat(state);
     music_wheel::push(
         actors,
         music_wheel::MusicWheelParams {
@@ -17169,6 +17341,7 @@ mod tests {
                             ..Default::default()
                         },
                         interaction: crate::views::SelectMusicInteractionPolicyView {
+                            show_random_entries: false,
                             song_search_shortcut: KeyCode::KeyQ,
                             ..Default::default()
                         },
@@ -17314,7 +17487,7 @@ mod tests {
             state.audio_playback.music_position_seconds,
         ) as f32;
         assert_eq!(
-            super::sl_selection_anim_beat(state.entries.first(), &state),
+            super::selection_anim_beat(&state),
             expected
         );
         assert!(
@@ -17956,7 +18129,7 @@ mod tests {
                 super::MusicWheelEntry::PackHeader {
                     name, song_count, ..
                 } => Some((name.as_ref(), *song_count)),
-                super::MusicWheelEntry::Song(_) => None,
+                super::MusicWheelEntry::Song(_) | super::MusicWheelEntry::Random(_) => None,
             })
             .collect();
         assert_eq!(
@@ -17985,7 +18158,7 @@ mod tests {
                     .iter()
                     .filter_map(|entry| match entry {
                         super::MusicWheelEntry::Song(song) => Some(song),
-                        super::MusicWheelEntry::PackHeader { .. } => None,
+                        super::MusicWheelEntry::PackHeader { .. } | super::MusicWheelEntry::Random(_) => None,
                     })
                     .collect();
                 assert_eq!(visible_songs.len(), 1, "level {label}");
@@ -18073,7 +18246,7 @@ mod tests {
             .iter()
             .filter_map(|entry| match entry {
                 super::MusicWheelEntry::Song(song) => Some(song.title.as_str()),
-                super::MusicWheelEntry::PackHeader { .. } => None,
+                super::MusicWheelEntry::PackHeader { .. } | super::MusicWheelEntry::Random(_) => None,
             })
             .collect()
     }
@@ -18184,7 +18357,7 @@ mod tests {
             .iter()
             .filter_map(|entry| match entry {
                 super::MusicWheelEntry::PackHeader { name, .. } => Some(name.as_ref()),
-                super::MusicWheelEntry::Song(_) => None,
+                super::MusicWheelEntry::Song(_) | super::MusicWheelEntry::Random(_) => None,
             })
             .collect::<Vec<_>>();
         assert_eq!(headers, ["Pack A", "Pack B"]);
@@ -18259,7 +18432,7 @@ mod tests {
             .iter()
             .filter_map(|entry| match entry {
                 super::MusicWheelEntry::PackHeader { name, .. } => Some(name.as_ref()),
-                super::MusicWheelEntry::Song(_) => None,
+                super::MusicWheelEntry::Song(_) | super::MusicWheelEntry::Random(_) => None,
             })
             .collect::<Vec<_>>();
 
@@ -21117,7 +21290,7 @@ mod tests {
             .iter()
             .filter_map(|entry| match entry {
                 super::MusicWheelEntry::PackHeader { name, .. } => Some(name.as_ref()),
-                super::MusicWheelEntry::Song(_) => None,
+                super::MusicWheelEntry::Song(_) | super::MusicWheelEntry::Random(_) => None,
             })
             .collect();
 
@@ -21162,7 +21335,7 @@ mod tests {
             .iter()
             .filter_map(|entry| match entry {
                 super::MusicWheelEntry::PackHeader { name, .. } => Some(name.as_ref()),
-                super::MusicWheelEntry::Song(_) => None,
+                super::MusicWheelEntry::Song(_) | super::MusicWheelEntry::Random(_) => None,
             })
             .collect();
 

@@ -1099,7 +1099,7 @@ fn wheel_banner_path(entry: Option<&MusicWheelEntry>) -> Option<PathBuf> {
         Some(MusicWheelEntry::PackHeader { banner_path, .. }) => {
             banner_path.as_deref().map(Path::to_path_buf)
         }
-        None => None,
+        Some(MusicWheelEntry::Random(_)) | None => None,
     }
 }
 
@@ -1950,12 +1950,9 @@ fn prepare_music_profile_selection(
             let side = if selected_versus { slot } else { selected_side };
             let selection = retained[side].or_else(|| {
                 selected.guest[side].then(|| {
-                    let first = match state.entries.get(state.selected_index) {
-                        Some(MusicWheelEntry::Song(song)) => song
-                            .best_steps_index(selected.play_style.chart_type(), 0)
-                            .unwrap_or(preferred_difficulties[side]),
-                        _ => preferred_difficulties[side],
-                    };
+                    let first = select_music::focused_song(state)
+                        .and_then(|song| song.best_steps_index(selected.play_style.chart_type(), 0))
+                        .unwrap_or(preferred_difficulties[side]);
                     (first, preferred_difficulties[side])
                 })
             });
@@ -4040,6 +4037,8 @@ impl App {
     }
 
     fn coin_select_music_init_view(&self, mut view: SelectMusicInitView) -> SelectMusicInitView {
+        view.policy.interaction.show_random_entries =
+            self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg;
         let options = config::runtime::get().coin;
         let session = profile::get_session_snapshot();
         let premium_free = matches!(session.play_mode, profile_data::PlayMode::PremiumFree);
@@ -4934,14 +4933,14 @@ impl App {
                             && state.banner_high_quality_requested
                         {
                             match state.entries.get(state.selected_index) {
-                                Some(MusicWheelEntry::Song(song)) => {
-                                    song.banner_path.as_deref()
-                                }
+                                Some(MusicWheelEntry::Song(song)) => song.banner_path.as_deref(),
                                 Some(MusicWheelEntry::PackHeader {
                                     banner_path,
                                     ..
                                 }) => banner_path.as_deref(),
-                                _ => None,
+                                Some(MusicWheelEntry::Random(_)) => select_music::focused_song(state)
+                                    .and_then(|song| song.banner_path.as_deref()),
+                                None => None,
                             }
                         } else {
                             None
@@ -10319,6 +10318,7 @@ impl App {
 
             match prev {
                 CurrentScreen::PlayerOptions => {
+                    select_music::release_chance_lock(&mut self.state.screens.select_music_state);
                     select_music::sync_profile_picker(
                         &mut self.state.screens.select_music_state,
                         crate::local_profiles::picker_view(),
@@ -10372,12 +10372,8 @@ impl App {
                     let desired_steps_index =
                         self.state.screens.select_music_state.selected_steps_index;
 
-                    if let Some(MusicWheelEntry::Song(song)) = self
-                        .state
-                        .screens
-                        .select_music_state
-                        .entries
-                        .get(self.state.screens.select_music_state.selected_index)
+                    if let Some(song) =
+                        select_music::focused_song(&self.state.screens.select_music_state)
                     {
                         let chart_type = profile_session.play_style.chart_type();
                         if song
@@ -10490,86 +10486,40 @@ impl App {
             // render immediately on entry (no initial debounce delay).
             select_music::prime_displayed_chart_data(&mut self.state.screens.select_music_state);
 
+            let state = &self.state.screens.select_music_state;
+            let song = select_music::focused_song(state);
             // Load the selected entry's banner during the fade-in so it appears immediately.
-            let banner_path = wheel_banner_path(
-                self.state
-                    .screens
-                    .select_music_state
-                    .entries
-                    .get(self.state.screens.select_music_state.selected_index),
+            let banner_path = song.map_or_else(
+                || wheel_banner_path(state.entries.get(state.selected_index)),
+                |song| song.banner_path.clone(),
             );
             commands.push(Command::SetBanner(banner_path));
-            let cdtitle_path = match self
-                .state
-                .screens
-                .select_music_state
-                .entries
-                .get(self.state.screens.select_music_state.selected_index)
-            {
-                Some(MusicWheelEntry::Song(song)) => song.cdtitle_path.clone(),
-                _ => None,
-            };
-            commands.push(Command::SetCdTitle(cdtitle_path));
+            commands.push(Command::SetCdTitle(
+                song.and_then(|song| song.cdtitle_path.clone()),
+            ));
 
             // Pre-render the density graph during the fade-in so the panel isn't blank on entry.
-            let chart_to_graph = match self
-                .state
-                .screens
-                .select_music_state
-                .entries
-                .get(self.state.screens.select_music_state.selected_index)
-            {
-                Some(MusicWheelEntry::Song(song)) => {
-                    let chart_type = profile_session.play_style.chart_type();
-                    song.chart_for_steps_index(
-                        chart_type,
-                        self.state.screens.select_music_state.selected_steps_index,
-                    )
-                    .map(|c| DensityGraphSource {
-                        max_nps: c.max_nps,
-                        measure_nps_vec: c.measure_nps_vec.clone(),
-                        measure_seconds_vec: c.measure_seconds_vec.clone(),
-                        first_second: c.first_second,
-                        last_second: song.precise_last_second(),
-                    })
-                }
-                _ => None,
+            let chart_type = profile_session.play_style.chart_type();
+            let chart_to_graph = |steps_index| {
+                let song = song?;
+                let chart = song.chart_for_steps_index(chart_type, steps_index)?;
+                Some(DensityGraphSource {
+                    max_nps: chart.max_nps,
+                    measure_nps_vec: chart.measure_nps_vec.clone(),
+                    measure_seconds_vec: chart.measure_seconds_vec.clone(),
+                    first_second: chart.first_second,
+                    last_second: song.precise_last_second(),
+                })
             };
             commands.push(Command::SetDensityGraph {
                 slot: DensityGraphSlot::SelectMusicP1,
-                chart_opt: chart_to_graph,
+                chart_opt: chart_to_graph(state.selected_steps_index),
             });
 
             if profile_session.play_style.is_versus() {
-                let chart_to_graph_p2 = match self
-                    .state
-                    .screens
-                    .select_music_state
-                    .entries
-                    .get(self.state.screens.select_music_state.selected_index)
-                {
-                    Some(MusicWheelEntry::Song(song)) => {
-                        let chart_type = profile_session.play_style.chart_type();
-                        song.chart_for_steps_index(
-                            chart_type,
-                            self.state
-                                .screens
-                                .select_music_state
-                                .p2_selected_steps_index,
-                        )
-                        .map(|c| DensityGraphSource {
-                            max_nps: c.max_nps,
-                            measure_nps_vec: c.measure_nps_vec.clone(),
-                            measure_seconds_vec: c.measure_seconds_vec.clone(),
-                            first_second: c.first_second,
-                            last_second: song.precise_last_second(),
-                        })
-                    }
-                    _ => None,
-                };
                 commands.push(Command::SetDensityGraph {
                     slot: DensityGraphSlot::SelectMusicP2,
-                    chart_opt: chart_to_graph_p2,
+                    chart_opt: chart_to_graph(state.p2_selected_steps_index),
                 });
             }
 

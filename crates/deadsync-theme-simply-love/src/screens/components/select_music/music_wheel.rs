@@ -731,6 +731,7 @@ pub(crate) fn runtime_slot_requests<'a>(
         let offset = slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
         let list_index = wheel_entry_index(selected_index, offset, entries.len());
         match &entries[list_index] {
+            MusicWheelEntry::Random(_) => MusicWheelSlotRuntimeRequest::Empty,
             MusicWheelEntry::PackHeader {
                 name,
                 pack_key: None,
@@ -946,6 +947,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
             };
 
             match entry {
+                MusicWheelEntry::Random(_) => {}
                 MusicWheelEntry::PackHeader {
                     name,
                     original_index,

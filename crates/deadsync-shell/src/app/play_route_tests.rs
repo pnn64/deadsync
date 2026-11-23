@@ -137,6 +137,8 @@ impl ApplicationHandler for RouteTest {
 }
 
 fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
+    use deadsync_gameplay::music_wheel::WheelRandomAction;
+
     app.on_fade_complete(CurrentScreen::Menu, event_loop);
     settle(app, event_loop, CurrentScreen::Menu);
     for next in [
@@ -151,6 +153,8 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
     let openitg = app.state.screens.menu_state.theme_flag() == ThemeFlag::OpenItg;
+    assert_eq!(actor_tree_has_text(&actors, "CHANCE"), openitg);
+    assert_eq!(actor_tree_has_text(&actors, "RANDOM"), openitg);
     if openitg {
         let font = actors
             .iter()
@@ -172,6 +176,26 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
                         .all(|character| font.glyph_map.contains_key(&character))
                 })
                 .unwrap_or(false)
+        );
+        press(app, event_loop, VirtualAction::p2_right);
+        let wheel = &app.state.screens.select_music_state;
+        assert!(matches!(
+            wheel.entries[wheel.selected_index],
+            MusicWheelEntry::Random(WheelRandomAction::Reveal)
+        ));
+        press(app, event_loop, VirtualAction::p2_start);
+        assert_eq!(
+            app.state.screens.stage_launch.prompt(),
+            deadsync_gameplay::stage_launch::StageLaunchPrompt::Hidden,
+        );
+        assert_eq!(app.state.screens.current_screen, CurrentScreen::SelectMusic);
+        let wheel = &app.state.screens.select_music_state;
+        let revealed_index = wheel.selected_index;
+        assert_eq!(select_music::focused_song(wheel).unwrap().title, SONG_TITLE);
+        press(app, event_loop, VirtualAction::p2_right);
+        assert_eq!(
+            app.state.screens.select_music_state.selected_index,
+            revealed_index
         );
     }
 
@@ -217,6 +241,36 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
     press(app, event_loop, VirtualAction::p2_start);
     settle(app, event_loop, CurrentScreen::SelectMusic);
+    if openitg {
+        for _ in 0..2 {
+            press(app, event_loop, VirtualAction::p2_right);
+        }
+        for _ in 0..16 {
+            menu_frame(app, event_loop);
+        }
+        let wheel = &app.state.screens.select_music_state;
+        assert!(matches!(
+            wheel.entries[wheel.selected_index],
+            MusicWheelEntry::Random(WheelRandomAction::Portal)
+        ));
+        let preview = Arc::clone(select_music::focused_song(wheel).unwrap());
+        press(app, event_loop, VirtualAction::p2_start);
+        assert_eq!(
+            app.state.screens.stage_launch.prompt(),
+            deadsync_gameplay::stage_launch::StageLaunchPrompt::OfferOptions,
+        );
+        settle(app, event_loop, CurrentScreen::Gameplay);
+        assert_eq!(
+            app.state
+                .screens
+                .gameplay_state
+                .as_ref()
+                .unwrap()
+                .song()
+                .simfile_path,
+            preview.simfile_path,
+        );
+    }
 }
 
 fn press(app: &mut App, event_loop: &ActiveEventLoop, action: VirtualAction) {

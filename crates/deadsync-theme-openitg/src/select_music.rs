@@ -12,7 +12,7 @@ use deadlib_present::space::{
 };
 use deadsync_theme::select_music::{
     SELECT_MUSIC_WHEEL_ROWS, SelectCourseItem, SelectCourseView, SelectMusicPlayerView,
-    SelectMusicPrompt, SelectMusicView, SelectMusicWheelRow,
+    SelectMusicPrompt, SelectMusicView, SelectMusicWheelAction, SelectMusicWheelRow,
 };
 use glam::{Mat4, Vec3};
 use std::cell::RefCell;
@@ -132,6 +132,7 @@ pub fn push_select_music_actors(
         &view.rows,
         view.wheel_offset,
         view.selection_beat,
+        view.wheel_locked,
         "NO SONGS",
     );
     push_difficulties(actors, layout, &view);
@@ -247,7 +248,7 @@ fn push_banner(
                     banner::CENTER,
                     0.5,
                     280.0,
-                    shared_text(section.title),
+                    shared_text(wheel_row_title(section)),
                     1.1,
                     opaque(INK),
                 ));
@@ -313,6 +314,7 @@ fn push_wheel(
     rows: &[Option<SelectMusicWheelRow<'_>>; SELECT_MUSIC_WHEEL_ROWS],
     wheel_offset: f32,
     selection_beat: f32,
+    locked: bool,
     empty_text: &'static str,
 ) {
     if rows.iter().all(Option::is_none) {
@@ -339,7 +341,8 @@ fn push_wheel(
         for (layer, index) in order.enumerate() {
             if let (Some(row), Some(view_proj)) = (rows[index], cameras.rows[index]) {
                 actors.push(Actor::CameraPush { view_proj });
-                push_wheel_card(actors, card, row, -90 + 2 * layer as i16);
+                let brightness = if locked && index != center { 0.5 } else { 1.0 };
+                push_wheel_card(actors, card, row, -90 + 2 * layer as i16, brightness);
                 actors.push(Actor::CameraPop);
             }
         }
@@ -357,21 +360,51 @@ fn push_wheel(
     });
 }
 
-fn push_wheel_card(actors: &mut Vec<Actor>, card: Layout, row: SelectMusicWheelRow<'_>, z: i16) {
+fn wheel_row_title(row: SelectMusicWheelRow<'_>) -> &str {
+    match row.action {
+        Some(SelectMusicWheelAction::RevealSong) => "CHANCE",
+        Some(SelectMusicWheelAction::PreviewedSong) => "RANDOM",
+        None => row.title,
+    }
+}
+
+fn push_wheel_card(
+    actors: &mut Vec<Actor>,
+    card: Layout,
+    row: SelectMusicWheelRow<'_>,
+    z: i16,
+    brightness: f32,
+) {
     let [width, height] = WHEEL_CARD_SIZE;
     let section = row.song_count.is_some();
-    let tint = match (section, row.expanded) {
-        (true, true) => [0.22, 0.28, 0.35, 1.0],
-        (true, false) => [0.15, 0.22, 0.30, 1.0],
-        (false, _) => [0.095, 0.145, 0.22, 1.0],
+    let dim = |[r, g, b]: [f32; 3]| [r * brightness, g * brightness, b * brightness, 1.0];
+    let tint = match (row.action.is_some(), section, row.expanded) {
+        (true, _, _) => [0.19, 0.19, 0.24],
+        (_, true, true) => [0.22, 0.28, 0.35],
+        (_, true, false) => [0.15, 0.22, 0.30],
+        _ => [0.095, 0.145, 0.22],
     };
-    actors.push(card.panel(-0.5 * width, -0.5 * height, [width, height - 0.8], tint, z));
-    let (x, max_width, tint) = if section {
-        (109.0, 210.0, opaque(ACCENT))
+    actors.push(card.panel(
+        -0.5 * width,
+        -0.5 * height,
+        [width, height - 0.8],
+        dim(tint),
+        z,
+    ));
+    let (x, align, max_width, tint) = if row.action.is_some() {
+        (47.0, 0.5, 170.0, dim(ACCENT))
+    } else if section {
+        (109.0, 1.0, 210.0, dim(ACCENT))
     } else {
-        (109.0, 221.0, opaque(INK))
+        (109.0, 1.0, 221.0, dim(INK))
     };
-    let mut title = card.text([x, 0.0], 1.0, shared_text(row.title), 0.92, tint);
+    let mut title = card.text(
+        [x, 0.0],
+        align,
+        shared_text(wheel_row_title(row)),
+        0.92,
+        tint,
+    );
     title.maxwidth(max_width);
     title.z(z + 1);
     actors.push(title.build(0));
@@ -381,7 +414,7 @@ fn push_wheel_card(actors: &mut Vec<Actor>, card: Layout, row: SelectMusicWheelR
             1.0,
             TextContent::inline_u32(count.min(u32::MAX as usize) as u32),
             0.65,
-            opaque(MUTED),
+            dim(MUTED),
         );
         count.z(z + 1);
         actors.push(count.build(0));
@@ -615,6 +648,7 @@ pub fn push_select_course_actors(
         &view.rows,
         view.wheel_offset,
         view.selection_beat,
+        false,
         "NO COURSES",
     );
     actors.push(layout.label(
@@ -754,10 +788,12 @@ mod tests {
             title: "Track",
             song_count: None,
             expanded: false,
+            action: None,
         });
         SelectMusicView {
             rows,
             wheel_offset: 0.0,
+            wheel_locked: false,
             selection_beat: 0.0,
             song: Some(SelectMusicSongView {
                 title: "Track",

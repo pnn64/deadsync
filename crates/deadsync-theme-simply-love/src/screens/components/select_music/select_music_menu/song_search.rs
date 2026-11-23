@@ -464,6 +464,7 @@ pub fn build_song_search_index(entries: &[MusicWheelEntry]) -> SongSearchIndex {
                     song: Arc::clone(song),
                 });
             }
+            MusicWheelEntry::Random(_) => {}
         }
     }
 

@@ -1179,6 +1179,7 @@ impl Default for SelectMusicWheelPolicyView {
 pub struct SelectMusicInteractionPolicyView {
     pub wheel_switch_speed: u8,
     pub wheel_style: deadsync_config::theme::SelectMusicWheelStyle,
+    pub show_random_entries: bool,
     pub hide_inactive_series: bool,
     pub initial_sort: deadsync_config::theme::SelectMusicSort,
     pub remember_last_sort: bool,
@@ -1197,6 +1198,7 @@ impl Default for SelectMusicInteractionPolicyView {
         Self {
             wheel_switch_speed: deadsync_config::defaults::DEFAULT_MUSIC_WHEEL_SWITCH_SPEED,
             wheel_style: deadsync_config::theme::SelectMusicWheelStyle::Itg,
+            show_random_entries: false,
             hide_inactive_series: false,
             initial_sort: deadsync_config::theme::SelectMusicSort::Series,
             remember_last_sort: false,

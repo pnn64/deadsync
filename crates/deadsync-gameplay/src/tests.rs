@@ -14629,6 +14629,69 @@ mod tests {
     }
 
     #[test]
+    fn random_song_prefers_joined_difficulties_then_open_section() {
+        use crate::music_wheel::{MusicWheelEntry, RandomSongPool};
+
+        let group = |name: &'static str| MusicWheelEntry::PackHeader {
+            name: Arc::from(name),
+            original_index: 0,
+            banner_path: None,
+            song_count: 1,
+            pack_key: None,
+            parent_series: None,
+        };
+        let song = |title: &str, style: &str, difficulties: &[&str]| {
+            let mut song = test_song(2.0, 2.0);
+            song.title = title.into();
+            song.charts = difficulties
+                .iter()
+                .map(|difficulty| {
+                    let mut chart = test_chart(ArrowStats::default(), 0, false);
+                    chart.chart_type = style.into();
+                    chart.difficulty = (*difficulty).into();
+                    chart
+                })
+                .collect();
+            MusicWheelEntry::Song(Arc::new(song))
+        };
+        let entries = Arc::from([
+            group("Local"),
+            song("Local hard", "dance-single", &["Hard"]),
+            song("Wrong style", "dance-double", &["Hard", "Challenge"]),
+            group("Remote"),
+            song("Both difficulties", "dance-single", &["Hard", "Challenge"]),
+        ]);
+        let mut pool = RandomSongPool::default();
+        pool.sync(&entries, "dance-single");
+        for seed in 0..64 {
+            let pick = |preferred| {
+                pool.pick(preferred, Some("Local"), seed)
+                    .unwrap()
+                    .title
+                    .as_str()
+            };
+            assert_eq!(pick([Some(3), Some(4)]), "Both difficulties");
+            assert_eq!(pick([Some(3), None]), "Local hard");
+            assert_eq!(pick([Some(3), Some(5)]), "Local hard");
+        }
+        pool.sync(&entries, "pump-single");
+        assert!(pool.is_empty());
+        let fallback = Arc::from([
+            song("Tutorial", "dance-single", &["Beginner"]),
+            song("Edit only", "dance-single", &["Edit"]),
+        ]);
+        pool.sync(&fallback, "dance-single");
+        assert_eq!(
+            pool.pick([Some(0), None], None, 0)
+                .unwrap()
+                .title,
+            "Edit only",
+        );
+        pool.sync(&Arc::from(&fallback[..1]), "dance-single");
+        assert_eq!(pool.pick([None, None], None, 0).unwrap().title, "Tutorial");
+    }
+
+    #[test]
     fn versus_song_charts_share_music_with_both_players() {
         use crate::song_launch::{
             SongSelection, change_song_chart, resolve_song_chart_slots, synchronize_song_charts,
