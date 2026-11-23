@@ -130,11 +130,12 @@ selects these widgets once at stage entry. Draws occur inside the existing
 HUD and Lua score proxy layers, with the same profile visibility, physical
 player side, and gameplay state.
 
-The effective `ScreenGameplay` metrics place the life frames at `(24, 270)`
-and `(616, 270)`, with a 272 px bottom-up fill. Score text anchors are
-`(160, 56)` and `(478, 56)` for one-side charts, and `(200, 56)` and
-`(440, 56)` for doubles. The original widget art uses those positions on a
-640×480 canvas centered at wider resolutions. Slide-in timing, animated life
+The effective `ScreenGameplay` metrics place the life frames 24 units in from
+the outside edges at y=270, with a 272-unit bottom-up fill. The frame leaves a
+16-unit inset above the painted area, corresponding to the transparent tip in
+the rotated reference graphic. One-side scores use the screen quarters with
+offsets of −20 for P1 and +18 for P2. Doubles uses offsets of ±140 from screen
+center. Both forms place the score at y=56. Slide-in timing, animated life
 glow, song and stage banners, and specialized score and life modes remain open.
 
 Actor tests cover native and wide layouts, failed life, and EX score tint.
@@ -232,7 +233,14 @@ Each case recorded 600 frames at a 120 FPS cap and saved a gameplay capture.
 | OpenITG | 854×480 | 8.35 ms | 1.10 ms |
 | OpenITG | 640×480 | 8.38 ms | 1.13 ms |
 
-The captures show the bundled noteskin and the distinct HUDs. The OpenITG life
-bar overlaps the left receptor during a hit flash at both sizes. The interactive
-menu-to-Evaluation walkthrough, comparisons against a running reference, and
-distribution checks on other platforms remain open.
+The release captures exposed a life bar overlapping the left receptor. Follow-up
+development captures verified the corrected frame and score positions at 640×480
+with a 4:3 layout and at 854×480 in solo and versus. The frames sit at the outside
+edges and clear the receptor sprite. In 4:3, the hit glow can still reach the
+upper rail.
+
+For two life bars and two scores, nine runs of 200,000 actor builds measured a
+median of 1.34 µs before the correction and 1.33 µs afterward at 640×480. The
+854×480 medians were 1.34 µs and 1.32 µs. The interactive menu-to-Evaluation
+walkthrough, comparisons against a running reference, and distribution checks
+on other platforms remain open.

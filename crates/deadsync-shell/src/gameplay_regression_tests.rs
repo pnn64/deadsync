@@ -5248,7 +5248,7 @@ return Def.ActorFrame{
                             if check_presenters {
                                 let openitg_life = actors.iter().any(|actor| matches!(actor,
                                 Actor::Sprite { offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], z: 90, .. }
-                                    if *offset == [4.0, 113.0] && *w == 40.0 && *h == 314.0
+                                    if *offset == [4.0, 129.0] && *w == 40.0 && *h == 298.0
                             ));
                                 assert_eq!(
                                     openitg_life,

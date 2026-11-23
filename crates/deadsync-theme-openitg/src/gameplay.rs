@@ -3,7 +3,7 @@ use deadlib_present::space::{screen_height, screen_width};
 use deadsync_core::hud_style::{FieldFeedbackStyle, TapFeedbackTween};
 use deadsync_theme::views::{GameplayHud, GameplayLifeView, GameplayScoreView, GameplayTapAtlas};
 
-use crate::presentation::Layout;
+use crate::presentation::{Layout, WIDTH};
 
 pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     standard_life: push_life_bar,
@@ -42,22 +42,23 @@ static FIELD_FEEDBACK: FieldFeedbackStyle = FieldFeedbackStyle {
 };
 
 fn push_life_bar(actors: &mut Vec<Actor>, life: GameplayLifeView) {
-    draw_life_bar(
-        actors,
-        Layout::centered(screen_width(), screen_height()),
-        life,
-    );
-}
-
-fn draw_life_bar(actors: &mut Vec<Actor>, layout: Layout, life: GameplayLifeView) {
-    let x = if life.p2 { 616.0 } else { 24.0 };
+    let width = screen_width();
+    let canvas = Layout::centered(width, screen_height());
+    // ScreenGameplay anchors each bar to the outside edge of its player's side.
+    let (screen_edge, canvas_edge, x) = if life.p2 {
+        (width, WIDTH, WIDTH - 24.0)
+    } else {
+        (0.0, 0.0, 24.0)
+    };
+    let layout = canvas.translated_x(screen_edge - canvas.position(canvas_edge, 0.0)[0]);
     let frame = if life.failed {
         [0.39, 0.23, 0.26, 1.0]
     } else {
         [0.56, 0.65, 0.72, 1.0]
     };
-    actors.push(layout.panel(x - 20.0, 113.0, [40.0, 314.0], frame, 90));
-    actors.push(layout.panel(x - 17.0, 116.0, [34.0, 308.0], [0.07, 0.11, 0.16, 1.0], 91));
+    // The reference frame has a transparent 16 px tip in its rotated orientation.
+    actors.push(layout.panel(x - 20.0, 129.0, [40.0, 298.0], frame, 90));
+    actors.push(layout.panel(x - 17.0, 132.0, [34.0, 292.0], [0.07, 0.11, 0.16, 1.0], 91));
     actors.push(layout.panel(x - 9.0, 134.0, [18.0, 272.0], [0.12, 0.18, 0.23, 1.0], 92));
 
     if !life.failed && life.level > 0.0 {
@@ -88,20 +89,14 @@ fn draw_life_bar(actors: &mut Vec<Actor>, layout: Layout, life: GameplayLifeView
 }
 
 fn push_score(actors: &mut Vec<Actor>, score: GameplayScoreView) {
-    draw_score(
-        actors,
-        Layout::centered(screen_width(), screen_height()),
-        score,
-    );
-}
-
-fn draw_score(actors: &mut Vec<Actor>, layout: Layout, score: GameplayScoreView) {
-    let x = match (score.p2, score.doubles) {
-        (false, false) => 160.0,
-        (false, true) => 200.0,
-        (true, false) => 478.0,
-        (true, true) => 440.0,
+    let width = screen_width();
+    let (shift, offset) = match (score.p2, score.doubles) {
+        (false, false) => (-0.25 * width, -20.0),
+        (false, true) => (0.0, -140.0),
+        (true, false) => (0.25 * width, 18.0),
+        (true, true) => (0.0, 140.0),
     };
+    let layout = Layout::centered(width, screen_height()).translated_x(shift);
     let rgba = if score.ex {
         score.rgba
     } else if score.p2 {
@@ -113,7 +108,7 @@ fn draw_score(actors: &mut Vec<Actor>, layout: Layout, score: GameplayScoreView)
     let whole = centi / 100;
     let fraction = centi % 100;
     if let Some(text) = TextContent::inline_format(format_args!("{whole}.{fraction:02}%")) {
-        let mut label = layout.text([x, 56.0], 0.5, text, 1.1, rgba);
+        let mut label = layout.text([WIDTH * 0.5 + offset, 56.0], 0.5, text, 1.1, rgba);
         label.z(90);
         actors.push(label.build(0));
     }
@@ -123,63 +118,85 @@ fn draw_score(actors: &mut Vec<Actor>, layout: Layout, score: GameplayScoreView)
 mod tests {
     use super::*;
     use deadlib_present::actors::SizeSpec;
+    use deadlib_present::space::{Metrics, with_current_metrics};
 
     #[test]
-    fn standard_life_uses_physical_side_and_bottom_up_fill() {
-        for (width, p2, x) in [(640.0, false, 24.0), (854.0, true, 723.0)] {
-            let layout = Layout::centered(width, 480.0);
-            let life = GameplayLifeView {
-                p2,
-                level: 0.25,
-                failed: false,
-                hot: false,
-                percent_label: Some(25.0),
-            };
-            let mut actors = Vec::new();
-            draw_life_bar(&mut actors, layout, life);
-            assert!(matches!(
-                &actors[3],
-                Actor::Sprite {
-                    offset,
-                    size: [SizeSpec::Px(18.0), SizeSpec::Px(68.0)],
-                    ..
-                } if *offset == [x - 9.0, 338.0]
-            ));
-            assert!(matches!(
-                actors.last(),
-                Some(Actor::Text { offset, content, .. })
-                    if *offset == [x, 415.0] && content.as_str() == "25.0%"
-            ));
+    fn standard_life_anchors_to_screen_edges_and_fills_from_the_bottom() {
+        for width in [640.0, 854.0, 1138.0] {
+            with_current_metrics(Metrics::centered(width, 480.0), || {
+                for (p2, x) in [(false, 24.0), (true, width - 24.0)] {
+                    let life = GameplayLifeView {
+                        p2,
+                        level: 0.25,
+                        failed: false,
+                        hot: false,
+                        percent_label: Some(25.0),
+                    };
+                    let mut actors = Vec::new();
+                    push_life_bar(&mut actors, life);
+                    assert!(matches!(
+                        &actors[0],
+                        Actor::Sprite {
+                            offset,
+                            size: [SizeSpec::Px(40.0), SizeSpec::Px(298.0)],
+                            ..
+                        } if *offset == [x - 20.0, 129.0]
+                    ));
+                    assert!(matches!(
+                        &actors[3],
+                        Actor::Sprite {
+                            offset,
+                            size: [SizeSpec::Px(18.0), SizeSpec::Px(68.0)],
+                            ..
+                        } if *offset == [x - 9.0, 338.0]
+                    ));
+                    assert!(matches!(
+                        actors.last(),
+                        Some(Actor::Text { offset, content, .. })
+                            if *offset == [x, 415.0] && content.as_str() == "25.0%"
+                    ));
 
-            actors.clear();
-            draw_life_bar(
-                &mut actors,
-                layout,
-                GameplayLifeView {
-                    failed: true,
-                    percent_label: None,
-                    ..life
-                },
-            );
-            assert_eq!(actors.len(), 3);
+                    actors.clear();
+                    push_life_bar(
+                        &mut actors,
+                        GameplayLifeView {
+                            failed: true,
+                            percent_label: None,
+                            ..life
+                        },
+                    );
+                    assert_eq!(actors.len(), 3);
+                }
+            });
         }
     }
 
     #[test]
-    fn percentage_uses_stage_score_and_keeps_ex_tint() {
-        let mut actors = Vec::new();
-        let score = GameplayScoreView {
-            p2: true,
-            doubles: true,
-            percent: 98.7899,
-            rgba: [0.2, 0.5, 1.0, 0.65],
-            ex: true,
-        };
-        draw_score(&mut actors, Layout::centered(640.0, 480.0), score);
-        assert!(matches!(
-            actors.as_slice(),
-            [Actor::Text { offset, content, color, .. }]
-                if *offset == [440.0, 56.0] && *color == score.rgba && content.as_str() == "98.78%"
-        ));
+    fn percentage_follows_screen_width_and_keeps_stage_score_and_ex_tint() {
+        for (width, p2, doubles, x) in [
+            (640.0, false, false, 140.0),
+            (640.0, true, false, 498.0),
+            (854.0, false, false, 193.5),
+            (854.0, true, false, 658.5),
+            (854.0, false, true, 287.0),
+            (854.0, true, true, 567.0),
+        ] {
+            with_current_metrics(Metrics::centered(width, 480.0), || {
+                let mut actors = Vec::new();
+                let score = GameplayScoreView {
+                    p2,
+                    doubles,
+                    percent: 98.7899,
+                    rgba: [0.2, 0.5, 1.0, 0.65],
+                    ex: true,
+                };
+                push_score(&mut actors, score);
+                assert!(matches!(
+                    actors.as_slice(),
+                    [Actor::Text { offset, content, color, .. }]
+                        if *offset == [x, 56.0] && *color == score.rgba && content.as_str() == "98.78%"
+                ));
+            });
+        }
     }
 }
