@@ -24,7 +24,7 @@ pub use select_music::{
     WHEEL_BANNER_FADE, WheelBannerFrame, WheelBannerMotion, push_select_course_actors,
     push_select_music_actors,
 };
-pub use system_options::SYSTEM_OPTIONS;
+pub use system_options::OpenItgSystemOptions;
 
 type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;
 

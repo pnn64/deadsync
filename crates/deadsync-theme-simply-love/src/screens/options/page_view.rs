@@ -11,7 +11,7 @@ pub(super) fn push_page(
     actors: &mut Vec<Actor>,
     state: &State,
     assets: &AssetManager,
-    draw: fn(&mut Vec<Actor>, SystemOptionsPage<'_>),
+    draw: &mut dyn FnMut(&mut Vec<Actor>, SystemOptionsPage<'_>),
     screen_phase: SystemOptionsPhase,
 ) {
     let elapsed = || state.submenu_fade_t * state.page_transition_seconds();
@@ -33,6 +33,7 @@ pub(super) fn push_page(
             draw(
                 actors,
                 SystemOptionsPage {
+                    id: 0,
                     title: "OPTIONS",
                     kind: SystemOptionsPageKind::ServiceMenu,
                     selected,
@@ -70,6 +71,7 @@ pub(super) fn push_page(
             draw(
                 actors,
                 SystemOptionsPage {
+                    id: kind as usize + 1,
                     title: submenu_title(state, kind),
                     kind: if kind == SubmenuKind::GraphicsBasic {
                         SystemOptionsPageKind::BasicGraphics

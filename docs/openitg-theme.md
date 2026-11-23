@@ -95,8 +95,16 @@ own anchor while the rows move with the panel.
 The OpenITG service page uses the 0.5 s navigation interval from
 `_options to options`. Settings pages use the 0.3 s panel interval. The same
 phase drives Options entry, exit, and submenu switches. Both layouts use the
-same settings validation and persistence. Native heading fonts and transforms,
-cursor and row tweens, explanation reveals, and modal styling remain open.
+same settings validation and persistence.
+
+The OpenITG layout moves rows and the choice cursor over 150 ms and moves
+the scrollbar thumb over 200 ms. A new input retargets each movement from
+its displayed position. The selection band moves to the destination row at
+once, and the scrollbar follows the selected row through the Done item.
+The durations and retargeting follow `ScreenOptions.cpp`, `OptionRow.cpp`,
+and `DualScrollBar.cpp`. Native cursor artwork, exact cursor widths and
+scrollbar graphics, heading fonts and transforms, explanation reveals,
+and modal styling remain open.
 
 Tests cover the viewport and Done row, prepared values, disabled and
 multiselect rows, an edited volume appearing in the alternate renderer, and
@@ -113,6 +121,13 @@ Timed Vulkan captures at both widths show service entry at 75, 150, 225, and
 the panel moves and that the controller keeps the source page active for
 the mounted duration. The tall early heading can clip above the viewport
 with the current font.
+
+Focus-motion tests cover a second input during a viewport scroll, a horizontal
+choice change, and reset on a new page. Vulkan captures at 640×480 and 854×480
+show the same row, cursor, and thumb positions immediately before and after
+the mid-scroll retarget. The highlight and help switch to the new selection
+at that frame. Basic Graphics captures show the cursor moving between aspect
+ratio values while the new value is active.
 
 At 854×480, nine warm actor-construction runs of 12,000 frames per layout
 measured medians of 32.6 μs for Simply Love and 19.1 μs for OpenITG on the
@@ -134,6 +149,13 @@ measured 19.4–19.6 μs against 19.1–19.2 μs before the change, with 30 acto
 in both cases. Warm composition at 854×480 measured 34.4 μs and 29 draw ops,
 against 31.1 μs and 27 draw ops before the heading shadow. The sampled
 animated frames measured 34.0–34.3 μs with the same 29 draw ops.
+
+The focus tweens measured 19.7 μs for steady service actor construction
+at 854×480, compared with 19.3–19.4 μs before this change. A stress case
+retargeting the viewport every 75 ms measured 23.3 μs for actor construction.
+Putting the cursor on the existing marker layer reduced steady composition
+from 30 to 28 draw ops in the layer experiment. The final build measured
+33.4 μs and 28 draw ops, compared with 33.8 μs and 29 draw ops before this change.
 
 ## Player Options
 

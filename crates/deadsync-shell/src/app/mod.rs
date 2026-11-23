@@ -630,6 +630,7 @@ pub struct ScreensState {
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor,
     options_state: options::State,
+    openitg_system_options: Option<deadsync_theme_openitg::OpenItgSystemOptions>,
     content_browser_state: content_browser::State,
     credits_state: credits::State,
     manage_local_profiles_state: manage_local_profiles::State,
@@ -1188,13 +1189,16 @@ fn options_init_view(
     bookkeeping: crate::coin::Bookkeeping,
     theme: config::theme::ThemeFlag,
 ) -> OptionsInitView {
-    let renderer = (theme == config::theme::ThemeFlag::OpenItg)
-        .then_some(&deadsync_theme_openitg::SYSTEM_OPTIONS);
+    let openitg = theme == config::theme::ThemeFlag::OpenItg;
     OptionsInitView {
         config: config::runtime::get(),
-        split_graphics: theme == config::theme::ThemeFlag::OpenItg,
-        service_order: renderer.map_or(&[], |renderer| renderer.service_order),
-        page_timing: renderer.map(|renderer| renderer.timing),
+        split_graphics: openitg,
+        service_order: if openitg {
+            deadsync_theme_openitg::OpenItgSystemOptions::SERVICE_ORDER
+        } else {
+            &[]
+        },
+        page_timing: openitg.then_some(deadsync_theme_openitg::OpenItgSystemOptions::TIMING),
         judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog(
             ActiveTheme::JUDGMENT_PRESET,
         ))
@@ -1324,6 +1328,8 @@ impl ScreensState {
             gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor::default(),
             gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor::default(),
             options_state,
+            openitg_system_options: (theme == config::theme::ThemeFlag::OpenItg)
+                .then(deadsync_theme_openitg::OpenItgSystemOptions::default),
             content_browser_state,
             credits_state,
             manage_local_profiles_state,
@@ -5431,6 +5437,9 @@ impl App {
     }
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
+        if let Some(presentation) = &mut self.state.screens.openitg_system_options {
+            presentation.reset();
+        }
         let theme = self.state.screens.menu_state.theme_flag();
         if from == CurrentScreen::OverscanAdjustment && theme == config::theme::ThemeFlag::OpenItg {
             options::open_graphics_submenu(&mut self.state.screens.options_state);
@@ -7873,9 +7882,8 @@ impl App {
                     change.ffmpeg,
                     change.workshop,
                 );
-                let (renderer, overlay_alpha) = if self.state.screens.menu_state.theme_flag()
-                    == config::theme::ThemeFlag::OpenItg
-                {
+                let options_state = &self.state.screens.options_state;
+                if let Some(presentation) = &mut self.state.screens.openitg_system_options {
                     use deadsync_theme::views::SystemOptionsPhase;
 
                     let (phase, overlay_alpha) = match self.state.shell.transition {
@@ -7891,18 +7899,25 @@ impl App {
                             1.0 - (elapsed / duration).clamp(0.0, 1.0),
                         ),
                     };
-                    (Some((&deadsync_theme_openitg::SYSTEM_OPTIONS, phase)), overlay_alpha)
+                    presentation.with_renderer(phase, arrow_effect_time_s, |renderer| {
+                        options::push_actors_with_layout(
+                            &mut actors,
+                            options_state,
+                            &self.asset_manager,
+                            overlay_alpha,
+                            visual_policy,
+                            Some(renderer),
+                        );
+                    });
                 } else {
-                    (None, screen_alpha_multiplier)
-                };
-                options::push_actors_with_layout(
-                    &mut actors,
-                    &self.state.screens.options_state,
-                    &self.asset_manager,
-                    overlay_alpha,
-                    visual_policy,
-                    renderer,
-                );
+                    options::push_actors(
+                        &mut actors,
+                        options_state,
+                        &self.asset_manager,
+                        screen_alpha_multiplier,
+                        visual_policy,
+                    );
+                }
             }
             CurrentScreen::ContentBrowser => content_browser::push_actors(
                 &mut actors,

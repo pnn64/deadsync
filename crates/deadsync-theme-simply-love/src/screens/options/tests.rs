@@ -2927,25 +2927,7 @@ fn volume_rows_emit_shell_request_before_feedback_sound() {
 
 #[test]
 fn alternate_service_page_reads_live_choices_and_yields_to_reload() {
-    use deadsync_theme::views::{
-        SystemOptionsPage, SystemOptionsPhase, SystemOptionsRenderer, SystemOptionsTiming,
-    };
-
-    let renderer = SystemOptionsRenderer {
-        service_order: &[],
-        timing: SystemOptionsTiming {
-            service_seconds: SUBMENU_FADE_DURATION,
-            settings_seconds: SUBMENU_FADE_DURATION,
-        },
-        background: |actors| actors.push(act!(text: font("miso"): settext("SERVICE BACKGROUND"))),
-        page: |actors, page: SystemOptionsPage<'_>| {
-            assert_eq!(page.title, "SOUND OPTIONS");
-            let row = (page.row)(page.selected).expect("focused system options row");
-            let values = row.choices.expect("master volume value");
-            let value = Arc::clone(&values[row.selected_choice]);
-            actors.push(act!(text: font("miso"): settext(value)));
-        },
-    };
+    use deadsync_theme::views::{SystemOptionsPage, SystemOptionsPhase, SystemOptionsRenderer};
     let assets = AssetManager::new();
     let mut state = init_with_audio(AudioOptionsView {
         master_volume: 50,
@@ -2956,13 +2938,26 @@ fn alternate_service_page_reads_live_choices_and_yields_to_reload() {
 
     let render = |state: &State| {
         let mut actors = Vec::new();
+        let mut draw = |actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>| {
+            assert_eq!(page.title, "SOUND OPTIONS");
+            let row = (page.row)(page.selected).expect("focused system options row");
+            let values = row.choices.expect("master volume value");
+            let value = Arc::clone(&values[row.selected_choice]);
+            actors.push(act!(text: font("miso"): settext(value)));
+        };
         push_actors_with_layout(
             &mut actors,
             state,
             &assets,
             1.0,
             crate::views::SimplyLoveVisualPolicyView::default(),
-            Some((&renderer, SystemOptionsPhase::Steady)),
+            Some(SystemOptionsRenderer {
+                phase: SystemOptionsPhase::Steady,
+                background: |actors| {
+                    actors.push(act!(text: font("miso"): settext("SERVICE BACKGROUND")));
+                },
+                page: &mut draw,
+            }),
         );
         actors
     };
@@ -3000,7 +2995,7 @@ fn alternate_page_motion_uses_elapsed_seconds_and_waits_for_mounted_timing() {
         &mut Vec::new(),
         &state,
         &assets,
-        |_, page| assert_eq!(page.phase, SystemOptionsPhase::Leaving(0.25)),
+        &mut |_, page| assert_eq!(page.phase, SystemOptionsPhase::Leaving(0.25)),
         SystemOptionsPhase::Steady,
     );
     step(&mut state, 0.25);
@@ -3010,7 +3005,7 @@ fn alternate_page_motion_uses_elapsed_seconds_and_waits_for_mounted_timing() {
         &mut Vec::new(),
         &state,
         &assets,
-        |_, page| assert_eq!(page.phase, SystemOptionsPhase::Entering(0.15)),
+        &mut |_, page| assert_eq!(page.phase, SystemOptionsPhase::Entering(0.15)),
         SystemOptionsPhase::Steady,
     );
     step(&mut state, 0.15);

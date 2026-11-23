@@ -641,10 +641,13 @@ service menu order through that contract. The controller uses the same tool
 requests for direct and nested input launchers. The shell uses the originating
 page to restore service-list focus when a direct tool closes. Options uses the
 mounted theme's transition durations and passes elapsed time to its renderer.
-The renderer owns the panel and heading motion. OpenITG's basic and
-advanced Graphics pages share the same pending display settings as the combined
-Simply Love editor. The controller emits one graphics request when the user
-leaves Graphics. The shell applies it through the shared graphics change plan.
+The renderer owns the panel, heading, and focus motion. Its retained row
+positions are keyed by the controller's page and row order. The shell
+passes the frame clock and resets presentation on Options entry.
+OpenITG's basic and advanced Graphics pages share the same pending display
+settings as the combined Simply Love editor. The controller emits one graphics
+request when the user leaves Graphics. The shell applies it through the shared
+graphics change plan.
 The music wheel shares the game's catalog entries and circular index, and both
 layouts use the same prepared difficulty window. The alternate base layout
 borrows song, chart, player, banner, and preview beat data from the existing

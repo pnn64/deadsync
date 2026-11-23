@@ -540,15 +540,12 @@ pub fn push_actors_with_layout(
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
-    renderer: Option<(
-        &deadsync_theme::views::SystemOptionsRenderer<Actor>,
-        deadsync_theme::views::SystemOptionsPhase,
-    )>,
+    renderer: Option<deadsync_theme::views::SystemOptionsRenderer<'_, Actor>>,
 ) {
     actors.reserve(320);
 
     /* -------------------------- HEART BACKGROUND -------------------------- */
-    if let Some((renderer, _)) = renderer {
+    if let Some(renderer) = &renderer {
         (renderer.background)(actors);
     } else {
         state.bg.push(
@@ -564,8 +561,8 @@ pub fn push_actors_with_layout(
         );
     }
 
-    let page_transition = renderer.is_some_and(|(_, phase)| {
-        !matches!(phase, deadsync_theme::views::SystemOptionsPhase::Steady)
+    let page_transition = renderer.as_ref().is_some_and(|renderer| {
+        !matches!(renderer.phase, deadsync_theme::views::SystemOptionsPhase::Steady)
     });
     if alpha_multiplier <= 0.0 && !page_transition {
         return;
@@ -633,8 +630,8 @@ pub fn push_actors_with_layout(
     }
 
     let mut ui_start = actors.len();
-    if let Some((renderer, phase)) = renderer {
-        super::page_view::push_page(actors, state, asset_manager, renderer.page, phase);
+    if let Some(renderer) = renderer {
+        super::page_view::push_page(actors, state, asset_manager, renderer.page, renderer.phase);
         if !page_transition {
             for actor in &mut actors[ui_start..] {
                 actor.mul_alpha(alpha_multiplier);

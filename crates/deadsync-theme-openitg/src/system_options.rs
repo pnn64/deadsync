@@ -7,8 +7,18 @@ use deadsync_theme::views::{
 
 use crate::presentation::{ACCENT, INK, Layout, quad};
 
-pub const SYSTEM_OPTIONS: SystemOptionsRenderer<Actor> = SystemOptionsRenderer {
-    service_order: &[
+#[derive(Default)]
+pub struct OpenItgSystemOptions {
+    page_id: Option<usize>,
+    first: usize,
+    rows: Vec<LinearMotion<2>>,
+    rows_move_until: f64,
+    cursor: Option<LinearMotion<2>>,
+    thumb: LinearMotion<1>,
+}
+
+impl OpenItgSystemOptions {
+    pub const SERVICE_ORDER: &'static [SystemOptionsServiceRow] = &[
         SystemOptionsServiceRow::Arcade,
         SystemOptionsServiceRow::System,
         SystemOptionsServiceRow::Graphics,
@@ -17,16 +27,102 @@ pub const SYSTEM_OPTIONS: SystemOptionsRenderer<Actor> = SystemOptionsRenderer {
         SystemOptionsServiceRow::TestInput,
         SystemOptionsServiceRow::ConfigureMappings,
         SystemOptionsServiceRow::ReloadSongsCourses,
-    ],
-    timing: SystemOptionsTiming {
+    ];
+    pub const TIMING: SystemOptionsTiming = SystemOptionsTiming {
         service_seconds: 0.5,
         settings_seconds: PANEL_SECONDS,
-    },
-    background: push_background,
-    page: push_page,
-};
+    };
+
+    /// Start a fresh Options visit while retaining the row allocation.
+    pub fn reset(&mut self) {
+        self.page_id = None;
+    }
+
+    pub fn with_renderer<R>(
+        &mut self,
+        phase: SystemOptionsPhase,
+        now_seconds: f64,
+        draw: impl FnOnce(SystemOptionsRenderer<'_, Actor>) -> R,
+    ) -> R {
+        let mut page = |actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>| {
+            self.push_page(actors, page, now_seconds);
+        };
+        draw(SystemOptionsRenderer {
+            phase,
+            background: push_background,
+            page: &mut page,
+        })
+    }
+
+    fn retarget_rows(&mut self, page: &SystemOptionsPage<'_>, first: usize, end: usize, now: f64) {
+        let progress = page.selected as f32 / page.row_count.max(1) as f32;
+        if self.page_id != Some(page.id) || self.rows.len() != page.row_count + 1 {
+            self.page_id = Some(page.id);
+            self.rows
+                .resize(page.row_count + 1, LinearMotion::default());
+            for (index, row) in self.rows.iter_mut().enumerate() {
+                *row = LinearMotion::at(row_destination(page, first, end, index));
+            }
+            self.rows_move_until = now;
+            self.cursor = None;
+            self.thumb = LinearMotion::at([progress]);
+        } else if self.first != first {
+            for (index, row) in self.rows.iter_mut().enumerate() {
+                row.retarget(row_destination(page, first, end, index), now, ROW_SECONDS);
+            }
+            self.rows_move_until = now + ROW_SECONDS;
+        }
+        self.first = first;
+        self.thumb.retarget([progress], now, SCROLLBAR_SECONDS);
+    }
+}
+
+#[derive(Clone, Copy)]
+struct LinearMotion<const N: usize> {
+    from: [f32; N],
+    target: [f32; N],
+    started: f64,
+}
+
+impl<const N: usize> Default for LinearMotion<N> {
+    fn default() -> Self {
+        Self::at([0.0; N])
+    }
+}
+
+impl<const N: usize> LinearMotion<N> {
+    const fn at(target: [f32; N]) -> Self {
+        Self {
+            from: target,
+            target,
+            started: 0.0,
+        }
+    }
+
+    fn sample(self, now: f64, duration: f64) -> [f32; N] {
+        let elapsed = now - self.started;
+        if elapsed >= duration || self.from == self.target {
+            return self.target;
+        }
+        let t = (elapsed.max(0.0) / duration) as f32;
+        std::array::from_fn(|index| {
+            (self.target[index] - self.from[index]).mul_add(t, self.from[index])
+        })
+    }
+
+    fn retarget(&mut self, target: [f32; N], now: f64, duration: f64) {
+        if self.target != target {
+            self.from = self.sample(now, duration);
+            self.target = target;
+            self.started = now;
+        }
+    }
+}
 
 const ROWS_SHOWN: usize = 8;
+const ROW_SECONDS: f64 = 0.15;
+const CURSOR_SECONDS: f64 = 0.15;
+const SCROLLBAR_SECONDS: f64 = 0.2;
 const PANEL_SECONDS: f32 = 0.3;
 const SERVICE_HEADER_ENTRY_SECONDS: f32 = 0.3;
 const SERVICE_HEADER_EXIT_SECONDS: f32 = 0.2;
@@ -47,6 +143,30 @@ const MUTED: [f32; 4] = [0.76, 0.66, 0.67, 1.0];
 const DIM: [f32; 4] = [0.55, 0.46, 0.48, 1.0];
 const AMBER: [f32; 4] = [ACCENT[0], ACCENT[1], ACCENT[2], 1.0];
 const WHITE: [f32; 4] = [INK[0], INK[1], INK[2], 1.0];
+
+fn row_destination(
+    page: &SystemOptionsPage<'_>,
+    first: usize,
+    end: usize,
+    index: usize,
+) -> [f32; 2] {
+    if index == page.row_count {
+        return [DONE_Y, if end == page.row_count { 1.0 } else { 0.0 }];
+    }
+    if index < first {
+        return [FIRST_ROW_Y - ROW_PITCH * 0.5, 0.0];
+    }
+    if index >= end {
+        return [FIRST_ROW_Y + ROW_PITCH * (ROWS_SHOWN as f32 - 0.5), 0.0];
+    }
+    let slot = index - first;
+    let slot = if page.kind == SystemOptionsPageKind::BasicGraphics {
+        BASIC_GRAPHICS_SLOTS.get(slot).copied().unwrap_or(slot)
+    } else {
+        slot
+    };
+    [ROW_PITCH.mul_add(slot as f32, FIRST_ROW_Y), 1.0]
+}
 
 fn push_background(actors: &mut Vec<Actor>) {
     let (width, height) = (screen_width(), screen_height());
@@ -97,82 +217,139 @@ fn push_service_header(actors: &mut Vec<Actor>, layout: Layout, phase: SystemOpt
     actors.push(text.build(0));
 }
 
-fn push_page(actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>) {
-    let width = screen_width();
-    let origin = Layout::centered(width, screen_height());
-    let slide = match page.phase {
-        SystemOptionsPhase::Steady => 0.0,
-        SystemOptionsPhase::Entering(elapsed) => {
-            -(1.0 - (elapsed / PANEL_SECONDS).clamp(0.0, 1.0)).powi(2)
+impl OpenItgSystemOptions {
+    fn push_page(&mut self, actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>, now: f64) {
+        let width = screen_width();
+        let origin = Layout::centered(width, screen_height());
+        let slide = match page.phase {
+            SystemOptionsPhase::Steady => 0.0,
+            SystemOptionsPhase::Entering(elapsed) => {
+                -(1.0 - (elapsed / PANEL_SECONDS).clamp(0.0, 1.0)).powi(2)
+            }
+            SystemOptionsPhase::Leaving(elapsed) => {
+                (elapsed / PANEL_SECONDS).clamp(0.0, 1.0).powi(2)
+            }
+        };
+        if slide.abs() >= 1.0 {
+            return;
         }
-        SystemOptionsPhase::Leaving(elapsed) => (elapsed / PANEL_SECONDS).clamp(0.0, 1.0).powi(2),
-    };
-    if slide.abs() >= 1.0 {
-        return;
-    }
-    let layout = origin.translated_x(slide * width);
-    push_panel(actors, layout);
-    if page.kind == SystemOptionsPageKind::ServiceMenu {
-        push_service_header(actors, origin, page.phase);
-    } else {
-        actors.push(layout.bounded_label(
-            [36.0, 38.0],
-            0.0,
-            568.0,
-            page.title.into(),
-            1.55,
-            WHITE,
-        ));
-    }
+        let layout = origin.translated_x(slide * width);
+        push_panel(actors, layout);
+        if page.kind == SystemOptionsPageKind::ServiceMenu {
+            push_service_header(actors, origin, page.phase);
+        } else {
+            actors.push(layout.bounded_label(
+                [36.0, 38.0],
+                0.0,
+                568.0,
+                page.title.into(),
+                1.55,
+                WHITE,
+            ));
+        }
 
-    let end_offset = page.row_count.saturating_sub(ROWS_SHOWN);
-    let first = page.selected.saturating_sub(ROWS_SHOWN / 2).min(end_offset);
-    let end = (first + ROWS_SHOWN).min(page.row_count);
-    for index in first..end {
-        if let Some(row) = (page.row)(index) {
-            let slot = index - first;
-            let slot = if page.kind == SystemOptionsPageKind::BasicGraphics {
-                BASIC_GRAPHICS_SLOTS.get(slot).copied().unwrap_or(slot)
+        let end_offset = page.row_count.saturating_sub(ROWS_SHOWN);
+        let first = page.selected.saturating_sub(ROWS_SHOWN / 2).min(end_offset);
+        let end = (first + ROWS_SHOWN).min(page.row_count);
+        self.retarget_rows(&page, first, end, now);
+        let focus_y = self.rows[page.selected].target[0];
+        push_row_band(actors, layout, focus_y, true);
+        let moving = now < self.rows_move_until;
+        let range = if moving {
+            0..page.row_count
+        } else {
+            first..end
+        };
+        let mut cursor_target = None;
+        for index in range {
+            let (y, alpha) = if moving {
+                let [y, alpha] = self.rows[index].sample(now, ROW_SECONDS);
+                (y, alpha)
             } else {
-                slot
+                (self.rows[index].target[0], 1.0)
             };
-            let y = slot as f32 * ROW_PITCH + FIRST_ROW_Y;
-            push_row(actors, layout, y, &row, index == page.selected);
+            let focused = index == page.selected;
+            if alpha <= 0.0 && !focused {
+                continue;
+            }
+            if let Some(row) = (page.row)(index) {
+                let row_start = actors.len();
+                if !focused || y != focus_y {
+                    push_row_band(actors, layout, y, false);
+                }
+                let cursor_x = push_row(actors, layout, y, &row, focused);
+                if focused && !row.disabled {
+                    cursor_target = Some([cursor_x, focus_y]);
+                }
+                if alpha < 1.0 {
+                    for actor in &mut actors[row_start..] {
+                        actor.mul_alpha(alpha);
+                    }
+                }
+            }
         }
-    }
-    if end == page.row_count {
-        let focused = page.selected == page.row_count;
-        push_row_band(actors, layout, DONE_Y, focused);
-        actors.push(layout.label(
-            [320.0, DONE_Y],
-            0.5,
-            "DONE".into(),
-            1.0,
-            if focused { WHITE } else { MUTED },
-        ));
-    }
-    if end_offset > 0 {
-        let track_height = 240.0;
-        let thumb_height = (track_height * ROWS_SHOWN as f32 / page.row_count as f32).max(16.0);
-        let thumb_offset = (track_height - thumb_height) * first as f32 / end_offset as f32;
-        let top = 122.0;
-        actors.push(layout.panel(33.0, top, [2.0, track_height], STROKE, -15));
-        actors.push(layout.panel(33.0, top + thumb_offset, [2.0, thumb_height], AMBER, -14));
-    }
-    if let Some(text) = page.description {
-        let height = if page.detail.is_some() { 22.0 } else { 40.0 };
-        actors.push(layout.paragraph([54.0, 381.0], [548.0, height], text.into(), 0.86, WHITE));
-    }
-    if let Some(text) = page.detail {
-        actors.push(layout.paragraph([54.0, 405.0], [548.0, 19.0], text.into(), 0.86, MUTED));
+        let focused_done = page.selected == page.row_count;
+        let [_, done_alpha] = self.rows[page.row_count].sample(now, ROW_SECONDS);
+        if done_alpha > 0.0 || focused_done {
+            let done_start = actors.len();
+            if !focused_done {
+                push_row_band(actors, layout, DONE_Y, false);
+            }
+            actors.push(layout.label(
+                [320.0, DONE_Y],
+                0.5,
+                "DONE".into(),
+                1.0,
+                if focused_done { WHITE } else { MUTED },
+            ));
+            if done_alpha < 1.0 {
+                for actor in &mut actors[done_start..] {
+                    actor.mul_alpha(done_alpha);
+                }
+            }
+            if focused_done {
+                cursor_target = Some([312.5, DONE_Y]);
+            }
+        }
+        if let Some(target) = cursor_target {
+            let cursor = self.cursor.get_or_insert(LinearMotion::at(target));
+            cursor.retarget(target, now, CURSOR_SECONDS);
+            let [x, y] = cursor.sample(now, CURSOR_SECONDS);
+            actors.push(layout.panel(x, y + 8.0, [15.0, 2.0], AMBER, -15));
+        } else {
+            self.cursor = None;
+        }
+        if end_offset > 0 {
+            let track_height = 240.0;
+            let thumb_height = 16.0;
+            let [percent] = self.thumb.sample(now, SCROLLBAR_SECONDS);
+            let thumb_offset = (track_height - thumb_height) * percent;
+            let top = 122.0;
+            actors.push(layout.panel(33.0, top, [2.0, track_height], STROKE, -15));
+            actors.push(layout.panel(33.0, top + thumb_offset, [2.0, thumb_height], AMBER, -14));
+        }
+        if let Some(text) = page.description {
+            let height = if page.detail.is_some() { 22.0 } else { 40.0 };
+            actors.push(layout.paragraph([54.0, 381.0], [548.0, height], text.into(), 0.86, WHITE));
+        }
+        if let Some(text) = page.detail {
+            actors.push(layout.paragraph([54.0, 405.0], [548.0, 19.0], text.into(), 0.86, MUTED));
+        }
     }
 }
 
 fn push_row_band(actors: &mut Vec<Actor>, layout: Layout, y: f32, focused: bool) {
     let fill = if focused { FOCUSED_ROW } else { ROW };
-    actors.push(layout.panel(35.0, y - 12.0, [561.0, 24.0], fill, -17));
+    let height = if focused && y == DONE_Y {
+        24.0 * (30.0 / 27.0)
+    } else {
+        24.0
+    };
+    let top = y - height * 0.5;
+    let z = if focused { -16 } else { -17 };
+    actors.push(layout.panel(35.0, top, [561.0, height], fill, z));
     if focused {
-        actors.push(layout.panel(35.0, y - 12.0, [3.0, 24.0], AMBER, -16));
+        actors.push(layout.panel(35.0, top, [3.0, height], AMBER, -15));
     }
 }
 
@@ -182,8 +359,7 @@ fn push_row(
     y: f32,
     row: &SystemOptionsRow,
     focused: bool,
-) {
-    push_row_band(actors, layout, y, focused);
+) -> f32 {
     let color = if row.disabled {
         DIM
     } else if focused {
@@ -205,6 +381,7 @@ fn push_row(
         0.97,
         color,
     ));
+    let mut cursor_x = label_x;
     if let Some(choices) = choices {
         let selected = row.selected_choice.min(choices.len() - 1);
         let value_limit = if row.disabled { 534.0 } else { VALUE_END_X };
@@ -216,6 +393,7 @@ fn push_row(
                 .iter()
                 .all(|choice| (choice.chars().count() as f32).mul_add(9.0, 12.0) <= cell_width);
         if fits_inline {
+            cursor_x = (selected as f32).mul_add(cell_width, VALUE_X);
             for (index, choice) in choices.iter().enumerate() {
                 let x = (index as f32).mul_add(cell_width, VALUE_X);
                 let enabled = match row.enabled_choices {
@@ -237,13 +415,8 @@ fn push_row(
                     0.9,
                     color,
                 ));
-                if enabled || (focused && index == selected && !row.disabled) {
-                    let mark = if focused && index == selected {
-                        AMBER
-                    } else {
-                        STROKE
-                    };
-                    actors.push(layout.panel(x, y + 8.0, [15.0, 2.0], mark, -15));
+                if enabled && !(focused && index == selected && !row.disabled) {
+                    actors.push(layout.panel(x, y + 8.0, [15.0, 2.0], STROKE, -15));
                 }
             }
         } else {
@@ -252,6 +425,7 @@ fn push_row(
                 actors.push(layout.panel(VALUE_X, y - 6.0, [14.0, 12.0], tint, -15));
                 value_x += 22.0;
             }
+            cursor_x = value_x;
             actors.push(layout.bounded_label(
                 [value_x, y],
                 0.0,
@@ -279,12 +453,11 @@ fn push_row(
                 actors.push(layout.label([VALUE_END_X, y], 0.5, ">".into(), 0.8, AMBER));
             }
         }
-    } else if focused && !row.disabled {
-        actors.push(layout.label([VALUE_X - 17.0, y], 0.5, ">".into(), 0.8, AMBER));
     }
     if row.disabled {
         actors.push(layout.label([582.0, y], 1.0, "LOCKED".into(), 0.73, DIM));
     }
+    cursor_x
 }
 
 fn choice_enabled(mask: u64, index: usize) -> bool {
@@ -317,6 +490,7 @@ mod tests {
         selected: usize,
     ) -> SystemOptionsPage<'a> {
         SystemOptionsPage {
+            id: 0,
             title: "OPTIONS",
             kind: SystemOptionsPageKind::ServiceMenu,
             selected,
@@ -335,6 +509,10 @@ mod tests {
                     if content.as_str() == text && *offset == position
             )
         })
+    }
+
+    fn push_page(actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>) {
+        OpenItgSystemOptions::default().push_page(actors, page, 0.0);
     }
 
     #[test]
@@ -444,6 +622,98 @@ mod tests {
             push_page(&mut actors, page(&row, 18, 18));
             assert_eq!(*visited.borrow(), (10..18).collect::<Vec<_>>());
             assert!(has_text(&actors, "DONE", [320.0, 353.0]));
+        });
+    }
+
+    #[test]
+    fn fast_repeats_retarget_rows_cursor_and_thumb_from_the_current_frame() {
+        with_current_metrics(Metrics::centered(640.0, 480.0), || {
+            let labels = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+            let row = |index: usize| Some(action(labels[index]));
+            let mut visual = OpenItgSystemOptions::default();
+            let mut actors = Vec::new();
+            let mut frame = |selected: usize, now: f64| {
+                actors.clear();
+                visual.push_page(&mut actors, page(&row, labels.len(), selected), now);
+                let y = actors.iter().find_map(|actor| match actor {
+                    Actor::Text {
+                        content, offset, ..
+                    } if content.as_str() == "1" => Some(offset[1]),
+                    _ => None,
+                });
+                let cursor = actors.iter().find_map(|actor| match actor {
+                    Actor::Sprite {
+                        offset,
+                        tint,
+                        size: [SizeSpec::Px(15.0), SizeSpec::Px(2.0)],
+                        ..
+                    } if *tint == AMBER => Some(offset[1]),
+                    _ => None,
+                });
+                let thumb = actors.iter().find_map(|actor| match actor {
+                    Actor::Sprite { offset, tint, .. } if offset[0] == 33.0 && *tint == AMBER => {
+                        Some(offset[1])
+                    }
+                    _ => None,
+                });
+                [y.unwrap_or(-1.0), cursor.unwrap(), thumb.unwrap()]
+            };
+
+            frame(3, 1.0);
+            assert_eq!(frame(5, 1.02)[..2], [155.0, 219.0]);
+            let moving = frame(5, 1.095);
+            assert!((moving[0] - 141.0).abs() < 0.01);
+            assert!((moving[1] - 233.0).abs() < 0.01);
+            assert!((moving[2] - 206.0).abs() < 0.01);
+            assert_eq!(frame(6, 1.095), moving);
+            let settled = frame(6, 1.4);
+            assert_eq!(settled[..2], [-1.0, 247.0]);
+            assert!((settled[2] - 256.4).abs() < 0.01);
+        });
+    }
+
+    #[test]
+    fn choice_cursor_moves_horizontally_and_a_new_page_starts_settled() {
+        with_current_metrics(Metrics::centered(640.0, 480.0), || {
+            let choices: Arc<[Arc<str>]> = Arc::from(["Off".into(), "Low".into(), "High".into()]);
+            let mut visual = OpenItgSystemOptions::default();
+            let mut actors = Vec::new();
+            let mut cursor_x = |id, choice, now| {
+                let row = |_| {
+                    Some(SystemOptionsRow {
+                        choices: Some(Arc::clone(&choices)),
+                        selected_choice: choice,
+                        inline: true,
+                        ..action("Quality")
+                    })
+                };
+                actors.clear();
+                visual.push_page(
+                    &mut actors,
+                    SystemOptionsPage {
+                        id,
+                        ..page(&row, 1, 0)
+                    },
+                    now,
+                );
+                actors
+                    .iter()
+                    .find_map(|actor| match actor {
+                        Actor::Sprite {
+                            offset,
+                            tint,
+                            size: [SizeSpec::Px(15.0), SizeSpec::Px(2.0)],
+                            ..
+                        } if *tint == AMBER => Some(offset[0]),
+                        _ => None,
+                    })
+                    .unwrap()
+            };
+
+            assert_eq!(cursor_x(1, 0, 0.0), 160.0);
+            assert_eq!(cursor_x(1, 2, 0.1), 160.0);
+            assert!((cursor_x(1, 2, 0.175) - 305.0).abs() < 0.01);
+            assert_eq!(cursor_x(2, 2, 0.18), 450.0);
         });
     }
 

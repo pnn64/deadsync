@@ -231,11 +231,10 @@ pub struct GraphicsOptionsView {
 }
 
 /// Presentation hooks for the shared service-options controller.
-pub struct SystemOptionsRenderer<A> {
-    pub service_order: &'static [SystemOptionsServiceRow],
-    pub timing: SystemOptionsTiming,
+pub struct SystemOptionsRenderer<'a, A> {
+    pub phase: SystemOptionsPhase,
     pub background: fn(&mut Vec<A>),
-    pub page: fn(&mut Vec<A>, SystemOptionsPage<'_>),
+    pub page: &'a mut dyn FnMut(&mut Vec<A>, SystemOptionsPage<'_>),
 }
 
 /// Time to finish entering or leaving a settings page, in seconds.
@@ -276,6 +275,8 @@ pub enum SystemOptionsPageKind {
 }
 
 pub struct SystemOptionsPage<'a> {
+    /// Identity of the page within the current Options visit.
+    pub id: usize,
     pub title: &'static str,
     pub kind: SystemOptionsPageKind,
     /// Selection in the visible controller order. `row_count` selects Done.
