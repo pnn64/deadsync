@@ -320,7 +320,7 @@ pub fn handle_raw_key_event(
 
 pub fn apply_apply_replaygain_events(
     state: &mut State,
-    events: impl IntoIterator<Item = crate::views::SimplyLoveApplyReplayGainEvent>,
+    events: impl IntoIterator<Item = deadsync_assets::progress::ApplyReplayGainEvent>,
 ) {
     for event in events {
         apply_apply_replaygain_event(state, event);

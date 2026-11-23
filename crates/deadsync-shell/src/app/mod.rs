@@ -146,7 +146,6 @@ use deadsync_theme_simply_love::{
         overscan_adjustment, practice, profile_load, sandbox, select_color,
         select_course, select_mode, select_music, select_style, test_lights,
     },
-    visual_styles,
 };
 use winit::{
     application::ApplicationHandler,
@@ -216,6 +215,7 @@ use deadsync_theme::evaluation::ThemeEvaluation;
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, MenuBackgroundMovie};
 use deadsync_theme::player_options::PlayerOptionsEntry;
 use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
+use deadsync_theme::select_music::DensityGraphSlot;
 use deadsync_theme::{
     AudioRequest, PlatformRequest, RevealPathKind, ThemeResources, ThemeScreenFlow,
     TransitionCompletion, UiCue,
@@ -227,11 +227,11 @@ use deadsync_theme_simply_love::views::{
     EvaluationContextView, EvaluationPlayerView, EvaluationPolicyView,
     EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource,
     MusicWheelRuntimeRequest, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest,
-    MusicWheelSlotRuntimeView, PostSelectStageView, ScreenBarBackgroundView, SelectCourseContextView,
+    MusicWheelSlotRuntimeView, PostSelectStageView, SelectCourseContextView,
     SelectCoursePolicyView,
     SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
-    SelectMusicSessionView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
-    SimplyLoveGrooveStatsService, SimplyLoveVisualPolicyView, VisualBackgroundView,
+    SelectMusicSessionView,
+    SimplyLoveGrooveStatsService, SimplyLoveVisualPolicyView,
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveDebugRequest,
@@ -311,15 +311,12 @@ struct FramePolicy {
 
 impl FramePolicy {
     fn from_config(config: &config::app_config::Config) -> Self {
-        let visual = simply_love_visual_policy(config);
+        let visual = SimplyLoveVisualPolicyView::from_config(config);
         Self {
             visual,
             smx: SmxFramePolicy::from_config(config),
             lights: LightingFramePolicy::from_config(config),
-            theme_background_video: (config.visual_style.is_srpg()
-                && config.show_video_backgrounds)
-                .then_some(visual.assets.shared_background_video)
-                .flatten(),
+            theme_background_video: visual.background_video(config.show_video_backgrounds),
             game_flag: config.game_flag,
             gameplay_banner_mode: config.gameplay_banner_mode,
             version_overlay_side: config.version_overlay_side,
@@ -652,6 +649,7 @@ pub struct ScreensState {
     smx_options_light_preview: deadsync_smx::OptionsLightPreview,
     smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview,
     player_options_state: Option<crate::player_options::PlayerOptionsState>,
+    player_options_layout: Option<crate::mounted_player_options::PlayerOptionsLayoutFactory>,
     init_state: init::State,
     attract: Option<attract_demo::AttractRuntime>,
     select_profile_state: <ActiveTheme as ThemeProfilePicker>::ProfilePickerState,
@@ -825,45 +823,6 @@ pub(crate) const fn scorebox_pane_filter(
     }
 }
 
-fn simply_love_visual_policy(config: &config::app_config::Config) -> SimplyLoveVisualPolicyView {
-    let srpg10 = config.visual_style.is_srpg()
-        && matches!(config.srpg_variant, config::theme::SrpgVariant::Srpg10);
-    let ecs15 = visual_styles::ecs15_active(config.visual_style, config.srpg_variant);
-    let background = match config.visual_style {
-        _ if ecs15 => VisualBackgroundView::Ecs15,
-        config::theme::VisualStyle::Technique => VisualBackgroundView::Technique,
-        config::theme::VisualStyle::Srpg9 => VisualBackgroundView::Srpg,
-        _ => VisualBackgroundView::Tiled,
-    };
-    let screen_bar = match config
-        .machine_bar_color
-        .resolve(config.visual_style.presentation_style(config.srpg_variant))
-    {
-        config::theme::MachineBarColor::Default => ScreenBarBackgroundView::Default,
-        config::theme::MachineBarColor::Colored => ScreenBarBackgroundView::Colored(if srpg10 {
-            color::srpg10_rgba(config.simply_love_color)
-        } else if ecs15 {
-            color::decorative_rgba(config.simply_love_color)
-        } else {
-            color::srpg9_rgba(config.simply_love_color)
-        }),
-        config::theme::MachineBarColor::Transparent => ScreenBarBackgroundView::Transparent,
-    };
-
-    SimplyLoveVisualPolicyView {
-        background,
-        assets: visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant),
-        machine_font: config.machine_font,
-        title_logo_texture_key: if ecs15 {
-            Some(visual_styles::ECS15_TITLE_LOGO)
-        } else {
-            srpg10.then_some(visual_styles::SRPG10_TITLE_LOGO)
-        },
-        srpg10_tint: srpg10,
-        screen_bar,
-    }
-}
-
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
     routine_shared: Option<&stage_stats::PlayerStageSummary>,
@@ -1021,7 +980,7 @@ fn prewarm_gameplay_text_layout_cache(
     compose_scratch.clear_retained_frames();
 
     state.stage.prewarm_song_texture_bindings(assets);
-    let visual_policy = simply_love_visual_policy(config);
+    let visual_policy = SimplyLoveVisualPolicyView::from_config(config);
     state.presentation.prewarm_combo_milestones(visual_policy);
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
@@ -1351,6 +1310,7 @@ impl ScreensState {
             smx_options_light_preview: deadsync_smx::OptionsLightPreview::default(),
             smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview::default(),
             player_options_state: None,
+            player_options_layout: crate::mounted_theme::player_options_layout(theme),
             init_state,
             attract: crate::mounted_theme::mount_attract(theme)
                 .map(attract_demo::AttractRuntime::new),
@@ -2954,13 +2914,14 @@ impl App {
         let cfg = config::runtime::get();
         let profiles = crate::player_options::active_profiles();
         let options = StageOptions::from_profiles(play_style, steps, session.music_rate, &profiles);
-        let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
+        let (player_profiles, scroll_speeds) = deadsync_profile_gameplay::stage_options::gameplay_profiles(
             profiles,
             &song,
             options,
             cfg.tournament,
             play_style,
             false,
+            cfg.enable_golf,
         );
         let mut requested_chart_ixs = plan.chart_indices.to_vec();
         if let Some(light_plan) = cabinet_light_plan(song.as_ref(), plan.chart_indices[0]) {
@@ -4810,7 +4771,7 @@ impl App {
             if self.state.screens.current_screen == CurrentScreen::PlayerOptions
                 && let Some(state) = self.state.screens.player_options_state.as_mut()
             {
-                self.heart_rate.refresh_player_options(state.editor_mut());
+                self.heart_rate.refresh_player_options(state);
             }
             if self.state.screens.current_screen == CurrentScreen::Evaluation {
                 crate::heart_rate::refresh_evaluation(
@@ -5224,7 +5185,7 @@ impl App {
             && let Some(backend) = self.backend.as_mut()
         {
             self.option_previews
-                .update(state.editor_mut(), &mut self.asset_manager, backend);
+                .update(state, &mut self.asset_manager, backend);
         } else {
             self.option_previews.idle();
         }
@@ -6883,21 +6844,23 @@ impl App {
             course_run.run.course_meter,
         );
         if show_player_options {
-            let theme = self.state.screens.menu_state.theme_flag();
             self.state.screens.player_options_state =
-                Some(crate::player_options::PlayerOptionsState::new(theme, PlayerOptionsEntry {
-                    song: Arc::clone(&stage.song),
-                    steps: stage.steps_index,
-                    preferred: stage.preferred_difficulty_index,
-                    color_index,
-                    return_screen: ActiveTheme::SCREENS.course_selection,
-                    fixed_stepchart_label: Some(label),
-                    noteskin_catalog: noteskin_catalog_view(&self.dirs),
-                    smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
-                    heart_rate_devices: crate::heart_rate::devices_view(),
-                    view: crate::player_options::init_view(),
-                    scroll_speeds: None,
-                }));
+                Some(crate::player_options::PlayerOptionsState::new(
+                    PlayerOptionsEntry {
+                        song: Arc::clone(&stage.song),
+                        steps: stage.steps_index,
+                        preferred: stage.preferred_difficulty_index,
+                        color_index,
+                        return_screen: ActiveTheme::SCREENS.course_selection,
+                        fixed_stepchart_label: Some(label),
+                        noteskin_catalog: noteskin_catalog_view(&self.dirs),
+                        smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
+                        heart_rate_devices: crate::heart_rate::devices_view(),
+                        view: crate::player_options::init_view(),
+                        scroll_speeds: None,
+                    },
+                    self.state.screens.player_options_layout,
+                ));
         } else {
             let mut start = StageStart::from_current_profiles(
                 stage.song.clone(),
@@ -7306,7 +7269,7 @@ impl App {
         let (deferred_sfx, entry_sfx) = ActiveTheme::prepare_evaluation_audio(
             &mut self.state.screens.evaluation_state,
             failed,
-            simply_love_visual_policy(config),
+            SimplyLoveVisualPolicyView::from_config(config),
         );
         self.ui_sfx.prepare_screen(&mut self.audio, deferred_sfx);
         let entry_sfx = entry_sfx
@@ -9537,21 +9500,23 @@ impl App {
                 } else {
                     ActiveTheme::SCREENS.song_selection
                 };
-                let theme = self.state.screens.menu_state.theme_flag();
                 self.state.screens.player_options_state =
-                    Some(crate::player_options::PlayerOptionsState::new(theme, PlayerOptionsEntry {
-                        song: selection.song,
-                        steps: chart_steps_index,
-                        preferred: preferred_difficulty_index,
-                        color_index,
-                        return_screen,
-                        fixed_stepchart_label: None,
-                        noteskin_catalog: noteskin_catalog_view(&self.dirs),
-                        smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
-                        heart_rate_devices: crate::heart_rate::devices_view(),
-                        view: crate::player_options::init_view(),
-                        scroll_speeds: None,
-                    }));
+                    Some(crate::player_options::PlayerOptionsState::new(
+                        PlayerOptionsEntry {
+                            song: selection.song,
+                            steps: chart_steps_index,
+                            preferred: preferred_difficulty_index,
+                            color_index,
+                            return_screen,
+                            fixed_stepchart_label: None,
+                            noteskin_catalog: noteskin_catalog_view(&self.dirs),
+                            smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
+                            heart_rate_devices: crate::heart_rate::devices_view(),
+                            view: crate::player_options::init_view(),
+                            scroll_speeds: None,
+                        },
+                        self.state.screens.player_options_layout,
+                    ));
             }
         } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {
             if self.state.session.course_run.is_some() && self.pending_song_lua_reload.is_none() {
@@ -9779,13 +9744,14 @@ impl App {
 
                 let stage_options = start.options;
                 let music_rate = stage_options.music_rate;
-                let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
+                let (player_profiles, scroll_speeds) = deadsync_profile_gameplay::stage_options::gameplay_profiles(
                     crate::player_options::active_profiles(),
                     &song_arc,
                     stage_options,
                     cfg.tournament,
                     play_style,
                     false,
+                    cfg.enable_golf,
                 );
 
                 let mut gameplay_session = gameplay_session();
@@ -10189,13 +10155,14 @@ impl App {
                 let combo_carry = self.state.session.combo_carry;
                 let stage_options = start.options;
                 let music_rate = stage_options.music_rate;
-                let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
+                let (player_profiles, scroll_speeds) = deadsync_profile_gameplay::stage_options::gameplay_profiles(
                     crate::player_options::active_profiles(),
                     &song_arc,
                     stage_options,
                     cfg.tournament,
                     play_style,
                     replay_offsets.is_some(),
+                    cfg.enable_golf,
                 );
                 let mut gameplay_session = gameplay_session();
                 let presentation_init = gameplay_presentation_init(&cfg, &player_profiles);
@@ -11491,7 +11458,7 @@ mod tests {
         assert!(policy.theme_background_video.is_none());
         assert!(!policy.show_select_music_banners);
         assert!(!policy.show_version_overlay);
-        assert_eq!(policy.visual, simply_love_visual_policy(&config));
+        assert_eq!(policy.visual, SimplyLoveVisualPolicyView::from_config(&config));
     }
 
     #[test]
@@ -11537,79 +11504,6 @@ mod tests {
             Some(PathBuf::from("Packs/Test/banner.png"))
         );
         assert_eq!(wheel_banner_path(None), None);
-    }
-
-    #[test]
-    fn visual_policy_resolves_runtime_style_and_bar_choices() {
-        let mut config = config::app_config::Config {
-            visual_style: config::theme::VisualStyle::Technique,
-            machine_bar_color: config::theme::MachineBarColor::Transparent,
-            ..Default::default()
-        };
-        let technique = simply_love_visual_policy(&config);
-        assert_eq!(technique.background, VisualBackgroundView::Technique);
-        assert_eq!(technique.screen_bar, ScreenBarBackgroundView::Transparent);
-        assert!(!technique.srpg10_tint);
-
-        config.visual_style = config::theme::VisualStyle::Srpg9;
-        config.srpg_variant = config::theme::SrpgVariant::Srpg10;
-        config.machine_bar_color = config::theme::MachineBarColor::Colored;
-        config.simply_love_color = 4;
-        config.machine_font = config::theme::MachineFont::Mega;
-        let srpg10 = simply_love_visual_policy(&config);
-        assert_eq!(srpg10.background, VisualBackgroundView::Srpg);
-        assert_eq!(
-            srpg10.assets.shared_background,
-            visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant)
-                .shared_background
-        );
-        assert_eq!(
-            srpg10.screen_bar,
-            ScreenBarBackgroundView::Colored(color::srpg10_rgba(4))
-        );
-        assert!(srpg10.srpg10_tint);
-        assert_eq!(srpg10.machine_font, config::theme::MachineFont::Mega);
-        assert_eq!(
-            srpg10.title_logo_texture_key,
-            Some(visual_styles::SRPG10_TITLE_LOGO)
-        );
-    }
-
-    #[test]
-    fn ecs15_visual_policy_uses_curtains_logo_and_technique_defaults() {
-        let mut config = config::app_config::Config {
-            visual_style: config::theme::VisualStyle::Srpg9,
-            srpg_variant: config::theme::SrpgVariant::Ecs15,
-            ..Default::default()
-        };
-        let policy = FramePolicy::from_config(&config);
-        assert_eq!(policy.visual.background, VisualBackgroundView::Ecs15);
-        assert_eq!(policy.visual.assets, &visual_styles::ECS15_ASSETS);
-        assert_eq!(
-            policy.visual.title_logo_texture_key,
-            Some(visual_styles::ECS15_TITLE_LOGO)
-        );
-        assert_eq!(
-            policy.visual.screen_bar,
-            ScreenBarBackgroundView::Transparent
-        );
-        assert!(!policy.visual.srpg10_tint);
-        assert!(policy.theme_background_video.is_none());
-        config.machine_bar_color = config::theme::MachineBarColor::Colored;
-        assert_eq!(
-            simply_love_visual_policy(&config).screen_bar,
-            ScreenBarBackgroundView::Colored(color::decorative_rgba(config.simply_love_color))
-        );
-        config.visual_style = config::theme::VisualStyle::Hearts;
-        assert_eq!(
-            simply_love_visual_policy(&config).background,
-            VisualBackgroundView::Tiled
-        );
-        assert!(
-            simply_love_visual_policy(&config)
-                .title_logo_texture_key
-                .is_none()
-        );
     }
 
     fn test_chart(hash: &str) -> ChartData {

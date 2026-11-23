@@ -16,6 +16,7 @@
 //! every frame.
 
 use crate::color;
+use deadsync_assets::progress::ContentReloadEvent;
 use deadsync_chart::song::SyncPref;
 use deadsync_notefield::ModelMeshCache;
 use deadsync_online::beginner::{BeginnerPhase, BeginnerSnapshot};
@@ -1070,7 +1071,7 @@ pub fn take_pending_reload_dirs(state: &mut State) -> Vec<PathBuf> {
 /// not this one's.
 pub fn sync_reload_events(
     state: &mut State,
-    events: impl IntoIterator<Item = crate::views::SimplyLoveContentReloadEvent>,
+    events: impl IntoIterator<Item = ContentReloadEvent>,
 ) -> bool {
     let mut finished = false;
     for event in events {
@@ -1078,10 +1079,10 @@ pub fn sync_reload_events(
             continue;
         };
         match event {
-            crate::views::SimplyLoveContentReloadEvent::Song {
+            ContentReloadEvent::Song {
                 done, total, pack, ..
             } => prompt.progress = Some((done, total, pack)),
-            crate::views::SimplyLoveContentReloadEvent::Finished { .. } => finished = true,
+            ContentReloadEvent::Finished { .. } => finished = true,
             _ => {}
         }
     }

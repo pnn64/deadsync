@@ -1,13 +1,12 @@
 use super::App;
 use crate::command::{
-    Command, build_density_graph_mesh, command_timing_result, fallback_banner_key,
-    log_command_timing_for_screen, spawn_online_grade_fetch,
+    Command, command_timing_result, log_command_timing_for_screen, spawn_online_grade_fetch,
 };
 use deadlib_assets::media_path_key;
 use deadsync_config as config;
 use deadsync_profile::compat as profile;
 use deadsync_theme::Screen as Screen;
-use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
+use deadsync_theme_simply_love::screens::select_music;
 use log::warn;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -50,7 +49,11 @@ impl App {
                 }
             }
             Command::SetDensityGraph { slot, chart_opt } => {
-                self.set_density_graph(slot, chart_opt);
+                select_music::set_density_graph(
+                    &mut self.state.screens.select_music_state,
+                    slot,
+                    chart_opt,
+                );
             }
             Command::FetchOnlineGrade(hash) => spawn_online_grade_fetch(hash),
             Command::PlayMusic {
@@ -105,16 +108,10 @@ impl App {
         } else {
             None
         };
-        let key = self
+        let loaded = self
             .dynamic_media
-            .set_banner(&mut self.asset_manager, backend, path, fade)
-            .unwrap_or_else(|| {
-                if had_path {
-                    Arc::from("banner1.png")
-                } else {
-                    Arc::from(fallback_banner_key(color_index))
-                }
-            });
+            .set_banner(&mut self.asset_manager, backend, path, fade);
+        let key = select_music::resolve_wheel_banner(loaded, had_path, color_index);
         if course {
             self.state.screens.select_course_state.current_banner_key = key;
         } else {
@@ -147,22 +144,6 @@ impl App {
         self.state.screens.select_music_state.current_cdtitle_key =
             self.dynamic_media
                 .set_cdtitle(&mut self.asset_manager, backend, path);
-    }
-
-    fn set_density_graph(
-        &mut self,
-        slot: DensityGraphSlot,
-        chart: Option<deadsync_theme::views::DensityGraphView>,
-    ) {
-        let mesh = build_density_graph_mesh(chart, deadlib_present::space::is_wide());
-        match slot {
-            DensityGraphSlot::SelectMusicP1 => {
-                self.state.screens.select_music_state.current_graph_mesh = mesh;
-            }
-            DensityGraphSlot::SelectMusicP2 => {
-                self.state.screens.select_music_state.current_graph_mesh_p2 = mesh;
-            }
-        }
     }
 
     fn set_dynamic_background(&mut self, path: Option<PathBuf>) {

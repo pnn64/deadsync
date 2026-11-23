@@ -1,4 +1,4 @@
-use deadsync_theme_simply_love::views::SimplyLoveApplyReplayGainEvent;
+use deadsync_assets::progress::ApplyReplayGainEvent;
 use log::info;
 use smallvec::SmallVec;
 use std::path::Path;
@@ -16,7 +16,7 @@ use crate::content_reload::{
 /// that also backs the startup skip, so both paths stop the same blocking pass.
 #[derive(Default)]
 pub(crate) struct Service {
-    rx: Option<Receiver<SimplyLoveApplyReplayGainEvent>>,
+    rx: Option<Receiver<ApplyReplayGainEvent>>,
 }
 
 impl Service {
@@ -31,9 +31,9 @@ impl Service {
         std::thread::spawn(move || {
             let paths = crate::content_reload::replaygain_music_paths(None);
             let total = paths.len();
-            let _ = tx.send(SimplyLoveApplyReplayGainEvent::Started { total });
+            let _ = tx.send(ApplyReplayGainEvent::Started { total });
             if total == 0 {
-                let _ = tx.send(SimplyLoveApplyReplayGainEvent::Finished {
+                let _ = tx.send(ApplyReplayGainEvent::Finished {
                     done: 0,
                     total: 0,
                     cancelled: false,
@@ -55,7 +55,7 @@ impl Service {
                         tx,
                         done,
                         total,
-                        SimplyLoveApplyReplayGainEvent::Progress {
+                        ApplyReplayGainEvent::Progress {
                             done,
                             total,
                             line2,
@@ -73,7 +73,7 @@ impl Service {
                 "Apply ReplayGain: {} ({last_done}/{total} analyzed).",
                 if cancelled { "cancelled" } else { "complete" }
             );
-            let _ = tx.send(SimplyLoveApplyReplayGainEvent::Finished {
+            let _ = tx.send(ApplyReplayGainEvent::Finished {
                 done: last_done,
                 total,
                 cancelled,
@@ -81,9 +81,7 @@ impl Service {
         });
     }
 
-    pub(crate) fn poll(
-        &mut self,
-    ) -> SmallVec<[SimplyLoveApplyReplayGainEvent; PROGRESS_EVENTS_PER_FRAME]> {
+    pub(crate) fn poll(&mut self) -> SmallVec<[ApplyReplayGainEvent; PROGRESS_EVENTS_PER_FRAME]> {
         let Some(rx) = self.rx.as_ref() else {
             return SmallVec::new();
         };
@@ -91,10 +89,10 @@ impl Service {
         let mut events = batch.events;
         let mut finished = events
             .iter()
-            .any(|event| matches!(event, SimplyLoveApplyReplayGainEvent::Finished { .. }));
+            .any(|event| matches!(event, ApplyReplayGainEvent::Finished { .. }));
         if batch.disconnected {
             if !finished {
-                events.push(SimplyLoveApplyReplayGainEvent::Finished {
+                events.push(ApplyReplayGainEvent::Finished {
                     done: 0,
                     total: 0,
                     cancelled: true,
@@ -117,7 +115,7 @@ mod tests {
     fn replaygain_progress_poll_is_bounded_before_terminal_event() {
         let (tx, rx) = mpsc::channel();
         for done in 1..=10 {
-            tx.send(SimplyLoveApplyReplayGainEvent::Progress {
+            tx.send(ApplyReplayGainEvent::Progress {
                 done,
                 total: 10,
                 line2: "Pack".to_owned(),
@@ -129,7 +127,7 @@ mod tests {
         assert_eq!(service.poll().len(), PROGRESS_EVENTS_PER_FRAME);
         assert_eq!(service.poll().len(), 10 - PROGRESS_EVENTS_PER_FRAME);
 
-        tx.send(SimplyLoveApplyReplayGainEvent::Finished {
+        tx.send(ApplyReplayGainEvent::Finished {
             done: 10,
             total: 10,
             cancelled: false,
@@ -137,7 +135,7 @@ mod tests {
         .unwrap();
         assert!(matches!(
             service.poll().as_slice(),
-            [SimplyLoveApplyReplayGainEvent::Finished { done: 10, .. }]
+            [ApplyReplayGainEvent::Finished { done: 10, .. }]
         ));
         assert!(service.rx.is_none());
     }

@@ -4148,7 +4148,7 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && state.contains("heart_rate_device_ids: [Option<String>; PLAYER_SLOTS]")
             && !state.contains("deadsync_profile::Profile")
             && shell.contains("crate::player_options::init_view()")
-            && shell.contains("crate::player_options::gameplay_profiles(")
+            && shell.contains("deadsync_profile_gameplay::stage_options::gameplay_profiles(")
             && preload.contains("StageOptions::from_profiles(")
             && !preload.contains("player_options::init")
             && !preload.contains("noteskin_catalog_view(")
@@ -4161,7 +4161,9 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && !shell.contains("player_options::init_for_gameplay")
             && !live_case.contains("player_options::init_for_gameplay")
             && !shell.contains("player_options::apply_no_cmod_alternative(")
-            && contains_rust(&adapter, "stage.resolve_scroll(")
+            && contains_rust(&stage_options, "stage.resolve_scroll(")
+            && !adapter.contains("fn apply_tournament_policy")
+            && !adapter.contains("fn apply_golf_policy")
             && !adapter.contains("screen::State")
             && !adapter.contains("apply_routine_master_options")
             && contains_rust(&stage_options, "pub struct StageOptions")
@@ -4174,6 +4176,7 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && profile_update.contains("pub fn update_player_options_for_side")
     );
     let mount = production_source(&root.join("crates/deadsync-shell/src/mounted_player_options.rs"));
+    let factory = production_source(&root.join("crates/deadsync-shell/src/mounted_theme.rs"));
     assert!(shell.contains("PlayerOptionsState::new("));
     assert!(shell.contains("pos.push_actors("));
     assert!(shell.contains("state.update(delta_time, asset_manager, effects)"));
@@ -4184,9 +4187,18 @@ fn player_options_runtime_reads_are_shell_prepared() {
         assert!(!mount.contains(&format!("OpenItgTheme::{hook}(")));
     }
     assert!(mount.contains("ActiveTheme::push_player_options_actors("));
-    assert!(mount.contains("player_options::push_actors_with_layout("));
-    assert!(previews.contains("ActiveTheme::take_player_options_noteskin_requests("));
-    assert!(heart_rate.contains("ActiveTheme::sync_player_options_heart_rate("));
+    assert!(mount.contains("ActiveTheme::with_player_options_page("));
+    assert!(mount.contains("layout.push_page("));
+    assert!(mount.contains("layout.entry_transition("));
+    assert!(mount.contains("layout.exit_transition("));
+    assert!(factory.contains("OpenItgPlayerOptions::default()"));
+    assert!(!mount.contains("OpenItg"));
+    assert!(!mount.contains("ThemeFlag"));
+    assert!(previews.contains("state.take_noteskin_requests("));
+    assert!(heart_rate.contains("state.sync_heart_rate("));
+    for source in [&shell, &previews, &heart_rate] {
+        assert!(!source.contains(".editor_mut()"));
+    }
     assert!(!shell.contains("screens::player_options::"));
     assert!(!input.contains("screens::player_options::"));
     assert!(!previews.contains("screens::player_options::"));
@@ -6236,7 +6248,7 @@ fn content_reload_execution_is_shell_owned() {
         "SimplyLoveContentRequest::ReloadSongDirs",
         "SimplyLoveContentRequest::ReloadSong",
         "pub fn sync_reload_events",
-        "SimplyLoveContentReloadEvent::Finished { song_packs }",
+        "ContentReloadEvent::Finished { song_packs }",
         "pub fn refresh_from_song_packs",
     ] {
         assert!(
@@ -6271,9 +6283,9 @@ fn content_reload_execution_is_shell_owned() {
     for prepared_boundary in [
         "SimplyLoveContentRequest::InitializeLibrary",
         "pub fn sync_loading_events",
-        "SimplyLoveContentReloadEvent::Artwork",
-        "SimplyLoveContentReloadEvent::Noteskins",
-        "SimplyLoveContentReloadEvent::Finished { .. }",
+        "ContentReloadEvent::Artwork",
+        "ContentReloadEvent::Noteskins",
+        "ContentReloadEvent::Finished { .. }",
     ] {
         assert!(
             init.contains(prepared_boundary),
@@ -6303,7 +6315,7 @@ fn content_reload_execution_is_shell_owned() {
         "SimplyLoveContentRequest::ReloadLibrary",
         "SimplyLoveContentRequest::ReloadSongDirs",
         "pub fn sync_reload_events",
-        "SimplyLoveContentReloadEvent::Finished { .. }",
+        "ContentReloadEvent::Finished { .. }",
     ] {
         assert!(
             options.contains(prepared_boundary),
@@ -6316,24 +6328,34 @@ fn content_reload_execution_is_shell_owned() {
     assert!(effects.contains("pub enum SimplyLoveContentRequest"));
     assert!(effects.contains("Content(SimplyLoveContentRequest)"));
 
-    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
-        .expect("Simply Love views should be readable");
-    for contract in [
-        "pub enum SimplyLoveContentReloadPhase",
-        "pub enum SimplyLoveContentReloadEvent",
+    let progress = read_source(root.join("crates/deadsync-assets/src/progress.rs"))
+        .expect("game content progress contract should be readable");
+    for definition in [
+        "pub enum ContentReloadPhase",
+        "pub enum ContentReloadEvent",
+        "pub enum ApplyReplayGainEvent",
         "Artwork {",
         "Noteskins {",
         "Finished {",
         "song_packs: Vec<deadsync_chart::SongPack>",
     ] {
         assert!(
-            views.contains(contract),
-            "missing reload contract {contract}"
+            progress.contains(definition),
+            "missing game progress contract {definition}"
         );
     }
 
     let service = read_source(root.join("crates/deadsync-shell/src/content_reload.rs"))
         .expect("shell content reload service should be readable");
+    let replaygain = read_source(root.join("crates/deadsync-shell/src/apply_replaygain.rs"))
+        .expect("shell library ReplayGain service should be readable");
+    assert!(
+        service.contains("use deadsync_assets::progress::{ContentReloadEvent, ContentReloadPhase};")
+            && replaygain.contains("use deadsync_assets::progress::ApplyReplayGainEvent;")
+            && !service.contains("deadsync_theme")
+            && !replaygain.contains("deadsync_theme"),
+        "library progress workers must publish game-owned reports"
+    );
     for shell_owner in [
         "std::thread::spawn",
         "scan_and_load_songs_with_progress_counts",
@@ -7333,7 +7355,7 @@ fn simply_love_three_key_navigation_uses_prepared_policy() {
 }
 
 #[test]
-fn simply_love_shared_visuals_use_shell_prepared_policy() {
+fn simply_love_shared_visuals_use_theme_resolved_policy() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let shared = root.join("crates/deadsync-theme-simply-love/src/screens/components/shared");
     let screen_bar =
@@ -7400,10 +7422,11 @@ fn simply_love_shared_visuals_use_shell_prepared_policy() {
         }
     }
     assert!(
-        shell.contains("fn simply_love_visual_policy(")
-            && shell.contains("let visual = simply_love_visual_policy(config)")
-            && contains_rust(&shell, "machine_bar_color.resolve(config.visual_style.presentation_style(config.srpg_variant))")
-            && shell.contains("visual_styles::for_style_and_variant(")
+        shell.contains("let visual = SimplyLoveVisualPolicyView::from_config(config)")
+            && shell.contains("visual.background_video(config.show_video_backgrounds)")
+            && !shell.contains("visual_styles::for_style_and_variant(")
+            && contains_rust(&views, "machine_bar_color.resolve(config.visual_style.presentation_style(config.srpg_variant))")
+            && views.contains("visual_styles::for_style_and_variant(")
     );
 }
 
@@ -7559,18 +7582,37 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
         assert!(!app.contains(implementation));
     }
 
-    for source in [
-        app.to_owned(),
-        production_source(&shell.join("app/attract_demo.rs")),
-        production_source(&shell.join("app/commands.rs")),
-        production_source(&shell.join("app/graphics.rs")),
-        production_source(&shell.join("app/screen_nav.rs")),
-        production_source(&shell.join("app/stage_start.rs")),
-        production_source(&shell.join("app/screenshot.rs")),
-    ] {
-        assert!(!source.contains("deadsync_theme_openitg"));
-        assert!(!source.contains("ThemeFlag::OpenItg"));
+    for path in production_rust_files(&shell) {
+        if path == shell.join("mounted_theme.rs") || path == shell.join("title_menu.rs") {
+            continue;
+        }
+        let source = production_source(&path);
+        for concrete in ["deadsync_theme_openitg", "ThemeFlag::OpenItg"] {
+            assert!(
+                !source.contains(concrete),
+                "{} uses {concrete} outside theme composition",
+                path.display()
+            );
+        }
     }
+}
+
+#[test]
+fn selection_theme_owns_density_mesh_and_fallback_artwork() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    for path in ["command.rs", "app/commands.rs"] {
+        let source = production_source(&shell.join(path));
+        for concrete in ["276.0", "286.0", "build_density_histogram_mesh(", "\"banner1.png\""] {
+            assert!(!source.contains(concrete), "{path} chooses {concrete}");
+        }
+    }
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    );
+    assert!(theme.contains("fn resolve_wheel_banner("));
+    assert!(theme.contains("fn set_density_graph("));
+    assert!(theme.contains("build_density_histogram_mesh("));
 }
 
 #[test]

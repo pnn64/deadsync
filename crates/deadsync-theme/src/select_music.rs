@@ -113,3 +113,10 @@ pub struct SelectCourseView<'a> {
     pub music_rate: f32,
     pub prompt: SelectMusicPrompt,
 }
+
+/// The player graph to refresh on the music selection screen.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DensityGraphSlot {
+    SelectMusicP1,
+    SelectMusicP2,
+}

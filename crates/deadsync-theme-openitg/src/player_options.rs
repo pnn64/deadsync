@@ -7,14 +7,17 @@ use crate::presentation::{
     push_options_highlight, push_options_panel, push_red_backdrop, push_red_streaks, sprite,
 };
 use crate::resources::MENU_NORMAL_FONT;
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::anim::bounceend_p;
 use deadlib_present::font::FontMap;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_theme::player_options::{
-    PlayerOptionsInline, PlayerOptionsPage, PlayerOptionsRow, PlayerOptionsViewport,
+    PlayerOptionsInline, PlayerOptionsLayout, PlayerOptionsPage, PlayerOptionsRow,
+    PlayerOptionsViewport,
 };
+use deadsync_theme::{Screen, ThemeTransitions};
 
 pub(super) const TRANSITION_SECONDS: f32 = 0.3;
 pub(super) const ENTRY_SECONDS: f32 = 0.5;
@@ -76,6 +79,30 @@ pub struct OpenItgPlayerOptions {
     entered_at: f64,
     thumbs: [Option<LinearMotion<1>>; MAX_PLAYERS],
     help: help::PlayerHelp,
+}
+
+impl PlayerOptionsLayout<Actor, TextContent> for OpenItgPlayerOptions {
+    fn viewport(&self) -> PlayerOptionsViewport {
+        Self::VIEWPORT
+    }
+
+    fn push_page(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        page: Page<'_>,
+        assets: &AssetManager,
+        now: f64,
+    ) {
+        self.push_actors(actors, page, assets.fonts(), now);
+    }
+
+    fn entry_transition(&self) -> (Vec<Actor>, f32) {
+        crate::OpenItgTheme::in_transition(Screen::PlayerOptions, ())
+    }
+
+    fn exit_transition(&self, target: Screen) -> (Vec<Actor>, f32) {
+        crate::OpenItgTheme::out_transition(Screen::PlayerOptions, target)
+    }
 }
 
 impl OpenItgPlayerOptions {

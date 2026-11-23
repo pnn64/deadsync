@@ -1,8 +1,6 @@
+use deadsync_assets::progress::{ContentReloadEvent, ContentReloadPhase};
 use deadsync_config as config;
 use deadsync_simfile::scan::SongScanMode;
-use deadsync_theme_simply_love::views::{
-    SimplyLoveContentReloadEvent, SimplyLoveContentReloadPhase,
-};
 use log::info;
 use smallvec::SmallVec;
 use std::path::{Path, PathBuf};
@@ -77,7 +75,7 @@ impl ProgressGate {
 
 #[derive(Default)]
 pub(crate) struct Service {
-    rx: Option<Receiver<SimplyLoveContentReloadEvent>>,
+    rx: Option<Receiver<ContentReloadEvent>>,
 }
 
 impl Service {
@@ -124,9 +122,7 @@ impl Service {
         audio_available: bool,
     ) {
         self.start(move |tx| {
-            let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
-                SimplyLoveContentReloadPhase::Songs,
-            ));
+            let _ = tx.send(ContentReloadEvent::Phase(ContentReloadPhase::Songs));
             let mut gate = ProgressGate::default();
             let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
                 if !gate.should_emit(done, total) {
@@ -136,7 +132,7 @@ impl Service {
                     &tx,
                     done,
                     total,
-                    SimplyLoveContentReloadEvent::Song {
+                    ContentReloadEvent::Song {
                         done,
                         total,
                         pack: pack.to_owned(),
@@ -154,10 +150,7 @@ impl Service {
         });
     }
 
-    fn start(
-        &mut self,
-        job: impl FnOnce(SyncSender<SimplyLoveContentReloadEvent>) + Send + 'static,
-    ) {
+    fn start(&mut self, job: impl FnOnce(SyncSender<ContentReloadEvent>) + Send + 'static) {
         if self.rx.is_some() {
             return;
         }
@@ -166,9 +159,7 @@ impl Service {
         std::thread::spawn(move || job(tx));
     }
 
-    pub(crate) fn poll(
-        &mut self,
-    ) -> SmallVec<[SimplyLoveContentReloadEvent; PROGRESS_EVENTS_PER_FRAME]> {
+    pub(crate) fn poll(&mut self) -> SmallVec<[ContentReloadEvent; PROGRESS_EVENTS_PER_FRAME]> {
         let Some(rx) = self.rx.as_ref() else {
             return SmallVec::new();
         };
@@ -176,7 +167,7 @@ impl Service {
         let mut events = batch.events;
         let mut finished = events
             .iter()
-            .any(|event| matches!(event, SimplyLoveContentReloadEvent::Finished { .. }));
+            .any(|event| matches!(event, ContentReloadEvent::Finished { .. }));
         if batch.disconnected {
             if !finished {
                 events.push(finished_event());
@@ -191,14 +182,12 @@ impl Service {
 }
 
 fn scan_library(
-    tx: &SyncSender<SimplyLoveContentReloadEvent>,
+    tx: &SyncSender<ContentReloadEvent>,
     songs_root: &Path,
     courses_root: &Path,
     mode: SongScanMode,
 ) {
-    let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
-        SimplyLoveContentReloadPhase::Songs,
-    ));
+    let _ = tx.send(ContentReloadEvent::Phase(ContentReloadPhase::Songs));
     let mut song_gate = ProgressGate::default();
     let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
         if !song_gate.should_emit(done, total) {
@@ -208,7 +197,7 @@ fn scan_library(
             tx,
             done,
             total,
-            SimplyLoveContentReloadEvent::Song {
+            ContentReloadEvent::Song {
                 done,
                 total,
                 pack: pack.to_owned(),
@@ -222,9 +211,7 @@ fn scan_library(
         &mut on_song,
     );
 
-    let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
-        SimplyLoveContentReloadPhase::Courses,
-    ));
+    let _ = tx.send(ContentReloadEvent::Phase(ContentReloadPhase::Courses));
     let mut course_gate = ProgressGate::default();
     let mut on_course = |done: usize, total: usize, group: &str, course: &str| {
         if !course_gate.should_emit(done, total) {
@@ -234,7 +221,7 @@ fn scan_library(
             tx,
             done,
             total,
-            SimplyLoveContentReloadEvent::Course {
+            ContentReloadEvent::Course {
                 done,
                 total,
                 group: group.to_owned(),
@@ -249,13 +236,11 @@ fn scan_library(
     );
 }
 
-fn prewarm_artwork(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
+fn prewarm_artwork(tx: &SyncSender<ContentReloadEvent>) {
     let (banner_paths, cdtitle_paths) = artwork_cache_paths();
     let plan = deadsync_assets::media_cache::artwork_cache_plan(&banner_paths, &cdtitle_paths);
     let total = plan.job_count();
-    let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
-        SimplyLoveContentReloadPhase::Artwork,
-    ));
+    let _ = tx.send(ContentReloadEvent::Phase(ContentReloadPhase::Artwork));
     info!(
         "Init loading: caching artwork in one pass (banner={}, cdtitle={}, total jobs={})...",
         banner_paths.len(),
@@ -272,7 +257,7 @@ fn prewarm_artwork(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
             tx,
             done,
             total,
-            SimplyLoveContentReloadEvent::Artwork {
+            ContentReloadEvent::Artwork {
                 done,
                 total,
                 line2,
@@ -284,10 +269,8 @@ fn prewarm_artwork(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
     info!("Init loading: artwork cache prewarm complete.");
 }
 
-fn compile_noteskins(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
-    let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
-        SimplyLoveContentReloadPhase::Noteskins,
-    ));
+fn compile_noteskins(tx: &SyncSender<ContentReloadEvent>) {
+    let _ = tx.send(ContentReloadEvent::Phase(ContentReloadPhase::Noteskins));
     info!("Init loading: compiling noteskin cache before UI...");
     let mut gate = ProgressGate::default();
     let mut on_noteskin = |done: usize, total: usize, skin: &str, status: &str| {
@@ -298,7 +281,7 @@ fn compile_noteskins(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
             tx,
             done,
             total,
-            SimplyLoveContentReloadEvent::Noteskins {
+            ContentReloadEvent::Noteskins {
                 done,
                 total,
                 skin: skin.to_owned(),
@@ -323,7 +306,7 @@ fn compile_noteskins(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
 /// considered (used by targeted song-dir reloads); `None` covers the whole
 /// library (boot and full reload).
 fn analyze_replaygain(
-    tx: &SyncSender<SimplyLoveContentReloadEvent>,
+    tx: &SyncSender<ContentReloadEvent>,
     restrict_to: Option<&[PathBuf]>,
     audio_available: bool,
 ) {
@@ -334,14 +317,12 @@ fn analyze_replaygain(
     if paths.is_empty() {
         return;
     }
-    let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
-        SimplyLoveContentReloadPhase::ReplayGain,
-    ));
+    let _ = tx.send(ContentReloadEvent::Phase(ContentReloadPhase::ReplayGain));
     let total = paths.len();
     // Publish the new phase's bounds before any decoder finishes.  Without an
     // explicit zero-progress event, reload overlays can keep displaying the
     // completed song-scan count while the first loudness analysis is running.
-    let _ = tx.send(SimplyLoveContentReloadEvent::ReplayGain {
+    let _ = tx.send(ContentReloadEvent::ReplayGain {
         done: 0,
         total,
         line2: String::new(),
@@ -361,7 +342,7 @@ fn analyze_replaygain(
             tx,
             done,
             total,
-            SimplyLoveContentReloadEvent::ReplayGain {
+            ContentReloadEvent::ReplayGain {
                 done,
                 total,
                 line2,
@@ -592,12 +573,12 @@ fn song_cache_progress_lines(path: &Path) -> Option<(String, String)> {
     None
 }
 
-fn send_finished(tx: &mpsc::SyncSender<SimplyLoveContentReloadEvent>) {
+fn send_finished(tx: &mpsc::SyncSender<ContentReloadEvent>) {
     let _ = tx.send(finished_event());
 }
 
-fn finished_event() -> SimplyLoveContentReloadEvent {
-    SimplyLoveContentReloadEvent::Finished {
+fn finished_event() -> ContentReloadEvent {
+    ContentReloadEvent::Finished {
         song_packs: deadsync_simfile::runtime_cache::get_song_cache().clone(),
     }
 }
@@ -1352,7 +1333,7 @@ mod tests {
     #[test]
     fn completed_event_releases_worker_slot() {
         let (tx, rx) = mpsc::channel();
-        tx.send(SimplyLoveContentReloadEvent::Finished {
+        tx.send(ContentReloadEvent::Finished {
             song_packs: Vec::new(),
         })
         .expect("test event should send");
@@ -1362,7 +1343,7 @@ mod tests {
 
         assert!(matches!(
             events.as_slice(),
-            [SimplyLoveContentReloadEvent::Finished { .. }]
+            [ContentReloadEvent::Finished { .. }]
         ));
         assert!(service.rx.is_none());
     }
@@ -1371,7 +1352,7 @@ mod tests {
     fn progress_poll_is_bounded_and_preserves_terminal_order() {
         let (tx, rx) = mpsc::channel();
         for done in 1..=10 {
-            tx.send(SimplyLoveContentReloadEvent::Song {
+            tx.send(ContentReloadEvent::Song {
                 done,
                 total: 10,
                 pack: "Pack".to_owned(),
@@ -1385,16 +1366,16 @@ mod tests {
         assert_eq!(second.len(), 10 - PROGRESS_EVENTS_PER_FRAME);
         assert!(matches!(
             second.last(),
-            Some(SimplyLoveContentReloadEvent::Song { done: 10, .. })
+            Some(ContentReloadEvent::Song { done: 10, .. })
         ));
 
-        tx.send(SimplyLoveContentReloadEvent::Finished {
+        tx.send(ContentReloadEvent::Finished {
             song_packs: Vec::new(),
         })
         .unwrap();
         assert!(matches!(
             service.poll().as_slice(),
-            [SimplyLoveContentReloadEvent::Finished { .. }]
+            [ContentReloadEvent::Finished { .. }]
         ));
         assert!(service.rx.is_none());
     }

@@ -92,7 +92,7 @@ pub enum SimplyLoveContentRequest {
     SkipReplayGain,
     /// Analyze EBU R128 loudness for the whole song library and populate the
     /// `ReplayGain` cache. Progress is reported via
-    /// [`crate::views::SimplyLoveApplyReplayGainEvent`]. Cancel an in-flight
+    /// [`deadsync_assets::progress::ApplyReplayGainEvent`]. Cancel an in-flight
     /// run with [`SimplyLoveContentRequest::SkipReplayGain`].
     ApplyReplayGain,
 }

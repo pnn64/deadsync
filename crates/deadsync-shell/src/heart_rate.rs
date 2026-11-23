@@ -1,7 +1,7 @@
-use crate::{ActiveTheme, app::EvaluationState, mounted_player_options::SimplyLovePlayerOptionsState};
+use crate::{ActiveTheme, app::EvaluationState, player_options::PlayerOptionsState};
 use deadsync_theme::evaluation::ThemeEvaluation;
 use deadsync_theme::player_options::{
-    HeartRateDeviceView, HeartRateDevicesView, HeartRateReadingView, ThemePlayerOptions,
+    HeartRateDeviceView, HeartRateDevicesView, HeartRateReadingView,
 };
 use deadsync_theme::views::{GameplayLivePresentation, HeartRatePlayerView, HeartRateView};
 use deadsync_theme_simply_love::screens::select_music;
@@ -50,7 +50,7 @@ impl Runtime {
         true
     }
 
-    pub(crate) fn refresh_player_options(&mut self, state: &mut SimplyLovePlayerOptionsState) -> bool {
+    pub(crate) fn refresh_player_options(&mut self, state: &mut PlayerOptionsState) -> bool {
         let key = (
             deadsync_heart_rate::discovery_generation(),
             deadsync_heart_rate::player_readings_generation(),
@@ -62,7 +62,7 @@ impl Runtime {
         // publication may cause one redundant refresh, but cannot be hidden.
         let view = devices_view();
         self.player_options_view_key = Some(key);
-        ActiveTheme::sync_player_options_heart_rate(state, &view);
+        state.sync_heart_rate(&view);
         true
     }
 

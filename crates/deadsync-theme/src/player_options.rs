@@ -1,7 +1,7 @@
 //! Presentation interface for editing a stage's player options.
 
 use crate::views::{NoteskinCatalogView, SmxGifCatalogView};
-use crate::{ThemeEffect, ThemeTransitions};
+use crate::{Screen, ThemeEffect, ThemeTransitions};
 use deadlib_assets::AssetManager;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
@@ -57,6 +57,20 @@ pub struct PlayerOptionsViewport {
     pub slots: u8,
     pub separate_exit: bool,
     pub row_tween_seconds: f32,
+}
+
+/// An alternate layout mounted for one visit to the shared options editor.
+pub trait PlayerOptionsLayout<A, T> {
+    fn viewport(&self) -> PlayerOptionsViewport;
+    fn push_page(
+        &mut self,
+        actors: &mut Vec<A>,
+        page: PlayerOptionsPage<'_, T, A>,
+        assets: &AssetManager,
+        now: f64,
+    );
+    fn entry_transition(&self) -> (Vec<A>, f32);
+    fn exit_transition(&self, target: Screen) -> (Vec<A>, f32);
 }
 
 pub struct PlayerOptionsRow<'a, T> {
@@ -125,6 +139,7 @@ pub trait ThemePlayerOptions: ThemeTransitions {
     type PlayerOptionsRawKey;
     type PlayerOptionsVisualPolicy;
     type PlayerOptionsNoteskin;
+    type PlayerOptionsText;
 
     fn init_player_options(
         entry: PlayerOptionsEntry<Self::Screen, Self::PlayerOptionsView>,
@@ -159,6 +174,18 @@ pub trait ThemePlayerOptions: ThemeTransitions {
         state: &Self::PlayerOptionsState,
         assets: &AssetManager,
         visual_policy: Self::PlayerOptionsVisualPolicy,
+    );
+    fn set_player_options_viewport(
+        state: &mut Self::PlayerOptionsState,
+        viewport: PlayerOptionsViewport,
+    );
+    fn with_player_options_page(
+        actors: &mut Vec<Self::Actor>,
+        state: &Self::PlayerOptionsState,
+        draw: impl FnOnce(
+            &mut Vec<Self::Actor>,
+            PlayerOptionsPage<'_, Self::PlayerOptionsText, Self::Actor>,
+        ),
     );
 
     fn sync_player_options_heart_rate(

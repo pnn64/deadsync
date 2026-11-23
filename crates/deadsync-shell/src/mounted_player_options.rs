@@ -3,46 +3,41 @@
 use crate::{ActiveTheme, ThemeScreen as Screen};
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::RawKeyboardEvent;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
+use deadsync_assets::noteskin::Noteskin;
 use deadsync_chart::SongData;
-use deadsync_config::theme::ThemeFlag;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_input::InputEvent;
 use deadsync_profile_gameplay::stage_options::{PlayerOptionsView, StageOptions};
 use deadsync_theme::ThemeTransitions;
 use deadsync_theme::player_options::{
-    PlayerOptionsEntry, PlayerOptionsSelection, ThemePlayerOptions,
+    HeartRateDevicesView, NoteskinPreviewRequest, PlayerOptionsEntry, PlayerOptionsLayout,
+    PlayerOptionsSelection, ThemePlayerOptions,
 };
-use deadsync_theme_openitg::{OpenItgPlayerOptions, OpenItgTheme};
-use deadsync_theme_simply_love::{
-    SimplyLoveEffect, screens::player_options, views::SimplyLoveVisualPolicyView,
-};
+use deadsync_theme_simply_love::{SimplyLoveEffect, views::SimplyLoveVisualPolicyView};
 use std::sync::Arc;
 
-pub(crate) type SimplyLovePlayerOptionsState =
-    <ActiveTheme as ThemePlayerOptions>::PlayerOptionsState;
+type EditorState = <ActiveTheme as ThemePlayerOptions>::PlayerOptionsState;
+type Layout = Box<dyn PlayerOptionsLayout<Actor, TextContent>>;
+
+pub(crate) type PlayerOptionsLayoutFactory = fn() -> Layout;
 
 pub(crate) struct PlayerOptionsState {
-    editor: SimplyLovePlayerOptionsState,
-    theme: ThemeFlag,
-    openitg: Option<OpenItgPlayerOptions>,
+    editor: EditorState,
+    layout: Option<Layout>,
 }
 
 impl PlayerOptionsState {
     pub(crate) fn new(
-        theme: ThemeFlag,
         entry: PlayerOptionsEntry<Screen, PlayerOptionsView>,
+        layout: Option<PlayerOptionsLayoutFactory>,
     ) -> Self {
         let mut editor = ActiveTheme::init_player_options(entry);
-        let openitg = (theme == ThemeFlag::OpenItg).then(|| {
-            player_options::set_viewport(&mut editor, OpenItgPlayerOptions::VIEWPORT);
-            OpenItgPlayerOptions::default()
-        });
-        Self {
-            editor,
-            theme,
-            openitg,
+        let layout = layout.map(|mount| mount());
+        if let Some(layout) = &layout {
+            ActiveTheme::set_player_options_viewport(&mut editor, layout.viewport());
         }
+        Self { editor, layout }
     }
 
     pub(crate) fn prepare(&mut self, assets: &AssetManager) {
@@ -96,9 +91,9 @@ impl PlayerOptionsState {
         policy: SimplyLoveVisualPolicyView,
         now: f64,
     ) {
-        if let Some(presentation) = &mut self.openitg {
-            player_options::push_actors_with_layout(actors, &self.editor, |actors, page| {
-                presentation.push_actors(actors, page, assets.fonts(), now)
+        if let Some(layout) = &mut self.layout {
+            ActiveTheme::with_player_options_page(actors, &self.editor, |actors, page| {
+                layout.push_page(actors, page, assets, now);
             });
         } else {
             ActiveTheme::push_player_options_actors(actors, &self.editor, assets, policy);
@@ -109,23 +104,45 @@ impl PlayerOptionsState {
         ActiveTheme::player_options_pad_light_preview(&self.editor)
     }
 
-    pub(crate) fn editor_mut(&mut self) -> &mut SimplyLovePlayerOptionsState {
+    pub(crate) fn sync_heart_rate(&mut self, devices: &HeartRateDevicesView) {
+        ActiveTheme::sync_player_options_heart_rate(&mut self.editor, devices);
+    }
+
+    pub(crate) fn take_noteskin_requests(
+        &mut self,
+        requests: &mut Vec<NoteskinPreviewRequest>,
+    ) -> Option<usize> {
+        ActiveTheme::take_player_options_noteskin_requests(&mut self.editor, requests)
+    }
+
+    pub(crate) fn retain_noteskin_previews(&mut self, requests: &[NoteskinPreviewRequest]) {
+        ActiveTheme::retain_player_options_noteskin_previews(&mut self.editor, requests);
+    }
+
+    pub(crate) fn set_noteskin_preview(&mut self, name: &str, parts: u16, skin: Option<Arc<Noteskin>>) {
+        ActiveTheme::set_player_options_noteskin_preview(&mut self.editor, name, parts, skin);
+    }
+
+    pub(crate) fn noteskin_preview_textures(skin: &Noteskin, parts: u16) -> Vec<(Arc<str>, bool)> {
+        ActiveTheme::player_options_noteskin_textures(skin, parts)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn editor_mut(&mut self) -> &mut EditorState {
         &mut self.editor
     }
 
     pub(crate) fn entry_transition(&self) -> (Vec<Actor>, f32) {
-        match self.theme {
-            ThemeFlag::SimplyLove => ActiveTheme::in_transition(Screen::PlayerOptions, None),
-            ThemeFlag::OpenItg => OpenItgTheme::in_transition(Screen::PlayerOptions, ()),
-        }
+        self.layout.as_ref().map_or_else(
+            || ActiveTheme::in_transition(Screen::PlayerOptions, None),
+            |layout| layout.entry_transition(),
+        )
     }
 
     pub(crate) fn exit_transition(&self, target: Screen) -> (Vec<Actor>, f32) {
-        match self.theme {
-            ThemeFlag::SimplyLove => ActiveTheme::out_transition(Screen::PlayerOptions, target),
-            ThemeFlag::OpenItg => {
-                OpenItgTheme::out_transition(Screen::PlayerOptions, target)
-            }
-        }
+        self.layout.as_ref().map_or_else(
+            || ActiveTheme::out_transition(Screen::PlayerOptions, target),
+            |layout| layout.exit_transition(target),
+        )
     }
 }

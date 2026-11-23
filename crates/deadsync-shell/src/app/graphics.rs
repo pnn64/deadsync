@@ -23,7 +23,7 @@ use deadsync_theme::{
     ThemeResources,
 };
 use deadsync_theme_simply_love::screens::{options, select_music};
-use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
+use deadsync_theme::select_music::DensityGraphSlot;
 use log::{debug, error, info};
 use std::error::Error;
 use std::time::Instant;

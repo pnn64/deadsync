@@ -7,6 +7,7 @@ pub mod language;
 pub mod media_cache;
 pub mod noteskin;
 pub mod present_dsl;
+pub mod progress;
 pub mod screenshot;
 pub mod song_lua;
 pub mod textures;

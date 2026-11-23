@@ -253,20 +253,22 @@ impl App {
                 player.judgment_palette_id = palette;
                 player.heart_rate_device_id = monitor;
             }
-            let theme = self.state.screens.menu_state.theme_flag();
-            PlayerOptionsState::new(theme, PlayerOptionsEntry {
-                song: start.song,
-                steps: chart_steps_index,
-                preferred: start.chart_difficulty_index,
-                color_index: start.color_index,
-                return_screen: start.return_screen,
-                fixed_stepchart_label: start.fixed_stepchart_label,
-                noteskin_catalog: noteskin_catalog_view(&self.dirs),
-                smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
-                heart_rate_devices: crate::heart_rate::devices_view(),
-                view,
-                scroll_speeds: Some(scroll_speeds),
-            })
+            PlayerOptionsState::new(
+                PlayerOptionsEntry {
+                    song: start.song,
+                    steps: chart_steps_index,
+                    preferred: start.chart_difficulty_index,
+                    color_index: start.color_index,
+                    return_screen: start.return_screen,
+                    fixed_stepchart_label: start.fixed_stepchart_label,
+                    noteskin_catalog: noteskin_catalog_view(&self.dirs),
+                    smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
+                    heart_rate_devices: crate::heart_rate::devices_view(),
+                    view,
+                    scroll_speeds: Some(scroll_speeds),
+                },
+                self.state.screens.player_options_layout,
+            )
         });
         screen.prepare(&self.asset_manager);
         self.commit_screen_change(ActiveTheme::SCREENS.player_options);
@@ -653,10 +655,7 @@ mod tests {
                         assert!(has_text("Hallway"));
                         assert_eq!(has_text("PICK MODIFIERS"), flag == ThemeFlag::OpenItg);
                         let mut previews = Vec::new();
-                        deadsync_theme_simply_love::screens::player_options::take_noteskin_preview_requests(
-                            editor.editor_mut(),
-                            &mut previews,
-                        );
+                        editor.take_noteskin_requests(&mut previews);
                         assert!(previews.iter().any(|preview| preview.parts & 1 != 0));
                         let (resubmitted, _) = app.take_stage_start().unwrap();
                         assert!(Arc::ptr_eq(&resubmitted.song, &song));

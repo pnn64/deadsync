@@ -15,11 +15,26 @@ game crates can use engine crates. The `deadsync` executable and `deadsync-shell
 are the composition roots that select and connect the concrete implementation.
 Neither is a dependency of engine, game, or theme crates.
 
-`deadsync-shell/src/mounted_theme.rs` selects the supplemental assets and the
-stage, selection, System Options, and attract presentations. Their shared
-interfaces live in `deadsync-theme`. The shell passes game state, elapsed time,
-input intent, and ready media to the installed presentation. Theme implementations
-own layout, animation, resource choices, and any presentation state they retain.
+`deadsync-shell/src/mounted_theme.rs` selects supplemental assets and the stage,
+selection, System Options, Player Options layout, and attract presentations.
+`title_menu.rs` connects the title implementations. The shell passes game
+state, elapsed time, input intent, and ready media through contracts in
+`deadsync-theme`. Themes own the layout, animation, resource choices, and
+presentation state.
+
+Both Player Options layouts consume the same editor and submit
+`deadsync-profile-gameplay::stage_options::StageOptions`. The mounted layout
+supplies its viewport and transitions. The game resolves stage scroll speed,
+tournament restrictions, and Golf settings on owned profile copies.
+Content reload and bulk ReplayGain workers publish progress through
+`deadsync-assets::progress`. Simply Love resolves its visual style, screen
+bars, background movie, wheel fallback banners, and density mesh in its theme
+crate.
+
+The shell still uses the Simply Love controller for parts of Player Options,
+Select Music, System Options, and Evaluation. Those controllers remain
+shared by both routes today. Their game behavior and presentation need
+separate interfaces before they can be replaced independently.
 
 ## Shared contracts
 

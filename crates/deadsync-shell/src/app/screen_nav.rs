@@ -647,7 +647,7 @@ impl App {
             gameplay,
             assets: &self.asset_manager,
             restart,
-            policy: super::simply_love_visual_policy(&config::runtime::get()),
+            policy: super::SimplyLoveVisualPolicyView::from_config(&config::runtime::get()),
         });
         let restarting = play.is_some_and(|(_, restart)| restart);
         let (actors, duration) = (screen == CurrentScreen::Gameplay)

@@ -9,6 +9,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
+use deadsync_assets::progress::{ContentReloadEvent, ContentReloadPhase};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_theme::FontRole;
 use std::cell::RefCell;
@@ -48,7 +49,7 @@ struct SpeedTextCache {
 }
 
 struct LoadingState {
-    phase: crate::views::SimplyLoveContentReloadPhase,
+    phase: ContentReloadPhase,
     line2: Arc<str>,
     line3: Arc<str>,
     count_text: Arc<str>,
@@ -72,7 +73,7 @@ struct LoadingState {
 impl LoadingState {
     fn new() -> Self {
         Self {
-            phase: crate::views::SimplyLoveContentReloadPhase::Songs,
+            phase: ContentReloadPhase::Songs,
             line2: EMPTY_TEXT.clone(),
             line3: EMPTY_TEXT.clone(),
             count_text: EMPTY_TEXT.clone(),
@@ -97,7 +98,7 @@ impl LoadingState {
     /// Switch the active phase, resetting the per-phase timer (used for the ETA
     /// estimate) whenever the phase actually changes so each phase's rate is
     /// measured from its own start rather than from boot.
-    fn set_phase(&mut self, phase: crate::views::SimplyLoveContentReloadPhase) {
+    fn set_phase(&mut self, phase: ContentReloadPhase) {
         if self.phase != phase {
             self.phase = phase;
             self.phase_started_at = Instant::now();
@@ -170,15 +171,15 @@ pub fn is_loading(state: &State) -> bool {
 }
 
 #[inline(always)]
-fn arc_phase_label(phase: crate::views::SimplyLoveContentReloadPhase) -> Arc<str> {
+fn arc_phase_label(phase: ContentReloadPhase) -> Arc<str> {
     match phase {
-        crate::views::SimplyLoveContentReloadPhase::Songs => tr("Init", "LoadingSongsText"),
-        crate::views::SimplyLoveContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
-        crate::views::SimplyLoveContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
-        crate::views::SimplyLoveContentReloadPhase::Noteskins => {
+        ContentReloadPhase::Songs => tr("Init", "LoadingSongsText"),
+        ContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
+        ContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
+        ContentReloadPhase::Noteskins => {
             tr("Init", "CompilingNoteskinsText")
         }
-        crate::views::SimplyLoveContentReloadPhase::ReplayGain => {
+        ContentReloadPhase::ReplayGain => {
             tr("Init", "AnalyzingLoudnessText")
         }
     }
@@ -187,19 +188,19 @@ fn arc_phase_label(phase: crate::views::SimplyLoveContentReloadPhase) -> Arc<str
 #[inline(always)]
 fn loading_progress_values(loading: &LoadingState) -> (usize, usize, f32) {
     let (done, mut total) = match loading.phase {
-        crate::views::SimplyLoveContentReloadPhase::Songs => {
+        ContentReloadPhase::Songs => {
             (loading.songs_done, loading.songs_total)
         }
-        crate::views::SimplyLoveContentReloadPhase::Courses => {
+        ContentReloadPhase::Courses => {
             (loading.courses_done, loading.courses_total)
         }
-        crate::views::SimplyLoveContentReloadPhase::Artwork => {
+        ContentReloadPhase::Artwork => {
             (loading.artwork_done, loading.artwork_total)
         }
-        crate::views::SimplyLoveContentReloadPhase::Noteskins => {
+        ContentReloadPhase::Noteskins => {
             (loading.noteskins_done, loading.noteskins_total)
         }
-        crate::views::SimplyLoveContentReloadPhase::ReplayGain => {
+        ContentReloadPhase::ReplayGain => {
             (loading.replaygain_done, loading.replaygain_total)
         }
     };
@@ -297,85 +298,85 @@ fn start_loading(state: &mut State) -> ThemeEffect {
 
 pub fn sync_loading_events(
     state: &mut State,
-    events: impl IntoIterator<Item = crate::views::SimplyLoveContentReloadEvent>,
+    events: impl IntoIterator<Item = ContentReloadEvent>,
 ) {
     let Some(loading) = state.loading.as_mut() else {
         return;
     };
     for event in events {
         match event {
-            crate::views::SimplyLoveContentReloadEvent::Phase(phase) => {
+            ContentReloadEvent::Phase(phase) => {
                 loading.set_phase(phase);
                 loading.line2 = EMPTY_TEXT.clone();
                 loading.line3 = EMPTY_TEXT.clone();
                 refresh_loading_count_text(loading);
             }
-            crate::views::SimplyLoveContentReloadEvent::Song {
+            ContentReloadEvent::Song {
                 done,
                 total,
                 pack,
                 song,
             } => {
-                loading.set_phase(crate::views::SimplyLoveContentReloadPhase::Songs);
+                loading.set_phase(ContentReloadPhase::Songs);
                 loading.songs_done = done;
                 loading.songs_total = total;
                 loading.line2 = Arc::<str>::from(pack);
                 loading.line3 = Arc::<str>::from(song);
                 refresh_loading_count_text(loading);
             }
-            crate::views::SimplyLoveContentReloadEvent::Course {
+            ContentReloadEvent::Course {
                 done,
                 total,
                 group,
                 course,
             } => {
-                loading.set_phase(crate::views::SimplyLoveContentReloadPhase::Courses);
+                loading.set_phase(ContentReloadPhase::Courses);
                 loading.courses_done = done;
                 loading.courses_total = total;
                 loading.line2 = Arc::<str>::from(group);
                 loading.line3 = Arc::<str>::from(course);
                 refresh_loading_count_text(loading);
             }
-            crate::views::SimplyLoveContentReloadEvent::Artwork {
+            ContentReloadEvent::Artwork {
                 done,
                 total,
                 line2,
                 line3,
             } => {
-                loading.set_phase(crate::views::SimplyLoveContentReloadPhase::Artwork);
+                loading.set_phase(ContentReloadPhase::Artwork);
                 loading.artwork_done = done;
                 loading.artwork_total = total;
                 loading.line2 = Arc::<str>::from(line2);
                 loading.line3 = Arc::<str>::from(line3);
                 refresh_loading_count_text(loading);
             }
-            crate::views::SimplyLoveContentReloadEvent::Noteskins {
+            ContentReloadEvent::Noteskins {
                 done,
                 total,
                 skin,
                 status,
             } => {
-                loading.set_phase(crate::views::SimplyLoveContentReloadPhase::Noteskins);
+                loading.set_phase(ContentReloadPhase::Noteskins);
                 loading.noteskins_done = done;
                 loading.noteskins_total = total;
                 loading.line2 = Arc::<str>::from(skin);
                 loading.line3 = Arc::<str>::from(status);
                 refresh_loading_count_text(loading);
             }
-            crate::views::SimplyLoveContentReloadEvent::ReplayGain {
+            ContentReloadEvent::ReplayGain {
                 done,
                 total,
                 line2,
                 line3,
             } => {
-                loading.set_phase(crate::views::SimplyLoveContentReloadPhase::ReplayGain);
+                loading.set_phase(ContentReloadPhase::ReplayGain);
                 loading.replaygain_done = done;
                 loading.replaygain_total = total;
                 loading.line2 = Arc::<str>::from(line2);
                 loading.line3 = Arc::<str>::from(line3);
                 refresh_loading_count_text(loading);
             }
-            crate::views::SimplyLoveContentReloadEvent::Finished { .. } => {
+            ContentReloadEvent::Finished { .. } => {
                 loading.done = true;
                 refresh_loading_count_text(loading);
             }
@@ -393,7 +394,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         if ev.pressed
             && is_start_or_back(ev.action)
             && let Some(loading) = state.loading.as_mut()
-            && loading.phase == crate::views::SimplyLoveContentReloadPhase::ReplayGain
+            && loading.phase == ContentReloadPhase::ReplayGain
             && !loading.replaygain_skip_requested
         {
             loading.replaygain_skip_requested = true;
@@ -529,7 +530,7 @@ fn push_loading_overlay(
     let loading = state.loading.as_ref();
     let phase = loading
         .map(|loading| loading.phase)
-        .unwrap_or(crate::views::SimplyLoveContentReloadPhase::Songs);
+        .unwrap_or(ContentReloadPhase::Songs);
     let (done, total, progress) = loading_progress(loading);
     let show_speed_row = total > 0;
     let speed_text = loading.filter(|_| show_speed_row).map(|loading| {
@@ -549,7 +550,7 @@ fn push_loading_overlay(
     });
     let show_skip_hint = matches!(
         phase,
-        crate::views::SimplyLoveContentReloadPhase::ReplayGain
+        ContentReloadPhase::ReplayGain
     ) && loading
         .is_some_and(|loading| !loading.done && !loading.replaygain_skip_requested);
     let fill = color::decorative_rgba(state.active_color_index);

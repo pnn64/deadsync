@@ -40,7 +40,7 @@ use crate::views::{
     SelectMusicInitView, SelectMusicLastPlayedView, SelectMusicLeaderboardRequest,
     SelectMusicPadProfileView, SelectMusicPlaylistView, SelectMusicPolicyView,
     SelectMusicProfileView, SelectMusicRuntimeView, SelectMusicScoreboxRequest,
-    SelectMusicSessionView, SimplyLoveContentReloadEvent, SimplyLoveContentReloadPhase,
+    SelectMusicSessionView,
 };
 use crate::{SimplyLoveEffect as ThemeEffect, SimplyLoveInputResult as ThemeInputResult};
 use deadlib_platform::input::{KeyCode, PadDir, PadEvent, RawKeyboardEvent};
@@ -55,6 +55,7 @@ use deadlib_present::space::{
     widescale,
 };
 use deadlib_render_core::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
+use deadsync_assets::progress::{ContentReloadEvent, ContentReloadPhase};
 use deadsync_chart::song::{chart_ix_for_steps_index, format_display_bpm_range};
 use deadsync_chart::{
     ChartData, ChartDisplayBpm, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData,
@@ -855,6 +856,48 @@ fn fallback_banner_key(active_color_index: i32) -> Arc<str> {
     FALLBACK_BANNER_KEYS[active_color_index.rem_euclid(12) as usize].clone()
 }
 
+/// Choose the built-in artwork when the selected wheel item has no loaded banner.
+pub fn resolve_wheel_banner(loaded: Option<Arc<str>>, had_path: bool, color_index: i32) -> Arc<str> {
+    loaded.unwrap_or_else(|| fallback_banner_key(if had_path { 0 } else { color_index }))
+}
+
+/// Install a prepared density graph at the wheel's existing refresh boundary.
+pub fn set_density_graph(
+    state: &mut State,
+    slot: DensityGraphSlot,
+    chart: Option<DensityGraphSource>,
+) {
+    let mesh = build_density_graph_mesh(chart, is_wide());
+    match slot {
+        DensityGraphSlot::SelectMusicP1 => state.current_graph_mesh = mesh,
+        DensityGraphSlot::SelectMusicP2 => state.current_graph_mesh_p2 = mesh,
+    }
+}
+
+fn build_density_graph_mesh(
+    chart_opt: Option<DensityGraphSource>,
+    wide_screen: bool,
+) -> Option<Arc<[MeshVertex]>> {
+    let graph_w = if wide_screen { 286.0 } else { 276.0 };
+    let graph_h = 64.0;
+    chart_opt.and_then(|chart| {
+        let verts = super::components::shared::density::build_density_histogram_mesh(
+            &chart.measure_nps_vec,
+            chart.max_nps,
+            &chart.measure_seconds_vec,
+            chart.first_second,
+            chart.last_second,
+            graph_w,
+            graph_h,
+            0.0,
+            graph_w,
+            None,
+            1.0,
+        );
+        (!verts.is_empty()).then(|| Arc::from(verts))
+    })
+}
+
 // Optimized formatter
 fn fmt_music_rate(rate: f32) -> Arc<str> {
     let rate = if rate.is_finite() { rate } else { 1.0 };
@@ -1029,7 +1072,7 @@ impl ExitCodeTracker {
 }
 
 struct ReloadUiState {
-    phase: SimplyLoveContentReloadPhase,
+    phase: ContentReloadPhase,
     line2: String,
     line3: String,
     songs_done: usize,
@@ -1046,7 +1089,7 @@ struct ReloadUiState {
 impl ReloadUiState {
     fn new() -> Self {
         Self {
-            phase: SimplyLoveContentReloadPhase::Songs,
+            phase: ContentReloadPhase::Songs,
             line2: String::new(),
             line3: String::new(),
             songs_done: 0,
@@ -1061,7 +1104,7 @@ impl ReloadUiState {
         }
     }
 
-    fn set_phase(&mut self, phase: SimplyLoveContentReloadPhase) {
+    fn set_phase(&mut self, phase: ContentReloadPhase) {
         if self.phase != phase {
             self.phase = phase;
             self.phase_started_at = Instant::now();
@@ -6074,57 +6117,57 @@ fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>) -> ThemeEf
 
 pub fn sync_reload_events(
     state: &mut State,
-    events: impl IntoIterator<Item = SimplyLoveContentReloadEvent>,
+    events: impl IntoIterator<Item = ContentReloadEvent>,
 ) {
     let Some(reload) = state.reload_ui.as_mut() else {
         return;
     };
     for event in events {
         match event {
-            SimplyLoveContentReloadEvent::Phase(phase) => {
+            ContentReloadEvent::Phase(phase) => {
                 reload.set_phase(phase);
                 reload.line2.clear();
                 reload.line3.clear();
             }
-            SimplyLoveContentReloadEvent::Song {
+            ContentReloadEvent::Song {
                 done,
                 total,
                 pack,
                 song,
             } => {
-                reload.set_phase(SimplyLoveContentReloadPhase::Songs);
+                reload.set_phase(ContentReloadPhase::Songs);
                 reload.songs_done = done;
                 reload.songs_total = total;
                 reload.line2 = pack;
                 reload.line3 = song;
             }
-            SimplyLoveContentReloadEvent::Course {
+            ContentReloadEvent::Course {
                 done,
                 total,
                 group,
                 course,
             } => {
-                reload.set_phase(SimplyLoveContentReloadPhase::Courses);
+                reload.set_phase(ContentReloadPhase::Courses);
                 reload.courses_done = done;
                 reload.courses_total = total;
                 reload.line2 = group;
                 reload.line3 = course;
             }
-            SimplyLoveContentReloadEvent::ReplayGain {
+            ContentReloadEvent::ReplayGain {
                 done,
                 total,
                 line2,
                 line3,
             } => {
-                reload.set_phase(SimplyLoveContentReloadPhase::ReplayGain);
+                reload.set_phase(ContentReloadPhase::ReplayGain);
                 reload.replaygain_done = done;
                 reload.replaygain_total = total;
                 reload.line2 = line2;
                 reload.line3 = line3;
             }
-            SimplyLoveContentReloadEvent::Artwork { .. }
-            | SimplyLoveContentReloadEvent::Noteskins { .. } => {}
-            SimplyLoveContentReloadEvent::Finished { song_packs } => {
+            ContentReloadEvent::Artwork { .. }
+            | ContentReloadEvent::Noteskins { .. } => {}
+            ContentReloadEvent::Finished { song_packs } => {
                 reload.done = true;
                 reload.song_packs = Some(song_packs);
             }
@@ -6134,7 +6177,7 @@ pub fn sync_reload_events(
 
 #[inline(always)]
 fn reload_progress(reload: &ReloadUiState) -> (usize, usize, f32) {
-    let (done, mut total) = if reload.phase == SimplyLoveContentReloadPhase::ReplayGain {
+    let (done, mut total) = if reload.phase == ContentReloadPhase::ReplayGain {
         (reload.replaygain_done, reload.replaygain_total)
     } else {
         (
@@ -6197,11 +6240,11 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
         z(1450)
     ));
     let phase_label = match reload.phase {
-        SimplyLoveContentReloadPhase::Songs => tr("Init", "LoadingSongsText"),
-        SimplyLoveContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
-        SimplyLoveContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
-        SimplyLoveContentReloadPhase::Noteskins => tr("Init", "CompilingNoteskinsText"),
-        SimplyLoveContentReloadPhase::ReplayGain => tr("Init", "AnalyzingLoudnessText"),
+        ContentReloadPhase::Songs => tr("Init", "LoadingSongsText"),
+        ContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
+        ContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
+        ContentReloadPhase::Noteskins => tr("Init", "CompilingNoteskinsText"),
+        ContentReloadPhase::ReplayGain => tr("Init", "AnalyzingLoudnessText"),
     };
     actors.push(act!(text:
         font("miso"):
@@ -14875,6 +14918,27 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn fallback_banner_key_preserves_color_cycle() {
+        assert_eq!(super::resolve_wheel_banner(None, false, 0).as_ref(), "banner1.png");
+        assert_eq!(super::resolve_wheel_banner(None, true, -1).as_ref(), "banner1.png");
+        assert_eq!(super::resolve_wheel_banner(None, false, -1).as_ref(), "banner12.png");
+    }
+
+    #[test]
+    fn density_graph_wrapper_handles_missing_and_populated_charts() {
+        assert!(super::build_density_graph_mesh(None, false).is_none());
+        let source = super::DensityGraphSource {
+            max_nps: 8.0,
+            measure_nps_vec: vec![2.0, 8.0, 4.0],
+            measure_seconds_vec: vec![0.0, 1.0, 2.0],
+            first_second: 0.0,
+            last_second: 2.0,
+        };
+
+        assert!(super::build_density_graph_mesh(Some(source), true).is_some());
+    }
+
     use super::{
         PREVIEW_DELAY_SECONDS, SyncGraphCols, WheelSortMode, append_pending_runtime,
         banner_texture_key, build_displayed_entries,

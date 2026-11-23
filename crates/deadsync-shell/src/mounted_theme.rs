@@ -1,5 +1,6 @@
 //! Startup composition of concrete presentation implementations.
 
+use crate::mounted_player_options::PlayerOptionsLayoutFactory;
 use deadlib_present::actors::Actor;
 use deadsync_config::theme::ThemeFlag;
 use deadsync_theme::attract::AttractPresentation;
@@ -43,6 +44,15 @@ pub(crate) fn mount_selection(theme: ThemeFlag) -> Option<Box<dyn SelectionPrese
         ThemeFlag::OpenItg => Some(Box::new(
             deadsync_theme_openitg::OpenItgSelectionPresentation::default(),
         )),
+    }
+}
+
+pub(crate) fn player_options_layout(theme: ThemeFlag) -> Option<PlayerOptionsLayoutFactory> {
+    match theme {
+        ThemeFlag::SimplyLove => None,
+        ThemeFlag::OpenItg => {
+            Some(|| Box::new(deadsync_theme_openitg::OpenItgPlayerOptions::default()))
+        }
     }
 }
 

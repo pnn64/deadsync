@@ -93,6 +93,53 @@ pub enum VisualBackgroundView {
 }
 
 impl SimplyLoveVisualPolicyView {
+    pub fn from_config(config: &deadsync_config::app_config::Config) -> Self {
+        use crate::{color, visual_styles};
+
+        let srpg10 = config.visual_style.is_srpg()
+            && matches!(config.srpg_variant, deadsync_config::theme::SrpgVariant::Srpg10);
+        let ecs15 = visual_styles::ecs15_active(config.visual_style, config.srpg_variant);
+        let background = match config.visual_style {
+            _ if ecs15 => VisualBackgroundView::Ecs15,
+            deadsync_config::theme::VisualStyle::Technique => VisualBackgroundView::Technique,
+            deadsync_config::theme::VisualStyle::Srpg9 => VisualBackgroundView::Srpg,
+            _ => VisualBackgroundView::Tiled,
+        };
+        let screen_bar = match config
+            .machine_bar_color
+            .resolve(config.visual_style.presentation_style(config.srpg_variant))
+        {
+            deadsync_config::theme::MachineBarColor::Default => ScreenBarBackgroundView::Default,
+            deadsync_config::theme::MachineBarColor::Colored => ScreenBarBackgroundView::Colored(if srpg10 {
+                color::srpg10_rgba(config.simply_love_color)
+            } else if ecs15 {
+                color::decorative_rgba(config.simply_love_color)
+            } else {
+                color::srpg9_rgba(config.simply_love_color)
+            }),
+            deadsync_config::theme::MachineBarColor::Transparent => ScreenBarBackgroundView::Transparent,
+        };
+
+        Self {
+            background,
+            assets: visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant),
+            machine_font: config.machine_font,
+            title_logo_texture_key: if ecs15 {
+                Some(visual_styles::ECS15_TITLE_LOGO)
+            } else {
+                srpg10.then_some(visual_styles::SRPG10_TITLE_LOGO)
+            },
+            srpg10_tint: srpg10,
+            screen_bar,
+        }
+    }
+
+    /// The selected style's shared background movie, if video is enabled.
+    #[must_use]
+    pub fn background_video(self, enabled: bool) -> Option<&'static str> {
+        self.assets.shared_background_video.filter(|_| enabled)
+    }
+
     /// ECS15 replaces menu backdrops but retains Technique on music selection.
     #[must_use]
     pub fn music_selection_background(self) -> Self {
@@ -892,79 +939,11 @@ impl Default for SelectMusicRuntimeView {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SimplyLoveContentReloadPhase {
-    Songs,
-    Courses,
-    Artwork,
-    Noteskins,
-    ReplayGain,
-}
-
-/// Progress and completion data produced by the shell-owned content reload
-/// worker. The completed cache snapshot lets the theme rebuild without reading
-/// the process-global runtime cache.
-#[derive(Clone, Debug)]
-pub enum SimplyLoveContentReloadEvent {
-    Phase(SimplyLoveContentReloadPhase),
-    Song {
-        done: usize,
-        total: usize,
-        pack: String,
-        song: String,
-    },
-    Course {
-        done: usize,
-        total: usize,
-        group: String,
-        course: String,
-    },
-    Artwork {
-        done: usize,
-        total: usize,
-        line2: String,
-        line3: String,
-    },
-    Noteskins {
-        done: usize,
-        total: usize,
-        skin: String,
-        status: String,
-    },
-    ReplayGain {
-        done: usize,
-        total: usize,
-        line2: String,
-        line3: String,
-    },
-    Finished {
-        song_packs: Vec<deadsync_chart::SongPack>,
-    },
-}
-
-/// Progress and completion data produced by the shell-owned bulk `ReplayGain`
-/// analysis worker triggered from the Sound options "Apply `ReplayGain`" action.
-#[derive(Clone, Debug)]
-pub enum SimplyLoveApplyReplayGainEvent {
-    /// Emitted once when the worker has enumerated the library and is about to
-    /// begin analysis.
-    Started { total: usize },
-    /// Emitted after each song finishes. `line2`/`line3` carry the pack and
-    /// song labels for display.
-    Progress {
-        done: usize,
-        total: usize,
-        line2: String,
-        line3: String,
-    },
-    /// Emitted once when the worker stops, either because it finished the whole
-    /// library or because it was cancelled.
-    Finished {
-        done: usize,
-        total: usize,
-        cancelled: bool,
-    },
-}
+pub use deadsync_assets::progress::{
+    ApplyReplayGainEvent as SimplyLoveApplyReplayGainEvent,
+    ContentReloadEvent as SimplyLoveContentReloadEvent,
+    ContentReloadPhase as SimplyLoveContentReloadPhase,
+};
 
 /// One shell-prepared unlock download row rendered by Select Music.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1285,15 +1264,8 @@ pub struct SelectMusicPolicyView {
     pub presentation: SelectMusicPresentationPolicyView,
 }
 
-/// Simply Love's two density-graph texture targets.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SimplyLoveDensityGraphSlot {
-    SelectMusicP1,
-    SelectMusicP2,
-}
-
-/// Simply Love compatibility name used inside its concrete screen modules.
-pub(crate) type DensityGraphSlot = SimplyLoveDensityGraphSlot;
+pub use deadsync_theme::select_music::DensityGraphSlot as SimplyLoveDensityGraphSlot;
+pub(crate) use deadsync_theme::select_music::DensityGraphSlot;
 
 /// Runtime capabilities used to decide which concrete Simply Love options
 /// rows are available on the current host.
@@ -1521,5 +1493,84 @@ mod tests {
         frame_histogram(&samples, &mut bins, 1_000);
         assert_eq!(bins[1], 1);
         assert_eq!(bins[HISTOGRAM_BINS - 1], 1);
+    }
+}
+
+#[cfg(test)]
+mod visual_policy_tests {
+    use super::*;
+    use crate::{color, visual_styles};
+
+    #[test]
+    fn visual_policy_resolves_runtime_style_and_bar_choices() {
+        let mut config = deadsync_config::app_config::Config {
+            visual_style: deadsync_config::theme::VisualStyle::Technique,
+            machine_bar_color: deadsync_config::theme::MachineBarColor::Transparent,
+            ..Default::default()
+        };
+        let technique = SimplyLoveVisualPolicyView::from_config(&config);
+        assert_eq!(technique.background, VisualBackgroundView::Technique);
+        assert_eq!(technique.screen_bar, ScreenBarBackgroundView::Transparent);
+        assert!(!technique.srpg10_tint);
+
+        config.visual_style = deadsync_config::theme::VisualStyle::Srpg9;
+        config.srpg_variant = deadsync_config::theme::SrpgVariant::Srpg10;
+        config.machine_bar_color = deadsync_config::theme::MachineBarColor::Colored;
+        config.simply_love_color = 4;
+        config.machine_font = deadsync_config::theme::MachineFont::Mega;
+        let srpg10 = SimplyLoveVisualPolicyView::from_config(&config);
+        assert_eq!(srpg10.background, VisualBackgroundView::Srpg);
+        assert_eq!(
+            srpg10.assets.shared_background,
+            visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant)
+                .shared_background
+        );
+        assert_eq!(
+            srpg10.screen_bar,
+            ScreenBarBackgroundView::Colored(color::srpg10_rgba(4))
+        );
+        assert!(srpg10.srpg10_tint);
+        assert_eq!(srpg10.machine_font, deadsync_config::theme::MachineFont::Mega);
+        assert_eq!(
+            srpg10.title_logo_texture_key,
+            Some(visual_styles::SRPG10_TITLE_LOGO)
+        );
+    }
+
+    #[test]
+    fn ecs15_visual_policy_uses_curtains_logo_and_technique_defaults() {
+        let mut config = deadsync_config::app_config::Config {
+            visual_style: deadsync_config::theme::VisualStyle::Srpg9,
+            srpg_variant: deadsync_config::theme::SrpgVariant::Ecs15,
+            ..Default::default()
+        };
+        let policy = SimplyLoveVisualPolicyView::from_config(&config);
+        assert_eq!(policy.background, VisualBackgroundView::Ecs15);
+        assert_eq!(policy.assets, &visual_styles::ECS15_ASSETS);
+        assert_eq!(
+            policy.title_logo_texture_key,
+            Some(visual_styles::ECS15_TITLE_LOGO)
+        );
+        assert_eq!(
+            policy.screen_bar,
+            ScreenBarBackgroundView::Transparent
+        );
+        assert!(!policy.srpg10_tint);
+        assert!(policy.background_video(true).is_none());
+        config.machine_bar_color = deadsync_config::theme::MachineBarColor::Colored;
+        assert_eq!(
+            SimplyLoveVisualPolicyView::from_config(&config).screen_bar,
+            ScreenBarBackgroundView::Colored(color::decorative_rgba(config.simply_love_color))
+        );
+        config.visual_style = deadsync_config::theme::VisualStyle::Hearts;
+        assert_eq!(
+            SimplyLoveVisualPolicyView::from_config(&config).background,
+            VisualBackgroundView::Tiled
+        );
+        assert!(
+            SimplyLoveVisualPolicyView::from_config(&config)
+                .title_logo_texture_key
+                .is_none()
+        );
     }
 }

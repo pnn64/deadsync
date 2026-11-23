@@ -983,6 +983,11 @@ checks that Evaluation renders the song title and returns to Select Music.
 The test drives the application's idle-screen update and advances gameplay
 with a deterministic audio clock in a windowless event loop.
 
+The mounted Player Options layout supplies its viewport, row rendering, and
+transitions for this route. Both themes submit the same stage options to the
+game layer. The route also covers opening the editor from the wheel and
+returning from Evaluation under both configurations.
+
 ## Gameplay parity verification
 
 The shell regression test `simply_love_and_openitg_produce_identical_gameplay_results`
