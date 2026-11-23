@@ -2,13 +2,17 @@ use std::sync::Arc;
 
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
-use deadsync_theme::views::AttractRecord;
+use deadsync_theme::views::{AttractCourseRecord, AttractRecord, AttractRecords};
 
 use crate::presentation::{Layout, WIDTH, italic, push_red_backdrop, quad, sprite};
-use crate::resources::MENU_NORMAL_FONT;
+use crate::resources::{MENU_HEADING_FONT, MENU_NORMAL_FONT};
 
 const RECORDS_PER_PAGE: usize = 5;
 const RECORD_PAGE_SECONDS: f32 = 10.0;
+const COURSE_SECONDS_PER_ROW: f32 = 0.4;
+const COURSE_ROW_SPACING: f32 = 65.0;
+const RANKING_TOP: f32 = 77.0;
+const RANKING_BOTTOM: f32 = 403.0;
 
 #[derive(Clone, Copy, Default)]
 enum Phase {
@@ -17,6 +21,8 @@ enum Phase {
     Intro,
     Logo,
     Records,
+    MarathonRecords,
+    SurvivalRecords,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -29,14 +35,15 @@ pub struct OpenItgIntroMedia {
 }
 
 impl Phase {
-    const fn duration(self, records: usize) -> f32 {
+    fn duration(self, records: &AttractRecords) -> f32 {
         match self {
             Self::Company | Self::Logo => 6.0,
             Self::Intro => 30.5,
             Self::Records => {
-                let pages = records.div_ceil(RECORDS_PER_PAGE);
-                RECORD_PAGE_SECONDS * if pages == 0 { 1.0 } else { pages as f32 }
+                RECORD_PAGE_SECONDS * records.songs.len().div_ceil(RECORDS_PER_PAGE).max(1) as f32
             }
+            Self::MarathonRecords => course_scroll_duration(&records.marathon),
+            Self::SurvivalRecords => course_scroll_duration(&records.survival),
         }
     }
 
@@ -63,7 +70,7 @@ impl Phase {
                 rate: 2.0,
                 poster: "openitg/attract-logo-poster.png",
             },
-            Self::Records => OpenItgIntroMedia {
+            Self::Records | Self::MarathonRecords | Self::SurvivalRecords => OpenItgIntroMedia {
                 movie: None,
                 music: Some("assets/media/openitg/ranking.ogg"),
                 loop_music: true,
@@ -78,11 +85,11 @@ impl Phase {
 pub struct OpenItgIntro {
     phase: Phase,
     elapsed: f32,
-    records: Vec<AttractRecord>,
+    records: AttractRecords,
 }
 
 impl OpenItgIntro {
-    pub fn show_records(&mut self, records: Vec<AttractRecord>) {
+    pub fn show_records(&mut self, records: AttractRecords) {
         self.phase = Phase::Records;
         self.elapsed = 0.0;
         self.records = records;
@@ -91,7 +98,7 @@ impl OpenItgIntro {
     pub fn advance(&mut self, delta_time: f32) -> bool {
         self.elapsed += delta_time.max(0.0);
         loop {
-            let duration = self.phase.duration(self.records.len());
+            let duration = self.phase.duration(&self.records);
             if self.elapsed < duration {
                 return false;
             }
@@ -99,7 +106,9 @@ impl OpenItgIntro {
                 Phase::Company => Phase::Intro,
                 Phase::Intro => Phase::Logo,
                 Phase::Logo => return true,
-                Phase::Records => Phase::Company,
+                Phase::Records => Phase::MarathonRecords,
+                Phase::MarathonRecords => Phase::SurvivalRecords,
+                Phase::SurvivalRecords => Phase::Company,
             };
             self.elapsed -= duration;
             self.phase = next;
@@ -119,9 +128,20 @@ impl OpenItgIntro {
         let height = screen_height();
         let [x, y] = [width * 0.5, height * 0.5];
         let layout = Layout::centered(width, height);
-        if matches!(self.phase, Phase::Records) {
-            push_records(actors, layout, &self.records, self.elapsed);
-            return;
+        match self.phase {
+            Phase::Records => {
+                push_records(actors, layout, &self.records.songs, self.elapsed);
+                return;
+            }
+            Phase::MarathonRecords | Phase::SurvivalRecords => {
+                let (title, courses) = match self.phase {
+                    Phase::MarathonRecords => ("Marathon", &self.records.marathon),
+                    _ => ("Survival", &self.records.survival),
+                };
+                push_course_records(actors, layout, title, courses, self.elapsed);
+                return;
+            }
+            _ => {}
         }
         let alpha = if matches!(self.phase, Phase::Logo) {
             0.7
@@ -154,18 +174,16 @@ impl OpenItgIntro {
         }
         actors.push(backdrop);
         match self.phase {
-            Phase::Company | Phase::Records => {}
+            _ => {}
             Phase::Intro => push_intro_layers(actors, layout, self.elapsed),
             Phase::Logo => push_logo_layers(actors, layout, self.elapsed),
         }
     }
 }
 
-fn push_records(actors: &mut Vec<Actor>, layout: Layout, records: &[AttractRecord], elapsed: f32) {
+fn push_ranking_backdrop(actors: &mut Vec<Actor>, layout: Layout, elapsed: f32) {
     push_red_backdrop(actors, [screen_width(), screen_height()], elapsed, 0);
-    let offset = (elapsed / RECORD_PAGE_SECONDS) as usize * RECORDS_PER_PAGE;
-    let page_elapsed = elapsed % RECORD_PAGE_SECONDS;
-    for y in [77.0, 403.0] {
+    for y in [RANKING_TOP, RANKING_BOTTOM] {
         actors.push(
             sprite(
                 "openitg/attract-ranking-rule.png",
@@ -177,6 +195,12 @@ fn push_records(actors: &mut Vec<Actor>, layout: Layout, records: &[AttractRecor
             .build(0),
         );
     }
+}
+
+fn push_records(actors: &mut Vec<Actor>, layout: Layout, records: &[AttractRecord], elapsed: f32) {
+    push_ranking_backdrop(actors, layout, elapsed);
+    let offset = (elapsed / RECORD_PAGE_SECONDS) as usize * RECORDS_PER_PAGE;
+    let page_elapsed = elapsed % RECORD_PAGE_SECONDS;
     push_record_label(
         actors,
         layout,
@@ -250,6 +274,101 @@ fn push_records(actors: &mut Vec<Actor>, layout: Layout, records: &[AttractRecor
         );
         if let Some(percent) = TextContent::inline_format(format_args!("{:.2}%", record.percent)) {
             push_record_label(actors, layout, [603.0, y], 1.0, percent, 0.75, white, 96.0);
+        }
+    }
+}
+
+fn course_scroll_duration(courses: &[AttractCourseRecord]) -> f32 {
+    if courses.is_empty() {
+        0.0
+    } else {
+        (courses.len() + RECORDS_PER_PAGE) as f32 * COURSE_SECONDS_PER_ROW
+    }
+}
+
+fn push_course_records(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    title: &'static str,
+    courses: &[AttractCourseRecord],
+    elapsed: f32,
+) {
+    push_ranking_backdrop(actors, layout, elapsed);
+    let mut heading = layout.text(
+        [110.0, 30.0],
+        0.0,
+        title.into(),
+        0.8,
+        [1.0, 1.0, 1.0, ramp(elapsed, 0.0, 0.5)],
+    );
+    heading.font(MENU_HEADING_FONT);
+    heading.shadowlength(4.0);
+    heading.z(3);
+    actors.push(heading.build(0));
+
+    // The reference starts one row beyond the half-window mask.
+    let center = elapsed / COURSE_SECONDS_PER_ROW - RECORDS_PER_PAGE as f32 / 2.0 - 1.0;
+    let [x, y] = layout.position(0.0, RANKING_TOP);
+    let [w, h] = layout.size([WIDTH, RANKING_BOTTOM - RANKING_TOP]);
+    for (index, course) in courses.iter().enumerate() {
+        let row_y = 240.0 + (index as f32 - center) * COURSE_ROW_SPACING;
+        let top = row_y - 31.0;
+        let bottom = row_y + 31.0;
+        if bottom <= RANKING_TOP || top >= RANKING_BOTTOM {
+            continue;
+        }
+        let mut frame = sprite(
+            "openitg/attract-ranking-frame.png",
+            layout.position(320.0, row_y),
+            layout.size([620.0, 62.0]),
+            [1.0; 4],
+            2,
+        );
+        frame.croptop(((RANKING_TOP - top) / 62.0).max(0.0));
+        frame.cropbottom(((bottom - RANKING_BOTTOM) / 62.0).max(0.0));
+        actors.push(frame.build(0));
+
+        let (name, percent) = course
+            .best
+            .as_ref()
+            .map_or(("-----", 0.0), |(name, percent)| (name.as_str(), *percent));
+        let first_label = actors.len();
+        push_record_label(
+            actors,
+            layout,
+            [110.0, row_y],
+            0.5,
+            (&course.title).into(),
+            1.0,
+            [1.0; 4],
+            160.0,
+        );
+        push_record_label(
+            actors,
+            layout,
+            [266.0, row_y - 9.0],
+            0.5,
+            TextContent::inline_str(name).unwrap_or_else(|| "-----".into()),
+            0.7,
+            [0.8, 0.8, 1.0, 1.0],
+            100.0,
+        );
+        if let Some(score) = TextContent::inline_format(format_args!("{percent:.2}%")) {
+            push_record_label(
+                actors,
+                layout,
+                [266.0, row_y + 9.0],
+                0.5,
+                score,
+                0.7,
+                [0.8, 0.8, 1.0, 1.0],
+                100.0,
+            );
+        }
+        for actor in &mut actors[first_label..] {
+            if let Actor::Text { clip, .. } = actor {
+                *clip = Some([x, y, w, h]);
+            }
         }
     }
 }
@@ -496,7 +615,7 @@ mod tests {
     #[test]
     fn idle_records_use_the_ranking_music_then_return_to_attract() {
         let mut intro = OpenItgIntro::default();
-        intro.show_records(Vec::new());
+        intro.show_records(AttractRecords::default());
         assert!(intro.media().loop_music);
         assert_eq!(
             intro.media().music,
@@ -513,12 +632,15 @@ mod tests {
     fn idle_records_render_the_supplied_chart_and_score() {
         use deadlib_present::space::{Metrics, with_current_metrics};
         let mut intro = OpenItgIntro::default();
-        intro.show_records(vec![AttractRecord {
-            title: Arc::from("Quartz"),
-            difficulty: Arc::from("Hard"),
-            initials: String::from("ABC"),
-            percent: 98.76,
-        }]);
+        intro.show_records(AttractRecords {
+            songs: vec![AttractRecord {
+                title: Arc::from("Quartz"),
+                difficulty: Arc::from("Hard"),
+                initials: String::from("ABC"),
+                percent: 98.76,
+            }],
+            ..AttractRecords::default()
+        });
         assert!(!intro.advance(1.0));
         let mut actors = Vec::new();
         with_current_metrics(Metrics::centered(640.0, 480.0), || {
@@ -529,5 +651,45 @@ mod tests {
                 |actor| matches!(actor, Actor::Text { content, .. } if content.as_str() == expected)
             ));
         }
+    }
+
+    #[test]
+    fn idle_course_pages_scroll_in_order_without_switching_music() {
+        use deadlib_present::space::{Metrics, with_current_metrics};
+        let mut intro = OpenItgIntro::default();
+        intro.show_records(AttractRecords {
+            marathon: vec![AttractCourseRecord {
+                title: Arc::from("Quartz Marathon"),
+                best: Some(("ABC".into(), 91.5)),
+            }],
+            survival: vec![AttractCourseRecord {
+                title: Arc::from("Quartz Survival"),
+                best: None,
+            }],
+            ..AttractRecords::default()
+        });
+        let ranking_media = intro.media();
+        let mut actors = Vec::new();
+        with_current_metrics(Metrics::centered(640.0, 480.0), || {
+            for (delta, name, value) in [
+                (11.0, "Quartz Marathon", "91.50%"),
+                (2.4, "Quartz Survival", "0.00%"),
+            ] {
+                assert!(!intro.advance(delta));
+                assert!(intro.media() == ranking_media);
+                actors.clear();
+                intro.push_actors(&mut actors, None);
+                for label in [name, value] {
+                    assert!(actors.iter().any(|actor| matches!(
+                        actor, Actor::Text { content, clip: Some(_), .. } if content.as_str() == label
+                    )));
+                }
+            }
+        });
+        assert!(!intro.advance(2.0));
+        assert_eq!(
+            intro.media().movie,
+            Some("assets/media/openitg/company.mpg")
+        );
     }
 }

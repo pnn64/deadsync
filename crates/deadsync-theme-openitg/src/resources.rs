@@ -85,6 +85,7 @@ impl ThemeResources for OpenItgTheme {
                 png!("attract-logo-poster"),
                 png!("attract-logo-roxor"),
                 png!("attract-ranking-rule"),
+                png!("attract-ranking-frame"),
                 png!("gameplay-difficulty"),
                 png!("gameplay-fallback"),
                 png!("gameplay-life-background"),

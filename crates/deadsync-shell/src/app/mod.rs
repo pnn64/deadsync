@@ -9313,7 +9313,9 @@ impl App {
             if prev == CurrentScreen::Menu
                 && let Some(intro) = self.state.screens.openitg_intro.as_mut()
             {
-                intro.timeline.show_records(crate::openitg::recent_attract_records());
+                intro.timeline.show_records(
+                    deadsync_profile_gameplay::cabinet_records::recent_records(40, 15),
+                );
             }
         } else if target == CurrentScreen::Options {
             self.reset_options_state_for_entry(prev);

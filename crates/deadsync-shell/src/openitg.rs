@@ -1,12 +1,11 @@
 //! Connects mounted OpenITG screens to the application flow and services.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::ThemeScreen as Screen;
 use crate::TransitionState;
 use deadsync_gameplay::ExitTransitionKind;
-use deadsync_theme::views::{AttractRecord, GameplayHudMotion};
+use deadsync_theme::views::GameplayHudMotion;
 use deadsync_theme::{AudioRequest, ThemeEffect};
 use deadsync_theme_openitg::{
     OpenItgIntro, OpenItgIntroMedia, OpenItgRuntimeRequest, OpenItgScreen,
@@ -31,48 +30,6 @@ impl IntroRuntime {
         self.current_media = Some(media);
         Some(media)
     }
-}
-
-pub(crate) fn recent_attract_records() -> Vec<AttractRecord> {
-    const MAX_RECORDS: usize = 40;
-    let recent = deadsync_profile::app_runtime::recent_played_chart_hashes_for_machine();
-    let recent = &recent[..recent.len().min(MAX_RECORDS)];
-    let mut remaining: HashMap<_, _> = recent
-        .iter()
-        .enumerate()
-        .map(|(index, hash)| (hash.as_str(), index))
-        .collect();
-    let mut chart_labels = vec![None; recent.len()];
-    if !remaining.is_empty() {
-        let library = deadsync_simfile::runtime_cache::get_song_cache();
-        'songs: for song in library.iter().flat_map(|pack| &pack.songs) {
-            for chart in &song.charts {
-                if let Some(index) = remaining.remove(chart.short_hash.as_str()) {
-                    chart_labels[index] = Some((
-                        Arc::from(song.title.as_str()),
-                        Arc::from(chart.difficulty.as_str()),
-                    ));
-                    if remaining.is_empty() {
-                        break 'songs;
-                    }
-                }
-            }
-        }
-    }
-    recent
-        .iter()
-        .zip(chart_labels)
-        .filter_map(|(hash, labels)| {
-            let (title, difficulty) = labels?;
-            let (initials, score) = deadsync_profile::app_runtime::machine_record_local(hash)?;
-            Some(AttractRecord {
-                title,
-                difficulty,
-                initials,
-                percent: score.score_percent * 100.0,
-            })
-        })
-        .collect()
 }
 
 pub(crate) fn gameplay_hud_motion(

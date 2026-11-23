@@ -1,3 +1,4 @@
+pub mod cabinet_records;
 pub mod results;
 pub mod stage_charts;
 pub mod stage_options;

@@ -684,6 +684,13 @@ calculation with its own camera parameters. The shell media manager retains
 recently replaced banner textures for the transition lifetime requested by the
 theme. OpenITG animates those layers and derives its exit motion from the
 shared launch confirmation.
+
+`deadsync-profile-gameplay::cabinet_records` resolves recency, catalog
+identity, and machine bests for idle rankings. The shell requests a snapshot
+when leaving the title screen and passes its score records to the theme.
+Course ranking uses the same persisted course identities as course evaluation.
+The theme controls the scroll geometry, page order, and music.
+
 OpenITG requests two random-selection rows. The game-owned candidate pool
 uses the active sort and style, and either action reaches the same chart
 selection and stage launch path as a song row. The shell prepares one score
