@@ -31,13 +31,16 @@ const WHEEL_CURVE_X: f32 = 24.0;
 const WHEEL_VISIBLE_HALF_SPAN: f32 = 7.5;
 const WHEEL_ANGLE_PER_ROW: f32 = TAU * 0.42 / SELECT_MUSIC_WHEEL_ROWS as f32;
 const WHEEL_CARD_SIZE: [f32; 2] = [368.0, 32.0];
+const LEFT_RIM_CENTER: [f32; 2] = [67.0, 223.0];
 const WHEEL_HIGHLIGHT_Z: i16 = -52;
 const FRAME_SEAM: [f32; 2] = [375.0, 222.0];
 const FRAME_EDGE_WIDTH: f32 = 132.0;
 const FRAME_MIDDLE_WIDTH: f32 = 353.0;
 const FRAME_HEIGHT: f32 = 414.0;
-const DIFFICULTY_CENTER: [f32; 2] = [460.0, 242.0];
-const DIFFICULTY_PITCH: f32 = 20.5;
+const DIFFICULTY_X: f32 = 474.0;
+// The first lane is between the silver divider and the first rule at texel 234.
+const DIFFICULTY_Y: f32 = FRAME_SEAM[1] + (223.0 / 412.0 - 0.5) * FRAME_HEIGHT;
+const DIFFICULTY_PITCH: f32 = 20.0 * FRAME_HEIGHT / 412.0;
 const TEXT_CACHE_LIMIT: usize = 4096;
 const WHITE: [f32; 4] = [1.0; 4];
 const CREAM: [f32; 4] = [0.82, 0.73, 0.69, 1.0];
@@ -77,7 +80,9 @@ struct WheelCameras {
     bounds: [f32; 4],
     offset: f32,
     rows: [Option<Mat4>; SELECT_MUSIC_WHEEL_ROWS],
+    left_crops: [f32; SELECT_MUSIC_WHEEL_ROWS],
     highlight: Mat4,
+    highlight_crop: f32,
 }
 
 impl WheelCameras {
@@ -129,14 +134,33 @@ impl WheelCameras {
                     1.0,
                 ])
         };
+        let crop_left = |camera: Mat4| {
+            let half_width = WHEEL_CARD_SIZE[0] * 0.5;
+            let left = camera * Vec3::new(metrics.left - half_width, metrics.top, 0.0).extend(1.0);
+            let right = camera * Vec3::new(metrics.left + half_width, metrics.top, 0.0).extend(1.0);
+            let y = (1.0 - left.y / (left.w * viewport.y_axis.y)) * HEIGHT * 0.5;
+            // Keep the exposed edge under the silver rim as the wheel turns.
+            // The visible rim starts at x=17 and curves out to x=120.
+            let height = ((y - LEFT_RIM_CENTER[1]) / 145.0).clamp(-1.0, 1.0);
+            let x = 19.0 + 101.0 * (1.0 - (1.0 - height * height).sqrt());
+            let edge = (2.0 * x / WIDTH - 1.0) * viewport.x_axis.x;
+            // Intersect the row's projected horizontal center with that edge.
+            let left = left.x - edge * left.w;
+            let right = right.x - edge * right.w;
+            (-left / (right - left)).clamp(0.0, 1.0)
+        };
+        let rows = std::array::from_fn(|index| {
+            let distance = index as f32 - (SELECT_MUSIC_WHEEL_ROWS / 2) as f32 + offset;
+            (distance.abs() <= WHEEL_VISIBLE_HALF_SPAN).then(|| card_camera(distance))
+        });
+        let highlight = card_camera(0.0);
         Self {
             bounds: Self::bounds(metrics),
             offset,
-            rows: std::array::from_fn(|index| {
-                let distance = index as f32 - (SELECT_MUSIC_WHEEL_ROWS / 2) as f32 + offset;
-                (distance.abs() <= WHEEL_VISIBLE_HALF_SPAN).then(|| card_camera(distance))
-            }),
-            highlight: card_camera(0.0),
+            rows,
+            left_crops: rows.map(|camera| camera.map_or(0.0, crop_left)),
+            highlight,
+            highlight_crop: crop_left(highlight),
         }
     }
 }
@@ -148,6 +172,8 @@ pub fn push_select_music_actors(
     banner: WheelBannerFrame<'_>,
 ) {
     let layout = push_backdrop(actors, view.selection_beat);
+    let camera = details_camera(layout);
+    push_details_frame(actors, layout, camera);
     push_banner(actors, layout, &view, banner);
     push_wheel(
         actors,
@@ -158,7 +184,7 @@ pub fn push_select_music_actors(
         view.wheel_locked,
         "NO SONGS",
     );
-    push_difficulties(actors, layout, &view);
+    push_difficulties(actors, layout, &view, camera);
     for (side, player) in view.players.iter().enumerate() {
         if player.joined {
             push_chart_pane(actors, layout, side, player);
@@ -234,11 +260,11 @@ fn details_plate(layout: Layout) -> Actor {
     }
 }
 
-fn push_details_frame(actors: &mut Vec<Actor>, layout: Layout) {
+fn push_details_frame(actors: &mut Vec<Actor>, layout: Layout, view_proj: Mat4) {
     actors.push(
         sprite(
             "openitg/wheel-frame-left.png",
-            layout.position(67.0, 223.0),
+            layout.position(LEFT_RIM_CENTER[0], LEFT_RIM_CENTER[1]),
             layout.size([106.0, 312.0]),
             WHITE,
             -8,
@@ -246,26 +272,7 @@ fn push_details_frame(actors: &mut Vec<Actor>, layout: Layout) {
         .build(0),
     );
 
-    // The two source sprites meet at x=375. Yaw tapers the rails as they
-    // approach the right edge of the logical canvas.
-    let metrics = current_metrics();
-    let [x, y] = layout.position(FRAME_SEAM[0], FRAME_SEAM[1]);
-    let [scale, _] = layout.size([1.0; 2]);
-    let viewport = Mat4::from_scale(Vec3::new(
-        scale * WIDTH / (metrics.right - metrics.left),
-        scale * HEIGHT / (metrics.top - metrics.bottom),
-        1.0,
-    ));
-    let (projection, view) = menu_perspective([WIDTH, HEIGHT], [320.0, FRAME_SEAM[1]], 58.0)
-        .expect("the wheel has a fixed positive camera size and field of view");
-    let pivot = Vec3::new(metrics.left + x, metrics.top - y, 0.0);
-    let pose = Mat4::from_translation(Vec3::new(FRAME_SEAM[0], FRAME_SEAM[1], 0.0))
-        * Mat4::from_rotation_y(20.0_f32.to_radians())
-        * Mat4::from_scale(Vec3::new(scale.recip(), -scale.recip(), 1.0))
-        * Mat4::from_translation(-pivot);
-    actors.push(Actor::CameraPush {
-        view_proj: viewport * projection * view * pose,
-    });
+    actors.push(Actor::CameraPush { view_proj });
     actors.push(details_plate(layout));
     for (key, x, width) in [
         (
@@ -293,13 +300,31 @@ fn push_details_frame(actors: &mut Vec<Actor>, layout: Layout) {
     actors.push(Actor::CameraPop);
 }
 
+fn details_camera(layout: Layout) -> Mat4 {
+    let metrics = current_metrics();
+    let [x, y] = layout.position(FRAME_SEAM[0], FRAME_SEAM[1]);
+    let [scale, _] = layout.size([1.0; 2]);
+    let viewport = Mat4::from_scale(Vec3::new(
+        scale * WIDTH / (metrics.right - metrics.left),
+        scale * HEIGHT / (metrics.top - metrics.bottom),
+        1.0,
+    ));
+    let (projection, view) = menu_perspective([WIDTH, HEIGHT], [320.0, FRAME_SEAM[1]], 58.0)
+        .expect("the wheel has a fixed positive camera size and field of view");
+    let pivot = Vec3::new(metrics.left + x, metrics.top - y, 0.0);
+    let pose = Mat4::from_translation(Vec3::new(FRAME_SEAM[0], FRAME_SEAM[1], 0.0))
+        * Mat4::from_rotation_y(20.0_f32.to_radians())
+        * Mat4::from_scale(Vec3::new(scale.recip(), -scale.recip(), 1.0))
+        * Mat4::from_translation(-pivot);
+    viewport * projection * view * pose
+}
+
 fn push_banner(
     actors: &mut Vec<Actor>,
     layout: Layout,
     view: &SelectMusicView<'_>,
     frame: WheelBannerFrame<'_>,
 ) {
-    push_details_frame(actors, layout);
     let section = view.rows[SELECT_MUSIC_WHEEL_ROWS / 2];
     banner::push(
         actors,
@@ -434,7 +459,14 @@ fn push_wheel(
             if let (Some(row), Some(view_proj)) = (rows[index], cameras.rows[index]) {
                 actors.push(Actor::CameraPush { view_proj });
                 let brightness = if locked && index != center { 0.5 } else { 1.0 };
-                push_wheel_card(actors, card, row, -90 + 2 * layer as i16, brightness);
+                push_wheel_card(
+                    actors,
+                    card,
+                    row,
+                    -90 + 2 * layer as i16,
+                    brightness,
+                    cameras.left_crops[index],
+                );
                 actors.push(Actor::CameraPop);
             }
         }
@@ -444,16 +476,15 @@ fn push_wheel(
         actors.push(Actor::CameraPush {
             view_proj: cameras.highlight,
         });
-        actors.push(
-            sprite(
-                "openitg/wheel-highlight.png",
-                card.position(0.0, 0.0),
-                [WHEEL_CARD_SIZE[0], 34.0],
-                accent,
-                WHEEL_HIGHLIGHT_Z,
-            )
-            .build(0),
+        let mut highlight = sprite(
+            "openitg/wheel-highlight.png",
+            card.position(0.0, 0.0),
+            [WHEEL_CARD_SIZE[0], 34.0],
+            accent,
+            WHEEL_HIGHLIGHT_Z,
         );
+        highlight.cropleft(cameras.highlight_crop);
+        actors.push(highlight.build(0));
         actors.push(Actor::CameraPop);
     });
 }
@@ -472,6 +503,7 @@ fn push_wheel_card(
     row: SelectMusicWheelRow<'_>,
     z: i16,
     brightness: f32,
+    left_crop: f32,
 ) {
     let [width, height] = WHEEL_CARD_SIZE;
     let section = row.song_count.is_some();
@@ -482,16 +514,15 @@ fn push_wheel_card(
         (_, true, false) => "openitg/wheel-section.png",
         _ => "openitg/wheel-song.png",
     };
-    actors.push(
-        sprite(
-            key,
-            card.position(0.0, 0.0),
-            [width, height],
-            dim([1.0; 3]),
-            z,
-        )
-        .build(0),
+    let mut tile = sprite(
+        key,
+        card.position(0.0, 0.0),
+        [width, height],
+        dim([1.0; 3]),
+        z,
     );
+    tile.cropleft(left_crop);
+    actors.push(tile.build(0));
     let (x, align, zoom, max_width, tint) = if row.action.is_some() {
         (4.0, 0.5, 0.97, 170.0, dim([0.68, 0.63, 0.62]))
     } else {
@@ -544,27 +575,33 @@ fn difficulty_style(difficulty: &str) -> (usize, &str, [f32; 4]) {
         })
 }
 
-fn push_difficulties(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'_>) {
+fn push_difficulties(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    view: &SelectMusicView<'_>,
+    view_proj: Mat4,
+) {
     if view.song.is_none() {
         return;
     }
-    let [x, base_y] = DIFFICULTY_CENTER;
+    let x = DIFFICULTY_X;
+    actors.push(Actor::CameraPush { view_proj });
     for (index, row) in view.difficulty_rows.iter().enumerate() {
         let Some(chart) = row.chart else { continue };
-        let y = base_y + index as f32 * DIFFICULTY_PITCH;
+        let y = DIFFICULTY_Y + index as f32 * DIFFICULTY_PITCH;
         let (state, level, color) = difficulty_style(&chart.difficulty);
         let level = if state == 5 && !chart.description.is_empty() {
             chart.description.as_str()
         } else {
             level
         };
-        let mut title = wheel_text(layout, [x - 61.0, y], 1.0, shared_text(level), 0.58, color);
+        let mut title = wheel_text(layout, [x - 72.0, y], 1.0, shared_text(level), 0.58, color);
         title.maxwidth(layout.size([119.0, 0.0])[0]);
         actors.push(title.build(0));
         actors.push(
             wheel_text(
                 layout,
-                [x - 20.0, y],
+                [x - 25.0, y],
                 0.5,
                 TextContent::inline_u32(chart.meter),
                 0.70,
@@ -578,8 +615,8 @@ fn push_difficulties(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusic
             let cell = if filled { state } else { 6 };
             let mut block = sprite(
                 "openitg/wheel-meter.png",
-                layout.position(x + 5.0 + segment as f32 * 10.0, y),
-                layout.size([10.0, 14.0]),
+                layout.position(x + 6.0 + segment as f32 * 13.45, y),
+                layout.size([13.45, 16.0]),
                 WHITE,
                 4,
             );
@@ -589,8 +626,8 @@ fn push_difficulties(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusic
         for (player, side) in view.players.iter().enumerate() {
             if side.joined && side.chart.is_some() && side.step_index == row.step_index {
                 let (offset, key) = [
-                    (-49.0, "openitg/wheel-p1.png"),
-                    (129.0, "openitg/wheel-p2.png"),
+                    (-59.0, "openitg/wheel-p1.png"),
+                    (175.0, "openitg/wheel-p2.png"),
                 ][player];
                 actors.push(
                     sprite(
@@ -605,6 +642,7 @@ fn push_difficulties(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusic
             }
         }
     }
+    actors.push(Actor::CameraPop);
 }
 
 fn push_chart_pane(
@@ -777,7 +815,7 @@ pub fn push_select_course_actors(
     banner: WheelBannerFrame<'_>,
 ) {
     let layout = push_backdrop(actors, view.selection_beat);
-    push_details_frame(actors, layout);
+    push_details_frame(actors, layout, details_camera(layout));
     banner::push(actors, layout, banner, view.banner_texture, |_, _| {});
     push_wheel(
         actors,
@@ -982,7 +1020,8 @@ mod tests {
                 );
                 assert!(actors.iter().any(|actor| matches!(actor,
                     Actor::Sprite { align, offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], .. }
-                        if *align == [0.5, 0.5] && *offset == [478.0 + delta, 112.0] && *w == 300.0 && *h == 128.0
+                        if *align == [0.5, 0.5] && *offset == [478.0 + delta, banner::CENTER[1]]
+                            && *w == banner::SIZE[0] && *h == banner::SIZE[1]
                 )));
                 assert!(actors.iter().any(|actor| matches!(actor,
                     Actor::Text { content, offset, .. }

@@ -401,15 +401,18 @@ the source's 15-row window moves. The supplied song, section, and action
 textures wrap around the wheel, with the native gold highlight pulsing on the
 preview beat. The shared red backdrop and header and footer streaks continue
 from Style and Play Mode. The supplied curved silver frame uses a 58° camera
-and 20° yaw. Eurostile labels, the fallback banner, the artist and BPM
-rail, segmented difficulty meters, and the 20.5 px row pitch follow the
-reference. The footer reports the available DeadSync Start action.
+and 20° yaw. The projected card edges and highlight trim under the left
+rim. Difficulty names, cursors, and meter segments share the right frame's
+projection and follow the rules in its texture. The artist and BPM rail
+uses Eurostile. Banners sit within the opening with the reference's
+0.6° rotation. The footer reports the available DeadSync Start action.
 
 The native 640×480 Quartz capture confirms the tilted rows and the fixed
 selection area. Vulkan captures of the DeadSync Quartz view checked the same
 title, artist, BPM, and Hard 5 chart at 640×480 and 854×480. Additional
-two-player captures check catalog labels, records, and the highlight during
-movement. DeadSync centers the 640×480 wheel at wider sizes. The source
+two-player captures check catalog labels, records, the rim during movement,
+and all five projected difficulty rows over the rules. DeadSync centers the
+640×480 wheel at wider sizes. The source
 banner aperture and popularity indicator remain fidelity gaps.
 
 In the 854×480 two-player fixture, the sum of the median actor construction
@@ -418,6 +421,11 @@ from 194 to 224 µs during scrolling. The segmented meters, chart text, and
 additional artwork bring the fixture from 132 to 166 actors and from 94
 to 106 draw operations. These timings use dev-profile libraries and warmed
 composition buffers.
+
+With five difficulty rows at 854×480, the rim and rail alignment pass went
+from 78 to 79 µs for settled actor construction and from 86 to 95 µs while
+scrolling. CPU composition stayed within 176–180 µs across the two builds,
+with 112 draw operations in each.
 
 The OpenITG song wheel includes Chance and Random in that order whenever
 the active sort contains a playable chart for the current style. The
