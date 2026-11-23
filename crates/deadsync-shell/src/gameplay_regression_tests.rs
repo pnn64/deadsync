@@ -2884,6 +2884,7 @@ M000
                     player.judgment_counts = [1, 1, 0, 0, 0, 1];
                     player.scoring_counts = player.judgment_counts;
                     player.earned_grade_points = 12;
+                    player.recorded_max_combo = 27 + runtime as u32;
                     player.holds_held = 1;
                     player.holds_held_for_score = 1;
                     player.rolls_held = 1;
@@ -2914,6 +2915,7 @@ M000
                         .expect("result on physical side");
                     assert_eq!(result.judgment_counts, [1, 1, 0, 0, 0, 1]);
                     assert_eq!(result.notes_hit, 2);
+                    assert_eq!(result.max_combo, 27 + runtime as u32);
                     assert_eq!(result.calories_burned, 3.25 + runtime as f32);
                     assert_eq!(result.column_judgments[0].w0, 1);
                     assert_eq!(result.column_judgments[1].w2, 1);
@@ -2947,13 +2949,45 @@ M000
                     assert_eq!(score.grade, result.grade);
                     assert_eq!(score.score_percent, result.score_percent);
                     assert_eq!(score.ex_score_percent, result.ex_score_percent);
+                    assert_eq!(score.max_combo, result.max_combo);
                     assert_eq!(score.column_judgments, result.column_judgments);
                     assert_eq!(score.scatter.len(), result.scatter.len());
                     assert_eq!(score.histogram.bins, result.histogram.bins);
                 }
-                let screen = evaluation::init(view);
+                let mut screen = evaluation::init(view);
                 assert_eq!(screen.stage_duration_seconds, 12.5);
                 assert!(!evaluation::all_joined_players_failed(&screen));
+                assert!(evaluation::overview_pane_selected(&screen));
+                screen.screen_elapsed = deadsync_theme_openitg::EVALUATION_OVERVIEW_SETTLED_SECONDS;
+                space::with_current_metrics(space::Metrics::centered(854.0, 480.0), || {
+                    let assets = deadlib_assets::AssetManager::new();
+                    let mut actors = Vec::new();
+                    evaluation::push_actors_with_overview(
+                        &mut actors,
+                        &screen,
+                        &assets,
+                        Default::default(),
+                        Some(deadsync_theme_openitg::push_evaluation_overview),
+                    );
+                    assert!(actor_tree_has_text(&actors, "CHECK YOUR STATS"));
+                    assert!(actor_tree_has_text(&actors, "27"));
+                    assert_eq!(actor_tree_has_text(&actors, "28"), style.is_versus());
+                    let graph = actors.iter().find_map(|actor| match actor {
+                        Actor::Mesh { vertices, .. } => Some(Arc::clone(vertices)),
+                        _ => None,
+                    }).expect("overview life graph");
+                    actors.clear();
+                    evaluation::push_actors_with_overview(
+                        &mut actors,
+                        &screen,
+                        &assets,
+                        Default::default(),
+                        Some(deadsync_theme_openitg::push_evaluation_overview),
+                    );
+                    assert!(actors.iter().any(|actor| matches!(actor,
+                        Actor::Mesh { vertices, .. } if Arc::ptr_eq(&graph, vertices)
+                    )));
+                });
                 // Session storage does not need the screen and remains unchanged by it.
                 drop(screen);
                 let mut session = crate::session::SessionState::new(0, [0; MAX_PLAYERS]);

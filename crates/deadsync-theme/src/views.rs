@@ -9,8 +9,9 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{
     ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, WindowCounts,
 };
+pub use deadsync_score::Grade;
 use deadsync_score::{
-    CachedPlayerLeaderboardData, ColumnJudgmentList, Grade, GrooveStatsEvalState, ItlEvalState,
+    CachedPlayerLeaderboardData, ColumnJudgmentList, GrooveStatsEvalState, ItlEvalState,
     LeaderboardEntry,
 };
 use std::path::PathBuf;
@@ -441,6 +442,7 @@ pub struct EvaluationView<N, S> {
     pub grade: Grade,
     pub speed_mod: ScrollSpeedSetting,
     pub mods_text: Arc<str>,
+    pub max_combo: u32,
     pub hands_achieved: u32,
     pub hands_total: u32,
     pub holds_held: u32,
@@ -495,6 +497,40 @@ impl<N, S> EvaluationView<N, S> {
     pub const fn is_course_summary(&self) -> bool {
         !self.course_graph_stages.is_empty()
     }
+}
+
+/// The result overview for the active evaluation page. The shared visit
+/// supplies completed results and the cached life-graph geometry.
+pub struct EvaluationOverview<'a, A> {
+    pub title: &'a Arc<str>,
+    pub artist: &'a Arc<str>,
+    pub banner_key: Option<&'a Arc<str>>,
+    pub course_summary: bool,
+    pub double_side_style: bool,
+    pub elapsed: f32,
+    pub players: [Option<EvaluationPlayerOverview<'a>>; MAX_PLAYERS],
+    pub life_graph: &'a dyn Fn(usize, [f32; 2], [f32; 2], [f32; 4], i16) -> Option<A>,
+}
+
+pub struct EvaluationPlayerOverview<'a> {
+    pub p2: bool,
+    pub grade: Grade,
+    pub percent: f64,
+    pub individual_percent: Option<f64>,
+    pub ex_percent: Option<f64>,
+    pub hard_ex_percent: Option<f64>,
+    pub difficulty: &'a str,
+    pub meter: u32,
+    pub mods: &'a Arc<str>,
+    pub judgments: judgment::JudgeCounts,
+    pub holds: [u32; 2],
+    pub mines: [u32; 2],
+    pub hands: [u32; 2],
+    pub rolls: [u32; 2],
+    pub max_combo: u32,
+    pub personal_rank: Option<u32>,
+    pub machine_rank: Option<u32>,
+    pub disqualified: bool,
 }
 
 /// Density data requested by a theme for a chart preview.

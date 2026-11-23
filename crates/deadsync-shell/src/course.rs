@@ -145,6 +145,7 @@ fn score_info_from_stage_with_record(
         grade: player.grade,
         speed_mod,
         mods_text,
+        max_combo: player.max_combo,
         hands_achieved: player.hands_achieved,
         hands_total: player.hands_total,
         holds_held: player.holds_held,

@@ -352,6 +352,7 @@ pub fn stage_result<A, C, D>(
             possible_grade_points: totals.possible_grade_points,
             ex_score_percent,
             hard_ex_score_percent,
+            max_combo: p.recorded_max_combo,
             hands_achieved: p.hands_achieved,
             hands_total: gs.hands_total_for_player(player_idx),
             holds_held: p.holds_held,

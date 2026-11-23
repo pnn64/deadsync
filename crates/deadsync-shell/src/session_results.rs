@@ -126,6 +126,7 @@ pub(crate) fn evaluation_view(
                 mods_text: deadsync_theme_simply_love::screens::components::gameplay::notefield::preferred_mods_text(
                     gs, player_idx,
                 ),
+                max_combo: player.max_combo,
                 hands_achieved: player.hands_achieved,
                 hands_total: player.hands_total,
                 holds_held: player.holds_held,

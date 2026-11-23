@@ -3,8 +3,9 @@
 Choose **OpenITG** in **Options → System → Theme**, then restart DeadSync.
 The equivalent setting is `Theme=OpenITG` under `[Options]` in `deadsync.ini`.
 Simply Love is the default. The selection mounts that theme's title, System
-Options, Player Options, base Select Music layout, and supported gameplay HUD
-widgets. Both themes use the same DeadSync session flow.
+Options, Player Options, base Select Music layout, supported gameplay HUD
+widgets, and Evaluation overview. Both themes use the same DeadSync session
+flow.
 
 ## Reference
 
@@ -162,6 +163,33 @@ frames gave medians of 65.1 ns for Simply Love before the change, 71.4 ns for
 Simply Love with the shared style input, and 247.2 ns for OpenITG with the
 additional label and pulse. These timings cover draw command construction.
 
-Evaluation still uses Simply Love.
+## Evaluation
+
+The OpenITG overview uses DeadSync's completed-stage score, grade, judgment
+counts, hold and roll results, avoided mines, hand counts, and life history.
+It shows the saved personal and machine ranks, disqualification, and the
+configured EX scores. Routine shows its shared result with the participant's
+score beside it. Maximum combo comes from the recorded gameplay peak. Course
+results retain the highest stage peak for each side, including recorded carry.
+
+The layout follows the effective `ScreenEvaluation` and `ScreenEvaluationStage`
+metrics. Single retains its physical player seat, versus draws both result
+panels, and doubles uses the reference inward shift. The grade slides in over
+0.5 seconds, settles by 3.0 seconds, and the banner and panels finish entering
+at 3.3 seconds. Automated captures wait for that reveal. The life line uses
+the existing sampler with a cached mesh at the requested dimensions.
+
+DeadSync still owns saves, submissions, the course page sequence, replay and
+practice handoffs, and onward routing. Timing, records, online detail panels,
+and other auxiliary panes retain their existing presentation and controls.
+Evaluation uses original artwork and DeadSync's existing entry and record
+cues. Jump totals, the combo-quality strip, course graph separators, and
+reference capture and audio comparisons remain open.
+
+At 854×480, nine warm runs of 8,000 settled-frame actor builds measured
+34.9 μs for Simply Love and 22.3 μs for OpenITG in solo, and 33.2 μs and
+39.3 μs in versus. The OpenITG versus overview builds 96 top-level actors
+for its two panels. The benchmark covers actor construction with bundled
+fonts and dev-profile theme libraries. GPU timing remains open.
 End-to-end parity across two complete presentations, visual comparison against
 a running reference, and distribution validation remain open.

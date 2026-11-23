@@ -616,6 +616,13 @@ label. It emits them inside the canonical draw ranges for Lua player and HUD
 child captures. See [the OpenITG progress record](openitg-theme.md) for the
 reference, implemented behavior, and fidelity checks.
 
+The evaluation visit receives completed stages before the shell chooses the
+overview renderer. The overview view borrows prepared artwork and exposes the
+canonical grade, scores, result counters, record ranks, and life graph. The
+recorded maximum combo travels with each stage and aggregates by maximum on
+course pages. Auxiliary panes and visit overlays remain with the existing
+controller, and theme selection stays out of result routing and persistence.
+
 Player Options mounts through the selected theme for song and course entry,
 input, updates, and actor composition. The shell supplies device and asset
 views, manages preview work and uploads, and reads the submitted game settings

@@ -33,17 +33,16 @@ impl Layout {
         }
     }
 
-    fn position(self, x: f32, y: f32) -> [f32; 2] {
+    pub(crate) fn position(self, x: f32, y: f32) -> [f32; 2] {
         [self.left + x * self.scale, self.top + y * self.scale]
     }
 
+    pub(crate) fn size(self, size: [f32; 2]) -> [f32; 2] {
+        size.map(|value| value * self.scale)
+    }
+
     pub(crate) fn panel(self, x: f32, y: f32, size: [f32; 2], rgba: [f32; 4], z: i16) -> Actor {
-        quad(
-            self.position(x, y),
-            size.map(|value| value * self.scale),
-            rgba,
-            z,
-        )
+        quad(self.position(x, y), self.size(size), rgba, z)
     }
 
     pub(crate) fn label(

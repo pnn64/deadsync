@@ -44,6 +44,7 @@ use deadsync_online::lobby_wait::{
     EvaluationPlayerStatsFacts, LocalLobbyPlayers, LobbyWaitReason,
 };
 use deadsync_theme::FontRole;
+use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview};
 use log::warn;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -2691,6 +2692,12 @@ fn result_dialog_page_text(page: usize, page_count: usize) -> Arc<str> {
     Arc::from(format!("{} / {page_count}", page + 1))
 }
 
+#[derive(Clone)]
+struct OverviewLifeMesh {
+    size: [f32; 2],
+    vertices: Option<Arc<[MeshVertex]>>,
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
@@ -2706,6 +2713,7 @@ pub struct State {
     heart_rate_generation: Option<(bool, u64, u64)>,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
     /// Routine's shared grade, shown for both participants.
     routine_shared_grade: Option<score_data::Grade>,
     /// Immutable per-result Nice eligibility compiled with `score_info`.
@@ -2730,6 +2738,7 @@ pub struct State {
     /// Screen-owned immutable mesh, warmed during evaluation initialization so
     /// graph-pane changes only share its vertex payload.
     pub life_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    overview_life_mesh: RefCell<[Option<OverviewLifeMesh>; MAX_PLAYERS]>,
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_hard_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -2766,6 +2775,7 @@ pub struct State {
     lobby_hud_status_scratch: RefCell<String>,
     event_overlay_page: [usize; MAX_PLAYERS],
     active_pane: [EvalPane; MAX_PLAYERS],
+    entry_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; MAX_PLAYERS],
@@ -2810,6 +2820,7 @@ impl Clone for State {
             heart_rate_generation: self.heart_rate_generation,
             stage_duration_seconds: self.stage_duration_seconds,
             score_info: self.score_info.clone(),
+            routine_shared_score_percent: self.routine_shared_score_percent,
             routine_shared_grade: self.routine_shared_grade,
             nice_scores: self.nice_scores,
             result_text: self.result_text.clone(),
@@ -2830,6 +2841,7 @@ impl Clone for State {
             event_actor_cache: RefCell::new(eval_panes::EventActorCache::default()),
             density_graph_mesh: self.density_graph_mesh.clone(),
             life_graph_mesh: self.life_graph_mesh.clone(),
+            overview_life_mesh: RefCell::new(self.overview_life_mesh.borrow().clone()),
             timing_hist_mesh: self.timing_hist_mesh.clone(),
             timing_hist_mesh_ex: self.timing_hist_mesh_ex.clone(),
             timing_hist_mesh_hard_ex: self.timing_hist_mesh_hard_ex.clone(),
@@ -2866,6 +2878,7 @@ impl Clone for State {
             lobby_hud_status_scratch: RefCell::new(String::new()),
             event_overlay_page: self.event_overlay_page,
             active_pane: self.active_pane,
+            entry_pane: self.entry_pane,
             active_graph: self.active_graph,
             menu_lr_chord: self.menu_lr_chord,
             menu_lr_undo: self.menu_lr_undo,
@@ -3308,6 +3321,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
         heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
+        routine_shared_score_percent,
         routine_shared_grade,
         nice_scores,
         result_text,
@@ -3328,6 +3342,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
         event_actor_cache: RefCell::new(eval_panes::EventActorCache::default()),
         density_graph_mesh,
         life_graph_mesh,
+        overview_life_mesh: RefCell::default(),
         timing_hist_mesh,
         timing_hist_mesh_ex,
         timing_hist_mesh_hard_ex,
@@ -3364,6 +3379,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
         lobby_hud_status_scratch: RefCell::new(String::new()),
         event_overlay_page: [0; MAX_PLAYERS],
         active_pane,
+        entry_pane: active_pane,
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
@@ -3622,6 +3638,7 @@ pub fn init_from_score_info(
         heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
+        routine_shared_score_percent,
         routine_shared_grade,
         nice_scores,
         result_text,
@@ -3642,6 +3659,7 @@ pub fn init_from_score_info(
         event_actor_cache: RefCell::new(eval_panes::EventActorCache::default()),
         density_graph_mesh,
         life_graph_mesh,
+        overview_life_mesh: RefCell::default(),
         timing_hist_mesh,
         timing_hist_mesh_ex,
         timing_hist_mesh_hard_ex,
@@ -3678,6 +3696,7 @@ pub fn init_from_score_info(
         lobby_hud_status_scratch: RefCell::new(String::new()),
         event_overlay_page: [0; MAX_PLAYERS],
         active_pane,
+        entry_pane: active_pane,
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
@@ -5546,6 +5565,120 @@ fn push_heart_rates(actors: &mut Vec<Actor>, state: &State) {
     }
 }
 
+/// Whether the visit is showing its ordinary result and graph selection.
+pub fn overview_pane_selected(state: &State) -> bool {
+    let mut populated = false;
+    for score in state.score_info.iter().flatten() {
+        populated = true;
+        let side = profile_data::player_side_index(score.side);
+        if !matches!(state.active_pane[side], EvalPane::Standard | EvalPane::FaPlus)
+            || state.active_pane[side] != state.entry_pane[side]
+            || state.active_graph[side]
+                != eval_graph_default_for(score.show_fa_plus_pane, score.show_hard_ex_score)
+        {
+            return false;
+        }
+    }
+    populated
+        && (state.context.play_style.is_versus()
+            || {
+                let other = 1 - profile_data::player_side_index(state.context.player_side);
+                state.active_pane[other] == state.entry_pane[other]
+            })
+}
+
+fn overview_life_graph(
+    state: &State,
+    player: usize,
+    origin: [f32; 2],
+    size: [f32; 2],
+    tint: [f32; 4],
+    z: i16,
+) -> Option<Actor> {
+    let score = state.score_info.get(player)?.as_ref()?;
+    let mut meshes = state.overview_life_mesh.borrow_mut();
+    let cache = &mut meshes[player];
+    if cache.as_ref().is_none_or(|entry| entry.size != size) {
+        *cache = Some(OverviewLifeMesh {
+            size,
+            vertices: build_eval_life_graph_mesh(score, size[0], size[1]),
+        });
+    }
+    let vertices = Arc::clone(cache.as_ref()?.vertices.as_ref()?);
+    Some(Actor::Mesh {
+        align: [0.0; 2],
+        offset: origin,
+        size: size.map(SizeSpec::Px),
+        tint,
+        vertex_color_encoding: Default::default(),
+        vertices,
+        visible: true,
+        blend: BlendMode::Alpha,
+        z,
+    })
+}
+
+fn push_overview(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    assets: &AssetManager,
+    draw: fn(&mut Vec<Actor>, EvaluationOverview<'_, Actor>),
+) -> bool {
+    let Some(index) = state.score_info.iter().position(Option::is_some) else {
+        return false;
+    };
+    let text = &state.result_text[index];
+    let life_graph =
+        |slot, origin, size, tint, z| overview_life_graph(state, slot, origin, size, tint, z);
+    draw(
+        actors,
+        EvaluationOverview {
+            title: text.full_title(state.context.policy.translated_titles),
+            artist: &text.artist,
+            banner_key: text
+                .banner_key
+                .as_ref()
+                .filter(|key| assets.has_texture_key(key)),
+            course_summary: state.score_info[index]
+                .as_ref()
+                .is_some_and(ScoreInfo::is_course_summary),
+            double_side_style: state.context.play_style.is_double(),
+            elapsed: state.screen_elapsed,
+            players: state.score_info.each_ref().map(|score| {
+                score.as_ref().map(|score| {
+                    let shared = state.routine_shared_score_percent;
+                    EvaluationPlayerOverview {
+                        p2: score.side == profile_data::PlayerSide::P2,
+                        grade: state.routine_shared_grade.unwrap_or(score.grade),
+                        percent: shared.unwrap_or(score.score_percent) * 100.0,
+                        individual_percent: shared.map(|_| score.score_percent * 100.0),
+                        ex_percent: score
+                            .show_ex_score
+                            .then_some(score.ex_score_percent.max(0.0)),
+                        hard_ex_percent: score
+                            .show_hard_ex_score
+                            .then_some(score.hard_ex_score_percent.max(0.0)),
+                        difficulty: score.chart.difficulty.as_str(),
+                        meter: score.chart.meter,
+                        mods: &score.mods_text,
+                        judgments: score.judgment_counts,
+                        holds: [score.holds_held, score.holds_total],
+                        mines: [score.mines_avoided, score.mines_total],
+                        hands: [score.hands_achieved, score.hands_total],
+                        rolls: [score.rolls_held, score.rolls_total],
+                        max_combo: score.max_combo,
+                        personal_rank: score.personal_record_highlight_rank,
+                        machine_rank: score.machine_record_highlight_rank,
+                        disqualified: score.disqualified,
+                    }
+                })
+            }),
+            life_graph: &life_graph,
+        },
+    );
+    true
+}
+
 /// # Panics
 ///
 /// Panics if an internal state invariant is violated.
@@ -5555,6 +5688,25 @@ pub fn push_actors(
     asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
+    push_actors_with_overview(actors, state, asset_manager, visual_policy, None);
+}
+
+pub fn push_actors_with_overview(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    draw_overview: Option<fn(&mut Vec<Actor>, EvaluationOverview<'_, Actor>)>,
+) {
+    if let Some(draw) = draw_overview
+        && overview_pane_selected(state)
+        && push_overview(actors, state, asset_manager, draw)
+    {
+        push_heart_rates(actors, state);
+        push_submission_overlay(actors, state, asset_manager);
+        push_visit_overlays(actors, state, asset_manager, false);
+        return;
+    }
     let policy = &state.context.policy;
     let sl_header_alpha = eval_panes::eval_style_alpha(policy.transparent_panels, 1.0, 0.5);
     let sl_panel_alpha = eval_panes::eval_style_alpha(policy.transparent_panels, 1.0, 0.75);
@@ -6922,6 +7074,97 @@ pub fn push_actors(
         }
     }
 
+    push_submission_overlay(actors, state, asset_manager);
+
+    // --- "DS" text and Pads (top right) ---
+    {
+        let ds_text_x = screen_width() - widescale(55.0, 62.0);
+        let ds_text = "DS";
+        let ds_font = machine_font_key_for_text(policy.machine_font, FontRole::Header, ds_text);
+        actors.push(act!(text: font(ds_font): settext(ds_text): align(1.0, 0.5): xy(ds_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
+        actors.extend(mode_pads::build(
+            state.context.play_style,
+            std::array::from_fn(|idx| state.context.players[idx].joined),
+        ));
+    }
+
+    // 3. Bottom Bar
+    let p1 = &state.context.players[0];
+    let p2 = &state.context.players[1];
+    let p1_avatar = p1
+        .avatar_texture_key
+        .as_deref()
+        .map(|texture_key| AvatarParams { texture_key });
+    let p2_avatar = p2
+        .avatar_texture_key
+        .as_deref()
+        .map(|texture_key| AvatarParams { texture_key });
+
+    // Only guest footers show this label.
+    let insert_card =
+        ((p1.joined && p1.guest) || (p2.joined && p2.guest)).then(|| tr("Common", "InsertCard"));
+
+    let (p1_footer_text, p1_footer_avatar) = if p1.joined {
+        if p1.guest {
+            (insert_card.as_deref(), None)
+        } else {
+            (Some(p1.display_name.as_str()), p1_avatar)
+        }
+    } else {
+        (None, None)
+    };
+    let (p2_footer_text, p2_footer_avatar) = if p2.joined {
+        if p2.guest {
+            (insert_card.as_deref(), None)
+        } else {
+            (Some(p2.display_name.as_str()), p2_avatar)
+        }
+    } else {
+        (None, None)
+    };
+
+    let (footer_left, footer_right, left_avatar, right_avatar) = if play_style.is_versus() {
+        (
+            p1_footer_text,
+            p2_footer_text,
+            p1_footer_avatar,
+            p2_footer_avatar,
+        )
+    } else {
+        match player_side {
+            profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
+            profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+        }
+    };
+    actors.push(screen_bar::build_no_background(ScreenBarParams {
+        visual_policy,
+        title: "",
+        title_placement: screen_bar::ScreenBarTitlePlacement::Center,
+        position: screen_bar::ScreenBarPosition::Bottom,
+        transparent: true,
+        fg_color: [1.0; 4],
+        left_text: footer_left,
+        center_text: None,
+        right_text: footer_right,
+        left_avatar,
+        right_avatar,
+    }));
+
+    actors.push(act!(text:
+        font(machine_font_key(policy.machine_font, FontRole::Numbers)):
+        settext(Arc::clone(state.footer_clock.text())):
+        align(0.5, 1.0): // align bottom-center of text block
+        xy(screen_center_x(), screen_height() - 14.0):
+        zoom(0.18):
+        horizalign(center):
+        z(121) // a bit above the screen bar (z=120)
+    ));
+
+    push_visit_overlays(actors, state, asset_manager, true);
+}
+
+fn push_submission_overlay(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+    let play_style = state.context.play_style;
     // Auto-submit UI text (SL/zmod parity with AutoSubmitScore.lua):
     // top PB/WR banner plus bottom submit-status actors.
     // Common Normal/MachineFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
@@ -7028,91 +7271,17 @@ pub fn push_actors(
             }
         }
     }
+}
 
-    // --- "DS" text and Pads (top right) ---
-    {
-        let ds_text_x = screen_width() - widescale(55.0, 62.0);
-        let ds_text = "DS";
-        let ds_font = machine_font_key_for_text(policy.machine_font, FontRole::Header, ds_text);
-        actors.push(act!(text: font(ds_font): settext(ds_text): align(1.0, 0.5): xy(ds_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
-        actors.extend(mode_pads::build(
-            state.context.play_style,
-            std::array::from_fn(|idx| state.context.players[idx].joined),
-        ));
-    }
-
-    // 3. Bottom Bar
-    let p1 = &state.context.players[0];
-    let p2 = &state.context.players[1];
-    let p1_avatar = p1
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = p2
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-
-    // Only guest footers show this label.
-    let insert_card =
-        ((p1.joined && p1.guest) || (p2.joined && p2.guest)).then(|| tr("Common", "InsertCard"));
-
-    let (p1_footer_text, p1_footer_avatar) = if p1.joined {
-        if p1.guest {
-            (insert_card.as_deref(), None)
-        } else {
-            (Some(p1.display_name.as_str()), p1_avatar)
-        }
-    } else {
-        (None, None)
-    };
-    let (p2_footer_text, p2_footer_avatar) = if p2.joined {
-        if p2.guest {
-            (insert_card.as_deref(), None)
-        } else {
-            (Some(p2.display_name.as_str()), p2_avatar)
-        }
-    } else {
-        (None, None)
-    };
-
-    let (footer_left, footer_right, left_avatar, right_avatar) = if play_style.is_versus() {
-        (
-            p1_footer_text,
-            p2_footer_text,
-            p1_footer_avatar,
-            p2_footer_avatar,
-        )
-    } else {
-        match player_side {
-            profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
-            profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
-        }
-    };
-    actors.push(screen_bar::build_no_background(ScreenBarParams {
-        visual_policy,
-        title: "",
-        title_placement: screen_bar::ScreenBarTitlePlacement::Center,
-        position: screen_bar::ScreenBarPosition::Bottom,
-        transparent: true,
-        fg_color: [1.0; 4],
-        left_text: footer_left,
-        center_text: None,
-        right_text: footer_right,
-        left_avatar,
-        right_avatar,
-    }));
-
-    actors.push(act!(text:
-        font(machine_font_key(policy.machine_font, FontRole::Numbers)):
-        settext(Arc::clone(state.footer_clock.text())):
-        align(0.5, 1.0): // align bottom-center of text block
-        xy(screen_center_x(), screen_height() - 14.0):
-        zoom(0.18):
-        horizalign(center):
-        z(121) // a bit above the screen bar (z=120)
-    ));
-
+fn push_visit_overlays(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    show_stinger: bool,
+) {
+    let play_style = state.context.play_style;
+    let player_side = state.context.player_side;
+    let policy = &state.context.policy;
     if let Some(joined) = state.lobby_session.runtime_view().snapshot.joined_lobby.as_ref() {
         let mut status_scratch = state.lobby_hud_status_scratch.borrow_mut();
         let status_text = evaluation_lobby_status_text_into(state, &mut status_scratch);
@@ -7133,7 +7302,9 @@ pub fn push_actors(
     }
 
     // ScreenEvaluationStage in stinger (standard Simply Love visual style).
-    actors.extend(build_stage_in_stinger(state));
+    if show_stinger {
+        actors.extend(build_stage_in_stinger(state));
+    }
 
     if state.event_overlay_visible {
         let progress_single = [(0, player_side)];

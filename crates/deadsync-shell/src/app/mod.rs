@@ -7974,12 +7974,20 @@ impl App {
                 init::push_actors(&mut actors, &self.state.screens.init_state, visual_policy);
             }
             CurrentScreen::Evaluation => {
-                ActiveTheme::push_evaluation_actors(
-                    &mut actors,
-                    &self.state.screens.evaluation_state,
-                    &self.asset_manager,
-                    visual_policy,
-                );
+                let state = &self.state.screens.evaluation_state;
+                if self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg {
+                    evaluation::push_actors_with_overview(
+                        &mut actors,
+                        state,
+                        &self.asset_manager,
+                        visual_policy,
+                        Some(deadsync_theme_openitg::push_evaluation_overview),
+                    );
+                } else {
+                    ActiveTheme::push_evaluation_actors(
+                        &mut actors, state, &self.asset_manager, visual_policy,
+                    );
+                }
             }
             CurrentScreen::EvaluationSummary => {
                 let stages = PostSelectStageView::new(
@@ -11623,6 +11631,7 @@ mod tests {
                 let profile = profile::get_for_side(side);
                 profile_data::evaluation_mods_text(&profile, speed_mod)
             },
+            max_combo: 0,
             hands_achieved: 0,
             hands_total: 0,
             holds_held: 0,
@@ -11799,6 +11808,7 @@ mod tests {
             possible_grade_points,
             ex_score_percent: 100.0,
             hard_ex_score_percent: 100.0,
+            max_combo: 20,
             hands_achieved: 1,
             hands_total: 1,
             holds_held: 2,

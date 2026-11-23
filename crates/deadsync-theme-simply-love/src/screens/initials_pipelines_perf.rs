@@ -188,6 +188,7 @@ fn test_player_summary(
         possible_grade_points,
         ex_score_percent: 100.0,
         hard_ex_score_percent: 100.0,
+        max_combo: 0,
         hands_achieved: 0,
         hands_total: 0,
         holds_held: 2,
