@@ -26,7 +26,7 @@ pub use runtime::{
 };
 pub use screen::{Screen, Theme, ThemeScreenId};
 pub use transition::{
-    ThemeTransitionAudio, ThemeTransitions, TransitionAudio, TransitionCompletion, TransitionFrame,
+    ThemeTransitionAudio, ThemeTransitions, TransitionCompletion, TransitionFrame,
     TransitionKind, TransitionMusic, TransitionState,
 };
 

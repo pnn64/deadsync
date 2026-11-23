@@ -10,7 +10,6 @@ use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_input::InputEvent;
 use deadsync_profile_gameplay::stage_options::{PlayerOptionsView, StageOptions};
-use deadsync_theme::ThemeTransitions;
 use deadsync_theme::player_options::{
     HeartRateDevicesView, NoteskinPreviewRequest, PlayerOptionsEntry, PlayerOptionsLayout,
     PlayerOptionsSelection, ThemePlayerOptions,
@@ -132,17 +131,11 @@ impl PlayerOptionsState {
         &mut self.editor
     }
 
-    pub(crate) fn entry_transition(&self) -> (Vec<Actor>, f32) {
-        self.layout.as_ref().map_or_else(
-            || ActiveTheme::in_transition(Screen::PlayerOptions, None),
-            |layout| layout.entry_transition(),
-        )
+    pub(crate) fn entry_transition(&self) -> Option<(Vec<Actor>, f32)> {
+        self.layout.as_ref().map(|layout| layout.entry_transition())
     }
 
-    pub(crate) fn exit_transition(&self, target: Screen) -> (Vec<Actor>, f32) {
-        self.layout.as_ref().map_or_else(
-            || ActiveTheme::out_transition(Screen::PlayerOptions, target),
-            |layout| layout.exit_transition(target),
-        )
+    pub(crate) fn exit_transition(&self, target: Screen) -> Option<(Vec<Actor>, f32)> {
+        self.layout.as_ref().map(|layout| layout.exit_transition(target))
     }
 }

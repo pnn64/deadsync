@@ -13799,7 +13799,7 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
     assert!(!navigation.contains("ActiveTheme"));
     for policy in [
         "if from.is_play() || target.is_play()",
-        "T::transition_kind(from, target)",
+        "presentation_kind(from, target)",
         "target.is_play()",
         "then_some(deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS)",
         "Some(deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS)",
@@ -13810,14 +13810,31 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
     let adapter = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     for handoff in [
         "target.current_screen_file_name()",
-        "ActiveTheme::out_transition(screen, target)",
-        "ActiveTheme::in_transition(screen, context)",
+        "(self.state.screens.transitions.exit)(screen, target)",
+        "(self.state.screens.transitions.entry)(screen)",
+        "(self.gameplay_presentation.entry)(",
+        "self.state.screens.transitions.kind",
+        "options.entry_transition()",
+        "options.exit_transition(target)",
         "stage_exit_duration(screen).unwrap_or(duration)",
         "let duration = stage_entry_duration(screen, restarting)",
         "duration.unwrap_or(visual_duration)",
     ] {
         assert!(contains_rust(&adapter, handoff), "missing shell transition handoff {handoff}");
     }
+    for inline_presentation in [
+        "screens::transitions::",
+        "ActiveTheme::in_transition",
+        "ActiveTheme::out_transition",
+    ] {
+        assert!(!adapter.contains(inline_presentation));
+    }
+    let player_options = production_source(&root.join("crates/deadsync-shell/src/mounted_player_options.rs"));
+    assert!(!player_options.contains("ActiveTheme::in_transition"));
+    assert!(!player_options.contains("ActiveTheme::out_transition"));
+    let registry = production_source(&root.join("src/theme_registry.rs"));
+    assert!(registry.contains("transitions: FALLBACK_TRANSITIONS"));
+    assert!(registry.contains("entry: |screen| SimplyLoveTheme::in_transition(screen, None)"));
 
     // The endpoint still receives the final tick on the completion frame.
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
@@ -13827,8 +13844,8 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
     let advance = app.find(".advance_frame(transition_dt)")
         .expect("advance transition clock");
     assert!(tick_policy < advance);
-    assert!(contains_rust(&app, "screen_fade_view(self.state.screens.current_screen, &self.state.shell.transition)"));
-    assert!(app.contains("let smx_overlay_alpha = gameplay_smx_overlay_alpha("));
+    assert!(app.contains("(self.state.screens.transitions.screen_alpha)("));
+    assert!(app.contains("(self.gameplay_presentation.smx_overlay_alpha)("));
 }
 
 #[test]
@@ -13864,24 +13881,27 @@ fn transition_audio_presentation_is_owned_by_the_theme() {
         }
     }
     for handoff in [
-        "T::transition_audio(",
+        "transition_music(context.previous, context.target)",
         "let entering_gameplay = context.target == Screen::Gameplay",
         "if context.target == Screen::Practice { TransitionMusic::Stop }",
         "commands.push(Command::UpdateSessionMusicRate(options.music_rate))",
-        "entry_music.unwrap_or(audio.music)",
-        "if audio.stop_preview_on_exit && !replaces_preview { commands.push(Command::StopMusic); }",
+        "entry_music.unwrap_or(music)",
+        "if !entering_gameplay && !replaces_preview && matches!(context.previous, Screen::SelectMusic | Screen::PlayerOptions)",
     ] {
         assert!(contains_rust(&shell, handoff), "missing fade audio handoff {handoff}");
     }
-    assert!(contains_rust(fade, "transition_effect_plan::<ActiveTheme>("));
+    assert!(contains_rust(fade, "transition_effect_plan("));
+    assert!(contains_rust(fade, "(transitions.music)(from, to, deadsync_theme::TransitionKind::Global, &config)"));
     assert!(contains_rust(fade, ".evaluation_audio().music_loop"));
     assert!(app.contains("EvaluationFallbackSounds::None"));
     let openitg_stage = production_source(&root.join("crates/deadsync-theme-openitg/src/stage_mount.rs"));
     let loop_path = "assets/media/openitg/evaluation.ogg";
     assert!(openitg_stage.contains(loop_path));
     assert!(!app.contains(loop_path));
-    assert!(contains_rust(&screen_nav, "ActiveTheme::transition_audio("));
-    assert!(contains_rust(&screen_nav, "!current.is_play() && ActiveTheme::stop_screen_sfx_on_exit(current, target)"));
+    assert!(contains_rust(&screen_nav, "(self.state.screens.transitions.music)("));
+    assert!(contains_rust(&screen_nav, "!current.is_play() && (self.state.screens.transitions.stop_screen_sfx_on_exit)(current, target)"));
+    assert!(!screen_nav.contains("TransitionAudioContext"));
+    assert!(!theme.contains("stop_preview_on_exit"));
 }
 
 #[test]

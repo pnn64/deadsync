@@ -1,9 +1,7 @@
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_theme::{
-    Screen, ThemeTransitionAudio, TransitionAudio, TransitionKind, TransitionMusic,
-};
+use deadsync_theme::{Screen, TransitionMusic};
 
 use crate::Command;
 
@@ -42,21 +40,17 @@ pub fn transition_music_command(music: TransitionMusic) -> Option<Command> {
     }
 }
 
-pub fn transition_effect_plan<T: ThemeTransitionAudio<Screen = Screen>>(
+pub fn transition_effect_plan(
     context: TransitionEffectContext,
-    audio_context: T::AudioContext,
+    transition_music: impl FnOnce(Screen, Screen) -> TransitionMusic,
+    stop_screen_sfx_on_exit: fn(Screen, Screen) -> bool,
 ) -> TransitionEffectPlan {
     let entering_gameplay = context.target == Screen::Gameplay;
-    let audio = if entering_gameplay {
+    let music = if entering_gameplay {
         // The stage controller takes over the stream when its clock starts.
-        TransitionAudio::default()
+        TransitionMusic::Keep
     } else {
-        T::transition_audio(
-            context.previous,
-            context.target,
-            TransitionKind::Global,
-            audio_context,
-        )
+        transition_music(context.previous, context.target)
     };
     let entry_music = context.entry_music.filter(|_| {
         !entering_gameplay && context.target != Screen::Practice
@@ -65,7 +59,7 @@ pub fn transition_effect_plan<T: ThemeTransitionAudio<Screen = Screen>>(
     let music = if context.target == Screen::Practice {
         TransitionMusic::Stop
     } else {
-        entry_music.unwrap_or(audio.music)
+        entry_music.unwrap_or(music)
     };
     let previous_is_play = context.previous.is_play();
     let clear_play_background = previous_is_play && !context.target.is_play();
@@ -119,7 +113,14 @@ pub fn transition_effect_plan<T: ThemeTransitionAudio<Screen = Screen>>(
             preferred_difficulty_index = Some(preferred);
         }
     }
-    if audio.stop_preview_on_exit && !replaces_preview {
+    // Finish the outgoing preview after committing the player's selection.
+    if !entering_gameplay && !replaces_preview
+        && matches!(context.previous, Screen::SelectMusic | Screen::PlayerOptions)
+        && !matches!(
+            context.target,
+            Screen::SelectMusic | Screen::PlayerOptions | Screen::SelectCourse
+        )
+    {
         commands.push(Command::StopMusic);
     }
 
@@ -130,7 +131,7 @@ pub fn transition_effect_plan<T: ThemeTransitionAudio<Screen = Screen>>(
     TransitionEffectPlan {
         commands,
         stop_screen_sfx: context.previous == Screen::Gameplay
-            || (!previous_is_play && T::stop_screen_sfx_on_exit(context.previous, context.target)),
+            || (!previous_is_play && stop_screen_sfx_on_exit(context.previous, context.target)),
         clear_play_background,
         preferred_difficulty_index,
     }
@@ -139,19 +140,18 @@ pub fn transition_effect_plan<T: ThemeTransitionAudio<Screen = Screen>>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ActiveTheme;
-    use deadsync_config::theme::{SrpgVariant, VisualStyle};
-    use deadsync_theme::{Theme, ThemeScreenId};
-    use deadsync_theme_simply_love::screens::transition_audio::TransitionAudioContext;
-
-    const AUDIO_CONTEXT: TransitionAudioContext = TransitionAudioContext {
-        menu_music_enabled: false,
-        style: VisualStyle::Hearts,
-        variant: SrpgVariant::Srpg9,
-    };
+    use deadsync_config::app_config::Config;
+    use deadsync_theme::TransitionKind;
 
     fn plan(context: TransitionEffectContext) -> TransitionEffectPlan {
-        transition_effect_plan::<ActiveTheme>(context, AUDIO_CONTEXT)
+        let mut config = Config::default();
+        config.menu_music = false;
+        let transitions = crate::theme_registry::mount(config.theme_flag).transitions;
+        transition_effect_plan(
+            context,
+            |from, to| (transitions.music)(from, to, TransitionKind::Global, &config),
+            transitions.stop_screen_sfx_on_exit,
+        )
     }
 
     #[test]
@@ -294,45 +294,10 @@ mod tests {
         }
     }
 
-    struct CueTheme;
-
-    impl Theme for CueTheme {
-        type Screen = Screen;
-        type RuntimeRequest = ();
-
-        fn screen_id(screen: Screen) -> ThemeScreenId {
-            ActiveTheme::screen_id(screen)
-        }
-    }
-
-    impl ThemeTransitionAudio for CueTheme {
-        type AudioContext = ();
-
-        fn transition_audio(
-            _: Screen,
-            target: Screen,
-            _: TransitionKind,
-            _: (),
-        ) -> TransitionAudio {
-            assert_ne!(target, Screen::Gameplay);
-            TransitionAudio {
-                music: TransitionMusic::Play {
-                    path: "alternate.ogg".into(),
-                    looping: true,
-                },
-                stop_preview_on_exit: false,
-            }
-        }
-
-        fn stop_screen_sfx_on_exit(_: Screen, _: Screen) -> bool {
-            false
-        }
-    }
-
     #[test]
     fn alternate_theme_music_plays_after_stage_exit_and_keeps_stage_entry_audio_owned_by_game() {
         for target in [Screen::Gameplay, Screen::Practice, Screen::Evaluation] {
-            let plan = transition_effect_plan::<CueTheme>(
+            let plan = transition_effect_plan(
                 TransitionEffectContext {
                     entry_music: None,
                     previous: Screen::Gameplay,
@@ -340,7 +305,14 @@ mod tests {
                     player_options: None,
                     select_music_preferred_difficulty: None,
                 },
-                (),
+                |_, to| {
+                    assert_ne!(to, Screen::Gameplay);
+                    TransitionMusic::Play {
+                        path: "alternate.ogg".into(),
+                        looping: true,
+                    }
+                },
+                |_, _| false,
             );
             assert!(plan.stop_screen_sfx);
             match target {

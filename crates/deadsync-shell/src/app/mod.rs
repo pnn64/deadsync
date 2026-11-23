@@ -37,8 +37,8 @@ use self::stage_start::{StageSelection, StageStart};
 use crate::content_reload::StartupLoad;
 use crate::{ActiveTheme, ThemeScreen as CurrentScreen, TransitionState};
 use crate::mounted_theme::{
-    GameplayPresentationMount, PlayerOptionsLayoutFactory, StartupScreen, SupplementalResources,
-    ThemeMount,
+    GameplayPresentationMount, PlayerOptionsLayoutFactory, ScreenTransitionMount, StartupScreen,
+    SupplementalResources, ThemeMount,
 };
 use crate::command::Command;
 use crate::course::{
@@ -224,9 +224,6 @@ use deadsync_theme::select_music::DensityGraphSlot;
 use deadsync_theme::{
     AudioRequest, PlatformRequest, RevealPathKind, ThemeResources,
     TransitionCompletion, UiCue,
-};
-use deadsync_theme_simply_love::screens::transitions::{
-    gameplay_smx_overlay_alpha, screen_fade_view,
 };
 use deadsync_theme_simply_love::views::{
     EvaluationContextView, EvaluationPlayerView, EvaluationPolicyView,
@@ -668,6 +665,7 @@ pub struct ScreensState {
     player_options_layout: Option<PlayerOptionsLayoutFactory>,
     startup_load: StartupLoad,
     startup_screen: Box<StartupScreen>,
+    transitions: ScreenTransitionMount,
     attract: Option<attract_demo::AttractRuntime>,
     select_profile_state: <ActiveTheme as ThemeProfilePicker>::ProfilePickerState,
     select_color_state: select_color::State,
@@ -1331,6 +1329,7 @@ impl ScreensState {
             player_options_layout: mount.player_options,
             startup_load: StartupLoad::default(),
             startup_screen: (mount.startup)(color_index),
+            transitions: mount.transitions,
             attract: mount.attract.map(attract_demo::AttractRuntime::new),
             gameplay_outro: None,
             evaluation_departure: None,
@@ -7905,8 +7904,10 @@ impl App {
         let screen_alpha_multiplier = if self.state.screens.current_screen == CurrentScreen::Menu {
             1.0
         } else {
-            screen_fade_view(self.state.screens.current_screen, &self.state.shell.transition)
-                .screen_alpha
+            (self.state.screens.transitions.screen_alpha)(
+                self.state.screens.current_screen,
+                &self.state.shell.transition,
+            )
         };
 
         let mut actors = std::mem::take(&mut self.actor_scratch);
@@ -7952,7 +7953,7 @@ impl App {
                 });
                 if !stage_covered && let Some(gs) = &mut self.state.screens.gameplay_state {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
-                    let smx_overlay_alpha = gameplay_smx_overlay_alpha(
+                    let smx_overlay_alpha = (self.gameplay_presentation.smx_overlay_alpha)(
                         gs.presentation.hide_song_intro,
                         &self.state.shell.transition,
                     );
@@ -9301,7 +9302,8 @@ impl App {
                 )
             }
         });
-        let plan = transition_effect_plan::<ActiveTheme>(
+        let transitions = self.state.screens.transitions;
+        let plan = transition_effect_plan(
             TransitionEffectContext {
                 previous: prev,
                 target,
@@ -9310,7 +9312,8 @@ impl App {
                 select_music_preferred_difficulty: (prev == CurrentScreen::SelectMusic)
                     .then_some(self.state.screens.select_music_state.preferred_difficulty_index),
             },
-            screen_nav::transition_audio_context(&config),
+            |from, to| (transitions.music)(from, to, deadsync_theme::TransitionKind::Global, &config),
+            transitions.stop_screen_sfx_on_exit,
         );
         // Lua Sound actors and their detached overlapping voices belong to the
         // outgoing gameplay screen, including an authored gameplay reload.

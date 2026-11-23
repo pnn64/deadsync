@@ -253,6 +253,27 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
         assert!(cover.is_empty());
         assert_eq!(duration, 0.5);
     }
+    if extreme {
+        let (cover, duration) = app.get_in_transition_for_screen(CurrentScreen::PlayerOptions);
+        assert_eq!(cover.len(), 1);
+        assert_eq!(duration, 0.25);
+    }
+    let normal_entry = app.state.screens.transitions.entry;
+    app.state.screens.transitions.entry = |screen| {
+        assert_eq!(screen, CurrentScreen::PlayerOptions);
+        (Vec::new(), 0.75)
+    };
+    let mounted_duration = match theme {
+        ThemeFlag::SimplyLove => 0.75,
+        ThemeFlag::OpenItg => 0.5,
+        ThemeFlag::DdrExtreme => 0.25,
+    };
+    assert_eq!(
+        app.get_in_transition_for_screen(CurrentScreen::PlayerOptions).1,
+        mounted_duration
+    );
+    app.state.screens.transitions.entry = normal_entry;
+
     // The editor's first Start moves focus to Exit and the next starts play.
     press(app, event_loop, VirtualAction::p2_start);
     press(app, event_loop, VirtualAction::p2_start);
