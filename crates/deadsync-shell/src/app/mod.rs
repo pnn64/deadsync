@@ -9225,10 +9225,25 @@ impl App {
             None
         };
         let submitted_music_rate = player_options.as_ref().map(|options| options.music_rate);
+        let entry_music = (target == CurrentScreen::Evaluation).then(|| {
+            use deadsync_theme::TransitionMusic;
+            if prev == target {
+                TransitionMusic::Keep
+            } else {
+                self.state.screens.stage_presentation.evaluation_music_loop().map_or(
+                    TransitionMusic::Stop,
+                    |asset| TransitionMusic::Play {
+                        path: deadsync_assets::resolve_asset_path(asset),
+                        looping: true,
+                    },
+                )
+            }
+        });
         let plan = transition_effect_plan::<ActiveTheme>(
             TransitionEffectContext {
                 previous: prev,
                 target,
+                entry_music,
                 player_options,
                 select_music_preferred_difficulty: (prev == ActiveTheme::SCREENS.song_selection)
                     .then_some(self.state.screens.select_music_state.preferred_difficulty_index),
@@ -11906,6 +11921,7 @@ mod tests {
             hands_total: 0,
             holds_held: 0,
             holds_held_for_score: 0,
+            dropped_hold_or_roll: false,
             holds_total: 0,
             rolls_held: 0,
             rolls_held_for_score: 0,
@@ -12087,6 +12103,7 @@ mod tests {
             hands_total: 1,
             holds_held: 2,
             holds_held_for_score: 2,
+            dropped_hold_or_roll: false,
             holds_total: 2,
             rolls_held: 1,
             rolls_held_for_score: 1,

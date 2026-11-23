@@ -195,6 +195,7 @@ fn test_player_summary(
         hands_total: 0,
         holds_held: 2,
         holds_held_for_score: 2,
+        dropped_hold_or_roll: false,
         holds_total: 2,
         rolls_held: 1,
         rolls_held_for_score: 1,

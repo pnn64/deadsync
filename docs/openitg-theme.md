@@ -840,9 +840,11 @@ additional label and pulse. These timings cover draw command construction.
 The OpenITG overview uses DeadSync's completed-stage score, grade, judgment
 counts, jump totals, hold and roll results, avoided mines, hand counts, and
 life history.
-It shows the saved personal and machine ranks, disqualification, and the
-configured EX scores. Routine shows its shared result with the participant's
-score beside it. Maximum combo comes from the recorded gameplay peak. Course
+Its machine-record callout reads the saved machine rank. The personal rank
+remains in the records pane, following the effective OpenITG overview metrics.
+Disqualification and the configured EX scores remain available. Routine shows
+its shared result with the participant's score beside it. Maximum combo comes
+from the recorded gameplay peak. Course
 results retain the highest stage peak for each side, including recorded carry.
 
 The layout follows the effective `ScreenEvaluation` and `ScreenEvaluationStage`
@@ -879,7 +881,26 @@ practice handoffs, and onward routing. Timing, records, online detail panels,
 and other auxiliary panes retain their existing presentation and controls.
 Evaluation uses original artwork and the shared record cues. The native
 pass and fail entry redirects are silent. The stage failure cue plays
-during the outro.
+during the outro. The theme supplies `ScreenEvaluation music (loop).ogg`
+from the d4 default theme. The shell replaces the outgoing stream on entry,
+keeps the loop when browsing result pages, and applies the destination audio
+policy when leaving. The packaged track is `assets/media/openitg/evaluation.ogg`.
+
+The machine rank reveals from the player's side over 0.3 seconds starting at
+3.0 seconds. Its Eurostile label oscillates between gray and white. Extra
+DeadSync score percentages move below the stats panel while the record label
+is present. Difficulty and peak combo awards slide in with the stats using the
+native labels, the five MilkShape model families, and their 24 textures.
+The orange flag uses the effective patch material. Award selection reads the
+shared unweighted judgment counts, hold and roll outcomes, and combo carry.
+The game still determines score validity and leaderboard placement.
+
+Matching two-player OpenGL and Vulkan captures at 640×480 and 854×480
+showed identical bounds for the green flag's saturated pixels and the same
+horizontal extent for the machine-record text. The top text row differed by
+one pixel, and its pulse shade differed at capture time. The 640×480 result
+also exercised the orange flag and the 8,000-combo logo. Award exit motion and
+auxiliary result panes still need comparison with the reference.
 
 The native 640×480 Quartz capture uses P1 Single, Hard 5, and AutoPlay.
 It shows an empty graph, the Jumps row above Holds, and the chart title above
@@ -903,8 +924,7 @@ Barely arrow when a clear dips below 10 percent life without reaching zero.
 Native OpenGL and DeadSync Vulkan captures used the same populated two-player
 life timeline at 640×480 and 854×480. They show the same slice boundaries,
 life silhouette, and Barely placement. Twelve sampled fill pixels across
-the two players matched exactly at each width. The native record callouts,
-award sprites, and Evaluation music loop remain open.
+the two players matched exactly at each width.
 
 The round and modifier placements were checked in 18 paired Vulkan captures
 at 640×480 and 854×480. The captures covered Quartz, solo, and versus at 3.0,
@@ -918,6 +938,10 @@ At 854×480, nine warm runs of 8,000 settled-frame actor builds measured
 39.3 μs in versus. The OpenITG versus overview builds 96 top-level actors
 for its two panels. The benchmark covers actor construction with bundled
 fonts and dev-profile theme libraries. Evaluation GPU timing remains open.
+
+In the same 854×480 actor-build harness, the no-award versus overview took
+64.5 μs before and after adding awards, with 109 actors. A two-player result
+with both flags and the peak-combo logo took 72.3 μs and built 114 actors.
 
 The jump and combo display comparison used nine 8,000-frame batches per
 layout at 854×480 with three drawn combo runs per player. Median OpenITG

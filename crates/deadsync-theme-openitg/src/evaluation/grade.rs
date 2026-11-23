@@ -1,7 +1,7 @@
 use std::sync::{Arc, LazyLock};
 
 use deadlib_present::actors::{Actor, MeshEnvironment, MeshTexture, SizeSpec};
-use deadlib_present::render::{BlendMode, CullMode, TexturedMeshVertex};
+use deadlib_present::render::{BlendMode, CullMode, MeshSampler, TexturedMeshVertex};
 use deadlib_present::space::{current_metrics, menu_perspective};
 use deadsync_theme::views::Grade;
 use glam::{Mat4, Vec3};
@@ -35,24 +35,7 @@ struct Geometry {
 static MODELS: LazyLock<[Geometry; Model::Arrow as usize + 1]> = LazyLock::new(|| {
     let mut bytes = include_bytes!("../../assets/evaluation-models.bin").as_slice();
     let models = std::array::from_fn(|_| {
-        let vertex_count = read_u16(&mut bytes);
-        let index_count = read_u16(&mut bytes);
-        let vertices = (0..vertex_count)
-            .map(|_| {
-                let [x, y, z, u, v, nx, ny, nz] =
-                    std::array::from_fn(|_| f32::from_le_bytes(read(&mut bytes)));
-                TexturedMeshVertex {
-                    pos: [x, -y, z],
-                    uv: [u, v],
-                    normal: [nx, -ny, nz, 1.0],
-                    color: [1.0; 4],
-                    ..Default::default()
-                }
-            })
-            .collect::<Vec<_>>();
-        let plain = (0..index_count)
-            .map(|_| vertices[read_u16(&mut bytes)])
-            .collect::<Arc<[_]>>();
+        let plain = read_indexed_mesh(&mut bytes, 1.0);
         let reflective = plain
             .iter()
             .map(|vertex| {
@@ -66,6 +49,27 @@ static MODELS: LazyLock<[Geometry; Model::Arrow as usize + 1]> = LazyLock::new(|
     assert!(bytes.is_empty());
     models
 });
+
+pub(super) fn read_indexed_mesh(bytes: &mut &[u8], texture_mode: f32) -> Arc<[TexturedMeshVertex]> {
+    let vertex_count = read_u16(bytes);
+    let index_count = read_u16(bytes);
+    let vertices = (0..vertex_count)
+        .map(|_| {
+            let [x, y, z, u, v, nx, ny, nz] =
+                std::array::from_fn(|_| f32::from_le_bytes(read(bytes)));
+            TexturedMeshVertex {
+                pos: [x, -y, z],
+                uv: [u, v],
+                normal: [nx, -ny, nz, texture_mode],
+                color: [1.0; 4],
+                ..Default::default()
+            }
+        })
+        .collect::<Vec<_>>();
+    (0..index_count)
+        .map(|_| vertices[read_u16(bytes)])
+        .collect()
+}
 
 fn read_u16(bytes: &mut &[u8]) -> usize {
     u16::from_le_bytes(read(bytes)) as usize
@@ -110,7 +114,7 @@ static SURFACES: LazyLock<[Arc<str>; Surface::ArrowAdd as usize + 1]> = LazyLock
     .map(|name| Arc::from(format!("openitg/evaluation-{name}.png")))
 });
 
-struct Scene {
+pub(super) struct Scene {
     projection: Mat4,
     view: Option<Mat4>,
     center: [f32; 2],
@@ -120,6 +124,23 @@ struct Scene {
 }
 
 impl Scene {
+    pub(super) fn orthographic(
+        layout: Layout,
+        center: [f32; 2],
+        transform: Mat4,
+        layer: i16,
+    ) -> Self {
+        Self {
+            projection: current_metrics().projection()
+                * Mat4::from_scale(Vec3::new(1.0, 1.0, 1.0 / 512.0)),
+            view: None,
+            center: layout.position(center[0], center[1]),
+            transform,
+            opacity: 1.0,
+            layer,
+        }
+    }
+
     fn model(&self, model: Model, surface: Surface, x: f32) -> Actor {
         let additive = match surface {
             Surface::Red | Surface::Yellow | Surface::Green | Surface::Orange => {
@@ -135,13 +156,30 @@ impl Scene {
         } else {
             &geom.plain
         };
+        self.mesh(
+            vertices,
+            &SURFACES[surface as usize],
+            additive.map(|key| &SURFACES[key as usize]),
+            None,
+            x,
+        )
+    }
+
+    pub(super) fn mesh(
+        &self,
+        vertices: &Arc<[TexturedMeshVertex]>,
+        texture: &Arc<str>,
+        additive: Option<&Arc<str>>,
+        sampler: Option<MeshSampler>,
+        x: f32,
+    ) -> Actor {
         let transform = self.transform * Mat4::from_translation(Vec3::new(x, 0.0, 0.0));
         Actor::TexturedMesh {
             environment: Some(MeshEnvironment {
-                sampler: None,
+                sampler,
                 camera: self.view.map(|view| (self.projection, view)),
                 transform,
-                additive_texture: additive.map(|key| Arc::clone(&SURFACES[key as usize])),
+                additive_texture: additive.cloned(),
                 additive_uv: [0.0, 0.0, 1.0, 1.0],
             }),
             align: [0.0; 2],
@@ -149,7 +187,7 @@ impl Scene {
             world_z: 0.0,
             size: [SizeSpec::Px(0.0); 2],
             local_transform: transform,
-            texture: MeshTexture::Key(Arc::clone(&SURFACES[surface as usize])),
+            texture: MeshTexture::Key(Arc::clone(texture)),
             tint: [1.0, 1.0, 1.0, self.opacity],
             vertex_color_encoding: Default::default(),
             glow: [0.0; 4],
@@ -170,7 +208,11 @@ impl Scene {
         }
     }
 
-    fn push(&mut self, actors: &mut Vec<Actor>, draw: impl FnOnce(&mut Self, &mut Vec<Actor>)) {
+    pub(super) fn push(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        draw: impl FnOnce(&mut Self, &mut Vec<Actor>),
+    ) {
         actors.push(Actor::CameraPush {
             view_proj: self.projection,
         });
@@ -228,17 +270,8 @@ pub(super) fn push_grade(
     grade: Grade,
     elapsed: f32,
 ) {
-    let projection =
-        current_metrics().projection() * Mat4::from_scale(Vec3::new(1.0, 1.0, 1.0 / 512.0));
     let scale = layout.size([scale, 0.0])[0];
-    let mut scene = Scene {
-        projection,
-        view: None,
-        center: layout.position(x, y),
-        transform: Mat4::from_scale(Vec3::splat(scale)),
-        opacity: 1.0,
-        layer: 101,
-    };
+    let mut scene = Scene::orthographic(layout, [x, y], Mat4::from_scale(Vec3::splat(scale)), 101);
     let wave = (elapsed * std::f32::consts::TAU).sin();
     let wag = (wave * 10.0).to_radians();
     let spin = (-90.0 + elapsed * 40.0).to_radians();

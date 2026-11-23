@@ -1,5 +1,6 @@
 //! Presentation choices for a stage and its results. The host supplies game facts.
 
+use deadlib_assets::AssetManager;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -38,7 +39,12 @@ pub trait StageOutroPresentation<A> {
 }
 
 pub trait EvaluationOverviewPresentation<A> {
-    fn push_overview(&mut self, actors: &mut Vec<A>, page: EvaluationOverview<'_>);
+    fn push_overview(
+        &mut self,
+        actors: &mut Vec<A>,
+        assets: &AssetManager,
+        page: EvaluationOverview<'_>,
+    );
 }
 
 pub trait StagePresentation<A> {
@@ -64,6 +70,11 @@ pub trait StagePresentation<A> {
     }
 
     fn evaluation_overview(&mut self) -> Option<&mut dyn EvaluationOverviewPresentation<A>> {
+        None
+    }
+
+    /// Bundled music to loop for the duration of an Evaluation visit.
+    fn evaluation_music_loop(&self) -> Option<&'static str> {
         None
     }
 

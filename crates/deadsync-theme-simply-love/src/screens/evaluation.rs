@@ -5600,6 +5600,7 @@ fn push_overview(
     let text = &state.result_text[index];
     presentation.push_overview(
         actors,
+        assets,
         EvaluationOverview {
             title: text.full_title(state.context.policy.translated_titles),
             artist: &text.artist,
@@ -5631,6 +5632,9 @@ fn push_overview(
                         meter: score.chart.meter,
                         mods: &score.mods_text,
                         judgments: score.judgment_counts,
+                        row_window_counts: score.window_counts,
+                        score_valid: score.score_valid,
+                        dropped_hold_or_roll: score.dropped_hold_or_roll,
                         jumps: score.jumps,
                         holds: [score.holds_held, score.holds_total],
                         mines: [score.mines_avoided, score.mines_total],
@@ -5641,7 +5645,6 @@ fn push_overview(
                         graph_seconds: [score.graph_first_second, score.graph_last_second],
                         course_graph_stages: &score.course_graph_stages,
                         steps_life: &score.steps_life,
-                        personal_rank: score.personal_record_highlight_rank,
                         machine_rank: score.machine_record_highlight_rank,
                         disqualified: score.disqualified,
                     }

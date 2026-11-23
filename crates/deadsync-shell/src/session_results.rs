@@ -137,6 +137,7 @@ pub(crate) fn evaluation_view(
                 hands_total: player.hands_total,
                 holds_held: player.holds_held,
                 holds_held_for_score: player.holds_held_for_score,
+                dropped_hold_or_roll: player.dropped_hold_or_roll,
                 holds_total: player.holds_total,
                 rolls_held: player.rolls_held,
                 rolls_held_for_score: player.rolls_held_for_score,

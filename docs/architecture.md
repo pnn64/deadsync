@@ -760,6 +760,11 @@ selects entry audio and carries animation, audio, and noteskin previews
 across course pages. The shell loads and plays the audio and tracks which
 course result is active.
 
+The mounted stage presentation supplies any Evaluation music loop. The
+shared transition plan applies that loop on entry and keeps it across result
+pages. The overview receives unweighted judgment counts, the dropped-hold
+fact, and combo carry so themes can present awards from the completed result.
+
 Video banners, screenshot labels, and StepManiaX result lighting use the
 completed stage's song, chart, and grade. The shell captures the automatic
 screenshot criteria before giving the result to the theme, and the theme

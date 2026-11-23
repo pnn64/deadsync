@@ -266,7 +266,14 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     let outro = app.state.screens.gameplay_outro.as_ref();
     assert_eq!(outro.is_some(), openitg);
     assert!(outro.is_none_or(|outro| outro.cue().is_none() && outro.duration() == 0.8));
+    let outgoing_track = deadlib_audio_core::active_music_track_id();
     settle(app, event_loop, CurrentScreen::Evaluation);
+    let evaluation_track = outgoing_track + u64::from(openitg);
+    assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
+    if openitg {
+        let relative_path = app.state.screens.stage_presentation.evaluation_music_loop().unwrap();
+        assert!(deadsync_assets::resolve_asset_path(relative_path).is_file());
+    }
     assert_eq!(app.state.session.played_stages.len(), 1);
     let result = &app.state.session.played_stages[0];
     assert!(result.players[0].is_none());
@@ -280,6 +287,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     for _ in 0..32 {
         menu_frame(app, event_loop);
     }
+    assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
     assert_eq!(

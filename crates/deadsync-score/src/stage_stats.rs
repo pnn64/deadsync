@@ -65,6 +65,8 @@ pub struct PlayerStageSummary {
     pub hands_total: u32,
     pub holds_held: u32,
     pub holds_held_for_score: u32,
+    /// A started hold or roll ended with a LetGo judgment.
+    pub dropped_hold_or_roll: bool,
     pub holds_total: u32,
     pub rolls_held: u32,
     pub rolls_held_for_score: u32,
@@ -281,6 +283,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         let mut life_judgments = LifeJudgmentTimes::default();
         let mut steps_elapsed = 0.0;
         let mut fail_time = None;
+        let mut dropped_hold_or_roll = false;
         let mut elapsed = 0.0_f32;
         let mut first_player: Option<&PlayerStageSummary> = None;
         for stage in input.stage_summaries {
@@ -306,6 +309,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             any_failed |= player.grade == Grade::Failed;
             score_valid &= player.score_valid;
             disqualified |= player.disqualified;
+            dropped_hold_or_roll |= player.dropped_hold_or_roll;
             show_w0 |= player.show_w0;
             show_fa_plus_pane |= player.show_fa_plus_pane;
             show_ex |= player.show_ex_score;
@@ -458,6 +462,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             hard_ex_score_percent,
             max_combo,
             combo_runs: combo_runs.into(),
+            dropped_hold_or_roll,
             jumps,
             hands_achieved,
             hands_total,
@@ -551,6 +556,7 @@ pub fn routine_shared_course_player(
     });
     shared.score_valid &= second.score_valid;
     shared.disqualified |= second.disqualified;
+    shared.dropped_hold_or_roll |= second.dropped_hold_or_roll;
     shared.earned_grade_points = first
         .earned_grade_points
         .saturating_add(second.earned_grade_points);
@@ -788,6 +794,7 @@ mod tests {
             hands_total: 0,
             holds_held: 2,
             holds_held_for_score: 2,
+            dropped_hold_or_roll: false,
             holds_total: 2,
             rolls_held: 1,
             rolls_held_for_score: 1,

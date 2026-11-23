@@ -1,3 +1,4 @@
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadsync_theme::stage::{
     EvaluationOverviewPresentation, StageLoadingView, StageMotionView, StageOutroPresentation,
@@ -60,6 +61,10 @@ impl StagePresentation<Actor> for OpenItgStagePresentation {
         Some(&mut self.evaluation)
     }
 
+    fn evaluation_music_loop(&self) -> Option<&'static str> {
+        Some("assets/media/openitg/evaluation.ogg")
+    }
+
     fn evaluation_intro_settled(&self, elapsed: f32, overview: bool) -> bool {
         !overview || elapsed >= EVALUATION_OVERVIEW_SETTLED_SECONDS
     }
@@ -74,8 +79,13 @@ impl StagePresentation<Actor> for OpenItgStagePresentation {
 }
 
 impl EvaluationOverviewPresentation<Actor> for OpenItgEvaluation {
-    fn push_overview(&mut self, actors: &mut Vec<Actor>, page: EvaluationOverview<'_>) {
-        OpenItgEvaluation::push_overview(self, actors, page);
+    fn push_overview(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        assets: &AssetManager,
+        page: EvaluationOverview<'_>,
+    ) {
+        OpenItgEvaluation::push_overview(self, actors, assets, page);
     }
 }
 

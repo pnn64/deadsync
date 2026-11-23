@@ -1,9 +1,10 @@
+mod award;
 mod grade;
 mod life_graph;
 
 use std::sync::{Arc, LazyLock};
 
-use deadlib_assets::present_dsl::cover_uv;
+use deadlib_assets::{AssetManager, present_dsl::cover_uv};
 use deadlib_present::actors::{Actor, MeshTexture, SizeSpec, TextContent};
 use deadlib_present::anim::bounceend_p;
 use deadlib_present::dsl::TextBuilder;
@@ -13,7 +14,7 @@ use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, Grade}
 use glam::{Mat4, Vec3};
 
 use crate::presentation::{
-    HEIGHT, Layout, WIDTH, italic, push_red_backdrop, push_red_streaks, sprite,
+    HEIGHT, Layout, TextMetrics, WIDTH, italic, push_red_backdrop, push_red_streaks, sprite,
 };
 use crate::resources::{
     EVALUATION_NUMBER_FONT, GAMEPLAY_SCORE_FONT, MENU_HEADING_FONT, MENU_NORMAL_FONT, TITLE_FONT,
@@ -44,6 +45,18 @@ const JUDGMENTS: [&str; 6] = [
     "Decent",
     "Way Off",
     "Miss",
+];
+const MACHINE_RECORDS: [&str; 10] = [
+    "Machine Record #1",
+    "Machine Record #2",
+    "Machine Record #3",
+    "Machine Record #4",
+    "Machine Record #5",
+    "Machine Record #6",
+    "Machine Record #7",
+    "Machine Record #8",
+    "Machine Record #9",
+    "Machine Record #10",
 ];
 
 static BANNER_MASK: LazyLock<Arc<str>> =
@@ -126,7 +139,12 @@ impl OpenItgEvaluation {
         }
         graph.as_ref().unwrap()
     }
-    pub fn push_overview(&mut self, actors: &mut Vec<Actor>, page: EvaluationOverview<'_>) {
+    pub fn push_overview(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        assets: &AssetManager,
+        page: EvaluationOverview<'_>,
+    ) {
         let viewport = [screen_width(), screen_height()];
         let layout = Layout::centered(viewport[0], viewport[1]);
         let elapsed = page.elapsed.max(0.0);
@@ -158,6 +176,12 @@ impl OpenItgEvaluation {
                 let body_shift = remaining * distance;
                 push_difficulty(actors, layout, seat, player, remaining * (WIDTH * 0.5));
                 push_player_stats(actors, layout, seat, player, body_shift);
+                if !player.disqualified
+                    && let Some(rank) = player.machine_rank
+                {
+                    push_machine_record(actors, assets, layout, seat, player.p2, rank, elapsed);
+                }
+                award::push_awards(actors, layout, seat.panel_x + body_shift, player, elapsed);
                 let graph = self.graph(slot, player.steps_life);
                 let life_x = seat.panel_x + body_shift;
                 graph.push(actors, layout, [life_x, LIFE_Y], LIFE_SIZE, player.p2);
@@ -182,6 +206,50 @@ impl OpenItgEvaluation {
             grade::push_grade(actors, layout, [x, y], scale, player.grade, elapsed);
         }
     }
+}
+
+fn push_machine_record(
+    actors: &mut Vec<Actor>,
+    assets: &AssetManager,
+    layout: Layout,
+    seat: Seat,
+    p2: bool,
+    rank: u32,
+    elapsed: f32,
+) {
+    let Some(&label) = rank
+        .checked_sub(1)
+        .and_then(|index| MACHINE_RECORDS.get(index as usize))
+    else {
+        return;
+    };
+    let x = seat.panel_x + if p2 { 177.0 } else { 183.0 };
+    let shade = 0.75 - 0.25 * (elapsed.fract() * std::f32::consts::TAU).cos();
+    let mut text = layout.text(
+        [x, 227.0],
+        0.5,
+        TextContent::Static(label),
+        0.5,
+        [shade, shade, shade, 1.0],
+    );
+    text.font(MENU_NORMAL_FONT);
+    text.shadowlength(layout.size([1.0, 0.0])[0]);
+    let mut text = text.build(0);
+    let reveal = (elapsed - STATS_START_SECONDS) / STATS_ENTER_SECONDS;
+    if reveal < 1.0
+        && let Actor::Text { clip, .. } = &mut text
+    {
+        let width = TextMetrics::new(assets.fonts(), MENU_NORMAL_FONT).width(label) * 0.5;
+        let left = if p2 {
+            x + width * (0.5 - reveal)
+        } else {
+            x - width * 0.5
+        };
+        let [left, top] = layout.position(left, 215.0);
+        let [width, height] = layout.size([width * reveal, 24.0]);
+        *clip = Some([left, top, width, height]);
+    }
+    actors.push(text);
 }
 
 pub(crate) fn push_arcade_backdrop(
@@ -648,6 +716,14 @@ fn push_player_stats(
         .iter()
         .filter(|(_, percent)| percent.is_some())
         .count();
+    let detail_y = if player
+        .machine_rank
+        .is_some_and(|rank| (1..=10).contains(&rank))
+    {
+        432.0
+    } else {
+        230.0
+    };
     for (index, (name, percent)) in accompanying
         .into_iter()
         .filter_map(|(name, percent)| percent.map(|percent| (name, percent)))
@@ -656,7 +732,7 @@ fn push_player_stats(
         let dx = (index as f32 - (count - 1) as f32 * 0.5) * 55.0;
         let mut detail = text(
             layout,
-            [percent_x + dx, 230.0],
+            [percent_x + dx, detail_y],
             0.5,
             value(format_args!("{name} {percent:.2}%")),
             0.38,
@@ -678,25 +754,6 @@ fn push_player_stats(
             )
             .build(0),
         );
-    } else {
-        for (rank, prefix, label_x) in [
-            (player.personal_rank, "PERSONAL", x + 6.0),
-            (player.machine_rank, "MACHINE", x + 144.0),
-        ] {
-            if let Some(rank) = rank.filter(|rank| *rank > 0) {
-                actors.push(
-                    text(
-                        layout,
-                        [label_x, 305.0],
-                        0.0,
-                        value(format_args!("{prefix} #{rank}")),
-                        0.43,
-                        seat.tint,
-                    )
-                    .build(0),
-                );
-            }
-        }
     }
     push_counts(actors, layout, x, seat.tint, player);
 }
@@ -820,6 +877,9 @@ mod tests {
             meter: 11,
             mods,
             judgments: [963, 104, 27, 4, 2, 8],
+            row_window_counts: Default::default(),
+            score_valid: true,
+            dropped_hold_or_roll: false,
             jumps: [18, 20],
             holds: [72, 79],
             mines: [32, 36],
@@ -830,7 +890,6 @@ mod tests {
             graph_seconds: [0.0, 120.0],
             course_graph_stages: &[],
             steps_life: &TEST_LIFE,
-            personal_rank: Some(1),
             machine_rank: Some(3),
             disqualified: false,
         }
@@ -852,6 +911,7 @@ mod tests {
 
     #[test]
     fn native_and_wide_overviews_place_the_banner_and_both_canonical_life_graphs() {
+        use deadsync_rules::timing::WindowCounts;
         use deadsync_theme::views::ComboRun;
         let title = Arc::from("DeadSync Stage");
         let artist = Arc::from("Artist");
@@ -882,6 +942,7 @@ mod tests {
                 let mut actors = Vec::new();
                 OpenItgEvaluation::default().push_overview(
                     &mut actors,
+                    &AssetManager::new(),
                     EvaluationOverview {
                         title: &title,
                         artist: &artist,
@@ -893,6 +954,11 @@ mod tests {
                         players: [
                             Some(EvaluationPlayerOverview {
                                 combo_runs: &combo_runs,
+                                row_window_counts: WindowCounts {
+                                    w2: 2,
+                                    w3: 1,
+                                    ..Default::default()
+                                },
                                 ..player(&mods)
                             }),
                             Some(EvaluationPlayerOverview {
@@ -900,6 +966,8 @@ mod tests {
                                 grade: Grade::Failed,
                                 percent: 65.0,
                                 disqualified: true,
+                                max_combo: 8158,
+                                machine_rank: None,
                                 ..player(&mods)
                             }),
                         ],
@@ -917,6 +985,27 @@ mod tests {
                 assert!(has_text(&actors, "C500, Overhead", [502.0 + delta, 183.0]));
                 assert!(has_text(&actors, "97.65%", [220.0 + delta, 212.0]));
                 assert!(has_text(&actors, "65.00%", [504.0 + delta, 212.0]));
+                assert!(has_text(
+                    &actors,
+                    "Machine Record #3",
+                    [222.0 + delta, 227.0]
+                ));
+                assert!(!has_text(
+                    &actors,
+                    "Machine Record #3",
+                    [506.0 + delta, 227.0]
+                ));
+                assert!(has_text(&actors, "One Great", [310.0 + delta, 305.0]));
+                assert!(!has_text(
+                    &actors,
+                    "8000 Peak Combo",
+                    [330.0 + delta, 305.0]
+                ));
+                assert!(actors.iter().any(|actor| matches!(actor,
+                    Actor::TexturedMesh { offset, texture, .. }
+                        if *offset == [280.0 + delta, 258.0]
+                            && texture.texture_key() == Some("openitg/evaluation-award-flag-green.png")
+                )));
                 for (key, x) in [
                     ("openitg/evaluation-red.png", 86.0),
                     ("openitg/evaluation-purple.png", 376.0),
@@ -958,6 +1047,7 @@ mod tests {
                 let mut actors = Vec::new();
                 OpenItgEvaluation::default().push_overview(
                     &mut actors,
+                    &AssetManager::new(),
                     EvaluationOverview {
                         title: &title,
                         artist: &empty,
@@ -982,6 +1072,7 @@ mod tests {
                     elapsed > 0.25
                 );
                 assert!(!has_text(&actors, "97.65%", [220.0, 212.0]));
+                assert!(!has_text(&actors, "Machine Record #3", [222.0, 227.0]));
                 assert!(!has_texture(&actors, "openitg/gameplay-stage-1.png"));
                 assert!(
                     !actors
@@ -992,6 +1083,7 @@ mod tests {
             let mut actors = Vec::new();
             OpenItgEvaluation::default().push_overview(
                 &mut actors,
+                &AssetManager::new(),
                 EvaluationOverview {
                     title: &title,
                     artist: &empty,
@@ -1004,6 +1096,10 @@ mod tests {
                 },
             );
             assert!(has_life_graph(&actors, false, -41.0));
+            assert!(actors.iter().any(|actor| matches!(actor,
+                Actor::Text { content, clip: Some(clip), .. }
+                    if content.as_str() == "Machine Record #3" && clip[0] < 222.0 && clip[2] > 0.0
+            )));
             assert!(actors.iter().any(|actor| matches!(actor,
                 Actor::Sprite { source: SpriteSource::TextureStatic("openitg/gameplay-stage-1.png"), offset, .. }
                     if (offset[0] - (-56.0 + 498.0 * 0.08)).abs() < 0.001
@@ -1020,6 +1116,7 @@ mod tests {
             let mut actors = Vec::new();
             OpenItgEvaluation::default().push_overview(
                 &mut actors,
+                &AssetManager::new(),
                 EvaluationOverview {
                     title: &title,
                     artist: &Arc::from(""),
@@ -1054,13 +1151,13 @@ mod tests {
                     .count(),
                 5
             );
-            assert!(has_text(&actors, "EX 91.25%", [302.0, 230.0]));
-            assert!(has_text(&actors, "H.EX 89.64%", [357.0, 230.0]));
-            assert!(has_text(&actors, "OWN 93.44%", [412.0, 230.0]));
+            assert!(has_text(&actors, "EX 91.25%", [302.0, 432.0]));
+            assert!(has_text(&actors, "H.EX 89.64%", [357.0, 432.0]));
+            assert!(has_text(&actors, "OWN 93.44%", [412.0, 432.0]));
             assert!(has_text(&actors, " 963", [281.0, 325.0]));
             assert!(has_text(&actors, " 72/ 79", [445.0, 341.0]));
             assert!(has_text(&actors, "  611", [445.0, 405.0]));
-            assert!(has_text(&actors, "MACHINE #3", [326.0, 305.0]));
+            assert!(has_text(&actors, "Machine Record #3", [359.0, 227.0]));
         });
     }
 }

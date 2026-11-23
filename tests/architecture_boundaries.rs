@@ -13760,11 +13760,17 @@ fn transition_audio_presentation_is_owned_by_the_theme() {
         "let entering_gameplay = context.target == T::SCREENS.gameplay",
         "if context.target == T::SCREENS.practice { TransitionMusic::Stop }",
         "commands.push(Command::UpdateSessionMusicRate(options.music_rate))",
-        "if audio.stop_preview_on_exit { commands.push(Command::StopMusic); }",
+        "entry_music.unwrap_or(audio.music)",
+        "if audio.stop_preview_on_exit && !replaces_preview { commands.push(Command::StopMusic); }",
     ] {
         assert!(contains_rust(&shell, handoff), "missing fade audio handoff {handoff}");
     }
     assert!(contains_rust(fade, "transition_effect_plan::<ActiveTheme>("));
+    assert!(fade.contains(".evaluation_music_loop()"));
+    let openitg_stage = production_source(&root.join("crates/deadsync-theme-openitg/src/stage_mount.rs"));
+    let loop_path = "assets/media/openitg/evaluation.ogg";
+    assert!(openitg_stage.contains(loop_path));
+    assert!(!app.contains(loop_path));
     assert!(contains_rust(&screen_nav, "ActiveTheme::transition_audio("));
     assert!(contains_rust(&screen_nav, "!is_play_screen::<ActiveTheme>(current) && ActiveTheme::stop_screen_sfx_on_exit(current, target)"));
 }

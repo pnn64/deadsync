@@ -7,7 +7,7 @@ use deadsync_gameplay::{GameplayRuntimeState, build_crossover_rows};
 use deadsync_profile as profile_data;
 use deadsync_rules::course::CourseType;
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::{judgment, timing as timing_stats};
+use deadsync_rules::{judgment, note::HoldResult, timing as timing_stats};
 use deadsync_score::stage_stats::{self, PlayerStageSummary, StageSummary};
 use deadsync_score::{self as score_data, GrooveStatsEvalState, ItlEvalState};
 use std::collections::HashMap;
@@ -188,6 +188,9 @@ pub fn stage_result<A, C, D>(
         let p = &gs.players()[player_idx];
         let prof = &gs.profiles()[player_idx];
         let col_offset = player_idx.saturating_mul(cols_per_player);
+        let dropped_hold_or_roll = notes.iter().any(|note| {
+            note.hold.as_ref().is_some_and(|hold| hold.result == Some(HoldResult::LetGo))
+        });
         let fail_stream_progress = p.fail_time.and_then(|fail_time| {
             let timing = gs.timing_for_player(player_idx)?;
             let chart = gs.gameplay_chart(player_idx)?;
@@ -371,6 +374,7 @@ pub fn stage_result<A, C, D>(
             hands_total: gs.hands_total_for_player(player_idx),
             holds_held: p.holds_held,
             holds_held_for_score: p.holds_held_for_score,
+            dropped_hold_or_roll,
             holds_total: totals.holds_total,
             rolls_held: p.rolls_held,
             rolls_held_for_score: p.rolls_held_for_score,

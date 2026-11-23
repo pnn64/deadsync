@@ -19,6 +19,7 @@ pub struct PlayerOptionsTransition {
 pub struct TransitionEffectContext<S> {
     pub previous: S,
     pub target: S,
+    pub entry_music: Option<TransitionMusic>,
     pub player_options: Option<PlayerOptionsTransition>,
     pub select_music_preferred_difficulty: Option<usize>,
 }
@@ -58,10 +59,14 @@ pub fn transition_effect_plan<T: ThemeScreenFlow + ThemeTransitionAudio>(
             audio_context,
         )
     };
+    let entry_music = context.entry_music.filter(|_| {
+        !entering_gameplay && context.target != T::SCREENS.practice
+    });
+    let replaces_preview = matches!(entry_music, Some(TransitionMusic::Play { .. }));
     let music = if context.target == T::SCREENS.practice {
         TransitionMusic::Stop
     } else {
-        audio.music
+        entry_music.unwrap_or(audio.music)
     };
     let previous_is_play = is_play_screen::<T>(context.previous);
     let clear_play_background = previous_is_play && !is_play_screen::<T>(context.target);
@@ -115,7 +120,7 @@ pub fn transition_effect_plan<T: ThemeScreenFlow + ThemeTransitionAudio>(
             preferred_difficulty_index = Some(preferred);
         }
     }
-    if audio.stop_preview_on_exit {
+    if audio.stop_preview_on_exit && !replaces_preview {
         commands.push(Command::StopMusic);
     }
 
@@ -153,6 +158,7 @@ mod tests {
     #[test]
     fn player_options_persists_settings_before_leaving_wheel_flow() {
         let plan = plan(TransitionEffectContext {
+            entry_music: None,
             previous: Screen::PlayerOptions,
             target: Screen::Menu,
             player_options: Some(PlayerOptionsTransition {
@@ -182,6 +188,7 @@ mod tests {
     #[test]
     fn versus_gameplay_handoff_keeps_music_and_persists_both_players_in_order() {
         let plan = plan(TransitionEffectContext {
+            entry_music: None,
             previous: Screen::PlayerOptions,
             target: Screen::Gameplay,
             player_options: Some(PlayerOptionsTransition {
@@ -232,6 +239,7 @@ mod tests {
     #[test]
     fn select_music_handoff_uses_wheel_preference_and_forwards_cleanup() {
         let plan = plan(TransitionEffectContext {
+            entry_music: None,
             previous: Screen::SelectMusic,
             target: Screen::Menu,
             player_options: None,
@@ -251,6 +259,7 @@ mod tests {
     #[test]
     fn gameplay_exit_stops_outgoing_music_and_clears_stage_media() {
         let plan = plan(TransitionEffectContext {
+            entry_music: None,
             previous: Screen::Gameplay,
             target: Screen::Evaluation,
             player_options: None,
@@ -262,6 +271,28 @@ mod tests {
             plan.commands.as_slice(),
             [Command::StopMusic, Command::StopMusic]
         ));
+    }
+
+    #[test]
+    fn evaluation_loop_replaces_song_and_preview_audio() {
+        for previous in [Screen::Gameplay, Screen::SelectMusic, Screen::PlayerOptions] {
+            let plan = plan(TransitionEffectContext {
+                previous,
+                target: Screen::Evaluation,
+                entry_music: Some(TransitionMusic::Play {
+                    path: "results.ogg".into(),
+                    looping: true,
+                }),
+                player_options: None,
+                select_music_preferred_difficulty: None,
+            });
+            assert_eq!(plan.clear_play_background, previous == Screen::Gameplay);
+            assert_eq!(plan.stop_screen_sfx, previous == Screen::Gameplay);
+            assert!(matches!(
+                plan.commands.as_slice(),
+                [Command::PlayMusic { path, looped: true, .. }] if path == std::path::Path::new("results.ogg")
+            ));
+        }
     }
 
     struct CueTheme;
@@ -308,6 +339,7 @@ mod tests {
         for target in [Screen::Gameplay, Screen::Practice, Screen::Evaluation] {
             let plan = transition_effect_plan::<CueTheme>(
                 TransitionEffectContext {
+                    entry_music: None,
                     previous: Screen::Gameplay,
                     target,
                     player_options: None,
