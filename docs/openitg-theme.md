@@ -383,6 +383,29 @@ for actor construction and composition during movement. Style went from
 fixture used dev-profile libraries, warm composition buffers, and fonts
 staged under the packaged asset paths. GPU time was outside this measurement.
 
+## Startup and idle scores
+
+The OpenITG startup presentation begins when the shared song scan completes.
+The company clip runs for six seconds, the In The Groove 2 intro for
+30.5 seconds, and the OpenITG logo for six seconds. The first two play their
+original audio. The logo uses the home theme layers and plays the background
+film at double speed. Start or Back leaves attract for the title menu. When
+video backgrounds are disabled or unavailable, embedded still frames carry
+the intro and logo overlays.
+
+After 30 seconds of inactivity on the title menu, the theme displays a
+recent-scores page and plays the native ranking music. The shell resolves the
+40 most recently played chart hashes against the loaded catalog and supplies
+the machine record for each available chart. Pages show five records for ten
+seconds each. Empty cabinets show the empty state. After the score pages, the
+intro and title loop resumes. The source's autoplay and course ranking pages
+and its rotating promotional lists remain open.
+
+An isolated Windows portable run entered all three movie phases with live
+video, decoded the original company and intro tracks, and opened ranking
+music after the title idle timeout. Tests cover the timeline, idle music
+routing, and the display of a prepared local record.
+
 ## Select Music
 
 The base layout draws the live wheel, selected song, prepared banner, player

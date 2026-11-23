@@ -165,6 +165,10 @@ pub fn replay_intro(state: &mut State) {
     state.loading = None;
 }
 
+pub fn is_loading(state: &State) -> bool {
+    state.phase == InitPhase::Loading
+}
+
 #[inline(always)]
 fn arc_phase_label(phase: crate::views::SimplyLoveContentReloadPhase) -> Arc<str> {
     match phase {

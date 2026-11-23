@@ -649,6 +649,7 @@ pub struct ScreensState {
     smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview,
     player_options_state: Option<crate::player_options::PlayerOptionsState>,
     init_state: init::State,
+    openitg_intro: Option<crate::openitg::IntroRuntime>,
     select_profile_state: <ActiveTheme as ThemeProfilePicker>::ProfilePickerState,
     select_color_state: select_color::State,
     arrowcloud_login_state: screens::arrowcloud_login::State,
@@ -1349,6 +1350,8 @@ impl ScreensState {
             smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview::default(),
             player_options_state: None,
             init_state,
+            openitg_intro: (theme == config::theme::ThemeFlag::OpenItg)
+                .then(crate::openitg::IntroRuntime::default),
             select_profile_state,
             select_color_state,
             arrowcloud_login_state,
@@ -1401,7 +1404,20 @@ impl ScreensState {
                 }
                 (None, false)
             }
-            CurrentScreen::Init => (Some(init::update(&mut self.init_state, delta_time)), false),
+            CurrentScreen::Init => {
+                let effect = if let Some(intro) = self.openitg_intro.as_mut()
+                    && !init::is_loading(&self.init_state)
+                {
+                    if intro.timeline.advance(delta_time) {
+                        ThemeEffect::NavigateNoFade(CurrentScreen::Menu)
+                    } else {
+                        ThemeEffect::None
+                    }
+                } else {
+                    init::update(&mut self.init_state, delta_time)
+                };
+                (Some(effect), false)
+            }
             CurrentScreen::Options => {
                 options::update(
                     &mut self.options_state,
@@ -4572,9 +4588,49 @@ impl App {
             &mut self.theme_effect_scratch,
         );
         let _ = self.drain_theme_effects(event_loop);
+        self.sync_openitg_intro_media();
         if let Some(target) = self.advance_stage_launch(dt) {
             let _ = self.drain_theme_effects(event_loop);
             self.handle_immediate_navigation(target, event_loop);
+        }
+    }
+
+    fn sync_openitg_intro_media(&mut self) {
+        let screens = &mut self.state.screens;
+        if screens.current_screen != CurrentScreen::Init || init::is_loading(&screens.init_state) {
+            return;
+        }
+        let Some(backend) = self.backend.as_mut() else {
+            return;
+        };
+        let Some(intro) = screens.openitg_intro.as_mut() else {
+            return;
+        };
+        let Some(media) = intro.update_media() else {
+            return;
+        };
+        let movie = media.movie.filter(|_| config::runtime::get().show_video_backgrounds);
+        let key = self.dynamic_media.set_background(
+            &mut self.asset_manager,
+            backend,
+            movie.map(deadsync_assets::resolve_asset_path),
+            0.0,
+            true,
+        );
+        intro.video_key = (key != "__black").then(|| Arc::from(key));
+        debug!(
+            "OpenITG attract media movie={:?} music={:?} video_active={}",
+            media.movie, media.music, self.dynamic_media.has_gameplay_video()
+        );
+        if let Some(path) = media.music {
+            self.audio.play_music(
+                deadsync_assets::resolve_asset_path(path),
+                deadlib_audio::stream::Cut::default(),
+                media.loop_music,
+                1.0,
+            );
+        } else {
+            self.audio.stop_music();
         }
     }
 
@@ -5108,10 +5164,13 @@ impl App {
                 } else {
                     None
                 };
+                let ui_video_time = self.state.screens.openitg_intro.as_ref()
+                    .filter(|_| current_screen == CurrentScreen::Init)
+                    .map_or(total_elapsed, |intro| intro.timeline.playback_time());
                 self.dynamic_media.queue_video_frames(
                     &mut self.asset_manager,
                     gameplay_time,
-                    total_elapsed,
+                    ui_video_time,
                 );
                 let screens = &mut self.state.screens;
                 let song = match current_screen {
@@ -8144,7 +8203,14 @@ impl App {
                 visual_policy,
             ),
             CurrentScreen::Init => {
-                init::push_actors(&mut actors, &self.state.screens.init_state, visual_policy);
+                let screens = &self.state.screens;
+                if let Some(intro) = &screens.openitg_intro
+                    && !init::is_loading(&screens.init_state)
+                {
+                    intro.timeline.push_actors(&mut actors, intro.video_key.as_ref());
+                } else {
+                    init::push_actors(&mut actors, &screens.init_state, visual_policy);
+                }
             }
             CurrentScreen::Evaluation => {
                 let state = &self.state.screens.evaluation_state;
@@ -9209,6 +9275,15 @@ impl App {
     }
 
     fn prepare_screen_state(&mut self, prev: CurrentScreen, target: CurrentScreen) {
+        if prev == CurrentScreen::Init && target != CurrentScreen::Init
+            && let Some(intro) = self.state.screens.openitg_intro.as_mut()
+        {
+            self.audio.stop_music();
+            if let Some(backend) = self.backend.as_mut() {
+                self.dynamic_media.set_background(&mut self.asset_manager, backend, None, 0.0, false);
+            }
+            *intro = crate::openitg::IntroRuntime::default();
+        }
         // A preview's audio stops with the screen; its download stops here,
         // and so does a pack sync measure that is still running. So does a
         // rip still looking for songs -- every counted request it would go on
@@ -9235,6 +9310,11 @@ impl App {
             let active_color_index = self.state.screens.menu_state.color_index();
             init::replay_intro(&mut self.state.screens.init_state);
             self.state.screens.init_state.active_color_index = active_color_index;
+            if prev == CurrentScreen::Menu
+                && let Some(intro) = self.state.screens.openitg_intro.as_mut()
+            {
+                intro.timeline.show_records(crate::openitg::recent_attract_records());
+            }
         } else if target == CurrentScreen::Options {
             self.reset_options_state_for_entry(prev);
         } else if target == CurrentScreen::ContentBrowser {

@@ -18,6 +18,14 @@ use deadsync_score::{
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// A local cabinet record with its chart context for an idle presentation.
+pub struct AttractRecord {
+    pub title: Arc<str>,
+    pub difficulty: Arc<str>,
+    pub initials: String,
+    pub percent: f64,
+}
+
 /// Which entry into the shared play flow the selector presents.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaySelectionKind {
