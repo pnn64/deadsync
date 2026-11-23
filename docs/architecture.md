@@ -650,9 +650,13 @@ OpenITG retains the current explanation and its reveal timing. It uses the
 engine bitmap text layout to measure wrapped paragraphs and reveal a glyph
 prefix while keeping the full paragraph's placement.
 OpenITG's basic and advanced Graphics pages share the same pending display
-settings as the combined Simply Love editor. The controller emits one graphics
-request when the user leaves Graphics. The shell applies it through the shared
-graphics change plan.
+settings as the combined Simply Love editor. The shell adapts host monitor
+capabilities to the theme contract, whose video mode records come from
+`deadsync-core`. `deadsync-config::graphics`
+builds resolution and refresh rate choices and seeds the FPS cap editor.
+The controller keeps the row selections and emits one graphics request when
+the user leaves Graphics. The shell applies it through the shared graphics
+change plan.
 The music wheel shares the game's catalog entries and circular index, and both
 layouts use the same prepared difficulty window. The alternate base layout
 borrows song, chart, player, banner, and preview beat data from the existing

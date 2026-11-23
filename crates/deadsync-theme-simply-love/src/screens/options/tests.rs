@@ -2505,7 +2505,7 @@ fn select_visible_row(state: &mut State, kind: SubmenuKind, row_id: SubRowId) ->
 
 #[test]
 fn inferred_aspect_choice_maps_1024x768_to_4_3() {
-    let idx = display_aspect_choice_index(4.0 / 3.0);
+    let idx = config::graphics::display_aspect_choice_for_ratio(4.0 / 3.0);
     assert!(matches!(
         DISPLAY_ASPECT_RATIO_CHOICES[idx],
         Choice::Literal("4:3")
@@ -2518,7 +2518,7 @@ fn sync_display_resolution_selects_loaded_4_3_mode() {
     sync_display_aspect_ratio(&mut state, 4.0 / 3.0);
     sync_display_resolution(&mut state, 1024, 768);
 
-    assert_eq!(selected_aspect_label(&state), "4:3");
+    assert_eq!(selected_aspect_ratio(&state), 4.0 / 3.0);
     assert_eq!(selected_resolution(&state), (1024, 768));
     assert!(state.resolution_choices.contains(&(1024, 768)));
 }

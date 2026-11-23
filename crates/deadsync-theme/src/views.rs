@@ -195,13 +195,7 @@ pub struct AudioOptionsView {
     pub assist_tick_volume: u8,
 }
 
-/// One renderer-neutral video mode advertised by a host monitor.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct GraphicsVideoModeView {
-    pub width: u32,
-    pub height: u32,
-    pub refresh_rate_millihertz: u32,
-}
+pub use deadsync_core::display::VideoMode as GraphicsVideoModeView;
 
 /// Host monitor capabilities prepared by the shell for theme option UIs.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

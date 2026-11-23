@@ -9,6 +9,7 @@ pub mod defaults;
 pub mod dirs;
 pub mod folders;
 pub mod frame_pacing;
+pub mod graphics;
 pub mod ini;
 pub mod judgment_palettes;
 pub mod keybinds;

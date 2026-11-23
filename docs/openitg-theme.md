@@ -76,6 +76,24 @@ Settings search can jump between the pages during an edit. Overscan returns to
 its row in Advanced and preserves pending display changes. Simply Love presents
 the combined Graphics Options page.
 
+Both layouts use the host's monitor capabilities and the display settings
+rules in `deadsync-config`. The resolution list retains the current physical
+size when it falls outside the configured aspect. Fullscreen refresh rate
+choices come from the active monitor at the selected resolution. The FPS cap
+editor seeds its value from the selected refresh rate or the monitor's modes
+when the saved cap is off.
+Before and after the extraction, both layouts produced identical graphics row
+snapshots for 1280×720, 1920×1080, and 3840×780 with the same monitor fixture.
+The six OpenITG Basic Graphics captures at 640×480 and 854×480 matched byte for
+byte through the aspect-ratio choice animation.
+
+Two paired runs alternated fullscreen resolutions through the normal Options
+sync path. Rebuilding the resolution and refresh lists took 4.4–4.7 μs per
+edit across layouts, compared with 4.5–4.8 μs before extraction. At 854×480,
+steady OpenITG Basic Graphics actor construction took 19.7 μs, compared with
+19.6–19.9 μs. The Simply Love service menu took 30.8–31.3 μs, compared with
+30.2–30.4 μs.
+
 The route follows `ScreenGraphicOptionsBasic` in the home theme's
 `metrics.ini`. Its display mode, aspect ratio, resolution, and Advanced link
 use the reference's y positions of 127, 183, 211, and 267 at 640×480. The
