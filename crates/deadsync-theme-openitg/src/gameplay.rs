@@ -294,17 +294,30 @@ fn push_difficulty(actors: &mut Vec<Actor>, view: GameplayDifficultyView<'_>) {
     actors.push(meter.build(0));
 }
 
+pub(crate) fn round_artwork(round: usize) -> Option<(&'static str, [f32; 2])> {
+    match round {
+        1 => Some(("openitg/gameplay-stage-1.png", [498.0, 236.0])),
+        2 => Some(("openitg/gameplay-stage-2.png", [554.0, 232.0])),
+        3 => Some(("openitg/gameplay-stage-3.png", [562.0, 236.0])),
+        4 => Some(("openitg/gameplay-stage-4.png", [556.0, 226.0])),
+        5 => Some(("openitg/gameplay-stage-5.png", [556.0, 236.0])),
+        6 => Some(("openitg/gameplay-stage-6.png", [552.0, 228.0])),
+        _ => None,
+    }
+}
+
 fn push_stage_badge(actors: &mut Vec<Actor>, view: GameplayStageBadgeView<'_>) {
     let artwork = match (view.round, view.text.as_ref()) {
-        (Some(1), _) | (None, "STAGE 1") => Some(("openitg/gameplay-stage-1.png", [498.0, 236.0])),
-        (Some(2), _) | (None, "STAGE 2") => Some(("openitg/gameplay-stage-2.png", [554.0, 232.0])),
-        (Some(3), _) | (None, "STAGE 3") => Some(("openitg/gameplay-stage-3.png", [562.0, 236.0])),
-        (Some(4), _) | (None, "STAGE 4") => Some(("openitg/gameplay-stage-4.png", [556.0, 226.0])),
-        (Some(5), _) | (None, "STAGE 5") => Some(("openitg/gameplay-stage-5.png", [556.0, 236.0])),
-        (Some(6), _) | (None, "STAGE 6") => Some(("openitg/gameplay-stage-6.png", [552.0, 228.0])),
+        (Some(round), _) => round_artwork(round),
         (None, "FINAL STAGE") => Some(("openitg/gameplay-stage-final.png", [470.0, 284.0])),
         (None, "EVENT") => Some(("openitg/gameplay-stage-event.png", [430.0, 280.0])),
-        _ => None,
+        (None, text) => text.strip_prefix("STAGE ").and_then(|round| {
+            round
+                .parse()
+                .ok()
+                .filter(|_| round.len() == 1)
+                .and_then(round_artwork)
+        }),
     };
     let height = screen_height();
     let layout = Layout::centered(screen_width(), height);

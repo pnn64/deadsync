@@ -9,6 +9,7 @@ pub(crate) const TITLE_FONT: &str = "openitg/title";
 pub(crate) const MENU_HEADING_FONT: &str = "openitg/eurostile-glow";
 pub(crate) const MENU_NORMAL_FONT: &str = "openitg/eurostile";
 pub(crate) const GAMEPLAY_SCORE_FONT: &str = "openitg/futurist-metalic";
+pub(crate) const EVALUATION_NUMBER_FONT: &str = "openitg/evaluation-numbers";
 pub(crate) const TUTORIAL_FONT: &str = "openitg/tutorial";
 
 macro_rules! png {
@@ -73,9 +74,36 @@ impl ThemeResources for OpenItgTheme {
                     ini_path: "assets/fonts/openitg/_futurist metalic.ini",
                     fallback_font_name: Some(MENU_NORMAL_FONT),
                 },
+                FontAssetSpec {
+                    name: EVALUATION_NUMBER_FONT,
+                    ini_path: "assets/fonts/openitg/_ScreenEvaluation numbers.ini",
+                    fallback_font_name: Some(MENU_NORMAL_FONT),
+                },
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("evaluation-arrow-sphere"),
+                png!("evaluation-arrow-sphere-add"),
+                png!("evaluation-banner-frame"),
+                png!("evaluation-banner-mask"),
+                png!("evaluation-cleared"),
+                png!("evaluation-cleared-glow"),
+                png!("evaluation-combo-max"),
+                png!("evaluation-combo-p1"),
+                png!("evaluation-combo-p2"),
+                png!("evaluation-failed"),
+                png!("evaluation-failed-glow"),
+                png!("evaluation-gold"),
+                png!("evaluation-grade-frame"),
+                png!("evaluation-green"),
+                png!("evaluation-orange"),
+                png!("evaluation-plastic"),
+                png!("evaluation-plastic-reverse"),
+                png!("evaluation-purple"),
+                png!("evaluation-red"),
+                png!("evaluation-silver"),
+                png!("evaluation-streak"),
+                png!("evaluation-yellow"),
                 png!("outro-blue-streak"),
                 png!("outro-depleted"),
                 png!("outro-failed"),

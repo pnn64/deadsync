@@ -826,11 +826,24 @@ score beside it. Maximum combo comes from the recorded gameplay peak. Course
 results retain the highest stage peak for each side, including recorded carry.
 
 The layout follows the effective `ScreenEvaluation` and `ScreenEvaluationStage`
-metrics. Single retains its physical player seat, versus draws both result
-panels, and doubles uses the reference inward shift. The grade slides in over
-0.5 seconds, settles by 3.0 seconds, and the banner and panels finish entering
-at 3.3 seconds. Automated captures wait for that reveal. The life line uses
-the existing sampler with a cached mesh at the requested dimensions.
+metrics. The theme embeds the original red result frame, banner rim and depth
+mask, combo bars, and clear and failure artwork. The number atlas draws dim
+leading digits and the metallic percentage font uses the native player colors.
+The difficulty tab and round badge reuse the existing OpenITG gameplay art.
+Single retains its physical player seat, versus draws both result panels, and
+doubles uses the reference inward shift.
+
+The eleven grade models and the background arrow retain the native MilkShape
+positions, normals, UVs, and triangle order. Their indexed data is bundled in
+`evaluation-models.bin` with little-endian vertex and index counts, eight
+floats per vertex, and 16-bit indices. The renderer uses the original sphere
+textures and the additive reflection layers. The models, meshes, and texture
+keys are retained across frames. DeadSync's five-star grade uses a five-model
+layout with the native gold star. The grade slides in over 0.5 seconds and
+settles at 3.0 seconds. The result lettering sweeps across after 0.25 seconds,
+the stats slide in from 3.0 to 3.3 seconds, and the fallback banner caption
+finishes fading at 3.8 seconds. Automated captures wait for the complete
+reveal.
 
 Jump totals use completed judgments and the playable tap and hold-head rows.
 Finite course summaries add the planned jumps on unplayed songs to the
@@ -849,15 +862,14 @@ pass and fail entry redirects are silent. The stage failure cue plays
 during the outro. Life-graph coloring by judgment quality and the remaining
 reference audio comparison are open.
 
-The native 640×480 Quartz capture was taken after the panel entrance, with
-P1 Single, Hard 5, and AutoPlay. It confirms the Jumps row above Holds and
-the graph area above the counts. DeadSync now slides the round label in
-below the header from the left after 3.0 seconds and centers the modifiers
-above each player's percentage. The label uses DeadSync's text font.
-Native AutoPlay produced an empty combo graph. A DeadSync Vulkan fixture supplied
-the same Quartz result to compare the counts, rank-free layout, and empty
-graph at 640×480. Separate solo and versus captures at 640×480 and 854×480
-showed filled runs, maximum-run labels, and record ranks.
+The native 640×480 Quartz capture uses P1 Single, Hard 5, and AutoPlay.
+It shows an empty graph, the Jumps row above Holds, and the chart title above
+the fallback banner. DeadSync Vulkan captures compared that same result at
+640×480 and verified the entry at both 640×480 and 854×480. Separate solo,
+versus, and failed results exercised the grade materials, combo strips, and
+both result sweeps. The shared sampler still supplies the cached life line.
+The textured life fill, judgment-based color bands, and native record callouts
+remain open.
 
 The round and modifier placements were checked in 18 paired Vulkan captures
 at 640×480 and 854×480. The captures covered Quartz, solo, and versus at 3.0,
@@ -885,6 +897,13 @@ and 29.3 µs after in solo OpenITG. Versus measured 50.8 µs before and
 50.8–52.7 µs after. Simply Love measured 31.3–35.2 µs across the four runs
 and both layouts. Each measurement used the median of nine 8,000-frame
 dev-profile batches.
+
+After adding the arcade art and 3D grades, another such run measured 29.3 µs
+before and 39.1 µs after in solo OpenITG, and 50.8 µs before and 60.5 µs after
+in versus. Simply Love measured 35.2 µs in solo and 33.2 µs in versus in both
+builds. The new actor list includes the perspective backdrop, the masked
+banner, and the model for each grade. The configured play routes, completed
+results, gameplay parity, and course transition tests passed.
 
 In paired 600-frame Windows gameplay runs with Vulkan through wgpu and WASAPI,
 95th-percentile frame time was 8.61 ms before and 8.69 ms after in OpenITG,

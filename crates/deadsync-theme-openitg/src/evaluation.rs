@@ -1,38 +1,74 @@
-use deadlib_present::actors::{Actor, InlineU32Text, TextContent};
+mod grade;
+
+use std::sync::{Arc, LazyLock};
+
+use deadlib_assets::present_dsl::cover_uv;
+use deadlib_present::actors::{Actor, MeshTexture, SizeSpec, TextContent};
 use deadlib_present::anim::bounceend_p;
+use deadlib_present::dsl::TextBuilder;
+use deadlib_present::render::{BlendMode, CullMode, TexturedMeshVertex};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, Grade};
+use glam::{Mat4, Vec3};
 
-use crate::presentation::{HEIGHT, INK, Layout, WIDTH, quad};
+use crate::presentation::{
+    HEIGHT, Layout, WIDTH, italic, push_red_backdrop, push_red_streaks, sprite,
+};
+use crate::resources::{
+    EVALUATION_NUMBER_FONT, GAMEPLAY_SCORE_FONT, MENU_HEADING_FONT, MENU_NORMAL_FONT, TITLE_FONT,
+};
 
 const STATS_START_SECONDS: f32 = 3.0;
 const STATS_ENTER_SECONDS: f32 = 0.3;
-pub const EVALUATION_OVERVIEW_SETTLED_SECONDS: f32 = STATS_START_SECONDS + STATS_ENTER_SECONDS;
+const CAPTION_FADE_SECONDS: f32 = 0.5;
+pub const EVALUATION_OVERVIEW_SETTLED_SECONDS: f32 =
+    STATS_START_SECONDS + STATS_ENTER_SECONDS + CAPTION_FADE_SECONDS;
 
 const GRADE_ENTER_SECONDS: f32 = 0.5;
 const GRADE_SETTLE_START: f32 = 2.5;
 const BANNER_SIZE: [f32; 2] = [210.0, 66.0];
+const BANNER_FRAME_SIZE: [f32; 2] = [222.0, 82.0];
 const LIFE_SIZE: [f32; 2] = [271.0, 39.0];
 const LIFE_Y: f32 = 239.0;
 const COMBO_Y: f32 = 287.0;
 const COUNT_FIRST_Y: f32 = 325.0;
 const COUNT_PITCH: f32 = 16.0;
 
-const WHITE: [f32; 4] = [INK[0], INK[1], INK[2], 1.0];
-const QUIET: [f32; 4] = [0.67, 0.75, 0.83, 1.0];
-const RAIL: [f32; 4] = [0.31, 0.44, 0.55, 1.0];
-const SKY: [f32; 4] = [0.55, 0.90, 1.0, 1.0];
-const FAILED: [f32; 4] = [1.0, 0.49, 0.53, 1.0];
-const P1: [f32; 4] = [1.0, 0.77, 0.25, 1.0];
-const P2: [f32; 4] = [0.48, 0.94, 0.51, 1.0];
-const JUDGMENTS: [(&str, [f32; 4]); 6] = [
-    ("Fantastic", SKY),
-    ("Excellent", P1),
-    ("Great", P2),
-    ("Decent", [0.70, 0.65, 1.0, 1.0]),
-    ("Way Off", [1.0, 0.65, 0.37, 1.0]),
-    ("Miss", FAILED),
+const WHITE: [f32; 4] = [1.0; 4];
+const P1: [f32; 4] = [251.0 / 255.0, 190.0 / 255.0, 3.0 / 255.0, 1.0];
+const P2: [f32; 4] = [86.0 / 255.0, 1.0, 72.0 / 255.0, 1.0];
+const JUDGMENTS: [&str; 6] = [
+    "Fantastic",
+    "Excellent",
+    "Great",
+    "Decent",
+    "Way Off",
+    "Miss",
 ];
+
+static BANNER_MASK: LazyLock<Arc<str>> =
+    LazyLock::new(|| "openitg/evaluation-banner-mask.png".into());
+static FALLBACK_BANNER: LazyLock<Arc<str>> =
+    LazyLock::new(|| "openitg/wheel-fallback-banner.png".into());
+static HELP_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| {
+    deadlib_present::font::replace_markers("Press &START; to continue")
+        .as_ref()
+        .into()
+});
+static BANNER_QUAD: LazyLock<Arc<[TexturedMeshVertex]>> = LazyLock::new(|| {
+    [0, 2, 3, 0, 3, 1]
+        .map(|corner| {
+            let u = (corner % 2) as f32;
+            let v = (corner / 2) as f32;
+            TexturedMeshVertex {
+                pos: [u, v, 0.0],
+                uv: [u, v],
+                color: WHITE,
+                ..Default::default()
+            }
+        })
+        .into()
+});
 
 #[derive(Clone, Copy)]
 struct Seat {
@@ -70,46 +106,28 @@ impl Seat {
 }
 
 pub fn push_evaluation_overview(actors: &mut Vec<Actor>, page: EvaluationOverview<'_, Actor>) {
-    let (width, height) = (screen_width(), screen_height());
-    let layout = Layout::centered(width, height);
+    let viewport = [screen_width(), screen_height()];
+    let layout = Layout::centered(viewport[0], viewport[1]);
     let elapsed = page.elapsed.max(0.0);
     let stats_progress = decelerate(elapsed - STATS_START_SECONDS, STATS_ENTER_SECONDS);
     let solo_double = page.double_side_style && page.players.iter().flatten().count() == 1;
 
-    actors.push(quad(
-        [0.0, 0.0],
-        [width, height],
-        [0.026, 0.039, 0.055, 1.0],
-        -22,
-    ));
-    actors.push(layout.panel(0.0, 0.0, [WIDTH, HEIGHT], [0.054, 0.084, 0.12, 1.0], -21));
-    actors.push(layout.panel(16.0, 64.0, [608.0, 1.0], RAIL, -20));
-    actors.push(layout.panel(16.0, 456.0, [608.0, 1.0], RAIL, -20));
+    push_background(actors, viewport, elapsed);
     push_header(actors, layout, elapsed);
-
+    push_result_reveal(actors, layout, &page, elapsed);
     if stats_progress > 0.0 {
-        push_banner(actors, layout, &page, stats_progress);
+        push_banner(actors, layout, &page, stats_progress, elapsed);
         if let Some(stage_number) = page.stage_number {
-            let slide_x = (stats_progress - 1.0) * width * 0.5;
-            let mut round = layout.translated_x(slide_x - layout.position(0.0, 0.0)[0]).text(
-                [24.0, 72.0],
-                0.0,
-                value(format_args!("ROUND {stage_number}")),
-                1.12,
-                WHITE,
+            push_round(
+                actors,
+                layout,
+                stage_number,
+                (1.0 - stats_progress) * viewport[0] * 0.5,
             );
-            round.shadowlength(layout.size([4.0, 0.0])[0]);
-            actors.push(round.build(0));
         }
-        let footer_alpha = ((elapsed - STATS_START_SECONDS) / STATS_ENTER_SECONDS).clamp(0.0, 1.0);
-        actors.push(layout.label(
-            [320.0, 445.0],
-            0.5,
-            "PRESS START TO CONTINUE".into(),
-            0.88,
-            [QUIET[0], QUIET[1], QUIET[2], footer_alpha],
-        ));
+        push_footer(actors, layout, &page, elapsed);
     }
+
     for (slot, player) in page.players.iter().enumerate() {
         let Some(player) = player else { continue };
         let seat = Seat::new(player.p2, solo_double);
@@ -129,9 +147,93 @@ pub fn push_evaluation_overview(actors: &mut Vec<Actor>, page: EvaluationOvervie
                 actors.push(graph);
             }
             push_course_boundaries(actors, layout, player, seat.panel_x + body_shift);
-            push_combo_runs(actors, layout, player, seat, seat.panel_x + body_shift);
+            push_combo_runs(actors, layout, player, seat.panel_x + body_shift);
         }
-        push_grade(actors, layout, seat, player.grade, elapsed);
+        let arrived = decelerate(elapsed, GRADE_ENTER_SECONDS);
+        let settle = decelerate(elapsed - GRADE_SETTLE_START, GRADE_ENTER_SECONDS);
+        let grade_x = (seat.grade_x - seat.grade_hold_x).mul_add(settle, seat.grade_hold_x);
+        let x = (1.0 - arrived).mul_add(seat.outward * 300.0, grade_x);
+        let y = 22.0_f32.mul_add(settle, 180.0);
+        let scale = (-1.5_f32).mul_add(settle, 2.5);
+        grade::push_grade(actors, layout, [x, y], scale, player.grade, elapsed);
+    }
+}
+
+fn push_background(actors: &mut Vec<Actor>, [width, height]: [f32; 2], elapsed: f32) {
+    let motion = elapsed * 0.5;
+    push_red_backdrop(actors, [width, height], motion, -30);
+    for (y, phase, speed, opacity) in [
+        (120.0, 0.2, 0.12, 0.2),
+        (166.0, 0.5, 0.08, 0.25),
+        (222.0, 0.8, 0.07, 0.3),
+        (267.0, 0.9, 0.09, 0.3),
+        (323.0, 0.2, 0.13, 0.2),
+        (378.0, 0.5, 0.15, 0.1),
+    ] {
+        let u = (speed * motion + phase) % 0.95;
+        let mut streak = sprite(
+            "openitg/evaluation-streak.png",
+            [width * 0.5, y * height / HEIGHT],
+            [width, 10.0 * height / HEIGHT],
+            [0.855, 0.475, 0.475, opacity],
+            -28,
+        );
+        streak.customtexturerect([u, 0.0, u + 0.05, 1.0]);
+        actors.push(streak.build(0));
+    }
+    grade::push_background_arrow(actors, [width, height], motion);
+    push_red_streaks(actors, [width, height], 1.0, -20);
+}
+
+fn push_result_reveal(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    page: &EvaluationOverview<'_, Actor>,
+    elapsed: f32,
+) {
+    if !(0.25..3.2).contains(&elapsed) {
+        return;
+    }
+    let passed = page
+        .players
+        .iter()
+        .flatten()
+        .any(|player| player.grade != Grade::Failed);
+    let (text, text_size, glow, glow_size) = if passed {
+        (
+            "openitg/evaluation-cleared.png",
+            [626.0, 188.0],
+            "openitg/evaluation-cleared-glow.png",
+            [626.0, 110.0],
+        )
+    } else {
+        (
+            "openitg/evaluation-failed.png",
+            [522.0, 128.0],
+            "openitg/evaluation-failed-glow.png",
+            [522.0, 86.0],
+        )
+    };
+    let position = layout.position(320.0, 340.0);
+    let sweep = ((elapsed - 0.25) / 0.7).clamp(0.0, 1.0);
+    let alpha = ((3.2 - elapsed) / 0.3).clamp(0.0, 1.0);
+    let mut word = sprite(
+        text,
+        position,
+        layout.size(text_size),
+        [1.0, 1.0, 1.0, alpha],
+        102,
+    );
+    word.cropright((1.3 - sweep * 1.6).max(0.0));
+    word.faderight(0.1);
+    actors.push(word.build(0));
+    if sweep < 1.0 {
+        let mut edge = sprite(glow, position, layout.size(glow_size), WHITE, 103);
+        edge.cropleft((sweep * 1.3 - 0.3).max(0.0));
+        edge.cropright((1.0 - sweep * 1.3).max(0.0));
+        edge.fadeleft(0.1);
+        edge.faderight(0.1);
+        actors.push(edge.build(0));
     }
 }
 
@@ -166,7 +268,6 @@ fn push_combo_runs(
     actors: &mut Vec<Actor>,
     layout: Layout,
     player: &EvaluationPlayerOverview<'_>,
-    seat: Seat,
     x: f32,
 ) {
     let [first, last] = player.graph_seconds;
@@ -181,41 +282,40 @@ fn push_combo_runs(
     }
     let width = LIFE_SIZE[0];
     let bar_x = |second: f32| width * ((second - first) / (last - first)).clamp(0.0, 1.0);
-    actors.push(layout.panel(
-        x,
-        COMBO_Y - 9.0,
-        [width, 18.0],
-        [0.027, 0.054, 0.081, 1.0],
-        2,
-    ));
     for run in player.combo_runs.iter().filter(|run| run.count >= 5) {
         let start = bar_x(run.start_second);
         let end = bar_x(run.end_second);
         let max_run = run.count == max_count;
-        actors.push(layout.panel(
-            x + start,
-            COMBO_Y - 4.0,
-            [(end - start).max(1.0), 8.0],
-            if max_run { seat.tint } else { RAIL },
-            3,
-        ));
+        let key = if max_run {
+            "openitg/evaluation-combo-max.png"
+        } else if player.p2 {
+            "openitg/evaluation-combo-p2.png"
+        } else {
+            "openitg/evaluation-combo-p1.png"
+        };
+        let center = x + f32::midpoint(start, end);
+        actors.push(
+            sprite(
+                key,
+                layout.position(center, COMBO_Y),
+                layout.size([(end - start).max(1.0), 18.0]),
+                WHITE,
+                3,
+            )
+            .build(0),
+        );
         if max_run {
-            let midpoint = x + f32::midpoint(start, end).clamp(12.0, width - 12.0);
-            actors.push(layout.panel(
-                midpoint - 12.0,
-                COMBO_Y - 8.0,
-                [24.0, 12.0],
-                [0.027, 0.054, 0.081, 1.0],
-                4,
-            ));
-            actors.push(layout.bounded_label(
+            let midpoint = center.clamp(x + 12.0, x + width - 12.0);
+            let mut count = text(
+                layout,
                 [midpoint, COMBO_Y - 2.0],
                 0.5,
-                22.0,
-                unsigned(run.count),
-                0.83,
+                TextContent::inline_u32(run.count),
+                0.5,
                 WHITE,
-            ));
+            );
+            count.shadowlength(2.0);
+            actors.push(count.build(0));
         }
     }
 }
@@ -226,16 +326,95 @@ fn decelerate(elapsed: f32, duration: f32) -> f32 {
 }
 
 fn push_header(actors: &mut Vec<Actor>, layout: Layout, elapsed: f32) {
-    const START: f32 = 2.0;
-    if elapsed <= START {
+    if elapsed <= 2.0 {
         return;
     }
-    let reveal = bounceend_p(((elapsed - START) / 0.3).min(1.0));
-    let mut headline = layout.text([36.0, 38.0], 0.0, "CHECK YOUR STATS".into(), 1.6, SKY);
-    let [zoom_x, zoom_y] = layout.size([1.6 * reveal, 1.6 * (6.0 - 5.0 * reveal).max(0.6)]);
+    let reveal = bounceend_p(((elapsed - 2.0) / 0.3).min(1.0));
+    let layout = layout.translated_x(-layout.position(0.0, 0.0)[0]);
+    let mut headline = text(
+        layout,
+        [36.0, 38.0],
+        0.0,
+        "CHECK YOUR STATS".into(),
+        1.0,
+        WHITE,
+    );
+    let [zoom_x, zoom_y] = layout.size([reveal, (6.0 - 5.0 * reveal).max(0.6)]);
+    headline.font(MENU_HEADING_FONT);
     headline.zoomx(zoom_x);
     headline.zoomy(zoom_y);
-    actors.push(headline.build(0));
+    headline.shadowlength(layout.size([4.0, 0.0])[0]);
+    actors.push(italic(headline.build(0), -0.16));
+}
+
+fn push_round(actors: &mut Vec<Actor>, layout: Layout, round: usize, shift: f32) {
+    let layout = layout.translated_x(-layout.position(0.0, 0.0)[0] - shift);
+    let left = 24.0;
+    if let Some((key, size)) = crate::gameplay::round_artwork(round) {
+        let size = size.map(|axis| axis * 0.16);
+        actors.push(
+            sprite(
+                key,
+                layout.position(left + size[0] * 0.5, 72.0),
+                layout.size(size),
+                WHITE,
+                1,
+            )
+            .build(0),
+        );
+    } else {
+        let mut label = text(
+            layout,
+            [left, 72.0],
+            0.0,
+            value(format_args!("ROUND {round}")),
+            0.55,
+            WHITE,
+        );
+        label.font(TITLE_FONT);
+        actors.push(label.build(0));
+    }
+}
+
+fn push_footer(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    page: &EvaluationOverview<'_, Actor>,
+    elapsed: f32,
+) {
+    let alpha = ((elapsed - STATS_START_SECONDS) / 0.5).clamp(0.0, 1.0);
+    let mut help = text(
+        layout,
+        [320.0, 445.0],
+        0.5,
+        (&*HELP_TEXT).into(),
+        0.7,
+        WHITE,
+    );
+    help.font(TITLE_FONT);
+    help.diffuse([
+        1.0,
+        1.0,
+        1.0,
+        alpha * (0.7 + 0.3 * (elapsed * std::f32::consts::TAU).cos()),
+    ]);
+    actors.push(help.build(0));
+    for (p2, x) in [(false, 42.0), (true, 598.0)] {
+        if !page.players.iter().flatten().any(|player| player.p2 == p2) {
+            let edge = layout.position(0.0, 0.0)[0];
+            let layout = layout.translated_x(if p2 { edge } else { -edge });
+            let mut label = text(
+                layout,
+                [x, 464.0],
+                if p2 { 1.0 } else { 0.0 },
+                "NOT PRESENT".into(),
+                0.5,
+                [1.0, 1.0, 1.0, alpha],
+            );
+            label.font(TITLE_FONT);
+            actors.push(label.build(0));
+        }
+    }
 }
 
 fn push_banner(
@@ -243,45 +422,101 @@ fn push_banner(
     layout: Layout,
     page: &EvaluationOverview<'_, Actor>,
     progress: f32,
+    elapsed: f32,
 ) {
     let y = 114.0 - (1.0 - progress) * (WIDTH * 0.5);
-    actors.push(layout.panel(212.0, y - 36.0, [216.0, 72.0], RAIL, 5));
-    if let Some(key) = page.banner_key {
-        actors.push(layout.image([320.0, y], BANNER_SIZE, key, 6));
-    } else {
-        actors.push(layout.panel(215.0, y - 33.0, BANNER_SIZE, [0.08, 0.16, 0.23, 1.0], 6));
-        actors.push(layout.panel(215.0, y - 33.0, [210.0, 3.0], SKY, 7));
-    }
-    let text_y = if page.banner_key.is_some() {
-        y + 44.0
-    } else {
-        y - 7.0
-    };
-    let text_width = if page.banner_key.is_some() {
-        272.0
-    } else {
-        194.0
-    };
-    actors.push(layout.bounded_label(
-        [320.0, text_y],
-        0.5,
-        text_width,
-        TextContent::from(page.title),
-        1.04,
-        WHITE,
+    let key = page.banner_key.unwrap_or(&FALLBACK_BANNER);
+    let crop = cover_uv(key, BANNER_SIZE[0], BANNER_SIZE[1]).unwrap_or([0.0, 0.0, 1.0, 1.0]);
+    actors.push(banner_mesh(
+        layout.position(320.0, y + 2.0),
+        layout.size(BANNER_FRAME_SIZE),
+        &BANNER_MASK,
+        [0.0, 0.0, 1.0, 1.0],
+        true,
     ));
-    if !page.artist.is_empty() {
-        actors.push(layout.bounded_label(
-            [320.0, text_y + 15.0],
+    actors.push(banner_mesh(
+        layout.position(320.0, y),
+        layout.size(BANNER_SIZE),
+        key,
+        crop,
+        false,
+    ));
+    actors.push(
+        sprite(
+            "openitg/evaluation-banner-frame.png",
+            layout.position(320.0, y + 2.0),
+            layout.size(BANNER_FRAME_SIZE),
+            WHITE,
+            7,
+        )
+        .build(0),
+    );
+
+    let alpha = ((elapsed - STATS_START_SECONDS - STATS_ENTER_SECONDS) / CAPTION_FADE_SECONDS)
+        .clamp(0.0, 1.0);
+    if page.banner_key.is_none() && alpha > 0.0 {
+        let mut title = text(
+            layout,
+            [320.0, 65.0],
             0.5,
-            text_width,
-            TextContent::from(page.artist),
-            0.75,
-            QUIET,
-        ));
+            page.title.into(),
+            0.55,
+            [1.0, 1.0, 1.0, alpha],
+        );
+        title.maxwidth(layout.size([272.0, 0.0])[0]);
+        actors.push(title.build(0));
     }
     if page.course_summary {
-        actors.push(layout.label([36.0, y - 38.0], 0.0, "COURSE RESULTS".into(), 0.85, SKY));
+        actors.push(
+            text(
+                layout,
+                [36.0, y - 38.0],
+                0.0,
+                "COURSE RESULTS".into(),
+                0.55,
+                WHITE,
+            )
+            .build(0),
+        );
+    }
+}
+
+fn banner_mesh(
+    offset: [f32; 2],
+    [width, height]: [f32; 2],
+    key: &Arc<str>,
+    [u0, v0, u1, v1]: [f32; 4],
+    mask: bool,
+) -> Actor {
+    Actor::TexturedMesh {
+        environment: None,
+        align: [0.5; 2],
+        offset,
+        world_z: if mask { 0.125 } else { 0.0 },
+        size: [SizeSpec::Px(width), SizeSpec::Px(height)],
+        local_transform: Mat4::from_scale(Vec3::new(width, height, 1.0)),
+        texture: MeshTexture::Key(Arc::clone(key)),
+        tint: WHITE,
+        vertex_color_encoding: Default::default(),
+        glow: [0.0; 4],
+        vertices: Arc::clone(&BANNER_QUAD),
+        geom_cache_key: BANNER_QUAD.as_ptr() as u64,
+        uv_scale: [u1 - u0, v1 - v0],
+        uv_offset: [u0, v0],
+        uv_tex_shift: [0.0; 2],
+        depth_test: !mask,
+        depth_write: mask,
+        depth_test_on_fail: false,
+        clear_depth: mask,
+        clear_depth_after: !mask,
+        cull_mode: CullMode::None,
+        visible: true,
+        blend: if mask {
+            BlendMode::NoEffect
+        } else {
+            BlendMode::Alpha
+        },
+        z: if mask { 5 } else { 6 },
     }
 }
 
@@ -294,75 +529,41 @@ fn push_difficulty(
 ) {
     let [x, y] = seat.difficulty;
     let x = x + shift;
-    actors.push(layout.panel(
-        x - 54.0,
-        y - 10.0,
-        [108.0, 32.0],
-        [0.10, 0.18, 0.25, 1.0],
-        2,
-    ));
-    actors.push(layout.panel(x - 54.0, y - 10.0, [3.0, 32.0], seat.tint, 3));
-    actors.push(layout.bounded_label(
-        [x, y],
-        0.5,
-        92.0,
-        value(format_args!("{}", player.difficulty)),
-        0.88,
+    let (row, _, _) = crate::select_music::difficulty_style(player.difficulty);
+    let label = ["Novice", "Easy", "Medium", "Hard", "Expert", "Edit"][row];
+    let direction = -seat.outward;
+    let mut tab = sprite(
+        "openitg/gameplay-difficulty.png",
+        layout.position(x, y),
+        layout.size([114.0, 40.0]),
         WHITE,
-    ));
-    actors.push(layout.label([x, y + 14.0], 0.5, unsigned(player.meter), 0.8, seat.tint));
-}
-
-fn push_grade(actors: &mut Vec<Actor>, layout: Layout, seat: Seat, grade: Grade, elapsed: f32) {
-    let arrived = decelerate(elapsed, GRADE_ENTER_SECONDS);
-    let settle = decelerate(elapsed - GRADE_SETTLE_START, GRADE_ENTER_SECONDS);
-    let grade_x = (seat.grade_x - seat.grade_hold_x).mul_add(settle, seat.grade_hold_x);
-    let x = (1.0 - arrived).mul_add(seat.outward * 300.0, grade_x);
-    let y = 22.0_f32.mul_add(settle, 180.0);
-    let scale = (-1.5_f32).mul_add(settle, 2.5);
-    let ink = if grade == Grade::Failed {
-        FAILED
-    } else {
-        seat.tint
-    };
-    let face = match grade {
-        Grade::Quint => "*****",
-        Grade::Tier01 => "****",
-        Grade::Tier02 => "***",
-        Grade::Tier03 => "**",
-        Grade::Tier04 => "*",
-        _ => grade.gif_suffix(),
-    };
-    let half_w = 45.0 * scale;
-    let half_h = 26.0 * scale;
-    actors.push(layout.panel(
-        x - half_w,
-        y - half_h,
-        [2.0 * half_w, 2.0 * half_h],
-        ink,
-        100,
-    ));
-    actors.push(layout.panel(
-        x - half_w + 2.0 * scale,
-        y - half_h + 2.0 * scale,
-        [2.0 * half_w - 4.0 * scale, 2.0 * half_h - 4.0 * scale],
-        [0.078, 0.117, 0.17, 1.0],
-        101,
-    ));
-    let mut label = layout.text(
-        [x, y],
-        0.5,
-        face.into(),
-        if face.len() > 3 {
-            1.75 * scale
-        } else {
-            2.65 * scale
-        },
-        ink,
+        2,
     );
-    label.maxwidth(layout.size([80.0 * scale, 0.0])[0]);
-    label.z(102);
-    actors.push(label.build(0));
+    tab.customtexturerect([0.0, row as f32 / 6.0, 1.0, (row + 1) as f32 / 6.0]);
+    tab.zoomx(direction);
+    actors.push(tab.build(0));
+
+    let mut name = text(
+        layout,
+        [x - direction * 14.0, y],
+        0.5,
+        label.into(),
+        0.5,
+        WHITE,
+    );
+    name.maxwidth(layout.size([61.0, 0.0])[0]);
+    name.shadowlength(2.0);
+    actors.push(name.build(0));
+    let mut meter = text(
+        layout,
+        [x + direction * 30.0, y],
+        0.5,
+        TextContent::inline_u32(player.meter),
+        0.5,
+        WHITE,
+    );
+    meter.shadowlength(2.0);
+    actors.push(meter.build(0));
 }
 
 fn push_player_stats(
@@ -374,27 +575,42 @@ fn push_player_stats(
 ) {
     let x = seat.panel_x + shift;
     let percent_x = seat.percent_x + shift;
-    actors.push(layout.panel(x - 3.0, 177.0, [277.0, 262.0], [0.076, 0.117, 0.17, 1.0], 1));
-    actors.push(layout.panel(x, 177.0, [271.0, 2.0], seat.tint, 2));
+    actors.push(
+        sprite(
+            "openitg/evaluation-grade-frame.png",
+            layout.position(x + 136.0, 294.0),
+            layout.size([286.0, 260.0]),
+            WHITE,
+            1,
+        )
+        .build(0),
+    );
     if !player.mods.is_empty() {
         let options_x = percent_x - if player.p2 { 2.0 } else { 0.0 };
-        actors.push(layout.bounded_label(
+        let mut mods = text(
+            layout,
             [options_x, 183.0],
             0.5,
-            168.0,
-            TextContent::from(player.mods),
-            0.85,
+            player.mods.into(),
+            0.5,
             WHITE,
-        ));
+        );
+        mods.wrapwidthpixels(386.0);
+        mods.shadowlength(2.0);
+        actors.push(mods.build(0));
     }
-    actors.push(layout.bounded_label(
+    let mut percent = text(
+        layout,
         [percent_x, 212.0],
         0.5,
-        156.0,
-        value(format_args!("{:.2}%", player.percent)),
-        2.0,
+        value(format_args!("{:5.2}%", player.percent)),
+        1.0,
         seat.tint,
-    ));
+    );
+    percent.font(GAMEPLAY_SCORE_FONT);
+    percent.maxwidth(layout.size([156.0, 0.0])[0]);
+    actors.push(percent.build(0));
+
     let accompanying = [
         ("EX", player.ex_percent),
         ("H.EX", player.hard_ex_percent),
@@ -410,44 +626,47 @@ fn push_player_stats(
         .enumerate()
     {
         let dx = (index as f32 - (count - 1) as f32 * 0.5) * 55.0;
-        actors.push(layout.bounded_label(
+        let mut detail = text(
+            layout,
             [percent_x + dx, 230.0],
             0.5,
-            52.0,
             value(format_args!("{name} {percent:.2}%")),
-            0.7,
-            QUIET,
-        ));
-    }
-
-    actors.push(layout.panel(x, LIFE_Y, LIFE_SIZE, [0.027, 0.054, 0.081, 1.0], 2));
-    actors.push(layout.panel(x, LIFE_Y + LIFE_SIZE[1] - 1.0, [LIFE_SIZE[0], 1.0], RAIL, 3));
-    for fraction in [0.25, 0.5, 0.75] {
-        actors.push(layout.panel(
-            x + LIFE_SIZE[0] * fraction,
-            LIFE_Y,
-            [1.0, LIFE_SIZE[1]],
-            [0.12, 0.19, 0.25, 1.0],
-            3,
-        ));
+            0.38,
+            WHITE,
+        );
+        detail.maxwidth(layout.size([52.0, 0.0])[0]);
+        actors.push(detail.build(0));
     }
 
     if player.disqualified {
-        actors.push(layout.label([x + 6.0, 302.0], 0.0, "DISQUALIFIED".into(), 0.8, FAILED));
+        actors.push(
+            text(
+                layout,
+                [percent_x + 2.0, 228.0],
+                0.5,
+                "DISQUALIFIED".into(),
+                0.5,
+                seat.tint,
+            )
+            .build(0),
+        );
     } else {
         for (rank, prefix, label_x) in [
             (player.personal_rank, "PERSONAL", x + 6.0),
             (player.machine_rank, "MACHINE", x + 144.0),
         ] {
             if let Some(rank) = rank.filter(|rank| *rank > 0) {
-                actors.push(layout.bounded_label(
-                    [label_x, 302.0],
-                    0.0,
-                    122.0,
-                    value(format_args!("{prefix} #{rank}")),
-                    0.8,
-                    seat.tint,
-                ));
+                actors.push(
+                    text(
+                        layout,
+                        [label_x, 305.0],
+                        0.0,
+                        value(format_args!("{prefix} #{rank}")),
+                        0.43,
+                        seat.tint,
+                    )
+                    .build(0),
+                );
             }
         }
     }
@@ -461,18 +680,16 @@ fn push_counts(
     tint: [f32; 4],
     player: &EvaluationPlayerOverview<'_>,
 ) {
-    actors.push(layout.panel(x + 135.0, 319.0, [1.0, 93.0], RAIL, 2));
-    for (index, ((label, color), count)) in JUDGMENTS.into_iter().zip(player.judgments).enumerate()
-    {
+    let judge_x = x + if player.p2 { 99.0 } else { 97.0 };
+    for (index, (label, count)) in JUDGMENTS.into_iter().zip(player.judgments).enumerate() {
         let y = (index as f32).mul_add(COUNT_PITCH, COUNT_FIRST_Y);
-        actors.push(layout.label([x + 6.0, y], 0.0, label.into(), 0.85, color));
-        actors.push(layout.bounded_label(
-            [x + 127.0, y],
-            1.0,
-            43.0,
-            value(format_args!("{count:03}")),
-            0.92,
-            WHITE,
+        actors.push(text(layout, [x + 8.0, y], 0.0, label.into(), 0.5, WHITE).build(0));
+        actors.push(number(
+            layout,
+            [judge_x, y],
+            0.5,
+            value(format_args!("{count:4}")),
+            tint,
         ));
     }
     for (index, (label, [hit, total])) in [
@@ -486,40 +703,60 @@ fn push_counts(
     .enumerate()
     {
         let y = (index as f32).mul_add(COUNT_PITCH, COUNT_FIRST_Y);
-        actors.push(layout.label([x + 144.0, y], 0.0, label.into(), 0.85, QUIET));
-        actors.push(layout.bounded_label(
+        actors.push(text(layout, [x + 140.0, y], 0.0, label.into(), 0.5, WHITE).build(0));
+        actors.push(number(
+            layout,
             [x + 263.0, y],
             1.0,
-            65.0,
-            value(format_args!("{hit:03}/{total:03}")),
-            0.92,
-            WHITE,
+            value(format_args!("{hit:3}/{total:3}")),
+            tint,
         ));
     }
     let y = 5.0_f32.mul_add(COUNT_PITCH, COUNT_FIRST_Y);
-    actors.push(layout.label([x + 144.0, y], 0.0, "Max Combo".into(), 0.85, tint));
-    actors.push(layout.bounded_label(
-        [x + 265.0, y],
+    let mut combo = text(layout, [x + 140.0, y], 0.0, "Max Combo".into(), 0.5, WHITE);
+    combo.maxwidth(layout.size([65.0, 0.0])[0]);
+    actors.push(combo.build(0));
+    actors.push(number(
+        layout,
+        [x + 263.0, y],
         1.0,
-        44.0,
-        value(format_args!("{:05}", player.max_combo)),
-        0.92,
-        WHITE,
+        value(format_args!("{:5}", player.max_combo)),
+        tint,
     ));
+}
+
+fn text(
+    layout: Layout,
+    position: [f32; 2],
+    alignment: f32,
+    content: TextContent,
+    zoom: f32,
+    rgba: [f32; 4],
+) -> TextBuilder {
+    let mut label = layout.text(position, alignment, content, zoom, rgba);
+    label.font(MENU_NORMAL_FONT);
+    label
+}
+
+fn number(
+    layout: Layout,
+    position: [f32; 2],
+    alignment: f32,
+    content: TextContent,
+    color: [f32; 4],
+) -> Actor {
+    let mut label = text(layout, position, alignment, content, 0.5, color);
+    label.font(EVALUATION_NUMBER_FONT);
+    label.build(0)
 }
 
 fn value(args: std::fmt::Arguments<'_>) -> TextContent {
     TextContent::inline_format(args).unwrap_or_else(|| TextContent::Owned(args.to_string()))
 }
-
-fn unsigned(number: u32) -> TextContent {
-    TextContent::InlineU32(InlineU32Text::new(number))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_present::actors::SizeSpec;
+    use deadlib_present::actors::SpriteSource;
     use deadlib_present::space::{Metrics, with_current_metrics};
     use std::cell::RefCell;
     use std::sync::Arc;
@@ -557,6 +794,14 @@ mod tests {
         ))
     }
 
+    fn has_texture(actors: &[Actor], texture: &str) -> bool {
+        actors.iter().any(|actor| {
+            matches!(actor,
+                Actor::Sprite { source: SpriteSource::TextureStatic(key), .. } if *key == texture
+            )
+        })
+    }
+
     #[test]
     fn native_and_wide_overviews_place_the_banner_and_both_canonical_life_graphs() {
         use deadsync_theme::views::ComboRun;
@@ -565,9 +810,24 @@ mod tests {
         let mods = Arc::from("C500, Overhead");
         let banner = Arc::from("stage-banner");
         let combo_runs = [
-            ComboRun { start_second: 3.0, end_second: 7.0, count: 4, carried: 500 },
-            ComboRun { start_second: 15.0, end_second: 45.0, count: 9, carried: 0 },
-            ComboRun { start_second: 75.0, end_second: 105.0, count: 9, carried: 0 },
+            ComboRun {
+                start_second: 3.0,
+                end_second: 7.0,
+                count: 4,
+                carried: 500,
+            },
+            ComboRun {
+                start_second: 15.0,
+                end_second: 45.0,
+                count: 9,
+                carried: 0,
+            },
+            ComboRun {
+                start_second: 75.0,
+                end_second: 105.0,
+                count: 9,
+                carried: 0,
+            },
         ];
         for (width, delta) in [(640.0, 0.0), (854.0, 107.0)] {
             with_current_metrics(Metrics::centered(width, 480.0), || {
@@ -584,7 +844,10 @@ mod tests {
                         double_side_style: false,
                         elapsed: EVALUATION_OVERVIEW_SETTLED_SECONDS,
                         players: [
-                            Some(EvaluationPlayerOverview { combo_runs: &combo_runs, ..player(&mods) }),
+                            Some(EvaluationPlayerOverview {
+                                combo_runs: &combo_runs,
+                                ..player(&mods)
+                            }),
                             Some(EvaluationPlayerOverview {
                                 p2: true,
                                 grade: Grade::Failed,
@@ -600,9 +863,9 @@ mod tests {
                     },
                 );
                 assert!(actors.iter().any(|actor| matches!(actor,
-                    Actor::Sprite { align, offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], .. }
-                        if *align == [0.5, 0.5] && *offset == [320.0 + delta, 114.0]
-                            && *w == 210.0 && *h == 66.0
+                    Actor::TexturedMesh { offset, size: [SizeSpec::Px(210.0), SizeSpec::Px(66.0)],
+                        texture, depth_test: true, .. }
+                        if *offset == [320.0 + delta, 114.0] && texture.texture_key() == Some("stage-banner")
                 )));
                 assert_eq!(
                     graphs.borrow().as_slice(),
@@ -611,27 +874,33 @@ mod tests {
                         (1, [329.0 + delta, 239.0], LIFE_SIZE, P2, 8),
                     ]
                 );
-                assert!(has_text(&actors, "ROUND 1", [24.0, 72.0]));
+                assert!(has_texture(&actors, "openitg/gameplay-stage-1.png"));
                 assert!(has_text(&actors, "C500, Overhead", [220.0 + delta, 183.0]));
                 assert!(has_text(&actors, "C500, Overhead", [502.0 + delta, 183.0]));
                 assert!(has_text(&actors, "97.65%", [220.0 + delta, 212.0]));
                 assert!(has_text(&actors, "65.00%", [504.0 + delta, 212.0]));
-                assert!(has_text(&actors, "A+", [86.0 + delta, 202.0]));
-                assert!(has_text(&actors, "F", [376.0 + delta, 202.0]));
-                assert!(has_text(&actors, "DISQUALIFIED", [335.0 + delta, 302.0]));
-                assert!(has_text(&actors, "018/020", [302.0 + delta, 325.0]));
-                assert!(has_text(&actors, "018/020", [592.0 + delta, 325.0]));
+                for (key, x) in [
+                    ("openitg/evaluation-red.png", 86.0),
+                    ("openitg/evaluation-purple.png", 376.0),
+                ] {
+                    assert!(actors.iter().any(
+                        |actor| matches!(actor, Actor::TexturedMesh { texture, offset, .. }
+                            if texture.texture_key() == Some(key) && *offset == [x + delta, 202.0]
+                        )
+                    ));
+                }
+                assert!(has_text(&actors, "DISQUALIFIED", [506.0 + delta, 228.0]));
+                assert!(has_text(&actors, " 18/ 20", [302.0 + delta, 325.0]));
+                assert!(has_text(&actors, " 18/ 20", [592.0 + delta, 325.0]));
                 assert!(has_text(&actors, "9", [106.75 + delta, 285.0]));
                 assert!(has_text(&actors, "9", [242.25 + delta, 285.0]));
                 assert_eq!(actors.iter().filter(|actor| matches!(actor,
-                    Actor::Sprite { offset, size: [_, SizeSpec::Px(8.0)], .. }
-                        if offset[1] == COMBO_Y - 4.0
+                    Actor::Sprite { source: SpriteSource::TextureStatic("openitg/evaluation-combo-max.png"),
+                        offset, size: [_, SizeSpec::Px(18.0)], .. } if offset[1] == COMBO_Y
                 )).count(), 2);
-                assert!(has_text(
-                    &actors,
-                    "PRESS START TO CONTINUE",
-                    [320.0 + delta, 445.0]
-                ));
+                assert!(has_text(&actors, &HELP_TEXT, [320.0 + delta, 445.0]));
+                assert!(has_texture(&actors, "openitg/evaluation-banner-frame.png"));
+                assert!(has_texture(&actors, "openitg/evaluation-grade-frame.png"));
             });
         }
     }
@@ -665,15 +934,20 @@ mod tests {
                         },
                     },
                 );
-                assert!(has_text(&actors, "A+", grade_xy));
+                assert!(actors.iter().any(|actor| matches!(actor,
+                    Actor::TexturedMesh { texture, offset, .. }
+                        if texture.texture_key() == Some("openitg/evaluation-red.png") && *offset == grade_xy
+                )));
                 assert_eq!(
                     has_text(&actors, "CHECK YOUR STATS", [36.0, 38.0]),
                     elapsed > 2.0
                 );
+                assert_eq!(
+                    has_texture(&actors, "openitg/evaluation-cleared.png"),
+                    elapsed > 0.25
+                );
                 assert!(!has_text(&actors, "97.65%", [220.0, 212.0]));
-                assert!(!actors.iter().any(|actor| {
-                    matches!(actor, Actor::Text { content, .. } if content.as_str() == "ROUND 1")
-                }));
+                assert!(!has_texture(&actors, "openitg/gameplay-stage-1.png"));
             }
             let mut actors = Vec::new();
             let graph_x = std::cell::Cell::new(0.0);
@@ -696,9 +970,8 @@ mod tests {
             );
             assert!((graph_x.get() - (-41.0)).abs() < 0.001);
             assert!(actors.iter().any(|actor| matches!(actor,
-                Actor::Text { content, offset, .. }
-                    if content.as_str() == "ROUND 1"
-                        && (offset[0] - (-56.0)).abs() < 0.001
+                Actor::Sprite { source: SpriteSource::TextureStatic("openitg/gameplay-stage-1.png"), offset, .. }
+                    if (offset[0] - (-56.0 + 498.0 * 0.08)).abs() < 0.001
                         && offset[1] == 72.0
             )));
         });
@@ -741,16 +1014,24 @@ mod tests {
                 },
             );
             assert!(has_text(&actors, "COURSE RESULTS", [36.0, 76.0]));
-            assert!(has_text(&actors, "Course Name", [320.0, 107.0]));
-            assert!(has_text(&actors, "Expert", [483.0, 90.0]));
-            assert!(has_text(&actors, "*****", [229.0, 202.0]));
+            assert!(has_text(&actors, "Course Name", [320.0, 65.0]));
+            assert!(has_text(&actors, "Expert", [497.0, 90.0]));
+            assert_eq!(
+                actors
+                    .iter()
+                    .filter(|actor| matches!(actor, Actor::TexturedMesh { texture, .. }
+                        if texture.texture_key() == Some("openitg/evaluation-gold.png")
+                    ))
+                    .count(),
+                5
+            );
             assert!(has_text(&actors, "EX 91.25%", [302.0, 230.0]));
             assert!(has_text(&actors, "H.EX 89.64%", [357.0, 230.0]));
             assert!(has_text(&actors, "OWN 93.44%", [412.0, 230.0]));
-            assert!(has_text(&actors, "963", [309.0, 325.0]));
-            assert!(has_text(&actors, "072/079", [445.0, 341.0]));
-            assert!(has_text(&actors, "00611", [447.0, 405.0]));
-            assert!(has_text(&actors, "MACHINE #3", [326.0, 302.0]));
+            assert!(has_text(&actors, " 963", [281.0, 325.0]));
+            assert!(has_text(&actors, " 72/ 79", [445.0, 341.0]));
+            assert!(has_text(&actors, "  611", [445.0, 405.0]));
+            assert!(has_text(&actors, "MACHINE #3", [326.0, 305.0]));
         });
     }
 }

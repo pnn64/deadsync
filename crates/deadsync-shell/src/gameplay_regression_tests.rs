@@ -2984,8 +2984,8 @@ M000
                         Some(deadsync_theme_openitg::push_evaluation_overview),
                     );
                     assert!(actor_tree_has_text(&actors, "CHECK YOUR STATS"));
-                    assert!(actor_tree_has_text(&actors, "00027"));
-                    assert_eq!(actor_tree_has_text(&actors, "00028"), style.is_versus());
+                    assert!(actor_tree_has_text(&actors, "   27"));
+                    assert_eq!(actor_tree_has_text(&actors, "   28"), style.is_versus());
                     let graph = actors.iter().find_map(|actor| match actor {
                         Actor::Mesh { vertices, .. } => Some(Arc::clone(vertices)),
                         _ => None,
