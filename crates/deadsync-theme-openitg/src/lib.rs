@@ -6,6 +6,7 @@ mod menu;
 mod play_selection;
 mod player_options;
 mod presentation;
+mod profile_picker;
 mod select_music;
 mod system_options;
 
@@ -17,6 +18,7 @@ pub use gameplay::{GAMEPLAY_HUD, TAP_RESULTS_PNG};
 pub use menu::MenuState;
 pub use play_selection::PlaySelectionCarousel;
 pub use player_options::push_player_options_actors;
+pub use profile_picker::push_profile_picker_actors;
 pub use select_music::push_select_music_actors;
 pub use system_options::SYSTEM_OPTIONS;
 

@@ -14061,7 +14061,7 @@ pub fn push_actors(
         ));
     }
 
-    push_select_music_overlays(actors, state, asset_manager, visual_policy, true);
+    push_select_music_overlays(actors, state, asset_manager, visual_policy, true, None);
 }
 
 /// Draw the existing auxiliary screens over whichever wheel layout the shell mounted.
@@ -14071,6 +14071,9 @@ pub fn push_select_music_overlays(
     asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     show_launch_prompt: bool,
+    profile_picker_renderer: Option<
+        fn(&mut Vec<Actor>, deadsync_theme::profile_picker::ProfilePickerScreenView<'_>, bool),
+    >,
 ) {
     if let Some(reload) = &state.reload_ui {
         push_reload_overlay(actors, reload, state.active_color_index);
@@ -14087,6 +14090,10 @@ pub fn push_select_music_overlays(
         return;
     }
     if let Some(overlay) = state.profile_switch_overlay.as_ref() {
+        if let Some(render) = profile_picker_renderer {
+            profile_boxes::with_screen_view(overlay, 1.0, |view| render(actors, view, true));
+            return;
+        }
         actors.push(act!(quad:
             align(0.0, 0.0):
             xy(0.0, 0.0):

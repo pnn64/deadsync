@@ -600,14 +600,14 @@ feedback, animation, and actor composition.
 
 The `Theme` setting selects Simply Love or OpenITG at startup. Both title menus
 use the same session start, cabinet permissions, and navigation commands.
-OpenITG mounts its title, System Options, Select Style, Select Play Mode,
-Player Options, and base Select Music layouts. The existing Options controller
-and shell still handle input, settings edits, and modal workflows. An alternate
-page renderer lazily reads the controller's visible row order, current values,
-and availability through
-`deadsync-theme`. The music wheel shares the game's catalog entries and circular
-index, and both layouts use the same prepared difficulty window. The alternate base layout
-borrows song, chart, player, and banner data from the existing controller.
+OpenITG mounts its title, System Options, Profile Picker, Select Style, Select
+Play Mode, Player Options, and base Select Music layouts. The existing Options
+controller and shell still handle input, settings edits, and modal workflows.
+An alternate page renderer lazily reads the controller's visible row order,
+current values, and availability through `deadsync-theme`. The music wheel
+shares the game's catalog entries and circular index, and both layouts use the
+same prepared difficulty window. The alternate base layout borrows song, chart,
+player, and banner data from the existing controller.
 The shell continues to use that controller for input, previews, and launching
 stages. At stage entry it can install alternate HUD drawing functions through
 `deadsync-theme`. The gameplay composer supplies the already resolved life and
@@ -621,6 +621,12 @@ Select Style and Select Play Mode use their existing input and confirmation
 controllers for both themes. The shell passes a borrowed `PlaySelectionView`
 to the OpenITG carousel. The carousel owns its animation position, while the
 controllers supply the available choices, selected index, and joined players.
+
+`deadsync-profile::picker` owns the per-side join and confirmation state,
+including duplicate local-profile validation and late join. The standalone
+picker and the Select Music overlay share that flow and the shell's profile
+requests. OpenITG borrows a visible profile window and status through
+`ProfilePickerScreenView` for both surfaces.
 
 The evaluation visit receives completed stages before the shell chooses the
 overview renderer. The overview view borrows prepared artwork and exposes the

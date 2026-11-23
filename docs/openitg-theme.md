@@ -3,9 +3,9 @@
 Choose **OpenITG** in **Options → System → Theme**, then restart DeadSync.
 The equivalent setting is `Theme=OpenITG` under `[Options]` in `deadsync.ini`.
 Simply Love is the default. The selection mounts that theme's title, System
-Options, Select Style, Select Play Mode, Player Options, base Select Music
-layout, supported gameplay HUD widgets, and Evaluation overview. Both themes
-use the same DeadSync session flow.
+Options, Profile Picker, Select Style, Select Play Mode, Player Options, base
+Select Music layout, supported gameplay HUD widgets, and Evaluation overview.
+Both themes use the same DeadSync session flow.
 
 ## Reference
 
@@ -101,6 +101,25 @@ The broader shell run still hits `late_foreground_keeps_shared_gameplay_tracks`,
 which reproduces at the same assertion on `703cb0d25`. A follow-up run confirmed
 that the failure poisons the shared session lock for `live_lua_screen_frames`.
 
+## Profile Picker
+
+The standalone profile picker and the music wheel's fast-switch and late-join
+overlay use the same OpenITG panels. Each physical side shows its own local
+profiles, guest choice, avatar, played-song count, and confirmation status.
+Both themes use `deadsync-profile` for joining, undoing readiness, and rejecting
+a local profile already confirmed on the other side. The existing shell still
+applies the selected profiles and resumes the appropriate route.
+
+OpenITG's `GameState::PlayersFinalized` loads the first available profile from
+the cabinet memory card. DeadSync presents its own local profiles and guest
+entries with original two-player panels. A live cabinet comparison of profile
+feedback remains open.
+
+At 854×480 with both players joined, the median of seven 8,000-frame batches
+was 43–44 µs before and 42–43 µs after for Simply Love, and 8.9 µs for OpenITG.
+The benchmark measures steady-state actor construction with bundled fonts
+and dev-profile libraries.
+
 ## Select Style and Play Mode
 
 The style and mode screens present the shared controller's current choices,
@@ -114,8 +133,8 @@ cues. Labels stay readable on the far side of the ring.
 DeadSync's flow shows Style first and retains its Regular and Marathon modes.
 Premium Free appears when the configured session permits it. Mode descriptions
 use the configured language and wrap to the panel. The three short style
-explanations are in English. Profile selection, color selection, and profile
-loading use the existing screens. The reference's perspective, artwork,
+explanations are in English. Color selection and profile loading use the
+existing screens. The reference's perspective, artwork,
 explanation panels, and transitions still need comparison against a live build.
 
 Actor checks cover the native and wide anchors, available modes, joined-player

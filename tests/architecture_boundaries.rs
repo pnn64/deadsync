@@ -3082,6 +3082,9 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
     assert!(shell_app.contains("<ActiveTheme as ThemeProfilePicker>::ProfilePickerState"));
     assert!(shell_app.contains("ActiveTheme::init_profile_picker("));
     assert!(shell_app.contains("ActiveTheme::push_profile_picker_actors("));
+    assert!(shell_app.contains("ActiveTheme::with_profile_picker_view("));
+    assert!(picker.contains("state.seats.start(side, choices)"));
+    assert!(picker.contains("state.seats.back(side)"));
     assert!(shell_input.contains("ActiveTheme::handle_profile_picker_input("));
     assert!(!shell_app.contains("select_profile::"));
     assert!(!shell_input.contains("select_profile::"));
@@ -4702,8 +4705,11 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
 
     let profile_boxes = read_source(screens.join("components/shared/profile_boxes.rs"))
         .expect("profile boxes should be readable");
-    assert!(profile_boxes.contains("p1_joined: state.p1_joined"));
-    assert!(profile_boxes.contains("p2_joined: state.p2_joined"));
+    assert!(contains_rust(
+        &profile_boxes,
+        "let [p1_joined, p2_joined] = state.seats.states().map(PickerSeat::joined);",
+    ));
+    assert!(contains_rust(&profile_boxes, "p1_joined, p2_joined, fast_switch: state.fast_switch"));
     assert!(profile_boxes.contains("fast_switch: state.fast_switch"));
     assert!(!profile_boxes.contains("fast_profile_switch_from_select_music"));
     for direct_session_write in [
@@ -7508,7 +7514,8 @@ fn both_music_wheels_use_the_game_catalog_and_keep_auxiliary_screens() {
     assert!(app.contains("select_music::select_music_view("));
     assert!(app.contains("deadsync_theme_openitg::push_select_music_actors("));
     assert!(app.contains("select_music::push_select_music_overlays("));
-    assert!(selection.contains("push_select_music_overlays(actors, state, asset_manager, visual_policy, true)"));
+    assert!(selection.contains("push_select_music_overlays(actors, state, asset_manager, visual_policy, true, None)"));
+    assert!(app.contains("Some(deadsync_theme_openitg::push_profile_picker_actors)"));
 }
 
 #[test]

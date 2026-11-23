@@ -7908,13 +7908,25 @@ impl App {
                     );
                 }
             }
-            CurrentScreen::SelectProfile => ActiveTheme::push_profile_picker_actors(
-                &mut actors,
-                &self.state.screens.select_profile_state,
-                &self.asset_manager,
-                screen_alpha_multiplier,
-                visual_policy,
-            ),
+            CurrentScreen::SelectProfile => {
+                let state = &self.state.screens.select_profile_state;
+                match self.state.screens.menu_state.theme_flag() {
+                    config::theme::ThemeFlag::SimplyLove => {
+                        ActiveTheme::push_profile_picker_actors(
+                            &mut actors,
+                            state,
+                            &self.asset_manager,
+                            screen_alpha_multiplier,
+                            visual_policy,
+                        );
+                    }
+                    config::theme::ThemeFlag::OpenItg => {
+                        ActiveTheme::with_profile_picker_view(state, screen_alpha_multiplier, |view| {
+                            deadsync_theme_openitg::push_profile_picker_actors(&mut actors, view, false);
+                        });
+                    }
+                }
+            }
             CurrentScreen::SelectColor => select_color::push_actors(
                 &mut actors,
                 &self.state.screens.select_color_state,
@@ -7994,7 +8006,12 @@ impl App {
                         );
                         deadsync_theme_openitg::push_select_music_actors(&mut actors, view);
                         select_music::push_select_music_overlays(
-                            &mut actors, state, &self.asset_manager, visual_policy, false,
+                            &mut actors,
+                            state,
+                            &self.asset_manager,
+                            visual_policy,
+                            false,
+                            Some(deadsync_theme_openitg::push_profile_picker_actors),
                         );
                     }
                 }

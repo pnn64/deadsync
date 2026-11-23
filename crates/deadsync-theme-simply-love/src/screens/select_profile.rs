@@ -5,7 +5,9 @@ use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadsync_input::InputEvent;
 use deadsync_profile as profile_data;
-use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
+use deadsync_theme::profile_picker::{
+    ProfilePickerContext, ProfilePickerScreenView, ThemeProfilePicker,
+};
 
 pub type State = profile_boxes::State;
 
@@ -122,6 +124,14 @@ impl ThemeProfilePicker for crate::SimplyLoveTheme {
         effects: &mut Vec<ThemeEffect>,
     ) {
         handle_input(state, input, effects);
+    }
+
+    fn with_profile_picker_view(
+        state: &State,
+        alpha: f32,
+        draw: impl FnOnce(ProfilePickerScreenView<'_>),
+    ) {
+        profile_boxes::with_screen_view(state, alpha, draw);
     }
 
     fn push_profile_picker_actors(
