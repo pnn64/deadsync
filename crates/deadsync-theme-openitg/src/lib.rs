@@ -13,6 +13,7 @@ mod presentation;
 mod profile_picker;
 mod resources;
 mod select_music;
+mod stage_loading;
 mod system_options;
 
 use deadlib_present::actors::Actor;
@@ -28,9 +29,10 @@ pub use play_selection::{PlaySelectionCarousel, push_profile_load_actors};
 pub use player_options::OpenItgPlayerOptions;
 pub use profile_picker::push_profile_picker_actors;
 pub use select_music::{
-    WHEEL_BANNER_FADE, WheelBannerFrame, WheelBannerMotion, push_select_course_actors,
-    push_select_music_actors,
+    WHEEL_BANNER_FADE, WHEEL_TO_PLAYER_OPTIONS_SECONDS, WheelBannerFrame, WheelBannerMotion,
+    push_select_course_actors, push_select_music_actors,
 };
+pub use stage_loading::push_stage_loading_actors;
 pub use system_options::OpenItgSystemOptions;
 
 type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;
@@ -98,7 +100,7 @@ impl ThemeTransitions for OpenItgTheme {
     fn actor_entry_duration(screen: Self::Screen) -> Option<f32> {
         match screen {
             OpenItgScreen::Menu => Some(menu::ENTRY_SECONDS),
-            OpenItgScreen::PlayerOptions => Some(player_options::TRANSITION_SECONDS),
+            OpenItgScreen::PlayerOptions => Some(player_options::ENTRY_SECONDS),
             _ => None,
         }
     }
@@ -128,11 +130,6 @@ impl ThemeTransitions for OpenItgTheme {
 
     fn in_transition(screen: Self::Screen, (): Self::EntryContext<'_>) -> (Vec<Self::Actor>, f32) {
         let duration = Self::actor_entry_duration(screen).unwrap_or_default();
-        let actors = if screen == OpenItgScreen::PlayerOptions {
-            vec![presentation::black_fade(duration, true)]
-        } else {
-            Vec::new()
-        };
-        (actors, duration)
+        (Vec::new(), duration)
     }
 }

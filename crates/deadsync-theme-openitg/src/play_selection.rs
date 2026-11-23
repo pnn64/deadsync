@@ -1,7 +1,7 @@
 //! Style and mode carousels for the existing DeadSync session flow.
 
 use crate::presentation::{
-    ACCENT, HEIGHT, INK, Layout, italic, push_red_backdrop, push_red_streaks, quad, sprite,
+    HEIGHT, Layout, italic, push_red_backdrop, push_red_streaks, quad, sprite,
 };
 use crate::resources::{MENU_HEADING_FONT, MENU_NORMAL_FONT, TITLE_FONT};
 use deadlib_present::actors::{Actor, TextContent};
@@ -31,17 +31,12 @@ fn pad_pose(elapsed: f64) -> u32 {
 pub fn push_profile_load_actors(actors: &mut Vec<Actor>, label: &Arc<str>, elapsed_seconds: f32) {
     let (width, height) = (screen_width(), screen_height());
     let layout = Layout::centered(width, height);
-    actors.push(quad(
-        [0.0, 0.0],
-        [width, height],
-        [0.025, 0.037, 0.064, 1.0],
-        -20,
-    ));
-    actors.push(layout.bounded_label([320.0, 231.0], 0.5, 384.0, label.into(), 1.48, rgba(INK)));
-    actors.push(layout.panel(200.0, 262.0, [240.0, 3.0], [0.17, 0.26, 0.38, 1.0], 1));
-    let phase = elapsed_seconds.rem_euclid(0.9) / 0.9;
-    let sweep = 1.0 - (2.0 * phase - 1.0).abs();
-    actors.push(layout.panel(200.0 + 180.0 * sweep, 262.0, [60.0, 3.0], rgba(ACCENT), 2));
+    crate::evaluation::push_arcade_backdrop(actors, [width, height], elapsed_seconds);
+    let mut heading = layout.text([320.0, 240.0], 0.5, label.into(), 1.0, WHITE);
+    heading.font(MENU_HEADING_FONT);
+    heading.maxwidth(layout.size([500.0, 0.0])[0]);
+    heading.shadowlength(layout.size([4.0, 0.0])[0]);
+    actors.push(italic(heading.build(0), -0.16));
 }
 
 /// Visual scroll position for the active style or mode screen.
@@ -483,10 +478,6 @@ fn push_players(actors: &mut Vec<Actor>, layout: Layout, view: &PlaySelectionVie
         text.z(30);
         actors.push(text.build(0));
     }
-}
-
-const fn rgba([r, g, b]: [f32; 3]) -> [f32; 4] {
-    [r, g, b, 1.0]
 }
 
 #[cfg(test)]

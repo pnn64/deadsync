@@ -82,11 +82,13 @@ impl WheelBannerMotion {
             let remaining = 1.0 - (elapsed_since(at) / MOTION_SECONDS).min(1.0);
             1.0 - remaining * remaining
         });
-        let departing = (self.confirmed_at.map_or(exit_elapsed, elapsed_since) / MOTION_SECONDS)
-            .clamp(0.0, 1.0);
+        let confirmation_seconds = self.confirmed_at.map_or(exit_elapsed, elapsed_since);
+        let departing = (confirmation_seconds / MOTION_SECONDS).clamp(0.0, 1.0);
         WheelBannerFrame {
             shift: 470.0 * (1.0 - incoming) + 440.0 * departing * departing,
             orientation: incoming,
+            confirmation_seconds,
+            transition_seconds: exit_elapsed,
             outgoing,
         }
     }
@@ -95,6 +97,8 @@ impl WheelBannerMotion {
 pub struct WheelBannerFrame<'a> {
     shift: f32,
     orientation: f32,
+    pub(super) confirmation_seconds: f32,
+    pub(super) transition_seconds: f32,
     outgoing: [Option<WheelBannerFade<'a>>; WHEEL_OUTGOING_BANNERS],
 }
 
@@ -103,6 +107,8 @@ impl Default for WheelBannerFrame<'_> {
         Self {
             shift: 0.0,
             orientation: 1.0,
+            confirmation_seconds: 0.0,
+            transition_seconds: 0.0,
             outgoing: [None; WHEEL_OUTGOING_BANNERS],
         }
     }

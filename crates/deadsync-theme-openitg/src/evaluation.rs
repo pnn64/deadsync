@@ -112,7 +112,7 @@ pub fn push_evaluation_overview(actors: &mut Vec<Actor>, page: EvaluationOvervie
     let stats_progress = decelerate(elapsed - STATS_START_SECONDS, STATS_ENTER_SECONDS);
     let solo_double = page.double_side_style && page.players.iter().flatten().count() == 1;
 
-    push_background(actors, viewport, elapsed);
+    push_arcade_backdrop(actors, viewport, elapsed * 0.5);
     push_header(actors, layout, elapsed);
     push_result_reveal(actors, layout, &page, elapsed);
     if stats_progress > 0.0 {
@@ -159,8 +159,7 @@ pub fn push_evaluation_overview(actors: &mut Vec<Actor>, page: EvaluationOvervie
     }
 }
 
-fn push_background(actors: &mut Vec<Actor>, [width, height]: [f32; 2], elapsed: f32) {
-    let motion = elapsed * 0.5;
+pub(crate) fn push_arcade_backdrop(actors: &mut Vec<Actor>, [width, height]: [f32; 2], motion: f32) {
     push_red_backdrop(actors, [width, height], motion, -30);
     for (y, phase, speed, opacity) in [
         (120.0, 0.2, 0.12, 0.2),
@@ -224,13 +223,13 @@ fn push_result_reveal(
         [1.0, 1.0, 1.0, alpha],
         102,
     );
-    word.cropright((1.3 - sweep * 1.6).max(0.0));
+    word.cropright(1.3 - sweep * 1.6);
     word.faderight(0.1);
     actors.push(word.build(0));
     if sweep < 1.0 {
         let mut edge = sprite(glow, position, layout.size(glow_size), WHITE, 103);
-        edge.cropleft((sweep * 1.3 - 0.3).max(0.0));
-        edge.cropright((1.0 - sweep * 1.3).max(0.0));
+        edge.cropleft(sweep * 1.3 - 0.3);
+        edge.cropright(1.0 - sweep * 1.3);
         edge.fadeleft(0.1);
         edge.faderight(0.1);
         actors.push(edge.build(0));

@@ -569,6 +569,12 @@ impl App {
         if let Some(duration) = self.openitg_options_transition_seconds(screen) {
             return (Vec::new(), duration);
         }
+        if target == CurrentScreen::PlayerOptions
+            && matches!(screen, CurrentScreen::SelectMusic | CurrentScreen::SelectCourse)
+            && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg
+        {
+            return (Vec::new(), deadsync_theme_openitg::WHEEL_TO_PLAYER_OPTIONS_SECONDS);
+        }
         if screen == CurrentScreen::PlayerOptions
             && let Some(options) = self.state.screens.player_options_state.as_ref()
         {

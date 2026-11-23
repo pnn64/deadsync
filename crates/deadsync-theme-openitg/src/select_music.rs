@@ -2,9 +2,10 @@
 
 mod banner;
 pub use banner::{WHEEL_BANNER_FADE, WheelBannerFrame, WheelBannerMotion};
+pub const WHEEL_TO_PLAYER_OPTIONS_SECONDS: f32 = 0.3;
 
 use crate::presentation::{
-    ACCENT, HEIGHT, INK, Layout, MUTED, WIDTH, italic, push_red_backdrop, push_red_streaks, quad,
+    ACCENT, HEIGHT, INK, Layout, MUTED, WIDTH, italic, push_red_backdrop, push_red_streaks,
     sprite,
 };
 use crate::resources::{MENU_HEADING_FONT, MENU_NORMAL_FONT, TITLE_FONT};
@@ -171,6 +172,7 @@ pub fn push_select_music_actors(
     banner: WheelBannerFrame<'_>,
 ) {
     let layout = push_backdrop(actors, view.selection_beat);
+    let prompt_motion = [banner.confirmation_seconds, banner.transition_seconds];
     push_details_frame(actors, layout);
     push_banner(actors, layout, &view, banner);
     push_wheel(
@@ -189,7 +191,7 @@ pub fn push_select_music_actors(
         }
     }
     push_footer(actors, layout, &view);
-    push_prompt(actors, layout, view.prompt);
+    push_prompt(actors, layout, view.prompt, prompt_motion);
 }
 
 fn push_backdrop(actors: &mut Vec<Actor>, selection_beat: f32) -> Layout {
@@ -772,36 +774,33 @@ fn push_wheel_title(actors: &mut Vec<Actor>, layout: Layout, title: &'static str
     actors.push(italic(text.build(0), -0.16));
 }
 
-fn push_prompt(actors: &mut Vec<Actor>, layout: Layout, prompt: SelectMusicPrompt) {
-    if prompt != SelectMusicPrompt::EnteringOptions {
-        let label = if prompt == SelectMusicPrompt::OfferOptions {
-            "Press Start for Player Options"
-        } else {
-            "Press Start to choose"
-        };
-        let mut text = wheel_text(layout, [320.0, 445.0], 0.5, label.into(), 0.68, WHITE);
+fn push_prompt(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    prompt: SelectMusicPrompt,
+    [confirmed, leaving]: [f32; 2],
+) {
+    if prompt == SelectMusicPrompt::Hidden {
+        let mut text = wheel_text(
+            layout, [320.0, 445.0], 0.5, "Press Start to choose".into(), 0.68, WHITE,
+        );
         text.z(22);
         actors.push(text.build(0));
         return;
     }
-    actors.push(quad(
-        [0.0, 0.0],
-        [screen_width(), screen_height()],
-        [0.05, 0.01, 0.01, 0.70],
-        1400,
-    ));
-    actors.push(layout.panel(112.0, 212.0, [416.0, 56.0], [0.23, 0.055, 0.049, 1.0], 1401));
-    let mut heading = wheel_text(
-        layout,
-        [WIDTH * 0.5, HEIGHT * 0.5],
-        0.5,
-        "ENTERING PLAYER OPTIONS".into(),
-        0.74,
-        WHITE,
+    let v = if prompt == SelectMusicPrompt::EnteringOptions { 0.5 } else { 0.0 };
+    let reveal = (confirmed / 0.3).clamp(0.0, 1.0);
+    let exit = (leaving / WHEEL_TO_PLAYER_OPTIONS_SECONDS).clamp(0.0, 1.0);
+    let mut message = sprite(
+        "openitg/wheel-options-prompt.png", layout.position(320.0, 240.0),
+        layout.size([512.0, 128.0]), WHITE, 1402,
     );
-    heading.maxwidth(layout.size([384.0, 0.0])[0]);
-    heading.z(1402);
-    actors.push(heading.build(0));
+    message.customtexturerect([0.0, v, 1.0, v + 0.5]);
+    message.cropleft(-0.3 + exit * 1.6);
+    message.cropright(1.3 - reveal * 1.6);
+    message.fadeleft(0.3);
+    message.faderight(0.3);
+    actors.push(message.build(0));
 }
 
 /// Present the course variant of the music wheel using its current rating and records.
@@ -811,6 +810,7 @@ pub fn push_select_course_actors(
     banner: WheelBannerFrame<'_>,
 ) {
     let layout = push_backdrop(actors, view.selection_beat);
+    let prompt_motion = [banner.confirmation_seconds, banner.transition_seconds];
     push_details_frame(actors, layout);
     banner::push(actors, layout, banner, view.banner_texture, |_, _| {});
     push_wheel(
@@ -844,7 +844,7 @@ pub fn push_select_course_actors(
             .unwrap_or_else(|| "RATE".into());
         actors.push(layout.label([604.0, 447.0], 1.0, label, 0.9, opaque(ACCENT)));
     }
-    push_prompt(actors, layout, view.prompt);
+    push_prompt(actors, layout, view.prompt, prompt_motion);
 }
 
 fn push_course_details(actors: &mut Vec<Actor>, layout: Layout, course: &SelectCourseItem<'_>) {
@@ -1031,8 +1031,8 @@ mod tests {
                         if *offset == [313.0 + delta, 224.0]
                 )));
                 assert!(actors.iter().any(|actor| matches!(actor,
-                    Actor::Text { content, offset, z, .. }
-                        if content.as_str() == "ENTERING PLAYER OPTIONS" && *offset == [320.0 + delta, 240.0] && *z > 1401
+                    Actor::Sprite { source: deadlib_present::actors::SpriteSource::TextureStatic("openitg/wheel-options-prompt.png"), offset, z, .. }
+                        if *offset == [320.0 + delta, 240.0] && *z > 1401
                 )));
             });
         }

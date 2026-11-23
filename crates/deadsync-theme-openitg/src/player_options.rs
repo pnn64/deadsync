@@ -17,6 +17,7 @@ use deadsync_theme::player_options::{
 };
 
 pub(super) const TRANSITION_SECONDS: f32 = 0.3;
+pub(super) const ENTRY_SECONDS: f32 = 0.5;
 
 const FIRST_ROW_Y: f32 = 127.0;
 const ROW_PITCH: f32 = 28.0;
@@ -139,9 +140,11 @@ fn push_page(
     push_red_backdrop(actors, [width, height], now.rem_euclid(60.0) as f32, -30);
     push_red_streaks(actors, [width, height], 1.0, -28);
     let panel_bottom = help.panel_bottom();
-    push_options_panel(actors, layout, panel_bottom, alpha);
+    let remaining = 1.0 - (elapsed / TRANSITION_SECONDS).clamp(0.0, 1.0);
+    let panel = layout.translated_x(-width * remaining * remaining);
+    push_options_panel(actors, panel, panel_bottom, alpha);
     draw_heading(actors, layout, page.title, elapsed, alpha);
-    draw_seats(actors, layout, seats, alpha);
+    draw_seats(actors, layout, seats, elapsed, alpha);
 
     for index in 0..page.row_count {
         let Some(row) = (page.row)(index) else {
@@ -213,7 +216,7 @@ fn draw_heading(
     push_options_heading(actors, layout, title, [t, (6.0 - 5.0 * t).max(0.0)], alpha);
 }
 
-fn draw_seats(actors: &mut Vec<Actor>, layout: Layout, seats: Seats, alpha: f32) {
+fn draw_seats(actors: &mut Vec<Actor>, layout: Layout, seats: Seats, elapsed: f32, alpha: f32) {
     for (player, (name, icon)) in PLAYER_NAMES
         .into_iter()
         .zip(["openitg/options-seat-p1.png", "openitg/options-seat-p2.png"])
@@ -222,6 +225,9 @@ fn draw_seats(actors: &mut Vec<Actor>, layout: Layout, seats: Seats, alpha: f32)
         if !seats.active[player] {
             continue;
         }
+        let delay = [0.1, 0.2][player];
+        let remaining = 1.0 - ((elapsed - delay) / TRANSITION_SECONDS).clamp(0.0, 1.0);
+        let layout = layout.translated_x(screen_width() * 0.75 * remaining * remaining);
         let x = seats.values[player];
         actors.push(
             sprite(
@@ -881,8 +887,9 @@ mod tests {
                     0.0,
                 );
                 assert!(has_text(&actors, "PICK MODIFIERS", [36.0 + delta, 38.0]));
-                assert!(has_text(&actors, "P2", [379.0 + delta, 79.0]));
-                assert!(!has_text(&actors, "P1", [379.0 + delta, 79.0]));
+                let arriving_seat = [379.0 + delta + width * 0.75, 79.0];
+                assert!(has_text(&actors, "P2", arriving_seat));
+                assert!(!has_text(&actors, "P1", arriving_seat));
                 assert!(has_text(&actors, "Scroll Speed", [53.0 + delta, 127.0]));
                 assert!(has_text(&actors, "2.50x", [395.0 + delta, 127.0]));
                 assert!(has_text(&actors, "Leaf", [362.0 + delta, 239.0]));

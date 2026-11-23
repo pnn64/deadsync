@@ -331,7 +331,12 @@ mod tests {
                     file.as_ref(),
                     "{cue:?} at {sample_rate_hz}"
                 );
-                assert!(embedded.iter().any(|&sample| sample.abs() > 500));
+                // The archived options swoosh peaks at four PCM units.
+                let minimum_peak = if cue == UiCue::OpenPlayerOptions { 0 } else { 500 };
+                assert!(
+                    embedded.iter().any(|&sample| sample.abs() > minimum_peak),
+                    "{cue:?} at {sample_rate_hz} peaks at or below {minimum_peak}"
+                );
                 if cue == UiCue::StageFailed && channels == 2 {
                     assert!(embedded.chunks_exact(2).any(|frame| frame[0] != frame[1]));
                 } else {

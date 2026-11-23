@@ -226,6 +226,14 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     // The first Start confirms the chart and offers the options window.
     press(app, event_loop, VirtualAction::p2_start);
     menu_frame(app, event_loop);
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert_eq!(
+        actors.iter().any(|actor| matches!(actor, Actor::Sprite {
+            source: deadlib_present::actors::SpriteSource::TextureStatic("openitg/wheel-options-prompt.png"),
+            ..
+        })),
+        openitg,
+    );
     press(app, event_loop, VirtualAction::p2_start);
     settle(app, event_loop, CurrentScreen::PlayerOptions);
     let selection = app
@@ -238,6 +246,11 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     assert_eq!(selection.song.title, SONG_TITLE);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert_eq!(actor_tree_has_text(&actors, "PICK MODIFIERS"), openitg);
+    if openitg {
+        let (cover, duration) = app.get_in_transition_for_screen(CurrentScreen::PlayerOptions);
+        assert!(cover.is_empty());
+        assert_eq!(duration, 0.5);
+    }
     // The editor's first Start moves focus to Exit and the next starts play.
     press(app, event_loop, VirtualAction::p2_start);
     press(app, event_loop, VirtualAction::p2_start);

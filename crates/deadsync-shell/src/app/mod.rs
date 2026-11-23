@@ -7903,12 +7903,25 @@ impl App {
         let visual_policy = policy.visual;
 
         if let Some(loading) = self.song_lua_loading() {
-            screens::components::shared::song_lua_loading::push(
-                &mut actors,
-                loading.title.clone(),
-                loading.progress.fraction(),
-                loading.color_index,
-            );
+            let progress = loading.progress.fraction();
+            if self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg {
+                let session = &self.state.session;
+                deadsync_theme_openitg::push_stage_loading_actors(
+                    &mut actors,
+                    &loading.title,
+                    session.active_stage_number(),
+                    session.course_run.is_some(),
+                    loading.presentation_elapsed(),
+                    progress,
+                );
+            } else {
+                screens::components::shared::song_lua_loading::push(
+                    &mut actors,
+                    loading.title.clone(),
+                    progress,
+                    loading.color_index,
+                );
+            }
             return (actors, CLEAR, None);
         }
 
@@ -9637,6 +9650,11 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let mut commands = Vec::new();
+        if target == CurrentScreen::PlayerOptions
+            && self.state.screens.player_options_state.is_some()
+        {
+            self.ui_sfx.play_cue(&mut self.audio, UiCue::OpenPlayerOptions);
+        }
         if matches!(target, CurrentScreen::Gameplay | CurrentScreen::Practice) {
             // The shared SRPG background is hidden for the whole stage. Clear
             // its key once on entry instead of taking its global mutex every

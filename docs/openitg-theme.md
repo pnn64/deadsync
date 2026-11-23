@@ -273,6 +273,15 @@ choice cursor and underline. The nameplates identify the physical seats.
 Inline choices fit the available width from the font's glyph advances.
 Wider translated lists use the compact player columns.
 
+The song and course wheels use the original two-state bitmap for the second
+Start prompt and the *Entering Modifier Menu* confirmation. The message
+reveals across the center of the wheel. The following screen slides its frame
+in from the left over 0.3 seconds, and its P1 and P2 tabs follow from the
+right at 0.1 and 0.2 seconds. The 0.5-second entry uses the original
+`_swoosh.ogg` audio at its archived level. The bundled WAV decodes to the same
+44.1 kHz mono PCM. The shared editor handles both Start presses and retains
+its selection and preview behavior.
+
 The scrollbar centers at `(34, 242)` and travels within 240 px. The thumb
 for each joined seat follows its position in the selectable row order over
 200 ms, with Exit at the bottom. The two thumbs share the width when they
@@ -638,8 +647,19 @@ offset. Both themes show one built-in tap judgment when that Lua is disabled.
 ## Profile Load and Select Course
 
 The loading screen advances once the worker supplies a prepared song or course
-wheel and the minimum display time has elapsed. The OpenITG loading animation
-uses elapsed time. It remains visible if catalog preparation takes longer.
+wheel and the minimum display time has elapsed. OpenITG draws its common
+red backdrop and Eurostile loading label during this catalog wait.
+
+When baked song Lua delays Gameplay or Practice, the OpenITG cover follows
+the reference `ScreenStage` artwork. The arcade backdrop darkens and the
+original round or course lettering sweeps in with its white highlight.
+The cover starts its animation once it is visible and displays the selected
+song title and the worker's actual completion percentage. The loading worker,
+input gating, handoff, and recovery use the same code for both themes.
+The fully dark cover omits the hidden backdrop draw during a long wait.
+Vulkan captures cover the two wheel messages, the modifier panel and seat
+entrance, catalog wait, and stage and course loading covers at 640×480 and
+854×480.
 
 OpenITG's effective `ScreenSelectMusicCourse` inherits `ScreenSelectMusic`. Its
 header actor reads “PICK A COURSE”. The course browser uses the song wheel's
