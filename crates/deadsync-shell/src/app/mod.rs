@@ -630,6 +630,7 @@ pub struct ScreensState {
     current_screen: CurrentScreen,
     menu_state: crate::title_menu::InstalledMenu,
     gameplay_state: Option<GameplayState>,
+    openitg_gameplay_outro: Option<deadsync_theme_openitg::GameplayOutro>,
     practice_state: Option<PracticeState>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor,
@@ -1355,6 +1356,7 @@ impl ScreensState {
             init_state,
             openitg_intro: (theme == config::theme::ThemeFlag::OpenItg)
                 .then(crate::openitg::IntroRuntime::default),
+            openitg_gameplay_outro: None,
             select_profile_state,
             select_color_state,
             arrowcloud_login_state,
@@ -4921,6 +4923,16 @@ impl App {
             // Keep gameplay stepping under evaluation fades so late judgments
             // and HUD animations settle while transition input remains blocked.
             self.step_gameplay(delta_time, true, event_loop);
+            if self.state.screens.openitg_gameplay_outro.is_some_and(|outro| outro.cue().is_some())
+                && !tick_gameplay_during_transition::<ActiveTheme>(
+                    self.state.screens.current_screen,
+                    &self.state.shell.transition,
+                )
+            {
+                // Stop any tail audio at the same boundary that freezes results.
+                self.audio.stop_music();
+                self.audio.stop_mine_sfx();
+            }
         }
         if tick_menu_attract {
             self.state.screens.menu_state.update(logic_dt, MainMenuPhase::Entering)
@@ -7296,11 +7308,13 @@ impl App {
             simply_love_visual_policy(config),
         );
         self.ui_sfx.prepare_screen(&mut self.audio, deferred_sfx);
-        let entry_sfx = entry_sfx.and_then(|path| {
-            self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
-                path.to_string_lossy().as_ref(),
-            ))
-        });
+        let entry_sfx = entry_sfx
+            .filter(|_| self.state.screens.menu_state.theme_flag() != config::theme::ThemeFlag::OpenItg)
+            .and_then(|path| {
+                self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
+                    path.to_string_lossy().as_ref(),
+                ))
+            });
         if let Some(sound) = entry_sfx {
             self.audio.play_screen_sfx(&sound);
         }
@@ -7914,7 +7928,11 @@ impl App {
                 );
             }
             CurrentScreen::Gameplay => {
-                if let Some(gs) = &mut self.state.screens.gameplay_state {
+                let stage_covered = self.state.screens.openitg_gameplay_outro.is_some_and(|outro| {
+                    matches!(self.state.shell.transition,
+                        TransitionState::FadingOut { elapsed, .. } if outro.covers_stage(elapsed))
+                });
+                if !stage_covered && let Some(gs) = &mut self.state.screens.gameplay_state {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
                     let smx_overlay_alpha = gameplay_smx_overlay_alpha(
                         gs.presentation.hide_song_intro,
@@ -8370,10 +8388,14 @@ impl App {
         self.append_gameplay_offset_prompt_actors(&mut actors);
 
         match &self.state.shell.transition {
-            TransitionState::FadingOut { target, .. } => {
-                let (out_actors, _) =
-                    self.get_out_transition_for_route(self.state.screens.current_screen, *target);
-                actors.extend(out_actors);
+            TransitionState::FadingOut { target, elapsed, .. } => {
+                if let Some(outro) = self.state.screens.openitg_gameplay_outro {
+                    outro.push_actors(&mut actors, *elapsed);
+                } else {
+                    let (out_actors, _) =
+                        self.get_out_transition_for_route(self.state.screens.current_screen, *target);
+                    actors.extend(out_actors);
+                }
             }
             TransitionState::FadingIn { .. } => {
                 let (in_actors, _) =

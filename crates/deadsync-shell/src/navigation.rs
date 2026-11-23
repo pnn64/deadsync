@@ -80,7 +80,7 @@ impl ProcessExitNavigationLog {
     }
 }
 
-/// The simulation advances under the normal entry cover and the exit to results.
+/// Allow the usual late judgments even when a theme holds the final frame longer.
 pub fn tick_gameplay_during_transition<T: ThemeScreenFlow>(
     screen: T::Screen,
     transition: &ThemeTransitionState<T::Screen>,
@@ -88,7 +88,10 @@ pub fn tick_gameplay_during_transition<T: ThemeScreenFlow>(
     screen == T::SCREENS.gameplay
         && match transition {
             ThemeTransitionState::FadingIn { .. } => true,
-            ThemeTransitionState::FadingOut { target, .. } => *target == T::SCREENS.results,
+            ThemeTransitionState::FadingOut { elapsed, target, .. } => {
+                *target == T::SCREENS.results
+                    && *elapsed < deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS
+            }
             _ => false,
         }
 }
@@ -1047,6 +1050,18 @@ mod tests {
             finished.completion,
             Some(TransitionCompletion::GlobalFadeOut(Screen::Evaluation))
         );
+    }
+
+    #[test]
+    fn a_long_results_outro_keeps_the_shared_judgment_cutoff() {
+        let mut transition = global_fade_out_transition(Screen::Evaluation, 7.5);
+        assert_eq!(transition.advance_frame(1.25).completion, None);
+        assert!(tick_gameplay_during_transition::<ActiveTheme>(Screen::Gameplay, &transition));
+        assert_eq!(transition.advance_frame(0.25).completion, None);
+        assert!(!tick_gameplay_during_transition::<ActiveTheme>(Screen::Gameplay, &transition));
+        assert_eq!(transition.advance_frame(6.0).completion, Some(
+            TransitionCompletion::GlobalFadeOut(Screen::Evaluation),
+        ));
     }
 
     #[test]

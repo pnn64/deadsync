@@ -161,6 +161,7 @@ impl App {
     #[inline(always)]
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
+        self.state.screens.openitg_gameplay_outro = None;
         if (prev == ActiveTheme::SCREENS.song_selection || prev == ActiveTheme::SCREENS.course_selection)
             && target != prev
             && !stage_launch_target(target)
@@ -429,6 +430,27 @@ impl App {
             self.audio.stop_screen_sfx();
         }
         let (_, out_duration) = self.get_out_transition_for_route(current, target);
+        let outro = if current == CurrentScreen::Gameplay
+            && target == CurrentScreen::Evaluation
+            && self.state.screens.menu_state.theme_flag() == config::theme::ThemeFlag::OpenItg
+        {
+            self.state.screens.gameplay_state.as_ref().filter(|stage| stage.stage.song_lua.is_none())
+                .map(|stage| deadsync_theme_openitg::GameplayOutro::from_result(
+                    stage.all_joined_players_failed(),
+                    &stage.song().simfile_path,
+                ))
+        } else {
+            None
+        };
+        let out_duration = outro.map_or(out_duration, |outro| {
+            if let Some(cue) = outro.cue() {
+                self.ui_sfx.play_cue(&mut self.audio, cue);
+            }
+            let duration = out_duration.max(outro.duration());
+            debug!("OpenITG gameplay outro {outro:?} for {duration:.2} s");
+            duration
+        });
+        self.state.screens.openitg_gameplay_outro = outro;
         apply_global_fade_out_transition(&mut self.state.shell, target, out_duration);
         self.sync_gameplay_input_capture();
     }

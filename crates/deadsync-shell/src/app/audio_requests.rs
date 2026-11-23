@@ -332,8 +332,12 @@ mod tests {
                     "{cue:?} at {sample_rate_hz}"
                 );
                 assert!(embedded.iter().any(|&sample| sample.abs() > 500));
-                for frame in embedded.chunks_exact(channels) {
-                    assert!(frame.iter().all(|&sample| sample == frame[0]));
+                if cue == UiCue::StageFailed && channels == 2 {
+                    assert!(embedded.chunks_exact(2).any(|frame| frame[0] != frame[1]));
+                } else {
+                    for frame in embedded.chunks_exact(channels) {
+                        assert!(frame.iter().all(|&sample| sample == frame[0]));
+                    }
                 }
             }
         }

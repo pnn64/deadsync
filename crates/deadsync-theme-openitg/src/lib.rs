@@ -3,6 +3,7 @@
 mod demonstration;
 mod evaluation;
 mod gameplay;
+mod gameplay_outro;
 mod intro;
 mod menu;
 mod option_explanation;
@@ -20,6 +21,7 @@ use deadsync_theme::{Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, Transi
 pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, push_evaluation_overview};
 pub use demonstration::{OpenItgTrainingFeedback, push_training_underlay};
 pub use gameplay::GAMEPLAY_HUD;
+pub use gameplay_outro::GameplayOutro;
 pub use intro::{OpenItgDemonstration, OpenItgIntro, OpenItgIntroMedia};
 pub use menu::MenuState;
 pub use play_selection::{PlaySelectionCarousel, push_profile_load_actors};

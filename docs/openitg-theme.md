@@ -701,6 +701,29 @@ During the results transition they accelerate off by the same distance over 0.8
 seconds. Loading and restart use the shared covers. The shell applies song Lua's
 intro suppression and supplies the stage clock that also governs input and audio.
 
+### Stage outro
+
+A clear fades the OpenITG playfield to black over 0.8 seconds. An all-player
+failure uses the original stereo cue and a 7.5-second sequence. The red
+Life Depleted card gives way to the blue Round Failed card, with the
+Pandemonium skull and the VerTex² ending on their original song folders.
+The artwork and timing come from the local `ScreenGameplay cleared` and
+`ScreenGameplay failed` definitions.
+
+DeadSync's result route and 1.5-second late-judgment window still determine
+the outcome. The longer failure outro holds the completed stage and stops
+song audio at that boundary. The renderer omits the field once the black
+curtain covers it. Song Lua, give-up, cancel, and intermediate course-stage
+transitions keep their own exit paths.
+
+Offscreen Vulkan captures at 640×480 and 854×480 cover the clear fade, both
+failure cards, their overlap, and the two song-specific actors. The
+configured OpenITG route checks that the cards lead to an actual failed
+evaluation. The embedded cue decodes to the same stereo PCM as the original
+Ogg. At 854×480, the previous black fade took 2.3 µs for warmed actor build
+and CPU composition over a fixture backdrop. The red and blue cards took
+5.5 and 6.4 µs in the same fixture.
+
 Vulkan and WASAPI fixture captures show the native HUD artwork at 640×480
 in regular and Event Mode and at 854×480 in single and versus. The regular
 launch displays Round 1 and Event Mode uses its own badge. The wide versus
@@ -821,9 +844,10 @@ result timeline.
 DeadSync still owns saves, submissions, the course page sequence, replay and
 practice handoffs, and onward routing. Timing, records, online detail panels,
 and other auxiliary panes retain their existing presentation and controls.
-Evaluation uses original artwork and DeadSync's existing entry and record
-cues. Life-graph coloring by judgment quality and reference audio comparisons
-remain open.
+Evaluation uses original artwork and the shared record cues. The native
+pass and fail entry redirects are silent. The stage failure cue plays
+during the outro. Life-graph coloring by judgment quality and the remaining
+reference audio comparison are open.
 
 The native 640×480 Quartz capture was taken after the panel entrance, with
 P1 Single, Hard 5, and AutoPlay. It confirms the Jumps row above Holds and

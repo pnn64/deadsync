@@ -41,6 +41,7 @@ impl ThemeResources for OpenItgTheme {
             (UiCue::Easier, wav!("easier")),
             (UiCue::Harder, wav!("harder")),
             (UiCue::Expand, wav!("expand")),
+            (UiCue::StageFailed, wav!("outro-failure")),
         ],
     };
 
@@ -75,6 +76,14 @@ impl ThemeResources for OpenItgTheme {
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("outro-blue-streak"),
+                png!("outro-depleted"),
+                png!("outro-failed"),
+                png!("outro-life"),
+                png!("outro-pandemonium"),
+                png!("outro-red-streak"),
+                png!("outro-round"),
+                png!("outro-vertex-two"),
                 png!("attract-company-poster"),
                 png!("attract-intro-1000"),
                 png!("attract-intro-135"),

@@ -250,6 +250,10 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     }
 
     complete_stage(app, event_loop);
+    assert_eq!(
+        app.state.screens.openitg_gameplay_outro,
+        openitg.then_some(deadsync_theme_openitg::GameplayOutro::Cleared),
+    );
     settle(app, event_loop, CurrentScreen::Evaluation);
     assert_eq!(app.state.session.played_stages.len(), 1);
     let result = &app.state.session.played_stages[0];
@@ -298,7 +302,37 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
                 .simfile_path,
             preview.simfile_path,
         );
+        check_failed_stage_outro(app, event_loop);
     }
+}
+
+fn check_failed_stage_outro(app: &mut App, event_loop: &ActiveEventLoop) {
+    use deadlib_present::actors::SpriteSource;
+    use deadsync_gameplay::{GameplayAction, GameplayExit};
+
+    let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
+    assert!(game.force_fail_player(0));
+    assert!(game.all_joined_players_failed());
+    app.handle_gameplay_action(GameplayAction::Navigate(GameplayExit::Complete), event_loop);
+    assert_eq!(app.state.screens.openitg_gameplay_outro, Some(deadsync_theme_openitg::GameplayOutro::Failed));
+    assert!(matches!(app.state.shell.transition, TransitionState::FadingOut {
+        duration: 7.5, target: CurrentScreen::Evaluation, ..
+    }));
+
+    for (frames, key) in [(6, "openitg/outro-life.png"), (22, "openitg/outro-round.png")] {
+        for _ in 0..frames {
+            menu_frame(app, event_loop);
+        }
+        let (actors, _, gameplay) = app.get_current_actors(0.0, app.frame_policy);
+        assert_eq!(gameplay.is_some(), frames == 6);
+        assert!(actors.iter().any(|actor| matches!(actor,
+            Actor::Sprite { source: SpriteSource::TextureStatic(texture), .. } if *texture == key
+        )));
+    }
+    settle(app, event_loop, CurrentScreen::Evaluation);
+    assert_eq!(app.state.screens.openitg_gameplay_outro, None);
+    assert_eq!(app.state.session.played_stages.len(), 2);
+    assert!(stage_stats::all_players_failed(&app.state.session.played_stages[1], [false, true]));
 }
 
 fn check_openitg_gameplay_hud(app: &mut App) {

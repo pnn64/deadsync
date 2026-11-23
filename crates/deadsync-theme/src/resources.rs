@@ -21,10 +21,11 @@ pub enum UiCue {
     Easier,
     Harder,
     Expand,
+    StageFailed,
 }
 
 impl UiCue {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Change,
         Self::Confirm,
         Self::Screenshot,
@@ -35,6 +36,7 @@ impl UiCue {
         Self::Easier,
         Self::Harder,
         Self::Expand,
+        Self::StageFailed,
     ];
 
     pub const fn index(self) -> usize {
