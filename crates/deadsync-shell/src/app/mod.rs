@@ -7899,16 +7899,21 @@ impl App {
                             1.0 - (elapsed / duration).clamp(0.0, 1.0),
                         ),
                     };
-                    presentation.with_renderer(phase, arrow_effect_time_s, |renderer| {
-                        options::push_actors_with_layout(
-                            &mut actors,
-                            options_state,
-                            &self.asset_manager,
-                            overlay_alpha,
-                            visual_policy,
-                            Some(renderer),
-                        );
-                    });
+                    presentation.with_renderer(
+                        phase,
+                        arrow_effect_time_s,
+                        &self.asset_manager,
+                        |renderer| {
+                            options::push_actors_with_layout(
+                                &mut actors,
+                                options_state,
+                                &self.asset_manager,
+                                overlay_alpha,
+                                visual_policy,
+                                Some(renderer),
+                            );
+                        },
+                    );
                 } else {
                     options::push_actors(
                         &mut actors,

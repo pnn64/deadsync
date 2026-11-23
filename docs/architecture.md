@@ -644,6 +644,9 @@ mounted theme's transition durations and passes elapsed time to its renderer.
 The renderer owns the panel, heading, and focus motion. Its retained row
 positions are keyed by the controller's page and row order. The shell
 passes the frame clock and resets presentation on Options entry.
+OpenITG retains the current explanation and its reveal timing. It uses the
+engine bitmap text layout to measure wrapped paragraphs and reveal a glyph
+prefix while keeping the full paragraph's placement.
 OpenITG's basic and advanced Graphics pages share the same pending display
 settings as the combined Simply Love editor. The controller emits one graphics
 request when the user leaves Graphics. The shell applies it through the shared

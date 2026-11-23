@@ -1,3 +1,6 @@
+mod help;
+
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_theme::views::{
@@ -6,6 +9,7 @@ use deadsync_theme::views::{
 };
 
 use crate::presentation::{ACCENT, INK, Layout, quad};
+use help::OptionsHelp;
 
 #[derive(Default)]
 pub struct OpenItgSystemOptions {
@@ -15,6 +19,7 @@ pub struct OpenItgSystemOptions {
     rows_move_until: f64,
     cursor: Option<LinearMotion<2>>,
     thumb: LinearMotion<1>,
+    help: OptionsHelp,
 }
 
 impl OpenItgSystemOptions {
@@ -42,10 +47,11 @@ impl OpenItgSystemOptions {
         &mut self,
         phase: SystemOptionsPhase,
         now_seconds: f64,
+        assets: &AssetManager,
         draw: impl FnOnce(SystemOptionsRenderer<'_, Actor>) -> R,
     ) -> R {
         let mut page = |actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>| {
-            self.push_page(actors, page, now_seconds);
+            self.push_page(actors, page, assets, now_seconds);
         };
         draw(SystemOptionsRenderer {
             phase,
@@ -178,12 +184,12 @@ fn push_background(actors: &mut Vec<Actor>) {
     ));
 }
 
-fn push_panel(actors: &mut Vec<Actor>, layout: Layout) {
-    actors.push(layout.panel(15.0, 90.0, [610.0, 336.0], WINE, -22));
+fn push_panel(actors: &mut Vec<Actor>, layout: Layout, bottom: f32) {
+    actors.push(layout.panel(15.0, 90.0, [610.0, bottom - 90.0], WINE, -22));
     actors.push(layout.panel(15.0, 90.0, [610.0, 2.0], STROKE, -21));
-    actors.push(layout.panel(15.0, 424.0, [610.0, 2.0], STROKE, -21));
-    actors.push(layout.panel(15.0, 92.0, [2.0, 332.0], STROKE, -21));
-    actors.push(layout.panel(623.0, 92.0, [2.0, 332.0], STROKE, -21));
+    actors.push(layout.panel(15.0, bottom - 2.0, [610.0, 2.0], STROKE, -21));
+    actors.push(layout.panel(15.0, 92.0, [2.0, bottom - 94.0], STROKE, -21));
+    actors.push(layout.panel(623.0, 92.0, [2.0, bottom - 94.0], STROKE, -21));
     actors.push(layout.panel(39.0, 368.0, [562.0, 1.0], STROKE, -20));
 }
 
@@ -218,7 +224,13 @@ fn push_service_header(actors: &mut Vec<Actor>, layout: Layout, phase: SystemOpt
 }
 
 impl OpenItgSystemOptions {
-    fn push_page(&mut self, actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>, now: f64) {
+    fn push_page(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        page: SystemOptionsPage<'_>,
+        assets: &AssetManager,
+        now: f64,
+    ) {
         let width = screen_width();
         let origin = Layout::centered(width, screen_height());
         let slide = match page.phase {
@@ -234,7 +246,9 @@ impl OpenItgSystemOptions {
             return;
         }
         let layout = origin.translated_x(slide * width);
-        push_panel(actors, layout);
+        self.help
+            .update(assets, &page, self.page_id != Some(page.id), now);
+        push_panel(actors, layout, self.help.panel_bottom());
         if page.kind == SystemOptionsPageKind::ServiceMenu {
             push_service_header(actors, origin, page.phase);
         } else {
@@ -328,13 +342,7 @@ impl OpenItgSystemOptions {
             actors.push(layout.panel(33.0, top, [2.0, track_height], STROKE, -15));
             actors.push(layout.panel(33.0, top + thumb_offset, [2.0, thumb_height], AMBER, -14));
         }
-        if let Some(text) = page.description {
-            let height = if page.detail.is_some() { 22.0 } else { 40.0 };
-            actors.push(layout.paragraph([54.0, 381.0], [548.0, height], text.into(), 0.86, WHITE));
-        }
-        if let Some(text) = page.detail {
-            actors.push(layout.paragraph([54.0, 405.0], [548.0, 19.0], text.into(), 0.86, MUTED));
-        }
+        self.help.push(actors, layout, [WHITE, MUTED], now);
     }
 }
 
@@ -468,6 +476,7 @@ fn choice_enabled(mask: u64, index: usize) -> bool {
 mod tests {
     use super::*;
     use deadlib_present::actors::SizeSpec;
+    use deadlib_present::actors::TextAttributes;
     use deadlib_present::space::{Metrics, with_current_metrics};
     use std::cell::RefCell;
     use std::sync::Arc;
@@ -512,7 +521,7 @@ mod tests {
     }
 
     fn push_page(actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>) {
-        OpenItgSystemOptions::default().push_page(actors, page, 0.0);
+        OpenItgSystemOptions::default().push_page(actors, page, &AssetManager::new(), 0.0);
     }
 
     #[test]
@@ -631,10 +640,16 @@ mod tests {
             let labels = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
             let row = |index: usize| Some(action(labels[index]));
             let mut visual = OpenItgSystemOptions::default();
+            let assets = AssetManager::new();
             let mut actors = Vec::new();
             let mut frame = |selected: usize, now: f64| {
                 actors.clear();
-                visual.push_page(&mut actors, page(&row, labels.len(), selected), now);
+                visual.push_page(
+                    &mut actors,
+                    page(&row, labels.len(), selected),
+                    &assets,
+                    now,
+                );
                 let y = actors.iter().find_map(|actor| match actor {
                     Actor::Text {
                         content, offset, ..
@@ -677,6 +692,7 @@ mod tests {
         with_current_metrics(Metrics::centered(640.0, 480.0), || {
             let choices: Arc<[Arc<str>]> = Arc::from(["Off".into(), "Low".into(), "High".into()]);
             let mut visual = OpenItgSystemOptions::default();
+            let assets = AssetManager::new();
             let mut actors = Vec::new();
             let mut cursor_x = |id, choice, now| {
                 let row = |_| {
@@ -694,6 +710,7 @@ mod tests {
                         id,
                         ..page(&row, 1, 0)
                     },
+                    &assets,
                     now,
                 );
                 actors
@@ -714,6 +731,68 @@ mod tests {
             assert_eq!(cursor_x(1, 2, 0.1), 160.0);
             assert!((cursor_x(1, 2, 0.175) - 305.0).abs() < 0.01);
             assert_eq!(cursor_x(2, 2, 0.18), 450.0);
+        });
+    }
+
+    #[test]
+    fn explanation_reveal_follows_text_changes_and_page_entry_time() {
+        with_current_metrics(Metrics::centered(640.0, 480.0), || {
+            let mut visual = OpenItgSystemOptions::default();
+            let assets = AssetManager::new();
+            let mut actors = Vec::new();
+            let row = |_| Some(action("Input"));
+            let mut frame = |text: &str, selected, phase, now| {
+                actors.clear();
+                visual.push_page(
+                    &mut actors,
+                    SystemOptionsPage {
+                        description: Some(Arc::from(text)),
+                        phase,
+                        ..page(&row, 2, selected)
+                    },
+                    &assets,
+                    now,
+                );
+                actors
+                    .iter()
+                    .find_map(|actor| match actor {
+                        Actor::Text {
+                            content,
+                            attributes,
+                            offset,
+                            scale,
+                            ..
+                        } if offset[1] == 381.0 && content.as_str() == text => {
+                            assert_eq!(scale[0], scale[1]);
+                            Some(match attributes {
+                                TextAttributes::GlyphReveal(fraction) => *fraction,
+                                _ => 1.0,
+                            })
+                        }
+                        _ => None,
+                    })
+                    .expect("explanation actor")
+            };
+
+            let arrived = frame(
+                "Test the inputs.",
+                0,
+                SystemOptionsPhase::Entering(0.125),
+                1.0,
+            );
+            assert_eq!(arrived, 0.25);
+            assert_eq!(
+                frame("Test the inputs.", 1, SystemOptionsPhase::Steady, 1.125),
+                0.5
+            );
+            assert_eq!(
+                frame("Map the inputs.", 0, SystemOptionsPhase::Steady, 1.25),
+                0.0
+            );
+            assert_eq!(
+                frame("Map the inputs.", 0, SystemOptionsPhase::Steady, 1.75),
+                1.0
+            );
         });
     }
 

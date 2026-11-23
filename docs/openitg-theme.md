@@ -65,7 +65,7 @@ and Configure Keyboard/Pad Mappings open directly from the service menu and
 return to the selected launcher. Settings search lists each action once.
 Simply Love reaches the same tools through its Input submenu. The native
 credit, diagnostics, and reset rows, pack workflows, and tool styling remain
-open. Long explanations can be compressed, as seen on Configure Pads.
+open.
 
 Graphics Options opens a basic page with display mode, aspect ratio, resolution,
 and the Advanced Graphic Options link. The advanced page contains renderer,
@@ -103,8 +103,14 @@ its displayed position. The selection band moves to the destination row at
 once, and the scrollbar follows the selected row through the Done item.
 The durations and retargeting follow `ScreenOptions.cpp`, `OptionRow.cpp`,
 and `DualScrollBar.cpp`. Native cursor artwork, exact cursor widths and
-scrollbar graphics, heading fonts and transforms, explanation reveals,
-and modal styling remain open.
+scrollbar graphics, heading fonts and transforms, and modal styling remain open.
+
+The selected explanation starts at `(54, 381)` and reveals its wrapped text
+in glyph order over 500 ms, following the default theme's `ScreenOptions`
+metrics and `BitmapText.cpp`. Rows with identical explanation text on the
+same page continue the current reveal. The panel extends downward for longer
+localized DeadSync explanations and scales text uniformly when needed. A
+secondary detail such as a path stays visible below the explanation.
 
 Tests cover the viewport and Done row, prepared values, disabled and
 multiselect rows, an edited volume appearing in the alternate renderer, and
@@ -128,6 +134,10 @@ show the same row, cursor, and thumb positions immediately before and after
 the mid-scroll retarget. The highlight and help switch to the new selection
 at that frame. Basic Graphics captures show the cursor moving between aspect
 ratio values while the new value is active.
+
+Vulkan captures at 640×480 and 854×480 show Test Input at 125, 250, and
+500 ms after focus changes. Each additional glyph appears at its final
+position. Configure Pads fits its full five-line explanation at both widths.
 
 At 854×480, nine warm actor-construction runs of 12,000 frames per layout
 measured medians of 32.6 μs for Simply Love and 19.1 μs for OpenITG on the
@@ -156,6 +166,15 @@ retargeting the viewport every 75 ms measured 23.3 μs for actor construction.
 Putting the cursor on the existing marker layer reduced steady composition
 from 30 to 28 draw ops in the layer experiment. The final build measured
 33.4 μs and 28 draw ops, compared with 33.8 μs and 29 draw ops before this change.
+
+With explanation reveals, two 854×480 runs measured 19.5–19.6 μs for steady
+service actor construction, compared with 19.0–19.8 μs before the change.
+Retargeting every 75 ms measured 27.3–27.5 μs, compared with 23.1–23.4 μs,
+including paragraph measurement when the selected help changes. Steady CPU
+composition measured 32.8–33.2 μs, compared with 33.6–34.2 μs. At the halfway
+point of a reveal, composition measured 93.9–97.1 μs while building the
+visible glyphs in reusable scratch storage. All composition samples had
+28 draw ops.
 
 ## Player Options
 

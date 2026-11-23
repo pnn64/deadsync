@@ -4926,6 +4926,7 @@ fn push_transient_text_mesh_quad(
 
 fn build_transient_text_mesh_builders(
     layout: &CachedTextLayout,
+    visible_glyphs: usize,
     text_align: actors::TextAlign,
     attributes: &[actors::TextAttribute],
     jitter_seed: Option<u32>,
@@ -4953,12 +4954,15 @@ fn build_transient_text_mesh_builders(
         .flatten();
 
     for line in &layout.lines {
+        if line.glyph_start >= visible_glyphs {
+            break;
+        }
         pen_y_logical += layout.font_height;
         let baseline_local_logical = pen_y_logical as f32;
         let mut pen_x_logical =
             start_x_logical(text_align, block_w_logical_even, line.width_i32 as f32);
-        let line_glyphs =
-            &layout.glyphs[line.glyph_start..line.glyph_start.saturating_add(line.glyph_len)];
+        let glyph_end = (line.glyph_start + line.glyph_len).min(visible_glyphs);
+        let line_glyphs = &layout.glyphs[line.glyph_start..glyph_end];
         for glyph in line_glyphs {
             let texture_page = if stroke {
                 glyph.stroke_page
@@ -5041,6 +5045,27 @@ fn build_cached_text_layout(
         layout_seed,
         CachedTextLayout::empty(),
     )
+}
+
+/// Logical width and height of a wrapped bitmap text block at unit zoom.
+pub fn measure_wrapped_text(
+    font: &font::Font,
+    fonts: &font::FontMap,
+    text: &str,
+    wrap_width_pixels: i32,
+) -> [i32; 2] {
+    let layout = build_cached_text_layout(
+        font,
+        fonts,
+        text,
+        font.line_spacing,
+        wrap_width_pixels,
+        0,
+    );
+    [
+        quantize_up_even_i32(layout.max_logical_width_i),
+        text_block_height_i(layout.font_height, layout.line_spacing, layout.lines.len()),
+    ]
 }
 
 fn rebuild_cached_text_layout(
@@ -6595,6 +6620,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
         let (builders, recycled_vertices, attr_scratch) = scratch.transient_text_mesh_scratch();
         build_transient_text_mesh_builders(
             layout,
+            layout.glyphs.len(),
             text.align_text,
             &[],
             None,
@@ -6619,6 +6645,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
             stroke_start = Some(out.len());
             build_transient_text_mesh_builders(
                 layout,
+                layout.glyphs.len(),
                 text.align_text,
                 &[],
                 None,
@@ -7617,6 +7644,11 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 if layout.lines.is_empty() {
                     return;
                 }
+                let visible_glyphs = attributes.visible_glyphs(layout.glyphs.len());
+                if visible_glyphs == 0 {
+                    return;
+                }
+                let partial_text = visible_glyphs < layout.glyphs.len();
                 let mut effect_color = *color;
                 let mut effect_scale = x_fold.map_or(*scale, |fold| fold.text_scale(*scale));
                 apply_effect_to_text(*effect, total_elapsed, &mut effect_color, &mut effect_scale);
@@ -7660,6 +7692,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             .and_then(|meshes| meshes.batches(*align_text, false))
                             .is_none();
                     if !transient_frame_inline
+                        && !partial_text
                         && attributes.is_empty()
                         && !*jitter
                         && text_distortion <= 1e-6
@@ -7721,6 +7754,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             scratch.transient_text_mesh_scratch();
                         build_transient_text_mesh_builders(
                             layout,
+                            visible_glyphs,
                             *align_text,
                             attributes.as_slice(),
                             jitter.then(|| (total_elapsed * 8.0) as u32),
@@ -7754,9 +7788,10 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                         if needs_stroke {
                             let stroke_start = out.len();
                             let stroke_start_sprite = sprite_instances.len();
-                            if transient_frame_inline || text_distortion > 1e-6 {
+                            if transient_frame_inline || partial_text || text_distortion > 1e-6 {
                                 build_transient_text_mesh_builders(
                                     layout,
+                                    visible_glyphs,
                                     *align_text,
                                     &[],
                                     None,
@@ -12377,6 +12412,7 @@ mod tests {
         assert_ne!(fill[0].geom_cache_key, fill[1].geom_cache_key);
         build_transient_text_mesh_builders(
             &layout,
+            layout.glyphs.len(),
             TextAlign::Center,
             &[],
             None,
@@ -12404,6 +12440,7 @@ mod tests {
         );
         build_transient_text_mesh_builders(
             &layout,
+            layout.glyphs.len(),
             TextAlign::Center,
             &[],
             None,
@@ -12418,6 +12455,38 @@ mod tests {
             assert_eq!(builder.texture_page, batch.texture_page);
             assert_eq!(builder.vertices.as_slice(), batch.vertices.as_ref());
         }
+    }
+
+    #[test]
+    fn glyph_reveal_keeps_the_full_layout_and_draws_a_prefix_across_lines() {
+        let a = Arc::<str>::from("fill_a");
+        let b = Arc::<str>::from("fill_b");
+        let fonts = font::FontMap::from_iter([(
+            "test",
+            test_split_stroke_font(&a, &b, &a, &b),
+        )]);
+        let font = fonts.get("test").expect("test font");
+        let layout = build_cached_text_layout(font, &fonts, "AB\nABA", 10, -1, 31);
+        let reveal = TextAttributes::GlyphReveal(0.5);
+        let visible = reveal.visible_glyphs(layout.glyphs.len());
+        assert_eq!(visible, 3);
+        let mut builders = Vec::new();
+        build_transient_text_mesh_builders(
+            &layout,
+            visible,
+            TextAlign::Center,
+            &[],
+            None,
+            0.0,
+            false,
+            &mut builders,
+            &mut Vec::new(),
+            &mut TextAttrScratch::default(),
+        );
+        for (builder, full) in builders.iter().zip(layout.fill_batches(TextAlign::Center)) {
+            assert_eq!(&builder.vertices, &full.vertices[..builder.vertices.len()]);
+        }
+        assert_eq!(builders.iter().map(|batch| batch.vertices.len()).sum::<usize>(), 18);
     }
 
     #[test]
