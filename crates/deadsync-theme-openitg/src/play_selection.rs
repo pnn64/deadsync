@@ -16,6 +16,16 @@ const WHITE: [f32; 4] = [1.0; 4];
 const RADIUS: f32 = 200.0;
 const STYLE_FOCAL_LENGTH: f32 = 415.6922; // 60-degree FOV at a logical height of 480 px.
 const MODE_FOCAL_LENGTH: f32 = 240.0; // 90-degree FOV.
+const PAD_NEUTRAL_POSE: u32 = 12;
+const PAD_ATLAS_COLS: u32 = 4;
+const PAD_ATLAS_ROWS: u32 = 7;
+// The atlas cell includes space for the outer edge at the ends of the wag.
+const PAD_ATLAS_SCALE: [f32; 2] = [476.0 / 422.0, 222.0 / 210.0];
+
+fn pad_pose(elapsed: f64) -> u32 {
+    let phase = elapsed.rem_euclid(1.0) as f32;
+    ((1.0 + (phase * TAU).sin()) * PAD_NEUTRAL_POSE as f32).round() as u32
+}
 
 /// Present the pending catalog load using the shared screen's elapsed time.
 pub fn push_profile_load_actors(actors: &mut Vec<Actor>, label: &Arc<str>, elapsed_seconds: f32) {
@@ -88,6 +98,11 @@ impl PlaySelectionCarousel {
         let layout = Layout::centered(width, height);
         let elapsed = (time - self.entered_at).max(0.0) as f32;
         let style = matches!(view.kind, PlaySelectionKind::Style { .. });
+        let focused_pad_pose = if matches!(view.kind, PlaySelectionKind::Style { pump: false }) {
+            pad_pose((time - self.started_at).max(0.0))
+        } else {
+            PAD_NEUTRAL_POSE
+        };
         push_red_backdrop(actors, [width, height], elapsed, -24);
         push_red_streaks(actors, [width, height], elapsed.min(1.0), -22);
         push_selection_header(actors, layout, view.title, elapsed);
@@ -102,7 +117,7 @@ impl PlaySelectionCarousel {
         for (layer, card) in cards.iter().enumerate() {
             // The actor at z=-100 stands between the front and rear of the ring.
             let z = (if card.depth < 0.5 { 2 } else { 14 }) + layer as i16 * 2;
-            card.push(actors, layout, &view, z);
+            card.push(actors, layout, &view, z, focused_pad_pose);
         }
         push_character(actors, layout, style, elapsed);
         let description = selected.description.map_or_else(
@@ -285,7 +300,14 @@ impl Card {
         }
     }
 
-    fn push(&self, actors: &mut Vec<Actor>, layout: Layout, view: &PlaySelectionView<'_>, z: i16) {
+    fn push(
+        &self,
+        actors: &mut Vec<Actor>,
+        layout: Layout,
+        view: &PlaySelectionView<'_>,
+        z: i16,
+        focused_pad_pose: u32,
+    ) {
         let light = self.light;
         let tint = [light, light, light, 1.0];
         let image = |key, x, y, size: [f32; 2], layer| {
@@ -307,7 +329,10 @@ impl Card {
                     (77.0, [196.0, 103.25]),
                 ][self.index];
                 let pad_light = 0.5 + 0.5 * light;
-                let pad_size = layout.size(size.map(|v| v * self.zoom));
+                let pad_size = layout.size([
+                    size[0] * self.zoom * PAD_ATLAS_SCALE[0],
+                    size[1] * self.zoom * PAD_ATLAS_SCALE[1],
+                ]);
                 for offset in [-shift, shift]
                     .into_iter()
                     .take(if shift > 0.0 { 2 } else { 1 })
@@ -316,16 +341,27 @@ impl Card {
                     if pump {
                         push_pump_pad(actors, layout, [x, pad_y], self.zoom, tint, z);
                     } else {
-                        actors.push(
-                            sprite(
-                                "openitg/selection-platform.png",
-                                layout.position(x, pad_y + 9.0 * self.zoom),
-                                pad_size,
-                                [pad_light, pad_light, pad_light, 1.0],
-                                z,
-                            )
-                            .build(0),
+                        let pose = if self.index == view.selected {
+                            focused_pad_pose
+                        } else {
+                            PAD_NEUTRAL_POSE
+                        };
+                        let u = (pose % PAD_ATLAS_COLS) as f32 / PAD_ATLAS_COLS as f32;
+                        let v = (pose / PAD_ATLAS_COLS) as f32 / PAD_ATLAS_ROWS as f32;
+                        let mut pad = sprite(
+                            "openitg/selection-platform.png",
+                            layout.position(x, pad_y + 9.0 * self.zoom),
+                            pad_size,
+                            [pad_light, pad_light, pad_light, 1.0],
+                            z,
                         );
+                        pad.customtexturerect([
+                            u,
+                            v,
+                            u + 1.0 / PAD_ATLAS_COLS as f32,
+                            v + 1.0 / PAD_ATLAS_ROWS as f32,
+                        ]);
+                        actors.push(pad.build(0));
                     }
                 }
                 let (english, key, size) = [
@@ -471,6 +507,68 @@ mod tests {
         assert!((reversed - previous - 3.0).abs() < 0.0001);
         assert_eq!(carousel.select_at(3, 2, 1.4), 2.0);
         assert_eq!(carousel.select_at(2, 0, 2.0), 0.0);
+    }
+
+    #[test]
+    fn style_pads_wag_only_while_their_choice_has_focus() {
+        use deadlib_present::actors::SpriteSource;
+
+        let mut carousel = PlaySelectionCarousel::default();
+        let labels = ["1 Player", "2 Players", "Double"].map(Arc::<str>::from);
+        let title = Arc::from("PICK A STYLE");
+        let prompt = Arc::from("Press Start");
+        let choices = labels.each_ref().map(|label| PlaySelectionChoice {
+            label,
+            description: None,
+        });
+        with_current_metrics(Metrics::centered(854.0, 480.0), || {
+            let mut draw = |selected, time| {
+                let mut actors = Vec::new();
+                carousel.push_actors(
+                    &mut actors,
+                    PlaySelectionView {
+                        kind: PlaySelectionKind::Style { pump: false },
+                        title: &title,
+                        choices: &choices,
+                        selected,
+                        player_names: [None; 2],
+                        join_prompt: &prompt,
+                        exit_progress: 0.0,
+                    },
+                    time,
+                );
+                actors
+                    .into_iter()
+                    .filter_map(|actor| match actor {
+                        Actor::Sprite {
+                            source: SpriteSource::TextureStatic("openitg/selection-platform.png"),
+                            uv_rect,
+                            ..
+                        } => uv_rect,
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let poses = draw(0, 0.0);
+            assert_eq!(poses.len(), 5);
+            let neutral = poses[0];
+            assert!(poses.iter().all(|pose| *pose == neutral));
+            assert_eq!(
+                draw(0, 0.25)
+                    .iter()
+                    .filter(|pose| **pose != neutral)
+                    .count(),
+                1
+            );
+            assert!(draw(1, 0.25).iter().all(|pose| *pose == neutral));
+            assert_eq!(
+                draw(1, 0.50)
+                    .iter()
+                    .filter(|pose| **pose != neutral)
+                    .count(),
+                2
+            );
+        });
     }
 
     #[test]

@@ -362,9 +362,10 @@ metrics supply the field of view, radius, depth spacing, dimming, and 0.3 s per
 item. The perspective ring passes in front of and behind the character, with
 the 640×480 composition centered in wider viewports.
 
-The dance pad preview is a texture rasterized from the supplied `_platform
-home single` model and materials at its authored tilt. The original uses a
-live rotating model with environmental reflection. Pump choices continue to
+The dance pad preview uses 25 poses rasterized from the supplied `_platform
+home single` model and materials at its authored tilt. The focused choice
+rocks ten degrees in each direction every second. Focus changes reset the
+motion and return the previous choice to its neutral pose. Pump choices
 show a five-panel layout. The supplied **Dance** logo represents DeadSync's
 Regular mode. DeadSync's controllers still supply the choices, joined players,
 and confirmation timing, including Marathon and conditional Premium Free.
@@ -382,6 +383,11 @@ for actor construction and composition during movement. Style went from
 57 µs to 36–39 µs per frame and Play Mode went from 44–47 µs to 36 µs. The
 fixture used dev-profile libraries, warm composition buffers, and fonts
 staged under the packaged asset paths. GPU time was outside this measurement.
+
+The pad animation was checked at both yaw extremes and at rest in Vulkan
+captures at 640×480 and 854×480. The paired widescreen benchmark measured
+39 μs per Style frame before and after the change, with 27 actors and 22
+draw operations in both builds.
 
 ## Startup and idle scores
 
