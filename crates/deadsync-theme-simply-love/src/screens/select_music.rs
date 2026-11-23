@@ -2533,7 +2533,7 @@ pub fn select_music_view<'a>(
     SelectMusicView {
         rows,
         wheel_offset: state.wheel_offset_from_selection,
-        selection_elapsed: state.time_since_selection_change,
+        selection_beat: selection_anim_beat(state),
         song: song.map(|song| SelectMusicSongView {
             title: song.display_title(translated),
             subtitle: song.display_subtitle(translated),
@@ -15415,10 +15415,12 @@ mod tests {
         super::sync_song_launch_prompt(&mut state, super::SongLaunchPrompt::OfferOptions);
 
         let view = super::select_music_view(&state, 4, Some(&state.current_banner_key));
-        assert_eq!(view.rows[0].unwrap().title, "Pack");
-        assert!(view.rows[6].unwrap().expanded);
-        assert_eq!(view.rows[7].unwrap().title, "First chart");
-        assert_eq!(view.rows[8].unwrap().title, "Second chart");
+        let center = super::SELECT_MUSIC_WHEEL_ROWS / 2;
+        assert_eq!(view.rows[0].unwrap().title, "Second chart");
+        assert_eq!(view.rows[1].unwrap().title, "Pack");
+        assert!(view.rows[center - 1].unwrap().expanded);
+        assert_eq!(view.rows[center].unwrap().title, "First chart");
+        assert_eq!(view.rows[center + 1].unwrap().title, "Second chart");
         assert_eq!(view.song.unwrap().title, selected.title);
         assert_eq!(view.stage_number, Some(4));
         assert_eq!(view.prompt, super::SelectMusicPrompt::OfferOptions);

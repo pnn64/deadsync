@@ -149,27 +149,6 @@ pub(crate) fn player_metric_y(
     )
 }
 
-fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4 {
-    Matrix4::from_cols_array(&[
-        2.0 * zn / (r - l),
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        2.0 * zn / (t - b),
-        0.0,
-        0.0,
-        (r + l) / (r - l),
-        (t + b) / (t - b),
-        -(zf + zn) / (zf - zn),
-        -1.0,
-        0.0,
-        0.0,
-        -2.0 * zf * zn / (zf - zn),
-        0.0,
-    ])
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct NotefieldCameraKey {
     screen_w: u32,
@@ -472,42 +451,7 @@ fn menu_camera(
     vanish_x: f32,
     vanish_y: f32,
 ) -> Option<(Matrix4, Matrix4)> {
-    if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
-        return None;
-    }
-
-    let half_w = 0.5 * screen_w;
-    let half_h = 0.5 * screen_h;
-
-    let fov_deg = 45.0_f32;
-    let theta = (0.5 * fov_deg).to_radians();
-    let tan_theta = theta.tan();
-    if !tan_theta.is_finite() || tan_theta.abs() < 1e-6 {
-        return None;
-    }
-    let dist = half_w / tan_theta;
-    if !dist.is_finite() || dist <= 0.0 {
-        return None;
-    }
-
-    let near = 1.0_f32;
-    let far = dist + 1000.0_f32;
-
-    let mut vp_x = sm_scale(vanish_x, 0.0, screen_w, screen_w, 0.0);
-    let mut vp_y = sm_scale(vanish_y, 0.0, screen_h, screen_h, 0.0);
-    vp_x -= half_w;
-    vp_y -= half_h;
-    let l = (vp_x - half_w) / dist;
-    let r = (vp_x + half_w) / dist;
-    let b = (vp_y + half_h) / dist;
-    let t = (vp_y - half_h) / dist;
-    let proj = rage_frustum(l, r, b, t, near, far);
-
-    let eye = Vector3::new(-vp_x + half_w, -vp_y + half_h, dist);
-    let at = Vector3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
-    let view = glam::camera::rh::view::look_at_mat4(eye, at, Vector3::Y);
-
-    Some((proj, view))
+    deadlib_present::space::menu_perspective([screen_w, screen_h], [vanish_x, vanish_y], 45.0)
 }
 
 pub(crate) fn combo_actor_zoom(mini: f32) -> f32 {

@@ -1958,6 +1958,7 @@ dependencies = [
  "deadsync-core",
  "deadsync-input",
  "deadsync-theme",
+ "glam",
 ]
 
 [[package]]

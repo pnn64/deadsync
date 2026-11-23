@@ -5,7 +5,8 @@ use deadsync_chart::ChartData;
 use deadsync_core::input::MAX_PLAYERS;
 use std::sync::Arc;
 
-pub const SELECT_MUSIC_WHEEL_ROWS: usize = 15;
+/// The centered window includes one retained row beyond each visible edge.
+pub const SELECT_MUSIC_WHEEL_ROWS: usize = 17;
 pub const SELECT_MUSIC_DIFFICULTY_ROWS: usize = 5;
 pub const SELECT_COURSE_TRACK_ROWS: usize = 6;
 
@@ -51,7 +52,8 @@ pub struct SelectMusicView<'a> {
     /// The focused row is the center slot. The window wraps with the game wheel.
     pub rows: [Option<SelectMusicWheelRow<'a>>; SELECT_MUSIC_WHEEL_ROWS],
     pub wheel_offset: f32,
-    pub selection_elapsed: f32,
+    /// Preview beat or the browsing clock when no preview is active.
+    pub selection_beat: f32,
     pub song: Option<SelectMusicSongView<'a>>,
     /// Prepared media for the current item. Each theme draws its own fallback.
     pub banner_texture: Option<&'a Arc<str>>,
@@ -89,7 +91,7 @@ pub struct SelectCourseItem<'a> {
 pub struct SelectCourseView<'a> {
     pub rows: [Option<SelectMusicWheelRow<'a>>; SELECT_MUSIC_WHEEL_ROWS],
     pub wheel_offset: f32,
-    pub selection_elapsed: f32,
+    pub selection_beat: f32,
     pub item: Option<SelectCourseItem<'a>>,
     pub banner_texture: Option<&'a Arc<str>>,
     pub player_names: [Option<&'a str>; MAX_PLAYERS],

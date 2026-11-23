@@ -1904,7 +1904,7 @@ pub fn select_course_view<'a>(
     SelectCourseView {
         rows,
         wheel_offset: state.wheel_offset_from_selection,
-        selection_elapsed: state.time_since_selection_change,
+        selection_beat: course_selection_anim_beat(state),
         item,
         banner_texture: loaded_banner
             .filter(|key| key.as_ref() == state.current_banner_key.as_ref()),

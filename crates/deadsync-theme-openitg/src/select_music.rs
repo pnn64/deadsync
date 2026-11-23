@@ -1,24 +1,32 @@
 //! Music-wheel presentation over the application's current browsing view.
 
 use crate::presentation::{ACCENT, HEIGHT, INK, Layout, MUTED, WIDTH, quad};
-use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
-use deadlib_present::space::{screen_height, screen_width};
+use deadlib_present::render::{BlendMode, MeshVertex};
+use deadlib_present::space::{
+    Metrics, current_metrics, menu_perspective, screen_height, screen_width,
+};
 use deadsync_theme::select_music::{
     SELECT_MUSIC_WHEEL_ROWS, SelectCourseItem, SelectCourseView, SelectMusicPlayerView,
     SelectMusicPrompt, SelectMusicView, SelectMusicWheelRow,
 };
+use glam::{Mat4, Vec3};
 use std::cell::RefCell;
 use std::f32::consts::{PI, TAU};
+use std::sync::Arc;
 
 const WHEEL_CENTER: [f32; 2] = [212.0, 222.0];
 const HEADER_Y: f32 = 23.0;
 const WHEEL_RADIUS: f32 = 200.0;
 const WHEEL_CURVE_X: f32 = 24.0;
-// The reference retains two additional positions outside the visible rows.
-const WHEEL_ANGLE_PER_ROW: f32 = TAU * 0.42 / 17.0;
-const BANNER_CENTER: [f32; 2] = [480.0, 112.0];
-const BANNER_SIZE: [f32; 2] = [430.0, 130.0];
+const WHEEL_VISIBLE_HALF_SPAN: f32 = 7.5;
+const WHEEL_ANGLE_PER_ROW: f32 = TAU * 0.42 / SELECT_MUSIC_WHEEL_ROWS as f32;
+const WHEEL_CARD_SIZE: [f32; 2] = [368.0, 32.0];
+const WHEEL_HIGHLIGHT_Z: i16 = -52;
+const DETAILS_LEFT: f32 = 264.0;
+const BANNER_CENTER: [f32; 2] = [478.0, 112.0];
+const BANNER_SIZE: [f32; 2] = [300.0, 128.0];
 const DIFFICULTY_CENTER: [f32; 2] = [460.0, 242.0];
 const DIFFICULTY_PITCH: f32 = 20.5;
 const TEXT_CACHE_LIMIT: usize = 4096;
@@ -29,6 +37,8 @@ const fn opaque([red, green, blue]: [f32; 3]) -> [f32; 4] {
 
 thread_local! {
     static WHEEL_LABELS: RefCell<SharedStrCache> = RefCell::new(shared_str_cache_with_capacity(256));
+    static WHEEL_CAMERAS: RefCell<Option<WheelCameras>> = const { RefCell::new(None) };
+    static DETAILS_PLATE: RefCell<Option<(f32, Arc<[MeshVertex]>)>> = const { RefCell::new(None) };
 }
 
 fn shared_text(text: &str) -> TextContent {
@@ -37,17 +47,74 @@ fn shared_text(text: &str) -> TextContent {
     })
 }
 
-fn wheel_row(slot: usize, scroll_offset: f32) -> ([f32; 2], f32) {
-    let offset_from_center = slot as f32 - (SELECT_MUSIC_WHEEL_ROWS / 2) as f32 + scroll_offset;
-    let (rise, depth) = (offset_from_center * WHEEL_ANGLE_PER_ROW).sin_cos();
-    let curve = (1.0 - (offset_from_center / PI).cos()) * WHEEL_CURVE_X;
-    (
-        [
-            WHEEL_CENTER[0] + curve,
-            WHEEL_CENTER[1] + WHEEL_RADIUS * rise,
-        ],
-        depth,
-    )
+/// The camera scopes carry the 3D card pose for both its quads and text.
+/// Keeping the scopes flat lets the wheel refill the caller's actor buffer.
+struct WheelCameras {
+    bounds: [f32; 4],
+    offset: f32,
+    rows: [Option<Mat4>; SELECT_MUSIC_WHEEL_ROWS],
+    highlight: Mat4,
+}
+
+impl WheelCameras {
+    fn bounds(metrics: Metrics) -> [f32; 4] {
+        [metrics.left, metrics.right, metrics.top, metrics.bottom]
+    }
+
+    fn new(metrics: Metrics, offset: f32) -> Self {
+        let width = metrics.right - metrics.left;
+        let height = metrics.top - metrics.bottom;
+        let scale = (width / WIDTH).min(height / HEIGHT);
+        let viewport = Mat4::from_scale(Vec3::new(
+            scale * WIDTH / width,
+            scale * HEIGHT / height,
+            1.0,
+        ));
+        let (projection, view) =
+            menu_perspective([WIDTH, HEIGHT], [WIDTH * 0.5, WHEEL_CENTER[1]], 58.0)
+                .expect("the wheel has a fixed positive camera size and field of view");
+        let parent = viewport
+            * projection
+            * view
+            * Mat4::from_translation(Vec3::new(WHEEL_CENTER[0], WHEEL_CENTER[1], 0.0))
+            * Mat4::from_scale(Vec3::new(0.86, 0.96, 1.40))
+            * Mat4::from_rotation_y(-20.0_f32.to_radians());
+        let card_camera = |distance: f32| {
+            let angle = distance * WHEEL_ANGLE_PER_ROW;
+            let (rise, depth) = angle.sin_cos();
+            let x = (1.0 - (distance / PI).cos()) * WHEEL_CURVE_X;
+            // Fold the conversion from centered world coordinates to the
+            // card's top-left plane into the X rotation and translation.
+            parent
+                * Mat4::from_cols_array(&[
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    -depth,
+                    rise,
+                    0.0,
+                    0.0,
+                    rise,
+                    depth,
+                    0.0,
+                    x - metrics.left,
+                    depth * metrics.top + WHEEL_RADIUS * rise,
+                    WHEEL_RADIUS * depth - 100.0 - rise * metrics.top,
+                    1.0,
+                ])
+        };
+        Self {
+            bounds: Self::bounds(metrics),
+            offset,
+            rows: std::array::from_fn(|index| {
+                let distance = index as f32 - (SELECT_MUSIC_WHEEL_ROWS / 2) as f32 + offset;
+                (distance.abs() <= WHEEL_VISIBLE_HALF_SPAN).then(|| card_camera(distance))
+            }),
+            highlight: card_camera(0.0),
+        }
+    }
 }
 
 /// Draws the browsing wheel, banner, currently available charts, and launch feedback.
@@ -59,7 +126,7 @@ pub fn push_select_music_actors(actors: &mut Vec<Actor>, view: SelectMusicView<'
         layout,
         &view.rows,
         view.wheel_offset,
-        view.selection_elapsed,
+        view.selection_beat,
         "NO SONGS",
     );
     push_difficulties(actors, layout, &view);
@@ -79,19 +146,68 @@ fn push_backdrop(actors: &mut Vec<Actor>) -> Layout {
         [0.0, 0.0],
         [width, height],
         [0.035, 0.048, 0.072, 1.0],
-        -20,
+        -100,
     ));
-    actors.push(layout.panel(0.0, 0.0, [WIDTH, HEIGHT], [0.063, 0.087, 0.126, 1.0], -19));
+    let canvas = [0.063, 0.087, 0.126, 1.0];
+    actors.push(layout.panel(0.0, 0.0, [WIDTH, HEIGHT], canvas, -99));
+    actors.push(layout.panel(0.0, 0.0, [WIDTH, 44.0], canvas, -5));
+    actors.push(layout.panel(0.0, 423.0, [WIDTH, 57.0], canvas, -5));
     layout
 }
 
-fn push_banner_plate(
-    actors: &mut Vec<Actor>,
-    layout: Layout,
-    texture: Option<&std::sync::Arc<str>>,
-) {
+fn details_plate(layout: Layout) -> Actor {
+    const LEFT_EDGE: [[f32; 2]; 11] = [
+        [326.0, 44.0],
+        [308.0, 72.0],
+        [289.0, 104.0],
+        [277.0, 140.0],
+        [267.0, 180.0],
+        [DETAILS_LEFT, 222.0],
+        [267.0, 266.0],
+        [276.0, 305.0],
+        [288.0, 345.0],
+        [305.0, 383.0],
+        [328.0, 423.0],
+    ];
+    let [scale, _] = layout.size([1.0; 2]);
+    let vertices = DETAILS_PLATE.with_borrow_mut(|cached| {
+        if cached.as_ref().is_none_or(|(old, _)| *old != scale) {
+            let mut vertices = Vec::with_capacity(12 * (LEFT_EDGE.len() - 1));
+            for edge in LEFT_EDGE.windows(2) {
+                let [x0, y0] = edge[0];
+                let [x1, y1] = edge[1];
+                for (right, color) in [
+                    ([WIDTH; 2], [0.075, 0.112, 0.165, 1.0]),
+                    ([x0 + 2.0, x1 + 2.0], opaque(MUTED)),
+                ] {
+                    let [a, b, c, d] = [[x0, y0], [right[0], y0], [right[1], y1], [x1, y1]];
+                    vertices.extend([a, b, c, a, c, d].map(|pos| MeshVertex {
+                        pos: pos.map(|value| value * scale),
+                        color,
+                    }));
+                }
+            }
+            *cached = Some((scale, vertices.into()));
+        }
+        Arc::clone(&cached.as_ref().expect("detail frame is prepared").1)
+    });
+    Actor::Mesh {
+        align: [0.0; 2],
+        offset: layout.position(0.0, 0.0),
+        size: layout.size([WIDTH, HEIGHT]).map(SizeSpec::Px),
+        tint: [1.0; 4],
+        vertex_color_encoding: Default::default(),
+        vertices,
+        visible: true,
+        blend: BlendMode::Alpha,
+        z: -9,
+    }
+}
+
+fn push_banner_plate(actors: &mut Vec<Actor>, layout: Layout, texture: Option<&Arc<str>>) {
     let banner_left = BANNER_CENTER[0] - BANNER_SIZE[0] * 0.5;
     let banner_top = BANNER_CENTER[1] - BANNER_SIZE[1] * 0.5;
+    actors.push(details_plate(layout));
     actors.push(layout.panel(
         banner_left,
         banner_top,
@@ -103,10 +219,10 @@ fn push_banner_plate(
         actors.push(layout.image(BANNER_CENTER, BANNER_SIZE, key, -6));
     }
     actors.push(layout.panel(
-        banner_left,
-        banner_top + BANNER_SIZE[1] - 20.0,
-        [BANNER_SIZE[0], 20.0],
-        [0.04, 0.07, 0.11, 0.88],
+        276.0,
+        banner_top + BANNER_SIZE[1] - 8.0,
+        [352.0, 50.0],
+        [0.04, 0.07, 0.11, 1.0],
         0,
     ));
 }
@@ -114,36 +230,46 @@ fn push_banner_plate(
 fn push_banner(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'_>) {
     push_banner_plate(actors, layout, view.banner_texture);
     if let Some(song) = &view.song {
+        let fallback = view.banner_texture.is_none();
         actors.push(layout.bounded_label(
-            [280.0, 168.0],
-            0.0,
-            330.0,
+            if fallback {
+                [BANNER_CENTER[0], 105.0]
+            } else {
+                [280.0, 182.0]
+            },
+            if fallback { 0.5 } else { 0.0 },
+            332.0,
             shared_text(song.title),
-            1.10,
+            if fallback { 1.48 } else { 1.05 },
             opaque(INK),
         ));
         if !song.subtitle.is_empty() {
             actors.push(layout.bounded_label(
-                [280.0, 187.0],
-                0.0,
-                330.0,
+                if fallback {
+                    [BANNER_CENTER[0], 130.0]
+                } else {
+                    [280.0, 194.0]
+                },
+                if fallback { 0.5 } else { 0.0 },
+                332.0,
                 shared_text(song.subtitle),
                 0.75,
                 opaque(MUTED),
             ));
         }
+        actors.push(layout.label([280.0, 201.0], 0.0, "ARTIST".into(), 0.66, opaque(MUTED)));
         actors.push(layout.bounded_label(
-            [280.0, 202.0],
+            [280.0, 211.0],
             0.0,
             180.0,
             shared_text(song.artist),
             0.85,
-            opaque(MUTED),
+            opaque(INK),
         ));
         if !song.display_bpm.is_empty() {
-            actors.push(layout.label([483.0, 206.0], 1.0, "BPM".into(), 0.8, opaque(ACCENT)));
+            actors.push(layout.label([495.0, 201.0], 0.0, "BPM".into(), 0.66, opaque(MUTED)));
             actors.push(layout.bounded_label(
-                [495.0, 206.0],
+                [495.0, 211.0],
                 0.0,
                 125.0,
                 shared_text(song.display_bpm),
@@ -153,9 +279,9 @@ fn push_banner(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'
         }
     } else if let Some(section) = &view.rows[SELECT_MUSIC_WHEEL_ROWS / 2] {
         actors.push(layout.bounded_label(
-            [280.0, 168.0],
-            0.0,
-            330.0,
+            BANNER_CENTER,
+            0.5,
+            332.0,
             shared_text(section.title),
             1.10,
             opaque(INK),
@@ -168,71 +294,9 @@ fn push_wheel(
     layout: Layout,
     rows: &[Option<SelectMusicWheelRow<'_>>; SELECT_MUSIC_WHEEL_ROWS],
     wheel_offset: f32,
-    selection_elapsed: f32,
+    selection_beat: f32,
     empty_text: &'static str,
 ) {
-    let phase = selection_elapsed.rem_euclid(1.0);
-    let pulse = 1.0 - (2.0 * phase - 1.0).abs();
-    for (index, row) in rows.iter().enumerate() {
-        let Some(row) = row else { continue };
-        let ([x, y], depth) = wheel_row(index, wheel_offset);
-        let focused = index == SELECT_MUSIC_WHEEL_ROWS / 2;
-        let section = row.song_count.is_some();
-        let row_height = 22.0 * depth.clamp(0.45, 1.0);
-        let panel_tint = if focused {
-            [0.23, 0.30, 0.39, 1.0]
-        } else if section {
-            [0.14, 0.22, 0.31, 1.0]
-        } else {
-            [0.09, 0.14, 0.21, 1.0]
-        };
-        actors.push(layout.panel(
-            x - 171.0,
-            y - row_height * 0.5,
-            [200.0, row_height],
-            panel_tint,
-            3,
-        ));
-        if focused {
-            actors.push(layout.panel(
-                x - 171.0,
-                y - row_height * 0.5,
-                [3.0, row_height],
-                [ACCENT[0], ACCENT[1], ACCENT[2], 0.70 + 0.30 * pulse],
-                4,
-            ));
-        }
-        let title_color = if focused {
-            opaque(INK)
-        } else if section {
-            opaque(ACCENT)
-        } else {
-            opaque(MUTED)
-        };
-        let title_x = if section { x - 146.0 } else { x - 159.0 };
-        if section {
-            let indicator = if row.expanded { "-" } else { "+" };
-            actors.push(layout.label([x - 158.0, y], 0.5, indicator.into(), 0.70, title_color));
-        }
-        let available_width = if section { 135.0 } else { 182.0 };
-        actors.push(layout.bounded_label(
-            [title_x, y],
-            0.0,
-            available_width,
-            shared_text(row.title),
-            0.70 + 0.17 * depth,
-            title_color,
-        ));
-        if let Some(count) = row.song_count {
-            actors.push(layout.label(
-                [x + 21.0, y],
-                1.0,
-                TextContent::inline_u32(count.min(u32::MAX as usize) as u32),
-                0.65,
-                opaque(MUTED),
-            ));
-        }
-    }
     if rows.iter().all(Option::is_none) {
         actors.push(layout.label(
             [83.0, WHEEL_CENTER[1]],
@@ -241,6 +305,68 @@ fn push_wheel(
             1.0,
             opaque(MUTED),
         ));
+        return;
+    }
+    let metrics = current_metrics();
+    let card = Layout::centered(WIDTH, HEIGHT);
+    WHEEL_CAMERAS.with_borrow_mut(|cached| {
+        if cached.as_ref().is_none_or(|cameras| {
+            cameras.bounds != WheelCameras::bounds(metrics) || cameras.offset != wheel_offset
+        }) {
+            *cached = Some(WheelCameras::new(metrics, wheel_offset));
+        }
+        let cameras = cached.as_ref().expect("wheel cameras have been prepared");
+        let center = SELECT_MUSIC_WHEEL_ROWS / 2;
+        let order = (0..center).chain((center..SELECT_MUSIC_WHEEL_ROWS).rev());
+        for (layer, index) in order.enumerate() {
+            if let (Some(row), Some(view_proj)) = (rows[index], cameras.rows[index]) {
+                actors.push(Actor::CameraPush { view_proj });
+                push_wheel_card(actors, card, row, -90 + 2 * layer as i16);
+                actors.push(Actor::CameraPop);
+            }
+        }
+        let phase = (selection_beat + 0.2).rem_euclid(1.0);
+        let pulse = 1.0 - (2.0 * phase - 1.0).abs();
+        let accent = [ACCENT[0], ACCENT[1], ACCENT[2], 0.3 + 0.4 * pulse];
+        let [width, height] = WHEEL_CARD_SIZE;
+        actors.push(Actor::CameraPush {
+            view_proj: cameras.highlight,
+        });
+        for y in [-0.5 * height, 0.5 * height - 1.25] {
+            actors.push(card.panel(-0.5 * width, y, [width, 1.25], accent, WHEEL_HIGHLIGHT_Z));
+        }
+        actors.push(Actor::CameraPop);
+    });
+}
+
+fn push_wheel_card(actors: &mut Vec<Actor>, card: Layout, row: SelectMusicWheelRow<'_>, z: i16) {
+    let [width, height] = WHEEL_CARD_SIZE;
+    let section = row.song_count.is_some();
+    let tint = match (section, row.expanded) {
+        (true, true) => [0.22, 0.28, 0.35, 1.0],
+        (true, false) => [0.15, 0.22, 0.30, 1.0],
+        (false, _) => [0.095, 0.145, 0.22, 1.0],
+    };
+    actors.push(card.panel(-0.5 * width, -0.5 * height, [width, height - 0.8], tint, z));
+    let (x, max_width, tint) = if section {
+        (109.0, 210.0, opaque(ACCENT))
+    } else {
+        (109.0, 221.0, opaque(INK))
+    };
+    let mut title = card.text([x, 0.0], 1.0, shared_text(row.title), 0.92, tint);
+    title.maxwidth(max_width);
+    title.z(z + 1);
+    actors.push(title.build(0));
+    if let Some(count) = row.song_count {
+        let mut count = card.text(
+            [-95.0, 0.0],
+            1.0,
+            TextContent::inline_u32(count.min(u32::MAX as usize) as u32),
+            0.65,
+            opaque(MUTED),
+        );
+        count.z(z + 1);
+        actors.push(count.build(0));
     }
 }
 
@@ -400,12 +526,18 @@ fn push_chart_score(actors: &mut Vec<Actor>, layout: Layout, x: f32, y: f32, per
 }
 
 fn push_footer(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'_>) {
-    actors.push(layout.label([36.0, HEADER_Y], 0.0, "SELECT MUSIC".into(), 1.55, opaque(INK)));
+    actors.push(layout.label(
+        [36.0, HEADER_Y],
+        0.0,
+        "PICK A TUNE".into(),
+        1.55,
+        opaque(INK),
+    ));
     actors.push(layout.panel(36.0, 425.0, [568.0, 1.0], [0.32, 0.40, 0.48, 1.0], 2));
     if let Some(stage) = view.stage_number {
         let label = TextContent::inline_format(format_args!("STAGE {stage}"))
             .unwrap_or_else(|| "STAGE".into());
-        actors.push(layout.label([36.0, 447.0], 0.0, label, 0.9, opaque(MUTED)));
+        actors.push(layout.label([36.0, 58.0], 0.0, label, 0.9, opaque(MUTED)));
     }
     if (view.music_rate - 1.0).abs() >= 0.005 {
         let label = TextContent::inline_format(format_args!("{:.2}x", view.music_rate))
@@ -415,11 +547,20 @@ fn push_footer(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'
 }
 
 fn push_prompt(actors: &mut Vec<Actor>, layout: Layout, prompt: SelectMusicPrompt) {
-    let label = match prompt {
+    match prompt {
         SelectMusicPrompt::Hidden => return,
-        SelectMusicPrompt::OfferOptions => "PRESS START FOR PLAYER OPTIONS",
-        SelectMusicPrompt::EnteringOptions => "ENTERING PLAYER OPTIONS",
-    };
+        SelectMusicPrompt::OfferOptions => {
+            actors.push(layout.label(
+                [WIDTH * 0.5, 447.0],
+                0.5,
+                "PRESS START FOR PLAYER OPTIONS".into(),
+                0.97,
+                opaque(INK),
+            ));
+            return;
+        }
+        SelectMusicPrompt::EnteringOptions => {}
+    }
     actors.push(quad(
         [0.0, 0.0],
         [screen_width(), screen_height()],
@@ -431,7 +572,7 @@ fn push_prompt(actors: &mut Vec<Actor>, layout: Layout, prompt: SelectMusicPromp
         [WIDTH * 0.5, HEIGHT * 0.5],
         0.5,
         384.0,
-        label.into(),
+        "ENTERING PLAYER OPTIONS".into(),
         1.0,
         opaque(INK),
     );
@@ -450,10 +591,16 @@ pub fn push_select_course_actors(actors: &mut Vec<Actor>, view: SelectCourseView
         layout,
         &view.rows,
         view.wheel_offset,
-        view.selection_elapsed,
+        view.selection_beat,
         "NO COURSES",
     );
-    actors.push(layout.label([36.0, HEADER_Y], 0.0, "PICK A COURSE".into(), 1.55, opaque(INK)));
+    actors.push(layout.label(
+        [36.0, HEADER_Y],
+        0.0,
+        "PICK A COURSE".into(),
+        1.55,
+        opaque(INK),
+    ));
     actors.push(layout.panel(36.0, 425.0, [568.0, 1.0], [0.32, 0.40, 0.48, 1.0], 2));
     if let Some(course) = &view.item {
         push_course_details(actors, layout, course);
@@ -573,12 +720,10 @@ fn push_course_details(actors: &mut Vec<Actor>, layout: Layout, course: &SelectC
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_present::actors::SizeSpec;
     use deadlib_present::space::{Metrics, with_current_metrics};
     use deadsync_theme::select_music::{
         SelectMusicDifficultyRow, SelectMusicSongView, SelectMusicWheelRow,
     };
-    use std::sync::Arc;
 
     fn view(banner: &Arc<str>, prompt: SelectMusicPrompt) -> SelectMusicView<'_> {
         let mut rows = [None; SELECT_MUSIC_WHEEL_ROWS];
@@ -590,7 +735,7 @@ mod tests {
         SelectMusicView {
             rows,
             wheel_offset: 0.0,
-            selection_elapsed: 0.0,
+            selection_beat: 0.0,
             song: Some(SelectMusicSongView {
                 title: "Track",
                 subtitle: "",
@@ -616,18 +761,22 @@ mod tests {
     }
 
     #[test]
-    fn wheel_arc_has_native_endpoints_and_retains_the_scroll_offset() {
-        let (top, _) = wheel_row(0, 0.0);
-        let (middle, depth) = wheel_row(SELECT_MUSIC_WHEEL_ROWS / 2, 0.0);
-        let (bottom, _) = wheel_row(SELECT_MUSIC_WHEEL_ROWS - 1, 0.0);
-        assert!((top[0] - 250.665).abs() < 0.01);
-        assert!((top[1] - 44.988).abs() < 0.01);
-        assert_eq!(middle, [212.0, 222.0]);
-        assert_eq!(depth, 1.0);
-        assert!((bottom[1] - 399.012).abs() < 0.01);
-        assert_eq!(
-            wheel_row(SELECT_MUSIC_WHEEL_ROWS / 2, 1.0),
-            wheel_row(SELECT_MUSIC_WHEEL_ROWS / 2 + 1, 0.0)
+    fn wheel_projects_tilted_cards_behind_a_fixed_highlight() {
+        let metrics = Metrics::centered(640.0, 480.0);
+        let settled = WheelCameras::new(metrics, 0.0);
+        let scrolling = WheelCameras::new(metrics, 1.0);
+        let center = SELECT_MUSIC_WHEEL_ROWS / 2;
+        assert_eq!(settled.rows.iter().flatten().count(), 15);
+        assert!(settled.rows[0].is_none());
+        assert!(scrolling.rows[0].is_some());
+        assert_eq!(settled.rows[center + 1], scrolling.rows[center]);
+        assert_eq!(settled.highlight, scrolling.highlight);
+        let tilted = settled.rows[center - 4].unwrap();
+        let left = tilted.project_point3(Vec3::new(-450.0, 240.0, 0.0));
+        let right = tilted.project_point3(Vec3::new(-270.0, 240.0, 0.0));
+        assert!(
+            (left.y - right.y).abs() > 0.015,
+            "the card edge should have perspective tilt"
         );
     }
 
@@ -643,11 +792,11 @@ mod tests {
                 );
                 assert!(actors.iter().any(|actor| matches!(actor,
                     Actor::Sprite { align, offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], .. }
-                        if *align == [0.5, 0.5] && *offset == [480.0 + delta, 112.0] && *w == 430.0 && *h == 130.0
+                        if *align == [0.5, 0.5] && *offset == [478.0 + delta, 112.0] && *w == 300.0 && *h == 128.0
                 )));
                 assert!(actors.iter().any(|actor| matches!(actor,
                     Actor::Text { content, offset, .. }
-                        if content.as_str() == "Artist" && *offset == [280.0 + delta, 202.0]
+                        if content.as_str() == "Artist" && *offset == [280.0 + delta, 211.0]
                 )));
                 assert!(actors.iter().any(|actor| matches!(actor,
                     Actor::Sprite { offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], .. }

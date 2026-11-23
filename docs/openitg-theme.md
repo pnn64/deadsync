@@ -159,10 +159,20 @@ presentation over the wheel.
 
 The source comparison uses the home release's effective `ScreenSelectMusic`
 and `MusicWheel` metrics and `WheelBase.cpp`. The layout uses the source
-wheel center `(212, 222)`, 15 rows on a radius-200 arc, the banner at
-`(480, 112)`, and a 20.5 px difficulty-row pitch. Actor tests check the 640×480
-and 854×480 layouts. The renderer uses original graphics. Exact 3D perspective,
-banner framing, and special-item presentation are pending.
+wheel center `(212, 222)`, a radius-200 arc, a 20° parent yaw, and a 58°
+horizontal perspective centered at `(320, 222)`. The cards and their labels
+tilt together. The shared view retains 17 rows so the edge cards can enter as
+the source's 15-row window moves. A fixed selection border pulses on the
+preview beat. The wheel uses a curved detail divider, an inset banner, an
+artist and BPM rail, and the 20.5 px difficulty-row pitch. The option offer
+appears in the footer so the confirmed song stays visible.
+
+The native 640×480 Quartz capture confirms the tilted rows and the fixed
+selection area. Vulkan captures of the DeadSync Quartz view checked the same
+title, artist, BPM, and Hard 5 chart at 640×480 and 854×480. Additional
+two-player captures check catalog labels, records, and the highlight during
+movement. The artwork and proportions use DeadSync's presentation. Native
+banner transitions and the Chance and Random entries remain open.
 
 Each joined side's chart pane shows steps, jumps, hands, holds, rolls, and
 judgable mines. The machine record and holder and the personal best use the
@@ -186,7 +196,20 @@ their records. The layout builds 90 actors for this fixture, up from 60.
 Circular indexing now gives short wheels the same wrap order in navigation,
 media requests, score requests, and drawing. An index-only benchmark on lists
 of 3, 128, 701, and 10,000 entries measured medians of 4.78 ns before and
-5.60 ns after the fix. Full-frame timing remains to be measured.
+5.60 ns after the fix.
+
+The perspective milestone used an 854×480 two-player wheel fixture with
+bundled fonts and warm actor and composition buffers. Median actor build time
+went from 40.27 to 42.73 µs when settled, and from 39.54 to 52.17 µs while
+scrolling. CPU composition went from 120.72 to 142.33 µs when settled, and from
+119.35 to 143.21 µs while scrolling. The projected cards increase the wheel
+from 78 to 93 draw operations and use a separate camera pose for each visible
+card. GPU wheel timing remains open.
+
+In matching portable Windows gameplay runs over 600 measured Quartz frames
+per theme, p95 frame time went from 8.69 to 8.64 ms for OpenITG and from 8.66
+to 8.62 ms for Simply Love after the camera extraction. All four runs had
+zero measured buffer growth and zero audio underruns.
 
 ## Theme resources and menu cues
 

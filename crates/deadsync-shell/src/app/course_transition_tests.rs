@@ -66,6 +66,7 @@ fn fixture(root: &std::path::Path, name: &str, pump: bool) -> Arc<SongData> {
 }
 
 pub(super) fn test_app(root: &std::path::Path) -> App {
+    crate::tests::init_paths();
     let dirs = AppDirs {
         data_dir: root.join("data"),
         cache_dir: root.join("cache"),
