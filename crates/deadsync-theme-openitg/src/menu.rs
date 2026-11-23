@@ -1,7 +1,7 @@
 use crate::intro::{LOGO_ENTRY_SECONDS, LOGO_MOVIE, LOGO_POSTER, push_logo_layers};
 use crate::presentation::{HEIGHT, Layout, italic, quad, sprite};
 use crate::resources::{TITLE_CHROME, TITLE_FONT, TITLE_GLINT, TITLE_STREAK};
-use crate::{Effect, OpenItgRuntimeRequest, OpenItgScreen, OpenItgTheme};
+use crate::OpenItgTheme;
 use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::dsl::SpriteBuilder;
@@ -14,9 +14,10 @@ use deadsync_theme::main_menu::{
     MainMenuFrame, MainMenuItem, MainMenuPhase, MainMenuRuntimeView, MenuBackgroundMovie,
     ThemeMainMenu, main_menu_items,
 };
-use deadsync_theme::{ThemeInputResult, TransitionState, UiCue};
+use deadsync_theme::{Screen, ThemeEffect, ThemeInputResult, TransitionState, UiCue};
 use std::sync::Arc;
 
+type Effect<R> = ThemeEffect<Screen, R>;
 type RuntimeView = MainMenuRuntimeView<GameFlag, CoinMode>;
 const FIRST_ROW_Y: f32 = 112.0;
 const ROW_PITCH: f32 = 36.0;
@@ -46,7 +47,7 @@ impl MenuState {
         )
     }
 
-    fn move_selection(&mut self, delta: isize) -> Effect {
+    fn move_selection<R>(&mut self, delta: isize) -> Effect<R> {
         let count = self.items().len();
         let next = (self.selected as isize + delta).rem_euclid(count as isize) as usize;
         if self.selected == next {
@@ -54,21 +55,21 @@ impl MenuState {
         }
         self.selected = next;
         self.focus_elapsed = 0.0;
-        Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Change))
+        Effect::UiCue(UiCue::Change)
     }
 
-    fn activate(&self) -> Effect {
+    fn activate<R>(&self) -> Effect<R> {
         let destination = match self.items()[self.selected] {
             // The host admits arcade Start before calling the menu. In Pay mode
             // the updated view can already report zero remaining credits.
-            MainMenuItem::Play => Effect::Navigate(OpenItgScreen::Play),
-            MainMenuItem::Options => Effect::Navigate(OpenItgScreen::Options),
-            MainMenuItem::Content => Effect::Navigate(OpenItgScreen::Content),
+            MainMenuItem::Play => Effect::Navigate(Screen::SelectProfile),
+            MainMenuItem::Options => Effect::Navigate(Screen::Options),
+            MainMenuItem::Content => Effect::Navigate(Screen::ContentBrowser),
             MainMenuItem::Exit => Effect::Exit,
             MainMenuItem::Shutdown => Effect::Shutdown,
         };
         Effect::sequence(
-            Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Confirm)),
+            Effect::UiCue(UiCue::Confirm),
             destination,
         )
     }
@@ -121,7 +122,7 @@ impl ThemeMainMenu for OpenItgTheme {
         state.selected = state.selected.min(state.items().len() - 1);
     }
 
-    fn update_menu(state: &mut MenuState, delta_time: f32, phase: MainMenuPhase) -> Effect {
+    fn update_menu<R>(state: &mut MenuState, delta_time: f32, phase: MainMenuPhase) -> Effect<R> {
         if delta_time <= 0.0 || !delta_time.is_finite() {
             return Effect::None;
         }
@@ -131,16 +132,16 @@ impl ThemeMainMenu for OpenItgTheme {
             state.idle_elapsed += delta_time;
             if state.idle_elapsed >= ATTRACT_SECONDS {
                 state.idle_elapsed = 0.0;
-                return Effect::Navigate(OpenItgScreen::Attract);
+                return Effect::Navigate(Screen::Init);
             }
         }
         Effect::None
     }
 
-    fn handle_menu_input(state: &mut MenuState, input: &InputEvent) -> Effect {
+    fn handle_menu_input<R>(state: &mut MenuState, input: &InputEvent) -> Effect<R> {
         state.idle_elapsed = 0.0;
         if state.cancel_chord(input) {
-            return Effect::Navigate(OpenItgScreen::Attract);
+            return Effect::Navigate(Screen::Init);
         }
         if !input.pressed {
             return Effect::None;
@@ -149,7 +150,7 @@ impl ThemeMainMenu for OpenItgTheme {
         use VirtualAction::*;
         match input.action {
             p1_start | p2_start => state.activate(),
-            p1_back | p2_back => Effect::Navigate(OpenItgScreen::Attract),
+            p1_back | p2_back => Effect::Navigate(Screen::Init),
             p1_menu_left | p1_menu_up | p2_menu_left | p2_menu_up => state.move_selection(-1),
             p1_menu_right | p1_menu_down | p2_menu_right | p2_menu_down => state.move_selection(1),
             p1_left | p1_up | p2_left | p2_up if !state.view.dedicated_three_key_nav => {
@@ -162,17 +163,17 @@ impl ThemeMainMenu for OpenItgTheme {
         }
     }
 
-    fn handle_menu_raw_key(
+    fn handle_menu_raw_key<R>(
         state: &mut MenuState,
         key: &RawKeyboardEvent,
-    ) -> ThemeInputResult<OpenItgScreen, OpenItgRuntimeRequest> {
+    ) -> ThemeInputResult<Screen, R> {
         state.idle_elapsed = 0.0;
         if !key.pressed || key.repeat {
             return ThemeInputResult::ignored();
         }
         match key.code {
-            KeyCode::Escape => ThemeInputResult::consumed(Effect::Navigate(OpenItgScreen::Attract)),
-            KeyCode::F4 => ThemeInputResult::consumed(Effect::Navigate(OpenItgScreen::Sandbox)),
+            KeyCode::Escape => ThemeInputResult::consumed(Effect::Navigate(Screen::Init)),
+            KeyCode::F4 => ThemeInputResult::consumed(Effect::Navigate(Screen::Sandbox)),
             _ => ThemeInputResult::ignored(),
         }
     }
@@ -180,13 +181,13 @@ impl ThemeMainMenu for OpenItgTheme {
     fn push_menu_actors(
         actors: &mut Vec<Actor>,
         state: &MenuState,
-        frame: MainMenuFrame<'_, OpenItgScreen, ()>,
+        frame: MainMenuFrame<'_, Screen, ()>,
     ) {
         push_title(actors, state, frame);
     }
 }
 
-fn transition_alpha(state: &MenuState, frame: &MainMenuFrame<'_, OpenItgScreen, ()>) -> (f32, f32) {
+fn transition_alpha(state: &MenuState, frame: &MainMenuFrame<'_, Screen, ()>) -> (f32, f32) {
     let (opacity, flash) = match *frame.transition {
         TransitionState::FadingIn { elapsed, .. }
         | TransitionState::ActorsFadeIn { elapsed, .. } => (1.0, 1.0 - elapsed / ENTRY_SECONDS),
@@ -243,7 +244,7 @@ fn title_image(
 fn push_title(
     actors: &mut Vec<Actor>,
     state: &MenuState,
-    frame: MainMenuFrame<'_, OpenItgScreen, ()>,
+    frame: MainMenuFrame<'_, Screen, ()>,
 ) {
     let width = screen_width();
     let height = screen_height();
@@ -416,19 +417,19 @@ mod tests {
     use deadsync_theme::ThemeFlowEvent;
     use std::time::Instant;
 
-    fn press(state: &mut MenuState, action: VirtualAction) -> Effect {
+    fn press(state: &mut MenuState, action: VirtualAction) -> Effect<()> {
         let now = Instant::now();
         let event = InputEvent::new(action, 0, true, InputSource::Keyboard, now, 0, now, now);
         OpenItgTheme::handle_menu_input(state, &event)
     }
 
-    fn assert_activation(effect: Effect, destination: ThemeFlowEvent<OpenItgScreen>) {
+    fn assert_activation(effect: Effect<()>, destination: ThemeFlowEvent<Screen>) {
         let Effect::Batch(effects) = effect else {
             panic!("expected confirming cue and destination")
         };
         assert!(matches!(
             &effects[0],
-            Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Confirm))
+            Effect::UiCue(UiCue::Confirm)
         ));
         assert_eq!(effects[1].flow_event(), Some(destination));
     }
@@ -438,11 +439,11 @@ mod tests {
         let mut state = OpenItgTheme::init_menu(0);
         assert!(matches!(
             press(&mut state, VirtualAction::p1_menu_right),
-            Effect::Runtime(OpenItgRuntimeRequest::Cue(UiCue::Change))
+            Effect::UiCue(UiCue::Change)
         ));
         assert_activation(
             press(&mut state, VirtualAction::p1_start),
-            ThemeFlowEvent::Navigate(OpenItgScreen::Options),
+            ThemeFlowEvent::Navigate(Screen::Options),
         );
         press(&mut state, VirtualAction::p1_menu_left);
         press(&mut state, VirtualAction::p1_menu_left);
@@ -471,14 +472,14 @@ mod tests {
         ));
         assert_activation(
             press(&mut state, VirtualAction::p2_start),
-            ThemeFlowEvent::Navigate(OpenItgScreen::Play),
+            ThemeFlowEvent::Navigate(Screen::SelectProfile),
         );
     }
 
     #[test]
     fn first_choice_keeps_native_coordinates_inside_a_wide_viewport() {
         let mut state = OpenItgTheme::init_menu(0);
-        OpenItgTheme::update_menu(&mut state, ENTRY_SECONDS, MainMenuPhase::Entering);
+        OpenItgTheme::update_menu::<()>(&mut state, ENTRY_SECONDS, MainMenuPhase::Entering);
         let movie_key = Arc::from("fixture/logo.mpg");
         for (width, x, background_key) in [
             (640.0, 120.0, None),

@@ -2164,16 +2164,16 @@ pub fn prepare_update(state: &mut State, effects: &mut Vec<ThemeEffect>) -> bool
 
 pub(crate) fn song_lua_transition_screen(
     name: Option<&str>,
-) -> Result<crate::screens::SimplyLoveScreen, String> {
-    use crate::screens::SimplyLoveScreen as Screen;
+) -> Result<crate::screens::Screen, String> {
+    use crate::screens::Screen;
     let Some(name) = name.filter(|name| !name.is_empty()) else {
         return Ok(Screen::Evaluation);
     };
     named_song_lua_screen(name).ok_or_else(|| format!("unsupported song Lua next screen {name}"))
 }
 
-pub(crate) fn named_song_lua_screen(name: &str) -> Option<crate::screens::SimplyLoveScreen> {
-    use crate::screens::SimplyLoveScreen as Screen;
+pub(crate) fn named_song_lua_screen(name: &str) -> Option<crate::screens::Screen> {
+    use crate::screens::Screen;
     [
         Screen::Menu,
         Screen::Practice,

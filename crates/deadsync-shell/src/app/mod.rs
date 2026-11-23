@@ -5789,6 +5789,10 @@ impl App {
             }
             ThemeEffect::Exit => self.handle_process_exit(ProcessExitRequest::Exit),
             ThemeEffect::Shutdown => self.handle_process_exit(ProcessExitRequest::Shutdown),
+            ThemeEffect::UiCue(cue) => {
+                audio_requests::execute(&mut self.audio, &self.ui_sfx, AudioRequest::PlayUiCue(cue));
+                Vec::new()
+            }
             ThemeEffect::Runtime(request) => match request {
                 SimplyLoveRuntimeRequest::GameplayAction(_) => {
                     unreachable!("gameplay actions must be normalized before runtime execution")

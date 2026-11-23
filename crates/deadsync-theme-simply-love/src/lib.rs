@@ -57,7 +57,7 @@ impl SimplyLoveTheme {
     #[must_use]
     pub const fn gameplay_exit_screen(
         destination: deadsync_gameplay::exit_route::GameplayExitDestination,
-    ) -> screens::SimplyLoveScreen {
+    ) -> screens::Screen {
         use deadsync_gameplay::exit_route::GameplayExitDestination;
         use deadsync_theme::ThemeScreenFlow;
 
@@ -71,22 +71,22 @@ impl SimplyLoveTheme {
         }
     }
 
-    pub fn resolve_song_lua_screen(name: Option<&str>) -> Result<screens::SimplyLoveScreen, String> {
+    pub fn resolve_song_lua_screen(name: Option<&str>) -> Result<screens::Screen, String> {
         screens::gameplay::song_lua_transition_screen(name)
     }
 
     /// Interpret legacy screen destinations that also have a gameplay meaning.
     #[must_use]
     pub const fn gameplay_action_for_navigation(
-        screen: screens::SimplyLoveScreen,
+        screen: screens::Screen,
         immediate: bool,
     ) -> Option<deadsync_gameplay::GameplayAction> {
         use deadsync_gameplay::{GameplayAction, GameplayExit};
-        use screens::SimplyLoveScreen;
+        use screens::Screen;
 
         let exit = match screen {
-            SimplyLoveScreen::Evaluation => GameplayExit::Complete,
-            SimplyLoveScreen::SelectMusic => GameplayExit::Cancel,
+            Screen::Evaluation => GameplayExit::Complete,
+            Screen::SelectMusic => GameplayExit::Cancel,
             _ => return None,
         };
         Some(if immediate {
@@ -98,28 +98,24 @@ impl SimplyLoveTheme {
 }
 
 impl deadsync_theme::Theme for SimplyLoveTheme {
-    type Screen = screens::SimplyLoveScreen;
+    type Screen = screens::Screen;
     type RuntimeRequest = SimplyLoveRuntimeRequest;
 
     #[inline(always)]
     fn screen_id(screen: Self::Screen) -> deadsync_theme::ThemeScreenId {
-        screen.id()
-    }
-
-    fn current_screen_file_name(screen: Self::Screen) -> &'static str {
-        screen.current_screen_file_name()
+        screens::screen_id(screen)
     }
 }
 
 impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme {
     const SCREENS: deadsync_theme::ThemeScreens<Self::Screen> = deadsync_theme::ThemeScreens {
-        menu: screens::SimplyLoveScreen::Menu,
-        gameplay: screens::SimplyLoveScreen::Gameplay,
-        practice: screens::SimplyLoveScreen::Practice,
-        results: screens::SimplyLoveScreen::Evaluation,
-        song_selection: screens::SimplyLoveScreen::SelectMusic,
-        course_selection: screens::SimplyLoveScreen::SelectCourse,
-        player_options: screens::SimplyLoveScreen::PlayerOptions,
+        menu: screens::Screen::Menu,
+        gameplay: screens::Screen::Gameplay,
+        practice: screens::Screen::Practice,
+        results: screens::Screen::Evaluation,
+        song_selection: screens::Screen::SelectMusic,
+        course_selection: screens::Screen::SelectCourse,
+        player_options: screens::Screen::PlayerOptions,
     };
 
     fn named_song_lua_screen(name: &str) -> Option<Self::Screen> {
@@ -130,7 +126,7 @@ impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme {
 impl deadsync_theme::ThemeSessionFlow for SimplyLoveTheme {
     const SESSION_SCREENS: deadsync_core::session_flow::SessionScreens<Self::Screen> = {
         use deadsync_theme::ThemeScreenFlow;
-        use screens::SimplyLoveScreen as Screen;
+        use screens::Screen;
 
         deadsync_core::session_flow::SessionScreens {
             menu: Self::SCREENS.menu,
@@ -148,8 +144,8 @@ impl deadsync_theme::ThemeSessionFlow for SimplyLoveTheme {
     };
     const PROFILE_LOGIN_SCREENS: deadsync_core::session_flow::ProfileLoginScreens<Self::Screen> =
         deadsync_core::session_flow::ProfileLoginScreens {
-            groovestats: Some(screens::SimplyLoveScreen::GrooveStatsLogin),
-            arrowcloud: Some(screens::SimplyLoveScreen::ArrowCloudLogin),
+            groovestats: Some(screens::Screen::GrooveStatsLogin),
+            arrowcloud: Some(screens::Screen::ArrowCloudLogin),
         };
 }
 

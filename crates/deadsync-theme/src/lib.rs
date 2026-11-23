@@ -22,7 +22,7 @@ pub use runtime::{
     FullscreenChoice, GraphicsRequest, PlatformRequest, PresentPolicyChoice, RendererChoice,
     RevealPathKind, thread_choice_index, thread_count_from_choice,
 };
-pub use screen::{Theme, ThemeScreenFlow, ThemeScreenId, ThemeScreens, ThemeSessionFlow};
+pub use screen::{Screen, Theme, ThemeScreenFlow, ThemeScreenId, ThemeScreens, ThemeSessionFlow};
 pub use transition::{
     ThemeTransitionAudio, ThemeTransitions, TransitionAudio, TransitionCompletion, TransitionFrame,
     TransitionKind, TransitionMusic, TransitionState,

@@ -154,19 +154,20 @@ pub trait ThemeMainMenu: ThemeTransitions {
     }
 
     fn sync_menu_runtime(state: &mut Self::MenuState, view: Self::MenuRuntimeView);
-    fn update_menu(
+    /// Title effects use shared navigation and cues with the host's request type.
+    fn update_menu<R>(
         state: &mut Self::MenuState,
         delta_time: f32,
         phase: MainMenuPhase,
-    ) -> ThemeEffect<Self::Screen, Self::RuntimeRequest>;
-    fn handle_menu_input(
+    ) -> ThemeEffect<Self::Screen, R>;
+    fn handle_menu_input<R>(
         state: &mut Self::MenuState,
         input: &Self::MenuInput,
-    ) -> ThemeEffect<Self::Screen, Self::RuntimeRequest>;
-    fn handle_menu_raw_key(
+    ) -> ThemeEffect<Self::Screen, R>;
+    fn handle_menu_raw_key<R>(
         _state: &mut Self::MenuState,
         _key: &Self::MenuRawKey,
-    ) -> ThemeInputResult<Self::Screen, Self::RuntimeRequest> {
+    ) -> ThemeInputResult<Self::Screen, R> {
         ThemeInputResult::ignored()
     }
     fn push_menu_actors(

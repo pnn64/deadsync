@@ -1,3 +1,5 @@
+use crate::UiCue;
+
 /// Work requested by a concrete theme after handling input or updating a
 /// screen.
 ///
@@ -19,6 +21,8 @@ pub enum ThemeEffect<S, R> {
     LeaveEvaluation,
     Exit,
     Shutdown,
+    /// Play a semantic cue from the installed theme's sound catalogue.
+    UiCue(UiCue),
     Runtime(R),
 }
 
@@ -147,7 +151,7 @@ impl<S: Copy, R> ThemeEffect<S, R> {
             Self::LeaveEvaluation => Some(ThemeFlowEvent::LeaveEvaluation),
             Self::Exit => Some(ThemeFlowEvent::Exit),
             Self::Shutdown => Some(ThemeFlowEvent::Shutdown),
-            Self::None | Self::Batch(_) | Self::Runtime(_) => None,
+            Self::None | Self::Batch(_) | Self::UiCue(_) | Self::Runtime(_) => None,
         }
     }
 }

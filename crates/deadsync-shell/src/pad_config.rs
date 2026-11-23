@@ -3,7 +3,7 @@ use deadsync_input::fsr::PadDeviceId;
 use deadsync_input_fsr::Monitor;
 use deadsync_profile::pad_config::{self, PadConfigProfile};
 use deadsync_profile::pad_config_sync::PadConfigSync;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme::Screen as Screen;
 use deadsync_theme_simply_love::screens::pad_config::{PadCommand, ProfileListEntry};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

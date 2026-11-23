@@ -17,11 +17,11 @@ pub(crate) type MainMenuRuntimeView = SharedMainMenuRuntimeView<
     deadsync_config::coin::CoinMode,
 >;
 
-pub(crate) fn handle_input<T: ThemeMainMenu<MenuInput = InputEvent>>(
+pub(crate) fn handle_input<T: ThemeMainMenu<MenuInput = InputEvent>, R>(
     state: &mut T::MenuState,
     session: &mut SessionState,
     input: &InputEvent,
-) -> ThemeEffect<T::Screen, T::RuntimeRequest> {
+) -> ThemeEffect<T::Screen, R> {
     session.remember_menu_start(input);
     T::handle_menu_input(state, input)
 }

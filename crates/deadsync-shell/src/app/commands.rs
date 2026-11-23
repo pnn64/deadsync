@@ -6,7 +6,7 @@ use crate::command::{
 use deadlib_assets::media_path_key;
 use deadsync_config as config;
 use deadsync_profile::compat as profile;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme::Screen as Screen;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
 use log::warn;
 use std::path::PathBuf;

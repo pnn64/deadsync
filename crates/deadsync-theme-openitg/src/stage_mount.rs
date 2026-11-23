@@ -4,11 +4,11 @@ use deadsync_theme::stage::{
     StageOutroView, StagePresentation,
 };
 use deadsync_theme::views::{EvaluationOverview, GameplayHud, GameplayHudMotion};
-use deadsync_theme::{ThemeTransitions, UiCue};
+use deadsync_theme::{Screen, ThemeTransitions, UiCue};
 
 use crate::{
     EVALUATION_OVERVIEW_SETTLED_SECONDS, GAMEPLAY_HUD, GameplayOutro, OpenItgEvaluation,
-    OpenItgScreen, OpenItgTheme, push_stage_loading_actors,
+    OpenItgTheme, push_stage_loading_actors,
 };
 
 #[derive(Default)]
@@ -45,7 +45,7 @@ impl StagePresentation<Actor> for OpenItgStagePresentation {
     }
 
     fn gameplay_entry(&self, restarting: bool, prepared: bool) -> Option<(Vec<Actor>, f32)> {
-        (!restarting && prepared).then(|| OpenItgTheme::in_transition(OpenItgScreen::Gameplay, ()))
+        (!restarting && prepared).then(|| OpenItgTheme::in_transition(Screen::Gameplay, ()))
     }
 
     fn gameplay_outro(

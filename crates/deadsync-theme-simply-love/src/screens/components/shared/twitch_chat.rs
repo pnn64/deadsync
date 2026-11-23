@@ -1,6 +1,7 @@
 //! Presentation compatible with Martin Natano's Simply Love Twitch module.
 //! Original copyright and permission notice: deadsync-online/src/twitch-LICENSE.
-use crate::{act, color, screens::flow::SimplyLoveScreen as Screen};
+use crate::{act, color};
+use deadsync_theme::Screen;
 use deadlib_assets::AssetManager;
 use deadlib_present::{
     actors::{Actor, DynamicText, TextAttribute, TextAttributes, TextContent},

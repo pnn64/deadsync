@@ -1,6 +1,5 @@
 //! Connects the installed title presentation to the shared session flow.
 
-use crate::openitg::{host_effect, screen_for_host};
 use crate::{ActiveTheme, SessionState, ThemeScreen as Screen, TransitionState};
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
@@ -8,7 +7,7 @@ use deadsync_config::theme::ThemeFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::ThemeTransitions;
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, MenuBackgroundMovie, ThemeMainMenu};
-use deadsync_theme_openitg::{OpenItgScreen, OpenItgTheme};
+use deadsync_theme_openitg::OpenItgTheme;
 use deadsync_theme_simply_love::{
     SimplyLoveEffect, SimplyLoveInputResult, views::SimplyLoveVisualPolicyView,
 };
@@ -43,7 +42,7 @@ impl InstalledMenu {
     pub(crate) fn entry_transition(&self) -> (Vec<Actor>, f32) {
         match self {
             Self::SimplyLove(_) => ActiveTheme::in_transition(Screen::Menu, None),
-            Self::OpenItg(_) => OpenItgTheme::in_transition(OpenItgScreen::Menu, ()),
+            Self::OpenItg(_) => OpenItgTheme::in_transition(Screen::Menu, ()),
         }
     }
 
@@ -51,7 +50,7 @@ impl InstalledMenu {
         match self {
             Self::SimplyLove(_) => ActiveTheme::out_transition(Screen::Menu, target),
             Self::OpenItg(_) => {
-                OpenItgTheme::out_transition(OpenItgScreen::Menu, screen_for_host(target))
+                OpenItgTheme::out_transition(Screen::Menu, target)
             }
         }
     }
@@ -59,7 +58,7 @@ impl InstalledMenu {
     pub(crate) fn actor_entry(&self) -> TransitionState {
         let duration = match self {
             Self::SimplyLove(_) => ActiveTheme::actor_entry_duration(Screen::Menu),
-            Self::OpenItg(_) => OpenItgTheme::actor_entry_duration(OpenItgScreen::Menu),
+            Self::OpenItg(_) => OpenItgTheme::actor_entry_duration(Screen::Menu),
         };
         duration.map_or(TransitionState::Idle, |duration| {
             TransitionState::ActorsFadeIn {
@@ -72,7 +71,7 @@ impl InstalledMenu {
     pub(crate) fn actor_exit(&self, target: Screen) -> TransitionState {
         let duration = match self {
             Self::SimplyLove(_) => ActiveTheme::actor_exit_duration(Screen::Menu),
-            Self::OpenItg(_) => OpenItgTheme::actor_exit_duration(OpenItgScreen::Menu),
+            Self::OpenItg(_) => OpenItgTheme::actor_exit_duration(Screen::Menu),
         };
         TransitionState::ActorsFadeOut {
             elapsed: 0.0,
@@ -112,7 +111,7 @@ impl InstalledMenu {
     pub(crate) fn update(&mut self, dt: f32, phase: MainMenuPhase) -> SimplyLoveEffect {
         match self {
             Self::SimplyLove(state) => ActiveTheme::update_menu(state, dt, phase),
-            Self::OpenItg(state) => host_effect(OpenItgTheme::update_menu(state, dt, phase)),
+            Self::OpenItg(state) => OpenItgTheme::update_menu(state, dt, phase),
         }
     }
 
@@ -123,24 +122,18 @@ impl InstalledMenu {
     ) -> SimplyLoveEffect {
         match self {
             Self::SimplyLove(state) => {
-                crate::main_menu::handle_input::<ActiveTheme>(state, session, input)
+                crate::main_menu::handle_input::<ActiveTheme, _>(state, session, input)
             }
-            Self::OpenItg(state) => host_effect(crate::main_menu::handle_input::<OpenItgTheme>(
-                state, session, input,
-            )),
+            Self::OpenItg(state) => {
+                crate::main_menu::handle_input::<OpenItgTheme, _>(state, session, input)
+            }
         }
     }
 
     pub(crate) fn handle_raw_key(&mut self, key: &RawKeyboardEvent) -> SimplyLoveInputResult {
         match self {
             Self::SimplyLove(state) => ActiveTheme::handle_menu_raw_key(state, key),
-            Self::OpenItg(state) => {
-                let result = OpenItgTheme::handle_menu_raw_key(state, key);
-                SimplyLoveInputResult {
-                    consumed: result.consumed,
-                    effect: host_effect(result.effect),
-                }
-            }
+            Self::OpenItg(state) => OpenItgTheme::handle_menu_raw_key(state, key),
         }
     }
 
@@ -152,7 +145,6 @@ impl InstalledMenu {
         match self {
             Self::SimplyLove(state) => ActiveTheme::push_menu_actors(actors, state, frame),
             Self::OpenItg(state) => {
-                let transition = openitg_transition(frame.transition);
                 OpenItgTheme::push_menu_actors(
                     actors,
                     state,
@@ -160,7 +152,7 @@ impl InstalledMenu {
                         update_banner_tag: frame.update_banner_tag,
                         background_key: frame.background_key,
                         alpha_multiplier: frame.alpha_multiplier,
-                        transition: &transition,
+                        transition: frame.transition,
                         visual_policy: (),
                     },
                 );
@@ -181,39 +173,10 @@ impl InstalledMenu {
             Self::OpenItg(state) => OpenItgTheme::push_menu_exit_overlay(
                 actors,
                 state,
-                &openitg_transition(transition),
+                transition,
                 (),
             ),
         }
-    }
-}
-
-fn openitg_transition(
-    transition: &TransitionState,
-) -> deadsync_theme::TransitionState<OpenItgScreen> {
-    use deadsync_theme::TransitionState::*;
-    match *transition {
-        Idle => Idle,
-        FadingIn { elapsed, duration } => FadingIn { elapsed, duration },
-        ActorsFadeIn { elapsed, duration } => ActorsFadeIn { elapsed, duration },
-        FadingOut {
-            elapsed,
-            duration,
-            target,
-        } => FadingOut {
-            elapsed,
-            duration,
-            target: screen_for_host(target),
-        },
-        ActorsFadeOut {
-            elapsed,
-            duration,
-            target,
-        } => ActorsFadeOut {
-            elapsed,
-            duration,
-            target: screen_for_host(target),
-        },
     }
 }
 
@@ -222,7 +185,7 @@ mod tests {
     use super::*;
     use deadsync_core::input::{InputSource, MAX_PLAYERS};
     use deadsync_input::VirtualAction;
-    use deadsync_theme::ThemeEffect;
+    use deadsync_theme::{ThemeEffect, UiCue};
     use std::time::Instant;
 
     #[test]
@@ -244,11 +207,10 @@ mod tests {
             let mut effects = Vec::new();
             menu.handle_input(&mut session, &start)
                 .append_to(&mut effects);
-            assert!(
-                effects
-                    .iter()
-                    .any(|effect| matches!(effect, ThemeEffect::Navigate(Screen::SelectProfile)))
-            );
+            assert!(matches!(
+                effects.as_slice(),
+                [ThemeEffect::UiCue(UiCue::Confirm), ThemeEffect::Navigate(Screen::SelectProfile)]
+            ));
             assert_eq!(session.menu_start_side, deadsync_profile::PlayerSide::P2);
         }
     }

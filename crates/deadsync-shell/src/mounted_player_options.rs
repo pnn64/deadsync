@@ -1,6 +1,5 @@
 //! Startup-selected Player Options layout and shared editor handoff.
 
-use crate::openitg::screen_for_host;
 use crate::{ActiveTheme, ThemeScreen as Screen};
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::RawKeyboardEvent;
@@ -14,7 +13,7 @@ use deadsync_theme::ThemeTransitions;
 use deadsync_theme::player_options::{
     PlayerOptionsEntry, PlayerOptionsSelection, ThemePlayerOptions,
 };
-use deadsync_theme_openitg::{OpenItgPlayerOptions, OpenItgScreen, OpenItgTheme};
+use deadsync_theme_openitg::{OpenItgPlayerOptions, OpenItgTheme};
 use deadsync_theme_simply_love::{
     SimplyLoveEffect, screens::player_options, views::SimplyLoveVisualPolicyView,
 };
@@ -117,7 +116,7 @@ impl PlayerOptionsState {
     pub(crate) fn entry_transition(&self) -> (Vec<Actor>, f32) {
         match self.theme {
             ThemeFlag::SimplyLove => ActiveTheme::in_transition(Screen::PlayerOptions, None),
-            ThemeFlag::OpenItg => OpenItgTheme::in_transition(OpenItgScreen::PlayerOptions, ()),
+            ThemeFlag::OpenItg => OpenItgTheme::in_transition(Screen::PlayerOptions, ()),
         }
     }
 
@@ -125,7 +124,7 @@ impl PlayerOptionsState {
         match self.theme {
             ThemeFlag::SimplyLove => ActiveTheme::out_transition(Screen::PlayerOptions, target),
             ThemeFlag::OpenItg => {
-                OpenItgTheme::out_transition(OpenItgScreen::PlayerOptions, screen_for_host(target))
+                OpenItgTheme::out_transition(Screen::PlayerOptions, target)
             }
         }
     }

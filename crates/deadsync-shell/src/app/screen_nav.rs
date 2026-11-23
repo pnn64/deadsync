@@ -19,7 +19,7 @@ use deadsync_gameplay::course_progress::CourseRenewal;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_theme::{
-    Theme, ThemeScreenFlow, ThemeTransitionAudio, ThemeTransitions, TransitionKind, TransitionState,
+    ThemeScreenFlow, ThemeTransitionAudio, ThemeTransitions, TransitionKind, TransitionState,
 };
 use deadsync_theme_simply_love::screens::transition_audio::TransitionAudioContext;
 use deadsync_theme_simply_love::screens::transitions::PlayEntryTransition;
@@ -253,7 +253,7 @@ impl App {
         self.state.screens.current_screen = target;
         self.sync_gameplay_input_capture();
         write_current_screen_file(
-            ActiveTheme::current_screen_file_name(target),
+            target.current_screen_file_name(),
             &self.dirs.current_screen_path(),
         );
         if plan.clear_text_layout_cache {

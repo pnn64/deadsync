@@ -19,7 +19,7 @@ mod stage_mount;
 mod system_options;
 
 use deadlib_present::actors::Actor;
-use deadsync_theme::{Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, TransitionKind, UiCue};
+use deadsync_theme::{Screen, Theme, ThemeScreenId, ThemeTransitions, TransitionKind};
 
 pub use demonstration::{OpenItgTrainingFeedback, push_training_underlay};
 pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, OpenItgEvaluation};
@@ -39,50 +39,18 @@ pub use stage_loading::push_stage_loading_actors;
 pub use stage_mount::OpenItgStagePresentation;
 pub use system_options::OpenItgSystemOptions;
 
-type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;
-
-/// Presentation identifiers for the OpenITG screens and their destinations.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OpenItgScreen {
-    Menu,
-    Attract,
-    Play,
-    Options,
-    Content,
-    Sandbox,
-    Gameplay,
-    Practice,
-    SongSelection,
-    CourseSelection,
-    PlayerOptions,
-}
-
-/// UI sound requests for the application to execute.
-#[derive(Clone, Debug)]
-pub enum OpenItgRuntimeRequest {
-    Cue(UiCue),
-}
-
 /// The OpenITG-inspired theme.
 pub struct OpenItgTheme;
 
 impl Theme for OpenItgTheme {
-    type Screen = OpenItgScreen;
-    type RuntimeRequest = OpenItgRuntimeRequest;
+    type Screen = Screen;
+    type RuntimeRequest = std::convert::Infallible;
 
     fn screen_id(screen: Self::Screen) -> ThemeScreenId {
         ThemeScreenId::new(match screen {
-            OpenItgScreen::Menu => "ScreenTitleMenu",
-            OpenItgScreen::Attract => "ScreenAttract",
-            OpenItgScreen::Play => "ScreenSelectProfile",
-            OpenItgScreen::Options => "ScreenOptionsMenu",
-            OpenItgScreen::Content => "ScreenContentBrowser",
-            OpenItgScreen::Sandbox => "ScreenSandbox",
-            OpenItgScreen::Gameplay => "ScreenGameplay",
-            OpenItgScreen::Practice => "ScreenPractice",
-            OpenItgScreen::SongSelection => "ScreenSelectMusic",
-            OpenItgScreen::CourseSelection => "ScreenSelectCourse",
-            OpenItgScreen::PlayerOptions => "ScreenPlayerOptions",
+            Screen::Init => "ScreenAttract",
+            Screen::Options => "ScreenOptionsMenu",
+            _ => screen.current_screen_file_name(),
         })
     }
 }
@@ -92,8 +60,8 @@ impl ThemeTransitions for OpenItgTheme {
     type EntryContext<'a> = ();
 
     fn transition_kind(from: Self::Screen, to: Self::Screen) -> TransitionKind {
-        if matches!(from, OpenItgScreen::Menu | OpenItgScreen::PlayerOptions)
-            || matches!(to, OpenItgScreen::Menu | OpenItgScreen::PlayerOptions)
+        if matches!(from, Screen::Menu | Screen::PlayerOptions)
+            || matches!(to, Screen::Menu | Screen::PlayerOptions)
         {
             TransitionKind::Actors
         } else {
@@ -103,16 +71,16 @@ impl ThemeTransitions for OpenItgTheme {
 
     fn actor_entry_duration(screen: Self::Screen) -> Option<f32> {
         match screen {
-            OpenItgScreen::Menu => Some(menu::ENTRY_SECONDS),
-            OpenItgScreen::PlayerOptions => Some(player_options::ENTRY_SECONDS),
+            Screen::Menu => Some(menu::ENTRY_SECONDS),
+            Screen::PlayerOptions => Some(player_options::ENTRY_SECONDS),
             _ => None,
         }
     }
 
     fn actor_exit_duration(screen: Self::Screen) -> f32 {
         match screen {
-            OpenItgScreen::Menu => menu::EXIT_SECONDS,
-            OpenItgScreen::PlayerOptions => player_options::TRANSITION_SECONDS,
+            Screen::Menu => menu::EXIT_SECONDS,
+            Screen::PlayerOptions => player_options::TRANSITION_SECONDS,
             _ => 0.0,
         }
     }
@@ -123,7 +91,7 @@ impl ThemeTransitions for OpenItgTheme {
 
     fn out_transition(from: Self::Screen, _to: Self::Screen) -> (Vec<Self::Actor>, f32) {
         let duration = Self::actor_exit_duration(from);
-        let actors = if from == OpenItgScreen::PlayerOptions {
+        let actors = if from == Screen::PlayerOptions {
             vec![presentation::black_fade(duration, false)]
         } else {
             // The title actors fade themselves using the shared clock.

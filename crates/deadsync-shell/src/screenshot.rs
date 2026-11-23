@@ -14,7 +14,7 @@ use deadsync_assets::screenshot::{
 };
 use deadsync_profile::PlayerSide;
 use deadsync_score::Grade;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme::Screen as Screen;
 
 const SCREENSHOT_PREVIEW_TEXTURE_KEY: &str = "__screenshot_preview";
 const SCREENSHOT_PREVIEW_BORDER_PX: f32 = 4.0;

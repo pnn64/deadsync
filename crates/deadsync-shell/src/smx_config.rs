@@ -3,7 +3,7 @@ use deadsync_profile::pad_config_sync::AppliedPadConfig;
 use deadsync_smx::SmxInfo;
 use deadsync_smx::SmxPadPreset;
 use deadsync_theme::views::{SmxAssignmentPadView, SmxAssignmentView, SmxGifCatalogView};
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme::Screen as Screen;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SmxAssignmentSource {

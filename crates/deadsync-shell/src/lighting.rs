@@ -24,7 +24,7 @@ use deadsync_smx::gifs::{FullPadAnim, difficulty_tag};
 use deadsync_smx::panel_fx::JudgementGifs;
 use deadsync_smx::panels::{Clock, PADS};
 use deadsync_theme::views::LightsTestView;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme::Screen as Screen;
 
 pub fn lights_test_view(state: LightState, mode: Mode) -> LightsTestView {
     let cabinet = [

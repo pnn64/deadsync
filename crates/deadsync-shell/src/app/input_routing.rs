@@ -13,7 +13,7 @@ use deadsync_theme::evaluation::ThemeEvaluation;
 use deadsync_theme::profile_picker::ThemeProfilePicker;
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
+use deadsync_theme::Screen as CurrentScreen;
 use std::error::Error;
 use winit::event_loop::ActiveEventLoop;
 

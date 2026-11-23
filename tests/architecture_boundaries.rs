@@ -4600,6 +4600,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         );
         assert!(
             source.contains("crate::effects::sfx")
+                || source.contains("ThemeEffect::UiCue(")
                 || source.contains("append_dismiss_effects")
                 || source.contains("AudioRequest::PlayScreenSfxPath"),
             "{path} must emit a typed audio effect"
@@ -7294,8 +7295,8 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
     }
     let factory = production_source(&root.join("crates/deadsync-shell/src/title_menu.rs"));
     for hook in [
-        "crate::main_menu::handle_input::<ActiveTheme>(state, session, input)",
-        "crate::main_menu::handle_input::<OpenItgTheme>(",
+        "crate::main_menu::handle_input::<ActiveTheme, _>(state, session, input)",
+        "crate::main_menu::handle_input::<OpenItgTheme, _>(state, session, input)",
         "OpenItgTheme::push_menu_actors(",
         "ThemeFlag::OpenItg => Self::OpenItg(",
     ] {
@@ -13701,7 +13702,7 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
     }
     let adapter = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     for handoff in [
-        "ActiveTheme::current_screen_file_name(target)",
+        "target.current_screen_file_name()",
         "ActiveTheme::out_transition(screen, target)",
         "ActiveTheme::in_transition(screen, context)",
         "stage_exit_duration::<ActiveTheme>(screen).unwrap_or(duration)",
@@ -13779,6 +13780,7 @@ fn theme_screen_contract_has_explicit_owners() {
         read_source(root.join("crates/deadsync-theme-simply-love/src/screens/flow.rs"))
             .expect("Simply Love flow should be readable");
     for token in [
+        "pub enum Screen",
         "pub struct ThemeScreenId",
         "pub trait Theme",
         "pub struct ThemeScreens<S>",
@@ -13799,7 +13801,7 @@ fn theme_screen_contract_has_explicit_owners() {
             "deadsync-theme is missing generic effect contract token {token}"
         );
     }
-    for token in ["pub enum SimplyLoveScreen", "pub fn resolve_navigation"] {
+    for token in ["fn screen_id(screen: Screen)", "pub fn resolve_navigation"] {
         assert!(
             simply_love_flow.contains(token),
             "Simply Love is missing concrete flow token {token}"
@@ -13808,6 +13810,15 @@ fn theme_screen_contract_has_explicit_owners() {
     let simply_love = read_source(root.join("crates/deadsync-theme-simply-love/src/lib.rs"))
         .expect("Simply Love theme should be readable");
     assert!(simply_love.contains("impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme"));
+    let openitg = production_source(&root.join("crates/deadsync-theme-openitg/src/lib.rs"));
+    let shell = production_source(&root.join("crates/deadsync-shell/src/lib.rs"));
+    let title = production_source(&root.join("crates/deadsync-shell/src/title_menu.rs"));
+    assert!(shell.contains("pub(crate) use deadsync_theme::Screen as ThemeScreen;"));
+    assert!(simply_love.contains("type Screen = screens::Screen;"));
+    assert!(openitg.contains("type Screen = Screen;"));
+    for adapter in ["host_screen(", "openitg_transition(", "host_effect("] {
+        assert!(!title.contains(adapter));
+    }
     let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(

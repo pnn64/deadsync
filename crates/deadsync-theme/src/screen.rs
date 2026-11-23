@@ -1,3 +1,78 @@
+/// Application destinations shared by the installed DeadSync presentations.
+///
+/// The screen role identifies the controller the shell should run. Each
+/// presentation chooses its own actors, transitions, and theme-local ID.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Screen {
+    Menu,
+    Gameplay,
+    Practice,
+    Options,
+    Credits,
+    ContentBrowser,
+    ManageLocalProfiles,
+    Init,
+    Initials,
+    GameOver,
+    Mappings,
+    Input,
+    SelectProfile,
+    GrooveStatsLogin,
+    ArrowCloudLogin,
+    SelectColor,
+    SelectStyle,
+    SelectPlayMode,
+    ProfileLoad,
+    SelectMusic,
+    SelectCourse,
+    Sandbox,
+    Evaluation,
+    EvaluationSummary,
+    PlayerOptions,
+    TestLights,
+    OverscanAdjustment,
+    ConfigurePads,
+    SmxAssignPads,
+}
+
+impl Screen {
+    /// Stable external screen name written to `save/current_screen.txt`.
+    #[must_use]
+    pub const fn current_screen_file_name(self) -> &'static str {
+        match self {
+            Self::Menu => "ScreenTitleMenu",
+            Self::Gameplay => "ScreenGameplay",
+            Self::Practice => "ScreenPractice",
+            Self::Options => "ScreenOptionsService",
+            Self::Credits => "ScreenCredits",
+            Self::ContentBrowser => "ScreenContentBrowser",
+            Self::ManageLocalProfiles => "ScreenOptionsManageProfiles",
+            Self::Init => "ScreenInit",
+            Self::Initials => "ScreenNameEntryTraditional",
+            Self::GameOver => "ScreenGameOver",
+            Self::Mappings => "ScreenMapControllers",
+            Self::Input => "ScreenTestInput",
+            Self::SelectProfile => "ScreenSelectProfile",
+            Self::GrooveStatsLogin => "ScreenGrooveStatsLogin",
+            Self::ArrowCloudLogin => "ScreenArrowCloudLogin",
+            Self::SelectColor => "ScreenSelectColor",
+            Self::SelectStyle => "ScreenSelectStyle",
+            Self::SelectPlayMode => "ScreenSelectPlayMode",
+            Self::ProfileLoad => "ScreenProfileLoad",
+            Self::SelectMusic => "ScreenSelectMusic",
+            Self::SelectCourse => "ScreenSelectCourse",
+            Self::Sandbox => "ScreenSandbox",
+            Self::Evaluation => "ScreenEvaluationStage",
+            Self::EvaluationSummary => "ScreenEvaluationSummary",
+            Self::PlayerOptions => "ScreenPlayerOptions",
+            Self::TestLights => "ScreenTestLights",
+            Self::OverscanAdjustment => "ScreenOverscanConfig",
+            Self::ConfigurePads => "ScreenConfigurePads",
+            Self::SmxAssignPads => "ScreenSmxAssignPads",
+        }
+    }
+}
+
 /// Stable identity for a screen supplied by a concrete theme.
 ///
 /// The shell treats this value as opaque. Only the concrete theme interprets
@@ -25,10 +100,6 @@ pub trait Theme {
     type RuntimeRequest;
 
     fn screen_id(screen: Self::Screen) -> ThemeScreenId;
-
-    fn current_screen_file_name(screen: Self::Screen) -> &'static str {
-        Self::screen_id(screen).as_str()
-    }
 }
 
 /// The screens that connect a theme's flow to the application's game sessions.

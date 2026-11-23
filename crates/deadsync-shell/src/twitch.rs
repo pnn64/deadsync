@@ -4,10 +4,8 @@ use deadlib_assets::AssetManager;
 use deadlib_present::{actors::Actor, space};
 use deadsync_config::streaming::{TwitchChannel, TwitchOptions};
 use deadsync_online::twitch::{self, Entry, Snapshot};
-use deadsync_theme_simply_love::screens::{
-    SimplyLoveScreen,
-    components::shared::twitch_chat::{self, GameplayLayout, Overlay},
-};
+use deadsync_theme::Screen;
+use deadsync_theme_simply_love::screens::components::shared::twitch_chat::{self, GameplayLayout, Overlay};
 use std::{
     sync::{
         Arc,
@@ -32,7 +30,7 @@ pub(crate) struct Runtime {
     entries: Vec<Arc<Entry>>,
     revision: u64,
     overlay: Overlay,
-    screen: Option<SimplyLoveScreen>,
+    screen: Option<Screen>,
     sides: [bool; 2],
     options: TwitchOptions,
 }
@@ -113,7 +111,7 @@ impl Runtime {
     pub(crate) fn push(
         &mut self,
         actors: &mut Vec<Actor>,
-        screen: SimplyLoveScreen,
+        screen: Screen,
         gameplay: Option<GameplayLayout>,
         tournament: bool,
         assets: &AssetManager,
@@ -129,7 +127,7 @@ impl Runtime {
                 session.side_joined(deadsync_profile::PlayerSide::P2),
             ];
         }
-        if screen == SimplyLoveScreen::Gameplay && !self.options.show_gameplay {
+        if screen == Screen::Gameplay && !self.options.show_gameplay {
             return;
         }
         if let Some(rect) = twitch_chat::placement(

@@ -6,123 +6,40 @@ use deadsync_profile::{
 pub use deadsync_profile_gameplay::stage_charts::{
     SelectMusicJoinContext, SelectMusicJoinPlan, select_music_join_plan,
 };
+use deadsync_theme::Screen;
 
-/// Concrete screen identity for Simply Love.
-///
-/// This list and its redirects are theme-owned: another theme may expose a
-/// completely different set of screens.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum SimplyLoveScreen {
-    Menu,
-    Gameplay,
-    Practice,
-    Options,
-    Credits,
-    ContentBrowser,
-    ManageLocalProfiles,
-    Init,
-    Initials,
-    GameOver,
-    Mappings,
-    Input,
-    SelectProfile,
-    GrooveStatsLogin,
-    ArrowCloudLogin,
-    SelectColor,
-    SelectStyle,
-    SelectPlayMode,
-    ProfileLoad,
-    SelectMusic,
-    SelectCourse,
-    Sandbox,
-    Evaluation,
-    EvaluationSummary,
-    PlayerOptions,
-    TestLights,
-    OverscanAdjustment,
-    ConfigurePads,
-    SmxAssignPads,
-}
-
-impl SimplyLoveScreen {
-    /// Opaque identity exposed through the generic theme contract.
-    #[inline(always)]
-    #[must_use]
-    pub const fn id(self) -> deadsync_theme::ThemeScreenId {
-        deadsync_theme::ThemeScreenId::new(self.id_str())
-    }
-
-    /// Stable theme-local identifier used when adapting to `ThemeScreenId`.
-    #[must_use]
-    pub const fn id_str(self) -> &'static str {
-        match self {
-            Self::Menu => "simply-love/menu",
-            Self::Gameplay => "simply-love/gameplay",
-            Self::Practice => "simply-love/practice",
-            Self::Options => "simply-love/options",
-            Self::Credits => "simply-love/credits",
-            Self::ContentBrowser => "simply-love/content-browser",
-            Self::ManageLocalProfiles => "simply-love/manage-local-profiles",
-            Self::Init => "simply-love/init",
-            Self::Initials => "simply-love/initials",
-            Self::GameOver => "simply-love/game-over",
-            Self::Mappings => "simply-love/mappings",
-            Self::Input => "simply-love/input",
-            Self::SelectProfile => "simply-love/select-profile",
-            Self::GrooveStatsLogin => "simply-love/groovestats-login",
-            Self::ArrowCloudLogin => "simply-love/arrowcloud-login",
-            Self::SelectColor => "simply-love/select-color",
-            Self::SelectStyle => "simply-love/select-style",
-            Self::SelectPlayMode => "simply-love/select-play-mode",
-            Self::ProfileLoad => "simply-love/profile-load",
-            Self::SelectMusic => "simply-love/select-music",
-            Self::SelectCourse => "simply-love/select-course",
-            Self::Sandbox => "simply-love/sandbox",
-            Self::Evaluation => "simply-love/evaluation",
-            Self::EvaluationSummary => "simply-love/evaluation-summary",
-            Self::PlayerOptions => "simply-love/player-options",
-            Self::TestLights => "simply-love/test-lights",
-            Self::OverscanAdjustment => "simply-love/overscan-adjustment",
-            Self::ConfigurePads => "simply-love/configure-pads",
-            Self::SmxAssignPads => "simply-love/smx-assign-pads",
-        }
-    }
-
-    /// Stable external screen name written to `save/current_screen.txt`.
-    #[must_use]
-    pub const fn current_screen_file_name(self) -> &'static str {
-        match self {
-            Self::Menu => "ScreenTitleMenu",
-            Self::Gameplay => "ScreenGameplay",
-            Self::Practice => "ScreenPractice",
-            Self::Options => "ScreenOptionsService",
-            Self::Credits => "ScreenCredits",
-            Self::ContentBrowser => "ScreenContentBrowser",
-            Self::ManageLocalProfiles => "ScreenOptionsManageProfiles",
-            Self::Init => "ScreenInit",
-            Self::Initials => "ScreenNameEntryTraditional",
-            Self::GameOver => "ScreenGameOver",
-            Self::Mappings => "ScreenMapControllers",
-            Self::Input => "ScreenTestInput",
-            Self::SelectProfile => "ScreenSelectProfile",
-            Self::GrooveStatsLogin => "ScreenGrooveStatsLogin",
-            Self::ArrowCloudLogin => "ScreenArrowCloudLogin",
-            Self::SelectColor => "ScreenSelectColor",
-            Self::SelectStyle => "ScreenSelectStyle",
-            Self::SelectPlayMode => "ScreenSelectPlayMode",
-            Self::ProfileLoad => "ScreenProfileLoad",
-            Self::SelectMusic => "ScreenSelectMusic",
-            Self::SelectCourse => "ScreenSelectCourse",
-            Self::Sandbox => "ScreenSandbox",
-            Self::Evaluation => "ScreenEvaluationStage",
-            Self::EvaluationSummary => "ScreenEvaluationSummary",
-            Self::PlayerOptions => "ScreenPlayerOptions",
-            Self::TestLights => "ScreenTestLights",
-            Self::OverscanAdjustment => "ScreenOverscanConfig",
-            Self::ConfigurePads => "ScreenConfigurePads",
-            Self::SmxAssignPads => "ScreenSmxAssignPads",
-        }
-    }
+pub(crate) const fn screen_id(screen: Screen) -> deadsync_theme::ThemeScreenId {
+    deadsync_theme::ThemeScreenId::new(match screen {
+        Screen::Menu => "simply-love/menu",
+        Screen::Gameplay => "simply-love/gameplay",
+        Screen::Practice => "simply-love/practice",
+        Screen::Options => "simply-love/options",
+        Screen::Credits => "simply-love/credits",
+        Screen::ContentBrowser => "simply-love/content-browser",
+        Screen::ManageLocalProfiles => "simply-love/manage-local-profiles",
+        Screen::Init => "simply-love/init",
+        Screen::Initials => "simply-love/initials",
+        Screen::GameOver => "simply-love/game-over",
+        Screen::Mappings => "simply-love/mappings",
+        Screen::Input => "simply-love/input",
+        Screen::SelectProfile => "simply-love/select-profile",
+        Screen::GrooveStatsLogin => "simply-love/groovestats-login",
+        Screen::ArrowCloudLogin => "simply-love/arrowcloud-login",
+        Screen::SelectColor => "simply-love/select-color",
+        Screen::SelectStyle => "simply-love/select-style",
+        Screen::SelectPlayMode => "simply-love/select-play-mode",
+        Screen::ProfileLoad => "simply-love/profile-load",
+        Screen::SelectMusic => "simply-love/select-music",
+        Screen::SelectCourse => "simply-love/select-course",
+        Screen::Sandbox => "simply-love/sandbox",
+        Screen::Evaluation => "simply-love/evaluation",
+        Screen::EvaluationSummary => "simply-love/evaluation-summary",
+        Screen::PlayerOptions => "simply-love/player-options",
+        Screen::TestLights => "simply-love/test-lights",
+        Screen::OverscanAdjustment => "simply-love/overscan-adjustment",
+        Screen::ConfigurePads => "simply-love/configure-pads",
+        Screen::SmxAssignPads => "simply-love/smx-assign-pads",
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -130,7 +47,7 @@ pub struct ProfileSelectionContext {
     pub preferred_difficulties: [usize; PLAYER_SLOTS],
     pub active_side: PlayerSide,
     pub fast_switch: bool,
-    pub current_screen: SimplyLoveScreen,
+    pub current_screen: Screen,
     pub show_groovestats_login: bool,
     pub show_arrowcloud_login: bool,
 }
@@ -140,12 +57,12 @@ pub struct ProfileSelectionPlan {
     pub preferred_active: usize,
     pub preferred_p2: usize,
     pub refresh_select_music: bool,
-    pub navigation_target: Option<SimplyLoveScreen>,
+    pub navigation_target: Option<Screen>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LateJoinContext {
-    pub screen: SimplyLoveScreen,
+    pub screen: Screen,
     pub screen_allows_join: bool,
     pub play_style: PlayStyle,
     pub joined: [bool; PLAYER_SLOTS],
@@ -162,11 +79,11 @@ pub fn late_join_side(
     }
     if !matches!(
         context.screen,
-        SimplyLoveScreen::SelectColor
-            | SimplyLoveScreen::SelectStyle
-            | SimplyLoveScreen::SelectPlayMode
-            | SimplyLoveScreen::SelectMusic
-            | SimplyLoveScreen::SelectCourse
+        Screen::SelectColor
+            | Screen::SelectStyle
+            | Screen::SelectPlayMode
+            | Screen::SelectMusic
+            | Screen::SelectCourse
     ) {
         return None;
     }
@@ -196,11 +113,11 @@ pub fn profile_selection_plan(context: ProfileSelectionContext) -> ProfileSelect
 
 #[must_use]
 pub fn profile_selection_target(
-    current_screen: SimplyLoveScreen,
+    current_screen: Screen,
     fast_switch: bool,
     show_groovestats_login: bool,
     show_arrowcloud_login: bool,
-) -> Option<SimplyLoveScreen> {
+) -> Option<Screen> {
     use deadsync_theme::ThemeSessionFlow;
 
     deadsync_core::session_flow::profile_selection_target(
@@ -214,15 +131,15 @@ pub fn profile_selection_target(
 }
 
 pub type SimplyLoveNavigationPlan =
-    deadsync_core::session_flow::SessionNavigationPlan<SimplyLoveScreen>;
+    deadsync_core::session_flow::SessionNavigationPlan<Screen>;
 pub use deadsync_core::session_flow::SessionNavigationPolicy as SimplyLoveNavigationPolicy;
 
 /// Resolve Simply Love's optional startup and post-play screens.
 #[must_use]
 pub fn resolve_navigation(
     policy: SimplyLoveNavigationPolicy,
-    from: SimplyLoveScreen,
-    requested: SimplyLoveScreen,
+    from: Screen,
+    requested: Screen,
     has_played_stages: bool,
 ) -> SimplyLoveNavigationPlan {
     use deadsync_theme::ThemeSessionFlow;
@@ -239,71 +156,71 @@ pub fn resolve_navigation(
 #[inline(always)]
 #[must_use]
 pub const fn evaluation_summary_return_to(
-    previous: SimplyLoveScreen,
+    previous: Screen,
     pending_post_select_summary_exit: bool,
-) -> SimplyLoveScreen {
+) -> Screen {
     if pending_post_select_summary_exit {
-        return SimplyLoveScreen::Initials;
+        return Screen::Initials;
     }
     match previous {
-        SimplyLoveScreen::SelectMusic => SimplyLoveScreen::SelectMusic,
-        SimplyLoveScreen::SelectCourse => SimplyLoveScreen::SelectCourse,
-        _ => SimplyLoveScreen::Initials,
+        Screen::SelectMusic => Screen::SelectMusic,
+        Screen::SelectCourse => Screen::SelectCourse,
+        _ => Screen::Initials,
     }
 }
 
 /// Whether Simply Love renders this screen's transition with actor tweens.
 #[must_use]
-pub const fn uses_actor_fade(screen: SimplyLoveScreen) -> bool {
+pub const fn uses_actor_fade(screen: Screen) -> bool {
     matches!(
         screen,
-        SimplyLoveScreen::Menu
-            | SimplyLoveScreen::Options
-            | SimplyLoveScreen::ManageLocalProfiles
-            | SimplyLoveScreen::Mappings
-            | SimplyLoveScreen::Input
-            | SimplyLoveScreen::TestLights
-            | SimplyLoveScreen::OverscanAdjustment
-            | SimplyLoveScreen::SmxAssignPads
-            | SimplyLoveScreen::SelectColor
+        Screen::Menu
+            | Screen::Options
+            | Screen::ManageLocalProfiles
+            | Screen::Mappings
+            | Screen::Input
+            | Screen::TestLights
+            | Screen::OverscanAdjustment
+            | Screen::SmxAssignPads
+            | Screen::SelectColor
     )
 }
 
 /// Simply Love's exact actor-only transition pairs.
 #[must_use]
-pub const fn uses_actor_only_transition(from: SimplyLoveScreen, to: SimplyLoveScreen) -> bool {
-    if matches!(from, SimplyLoveScreen::Menu) {
-        return !matches!(to, SimplyLoveScreen::Menu | SimplyLoveScreen::Init);
+pub const fn uses_actor_only_transition(from: Screen, to: Screen) -> bool {
+    if matches!(from, Screen::Menu) {
+        return !matches!(to, Screen::Menu | Screen::Init);
     }
     matches!(
         (from, to),
         (
-            SimplyLoveScreen::Options
-                | SimplyLoveScreen::SelectProfile
-                | SimplyLoveScreen::SelectColor,
-            SimplyLoveScreen::Menu
+            Screen::Options
+                | Screen::SelectProfile
+                | Screen::SelectColor,
+            Screen::Menu
         ) | (
-            SimplyLoveScreen::SelectProfile,
-            SimplyLoveScreen::SelectColor | SimplyLoveScreen::SelectStyle
+            Screen::SelectProfile,
+            Screen::SelectColor | Screen::SelectStyle
         ) | (
-            SimplyLoveScreen::SelectStyle,
-            SimplyLoveScreen::SelectProfile | SimplyLoveScreen::SelectColor
-        ) | (SimplyLoveScreen::SelectColor, SimplyLoveScreen::SelectStyle)
+            Screen::SelectStyle,
+            Screen::SelectProfile | Screen::SelectColor
+        ) | (Screen::SelectColor, Screen::SelectStyle)
             | (
-                SimplyLoveScreen::Options,
-                SimplyLoveScreen::Mappings
-                    | SimplyLoveScreen::TestLights
-                    | SimplyLoveScreen::OverscanAdjustment
-                    | SimplyLoveScreen::SmxAssignPads
-                    | SimplyLoveScreen::ManageLocalProfiles
+                Screen::Options,
+                Screen::Mappings
+                    | Screen::TestLights
+                    | Screen::OverscanAdjustment
+                    | Screen::SmxAssignPads
+                    | Screen::ManageLocalProfiles
             )
             | (
-                SimplyLoveScreen::Mappings
-                    | SimplyLoveScreen::TestLights
-                    | SimplyLoveScreen::OverscanAdjustment
-                    | SimplyLoveScreen::SmxAssignPads
-                    | SimplyLoveScreen::ManageLocalProfiles,
-                SimplyLoveScreen::Options
+                Screen::Mappings
+                    | Screen::TestLights
+                    | Screen::OverscanAdjustment
+                    | Screen::SmxAssignPads
+                    | Screen::ManageLocalProfiles,
+                Screen::Options
             )
     )
 }
@@ -315,54 +232,54 @@ mod tests {
     #[test]
     fn identifiers_are_theme_scoped_and_unique() {
         let screens = [
-            SimplyLoveScreen::Menu,
-            SimplyLoveScreen::Gameplay,
-            SimplyLoveScreen::Practice,
-            SimplyLoveScreen::Options,
-            SimplyLoveScreen::Credits,
-            SimplyLoveScreen::ContentBrowser,
-            SimplyLoveScreen::ManageLocalProfiles,
-            SimplyLoveScreen::Init,
-            SimplyLoveScreen::Initials,
-            SimplyLoveScreen::GameOver,
-            SimplyLoveScreen::Mappings,
-            SimplyLoveScreen::Input,
-            SimplyLoveScreen::SelectProfile,
-            SimplyLoveScreen::GrooveStatsLogin,
-            SimplyLoveScreen::ArrowCloudLogin,
-            SimplyLoveScreen::SelectColor,
-            SimplyLoveScreen::SelectStyle,
-            SimplyLoveScreen::SelectPlayMode,
-            SimplyLoveScreen::ProfileLoad,
-            SimplyLoveScreen::SelectMusic,
-            SimplyLoveScreen::SelectCourse,
-            SimplyLoveScreen::Sandbox,
-            SimplyLoveScreen::Evaluation,
-            SimplyLoveScreen::EvaluationSummary,
-            SimplyLoveScreen::PlayerOptions,
-            SimplyLoveScreen::TestLights,
-            SimplyLoveScreen::OverscanAdjustment,
-            SimplyLoveScreen::ConfigurePads,
-            SimplyLoveScreen::SmxAssignPads,
+            Screen::Menu,
+            Screen::Gameplay,
+            Screen::Practice,
+            Screen::Options,
+            Screen::Credits,
+            Screen::ContentBrowser,
+            Screen::ManageLocalProfiles,
+            Screen::Init,
+            Screen::Initials,
+            Screen::GameOver,
+            Screen::Mappings,
+            Screen::Input,
+            Screen::SelectProfile,
+            Screen::GrooveStatsLogin,
+            Screen::ArrowCloudLogin,
+            Screen::SelectColor,
+            Screen::SelectStyle,
+            Screen::SelectPlayMode,
+            Screen::ProfileLoad,
+            Screen::SelectMusic,
+            Screen::SelectCourse,
+            Screen::Sandbox,
+            Screen::Evaluation,
+            Screen::EvaluationSummary,
+            Screen::PlayerOptions,
+            Screen::TestLights,
+            Screen::OverscanAdjustment,
+            Screen::ConfigurePads,
+            Screen::SmxAssignPads,
         ];
-        let mut ids = screens.map(SimplyLoveScreen::id_str);
+        let mut ids = screens.map(|screen| screen_id(screen).as_str());
         ids.sort_unstable();
         assert!(ids.windows(2).all(|pair| pair[0] != pair[1]));
         assert!(ids.iter().all(|id| id.starts_with("simply-love/")));
     }
 
     #[test]
-    fn compatibility_file_names_match_simply_love_names() {
+    fn compatibility_file_names_match_external_names() {
         assert_eq!(
-            SimplyLoveScreen::Menu.current_screen_file_name(),
+            Screen::Menu.current_screen_file_name(),
             "ScreenTitleMenu"
         );
         assert_eq!(
-            SimplyLoveScreen::Evaluation.current_screen_file_name(),
+            Screen::Evaluation.current_screen_file_name(),
             "ScreenEvaluationStage"
         );
         assert_eq!(
-            SimplyLoveScreen::ManageLocalProfiles.current_screen_file_name(),
+            Screen::ManageLocalProfiles.current_screen_file_name(),
             "ScreenOptionsManageProfiles"
         );
     }
@@ -377,11 +294,11 @@ mod tests {
         };
         let plan = resolve_navigation(
             policy,
-            SimplyLoveScreen::Menu,
-            SimplyLoveScreen::SelectProfile,
+            Screen::Menu,
+            Screen::SelectProfile,
             false,
         );
-        assert_eq!(plan.target, SimplyLoveScreen::SelectStyle);
+        assert_eq!(plan.target, Screen::SelectStyle);
         assert!(plan.initialize_session_side);
     }
 
@@ -391,35 +308,35 @@ mod tests {
             preferred_difficulties: [2, 5],
             active_side: PlayerSide::P2,
             fast_switch: true,
-            current_screen: SimplyLoveScreen::SelectProfile,
+            current_screen: Screen::SelectProfile,
             show_groovestats_login: false,
             show_arrowcloud_login: false,
         });
         assert_eq!(plan.preferred_active, 5);
         assert_eq!(plan.preferred_p2, 5);
-        assert_eq!(plan.navigation_target, Some(SimplyLoveScreen::SelectMusic));
+        assert_eq!(plan.navigation_target, Some(Screen::SelectMusic));
     }
 
     #[test]
     fn actor_transition_policy_is_theme_owned() {
-        assert!(uses_actor_fade(SimplyLoveScreen::Menu));
-        assert!(!uses_actor_fade(SimplyLoveScreen::SelectProfile));
+        assert!(uses_actor_fade(Screen::Menu));
+        assert!(!uses_actor_fade(Screen::SelectProfile));
         for target in [
-            SimplyLoveScreen::SelectProfile,
-            SimplyLoveScreen::SelectColor,
-            SimplyLoveScreen::SelectStyle,
-            SimplyLoveScreen::ProfileLoad,
-            SimplyLoveScreen::SelectMusic,
+            Screen::SelectProfile,
+            Screen::SelectColor,
+            Screen::SelectStyle,
+            Screen::ProfileLoad,
+            Screen::SelectMusic,
         ] {
-            assert!(uses_actor_only_transition(SimplyLoveScreen::Menu, target));
+            assert!(uses_actor_only_transition(Screen::Menu, target));
         }
         assert!(!uses_actor_only_transition(
-            SimplyLoveScreen::Gameplay,
-            SimplyLoveScreen::Evaluation,
+            Screen::Gameplay,
+            Screen::Evaluation,
         ));
         assert!(!uses_actor_only_transition(
-            SimplyLoveScreen::Menu,
-            SimplyLoveScreen::Init,
+            Screen::Menu,
+            Screen::Init,
         ));
     }
 }

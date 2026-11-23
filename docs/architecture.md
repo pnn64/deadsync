@@ -543,10 +543,10 @@ cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 
 ## Screen transitions
 
-The shell runs the shared transition clock using the selected theme's screen
-type. `ThemeTransitions` supplies transition actors, actor-fade timing, and
-presentation routing for non-play screens. Simply Love owns menu fades, overlay
-opacity, and its compatibility names for `current_screen.txt`.
+The shell runs the transition clock with the shared `deadsync_theme::Screen`
+roles. The installed theme supplies its title and modifier-entry actors, fade
+timing, and local screen identity. External consumers of `current_screen.txt`
+use the shared compatibility names for both themes.
 
 `ThemeScreenFlow` identifies the theme's screens for play, results, selection,
 and player options. The shell uses those IDs for stage transitions, course
@@ -768,5 +768,6 @@ reports when it has finished showing animations and dialogs.
 Several screens and runtime requests still use concrete Simply Love types.
 The Evaluation mount still uses Simply Love's presentation context, runtime
 views, and auxiliary pane controller.
-The shell's screen and effect types and several shared controllers also come
-from Simply Love through `ActiveTheme`.
+Both title menus emit shared navigation effects and semantic UI cues directly.
+Several screen controllers and their service requests still come from Simply
+Love through `ActiveTheme`.

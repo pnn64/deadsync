@@ -1,4 +1,4 @@
-use crate::screens::SimplyLoveScreen;
+use crate::screens::Screen;
 use crate::views::{ManageLocalProfilesView, SimplyLoveDensityGraphSlot};
 #[cfg(target_os = "windows")]
 use deadlib_input_native::WindowsPadBackend;
@@ -924,9 +924,9 @@ pub enum SimplyLoveRuntimeRequest {
     SongSearch(SimplyLoveSongSearchRequest),
 }
 
-pub type SimplyLoveEffect = deadsync_theme::ThemeEffect<SimplyLoveScreen, SimplyLoveRuntimeRequest>;
+pub type SimplyLoveEffect = deadsync_theme::ThemeEffect<Screen, SimplyLoveRuntimeRequest>;
 pub type SimplyLoveInputResult =
-    deadsync_theme::ThemeInputResult<SimplyLoveScreen, SimplyLoveRuntimeRequest>;
+    deadsync_theme::ThemeInputResult<Screen, SimplyLoveRuntimeRequest>;
 
 pub(crate) const fn sfx(path: &'static str) -> SimplyLoveEffect {
     SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)))
@@ -944,7 +944,7 @@ pub(crate) const fn lobby(request: SimplyLoveLobbyRequest) -> SimplyLoveEffect {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SimplyLoveEffectRouteContext {
-    pub current_screen: SimplyLoveScreen,
+    pub current_screen: Screen,
     pub restart_pending: bool,
     pub course_active: bool,
     pub course_has_next_stage: bool,
@@ -1008,7 +1008,7 @@ pub fn resolve_effect_route(
             let route = resolve_gameplay_exit_route(
                 action,
                 GameplayExitRouteContext {
-                    from_gameplay: context.current_screen == SimplyLoveScreen::Gameplay,
+                    from_gameplay: context.current_screen == Screen::Gameplay,
                     restart_pending: context.restart_pending,
                     course_active: context.course_active,
                     course_has_next_stage: context.course_has_next_stage,
@@ -1046,8 +1046,8 @@ mod tests {
             assert_eq!(gameplay_action_for_effect(&effect), Some(action));
         }
         for effect in [
-            SimplyLoveEffect::Navigate(SimplyLoveScreen::Gameplay),
-            SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::SelectCourse),
+            SimplyLoveEffect::Navigate(Screen::Gameplay),
+            SimplyLoveEffect::NavigateNoFade(Screen::SelectCourse),
             SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::RestartGameplay),
             SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::ReloadSongLua),
             SimplyLoveEffect::None,
@@ -1059,22 +1059,22 @@ mod tests {
     #[test]
     fn gameplay_exit_adapter_preserves_destination_and_transition_mode() {
         for (destination, screen) in [
-            (GameplayExitDestination::Results, SimplyLoveScreen::Evaluation),
+            (GameplayExitDestination::Results, Screen::Evaluation),
             (
                 GameplayExitDestination::SongSelection,
-                SimplyLoveScreen::SelectMusic,
+                Screen::SelectMusic,
             ),
             (
                 GameplayExitDestination::CourseSelection,
-                SimplyLoveScreen::SelectCourse,
+                Screen::SelectCourse,
             ),
             (
                 GameplayExitDestination::NextCourseStage,
-                SimplyLoveScreen::Gameplay,
+                Screen::Gameplay,
             ),
             (
                 GameplayExitDestination::RestartStage,
-                SimplyLoveScreen::Gameplay,
+                Screen::Gameplay,
             ),
         ] {
             for immediate in [false, true] {
@@ -1096,7 +1096,7 @@ mod tests {
     #[test]
     fn legacy_and_semantic_gameplay_requests_share_compatibility_resolution() {
         let context = SimplyLoveEffectRouteContext {
-            current_screen: SimplyLoveScreen::Gameplay,
+            current_screen: Screen::Gameplay,
             restart_pending: true,
             course_active: true,
             course_has_next_stage: true,
@@ -1104,19 +1104,19 @@ mod tests {
         };
         for (legacy, action) in [
             (
-                SimplyLoveEffect::Navigate(SimplyLoveScreen::Evaluation),
+                SimplyLoveEffect::Navigate(Screen::Evaluation),
                 GameplayAction::Navigate(GameplayExit::Complete),
             ),
             (
-                SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::Evaluation),
+                SimplyLoveEffect::NavigateNoFade(Screen::Evaluation),
                 GameplayAction::NavigateNoFade(GameplayExit::Complete),
             ),
             (
-                SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectMusic),
+                SimplyLoveEffect::Navigate(Screen::SelectMusic),
                 GameplayAction::Navigate(GameplayExit::Cancel),
             ),
             (
-                SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::SelectMusic),
+                SimplyLoveEffect::NavigateNoFade(Screen::SelectMusic),
                 GameplayAction::NavigateNoFade(GameplayExit::Cancel),
             ),
         ] {
@@ -1149,12 +1149,12 @@ mod tests {
         ));
         assert!(!restart.clear_restart_pending);
         let named = resolve_effect_route(
-            SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::Menu),
+            SimplyLoveEffect::NavigateNoFade(Screen::Menu),
             context,
         );
         assert!(matches!(
             named.action,
-            SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::Menu)
+            SimplyLoveEffect::NavigateNoFade(Screen::Menu)
         ));
         assert!(!named.clear_restart_pending);
     }
@@ -1163,7 +1163,7 @@ mod tests {
     fn sfx_then_preserves_audio_before_follow_up_effect() {
         let effect = sfx_then(
             "assets/sounds/start.ogg",
-            SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectStyle),
+            SimplyLoveEffect::Navigate(Screen::SelectStyle),
         );
         let SimplyLoveEffect::Batch(effects) = effect else {
             panic!("expected batch effect");
@@ -1177,7 +1177,7 @@ mod tests {
         ));
         assert!(matches!(
             effects[1],
-            SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectStyle)
+            SimplyLoveEffect::Navigate(Screen::SelectStyle)
         ));
     }
 

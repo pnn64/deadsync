@@ -10,7 +10,7 @@ use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::results::EvaluationStage;
 use deadsync_theme::evaluation::ThemeEvaluation;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
+use deadsync_theme::Screen as CurrentScreen;
 use std::{sync::Arc, time::Instant};
 
 type PlayerQueries<'a> = [Option<(profile_data::PlayerSide, &'a str)>; MAX_PLAYERS];

@@ -1464,6 +1464,7 @@ dependencies = [
  "deadsync-shell",
  "deadsync-simfile",
  "deadsync-song-lua",
+ "deadsync-theme",
  "deadsync-theme-simply-love",
  "deadsync-updater",
  "deadsync-version",

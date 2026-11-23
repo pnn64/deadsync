@@ -7,7 +7,7 @@ use deadsync_profile::PlayerSide;
 use deadsync_theme::ThemeSessionFlow;
 use deadsync_theme::profile_picker::ProfilePickerContext;
 #[cfg(test)]
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme::Screen as Screen;
 #[cfg(test)]
 use deadsync_theme_simply_love::screens::{
     LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, SelectMusicJoinPlan,
@@ -215,16 +215,16 @@ mod tests {
             state.credits = view.credits;
         }
 
-        fn update_menu(
+        fn update_menu<R>(
             state: &mut AlternateMenu, delta_time: f32, phase: MainMenuPhase,
-        ) -> ThemeEffect<Self::Screen, ()> {
+        ) -> ThemeEffect<Self::Screen, R> {
             if phase == MainMenuPhase::Active {
                 state.active_time += delta_time;
             }
             ThemeEffect::None
         }
 
-        fn handle_menu_input(_: &mut AlternateMenu, input: &InputEvent) -> ThemeEffect<Self::Screen, ()> {
+        fn handle_menu_input<R>(_: &mut AlternateMenu, input: &InputEvent) -> ThemeEffect<Self::Screen, R> {
             if input.pressed && matches!(input.action, VirtualAction::p2_start) {
                 ThemeEffect::Navigate("mode")
             } else {
@@ -289,8 +289,8 @@ mod tests {
         let mut menu = AlternateTheme::init_menu(0);
         AlternateTheme::set_menu_color_index(&mut menu, 7);
         AlternateTheme::sync_menu_runtime(&mut menu, MainMenuRuntimeView { credits: 3, ..Default::default() });
-        AlternateTheme::update_menu(&mut menu, 0.5, MainMenuPhase::Entering);
-        AlternateTheme::update_menu(&mut menu, 0.25, MainMenuPhase::Active);
+        AlternateTheme::update_menu::<()>(&mut menu, 0.5, MainMenuPhase::Entering);
+        AlternateTheme::update_menu::<()>(&mut menu, 0.25, MainMenuPhase::Active);
         assert_eq!(menu.active_time, 0.25);
         let mut actors = Vec::new();
         AlternateTheme::push_menu_actors(&mut actors, &menu, MainMenuFrame {
@@ -305,7 +305,7 @@ mod tests {
         let mut session = crate::SessionState::new(0, [0; 2]);
         let now = std::time::Instant::now();
         let start = InputEvent::new(VirtualAction::p2_start, 0, true, InputSource::Keyboard, now, 0, now, now);
-        let action = crate::main_menu::handle_input::<AlternateTheme>(&mut menu, &mut session, &start);
+        let action = crate::main_menu::handle_input::<AlternateTheme, ()>(&mut menu, &mut session, &start);
         let ThemeEffect::Navigate(target) = action else { panic!("menu should request a startup screen") };
         assert_eq!(session.menu_start_side, PlayerSide::P2);
         let plan = navigation_route_plan::<AlternateTheme>(&config, "home", target, false);
