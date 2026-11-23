@@ -627,6 +627,7 @@ pub struct ScreensState {
     menu_state: crate::title_menu::InstalledMenu,
     gameplay_state: Option<GameplayState>,
     gameplay_outro: Option<Box<dyn deadsync_theme::stage::StageOutroPresentation<Actor>>>,
+    evaluation_departure: Option<deadsync_theme::stage::EvaluationDeparture<Actor>>,
     stage_presentation: Box<dyn deadsync_theme::stage::StagePresentation<Actor>>,
     practice_state: Option<PracticeState>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
@@ -1315,6 +1316,7 @@ impl ScreensState {
             attract: crate::mounted_theme::mount_attract(theme)
                 .map(attract_demo::AttractRuntime::new),
             gameplay_outro: None,
+            evaluation_departure: None,
             stage_presentation: crate::mounted_theme::mount_stage(theme),
             select_profile_state,
             select_color_state,
@@ -8217,12 +8219,18 @@ impl App {
             }
             CurrentScreen::Evaluation => {
                 let screens = &mut self.state.screens;
+                let departure_elapsed = match self.state.shell.transition {
+                    TransitionState::FadingOut { elapsed, .. }
+                        if screens.evaluation_departure.is_some() => Some(elapsed),
+                    _ => None,
+                };
                 ActiveTheme::push_evaluation_actors(
                     &mut actors,
                     &screens.evaluation_state,
                     &self.asset_manager,
                     visual_policy,
                     screens.stage_presentation.evaluation_overview(),
+                    departure_elapsed,
                 );
             }
             CurrentScreen::EvaluationSummary => {
@@ -8327,6 +8335,8 @@ impl App {
             TransitionState::FadingOut { target, elapsed, .. } => {
                 if let Some(outro) = self.state.screens.gameplay_outro.as_ref() {
                     outro.push_actors(&mut actors, *elapsed);
+                } else if let Some(exit) = self.state.screens.evaluation_departure.as_ref() {
+                    (exit.push_overlay)(&mut actors, *elapsed);
                 } else {
                     let (out_actors, _) =
                         self.get_out_transition_for_route(self.state.screens.current_screen, *target);
@@ -8892,6 +8902,9 @@ impl App {
                 }
             }
             RawKeyScreenRoute::Evaluation => {
+                if self.state.screens.evaluation_departure.is_some() {
+                    return true;
+                }
                 ActiveTheme::handle_evaluation_raw_key(
                     &mut self.state.screens.evaluation_state,
                     &raw_key,

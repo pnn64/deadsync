@@ -24,6 +24,9 @@ const STATS_START_SECONDS: f32 = 3.0;
 const STATS_ENTER_SECONDS: f32 = 0.3;
 const CAPTION_FADE_SECONDS: f32 = 0.5;
 pub const EVALUATION_OVERVIEW_SETTLED_SECONDS: f32 = 4.45;
+pub(super) const INPUT_READY_SECONDS: f32 = 3.2;
+pub(super) const DEPARTURE_SECONDS: f32 = 0.5;
+const DEPARTURE_MOTION_SECONDS: f32 = 0.3;
 
 const GRADE_ENTER_SECONDS: f32 = 0.5;
 const GRADE_SETTLE_START: f32 = 2.5;
@@ -147,39 +150,58 @@ impl OpenItgEvaluation {
     ) {
         let viewport = [screen_width(), screen_height()];
         let layout = Layout::centered(viewport[0], viewport[1]);
-        let elapsed = page.elapsed.max(0.0);
+        let departure = page.departure_elapsed.unwrap_or_default();
+        let elapsed = page.elapsed.max(0.0) + departure;
         let stats_progress = decelerate(elapsed - STATS_START_SECONDS, STATS_ENTER_SECONDS);
         let solo_double = page.double_side_style && page.players.iter().flatten().count() == 1;
+        let double_distance = if solo_double { 2.0 } else { 1.0 };
+        let half_width_pixels = viewport[0] * 0.5;
+        let (grade_departure, stats_departure, half_width) =
+            page.departure_elapsed.map_or((0.0, 0.0, 0.0), |elapsed| {
+                // The departure queues behind any unfinished stats entrance tween.
+                let stats_wait = (STATS_START_SECONDS + STATS_ENTER_SECONDS - page.elapsed).max(0.0);
+                (
+                    accelerate(elapsed, DEPARTURE_MOTION_SECONDS),
+                    accelerate(elapsed - stats_wait, DEPARTURE_MOTION_SECONDS),
+                    half_width_pixels / layout.size([1.0, 1.0])[0],
+                )
+            });
+        let stats_slide = stats_departure * half_width;
+        let stats_visible = stats_progress > 0.0 && stats_departure < 1.0;
 
         push_arcade_backdrop(actors, viewport, elapsed * 0.5);
-        push_header(actors, layout, elapsed);
+        push_header(actors, layout, elapsed, departure);
         push_result_reveal(actors, layout, &page, elapsed);
-        if stats_progress > 0.0 {
-            push_banner(actors, layout, &page, stats_progress, elapsed);
+        if stats_visible {
+            push_banner(actors, layout, &page, stats_progress, elapsed, stats_slide);
             if let Some(stage_number) = page.stage_number {
                 push_round(
                     actors,
                     layout,
                     stage_number,
-                    (1.0 - stats_progress) * viewport[0] * 0.5,
+                    (1.0 - stats_progress + stats_departure) * half_width_pixels,
                 );
             }
-            push_footer(actors, layout, &page, elapsed);
+        }
+        if stats_progress > 0.0 {
+            push_footer(actors, layout, &page, elapsed, departure);
         }
 
         for (slot, player) in page.players.iter().enumerate() {
             let Some(player) = player else { continue };
             let seat = Seat::new(player.p2, solo_double);
-            if stats_progress > 0.0 {
+            if stats_visible {
                 let remaining = (1.0 - stats_progress) * seat.outward;
-                let distance = if solo_double { WIDTH } else { WIDTH * 0.5 };
-                let body_shift = remaining * distance;
-                push_difficulty(actors, layout, seat, player, remaining * (WIDTH * 0.5));
+                let departure_shift = stats_slide * seat.outward * double_distance;
+                let body_shift = remaining * (WIDTH * 0.5 * double_distance) + departure_shift;
+                let difficulty_shift = remaining * (WIDTH * 0.5) + seat.outward * stats_slide;
+                push_difficulty(actors, layout, seat, player, difficulty_shift);
                 push_player_stats(actors, layout, seat, player, body_shift);
                 if !player.disqualified
                     && let Some(rank) = player.machine_rank
                 {
-                    push_machine_record(actors, assets, layout, seat, player.p2, rank, elapsed);
+                    let record_layout = layout.translated_x(layout.size([departure_shift, 0.0])[0]);
+                    push_machine_record(actors, assets, record_layout, seat, player.p2, rank, elapsed);
                 }
                 award::push_awards(actors, layout, seat.panel_x + body_shift, player, elapsed);
                 let graph = self.graph(slot, player.steps_life);
@@ -197,13 +219,16 @@ impl OpenItgEvaluation {
                 push_course_boundaries(actors, layout, player, seat.panel_x + body_shift);
                 push_combo_runs(actors, layout, player, seat.panel_x + body_shift);
             }
-            let arrived = decelerate(elapsed, GRADE_ENTER_SECONDS);
-            let settle = decelerate(elapsed - GRADE_SETTLE_START, GRADE_ENTER_SECONDS);
-            let grade_x = (seat.grade_x - seat.grade_hold_x).mul_add(settle, seat.grade_hold_x);
-            let x = (1.0 - arrived).mul_add(seat.outward * 300.0, grade_x);
-            let y = 22.0_f32.mul_add(settle, 180.0);
-            let scale = (-1.5_f32).mul_add(settle, 2.5);
-            grade::push_grade(actors, layout, [x, y], scale, player.grade, elapsed);
+            if grade_departure < 1.0 {
+                let arrived = decelerate(elapsed, GRADE_ENTER_SECONDS);
+                let settle = decelerate(elapsed - GRADE_SETTLE_START, GRADE_ENTER_SECONDS);
+                let grade_x = (seat.grade_x - seat.grade_hold_x).mul_add(settle, seat.grade_hold_x);
+                let slide = grade_departure * half_width * double_distance;
+                let x = (1.0 - arrived).mul_add(seat.outward * 300.0, grade_x) + seat.outward * slide;
+                let y = 22.0_f32.mul_add(settle, 180.0);
+                let scale = (-1.5_f32).mul_add(settle, 2.5);
+                grade::push_grade(actors, layout, [x, y], scale, player.grade, elapsed);
+            }
         }
     }
 }
@@ -421,8 +446,34 @@ fn decelerate(elapsed: f32, duration: f32) -> f32 {
     remaining.mul_add(-remaining, 1.0)
 }
 
-fn push_header(actors: &mut Vec<Actor>, layout: Layout, elapsed: f32) {
-    if elapsed <= 2.0 {
+fn accelerate(elapsed: f32, duration: f32) -> f32 {
+    let fraction = (elapsed / duration).clamp(0.0, 1.0);
+    fraction * fraction
+}
+
+pub(super) fn push_departure_overlay(actors: &mut Vec<Actor>, elapsed: f32) {
+    let alpha = ((elapsed - 0.2) / 0.1).clamp(0.0, 1.0);
+    if alpha <= 0.0 {
+        return;
+    }
+    let layout = Layout::centered(screen_width(), screen_height());
+    let mut label = text(
+        layout,
+        [320.0, 240.0],
+        0.5,
+        "Loading...".into(),
+        1.4,
+        [1.0, 0.63, 0.62, alpha],
+    );
+    label.font(MENU_HEADING_FONT);
+    label.shadowlength(layout.size([3.0, 0.0])[0]);
+    label.z(1200);
+    actors.push(italic(label.build(0), -0.16));
+}
+
+fn push_header(actors: &mut Vec<Actor>, layout: Layout, elapsed: f32, departure: f32) {
+    let exit = accelerate(departure, 0.2);
+    if elapsed <= 2.0 || exit >= 1.0 {
         return;
     }
     let reveal = bounceend_p(((elapsed - 2.0) / 0.3).min(1.0));
@@ -433,9 +484,12 @@ fn push_header(actors: &mut Vec<Actor>, layout: Layout, elapsed: f32) {
         0.0,
         "CHECK YOUR STATS".into(),
         1.0,
-        WHITE,
+        [1.0, 1.0, 1.0, 1.0 - exit],
     );
-    let [zoom_x, zoom_y] = layout.size([reveal, (6.0 - 5.0 * reveal).max(0.6)]);
+    let [zoom_x, zoom_y] = layout.size([
+        reveal * (1.0 + exit),
+        (6.0 - 5.0 * reveal).max(0.6) * (1.0 - exit),
+    ]);
     headline.font(MENU_HEADING_FONT);
     headline.zoomx(zoom_x);
     headline.zoomy(zoom_y);
@@ -477,24 +531,31 @@ fn push_footer(
     layout: Layout,
     page: &EvaluationOverview<'_>,
     elapsed: f32,
+    departure: f32,
 ) {
     let alpha = ((elapsed - STATS_START_SECONDS) / 0.5).clamp(0.0, 1.0);
-    let mut help = text(
-        layout,
-        [320.0, 445.0],
-        0.5,
-        (&*HELP_TEXT).into(),
-        0.7,
-        WHITE,
-    );
-    help.font(TITLE_FONT);
-    help.diffuse([
-        1.0,
-        1.0,
-        1.0,
-        alpha * (0.7 + 0.3 * (elapsed * std::f32::consts::TAU).cos()),
-    ]);
-    actors.push(help.build(0));
+    if departure < DEPARTURE_MOTION_SECONDS {
+        let mut help = text(
+            layout,
+            [320.0, 445.0],
+            0.5,
+            (&*HELP_TEXT).into(),
+            0.7,
+            WHITE,
+        );
+        help.font(TITLE_FONT);
+        if departure > 0.0 {
+            let zoom_y = 0.7 * (1.0 - departure / DEPARTURE_MOTION_SECONDS);
+            help.zoomy(layout.size([0.0, zoom_y])[1]);
+        }
+        help.diffuse([
+            1.0,
+            1.0,
+            1.0,
+            alpha * (0.7 + 0.3 * (elapsed * std::f32::consts::TAU).cos()),
+        ]);
+        actors.push(help.build(0));
+    }
     for (p2, x) in [(false, 42.0), (true, 598.0)] {
         if !page.players.iter().flatten().any(|player| player.p2 == p2) {
             let edge = layout.position(0.0, 0.0)[0];
@@ -519,8 +580,9 @@ fn push_banner(
     page: &EvaluationOverview<'_>,
     progress: f32,
     elapsed: f32,
+    rise: f32,
 ) {
-    let y = 114.0 - (1.0 - progress) * (WIDTH * 0.5);
+    let y = 114.0 - (1.0 - progress) * (WIDTH * 0.5) - rise;
     let key = page.banner_key.unwrap_or(&FALLBACK_BANNER);
     let crop = cover_uv(key, BANNER_SIZE[0], BANNER_SIZE[1]).unwrap_or([0.0, 0.0, 1.0, 1.0]);
     actors.push(banner_mesh(
@@ -553,7 +615,7 @@ fn push_banner(
     if page.banner_key.is_none() && alpha > 0.0 {
         let mut title = text(
             layout,
-            [320.0, 65.0],
+            [320.0, 65.0 - rise],
             0.5,
             page.title.into(),
             0.55,
@@ -910,6 +972,65 @@ mod tests {
     }
 
     #[test]
+    fn departure_moves_the_results_and_keeps_the_backdrop_at_both_widths() {
+        let title = Arc::from("Fixture");
+        let mods = Arc::from("C500");
+        let assets = AssetManager::new();
+        for width in [640.0, 854.0] {
+            with_current_metrics(Metrics::centered(width, 480.0), || {
+                let mut presentation = OpenItgEvaluation::default();
+                let mut actors = Vec::new();
+                let mut frame = |actors: &mut Vec<Actor>, elapsed| {
+                    actors.clear();
+                    presentation.push_overview(actors, &assets, EvaluationOverview {
+                        title: &title,
+                        artist: &title,
+                        banner_key: None,
+                        course_summary: false,
+                        stage_number: Some(1),
+                        double_side_style: false,
+                        elapsed: EVALUATION_OVERVIEW_SETTLED_SECONDS,
+                        departure_elapsed: Some(elapsed),
+                        players: [Some(player(&mods)), Some(EvaluationPlayerOverview {
+                            p2: true,
+                            ..player(&mods)
+                        })],
+                    });
+                    push_departure_overlay(actors, elapsed);
+                };
+                let edge = (width - WIDTH) * 0.5;
+                let half_motion = width * 0.125;
+                frame(&mut actors, 0.15);
+                assert!(has_life_graph(&actors, false, 39.0 + edge - half_motion));
+                assert!(has_life_graph(&actors, true, 329.0 + edge + half_motion));
+                assert!(actors.iter().any(|actor| matches!(actor, Actor::TexturedMesh {
+                    offset, z: 6, ..
+                } if (offset[1] - (114.0 - half_motion)).abs() < 0.001)));
+                assert!(!has_text(&actors, "Loading...", [width * 0.5, 240.0]));
+                let life = actors.iter().find_map(|actor| match actor {
+                    Actor::TexturedMesh { vertices, z: 8, .. } => Some(Arc::clone(vertices)),
+                    _ => None,
+                }).unwrap();
+
+                frame(&mut actors, 0.25);
+                assert!(actors.iter().any(|actor| matches!(actor, Actor::Text {
+                    content, color, z: 1200, ..
+                } if content.as_str() == "Loading..." && (color[3] - 0.5).abs() < 0.001)));
+                assert!(actors.iter().any(|actor| matches!(actor, Actor::TexturedMesh {
+                    vertices, z: 8, ..
+                } if Arc::ptr_eq(&life, vertices))));
+
+                frame(&mut actors, 0.40);
+                assert!(!actors.iter().any(|actor| matches!(actor,
+                    Actor::TexturedMesh { z: 6 | 8, .. }
+                )));
+                assert!(has_texture(&actors, "openitg/evaluation-streak.png"));
+                assert!(has_text(&actors, "Loading...", [width * 0.5, 240.0]));
+            });
+        }
+    }
+
+    #[test]
     fn native_and_wide_overviews_place_the_banner_and_both_canonical_life_graphs() {
         use deadsync_rules::timing::WindowCounts;
         use deadsync_theme::views::ComboRun;
@@ -951,6 +1072,7 @@ mod tests {
                         stage_number: Some(1),
                         double_side_style: false,
                         elapsed: EVALUATION_OVERVIEW_SETTLED_SECONDS,
+                        departure_elapsed: None,
                         players: [
                             Some(EvaluationPlayerOverview {
                                 combo_runs: &combo_runs,
@@ -1056,6 +1178,7 @@ mod tests {
                         stage_number: Some(1),
                         double_side_style: false,
                         elapsed,
+                        departure_elapsed: None,
                         players: [Some(player(&empty)), None],
                     },
                 );
@@ -1092,6 +1215,7 @@ mod tests {
                     stage_number: Some(1),
                     double_side_style: false,
                     elapsed: 3.15,
+                    departure_elapsed: None,
                     players: [Some(player(&empty)), None],
                 },
             );
@@ -1125,6 +1249,7 @@ mod tests {
                     stage_number: None,
                     double_side_style: true,
                     elapsed: 5.0,
+                    departure_elapsed: None,
                     players: [
                         Some(EvaluationPlayerOverview {
                             p2: true,

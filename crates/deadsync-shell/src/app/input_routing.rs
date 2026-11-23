@@ -496,7 +496,6 @@ impl App {
             CurrentScreen::Evaluation => ActiveTheme::handle_evaluation_input(
                 &mut self.state.screens.evaluation_state,
                 &ev,
-                self.state.screens.evaluation_origin,
             ),
             CurrentScreen::EvaluationSummary => {
                 let num_stages = self.post_select_display_stage_count(

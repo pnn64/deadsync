@@ -2989,6 +2989,7 @@ M000
                         &assets,
                         Default::default(),
                         Some(&mut openitg),
+                        None,
                     );
                     assert!(actor_tree_has_text(&actors, "CHECK YOUR STATS"));
                     assert!(actor_tree_has_text(&actors, "   27"));
@@ -3004,6 +3005,7 @@ M000
                         &assets,
                         Default::default(),
                         Some(&mut openitg),
+                        None,
                     );
                     assert!(actors.iter().any(|actor| matches!(actor,
                         Actor::TexturedMesh { vertices, z: 8, .. } if Arc::ptr_eq(&graph, vertices)

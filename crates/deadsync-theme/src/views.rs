@@ -734,6 +734,8 @@ pub struct EvaluationOverview<'a> {
     pub stage_number: Option<usize>,
     pub double_side_style: bool,
     pub elapsed: f32,
+    /// Time since the player elected to leave. The visit clock stops at that point.
+    pub departure_elapsed: Option<f32>,
     pub players: [Option<EvaluationPlayerOverview<'a>>; MAX_PLAYERS],
 }
 

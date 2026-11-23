@@ -1,6 +1,6 @@
 //! Presentation interface for a completed stage or course.
 
-use crate::{ThemeEffect, ThemeTransitions};
+use crate::{ThemeEffect, ThemeTransitions, UiCue};
 use crate::stage::EvaluationOverviewPresentation;
 use crate::views::{EvaluationStageView, EvaluationView, HeartRateView};
 use deadlib_assets::AssetManager;
@@ -66,8 +66,11 @@ pub trait ThemeEvaluation: ThemeTransitions {
     fn handle_evaluation_input(
         state: &mut Self::EvaluationState,
         input: &Self::EvaluationInput,
-        origin: EvaluationOrigin,
     ) -> ThemeEffect<Self::Screen, Self::RuntimeRequest>;
+    /// Cue for the theme's standard result departure.
+    fn evaluation_departure_cue(_origin: EvaluationOrigin) -> Option<UiCue> {
+        None
+    }
     fn handle_evaluation_raw_key(state: &mut Self::EvaluationState, key: &Self::EvaluationRawKey);
     fn handle_evaluation_raw_pad(state: &mut Self::EvaluationState, pad: &Self::EvaluationRawPad);
     fn evaluation_test_input_pane_active(state: &Self::EvaluationState) -> bool;
@@ -84,6 +87,7 @@ pub trait ThemeEvaluation: ThemeTransitions {
         assets: &AssetManager,
         visual_policy: Self::EvaluationVisualPolicy,
         overview: Option<&mut dyn EvaluationOverviewPresentation<Self::Actor>>,
+        departure_elapsed: Option<f32>,
     );
     fn sync_evaluation_runtime(state: &mut Self::EvaluationState, view: Self::EvaluationRuntime);
     fn evaluation_heart_rate_generation(state: &Self::EvaluationState) -> Option<(bool, u64, u64)>;

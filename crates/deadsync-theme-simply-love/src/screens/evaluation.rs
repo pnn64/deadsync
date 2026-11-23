@@ -943,28 +943,17 @@ mod tests {
     }
 
     #[test]
-    fn evaluation_session_leave_uses_the_game_origin_for_feedback() {
+    fn evaluation_session_emits_a_departure_and_keeps_its_cue_separate() {
         use super::{Screen, ThemeEffect, handle_input, handle_session_input};
+        use crate::SimplyLoveTheme;
         use deadsync_core::session_flow::EvaluationOrigin;
-        use deadsync_theme::AudioRequest;
+        use deadsync_theme::{UiCue, evaluation::ThemeEvaluation};
 
         let mut state = super::init(Default::default(), Default::default());
         state.return_to_course = true;
         state.auto_advance_seconds = Some(1.0);
         let start = press(VirtualAction::p1_start);
-        let effect = handle_session_input(&mut state, &start, EvaluationOrigin::Song);
-        let ThemeEffect::Batch(effects) = effect else {
-            panic!("song results should play their cue before leaving");
-        };
-        assert!(matches!(
-            effects.as_slice(),
-            [
-                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-                    AudioRequest::PlaySfx("assets/sounds/start.ogg"),
-                )),
-                ThemeEffect::LeaveEvaluation,
-            ],
-        ));
+        assert!(matches!(handle_session_input(&mut state, &start), ThemeEffect::LeaveEvaluation));
         assert!(matches!(handle_input(&mut state, &start), ThemeEffect::None));
         state.auto_advance_seconds = None;
         assert!(matches!(
@@ -972,12 +961,13 @@ mod tests {
             ThemeEffect::Navigate(Screen::SelectCourse),
         ));
 
-        state.return_to_course = false;
         let back = press(VirtualAction::p2_back);
-        assert!(matches!(
-            handle_session_input(&mut state, &back, EvaluationOrigin::Course),
-            ThemeEffect::LeaveEvaluation,
-        ));
+        assert!(matches!(handle_session_input(&mut state, &back), ThemeEffect::LeaveEvaluation));
+        assert_eq!(
+            SimplyLoveTheme::evaluation_departure_cue(EvaluationOrigin::Song),
+            Some(UiCue::Confirm),
+        );
+        assert_eq!(SimplyLoveTheme::evaluation_departure_cue(EvaluationOrigin::Course), None);
     }
 
     #[test]
@@ -5098,24 +5088,14 @@ mod input_audio_effect_tests {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    handle_input_impl(state, ev, None)
+    handle_input_impl(state, ev, false)
 }
 
-pub fn handle_session_input(
-    state: &mut State,
-    ev: &InputEvent,
-    origin: deadsync_core::session_flow::EvaluationOrigin,
-) -> ThemeEffect {
-    handle_input_impl(state, ev, Some(origin))
+pub fn handle_session_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+    handle_input_impl(state, ev, true)
 }
 
-fn handle_input_impl(
-    state: &mut State,
-    ev: &InputEvent,
-    session_origin: Option<deadsync_core::session_flow::EvaluationOrigin>,
-) -> ThemeEffect {
-    use deadsync_core::session_flow::EvaluationOrigin;
-
+fn handle_input_impl(state: &mut State, ev: &InputEvent, game_session: bool) -> ThemeEffect {
     // Feed virtual input through the test_input state so the highlight feedback on the
     // EvalPane::TestInput pad reflects MENU buttons / Start / Select while the pane is active.
     test_input::apply_virtual_input(&mut state.test_input_state, ev);
@@ -5171,7 +5151,7 @@ fn handle_input_impl(
     if !ev.pressed {
         return ThemeEffect::sequence(favorite_effect, ThemeEffect::None);
     }
-    if session_origin.is_none() && state.auto_advance_seconds.is_some() {
+    if !game_session && state.auto_advance_seconds.is_some() {
         return ThemeEffect::sequence(favorite_effect, ThemeEffect::None);
     }
     if state.event_overlay_visible {
@@ -5454,21 +5434,13 @@ fn handle_input_impl(
         | VirtualAction::p1_start
         | VirtualAction::p2_back
         | VirtualAction::p2_start => {
-            let (origin, exit) = match session_origin {
-                Some(origin) => (origin, ThemeEffect::LeaveEvaluation),
-                None if state.return_to_course => (
-                    EvaluationOrigin::Course,
-                    ThemeEffect::Navigate(Screen::SelectCourse),
-                ),
-                None => (
-                    EvaluationOrigin::Song,
-                    ThemeEffect::Navigate(Screen::SelectMusic),
-                ),
-            };
-            prepend_sfx(
-                (origin == EvaluationOrigin::Song).then_some("assets/sounds/start.ogg"),
-                exit,
-            )
+            if game_session {
+                ThemeEffect::LeaveEvaluation
+            } else if state.return_to_course {
+                ThemeEffect::Navigate(Screen::SelectCourse)
+            } else {
+                prepend_sfx(Some("assets/sounds/start.ogg"), ThemeEffect::Navigate(Screen::SelectMusic))
+            }
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
@@ -5593,6 +5565,7 @@ fn push_overview(
     state: &State,
     assets: &AssetManager,
     presentation: &mut dyn EvaluationOverviewPresentation<Actor>,
+    departure_elapsed: Option<f32>,
 ) -> bool {
     let Some(index) = state.score_info.iter().position(Option::is_some) else {
         return false;
@@ -5614,6 +5587,7 @@ fn push_overview(
             stage_number: state.stage_number,
             double_side_style: state.context.play_style.is_double(),
             elapsed: state.screen_elapsed,
+            departure_elapsed,
             players: state.score_info.each_ref().map(|score| {
                 score.as_ref().map(|score| {
                     let shared = state.routine_shared_score_percent;
@@ -5664,7 +5638,7 @@ pub fn push_actors(
     asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
-    push_actors_with_overview(actors, state, asset_manager, visual_policy, None);
+    push_actors_with_overview(actors, state, asset_manager, visual_policy, None, None);
 }
 
 pub fn push_actors_with_overview(
@@ -5673,10 +5647,11 @@ pub fn push_actors_with_overview(
     asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     draw_overview: Option<&mut dyn EvaluationOverviewPresentation<Actor>>,
+    departure_elapsed: Option<f32>,
 ) {
     if let Some(draw) = draw_overview
-        && overview_pane_selected(state)
-        && push_overview(actors, state, asset_manager, draw)
+        && (departure_elapsed.is_some() || overview_pane_selected(state))
+        && push_overview(actors, state, asset_manager, draw, departure_elapsed)
     {
         push_heart_rates(actors, state);
         push_submission_overlay(actors, state, asset_manager);

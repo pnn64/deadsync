@@ -13433,9 +13433,12 @@ fn evaluation_leaves_using_game_session_origin() {
     assert!(input.contains("ActiveTheme::handle_evaluation_input("));
     assert!(contains_rust(
         &nav,
-        "evaluation_return_to(self.state.screens.evaluation_origin)",
+        "self.handle_navigation_action(evaluation_return_to(origin))",
     ));
-    assert!(theme.contains("Some(origin) => (origin, ThemeEffect::LeaveEvaluation)"));
+    assert!(contains_rust(&theme, "if game_session { ThemeEffect::LeaveEvaluation }"));
+    assert!(nav.contains("screens.stage_presentation.evaluation_departure()"));
+    assert!(nav.contains("view.elapsed < exit.input_ready_seconds"));
+    assert!(app.contains("(exit.push_overlay)(&mut actors, *elapsed)"));
     assert!(!app.contains(".return_to_course"));
     assert!(!app.contains(".auto_advance_seconds"));
 }

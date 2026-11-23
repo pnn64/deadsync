@@ -18,6 +18,7 @@ use deadsync_config as config;
 use deadsync_gameplay::course_progress::CourseRenewal;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
+use deadsync_theme::evaluation::ThemeEvaluation;
 use deadsync_theme::{
     ThemeTransitionAudio, ThemeTransitions, TransitionKind, TransitionState,
 };
@@ -193,6 +194,7 @@ impl App {
         let prev = self.state.screens.current_screen;
         self.state.screens.gameplay_outro = None;
         if prev == CurrentScreen::Evaluation && target != prev {
+            self.state.screens.evaluation_departure = None;
             self.state.screens.stage_presentation.leave_evaluation();
         }
         if (prev == CurrentScreen::SelectMusic || prev == CurrentScreen::SelectCourse)
@@ -321,9 +323,30 @@ impl App {
     }
 
     pub(super) fn leave_evaluation(&mut self) {
-        if self.state.screens.current_screen == CurrentScreen::Evaluation {
-            let target = evaluation_return_to(self.state.screens.evaluation_origin);
-            self.handle_navigation_action(target);
+        let screens = &mut self.state.screens;
+        if screens.current_screen != CurrentScreen::Evaluation
+            || !matches!(self.state.shell.transition, TransitionState::Idle)
+        {
+            return;
+        }
+        let view = ActiveTheme::evaluation_capture_view(&screens.evaluation_state);
+        let departure = if view.overview {
+            screens.stage_presentation.evaluation_departure()
+        } else {
+            None
+        };
+        if departure.as_ref().is_some_and(|exit| view.elapsed < exit.input_ready_seconds) {
+            return;
+        }
+        let origin = screens.evaluation_origin;
+        let cue = departure.as_ref().map_or_else(
+            || ActiveTheme::evaluation_departure_cue(origin),
+            |exit| exit.cue,
+        );
+        screens.evaluation_departure = departure;
+        self.handle_navigation_action(evaluation_return_to(origin));
+        if let Some(cue) = cue {
+            self.ui_sfx.play_cue(&mut self.audio, cue);
         }
     }
 
@@ -612,6 +635,11 @@ impl App {
             && let Some(options) = self.state.screens.player_options_state.as_ref()
         {
             return options.exit_transition(target);
+        }
+        if screen == CurrentScreen::Evaluation
+            && let Some(exit) = &self.state.screens.evaluation_departure
+        {
+            return (Vec::new(), exit.duration);
         }
         let (actors, duration) = ActiveTheme::out_transition(screen, target);
         let duration = stage_exit_duration(screen).unwrap_or(duration);

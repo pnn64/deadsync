@@ -111,9 +111,12 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
     fn handle_evaluation_input(
         state: &mut State,
         input: &InputEvent,
-        origin: EvaluationOrigin,
     ) -> ThemeEffect {
-        handle_session_input(state, input, origin)
+        handle_session_input(state, input)
+    }
+
+    fn evaluation_departure_cue(origin: EvaluationOrigin) -> Option<deadsync_theme::UiCue> {
+        (origin == EvaluationOrigin::Song).then_some(deadsync_theme::UiCue::Confirm)
     }
 
     fn handle_evaluation_raw_key(state: &mut State, key: &RawKeyboardEvent) {
@@ -144,8 +147,9 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
         assets: &AssetManager,
         visual_policy: Self::EvaluationVisualPolicy,
         overview: Option<&mut dyn EvaluationOverviewPresentation<Actor>>,
+        departure_elapsed: Option<f32>,
     ) {
-        push_actors_with_overview(actors, state, assets, visual_policy, overview);
+        push_actors_with_overview(actors, state, assets, visual_policy, overview, departure_elapsed);
     }
 
     fn sync_evaluation_runtime(state: &mut State, view: EvaluationRuntimeView) {

@@ -307,8 +307,14 @@ fn course_launch_uses_confirmed_rating_after_wheel_replacement() {
 #[test]
 fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
     on_app_thread(|| {
+        use config::theme::ThemeFlag;
+
         for pump in [false, true] {
-            for failure in ["payload", "plan", "cursor"] {
+            for (failure, theme) in [
+                ("payload", ThemeFlag::SimplyLove),
+                ("plan", ThemeFlag::OpenItg),
+                ("cursor", ThemeFlag::SimplyLove),
+            ] {
                 let style = if pump {
                     profile_data::PlayStyle::PumpRoutine
                 } else {
@@ -319,7 +325,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         .prefix(&format!("pr845-transition-failure-{pump}-{failure}-"))
                         .tempdir()
                         .unwrap();
-                    let mut app = test_app(root.path());
+                    let mut app = test_app_with_theme(root.path(), theme);
                     let b = prepare_boundary(&mut app, root.path(), pump);
                     match failure {
                         // The run retains B's metadata, but its payload load fails.
@@ -437,12 +443,14 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         Some(root.path().join("endless.crs").as_path())
                     );
                     app.state.shell.transition = TransitionState::Idle;
+                    app.state.screens.evaluation_state.screen_elapsed = 5.0;
                     app.leave_evaluation();
                     assert!(matches!(
                         app.state.shell.transition,
                         TransitionState::FadingOut { target: CurrentScreen::SelectCourse, .. }
                             | TransitionState::ActorsFadeOut { target: CurrentScreen::SelectCourse, .. }
                     ));
+                    assert_eq!(app.state.screens.evaluation_departure.is_some(), theme == ThemeFlag::OpenItg);
                 });
             }
         }

@@ -283,6 +283,12 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     assert_eq!(player.combo_runs.len(), 1);
     assert_eq!(player.combo_runs[0].count, 6);
     assert!(app.state.screens.evaluation_stage.is_some());
+    if openitg {
+        press(app, event_loop, VirtualAction::p2_start);
+        press(app, event_loop, VirtualAction::p2_back);
+        assert!(matches!(app.state.shell.transition, TransitionState::Idle));
+        assert!(app.state.screens.evaluation_departure.is_none());
+    }
     // Allow the results intro to settle before accepting a normal Start.
     for _ in 0..32 {
         menu_frame(app, event_loop);
@@ -300,7 +306,26 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
         openitg,
     );
     press(app, event_loop, VirtualAction::p2_start);
+    if openitg {
+        let exit = app.state.screens.evaluation_departure.as_ref().unwrap();
+        assert_eq!(exit.cue, Some(deadsync_theme::UiCue::Confirm));
+        assert!(matches!(app.state.shell.transition, TransitionState::FadingOut {
+            target: CurrentScreen::SelectMusic, elapsed: 0.0, duration: 0.5
+        }));
+        let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+        assert!(!actor_tree_has_text(&actors, "Loading..."));
+        for _ in 0..2 {
+            menu_frame(app, event_loop);
+        }
+        let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+        assert!(actor_tree_has_text(&actors, "Loading..."));
+        assert_eq!(app.state.screens.current_screen, CurrentScreen::Evaluation);
+        assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
+    } else {
+        assert!(app.state.screens.evaluation_departure.is_none());
+    }
     settle(app, event_loop, CurrentScreen::SelectMusic);
+    assert!(app.state.screens.evaluation_departure.is_none());
     if openitg {
         for _ in 0..2 {
             press(app, event_loop, VirtualAction::p2_right);

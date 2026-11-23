@@ -30,6 +30,13 @@ side that pressed Start. Theme screen IDs remain available to presentation.
 Song Lua's legacy screen names resolve to the same roles, and normal stage
 completion and reload still go through the game-owned lifecycle.
 
+Evaluation input emits a departure intent. The game selects the song or
+course return from the recorded origin. The mounted overview can supply
+its departure cue, readiness time, duration, and overlay through
+`StagePresentation`. The shell advances its existing transition clock.
+The result view borrows that elapsed time for animation while the visit
+clock holds its original value.
+
 Both Player Options layouts consume the same editor and submit
 `deadsync-profile-gameplay::stage_options::StageOptions`. The mounted layout
 supplies its viewport and transitions. The game resolves stage scroll speed,

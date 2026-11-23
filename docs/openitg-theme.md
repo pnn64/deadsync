@@ -899,8 +899,27 @@ Matching two-player OpenGL and Vulkan captures at 640×480 and 854×480
 showed identical bounds for the green flag's saturated pixels and the same
 horizontal extent for the machine-record text. The top text row differed by
 one pixel, and its pulse shade differed at capture time. The 640×480 result
-also exercised the orange flag and the 8,000-combo logo. Award exit motion and
-auxiliary result panes still need comparison with the reference.
+also exercised the orange flag and the 8,000-combo logo.
+
+The results overview accepts Start and Back after the 3.2-second intro.
+The mounted departure lasts 0.5 seconds over the moving backdrop. The header
+collapses in 0.2 seconds, the detail panels move outward over 0.3 seconds,
+and the banner and its caption lift out together. Panel movement follows
+any portion of the entry tween that was still running when the player
+left. The centered loading cue fades in from 0.2 to 0.3 seconds. DeadSync
+draws that cue with its existing heading font and plays the bundled
+confirm sound. The game chooses the wheel to return to from the result origin.
+
+OpenGL reference and Vulkan captures at 640×480 and 854×480 cover the
+settled result, panel and banner motion, and the loading cue. At 0.142 seconds,
+the P2 life panel moved 72 pixels at 640×480 and 96 pixels at 854×480 in both
+renderers. At 0.241 and 0.242 seconds it had moved 206 and 278 pixels,
+respectively. The banner rise matched at 854×480 and differed by three
+pixels at 640×480. The reference shows detached combo labels after the main
+panels leave. DeadSync moves those labels with the results. Auxiliary result
+panes still use the existing Simply Love presentation. Two paired CPU runs
+of the warmed versus overview measured a median of 72.3 µs and 114 actors
+per frame before and after the change.
 
 The native 640×480 Quartz capture uses P1 Single, Hard 5, and AutoPlay.
 It shows an empty graph, the Jumps row above Holds, and the chart title above

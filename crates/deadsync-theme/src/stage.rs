@@ -47,6 +47,17 @@ pub trait EvaluationOverviewPresentation<A> {
     );
 }
 
+/// Presentation for an accepted request to leave the result overview.
+///
+/// The host resolves the destination and owns the clock. The cue and overlay
+/// use the same departure timing for individual songs and course pages.
+pub struct EvaluationDeparture<A> {
+    pub input_ready_seconds: f32,
+    pub duration: f32,
+    pub cue: Option<UiCue>,
+    pub push_overlay: fn(&mut Vec<A>, f32),
+}
+
 pub trait StagePresentation<A> {
     fn push_loading(&self, actors: &mut Vec<A>, view: StageLoadingView<'_>);
 
@@ -70,6 +81,10 @@ pub trait StagePresentation<A> {
     }
 
     fn evaluation_overview(&mut self) -> Option<&mut dyn EvaluationOverviewPresentation<A>> {
+        None
+    }
+
+    fn evaluation_departure(&self) -> Option<EvaluationDeparture<A>> {
         None
     }
 

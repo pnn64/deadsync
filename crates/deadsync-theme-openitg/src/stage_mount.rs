@@ -1,8 +1,8 @@
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadsync_theme::stage::{
-    EvaluationOverviewPresentation, StageLoadingView, StageMotionView, StageOutroPresentation,
-    StageOutroView, StagePresentation,
+    EvaluationDeparture, EvaluationOverviewPresentation, StageLoadingView, StageMotionView,
+    StageOutroPresentation, StageOutroView, StagePresentation,
 };
 use deadsync_theme::views::{EvaluationOverview, GameplayHud, GameplayHudMotion};
 use deadsync_theme::{Screen, ThemeTransitions, UiCue};
@@ -59,6 +59,15 @@ impl StagePresentation<Actor> for OpenItgStagePresentation {
 
     fn evaluation_overview(&mut self) -> Option<&mut dyn EvaluationOverviewPresentation<Actor>> {
         Some(&mut self.evaluation)
+    }
+
+    fn evaluation_departure(&self) -> Option<EvaluationDeparture<Actor>> {
+        Some(EvaluationDeparture {
+            input_ready_seconds: crate::evaluation::INPUT_READY_SECONDS,
+            duration: crate::evaluation::DEPARTURE_SECONDS,
+            cue: Some(UiCue::Confirm),
+            push_overlay: crate::evaluation::push_departure_overlay,
+        })
     }
 
     fn evaluation_music_loop(&self) -> Option<&'static str> {
