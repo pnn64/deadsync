@@ -234,9 +234,15 @@ The scrollbar centers at `(34, 242)` and travels within 240 px. The thumb
 for each joined seat follows its position in the selectable row order over
 200 ms, with Exit at the bottom. The two thumbs share the width when they
 overlap. The marker artwork uses DeadSync's player colors. The reference's
-16-row grouping and artwork remain open. Long per-player explanations can
-still be compressed, as seen on Visual Delay. Timing scaling and workout
-overrides remain governed by DeadSync's rules.
+16-row grouping and artwork remain open. Timing scaling and workout overrides
+remain governed by DeadSync's rules.
+
+Each explanation uses the reference anchor at y=381, with P1 left-aligned at
+x=68 and P2 right-aligned at x=568. Each column has the equivalent of the
+reference's 250 px displayed wrap width. The renderer keeps translated line
+breaks and scales the full paragraph uniformly when it needs to fit.
+The two 500 ms glyph reveals run independently and restart when the associated
+explanation changes or the editor switches panes.
 
 Tests cover P2-only perspective edits, profile requests, stage recovery and
 resubmission, and noteskin preview requests through both layouts. Actor checks
@@ -249,6 +255,13 @@ captures at 640×480 and 854×480 show the overlapping thumbs on entry, the
 thumbs and rows in motion at 75 ms, and the two settled row windows. At Exit,
 P2's thumb reaches y=340 while P1 stays at y=122. A P2-only capture shows one
 full-width green thumb.
+
+The Visual Delay captures at 640×480 and 854×480 show the first 125, 250, and
+500 ms after P2 changes focus. P1's explanation stays fully visible. The
+four-line P2 paragraph also fits in the P2-only layout. The tests check both
+anchors, paragraph bounds, and the reveal when another row has identical help.
+System Options actor traces for Test Input and Configure Pads match at both
+widths across the change to the shared explanation renderer.
 
 At 854×480, nine warm runs of 8,000 actor builds with dev-profile theme libraries
 measured Simply Love at 60.6 µs before the change and 60.2 µs afterward in solo,
@@ -263,6 +276,12 @@ control runs measured 61.0–61.4 μs in solo and 77.7–79.3 μs in versus acro
 the two builds. At the start of the versus fixture, CPU composition went from
 80.9 μs and 53 draw ops to 70.8 μs and 39 draw ops. The 75 ms scroll sample
 went from 108.3 μs and 60 draw ops to 92.6 μs and 53 draw ops.
+
+Process CPU timing at 854×480 measured steady OpenITG actor construction at
+27.3 μs in solo and 33.2 μs in versus with the new explanations, compared
+with 25.4 μs and 33.2 μs. Settled Visual Delay composition measured 62.5 μs
+in both builds. At 250 ms the new renderer built a partial glyph mesh for
+P2 and measured 148.4 μs. Both samples used 39 draw ops.
 
 ## Profile Picker
 

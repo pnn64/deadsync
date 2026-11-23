@@ -99,7 +99,7 @@ impl PlayerOptionsState {
     ) {
         if let Some(presentation) = &mut self.openitg {
             player_options::push_actors_with_layout(actors, &self.editor, |actors, page| {
-                presentation.push_actors(actors, page, now)
+                presentation.push_actors(actors, page, assets.fonts(), now)
             });
         } else {
             ActiveTheme::push_player_options_actors(actors, &self.editor, assets, policy);

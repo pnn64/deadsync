@@ -3,6 +3,7 @@
 mod evaluation;
 mod gameplay;
 mod menu;
+mod option_explanation;
 mod play_selection;
 mod player_options;
 mod presentation;

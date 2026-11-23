@@ -1,7 +1,10 @@
 //! Player Options presentation for the shared editor.
 
+mod help;
+
 use crate::presentation::{ACCENT, HEIGHT, INK, Layout, LinearMotion, MUTED, WIDTH, quad};
 use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::font::FontMap;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_theme::player_options::{
@@ -60,6 +63,7 @@ impl Seats {
 pub struct OpenItgPlayerOptions {
     pane: Option<&'static str>,
     thumbs: [Option<LinearMotion<1>>; MAX_PLAYERS],
+    help: help::PlayerHelp,
 }
 
 impl OpenItgPlayerOptions {
@@ -69,8 +73,15 @@ impl OpenItgPlayerOptions {
         row_tween_seconds: 0.15,
     };
 
-    pub fn push_actors(&mut self, actors: &mut Vec<Actor>, page: Page<'_>, now: f64) {
-        if self.pane != Some(page.title) {
+    pub fn push_actors(
+        &mut self,
+        actors: &mut Vec<Actor>,
+        page: Page<'_>,
+        fonts: &FontMap,
+        now: f64,
+    ) {
+        let new_pane = self.pane != Some(page.title);
+        if new_pane {
             self.pane = Some(page.title);
             self.thumbs = [None; MAX_PLAYERS];
         }
@@ -85,11 +96,18 @@ impl OpenItgPlayerOptions {
             let [fraction] = thumb.sample(now, THUMB_SECONDS);
             Some((SCROLLBAR_HEIGHT - THUMB_HEIGHT).mul_add(fraction, SCROLLBAR_TOP))
         });
-        push_page(actors, page, tops);
+        self.help.update(&page, fonts, new_pane, now);
+        push_page(actors, page, tops, &self.help, now);
     }
 }
 
-fn push_page(actors: &mut Vec<Actor>, page: Page<'_>, thumbs: [Option<f32>; MAX_PLAYERS]) {
+fn push_page(
+    actors: &mut Vec<Actor>,
+    page: Page<'_>,
+    thumbs: [Option<f32>; MAX_PLAYERS],
+    help: &help::PlayerHelp,
+    now: f64,
+) {
     let (width, height) = (screen_width(), screen_height());
     let layout = Layout::centered(width, height);
     let seats = Seats::new(page.active);
@@ -166,7 +184,7 @@ fn push_page(actors: &mut Vec<Actor>, page: Page<'_>, thumbs: [Option<f32>; MAX_
         }
     }
     draw_scrollbar(actors, layout, thumbs, alpha);
-    draw_help(actors, layout, &page, alpha);
+    help.push(actors, layout, alpha, now);
 }
 
 fn draw_scrollbar(
@@ -521,47 +539,6 @@ fn draw_choice_marks(
     }
 }
 
-fn draw_help(actors: &mut Vec<Actor>, layout: Layout, page: &Page<'_>, alpha: f32) {
-    actors.push(layout.panel(
-        36.0,
-        370.0,
-        [568.0, 1.0],
-        rgba([0.32, 0.40, 0.48], alpha),
-        -17,
-    ));
-    let split = page.active == [true; MAX_PLAYERS];
-    for player in 0..MAX_PLAYERS {
-        if !page.active[player] {
-            continue;
-        }
-        let line_count = (0..)
-            .take_while(|&line| (page.help)(player, line).is_some())
-            .count();
-        if line_count == 0 {
-            continue;
-        }
-        let (x, width) = if split {
-            (53.0 + player as f32 * 278.0, 256.0)
-        } else {
-            (53.0, 534.0)
-        };
-        let height = (65.0 / line_count as f32).min(30.0);
-        for (line, text) in (0..)
-            .map_while(|line| (page.help)(player, line))
-            .enumerate()
-        {
-            let y = (line as f32).mul_add(height, 383.0);
-            actors.push(layout.paragraph(
-                [x, y],
-                [width, (height - 2.0).max(1.0)],
-                TextContent::from(text),
-                0.82,
-                rgba(PLAYER_HUES[player], alpha),
-            ));
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -600,6 +577,122 @@ mod tests {
     }
 
     #[test]
+    fn explanations_keep_their_layout_and_reveal_independently() {
+        use deadlib_present::actors::{TextAlign, TextAttributes};
+        use deadlib_present::compose::measure_wrapped_text;
+
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets");
+        let font = deadlib_assets::parse_font_with_asset_context(
+            &root.join("fonts/miso/_miso light.ini"),
+            vec![root.clone()],
+        )
+        .expect("bundled font");
+        let mut assets = deadlib_assets::AssetManager::new();
+        assets.register_font("miso", font.font);
+        let fonts = assets.fonts();
+        let font = fonts.get("miso").unwrap();
+        let first = [
+            Arc::<str>::from("Choose an option."),
+            Arc::<str>::from("Choose an option."),
+        ];
+        let second = [
+            Arc::<str>::from(
+                "A long line with many words that will wrap in the right column. ".repeat(5),
+            ),
+            Arc::<str>::from("A final translated line."),
+            Arc::<str>::from("A different final line."),
+        ];
+        for (width, delta) in [(640.0, 0.0), (854.0, 107.0)] {
+            with_current_metrics(Metrics::centered(width, 480.0), || {
+                let mut presentation = OpenItgPlayerOptions::default();
+                let mut actors = Vec::new();
+                let mut frame = |title, selection: [usize; 2], now| {
+                    actors.clear();
+                    presentation.push_actors(
+                        &mut actors,
+                        PlayerOptionsPage {
+                            title,
+                            active: [true, true],
+                            selected_rows: selection,
+                            scroll_position: [0.0; 2],
+                            row_count: 2,
+                            visible_slots: 8,
+                            alpha: 1.0,
+                            row: &|_| None,
+                            help: &|player, line| match (player, line) {
+                                (0, 0) => first.get(selection[0]),
+                                (1, 0) => Some(&second[0]),
+                                (1, 1) => second.get(selection[1] + 1),
+                                _ => None,
+                            },
+                            draw_preview: &|_, _, _, _| {},
+                        },
+                        fonts,
+                        now,
+                    );
+                    let mut reveal = [0.0; 2];
+                    let mut seen = 0;
+                    for actor in &actors {
+                        if let Actor::Text {
+                            offset,
+                            align,
+                            align_text,
+                            content,
+                            scale,
+                            max_height,
+                            wrap_width_pixels,
+                            attributes,
+                            ..
+                        } = actor
+                            && offset[1] == 381.0
+                        {
+                            let right = seen == 1;
+                            assert_eq!(offset[0], if right { 568.0 } else { 68.0 } + delta);
+                            assert_eq!(*align, [if right { 1.0 } else { 0.0 }, 0.0]);
+                            assert_eq!(
+                                *align_text,
+                                if right {
+                                    TextAlign::Right
+                                } else {
+                                    TextAlign::Left
+                                }
+                            );
+                            assert_eq!(scale[0], scale[1]);
+                            assert!(max_height.is_none());
+                            let [w, h] = measure_wrapped_text(
+                                font,
+                                fonts,
+                                content.as_str(),
+                                wrap_width_pixels.unwrap(),
+                            );
+                            assert!(
+                                w as f32 * scale[0] <= 250.001 && h as f32 * scale[1] <= 86.001
+                            );
+                            if right {
+                                assert!(content.as_str().contains('\n'));
+                                assert!(scale[0] < 0.82);
+                            }
+                            reveal[seen] = match attributes {
+                                TextAttributes::GlyphReveal(fraction) => *fraction,
+                                _ => 1.0,
+                            };
+                            seen += 1;
+                        }
+                    }
+                    assert_eq!(seen, 2);
+                    reveal
+                };
+
+                assert_eq!(frame("PLAYER OPTIONS", [0, 0], 0.0), [0.0, 0.0]);
+                assert_eq!(frame("PLAYER OPTIONS", [1, 0], 0.25), [0.5, 0.5]);
+                assert_eq!(frame("PLAYER OPTIONS", [1, 1], 0.375), [0.75, 0.0]);
+                assert_eq!(frame("PLAYER OPTIONS", [1, 1], 0.875), [1.0, 1.0]);
+                assert_eq!(frame("DISPLAY OPTIONS", [1, 1], 1.0), [0.0, 0.0]);
+            });
+        }
+    }
+
+    #[test]
     fn overlapping_thumbs_keep_both_seats_visible_and_retarget_independently() {
         use deadlib_present::actors::SizeSpec;
 
@@ -622,6 +715,7 @@ mod tests {
                         help: &|_, _| None,
                         draw_preview: &|_, _, _, _| {},
                     },
+                    &FontMap::default(),
                     now,
                 );
                 actors
@@ -708,6 +802,7 @@ mod tests {
                         help: &|player, line| (player == 1 && line == 0).then_some(&help),
                         draw_preview: &|_, index, xs, y| preview.set(Some((index, xs, y))),
                     },
+                    &FontMap::default(),
                     0.0,
                 );
                 assert!(has_text(&actors, "PLAYER OPTIONS", [36.0 + delta, 38.0]));
@@ -717,7 +812,7 @@ mod tests {
                 assert!(has_text(&actors, "2.50x", [395.0 + delta, 127.0]));
                 assert!(has_text(&actors, "Leaf", [362.0 + delta, 239.0]));
                 assert!(has_text(&actors, "Exit", [320.0 + delta, 353.0]));
-                assert!(has_text(&actors, &help, [53.0 + delta, 383.0]));
+                assert!(has_text(&actors, &help, [568.0 + delta, 381.0]));
                 assert_eq!(preview.get(), Some((2, [459.0 + delta; 2], 239.0)));
             });
         }
@@ -757,6 +852,7 @@ mod tests {
                         panic!("inline text row does not request a preview")
                     },
                 },
+                &FontMap::default(),
                 0.0,
             );
             assert!(has_text(&actors, "Normal", [306.0, 127.0]));
@@ -802,6 +898,7 @@ mod tests {
                     help: &|_, _| None,
                     draw_preview: &|_, _, _, _| {},
                 },
+                &FontMap::default(),
                 0.0,
             );
             assert!(has_text(&actors, "Music Rate", [53.0, 122.5]));
