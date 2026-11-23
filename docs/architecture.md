@@ -194,7 +194,11 @@ and live attack effects for gameplay. Practice editing uses base options and
 its explicit scroll override. The compositor sends these resolved inputs,
 the borrowed Lua columns and note visibility, and the current authored judgment
 texture to the field presenter. Both native and Lua composition use the same
-preparation. The presenter supplies HUD assets and layout.
+preparation and resolve the notefield perspective from the Player position.
+Native playback takes the stage's prepared position, and scripted playback
+supplies the evaluated Player state. The presenter supplies HUD assets and
+layout. The system overlay draws outside song cameras and captures, while
+the gameplay exit prompt participates in the song's Overlay.
 
 Stage preparation prewarms the notefield model cache against the selected
 noteskins and sizes the hold mesh and field capture buffers. The stage retains

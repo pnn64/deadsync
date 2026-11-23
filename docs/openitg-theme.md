@@ -97,10 +97,6 @@ and 78.7 µs and 79.3 µs in versus. The OpenITG layout measured 38.8 µs in sol
 and 48.9 µs in versus. These timings cover settled main-pane actor construction
 with bundled fonts.
 
-The broader shell run still hits `late_foreground_keeps_shared_gameplay_tracks`,
-which reproduces at the same assertion on `703cb0d25`. A follow-up run confirmed
-that the failure poisons the shared session lock for `live_lua_screen_frames`.
-
 ## Profile Picker
 
 The standalone profile picker and the music wheel's fast-switch and late-join
@@ -144,11 +140,6 @@ runs of seven 8,000-frame batches measured median actor construction at
 and 58–59 µs after for Simply Love Mode. The OpenITG layouts measured about
 21 µs for Style and 15 µs for Mode. The benchmark covers steady-state actor
 construction with dev-profile libraries and bundled fonts.
-
-The ordinary-song compositor comparison still reports a camera mismatch for
-Single/P1 with song visuals visible. Three shell test binaries built before
-this change reproduce that assertion. The cross-theme result and live Lua
-score checks pass.
 
 ## Select Music
 
@@ -299,6 +290,26 @@ combo, and failure state each frame. The passing and failing runs include an
 early Fantastic, a late Excellent, and a wrong-lane press followed by a Miss.
 At completion the test compares the recorded maximum combo, grade points,
 ITG and EX scores, and fail time.
+
+The native and scripted frame paths now resolve the notefield perspective from
+the same Player-position rules. The render-frame comparison passes for Dance
+and Pump in solo, double, and versus, with both physical sides and changes to
+song-visual and HUD visibility. The late-foreground fixture checks the
+projected depth-tested quad after its authored screen movement. The score-proxy
+fixture checks that the gameplay exit prompt fades with the song's Overlay
+while the system footer and Stage label retain their own alpha. The whole-Player
+proxy regression verifies the separate Combo, field, and Judgment segments.
+
+Before and after the camera change, both themes rendered 600 frames of the
+same dance-single fixture at 854×480 with Vulkan through wgpu and WASAPI
+shared audio. Mean frame time was 8.56 ms in all four runs. The 95th percentile
+ranged from 8.61 to 8.66 ms, with zero audio underruns.
+
+The shell suite still has three failures reproduced in an older shell binary.
+`live_lua_screen_frames` misses its background marker. The Song Lua frame
+repeatability and top-screen AFT tests hit the retained Judgment draw-range
+assertion. Because these failures poison the shared session lock, the affected
+tests were rerun separately. The other cases passed across those runs.
 
 ## Windows release verification
 

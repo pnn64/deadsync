@@ -5002,7 +5002,7 @@ return Def.ActorFrame{
                 space::set_current_window_px(1280, 720);
                 let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
-                profiles[0].display_name = "OverlayFooter".into();
+                profiles[0].display_name = "SystemFooter".into();
                 let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
@@ -5010,8 +5010,20 @@ return Def.ActorFrame{
                     profiles,
                 );
                 let assets = fixture_assets();
+                let prompt = deadsync_theme_simply_love::i18n::tr(
+                    "Gameplay",
+                    "ContinueHoldingStartGiveUp",
+                );
+                let prompt = deadlib_present::font::replace_markers(&prompt);
                 for (time, alpha) in [(0.0, 1.0), (0.75, 0.5), (2.5, 0.0), (0.75, 0.5)] {
                     set_fixture_time(&mut state, time);
+                    // The exit prompt belongs to ScreenGameplay's Overlay. Keep
+                    // its own fade settled while seeking through the Lua tween.
+                    let input = &mut state.gameplay.control.exit_input;
+                    input.hold_to_exit_key = Some(deadsync_gameplay::HoldToExitKey::Start);
+                    input.hold_to_exit_start = Some(
+                        std::time::Instant::now() - std::time::Duration::from_secs(1),
+                    );
                     let mut actors = Vec::new();
                     let segments = crate::gameplay_runtime::push_actors(
                         &mut actors,
@@ -5026,14 +5038,18 @@ return Def.ActorFrame{
                     if time > 0.0 {
                         assert!(actor_tree_has_text(&actors, "."));
                     }
-                    let actual = top_screen_text_draw(&actors, "OverlayFooter", 0, 1.0)
+                    let actual = top_screen_text_draw(&actors, &prompt, 0, 1.0)
                         .map_or(0.0, |(_, alpha)| alpha);
                     assert!(
                         (actual - alpha).abs() < 0.02,
-                        "footer fade at {time}: {actual} != {alpha}"
+                        "exit prompt fade at {time}: {actual} != {alpha}"
                     );
-                    // Simply Love's Event label belongs to In, a sibling of
-                    // Overlay. The score proxy must not make Overlay own it.
+                    // The system footer and the In child's Event label draw
+                    // independently of the song's Overlay.
+                    assert_eq!(
+                        top_screen_text_draw(&actors, "SystemFooter", 0, 1.0).unwrap().1,
+                        1.0,
+                    );
                     assert_eq!(top_screen_text_draw(&actors, "EVENT", 0, 1.0).unwrap().1, 1.0);
                 }
             },
@@ -5918,29 +5934,42 @@ return Def.ActorFrame {
                             &mut compose::ComposeScratch::default(),
                         );
                         let mut markers = 0;
+                        let mut projected_quads = Vec::new();
                         for op in &frame.ops {
-                            let DrawOp::Sprite(run) = op else { continue };
+                            let DrawOp::TexturedMesh(run) = op else { continue };
+                            if !run.depth_test {
+                                continue;
+                            }
+                            // Zoom can live in either geometry or the instance
+                            // transform. Identify the authored 16px height in
+                            // projected coordinates.
+                            let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+                            if vertices.len() != 6 {
+                                continue;
+                            }
                             let camera = frame
                                 .cameras
                                 .get(run.camera as usize)
                                 .copied()
                                 .unwrap_or_else(|| metrics.projection());
-                            for instance in &frame.sprite_instances[run.instance_start as usize
+                            for instance in &frame.tmesh_instances[run.instance_start as usize
                                 ..(run.instance_start + run.instance_count) as usize]
                             {
-                                if instance.size != [16.0, 16.0] {
+                                let matrix = camera * instance.transform();
+                                let [top, bottom] = vertices.iter().fold(
+                                    [f32::INFINITY, f32::NEG_INFINITY],
+                                    |[top, bottom], vertex| {
+                                        let [x, y, z] = vertex.pos;
+                                        let p = matrix.mul_vec4([x, y, z, 1.0].into());
+                                        let y = (1.0 - p.y / p.w) * 240.0;
+                                        [top.min(y), bottom.max(y)]
+                                    },
+                                );
+                                projected_quads.push([top, bottom]);
+                                if (bottom - top - 16.0).abs() >= 0.02 {
                                     continue;
                                 }
-                                let p = camera.mul_vec4(
-                                    [
-                                        instance.center[0],
-                                        instance.center[1],
-                                        instance.center[2],
-                                        1.0,
-                                    ]
-                                    .into(),
-                                );
-                                let y = (1.0 - p.y / p.w) * 240.0;
+                                let y = f32::midpoint(top, bottom);
                                 assert!(
                                     (y - 80.0 - screen_y).abs() < 0.01,
                                     "shared screen translation: {y}"
@@ -5948,7 +5977,7 @@ return Def.ActorFrame {
                                 markers += 1;
                             }
                         }
-                        assert_eq!(markers, 1);
+                        assert_eq!(markers, 1, "depth-tested quad bounds at {second}: {projected_quads:?}");
                     }
                 }
             },
@@ -7515,8 +7544,11 @@ return Def.ActorFrame {
                     123.0,
                     deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert_eq!(segments.direct_proxy_count(), 2);
+                // A whole-Player proxy carries separate Combo, Field, and
+                // Judgment segments so their draw order is preserved.
+                assert_eq!(segments.direct_proxy_count(), 3);
                 assert_eq!(segments.direct_field_proxy_count(state.song_frame()), 1);
+                assert_eq!(segments.direct_combo_proxy_count(state.song_frame()), 1);
                 let actor_segments = segments.segments(state.song_frame(), &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();

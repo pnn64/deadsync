@@ -13878,6 +13878,22 @@ fn song_lua_player_target_x(
     })
 }
 
+// Player's own position anchors the notefield perspective in both frame paths.
+fn song_lua_field_player_position(
+    transform: &deadsync_gameplay::SongLuaPlayerTransform,
+    player_state: Option<&SongLuaOverlayState>,
+    force_center: bool,
+) -> deadsync_notefield::SongLuaPlayerPosition {
+    deadsync_notefield::SongLuaPlayerPosition {
+        x: transform
+            .x
+            .or_else(|| player_state.filter(|_| !force_center).map(|state| state.x)),
+        y: transform
+            .y
+            .unwrap_or_else(|| player_state.map_or_else(screen_center_y, |state| state.y)),
+    }
+}
+
 fn prepare_song_lua_layer<S: NoteskinSlot + Clone>(
     out: &mut Vec<Actor>,
     overlays: &[SongLuaOverlayActor<S>],
@@ -15623,16 +15639,11 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 } else {
                     (Matrix4::IDENTITY, [1.0; 4], true)
                 };
-            let player_position = deadsync_notefield::SongLuaPlayerPosition {
-                x: player_transform.x.or_else(|| {
-                    lua_player_state
-                        .filter(|_| !notefield_view.force_center_1player)
-                        .map(|player_state| player_state.x)
-                }),
-                y: player_transform.y.unwrap_or_else(|| {
-                    lua_player_state.map_or_else(screen_center_y, |player_state| player_state.y)
-                }),
-            };
+            let player_position = song_lua_field_player_position(
+                &player_transform,
+                lua_player_state.as_ref(),
+                notefield_view.force_center_1player,
+            );
             let ((judgment_transform, judgment_visible), (combo_transform, combo_visible)) =
                 if show_song_visuals {
                     let judgment = song_lua_child_render(
