@@ -214,7 +214,7 @@ use deadsync_theme::views::{
 };
 use deadsync_theme::color::ThemeJudgmentPalette;
 use deadsync_theme::evaluation::ThemeEvaluation;
-use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase};
+use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, MenuBackgroundMovie};
 use deadsync_theme::player_options::PlayerOptionsEntry;
 use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
 use deadsync_theme::{
@@ -7753,24 +7753,28 @@ impl App {
             return;
         }
 
-        let path = path.map(deadsync_assets::resolve_asset_path);
-
         let Some(backend) = self.backend.as_mut() else {
             screens::components::shared::visual_style_bg::set_srpg_background_key(None);
             return;
         };
-
-        let key = self.dynamic_media.set_background(
+        let menu_movie = (self.state.screens.current_screen == CurrentScreen::Menu)
+            .then(|| self.state.screens.menu_state.background_movie())
+            .flatten();
+        let movie = if enabled {
+            menu_movie.or_else(|| path.map(|path| MenuBackgroundMovie { path, rate: 1.0 }))
+        } else {
+            None
+        };
+        self.dynamic_media.sync_ui_background(
             &mut self.asset_manager,
             backend,
-            path,
+            movie,
             ui_time_sec,
-            enabled,
         );
-        let srpg_key = if key == "__black" {
-            None
+        let srpg_key = if menu_movie.is_none() {
+            self.dynamic_media.ui_background_key().cloned()
         } else {
-            Some(key.into_owned())
+            None
         };
         screens::components::shared::visual_style_bg::set_srpg_background_key(srpg_key);
     }
@@ -7902,6 +7906,7 @@ impl App {
                     &mut actors,
                     MainMenuFrame {
                         update_banner_tag: update_tag.as_deref(),
+                        background_key: self.dynamic_media.ui_background_key(),
                         alpha_multiplier: screen_alpha_multiplier,
                         transition: &self.state.shell.transition,
                         visual_policy,

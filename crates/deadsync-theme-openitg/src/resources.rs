@@ -2,7 +2,6 @@ use crate::{GAMEPLAY_HUD, OpenItgTheme};
 use deadlib_assets::{EmbeddedPng, FontAssetSpec, TextureAssetSpec};
 use deadsync_theme::{ThemeAssetManifest, ThemeResources, ThemeSounds, UiCue, UiSound};
 
-pub(crate) const TITLE_BACKDROP: &str = "openitg/title-backdrop.png";
 pub(crate) const TITLE_CHROME: &str = "openitg/title-chrome.png";
 pub(crate) const TITLE_GLINT: &str = "openitg/title-glint.png";
 pub(crate) const TITLE_STREAK: &str = "openitg/title-streak.png";
@@ -120,10 +119,6 @@ impl ThemeResources for OpenItgTheme {
                 png!("gameplay-stage-event"),
                 png!("gameplay-stage-final"),
                 png!("gameplay-tip"),
-                EmbeddedPng {
-                    key: TITLE_BACKDROP,
-                    bytes: include_bytes!("../assets/title-backdrop.png"),
-                },
                 EmbeddedPng {
                     key: TITLE_CHROME,
                     bytes: include_bytes!("../assets/title-chrome.png"),

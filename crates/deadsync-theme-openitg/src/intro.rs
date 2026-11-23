@@ -13,6 +13,9 @@ const COURSE_SECONDS_PER_ROW: f32 = 0.4;
 const COURSE_ROW_SPACING: f32 = 65.0;
 const RANKING_TOP: f32 = 77.0;
 const RANKING_BOTTOM: f32 = 403.0;
+pub(crate) const LOGO_MOVIE: &str = "assets/media/openitg/logo.mpg";
+pub(crate) const LOGO_POSTER: &str = "openitg/attract-logo-poster.png";
+pub(crate) const LOGO_ENTRY_SECONDS: f32 = 1.53;
 
 #[derive(Clone, Copy, Default)]
 enum Phase {
@@ -73,11 +76,11 @@ impl Phase {
                 poster: "openitg/attract-intro-poster.png",
             },
             Self::Logo => OpenItgIntroMedia {
-                movie: Some("assets/media/openitg/logo.mpg"),
+                movie: Some(LOGO_MOVIE),
                 music: None,
                 loop_music: false,
                 rate: 2.0,
-                poster: "openitg/attract-logo-poster.png",
+                poster: LOGO_POSTER,
             },
             Self::Demonstration(_) => OpenItgIntroMedia {
                 movie: None,
@@ -222,7 +225,7 @@ impl OpenItgIntro {
         actors.push(backdrop);
         match self.phase {
             Phase::Intro => push_intro_layers(actors, layout, self.elapsed),
-            Phase::Logo => push_logo_layers(actors, layout, self.elapsed),
+            Phase::Logo => push_logo_layers(actors, layout, self.elapsed, 1.0, 0),
             _ => {}
         }
     }
@@ -568,16 +571,23 @@ fn push_caption(
     actors.push(if skewed { italic(actor, -0.2) } else { actor });
 }
 
-fn push_logo_layers(actors: &mut Vec<Actor>, layout: Layout, elapsed: f32) {
-    let company_alpha = ramp(elapsed, 0.5, 0.5);
+pub(crate) fn push_logo_layers(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    elapsed: f32,
+    opacity: f32,
+    depth: i16,
+) {
+    let company_alpha = opacity * ramp(elapsed, 0.5, 0.5);
     if company_alpha > 0.0 {
+        let x = layout.size([90.0, 0.0])[0];
         actors.push(
             sprite(
                 "openitg/attract-logo-roxor.png",
-                layout.position(90.0, 30.0),
+                [x, layout.position(0.0, 30.0)[1]],
                 layout.size([146.0, 36.0]),
                 [1.0, 1.0, 1.0, company_alpha],
-                2,
+                depth + 2,
             )
             .build(0),
         );
@@ -589,8 +599,8 @@ fn push_logo_layers(actors: &mut Vec<Actor>, layout: Layout, elapsed: f32) {
             "openitg/attract-logo-otherred.png",
             layout.position(415.0, 270.0),
             layout.size([430.0, 76.8]),
-            [1.0; 4],
-            1,
+            [1.0, 1.0, 1.0, opacity],
+            depth + 1,
         );
         band.cropright(1.0 - band_progress);
         band.faderight(0.9);
@@ -598,14 +608,18 @@ fn push_logo_layers(actors: &mut Vec<Actor>, layout: Layout, elapsed: f32) {
     }
 
     let remaining = (1.0 - ramp(elapsed, 0.2, 0.5)).powi(2);
+    let [x, y] = layout.position(130.0, 215.0);
     let mut arrow = sprite(
         "openitg/attract-logo-arrow.png",
-        layout.position(130.0 + 320.0 * remaining, 215.0 + 400.0 * remaining),
+        [
+            x + screen_width() * 0.5 * remaining,
+            y + screen_height() / 1.2 * remaining,
+        ],
         layout.size([240.0, 241.6]),
-        [1.0; 4],
-        2,
+        [1.0, 1.0, 1.0, opacity],
+        depth + 2,
     );
-    arrow.glow([1.0, 1.0, 1.0, remaining]);
+    arrow.glow([1.0, 1.0, 1.0, opacity * remaining]);
     actors.push(arrow.build(0));
 
     let reveal = ramp(elapsed, 0.7, 0.3);
@@ -619,8 +633,8 @@ fn push_logo_layers(actors: &mut Vec<Actor>, layout: Layout, elapsed: f32) {
                 key,
                 layout.position(410.0, 270.0),
                 layout.size(size),
-                [1.0, 1.0, 1.0, alpha],
-                3,
+                [1.0, 1.0, 1.0, opacity * alpha],
+                depth + 3,
             );
             logo.cropright(1.0 - reveal);
             logo.faderight(0.1 * (1.0 - ramp(elapsed, 1.0, 0.03)));
@@ -628,13 +642,13 @@ fn push_logo_layers(actors: &mut Vec<Actor>, layout: Layout, elapsed: f32) {
         }
     }
 
-    let flash = (1.0 - ramp(elapsed, 0.1, 0.5)).powi(2);
+    let flash = opacity * (1.0 - ramp(elapsed, 0.1, 0.5).powi(2));
     if flash > 0.0 {
         actors.push(quad(
             [0.0, 0.0],
             [screen_width(), screen_height()],
             [1.0, 1.0, 1.0, flash],
-            5,
+            depth + 5,
         ));
     }
 }

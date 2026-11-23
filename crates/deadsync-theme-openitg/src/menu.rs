@@ -1,5 +1,6 @@
-use crate::presentation::{HEIGHT, Layout, WIDTH, italic, quad, sprite};
-use crate::resources::{TITLE_BACKDROP, TITLE_CHROME, TITLE_FONT, TITLE_GLINT, TITLE_STREAK};
+use crate::intro::{LOGO_ENTRY_SECONDS, LOGO_MOVIE, LOGO_POSTER, push_logo_layers};
+use crate::presentation::{HEIGHT, Layout, italic, quad, sprite};
+use crate::resources::{TITLE_CHROME, TITLE_FONT, TITLE_GLINT, TITLE_STREAK};
 use crate::{Effect, OpenItgRuntimeRequest, OpenItgScreen, OpenItgTheme};
 use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, TextContent};
@@ -10,9 +11,11 @@ use deadsync_config::coin::CoinMode;
 use deadsync_config::theme::GameFlag;
 use deadsync_input::{InputEvent, MenuLrChord, VirtualAction};
 use deadsync_theme::main_menu::{
-    MainMenuFrame, MainMenuItem, MainMenuPhase, MainMenuRuntimeView, ThemeMainMenu, main_menu_items,
+    MainMenuFrame, MainMenuItem, MainMenuPhase, MainMenuRuntimeView, MenuBackgroundMovie,
+    ThemeMainMenu, main_menu_items,
 };
 use deadsync_theme::{ThemeInputResult, TransitionState, UiCue};
+use std::sync::Arc;
 
 type RuntimeView = MainMenuRuntimeView<GameFlag, CoinMode>;
 const FIRST_ROW_Y: f32 = 112.0;
@@ -20,7 +23,6 @@ const ROW_PITCH: f32 = 36.0;
 const FOCUS_SECONDS: f32 = 0.5;
 const ATTRACT_SECONDS: f32 = 30.0;
 const FRAME_REVEAL_SECONDS: f32 = 1.0;
-const BACKDROP_PERIOD: f32 = 8.0;
 pub(super) const ENTRY_SECONDS: f32 = 0.3;
 pub(super) const EXIT_SECONDS: f32 = 0.3;
 
@@ -31,7 +33,6 @@ pub struct MenuState {
     color_index: i32,
     view: RuntimeView,
     entry_elapsed: f32,
-    backdrop_elapsed: f32,
     focus_elapsed: f32,
     idle_elapsed: f32,
     nav_chords: [MenuLrChord; 2],
@@ -92,6 +93,11 @@ impl ThemeMainMenu for OpenItgTheme {
     type MenuRawKey = RawKeyboardEvent;
     type MenuVisualPolicy = ();
 
+    const MENU_BACKGROUND_MOVIE: Option<MenuBackgroundMovie> = Some(MenuBackgroundMovie {
+        path: LOGO_MOVIE,
+        rate: 2.0,
+    });
+
     fn init_menu(color_index: i32) -> MenuState {
         MenuState {
             color_index,
@@ -119,8 +125,7 @@ impl ThemeMainMenu for OpenItgTheme {
         if delta_time <= 0.0 || !delta_time.is_finite() {
             return Effect::None;
         }
-        state.entry_elapsed = (state.entry_elapsed + delta_time).min(FRAME_REVEAL_SECONDS);
-        state.backdrop_elapsed = (state.backdrop_elapsed + delta_time) % BACKDROP_PERIOD;
+        state.entry_elapsed = (state.entry_elapsed + delta_time).min(LOGO_ENTRY_SECONDS);
         state.focus_elapsed = (state.focus_elapsed + delta_time) % FOCUS_SECONDS;
         if phase == MainMenuPhase::Active {
             state.idle_elapsed += delta_time;
@@ -244,26 +249,23 @@ fn push_title(
     let height = screen_height();
     let center = [width * 0.5, height * 0.5];
     let layout = Layout::centered(width, height);
+    let side_inset = layout.position(0.0, 0.0)[0];
+    let left = layout.translated_x(-side_inset);
+    let right = layout.translated_x(side_inset);
     let (alpha, flash) = transition_alpha(state, &frame);
     let white = [1.0, 1.0, 1.0, alpha];
 
-    let backdrop_scale = (width / WIDTH).max(height / HEIGHT) * 1.07;
-    let phase = state.backdrop_elapsed * (std::f32::consts::TAU / BACKDROP_PERIOD);
-    let (sin, cos) = phase.sin_cos();
-    let origin = [
-        center[0] + 12.0 * backdrop_scale * sin,
-        center[1] + 8.0 * backdrop_scale * cos,
-    ];
-    actors.push(
-        title_image(
-            TITLE_BACKDROP,
-            origin,
-            [WIDTH * backdrop_scale, HEIGHT * backdrop_scale],
-            alpha,
-            -24,
-        )
-        .build(0),
+    let mut backdrop = frame.background_key.map_or_else(
+        || SpriteBuilder::static_texture(LOGO_POSTER),
+        |key| SpriteBuilder::texture(Arc::clone(key)),
     );
+    backdrop.align(0.5, 0.5);
+    backdrop.xy(center[0], center[1]);
+    backdrop.size(width, height);
+    backdrop.alpha(alpha * 0.7);
+    backdrop.z(-32);
+    actors.push(backdrop.build(0));
+    push_logo_layers(actors, layout, state.entry_elapsed, alpha, -30);
     let reveal = (state.entry_elapsed / FRAME_REVEAL_SECONDS).clamp(0.0, 1.0);
     let vertical_scale = height / HEIGHT;
     let mut chrome = title_image(
@@ -304,19 +306,7 @@ fn push_title(
     }
     actors.push(italic(
         title_text(
-            layout,
-            [330.0, 267.0],
-            0.5,
-            "DEADSYNC".into(),
-            2.64,
-            [0.85, 0.75, 0.66, alpha * 0.24],
-            -20,
-        ),
-        -0.22,
-    ));
-    actors.push(italic(
-        title_text(
-            layout,
+            left,
             [36.0, 39.0],
             0.0,
             "MAIN MENU".into(),
@@ -353,9 +343,9 @@ fn push_title(
         "INSERT COIN"
     };
     let footer_y = HEIGHT - 16.0;
-    for (x, alignment) in [(36.0, 0.0), (604.0, 1.0)] {
+    for (edge, x, alignment) in [(left, 36.0, 0.0), (right, 604.0, 1.0)] {
         actors.push(title_text(
-            layout,
+            edge,
             [x, footer_y],
             alignment,
             prompt.into(),
@@ -366,9 +356,9 @@ fn push_title(
     }
     if state.view.coin_mode == CoinMode::Home {
         let controls = if state.view.dedicated_three_key_nav {
-            "Use Left or Right to choose, then press Start"
+            "Press &MENULEFT;&MENURIGHT; to choose, then press &START;"
         } else {
-            "Use Up or Down to choose, then press Start"
+            "Press &MENUUP;&MENUDOWN; to choose, then press &START;"
         };
         actors.push(title_text(
             layout,
@@ -398,7 +388,7 @@ fn push_title(
     }
     if frame.update_banner_tag.is_some() {
         actors.push(title_text(
-            layout,
+            right,
             [604.0, 39.0],
             1.0,
             "UPDATE AVAILABLE".into(),
@@ -420,6 +410,7 @@ fn push_title(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadlib_present::actors::SpriteSource;
     use deadlib_present::space::{Metrics, with_current_metrics};
     use deadsync_core::input::InputSource;
     use deadsync_theme::ThemeFlowEvent;
@@ -488,7 +479,11 @@ mod tests {
     fn first_choice_keeps_native_coordinates_inside_a_wide_viewport() {
         let mut state = OpenItgTheme::init_menu(0);
         OpenItgTheme::update_menu(&mut state, ENTRY_SECONDS, MainMenuPhase::Entering);
-        for (width, x) in [(640.0, 120.0), (854.0, 227.0)] {
+        let movie_key = Arc::from("fixture/logo.mpg");
+        for (width, x, background_key) in [
+            (640.0, 120.0, None),
+            (854.0, 227.0, Some(&movie_key)),
+        ] {
             with_current_metrics(Metrics::centered(width, HEIGHT), || {
                 let mut actors = Vec::new();
                 OpenItgTheme::push_menu_actors(
@@ -496,11 +491,22 @@ mod tests {
                     &state,
                     MainMenuFrame {
                         update_banner_tag: None,
+                        background_key,
                         alpha_multiplier: 1.0,
                         transition: &TransitionState::Idle,
                         visual_policy: (),
                     },
                 );
+                let Actor::Sprite { source, tint, z, .. } = &actors[0] else {
+                    panic!("the badge and menu should draw over a background sprite");
+                };
+                match (background_key, source) {
+                    (None, SpriteSource::TextureStatic(LOGO_POSTER)) => {}
+                    (Some(movie), SpriteSource::Texture(key)) if movie == key => {}
+                    _ => panic!("unexpected title background {source:?}"),
+                }
+                assert_eq!(*tint, [1.0, 1.0, 1.0, 0.7]);
+                assert_eq!(*z, -32);
                 assert!(actors.iter().any(|actor| matches!(actor,
                     Actor::Text { content: TextContent::Static("Play"), font: TITLE_FONT, offset, scale, .. }
                         if *offset == [x, FIRST_ROW_Y] && *scale == [1.1; 2]
@@ -510,8 +516,9 @@ mod tests {
                     Actor::Text {
                         content: TextContent::Static("MAIN MENU"),
                         font: TITLE_FONT,
+                        offset,
                         ..
-                    }
+                    } if *offset == [36.0, 39.0]
                 )));
             });
         }

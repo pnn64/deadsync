@@ -33,27 +33,41 @@ the title, style selection, song wheel, gameplay, and Evaluation.
 ## Title screen
 
 - The title uses the native outlined Eurostile bitmap font and metrics from
-  `default/Fonts/_eurostile outline`. The font is bundled in
-  `assets/fonts/openitg` and loaded through the standard font loader.
+  `default/Fonts/_eurostile outline`. The font and controller glyphs are
+  bundled in `assets/fonts/openitg` and loaded through the standard font loader.
   The title's chrome frame, red streaks, and rotating flares come from the
   effective `ScreenTitleMenu underlay` and `ScreenWithMenuElements underlay`.
-- The native title uses the `ScreenLogo background` movie and timed bitmap
-  layers. DeadSync uses its sprite and text renderer with an original
-  panning red backdrop and a DeadSync wordmark. The chrome reveals from
-  the left over one second. The selected label uses the reference's red
-  pulse and 110% scale.
+- The title and intro share the effective home theme's `ScreenLogo background`
+  film, logo artwork, and timed image layers. The film stretches to the
+  viewport at 70% opacity and loops at double speed. The title uses the
+  embedded poster while the first frame loads or when video backgrounds are
+  disabled. The chrome reveals from the left over one second, and focused
+  text uses the reference's red pulse and 110% scale. The inherited title
+  music redirect is silent.
 - Home mode offers Play, Options, Find Content, Exit, and Shutdown when enabled.
   Free and Pay mode expose Play and use the same host credit rules as Simply
   Love. Both title implementations use the shared menu availability contract.
-- The native menu runs from Dance Mode through style to the song wheel.
-  DeadSync's Play route includes the existing mode step. The native logos,
-  movie playback, and title audio remain fidelity differences.
+- DeadSync's Play route includes the existing mode step. The native direct
+  mode choices, Records, and editor entries remain fidelity differences.
 
-Vulkan captures at 640×480 and 854×480 cover the mid-entry sweep, the
-settled Play row, and focus on Options after a menu input. In two paired
-dev-profile runs at 854×480, warmed actor construction and composition
-took 27.3–29.3 μs of process CPU time before the redesign and 35.2 μs
-afterward. The moving title used 20 draw operations per frame, up from 14.
+The shared menu frame carries the decoded texture. The shell uses the same
+bounded background-decoder preparation and upload path for the OpenITG
+title and Simply Love's video-enabled visual styles. The title keeps drawing
+its poster while that work runs. A settled request reuses its texture key
+without resolving the asset path or reopening the decoder each frame.
+
+Vulkan captures at 640×480 and 854×480 cover the moving film, mid-entry
+sweep, settled Play row, and focus on Options after a menu input. Compared
+with the native 640×480 title capture, the arrow, wordmark, chrome, and
+row pitch align. The fallback captures show the original controller glyphs
+with movies disabled. Warmed title actor construction and composition
+took 55 μs before this change and 53 μs afterward in the 854×480 harness.
+The warmed frame used 25 draw operations with the extra logo layers, up
+from 20. These timings exclude video decoding and GPU work.
+The offscreen Windows runtime mounted the movie in 0.20–0.34 ms on the
+render thread and uploaded the first frame after 0.19–0.23 seconds. It
+rendered the movie across its 15-second loop and retired the decoder on
+exit, including when a title reentry was canceled during preparation.
 
 The focused tests exercise configuration round-tripping, both titles' P2
 session entry, arcade final-credit Start, home navigation, and actor placement
@@ -585,8 +599,8 @@ prepared once at startup for the output device and played by its retained
 handle. Both themes use the same wheel, option, and chart controllers. The
 OpenITG tap atlas also loads from the selected theme's manifest. Menus and
 overlays still use Simply Love's fallback assets for effects outside the
-installed cue set. The title entry stinger, sort and lock feedback, Evaluation
-entry audio, and comparisons with the reference audio remain open.
+installed cue set. Sort and lock feedback, Evaluation entry audio, and
+comparisons with the reference audio remain open.
 
 All nine cues match the file-backed decoder sample for sample at 24 kHz mono,
 44.1 kHz stereo, and 48 kHz stereo. The Windows packager's development-build

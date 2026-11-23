@@ -7,7 +7,7 @@ use deadlib_present::actors::Actor;
 use deadsync_config::theme::ThemeFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::ThemeTransitions;
-use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
+use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, MenuBackgroundMovie, ThemeMainMenu};
 use deadsync_theme_openitg::{OpenItgScreen, OpenItgTheme};
 use deadsync_theme_simply_love::{
     SimplyLoveEffect, SimplyLoveInputResult, views::SimplyLoveVisualPolicyView,
@@ -30,6 +30,13 @@ impl InstalledMenu {
         match self {
             Self::SimplyLove(_) => ThemeFlag::SimplyLove,
             Self::OpenItg(_) => ThemeFlag::OpenItg,
+        }
+    }
+
+    pub(crate) const fn background_movie(&self) -> Option<MenuBackgroundMovie> {
+        match self {
+            Self::SimplyLove(_) => ActiveTheme::MENU_BACKGROUND_MOVIE,
+            Self::OpenItg(_) => OpenItgTheme::MENU_BACKGROUND_MOVIE,
         }
     }
 
@@ -151,6 +158,7 @@ impl InstalledMenu {
                     state,
                     MainMenuFrame {
                         update_banner_tag: frame.update_banner_tag,
+                        background_key: frame.background_key,
                         alpha_multiplier: frame.alpha_multiplier,
                         transition: &transition,
                         visual_policy: (),

@@ -295,6 +295,7 @@ mod tests {
         let mut actors = Vec::new();
         AlternateTheme::push_menu_actors(&mut actors, &menu, MainMenuFrame {
             update_banner_tag: None,
+            background_key: None,
             alpha_multiplier: 0.75,
             transition: &deadsync_theme::TransitionState::Idle,
             visual_policy: (),

@@ -17,6 +17,7 @@ use deadsync_assets::media_cache;
 use deadsync_chart::{SongBackgroundChange, SongData};
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
+use deadsync_theme::main_menu::MenuBackgroundMovie;
 use deadsync_theme::select_music::{WHEEL_OUTGOING_BANNERS, WheelBannerFade};
 use log::{debug, warn};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -362,6 +363,12 @@ fn sync_bg_video_timing(state: &mut DynamicBackgroundState, timing: BgVideoTimin
     }
 }
 
+struct UiBackground {
+    movie: Option<MenuBackgroundMovie>,
+    key: Option<Arc<str>>,
+    visible: bool,
+}
+
 pub struct DynamicMedia {
     current_dynamic_banner: Option<DynamicBannerState>,
     outgoing_banners: SmallVec<[OutgoingBanner; WHEEL_OUTGOING_BANNERS]>,
@@ -377,6 +384,7 @@ pub struct DynamicMedia {
     dynamic_pack_banner_keys: FxHashSet<String>,
     wheel_item_background_keys: TextureKeySetReconciler,
     current_dynamic_background: Option<DynamicBackgroundState>,
+    ui_background: Option<UiBackground>,
     active_song_lua_videos: FxHashMap<String, SongLuaVideoState>,
     failed_song_lua_video_keys: FxHashSet<String>,
     gameplay_background_keys: TextureKeySetReconciler,
@@ -408,6 +416,7 @@ impl DynamicMedia {
             dynamic_pack_banner_keys: FxHashSet::default(),
             wheel_item_background_keys: TextureKeySetReconciler::default(),
             current_dynamic_background: None,
+            ui_background: None,
             active_song_lua_videos: FxHashMap::default(),
             failed_song_lua_video_keys: FxHashSet::default(),
             gameplay_background_keys: TextureKeySetReconciler::default(),
@@ -438,6 +447,7 @@ impl DynamicMedia {
     }
 
     pub fn destroy_assets(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
+        self.ui_background = None;
         let mut keys: Vec<String> = Vec::with_capacity(
             self.active_banner_videos
                 .len()
@@ -812,6 +822,94 @@ impl DynamicMedia {
                 });
     }
 
+    pub fn sync_ui_background(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        movie: Option<MenuBackgroundMovie>,
+        now: f32,
+    ) {
+        if self
+            .ui_background
+            .as_ref()
+            .is_none_or(|current| current.movie != movie)
+        {
+            self.destroy_current_dynamic_background(assets, backend);
+            self.reset_pending_gameplay_background();
+            self.failed_gameplay_background_key = None;
+            let key = movie.map(|movie| {
+                let path = deadsync_assets::resolve_asset_path(movie.path);
+                let key = path_texture_key(&path);
+                let upload_handle = assets.reserve_texture_handle(key.clone());
+                self.submit_gameplay_background_prep(&path);
+                let ui_key = Arc::<str>::from(key.as_str());
+                self.current_dynamic_background = Some(DynamicBackgroundState::new(
+                    key,
+                    upload_handle,
+                    path,
+                    None,
+                    now,
+                    movie.rate,
+                ));
+                ui_key
+            });
+            self.ui_background = Some(UiBackground {
+                movie,
+                key,
+                visible: false,
+            });
+        }
+        let (Some(movie), Some(ui)) = (movie, self.ui_background.as_mut()) else {
+            return;
+        };
+        let Some(key) = ui.key.as_ref().filter(|key| {
+            !ui.visible && self.failed_gameplay_background_key.as_deref() != Some(key.as_ref())
+        }) else {
+            return;
+        };
+        if self
+            .current_dynamic_background
+            .as_ref()
+            .is_some_and(|state| state.video.is_some())
+        {
+            if assets.has_uploaded_texture_key(key) {
+                ui.visible = true;
+                debug!(
+                    "UI background movie '{}' at {}x, video_active=true",
+                    movie.path, movie.rate
+                );
+            }
+            return;
+        }
+        let key = Arc::clone(key);
+        self.drain_gameplay_background_preps(
+            assets,
+            backend,
+            &key,
+            BgVideoTiming {
+                current_sec: now,
+                start_sec: Some(now),
+                rate: movie.rate,
+            },
+        );
+        if !self.pending_gameplay_background_preps.contains(key.as_ref())
+            && self.failed_gameplay_background_key.as_deref() != Some(key.as_ref())
+            && let Some(state) = self.current_dynamic_background.as_ref()
+            && state.video.is_none()
+        {
+            let path = state.path.clone();
+            self.submit_gameplay_background_prep(&path);
+        }
+    }
+
+    pub fn ui_background_key(&self) -> Option<&Arc<str>> {
+        self.ui_background
+            .as_ref()
+            .filter(|background| background.visible)?
+            .key
+            .as_ref()
+    }
+
     pub fn set_background(
         &mut self,
         assets: &mut AssetManager,
@@ -822,6 +920,7 @@ impl DynamicMedia {
     ) -> Cow<'static, str> {
         const FALLBACK_KEY: &str = "__black";
 
+        self.ui_background = None;
         self.failed_gameplay_background_key = None;
         self.reset_pending_gameplay_background();
 
@@ -1413,6 +1512,7 @@ impl DynamicMedia {
         assets: &mut AssetManager,
         backend: &mut Backend,
     ) {
+        self.ui_background = None;
         if let Some(state) = self.current_dynamic_background.take() {
             self.release_texture_key(assets, backend, retire_dynamic_background_state(state));
         }
@@ -1635,7 +1735,7 @@ impl DynamicMedia {
                         continue;
                     }
                     warn!(
-                        "Failed to start gameplay background video '{}': {msg}. Keeping prewarmed poster.",
+                        "Failed to start background video '{}': {msg}. Keeping fallback artwork.",
                         path.display()
                     );
                     self.failed_gameplay_background_key = Some(key);

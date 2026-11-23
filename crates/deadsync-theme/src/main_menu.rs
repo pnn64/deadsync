@@ -119,8 +119,17 @@ pub enum MainMenuPhase {
     Entering,
 }
 
+/// Looping movie to use behind a title menu when video backgrounds are enabled.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MenuBackgroundMovie {
+    pub path: &'static str,
+    pub rate: f32,
+}
+
 pub struct MainMenuFrame<'a, Screen, Policy> {
     pub update_banner_tag: Option<&'a str>,
+    /// A decoded background frame, when the configured movie is visible.
+    pub background_key: Option<&'a Arc<str>>,
     pub alpha_multiplier: f32,
     pub transition: &'a TransitionState<Screen>,
     pub visual_policy: Policy,
@@ -133,6 +142,8 @@ pub trait ThemeMainMenu: ThemeTransitions {
     type MenuInput;
     type MenuRawKey;
     type MenuVisualPolicy;
+
+    const MENU_BACKGROUND_MOVIE: Option<MenuBackgroundMovie> = None;
 
     fn init_menu(color_index: i32) -> Self::MenuState;
     fn menu_color_index(state: &Self::MenuState) -> i32;
