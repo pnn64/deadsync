@@ -31,16 +31,15 @@ const WHEEL_CURVE_X: f32 = 24.0;
 const WHEEL_VISIBLE_HALF_SPAN: f32 = 7.5;
 const WHEEL_ANGLE_PER_ROW: f32 = TAU * 0.42 / SELECT_MUSIC_WHEEL_ROWS as f32;
 const WHEEL_CARD_SIZE: [f32; 2] = [368.0, 32.0];
-const LEFT_RIM_CENTER: [f32; 2] = [67.0, 223.0];
+const LEFT_RIM_CENTER: [f32; 2] = [64.0, 223.0];
 const WHEEL_HIGHLIGHT_Z: i16 = -52;
-const FRAME_SEAM: [f32; 2] = [375.0, 222.0];
-const FRAME_EDGE_WIDTH: f32 = 132.0;
-const FRAME_MIDDLE_WIDTH: f32 = 353.0;
-const FRAME_HEIGHT: f32 = 414.0;
-const DIFFICULTY_X: f32 = 474.0;
-// The first lane is between the silver divider and the first rule at texel 234.
-const DIFFICULTY_Y: f32 = FRAME_SEAM[1] + (223.0 / 412.0 - 0.5) * FRAME_HEIGHT;
-const DIFFICULTY_PITCH: f32 = 20.0 * FRAME_HEIGHT / 412.0;
+const FRAME_PIVOT: [f32; 2] = [434.0, 224.0];
+const FRAME_SEAM: [f32; 2] = [392.0, 224.0];
+const FRAME_EDGE_WIDTH: f32 = 158.0;
+const FRAME_MIDDLE_WIDTH: f32 = 8.0 * 40.0;
+const FRAME_HEIGHT: f32 = 412.0 * 0.985;
+const DIFFICULTY_ORIGIN: [f32; 2] = [460.0, 242.0];
+const DIFFICULTY_PITCH: f32 = 20.5;
 const TEXT_CACHE_LIMIT: usize = 4096;
 const WHITE: [f32; 4] = [1.0; 4];
 const CREAM: [f32; 4] = [0.82, 0.73, 0.69, 1.0];
@@ -140,9 +139,9 @@ impl WheelCameras {
             let right = camera * Vec3::new(metrics.left + half_width, metrics.top, 0.0).extend(1.0);
             let y = (1.0 - left.y / (left.w * viewport.y_axis.y)) * HEIGHT * 0.5;
             // Keep the exposed edge under the silver rim as the wheel turns.
-            // The visible rim starts at x=17 and curves out to x=120.
+            // The visible rim starts at x=15 and curves out from that edge.
             let height = ((y - LEFT_RIM_CENTER[1]) / 145.0).clamp(-1.0, 1.0);
-            let x = 19.0 + 101.0 * (1.0 - (1.0 - height * height).sqrt());
+            let x = 16.0 + 101.0 * (1.0 - (1.0 - height * height).sqrt());
             let edge = (2.0 * x / WIDTH - 1.0) * viewport.x_axis.x;
             // Intersect the row's projected horizontal center with that edge.
             let left = left.x - edge * left.w;
@@ -172,8 +171,7 @@ pub fn push_select_music_actors(
     banner: WheelBannerFrame<'_>,
 ) {
     let layout = push_backdrop(actors, view.selection_beat);
-    let camera = details_camera(layout);
-    push_details_frame(actors, layout, camera);
+    push_details_frame(actors, layout);
     push_banner(actors, layout, &view, banner);
     push_wheel(
         actors,
@@ -184,7 +182,7 @@ pub fn push_select_music_actors(
         view.wheel_locked,
         "NO SONGS",
     );
-    push_difficulties(actors, layout, &view, camera);
+    push_difficulties(actors, layout, &view);
     for (side, player) in view.players.iter().enumerate() {
         if player.joined {
             push_chart_pane(actors, layout, side, player);
@@ -260,7 +258,7 @@ fn details_plate(layout: Layout) -> Actor {
     }
 }
 
-fn push_details_frame(actors: &mut Vec<Actor>, layout: Layout, view_proj: Mat4) {
+fn push_details_frame(actors: &mut Vec<Actor>, layout: Layout) {
     actors.push(
         sprite(
             "openitg/wheel-frame-left.png",
@@ -272,7 +270,9 @@ fn push_details_frame(actors: &mut Vec<Actor>, layout: Layout, view_proj: Mat4) 
         .build(0),
     );
 
-    actors.push(Actor::CameraPush { view_proj });
+    actors.push(Actor::CameraPush {
+        view_proj: wheel_plane_camera(layout, FRAME_PIVOT, HEIGHT * 0.5, wheel_plane_yaw()),
+    });
     actors.push(details_plate(layout));
     for (key, x, width) in [
         (
@@ -300,20 +300,24 @@ fn push_details_frame(actors: &mut Vec<Actor>, layout: Layout, view_proj: Mat4) 
     actors.push(Actor::CameraPop);
 }
 
-fn details_camera(layout: Layout) -> Mat4 {
+fn wheel_plane_yaw() -> Mat4 {
+    Mat4::from_rotation_y(20.0_f32.to_radians())
+}
+
+fn wheel_plane_camera(layout: Layout, [x, y]: [f32; 2], vanish_y: f32, rotation: Mat4) -> Mat4 {
     let metrics = current_metrics();
-    let [x, y] = layout.position(FRAME_SEAM[0], FRAME_SEAM[1]);
+    let [display_x, display_y] = layout.position(x, y);
     let [scale, _] = layout.size([1.0; 2]);
     let viewport = Mat4::from_scale(Vec3::new(
         scale * WIDTH / (metrics.right - metrics.left),
         scale * HEIGHT / (metrics.top - metrics.bottom),
         1.0,
     ));
-    let (projection, view) = menu_perspective([WIDTH, HEIGHT], [320.0, FRAME_SEAM[1]], 58.0)
+    let (projection, view) = menu_perspective([WIDTH, HEIGHT], [WIDTH * 0.5, vanish_y], 58.0)
         .expect("the wheel has a fixed positive camera size and field of view");
-    let pivot = Vec3::new(metrics.left + x, metrics.top - y, 0.0);
-    let pose = Mat4::from_translation(Vec3::new(FRAME_SEAM[0], FRAME_SEAM[1], 0.0))
-        * Mat4::from_rotation_y(20.0_f32.to_radians())
+    let pivot = Vec3::new(metrics.left + display_x, metrics.top - display_y, 0.0);
+    let pose = Mat4::from_translation(Vec3::new(x, y, 0.0))
+        * rotation
         * Mat4::from_scale(Vec3::new(scale.recip(), -scale.recip(), 1.0))
         * Mat4::from_translation(-pivot);
     viewport * projection * view * pose
@@ -326,50 +330,42 @@ fn push_banner(
     frame: WheelBannerFrame<'_>,
 ) {
     let section = view.rows[SELECT_MUSIC_WHEEL_ROWS / 2];
-    banner::push(
-        actors,
-        layout,
-        frame,
-        view.banner_texture,
-        |actors, moving| {
-            if let Some(song) = &view.song {
-                actors.push(
-                    sprite(
-                        "openitg/wheel-fallback-banner.png",
-                        moving.position(banner::CENTER[0], banner::CENTER[1]),
-                        moving.size(banner::SIZE),
-                        WHITE,
-                        -6,
-                    )
-                    .build(0),
-                );
-                if section.is_some_and(|row| row.action.is_some()) {
-                    let mut text = wheel_text(
-                        moving,
-                        [banner::CENTER[0], 161.0],
-                        0.5,
-                        shared_text(song.title),
-                        0.65,
-                        WHITE,
-                    );
-                    text.maxwidth(moving.size([280.0, 0.0])[0]);
-                    text.shadowlength(moving.size([2.0, 0.0])[0]);
-                    actors.push(text.build(0));
-                }
-            } else if let Some(section) = section {
+    let texture = view
+        .banner_texture
+        .or_else(|| view.song.as_ref().map(|_| &*banner::FALLBACK));
+    banner::push(actors, layout, frame, texture, |actors, moving| {
+        if view.banner_texture.is_some() {
+            return;
+        }
+        if let Some(song) = &view.song {
+            if section.is_some_and(|row| row.action.is_some()) {
                 let mut text = wheel_text(
                     moving,
-                    banner::CENTER,
+                    [banner::CENTER[0], 161.0],
                     0.5,
-                    shared_text(wheel_row_title(section)),
-                    1.1,
+                    shared_text(song.title),
+                    0.65,
                     WHITE,
                 );
                 text.maxwidth(moving.size([280.0, 0.0])[0]);
+                text.shadowlength(moving.size([2.0, 0.0])[0]);
+                text.z(-6);
                 actors.push(text.build(0));
             }
-        },
-    );
+        } else if let Some(section) = section {
+            let mut text = wheel_text(
+                moving,
+                banner::CENTER,
+                0.5,
+                shared_text(wheel_row_title(section)),
+                1.1,
+                WHITE,
+            );
+            text.maxwidth(moving.size([280.0, 0.0])[0]);
+            text.z(-6);
+            actors.push(text.build(0));
+        }
+    });
     if let Some(song) = &view.song {
         // The names in the wheel and ribbon follow the live selection while
         // the outgoing banner may still be visible during its crossfade.
@@ -575,33 +571,33 @@ pub(crate) fn difficulty_style(difficulty: &str) -> (usize, &str, [f32; 4]) {
         })
 }
 
-fn push_difficulties(
-    actors: &mut Vec<Actor>,
-    layout: Layout,
-    view: &SelectMusicView<'_>,
-    view_proj: Mat4,
-) {
+fn push_difficulties(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'_>) {
     if view.song.is_none() {
         return;
     }
-    let x = DIFFICULTY_X;
-    actors.push(Actor::CameraPush { view_proj });
+    let [x, first_y] = DIFFICULTY_ORIGIN;
+    let pose = Mat4::from_rotation_x(2.5_f32.to_radians())
+        * wheel_plane_yaw()
+        * Mat4::from_scale(Vec3::new(1.0, 0.94, 1.0));
+    actors.push(Actor::CameraPush {
+        view_proj: wheel_plane_camera(layout, DIFFICULTY_ORIGIN, WHEEL_CENTER[1], pose),
+    });
     for (index, row) in view.difficulty_rows.iter().enumerate() {
         let Some(chart) = row.chart else { continue };
-        let y = DIFFICULTY_Y + index as f32 * DIFFICULTY_PITCH;
+        let y = first_y + index as f32 * DIFFICULTY_PITCH;
         let (state, level, color) = difficulty_style(&chart.difficulty);
         let level = if state == 5 && !chart.description.is_empty() {
             chart.description.as_str()
         } else {
             level
         };
-        let mut title = wheel_text(layout, [x - 72.0, y], 1.0, shared_text(level), 0.58, color);
-        title.maxwidth(layout.size([119.0, 0.0])[0]);
+        let mut title = wheel_text(layout, [x - 70.0, y], 1.0, shared_text(level), 0.6, color);
+        title.maxwidth(layout.size([150.0, 0.0])[0]);
         actors.push(title.build(0));
         actors.push(
             wheel_text(
                 layout,
-                [x - 25.0, y],
+                [x - 22.0, y],
                 0.5,
                 TextContent::inline_u32(chart.meter),
                 0.70,
@@ -615,8 +611,8 @@ fn push_difficulties(
             let cell = if filled { state } else { 6 };
             let mut block = sprite(
                 "openitg/wheel-meter.png",
-                layout.position(x + 6.0 + segment as f32 * 13.45, y),
-                layout.size([13.45, 16.0]),
+                layout.position(x + 5.6 + segment as f32 * 12.8, y),
+                layout.size([11.2, 18.0]),
                 WHITE,
                 4,
             );
@@ -626,14 +622,14 @@ fn push_difficulties(
         for (player, side) in view.players.iter().enumerate() {
             if side.joined && side.chart.is_some() && side.step_index == row.step_index {
                 let (offset, key) = [
-                    (-59.0, "openitg/wheel-p1.png"),
-                    (175.0, "openitg/wheel-p2.png"),
+                    (-46.0, "openitg/wheel-p1.png"),
+                    (164.0, "openitg/wheel-p2.png"),
                 ][player];
                 actors.push(
                     sprite(
                         key,
                         layout.position(x + offset, y),
-                        layout.size([18.0, 16.0]),
+                        layout.size([22.0, 18.0]),
                         WHITE,
                         5,
                     )
@@ -815,7 +811,7 @@ pub fn push_select_course_actors(
     banner: WheelBannerFrame<'_>,
 ) {
     let layout = push_backdrop(actors, view.selection_beat);
-    push_details_frame(actors, layout, details_camera(layout));
+    push_details_frame(actors, layout);
     banner::push(actors, layout, banner, view.banner_texture, |_, _| {});
     push_wheel(
         actors,
@@ -1019,9 +1015,12 @@ mod tests {
                     WheelBannerFrame::default(),
                 );
                 assert!(actors.iter().any(|actor| matches!(actor,
-                    Actor::Sprite { align, offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], .. }
-                        if *align == [0.5, 0.5] && *offset == [478.0 + delta, banner::CENTER[1]]
-                            && *w == banner::SIZE[0] && *h == banner::SIZE[1]
+                    Actor::ReusableTexturedMesh { texture, offset, size: [SizeSpec::Px(430.0), SizeSpec::Px(130.0)], depth_test: true, .. }
+                        if texture.texture_key() == Some("selection-banner") && *offset == [480.0 + delta, 112.0]
+                )));
+                assert!(actors.iter().any(|actor| matches!(actor,
+                    Actor::ReusableTexturedMesh { texture, offset, depth_write: true, blend: BlendMode::NoEffect, .. }
+                        if texture.texture_key() == Some("openitg/wheel-banner-mask.png") && *offset == [480.0 + delta, 112.0]
                 )));
                 assert!(actors.iter().any(|actor| matches!(actor,
                     Actor::Text { content, offset, .. }
@@ -1029,7 +1028,7 @@ mod tests {
                 )));
                 assert!(actors.iter().any(|actor| matches!(actor,
                     Actor::Sprite { source: deadlib_present::actors::SpriteSource::TextureStatic("openitg/wheel-frame-edge.png"), offset, .. }
-                        if *offset == [309.0 + delta, 222.0]
+                        if *offset == [313.0 + delta, 224.0]
                 )));
                 assert!(actors.iter().any(|actor| matches!(actor,
                     Actor::Text { content, offset, z, .. }

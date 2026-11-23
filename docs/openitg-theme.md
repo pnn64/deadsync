@@ -480,19 +480,21 @@ the source's 15-row window moves. The supplied song, section, and action
 textures wrap around the wheel, with the native gold highlight pulsing on the
 preview beat. The shared red backdrop and header and footer streaks continue
 from Style and Play Mode. The supplied curved silver frame uses a 58° camera
-and 20° yaw. The projected card edges and highlight trim under the left
-rim. Difficulty names, cursors, and meter segments share the right frame's
-projection and follow the rules in its texture. The artist and BPM rail
-uses Eurostile. Banners sit within the opening with the reference's
-0.6° rotation. The footer reports the available DeadSync Start action.
+and 20° yaw. The left rim sits at the authored center and the card edges
+trim under it as the wheel turns. The right frame uses its own centered
+vanishing point and the authored sprite dimensions. Difficulty names,
+cursors, and meters use the difficulty list's 20.5-unit row spacing, yaw,
+and vertical tilt. The artist and BPM rail uses Eurostile. The footer
+reports the available DeadSync Start action.
 
 The native 640×480 Quartz capture confirms the tilted rows and the fixed
 selection area. Vulkan captures of the DeadSync Quartz view checked the same
 title, artist, BPM, and Hard 5 chart at 640×480 and 854×480. Additional
 two-player captures check catalog labels, records, the rim during movement,
-and all five projected difficulty rows over the rules. DeadSync centers the
-640×480 wheel at wider sizes. The source
-banner aperture and popularity indicator remain fidelity gaps.
+and all five projected difficulty rows over the rules. The original
+fallback banner fills the curved opening in the native Quartz capture and
+in DeadSync's 640×480 capture. DeadSync centers the 640×480 wheel at wider
+sizes. The popularity indicator remains a fidelity gap.
 
 In the 854×480 two-player fixture, the sum of the median actor construction
 and CPU composition times went from 187 to 210 µs per settled frame and
@@ -531,18 +533,24 @@ two-player fixture measured 43.5–43.7 µs for settled actor construction
 and 53.0–53.7 µs while moving across the two builds. The Quartz fixture
 with the two actions built in 32.6 µs when settled and 41.2 µs while moving.
 
-OpenITG's song and course banners slide in with a 750 ms deceleration and
+OpenITG's song and course banners use the authored 430×130 dimensions,
+perspective yaw, and 0.6° roll. The original depth mask clips stills and
+their outgoing layers around the curved opening. Video banners render with
+YUV sampling and use bands traced from the same mask, with opacity sampled
+per band during the wipe. Banners slide in with a 750 ms deceleration and
 slide out with a 750 ms acceleration. The first accepted confirmation starts
-the exit. The stage-launch controller still handles the second Start and
-decides when to enter Player Options or Gameplay. The effective patch's
-`FadingBanner` commands drive a 500 ms corner-by-corner fade of the outgoing
-image over the replacement. DeadSync keeps up to four outgoing textures
-through that animation and reuses them when revisiting a banner. Video
-banners retain the texture they last displayed.
+the exit. The stage-launch controller handles the second Start and decides
+when to enter Player Options or Gameplay. The effective patch's
+`FadingBanner` commands drive a 500 ms corner wipe over the replacement.
+DeadSync keeps up to four outgoing textures through that animation and
+reuses them when revisiting a banner. Video banners retain the texture they
+last displayed.
 
 Vulkan captures at 640×480 and 854×480 verify corner order at 0, 125, 250, and
-375 ms with two contrasting fixture textures. The wide entry and exit
-captures keep the side margins clear. A Vulkan media check verifies repeated
+375 ms with two contrasting stills. The wide entry and exit captures keep
+the side margins clear. Separate Vulkan captures use YUV textures to verify
+that the new projection preserves video color during entry and fade. A
+Vulkan media check verifies repeated
 selection, the four-texture bound, expiration, and clearing the outgoing
 layers on screen change. Motion timing is verified against the effective
 source metrics. A timestamp-matched native animation capture and the native
@@ -555,6 +563,13 @@ to 45.6 µs when settled and from 53.6 to 57.4 µs while scrolling with one
 outgoing image. Median CPU composition stayed within 143–146 µs, with one
 additional draw in the fade. These measurements use warm actor and
 composition buffers and dev-profile libraries.
+
+The aperture and alignment pass, measured with five difficulty rows at
+854×480, moved median actor construction from 81 to 85 µs when settled and
+100 to 104 µs while scrolling and fading. CPU composition moved from 175 to
+186 µs settled and 177 to 183 µs mid-wipe. Both paths add one draw operation.
+Vulkan through wgpu measured 2.59 to 2.69 ms settled and 2.64 to 2.68 ms
+mid-wipe for submitting and draining batches of precomposed frames.
 
 Each joined side's chart pane uses the supplied red frame and shows the chart
 level, steps, jumps, hands, holds, rolls, and judgable mines. The machine

@@ -154,6 +154,7 @@ impl ThemeResources for OpenItgTheme {
                 png!("selection-platform"),
                 png!("wheel-expanded"),
                 png!("wheel-fallback-banner"),
+                png!("wheel-banner-mask"),
                 png!("wheel-frame-edge"),
                 png!("wheel-frame-left"),
                 png!("wheel-frame-middle"),
