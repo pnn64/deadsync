@@ -365,6 +365,7 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
                 result?;
             }
             let wrapper_initials = song_capture::wrapper_initials(call, roots)?;
+            let foreground_beats = baked_foreground_beats(call, roots, &data.context)?;
             let options = read_options(call, globals, &data.context)?;
             *data.output.lock().unwrap() = Some(SongActivation {
                 initialized_globals: initialized,
@@ -372,6 +373,7 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
                 updates: HashMap::new(),
                 tweens: HashMap::new(),
                 broadcasts: Vec::new(),
+                foreground_beats,
                 options,
                 new_screen: None,
             });
@@ -379,6 +381,41 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
         })
     })
 }
+
+fn baked_foreground_beats(
+    call: &mut HostCall<'_>,
+    roots: TableId,
+    context: &SongLuaCompileContext,
+) -> Result<Vec<Option<std::ops::RangeInclusive<f32>>>, Error> {
+    if context.live || context.layer_start_beats.is_empty() {
+        return Ok(Vec::new());
+    }
+    // The foreground measures its full actor queue after On, before Update.
+    let mut windows = vec![None; context.background_layer_count];
+    let rate = crate::song_music_rate(context);
+    for (index, &beat) in context
+        .layer_start_beats
+        .iter()
+        .enumerate()
+        .skip(windows.len())
+    {
+        let value = call.raw_table_get(roots, Value::Number((index + 1) as f64))?;
+        let window = if let Value::Table(actor) = value {
+            let start = crate::song_layers::foreground_start_second(context, beat, rate);
+            let stop = crate::song_layers::foreground_stop_beat(
+                context,
+                start,
+                lifecycle::time_left(call, actor)?,
+            );
+            Some(beat..=stop)
+        } else {
+            None
+        };
+        windows.push(window);
+    }
+    Ok(windows)
+}
+
 fn named_tree(call: &mut HostCall<'_>, actor: TableId, name: &[u8]) -> Result<(), Error> {
     call.with_roots(&[Value::Table(actor)], |call| {
         native_children::run_command(call, actor, name, None)?;

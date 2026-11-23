@@ -33,6 +33,7 @@ impl game::SongLuaRuntimeBuilder<Overlay, song::SongLuaCapturedActor, Delta> for
             Default::default(),
             game::SongLuaRuntimeVisuals {
                 overlays: vec![],
+                foreground_beats: None,
                 screen_overlay_index: None,
                 overlay_eases: vec![],
                 overlay_ease_ranges: vec![],

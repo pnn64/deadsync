@@ -198,6 +198,7 @@ fn live_hud_publication_keeps_current_pose_and_native_axis_scales() {
         gameplay::SongLuaRuntimeOverlayStateDelta,
     > = deadsync_gameplay::SongLuaRuntimeVisuals {
         overlays: compiled.overlays,
+        foreground_beats: None,
         screen_overlay_index: compiled.screen_overlay_index,
         overlay_eases: Vec::new(),
         overlay_ease_ranges: Vec::new(),

@@ -3546,6 +3546,7 @@ mods_ease = {
 }
 
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(20) end,
     InitCommand=function(self)
         prefix_globals.ease = {
             {4, 4, 0, 18, function(value) if player then player:rotationz(value) end end, "len", ease.inOutQuad},
@@ -4122,6 +4123,7 @@ return Def.ActorFrame {
             lua_dir.join("default.lua"),
             r#"
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(4) end,
     Def.ActorProxy{
         OnCommand=function(self)
             local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
@@ -4149,6 +4151,7 @@ return Def.ActorFrame{
             lua_dir.join("default.lua"),
             r#"
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(4) end,
     Def.ActorProxy{
         OnCommand=function(self)
             local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
@@ -4192,6 +4195,7 @@ return Def.ActorFrame{
 local capture = nil
 
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(4) end,
     Def.ActorFrameTexture{
         Name="DirectCapture",
         InitCommand=function(self)
@@ -4243,6 +4247,7 @@ return Def.ActorFrame{
 local capture = nil
 
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(4) end,
     Def.ActorFrameTexture{
         Name="DirectPlayerCapture",
         InitCommand=function(self)
@@ -4366,8 +4371,8 @@ return Def.ActorFrame{
                         );
                         assert_eq!(segments.direct_proxy_count(), 2, "live={live}");
                     }
-                    if live {
-                        set_fixture_time(&mut state, 3.5);
+                    for (seconds, expected) in [(3.0, 2), (3.5, 0)] {
+                        set_fixture_time(&mut state, seconds);
                         add_sprite_core_feedback(&mut state, 0, 0, 100);
                         actors.clear();
                         let segments = crate::gameplay_runtime::push_actors(
@@ -4378,7 +4383,7 @@ return Def.ActorFrame{
                             123.0,
                             deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                         );
-                        assert_eq!(segments.direct_proxy_count(), 0, "foreground has expired");
+                        assert_eq!(segments.direct_proxy_count(), expected, "live={live}, seconds={seconds}");
                     }
                 }
             },
@@ -4999,6 +5004,7 @@ return Def.ActorFrame{
 local player
 return Def.ActorFrame{
     OnCommand=function(self)
+        self:sleep(3)
         player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
         player:visible(false)
         SCREENMAN:GetTopScreen():GetChild("Underlay"):visible(false)
@@ -5032,6 +5038,7 @@ return Def.ActorFrame{
 local player, score
 return Def.ActorFrame{
     OnCommand=function(self)
+        self:sleep(4)
         local top = SCREENMAN:GetTopScreen()
         player = top:GetChild("PlayerP1")
         player:visible(false)
@@ -5914,7 +5921,8 @@ return Def.ActorFrame {
                     fs::create_dir_all(dir.join("bg")).unwrap();
                     fs::write(
                         dir.join("lua/default.lua"),
-                        include_str!("../../../tests/fixtures/song_lua/late-shared-runtime.lua"),
+                        include_str!("../../../tests/fixtures/song_lua/late-shared-runtime.lua")
+                            .replace("self:ztest(1)", "self:ztest(1):sleep(3)"),
                     )
                     .unwrap();
                     fs::write(dir.join("bg/default.lua"), "return Def.ActorFrame{}").unwrap();
@@ -5974,9 +5982,12 @@ return Def.ActorFrame {
                             .blend,
                         deadsync_song_lua::SongLuaOverlayBlendMode::NoEffect
                     );
-                    for (second, x, stealth, screen_y) in
-                        [(2.5, -9999.0, 1.0, 12.0), (3.5, 213.5, 0.0, 0.0)]
-                    {
+                    for (second, x, stealth, screen_y, expected_markers) in [
+                        (2.5, -9999.0, 1.0, 12.0, 1),
+                        (3.5, 213.5, 0.0, 0.0, 1),
+                        (3.51, 213.5, 0.0, 0.0, 0),
+                        (2.5, -9999.0, 1.0, 12.0, 1),
+                    ] {
                         set_fixture_time(&mut state, second);
                         refresh_active_attack_masks(&mut state.gameplay, f32::MAX);
                         assert_eq!(state.gameplay.song_lua_player_transform(0).x, Some(x));
@@ -6044,7 +6055,7 @@ return Def.ActorFrame {
                                 markers += 1;
                             }
                         }
-                        assert_eq!(markers, 1, "depth-tested quad bounds at {second}: {projected_quads:?}");
+                        assert_eq!(markers, expected_markers, "depth-tested quad bounds at {second}: {projected_quads:?}");
                     }
                 }
             },

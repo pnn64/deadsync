@@ -593,7 +593,11 @@ pub fn compile_prepared_song_lua_layers<S, V>(
     timer.push_stage("finalize");
     context.report_bake_progress(0.99);
     crate::log_song_lua_compile_timing(&trace, &timer);
-    crate::compiled_layers::split_compiled_song_lua(out, tags, &paths, primary)
+    let mut layers = crate::compiled_layers::split_compiled_song_lua(out, tags, &paths, primary)?;
+    for (layer, beats) in layers.iter_mut().zip(activation.foreground_beats) {
+        layer.foreground_beats = beats;
+    }
+    Ok(layers)
 }
 
 impl SongRuntime {

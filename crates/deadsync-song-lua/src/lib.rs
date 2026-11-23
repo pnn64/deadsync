@@ -3056,6 +3056,8 @@ pub struct CompiledSongLua<OverlayActor> {
     pub live_scene: Option<SongLuaLiveScene>,
     /// Retained scene positions corresponding to this layer's overlays.
     pub live_indices: Vec<usize>,
+    /// The scheduled foreground's inclusive lifetime, sampled after On.
+    pub foreground_beats: Option<std::ops::RangeInclusive<f32>>,
     /// Charts whose note fields were constructed after startup reloads.
     pub loaded_steps: Option<[Option<usize>; LUA_PLAYERS]>,
     pub loaded_style: Option<String>,
@@ -3171,6 +3173,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
         Self {
             live_scene: None,
             live_indices: Vec::new(),
+            foreground_beats: None,
             loaded_steps: None,
             loaded_style: None,
             loaded_players: None,

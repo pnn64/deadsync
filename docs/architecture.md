@@ -207,6 +207,12 @@ a judgment texture to a generated actor.
 A tap judgment actor created without a texture exposes logical frame indices
 until a chart loads a sprite sheet.
 
+Runtime Song Lua measures a foreground actor tree's remaining tween time after
+`On` and converts it to an inclusive final song beat. Baked Song Lua records
+the same window during stage preparation. Composition uses the window for the
+foreground's actors, proxy requests, and render targets. Shared screen and
+player tracks are evaluated on their own timelines.
+
 Stage preparation prewarms the notefield model cache against the selected
 noteskins and sizes the hold mesh and field capture buffers. The stage retains
 these caches and the hold emitters across frames. `deadsync-notefield` samples

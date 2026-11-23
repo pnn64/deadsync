@@ -2935,6 +2935,7 @@ fn song_lua_late_wrappers_preserve_composition_order_and_capture_handles() {
 
     let mut visual = SongLuaRuntimeVisuals {
         overlays, screen_overlay_index: None, overlay_eases: Vec::new(), overlay_ease_ranges: Vec::new(),
+        foreground_beats: None,
         overlay_events: Vec::new(), background_visual_layers: Vec::new(), foreground_visual_layers: Vec::new(),
         player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
         player_events: Default::default(), player_judgment_events: Default::default(), player_combo_events: Default::default(),
@@ -13389,11 +13390,12 @@ fn song_lua_overlay_applies_bitmaptext_fit_size_at_runtime() {
 }
 
 #[test]
-fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
+fn song_lua_foreground_owner_index_matches_visibility_and_activity() {
     let path = std::path::PathBuf::from("badapple.avi");
     let layer = |start_second: f32, overlay: SongLuaOverlayActor| {
         deadsync_gameplay::SongLuaVisualLayerRuntime {
             start_second,
+            foreground_beats: None,
             screen_width: 640.0,
             screen_height: 480.0,
             overlays: vec![overlay],
@@ -13414,6 +13416,7 @@ fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
     let visuals = SongLuaRuntimeVisuals {
         screen_overlay_index: None,
         overlays: Vec::new(),
+        foreground_beats: None,
         overlay_eases: Vec::new(),
         overlay_ease_ranges: Vec::new(),
         overlay_events: Vec::new(),
@@ -13445,6 +13448,8 @@ fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
 
     assert!(!index.owns(
         4.99,
+        true,
+        &[],
         &visuals,
         &root_states,
         &background_states,
@@ -13452,6 +13457,8 @@ fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
     ));
     assert!(index.owns(
         5.0,
+        true,
+        &[],
         &visuals,
         &root_states,
         &background_states,
@@ -13460,6 +13467,8 @@ fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
     background_states[0][0].visible = false;
     assert!(!index.owns(
         9.99,
+        true,
+        &[],
         &visuals,
         &root_states,
         &background_states,
@@ -13468,6 +13477,17 @@ fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
     foreground_states[0][0].visible = true;
     assert!(index.owns(
         10.0,
+        true,
+        &[0],
+        &visuals,
+        &root_states,
+        &background_states,
+        &foreground_states,
+    ));
+    assert!(!index.owns(
+        10.01,
+        false,
+        &[],
         &visuals,
         &root_states,
         &background_states,
@@ -13477,6 +13497,8 @@ fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
     index.select(Some(Path::new("not-owned.avi")));
     assert!(!index.owns(
         10.0,
+        true,
+        &[0],
         &visuals,
         &root_states,
         &background_states,
@@ -14470,11 +14492,13 @@ fn song_lua_live_aft_bindings_refresh_same_count_root_background_and_foreground(
     ];
     let make_layer = || deadsync_gameplay::SongLuaVisualLayerRuntime {
         start_second: 0., screen_width: 640., screen_height: 480., overlays: overlays.clone(),
+        foreground_beats: None,
         overlay_eases: Vec::new(), overlay_ease_ranges: Vec::new(), overlay_events: Vec::new(),
         song_foreground: SongLuaCapturedActor::default(), song_foreground_events: Vec::new(),
     };
     let mut visual = SongLuaRuntimeVisuals {
         overlays: overlays.clone(), screen_overlay_index: None, overlay_eases: Vec::new(),
+        foreground_beats: None,
         overlay_ease_ranges: Vec::new(), overlay_events: Vec::new(),
         background_visual_layers: vec![make_layer()], foreground_visual_layers: vec![make_layer()],
         player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),

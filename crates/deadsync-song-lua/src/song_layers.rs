@@ -20,6 +20,29 @@ pub(super) struct Entry {
     pub beat: Option<f32>,
     pub color: Option<[f32; 4]>,
 }
+
+pub(crate) fn foreground_start_second(
+    context: &SongLuaCompileContext,
+    beat: f32,
+    music_rate: f32,
+) -> f32 {
+    context.song_timing.as_ref().map_or_else(
+        || crate::song_elapsed_seconds_at(beat, context) * crate::song_music_rate(context),
+        |timing| timing.get_song_time_for_beat(beat, music_rate),
+    )
+}
+
+pub(crate) fn foreground_stop_beat(
+    context: &SongLuaCompileContext,
+    start_second: f32,
+    tween_seconds: f32,
+) -> f32 {
+    let stop_second = start_second + tween_seconds;
+    context.song_timing.as_ref().map_or_else(
+        || crate::song_beat_at_elapsed_seconds(stop_second / crate::song_music_rate(context), context),
+        |timing| timing.get_song_position(stop_second).beat,
+    )
+}
 impl SongLayerPlan {
     /// Validate all entries before constructing a runtime or executing Lua.
     pub fn new(

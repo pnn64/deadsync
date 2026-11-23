@@ -418,18 +418,28 @@ averaged 8.74 ms before and 8.60 ms after. Its 95th percentile was 8.78 ms befor
 and 8.67 ms after. These captures recorded zero audio underruns and zero buffer
 growth events. That Quartz script queued zero tween time on its foreground.
 Runtime expired the foreground at its start beat, following the lifetime
-rule in OpenITG's and ITGmania's `Foreground.cpp`. The Baked path still
-omits this expiry rule.
+rule in OpenITG's and ITGmania's `Foreground.cpp`. Baked playback now applies
+that rule to visual foregrounds using the full actor tree's tween time after
+`On`. The foreground draws at the stop beat. Once the song clock passes that
+beat, actor draws and proxy requests stop.
 
 A Quartz foreground with three seconds of authored tween time drew the
 offset tap judgment in both Lua modes and both themes at 854×480. The
-shell regression checks the same behavior and confirms expiry in
-Runtime. In the early-hold Quartz capture, the lane badge and both tap
+shell regressions check expiry in both modes and exercise a later foreground's
+independent stop beat and reappearance after seeking backward. In the early-hold
+Quartz capture, the lane badge and both tap
 judgments are visible after the capture fix. The copied hold badge is gone
 from both themes. The paired 600-frame Baked runs at 854×480 measured
 8.56 ms before and after in OpenITG and 8.56 ms before and 8.57 ms after
 in Simply Love. All four runs reported zero audio underruns or buffer
 growth events.
+
+Windows captures at 854×480 show both themes drawing the Quartz proxy in Baked
+mode with three seconds of tween time. With zero tween time, both captures show only
+the original tap judgment. In the paired 600-frame timed runs, 95th-percentile
+frame time moved from 8.64 to 8.61 ms in OpenITG and from 8.67 to 8.62 ms in
+Simply Love. All four Vulkan and WASAPI runs recorded zero audio underruns and
+zero buffer growth events.
 
 ## Windows release verification
 

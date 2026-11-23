@@ -999,6 +999,7 @@ mod tests {
     fn song_lua_runtime_visuals_are_parser_free_containers() {
         let layer = SongLuaVisualLayerRuntime {
             start_second: 2.0,
+            foreground_beats: None,
             screen_width: 640.0,
             screen_height: 480.0,
             overlays: vec![1_u8],
@@ -1015,6 +1016,7 @@ mod tests {
         let visuals = SongLuaRuntimeVisuals {
             screen_overlay_index: None,
             overlays: vec![3_u8],
+            foreground_beats: None,
             overlay_eases: layer.overlay_eases.clone(),
             overlay_ease_ranges: vec![0..1],
             overlay_events: layer.overlay_events.clone(),

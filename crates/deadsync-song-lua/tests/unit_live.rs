@@ -9051,6 +9051,7 @@ return Def.ActorFrame {
     scene.bind_targets(bindings).unwrap();
     let mut visuals = deadsync_gameplay::SongLuaRuntimeVisuals {
         overlays: compiled.overlays,
+        foreground_beats: None,
         screen_overlay_index: compiled.screen_overlay_index,
         overlay_eases: Vec::new(),
         overlay_ease_ranges: Vec::new(),

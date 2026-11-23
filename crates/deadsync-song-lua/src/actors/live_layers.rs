@@ -436,22 +436,11 @@ fn entry(call: &mut HostCall<'_>) -> Result<(), Error> {
                     song_activation::startup(call, actor)?;
                 }
                 let start_rate = self::music_rate(call, options)?;
-                let start = data.context.song_timing.as_ref().map_or_else(
-                    || {
-                        crate::song_elapsed_seconds_at(fg.start, &data.context)
-                            * crate::song_music_rate(&data.context)
-                    },
-                    |t| t.get_song_time_for_beat(fg.start, start_rate),
+                let start = crate::song_layers::foreground_start_second(
+                    &data.context, fg.start, start_rate,
                 );
-                let stop = start + lifecycle::time_left(call, actor)?;
-                fg.stop = data.context.song_timing.as_ref().map_or_else(
-                    || {
-                        crate::song_beat_at_elapsed_seconds(
-                            stop / crate::song_music_rate(&data.context),
-                            &data.context,
-                        )
-                    },
-                    |t| t.get_song_position(stop).beat,
+                fg.stop = crate::song_layers::foreground_stop_beat(
+                    &data.context, start, lifecycle::time_left(call, actor)?,
                 );
                 fg.started = true;
                 (music - start).max(0.) / rate

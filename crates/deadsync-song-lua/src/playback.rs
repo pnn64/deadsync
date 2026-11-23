@@ -26,7 +26,8 @@ use deadlib_render_core::{
 use deadsync_chart::SongData;
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_gameplay::{
-    SongLuaEase, SongLuaOverlayMessageRuntime, SongLuaRuntimeVisuals, song_lua_ease_factor,
+    SongLuaEase, SongLuaOverlayMessageRuntime, SongLuaRuntimeVisuals, SongLuaVisualLayerRuntime,
+    song_lua_ease_factor,
 };
 use deadsync_notefield::ViewOverride as NotefieldViewOverride;
 use deadsync_notefield::{
@@ -1477,6 +1478,84 @@ impl SongLuaLayerActivity {
         &self.active
     }
 }
+
+/// Rebuilds the source-order foreground list when a seconds start or beat boundary
+/// crosses the playback clock. The list reserves its full capacity at song entry.
+#[derive(Default)]
+struct SongLuaForegroundActivity {
+    starts: SongLuaLayerActivity,
+    beat_boundaries: Box<[(f32, bool)]>,
+    active: Vec<usize>,
+    started_count: usize,
+    crossed_boundaries: usize,
+}
+
+impl SongLuaForegroundActivity {
+    fn new<A, C, D>(layers: &[SongLuaVisualLayerRuntime<A, C, D>], now: f32) -> Self {
+        let starts = layers.iter().map(|layer| {
+            // Baked windows use the raw beat, including through stops and delays.
+            layer
+                .foreground_beats
+                .as_ref()
+                .map_or(layer.start_second, |_| f32::NEG_INFINITY)
+        });
+        let mut beat_boundaries = Vec::new();
+        for window in layers
+            .iter()
+            .filter_map(|layer| layer.foreground_beats.as_ref())
+        {
+            beat_boundaries.push((*window.start(), false));
+            beat_boundaries.push((*window.end(), true));
+        }
+        beat_boundaries.sort_unstable_by(|&(left, left_end), &(right, right_end)| {
+            if left == right {
+                left_end.cmp(&right_end)
+            } else {
+                left.total_cmp(&right)
+            }
+        });
+        let capacity = if beat_boundaries.is_empty() {
+            0
+        } else {
+            layers.len()
+        };
+        Self {
+            starts: SongLuaLayerActivity::new(starts, now),
+            beat_boundaries: beat_boundaries.into_boxed_slice(),
+            active: Vec::with_capacity(capacity),
+            started_count: 0,
+            crossed_boundaries: 0,
+        }
+    }
+
+    fn sync<A, C, D>(
+        &mut self,
+        now: f32,
+        beat: f32,
+        layers: &[SongLuaVisualLayerRuntime<A, C, D>],
+    ) -> &[usize] {
+        let started = self.starts.sync(now);
+        if self.beat_boundaries.is_empty() {
+            return started;
+        }
+        let crossed_boundaries = self
+            .beat_boundaries
+            .partition_point(|&(at, is_end)| at < beat || (!is_end && at == beat));
+        if started.len() != self.started_count || crossed_boundaries != self.crossed_boundaries {
+            self.started_count = started.len();
+            self.crossed_boundaries = crossed_boundaries;
+            self.active.clear();
+            self.active.extend(started.iter().copied().filter(|&index| {
+                layers[index]
+                    .foreground_beats
+                    .as_ref()
+                    .is_none_or(|window| window.contains(&beat))
+            }));
+        }
+        &self.active
+    }
+}
+
 const SONG_LUA_FG_OWNER_ROOT: u8 = 0;
 const SONG_LUA_FG_OWNER_BACKGROUND: u8 = 1;
 const SONG_LUA_FG_OWNER_FOREGROUND: u8 = 2;
@@ -1623,6 +1702,8 @@ impl SongLuaForegroundOwnerIndex {
     fn owns<S: NoteskinSlot + Clone>(
         &self,
         now: f32,
+        show_root: bool,
+        active_foregrounds: &[usize],
         visuals: &SongLuaRuntimeVisuals<
             SongLuaOverlayActor<S>,
             SongLuaCapturedActor,
@@ -1636,19 +1717,20 @@ impl SongLuaForegroundOwnerIndex {
             .iter()
             .any(|owner| {
                 let state = match owner.source {
-                    SONG_LUA_FG_OWNER_ROOT => overlay_states.get(owner.overlay_index),
+                    SONG_LUA_FG_OWNER_ROOT if show_root => overlay_states.get(owner.overlay_index),
                     SONG_LUA_FG_OWNER_BACKGROUND => visuals
                         .background_visual_layers
                         .get(owner.layer_index)
                         .filter(|layer| !(now < layer.start_second))
                         .and_then(|_| background_layer_states.get(owner.layer_index))
                         .and_then(|states| states.get(owner.overlay_index)),
-                    SONG_LUA_FG_OWNER_FOREGROUND => visuals
-                        .foreground_visual_layers
-                        .get(owner.layer_index)
-                        .filter(|layer| !(now < layer.start_second))
-                        .and_then(|_| foreground_layer_states.get(owner.layer_index))
-                        .and_then(|states| states.get(owner.overlay_index)),
+                    SONG_LUA_FG_OWNER_FOREGROUND
+                        if active_foregrounds.binary_search(&owner.layer_index).is_ok() =>
+                    {
+                        foreground_layer_states
+                            .get(owner.layer_index)
+                            .and_then(|states| states.get(owner.overlay_index))
+                    }
                     _ => None,
                 };
                 state.is_some_and(|state| state.draw_visible() && state.diffuse[3] > f32::EPSILON)
@@ -14318,7 +14400,7 @@ pub struct FrameScratch {
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
     song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
     song_lua_background_layer_activity: SongLuaLayerActivity,
-    song_lua_foreground_layer_activity: SongLuaLayerActivity,
+    song_lua_foreground_layer_activity: SongLuaForegroundActivity,
     song_lua_proxy_request_index: SongLuaProxyRequestIndex,
     song_lua_background_overlay_topology_indices: Vec<SongLuaOverlayTopologyIndex>,
     song_lua_foreground_proxy_request_indices: Vec<SongLuaProxyRequestIndex>,
@@ -14611,11 +14693,8 @@ impl FrameScratch {
                 .map(|layer| layer.start_second),
             song_lua_now,
         );
-        let song_lua_foreground_layer_activity = SongLuaLayerActivity::new(
-            song_lua_visuals
-                .foreground_visual_layers
-                .iter()
-                .map(|layer| layer.start_second),
+        let song_lua_foreground_layer_activity = SongLuaForegroundActivity::new(
+            &song_lua_visuals.foreground_visual_layers,
             song_lua_now,
         );
         let target_capacity = std::iter::once(&song_lua_aft_capture_scratch)
@@ -15184,6 +15263,11 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
     let song_lua_now = state.current_music_time_display();
+    let show_primary_foreground = show_song_visuals
+        && song_lua_visuals
+            .foreground_beats
+            .as_ref()
+            .is_none_or(|window| window.contains(&state.current_beat()));
     let screen_layers: [SongLuaOverlayState; 4] = std::array::from_fn(|index| {
         if !show_song_visuals {
             return SongLuaOverlayState::default();
@@ -15235,7 +15319,11 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         &[]
     };
     let song_lua_foreground_active_layers: &[usize] = if show_song_visuals {
-        song_lua_foreground_layer_activity.sync(song_lua_now)
+        song_lua_foreground_layer_activity.sync(
+            song_lua_now,
+            state.current_beat(),
+            &song_lua_visuals.foreground_visual_layers,
+        )
     } else {
         &[]
     };
@@ -15303,7 +15391,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             [song_lua_now, state.current_beat()],
         );
     }
-    let mut proxy_analysis = if show_song_visuals {
+    let mut proxy_analysis = if show_primary_foreground {
         song_lua_proxy_request_analysis_indexed(
             &song_lua_visuals.overlays,
             song_lua_overlay_state_scratch,
@@ -15351,7 +15439,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         // Release the bank about to be reused before refilling its source
         // buffers. Otherwise our own old captures force Arc replacements.
         song_lua_aft_capture_scratch.manual.release_next();
-        manual_requests = song_lua_aft_capture_scratch.manual.requests(song_lua_now);
+        if show_primary_foreground {
+            manual_requests = song_lua_aft_capture_scratch.manual.requests(song_lua_now);
+        }
         for &layer in song_lua_foreground_active_layers {
             song_lua_foreground_aft_capture_scratch[layer]
                 .manual
@@ -15375,7 +15465,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         hidden_song_layers,
         [proxy_requests.underlay, proxy_requests.overlay],
     );
-    let mut covering_proxy_requests = if show_song_visuals {
+    let mut covering_proxy_requests = if show_primary_foreground {
         song_lua_covering_capture_requests(
             &song_lua_visuals.overlays,
             song_lua_local_state_scratch,
@@ -16266,7 +16356,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             direct_combo: p2_direct_combo.is_some(),
         },
     ];
-    let mut replacement_active_players = if show_song_visuals {
+    let mut replacement_active_players = if show_primary_foreground {
         song_lua_replacement_active_players_indexed(
             &song_lua_visuals.overlays,
             song_lua_overlay_state_scratch,
@@ -16473,7 +16563,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         background: background_source.as_deref(),
         stage: stage_source.as_deref(),
     };
-    if show_song_visuals {
+    if show_primary_foreground {
         push_song_lua_layer_actors(
             actors,
             render_targets,
@@ -16509,9 +16599,13 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             song_lua_projected_mesh_scratch,
             SONG_LUA_FOREGROUND_DEPTH,
         );
+    }
+    if show_song_visuals {
         if let Some(actor) = build_foreground_media(
             state,
             media,
+            show_primary_foreground,
+            song_lua_foreground_active_layers,
             song_lua_overlay_state_scratch,
             song_lua_background_layer_state_scratch,
             song_lua_foreground_layer_state_scratch,
@@ -16605,6 +16699,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
 fn build_foreground_media<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot + Clone>(
     state: &GameplayCoreState<P, S>,
     media: &SongMedia,
+    show_primary_foreground: bool,
+    active_foregrounds: &[usize],
     overlay_states: &[SongLuaOverlayState],
     background_layer_states: &[Vec<SongLuaOverlayState>],
     foreground_layer_states: &[Vec<SongLuaOverlayState>],
@@ -16612,6 +16708,8 @@ fn build_foreground_media<P: deadsync_gameplay::GameplayProfileData, S: Noteskin
     let texture_key = media.current_foreground_key.clone()?;
     if media.song_lua_foreground_owner_index.owns(
         state.current_music_time_display(),
+        show_primary_foreground,
+        active_foregrounds,
         state.song_lua_visuals(),
         overlay_states,
         background_layer_states,
