@@ -17,7 +17,7 @@ const STEP_SECONDS: f32 = 0.125;
 
 #[test]
 fn configured_themes_complete_song_route() {
-    // Both the runtime configuration and winit event-loop registration are
+    // The runtime configuration and winit event-loop registration are both
     // process-global. Give each configured launch its own isolated process.
     if let Ok(theme) = std::env::var(CHILD_THEME) {
         on_app_thread(move || run_child(&theme));
@@ -25,7 +25,7 @@ fn configured_themes_complete_song_route() {
         return;
     }
     let executable = std::env::current_exe().unwrap();
-    for theme in ["Simply Love", "OpenITG"] {
+    for theme in ThemeFlag::CHOICES.map(ThemeFlag::as_str) {
         let child = ProcessCommand::new(&executable)
             .args(["--exact", TEST_NAME, "--nocapture"])
             .env(CHILD_THEME, theme)
@@ -64,11 +64,7 @@ fn run_child(theme: &str) {
     config::runtime::flush_pending_saves();
     deadsync_theme_simply_love::i18n::init_for_tests();
     seed_library(&dirs);
-    let expected_theme = if theme == "OpenITG" {
-        ThemeFlag::OpenItg
-    } else {
-        ThemeFlag::SimplyLove
-    };
+    let expected_theme: ThemeFlag = theme.parse().unwrap();
     let (generation, cfg) = config::runtime::snapshot();
     assert_eq!(cfg.theme_flag, expected_theme);
     let paths = dirs.asset_paths(None);
@@ -84,20 +80,13 @@ fn run_child(theme: &str) {
         None,
     );
     app.asset_manager = fixture_assets();
-    if expected_theme == ThemeFlag::OpenItg {
-        use deadsync_theme::ThemeResources;
-        let fonts = deadlib_assets::parse_font_asset_specs(
-            deadsync_theme_openitg::OpenItgTheme::asset_manifest()
-                .fonts
-                .iter()
-                .copied(),
-            &paths.texture_roots,
-            |path| paths.resolve_asset_path(path),
-        )
-        .expect("bundled OpenITG fonts load");
-        app.asset_manager
-            .register_fonts(fonts.into_iter().map(|asset| (asset.name, asset.font)));
-    }
+    let fonts = deadlib_assets::parse_font_asset_specs(
+        crate::mounted_theme::supplemental_resources(expected_theme).fonts.iter().copied(),
+        &paths.texture_roots,
+        |path| paths.resolve_asset_path(path),
+    ).expect("bundled theme fonts load");
+    app.asset_manager
+        .register_fonts(fonts.into_iter().map(|asset| (asset.name, asset.font)));
     assert_eq!(app.state.screens.menu_state.theme_flag(), expected_theme);
 
     let mut route = RouteTest { app: Some(app) };
@@ -156,6 +145,10 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
 
     app.on_fade_complete(CurrentScreen::Menu, event_loop);
     settle(app, event_loop, CurrentScreen::Menu);
+    let theme = app.state.screens.menu_state.theme_flag();
+    let circuit = theme == ThemeFlag::PulseCircuit;
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert_eq!(actor_tree_has_text(&actors, "CIRCUIT"), circuit);
     for next in [
         CurrentScreen::SelectProfile,
         CurrentScreen::SelectStyle,
@@ -167,7 +160,8 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     }
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
-    let openitg = app.state.screens.menu_state.theme_flag() == ThemeFlag::OpenItg;
+    assert_eq!(actor_tree_has_text(&actors, "SELECT TRACK"), circuit);
+    let openitg = theme == ThemeFlag::OpenItg;
     assert_eq!(actor_tree_has_text(&actors, "CHANCE"), openitg);
     assert_eq!(actor_tree_has_text(&actors, "RANDOM"), openitg);
     if openitg {
@@ -296,6 +290,10 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
+    assert_eq!(actor_tree_has_text(&actors, "STAGE RESULTS"), circuit);
+    if circuit {
+        assert!(actor_tree_has_text(&actors, "PLAYER 2"));
+    }
     assert_eq!(
         actors.iter().any(|actor| matches!(actor,
             Actor::Sprite {
@@ -321,6 +319,10 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
         assert!(actor_tree_has_text(&actors, "Loading..."));
         assert_eq!(app.state.screens.current_screen, CurrentScreen::Evaluation);
         assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
+    } else if circuit {
+        let exit = app.state.screens.evaluation_departure.as_ref().unwrap();
+        assert_eq!(exit.cue, Some(deadsync_theme::UiCue::Confirm));
+        assert_eq!(exit.duration, 0.22);
     } else {
         assert!(app.state.screens.evaluation_departure.is_none());
     }

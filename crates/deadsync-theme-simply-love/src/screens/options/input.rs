@@ -367,10 +367,9 @@ pub(super) fn apply_submenu_choice_delta(
             }
             SubRowId::Theme => {
                 action = Some(options_config_effect(
-                    crate::SimplyLoveOptionsConfigRequest::Theme(match new_index {
-                        1 => deadsync_config::theme::ThemeFlag::OpenItg,
-                        _ => deadsync_config::theme::ThemeFlag::SimplyLove,
-                    }),
+                    crate::SimplyLoveOptionsConfigRequest::Theme(
+                        deadsync_config::theme::ThemeFlag::from_choice(new_index),
+                    ),
                 ));
             }
             SubRowId::Language => {

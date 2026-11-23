@@ -8,6 +8,8 @@ use deadsync_theme::selection::SelectionPresentation;
 use deadsync_theme::stage::StagePresentation;
 use deadsync_theme::system_options::SystemOptionsPresentation;
 use deadsync_theme::{ThemeResources, ThemeSounds};
+use deadsync_theme_ddr_extreme::{CircuitAttract, CircuitSelection, CircuitStage, PulseCircuitTheme};
+use deadsync_theme_openitg::OpenItgTheme;
 
 #[derive(Default)]
 pub(crate) struct SupplementalResources {
@@ -19,15 +21,17 @@ pub(crate) struct SupplementalResources {
 pub(crate) fn supplemental_resources(theme: ThemeFlag) -> SupplementalResources {
     match theme {
         ThemeFlag::SimplyLove => SupplementalResources::default(),
-        ThemeFlag::OpenItg => {
-            use deadsync_theme_openitg::OpenItgTheme;
-            let manifest = OpenItgTheme::asset_manifest();
-            SupplementalResources {
-                fonts: manifest.fonts,
-                embedded_pngs: manifest.embedded_pngs,
-                sounds: OpenItgTheme::SOUNDS,
-            }
-        }
+        ThemeFlag::OpenItg => resources::<OpenItgTheme>(),
+        ThemeFlag::PulseCircuit => resources::<PulseCircuitTheme>(),
+    }
+}
+
+fn resources<T: ThemeResources>() -> SupplementalResources {
+    let manifest = T::asset_manifest();
+    SupplementalResources {
+        fonts: manifest.fonts,
+        embedded_pngs: manifest.embedded_pngs,
+        sounds: T::SOUNDS,
     }
 }
 
@@ -35,12 +39,14 @@ pub(crate) fn mount_stage(theme: ThemeFlag) -> Box<dyn StagePresentation<Actor>>
     match theme {
         ThemeFlag::SimplyLove => Box::new(deadsync_theme_simply_love::SimplyLoveTheme),
         ThemeFlag::OpenItg => Box::new(deadsync_theme_openitg::OpenItgStagePresentation::default()),
+        ThemeFlag::PulseCircuit => Box::new(CircuitStage),
     }
 }
 
 pub(crate) fn mount_selection(theme: ThemeFlag) -> Option<Box<dyn SelectionPresentation<Actor>>> {
     match theme {
         ThemeFlag::SimplyLove => None,
+        ThemeFlag::PulseCircuit => Some(Box::new(CircuitSelection)),
         ThemeFlag::OpenItg => Some(Box::new(
             deadsync_theme_openitg::OpenItgSelectionPresentation::default(),
         )),
@@ -49,7 +55,7 @@ pub(crate) fn mount_selection(theme: ThemeFlag) -> Option<Box<dyn SelectionPrese
 
 pub(crate) fn player_options_layout(theme: ThemeFlag) -> Option<PlayerOptionsLayoutFactory> {
     match theme {
-        ThemeFlag::SimplyLove => None,
+        ThemeFlag::SimplyLove | ThemeFlag::PulseCircuit => None,
         ThemeFlag::OpenItg => {
             Some(|| Box::new(deadsync_theme_openitg::OpenItgPlayerOptions::default()))
         }
@@ -60,7 +66,7 @@ pub(crate) fn mount_system_options(
     theme: ThemeFlag,
 ) -> Option<Box<dyn SystemOptionsPresentation<Actor>>> {
     match theme {
-        ThemeFlag::SimplyLove => None,
+        ThemeFlag::SimplyLove | ThemeFlag::PulseCircuit => None,
         ThemeFlag::OpenItg => Some(Box::new(
             deadsync_theme_openitg::OpenItgSystemOptions::default(),
         )),
@@ -70,6 +76,7 @@ pub(crate) fn mount_system_options(
 pub(crate) fn mount_attract(theme: ThemeFlag) -> Option<Box<dyn AttractPresentation<Actor>>> {
     match theme {
         ThemeFlag::SimplyLove => None,
+        ThemeFlag::PulseCircuit => Some(Box::new(CircuitAttract::default())),
         ThemeFlag::OpenItg => Some(Box::new(deadsync_theme_openitg::OpenItgIntro::default())),
     }
 }

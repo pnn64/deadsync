@@ -38,6 +38,7 @@ deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-smx = { path = "../deadsync-smx" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 deadsync-theme = { path = "../deadsync-theme" }
+deadsync-theme-ddr-extreme = { path = "../deadsync-theme-ddr-extreme" }
 deadsync-theme-openitg = { path = "../deadsync-theme-openitg" }
 deadsync-theme-simply-love = { path = "../deadsync-theme-simply-love" }
 deadsync-updater = { path = "../deadsync-updater" }

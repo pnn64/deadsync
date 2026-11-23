@@ -709,10 +709,7 @@ pub fn init(view: OptionsInitView) -> State {
         &mut state.sub[SubmenuKind::System].choice_indices,
         SYSTEM_OPTIONS_ROWS,
         SubRowId::Theme,
-        match cfg.theme_flag {
-            deadsync_config::theme::ThemeFlag::SimplyLove => 0,
-            deadsync_config::theme::ThemeFlag::OpenItg => 1,
-        },
+        cfg.theme_flag.choice_index(),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::System].choice_indices,

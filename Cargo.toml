@@ -72,6 +72,7 @@ members = [
     "crates/deadsync-song-lua",
     "crates/deadsync-smx",
     "crates/deadsync-theme",
+    "crates/deadsync-theme-ddr-extreme",
     "crates/deadsync-theme-openitg",
     "crates/deadsync-theme-simply-love",
     "crates/deadsync-updater",

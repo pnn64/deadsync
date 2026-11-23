@@ -9,12 +9,16 @@ use deadlib_present::render::BlendMode;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_config::coin::CoinMode;
 use deadsync_config::theme::GameFlag;
-use deadsync_input::{InputEvent, MenuLrChord, VirtualAction};
+use deadsync_input::InputEvent;
+#[cfg(test)]
+use deadsync_input::VirtualAction;
 use deadsync_theme::main_menu::{
-    MainMenuFrame, MainMenuItem, MainMenuPhase, MainMenuRuntimeView, MenuBackgroundMovie,
+    MainMenuFrame, MainMenuItem, MainMenuPhase, MainMenuRuntimeView, MainMenuSelection, MenuBackgroundMovie,
     ThemeMainMenu, main_menu_items,
 };
-use deadsync_theme::{Screen, ThemeEffect, ThemeInputResult, TransitionState, UiCue};
+use deadsync_theme::{Screen, ThemeEffect, ThemeInputResult, TransitionState};
+#[cfg(test)]
+use deadsync_theme::UiCue;
 use std::sync::Arc;
 
 type Effect<R> = ThemeEffect<Screen, R>;
@@ -30,13 +34,12 @@ pub(super) const EXIT_SECONDS: f32 = 0.3;
 /// Retained selection and animation state for the title screen.
 #[derive(Default)]
 pub struct MenuState {
-    selected: usize,
+    selection: MainMenuSelection,
     color_index: i32,
     view: RuntimeView,
     entry_elapsed: f32,
     focus_elapsed: f32,
     idle_elapsed: f32,
-    nav_chords: [MenuLrChord; 2],
 }
 
 impl MenuState {
@@ -47,44 +50,7 @@ impl MenuState {
         )
     }
 
-    fn move_selection<R>(&mut self, delta: isize) -> Effect<R> {
-        let count = self.items().len();
-        let next = (self.selected as isize + delta).rem_euclid(count as isize) as usize;
-        if self.selected == next {
-            return Effect::None;
-        }
-        self.selected = next;
-        self.focus_elapsed = 0.0;
-        Effect::UiCue(UiCue::Change)
-    }
 
-    fn activate<R>(&self) -> Effect<R> {
-        let destination = match self.items()[self.selected] {
-            // The host admits arcade Start before calling the menu. In Pay mode
-            // the updated view can already report zero remaining credits.
-            MainMenuItem::Play => Effect::Navigate(Screen::SelectProfile),
-            MainMenuItem::Options => Effect::Navigate(Screen::Options),
-            MainMenuItem::Content => Effect::Navigate(Screen::ContentBrowser),
-            MainMenuItem::Exit => Effect::Exit,
-            MainMenuItem::Shutdown => Effect::Shutdown,
-        };
-        Effect::sequence(
-            Effect::UiCue(UiCue::Confirm),
-            destination,
-        )
-    }
-
-    fn cancel_chord(&mut self, input: &InputEvent) -> bool {
-        if !self.view.dedicated_three_key_nav {
-            return false;
-        }
-        let side = match input.action {
-            VirtualAction::p1_menu_left | VirtualAction::p1_menu_right => 0,
-            VirtualAction::p2_menu_left | VirtualAction::p2_menu_right => 1,
-            _ => return false,
-        };
-        self.nav_chords[side].update(input)
-    }
 }
 
 impl ThemeMainMenu for OpenItgTheme {
@@ -115,11 +81,9 @@ impl ThemeMainMenu for OpenItgTheme {
     }
 
     fn sync_menu_runtime(state: &mut MenuState, view: RuntimeView) {
-        if view.dedicated_three_key_nav != state.view.dedicated_three_key_nav {
-            state.nav_chords = [MenuLrChord::default(); 2];
-        }
         state.view = view;
-        state.selected = state.selected.min(state.items().len() - 1);
+        let items = state.items();
+        state.selection.sync(items, state.view.dedicated_three_key_nav);
     }
 
     fn update_menu<R>(state: &mut MenuState, delta_time: f32, phase: MainMenuPhase) -> Effect<R> {
@@ -140,27 +104,13 @@ impl ThemeMainMenu for OpenItgTheme {
 
     fn handle_menu_input<R>(state: &mut MenuState, input: &InputEvent) -> Effect<R> {
         state.idle_elapsed = 0.0;
-        if state.cancel_chord(input) {
-            return Effect::Navigate(Screen::Init);
+        let selected = state.selection.index();
+        let items = state.items();
+        let effect = state.selection.input(input, items);
+        if state.selection.index() != selected {
+            state.focus_elapsed = 0.0;
         }
-        if !input.pressed {
-            return Effect::None;
-        }
-
-        use VirtualAction::*;
-        match input.action {
-            p1_start | p2_start => state.activate(),
-            p1_back | p2_back => Effect::Navigate(Screen::Init),
-            p1_menu_left | p1_menu_up | p2_menu_left | p2_menu_up => state.move_selection(-1),
-            p1_menu_right | p1_menu_down | p2_menu_right | p2_menu_down => state.move_selection(1),
-            p1_left | p1_up | p2_left | p2_up if !state.view.dedicated_three_key_nav => {
-                state.move_selection(-1)
-            }
-            p1_right | p1_down | p2_right | p2_down if !state.view.dedicated_three_key_nav => {
-                state.move_selection(1)
-            }
-            _ => Effect::None,
-        }
+        effect
     }
 
     fn handle_menu_raw_key<R>(
@@ -321,7 +271,7 @@ fn push_title(
     let pulse = 0.5 - 0.5 * (state.focus_elapsed * (std::f32::consts::TAU / FOCUS_SECONDS)).cos();
     for (index, item) in state.items().iter().copied().enumerate() {
         let y = FIRST_ROW_Y + index as f32 * ROW_PITCH;
-        let (zoom, color) = if index == state.selected {
+        let (zoom, color) = if index == state.selection.index() {
             let shade = 0.5 + 0.5 * pulse;
             (1.1, [shade, 0.5 * shade, 0.5 * shade, alpha])
         } else {

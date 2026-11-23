@@ -1,6 +1,7 @@
 //! Presentation interface for the title menu.
 
-use crate::{ThemeEffect, ThemeInputResult, ThemeTransitions, TransitionState};
+use crate::{Screen, ThemeEffect, ThemeInputResult, ThemeTransitions, TransitionState, UiCue};
+use deadsync_input::{InputEvent, MenuLrChord, VirtualAction};
 use std::sync::Arc;
 
 /// Host actions available from the title screen.
@@ -22,6 +23,75 @@ pub const fn main_menu_items(home: bool, allow_shutdown: bool) -> &'static [Main
         &[Play, Options, Content, Exit, Shutdown]
     } else {
         &[Play, Options, Content, Exit]
+    }
+}
+
+/// Focus and logical menu controls used by titles with a single list of host actions.
+#[derive(Default)]
+pub struct MainMenuSelection {
+    selected: usize,
+    dedicated_navigation: bool,
+    chords: [MenuLrChord; 2],
+}
+
+impl MainMenuSelection {
+    pub const fn index(&self) -> usize {
+        self.selected
+    }
+
+    pub fn sync(&mut self, items: &[MainMenuItem], dedicated_navigation: bool) {
+        if self.dedicated_navigation != dedicated_navigation {
+            self.chords = Default::default();
+            self.dedicated_navigation = dedicated_navigation;
+        }
+        self.selected = self.selected.min(items.len().saturating_sub(1));
+    }
+
+    /// The shell admits Start and records the physical side before forwarding the event.
+    pub fn input<R>(
+        &mut self,
+        event: &InputEvent,
+        items: &[MainMenuItem],
+    ) -> ThemeEffect<Screen, R> {
+        use ThemeEffect as Effect;
+        use VirtualAction::*;
+        if self.dedicated_navigation {
+            let side = match event.action {
+                p1_menu_left | p1_menu_right => Some(0),
+                p2_menu_left | p2_menu_right => Some(1),
+                _ => None,
+            };
+            if side.is_some_and(|side| self.chords[side].update(event)) {
+                return Effect::Navigate(Screen::Init);
+            }
+        }
+        if !event.pressed || items.is_empty() {
+            return Effect::None;
+        }
+        let delta = match event.action {
+            p1_start | p2_start => {
+                let destination = match items[self.selected] {
+                    MainMenuItem::Play => Effect::Navigate(Screen::SelectProfile),
+                    MainMenuItem::Options => Effect::Navigate(Screen::Options),
+                    MainMenuItem::Content => Effect::Navigate(Screen::ContentBrowser),
+                    MainMenuItem::Exit => Effect::Exit,
+                    MainMenuItem::Shutdown => Effect::Shutdown,
+                };
+                return Effect::sequence(Effect::UiCue(UiCue::Confirm), destination);
+            }
+            p1_back | p2_back => return Effect::Navigate(Screen::Init),
+            p1_menu_left | p1_menu_up | p2_menu_left | p2_menu_up => -1,
+            p1_menu_right | p1_menu_down | p2_menu_right | p2_menu_down => 1,
+            p1_left | p1_up | p2_left | p2_up if !self.dedicated_navigation => -1,
+            p1_right | p1_down | p2_right | p2_down if !self.dedicated_navigation => 1,
+            _ => return Effect::None,
+        };
+        let next = (self.selected as isize + delta).rem_euclid(items.len() as isize) as usize;
+        if self.selected == next {
+            return Effect::None;
+        }
+        self.selected = next;
+        Effect::UiCue(UiCue::Change)
     }
 }
 

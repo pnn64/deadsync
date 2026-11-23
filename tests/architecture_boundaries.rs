@@ -32,8 +32,8 @@ fn renderer_and_shell_cues_use_theme_resources() {
     let mounting = production_source(&shell.join("mounted_theme.rs"));
     assert!(graphics_app.contains("manifest.embedded_pngs = supplemental.embedded_pngs"));
     assert!(graphics_app.contains("supplemental.fonts"));
-    assert!(mounting.contains("let manifest = OpenItgTheme::asset_manifest()"));
-    assert!(mounting.contains("sounds: OpenItgTheme::SOUNDS"));
+    assert!(mounting.contains("let manifest = T::asset_manifest()"));
+    assert!(mounting.contains("sounds: T::SOUNDS"));
     assert!(contains_rust(app, "UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, installed_sounds)"));
     assert!(app.contains("AudioRequest::PlayUiCue(UiCue::Confirm)"));
     assert!(screenshot.contains("UiCue::Screenshot"));
@@ -7317,10 +7317,10 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
     }
     let factory = production_source(&root.join("crates/deadsync-shell/src/title_menu.rs"));
     for hook in [
-        "ActiveTheme::handle_menu_input(state, input)",
-        "OpenItgTheme::handle_menu_input(state, input)",
-        "OpenItgTheme::push_menu_actors(",
-        "ThemeFlag::OpenItg => Self::OpenItg(",
+        "T::handle_menu_input(&mut self.state, input)",
+        "T::push_menu_actors(",
+        "ThemeFlag::OpenItg => mount::<OpenItgTheme>(",
+        "ThemeFlag::PulseCircuit => mount::<PulseCircuitTheme>(",
     ] {
         assert!(contains_rust(&factory, hook), "installed title menu is missing {hook}");
     }
@@ -7587,7 +7587,12 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
             continue;
         }
         let source = production_source(&path);
-        for concrete in ["deadsync_theme_openitg", "ThemeFlag::OpenItg"] {
+        for concrete in [
+            "deadsync_theme_openitg",
+            "ThemeFlag::OpenItg",
+            "deadsync_theme_ddr_extreme",
+            "ThemeFlag::PulseCircuit",
+        ] {
             assert!(
                 !source.contains(concrete),
                 "{} uses {concrete} outside theme composition",
