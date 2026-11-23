@@ -12,9 +12,9 @@ use deadsync_theme::views::{AttractRecords, EvaluationOverview};
 use std::fmt::Write;
 
 #[derive(Default)]
-pub struct CircuitStage;
+pub struct ExtremeStage;
 
-impl StagePresentation<Actor> for CircuitStage {
+impl StagePresentation<Actor> for ExtremeStage {
     fn push_loading(&self, actors: &mut Vec<Actor>, view: StageLoadingView<'_>) {
         let scene = Scene::new(1.0);
         scene.cover(actors);
@@ -42,7 +42,7 @@ impl StagePresentation<Actor> for CircuitStage {
     }
 }
 
-impl EvaluationOverviewPresentation<Actor> for CircuitStage {
+impl EvaluationOverviewPresentation<Actor> for ExtremeStage {
     fn push_overview(
         &mut self,
         actors: &mut Vec<Actor>,
@@ -133,13 +133,13 @@ fn number_text(args: std::fmt::Arguments<'_>) -> TextContent {
 }
 
 #[derive(Default)]
-pub struct CircuitAttract {
+pub struct ExtremeAttract {
     elapsed: f32,
     idle: bool,
     records: AttractRecords,
 }
 
-impl AttractPresentation<Actor> for CircuitAttract {
+impl AttractPresentation<Actor> for ExtremeAttract {
     fn reset(&mut self) {
         *self = Self::default();
     }
@@ -198,7 +198,7 @@ impl AttractPresentation<Actor> for CircuitAttract {
             }
         } else {
             scene.motif(actors, [235.0, 188.0], self.elapsed);
-            scene.text(actors, [109.0, 263.0], [2.7, 423.0], "PULSE CIRCUIT", PAPER);
+            scene.text(actors, [109.0, 263.0], [2.7, 423.0], "DDR EXTREME", PAPER);
         }
         scene.text(actors, [62.0, 430.0], [0.58, 515.0], "PRESS START", MUTED);
     }

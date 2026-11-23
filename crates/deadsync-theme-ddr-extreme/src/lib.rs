@@ -1,4 +1,4 @@
-//! Pulse Circuit's original arcade presentation for the shared DeadSync game.
+//! DDR Extreme's original arcade presentation for the shared DeadSync game.
 
 mod menu;
 mod resources;
@@ -9,12 +9,12 @@ mod stage;
 use deadlib_present::actors::Actor;
 use deadsync_theme::{Screen, Theme, ThemeScreenId, ThemeTransitions, TransitionKind};
 
-pub use selection::CircuitSelection;
-pub use stage::{CircuitAttract, CircuitStage};
+pub use selection::ExtremeSelection;
+pub use stage::{ExtremeAttract, ExtremeStage};
 
-pub struct PulseCircuitTheme;
+pub struct DdrExtremeTheme;
 
-impl Theme for PulseCircuitTheme {
+impl Theme for DdrExtremeTheme {
     type Screen = Screen;
     type RuntimeRequest = std::convert::Infallible;
 
@@ -23,7 +23,7 @@ impl Theme for PulseCircuitTheme {
     }
 }
 
-impl ThemeTransitions for PulseCircuitTheme {
+impl ThemeTransitions for DdrExtremeTheme {
     type Actor = Actor;
     type EntryContext<'a> = ();
 

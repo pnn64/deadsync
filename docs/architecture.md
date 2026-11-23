@@ -22,8 +22,8 @@ state, elapsed time, input intent, and ready media through contracts in
 `deadsync-theme`. Themes own the layout, animation, resource choices, and
 presentation state.
 
-The title mount adapts each theme once at startup. OpenITG and Pulse
-Circuit share the focus and input handling for the list of menu actions.
+The title mount adapts each theme once at startup. OpenITG and
+DDR Extreme share the focus and input handling for the list of menu actions.
 Each theme owns its presentation clock and receives the same prepared
 credit and session facts. The shell admits Start and records the physical
 side before the title requests profile selection.
@@ -73,23 +73,23 @@ separate interfaces before they can be replaced independently.
 All configurations also mount the Simply Love gameplay frame composer
 and Twitch overlay. The mounted stage supplies the OpenITG HUD.
 
-### Pulse Circuit
+### DDR Extreme
 
-`deadsync-theme-ddr-extreme` is the crate for Pulse Circuit, an original
-arcade theme. Select it in System Options or set `Theme=Pulse Circuit`
+`deadsync-theme-ddr-extreme` is the crate for DDR Extreme, an original
+arcade theme. Select it in System Options or set `Theme=DDR Extreme`
 under `[Options]` in `deadsync.ini` and restart.
 
 The theme mounts an intro and idle records screen, title menu, profile
 picker, style and mode selection, song and course wheels, profile and
 stage loading views, and results overview. Its font is packaged under
-`assets/fonts/pulse-circuit`. The theme embeds its two feedback samples
+`assets/fonts/ddr-extreme`. The theme embeds its two feedback samples
 in the executable. The shell supplies the chart catalog, preview clock,
 profile rows, and completed score records through the same interfaces
 used by OpenITG.
 
 The configured Windows play-route test launches each of the three themes
-in its own process and records six timestamped hits for solo P2. Pulse
-Circuit displays that completed result on P2's panel and returns to the
+in its own process and records six timestamped hits for solo P2. DDR
+Extreme displays that completed result on P2's panel and returns to the
 wheel. The intro, title, profile picker, song wheel, loading view, and
 results were rendered at 640×480 and 854×480 with Vulkan through wgpu.
 
@@ -715,7 +715,7 @@ Other effects used on those screens and their supporting assets still come
 from the current Simply Love manifest. The graphics loader reads embedded PNGs
 from the asset manifest on startup and renderer recreation.
 
-The `Theme` setting selects Simply Love or OpenITG at startup. Both title menus
+The `Theme` setting selects the installed presentation at startup. All title menus
 use the same session start, cabinet permissions, and navigation commands.
 OpenITG mounts its title, System Options, Profile Picker, Select Style, Select
 Play Mode, Player Options, and base Select Music layouts. The existing Options

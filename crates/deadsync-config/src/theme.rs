@@ -1451,18 +1451,18 @@ impl FromStr for GameFlag {
 pub enum ThemeFlag {
     SimplyLove,
     OpenItg,
-    PulseCircuit,
+    DdrExtreme,
 }
 
 impl ThemeFlag {
-    pub const CHOICES: [Self; 3] = [Self::SimplyLove, Self::OpenItg, Self::PulseCircuit];
+    pub const CHOICES: [Self; 3] = [Self::SimplyLove, Self::OpenItg, Self::DdrExtreme];
 
     #[must_use]
     pub const fn choice_index(self) -> usize {
         match self {
             Self::SimplyLove => 0,
             Self::OpenItg => 1,
-            Self::PulseCircuit => 2,
+            Self::DdrExtreme => 2,
         }
     }
 
@@ -1480,7 +1480,7 @@ impl ThemeFlag {
         match self {
             Self::SimplyLove => "Simply Love",
             Self::OpenItg => "OpenITG",
-            Self::PulseCircuit => "Pulse Circuit",
+            Self::DdrExtreme => "DDR Extreme",
         }
     }
 }
@@ -1495,7 +1495,7 @@ impl FromStr for ThemeFlag {
         match key.as_str() {
             "simplylove" => Ok(Self::SimplyLove),
             "openitg" => Ok(Self::OpenItg),
-            "pulsecircuit" | "ddrextreme" => Ok(Self::PulseCircuit),
+            "ddrextreme" => Ok(Self::DdrExtreme),
             _ => Err(()),
         }
     }

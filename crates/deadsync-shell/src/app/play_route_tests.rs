@@ -146,9 +146,9 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     app.on_fade_complete(CurrentScreen::Menu, event_loop);
     settle(app, event_loop, CurrentScreen::Menu);
     let theme = app.state.screens.menu_state.theme_flag();
-    let circuit = theme == ThemeFlag::PulseCircuit;
+    let extreme = theme == ThemeFlag::DdrExtreme;
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
-    assert_eq!(actor_tree_has_text(&actors, "CIRCUIT"), circuit);
+    assert_eq!(actor_tree_has_text(&actors, "EXTREME"), extreme);
     for next in [
         CurrentScreen::SelectProfile,
         CurrentScreen::SelectStyle,
@@ -160,7 +160,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     }
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
-    assert_eq!(actor_tree_has_text(&actors, "SELECT TRACK"), circuit);
+    assert_eq!(actor_tree_has_text(&actors, "SELECT TRACK"), extreme);
     let openitg = theme == ThemeFlag::OpenItg;
     assert_eq!(actor_tree_has_text(&actors, "CHANCE"), openitg);
     assert_eq!(actor_tree_has_text(&actors, "RANDOM"), openitg);
@@ -290,8 +290,8 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
-    assert_eq!(actor_tree_has_text(&actors, "STAGE RESULTS"), circuit);
-    if circuit {
+    assert_eq!(actor_tree_has_text(&actors, "STAGE RESULTS"), extreme);
+    if extreme {
         assert!(actor_tree_has_text(&actors, "PLAYER 2"));
     }
     assert_eq!(
@@ -319,7 +319,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
         assert!(actor_tree_has_text(&actors, "Loading..."));
         assert_eq!(app.state.screens.current_screen, CurrentScreen::Evaluation);
         assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
-    } else if circuit {
+    } else if extreme {
         let exit = app.state.screens.evaluation_departure.as_ref().unwrap();
         assert_eq!(exit.cue, Some(deadsync_theme::UiCue::Confirm));
         assert_eq!(exit.duration, 0.22);

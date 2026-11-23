@@ -6,7 +6,7 @@ use deadlib_present::actors::Actor;
 use deadsync_config::theme::ThemeFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, MenuBackgroundMovie, ThemeMainMenu};
-use deadsync_theme_ddr_extreme::PulseCircuitTheme;
+use deadsync_theme_ddr_extreme::DdrExtremeTheme;
 use deadsync_theme_openitg::OpenItgTheme;
 use deadsync_theme_simply_love::{
     SimplyLoveEffect, SimplyLoveInputResult, views::SimplyLoveVisualPolicyView,
@@ -25,7 +25,7 @@ impl InstalledMenu {
         let title = match flag {
             ThemeFlag::SimplyLove => mount::<ActiveTheme>(color_index, |policy| policy),
             ThemeFlag::OpenItg => mount::<OpenItgTheme>(color_index, |_| ()),
-            ThemeFlag::PulseCircuit => mount::<PulseCircuitTheme>(color_index, |_| ()),
+            ThemeFlag::DdrExtreme => mount::<DdrExtremeTheme>(color_index, |_| ()),
         };
         Self { flag, title }
     }

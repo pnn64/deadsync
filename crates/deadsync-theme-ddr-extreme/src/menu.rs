@@ -1,4 +1,4 @@
-use crate::PulseCircuitTheme;
+use crate::DdrExtremeTheme;
 use crate::scene::{AMBER, MINT, MUTED, PAPER, Scene};
 use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::actors::Actor;
@@ -32,7 +32,7 @@ fn items(state: &MenuState) -> &'static [MainMenuItem] {
     )
 }
 
-impl ThemeMainMenu for PulseCircuitTheme {
+impl ThemeMainMenu for DdrExtremeTheme {
     type MenuState = MenuState;
     type MenuRuntimeView = Runtime;
     type MenuInput = InputEvent;
@@ -119,8 +119,8 @@ impl ThemeMainMenu for PulseCircuitTheme {
         let scene = Scene::new(frame.alpha_multiplier * reveal.clamp(0.0, 1.0));
         scene.cover(actors);
         scene.motif(actors, [45.0, 168.0], state.elapsed);
-        scene.text(actors, [43.0, 230.0], [3.6, 280.0], "PULSE", PAPER);
-        scene.text(actors, [44.0, 312.0], [2.6, 266.0], "CIRCUIT", MINT);
+        scene.text(actors, [43.0, 230.0], [4.0, 280.0], "DDR", PAPER);
+        scene.text(actors, [44.0, 312.0], [2.6, 266.0], "EXTREME", MINT);
         scene.rect(actors, [321.0, 58.0], [1.0, 366.0], MUTED, 0.45, 0);
         let items = items(state);
         let rows_start = 237.0 - 25.0 * (items.len() - 1) as f32;

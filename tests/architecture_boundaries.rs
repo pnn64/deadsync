@@ -7320,7 +7320,7 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
         "T::handle_menu_input(&mut self.state, input)",
         "T::push_menu_actors(",
         "ThemeFlag::OpenItg => mount::<OpenItgTheme>(",
-        "ThemeFlag::PulseCircuit => mount::<PulseCircuitTheme>(",
+        "ThemeFlag::DdrExtreme => mount::<DdrExtremeTheme>(",
     ] {
         assert!(contains_rust(&factory, hook), "installed title menu is missing {hook}");
     }
@@ -7591,7 +7591,7 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
             "deadsync_theme_openitg",
             "ThemeFlag::OpenItg",
             "deadsync_theme_ddr_extreme",
-            "ThemeFlag::PulseCircuit",
+            "ThemeFlag::DdrExtreme",
         ] {
             assert!(
                 !source.contains(concrete),

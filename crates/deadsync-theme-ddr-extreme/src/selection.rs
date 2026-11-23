@@ -25,9 +25,9 @@ fn label(source: &str) -> Arc<str> {
     cached_shared_str(&LABELS, source, TEXT_CACHE_LIMIT)
 }
 
-pub struct CircuitSelection;
+pub struct ExtremeSelection;
 
-impl SelectionPresentation<Actor> for CircuitSelection {
+impl SelectionPresentation<Actor> for ExtremeSelection {
     fn show_random_entries(&self) -> bool {
         false
     }
