@@ -1884,6 +1884,32 @@ where
             .unwrap_or(0)
     }
 
+    /// Jumps completed and available on this player's transformed chart.
+    pub fn stage_jumps_for_player(&self, player: usize) -> [u32; 2] {
+        let Some(&(start, end)) = self.chart_runtime.row_indices.row_entry_ranges.get(player)
+        else {
+            return [0, 0];
+        };
+        let mut jumps = [0u32; 2];
+        for row in &self.chart_runtime.row_entries[start..end] {
+            let heads = row.note_indices().iter().filter(|index| {
+                matches!(
+                    self.chart_runtime.notes[index.get()].note_type,
+                    NoteType::Tap | NoteType::Hold | NoteType::Roll
+                )
+            });
+            if heads.take(2).count() == 2 {
+                jumps[1] = jumps[1].saturating_add(1);
+                if row.final_outcome.is_some_and(|outcome| {
+                    !matches!(outcome.final_grade, JudgeGrade::Miss | JudgeGrade::WayOff)
+                }) {
+                    jumps[0] = jumps[0].saturating_add(1);
+                }
+            }
+        }
+        jumps
+    }
+
     pub fn display_judgment_count(&self, player_idx: usize, grade: JudgeGrade) -> u32 {
         if player_idx >= self.setup.num_players {
             return 0;

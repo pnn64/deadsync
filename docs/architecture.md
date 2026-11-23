@@ -207,6 +207,12 @@ a judgment texture to a generated actor.
 A tap judgment actor created without a texture exposes logical frame indices
 until a chart loads a sprite sheet.
 
+Game results count jumps from finalized rows on the playable chart and retain
+combo intervals at the existing row and checkpoint scoring boundaries. Course
+assembly adds planned jumps for unplayed finite-course songs and joins combo
+runs carried across songs. Themes receive these results through the evaluation
+view, alongside the existing song times and life graph.
+
 Runtime Song Lua measures a foreground actor tree's remaining tween time after
 `On` and converts it to an inclusive final song beat. Baked Song Lua records
 the same window during stage preparation. Composition uses the window for the

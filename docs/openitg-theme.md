@@ -21,10 +21,14 @@ default and fallback metrics, and `ScreenTitleMenu` actors and redirects.
 The reference uses a 640×480 logical area, a first row at `(120, 112)`, a
 36 px pitch, immediate wrapping selection, a 110% focus scale with a 0.5 s
 pulse, and 0.3 s entry and exit fades. These are source observations. The
-archive did not include a runnable Windows reference executable.
-The supplied Visual Studio project targets the 2015 toolset and needs
-legacy DirectX 9 development headers and libraries. The build host has the
-2022 toolset, and the legacy DirectX dependencies are absent.
+archive ships source and a legacy Windows project. An isolated Win32 build
+now runs the home overlay in a 640×480 OpenGL window on Windows. It uses
+Visual Studio 2022 and compatible Ogg and Vorbis libraries built from the
+local ITGmania source archive. The build uses the archived theme files and
+game rules. Build logs and individual compatibility adjustments are under
+`target/openitg-native-reference`. A focused-window keyboard compatibility
+change enabled the automated observation. The native capture record covers
+the title, style selection, song wheel, gameplay, and Evaluation.
 
 ## Title screen
 
@@ -36,8 +40,9 @@ legacy DirectX 9 development headers and libraries. The build host has the
   Love. Both title implementations use the shared menu availability contract.
 - The reference's Dance, Battle, Marathon, Fitness, Edit, and Records rows
   differ from the current DeadSync actions. The reference logo, background,
-  typography, and audio also differ. Pixel comparison against a running
-  OpenITG reference is pending.
+  typography, and audio also differ. The two 640×480 captures confirm the
+  shared first-row anchor and pitch. The native menu runs directly from Dance
+  Mode through style to the song wheel. DeadSync keeps its separate mode step.
 
 The focused tests exercise configuration round-tripping, both titles' P2
 session entry, arcade final-credit Start, home navigation, and actor placement
@@ -338,7 +343,8 @@ additional label and pulse. These timings cover draw command construction.
 ## Evaluation
 
 The OpenITG overview uses DeadSync's completed-stage score, grade, judgment
-counts, hold and roll results, avoided mines, hand counts, and life history.
+counts, jump totals, hold and roll results, avoided mines, hand counts, and
+life history.
 It shows the saved personal and machine ranks, disqualification, and the
 configured EX scores. Routine shows its shared result with the participant's
 score beside it. Maximum combo comes from the recorded gameplay peak. Course
@@ -351,18 +357,51 @@ panels, and doubles uses the reference inward shift. The grade slides in over
 at 3.3 seconds. Automated captures wait for that reveal. The life line uses
 the existing sampler with a cached mesh at the requested dimensions.
 
+Jump totals use completed judgments and the playable tap and hold-head rows.
+Finite course summaries add the planned jumps on unplayed songs to the
+possible total. The counts use the reference's three-digit padding, and the
+maximum combo is padded to five digits. The strip shows uninterrupted runs
+of at least five below the life line. It labels every longest run and excludes
+the combo brought into the stage. Course summaries join runs carried between songs
+and mark song boundaries on the life graph. Both graphs use the shared
+result timeline.
+
 DeadSync still owns saves, submissions, the course page sequence, replay and
 practice handoffs, and onward routing. Timing, records, online detail panels,
 and other auxiliary panes retain their existing presentation and controls.
 Evaluation uses original artwork and DeadSync's existing entry and record
-cues. Jump totals, the combo-quality strip, course graph separators, and
-reference capture and audio comparisons remain open.
+cues. Life-graph coloring by judgment quality and reference audio comparisons
+remain open.
+
+The native 640×480 Quartz capture was taken after the panel entrance, with
+P1 Single, Hard 5, and AutoPlay. It confirms the Jumps row above Holds and
+the graph area above the counts. The reference shows the round label below
+the header and modifiers above the percentage. DeadSync's overview places
+modifiers at the bottom of the panel and still needs the round label. Native
+AutoPlay produced an empty combo graph. A DeadSync Vulkan fixture supplied
+the same Quartz result to compare the counts, rank-free layout, and empty
+graph at 640×480. Separate solo and versus captures at 640×480 and 854×480
+showed filled runs, maximum-run labels, and record ranks.
 
 At 854×480, nine warm runs of 8,000 settled-frame actor builds measured
 34.9 μs for Simply Love and 22.3 μs for OpenITG in solo, and 33.2 μs and
 39.3 μs in versus. The OpenITG versus overview builds 96 top-level actors
 for its two panels. The benchmark covers actor construction with bundled
 fonts and dev-profile theme libraries. Evaluation GPU timing remains open.
+
+The jump and combo display comparison used nine 8,000-frame batches per
+layout at 854×480 with three drawn combo runs per player. Median OpenITG
+actor construction was 22.1 µs before and 28.0 µs afterward in solo, and
+39.4 µs and 52.0 µs in versus. The layouts added six actors per player.
+The padded counts use inline text formatting. Simply Love measured 34.4 µs
+and 33.1 µs in solo, and 32.9 µs and 33.2 µs in versus.
+
+In paired 600-frame Windows gameplay runs with Vulkan through wgpu and WASAPI,
+95th-percentile frame time was 8.61 ms before and 8.69 ms after in OpenITG,
+and 8.62 ms and 8.66 ms in Simply Love. All runs recorded zero audio underruns
+and zero buffer growth events. The full shell, gameplay, and score suites
+passed. The final overview layout also passed the OpenITG unit tests and the
+configured play route and gameplay parity regressions.
 
 ## Configured play route
 

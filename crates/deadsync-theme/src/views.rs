@@ -4,6 +4,7 @@ use crate::{DisplayModeChoice, FullscreenChoice, PresentPolicyChoice, RendererCh
 use deadsync_chart::course::CourseSessionPlan;
 use deadsync_chart::{ChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
+pub use deadsync_rules::combo::ComboRun;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{
@@ -559,6 +560,8 @@ pub struct EvaluationView<N, S> {
     pub speed_mod: ScrollSpeedSetting,
     pub mods_text: Arc<str>,
     pub max_combo: u32,
+    pub combo_runs: Arc<[ComboRun]>,
+    pub jumps: [u32; 2],
     pub hands_achieved: u32,
     pub hands_total: u32,
     pub holds_held: u32,
@@ -639,11 +642,15 @@ pub struct EvaluationPlayerOverview<'a> {
     pub meter: u32,
     pub mods: &'a Arc<str>,
     pub judgments: judgment::JudgeCounts,
+    pub jumps: [u32; 2],
     pub holds: [u32; 2],
     pub mines: [u32; 2],
     pub hands: [u32; 2],
     pub rolls: [u32; 2],
     pub max_combo: u32,
+    pub combo_runs: &'a [ComboRun],
+    pub graph_seconds: [f32; 2],
+    pub course_graph_stages: &'a [CourseGraphStageView],
     pub personal_rank: Option<u32>,
     pub machine_rank: Option<u32>,
     pub disqualified: bool,

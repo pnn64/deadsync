@@ -14,6 +14,7 @@ const GRADE_SETTLE_START: f32 = 2.5;
 const BANNER_SIZE: [f32; 2] = [210.0, 66.0];
 const LIFE_SIZE: [f32; 2] = [271.0, 39.0];
 const LIFE_Y: f32 = 239.0;
+const COMBO_Y: f32 = 287.0;
 const COUNT_FIRST_Y: f32 = 325.0;
 const COUNT_PITCH: f32 = 16.0;
 
@@ -115,8 +116,95 @@ pub fn push_evaluation_overview(actors: &mut Vec<Actor>, page: EvaluationOvervie
             ) {
                 actors.push(graph);
             }
+            push_course_boundaries(actors, layout, player, seat.panel_x + body_shift);
+            push_combo_runs(actors, layout, player, seat, seat.panel_x + body_shift);
         }
         push_grade(actors, layout, seat, player.grade, elapsed);
+    }
+}
+
+fn push_course_boundaries(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    player: &EvaluationPlayerOverview<'_>,
+    x: f32,
+) {
+    let [first, last] = player.graph_seconds;
+    if last <= first {
+        return;
+    }
+    let stages = player.course_graph_stages;
+    let mut elapsed = 0.0;
+    for stage in &stages[..stages.len().saturating_sub(1)] {
+        elapsed += stage.song_last_second.max(0.0);
+        if elapsed > first && elapsed < last {
+            let center = x + LIFE_SIZE[0] * ((elapsed - first) / (last - first));
+            actors.push(layout.panel(
+                center - 1.0,
+                LIFE_Y,
+                [2.0, LIFE_SIZE[1]],
+                [1.0, 1.0, 1.0, 0.25],
+                9,
+            ));
+        }
+    }
+}
+
+fn push_combo_runs(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    player: &EvaluationPlayerOverview<'_>,
+    seat: Seat,
+    x: f32,
+) {
+    let [first, last] = player.graph_seconds;
+    let max_count = player
+        .combo_runs
+        .iter()
+        .map(|run| run.count)
+        .max()
+        .unwrap_or(0);
+    if max_count < 5 || last <= first {
+        return;
+    }
+    let width = LIFE_SIZE[0];
+    let bar_x = |second: f32| width * ((second - first) / (last - first)).clamp(0.0, 1.0);
+    actors.push(layout.panel(
+        x,
+        COMBO_Y - 9.0,
+        [width, 18.0],
+        [0.027, 0.054, 0.081, 1.0],
+        2,
+    ));
+    for run in player.combo_runs.iter().filter(|run| run.count >= 5) {
+        let start = bar_x(run.start_second);
+        let end = bar_x(run.end_second);
+        let max_run = run.count == max_count;
+        actors.push(layout.panel(
+            x + start,
+            COMBO_Y - 4.0,
+            [(end - start).max(1.0), 8.0],
+            if max_run { seat.tint } else { RAIL },
+            3,
+        ));
+        if max_run {
+            let midpoint = x + f32::midpoint(start, end).clamp(12.0, width - 12.0);
+            actors.push(layout.panel(
+                midpoint - 12.0,
+                COMBO_Y - 8.0,
+                [24.0, 12.0],
+                [0.027, 0.054, 0.081, 1.0],
+                4,
+            ));
+            actors.push(layout.bounded_label(
+                [midpoint, COMBO_Y - 2.0],
+                0.5,
+                22.0,
+                unsigned(run.count),
+                0.83,
+                WHITE,
+            ));
+        }
     }
 }
 
@@ -329,7 +417,7 @@ fn push_player_stats(
     }
 
     if player.disqualified {
-        actors.push(layout.label([x + 6.0, 295.0], 0.0, "DISQUALIFIED".into(), 0.8, FAILED));
+        actors.push(layout.label([x + 6.0, 302.0], 0.0, "DISQUALIFIED".into(), 0.8, FAILED));
     } else {
         for (rank, prefix, label_x) in [
             (player.personal_rank, "PERSONAL", x + 6.0),
@@ -337,7 +425,7 @@ fn push_player_stats(
         ] {
             if let Some(rank) = rank.filter(|rank| *rank > 0) {
                 actors.push(layout.bounded_label(
-                    [label_x, 295.0],
+                    [label_x, 302.0],
                     0.0,
                     122.0,
                     value(format_args!("{prefix} #{rank}")),
@@ -367,16 +455,22 @@ fn push_counts(
     tint: [f32; 4],
     player: &EvaluationPlayerOverview<'_>,
 ) {
-    actors.push(layout.label([x + 6.0, 309.0], 0.0, "JUDGMENTS".into(), 0.73, QUIET));
-    actors.push(layout.label([x + 144.0, 309.0], 0.0, "TOTALS".into(), 0.73, QUIET));
     actors.push(layout.panel(x + 135.0, 319.0, [1.0, 93.0], RAIL, 2));
     for (index, ((label, color), count)) in JUDGMENTS.into_iter().zip(player.judgments).enumerate()
     {
         let y = (index as f32).mul_add(COUNT_PITCH, COUNT_FIRST_Y);
         actors.push(layout.label([x + 6.0, y], 0.0, label.into(), 0.85, color));
-        actors.push(layout.bounded_label([x + 127.0, y], 1.0, 43.0, unsigned(count), 0.92, WHITE));
+        actors.push(layout.bounded_label(
+            [x + 127.0, y],
+            1.0,
+            43.0,
+            value(format_args!("{count:03}")),
+            0.92,
+            WHITE,
+        ));
     }
     for (index, (label, [hit, total])) in [
+        ("Jumps", player.jumps),
         ("Holds", player.holds),
         ("Mines", player.mines),
         ("Hands", player.hands),
@@ -385,13 +479,13 @@ fn push_counts(
     .into_iter()
     .enumerate()
     {
-        let y = ((index + 1) as f32).mul_add(COUNT_PITCH, COUNT_FIRST_Y);
+        let y = (index as f32).mul_add(COUNT_PITCH, COUNT_FIRST_Y);
         actors.push(layout.label([x + 144.0, y], 0.0, label.into(), 0.85, QUIET));
         actors.push(layout.bounded_label(
-            [x + 265.0, y],
+            [x + 263.0, y],
             1.0,
             65.0,
-            value(format_args!("{hit}/{total}")),
+            value(format_args!("{hit:03}/{total:03}")),
             0.92,
             WHITE,
         ));
@@ -402,7 +496,7 @@ fn push_counts(
         [x + 265.0, y],
         1.0,
         44.0,
-        unsigned(player.max_combo),
+        value(format_args!("{:05}", player.max_combo)),
         0.92,
         WHITE,
     ));
@@ -436,11 +530,15 @@ mod tests {
             meter: 11,
             mods,
             judgments: [963, 104, 27, 4, 2, 8],
+            jumps: [18, 20],
             holds: [72, 79],
             mines: [32, 36],
             hands: [15, 16],
             rolls: [7, 9],
             max_combo: 611,
+            combo_runs: &[],
+            graph_seconds: [0.0, 120.0],
+            course_graph_stages: &[],
             personal_rank: Some(1),
             machine_rank: Some(3),
             disqualified: false,
@@ -455,10 +553,16 @@ mod tests {
 
     #[test]
     fn native_and_wide_overviews_place_the_banner_and_both_canonical_life_graphs() {
+        use deadsync_theme::views::ComboRun;
         let title = Arc::from("DeadSync Stage");
         let artist = Arc::from("Artist");
         let mods = Arc::from("C500, Overhead");
         let banner = Arc::from("stage-banner");
+        let combo_runs = [
+            ComboRun { start_second: 3.0, end_second: 7.0, count: 4, carried: 500 },
+            ComboRun { start_second: 15.0, end_second: 45.0, count: 9, carried: 0 },
+            ComboRun { start_second: 75.0, end_second: 105.0, count: 9, carried: 0 },
+        ];
         for (width, delta) in [(640.0, 0.0), (854.0, 107.0)] {
             with_current_metrics(Metrics::centered(width, 480.0), || {
                 let mut actors = Vec::new();
@@ -473,7 +577,7 @@ mod tests {
                         double_side_style: false,
                         elapsed: EVALUATION_OVERVIEW_SETTLED_SECONDS,
                         players: [
-                            Some(player(&mods)),
+                            Some(EvaluationPlayerOverview { combo_runs: &combo_runs, ..player(&mods) }),
                             Some(EvaluationPlayerOverview {
                                 p2: true,
                                 grade: Grade::Failed,
@@ -504,7 +608,15 @@ mod tests {
                 assert!(has_text(&actors, "65.00%", [504.0 + delta, 212.0]));
                 assert!(has_text(&actors, "A+", [86.0 + delta, 202.0]));
                 assert!(has_text(&actors, "F", [376.0 + delta, 202.0]));
-                assert!(has_text(&actors, "DISQUALIFIED", [335.0 + delta, 295.0]));
+                assert!(has_text(&actors, "DISQUALIFIED", [335.0 + delta, 302.0]));
+                assert!(has_text(&actors, "018/020", [302.0 + delta, 325.0]));
+                assert!(has_text(&actors, "018/020", [592.0 + delta, 325.0]));
+                assert!(has_text(&actors, "9", [106.75 + delta, 285.0]));
+                assert!(has_text(&actors, "9", [242.25 + delta, 285.0]));
+                assert_eq!(actors.iter().filter(|actor| matches!(actor,
+                    Actor::Sprite { offset, size: [_, SizeSpec::Px(8.0)], .. }
+                        if offset[1] == COMBO_Y - 4.0
+                )).count(), 2);
                 assert!(has_text(
                     &actors,
                     "PRESS START TO CONTINUE",
@@ -614,9 +726,9 @@ mod tests {
             assert!(has_text(&actors, "H.EX 89.64%", [357.0, 230.0]));
             assert!(has_text(&actors, "OWN 93.44%", [412.0, 230.0]));
             assert!(has_text(&actors, "963", [309.0, 325.0]));
-            assert!(has_text(&actors, "72/79", [447.0, 341.0]));
-            assert!(has_text(&actors, "611", [447.0, 405.0]));
-            assert!(has_text(&actors, "MACHINE #3", [326.0, 295.0]));
+            assert!(has_text(&actors, "072/079", [445.0, 341.0]));
+            assert!(has_text(&actors, "00611", [447.0, 405.0]));
+            assert!(has_text(&actors, "MACHINE #3", [326.0, 302.0]));
         });
     }
 }

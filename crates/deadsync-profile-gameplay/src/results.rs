@@ -124,6 +124,12 @@ pub fn course_summary_stage(
         song_stub,
         course_total_seconds: run.total_seconds(),
         totals: course_summary_totals(run),
+        unplayed_jumps: run.stages[stage_summaries.len().min(run.stages.len())..]
+            .iter()
+            .filter(|_| run.course_type != CourseType::Endless)
+            .fold([0u32; MAX_PLAYERS], |totals, stage| {
+                std::array::from_fn(|player| totals[player].saturating_add(stage.jumps[player]))
+            }),
         stage_summaries,
     })
 }
@@ -353,6 +359,8 @@ pub fn stage_result<A, C, D>(
             ex_score_percent,
             hard_ex_score_percent,
             max_combo: p.recorded_max_combo,
+            combo_runs: p.combo_runs.as_slice().into(),
+            jumps: gs.stage_jumps_for_player(player_idx),
             hands_achieved: p.hands_achieved,
             hands_total: gs.hands_total_for_player(player_idx),
             holds_held: p.holds_held,

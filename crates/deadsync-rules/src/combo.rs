@@ -1,5 +1,14 @@
 use crate::judgment::JudgeGrade;
 
+/// One uninterrupted combo on the result graph's song-time axis.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ComboRun {
+    pub start_second: f32,
+    pub end_second: f32,
+    pub count: u32,
+    pub carried: u32,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ComboState {
     pub combo: u32,

@@ -203,7 +203,11 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     assert_eq!(app.state.session.played_stages.len(), 1);
     let result = &app.state.session.played_stages[0];
     assert!(result.players[0].is_none());
-    assert_eq!(result.players[1].as_ref().unwrap().notes_hit, 6);
+    let player = result.players[1].as_ref().unwrap();
+    assert_eq!(player.notes_hit, 6);
+    assert_eq!(player.jumps, [0, 0]);
+    assert_eq!(player.combo_runs.len(), 1);
+    assert_eq!(player.combo_runs[0].count, 6);
     assert!(app.state.screens.evaluation_stage.is_some());
     // Allow the results intro to settle before accepting a normal Start.
     for _ in 0..32 {

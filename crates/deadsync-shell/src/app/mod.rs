@@ -11723,6 +11723,8 @@ mod tests {
                 profile_data::evaluation_mods_text(&profile, speed_mod)
             },
             max_combo: 0,
+            combo_runs: Arc::from([]),
+            jumps: [0, 0],
             hands_achieved: 0,
             hands_total: 0,
             holds_held: 0,
@@ -11869,6 +11871,7 @@ mod tests {
         CourseStageRuntime {
             song,
             steps_index: [0; MAX_PLAYERS],
+            jumps: [0; MAX_PLAYERS],
             preferred_difficulty_index: [0; MAX_PLAYERS],
             modifiers: String::new(),
             gain_seconds: 0.0,
@@ -11900,6 +11903,8 @@ mod tests {
             ex_score_percent: 100.0,
             hard_ex_score_percent: 100.0,
             max_combo: 20,
+            combo_runs: Arc::from([]),
+            jumps: [0, 0],
             hands_achieved: 1,
             hands_total: 1,
             holds_held: 2,

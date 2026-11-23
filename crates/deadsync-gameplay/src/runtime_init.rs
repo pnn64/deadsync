@@ -1068,6 +1068,7 @@ where
             combo_carry[p],
             caps,
         );
+        player.combo_runs.reserve_exact(row_count + pump_checkpoint_score_rows[p] as usize);
         if play_style.is_routine() {
             // Player::Load seeds history only for an individual LifeMeter.
             // CombinedLifeMeterShared changes a separate inner meter; native

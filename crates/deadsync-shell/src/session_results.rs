@@ -127,6 +127,8 @@ pub(crate) fn evaluation_view(
                     gs, player_idx,
                 ),
                 max_combo: player.max_combo,
+                combo_runs: player.combo_runs.clone(),
+                jumps: player.jumps,
                 hands_achieved: player.hands_achieved,
                 hands_total: player.hands_total,
                 holds_held: player.holds_held,

@@ -189,6 +189,8 @@ fn test_player_summary(
         ex_score_percent: 100.0,
         hard_ex_score_percent: 100.0,
         max_combo: 0,
+        combo_runs: Arc::from([]),
+        jumps: [0, 0],
         hands_achieved: 0,
         hands_total: 0,
         holds_held: 2,

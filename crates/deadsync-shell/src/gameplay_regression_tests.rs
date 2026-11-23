@@ -5378,6 +5378,7 @@ return Def.ActorFrame{
                         let r = &right.players()[0];
                         assert_eq!(l.life.to_bits(), r.life.to_bits(), "life at {music_ns}");
                         assert_eq!(l.life_history, r.life_history);
+                        assert_eq!(l.combo_runs, r.combo_runs);
                         assert_eq!(
                             (l.combo, l.recorded_max_combo, l.miss_combo),
                             (r.combo, r.recorded_max_combo, r.miss_combo)

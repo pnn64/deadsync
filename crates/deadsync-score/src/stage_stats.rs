@@ -39,6 +39,8 @@ pub struct PlayerStageSummary {
     pub ex_score_percent: f64,
     pub hard_ex_score_percent: f64,
     pub max_combo: u32,
+    pub combo_runs: Arc<[deadsync_rules::combo::ComboRun]>,
+    pub jumps: [u32; 2],
     pub hands_achieved: u32,
     pub hands_total: u32,
     pub holds_held: u32,
@@ -93,6 +95,7 @@ pub struct CourseSummaryInput<'a> {
     pub song_stub: &'a SongData,
     pub course_total_seconds: f32,
     pub totals: [CourseSummaryTotals; MAX_PLAYERS],
+    pub unplayed_jumps: [u32; MAX_PLAYERS],
     pub stage_summaries: &'a [StageSummary],
 }
 
@@ -223,6 +226,8 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         let mut column_judgments = ColumnJudgmentList::new();
         let mut counts_10ms = WindowCounts::default();
         let mut max_combo = 0;
+        let mut combo_runs: Vec<deadsync_rules::combo::ComboRun> = Vec::new();
+        let mut jumps = [0u32, input.unplayed_jumps[idx]];
         let mut hands_achieved = 0u32;
         let mut hands_total = 0u32;
         let mut holds_held = 0u32;
@@ -281,6 +286,23 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             merge_column_judgments(&mut column_judgments, &player.column_judgments);
             counts_10ms = merge_window_counts(counts_10ms, player.window_counts_10ms);
             max_combo = max_combo.max(player.max_combo);
+            for (index, run) in player.combo_runs.iter().enumerate() {
+                let mut run = *run;
+                run.start_second += stage_offset;
+                run.end_second += stage_offset;
+                if index == 0 && run.carried != 0
+                    && let Some(previous) = combo_runs.last_mut()
+                    && previous.carried.saturating_add(previous.count) == run.carried
+                {
+                    previous.end_second = previous.end_second.max(run.end_second);
+                    previous.count = previous.count.saturating_add(run.count);
+                } else {
+                    combo_runs.push(run);
+                }
+            }
+            for (total, count) in jumps.iter_mut().zip(player.jumps) {
+                *total = total.saturating_add(count);
+            }
             hands_achieved = hands_achieved.saturating_add(player.hands_achieved);
             hands_total = hands_total.saturating_add(player.hands_total);
             holds_held = holds_held.saturating_add(player.holds_held);
@@ -399,6 +421,8 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             ex_score_percent,
             hard_ex_score_percent,
             max_combo,
+            combo_runs: combo_runs.into(),
+            jumps,
             hands_achieved,
             hands_total,
             holds_held,
@@ -499,6 +523,7 @@ pub fn routine_shared_course_player(
     shared.window_counts_10ms =
         merge_window_counts(first.window_counts_10ms, second.window_counts_10ms);
     shared.max_combo = first.max_combo.max(second.max_combo);
+    shared.jumps = std::array::from_fn(|idx| first.jumps[idx].saturating_add(second.jumps[idx]));
     shared.hands_achieved = first.hands_achieved.saturating_add(second.hands_achieved);
     shared.hands_total = first.hands_total.saturating_add(second.hands_total);
     shared.holds_held = first.holds_held.saturating_add(second.holds_held);
@@ -715,6 +740,8 @@ mod tests {
             ex_score_percent: 100.0,
             hard_ex_score_percent: 100.0,
             max_combo: 0,
+            combo_runs: Arc::from([]),
+            jumps: [0, 0],
             hands_achieved: 0,
             hands_total: 0,
             holds_held: 2,
@@ -835,6 +862,7 @@ mod tests {
                 },
                 CourseSummaryTotals::default(),
             ],
+            unplayed_jumps: [12, 0],
             stage_summaries: stages.as_slice(),
         })
         .expect("course summary");
@@ -848,6 +876,7 @@ mod tests {
         assert_eq!(player.holds_total, 4);
         assert_eq!(player.rolls_total, 2);
         assert_eq!(player.mines_total, 6);
+        assert_eq!(player.jumps, [0, 12]);
         assert_eq!(player.grade, Grade::Failed);
         assert_eq!(player.chart.short_hash, "course-hash");
         assert_eq!(player.chart.difficulty, "Hard");
@@ -887,6 +916,7 @@ mod tests {
                 song_stub: song.as_ref(),
                 course_total_seconds: 120.0,
                 totals,
+                unplayed_jumps: [0, 0],
                 stage_summaries: stages.as_slice(),
             })
             .expect("course summary")
@@ -933,12 +963,25 @@ mod tests {
 
     #[test]
     fn course_summary_streams_offsets_and_borrows_stage_histograms() {
+        use deadsync_rules::combo::ComboRun;
         let song = test_song("Songs/Test/a.ssc", "a", 60.0);
         let mut first = test_player_summary(test_chart("stage-a"), Grade::Tier01, 500, 500);
         first.max_combo = 43;
+        first.jumps = [1, 2];
+        first.combo_runs = Arc::from([ComboRun {
+            start_second: 4.0,
+            end_second: 42.0,
+            count: 40,
+            carried: 3,
+        }]);
         first.life_history.push((30.0, 0.75));
         let mut second = test_player_summary(test_chart("stage-b"), Grade::Tier02, 400, 500);
         second.max_combo = 37;
+        second.jumps = [3, 4];
+        second.combo_runs = Arc::from([
+            ComboRun { start_second: 1.0, end_second: 5.0, count: 5, carried: 43 },
+            ComboRun { start_second: 9.0, end_second: 12.0, count: 6, carried: 0 },
+        ]);
         second.scatter[0].offset_ms = Some(-20.0);
         second.histogram.bins = vec![(-20, 1)];
         second.histogram.worst_observed_ms = 20.0;
@@ -980,12 +1023,18 @@ mod tests {
             song_stub: song.as_ref(),
             course_total_seconds: 120.0,
             totals: [CourseSummaryTotals::default(); MAX_PLAYERS],
+            unplayed_jumps: [0, 0],
             stage_summaries: &stages,
         })
         .expect("course summary");
         let player = summary.players[0].as_ref().expect("P1 summary");
 
         assert_eq!(player.max_combo, 43);
+        assert_eq!(player.jumps, [4, 6]);
+        assert_eq!(player.combo_runs.as_ref(), &[
+            ComboRun { start_second: 4.0, end_second: 65.0, count: 45, carried: 3 },
+            ComboRun { start_second: 69.0, end_second: 72.0, count: 6, carried: 0 },
+        ]);
         assert_eq!(player.scatter.len(), 2);
         assert_eq!(player.scatter[0].time_sec.to_bits(), 5.0_f32.to_bits());
         assert_eq!(player.scatter[1].time_sec.to_bits(), 65.0_f32.to_bits());

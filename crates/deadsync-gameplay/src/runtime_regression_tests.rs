@@ -4738,6 +4738,7 @@ mod runtime_regression_tests {
             vec![0, 1],
         )];
         state.chart_runtime.row_indices.note_row_entry_indices = vec![0, 0];
+        state.chart_runtime.row_indices.row_entry_ranges[0] = (0, 1);
         state.hold_runtime.tap_miss_held_at_note.fill(true);
 
         state.set_final_note_result(
@@ -4760,6 +4761,19 @@ mod runtime_regression_tests {
                 .map(|judgment| judgment.grade),
             Some(JudgeGrade::Fantastic)
         );
+        assert_eq!(state.stage_jumps_for_player(0), [0, 1]);
+        state.set_final_note_result(1, state.chart_runtime.notes[0].result.unwrap());
+        state.set_current_music_time_ns(song_time_ns_from_seconds(1.0));
+        state.finalize_row_judgment(0, row_index, 0, true);
+        assert_eq!(state.stage_jumps_for_player(0), [1, 1]);
+        assert_eq!(state.players()[0].combo_runs.as_slice(), &[
+            deadsync_rules::combo::ComboRun {
+                start_second: 1.0,
+                end_second: 1.0,
+                count: 2,
+                carried: 0,
+            },
+        ]);
     }
 
     #[test]
