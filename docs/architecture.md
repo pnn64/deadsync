@@ -22,6 +22,14 @@ state, elapsed time, input intent, and ready media through contracts in
 `deadsync-theme`. Themes own the layout, animation, resource choices, and
 presentation state.
 
+The shell uses shared `Screen` roles for stage launch, restart, Practice,
+profile selection, and Evaluation return. `deadsync-core::session_flow`
+resolves optional session steps using machine settings and those roles.
+The title presentation emits a destination after the session records the
+side that pressed Start. Theme screen IDs remain available to presentation.
+Song Lua's legacy screen names resolve to the same roles, and normal stage
+completion and reload still go through the game-owned lifecycle.
+
 Both Player Options layouts consume the same editor and submit
 `deadsync-profile-gameplay::stage_options::StageOptions`. The mounted layout
 supplies its viewport and transitions. The game resolves stage scroll speed,
@@ -563,10 +571,9 @@ roles. The installed theme supplies its title and modifier-entry actors, fade
 timing, and local screen identity. External consumers of `current_screen.txt`
 use the shared compatibility names for both themes.
 
-`ThemeScreenFlow` identifies the theme's screens for play, results, selection,
-and player options. The shell uses those IDs for stage transitions, course
-continuation, and keeping the temporary Practice rate across player options.
-Themes can choose other IDs and add screens while using the same stage routing.
+The shared roles drive stage transitions, course continuation, and retention
+of the temporary Practice rate across a visit to Player Options. Concrete
+themes supply their own `ThemeScreenId` values for presentation.
 
 `ThemeTransitionAudio` supplies presentation music, preview continuity, and
 screen sound cleanup. Simply Love resolves tracks when a cue starts. The shell
@@ -584,16 +591,15 @@ Normal gameplay sends stage actions, Lua reload requests, and lobby work
 directly to the shell in frame order. The shell keeps course continuation and
 stage restart on the gameplay lifecycle. The game interprets the default and
 `ScreenEvaluationStage` as completion, `ScreenSelectMusic` as cancellation, and
-`ScreenGameplay` as reload. The shell maps other standard Lua destinations to
-screen roles. Themes can expose additional named presentation screens, which
-are validated before the live scene ends.
+`ScreenGameplay` as reload. The shell validates other supported legacy Lua
+destinations against shared roles before the live scene ends.
 Gameplay frames under a screen transition still dispatch lobby work in order.
 
 The game-owned Practice session coordinates editor input, the edit seek clock,
 chart playback, and loop restarts. The shell drives the session directly and
 applies its rate changes after draining game audio commands. The session chooses
-the destination on menu activation, and the shell resolves it through the theme's
-screen roles. A reload restores the game editor state and the theme's saved view.
+the destination on menu activation, and the shell maps it to a shared role.
+A reload restores the game editor state and the theme's saved view.
 
 `deadsync-profile-gameplay` resolves stage-local scroll options for preloading,
 Practice, and Gameplay. The resolver applies the No CMod alternative and any

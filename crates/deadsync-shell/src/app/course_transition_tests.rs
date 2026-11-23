@@ -216,7 +216,7 @@ fn press_course_start(app: &mut App) {
     };
     assert!(effects.next().is_none());
     app.request_stage_launch(
-        ActiveTheme::SCREENS.course_selection,
+        CurrentScreen::SelectCourse,
         request.map_selection(StageSelection::Course),
     );
 }

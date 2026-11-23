@@ -4540,32 +4540,11 @@ return Def.ActorFrame{
         )
     }
 
+    use deadsync_theme::Screen;
+
     struct AlternateGameplay;
 
     impl deadsync_theme::views::GameplayLivePresentation<State> for AlternateGameplay {}
-
-    struct AlternateGameplayTheme;
-
-    impl deadsync_theme::Theme for AlternateGameplayTheme {
-        type Screen = &'static str;
-        type RuntimeRequest = ();
-
-        fn screen_id(screen: Self::Screen) -> deadsync_theme::ThemeScreenId {
-            deadsync_theme::ThemeScreenId::new(screen)
-        }
-    }
-
-    impl deadsync_theme::ThemeScreenFlow for AlternateGameplayTheme {
-        const SCREENS: deadsync_theme::ThemeScreens<Self::Screen> = deadsync_theme::ThemeScreens {
-            menu: "home",
-            gameplay: "dance",
-            practice: "rehearsal",
-            results: "record",
-            song_selection: "library",
-            course_selection: "marathon",
-            player_options: "settings",
-        };
-    }
 
     impl GameplayFramePresenter for AlternateGameplay {
         type Profile = GameplayProfile;
@@ -4642,7 +4621,7 @@ return Def.ActorFrame{
 
     impl PracticeLivePresentation<AlternateGameplay> for AlternatePractice {
         type Feedback<'a> = AlternatePracticeFeedback;
-        type Effect = deadsync_theme::ThemeEffect<&'static str, ()>;
+        type Effect = deadsync_theme::ThemeEffect<Screen, ()>;
         type EditSnapshot = bool;
 
         fn editor_feedback(&mut self) -> Self::Feedback<'_> {
@@ -4766,7 +4745,7 @@ return Def.ActorFrame{
                             Some("ScreenPractice"),
                         );
                         let destination = (0..20).find_map(|_| {
-                            gameplay_runtime::update::<AlternateGameplayTheme, _>(
+                            gameplay_runtime::update(
                                 &mut host, 0.125, false, &mut audio, &sounds, &mut clock,
                                 &mut score_cursor, &mut telemetry,
                             ).into_iter().find_map(|effect| match effect {
@@ -4774,7 +4753,7 @@ return Def.ActorFrame{
                                 _ => None,
                             })
                         });
-                        assert_eq!(destination, Some("rehearsal"));
+                        assert_eq!(destination, Some(Screen::Practice));
                         assert!(host.song_lua.is_ended());
                         gameplay_runtime::sync_initial_scores(&mut host);
                         let practice_init = gameplay_runtime::practice_init(
@@ -4796,7 +4775,7 @@ return Def.ActorFrame{
                         let mut effects = Vec::new();
                         let timestamp = std::time::Instant::now();
                         let mut raw_key = |code, pressed| {
-                            gameplay_runtime::handle_practice_raw_key::<AlternateGameplayTheme, _, _>(
+                            gameplay_runtime::handle_practice_raw_key(
                                 &mut practice,
                                 &RawKeyboardEvent { code, pressed, repeat: false, timestamp, host_nanos: 0 },
                                 &mut audio, &sounds, &mut clock, &mut effects,
@@ -4819,7 +4798,7 @@ return Def.ActorFrame{
                         let editor = practice.session.editor().snapshot();
                         let saved = gameplay_runtime::practice_edit_snapshot(&practice);
                         practice.presentation.overlay_visible = false;
-                        gameplay_runtime::handle_practice_input::<AlternateGameplayTheme, _, _>(
+                        gameplay_runtime::handle_practice_input(
                             &mut practice, &input(VirtualAction::p1_menu_down), &mut audio, &sounds,
                             &mut clock, &mut effects,
                         );
@@ -4828,7 +4807,7 @@ return Def.ActorFrame{
                         assert_eq!(practice.session.editor().snapshot(), editor);
                         assert!(practice.presentation.overlay_visible);
                         for action in [VirtualAction::p1_start, VirtualAction::p1_start] {
-                            gameplay_runtime::handle_practice_input::<AlternateGameplayTheme, _, _>(
+                            gameplay_runtime::handle_practice_input(
                                 &mut practice, &input(action), &mut audio, &sounds, &mut clock, &mut effects,
                             );
                         }
@@ -4843,12 +4822,12 @@ return Def.ActorFrame{
                             VirtualAction::p1_menu_up,
                             VirtualAction::p1_start,
                         ] {
-                            gameplay_runtime::handle_practice_input::<AlternateGameplayTheme, _, _>(
+                            gameplay_runtime::handle_practice_input(
                                 &mut practice, &input(action), &mut audio, &sounds, &mut clock, &mut effects,
                             );
                         }
                         assert!(!practice.session.is_playing());
-                        assert_eq!(effects, vec![ThemeEffect::Navigate("library")]);
+                        assert_eq!(effects, vec![ThemeEffect::Navigate(Screen::SelectMusic)]);
                     },
                 );
             })

@@ -59,14 +59,14 @@ impl SimplyLoveTheme {
         destination: deadsync_gameplay::exit_route::GameplayExitDestination,
     ) -> screens::Screen {
         use deadsync_gameplay::exit_route::GameplayExitDestination;
-        use deadsync_theme::ThemeScreenFlow;
+        use screens::Screen;
 
         match destination {
-            GameplayExitDestination::Results => Self::SCREENS.results,
-            GameplayExitDestination::SongSelection => Self::SCREENS.song_selection,
-            GameplayExitDestination::CourseSelection => Self::SCREENS.course_selection,
+            GameplayExitDestination::Results => Screen::Evaluation,
+            GameplayExitDestination::SongSelection => Screen::SelectMusic,
+            GameplayExitDestination::CourseSelection => Screen::SelectCourse,
             GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => {
-                Self::SCREENS.gameplay
+                Screen::Gameplay
             }
         }
     }
@@ -105,48 +105,6 @@ impl deadsync_theme::Theme for SimplyLoveTheme {
     fn screen_id(screen: Self::Screen) -> deadsync_theme::ThemeScreenId {
         screens::screen_id(screen)
     }
-}
-
-impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme {
-    const SCREENS: deadsync_theme::ThemeScreens<Self::Screen> = deadsync_theme::ThemeScreens {
-        menu: screens::Screen::Menu,
-        gameplay: screens::Screen::Gameplay,
-        practice: screens::Screen::Practice,
-        results: screens::Screen::Evaluation,
-        song_selection: screens::Screen::SelectMusic,
-        course_selection: screens::Screen::SelectCourse,
-        player_options: screens::Screen::PlayerOptions,
-    };
-
-    fn named_song_lua_screen(name: &str) -> Option<Self::Screen> {
-        screens::gameplay::named_song_lua_screen(name)
-    }
-}
-
-impl deadsync_theme::ThemeSessionFlow for SimplyLoveTheme {
-    const SESSION_SCREENS: deadsync_core::session_flow::SessionScreens<Self::Screen> = {
-        use deadsync_theme::ThemeScreenFlow;
-        use screens::Screen;
-
-        deadsync_core::session_flow::SessionScreens {
-            menu: Self::SCREENS.menu,
-            select_music: Self::SCREENS.song_selection,
-            select_course: Self::SCREENS.course_selection,
-            select_profile: Some(Screen::SelectProfile),
-            select_color: Some(Screen::SelectColor),
-            select_style: Some(Screen::SelectStyle),
-            select_play_mode: Some(Screen::SelectPlayMode),
-            profile_load: Screen::ProfileLoad,
-            evaluation_summary: Some(Screen::EvaluationSummary),
-            initials: Some(Screen::Initials),
-            gameover: Some(Screen::GameOver),
-        }
-    };
-    const PROFILE_LOGIN_SCREENS: deadsync_core::session_flow::ProfileLoginScreens<Self::Screen> =
-        deadsync_core::session_flow::ProfileLoginScreens {
-            groovestats: Some(screens::Screen::GrooveStatsLogin),
-            arrowcloud: Some(screens::Screen::ArrowCloudLogin),
-        };
 }
 
 impl deadsync_theme::color::ThemeJudgmentPalette for SimplyLoveTheme {

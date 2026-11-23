@@ -330,7 +330,7 @@ impl App {
         if current_screen == CurrentScreen::Practice {
             debug_assert!(self.theme_effect_scratch.is_empty());
             if let Some(state) = self.state.screens.practice_state.as_mut() {
-                crate::gameplay_runtime::handle_practice_input::<crate::ActiveTheme, _, _>(
+                crate::gameplay_runtime::handle_practice_input(
                     state,
                     &ev,
                     &mut self.audio,
@@ -438,10 +438,8 @@ impl App {
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
-                self.state.screens.menu_state.handle_input(
-                    &mut self.state.session,
-                    &ev,
-                )
+                self.state.session.remember_menu_start(&ev);
+                self.state.screens.menu_state.handle_input(&ev)
             }
             CurrentScreen::SelectProfile => unreachable!("Select Profile uses the flat buffer"),
             CurrentScreen::SelectColor => {

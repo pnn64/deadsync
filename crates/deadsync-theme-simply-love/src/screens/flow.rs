@@ -118,11 +118,9 @@ pub fn profile_selection_target(
     show_groovestats_login: bool,
     show_arrowcloud_login: bool,
 ) -> Option<Screen> {
-    use deadsync_theme::ThemeSessionFlow;
-
     deadsync_core::session_flow::profile_selection_target(
-        crate::SimplyLoveTheme::SESSION_SCREENS,
-        crate::SimplyLoveTheme::PROFILE_LOGIN_SCREENS,
+        Screen::SESSION_SCREENS,
+        Screen::PROFILE_LOGIN_SCREENS,
         current_screen,
         fast_switch,
         show_groovestats_login,
@@ -142,10 +140,8 @@ pub fn resolve_navigation(
     requested: Screen,
     has_played_stages: bool,
 ) -> SimplyLoveNavigationPlan {
-    use deadsync_theme::ThemeSessionFlow;
-
     deadsync_core::session_flow::resolve_navigation(
-        crate::SimplyLoveTheme::SESSION_SCREENS,
+        Screen::SESSION_SCREENS,
         policy,
         from,
         requested,

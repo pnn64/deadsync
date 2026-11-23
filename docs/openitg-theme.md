@@ -988,6 +988,10 @@ transitions for this route. Both themes submit the same stage options to the
 game layer. The route also covers opening the editor from the wheel and
 returning from Evaluation under both configurations.
 
+The two title presentations now enter the same session routing through shared
+screen roles. The tests also cover course recovery, Practice return, and a live
+song Lua transition with an alternate presenter.
+
 ## Gameplay parity verification
 
 The shell regression test `simply_love_and_openitg_produce_identical_gameplay_results`

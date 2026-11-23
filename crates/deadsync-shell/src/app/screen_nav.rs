@@ -5,7 +5,7 @@ use crate::interaction::ProcessExitRequest;
 use crate::navigation::{
     FadeCompletionEffect, NavigationTransitionStart, ProcessExitNavigationEffect,
     apply_actor_entry_transition, apply_actor_fade_out_transition, apply_global_entry_transition,
-    apply_global_fade_out_transition, course_plan_required, fade_completion_plan, is_play_screen,
+    apply_global_fade_out_transition, course_plan_required, fade_completion_plan,
     navigation_transition_effect_plan, practice_music_rate_on_screen_change, process_exit_navigation_plan,
     screen_change_plan, stage_entry_duration, stage_exit_duration, write_current_screen_file,
 };
@@ -19,7 +19,7 @@ use deadsync_gameplay::course_progress::CourseRenewal;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_theme::{
-    ThemeScreenFlow, ThemeTransitionAudio, ThemeTransitions, TransitionKind, TransitionState,
+    ThemeTransitionAudio, ThemeTransitions, TransitionKind, TransitionState,
 };
 use deadsync_theme_simply_love::screens::transition_audio::TransitionAudioContext;
 use deadsync_theme_simply_love::screens::transitions::PlayEntryTransition;
@@ -86,8 +86,8 @@ impl App {
         previous: CurrentScreen,
         target: CurrentScreen,
     ) -> CurrentScreen {
-        if previous != ActiveTheme::SCREENS.gameplay
-            || target != ActiveTheme::SCREENS.gameplay
+        if previous != CurrentScreen::Gameplay
+            || target != CurrentScreen::Gameplay
             || self.pending_song_lua_reload.is_some()
         {
             return target;
@@ -117,7 +117,7 @@ impl App {
         self.pending_gameplay_init = None;
         // The normal evaluation lifecycle records the finished song, saves the
         // accumulated course score and retains its per-song evaluation pages.
-        ActiveTheme::SCREENS.results
+        CurrentScreen::Evaluation
     }
 
     pub(super) fn reject_missing_course_plan(
@@ -125,7 +125,7 @@ impl App {
         previous: CurrentScreen,
         target: CurrentScreen,
     ) -> bool {
-        if !course_plan_required::<ActiveTheme>(previous, target) {
+        if !course_plan_required(previous, target) {
             return false;
         }
         let stage_launch = &self.state.screens.stage_launch;
@@ -195,18 +195,18 @@ impl App {
         if prev == CurrentScreen::Evaluation && target != prev {
             self.state.screens.stage_presentation.leave_evaluation();
         }
-        if (prev == ActiveTheme::SCREENS.song_selection || prev == ActiveTheme::SCREENS.course_selection)
+        if (prev == CurrentScreen::SelectMusic || prev == CurrentScreen::SelectCourse)
             && target != prev
             && !stage_launch_target(target)
                 .is_some_and(|target| self.state.screens.stage_launch.ready_for(target))
         {
             self.clear_stage_launch();
         }
-        if !is_play_screen::<ActiveTheme>(target) {
+        if !target.is_play() {
             self.state.pending_stage = None;
         }
-        let plan = screen_change_plan::<ActiveTheme>(prev, target);
-        if let Some(rate) = practice_music_rate_on_screen_change::<ActiveTheme>(
+        let plan = screen_change_plan(prev, target);
+        if let Some(rate) = practice_music_rate_on_screen_change(
             &mut self.state.session.pre_practice_music_rate,
             target,
             profile::get_session_snapshot().music_rate,
@@ -321,8 +321,8 @@ impl App {
     }
 
     pub(super) fn leave_evaluation(&mut self) {
-        if self.state.screens.current_screen == ActiveTheme::SCREENS.results {
-            let target = evaluation_return_to::<ActiveTheme>(self.state.screens.evaluation_origin);
+        if self.state.screens.current_screen == CurrentScreen::Evaluation {
+            let target = evaluation_return_to(self.state.screens.evaluation_origin);
             self.handle_navigation_action(target);
         }
     }
@@ -333,8 +333,8 @@ impl App {
         event_loop: &ActiveEventLoop,
     ) {
         let current = self.state.screens.current_screen;
-        if target == ActiveTheme::SCREENS.gameplay
-            && current == ActiveTheme::SCREENS.song_selection
+        if target == CurrentScreen::Gameplay
+            && current == CurrentScreen::SelectMusic
             && self.defer_gameplay_entry(event_loop)
         {
             return;
@@ -356,7 +356,7 @@ impl App {
         let from = self.state.screens.current_screen;
         let cfg = config::runtime::get();
         self.lights.clear_button_pressed();
-        let plan = navigation_route_plan::<ActiveTheme>(
+        let plan = navigation_route_plan(
             &cfg,
             from,
             target,
@@ -436,7 +436,7 @@ impl App {
                 target,
             };
         } else {
-            apply_actor_fade_out_transition(&mut self.state.shell, from, target);
+            apply_actor_fade_out_transition::<ActiveTheme>(&mut self.state.shell, from, target);
         }
         self.sync_gameplay_input_capture();
     }
@@ -450,14 +450,14 @@ impl App {
                 duration,
             };
         } else {
-            apply_actor_entry_transition(&mut self.state.shell, target);
+            apply_actor_entry_transition::<ActiveTheme>(&mut self.state.shell, target);
         }
     }
 
     fn start_global_fade(&mut self, target: CurrentScreen) {
         debug!("Starting global fade out to screen: {target:?}");
         let current = self.state.screens.current_screen;
-        if !is_play_screen::<ActiveTheme>(current)
+        if !current.is_play()
             && ActiveTheme::stop_screen_sfx_on_exit(current, target)
         {
             self.audio.stop_screen_sfx();
@@ -540,7 +540,7 @@ impl App {
         }
 
         let (_, in_duration) = self.get_in_transition_for_screen(target);
-        apply_global_entry_transition(&mut self.state.shell, prev, target, in_duration);
+        apply_global_entry_transition::<ActiveTheme>(&mut self.state.shell, prev, target, in_duration);
         self.sync_gameplay_input_capture();
         deadlib_present::runtime::clear_all();
         self.run_commands(commands, event_loop);
@@ -554,11 +554,11 @@ impl App {
     ) -> (CurrentScreen, Vec<Command>) {
         let prev = self.state.screens.current_screen;
         let target = self.resolve_course_stage_transition(prev, requested);
-        if prev == ActiveTheme::SCREENS.song_selection && target != ActiveTheme::SCREENS.gameplay {
+        if prev == CurrentScreen::SelectMusic && target != CurrentScreen::Gameplay {
             self.gameplay_preload = None;
         }
         self.commit_screen_change(target);
-        if target != ActiveTheme::SCREENS.gameplay {
+        if target != CurrentScreen::Gameplay {
             self.state.gameplay_offset_save_prompt = None;
         }
         if target == CurrentScreen::SelectColor {
@@ -614,7 +614,7 @@ impl App {
             return options.exit_transition(target);
         }
         let (actors, duration) = ActiveTheme::out_transition(screen, target);
-        let duration = stage_exit_duration::<ActiveTheme>(screen).unwrap_or(duration);
+        let duration = stage_exit_duration(screen).unwrap_or(duration);
         (actors, duration)
     }
 
@@ -630,12 +630,12 @@ impl App {
         {
             return options.entry_transition();
         }
-        let play = if screen == ActiveTheme::SCREENS.gameplay {
+        let play = if screen == CurrentScreen::Gameplay {
             Some((
                 self.state.screens.gameplay_state.as_ref(),
                 self.state.session.gameplay_restart_count > 0,
             ))
-        } else if screen == ActiveTheme::SCREENS.practice {
+        } else if screen == CurrentScreen::Practice {
             Some((
                 self.state.screens.practice_state.as_ref().map(|state| &state.gameplay),
                 false,
@@ -657,7 +657,7 @@ impl App {
             ))
             .flatten()
             .unwrap_or_else(|| ActiveTheme::in_transition(screen, context));
-        let duration = stage_entry_duration::<ActiveTheme>(screen, restarting).unwrap_or(duration);
+        let duration = stage_entry_duration(screen, restarting).unwrap_or(duration);
         (actors, duration)
     }
 }

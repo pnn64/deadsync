@@ -217,7 +217,7 @@ use deadsync_theme::player_options::PlayerOptionsEntry;
 use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
 use deadsync_theme::select_music::DensityGraphSlot;
 use deadsync_theme::{
-    AudioRequest, PlatformRequest, RevealPathKind, ThemeResources, ThemeScreenFlow,
+    AudioRequest, PlatformRequest, RevealPathKind, ThemeResources,
     TransitionCompletion, UiCue,
 };
 use deadsync_theme_simply_love::screens::transitions::{
@@ -4871,7 +4871,7 @@ impl App {
         } else {
             logic_dt
         };
-        let tick_gameplay = tick_gameplay_during_transition::<ActiveTheme>(
+        let tick_gameplay = tick_gameplay_during_transition(
             self.state.screens.current_screen,
             &self.state.shell.transition,
         );
@@ -4884,7 +4884,7 @@ impl App {
             // and HUD animations settle while transition input remains blocked.
             self.step_gameplay(delta_time, true, event_loop);
             if self.state.screens.gameplay_outro.as_ref().is_some_and(|outro| outro.stop_tail_audio_when_frozen())
-                && !tick_gameplay_during_transition::<ActiveTheme>(
+                && !tick_gameplay_during_transition(
                     self.state.screens.current_screen,
                     &self.state.shell.transition,
                 )
@@ -4908,7 +4908,7 @@ impl App {
         });
         if transition_plan.step_screen && !self.gameplay_preload_holds_frame() {
             if step_plan.step_screen
-                && self.state.screens.current_screen == ActiveTheme::SCREENS.gameplay
+                && self.state.screens.current_screen == CurrentScreen::Gameplay
             {
                 self.step_gameplay(logic_dt, false, event_loop);
             } else if step_plan.step_screen {
@@ -5760,21 +5760,21 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::SongLaunch(request) => {
                     self.request_stage_launch(
-                        ActiveTheme::SCREENS.song_selection,
+                        CurrentScreen::SelectMusic,
                         request.map_selection(StageSelection::Song),
                     );
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::CourseLaunch(request) => {
                     self.request_stage_launch(
-                        ActiveTheme::SCREENS.course_selection,
+                        CurrentScreen::SelectCourse,
                         request.map_selection(StageSelection::Course),
                     );
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::StartReplay(replay) => {
                     if self.queue_replay_stage(replay) {
-                        self.handle_navigation_action(ActiveTheme::SCREENS.gameplay);
+                        self.handle_navigation_action(CurrentScreen::Gameplay);
                     }
                     Vec::new()
                 }
@@ -6851,7 +6851,7 @@ impl App {
                         steps: stage.steps_index,
                         preferred: stage.preferred_difficulty_index,
                         color_index,
-                        return_screen: ActiveTheme::SCREENS.course_selection,
+                        return_screen: CurrentScreen::SelectCourse,
                         fixed_stepchart_label: Some(label),
                         noteskin_catalog: noteskin_catalog_view(&self.dirs),
                         smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
@@ -6914,7 +6914,7 @@ impl App {
     }
 
     fn prepare_gameplay_restart(&mut self) -> bool {
-        match gameplay_restart_prepare_source::<ActiveTheme>(
+        match gameplay_restart_prepare_source(
             self.state.screens.current_screen,
             self.state.screens.gameplay_state.is_some(),
             self.state.screens.evaluation_stage.is_some(),
@@ -6960,7 +6960,7 @@ impl App {
     }
 
     fn prepare_practice_from_eval(&mut self) -> bool {
-        match practice_restart_prepare_source::<ActiveTheme>(
+        match practice_restart_prepare_source(
             self.state.screens.current_screen,
             self.state.screens.evaluation_stage.is_some(),
         ) {
@@ -6985,7 +6985,7 @@ impl App {
 
     fn try_gameplay_restart(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
         let restartable = self.prepare_gameplay_restart();
-        match gameplay_restart_route::<ActiveTheme>(
+        match gameplay_restart_route(
             self.state.screens.current_screen,
             restartable,
             self.state.screens.gameplay_state.is_some(),
@@ -7033,7 +7033,7 @@ impl App {
 
     fn try_gameplay_reload(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
         let eval_payload = self.state.screens.evaluation_stage.as_ref();
-        let simfile_path = match gameplay_reload_source::<ActiveTheme>(
+        let simfile_path = match gameplay_reload_source(
             self.state.screens.current_screen,
             self.state.screens.gameplay_state.is_some(),
             eval_payload.is_some(),
@@ -7089,7 +7089,7 @@ impl App {
     /// `gameplay_restart_count` / `restart_pending` (those are gameplay-only).
     fn try_practice_from_eval(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
         let eval_payload_available = self.state.screens.evaluation_stage.is_some();
-        if !practice_from_eval_allowed::<ActiveTheme>(self.state.screens.current_screen, eval_payload_available) {
+        if !practice_from_eval_allowed(self.state.screens.current_screen, eval_payload_available) {
             return false;
         }
         if !self.prepare_practice_from_eval() {
@@ -7106,7 +7106,7 @@ impl App {
     }
 
     fn try_practice_reload(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
-        if !practice_reload_allowed::<ActiveTheme>(
+        if !practice_reload_allowed(
             self.state.screens.current_screen,
             self.state.screens.practice_state.is_some(),
         ) {
@@ -7854,7 +7854,7 @@ impl App {
         Option<deadsync_song_lua::playback::GameplayActorSegments>,
     ) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
-        let screen_alpha_multiplier = if self.state.screens.current_screen == ActiveTheme::SCREENS.menu {
+        let screen_alpha_multiplier = if self.state.screens.current_screen == CurrentScreen::Menu {
             1.0
         } else {
             screen_fade_view(self.state.screens.current_screen, &self.state.shell.transition)
@@ -8341,7 +8341,7 @@ impl App {
             _ => {}
         }
 
-        if self.state.screens.current_screen == ActiveTheme::SCREENS.menu {
+        if self.state.screens.current_screen == CurrentScreen::Menu {
             self.state.screens.menu_state.push_exit_overlay(
                 &mut actors,
                 &self.state.shell.transition,
@@ -8840,7 +8840,7 @@ impl App {
                     .as_ref()
                     .is_some_and(|state| {
                         state.selection().return_screen
-                            == ActiveTheme::SCREENS.song_selection
+                            == CurrentScreen::SelectMusic
                     });
                 if returns_to_select_music {
                     debug_assert!(self.theme_effect_scratch.is_empty());
@@ -8873,7 +8873,7 @@ impl App {
                 }
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 let consumed = if let Some(state) = self.state.screens.practice_state.as_mut() {
-                    crate::gameplay_runtime::handle_practice_raw_key::<ActiveTheme, _, _>(
+                    crate::gameplay_runtime::handle_practice_raw_key(
                         state,
                         &raw_key,
                         &mut self.audio,
@@ -9157,7 +9157,7 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let config = config::runtime::get();
-        let from_player_options = prev == ActiveTheme::SCREENS.player_options;
+        let from_player_options = prev == CurrentScreen::PlayerOptions;
         let player_options = if from_player_options {
             let session = profile::get_session_snapshot();
             self.state
@@ -9208,7 +9208,7 @@ impl App {
                 target,
                 entry_music,
                 player_options,
-                select_music_preferred_difficulty: (prev == ActiveTheme::SCREENS.song_selection)
+                select_music_preferred_difficulty: (prev == CurrentScreen::SelectMusic)
                     .then_some(self.state.screens.select_music_state.preferred_difficulty_index),
             },
             screen_nav::transition_audio_context(&config),
@@ -9404,7 +9404,7 @@ impl App {
             let color_index =
                 ActiveTheme::profile_picker_color_index(&self.state.screens.select_profile_state);
             let view = crate::local_profiles::picker_view();
-            let context = crate::screen_flow::profile_picker_context::<ActiveTheme>(
+            let context = crate::screen_flow::profile_picker_context(
                 prev,
                 color_index,
                 self.state.session.menu_start_side,
@@ -9483,7 +9483,7 @@ impl App {
                     warn!("Unable to prepare PlayerOptions for the selected course.");
                 }
             } else {
-                let selection = (prev == ActiveTheme::SCREENS.song_selection)
+                let selection = (prev == CurrentScreen::SelectMusic)
                     .then(|| self.take_ready_song_selection(StageLaunchTarget::PlayerOptions))
                     .flatten()
                     .or_else(|| {
@@ -9495,10 +9495,10 @@ impl App {
                 );
 
                 let color_index = self.state.screens.select_music_state.active_color_index;
-                let return_screen = if prev == ActiveTheme::SCREENS.practice {
-                    ActiveTheme::SCREENS.practice
+                let return_screen = if prev == CurrentScreen::Practice {
+                    CurrentScreen::Practice
                 } else {
-                    ActiveTheme::SCREENS.song_selection
+                    CurrentScreen::SelectMusic
                 };
                 self.state.screens.player_options_state =
                     Some(crate::player_options::PlayerOptionsState::new(
@@ -10411,7 +10411,7 @@ impl App {
                         .active_color_index
                 }
             };
-            let return_to = evaluation_summary_return_to::<ActiveTheme>(
+            let return_to = evaluation_summary_return_to(
                 prev,
                 std::mem::take(&mut self.state.session.pending_post_select_summary_exit),
             );
@@ -12414,7 +12414,7 @@ mod tests {
     #[test]
     fn evaluation_summary_return_to_stays_in_select_music_for_set_summary() {
         assert_eq!(
-            evaluation_summary_return_to::<ActiveTheme>(CurrentScreen::SelectMusic, false),
+            evaluation_summary_return_to(CurrentScreen::SelectMusic, false),
             CurrentScreen::SelectMusic,
         );
     }
@@ -12422,11 +12422,11 @@ mod tests {
     #[test]
     fn evaluation_summary_return_to_keeps_exit_flow_moving() {
         assert_eq!(
-            evaluation_summary_return_to::<ActiveTheme>(CurrentScreen::SelectMusic, true),
+            evaluation_summary_return_to(CurrentScreen::SelectMusic, true),
             CurrentScreen::Initials,
         );
         assert_eq!(
-            evaluation_summary_return_to::<ActiveTheme>(CurrentScreen::SelectCourse, true),
+            evaluation_summary_return_to(CurrentScreen::SelectCourse, true),
             CurrentScreen::Initials,
         );
     }

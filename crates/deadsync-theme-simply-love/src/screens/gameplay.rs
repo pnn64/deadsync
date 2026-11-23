@@ -2169,43 +2169,7 @@ pub(crate) fn song_lua_transition_screen(
     let Some(name) = name.filter(|name| !name.is_empty()) else {
         return Ok(Screen::Evaluation);
     };
-    named_song_lua_screen(name).ok_or_else(|| format!("unsupported song Lua next screen {name}"))
-}
-
-pub(crate) fn named_song_lua_screen(name: &str) -> Option<crate::screens::Screen> {
-    use crate::screens::Screen;
-    [
-        Screen::Menu,
-        Screen::Practice,
-        Screen::Options,
-        Screen::Credits,
-        Screen::ContentBrowser,
-        Screen::ManageLocalProfiles,
-        Screen::Init,
-        Screen::Initials,
-        Screen::GameOver,
-        Screen::Mappings,
-        Screen::Input,
-        Screen::SelectProfile,
-        Screen::GrooveStatsLogin,
-        Screen::ArrowCloudLogin,
-        Screen::SelectColor,
-        Screen::SelectStyle,
-        Screen::SelectPlayMode,
-        Screen::ProfileLoad,
-        Screen::SelectMusic,
-        Screen::SelectCourse,
-        Screen::Sandbox,
-        Screen::Evaluation,
-        Screen::EvaluationSummary,
-        Screen::PlayerOptions,
-        Screen::TestLights,
-        Screen::OverscanAdjustment,
-        Screen::ConfigurePads,
-        Screen::SmxAssignPads,
-    ]
-    .into_iter()
-    .find(|screen| screen.current_screen_file_name() == name)
+    Screen::from_song_lua_name(name).ok_or_else(|| format!("unsupported song Lua next screen {name}"))
 }
 
 /// Advances deterministic gameplay using the shell-prepared audio snapshot.

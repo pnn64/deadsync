@@ -113,8 +113,8 @@ fn confirmed_song_and_course_launches_share_game_policy() {
     }
     let shell = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
     assert!(shell.contains("stage_launch.advance(delta_time)"));
-    assert!(shell.contains("Some(ActiveTheme::SCREENS.gameplay)"));
-    assert!(shell.contains("Some(ActiveTheme::SCREENS.player_options)"));
+    assert!(shell.contains("Some(CurrentScreen::Gameplay)"));
+    assert!(shell.contains("Some(CurrentScreen::PlayerOptions)"));
 }
 
 #[test]
@@ -793,7 +793,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         "let presentation = &mut state.presentation",
         "presentation.update_gameplay_visuals(game, delta)",
         "stage.update(",
-        "crate::navigation::song_lua_presentation_screen::<T>",
+        "crate::navigation::song_lua_presentation_screen,",
         "stage.handle_input(ev, physical)",
         "stage.take_output()",
         ".for_each_scheduled_song_sound(previous_song_lua_time,",
@@ -3154,8 +3154,8 @@ fn practice_runtime_is_shell_prepared() {
         "state.presentation.restore_edit_snapshot(snapshot.view)",
         "state.presentation.apply_view_request(request)",
         "PracticeViewRequest::Navigate(PracticeDestination::PlayerOptions)",
-        "ThemeEffect::Navigate(T::SCREENS.player_options)",
-        "ThemeEffect::Navigate(T::SCREENS.song_selection)",
+        "ThemeEffect::Navigate(Screen::PlayerOptions)",
+        "ThemeEffect::Navigate(Screen::SelectMusic)",
         "let rates = state.session.drain_music_rates();",
         "profile::set_session_music_rate(rate)",
         "state.presentation.append_effects(effects)",
@@ -7317,8 +7317,8 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
     }
     let factory = production_source(&root.join("crates/deadsync-shell/src/title_menu.rs"));
     for hook in [
-        "crate::main_menu::handle_input::<ActiveTheme, _>(state, session, input)",
-        "crate::main_menu::handle_input::<OpenItgTheme, _>(state, session, input)",
+        "ActiveTheme::handle_menu_input(state, input)",
+        "OpenItgTheme::handle_menu_input(state, input)",
         "OpenItgTheme::push_menu_actors(",
         "ThemeFlag::OpenItg => Self::OpenItg(",
     ] {
@@ -7663,19 +7663,17 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
             && shell.contains("show_select_profile: config.machine_show_select_profile")
             && shell.contains("show_eval_summary: config.machine_show_eval_summary")
             && shell.contains("session_flow::resolve_navigation(")
-            && shell.contains("T::SESSION_SCREENS")
+            && shell.contains("Screen::SESSION_SCREENS")
             && profile_requests.contains("profile_combo_carry(&profiles)")
             && profile_requests.contains("preferred_difficulty_indices(&profiles, session.play_style)")
             && shell.contains("session_flow::profile_selection_target(")
-            && profile_executor.contains("profile_selection_target::<ActiveTheme>("),
+            && profile_executor.contains("profile_selection_target("),
         "theme navigation must receive prepared inputs from the game and shell"
     );
     let input = production_source(&root.join("crates/deadsync-shell/src/app/input_routing.rs"));
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).unwrap();
-    let menu_runtime = production_source(&root.join("crates/deadsync-shell/src/main_menu.rs"));
-    assert!(input.contains("self.state.screens.menu_state.handle_input("));
-    assert!(contains_rust(&menu_runtime, "session.remember_menu_start(input); T::handle_menu_input(state, input)"));
+    assert!(contains_rust(&input, "self.state.session.remember_menu_start(&ev); self.state.screens.menu_state.handle_input(&ev)"));
     for entry in [&app, &navigation] {
         assert!(entry.contains("self.state.session.menu_start_side"));
         assert!(!entry.contains("menu_state.started_by_p2"));
@@ -13435,7 +13433,7 @@ fn evaluation_leaves_using_game_session_origin() {
     assert!(input.contains("ActiveTheme::handle_evaluation_input("));
     assert!(contains_rust(
         &nav,
-        "evaluation_return_to::<ActiveTheme>(self.state.screens.evaluation_origin)",
+        "evaluation_return_to(self.state.screens.evaluation_origin)",
     ));
     assert!(theme.contains("Some(origin) => (origin, ThemeEffect::LeaveEvaluation)"));
     assert!(!app.contains(".return_to_course"));
@@ -13654,13 +13652,13 @@ fn gameplay_exit_routing_stays_below_the_theme() {
         "action: GameplayAction",
         "GameplayAction::None => return",
         "GameplayAction::Restart => { self.try_gameplay_restart(event_loop,",
-        "self.state.screens.current_screen == ActiveTheme::SCREENS.gameplay",
+        "self.state.screens.current_screen == Screen::Gameplay",
         "self.state.session.course_run.as_ref()",
         "restart_pending: self.state.session.restart_pending",
         "course_active: course.is_some()",
         "course_has_next_stage: course.is_some_and(|course| course.run.has_next_stage())",
         "resolve_gameplay_exit_route(",
-        "gameplay_exit_screen::<ActiveTheme>(route.destination)",
+        "gameplay_exit_screen(route.destination)",
         "route.consume_restart_pending",
     ] {
         assert!(
@@ -13669,10 +13667,10 @@ fn gameplay_exit_routing_stays_below_the_theme() {
         );
     }
     for destination in [
-        "GameplayExitDestination::Results => T::SCREENS.results",
-        "GameplayExitDestination::SongSelection => T::SCREENS.song_selection",
-        "GameplayExitDestination::CourseSelection => T::SCREENS.course_selection",
-        "GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => { T::SCREENS.gameplay }",
+        "GameplayExitDestination::Results => Screen::Evaluation",
+        "GameplayExitDestination::SongSelection => Screen::SelectMusic",
+        "GameplayExitDestination::CourseSelection => Screen::SelectCourse",
+        "GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => { Screen::Gameplay }",
     ] {
         assert!(contains_rust(&stage_screens, destination), "missing game route {destination}");
     }
@@ -13732,10 +13730,11 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
         assert!(owner.contains(presentation), "missing theme transition {presentation}");
     }
     let navigation = production_source(&root.join("crates/deadsync-shell/src/navigation.rs"));
+    assert!(!navigation.contains("ActiveTheme"));
     for policy in [
-        "if is_play_screen::<T>(from) || is_play_screen::<T>(target)",
+        "if from.is_play() || target.is_play()",
         "T::transition_kind(from, target)",
-        "screen == T::SCREENS.gameplay || screen == T::SCREENS.practice",
+        "target.is_play()",
         "then_some(deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS)",
         "Some(deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS)",
         "then_some(deadsync_gameplay::GAMEPLAY_ENTRY_TRANSITION_SECONDS)",
@@ -13747,8 +13746,8 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
         "target.current_screen_file_name()",
         "ActiveTheme::out_transition(screen, target)",
         "ActiveTheme::in_transition(screen, context)",
-        "stage_exit_duration::<ActiveTheme>(screen).unwrap_or(duration)",
-        "stage_entry_duration::<ActiveTheme>(screen, restarting).unwrap_or(duration)",
+        "stage_exit_duration(screen).unwrap_or(duration)",
+        "stage_entry_duration(screen, restarting).unwrap_or(duration)",
     ] {
         assert!(contains_rust(&adapter, handoff), "missing shell transition handoff {handoff}");
     }
@@ -13756,7 +13755,7 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
     // The endpoint still receives the final tick on the completion frame.
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell frame loop");
-    let tick_policy = app.find("let tick_gameplay = tick_gameplay_during_transition::<ActiveTheme>(")
+    let tick_policy = app.find("let tick_gameplay = tick_gameplay_during_transition(")
         .expect("shell gameplay tick policy");
     let advance = app.find(".advance_frame(transition_dt)")
         .expect("advance transition clock");
@@ -13799,8 +13798,8 @@ fn transition_audio_presentation_is_owned_by_the_theme() {
     }
     for handoff in [
         "T::transition_audio(",
-        "let entering_gameplay = context.target == T::SCREENS.gameplay",
-        "if context.target == T::SCREENS.practice { TransitionMusic::Stop }",
+        "let entering_gameplay = context.target == Screen::Gameplay",
+        "if context.target == Screen::Practice { TransitionMusic::Stop }",
         "commands.push(Command::UpdateSessionMusicRate(options.music_rate))",
         "entry_music.unwrap_or(audio.music)",
         "if audio.stop_preview_on_exit && !replaces_preview { commands.push(Command::StopMusic); }",
@@ -13814,7 +13813,7 @@ fn transition_audio_presentation_is_owned_by_the_theme() {
     assert!(openitg_stage.contains(loop_path));
     assert!(!app.contains(loop_path));
     assert!(contains_rust(&screen_nav, "ActiveTheme::transition_audio("));
-    assert!(contains_rust(&screen_nav, "!is_play_screen::<ActiveTheme>(current) && ActiveTheme::stop_screen_sfx_on_exit(current, target)"));
+    assert!(contains_rust(&screen_nav, "!current.is_play() && ActiveTheme::stop_screen_sfx_on_exit(current, target)"));
 }
 
 #[test]
@@ -13831,8 +13830,8 @@ fn theme_screen_contract_has_explicit_owners() {
         "pub enum Screen",
         "pub struct ThemeScreenId",
         "pub trait Theme",
-        "pub struct ThemeScreens<S>",
-        "pub trait ThemeScreenFlow: Theme",
+        "pub const SESSION_SCREENS:",
+        "pub fn from_song_lua_name(",
     ] {
         assert!(
             generic_screen.contains(token),
@@ -13857,13 +13856,21 @@ fn theme_screen_contract_has_explicit_owners() {
     }
     let simply_love = read_source(root.join("crates/deadsync-theme-simply-love/src/lib.rs"))
         .expect("Simply Love theme should be readable");
-    assert!(simply_love.contains("impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme"));
+    assert!(simply_love.contains("impl deadsync_theme::Theme for SimplyLoveTheme"));
     let openitg = production_source(&root.join("crates/deadsync-theme-openitg/src/lib.rs"));
     let shell = production_source(&root.join("crates/deadsync-shell/src/lib.rs"));
     let title = production_source(&root.join("crates/deadsync-shell/src/title_menu.rs"));
     assert!(shell.contains("pub(crate) use deadsync_theme::Screen as ThemeScreen;"));
     assert!(simply_love.contains("type Screen = screens::Screen;"));
     assert!(openitg.contains("type Screen = Screen;"));
+    for path in production_rust_files(&root.join("crates/deadsync-shell/src")) {
+        let body = production_source(&path);
+        for obsolete in ["ThemeScreenFlow", "ThemeSessionFlow", "ActiveTheme::SCREENS"] {
+            assert!(!body.contains(obsolete), "{} still uses {obsolete}", path.display());
+        }
+    }
+    assert!(!title.contains("SessionState"));
+
     for adapter in ["host_screen(", "openitg_transition(", "host_effect("] {
         assert!(!title.contains(adapter));
     }

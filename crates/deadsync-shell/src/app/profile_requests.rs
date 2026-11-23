@@ -176,7 +176,7 @@ impl App {
             self.state.session.preferred_difficulty_index =
                 selection.preferred_difficulties[player_side_index(selection.active_side)];
         }
-        if let Some(target) = profile_selection_target::<ActiveTheme>(
+        if let Some(target) = profile_selection_target(
             current_screen,
             fast_switch,
             show_groovestats_login,

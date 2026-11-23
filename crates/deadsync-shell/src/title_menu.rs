@@ -1,6 +1,6 @@
 //! Connects the installed title presentation to the shared session flow.
 
-use crate::{ActiveTheme, SessionState, ThemeScreen as Screen, TransitionState};
+use crate::{ActiveTheme, ThemeScreen as Screen, TransitionState};
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
 use deadsync_config::theme::ThemeFlag;
@@ -115,18 +115,10 @@ impl InstalledMenu {
         }
     }
 
-    pub(crate) fn handle_input(
-        &mut self,
-        session: &mut SessionState,
-        input: &InputEvent,
-    ) -> SimplyLoveEffect {
+    pub(crate) fn handle_input(&mut self, input: &InputEvent) -> SimplyLoveEffect {
         match self {
-            Self::SimplyLove(state) => {
-                crate::main_menu::handle_input::<ActiveTheme, _>(state, session, input)
-            }
-            Self::OpenItg(state) => {
-                crate::main_menu::handle_input::<OpenItgTheme, _>(state, session, input)
-            }
+            Self::SimplyLove(state) => ActiveTheme::handle_menu_input(state, input),
+            Self::OpenItg(state) => OpenItgTheme::handle_menu_input(state, input),
         }
     }
 
@@ -183,16 +175,15 @@ impl InstalledMenu {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_core::input::{InputSource, MAX_PLAYERS};
+    use deadsync_core::input::InputSource;
     use deadsync_input::VirtualAction;
     use deadsync_theme::{ThemeEffect, UiCue};
     use std::time::Instant;
 
     #[test]
-    fn both_title_menus_enter_the_same_session_from_p2() {
+    fn both_title_menus_request_profile_selection_from_p2() {
         for flag in [ThemeFlag::SimplyLove, ThemeFlag::OpenItg] {
             let mut menu = InstalledMenu::new(flag, 2);
-            let mut session = SessionState::new(0, [0; MAX_PLAYERS]);
             let now = Instant::now();
             let start = InputEvent::new(
                 VirtualAction::p2_start,
@@ -205,13 +196,11 @@ mod tests {
                 now,
             );
             let mut effects = Vec::new();
-            menu.handle_input(&mut session, &start)
-                .append_to(&mut effects);
+            menu.handle_input(&start).append_to(&mut effects);
             assert!(matches!(
                 effects.as_slice(),
                 [ThemeEffect::UiCue(UiCue::Confirm), ThemeEffect::Navigate(Screen::SelectProfile)]
             ));
-            assert_eq!(session.menu_start_side, deadsync_profile::PlayerSide::P2);
         }
     }
 }

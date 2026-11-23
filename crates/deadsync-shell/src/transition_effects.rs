@@ -2,11 +2,10 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme::{
-    ThemeScreenFlow, ThemeTransitionAudio, TransitionAudio, TransitionKind, TransitionMusic,
+    Screen, ThemeTransitionAudio, TransitionAudio, TransitionKind, TransitionMusic,
 };
 
 use crate::Command;
-use crate::navigation::is_play_screen;
 
 pub struct PlayerOptionsTransition {
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -16,9 +15,9 @@ pub struct PlayerOptionsTransition {
     pub player_side: PlayerSide,
 }
 
-pub struct TransitionEffectContext<S> {
-    pub previous: S,
-    pub target: S,
+pub struct TransitionEffectContext {
+    pub previous: Screen,
+    pub target: Screen,
     pub entry_music: Option<TransitionMusic>,
     pub player_options: Option<PlayerOptionsTransition>,
     pub select_music_preferred_difficulty: Option<usize>,
@@ -43,11 +42,11 @@ pub fn transition_music_command(music: TransitionMusic) -> Option<Command> {
     }
 }
 
-pub fn transition_effect_plan<T: ThemeScreenFlow + ThemeTransitionAudio>(
-    context: TransitionEffectContext<T::Screen>,
+pub fn transition_effect_plan<T: ThemeTransitionAudio<Screen = Screen>>(
+    context: TransitionEffectContext,
     audio_context: T::AudioContext,
 ) -> TransitionEffectPlan {
-    let entering_gameplay = context.target == T::SCREENS.gameplay;
+    let entering_gameplay = context.target == Screen::Gameplay;
     let audio = if entering_gameplay {
         // The stage controller takes over the stream when its clock starts.
         TransitionAudio::default()
@@ -60,16 +59,16 @@ pub fn transition_effect_plan<T: ThemeScreenFlow + ThemeTransitionAudio>(
         )
     };
     let entry_music = context.entry_music.filter(|_| {
-        !entering_gameplay && context.target != T::SCREENS.practice
+        !entering_gameplay && context.target != Screen::Practice
     });
     let replaces_preview = matches!(entry_music, Some(TransitionMusic::Play { .. }));
-    let music = if context.target == T::SCREENS.practice {
+    let music = if context.target == Screen::Practice {
         TransitionMusic::Stop
     } else {
         entry_music.unwrap_or(audio.music)
     };
-    let previous_is_play = is_play_screen::<T>(context.previous);
-    let clear_play_background = previous_is_play && !is_play_screen::<T>(context.target);
+    let previous_is_play = context.previous.is_play();
+    let clear_play_background = previous_is_play && !context.target.is_play();
     let stop_stage_music = clear_play_background && !matches!(music, TransitionMusic::Play { .. });
     let mut commands = Vec::new();
     if let Some(command) = transition_music_command(music) {
@@ -80,8 +79,8 @@ pub fn transition_effect_plan<T: ThemeScreenFlow + ThemeTransitionAudio>(
     }
     let mut preferred_difficulty_index = None;
 
-    if context.previous == T::SCREENS.song_selection
-        || context.previous == T::SCREENS.player_options
+    if context.previous == Screen::SelectMusic
+        || context.previous == Screen::PlayerOptions
     {
         if let Some(options) = context.player_options {
             match options.play_style {
@@ -124,13 +123,13 @@ pub fn transition_effect_plan<T: ThemeScreenFlow + ThemeTransitionAudio>(
         commands.push(Command::StopMusic);
     }
 
-    if context.previous == T::SCREENS.song_selection {
+    if context.previous == Screen::SelectMusic {
         preferred_difficulty_index = context.select_music_preferred_difficulty;
     }
 
     TransitionEffectPlan {
         commands,
-        stop_screen_sfx: context.previous == T::SCREENS.gameplay
+        stop_screen_sfx: context.previous == Screen::Gameplay
             || (!previous_is_play && T::stop_screen_sfx_on_exit(context.previous, context.target)),
         clear_play_background,
         preferred_difficulty_index,
@@ -140,9 +139,9 @@ pub fn transition_effect_plan<T: ThemeScreenFlow + ThemeTransitionAudio>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ActiveTheme, ThemeScreen as Screen};
+    use crate::ActiveTheme;
     use deadsync_config::theme::{SrpgVariant, VisualStyle};
-    use deadsync_theme::{Theme, ThemeScreenId, ThemeScreens};
+    use deadsync_theme::{Theme, ThemeScreenId};
     use deadsync_theme_simply_love::screens::transition_audio::TransitionAudioContext;
 
     const AUDIO_CONTEXT: TransitionAudioContext = TransitionAudioContext {
@@ -151,7 +150,7 @@ mod tests {
         variant: SrpgVariant::Srpg9,
     };
 
-    fn plan(context: TransitionEffectContext<Screen>) -> TransitionEffectPlan {
+    fn plan(context: TransitionEffectContext) -> TransitionEffectPlan {
         transition_effect_plan::<ActiveTheme>(context, AUDIO_CONTEXT)
     }
 
@@ -306,10 +305,6 @@ mod tests {
         }
     }
 
-    impl ThemeScreenFlow for CueTheme {
-        const SCREENS: ThemeScreens<Screen> = ActiveTheme::SCREENS;
-    }
-
     impl ThemeTransitionAudio for CueTheme {
         type AudioContext = ();
 
@@ -319,7 +314,7 @@ mod tests {
             _: TransitionKind,
             _: (),
         ) -> TransitionAudio {
-            assert_ne!(target, Self::SCREENS.gameplay);
+            assert_ne!(target, Screen::Gameplay);
             TransitionAudio {
                 music: TransitionMusic::Play {
                     path: "alternate.ogg".into(),

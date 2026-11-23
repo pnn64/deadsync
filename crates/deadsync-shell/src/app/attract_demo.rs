@@ -79,7 +79,7 @@ impl App {
                 delta_time,
                 gameplay_runtime::snapshot(&mut self.music_clock),
                 deadlib_platform::host_time::now_nanos,
-                crate::navigation::song_lua_presentation_screen::<ActiveTheme>,
+                crate::navigation::song_lua_presentation_screen,
                 |effect| {
                     complete |= matches!(
                         effect,
