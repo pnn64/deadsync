@@ -5,10 +5,13 @@
 // `--console` is set). No effect on non-Windows targets.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod theme_registry;
+
 use deadlib_platform::logging::{self, StartupBuildInfo};
 use deadsync_config as config;
 use deadsync_profile::compat as profile;
 use deadsync_shell::app;
+use deadsync_shell::mounted_theme;
 use deadsync_theme_simply_love::{i18n, visual_styles};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
@@ -318,5 +321,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    app::run(dirs, audio, music_clock, live_case)
+    app::run(dirs, audio, music_clock, live_case, |config| {
+        theme_registry::mount(config.theme_flag)
+    })
 }

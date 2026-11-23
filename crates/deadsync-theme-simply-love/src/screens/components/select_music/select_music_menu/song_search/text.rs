@@ -1,63 +1,6 @@
-//! Allocation-conscious title cleanup, completion assembly, and text fitting.
+//! Search completion assembly and text fitting.
 use super::SONG_SEARCH_MAX_LEN;
 use deadlib_assets::AssetManager;
-use std::borrow::Cow;
-
-const DIFFICULTY_WORDS: [&str; 8] = [
-    "beginner",
-    "easy",
-    "medium",
-    "hard",
-    "challenge",
-    "edit",
-    "expert",
-    "basic",
-];
-
-// Keep whitespace pending across removed groups so normalization matches
-// concatenating the surviving spans and then split_whitespace().join(" ").
-fn append_normalized(out: &mut String, span: &str, pending_space: &mut bool) {
-    for ch in span.chars() {
-        if ch.is_whitespace() {
-            *pending_space = true;
-        } else {
-            if *pending_space && !out.is_empty() {
-                out.push(' ');
-            }
-            out.push(ch);
-            *pending_space = false;
-        }
-    }
-}
-
-/// Remove exact difficulty groups and normalize whitespace when parentheses occur.
-pub(super) fn strip_difficulty_parens(input: &str) -> Cow<'_, str> {
-    if !input.contains('(') {
-        return Cow::Borrowed(input);
-    }
-    let mut out = String::with_capacity(input.len());
-    let mut rest = input;
-    let mut pending_space = false;
-    while let Some(open) = rest.find('(') {
-        let Some(close_rel) = rest[open + 1..].find(')') else {
-            break;
-        };
-        let close = open + 1 + close_rel;
-        let inner = rest[open + 1..close].trim();
-        let end = if DIFFICULTY_WORDS
-            .iter()
-            .any(|word| inner.eq_ignore_ascii_case(word))
-        {
-            open
-        } else {
-            close + 1
-        };
-        append_normalized(&mut out, &rest[..end], &mut pending_space);
-        rest = &rest[close + 1..];
-    }
-    append_normalized(&mut out, rest, &mut pending_space);
-    Cow::Owned(out)
-}
 
 fn character_prefix(text: &str, count: usize) -> &str {
     let end = text

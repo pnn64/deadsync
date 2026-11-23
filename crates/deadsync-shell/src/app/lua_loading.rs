@@ -96,7 +96,7 @@ mod tests {
                     assert!(!app.accepts_live_input());
                     assert_loading_frame(&mut app);
                     app.state.screens.stage_presentation =
-                        crate::mounted_theme::mount_stage(config::theme::ThemeFlag::OpenItg);
+                        crate::theme_registry::mount(config::theme::ThemeFlag::OpenItg).stage;
                     let (actors, _, segments) = app.get_current_actors(0.0, app.frame_policy);
                     assert!(segments.is_none());
                     assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite {

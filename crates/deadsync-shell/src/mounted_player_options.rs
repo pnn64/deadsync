@@ -1,6 +1,7 @@
 //! Startup-selected Player Options layout and shared editor handoff.
 
 use crate::{ActiveTheme, ThemeScreen as Screen};
+use crate::mounted_theme::PlayerOptionsLayoutFactory;
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::{Actor, TextContent};
@@ -14,13 +15,12 @@ use deadsync_theme::player_options::{
     HeartRateDevicesView, NoteskinPreviewRequest, PlayerOptionsEntry, PlayerOptionsLayout,
     PlayerOptionsSelection, ThemePlayerOptions,
 };
-use deadsync_theme_simply_love::{SimplyLoveEffect, views::SimplyLoveVisualPolicyView};
+use deadsync_theme::app_requests::AppEffect;
+use deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView;
 use std::sync::Arc;
 
 type EditorState = <ActiveTheme as ThemePlayerOptions>::PlayerOptionsState;
 type Layout = Box<dyn PlayerOptionsLayout<Actor, TextContent>>;
-
-pub(crate) type PlayerOptionsLayoutFactory = fn() -> Layout;
 
 pub(crate) struct PlayerOptionsState {
     editor: EditorState,
@@ -60,7 +60,7 @@ impl PlayerOptionsState {
         &mut self,
         dt: f32,
         assets: &AssetManager,
-        host: &mut Vec<SimplyLoveEffect>,
+        host: &mut Vec<AppEffect>,
     ) {
         ActiveTheme::update_player_options(&mut self.editor, dt, assets, host);
     }
@@ -69,7 +69,7 @@ impl PlayerOptionsState {
         &mut self,
         assets: &AssetManager,
         input: &InputEvent,
-        host: &mut Vec<SimplyLoveEffect>,
+        host: &mut Vec<AppEffect>,
     ) {
         ActiveTheme::handle_player_options_input(&mut self.editor, assets, input, host);
     }
@@ -79,7 +79,7 @@ impl PlayerOptionsState {
         key: Option<&RawKeyboardEvent>,
         text: Option<&str>,
         ctrl: bool,
-        host: &mut Vec<SimplyLoveEffect>,
+        host: &mut Vec<AppEffect>,
     ) -> bool {
         ActiveTheme::handle_player_options_raw_key(&mut self.editor, key, text, ctrl, host)
     }

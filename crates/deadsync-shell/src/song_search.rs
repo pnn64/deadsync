@@ -5,24 +5,27 @@
 //! then only sends queries (`Rank`). Results come back through
 //! [`Service::poll`] tagged with a generation the screen can check.
 
-use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
+use deadsync_simfile::song_search_index::{
     SongSearchIndex, SongSearchScope, build_pack_matches, build_song_matches,
     build_song_search_index,
 };
-use deadsync_theme_simply_love::{SimplyLoveSongSearchRequest, SimplyLoveSongSearchResult};
+use deadsync_theme::app_requests::{
+    SongSearchRequest,
+    SongSearchResult,
+};
 use std::sync::mpsc;
 
 /// A long-lived worker plus its result queue.
 pub(crate) struct Service {
-    tx: mpsc::Sender<SimplyLoveSongSearchRequest>,
-    rx: mpsc::Receiver<SimplyLoveSongSearchResult>,
+    tx: mpsc::Sender<SongSearchRequest>,
+    rx: mpsc::Receiver<SongSearchResult>,
     _worker: std::thread::JoinHandle<()>,
 }
 
 impl Default for Service {
     fn default() -> Self {
-        let (req_tx, req_rx) = mpsc::channel::<SimplyLoveSongSearchRequest>();
-        let (res_tx, res_rx) = mpsc::channel::<SimplyLoveSongSearchResult>();
+        let (req_tx, req_rx) = mpsc::channel::<SongSearchRequest>();
+        let (res_tx, res_rx) = mpsc::channel::<SongSearchResult>();
         let worker = std::thread::Builder::new()
             .name("song-search".to_string())
             .spawn(move || worker_loop(req_rx, res_tx))
@@ -37,14 +40,14 @@ impl Default for Service {
 
 impl Service {
     /// Queue work; this only sends over a channel.
-    pub(crate) fn submit(&self, request: SimplyLoveSongSearchRequest) {
+    pub(crate) fn submit(&self, request: SongSearchRequest) {
         // If the worker died the overlay just keeps its old results.
         let _ = self.tx.send(request);
     }
 
     /// Return the freshest ready result, discarding older ones.
-    pub(crate) fn poll(&self) -> Option<SimplyLoveSongSearchResult> {
-        let mut latest: Option<SimplyLoveSongSearchResult> = None;
+    pub(crate) fn poll(&self) -> Option<SongSearchResult> {
+        let mut latest: Option<SongSearchResult> = None;
         while let Ok(result) = self.rx.try_recv() {
             match &latest {
                 // Strictly older only: on a tie the later arrival is the newer
@@ -70,15 +73,15 @@ struct PendingRank {
 /// Rankings coalesce to the newest, but every `BuildIndex` is applied, or a
 /// reload arriving mid-burst would be dropped in favour of a keystroke.
 fn absorb(
-    request: SimplyLoveSongSearchRequest,
+    request: SongSearchRequest,
     index: &mut Option<SongSearchIndex>,
     pending: &mut Option<PendingRank>,
 ) {
     match request {
-        SimplyLoveSongSearchRequest::BuildIndex { entries } => {
+        SongSearchRequest::BuildIndex { entries } => {
             *index = Some(build_song_search_index(&entries));
         }
-        SimplyLoveSongSearchRequest::Rank {
+        SongSearchRequest::Rank {
             generation,
             query,
             scope,
@@ -100,8 +103,8 @@ fn absorb(
 }
 
 fn worker_loop(
-    rx: mpsc::Receiver<SimplyLoveSongSearchRequest>,
-    tx: mpsc::Sender<SimplyLoveSongSearchResult>,
+    rx: mpsc::Receiver<SongSearchRequest>,
+    tx: mpsc::Sender<SongSearchResult>,
 ) {
     let mut index: Option<SongSearchIndex> = None;
 
@@ -127,7 +130,7 @@ fn worker_loop(
             });
 
         if tx
-            .send(SimplyLoveSongSearchResult {
+            .send(SongSearchResult {
                 generation: rank.generation,
                 matches,
             })

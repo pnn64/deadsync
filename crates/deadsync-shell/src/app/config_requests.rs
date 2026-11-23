@@ -1,21 +1,34 @@
 use deadsync_config as config;
 use deadsync_profile::compat as profile;
-use deadsync_theme_simply_love::{
-    SimplyLoveAdvancedConfigRequest, SimplyLoveCoinConfigRequest, SimplyLoveCourseConfigRequest,
-    SimplyLoveGameplayConfigRequest, SimplyLoveGameplayPadLights, SimplyLoveGraphOrientation,
-    SimplyLoveGraphOrigin, SimplyLoveLightsConfigRequest, SimplyLoveLightsDriver,
-    SimplyLoveMachineConfigRequest, SimplyLoveNullOrDieConfigRequest, SimplyLoveNullOrDieGraph,
-    SimplyLoveOnlineConfigRequest, SimplyLoveOptionsConfigRequest, SimplyLoveQrLoginPolicy,
-    SimplyLoveSelectMusicConfigRequest, SimplyLoveSrpgShopFolder, SimplyLoveSyncKernel,
-    SimplyLoveSyncKernelTarget, SimplyLoveTournamentConfigRequest,
+use deadsync_theme::app_requests::{
+    AdvancedConfigRequest,
+    CoinConfigRequest,
+    CourseConfigRequest,
+    GameplayConfigRequest,
+    GameplayPadLights,
+    GraphOrientation,
+    GraphOrigin,
+    LightsConfigRequest,
+    LightsDriver,
+    MachineConfigRequest,
+    NullOrDieConfigRequest,
+    NullOrDieGraph,
+    OnlineConfigRequest,
+    OptionsConfigRequest,
+    QrLoginPolicy,
+    SelectMusicConfigRequest,
+    SrpgShopFolder,
+    SyncKernel,
+    SyncKernelTarget,
+    TournamentConfigRequest,
 };
 use null_or_die::{BiasKernel, KernelTarget};
 
 pub(super) fn execute_options(
-    request: SimplyLoveOptionsConfigRequest,
+    request: OptionsConfigRequest,
     input: &mut deadsync_input::keymap::InputState,
 ) {
-    use SimplyLoveOptionsConfigRequest as Request;
+    use OptionsConfigRequest as Request;
 
     match request {
         Request::Game(flag) => config::runtime_update::update_game_flag(flag),
@@ -72,8 +85,8 @@ pub(super) fn execute_options(
     }
 }
 
-pub(super) fn execute_coin(request: SimplyLoveCoinConfigRequest) {
-    use SimplyLoveCoinConfigRequest as Request;
+pub(super) fn execute_coin(request: CoinConfigRequest) {
+    use CoinConfigRequest as Request;
 
     match request {
         Request::Mode(mode) => config::runtime_update::update_coin_mode(mode),
@@ -98,28 +111,28 @@ pub(super) fn execute_coin(request: SimplyLoveCoinConfigRequest) {
     }
 }
 
-pub(super) fn execute_lights(request: SimplyLoveLightsConfigRequest) {
-    use SimplyLoveLightsConfigRequest as Request;
+pub(super) fn execute_lights(request: LightsConfigRequest) {
+    use LightsConfigRequest as Request;
 
     match request {
         Request::Driver(driver) => config::runtime_update::update_lights_driver(match driver {
-            SimplyLoveLightsDriver::Off => deadsync_lights::DriverKind::Off,
-            SimplyLoveLightsDriver::Snek => deadsync_lights::DriverKind::Snek,
-            SimplyLoveLightsDriver::Litboard => deadsync_lights::DriverKind::Litboard,
-            SimplyLoveLightsDriver::Win32Serial => deadsync_lights::DriverKind::Win32Serial,
-            SimplyLoveLightsDriver::Fusion => deadsync_lights::DriverKind::Fusion,
-            SimplyLoveLightsDriver::Gpb => deadsync_lights::DriverKind::Gpb,
-            SimplyLoveLightsDriver::PacDrive => deadsync_lights::DriverKind::PacDrive,
-            SimplyLoveLightsDriver::PiuioLeds => deadsync_lights::DriverKind::PiuioLeds,
-            SimplyLoveLightsDriver::Itgio => deadsync_lights::DriverKind::Itgio,
-            SimplyLoveLightsDriver::HidBlueDot => deadsync_lights::DriverKind::HidBlueDot,
-            SimplyLoveLightsDriver::Stac2 => deadsync_lights::DriverKind::Stac2,
-            SimplyLoveLightsDriver::MinimaidHid => deadsync_lights::DriverKind::MinimaidHid,
+            LightsDriver::Off => deadsync_lights::DriverKind::Off,
+            LightsDriver::Snek => deadsync_lights::DriverKind::Snek,
+            LightsDriver::Litboard => deadsync_lights::DriverKind::Litboard,
+            LightsDriver::Win32Serial => deadsync_lights::DriverKind::Win32Serial,
+            LightsDriver::Fusion => deadsync_lights::DriverKind::Fusion,
+            LightsDriver::Gpb => deadsync_lights::DriverKind::Gpb,
+            LightsDriver::PacDrive => deadsync_lights::DriverKind::PacDrive,
+            LightsDriver::PiuioLeds => deadsync_lights::DriverKind::PiuioLeds,
+            LightsDriver::Itgio => deadsync_lights::DriverKind::Itgio,
+            LightsDriver::HidBlueDot => deadsync_lights::DriverKind::HidBlueDot,
+            LightsDriver::Stac2 => deadsync_lights::DriverKind::Stac2,
+            LightsDriver::MinimaidHid => deadsync_lights::DriverKind::MinimaidHid,
         }),
         Request::GameplayPadLights(mode) => {
             config::runtime_update::update_lights_gameplay_pad_lights(match mode {
-                SimplyLoveGameplayPadLights::Input => deadsync_lights::GameplayPadLightMode::Input,
-                SimplyLoveGameplayPadLights::Chart => deadsync_lights::GameplayPadLightMode::Chart,
+                GameplayPadLights::Input => deadsync_lights::GameplayPadLightMode::Input,
+                GameplayPadLights::Chart => deadsync_lights::GameplayPadLightMode::Chart,
             })
         }
         Request::SimplifyBass(enabled) => {
@@ -128,8 +141,8 @@ pub(super) fn execute_lights(request: SimplyLoveLightsConfigRequest) {
     }
 }
 
-pub(super) fn execute_advanced(request: SimplyLoveAdvancedConfigRequest) {
-    use SimplyLoveAdvancedConfigRequest as Request;
+pub(super) fn execute_advanced(request: AdvancedConfigRequest) {
+    use AdvancedConfigRequest as Request;
 
     match request {
         Request::DefaultFailType(fail_type) => {
@@ -148,8 +161,8 @@ pub(super) fn execute_advanced(request: SimplyLoveAdvancedConfigRequest) {
     }
 }
 
-pub(super) fn execute_course(request: SimplyLoveCourseConfigRequest) {
-    use SimplyLoveCourseConfigRequest as Request;
+pub(super) fn execute_course(request: CourseConfigRequest) {
+    use CourseConfigRequest as Request;
 
     match request {
         Request::ShowRandom(enabled) => config::runtime_update::update_show_random_courses(enabled),
@@ -168,8 +181,8 @@ pub(super) fn execute_course(request: SimplyLoveCourseConfigRequest) {
     }
 }
 
-pub(super) fn execute_gameplay(request: SimplyLoveGameplayConfigRequest) {
-    use SimplyLoveGameplayConfigRequest as Request;
+pub(super) fn execute_gameplay(request: GameplayConfigRequest) {
+    use GameplayConfigRequest as Request;
 
     match request {
         Request::BackgroundBrightnessTenths(tenths) => {
@@ -202,8 +215,8 @@ pub(super) fn execute_gameplay(request: SimplyLoveGameplayConfigRequest) {
     }
 }
 
-pub(super) fn execute_tournament(request: SimplyLoveTournamentConfigRequest) {
-    use SimplyLoveTournamentConfigRequest as Request;
+pub(super) fn execute_tournament(request: TournamentConfigRequest) {
+    use TournamentConfigRequest as Request;
 
     match request {
         Request::Enabled(enabled) => {
@@ -219,8 +232,8 @@ pub(super) fn execute_tournament(request: SimplyLoveTournamentConfigRequest) {
     }
 }
 
-pub(super) fn execute_machine(request: SimplyLoveMachineConfigRequest) {
-    use SimplyLoveMachineConfigRequest as Request;
+pub(super) fn execute_machine(request: MachineConfigRequest) {
+    use MachineConfigRequest as Request;
 
     match request {
         Request::ShowSelectProfile(enabled) => {
@@ -297,29 +310,29 @@ pub(super) fn execute_machine(request: SimplyLoveMachineConfigRequest) {
     }
 }
 
-pub(super) fn execute_null_or_die(request: SimplyLoveNullOrDieConfigRequest) {
-    use SimplyLoveNullOrDieConfigRequest as Request;
+pub(super) fn execute_null_or_die(request: NullOrDieConfigRequest) {
+    use NullOrDieConfigRequest as Request;
 
     match request {
         Request::SyncGraph(graph) => {
             config::runtime_update::update_null_or_die_sync_graph(match graph {
-                SimplyLoveNullOrDieGraph::Frequency => config::theme::SyncGraphMode::Frequency,
-                SimplyLoveNullOrDieGraph::BeatIndex => config::theme::SyncGraphMode::BeatIndex,
-                SimplyLoveNullOrDieGraph::PostKernelFingerprint => {
+                NullOrDieGraph::Frequency => config::theme::SyncGraphMode::Frequency,
+                NullOrDieGraph::BeatIndex => config::theme::SyncGraphMode::BeatIndex,
+                NullOrDieGraph::PostKernelFingerprint => {
                     config::theme::SyncGraphMode::PostKernelFingerprint
                 }
             })
         }
         Request::GraphOrientation(orientation) => {
             config::runtime_update::update_null_or_die_graph_orientation(match orientation {
-                SimplyLoveGraphOrientation::Vertical => null_or_die::GraphOrientation::Vertical,
-                SimplyLoveGraphOrientation::Horizontal => null_or_die::GraphOrientation::Horizontal,
+                GraphOrientation::Vertical => null_or_die::GraphOrientation::Vertical,
+                GraphOrientation::Horizontal => null_or_die::GraphOrientation::Horizontal,
             });
         }
         Request::GraphOrigin(origin) => {
             config::runtime_update::update_null_or_die_graph_origin(match origin {
-                SimplyLoveGraphOrigin::Bottom => config::null_or_die::GraphOrigin::Bottom,
-                SimplyLoveGraphOrigin::Top => config::null_or_die::GraphOrigin::Top,
+                GraphOrigin::Bottom => config::null_or_die::GraphOrigin::Bottom,
+                GraphOrigin::Top => config::null_or_die::GraphOrigin::Top,
             })
         }
         Request::ConfidencePercent(percent) => {
@@ -345,14 +358,14 @@ pub(super) fn execute_null_or_die(request: SimplyLoveNullOrDieConfigRequest) {
         }
         Request::KernelTarget(target) => {
             config::runtime_update::update_null_or_die_kernel_target(match target {
-                SimplyLoveSyncKernelTarget::Digest => KernelTarget::Digest,
-                SimplyLoveSyncKernelTarget::Accumulator => KernelTarget::Accumulator,
+                SyncKernelTarget::Digest => KernelTarget::Digest,
+                SyncKernelTarget::Accumulator => KernelTarget::Accumulator,
             })
         }
         Request::Kernel(kernel) => {
             config::runtime_update::update_null_or_die_kernel_type(match kernel {
-                SimplyLoveSyncKernel::Rising => BiasKernel::Rising,
-                SimplyLoveSyncKernel::Loudest => BiasKernel::Loudest,
+                SyncKernel::Rising => BiasKernel::Rising,
+                SyncKernel::Loudest => BiasKernel::Loudest,
             })
         }
         Request::FullSpectrogram(enabled) => {
@@ -361,8 +374,8 @@ pub(super) fn execute_null_or_die(request: SimplyLoveNullOrDieConfigRequest) {
     }
 }
 
-pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
-    use SimplyLoveOnlineConfigRequest as Request;
+pub(super) fn execute_online(request: OnlineConfigRequest) {
+    use OnlineConfigRequest as Request;
 
     match request {
         Request::TwitchChat(options) => config::runtime_update::update_twitch_chat(options),
@@ -372,9 +385,9 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
         Request::ShowSrpgShop(enabled) => config::runtime_update::update_show_srpg_shop(enabled),
         Request::SrpgShopFolder(folder) => {
             config::runtime_update::update_srpg_shop_folder(match folder {
-                SimplyLoveSrpgShopFolder::Unlocks => config::theme::SrpgShopFolder::Unlocks,
-                SimplyLoveSrpgShopFolder::Shops => config::theme::SrpgShopFolder::Shops,
-                SimplyLoveSrpgShopFolder::Faction => config::theme::SrpgShopFolder::Faction,
+                SrpgShopFolder::Unlocks => config::theme::SrpgShopFolder::Unlocks,
+                SrpgShopFolder::Shops => config::theme::SrpgShopFolder::Shops,
+                SrpgShopFolder::Faction => config::theme::SrpgShopFolder::Faction,
             })
         }
         Request::EnableBoogieStats(enabled) => {
@@ -391,11 +404,11 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
         }
         Request::GrooveStatsQrLogin(policy) => {
             config::runtime_update::update_groovestats_qr_login_when(match policy {
-                SimplyLoveQrLoginPolicy::Always => config::theme::GrooveStatsQrLoginWhen::Always,
-                SimplyLoveQrLoginPolicy::Sometimes => {
+                QrLoginPolicy::Always => config::theme::GrooveStatsQrLoginWhen::Always,
+                QrLoginPolicy::Sometimes => {
                     config::theme::GrooveStatsQrLoginWhen::Sometimes
                 }
-                SimplyLoveQrLoginPolicy::Disabled => {
+                QrLoginPolicy::Disabled => {
                     config::theme::GrooveStatsQrLoginWhen::Disabled
                 }
             });
@@ -431,19 +444,19 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
         }
         Request::ArrowCloudQrLogin(policy) => {
             config::runtime_update::update_arrowcloud_qr_login_when(match policy {
-                SimplyLoveQrLoginPolicy::Always => config::theme::ArrowCloudQrLoginWhen::Always,
-                SimplyLoveQrLoginPolicy::Sometimes => {
+                QrLoginPolicy::Always => config::theme::ArrowCloudQrLoginWhen::Always,
+                QrLoginPolicy::Sometimes => {
                     config::theme::ArrowCloudQrLoginWhen::Sometimes
                 }
-                SimplyLoveQrLoginPolicy::Disabled => config::theme::ArrowCloudQrLoginWhen::Disabled,
+                QrLoginPolicy::Disabled => config::theme::ArrowCloudQrLoginWhen::Disabled,
             });
         }
         Request::ShareRips(enabled) => config::runtime_update::update_share_rips(enabled),
     }
 }
 
-pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) {
-    use SimplyLoveSelectMusicConfigRequest as Request;
+pub(super) fn execute_select_music(request: SelectMusicConfigRequest) {
+    use SelectMusicConfigRequest as Request;
 
     match request {
         Request::ShowBanners(enabled) => {

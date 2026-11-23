@@ -177,6 +177,29 @@ fn production_crate_dependencies_follow_layer_direction() {
 }
 
 #[test]
+fn optional_themes_are_registered_by_the_executable() {
+    let metadata = workspace_metadata();
+    let shell = metadata
+        .packages
+        .iter()
+        .find(|package| package.name == "deadsync-shell")
+        .expect("shell workspace package");
+    let executable = metadata
+        .packages
+        .iter()
+        .find(|package| package.name == "deadsync")
+        .expect("executable workspace package");
+    for theme in ["deadsync-theme-ddr-extreme", "deadsync-theme-openitg"] {
+        assert!(executable.dependencies.iter().any(|dependency| {
+            dependency.name == theme && dependency.kind.is_none()
+        }));
+        assert!(shell.dependencies.iter().all(|dependency| {
+            dependency.name != theme || dependency.kind.as_deref() == Some("dev")
+        }));
+    }
+}
+
+#[test]
 fn game_controller_test_builds_stay_independent_of_themes_and_application() {
     let metadata = workspace_metadata();
     for owner in [

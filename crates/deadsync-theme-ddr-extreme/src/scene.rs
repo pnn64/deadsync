@@ -67,17 +67,51 @@ impl Scene {
         text: impl Into<TextContent>,
         ink: [f32; 3],
     ) {
+        let mut actor = self.text_builder(at, zoom, text.into(), ink);
+        actor.align(0.0, 0.5);
+        actor.maxwidth(width * self.scale);
+        actors.push(actor.build(0));
+    }
+
+    pub(crate) fn paragraph(
+        self,
+        actors: &mut Vec<Actor>,
+        at: [f32; 2],
+        [width, height]: [f32; 2],
+        zoom: f32,
+        text: impl Into<TextContent>,
+        ink: [f32; 3],
+    ) {
+        let mut actor = self.text_builder(at, zoom, text.into(), ink);
+        actor.align(0.0, 0.0);
+        actor.wrapwidthpixels(width / zoom);
+        actor.maxheight(height * self.scale);
+        actors.push(actor.build(0));
+    }
+
+    pub(crate) fn with_alpha(self, alpha: f32) -> Self {
+        Self {
+            alpha: alpha.clamp(0.0, 1.0),
+            ..self
+        }
+    }
+
+    fn text_builder(
+        self,
+        at: [f32; 2],
+        zoom: f32,
+        text: TextContent,
+        ink: [f32; 3],
+    ) -> TextBuilder {
         let [x, y] = self.xy(at);
         let mut actor = TextBuilder::new();
         actor.xy(x, y);
-        actor.align(0.0, 0.5);
         actor.font(FONT);
-        actor.settext(text.into());
+        actor.settext(text);
         actor.zoom(zoom * self.scale);
-        actor.maxwidth(width * self.scale);
         actor.diffuse(color(ink, self.alpha));
         actor.z(10);
-        actors.push(actor.build(0));
+        actor
     }
 
     pub(crate) fn banner(
@@ -115,7 +149,7 @@ impl Scene {
         }
     }
 
-    fn xy(self, point: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn xy(self, point: [f32; 2]) -> [f32; 2] {
         std::array::from_fn(|i| point[i].mul_add(self.scale, self.origin[i]))
     }
 }

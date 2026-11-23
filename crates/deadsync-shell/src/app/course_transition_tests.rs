@@ -96,6 +96,7 @@ pub(super) fn test_app_with_theme(root: &std::path::Path, theme_flag: config::th
         deadsync_audio_stream::AudioControl::without_audio(),
         deadsync_audio_stream::MusicClock::without_audio(),
         None,
+        crate::theme_registry::mount(theme_flag),
     )
 }
 
@@ -206,11 +207,11 @@ fn press_course_start(app: &mut App) {
     let mut effects = effects.into_iter();
     assert!(matches!(
         effects.next(),
-        Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+        Some(ThemeEffect::Runtime(RuntimeRequest::Audio(
             AudioRequest::PlaySfx("assets/sounds/start.ogg")
         )))
     ));
-    let Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::CourseLaunch(request))) = effects.next()
+    let Some(ThemeEffect::Runtime(RuntimeRequest::CourseLaunch(request))) = effects.next()
     else {
         panic!("course Start should signal launch intent");
     };

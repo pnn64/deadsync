@@ -64,3 +64,17 @@ pub trait ThemeProfilePicker: ThemeTransitions {
         visual_policy: Self::ProfilePickerVisualPolicy,
     );
 }
+
+/// Shell-prepared local profile catalog used by Manage Local Profiles.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ManageLocalProfilesView {
+    pub profiles: Vec<LocalProfileView>,
+    pub default_profile_ids: [Option<String>; 2],
+    pub dedicated_three_key_nav: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalProfileView {
+    pub id: String,
+    pub display_name: String,
+}

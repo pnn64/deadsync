@@ -1,6 +1,7 @@
 //! DDR Extreme's original arcade presentation for the shared DeadSync game.
 
 mod menu;
+mod options;
 mod resources;
 mod scene;
 mod selection;
@@ -9,6 +10,7 @@ mod stage;
 use deadlib_present::actors::Actor;
 use deadsync_theme::{Screen, Theme, ThemeScreenId, ThemeTransitions, TransitionKind};
 
+pub use options::{ExtremePlayerOptions, ExtremeSystemOptions};
 pub use selection::ExtremeSelection;
 pub use stage::{ExtremeAttract, ExtremeStage};
 

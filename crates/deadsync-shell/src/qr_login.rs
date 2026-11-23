@@ -1,9 +1,12 @@
 use deadsync_config::theme::{ArrowCloudQrLoginWhen, GrooveStatsQrLoginWhen};
 use deadsync_online::{arrowcloud, groovestats};
 use deadsync_profile::{PlayerSide, compat as profile};
-use deadsync_theme_simply_love::{
-    SimplyLoveQrLoginEvent, SimplyLoveQrLoginRequest, SimplyLoveQrLoginService,
-    SimplyLoveQrLoginSlot, SimplyLoveQrLoginSlotAvailability,
+use deadsync_theme::app_requests::{
+    QrLoginEvent,
+    QrLoginRequest,
+    QrLoginService,
+    QrLoginSlot,
+    QrLoginSlotAvailability,
 };
 use smallvec::SmallVec;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,8 +35,8 @@ enum WorkerEvent {
 
 struct ActiveLogin {
     id: u64,
-    service: SimplyLoveQrLoginService,
-    slots: [SimplyLoveQrLoginSlot; 2],
+    service: QrLoginService,
+    slots: [QrLoginSlot; 2],
     pending_sides: u8,
     cancel: Arc<AtomicBool>,
 }
@@ -59,7 +62,7 @@ impl Default for Service {
 }
 
 impl Service {
-    pub(crate) fn start(&mut self, request: SimplyLoveQrLoginRequest) {
+    pub(crate) fn start(&mut self, request: QrLoginRequest) {
         self.cancel_any();
         self.next_id = self.next_id.wrapping_add(1);
         let id = self.next_id;
@@ -67,7 +70,7 @@ impl Service {
         let pending_sides = request
             .slots
             .iter()
-            .filter(|slot| matches!(slot.availability, SimplyLoveQrLoginSlotAvailability::Ready))
+            .filter(|slot| matches!(slot.availability, QrLoginSlotAvailability::Ready))
             .fold(0, |mask, slot| mask | side_bit(slot.side));
         if pending_sides == 0 {
             self.active = None;
@@ -81,16 +84,16 @@ impl Service {
             cancel: Arc::clone(&cancel),
         });
         match request.service {
-            SimplyLoveQrLoginService::ArrowCloud => {
+            QrLoginService::ArrowCloud => {
                 self.start_arrowcloud(id, &request.slots, cancel);
             }
-            SimplyLoveQrLoginService::GrooveStats => {
+            QrLoginService::GrooveStats => {
                 self.start_groovestats(id, &request.slots, cancel);
             }
         }
     }
 
-    pub(crate) fn cancel(&self, service: SimplyLoveQrLoginService) {
+    pub(crate) fn cancel(&self, service: QrLoginService) {
         if let Some(active) = &self.active
             && active.service == service
         {
@@ -110,14 +113,14 @@ impl Service {
     pub(crate) fn poll(
         &mut self,
     ) -> Option<(
-        SimplyLoveQrLoginService,
-        SmallVec<[SimplyLoveQrLoginEvent; FRAME_EVENTS]>,
+        QrLoginService,
+        SmallVec<[QrLoginEvent; FRAME_EVENTS]>,
     )> {
         let service = self.active.as_ref()?.service;
         Some((service, self.drain_events()))
     }
 
-    fn drain_events(&mut self) -> SmallVec<[SimplyLoveQrLoginEvent; FRAME_EVENTS]> {
+    fn drain_events(&mut self) -> SmallVec<[QrLoginEvent; FRAME_EVENTS]> {
         let mut events = SmallVec::new();
         while let Ok((id, event)) = self.rx.try_recv() {
             if let Some(event) = self.consume_worker_event(id, event) {
@@ -132,7 +135,7 @@ impl Service {
         &mut self,
         id: u64,
         event: WorkerEvent,
-    ) -> Option<SimplyLoveQrLoginEvent> {
+    ) -> Option<QrLoginEvent> {
         let active = self.active.as_mut()?;
         if active.id != id {
             return None;
@@ -143,7 +146,7 @@ impl Service {
                 side,
                 short_code,
                 verification_url,
-            } => SimplyLoveQrLoginEvent::Started {
+            } => QrLoginEvent::Started {
                 service,
                 side,
                 short_code,
@@ -157,7 +160,7 @@ impl Service {
                 let slot = &active.slots[deadsync_profile::player_side_index(side)];
                 persist_credentials(service, slot, &api_key, username.as_deref());
                 active.pending_sides &= !side_bit(side);
-                SimplyLoveQrLoginEvent::Succeeded {
+                QrLoginEvent::Succeeded {
                     service,
                     side,
                     display_name: slot.display_name.clone(),
@@ -165,7 +168,7 @@ impl Service {
             }
             WorkerEvent::Failed { side, reason } => {
                 active.pending_sides &= !side_bit(side);
-                SimplyLoveQrLoginEvent::Failed {
+                QrLoginEvent::Failed {
                     service,
                     side,
                     reason,
@@ -187,7 +190,7 @@ impl Service {
     fn start_arrowcloud(
         &self,
         id: u64,
-        slots: &[SimplyLoveQrLoginSlot; 2],
+        slots: &[QrLoginSlot; 2],
         cancel: Arc<AtomicBool>,
     ) {
         for slot in ready_slots(slots) {
@@ -226,7 +229,7 @@ impl Service {
     fn start_groovestats(
         &self,
         id: u64,
-        slots: &[SimplyLoveQrLoginSlot; 2],
+        slots: &[QrLoginSlot; 2],
         cancel: Arc<AtomicBool>,
     ) {
         let uuid = groovestats::generate_qr_login_uuid();
@@ -287,24 +290,24 @@ impl Service {
 }
 
 pub(crate) fn request(
-    service: SimplyLoveQrLoginService,
+    service: QrLoginService,
     target_profile: Option<(String, String)>,
-) -> SimplyLoveQrLoginRequest {
+) -> QrLoginRequest {
     let slots = if let Some((profile_id, display_name)) = target_profile {
         [
-            SimplyLoveQrLoginSlot {
+            QrLoginSlot {
                 side: PlayerSide::P1,
-                availability: SimplyLoveQrLoginSlotAvailability::Ready,
+                availability: QrLoginSlotAvailability::Ready,
                 had_existing_key: profile_has_key(service, &profile_id),
                 display_name,
                 target_profile_id: Some(profile_id),
             },
-            unavailable_slot(PlayerSide::P2, SimplyLoveQrLoginSlotAvailability::NotJoined),
+            unavailable_slot(PlayerSide::P2, QrLoginSlotAvailability::NotJoined),
         ]
     } else {
         SIDES.map(|side| session_slot(service, side))
     };
-    SimplyLoveQrLoginRequest { service, slots }
+    QrLoginRequest { service, slots }
 }
 
 pub(crate) fn should_auto_show_arrowcloud(enabled: bool, when: ArrowCloudQrLoginWhen) -> bool {
@@ -312,7 +315,7 @@ pub(crate) fn should_auto_show_arrowcloud(enabled: bool, when: ArrowCloudQrLogin
         && match when {
             ArrowCloudQrLoginWhen::Always => true,
             ArrowCloudQrLoginWhen::Sometimes => {
-                session_has_missing_key(SimplyLoveQrLoginService::ArrowCloud)
+                session_has_missing_key(QrLoginService::ArrowCloud)
             }
             ArrowCloudQrLoginWhen::Disabled => false,
         }
@@ -323,31 +326,31 @@ pub(crate) fn should_auto_show_groovestats(enabled: bool, when: GrooveStatsQrLog
         && match when {
             GrooveStatsQrLoginWhen::Always => true,
             GrooveStatsQrLoginWhen::Sometimes => {
-                session_has_missing_key(SimplyLoveQrLoginService::GrooveStats)
+                session_has_missing_key(QrLoginService::GrooveStats)
             }
             GrooveStatsQrLoginWhen::Disabled => false,
         }
 }
 
-fn session_has_missing_key(service: SimplyLoveQrLoginService) -> bool {
+fn session_has_missing_key(service: QrLoginService) -> bool {
     ready_slots(&request(service, None).slots).any(|slot| !slot.had_existing_key)
 }
 
-fn session_slot(service: SimplyLoveQrLoginService, side: PlayerSide) -> SimplyLoveQrLoginSlot {
+fn session_slot(service: QrLoginService, side: PlayerSide) -> QrLoginSlot {
     if !profile::is_session_side_joined(side) {
-        return unavailable_slot(side, SimplyLoveQrLoginSlotAvailability::NotJoined);
+        return unavailable_slot(side, QrLoginSlotAvailability::NotJoined);
     }
     if profile::is_session_side_guest(side) {
-        return unavailable_slot(side, SimplyLoveQrLoginSlotAvailability::Guest);
+        return unavailable_slot(side, QrLoginSlotAvailability::Guest);
     }
     let current = profile::get_for_side(side);
     let had_existing_key = match service {
-        SimplyLoveQrLoginService::ArrowCloud => !current.arrowcloud_api_key.trim().is_empty(),
-        SimplyLoveQrLoginService::GrooveStats => !current.groovestats_api_key.trim().is_empty(),
+        QrLoginService::ArrowCloud => !current.arrowcloud_api_key.trim().is_empty(),
+        QrLoginService::GrooveStats => !current.groovestats_api_key.trim().is_empty(),
     };
-    SimplyLoveQrLoginSlot {
+    QrLoginSlot {
         side,
-        availability: SimplyLoveQrLoginSlotAvailability::Ready,
+        availability: QrLoginSlotAvailability::Ready,
         display_name: current.display_name,
         had_existing_key,
         target_profile_id: None,
@@ -356,9 +359,9 @@ fn session_slot(service: SimplyLoveQrLoginService, side: PlayerSide) -> SimplyLo
 
 const fn unavailable_slot(
     side: PlayerSide,
-    availability: SimplyLoveQrLoginSlotAvailability,
-) -> SimplyLoveQrLoginSlot {
-    SimplyLoveQrLoginSlot {
+    availability: QrLoginSlotAvailability,
+) -> QrLoginSlot {
+    QrLoginSlot {
         side,
         availability,
         display_name: String::new(),
@@ -367,31 +370,31 @@ const fn unavailable_slot(
     }
 }
 
-fn ready_slots(slots: &[SimplyLoveQrLoginSlot; 2]) -> impl Iterator<Item = &SimplyLoveQrLoginSlot> {
+fn ready_slots(slots: &[QrLoginSlot; 2]) -> impl Iterator<Item = &QrLoginSlot> {
     slots
         .iter()
-        .filter(|slot| matches!(slot.availability, SimplyLoveQrLoginSlotAvailability::Ready))
+        .filter(|slot| matches!(slot.availability, QrLoginSlotAvailability::Ready))
 }
 
-fn profile_has_key(service: SimplyLoveQrLoginService, profile_id: &str) -> bool {
+fn profile_has_key(service: QrLoginService, profile_id: &str) -> bool {
     match service {
-        SimplyLoveQrLoginService::ArrowCloud => !profile::get_arrowcloud_api_key_for_id(profile_id)
+        QrLoginService::ArrowCloud => !profile::get_arrowcloud_api_key_for_id(profile_id)
             .trim()
             .is_empty(),
-        SimplyLoveQrLoginService::GrooveStats => {
+        QrLoginService::GrooveStats => {
             profile::get_groovestats_api_key_for_id(profile_id).is_some()
         }
     }
 }
 
 fn persist_credentials(
-    service: SimplyLoveQrLoginService,
-    slot: &SimplyLoveQrLoginSlot,
+    service: QrLoginService,
+    slot: &QrLoginSlot,
     api_key: &str,
     username: Option<&str>,
 ) {
     match service {
-        SimplyLoveQrLoginService::ArrowCloud => {
+        QrLoginService::ArrowCloud => {
             if let Some(profile_id) = slot.target_profile_id.as_deref() {
                 profile::set_arrowcloud_api_key_for_id(profile_id, api_key);
             } else {
@@ -399,7 +402,7 @@ fn persist_credentials(
             }
             deadsync_online::runtime::refresh_arrowcloud_status();
         }
-        SimplyLoveQrLoginService::GrooveStats => {
+        QrLoginService::GrooveStats => {
             let username = username.unwrap_or_default();
             if let Some(profile_id) = slot.target_profile_id.as_deref() {
                 profile::set_groovestats_credentials_for_id(profile_id, api_key, username);
@@ -460,12 +463,12 @@ mod tests {
     fn profile_request_prepares_one_ready_slot() {
         crate::tests::init_paths();
         let request = request(
-            SimplyLoveQrLoginService::ArrowCloud,
+            QrLoginService::ArrowCloud,
             Some(("missing-profile".to_owned(), "Player".to_owned())),
         );
         assert_eq!(
             request.slots[0].availability,
-            SimplyLoveQrLoginSlotAvailability::Ready
+            QrLoginSlotAvailability::Ready
         );
         assert_eq!(request.slots[0].display_name, "Player");
         assert_eq!(
@@ -474,14 +477,14 @@ mod tests {
         );
         assert_eq!(
             request.slots[1].availability,
-            SimplyLoveQrLoginSlotAvailability::NotJoined
+            QrLoginSlotAvailability::NotJoined
         );
     }
 
     #[test]
     fn unavailable_slot_contains_no_profile_target() {
-        let slot = unavailable_slot(PlayerSide::P2, SimplyLoveQrLoginSlotAvailability::Guest);
-        assert_eq!(slot.availability, SimplyLoveQrLoginSlotAvailability::Guest);
+        let slot = unavailable_slot(PlayerSide::P2, QrLoginSlotAvailability::Guest);
+        assert_eq!(slot.availability, QrLoginSlotAvailability::Guest);
         assert!(slot.display_name.is_empty());
         assert!(slot.target_profile_id.is_none());
     }
@@ -492,18 +495,18 @@ mod tests {
         assert!(service.poll().is_none());
 
         let slots = [
-            SimplyLoveQrLoginSlot {
+            QrLoginSlot {
                 side: PlayerSide::P1,
-                availability: SimplyLoveQrLoginSlotAvailability::Ready,
+                availability: QrLoginSlotAvailability::Ready,
                 had_existing_key: false,
                 display_name: "Player".to_owned(),
                 target_profile_id: None,
             },
-            unavailable_slot(PlayerSide::P2, SimplyLoveQrLoginSlotAvailability::NotJoined),
+            unavailable_slot(PlayerSide::P2, QrLoginSlotAvailability::NotJoined),
         ];
         service.active = Some(ActiveLogin {
             id: 9,
-            service: SimplyLoveQrLoginService::ArrowCloud,
+            service: QrLoginService::ArrowCloud,
             slots,
             pending_sides: side_bit(PlayerSide::P1),
             cancel: Arc::new(AtomicBool::new(false)),
@@ -521,10 +524,10 @@ mod tests {
             ))
             .expect("the service owns the matching receiver");
         let (login_service, events) = service.poll().expect("the login is active");
-        assert_eq!(login_service, SimplyLoveQrLoginService::ArrowCloud);
+        assert_eq!(login_service, QrLoginService::ArrowCloud);
         assert!(matches!(
             events.as_slice(),
-            [SimplyLoveQrLoginEvent::Started { side: PlayerSide::P1, short_code, .. }]
+            [QrLoginEvent::Started { side: PlayerSide::P1, short_code, .. }]
                 if short_code == "ABCD"
         ));
 
@@ -544,7 +547,7 @@ mod tests {
                 .expect("the login is still active")
                 .1
                 .as_slice(),
-            [SimplyLoveQrLoginEvent::Failed { reason, .. }] if reason == "finished"
+            [QrLoginEvent::Failed { reason, .. }] if reason == "finished"
         ));
         assert!(service.poll().is_none());
     }
@@ -554,10 +557,10 @@ mod tests {
         let mut service = Service::default();
         service.active = Some(ActiveLogin {
             id: 11,
-            service: SimplyLoveQrLoginService::GrooveStats,
-            slots: SIDES.map(|side| SimplyLoveQrLoginSlot {
+            service: QrLoginService::GrooveStats,
+            slots: SIDES.map(|side| QrLoginSlot {
                 side,
-                availability: SimplyLoveQrLoginSlotAvailability::Ready,
+                availability: QrLoginSlotAvailability::Ready,
                 display_name: String::new(),
                 had_existing_key: false,
                 target_profile_id: None,
@@ -582,7 +585,7 @@ mod tests {
         }
 
         let (provider, events) = service.poll().expect("the login is active");
-        assert_eq!(provider, SimplyLoveQrLoginService::GrooveStats);
+        assert_eq!(provider, QrLoginService::GrooveStats);
         assert_eq!(events.len(), FRAME_EVENTS);
         assert!(!events.spilled());
         assert!(events.iter().all(|event| event.service() == provider));

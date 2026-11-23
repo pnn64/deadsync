@@ -54,46 +54,8 @@ impl deadsync_theme::stage::StagePresentation<deadlib_present::actors::Actor> fo
 }
 
 impl SimplyLoveTheme {
-    #[must_use]
-    pub const fn gameplay_exit_screen(
-        destination: deadsync_gameplay::exit_route::GameplayExitDestination,
-    ) -> screens::Screen {
-        use deadsync_gameplay::exit_route::GameplayExitDestination;
-        use screens::Screen;
-
-        match destination {
-            GameplayExitDestination::Results => Screen::Evaluation,
-            GameplayExitDestination::SongSelection => Screen::SelectMusic,
-            GameplayExitDestination::CourseSelection => Screen::SelectCourse,
-            GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => {
-                Screen::Gameplay
-            }
-        }
-    }
-
     pub fn resolve_song_lua_screen(name: Option<&str>) -> Result<screens::Screen, String> {
         screens::gameplay::song_lua_transition_screen(name)
-    }
-
-    /// Interpret legacy screen destinations that also have a gameplay meaning.
-    #[must_use]
-    pub const fn gameplay_action_for_navigation(
-        screen: screens::Screen,
-        immediate: bool,
-    ) -> Option<deadsync_gameplay::GameplayAction> {
-        use deadsync_gameplay::{GameplayAction, GameplayExit};
-        use screens::Screen;
-
-        let exit = match screen {
-            Screen::Evaluation => GameplayExit::Complete,
-            Screen::SelectMusic => GameplayExit::Cancel,
-            _ => return None,
-        };
-        Some(if immediate {
-            GameplayAction::NavigateNoFade(exit)
-        } else {
-            GameplayAction::Navigate(exit)
-        })
     }
 }
 

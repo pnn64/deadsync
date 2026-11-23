@@ -29,7 +29,7 @@ pub mod live_case;
 mod local_profiles;
 mod main_menu;
 mod mounted_player_options;
-mod mounted_theme;
+pub mod mounted_theme;
 mod title_menu;
 mod mappings;
 mod navigation;
@@ -77,6 +77,10 @@ pub(crate) use stutter_diag::StutterDiagRecorder;
 pub(crate) type ActiveTheme = deadsync_theme_simply_love::SimplyLoveTheme;
 pub(crate) use deadsync_theme::Screen as ThemeScreen;
 pub(crate) type TransitionState = deadsync_theme::TransitionState<ThemeScreen>;
+
+#[cfg(test)]
+#[path = "../../../src/theme_registry.rs"]
+mod theme_registry;
 
 #[cfg(test)]
 mod tests {

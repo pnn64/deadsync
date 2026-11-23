@@ -1,9 +1,11 @@
 use crate::latest_worker_value::LatestWorkerValue;
 use deadsync_online::score_compat as scores;
-use deadsync_score::{ScoreBulkImportSummary, ScoreImportProgress};
-use deadsync_theme_simply_love::{
-    SimplyLoveScoreImportEvent, SimplyLoveScoreImportProgress, SimplyLoveScoreImportRequest,
-    SimplyLoveScoreImportSummary,
+use deadsync_score::{ScoreBulkImportSummary, ScoreImportProgress as WorkerProgress};
+use deadsync_theme::app_requests::{
+    ScoreImportEvent,
+    ScoreImportProgress,
+    ScoreImportRequest,
+    ScoreImportSummary,
 };
 use smallvec::SmallVec;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,7 +14,7 @@ use std::sync::{Arc, mpsc};
 const PENDING_TERMINALS: usize = 8;
 const TERMINALS_PER_FRAME: usize = 8;
 const FRAME_EVENTS: usize = 2;
-type ImportResult = Result<SimplyLoveScoreImportSummary, String>;
+type ImportResult = Result<ScoreImportSummary, String>;
 
 /// Shell-owned score-import worker, cancellation, and frame handoff.
 ///
@@ -28,7 +30,7 @@ type ImportResult = Result<SimplyLoveScoreImportSummary, String>;
 pub(crate) struct Service {
     tx: mpsc::SyncSender<(u64, ImportResult)>,
     rx: mpsc::Receiver<(u64, ImportResult)>,
-    progress: Arc<LatestWorkerValue<SimplyLoveScoreImportProgress>>,
+    progress: Arc<LatestWorkerValue<ScoreImportProgress>>,
     active: Option<(u64, Arc<AtomicBool>)>,
     active_jobs: usize,
     next_id: u64,
@@ -49,7 +51,7 @@ impl Default for Service {
 }
 
 impl Service {
-    pub(crate) fn start(&mut self, request: SimplyLoveScoreImportRequest) {
+    pub(crate) fn start(&mut self, request: ScoreImportRequest) {
         self.cancel();
         self.next_id = self.next_id.wrapping_add(1);
         let job_id = self.next_id;
@@ -62,7 +64,7 @@ impl Service {
         progress.start(job_id);
 
         std::thread::spawn(move || {
-            let SimplyLoveScoreImportRequest {
+            let ScoreImportRequest {
                 endpoint,
                 profile,
                 pack_groups,
@@ -122,20 +124,20 @@ impl Service {
     /// Returns `None` without touching the queue when no import worker is active.
     /// Each worker sends exactly one terminal, so superseded jobs keep polling
     /// until their completion has been removed from the shared queue.
-    pub(crate) fn poll(&mut self) -> Option<SmallVec<[SimplyLoveScoreImportEvent; FRAME_EVENTS]>> {
+    pub(crate) fn poll(&mut self) -> Option<SmallVec<[ScoreImportEvent; FRAME_EVENTS]>> {
         if self.active_jobs == 0 {
             return None;
         }
         Some(self.drain_events())
     }
 
-    fn drain_events(&mut self) -> SmallVec<[SimplyLoveScoreImportEvent; FRAME_EVENTS]> {
+    fn drain_events(&mut self) -> SmallVec<[ScoreImportEvent; FRAME_EVENTS]> {
         let active_id = self.active.as_ref().map(|(id, _)| *id);
         let mut events = SmallVec::new();
         if let Some(job_id) = active_id
             && let Some(progress) = self.progress.take(job_id)
         {
-            events.push(SimplyLoveScoreImportEvent::Progress(progress));
+            events.push(ScoreImportEvent::Progress(progress));
         }
         for _ in 0..TERMINALS_PER_FRAME {
             let Ok((job_id, result)) = self.rx.try_recv() else {
@@ -147,15 +149,15 @@ impl Service {
             }
             self.active = None;
             self.progress.finish(job_id);
-            events.push(SimplyLoveScoreImportEvent::Finished(result));
+            events.push(ScoreImportEvent::Finished(result));
             break;
         }
         events
     }
 }
 
-fn progress_view(progress: ScoreImportProgress) -> SimplyLoveScoreImportProgress {
-    SimplyLoveScoreImportProgress {
+fn progress_view(progress: WorkerProgress) -> ScoreImportProgress {
+    ScoreImportProgress {
         processed_charts: progress.processed_charts,
         total_charts: progress.total_charts,
         imported_scores: progress.imported_scores,
@@ -165,8 +167,8 @@ fn progress_view(progress: ScoreImportProgress) -> SimplyLoveScoreImportProgress
     }
 }
 
-const fn summary_view(summary: ScoreBulkImportSummary) -> SimplyLoveScoreImportSummary {
-    SimplyLoveScoreImportSummary {
+const fn summary_view(summary: ScoreBulkImportSummary) -> ScoreImportSummary {
+    ScoreImportSummary {
         requested_charts: summary.requested_charts,
         imported_scores: summary.imported_scores,
         missing_scores: summary.missing_scores,
@@ -181,8 +183,8 @@ const fn summary_view(summary: ScoreBulkImportSummary) -> SimplyLoveScoreImportS
 mod tests {
     use super::*;
 
-    fn test_progress(done: usize, total: usize, detail: &str) -> SimplyLoveScoreImportProgress {
-        SimplyLoveScoreImportProgress {
+    fn test_progress(done: usize, total: usize, detail: &str) -> ScoreImportProgress {
+        ScoreImportProgress {
             processed_charts: done,
             total_charts: total,
             imported_scores: done.saturating_sub(2),
@@ -234,7 +236,7 @@ mod tests {
 
         assert!(matches!(
             events.as_slice(),
-            [SimplyLoveScoreImportEvent::Finished(Err(reason))] if reason == "finished"
+            [ScoreImportEvent::Finished(Err(reason))] if reason == "finished"
         ));
         assert!(service.poll().is_none());
     }
@@ -251,7 +253,7 @@ mod tests {
 
         assert!(matches!(
             events.as_slice(),
-            [SimplyLoveScoreImportEvent::Progress(progress)]
+            [ScoreImportEvent::Progress(progress)]
                 if progress.processed_charts == 64 && progress.detail.len() == 24
         ));
         assert!(!events.spilled());
@@ -269,7 +271,7 @@ mod tests {
             .tx
             .send((
                 1,
-                Ok(SimplyLoveScoreImportSummary {
+                Ok(ScoreImportSummary {
                     requested_charts: 8,
                     imported_scores: 6,
                     missing_scores: 2,
@@ -285,8 +287,8 @@ mod tests {
         assert!(matches!(
             events.as_slice(),
             [
-                SimplyLoveScoreImportEvent::Progress(progress),
-                SimplyLoveScoreImportEvent::Finished(Ok(_)),
+                ScoreImportEvent::Progress(progress),
+                ScoreImportEvent::Finished(Ok(_)),
             ] if progress.processed_charts == 8
         ));
         assert!(!events.spilled());
@@ -307,7 +309,7 @@ mod tests {
         let events = service.poll().expect("the current import is active");
         assert!(matches!(
             events.as_slice(),
-            [SimplyLoveScoreImportEvent::Progress(progress)]
+            [ScoreImportEvent::Progress(progress)]
                 if progress.processed_charts == 3 && progress.detail == "current"
         ));
         assert!(service.active.is_some());

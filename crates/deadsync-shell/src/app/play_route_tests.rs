@@ -71,25 +71,25 @@ fn run_child(theme: &str) {
     let mut app = App::new(
         dirs,
         0,
-        cfg.simply_love_color,
+        cfg.theme_color,
         generation,
         cfg,
         profile::get(),
         deadsync_audio_stream::AudioControl::without_audio(),
         deadsync_audio_stream::MusicClock::without_audio(),
         None,
+        crate::theme_registry::mount(cfg.theme_flag),
     );
     app.asset_manager = fixture_assets();
     let fonts = deadlib_assets::parse_font_asset_specs(
-        crate::mounted_theme::supplemental_resources(expected_theme).fonts.iter().copied(),
+        app.theme_resources.fonts.iter().copied(),
         &paths.texture_roots,
         |path| paths.resolve_asset_path(path),
     ).expect("bundled theme fonts load");
     app.asset_manager
         .register_fonts(fonts.into_iter().map(|asset| (asset.name, asset.font)));
-    assert_eq!(app.state.screens.menu_state.theme_flag(), expected_theme);
 
-    let mut route = RouteTest { app: Some(app) };
+    let mut route = RouteTest { app: Some(app), theme: expected_theme };
     let event_loop = EventLoop::builder().with_any_thread(true).build().unwrap();
     event_loop.run_app(&mut route).unwrap();
     assert!(route.app.is_none(), "winit did not run the play route");
@@ -126,6 +126,7 @@ fn seed_library(dirs: &AppDirs) {
 
 struct RouteTest {
     app: Option<App>,
+    theme: ThemeFlag,
 }
 
 impl ApplicationHandler for RouteTest {
@@ -133,22 +134,24 @@ impl ApplicationHandler for RouteTest {
         let Some(mut app) = self.app.take() else {
             return;
         };
-        play_route(&mut app, event_loop);
+        play_route(&mut app, event_loop, self.theme);
         event_loop.exit();
     }
 
     fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
 }
 
-fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
+fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     use deadsync_gameplay::music_wheel::WheelRandomAction;
 
     app.on_fade_complete(CurrentScreen::Menu, event_loop);
     settle(app, event_loop, CurrentScreen::Menu);
-    let theme = app.state.screens.menu_state.theme_flag();
     let extreme = theme == ThemeFlag::DdrExtreme;
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert_eq!(actor_tree_has_text(&actors, "EXTREME"), extreme);
+    if extreme {
+        check_extreme_system_options(app, event_loop);
+    }
     for next in [
         CurrentScreen::SelectProfile,
         CurrentScreen::SelectStyle,
@@ -240,6 +243,11 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     assert_eq!(selection.song.title, SONG_TITLE);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert_eq!(actor_tree_has_text(&actors, "PICK MODIFIERS"), openitg);
+    if extreme {
+        assert!(has_extreme_options_text(&actors, "PLAYER OPTIONS"));
+        assert!(has_extreme_options_text(&actors, "PLAYER 2"));
+        assert!(!has_extreme_options_text(&actors, "PLAYER 1"));
+    }
     if openitg {
         let (cover, duration) = app.get_in_transition_for_screen(CurrentScreen::PlayerOptions);
         assert!(cover.is_empty());
@@ -359,6 +367,34 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
         );
         check_failed_stage_outro(app, event_loop);
     }
+}
+
+fn check_extreme_system_options(app: &mut App, event_loop: &ActiveEventLoop) {
+    press(app, event_loop, VirtualAction::p2_menu_down);
+    press(app, event_loop, VirtualAction::p2_start);
+    settle(app, event_loop, CurrentScreen::Options);
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(has_extreme_options_text(&actors, "OPTIONS"));
+    assert!(has_extreme_options_text(&actors, "System Options"));
+    press(app, event_loop, VirtualAction::p2_start);
+    for _ in 0..8 {
+        menu_frame(app, event_loop);
+    }
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(has_extreme_options_text(&actors, "DDR Extreme"));
+    press(app, event_loop, VirtualAction::p2_back);
+    for _ in 0..8 {
+        menu_frame(app, event_loop);
+    }
+    assert!(app.state.screens.options_state.is_main_view());
+    press(app, event_loop, VirtualAction::p2_back);
+    settle(app, event_loop, CurrentScreen::Menu);
+}
+
+fn has_extreme_options_text(actors: &[Actor], expected: &str) -> bool {
+    actors.iter().any(|actor| matches!(actor,
+        Actor::Text { content, font: "ddr-extreme/signal", .. } if content.as_str() == expected
+    ))
 }
 
 fn check_failed_stage_outro(app: &mut App, event_loop: &ActiveEventLoop) {

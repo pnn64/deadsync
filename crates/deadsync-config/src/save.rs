@@ -565,7 +565,7 @@ const fn stats_overlay_options<'a>(
 
 const fn theme_presentation_options(cfg: &Config) -> ThemePresentationOptions {
     ThemePresentationOptions {
-        simply_love_color: cfg.simply_love_color,
+        theme_color: cfg.theme_color,
         show_select_music_gameplay_timer: cfg.show_select_music_gameplay_timer,
         keyboard_features: cfg.keyboard_features,
         visual_style: cfg.visual_style,

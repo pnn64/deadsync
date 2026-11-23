@@ -373,8 +373,8 @@ pub fn update_only_dedicated_menu_buttons(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_simply_love_color(index: i32) -> bool {
-    if !RUNTIME_CONFIG.update_simply_love_color(index) {
+pub fn update_theme_color(index: i32) -> bool {
+    if !RUNTIME_CONFIG.update_theme_color(index) {
         return false;
     }
     save_without_keymaps();

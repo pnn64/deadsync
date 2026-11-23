@@ -111,11 +111,11 @@ impl SimplyLoveVisualPolicyView {
         {
             deadsync_config::theme::MachineBarColor::Default => ScreenBarBackgroundView::Default,
             deadsync_config::theme::MachineBarColor::Colored => ScreenBarBackgroundView::Colored(if srpg10 {
-                color::srpg10_rgba(config.simply_love_color)
+                color::srpg10_rgba(config.theme_color)
             } else if ecs15 {
-                color::decorative_rgba(config.simply_love_color)
+                color::decorative_rgba(config.theme_color)
             } else {
-                color::srpg9_rgba(config.simply_love_color)
+                color::srpg9_rgba(config.theme_color)
             }),
             deadsync_config::theme::MachineBarColor::Transparent => ScreenBarBackgroundView::Transparent,
         };
@@ -773,20 +773,7 @@ pub struct SelectCoursePresentationInitView {
     pub context: SelectCourseContextView,
 }
 
-/// Shell-prepared local profile catalog used by Manage Local Profiles.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ManageLocalProfilesView {
-    pub profiles: Vec<LocalProfileView>,
-    pub default_profile_ids: [Option<String>; 2],
-    pub dedicated_three_key_nav: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LocalProfileView {
-    pub id: String,
-    pub display_name: String,
-}
-
+pub use deadsync_theme::profile_picker::{LocalProfileView, ManageLocalProfilesView};
 pub use deadsync_profile::picker::{ProfilePickerEntryView, ProfilePickerView};
 
 /// Live session routing used throughout Select Music without reading the
@@ -1516,7 +1503,7 @@ mod visual_policy_tests {
         config.visual_style = deadsync_config::theme::VisualStyle::Srpg9;
         config.srpg_variant = deadsync_config::theme::SrpgVariant::Srpg10;
         config.machine_bar_color = deadsync_config::theme::MachineBarColor::Colored;
-        config.simply_love_color = 4;
+        config.theme_color = 4;
         config.machine_font = deadsync_config::theme::MachineFont::Mega;
         let srpg10 = SimplyLoveVisualPolicyView::from_config(&config);
         assert_eq!(srpg10.background, VisualBackgroundView::Srpg);
@@ -1560,7 +1547,7 @@ mod visual_policy_tests {
         config.machine_bar_color = deadsync_config::theme::MachineBarColor::Colored;
         assert_eq!(
             SimplyLoveVisualPolicyView::from_config(&config).screen_bar,
-            ScreenBarBackgroundView::Colored(color::decorative_rgba(config.simply_love_color))
+            ScreenBarBackgroundView::Colored(color::decorative_rgba(config.theme_color))
         );
         config.visual_style = deadsync_config::theme::VisualStyle::Hearts;
         assert_eq!(

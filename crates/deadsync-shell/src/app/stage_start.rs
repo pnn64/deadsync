@@ -277,7 +277,7 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{SimplyLoveRuntimeRequest, ThemeEffect};
+    use super::super::{RuntimeRequest, ThemeEffect};
     use super::*;
     use crate::app::course_transition_tests::{finish_pending_stage, on_app_thread, test_app, test_app_with_theme};
     use crate::gameplay_regression_tests::tests::with_session;
@@ -309,7 +309,7 @@ mod tests {
         let request = effects
             .into_iter()
             .find_map(|effect| match effect {
-                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::SongLaunch(request)) => {
+                ThemeEffect::Runtime(RuntimeRequest::SongLaunch(request)) => {
                     Some(request)
                 }
                 _ => None,
@@ -351,7 +351,7 @@ mod tests {
                     );
                     assert!(matches!(
                         app.theme_effect_scratch.as_slice(),
-                        [ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                        [ThemeEffect::Runtime(RuntimeRequest::Audio(
                             AudioRequest::StopMusic
                         ))]
                     ));
@@ -455,7 +455,7 @@ mod tests {
                     assert!(!restart.is_empty());
                     assert_eq!(duration, GAMEPLAY_RESTART_TRANSITION_SECONDS);
                     app.state.session.gameplay_restart_count = 0;
-                    app.state.screens.stage_presentation = crate::mounted_theme::mount_stage(ThemeFlag::SimplyLove);
+                    app.state.screens.stage_presentation = crate::theme_registry::mount(ThemeFlag::SimplyLove).stage;
                     let (entry, duration) =
                         app.get_in_transition_for_screen(CurrentScreen::Gameplay);
                     assert!(!entry.is_empty());
@@ -584,7 +584,7 @@ mod tests {
                 false,
                 true,
                 || {
-                    for flag in [ThemeFlag::SimplyLove, ThemeFlag::OpenItg] {
+                    for flag in ThemeFlag::CHOICES {
                         let root = tempfile::tempdir().unwrap();
                         let mut app = test_app_with_theme(root.path(), flag);
                         deadsync_theme_simply_love::i18n::init_for_tests();
@@ -640,7 +640,7 @@ mod tests {
                             }
                         }
                         assert!(effects.iter().any(|effect| matches!(effect,
-                            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Profile(
+                            ThemeEffect::Runtime(RuntimeRequest::Profile(
                                 profile_data::requests::ProfileRequest::UpdatePlayerOptions {
                                     side: profile_data::PlayerSide::P2, options, ..
                                 }

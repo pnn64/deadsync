@@ -5200,7 +5200,7 @@ return Def.ActorFrame{
             stage_stats::{PlayerStageSummary, all_players_failed},
         };
         use deadsync_theme::ThemeEffect;
-        use deadsync_theme_simply_love::SimplyLoveRuntimeRequest;
+        use deadsync_theme::app_requests::RuntimeRequest;
         use std::time::{Duration, Instant};
 
         let simfile = write_fixture(
@@ -5327,7 +5327,7 @@ return Def.ActorFrame{
                             completion[theme] = effects.iter().any(|effect| {
                                 matches!(
                                     effect,
-                                    ThemeEffect::Runtime(SimplyLoveRuntimeRequest::GameplayAction(
+                                    ThemeEffect::Runtime(RuntimeRequest::GameplayAction(
                                         GameplayAction::Navigate(GameplayExit::Complete)
                                             | GameplayAction::NavigateNoFade(
                                                 GameplayExit::Complete

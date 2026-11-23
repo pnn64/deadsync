@@ -112,6 +112,9 @@ deadsync-assets = { path = "crates/deadsync-assets" }
 deadsync-config = { path = "crates/deadsync-config" }
 deadsync-profile = { path = "crates/deadsync-profile" }
 deadsync-shell = { path = "crates/deadsync-shell" }
+deadsync-theme = { path = "crates/deadsync-theme" }
+deadsync-theme-ddr-extreme = { path = "crates/deadsync-theme-ddr-extreme" }
+deadsync-theme-openitg = { path = "crates/deadsync-theme-openitg" }
 deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love" }
 deadsync-updater = { path = "crates/deadsync-updater" }
 deadsync-version = { path = "crates/deadsync-version" }
@@ -130,7 +133,6 @@ deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
 deadsync-song-lua = { path = "crates/deadsync-song-lua", features = ["test-support"] }
-deadsync-theme = { path = "crates/deadsync-theme" }
 deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love", features = ["test-support"] }
 image = "0.25.10"
 memmap2 = "0.9.12"

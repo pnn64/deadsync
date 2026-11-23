@@ -6,11 +6,22 @@ license = "GPL-3.0"
 
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
+deadlib-platform = { path = "../deadlib-platform" }
 deadsync-chart = { path = "../deadsync-chart" }
+deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
+deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-input = { path = "../deadsync-input" }
+deadsync-online = { path = "../deadsync-online" }
+deadsync-profile = { path = "../deadsync-profile" }
+deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
+deadsync-simfile = { path = "../deadsync-simfile" }
+deadsync-smx = { path = "../deadsync-smx" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+deadlib-input-native = { path = "../deadlib-input-native" }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

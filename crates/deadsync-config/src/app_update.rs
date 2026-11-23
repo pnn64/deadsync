@@ -621,8 +621,8 @@ pub fn set_hide_mouse_cursor(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.hide_mouse_cursor, enabled)
 }
 
-pub fn set_simply_love_color(cfg: &mut Config, index: i32) -> bool {
-    set_if_changed(&mut cfg.simply_love_color, index)
+pub fn set_theme_color(cfg: &mut Config, index: i32) -> bool {
+    set_if_changed(&mut cfg.theme_color, index)
 }
 
 pub fn set_global_offset_seconds(cfg: &mut Config, offset: f32) -> bool {

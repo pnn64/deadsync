@@ -25,7 +25,8 @@ use deadsync_theme::{
 use deadsync_theme_simply_love::screens::transition_audio::TransitionAudioContext;
 use deadsync_theme_simply_love::screens::transitions::PlayEntryTransition;
 use deadsync_theme_simply_love::views::OverscanAdjustmentView;
-use deadsync_theme_simply_love::{SimplyLoveQrLoginService, screens};
+use deadsync_theme::app_requests::QrLoginService;
+use deadsync_theme_simply_love::screens;
 use log::{debug, info, warn};
 use winit::event_loop::ActiveEventLoop;
 
@@ -158,7 +159,7 @@ impl App {
             .target_profile
             .as_ref()
             .map(|target| (target.id.clone(), target.display_name.clone()));
-        let request = crate::qr_login::request(SimplyLoveQrLoginService::ArrowCloud, target);
+        let request = crate::qr_login::request(QrLoginService::ArrowCloud, target);
         screens::arrowcloud_login::on_enter(
             state,
             request,
@@ -180,7 +181,7 @@ impl App {
                 config.enable_arrowcloud,
                 config.arrowcloud_qr_login_when,
             );
-        let request = crate::qr_login::request(SimplyLoveQrLoginService::GrooveStats, target);
+        let request = crate::qr_login::request(QrLoginService::GrooveStats, target);
         screens::groovestats_login::on_enter(
             state,
             request,

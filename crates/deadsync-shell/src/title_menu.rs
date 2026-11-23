@@ -1,37 +1,39 @@
 //! Connects the installed title presentation to the shared session flow.
 
-use crate::{ActiveTheme, ThemeScreen as Screen, TransitionState};
+use crate::{ThemeScreen as Screen, TransitionState};
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
-use deadsync_config::theme::ThemeFlag;
 use deadsync_input::InputEvent;
+use deadsync_theme::app_requests::{AppEffect, AppInputResult};
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, MenuBackgroundMovie, ThemeMainMenu};
-use deadsync_theme_ddr_extreme::DdrExtremeTheme;
-use deadsync_theme_openitg::OpenItgTheme;
-use deadsync_theme_simply_love::{
-    SimplyLoveEffect, SimplyLoveInputResult, views::SimplyLoveVisualPolicyView,
-};
+use deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView;
 
 type Policy = SimplyLoveVisualPolicyView;
 type Runtime = crate::main_menu::MainMenuRuntimeView;
 
-pub(crate) struct InstalledMenu {
-    flag: ThemeFlag,
+pub struct InstalledMenu {
     title: Box<dyn TitlePresentation>,
 }
 
 impl InstalledMenu {
-    pub(crate) fn new(flag: ThemeFlag, color_index: i32) -> Self {
-        let title = match flag {
-            ThemeFlag::SimplyLove => mount::<ActiveTheme>(color_index, |policy| policy),
-            ThemeFlag::OpenItg => mount::<OpenItgTheme>(color_index, |_| ()),
-            ThemeFlag::DdrExtreme => mount::<DdrExtremeTheme>(color_index, |_| ()),
-        };
-        Self { flag, title }
-    }
-
-    pub(crate) const fn theme_flag(&self) -> ThemeFlag {
-        self.flag
+    pub fn mount<T>(color_index: i32, policy: fn(Policy) -> T::MenuVisualPolicy) -> Self
+    where
+        T: ThemeMainMenu<
+                Screen = Screen,
+                Actor = Actor,
+                MenuRuntimeView = Runtime,
+                MenuInput = InputEvent,
+                MenuRawKey = RawKeyboardEvent,
+            > + 'static,
+        T::MenuState: 'static,
+        for<'a> T::EntryContext<'a>: Default,
+    {
+        Self {
+            title: Box::new(MountedTitle::<T> {
+                state: T::init_menu(color_index),
+                policy,
+            }),
+        }
     }
 
     pub(crate) fn background_movie(&self) -> Option<MenuBackgroundMovie> {
@@ -81,15 +83,15 @@ impl InstalledMenu {
         self.title.sync_runtime(view);
     }
 
-    pub(crate) fn update(&mut self, dt: f32, phase: MainMenuPhase) -> SimplyLoveEffect {
+    pub(crate) fn update(&mut self, dt: f32, phase: MainMenuPhase) -> AppEffect {
         self.title.update(dt, phase)
     }
 
-    pub(crate) fn handle_input(&mut self, input: &InputEvent) -> SimplyLoveEffect {
+    pub(crate) fn handle_input(&mut self, input: &InputEvent) -> AppEffect {
         self.title.input(input)
     }
 
-    pub(crate) fn handle_raw_key(&mut self, key: &RawKeyboardEvent) -> SimplyLoveInputResult {
+    pub(crate) fn handle_raw_key(&mut self, key: &RawKeyboardEvent) -> AppInputResult {
         self.title.raw_key(key)
     }
 
@@ -121,9 +123,9 @@ trait TitlePresentation {
     fn set_color_index(&mut self, index: i32);
     fn reset(&mut self);
     fn sync_runtime(&mut self, view: Runtime);
-    fn update(&mut self, dt: f32, phase: MainMenuPhase) -> SimplyLoveEffect;
-    fn input(&mut self, input: &InputEvent) -> SimplyLoveEffect;
-    fn raw_key(&mut self, key: &RawKeyboardEvent) -> SimplyLoveInputResult;
+    fn update(&mut self, dt: f32, phase: MainMenuPhase) -> AppEffect;
+    fn input(&mut self, input: &InputEvent) -> AppEffect;
+    fn raw_key(&mut self, key: &RawKeyboardEvent) -> AppInputResult;
     fn push_actors(&self, actors: &mut Vec<Actor>, frame: MainMenuFrame<'_, Screen, Policy>);
     fn push_exit_overlay(
         &self,
@@ -136,24 +138,6 @@ trait TitlePresentation {
 struct MountedTitle<T: ThemeMainMenu> {
     state: T::MenuState,
     policy: fn(Policy) -> T::MenuVisualPolicy,
-}
-
-fn mount<T>(index: i32, policy: fn(Policy) -> T::MenuVisualPolicy) -> Box<dyn TitlePresentation>
-where
-    T: ThemeMainMenu<
-            Screen = Screen,
-            Actor = Actor,
-            MenuRuntimeView = Runtime,
-            MenuInput = InputEvent,
-            MenuRawKey = RawKeyboardEvent,
-        > + 'static,
-    T::MenuState: 'static,
-    for<'a> T::EntryContext<'a>: Default,
-{
-    Box::new(MountedTitle::<T> {
-        state: T::init_menu(index),
-        policy,
-    })
 }
 
 impl<T> TitlePresentation for MountedTitle<T>
@@ -203,15 +187,15 @@ where
         T::sync_menu_runtime(&mut self.state, view);
     }
 
-    fn update(&mut self, dt: f32, phase: MainMenuPhase) -> SimplyLoveEffect {
+    fn update(&mut self, dt: f32, phase: MainMenuPhase) -> AppEffect {
         T::update_menu(&mut self.state, dt, phase)
     }
 
-    fn input(&mut self, input: &InputEvent) -> SimplyLoveEffect {
+    fn input(&mut self, input: &InputEvent) -> AppEffect {
         T::handle_menu_input(&mut self.state, input)
     }
 
-    fn raw_key(&mut self, key: &RawKeyboardEvent) -> SimplyLoveInputResult {
+    fn raw_key(&mut self, key: &RawKeyboardEvent) -> AppInputResult {
         T::handle_menu_raw_key(&mut self.state, key)
     }
 
@@ -242,6 +226,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_config::theme::ThemeFlag;
     use deadsync_core::input::InputSource;
     use deadsync_input::VirtualAction;
     use deadsync_theme::{ThemeEffect, UiCue};
@@ -250,7 +235,7 @@ mod tests {
     #[test]
     fn installed_title_menus_request_profile_selection_from_p2() {
         for flag in ThemeFlag::CHOICES {
-            let mut menu = InstalledMenu::new(flag, 2);
+            let mut menu = (crate::theme_registry::mount(flag).title)(2);
             let now = Instant::now();
             let start = InputEvent::new(
                 VirtualAction::p2_start,

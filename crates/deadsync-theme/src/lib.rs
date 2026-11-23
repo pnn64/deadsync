@@ -1,3 +1,4 @@
+pub mod app_requests;
 pub mod attract;
 pub mod color;
 mod effect;

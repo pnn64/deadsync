@@ -286,7 +286,7 @@ impl App {
             },
         );
         let mut manifest = ActiveTheme::asset_manifest();
-        let supplemental = crate::mounted_theme::supplemental_resources(self.state.screens.menu_state.theme_flag());
+        let supplemental = self.theme_resources;
         if !supplemental.embedded_pngs.is_empty() {
             manifest.embedded_pngs = supplemental.embedded_pngs;
         }

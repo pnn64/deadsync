@@ -1,9 +1,9 @@
 use deadsync_config::ini::SimpleIni;
 use deadsync_profile::compat as profile;
 use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
-use deadsync_theme_simply_love::SimplyLoveScoreImportProfile;
+use deadsync_theme::app_requests::ScoreImportProfile;
 
-pub(crate) fn score_import_profiles() -> Vec<SimplyLoveScoreImportProfile> {
+pub(crate) fn score_import_profiles() -> Vec<ScoreImportProfile> {
     let mut profiles = Vec::new();
     for summary in profile::scan_local_profiles() {
         let profile_dir = profile::local_profile_dir_for_id(&summary.id);
@@ -33,7 +33,7 @@ pub(crate) fn score_import_profiles() -> Vec<SimplyLoveScoreImportProfile> {
         } else {
             String::new()
         };
-        profiles.push(SimplyLoveScoreImportProfile {
+        profiles.push(ScoreImportProfile {
             id: summary.id,
             display_name: summary.display_name.trim().to_owned(),
             groovestats_api_key,

@@ -475,7 +475,7 @@ pub fn init(view: OptionsInitView) -> State {
         chart_info_mask: select_music_chart_info_mask_from_config(&cfg),
         selected: 0,
         prev_selected: 0,
-        active_color_index: cfg.simply_love_color,
+        active_color_index: cfg.theme_color,
         bg: visual_style_bg::State::new(),
 
         nav_key_held_direction: None,
@@ -963,7 +963,7 @@ pub fn init(view: OptionsInitView) -> State {
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::PreferredColor,
-        cfg.simply_love_color
+        cfg.theme_color
             .rem_euclid(color::DECORATIVE_RGBA.len() as i32) as usize,
     );
     set_choice_by_id(

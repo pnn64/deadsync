@@ -11,7 +11,7 @@ use deadsync_gameplay::RawKeyAction;
 use deadsync_input::{self as logical_input, InputEvent};
 use deadsync_theme::evaluation::ThemeEvaluation;
 use deadsync_theme::profile_picker::ThemeProfilePicker;
-use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
+use deadsync_theme::app_requests::AppEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens;
 use deadsync_theme::Screen as CurrentScreen;
 use std::error::Error;

@@ -1,12 +1,12 @@
 use super::App;
 use crate::gameplay_runtime::{self, GameplayFrameEffect, GameplayFrameEffects};
-use crate::navigation::gameplay_exit_screen;
 use crate::{ThemeScreen as Screen, TransitionState};
 use deadsync_gameplay::exit_route::{GameplayExitRouteContext, resolve_gameplay_exit_route};
 use deadsync_gameplay::{GameplayAction, GameplayExit};
 use deadsync_online::gameplay_lobby::{GAMEPLAY_SCREEN_NAME, GameplayLobbyAction};
 use deadsync_online::lobbies;
 use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
+use deadsync_theme::app_requests::gameplay_exit_screen;
 use log::warn;
 use winit::event_loop::ActiveEventLoop;
 

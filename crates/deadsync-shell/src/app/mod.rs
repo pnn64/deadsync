@@ -35,6 +35,7 @@ use self::lua_loading::SongLuaLoading;
 use self::screenshot::EvaluationCapture;
 use self::stage_start::{StageSelection, StageStart};
 use crate::{ActiveTheme, ThemeScreen as CurrentScreen, TransitionState};
+use crate::mounted_theme::{PlayerOptionsLayoutFactory, SupplementalResources, ThemeMount};
 use crate::command::Command;
 use crate::course::{
     CourseRunState, build_course_graph_stages, build_course_run_from_selection,
@@ -233,13 +234,23 @@ use deadsync_theme_simply_love::views::{
     SelectMusicSessionView,
     SimplyLoveGrooveStatsService, SimplyLoveVisualPolicyView,
 };
-use deadsync_theme_simply_love::{
-    SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveDebugRequest,
-    SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
-    SimplyLoveInputResult as ThemeInputResult, SimplyLoveLobbyRequest, SimplyLoveMediaRequest,
-    SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent,
-    SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncEvent, SimplyLoveSyncOwner,
-    SimplyLoveSyncRequest, gameplay_action_for_effect,
+use deadsync_theme::app_requests::{
+    ConfigRequest,
+    ContentRequest,
+    DebugRequest,
+    AppEffect as ThemeEffect,
+    HardwareRequest,
+    AppInputResult as ThemeInputResult,
+    LobbyRequest,
+    MediaRequest,
+    OnlineRequest,
+    ProfileImportEvent,
+    QrLoginService,
+    RuntimeRequest,
+    SyncEvent,
+    SyncOwner,
+    SyncRequest,
+    gameplay_action_for_effect,
 };
 
 /// The main Options rows that launch standalone child screens should regain
@@ -373,7 +384,7 @@ impl LightingFramePolicy {
         Self {
             driver: config.lights_driver,
             gameplay_pad_lights: config.lights_gameplay_pad_lights,
-            theme_index: config.simply_love_color,
+            theme_index: config.theme_color,
             simplify_bass: config.lights_simplify_bass,
             smx_input: config.smx_input,
             smx_panel_lights: config.smx_panel_lights,
@@ -650,7 +661,7 @@ pub struct ScreensState {
     smx_options_light_preview: deadsync_smx::OptionsLightPreview,
     smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview,
     player_options_state: Option<crate::player_options::PlayerOptionsState>,
-    player_options_layout: Option<crate::mounted_player_options::PlayerOptionsLayoutFactory>,
+    player_options_layout: Option<PlayerOptionsLayoutFactory>,
     init_state: init::State,
     attract: Option<attract_demo::AttractRuntime>,
     select_profile_state: <ActiveTheme as ThemeProfilePicker>::ProfilePickerState,
@@ -1194,9 +1205,9 @@ impl ScreensState {
         dedicated_three_key_nav: bool,
         audio_options: AudioOptionsView,
         bookkeeping: crate::coin::Bookkeeping,
-        theme: config::theme::ThemeFlag,
+        mount: ThemeMount,
     ) -> Self {
-        let menu_state = crate::title_menu::InstalledMenu::new(theme, color_index);
+        let menu_state = (mount.title)(color_index);
 
         let select_profile_state = ActiveTheme::init_profile_picker(
             crate::local_profiles::picker_view(),
@@ -1241,7 +1252,7 @@ impl ScreensState {
         let app_paths = app_paths_view(dirs);
         let init_songs_root = app_paths.songs.path.clone();
         let init_courses_root = app_paths.courses.path;
-        let system_options_presentation = crate::mounted_theme::mount_system_options(theme);
+        let system_options_presentation = mount.system_options;
         let options_layout = system_options_presentation
             .as_ref()
             .map_or_else(Default::default, |presentation| presentation.layout());
@@ -1318,20 +1329,19 @@ impl ScreensState {
             smx_options_light_preview: deadsync_smx::OptionsLightPreview::default(),
             smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview::default(),
             player_options_state: None,
-            player_options_layout: crate::mounted_theme::player_options_layout(theme),
+            player_options_layout: mount.player_options,
             init_state,
-            attract: crate::mounted_theme::mount_attract(theme)
-                .map(attract_demo::AttractRuntime::new),
+            attract: mount.attract.map(attract_demo::AttractRuntime::new),
             gameplay_outro: None,
             evaluation_departure: None,
-            stage_presentation: crate::mounted_theme::mount_stage(theme),
+            stage_presentation: mount.stage,
             select_profile_state,
             select_color_state,
             arrowcloud_login_state,
             groovestats_login_state,
             select_style_state,
             select_play_mode_state,
-            selection_presentation: crate::mounted_theme::mount_selection(theme),
+            selection_presentation: mount.selection,
             profile_load_state,
             select_music_state,
             stage_launch: StageLaunch::default(),
@@ -1587,6 +1597,7 @@ impl AppState {
         overlay_mode: u8,
         color_index: i32,
         audio_options: AudioOptionsView,
+        theme: ThemeMount,
     ) -> Self {
         let play_style = profile::get_session_play_style();
         let preferred = deadsync_profile::preferred_difficulty_index(&profile_data, play_style);
@@ -1602,7 +1613,7 @@ impl AppState {
             cfg.three_key_navigation && cfg.only_dedicated_menu_buttons,
             audio_options,
             coin.bookkeeping(),
-            cfg.theme_flag,
+            theme,
         );
 
         Self {
@@ -1619,6 +1630,7 @@ impl AppState {
 
 pub struct App {
     dirs: AppDirs,
+    theme_resources: SupplementalResources,
     screenshots_dir: PathBuf,
     input: logical_input::keymap::InputState,
     window: Option<Arc<Window>>,
@@ -2444,7 +2456,7 @@ impl App {
         }
         for request in content_browser::take_audio_requests(state) {
             self.theme_effect_scratch
-                .push(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                .push(ThemeEffect::Runtime(RuntimeRequest::Audio(
                     request,
                 )));
         }
@@ -2473,7 +2485,7 @@ impl App {
         };
         if !dirs.is_empty() {
             self.theme_effect_scratch.push(ThemeEffect::Runtime(
-                SimplyLoveRuntimeRequest::Content(SimplyLoveContentRequest::ReloadSongDirs {
+                RuntimeRequest::Content(ContentRequest::ReloadSongDirs {
                     songs_root: self.dirs.songs_dir(),
                     pack_dirs: dirs,
                 }),
@@ -2554,7 +2566,7 @@ impl App {
         }
         if events
             .iter()
-            .any(|event| matches!(event, SimplyLoveProfileImportEvent::Finished(_)))
+            .any(|event| matches!(event, ProfileImportEvent::Finished(_)))
         {
             manage_local_profiles::sync_runtime_view(
                 &mut self.state.screens.manage_local_profiles_state,
@@ -2594,11 +2606,11 @@ impl App {
             return;
         }
         match service {
-            SimplyLoveQrLoginService::ArrowCloud => screens::arrowcloud_login::apply_events(
+            QrLoginService::ArrowCloud => screens::arrowcloud_login::apply_events(
                 &mut self.state.screens.arrowcloud_login_state,
                 events,
             ),
-            SimplyLoveQrLoginService::GrooveStats => screens::groovestats_login::apply_events(
+            QrLoginService::GrooveStats => screens::groovestats_login::apply_events(
                 &mut self.state.screens.groovestats_login_state,
                 events,
             ),
@@ -2628,14 +2640,14 @@ impl App {
         if !song_events.is_empty() {
             select_music::apply_sync_analysis_events(
                 &mut self.state.screens.select_music_state,
-                SimplyLoveSyncOwner::SelectMusicSong,
+                SyncOwner::SelectMusicSong,
                 song_events,
             );
         }
         if !select_pack_events.is_empty() {
             select_music::apply_sync_analysis_events(
                 &mut self.state.screens.select_music_state,
-                SimplyLoveSyncOwner::SelectMusicPack,
+                SyncOwner::SelectMusicPack,
                 select_pack_events,
             );
         }
@@ -5554,6 +5566,7 @@ impl App {
         mut audio: deadsync_audio_stream::AudioControl,
         music_clock: deadsync_audio_stream::MusicClock,
         live_case: Option<crate::live_case::LiveCase>,
+        theme: ThemeMount,
     ) -> Self {
         let backend_type = config.video_renderer;
         let software_renderer_threads = config.software_renderer_threads;
@@ -5566,9 +5579,9 @@ impl App {
         // Share Rips as the machine starts with it; every later change comes
         // with the config snapshot in the frame loop.
         deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
-        let installed_sounds =
-            crate::mounted_theme::supplemental_resources(config.theme_flag).sounds;
-        let ui_sfx = audio_requests::UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, installed_sounds);
+        let theme_resources = theme.resources;
+        let twitch_chat = (theme.chat)();
+        let ui_sfx = audio_requests::UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, theme_resources.sounds);
         let audio_options = audio_requests::options_view(&audio);
         let state = AppState::new(
             &dirs,
@@ -5577,8 +5590,10 @@ impl App {
             overlay_mode,
             color_index,
             audio_options,
+            theme,
         );
         Self {
+            theme_resources,
             input: logical_input::with_keymap(|km| {
                 logical_input::keymap::InputState::new(km, config.input_debounce_seconds)
             }),
@@ -5681,7 +5696,7 @@ impl App {
             apply_replaygain: crate::apply_replaygain::Service::default(),
             heart_rate: crate::heart_rate::Runtime::default(),
             twitch: crate::twitch::Runtime::default(),
-            twitch_chat: crate::mounted_theme::mount_twitch_chat(),
+            twitch_chat,
             twitch_chat_sides: None,
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
@@ -5769,30 +5784,30 @@ impl App {
                 Vec::new()
             }
             ThemeEffect::Runtime(request) => match request {
-                SimplyLoveRuntimeRequest::GameplayAction(_) => {
+                RuntimeRequest::GameplayAction(_) => {
                     unreachable!("gameplay actions must be normalized before runtime execution")
                 }
-                SimplyLoveRuntimeRequest::SongLaunch(request) => {
+                RuntimeRequest::SongLaunch(request) => {
                     self.request_stage_launch(
                         CurrentScreen::SelectMusic,
                         request.map_selection(StageSelection::Song),
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::CourseLaunch(request) => {
+                RuntimeRequest::CourseLaunch(request) => {
                     self.request_stage_launch(
                         CurrentScreen::SelectCourse,
                         request.map_selection(StageSelection::Course),
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::StartReplay(replay) => {
+                RuntimeRequest::StartReplay(replay) => {
                     if self.queue_replay_stage(replay) {
                         self.handle_navigation_action(CurrentScreen::Gameplay);
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LinkArrowCloud {
+                RuntimeRequest::Online(OnlineRequest::LinkArrowCloud {
                     profile_id,
                     display_name,
                 }) => {
@@ -5803,7 +5818,7 @@ impl App {
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LinkGrooveStats {
+                RuntimeRequest::Online(OnlineRequest::LinkGrooveStats {
                     profile_id,
                     display_name,
                 }) => {
@@ -5814,40 +5829,40 @@ impl App {
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::Screenshot(side)) => {
+                RuntimeRequest::Media(MediaRequest::Screenshot(side)) => {
                     self.state.shell.screenshot.request(side);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::Banner(path)) => {
+                RuntimeRequest::Media(MediaRequest::Banner(path)) => {
                     self.execute_command(Command::SetBanner(path), event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::CdTitle(path)) => {
+                RuntimeRequest::Media(MediaRequest::CdTitle(path)) => {
                     self.execute_command(Command::SetCdTitle(path), event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::PackBanner(path)) => {
+                RuntimeRequest::Media(MediaRequest::PackBanner(path)) => {
                     self.execute_command(Command::SetPackBanner(path), event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::WheelItemBackgrounds(
+                RuntimeRequest::Media(MediaRequest::WheelItemBackgrounds(
                     paths,
                 )) => {
                     self.execute_command(Command::SetWheelItemBackgrounds(paths), event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::DensityGraph {
+                RuntimeRequest::Media(MediaRequest::DensityGraph {
                     slot,
                     chart_opt,
                 }) => {
                     self.execute_command(Command::SetDensityGraph { slot, chart_opt }, event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::FetchGrade(hash)) => {
+                RuntimeRequest::Online(OnlineRequest::FetchGrade(hash)) => {
                     self.execute_command(Command::FetchOnlineGrade(hash), event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Debug(SimplyLoveDebugRequest::WriteFsrDump) => {
+                RuntimeRequest::Debug(DebugRequest::WriteFsrDump) => {
                     let path = self.dirs.fsr_dump_path();
                     match self.fsr_monitor.write_debug_dump(&path) {
                         Ok(()) => {
@@ -5867,19 +5882,19 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::RestartGameplay => {
+                RuntimeRequest::RestartGameplay => {
                     self.try_gameplay_restart(event_loop, "missed target");
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::ReloadSongLua => {
+                RuntimeRequest::ReloadSongLua => {
                     self.handle_song_lua_reload(event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Profile(request) => {
+                RuntimeRequest::Profile(request) => {
                     self.handle_profile_request(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffset {
+                RuntimeRequest::Sync(SyncRequest::ApplySongOffset {
                     simfile_path,
                     delta_seconds,
                 }) => {
@@ -5900,7 +5915,7 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::StartAnalysis {
+                RuntimeRequest::Sync(SyncRequest::StartAnalysis {
                     owner,
                     targets,
                     emit_freq_delta,
@@ -5908,11 +5923,11 @@ impl App {
                     self.sync_analysis.start(owner, targets, emit_freq_delta);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::CancelAnalysis(owner)) => {
+                RuntimeRequest::Sync(SyncRequest::CancelAnalysis(owner)) => {
                     self.sync_analysis.cancel(owner);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffsetBatch {
+                RuntimeRequest::Sync(SyncRequest::ApplySongOffsetBatch {
                     owner,
                     changes,
                 }) => {
@@ -5927,27 +5942,27 @@ impl App {
                             Instant::now(),
                         );
                     }
-                    if owner == SimplyLoveSyncOwner::ContentBrowserPack && summary.saved_files > 0 {
+                    if owner == SyncOwner::ContentBrowserPack && summary.saved_files > 0 {
                         self.record_measured_pack(&summary);
                     }
 
-                    let mut events = vec![SimplyLoveSyncEvent::BatchSaveFinished { summary }];
+                    let mut events = vec![SyncEvent::BatchSaveFinished { summary }];
                     match owner {
-                        SimplyLoveSyncOwner::SelectMusicSong
-                        | SimplyLoveSyncOwner::SelectMusicPack => {
+                        SyncOwner::SelectMusicSong
+                        | SyncOwner::SelectMusicPack => {
                             select_music::apply_sync_analysis_events(
                                 &mut self.state.screens.select_music_state,
                                 owner,
                                 &mut events,
                             );
                         }
-                        SimplyLoveSyncOwner::OptionsPack => {
+                        SyncOwner::OptionsPack => {
                             options::apply_sync_analysis_events(
                                 &mut self.state.screens.options_state,
                                 &mut events,
                             );
                         }
-                        SimplyLoveSyncOwner::ContentBrowserPack => {
+                        SyncOwner::ContentBrowserPack => {
                             content_browser::apply_sync_analysis_events(
                                 &mut self.state.screens.content_browser_state,
                                 &mut events,
@@ -5956,17 +5971,17 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Audio(request) => {
+                RuntimeRequest::Audio(request) => {
                     audio_requests::execute(&mut self.audio, &self.ui_sfx, request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::SongSearch(request) => {
+                RuntimeRequest::SongSearch(request) => {
                     self.song_search.submit(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Content(request) => {
+                RuntimeRequest::Content(request) => {
                     match request {
-                        SimplyLoveContentRequest::InitializeLibrary {
+                        ContentRequest::InitializeLibrary {
                             songs_root,
                             courses_root,
                         } => self.content_reload.start_initialization(
@@ -5974,7 +5989,7 @@ impl App {
                             courses_root,
                             self.audio.is_available(),
                         ),
-                        SimplyLoveContentRequest::ReloadLibrary {
+                        ContentRequest::ReloadLibrary {
                             songs_root,
                             courses_root,
                         } => self.content_reload.start_library(
@@ -5982,7 +5997,7 @@ impl App {
                             courses_root,
                             self.audio.is_available(),
                         ),
-                        SimplyLoveContentRequest::ReloadSongDirs {
+                        ContentRequest::ReloadSongDirs {
                             songs_root,
                             pack_dirs,
                         } => self.content_reload.start_song_dirs(
@@ -5990,7 +6005,7 @@ impl App {
                             pack_dirs,
                             self.audio.is_available(),
                         ),
-                        SimplyLoveContentRequest::ReloadSong { simfile_path } => {
+                        ContentRequest::ReloadSong { simfile_path } => {
                             match crate::content_reload::reload_song(&simfile_path) {
                                 Ok(song_packs) => {
                                     select_music::refresh_from_song_packs(
@@ -6013,7 +6028,7 @@ impl App {
                                 ),
                             }
                         }
-                        SimplyLoveContentRequest::DeleteSong { simfile_path } => {
+                        ContentRequest::DeleteSong { simfile_path } => {
                             let config = config::runtime::get();
                             let result = if config.allow_song_deletion {
                                 let songs_root = self.dirs.songs_dir();
@@ -6044,7 +6059,7 @@ impl App {
                         // the Installed tab's own Start-then-confirm question, the
                         // way the ITGmania browser removes packs, and delete_pack
                         // keeps its own rules about what it may remove.
-                        SimplyLoveContentRequest::DeletePack { group_name } => {
+                        ContentRequest::DeletePack { group_name } => {
                             let songs_root = self.dirs.songs_dir();
                             let roots =
                                 deadsync_simfile::app_runtime::collect_song_scan_roots(&songs_root);
@@ -6078,7 +6093,7 @@ impl App {
                                     .map_err(Clone::clone),
                             );
                         }
-                        SimplyLoveContentRequest::SetPackSync { group_name, itg } => {
+                        ContentRequest::SetPackSync { group_name, itg } => {
                             let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
                                 &self.dirs.songs_dir(),
                             );
@@ -6119,7 +6134,7 @@ impl App {
                                 told,
                             );
                         }
-                        SimplyLoveContentRequest::MeasurePackSync { group_name } => {
+                        ContentRequest::MeasurePackSync { group_name } => {
                             // Proved again before any simfile is measured for
                             // saving: a pack the review could save into but
                             // not record would end up shifted twice.
@@ -6155,7 +6170,7 @@ impl App {
                                     &view.target_chart_type,
                                     view.preferred_difficulty_index,
                                 );
-                                if let Some(SimplyLoveSyncRequest::StartAnalysis {
+                                if let Some(SyncRequest::StartAnalysis {
                                     owner,
                                     targets,
                                     emit_freq_delta,
@@ -6165,30 +6180,30 @@ impl App {
                                 }
                             }
                         }
-                        SimplyLoveContentRequest::SkipReplayGain => {
+                        ContentRequest::SkipReplayGain => {
                             deadsync_audio_replaygain::request_skip_blocking_analysis();
                         }
-                        SimplyLoveContentRequest::ApplyReplayGain => {
+                        ContentRequest::ApplyReplayGain => {
                             self.apply_replaygain.start();
                         }
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Graphics(request) => {
+                RuntimeRequest::Graphics(request) => {
                     self.handle_graphics_change(request, event_loop)?;
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Updater(request) => {
+                RuntimeRequest::Updater(request) => {
                     updater::execute(request, &self.dirs);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::ShowOverlay(mode)) => {
+                RuntimeRequest::Config(ConfigRequest::ShowOverlay(mode)) => {
                     self.state.shell.set_overlay_mode(mode);
                     config::runtime_update::update_show_stats_mode(mode);
                     options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::MouseCursorHidden(
+                RuntimeRequest::Config(ConfigRequest::MouseCursorHidden(
                     hidden,
                 )) => {
                     if let Some(window) = &self.window {
@@ -6198,11 +6213,11 @@ impl App {
                     options::sync_hide_mouse_cursor(&mut self.state.screens.options_state, hidden);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::PersistColor(index)) => {
+                RuntimeRequest::Config(ConfigRequest::PersistColor(index)) => {
                     crate::smx_config::set_theme_color(index);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Overscan {
+                RuntimeRequest::Config(ConfigRequest::Overscan {
                     translate_x,
                     translate_y,
                     add_width,
@@ -6216,31 +6231,31 @@ impl App {
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Advanced(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Advanced(request)) => {
                     config_requests::execute_advanced(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Coin(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Coin(request)) => {
                     config_requests::execute_coin(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Course(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Course(request)) => {
                     config_requests::execute_course(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Gameplay(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Gameplay(request)) => {
                     config_requests::execute_gameplay(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Lights(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Lights(request)) => {
                     config_requests::execute_lights(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Machine(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Machine(request)) => {
                     config_requests::execute_machine(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Mappings(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Mappings(request)) => {
                     crate::mappings::execute(request);
                     logical_input::with_keymap(|km| self.input.set_keymap(km));
                     // Rebinding a held time-control key can remove its system action,
@@ -6250,27 +6265,27 @@ impl App {
                     controls.set_slow_down(false);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::NullOrDie(request)) => {
+                RuntimeRequest::Config(ConfigRequest::NullOrDie(request)) => {
                     config_requests::execute_null_or_die(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Online(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Online(request)) => {
                     config_requests::execute_online(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Options(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Options(request)) => {
                     config_requests::execute_options(request, &mut self.input);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::SelectMusic(request)) => {
+                RuntimeRequest::Config(ConfigRequest::SelectMusic(request)) => {
                     config_requests::execute_select_music(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Tournament(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Tournament(request)) => {
                     config_requests::execute_tournament(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::JudgmentPalettes(catalog) => {
+                RuntimeRequest::JudgmentPalettes(catalog) => {
                     if let Err(error) = deadsync_config::judgment_palettes::update_runtime_catalog(
                         ActiveTheme::JUDGMENT_PRESET,
                         |current| {
@@ -6282,48 +6297,48 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::TestLightsAuto) => {
+                RuntimeRequest::Hardware(HardwareRequest::TestLightsAuto) => {
                     test_lights::on_enter(&mut self.state.screens.test_lights_state);
                     self.lights.set_test_auto_cycle();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::StepTestCabinet(
+                RuntimeRequest::Hardware(HardwareRequest::StepTestCabinet(
                     delta,
                 )) => {
                     self.lights.step_test_cabinet(delta);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::StepTestButton(
+                RuntimeRequest::Hardware(HardwareRequest::StepTestButton(
                     delta,
                 )) => {
                     self.lights.step_test_button(delta);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::AssignSmxPads {
+                RuntimeRequest::Hardware(HardwareRequest::AssignSmxPads {
                     p1_serial,
                     p2_serial,
                 }) => {
                     crate::smx_config::set_smx_assignment(p1_serial, p2_serial);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::SwapSmxPads) => {
+                RuntimeRequest::Hardware(HardwareRequest::SwapSmxPads) => {
                     let _ = crate::smx_config::swap_smx_assignment();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::SetSmxUnderglowTheme(enabled),
+                RuntimeRequest::Hardware(
+                    HardwareRequest::SetSmxUnderglowTheme(enabled),
                 ) => {
                     crate::smx_config::set_smx_underglow_theme(enabled);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::SetSmxUnderglowGrb(grb),
+                RuntimeRequest::Hardware(
+                    HardwareRequest::SetSmxUnderglowGrb(grb),
                 ) => {
                     crate::smx_config::set_smx_underglow_grb(grb);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::ApplySmxPadPreset { pad, name },
+                RuntimeRequest::Hardware(
+                    HardwareRequest::ApplySmxPadPreset { pad, name },
                 ) => {
                     if crate::smx_config::apply_smx_pad_preset(pad, &name) {
                         self.state
@@ -6338,8 +6353,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::ApplySmxPadConfig { pad, name },
+                RuntimeRequest::Hardware(
+                    HardwareRequest::ApplySmxPadConfig { pad, name },
                 ) => {
                     if crate::smx_config::apply_smx_saved_pad_config(pad, &name) {
                         self.state
@@ -6354,8 +6369,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::CaptureSmxPadConfig {
+                RuntimeRequest::Hardware(
+                    HardwareRequest::CaptureSmxPadConfig {
                         pad,
                         name,
                         set_default,
@@ -6375,8 +6390,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::RenameSmxPadConfig {
+                RuntimeRequest::Hardware(
+                    HardwareRequest::RenameSmxPadConfig {
                         serial,
                         old_name,
                         new_name,
@@ -6389,66 +6404,66 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::SetSmxPadConfigDefault { serial, name },
+                RuntimeRequest::Hardware(
+                    HardwareRequest::SetSmxPadConfigDefault { serial, name },
                 ) => {
                     profile::set_default_pad_config(&serial, &name);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::DeleteSmxPadConfig { name },
+                RuntimeRequest::Hardware(
+                    HardwareRequest::DeleteSmxPadConfig { name },
                 ) => {
                     profile::delete_pad_config(&name);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::SetSmxPlayerLights(colors),
+                RuntimeRequest::Hardware(
+                    HardwareRequest::SetSmxPlayerLights(colors),
                 ) => {
                     deadsync_smx::set_player_lights(colors);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::ReenableSmxAutoLights,
+                RuntimeRequest::Hardware(
+                    HardwareRequest::ReenableSmxAutoLights,
                 ) => {
                     deadsync_smx::reenable_auto_lights();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Platform(request) => {
+                RuntimeRequest::Platform(request) => {
                     execute_platform_request(&self.dirs, request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::Reinitialize) => {
+                RuntimeRequest::Online(OnlineRequest::Reinitialize) => {
                     deadsync_online::runtime::init();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::Lobby(request)) => {
+                RuntimeRequest::Online(OnlineRequest::Lobby(request)) => {
                     match request {
-                        SimplyLoveLobbyRequest::Search => {
+                        LobbyRequest::Search => {
                             deadsync_online::lobbies::runtime_search_lobbies_default();
                         }
-                        SimplyLoveLobbyRequest::Create { password } => {
+                        LobbyRequest::Create { password } => {
                             deadsync_online::lobbies::runtime_create_lobby_with_password_default(
                                 &password,
                             );
                         }
-                        SimplyLoveLobbyRequest::Join { code, password } => {
+                        LobbyRequest::Join { code, password } => {
                             deadsync_online::lobbies::runtime_join_lobby_with_password_default(
                                 &code, &password,
                             );
                         }
-                        SimplyLoveLobbyRequest::Leave => {
+                        LobbyRequest::Leave => {
                             deadsync_online::lobbies::runtime_leave_lobby_default();
                         }
-                        SimplyLoveLobbyRequest::SelectSong(song) => {
+                        LobbyRequest::SelectSong(song) => {
                             deadsync_online::lobbies::runtime_select_song_default(song);
                         }
-                        SimplyLoveLobbyRequest::UpdateMachineState { screen_name, ready } => {
+                        LobbyRequest::UpdateMachineState { screen_name, ready } => {
                             deadsync_online::lobbies::runtime_update_machine_state_default(
                                 screen_name,
                                 ready,
                             );
                         }
-                        SimplyLoveLobbyRequest::UpdateMachineStats {
+                        LobbyRequest::UpdateMachineStats {
                             screen_name,
                             p1_ready,
                             p2_ready,
@@ -6463,36 +6478,36 @@ impl App {
                                 p2_stats,
                             );
                         }
-                        SimplyLoveLobbyRequest::Disconnect => {
+                        LobbyRequest::Disconnect => {
                             deadsync_online::lobbies::runtime_disconnect();
                         }
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::StartQrLogin(
+                RuntimeRequest::Online(OnlineRequest::StartQrLogin(
                     request,
                 )) => {
                     self.qr_login.start(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::CancelQrLogin(
+                RuntimeRequest::Online(OnlineRequest::CancelQrLogin(
                     service,
                 )) => {
                     self.qr_login.cancel(service);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::StartScoreImport(
+                RuntimeRequest::Online(OnlineRequest::StartScoreImport(
                     request,
                 )) => {
                     self.score_import.start(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::CancelScoreImport) => {
+                RuntimeRequest::Online(OnlineRequest::CancelScoreImport) => {
                     self.score_import.cancel();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::RefreshPlayerLeaderboard {
+                RuntimeRequest::Online(
+                    OnlineRequest::RefreshPlayerLeaderboard {
                         chart_hash,
                         side,
                         max_entries,
@@ -6505,7 +6520,7 @@ impl App {
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LoadMachineReplays {
+                RuntimeRequest::Online(OnlineRequest::LoadMachineReplays {
                     chart_hash,
                     max_entries,
                 }) => {
@@ -6518,7 +6533,7 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::RefreshSrpgShop {
+                RuntimeRequest::Online(OnlineRequest::RefreshSrpgShop {
                     side,
                 }) => {
                     let profile = deadsync_profile::runtime_profile_for_side(side);
@@ -6529,8 +6544,8 @@ impl App {
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::DownloadSrpgShopUnlock { shop_id, name, url },
+                RuntimeRequest::Online(
+                    OnlineRequest::DownloadSrpgShopUnlock { shop_id, name, url },
                 ) => {
                     let folder = deadsync_config::runtime::get().srpg_shop_folder;
                     let pack_name = deadsync_online::srpg_shop::download_folder(shop_id, folder);
@@ -6538,26 +6553,26 @@ impl App {
                     deadsync_online::runtime::queue_event_unlock_download(&url, &name, pack_name);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::RetryUnlockDownloads) => {
+                RuntimeRequest::Online(OnlineRequest::RetryUnlockDownloads) => {
                     let _ = deadsync_online::runtime::retry_failed_unlock_downloads();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::EnsureStepManiaOnlineCatalog,
+                RuntimeRequest::Online(
+                    OnlineRequest::EnsureStepManiaOnlineCatalog,
                 ) => {
                     deadsync_online::stepmaniaonline::runtime_ensure_catalog();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::RefreshStepManiaOnlineCatalog,
+                RuntimeRequest::Online(
+                    OnlineRequest::RefreshStepManiaOnlineCatalog,
                 ) => {
                     deadsync_online::stepmaniaonline::runtime_refresh_catalog();
                     deadsync_online::smo_details::runtime_refresh_details();
                     deadsync_online::smo_describe::runtime_refresh();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::LoadMoreStepManiaOnlinePacks,
+                RuntimeRequest::Online(
+                    OnlineRequest::LoadMoreStepManiaOnlinePacks,
                 ) => {
                     // On the beginner tab the next helping is more pack pages
                     // to read, not more catalogue rows to fetch -- and never a
@@ -6578,8 +6593,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::DownloadStepManiaOnlinePack { pack_id },
+                RuntimeRequest::Online(
+                    OnlineRequest::DownloadStepManiaOnlinePack { pack_id },
                 ) => {
                     if let Err(error) = deadsync_online::stepmaniaonline::runtime_queue_download(
                         pack_id,
@@ -6589,8 +6604,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::PurchaseSrpgShopItem {
+                RuntimeRequest::Online(
+                    OnlineRequest::PurchaseSrpgShopItem {
                         shop_id,
                         item_id,
                         type_id,
@@ -7534,7 +7549,7 @@ impl App {
         }
 
         self.theme_effect_scratch
-            .push(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+            .push(ThemeEffect::Runtime(RuntimeRequest::Audio(
                 AudioRequest::PlayUiCue(UiCue::Confirm),
             )));
         true
@@ -9375,7 +9390,7 @@ impl App {
             deadsync_online::smo_songs::runtime_preview_stop();
             deadsync_online::rip_packs::runtime_stop_search();
             self.sync_analysis
-                .cancel(SimplyLoveSyncOwner::ContentBrowserPack);
+                .cancel(SyncOwner::ContentBrowserPack);
         }
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
@@ -11218,10 +11233,11 @@ pub fn run(
     audio: deadsync_audio_stream::AudioControl,
     music_clock: deadsync_audio_stream::MusicClock,
     live_case: Option<crate::live_case::LiveCase>,
+    mount: fn(&config::app_config::Config) -> ThemeMount,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (config_generation, config) = config::runtime::snapshot();
     let show_stats_mode = config.show_stats_mode.min(2);
-    let color_index = config.simply_love_color;
+    let color_index = config.theme_color;
     let profile_data = profile::get();
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
     let mut app = App::new(
@@ -11234,6 +11250,7 @@ pub fn run(
         audio,
         music_clock,
         live_case,
+        mount(&config),
     );
 
     // Spawn background input backend threads; all input stays decoupled from frame rate.

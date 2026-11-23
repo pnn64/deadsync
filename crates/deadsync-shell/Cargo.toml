@@ -38,8 +38,6 @@ deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-smx = { path = "../deadsync-smx" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 deadsync-theme = { path = "../deadsync-theme" }
-deadsync-theme-ddr-extreme = { path = "../deadsync-theme-ddr-extreme" }
-deadsync-theme-openitg = { path = "../deadsync-theme-openitg" }
 deadsync-theme-simply-love = { path = "../deadsync-theme-simply-love" }
 deadsync-updater = { path = "../deadsync-updater" }
 image = "0.25.10"
@@ -54,6 +52,8 @@ smallvec = "1.16.5"
 winit = "0.30.13"
 
 [dev-dependencies]
+deadsync-theme-ddr-extreme = { path = "../deadsync-theme-ddr-extreme" }
+deadsync-theme-openitg = { path = "../deadsync-theme-openitg" }
 zstd = "0.14.4"
 tar = "0.4.46"
 tempfile = "3.27.0"

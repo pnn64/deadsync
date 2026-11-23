@@ -1,7 +1,6 @@
 use crate::{Command, ThemeScreen as Screen, TransitionState};
 use crate::interaction::{ExitIntent, ProcessExitPlan, ProcessExitRequest, ShellInteractionState};
 use crate::runtime::ShellState;
-use deadsync_gameplay::exit_route::GameplayExitDestination;
 use deadsync_theme::{
     ThemeTransitions, TransitionKind, TransitionState as ThemeTransitionState,
 };
@@ -125,17 +124,6 @@ pub fn practice_music_rate_on_screen_change(
 pub fn course_plan_required(previous: Screen, target: Screen) -> bool {
     previous == Screen::SelectCourse
         && (target == Screen::Gameplay || target == Screen::PlayerOptions)
-}
-
-pub fn gameplay_exit_screen(destination: GameplayExitDestination) -> Screen {
-    match destination {
-        GameplayExitDestination::Results => Screen::Evaluation,
-        GameplayExitDestination::SongSelection => Screen::SelectMusic,
-        GameplayExitDestination::CourseSelection => Screen::SelectCourse,
-        GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => {
-            Screen::Gameplay
-        }
-    }
 }
 
 pub(crate) fn song_lua_presentation_screen(name: &str) -> Result<Screen, String> {
@@ -349,6 +337,8 @@ pub fn write_current_screen_file(name: &str, path: &std::path::Path) {
 mod tests {
     use super::*;
     use crate::ActiveTheme;
+    use deadsync_gameplay::exit_route::GameplayExitDestination;
+    use deadsync_theme::app_requests::gameplay_exit_screen;
     use deadsync_theme::{
         Theme, ThemeScreenId, TransitionCompletion, TransitionFrame,
     };

@@ -10,17 +10,18 @@ scoring, failure, input semantics, and chart behavior belong to the game.
 | Game | `deadsync-*`, excluding themes and the application shell | Timing, judgments, scoring, player/session state, logical input, receptors, arrows, notefields, noteskins, song Lua, profiles, and game services. No dependency on theme crates. |
 | Themes | `deadsync-theme`, `deadsync-theme-*` | Screen presentation, layout, fonts, colors, menus, evaluation, and HUD appearance. Consume game data and translate user actions into requests. |
 
-Production dependencies point downward. Themes can use game and engine crates;
-game crates can use engine crates. The `deadsync` executable and `deadsync-shell`
-are the composition roots that select and connect the concrete implementation.
-Neither is a dependency of engine, game, or theme crates.
+Production dependencies point downward. Themes can use game and engine crates.
+Game crates can use engine crates. The `deadsync` executable selects the
+installed theme in `src/theme_registry.rs` and passes its presentation to
+`deadsync-shell`. Neither crate is a dependency of engine, game, or theme crates.
 
-`deadsync-shell/src/mounted_theme.rs` selects supplemental assets and the stage,
-selection, System Options, Player Options layout, and attract presentations.
-`title_menu.rs` connects the title implementations. The shell passes game
-state, elapsed time, input intent, and ready media through contracts in
-`deadsync-theme`. Themes own the layout, animation, resource choices, and
-presentation state.
+The mount supplies title, stage, selection, System Options, Player Options,
+attract, and chat presentations and their supplemental assets. The shell
+passes game state, elapsed time, input intent, and ready media through
+contracts in `deadsync-theme`. Themes own the layout, animation, resource
+choices, and presentation state. OpenITG and DDR Extreme are production
+dependencies of the executable. Shell integration tests exercise the same
+registry as the executable.
 
 The title mount adapts each theme once at startup. OpenITG and
 DDR Extreme share the focus and input handling for the list of menu actions.
@@ -49,7 +50,7 @@ those records. Course paging shares the same records, including the timing
 and life histories. The score crate resolves the displayed Routine grade
 from the combined percentage and the participants' failure states.
 
-Both Player Options layouts consume the same editor and submit
+All Player Options layouts consume the same editor and submit
 `deadsync-profile-gameplay::stage_options::StageOptions`. The mounted layout
 supplies its viewport and transitions. The game resolves stage scroll speed,
 tournament restrictions, and Golf settings on owned profile copies.
@@ -66,12 +67,15 @@ to Select Music for the layout to interpret. Twitch connection state stays
 with the shell service. The mounted overlay reads a borrowed chat snapshot
 and owns placement, text, and its actor cache.
 
-The shell still uses the Simply Love controller for parts of Player Options,
-Select Music, System Options, and Evaluation. Those controllers remain
-shared by both routes today. Their game behavior and presentation need
-separate interfaces before they can be replaced independently.
-All configurations also mount the Simply Love gameplay frame composer
-and Twitch overlay. The mounted stage supplies the OpenITG HUD.
+Shell services accept runtime requests and publish events through
+`deadsync-theme::app_requests`. The song search worker uses the game catalog
+and ranking in `deadsync-simfile`. Each theme owns any search overlay and
+passes the current chart type in its request.
+
+The shell still depends on the default theme for the Player Options editor,
+parts of Select Music, System Options, Evaluation, and the gameplay frame
+composer. The executable mounts the existing Twitch overlay. The installed
+stage presentation supplies each theme's HUD where available.
 
 ### DDR Extreme
 
@@ -80,9 +84,9 @@ arcade theme. Select it in System Options or set `Theme=DDR Extreme`
 under `[Options]` in `deadsync.ini` and restart.
 
 The theme mounts an intro and idle records screen, title menu, profile
-picker, style and mode selection, song and course wheels, profile and
-stage loading views, and results overview. Its font is packaged under
-`assets/fonts/ddr-extreme`. The theme embeds its two feedback samples
+picker, style and mode selection, song and course wheels, System Options,
+Player Options, profile and stage loading views, and results overview. Its font
+is packaged under `assets/fonts/ddr-extreme`. The theme embeds its two feedback samples
 in the executable. The shell supplies the chart catalog, preview clock,
 profile rows, and completed score records through the same interfaces
 used by OpenITG.
@@ -93,8 +97,8 @@ Extreme displays that completed result on P2's panel and returns to the
 wheel. The intro, title, profile picker, song wheel, loading view, and
 results were rendered at 640×480 and 854×480 with Vulkan through wgpu.
 
-System Options, Player Options, gameplay HUD, and the auxiliary results
-panes currently use the existing fallback presentation.
+The gameplay HUD and auxiliary results panes currently use the fallback
+presentation.
 
 ## Shared contracts
 
@@ -153,8 +157,8 @@ Normal gameplay effects carry the original game action to the shell instead of
 first becoming a concrete screen request. The shell calls the game policy for
 each effect when it executes, after preceding effects have changed session state.
 It reads failure state only for normal completion from gameplay, and consumes a
-pending restart before offset-prompt or transition-busy early returns. The theme
-maps the resulting destination to its screens. Explicit song-Lua navigation to
+pending restart before offset-prompt or transition-busy early returns. The shared
+screen contract maps the destination to a screen role. Explicit song-Lua navigation to
 Evaluation or Select Music uses the same policy through a compatibility adapter;
 other named destinations and validation before End retain their existing paths.
 No-op actions still become empty effects, and existing effect buffers are reused.

@@ -153,7 +153,7 @@ pub struct Config {
     // 1 = Single-threaded
     // N >= 2 = cap at N threads (clamped to available cores).
     pub song_parsing_threads: u8,
-    pub simply_love_color: i32,
+    pub theme_color: i32,
     pub show_select_music_gameplay_timer: bool,
     pub show_select_music_stage_display: bool,
     pub show_select_music_banners: bool,
@@ -465,7 +465,7 @@ impl Default for Config {
             smx_default_light_brightness: DEFAULT_SMX_DEFAULT_LIGHT_BRIGHTNESS,
             software_renderer_threads: runtime.software_renderer_threads,
             song_parsing_threads: runtime.song_parsing_threads,
-            simply_love_color: theme.simply_love_color,
+            theme_color: theme.theme_color,
             show_select_music_gameplay_timer: theme.show_select_music_gameplay_timer,
             show_select_music_stage_display: select_music.show_stage_display,
             show_select_music_banners: select_music.show_banners,
