@@ -4704,6 +4704,7 @@ mod runtime_regression_tests {
             Some(HoldJudgmentRenderInfo {
                 result: HoldResult::Held,
                 started_at_screen_s: 4.201,
+                alternate: false,
             }),
         );
         state.tick_visual_effects(0.0);
@@ -4714,6 +4715,7 @@ mod runtime_regression_tests {
             Some(HoldJudgmentRenderInfo {
                 result: HoldResult::Held,
                 started_at_screen_s: 4.2,
+                alternate: false,
             }),
         );
         state.tick_visual_effects(0.0);

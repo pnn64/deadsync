@@ -31,10 +31,16 @@ impl ThemeResources for OpenItgTheme {
         ThemeAssetManifest {
             fonts: &[],
             textures: std::iter::empty(),
-            embedded_pngs: &[EmbeddedPng {
-                key: GAMEPLAY_HUD.default_tap_atlas.key,
-                bytes: include_bytes!("../assets/tap-results.png"),
-            }],
+            embedded_pngs: &[
+                EmbeddedPng {
+                    key: GAMEPLAY_HUD.default_tap_atlas.key,
+                    bytes: include_bytes!("../assets/tap-results.png"),
+                },
+                EmbeddedPng {
+                    key: GAMEPLAY_HUD.default_hold_atlas.key,
+                    bytes: include_bytes!("../assets/hold-results.png"),
+                },
+            ],
             texture_needs_repeat_sampler: |_| false,
         }
     }

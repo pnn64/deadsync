@@ -1359,6 +1359,7 @@ mod tests {
                     held_miss_sprite: None,
                     hold_judgments: &[],
                     hold_sprite: None,
+                    hold_style: None,
                 }),
             };
             let mut actors = Vec::new();
@@ -1461,6 +1462,7 @@ mod tests {
         let holds = [Some(HoldJudgmentRenderInfo {
             result: HoldResult::Held,
             started_at_screen_s: 0.0,
+            alternate: false,
         })];
         // Native Actor::Draw order: wrapper translation/rotation/scale, then
         // Player's Judgment position and zoom. The theme sprite is a child.
@@ -1500,6 +1502,7 @@ mod tests {
                     held_misses: &[],
                     held_miss_sprite: None,
                     hold_judgments: &holds,
+                    hold_style: None,
                     hold_sprite: Some(IndicatorSprite {
                         source: SpriteSource::Texture("hold".into()),
                         frame_size: [80.0, 40.0],

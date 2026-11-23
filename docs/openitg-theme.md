@@ -207,9 +207,9 @@ Separate portable starts prepare the OpenITG cues only for the OpenITG setting.
 Before and after the resource change, both themes rendered the same 600-frame
 fixture at 854×480 using Vulkan through wgpu and WASAPI shared at 48 kHz.
 OpenITG averaged 8.56 ms in both runs. Simply Love averaged 8.57 ms before
-and 8.56 ms after. All four runs reported zero audio underruns. The gameplay
-captures show the embedded atlas in use and expose overlapping Fantastic text
-in both OpenITG runs.
+and 8.56 ms after. All four runs reported zero audio underruns. Quartz's
+foreground Lua draws a second judgment through an ActorProxy at its authored
+offset. Both themes show one built-in tap judgment when that Lua is disabled.
 
 ## Profile Load and Select Course
 
@@ -294,7 +294,35 @@ the shared fonts. The number grows with the displayed count and pulses for
 The canonical HUD keeps the combo digits, label, and judgment sprite in their
 existing player and Lua capture ranges. Draw-range tests exercise both direct
 and captured output. Reference-specific alternating tap tilt, beginner timing
-wording, hold artwork, and the full-combo color cycle remain open.
+wording and the full-combo color cycle remain open.
+
+The stock OpenITG hold atlas supplies two original 78×44 badges for completed
+and released holds and rolls. The shared compositor positions each badge at
+its lane and interpolates from −90 to +90 with reverse. Its scale settles from
+1.25× to 1.0× over 0.3 seconds and the badge disappears at 0.8 seconds.
+Release badges alternate −20° and +20° in each lane. Completed holds advance
+that lane's phase. The lookup preserves custom and disabled hold graphics. The
+stock OpenITG badge is reserved for outcomes after a hit head. Missed heads
+use the tap feedback and the player's separate held-miss setting.
+
+These metrics are from the effective patched `[HoldJudgment]` section,
+inherited Player metrics, `HoldJudgment.cpp`, and `Player.cpp`. The tap Judgment
+proxy and hold badges keep their existing composition ranges.
+
+Vulkan captures show the completed hold in OpenITG at 640×480 and 854×480
+and in Simply Love at 854×480. The 640×480 left-lane badge can touch the
+outer life rail. Notefield tests cover both release angles, the atlas cells,
+zoom, missed-head behavior, and expiry. Both themes ran the same 600-frame
+fixture before and after with WASAPI shared audio. Mean frame times across
+the six runs ranged from 8.50 to 8.57 ms, with zero audio underruns. A fresh
+Windows portable smoke archive embeds the hold and tap atlases alongside the
+nine audio cues. Both theme configurations reached the event loop from that
+archive.
+
+Two focused song-Lua hold snapshots fail with the same differences against the
+pre-change build. A release-state probe on that build also returns sprite frame
+0 where the live actor test expects frame 1. Those Lua compatibility gaps
+remain open.
 
 In an optimized two-player combo draw benchmark, nine runs of one million
 frames gave medians of 65.1 ns for Simply Love before the change, 71.4 ns for

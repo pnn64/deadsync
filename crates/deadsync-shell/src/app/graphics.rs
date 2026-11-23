@@ -611,33 +611,30 @@ impl App {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn embedded_tap_atlas_matches_the_gameplay_frame_grid() {
-        let spec = deadsync_theme_openitg::GAMEPLAY_HUD.default_tap_atlas;
+    fn embedded_judgment_atlases_match_the_gameplay_frame_grids() {
+        let hud = deadsync_theme_openitg::GAMEPLAY_HUD;
+        let tap = hud.default_tap_atlas;
+        let hold = hud.default_hold_atlas;
         let manifest = OpenItgTheme::asset_manifest();
-        let png = manifest.embedded_pngs.iter().find(|png| png.key == spec.key).unwrap();
-        let atlas = image::load_from_memory_with_format(
-            png.bytes,
-            image::ImageFormat::Png,
-        )
-        .expect("embedded tap atlas decodes")
-        .into_rgba8();
-        let cell_width = (2.0 * spec.frame_size[0]) as u32;
-        let cell_height = (2.0 * spec.frame_size[1]) as u32;
-        assert_eq!(
-            atlas.dimensions(),
-            (
-                cell_width * spec.frame_cols as u32,
-                cell_height * spec.frame_rows as u32
-            )
-        );
-        for row in 0..spec.frame_rows as u32 {
-            for col in 0..spec.frame_cols as u32 {
-                let x = col * cell_width;
-                let y = row * cell_height;
-                assert!(
-                    (y..y + cell_height)
-                        .any(|y| { (x..x + cell_width).any(|x| atlas.get_pixel(x, y)[3] != 0) })
-                );
+        for (key, [width, height], cols, rows) in [
+            (tap.key, tap.frame_size, tap.frame_cols as u32, tap.frame_rows as u32),
+            (hold.key, hold.frame_size, 1, 2),
+        ] {
+            let png = manifest.embedded_pngs.iter().find(|png| png.key == key).unwrap();
+            let atlas = image::load_from_memory_with_format(png.bytes, image::ImageFormat::Png)
+                .expect("embedded judgment atlas decodes")
+                .into_rgba8();
+            let cell_width = (2.0 * width) as u32;
+            let cell_height = (2.0 * height) as u32;
+            assert_eq!(atlas.dimensions(), (cell_width * cols, cell_height * rows));
+            for row in 0..rows {
+                for col in 0..cols {
+                    let x = col * cell_width;
+                    let y = row * cell_height;
+                    assert!((y..y + cell_height).any(|y| {
+                        (x..x + cell_width).any(|x| atlas.get_pixel(x, y)[3] != 0)
+                    }));
+                }
             }
         }
     }

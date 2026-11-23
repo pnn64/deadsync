@@ -635,8 +635,11 @@ stages. At stage entry it can install alternate HUD drawing functions through
 `deadsync-theme`. The gameplay composer supplies the already resolved life and
 percentage score at the established HUD and Lua score capture sites. The shared
 notefield accepts a theme-selected tap graphic, feedback metrics, and combo
-label. It emits them inside the canonical draw ranges for Lua player and HUD
-child captures. See [the OpenITG progress record](openitg-theme.md) for the
+label. It also accepts a stock hold atlas and its animation style. Gameplay
+records the current hold result and alternating phase per lane. The canonical
+renderer applies the style to the hold range. Judgment proxies capture the
+tap range, and held-miss indicators use their own style. See
+[the OpenITG progress record](openitg-theme.md) for the
 reference, implemented behavior, and fidelity checks.
 
 Select Style and Select Play Mode use their existing input and confirmation

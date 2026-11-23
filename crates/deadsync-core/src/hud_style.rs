@@ -218,6 +218,15 @@ pub struct TapFeedbackTween {
     pub end_s: f32,
 }
 
+/// Presentation for the theme's default hold result atlas.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HoldFeedbackStyle {
+    pub initial_zoom: f32,
+    pub final_zoom: f32,
+    pub release_rotation_deg: f32,
+    pub show_missed_head: bool,
+}
+
 /// Optional feedback-only layout, independent of receptors and auxiliary HUD.
 /// Pairs are ordered normal, reverse. Centered offsets are additive.
 #[derive(Debug, Clone, Copy, PartialEq)]

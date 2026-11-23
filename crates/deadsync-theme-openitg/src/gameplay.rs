@@ -1,8 +1,9 @@
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
-use deadsync_core::hud_style::{FieldFeedbackStyle, TapFeedbackTween};
+use deadsync_core::hud_style::{FieldFeedbackStyle, HoldFeedbackStyle, TapFeedbackTween};
 use deadsync_theme::views::{
-    GameplayHud, GameplayHudMotion, GameplayLifeView, GameplayScoreView, GameplayTapAtlas,
+    GameplayHoldAtlas, GameplayHud, GameplayHudMotion, GameplayLifeView, GameplayScoreView,
+    GameplayTapAtlas,
 };
 
 use crate::presentation::{Layout, WIDTH};
@@ -21,6 +22,16 @@ pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
             settle_s: 0.1,
             shrink_start_s: 1.1,
             end_s: 1.3,
+        },
+    },
+    default_hold_atlas: GameplayHoldAtlas {
+        key: "openitg/hold-results",
+        frame_size: [78.0, 44.0],
+        style: &HoldFeedbackStyle {
+            initial_zoom: 1.25,
+            final_zoom: 1.0,
+            release_rotation_deg: 20.0,
+            show_missed_head: false,
         },
     },
 };

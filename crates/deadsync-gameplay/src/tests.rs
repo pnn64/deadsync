@@ -5670,6 +5670,7 @@ mod tests {
         let hold = HoldJudgmentRenderInfo {
             result: HoldResult::Held,
             started_at_screen_s: 3.0,
+            alternate: false,
         };
         assert!(!hold_judgment_expired_at(
             hold,
@@ -16803,6 +16804,25 @@ mod tests {
     }
 
     #[test]
+    fn hold_feedback_alternates_per_lane_across_completions_and_releases() {
+        let mut state = GameplayHoldFeedbackState::default();
+        state.set_hold_judgment(0, Some(hold_judgment_render_info(HoldResult::Held, 1.0)));
+        assert!(!state.hold_judgment(0).unwrap().alternate);
+        state.tick(2.0);
+        assert!(state.hold_judgment(0).is_none());
+        state.set_hold_judgment(0, Some(hold_judgment_render_info(HoldResult::Missed, 2.0)));
+        state.set_hold_judgment(0, Some(hold_judgment_render_info(HoldResult::LetGo, 3.0)));
+        state.set_hold_judgment(1, Some(hold_judgment_render_info(HoldResult::LetGo, 3.0)));
+        assert!(state.hold_judgment(0).unwrap().alternate);
+        assert!(!state.hold_judgment(1).unwrap().alternate);
+        state.set_hold_judgment(0, Some(hold_judgment_render_info(HoldResult::LetGo, 4.0)));
+        assert!(!state.hold_judgment(0).unwrap().alternate);
+        state.clear();
+        state.set_hold_judgment(1, Some(hold_judgment_render_info(HoldResult::LetGo, 5.0)));
+        assert!(!state.hold_judgment(1).unwrap().alternate);
+    }
+
+    #[test]
     fn hold_feedback_state_returns_slices_and_clears() {
         let mut state = GameplayHoldFeedbackState::default();
         state.set_hold_judgment(
@@ -16810,6 +16830,7 @@ mod tests {
             Some(HoldJudgmentRenderInfo {
                 result: HoldResult::Held,
                 started_at_screen_s: 2.0,
+                alternate: false,
             }),
         );
         state.set_held_miss(

@@ -135,6 +135,7 @@ pub struct JudgmentHudFrame<'a> {
     pub held_miss_sprite: Option<IndicatorSprite>,
     pub hold_judgments: &'a [Option<HoldJudgmentRenderInfo>],
     pub hold_sprite: Option<IndicatorSprite>,
+    pub hold_style: Option<&'static deadsync_core::hud_style::HoldFeedbackStyle>,
 }
 
 /// Theme-prepared runtime snapshots for the canonical post-chrome HUD pass.
@@ -648,6 +649,7 @@ fn compose_judgment<S>(
             held_miss_sprite: frame.held_miss_sprite.as_ref(),
             hold_judgments: frame.hold_judgments,
             hold_sprite: frame.hold_sprite.as_ref(),
+            hold_style: frame.hold_style,
             current_beat: prepared.current_beat,
             arrow_effect_time: prepared.arrow_effect_time_s,
             mini: prepared.mini,

@@ -254,6 +254,7 @@ mod tests {
         HoldJudgmentRenderInfo {
             result,
             started_at_screen_s: at,
+            alternate: false,
         }
     }
 

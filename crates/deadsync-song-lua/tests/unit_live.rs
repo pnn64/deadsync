@@ -11428,6 +11428,7 @@ return Def.ActorFrame {
     input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
         result: deadsync_rules::note::HoldResult::Held,
         started_at_screen_s: 0.125,
+        alternate: false,
     });
     scene
         .advance(input.clone())
@@ -11470,6 +11471,7 @@ return Def.ActorFrame {
     input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
         result: deadsync_rules::note::HoldResult::LetGo,
         started_at_screen_s: 0.25,
+        alternate: false,
     });
     scene
         .advance(input.clone())
@@ -11484,6 +11486,7 @@ return Def.ActorFrame {
     input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
         result: deadsync_rules::note::HoldResult::Missed,
         started_at_screen_s: 0.3125,
+        alternate: false,
     });
     scene
         .advance(input.clone())

@@ -15,6 +15,8 @@ pub struct MineJudgmentRenderInfo {
 pub struct HoldJudgmentRenderInfo {
     pub result: HoldResult,
     pub started_at_screen_s: f32,
+    /// Second phase of the alternating visual sequence for this lane.
+    pub alternate: bool,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -57,6 +59,7 @@ pub const fn hold_judgment_render_info(
     HoldJudgmentRenderInfo {
         result,
         started_at_screen_s,
+        alternate: false,
     }
 }
 

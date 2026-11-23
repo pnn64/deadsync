@@ -285,6 +285,7 @@ fn held_let_go_missed_hold_and_duplicate_timestamp_queues_match() {
             *render = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
                 result,
                 started_at_screen_s: i as f32 + column as f32 / 10.,
+                alternate: false,
             });
         }
         p.update(&f, None);
@@ -342,6 +343,7 @@ fn hold_callbacks_can_change_judgment_and_zoom_inputs_before_their_phases() {
     f.players[0].hold_judgments[0] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
         result: HoldResult::Held,
         started_at_screen_s: 0.1,
+        alternate: false,
     });
     p.update(&f, None);
 }
@@ -362,6 +364,7 @@ fn feedback_methods_modifiers_and_color_remain_rooted_across_replacement_gc() {
     f.players[0].hold_judgments[0] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
         result: HoldResult::Held,
         started_at_screen_s: 0.1,
+        alternate: false,
     });
     p.update(&f, None);
 }
@@ -524,6 +527,7 @@ fn feedback_errors_preserve_the_written_timestamp_and_resume_without_retry() {
     f.players[0].hold_judgments[0] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
         result: HoldResult::Held,
         started_at_screen_s: 0.1,
+        alternate: false,
     });
 
     p.frames.update(&mut p.rust, &f, None, false).unwrap();

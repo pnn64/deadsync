@@ -370,6 +370,7 @@ pub struct GameplayHud<A> {
     pub percentage_score: fn(&mut Vec<A>, GameplayScoreView),
     pub field_feedback: &'static deadsync_core::hud_style::FieldFeedbackStyle,
     pub default_tap_atlas: GameplayTapAtlas,
+    pub default_hold_atlas: GameplayHoldAtlas,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -379,6 +380,14 @@ pub struct GameplayTapAtlas {
     pub frame_cols: usize,
     pub frame_rows: usize,
     pub tween: &'static deadsync_core::hud_style::TapFeedbackTween,
+}
+
+/// The stock hold feedback sheet, with one completed and one released cell.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayHoldAtlas {
+    pub key: &'static str,
+    pub frame_size: [f32; 2],
+    pub style: &'static deadsync_core::hud_style::HoldFeedbackStyle,
 }
 
 /// Stage transition time available to gameplay presenters.

@@ -841,10 +841,10 @@ where
         self.record_ghost_judgment(player);
         self.display.hold_feedback.set_hold_judgment(
             column,
-            Some(HoldJudgmentRenderInfo {
-                result: HoldResult::Missed,
-                started_at_screen_s: self.boundary.total_elapsed_in_screen,
-            }),
+            Some(hold_judgment_render_info(
+                HoldResult::Missed,
+                self.boundary.total_elapsed_in_screen,
+            )),
         );
     }
 
