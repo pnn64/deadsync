@@ -1,0 +1,324 @@
+use super::course_transition_tests::{finish_pending_stage, on_app_thread};
+use super::*;
+use crate::gameplay_regression_tests::tests::{actor_tree_has_text, fixture_assets};
+use deadsync_config::theme::ThemeFlag;
+use deadsync_core::input::InputSource;
+use deadsync_gameplay::{GameplayAudioSnapshot, GameplayStreamClockSnapshot};
+use deadsync_input::VirtualAction;
+use std::process::Command as ProcessCommand;
+use winit::platform::windows::EventLoopBuilderExtWindows;
+use winit::window::WindowId;
+
+const TEST_NAME: &str = "app::play_route_tests::configured_themes_complete_song_route";
+const CHILD_THEME: &str = "DEADSYNC_TEST_PLAY_ROUTE_THEME";
+const CHILD_COMPLETED: &str = "configured play route completed";
+const SONG_TITLE: &str = "Route verification";
+const STEP_SECONDS: f32 = 0.125;
+
+#[test]
+fn configured_themes_complete_song_route() {
+    // Both the runtime configuration and winit event-loop registration are
+    // process-global. Give each configured launch its own isolated process.
+    if let Ok(theme) = std::env::var(CHILD_THEME) {
+        on_app_thread(move || run_child(&theme));
+        println!("{CHILD_COMPLETED}");
+        return;
+    }
+    let executable = std::env::current_exe().unwrap();
+    for theme in ["Simply Love", "OpenITG"] {
+        let child = ProcessCommand::new(&executable)
+            .args(["--exact", TEST_NAME, "--nocapture"])
+            .env(CHILD_THEME, theme)
+            .output()
+            .expect("start the isolated play route");
+        let output = String::from_utf8_lossy(&child.stdout);
+        assert!(
+            child.status.success() && output.contains(CHILD_COMPLETED),
+            "{theme} play route failed\n{output}\n{}",
+            String::from_utf8_lossy(&child.stderr),
+        );
+    }
+}
+
+fn run_child(theme: &str) {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = AppDirs {
+        data_dir: root.path().join("data"),
+        cache_dir: root.path().join("cache"),
+        exe_dir: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
+        portable: false,
+    };
+    dirs.ensure_dirs_exist();
+    init_paths(&dirs).unwrap();
+    std::fs::write(
+        dirs.config_path(),
+        format!(
+            "[Options]\nTheme={theme}\nVideoRenderer=Software\nLogToFile=0\nCoinMode=Home\n\
+             EnableArrowCloud=0\nEnableGrooveStats=0\n\
+             [Theme]\nMachineShowSelectProfile=1\nMachineShowSelectColor=0\n\
+             MachineShowSelectStyle=1\nMachineShowSelectPlayMode=1\n",
+        ),
+    )
+    .unwrap();
+    config::runtime_load::load();
+    config::runtime::flush_pending_saves();
+    deadsync_theme_simply_love::i18n::init_for_tests();
+    seed_library(&dirs);
+    let expected_theme = if theme == "OpenITG" {
+        ThemeFlag::OpenItg
+    } else {
+        ThemeFlag::SimplyLove
+    };
+    let (generation, cfg) = config::runtime::snapshot();
+    assert_eq!(cfg.theme_flag, expected_theme);
+    let mut app = App::new(
+        dirs,
+        0,
+        cfg.simply_love_color,
+        generation,
+        cfg,
+        profile::get(),
+        deadsync_audio_stream::AudioControl::without_audio(),
+        deadsync_audio_stream::MusicClock::without_audio(),
+        None,
+    );
+    app.asset_manager = fixture_assets();
+    assert_eq!(app.state.screens.menu_state.theme_flag(), expected_theme);
+
+    let mut route = RouteTest { app: Some(app) };
+    let event_loop = EventLoop::builder().with_any_thread(true).build().unwrap();
+    event_loop.run_app(&mut route).unwrap();
+    assert!(route.app.is_none(), "winit did not run the play route");
+    config::runtime::flush_pending_saves();
+}
+
+fn seed_library(dirs: &AppDirs) {
+    let directory = dirs.songs_dir().join("Route");
+    let song_path = directory.join(SONG_TITLE).join("route.sm");
+    std::fs::create_dir_all(song_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &song_path,
+        format!(
+            "#TITLE:{SONG_TITLE};\n#BPMS:0=120;\n#NOTES:dance-single::Hard:5:0,0,0,0,0:\n\
+             0000\n,\n0000\n,\n0000\n1000\n0100\n0010\n,\n0001\n1000\n0000\n1000\n;\n",
+        ),
+    )
+    .unwrap();
+    let song = deadsync_simfile::app_runtime::parse_song_for_test(&song_path, 0.0).unwrap();
+    deadsync_simfile::runtime_cache::set_song_cache(vec![deadsync_chart::SongPack {
+        group_name: "Route".into(),
+        name: "Route".into(),
+        sort_title: "Route".into(),
+        translit_title: String::new(),
+        series: String::new(),
+        folder_series: String::new(),
+        year: 0,
+        sync_pref: deadsync_chart::SyncPref::Default,
+        directory,
+        banner_path: None,
+        songs: vec![Arc::new(song)],
+    }]);
+}
+
+struct RouteTest {
+    app: Option<App>,
+}
+
+impl ApplicationHandler for RouteTest {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(mut app) = self.app.take() else {
+            return;
+        };
+        play_route(&mut app, event_loop);
+        event_loop.exit();
+    }
+
+    fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
+}
+
+fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
+    app.on_fade_complete(CurrentScreen::Menu, event_loop);
+    settle(app, event_loop, CurrentScreen::Menu);
+    for next in [
+        CurrentScreen::SelectProfile,
+        CurrentScreen::SelectStyle,
+        CurrentScreen::SelectPlayMode,
+        CurrentScreen::SelectMusic,
+    ] {
+        press(app, event_loop, VirtualAction::p2_start);
+        settle(app, event_loop, next);
+    }
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(actor_tree_has_text(&actors, SONG_TITLE));
+
+    // The first Start confirms the chart and offers the options window.
+    press(app, event_loop, VirtualAction::p2_start);
+    menu_frame(app, event_loop);
+    press(app, event_loop, VirtualAction::p2_start);
+    settle(app, event_loop, CurrentScreen::PlayerOptions);
+    let selection = app
+        .state
+        .screens
+        .player_options_state
+        .as_ref()
+        .unwrap()
+        .selection();
+    assert_eq!(selection.song.title, SONG_TITLE);
+    let openitg = app.state.screens.menu_state.theme_flag() == ThemeFlag::OpenItg;
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert_eq!(actor_tree_has_text(&actors, "PLAYER OPTIONS"), openitg);
+    // The editor's first Start moves focus to Exit and the next starts play.
+    press(app, event_loop, VirtualAction::p2_start);
+    press(app, event_loop, VirtualAction::p2_start);
+    settle(app, event_loop, CurrentScreen::Gameplay);
+    let gameplay = app.state.screens.gameplay_state.as_ref().unwrap();
+    assert_eq!(gameplay.song().title, SONG_TITLE);
+    assert_eq!(gameplay.setup.session.joined_sides, [false, true]);
+
+    complete_stage(app, event_loop);
+    settle(app, event_loop, CurrentScreen::Evaluation);
+    assert_eq!(app.state.session.played_stages.len(), 1);
+    let result = &app.state.session.played_stages[0];
+    assert!(result.players[0].is_none());
+    assert_eq!(result.players[1].as_ref().unwrap().notes_hit, 6);
+    assert!(app.state.screens.evaluation_stage.is_some());
+    // Allow the results intro to settle before accepting a normal Start.
+    for _ in 0..32 {
+        menu_frame(app, event_loop);
+    }
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(actor_tree_has_text(&actors, SONG_TITLE));
+    press(app, event_loop, VirtualAction::p2_start);
+    settle(app, event_loop, CurrentScreen::SelectMusic);
+}
+
+fn press(app: &mut App, event_loop: &ActiveEventLoop, action: VirtualAction) {
+    for pressed in [true, false] {
+        let now = Instant::now();
+        let event = InputEvent::new(action, 0, pressed, InputSource::Keyboard, now, 0, now, now);
+        app.route_input_event(event_loop, event).unwrap();
+    }
+}
+
+fn settle(app: &mut App, event_loop: &ActiveEventLoop, expected: CurrentScreen) {
+    let mut frames = 0;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while frames < 100 && Instant::now() < deadline {
+        if app.state.screens.current_screen == expected
+            && matches!(app.state.shell.transition, TransitionState::Idle)
+        {
+            return;
+        }
+        menu_frame(app, event_loop);
+        if app.state.screens.current_screen == CurrentScreen::ProfileLoad {
+            // Let the asynchronous catalog worker run during simulated frames.
+            std::thread::sleep(Duration::from_millis(2));
+        } else {
+            frames += 1;
+        }
+    }
+    panic!(
+        "expected {expected:?}, found {:?} with {:?}",
+        app.state.screens.current_screen, app.state.shell.transition
+    );
+}
+
+fn menu_frame(app: &mut App, event_loop: &ActiveEventLoop) {
+    if app.state.screens.current_screen == CurrentScreen::ProfileLoad {
+        app.poll_profile_load();
+    }
+    finish_pending_stage(app);
+    deadlib_present::runtime::tick(STEP_SECONDS);
+    let transition = app.state.shell.transition.advance_frame(STEP_SECONDS);
+    if transition.step_screen && app.state.screens.current_screen != CurrentScreen::Gameplay {
+        app.step_idle_screen(STEP_SECONDS, Instant::now(), event_loop);
+    }
+    match transition.completion {
+        Some(TransitionCompletion::ActorFadeOut(target)) => {
+            app.finish_actor_fade_out(target, event_loop)
+        }
+        Some(TransitionCompletion::GlobalFadeOut(target)) => {
+            app.on_fade_complete(target, event_loop)
+        }
+        None => {}
+    }
+    app.get_current_actors(0.0, app.frame_policy);
+}
+
+fn complete_stage(app: &mut App, event_loop: &ActiveEventLoop) {
+    let state = app.state.screens.gameplay_state.as_mut().unwrap();
+    let columns = [
+        VirtualAction::p2_left,
+        VirtualAction::p2_down,
+        VirtualAction::p2_up,
+        VirtualAction::p2_right,
+    ];
+    let epoch = Instant::now() - Duration::from_secs(30);
+    let host_epoch = 1_000_000_000;
+    let mut edges = Vec::new();
+    for (note, &ns) in state.notes().iter().zip(state.note_time_cache_ns()) {
+        edges.push((ns, columns[note.column], true));
+        edges.push((ns + 40_000_000, columns[note.column], false));
+    }
+    edges.sort_by_key(|(ns, _, _)| *ns);
+    let mut edges = edges.into_iter().peekable();
+    let mut effects = Vec::new();
+    for frame in 0..800 {
+        let music_nanos = frame * 20_000_000;
+        let host = host_epoch + music_nanos as u64;
+        while let Some((ns, action, pressed)) = edges.next_if(|(ns, _, _)| *ns <= music_nanos) {
+            let instant = epoch + Duration::from_nanos(ns as u64);
+            let event = InputEvent::new(
+                action,
+                0,
+                pressed,
+                InputSource::Keyboard,
+                instant,
+                host_epoch + ns as u64,
+                instant,
+                instant,
+            );
+            deadsync_theme_simply_love::screens::gameplay::handle_input(
+                state,
+                &event,
+                &mut effects,
+            );
+        }
+        deadsync_theme_simply_love::screens::gameplay::update(
+            state,
+            0.020,
+            GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot {
+                    music_nanos,
+                    music_seconds_per_second: 1.0,
+                    valid_at: epoch + Duration::from_nanos(music_nanos as u64),
+                    valid_at_host_nanos: host,
+                    has_music_mapping: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            || host,
+            &mut effects,
+        );
+        if state.song_completed_naturally() {
+            assert_eq!(state.players()[0].judgment_counts.iter().sum::<u32>(), 6);
+            let complete = effects
+                .iter()
+                .find(|effect| {
+                    matches!(
+                        gameplay_action_for_effect(effect),
+                        Some(deadsync_gameplay::GameplayAction::Navigate(
+                            deadsync_gameplay::GameplayExit::Complete
+                        ))
+                    )
+                })
+                .expect("completed stage queues navigation");
+            let action = gameplay_action_for_effect(complete).unwrap();
+            app.handle_gameplay_action(action, event_loop);
+            return;
+        }
+        effects.clear();
+    }
+    panic!("the chart did not finish on the deterministic audio clock");
+}

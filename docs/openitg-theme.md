@@ -22,6 +22,9 @@ The reference uses a 640×480 logical area, a first row at `(120, 112)`, a
 36 px pitch, immediate wrapping selection, a 110% focus scale with a 0.5 s
 pulse, and 0.3 s entry and exit fades. These are source observations. The
 archive did not include a runnable Windows reference executable.
+The supplied Visual Studio project targets the 2015 toolset and needs
+legacy DirectX 9 development headers and libraries. The build host has the
+2022 toolset, and the legacy DirectX dependencies are absent.
 
 ## Title screen
 
@@ -281,6 +284,18 @@ At 854×480, nine warm runs of 8,000 settled-frame actor builds measured
 for its two panels. The benchmark covers actor construction with bundled
 fonts and dev-profile theme libraries. Evaluation GPU timing remains open.
 
+## Configured play route
+
+The Windows shell test `configured_themes_complete_song_route` loads each
+theme through a fresh `deadsync.ini` in its own process. It starts at the title
+and sends P2's Start through the normal input router for profile selection,
+style, play mode, and Select Music. Two Start presses enter Player Options
+with the confirmed chart. The test accepts the options, plays six timestamped
+taps, checks that the resulting stage records six hits on P2 alone, and
+checks that Evaluation renders the song title and returns to Select Music.
+The test drives the application's idle-screen update and advances gameplay
+with a deterministic audio clock in a windowless event loop.
+
 ## Gameplay parity verification
 
 The shell regression test `simply_love_and_openitg_produce_identical_gameplay_results`
@@ -310,7 +325,7 @@ Judgment proxy using its intended capture path. A dedicated regression checks
 that both themes can draw two root Judgment proxies from a retained HUD
 range. The live Lua fixture checks marker positions and counts using the
 renderer’s packed RageColor values.
-The full shell suite passed with 448 tests passing and 11 ignored.
+The full shell suite passed with 449 tests passing and 11 ignored.
 
 Separate Windows captures at 854×480 show the chart's root Judgment proxy
 draw at its authored offset in both themes. In the 600-frame baked-Lua case,

@@ -9,6 +9,8 @@ mod commands;
 mod config_requests;
 #[cfg(test)]
 mod course_transition_tests;
+#[cfg(all(test, target_os = "windows"))]
+mod play_route_tests;
 mod evaluation_views;
 mod gameplay_actions;
 mod graphics;
@@ -4509,6 +4511,47 @@ impl App {
         }
     }
 
+    fn step_idle_screen(&mut self, dt: f32, now: Instant, event_loop: &ActiveEventLoop) {
+        let smx_assignment = matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Options
+                | CurrentScreen::SmxAssignPads
+                | CurrentScreen::SelectMusic
+        )
+        .then(crate::smx_config::smx_assignment_view);
+        let premium_seconds_left = (self.state.screens.current_screen
+            == CurrentScreen::SelectMusic
+            && matches!(
+                profile::get_session_play_mode(),
+                profile_data::PlayMode::PremiumFree
+            ))
+        .then(|| {
+            let coin_options = config::runtime::get().coin;
+            self.state
+                .coin
+                .premium_seconds_left(coin_options, now)
+                .unwrap_or_else(|| coin_options.premium_free_seconds())
+        });
+        debug_assert!(self.theme_effect_scratch.is_empty());
+        self.state.screens.step_idle(
+            dt,
+            now,
+            &self.state.session,
+            premium_seconds_left,
+            &self.asset_manager,
+            &mut self.audio,
+            &self.gameplay_sfx,
+            &mut self.music_clock,
+            smx_assignment.as_ref(),
+            &mut self.theme_effect_scratch,
+        );
+        let _ = self.drain_theme_effects(event_loop);
+        if let Some(target) = self.advance_stage_launch(dt) {
+            let _ = self.drain_theme_effects(event_loop);
+            self.handle_immediate_navigation(target, event_loop);
+        }
+    }
+
     fn log_frame_loop_mode(&mut self, mode: FrameLoopMode) {
         if !self.state.shell.note_frame_loop_mode(mode) {
             return;
@@ -4811,44 +4854,7 @@ impl App {
             {
                 self.step_gameplay(logic_dt, false, event_loop);
             } else if step_plan.step_screen {
-                let smx_assignment = matches!(
-                    self.state.screens.current_screen,
-                    CurrentScreen::Options
-                        | CurrentScreen::SmxAssignPads
-                        | CurrentScreen::SelectMusic
-                )
-                .then(crate::smx_config::smx_assignment_view);
-                let premium_seconds_left = (self.state.screens.current_screen
-                    == CurrentScreen::SelectMusic
-                    && matches!(
-                        profile::get_session_play_mode(),
-                        profile_data::PlayMode::PremiumFree
-                    ))
-                .then(|| {
-                    let coin_options = config::runtime::get().coin;
-                    self.state
-                        .coin
-                        .premium_seconds_left(coin_options, redraw_started)
-                        .unwrap_or_else(|| coin_options.premium_free_seconds())
-                });
-                debug_assert!(self.theme_effect_scratch.is_empty());
-                self.state.screens.step_idle(
-                    logic_dt,
-                    redraw_started,
-                    &self.state.session,
-                    premium_seconds_left,
-                    &self.asset_manager,
-                    &mut self.audio,
-                    &self.gameplay_sfx,
-                    &mut self.music_clock,
-                    smx_assignment.as_ref(),
-                    &mut self.theme_effect_scratch,
-                );
-                let _ = self.drain_theme_effects(event_loop);
-                if let Some(target) = self.advance_stage_launch(logic_dt) {
-                    let _ = self.drain_theme_effects(event_loop);
-                    self.handle_immediate_navigation(target, event_loop);
-                }
+                self.step_idle_screen(logic_dt, redraw_started, event_loop);
             }
             self.update_evaluation_capture(frame_policy.auto_screenshot_eval);
         }

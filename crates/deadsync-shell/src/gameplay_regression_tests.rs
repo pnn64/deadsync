@@ -252,7 +252,7 @@ pub(crate) mod tests {
 
     const FIXTURE_TEXTURES: FixtureTextureContext = FixtureTextureContext;
 
-    fn actor_tree_has_text(actors: &[Actor], expected: &str) -> bool {
+    pub(crate) fn actor_tree_has_text(actors: &[Actor], expected: &str) -> bool {
         actors.iter().any(|actor| match actor {
             Actor::Text { content, .. } => content.as_str() == expected,
             Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
@@ -379,7 +379,7 @@ pub(crate) mod tests {
             .max()
     }
 
-    fn fixture_assets() -> deadlib_assets::AssetManager {
+    pub(crate) fn fixture_assets() -> deadlib_assets::AssetManager {
         let mut assets = deadlib_assets::AssetManager::new();
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let asset_root = project_root.join("assets");
