@@ -196,7 +196,7 @@ pub(super) const fn music_rate_text(state: &State) -> &MusicRatePresentation {
 pub fn push_actors_with_layout(
     actors: &mut Vec<Actor>,
     state: &State,
-    draw: fn(&mut Vec<Actor>, PlayerOptionsPage<'_, TextContent, Actor>),
+    draw: impl FnOnce(&mut Vec<Actor>, PlayerOptionsPage<'_, TextContent, Actor>),
 ) {
     let pane = state.pane();
     let active = state.active;
@@ -207,7 +207,7 @@ pub fn push_actors_with_layout(
         let row = pane.row_map.get_at(index)?;
         let (y, alpha) = row_display_position(state, index, first_y, row_step, alpha);
         let exit = row.id == RowId::Exit;
-        if alpha <= 0.001 && !exit {
+        if alpha <= 0.001 {
             return None;
         }
         let next_row = std::array::from_fn(|player| {
@@ -282,8 +282,9 @@ pub fn push_actors_with_layout(
             },
             active,
             selected_rows: pane.selected_row,
+            scroll_position: pane.scroll_position,
             row_count: pane.row_map.len(),
-            visible_slots: VISIBLE_ROWS,
+            visible_slots: usize::from(state.viewport.slots),
             alpha,
             row: &row,
             help: &help,

@@ -312,11 +312,7 @@ pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.pane_mut().reset_cursor();
     state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
     state.help_anim_time = [0.0; PLAYER_SLOTS];
-    let active = state.active;
-    let policy = state.policy;
-    let option_masks = state.option_masks;
-    let p = state.pane_mut();
-    p.row_tweens = init_row_tweens(&p.row_map, p.selected_row, active, option_masks, policy);
+    reset_viewport_rows(state);
     state.pane_mut().arcade_row_focus = std::array::from_fn(|player_idx| {
         row_allows_arcade_next_row(state, state.pane().selected_row[player_idx])
     });
@@ -377,11 +373,7 @@ pub(super) fn jump_to_setting(
     // Snap the cursor ring to the new row instead of tweening across the screen.
     p.cursor_initialized[idx] = false;
 
-    let active = state.active;
-    let policy = state.policy;
-    let option_masks = state.option_masks;
-    let p = state.pane_mut();
-    p.row_tweens = init_row_tweens(&p.row_map, p.selected_row, active, option_masks, policy);
+    reset_viewport_rows(state);
     state.pane_mut().arcade_row_focus = std::array::from_fn(|player_idx| {
         row_allows_arcade_next_row(state, state.pane().selected_row[player_idx])
     });

@@ -1,23 +1,31 @@
 //! Player Options presentation for the shared editor.
 
-use crate::presentation::{ACCENT, HEIGHT, INK, Layout, MUTED, WIDTH, quad};
+use crate::presentation::{ACCENT, HEIGHT, INK, Layout, LinearMotion, MUTED, WIDTH, quad};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_theme::player_options::{PlayerOptionsInline, PlayerOptionsPage, PlayerOptionsRow};
+use deadsync_theme::player_options::{
+    PlayerOptionsInline, PlayerOptionsPage, PlayerOptionsRow, PlayerOptionsViewport,
+};
 
 pub(super) const TRANSITION_SECONDS: f32 = 0.3;
 
 const FIRST_ROW_Y: f32 = 127.0;
 const ROW_PITCH: f32 = 28.0;
 const EXIT_Y: f32 = 353.0;
-const ROW_X: f32 = 36.0;
-const ROW_WIDTH: f32 = 568.0;
+const ROW_X: f32 = 42.0;
+const ROW_WIDTH: f32 = 562.0;
 const LABEL_X: f32 = 53.0;
 const INLINE_LEFT: f32 = 210.0;
 const INLINE_RIGHT: f32 = 594.0;
 const PLAYER_HUES: [[f32; 3]; MAX_PLAYERS] = [ACCENT, [0.48, 0.94, 0.51]];
 const PLAYER_NAMES: [&str; MAX_PLAYERS] = ["P1", "P2"];
+const SCROLLBAR_X: f32 = 34.0;
+const SCROLLBAR_TOP: f32 = 122.0;
+const SCROLLBAR_HEIGHT: f32 = 240.0;
+const THUMB_WIDTH: f32 = 10.0;
+const THUMB_HEIGHT: f32 = 22.0;
+const THUMB_SECONDS: f64 = 0.2;
 
 type Page<'a> = PlayerOptionsPage<'a, TextContent, Actor>;
 type Row<'a> = PlayerOptionsRow<'a, TextContent>;
@@ -47,10 +55,41 @@ impl Seats {
     }
 }
 
-pub fn push_player_options_actors(
-    actors: &mut Vec<Actor>,
-    page: PlayerOptionsPage<'_, TextContent, Actor>,
-) {
+/// Retained scroll feedback for the mounted Player Options editor.
+#[derive(Default)]
+pub struct OpenItgPlayerOptions {
+    pane: Option<&'static str>,
+    thumbs: [Option<LinearMotion<1>>; MAX_PLAYERS],
+}
+
+impl OpenItgPlayerOptions {
+    pub const VIEWPORT: PlayerOptionsViewport = PlayerOptionsViewport {
+        slots: 8,
+        separate_exit: true,
+        row_tween_seconds: 0.15,
+    };
+
+    pub fn push_actors(&mut self, actors: &mut Vec<Actor>, page: Page<'_>, now: f64) {
+        if self.pane != Some(page.title) {
+            self.pane = Some(page.title);
+            self.thumbs = [None; MAX_PLAYERS];
+        }
+        let tops = std::array::from_fn(|player| {
+            if !page.active[player] || page.row_count == 0 {
+                self.thumbs[player] = None;
+                return None;
+            }
+            let target = [page.scroll_position[player].clamp(0.0, 1.0)];
+            let thumb = self.thumbs[player].get_or_insert(LinearMotion::at(target));
+            thumb.retarget(target, now, THUMB_SECONDS);
+            let [fraction] = thumb.sample(now, THUMB_SECONDS);
+            Some((SCROLLBAR_HEIGHT - THUMB_HEIGHT).mul_add(fraction, SCROLLBAR_TOP))
+        });
+        push_page(actors, page, tops);
+    }
+}
+
+fn push_page(actors: &mut Vec<Actor>, page: Page<'_>, thumbs: [Option<f32>; MAX_PLAYERS]) {
     let (width, height) = (screen_width(), screen_height());
     let layout = Layout::centered(width, height);
     let seats = Seats::new(page.active);
@@ -88,14 +127,14 @@ pub fn push_player_options_actors(
         let Some(row) = (page.row)(index) else {
             continue;
         };
-        if row.alpha <= 0.001 && !row.exit {
+        if row.alpha <= 0.001 {
             continue;
         }
         let focused = std::array::from_fn(|player| {
             seats.active[player] && page.selected_rows[player] == index
         });
         if row.exit {
-            draw_exit(actors, layout, &row, focused, alpha);
+            draw_exit(actors, layout, &row, focused, row.alpha);
             continue;
         }
 
@@ -126,7 +165,41 @@ pub fn push_player_options_actors(
             (page.draw_preview)(actors, index, [p1_x, p2_x], preview_y);
         }
     }
+    draw_scrollbar(actors, layout, thumbs, alpha);
     draw_help(actors, layout, &page, alpha);
+}
+
+fn draw_scrollbar(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    tops: [Option<f32>; MAX_PLAYERS],
+    alpha: f32,
+) {
+    let half = THUMB_WIDTH * 0.5;
+    let mut draw = |player: usize, x, top, width| {
+        actors.push(layout.panel(
+            x,
+            top,
+            [width, THUMB_HEIGHT],
+            rgba(PLAYER_HUES[player], alpha),
+            -15,
+        ));
+    };
+    if let [Some(p1), Some(p2)] = tops
+        && (p1 - p2).abs() < THUMB_HEIGHT
+    {
+        // Each player owns their half of the track where the thumbs overlap.
+        draw(0, SCROLLBAR_X, p1, half);
+        draw(1, SCROLLBAR_X - half, p2, half);
+        draw(0, SCROLLBAR_X - half, p1, half);
+        draw(1, SCROLLBAR_X, p2, half);
+    } else {
+        for (player, top) in tops.into_iter().enumerate() {
+            if let Some(top) = top {
+                draw(player, SCROLLBAR_X - half, top, THUMB_WIDTH);
+            }
+        }
+    }
 }
 
 const fn rgba([red, green, blue]: [f32; 3], alpha: f32) -> [f32; 4] {
@@ -527,6 +600,71 @@ mod tests {
     }
 
     #[test]
+    fn overlapping_thumbs_keep_both_seats_visible_and_retarget_independently() {
+        use deadlib_present::actors::SizeSpec;
+
+        with_current_metrics(Metrics::centered(854.0, 480.0), || {
+            let mut presentation = OpenItgPlayerOptions::default();
+            let mut actors = Vec::new();
+            let mut frame = |title, active, scroll_position, now| {
+                actors.clear();
+                presentation.push_actors(
+                    &mut actors,
+                    PlayerOptionsPage {
+                        title,
+                        active,
+                        selected_rows: [0; MAX_PLAYERS],
+                        scroll_position,
+                        row_count: 16,
+                        visible_slots: 8,
+                        alpha: 1.0,
+                        row: &|_| None,
+                        help: &|_, _| None,
+                        draw_preview: &|_, _, _, _| {},
+                    },
+                    now,
+                );
+                actors
+                    .iter()
+                    .filter_map(|actor| match actor {
+                        Actor::Sprite {
+                            offset,
+                            size: [SizeSpec::Px(width), SizeSpec::Px(22.0)],
+                            tint,
+                            ..
+                        } => Some((*offset, *width, *tint)),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            };
+
+            let p1 = rgba(PLAYER_HUES[0], 1.0);
+            let p2 = rgba(PLAYER_HUES[1], 1.0);
+            let both = [true, true];
+            let overlap = frame("PLAYER OPTIONS", both, [0.0, 0.0], 0.0);
+            assert_eq!(
+                overlap[2..],
+                [([136.0, 122.0], 5.0, p1), ([141.0, 122.0], 5.0, p2)]
+            );
+            assert_eq!(frame("PLAYER OPTIONS", both, [0.0, 1.0], 1.0), overlap);
+            let halfway = frame("PLAYER OPTIONS", both, [0.0, 1.0], 1.1);
+            assert_eq!(
+                halfway,
+                [([136.0, 122.0], 10.0, p1), ([136.0, 231.0], 10.0, p2)]
+            );
+            assert_eq!(frame("PLAYER OPTIONS", both, [0.0, 0.25], 1.1), halfway);
+            assert_eq!(
+                frame("PLAYER OPTIONS", both, [0.0, 0.25], 1.4)[1],
+                ([136.0, 176.5], 10.0, p2)
+            );
+            assert_eq!(
+                frame("DISPLAY OPTIONS", [false, true], [0.0, 1.0], 1.41),
+                [([136.0, 340.0], 10.0, p2)]
+            );
+        });
+    }
+
+    #[test]
     fn p2_solo_wide_layout_retains_prepared_values_exit_help_and_preview_anchor() {
         let speed = TextContent::from("Scroll Speed");
         let speed_value = TextContent::inline_str("2.50x").unwrap();
@@ -538,12 +676,13 @@ mod tests {
             with_current_metrics(Metrics::centered(width, 480.0), || {
                 let mut actors = Vec::new();
                 let preview = Cell::new(None);
-                push_player_options_actors(
+                OpenItgPlayerOptions::default().push_actors(
                     &mut actors,
                     PlayerOptionsPage {
                         title: "PLAYER OPTIONS",
                         active: [false, true],
                         selected_rows: [0, 2],
+                        scroll_position: [0.0, 2.0 / 3.0],
                         row_count: 4,
                         visible_slots: 10,
                         alpha: 1.0,
@@ -561,7 +700,6 @@ mod tests {
                             }),
                             3 => Some(Row {
                                 slot: 9.0,
-                                alpha: 0.0,
                                 exit: true,
                                 ..row(&exit)
                             }),
@@ -570,6 +708,7 @@ mod tests {
                         help: &|player, line| (player == 1 && line == 0).then_some(&help),
                         draw_preview: &|_, index, xs, y| preview.set(Some((index, xs, y))),
                     },
+                    0.0,
                 );
                 assert!(has_text(&actors, "PLAYER OPTIONS", [36.0 + delta, 38.0]));
                 assert!(has_text(&actors, "P2", [395.0 + delta, 92.0]));
@@ -590,12 +729,13 @@ mod tests {
         let choices = ["Normal", "Reverse", "Split"].map(TextContent::from);
         with_current_metrics(Metrics::centered(640.0, 480.0), || {
             let mut actors = Vec::new();
-            push_player_options_actors(
+            OpenItgPlayerOptions::default().push_actors(
                 &mut actors,
                 PlayerOptionsPage {
                     title: "ADVANCED OPTIONS",
                     active: [true, true],
                     selected_rows: [0, 0],
+                    scroll_position: [0.0, 0.0],
                     row_count: 1,
                     visible_slots: 8,
                     alpha: 1.0,
@@ -617,6 +757,7 @@ mod tests {
                         panic!("inline text row does not request a preview")
                     },
                 },
+                0.0,
             );
             assert!(has_text(&actors, "Normal", [306.0, 127.0]));
             assert!(has_text(&actors, "Reverse", [498.0, 127.0]));
@@ -639,12 +780,13 @@ mod tests {
         let rate_value = TextContent::from("1.50x");
         with_current_metrics(Metrics::centered(640.0, 480.0), || {
             let mut actors = Vec::new();
-            push_player_options_actors(
+            OpenItgPlayerOptions::default().push_actors(
                 &mut actors,
                 PlayerOptionsPage {
                     title: "DISPLAY OPTIONS",
                     active: [true, true],
                     selected_rows: [0, 0],
+                    scroll_position: [0.0, 0.0],
                     row_count: 1,
                     visible_slots: 10,
                     alpha: 0.5,
@@ -660,6 +802,7 @@ mod tests {
                     help: &|_, _| None,
                     draw_preview: &|_, _, _, _| {},
                 },
+                0.0,
             );
             assert!(has_text(&actors, "Music Rate", [53.0, 122.5]));
             assert!(has_text(&actors, "180 BPM", [53.0, 133.0]));

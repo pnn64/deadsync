@@ -224,22 +224,45 @@ profile updates, stage submission, course validation, and failed-load recovery.
 The effective reference uses the `ScreenPlayerOptions` section in patch
 `default/metrics.ini` and the parent `ScreenOptions` metrics. The row labels
 start at x=53, rows begin at y=127 with 28 px spacing, and Exit sits at y=353
-on the 640×480 layout. The layout uses those anchors and fits DeadSync's
-ten-slot scrolling window between the first row and Exit. The shared editor
-supplies the row order and navigation, including the optional arcade bindings.
-The reference's 16-row grouping, scrollbar, and artwork remain open. Timing
-scaling and workout overrides remain governed by DeadSync's rules.
+on the 640×480 layout. OpenITG uses an eight-slot viewport and tweens row
+movement over 150 ms. When players focus distant rows, each gets a window
+around their selection. Exit appears at its separate anchor when the window
+reaches the final row. The shared editor supplies the row order and navigation,
+including the optional arcade bindings and full-height wrapped rows.
+
+The scrollbar centers at `(34, 242)` and travels within 240 px. The thumb
+for each joined seat follows its position in the selectable row order over
+200 ms, with Exit at the bottom. The two thumbs share the width when they
+overlap. The marker artwork uses DeadSync's player colors. The reference's
+16-row grouping and artwork remain open. Long per-player explanations can
+still be compressed, as seen on Visual Delay. Timing scaling and workout
+overrides remain governed by DeadSync's rules.
 
 Tests cover P2-only perspective edits, profile requests, stage recovery and
 resubmission, and noteskin preview requests through both layouts. Actor checks
 cover separate versus focus and enabled choices, the arcade next-row affordance,
 and row anchors at 640×480 and 854×480.
 
+Viewport tests cover wrapped rows under both window sizes, reveal the separate
+Exit when P2 reaches it, and check retargeting an in-flight thumb. Vulkan
+captures at 640×480 and 854×480 show the overlapping thumbs on entry, the
+thumbs and rows in motion at 75 ms, and the two settled row windows. At Exit,
+P2's thumb reaches y=340 while P1 stays at y=122. A P2-only capture shows one
+full-width green thumb.
+
 At 854×480, nine warm runs of 8,000 actor builds with dev-profile theme libraries
 measured Simply Love at 60.6 µs before the change and 60.2 µs afterward in solo,
 and 78.7 µs and 79.3 µs in versus. The OpenITG layout measured 38.8 µs in solo
 and 48.9 µs in versus. These timings cover settled main-pane actor construction
 with bundled fonts.
+
+Two paired runs of the eight-slot viewport at 854×480 measured 26.3–26.4 μs
+for OpenITG solo actor construction and 33.6–33.9 μs in versus. The previous
+viewport measured 39.0–39.1 μs and 47.9–48.9 μs, respectively. The Simply Love
+control runs measured 61.0–61.4 μs in solo and 77.7–79.3 μs in versus across
+the two builds. At the start of the versus fixture, CPU composition went from
+80.9 μs and 53 draw ops to 70.8 μs and 39 draw ops. The 75 ms scroll sample
+went from 108.3 μs and 60 draw ops to 92.6 μs and 53 draw ops.
 
 ## Profile Picker
 

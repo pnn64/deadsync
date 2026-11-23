@@ -40,6 +40,8 @@ pub struct PlayerOptionsPage<'a, T, A> {
     pub title: &'static str,
     pub active: [bool; MAX_PLAYERS],
     pub selected_rows: [usize; MAX_PLAYERS],
+    /// Each seat's position in the selectable row order, including Exit.
+    pub scroll_position: [f32; MAX_PLAYERS],
     pub row_count: usize,
     pub visible_slots: usize,
     pub alpha: f32,
@@ -47,6 +49,14 @@ pub struct PlayerOptionsPage<'a, T, A> {
     pub help: &'a dyn Fn(usize, usize) -> Option<&'a Arc<str>>,
     /// Draw the row's live samples at the given screen-space player centers and Y.
     pub draw_preview: &'a dyn Fn(&mut Vec<A>, usize, [f32; MAX_PLAYERS], f32),
+}
+
+/// The mounted layout's scrolling window and row movement.
+#[derive(Clone, Copy)]
+pub struct PlayerOptionsViewport {
+    pub slots: u8,
+    pub separate_exit: bool,
+    pub row_tween_seconds: f32,
 }
 
 pub struct PlayerOptionsRow<'a, T> {

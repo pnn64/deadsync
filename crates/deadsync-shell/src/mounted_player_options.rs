@@ -14,7 +14,7 @@ use deadsync_theme::ThemeTransitions;
 use deadsync_theme::player_options::{
     PlayerOptionsEntry, PlayerOptionsSelection, ThemePlayerOptions,
 };
-use deadsync_theme_openitg::{OpenItgScreen, OpenItgTheme, push_player_options_actors};
+use deadsync_theme_openitg::{OpenItgPlayerOptions, OpenItgScreen, OpenItgTheme};
 use deadsync_theme_simply_love::{
     SimplyLoveEffect, screens::player_options, views::SimplyLoveVisualPolicyView,
 };
@@ -26,6 +26,7 @@ pub(crate) type SimplyLovePlayerOptionsState =
 pub(crate) struct PlayerOptionsState {
     editor: SimplyLovePlayerOptionsState,
     theme: ThemeFlag,
+    openitg: Option<OpenItgPlayerOptions>,
 }
 
 impl PlayerOptionsState {
@@ -33,9 +34,15 @@ impl PlayerOptionsState {
         theme: ThemeFlag,
         entry: PlayerOptionsEntry<Screen, PlayerOptionsView>,
     ) -> Self {
+        let mut editor = ActiveTheme::init_player_options(entry);
+        let openitg = (theme == ThemeFlag::OpenItg).then(|| {
+            player_options::set_viewport(&mut editor, OpenItgPlayerOptions::VIEWPORT);
+            OpenItgPlayerOptions::default()
+        });
         Self {
-            editor: ActiveTheme::init_player_options(entry),
+            editor,
             theme,
+            openitg,
         }
     }
 
@@ -84,20 +91,18 @@ impl PlayerOptionsState {
     }
 
     pub(crate) fn push_actors(
-        &self,
+        &mut self,
         actors: &mut Vec<Actor>,
         assets: &AssetManager,
         policy: SimplyLoveVisualPolicyView,
+        now: f64,
     ) {
-        match self.theme {
-            ThemeFlag::SimplyLove => {
-                ActiveTheme::push_player_options_actors(actors, &self.editor, assets, policy)
-            }
-            ThemeFlag::OpenItg => player_options::push_actors_with_layout(
-                actors,
-                &self.editor,
-                push_player_options_actors,
-            ),
+        if let Some(presentation) = &mut self.openitg {
+            player_options::push_actors_with_layout(actors, &self.editor, |actors, page| {
+                presentation.push_actors(actors, page, now)
+            });
+        } else {
+            ActiveTheme::push_player_options_actors(actors, &self.editor, assets, policy);
         }
     }
 

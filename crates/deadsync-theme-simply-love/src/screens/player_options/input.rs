@@ -161,9 +161,11 @@ pub fn update(
         state.policy,
     );
     let total_rows = state.pane().row_map.len();
+    let viewport = state.viewport;
     let (first_row_center_y, row_step) = row_layout_params();
     if total_rows == 0 {
         state.pane_mut().row_tweens.clear();
+        state.pane_mut().scroll_position = [0.0; PLAYER_SLOTS];
         state.pane_mut().layout_key = None;
     } else {
         let layout_key = RowLayoutKey {
@@ -174,13 +176,7 @@ pub fn update(
             row_step_bits: row_step.to_bits(),
         };
         if state.pane().row_tweens.len() != total_rows {
-            state.pane_mut().row_tweens = init_row_tweens(
-                &state.pane().row_map,
-                state.pane().selected_row,
-                active,
-                state.option_masks,
-                state.policy,
-            );
+            reset_viewport_rows(state);
             state.pane_mut().layout_key = Some(layout_key);
         } else if state.pane().layout_key != Some(layout_key) {
             let selected_row = state.pane().selected_row;
@@ -191,13 +187,17 @@ pub fn update(
                 selected_row,
                 active,
                 visibility,
+                viewport,
             );
+            if viewport.separate_exit {
+                pane.scroll_position = row_scroll_position(&pane.row_map, selected_row, visibility);
+            }
             pane.layout_key = Some(layout_key);
         }
         for tween in &mut state.pane_mut().row_tweens {
             if tween.t < 1.0 {
-                if ROW_TWEEN_SECONDS > 0.0 {
-                    tween.t = (tween.t + dt / ROW_TWEEN_SECONDS).min(1.0);
+                if viewport.row_tween_seconds > 0.0 {
+                    tween.t = (tween.t + dt / viewport.row_tween_seconds).min(1.0);
                 } else {
                     tween.t = 1.0;
                 }

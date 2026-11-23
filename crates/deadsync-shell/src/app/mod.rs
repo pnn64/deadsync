@@ -7982,11 +7982,12 @@ impl App {
                 visual_policy,
             ),
             CurrentScreen::PlayerOptions => {
-                if let Some(pos) = &self.state.screens.player_options_state {
+                if let Some(pos) = &mut self.state.screens.player_options_state {
                     pos.push_actors(
                         &mut actors,
                         &self.asset_manager,
                         visual_policy,
+                        arrow_effect_time_s,
                     );
                 }
             }

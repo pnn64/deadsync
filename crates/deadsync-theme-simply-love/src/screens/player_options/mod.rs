@@ -84,6 +84,7 @@ pub use profile::{
     SpeedMod, SpeedModType, apply_no_cmod_alternative, convert_speed_mod_to_type,
     effective_scroll_speed_with_alt, no_cmod_alt_speed_mod_type, scroll_speed_for_mod,
 };
+pub use layout::set_viewport;
 pub use render::{get_actors, push_actors, push_actors_with_layout};
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
@@ -510,6 +511,7 @@ fn init_state(
         active,
         [p1_masks, p2_masks],
         policy,
+        layout::DEFAULT_VIEWPORT,
     );
     let mut panes = [
         PaneState::new(main_row_map),
@@ -529,6 +531,7 @@ fn init_state(
         chart_steps_index,
         chart_difficulty_index,
         panes,
+        viewport: layout::DEFAULT_VIEWPORT,
         option_masks: [p1_masks, p2_masks],
         active_color_index,
         speed_mod: [speed_mod_p1, speed_mod_p2],

@@ -650,7 +650,7 @@ mod tests {
                             )) if options.perspective == Perspective::Hallway
                         )));
                         let mut actors = Vec::new();
-                        editor.push_actors(&mut actors, &app.asset_manager, Default::default());
+                        editor.push_actors(&mut actors, &app.asset_manager, Default::default(), 0.0);
                         let has_text = |text| actors.iter().any(|actor| matches!(actor,
                             deadlib_present::actors::Actor::Text { content, .. } if content.as_str() == text
                         ));

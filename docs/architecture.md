@@ -649,6 +649,10 @@ entry.
 OpenITG retains the current explanation and its reveal timing. It uses the
 engine bitmap text layout to measure wrapped paragraphs and reveal a glyph
 prefix while keeping the full paragraph's placement.
+The Player Options mount supplies the viewport size, exit-row placement mode,
+and row animation time to the shared editor. The editor exposes the joined
+seats' positions in the selectable row order with the prepared rows. OpenITG
+owns the scrollbar artwork and retargets each thumb on the shell's frame clock.
 OpenITG's basic and advanced Graphics pages share the same pending display
 settings as the combined Simply Love editor. The shell adapts host monitor
 capabilities to the theme contract, whose video mode records come from

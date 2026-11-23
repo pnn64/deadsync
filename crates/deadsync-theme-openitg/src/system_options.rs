@@ -9,7 +9,7 @@ use deadsync_theme::views::{
     SystemOptionsRow, SystemOptionsServiceRow, SystemOptionsTiming,
 };
 
-use crate::presentation::{ACCENT, INK, Layout, quad};
+use crate::presentation::{ACCENT, INK, Layout, LinearMotion, quad};
 use choice_layout::{ChoiceLayout, CursorLabel, TextMetrics};
 use help::OptionsHelp;
 
@@ -86,48 +86,6 @@ impl OpenItgSystemOptions {
         }
         self.first = first;
         self.thumb.retarget([progress], now, SCROLLBAR_SECONDS);
-    }
-}
-
-#[derive(Clone, Copy)]
-struct LinearMotion<const N: usize> {
-    from: [f32; N],
-    target: [f32; N],
-    started: f64,
-}
-
-impl<const N: usize> Default for LinearMotion<N> {
-    fn default() -> Self {
-        Self::at([0.0; N])
-    }
-}
-
-impl<const N: usize> LinearMotion<N> {
-    const fn at(target: [f32; N]) -> Self {
-        Self {
-            from: target,
-            target,
-            started: 0.0,
-        }
-    }
-
-    fn sample(self, now: f64, duration: f64) -> [f32; N] {
-        let elapsed = now - self.started;
-        if elapsed >= duration || self.from == self.target {
-            return self.target;
-        }
-        let t = (elapsed.max(0.0) / duration) as f32;
-        std::array::from_fn(|index| {
-            (self.target[index] - self.from[index]).mul_add(t, self.from[index])
-        })
-    }
-
-    fn retarget(&mut self, target: [f32; N], now: f64, duration: f64) {
-        if self.target != target {
-            self.from = self.sample(now, duration);
-            self.target = target;
-            self.started = now;
-        }
     }
 }
 

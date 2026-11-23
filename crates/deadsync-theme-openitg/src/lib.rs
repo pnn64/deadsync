@@ -18,7 +18,7 @@ pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, push_evaluation_overvi
 pub use gameplay::GAMEPLAY_HUD;
 pub use menu::MenuState;
 pub use play_selection::{PlaySelectionCarousel, push_profile_load_actors};
-pub use player_options::push_player_options_actors;
+pub use player_options::OpenItgPlayerOptions;
 pub use profile_picker::push_profile_picker_actors;
 pub use select_music::{
     WHEEL_BANNER_FADE, WheelBannerFrame, WheelBannerMotion, push_select_course_actors,

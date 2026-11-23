@@ -10,6 +10,48 @@ pub(crate) const MUTED: [f32; 3] = [0.57, 0.65, 0.74];
 pub(crate) const ACCENT: [f32; 3] = [1.0, 0.69, 0.25];
 
 #[derive(Clone, Copy)]
+pub(crate) struct LinearMotion<const N: usize> {
+    from: [f32; N],
+    pub(crate) target: [f32; N],
+    started: f64,
+}
+
+impl<const N: usize> Default for LinearMotion<N> {
+    fn default() -> Self {
+        Self::at([0.0; N])
+    }
+}
+
+impl<const N: usize> LinearMotion<N> {
+    pub(crate) const fn at(target: [f32; N]) -> Self {
+        Self {
+            from: target,
+            target,
+            started: 0.0,
+        }
+    }
+
+    pub(crate) fn sample(self, now: f64, duration: f64) -> [f32; N] {
+        let elapsed = now - self.started;
+        if elapsed >= duration || self.from == self.target {
+            return self.target;
+        }
+        let t = (elapsed.max(0.0) / duration) as f32;
+        std::array::from_fn(|index| {
+            (self.target[index] - self.from[index]).mul_add(t, self.from[index])
+        })
+    }
+
+    pub(crate) fn retarget(&mut self, target: [f32; N], now: f64, duration: f64) {
+        if self.target != target {
+            self.from = self.sample(now, duration);
+            self.target = target;
+            self.started = now;
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 pub(crate) struct Layout {
     left: f32,
     top: f32,
