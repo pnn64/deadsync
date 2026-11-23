@@ -57,9 +57,32 @@ impl Layout {
         content: TextContent,
         rgba: [f32; 4],
     ) -> Actor {
-        let mut text = self.text(position, 0.5, content, 1.0, rgba);
+        self.bounded_label(position, 0.5, width, content, 1.0, rgba)
+    }
+
+    pub(crate) fn bounded_label(
+        self,
+        position: [f32; 2],
+        alignment: f32,
+        width: f32,
+        content: TextContent,
+        zoom: f32,
+        rgba: [f32; 4],
+    ) -> Actor {
+        let mut text = self.text(position, alignment, content, zoom, rgba);
         text.maxwidth(width * self.scale);
         text.build(0)
+    }
+
+    pub(crate) fn image(
+        self,
+        [x, y]: [f32; 2],
+        [width, height]: [f32; 2],
+        key: &std::sync::Arc<str>,
+        z: i16,
+    ) -> Actor {
+        let [x, y] = self.position(x, y);
+        deadlib_assets::present_dsl::cover_sprite(key.clone(), x, y, width, height, self.scale, z)
     }
 
     fn text(

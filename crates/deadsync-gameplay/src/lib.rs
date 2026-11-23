@@ -47,6 +47,7 @@ use twox_hash::XxHash64;
 pub mod course_progress;
 pub mod course_run;
 pub mod exit_route;
+pub mod music_wheel;
 pub mod practice;
 pub mod song_backgrounds;
 pub mod song_launch;

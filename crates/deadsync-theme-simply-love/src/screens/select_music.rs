@@ -3,12 +3,20 @@ use crate::fonts::machine_font_key;
 use crate::i18n;
 use crate::i18n::{tr, tr_fmt};
 use deadlib_assets::AssetManager;
+pub use deadsync_gameplay::music_wheel::MusicWheelEntry;
+use deadsync_gameplay::music_wheel::wheel_entry_index;
 use deadsync_config::null_or_die::GraphOrigin;
 use deadsync_config::theme::{
     BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicSeriesSource,
     SelectMusicSort, SyncGraphMode,
 };
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_theme::FontRole;
+use deadsync_theme::select_music::{
+    SELECT_MUSIC_DIFFICULTY_ROWS, SELECT_MUSIC_WHEEL_ROWS, SelectMusicDifficultyRow,
+    SelectMusicPlayerView, SelectMusicPrompt, SelectMusicSongView, SelectMusicView,
+    SelectMusicWheelRow,
+};
 use null_or_die::GraphOrientation;
 
 use crate::color;
@@ -1216,21 +1224,6 @@ const fn saved_sort(sort: WheelSortMode) -> Option<SelectMusicSort> {
     })
 }
 
-#[derive(Clone, Debug)]
-pub enum MusicWheelEntry {
-    PackHeader {
-        name: Arc<str>,
-        original_index: usize,
-        banner_path: Option<Arc<Path>>,
-        song_count: usize,
-        pack_key: Option<Arc<str>>,
-        /// Set on both a series header and its child pack headers. A series
-        /// header is distinguished by its absent `pack_key`.
-        parent_series: Option<Arc<str>>,
-    },
-    Song(Arc<SongData>),
-}
-
 enum MediaPathSource {
     SongBanner(Arc<SongData>),
     SongCdTitle(Arc<SongData>),
@@ -1245,53 +1238,6 @@ impl MediaPathSource {
             Self::SongCdTitle(song) => song.cdtitle_path.as_deref(),
             Self::Shared(path) => Some(path),
         }
-    }
-}
-
-impl MusicWheelEntry {
-    #[must_use]
-    pub fn pack_key(&self) -> Option<&str> {
-        match self {
-            Self::PackHeader {
-                pack_key: Some(key),
-                ..
-            } => Some(key.as_ref()),
-            _ => None,
-        }
-    }
-
-    /// Stable identity for an openable pack section. Real packs use their
-    /// directory group name so duplicate `DisplayTitle` values remain
-    /// distinct; virtual sort sections fall back to their visible name.
-    /// Series headers return `None` so a parent with the same name as a child
-    /// pack cannot capture pack-focus lookups.
-    #[must_use]
-    pub fn section_key(&self) -> Option<&str> {
-        match self {
-            Self::PackHeader {
-                pack_key: Some(key),
-                ..
-            } => Some(key.as_ref()),
-            Self::PackHeader {
-                name,
-                parent_series: None,
-                ..
-            } => Some(name.as_ref()),
-            Self::PackHeader { .. } | Self::Song(_) => None,
-        }
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn is_series_header(&self) -> bool {
-        matches!(
-            self,
-            Self::PackHeader {
-                pack_key: None,
-                parent_series: Some(_),
-                ..
-            }
-        )
     }
 }
 
@@ -2477,6 +2423,135 @@ fn close_song_delete_prompt(state: &mut State) {
 /// song (not a pack header). Used to resolve its per-song SMX pad background.
 pub fn highlighted_song(state: &State) -> Option<Arc<SongData>> {
     selected_song_arc(state)
+}
+
+fn difficulty_rows<'a>(
+    state: &'a State,
+    song: Option<&'a Arc<SongData>>,
+) -> ([SelectMusicDifficultyRow<'a>; SELECT_MUSIC_DIFFICULTY_ROWS], [usize; MAX_PLAYERS]) {
+    let chart_type = state.session.play_style.chart_type();
+    let cached_song = song.filter(|song| {
+        state
+            .cached_song
+            .as_ref()
+            .is_some_and(|cached| Arc::ptr_eq(cached, song))
+            && state.cached_chart_type == chart_type
+    });
+    let edits = cached_song
+        .and_then(|song| {
+            state.cached_edits.as_ref().filter(|cache| {
+                Arc::ptr_eq(&cache.song, song) && cache.chart_type == chart_type
+            })
+        })
+        .map_or(&[][..], |cache| cache.indices.as_slice());
+    let count = NUM_STANDARD_DIFFICULTIES + edits.len();
+    let selections = if song.is_some() {
+        [state.selected_steps_index, state.p2_selected_steps_index]
+    } else {
+        [state.preferred_difficulty_index, state.p2_preferred_difficulty_index]
+    }
+    .map(|index| index.min(count - 1));
+    let focus = if state.session.play_style.is_versus() {
+        selections[0].max(selections[1])
+    } else {
+        selections[0]
+    };
+    let first = focus.saturating_sub(SELECT_MUSIC_DIFFICULTY_ROWS - 1);
+
+    let rows = std::array::from_fn(|slot| {
+        let step_index = first + slot;
+        let chart = cached_song.and_then(|song| {
+            chart_ix_for_steps_index(&state.cached_standard_chart_ixs, step_index, edits)
+                .and_then(|chart_ix| song.charts.get(chart_ix))
+        });
+        SelectMusicDifficultyRow { step_index, chart }
+    });
+    (rows, selections)
+}
+
+/// Read the wheel and prepared chart and media data without cloning songs or rebuilding caches.
+pub fn select_music_view<'a>(
+    state: &'a State,
+    stage_number: usize,
+    loaded_banner: Option<&'a Arc<str>>,
+) -> SelectMusicView<'a> {
+    let translated = state.music_wheel.translated_titles;
+    let rows = if state.entries.is_empty() {
+        [None; SELECT_MUSIC_WHEEL_ROWS]
+    } else {
+        std::array::from_fn(|slot| {
+            let offset = slot as isize - (SELECT_MUSIC_WHEEL_ROWS / 2) as isize;
+            let index = wheel_entry_index(state.selected_index, offset, state.entries.len());
+            let entry = &state.entries[index];
+            Some(match entry {
+                MusicWheelEntry::Song(song) => SelectMusicWheelRow {
+                    title: song.display_title(translated),
+                    song_count: None,
+                    expanded: false,
+                },
+                MusicWheelEntry::PackHeader {
+                    name, song_count, ..
+                } => SelectMusicWheelRow {
+                    title: name,
+                    song_count: Some(*song_count),
+                    expanded: if entry.is_series_header() {
+                        state.expanded_series_name.as_deref() == Some(name.as_ref())
+                    } else {
+                        entry.section_key().is_some_and(|key| {
+                            state.expanded_pack_name.as_deref() == Some(key)
+                        })
+                    },
+                },
+            })
+        })
+    };
+    let song = match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Song(song)) => Some(song),
+        _ => None,
+    };
+    let play_style = state.session.play_style;
+    let charts = immediate_selected_charts(state, play_style);
+    let (difficulty_rows, step_indexes) = difficulty_rows(state, song);
+    let prompt = if state.reload_ui.is_some() || delayed_selection_updates_blocked(state) {
+        SelectMusicPrompt::Hidden
+    } else {
+        match state.song_launch_prompt {
+            SongLaunchPrompt::Hidden => SelectMusicPrompt::Hidden,
+            SongLaunchPrompt::OfferOptions => SelectMusicPrompt::OfferOptions,
+            SongLaunchPrompt::EnteringOptions => SelectMusicPrompt::EnteringOptions,
+        }
+    };
+    SelectMusicView {
+        rows,
+        wheel_offset: state.wheel_offset_from_selection,
+        selection_elapsed: state.time_since_selection_change,
+        song: song.map(|song| SelectMusicSongView {
+            title: song.display_title(translated),
+            subtitle: song.display_subtitle(translated),
+            artist: if translated && !song.translit_artist.is_empty() {
+                &song.translit_artist
+            } else {
+                &song.artist
+            },
+            display_bpm: &song.display_bpm,
+        }),
+        banner_texture: loaded_banner.filter(|key| {
+            state.policy.media.show_banners && key.as_ref() == state.current_banner_key.as_ref()
+        }),
+        players: std::array::from_fn(|side| {
+            let slot = if play_style.is_versus() { side } else { 0 };
+            SelectMusicPlayerView {
+                joined: state.session.joined[side],
+                name: state.profiles.display_names[side].as_ref(),
+                chart: charts[slot],
+                step_index: step_indexes[slot],
+            }
+        }),
+        difficulty_rows,
+        stage_number: state.policy.presentation.show_stage_display.then_some(stage_number),
+        music_rate: state.session.music_rate,
+        prompt,
+    }
 }
 
 fn song_entry_index(entries: &[MusicWheelEntry], target_song: &Arc<SongData>) -> Option<usize> {
@@ -4357,13 +4432,9 @@ fn music_wheel_change(state: &mut State, dist: isize, sound: WheelChangeSound) {
         return;
     }
 
-    if dist > 0 {
-        state.selected_index = (state.selected_index + 1) % num_entries;
-        state.wheel_offset_from_selection += 1.0;
-    } else if dist < 0 {
-        state.selected_index = (state.selected_index + num_entries - 1) % num_entries;
-        state.wheel_offset_from_selection -= 1.0;
-    }
+    let direction = dist.signum();
+    state.selected_index = wheel_entry_index(state.selected_index, direction, num_entries);
+    state.wheel_offset_from_selection += direction as f32;
     state.time_since_selection_change = 0.0;
     // Audio belongs to the wheel movement, not the final selected index of the
     // next update. Two presses between frames must play two independent clicks.
@@ -13730,81 +13801,17 @@ pub fn push_actors(
     let lst_cy = screen_center_y() + 67.0;
     actors.push(act!(quad: align(0.5, 0.5): xy(lst_cx, lst_cy): setsize(32.0, 152.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
 
-    const VISIBLE_STEPS_SLOTS: usize = 5;
-    let (steps_song, sel_p1, sel_p2) = match entry_opt {
-        Some(MusicWheelEntry::Song(song)) => (
-            Some(song),
-            state.selected_steps_index,
-            state.p2_selected_steps_index,
-        ),
-        _ => (
-            None,
-            state.preferred_difficulty_index,
-            state.p2_preferred_difficulty_index,
-        ),
+    let steps_song = match entry_opt {
+        Some(MusicWheelEntry::Song(song)) => Some(song),
+        _ => None,
     };
-    let steps_cache_matches = match steps_song {
-        Some(song) => {
-            state
-                .cached_song
-                .as_ref()
-                .is_some_and(|cached_song| Arc::ptr_eq(cached_song, song))
-                && state.cached_chart_type == target_chart_type
-        }
-        None => false,
-    };
-    let edit_indices: &[usize] = if steps_cache_matches {
-        state
-            .cached_edits
-            .as_ref()
-            .and_then(|cache| {
-                let song = steps_song?;
-                (Arc::ptr_eq(&cache.song, song) && cache.chart_type == target_chart_type)
-                    .then_some(cache.indices.as_slice())
-            })
-            .unwrap_or(&[])
-    } else {
-        &[]
-    };
-    let list_len = if steps_song.is_some() {
-        NUM_STANDARD_DIFFICULTIES + edit_indices.len()
-    } else {
-        NUM_STANDARD_DIFFICULTIES
-    };
-    let sel_p1 = sel_p1.min(list_len.saturating_sub(1));
-    let sel_p2 = sel_p2.min(list_len.saturating_sub(1));
-    let focus_sel = if is_versus {
-        sel_p1.max(sel_p2)
-    } else {
-        sel_p1
-    };
-    let top_index = if list_len > VISIBLE_STEPS_SLOTS {
-        // Simply Love: keep Edit charts off-screen until you scroll past Expert.
-        // Once you're in Edit charts, keep the selected chart in the bottom slot and
-        // shift the other difficulties upward as you move deeper.
-        focus_sel
-            .saturating_sub(VISIBLE_STEPS_SLOTS - 1)
-            .min(list_len - VISIBLE_STEPS_SLOTS)
-    } else {
-        0
-    };
-
-    for slot in 0..VISIBLE_STEPS_SLOTS {
+    const VISIBLE_STEPS_SLOTS: usize = SELECT_MUSIC_DIFFICULTY_ROWS;
+    let (difficulty_rows, [sel_p1, sel_p2]) = difficulty_rows(state, steps_song);
+    let top_index = difficulty_rows[0].step_index;
+    for (slot, row) in difficulty_rows.into_iter().enumerate() {
         let y = (slot as i32 - 2) as f32 * 30.0;
         actors.push(act!(quad: align(0.5, 0.5): xy(lst_cx, lst_cy + y): setsize(28.0, 28.0): z(121): diffuse(0.059, 0.059, 0.059, 1.0)));
-        let idx = top_index + slot;
-        if idx >= list_len {
-            continue;
-        }
-        let chart = if steps_cache_matches {
-            steps_song.and_then(|song| {
-                chart_ix_for_steps_index(&state.cached_standard_chart_ixs, idx, edit_indices)
-                    .and_then(|chart_ix| song.charts.get(chart_ix))
-            })
-        } else {
-            None
-        };
-        if let Some(chart) = chart {
+        if let Some(chart) = row.chart {
             let c = color::difficulty_rgba_with_scheme(
                 &chart.difficulty,
                 state.active_color_index,
@@ -14054,6 +14061,17 @@ pub fn push_actors(
         ));
     }
 
+    push_select_music_overlays(actors, state, asset_manager, visual_policy, true);
+}
+
+/// Draw the existing auxiliary screens over whichever wheel layout the shell mounted.
+pub fn push_select_music_overlays(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    show_launch_prompt: bool,
+) {
     if let Some(reload) = &state.reload_ui {
         push_reload_overlay(actors, reload, state.active_color_index);
         return;
@@ -14248,7 +14266,7 @@ pub fn push_actors(
     }
 
     // Simply Love ScreenSelectMusic out transition: "Press &START; for options"
-    if state.song_launch_prompt != SongLaunchPrompt::Hidden {
+    if show_launch_prompt && state.song_launch_prompt != SongLaunchPrompt::Hidden {
         actors.push(act!(quad:
             align(0.0, 0.0): xy(0.0, 0.0):
             zoomto(screen_width(), screen_height()):
@@ -15324,6 +15342,52 @@ mod tests {
         let fallback_b = banner_texture_key(&state);
         assert_eq!(fallback_a.as_ref(), "banner12.png");
         assert!(Arc::ptr_eq(&fallback_a, &fallback_b));
+    }
+
+    #[test]
+    fn shared_select_music_view_keeps_the_focused_song_and_stage_prompt() {
+        use super::MusicWheelEntry;
+
+        let mut state = init_placeholder();
+        let selected = test_song("First chart");
+        state.entries = vec![
+            MusicWheelEntry::PackHeader {
+                name: Arc::from("Pack"),
+                original_index: 0,
+                banner_path: None,
+                song_count: 2,
+                pack_key: Some(Arc::from("Pack")),
+                parent_series: None,
+            },
+            MusicWheelEntry::Song(Arc::clone(&selected)),
+            MusicWheelEntry::Song(test_song("Second chart")),
+        ];
+        state.selected_index = 1;
+        state.selected_steps_index = 3;
+        state.session.joined = [false, true];
+        state.expanded_pack_name = Some(Arc::from("Pack"));
+        state.current_banner_key = Arc::from("selected/banner");
+        state.policy.media.show_banners = true;
+        state.policy.presentation.show_stage_display = true;
+        super::sync_song_launch_prompt(&mut state, super::SongLaunchPrompt::OfferOptions);
+
+        let view = super::select_music_view(&state, 4, Some(&state.current_banner_key));
+        assert_eq!(view.rows[0].unwrap().title, "Pack");
+        assert!(view.rows[6].unwrap().expanded);
+        assert_eq!(view.rows[7].unwrap().title, "First chart");
+        assert_eq!(view.rows[8].unwrap().title, "Second chart");
+        assert_eq!(view.song.unwrap().title, selected.title);
+        assert_eq!(view.stage_number, Some(4));
+        assert_eq!(view.prompt, super::SelectMusicPrompt::OfferOptions);
+        assert!(view.players[1].joined);
+        assert_eq!(view.players[1].step_index, 3);
+        assert!(Arc::ptr_eq(view.banner_texture.unwrap(), &state.current_banner_key));
+
+        state.test_input_overlay_visible = true;
+        let unrelated: Arc<str> = Arc::from("other/banner");
+        let view = super::select_music_view(&state, 4, Some(&unrelated));
+        assert_eq!(view.prompt, super::SelectMusicPrompt::Hidden);
+        assert!(view.banner_texture.is_none());
     }
 
     #[test]

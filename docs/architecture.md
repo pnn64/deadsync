@@ -600,9 +600,13 @@ feedback, animation, and actor composition.
 
 The `Theme` setting selects Simply Love or OpenITG at startup. Both title menus
 use the same session start, cabinet permissions, and navigation commands. The
-OpenITG mounts its title and Player Options screens. Other screens currently
-use Simply Love. See [the OpenITG progress record](openitg-theme.md) for the
-reference, implemented behavior, and fidelity checks.
+OpenITG mounts its title, Player Options, and base Select Music layouts. The
+music wheel shares the game's catalog entries and circular index, and both
+layouts use the same prepared difficulty window. The alternate base layout
+borrows song, chart, player, and banner data from the existing controller.
+The shell continues to use that controller for input, previews, and launching
+stages. See [the OpenITG progress record](openitg-theme.md) for the reference,
+implemented behavior, and fidelity checks.
 
 Player Options mounts through the selected theme for song and course entry,
 input, updates, and actor composition. The shell supplies device and asset

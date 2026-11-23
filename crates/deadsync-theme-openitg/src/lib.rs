@@ -3,6 +3,7 @@
 mod menu;
 mod player_options;
 mod presentation;
+mod select_music;
 
 use deadlib_present::actors::Actor;
 use deadsync_profile::requests::ProfileRequest;
@@ -12,10 +13,11 @@ use deadsync_theme::{
 
 pub use menu::MenuState;
 pub use player_options::PlayerOptionsState;
+pub use select_music::push_select_music_actors;
 
 type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;
 
-/// Presentation identifiers for the title menu and its destinations.
+/// Presentation identifiers for the OpenITG screens and their destinations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpenItgScreen {
     Menu,

@@ -2,8 +2,9 @@
 
 Choose **OpenITG** in **Options → System → Theme**, then restart DeadSync.
 The equivalent setting is `Theme=OpenITG` under `[Options]` in `deadsync.ini`.
-Simply Love is the default. The selection mounts that theme's title and Player
-Options. Both themes continue into the same DeadSync session flow.
+Simply Love is the default. The selection mounts that theme's title, Player
+Options, and base Select Music layout. Both themes use the same DeadSync
+session flow.
 
 ## Reference
 
@@ -62,7 +63,27 @@ Focused tests cover recovery and resubmission from both themes, P2 profile
 saves, two-player confirmation, and matched session and audio rate changes.
 The actor checks cover row anchors at 640×480 and 854×480.
 
-System Options, Select Music, gameplay presentation, and Evaluation still use
-Simply Love. End-to-end parity across two complete presentations, visual
-comparison against a running reference, and distribution validation remain
-open.
+## Select Music
+
+The base layout draws the live wheel, selected song, prepared banner, player
+and difficulty information, and the shared launch prompt. Left and right still
+browse the same catalog. Song confirmation, previews, chart shortcuts, and
+the second Start into Player Options use the existing controller. Search,
+sort, lobby, pad tools, and other auxiliary screens keep their existing
+presentation over the wheel.
+
+The source comparison uses the home release's effective `ScreenSelectMusic`
+and `MusicWheel` metrics and `WheelBase.cpp`. The layout uses the source
+wheel center `(212, 222)`, 15 rows on a radius-200 arc, the banner at
+`(480, 112)`, and a 20.5 px difficulty-row pitch. Actor tests check the 640×480
+and 854×480 layouts. The renderer uses original graphics. Exact 3D perspective,
+banner framing, score panes, and special-item presentation are pending.
+
+Circular indexing now gives short wheels the same wrap order in navigation,
+media requests, score requests, and drawing. An index-only benchmark on lists
+of 3, 128, 701, and 10,000 entries measured medians of 4.78 ns before and
+5.60 ns after the fix. Full-frame timing remains to be measured.
+
+System Options, gameplay presentation, and Evaluation still use Simply Love.
+End-to-end parity across two complete presentations, visual comparison against
+a running reference, and distribution validation remain open.

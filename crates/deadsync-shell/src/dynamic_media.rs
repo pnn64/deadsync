@@ -604,6 +604,10 @@ impl DynamicMedia {
         self.wheel_item_background_keys.recycle_stale(release_keys);
     }
 
+    pub(crate) fn loaded_banner_key(&self) -> Option<&Arc<str>> {
+        self.current_dynamic_banner.as_ref().map(|banner| &banner.key)
+    }
+
     pub fn set_banner(
         &mut self,
         assets: &mut AssetManager,

@@ -7490,6 +7490,26 @@ fn simply_love_select_flow_uses_shell_prepared_session_state() {
 }
 
 #[test]
+fn both_music_wheels_use_the_game_catalog_and_keep_auxiliary_screens() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let game = production_source(&root.join("crates/deadsync-gameplay/src/music_wheel.rs"));
+    let theme = root.join("crates/deadsync-theme-simply-love/src/screens");
+    let selection = read_source(theme.join("select_music.rs")).expect("Select Music source");
+    let wheel = production_source(&theme.join("components/select_music/music_wheel.rs"));
+    let openitg = production_source(&root.join("crates/deadsync-theme-openitg/src/select_music.rs"));
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).expect("application source");
+    assert!(game.contains("pub enum MusicWheelEntry"));
+    assert!(selection.contains("pub use deadsync_gameplay::music_wheel::MusicWheelEntry"));
+    assert!(selection.contains("wheel_entry_index(state.selected_index, direction,"));
+    assert!(wheel.contains("wheel_entry_index(p.selected_index,"));
+    assert!(openitg.contains("SelectMusicView<'_>"));
+    assert!(app.contains("select_music::select_music_view("));
+    assert!(app.contains("deadsync_theme_openitg::push_select_music_actors("));
+    assert!(app.contains("select_music::push_select_music_overlays("));
+    assert!(selection.contains("push_select_music_overlays(actors, state, asset_manager, visual_policy, true)"));
+}
+
+#[test]
 fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let flow =

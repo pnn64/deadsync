@@ -40,6 +40,7 @@ use crate::course::{
 #[cfg(test)]
 use crate::course::score_info_from_stage;
 use deadsync_gameplay::course_run::CourseEntry;
+use deadsync_gameplay::music_wheel::MusicWheelEntry;
 use deadsync_profile_gameplay::results::{EvaluationStage, course_summary_records};
 #[cfg(test)]
 use deadsync_gameplay::course_run::{CourseRun, CourseStageRuntime};
@@ -1089,10 +1090,10 @@ fn app_path_view(path: PathBuf) -> AppPathView {
     }
 }
 
-fn wheel_banner_path(entry: Option<&select_music::MusicWheelEntry>) -> Option<PathBuf> {
+fn wheel_banner_path(entry: Option<&MusicWheelEntry>) -> Option<PathBuf> {
     match entry {
-        Some(select_music::MusicWheelEntry::Song(song)) => song.banner_path.clone(),
-        Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
+        Some(MusicWheelEntry::Song(song)) => song.banner_path.clone(),
+        Some(MusicWheelEntry::PackHeader { banner_path, .. }) => {
             banner_path.as_deref().map(Path::to_path_buf)
         }
         None => None,
@@ -1945,7 +1946,7 @@ fn prepare_music_profile_selection(
             let selection = retained[side].or_else(|| {
                 selected.guest[side].then(|| {
                     let first = match state.entries.get(state.selected_index) {
-                        Some(select_music::MusicWheelEntry::Song(song)) => song
+                        Some(MusicWheelEntry::Song(song)) => song
                             .best_steps_index(selected.play_style.chart_type(), 0)
                             .unwrap_or(preferred_difficulties[side]),
                         _ => preferred_difficulties[side],
@@ -4914,10 +4915,10 @@ impl App {
                             && state.banner_high_quality_requested
                         {
                             match state.entries.get(state.selected_index) {
-                                Some(select_music::MusicWheelEntry::Song(song)) => {
+                                Some(MusicWheelEntry::Song(song)) => {
                                     song.banner_path.as_deref()
                                 }
-                                Some(select_music::MusicWheelEntry::PackHeader {
+                                Some(MusicWheelEntry::PackHeader {
                                     banner_path,
                                     ..
                                 }) => banner_path.as_deref(),
@@ -4940,10 +4941,10 @@ impl App {
                             && state.banner_high_quality_requested
                         {
                             match state.entries.get(state.selected_index) {
-                                Some(select_music::MusicWheelEntry::Song(song)) => {
+                                Some(MusicWheelEntry::Song(song)) => {
                                     song.banner_path.as_deref()
                                 }
-                                Some(select_music::MusicWheelEntry::PackHeader {
+                                Some(MusicWheelEntry::PackHeader {
                                     banner_path,
                                     ..
                                 }) => banner_path.as_deref(),
@@ -7933,13 +7934,22 @@ impl App {
                 );
             }
             CurrentScreen::SelectMusic => {
-                select_music::push_actors(
-                    &mut actors,
-                    &self.state.screens.select_music_state,
-                    &self.asset_manager,
-                    self.state.session.played_stages.len() + 1,
-                    visual_policy,
-                );
+                let state = &self.state.screens.select_music_state;
+                let stage_number = self.state.session.played_stages.len() + 1;
+                match self.state.screens.menu_state.theme_flag() {
+                    config::theme::ThemeFlag::SimplyLove => select_music::push_actors(
+                        &mut actors, state, &self.asset_manager, stage_number, visual_policy,
+                    ),
+                    config::theme::ThemeFlag::OpenItg => {
+                        let view = select_music::select_music_view(
+                            state, stage_number, self.dynamic_media.loaded_banner_key(),
+                        );
+                        deadsync_theme_openitg::push_select_music_actors(&mut actors, view);
+                        select_music::push_select_music_overlays(
+                            &mut actors, state, &self.asset_manager, visual_policy, false,
+                        );
+                    }
+                }
             }
             CurrentScreen::SelectCourse => select_course::push_actors(
                 &mut actors,
@@ -10240,7 +10250,7 @@ impl App {
                     let desired_steps_index =
                         self.state.screens.select_music_state.selected_steps_index;
 
-                    if let Some(select_music::MusicWheelEntry::Song(song)) = self
+                    if let Some(MusicWheelEntry::Song(song)) = self
                         .state
                         .screens
                         .select_music_state
@@ -10374,7 +10384,7 @@ impl App {
                 .entries
                 .get(self.state.screens.select_music_state.selected_index)
             {
-                Some(select_music::MusicWheelEntry::Song(song)) => song.cdtitle_path.clone(),
+                Some(MusicWheelEntry::Song(song)) => song.cdtitle_path.clone(),
                 _ => None,
             };
             commands.push(Command::SetCdTitle(cdtitle_path));
@@ -10387,7 +10397,7 @@ impl App {
                 .entries
                 .get(self.state.screens.select_music_state.selected_index)
             {
-                Some(select_music::MusicWheelEntry::Song(song)) => {
+                Some(MusicWheelEntry::Song(song)) => {
                     let chart_type = profile_session.play_style.chart_type();
                     song.chart_for_steps_index(
                         chart_type,
@@ -10416,7 +10426,7 @@ impl App {
                     .entries
                     .get(self.state.screens.select_music_state.selected_index)
                 {
-                    Some(select_music::MusicWheelEntry::Song(song)) => {
+                    Some(MusicWheelEntry::Song(song)) => {
                         let chart_type = profile_session.play_style.chart_type();
                         song.chart_for_steps_index(
                             chart_type,
@@ -11214,7 +11224,7 @@ mod tests {
     #[test]
     fn wheel_banner_path_owns_shared_pack_banner_for_shell_command() {
         let banner: Arc<Path> = Arc::from(PathBuf::from("Packs/Test/banner.png"));
-        let entry = select_music::MusicWheelEntry::PackHeader {
+        let entry = MusicWheelEntry::PackHeader {
             name: Arc::from("Test"),
             original_index: 0,
             banner_path: Some(Arc::clone(&banner)),
@@ -11394,7 +11404,7 @@ mod tests {
         song.charts = vec![test_chart_with(chart_type, "Hard", "hard")];
 
         let mut state = select_music::init_placeholder();
-        state.entries = vec![select_music::MusicWheelEntry::Song(Arc::new(song))];
+        state.entries = vec![MusicWheelEntry::Song(Arc::new(song))];
         apply_music_preferences(&mut state, 2, 2);
 
         assert_eq!(state.selected_steps_index, 3);
@@ -11441,7 +11451,7 @@ mod tests {
         }
         let mut state = select_music::init_placeholder();
         sync_profile_music_session(&mut state, session);
-        state.entries = vec![select_music::MusicWheelEntry::Song(Arc::new(song))];
+        state.entries = vec![MusicWheelEntry::Song(Arc::new(song))];
         state.selected_steps_index = 4;
         state.preferred_difficulty_index = 4;
         state.p2_selected_steps_index = 1;
