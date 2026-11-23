@@ -206,7 +206,7 @@ use deadsync_rules::timing as timing_rules;
 use deadsync_theme::views::{
     AppPathView, AppPathsView, AudioOptionsView, DensityGraphView as DensityGraphSource,
     GameplayReplayView, GameplayStageIntro, GameplayStageView, NoteskinCatalogView,
-    SmxAssignmentView,
+    ScoreboxLocalView, ScoreboxMachineView, ScoreboxSideView, SmxAssignmentView,
 };
 use deadsync_theme::color::ThemeJudgmentPalette;
 use deadsync_theme::evaluation::ThemeEvaluation;
@@ -224,8 +224,8 @@ use deadsync_theme_simply_love::views::{
     EvaluationContextView, EvaluationInitView, EvaluationPlayerView, EvaluationPolicyView,
     EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource,
     MusicWheelRuntimeRequest, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest,
-    MusicWheelSlotRuntimeView, PostSelectStageView, ScoreboxLocalView, ScoreboxMachineView,
-    ScoreboxSideView, ScreenBarBackgroundView, SelectCourseContextView, SelectCoursePolicyView,
+    MusicWheelSlotRuntimeView, PostSelectStageView, ScreenBarBackgroundView, SelectCourseContextView,
+    SelectCoursePolicyView,
     SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
     SelectMusicSessionView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
     SimplyLoveGrooveStatsService, SimplyLoveVisualPolicyView, VisualBackgroundView,

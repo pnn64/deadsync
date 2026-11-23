@@ -613,7 +613,9 @@ An alternate page renderer lazily reads the controller's visible row order,
 current values, and availability through `deadsync-theme`. The music wheel
 shares the game's catalog entries and circular index, and both layouts use the
 same prepared difficulty window. The alternate base layout borrows song, chart,
-player, and banner data from the existing controller.
+player, and banner data from the existing controller. The shell prepares one
+score snapshot per physical side for both themes. The shared view checks the
+current chart hash before exposing its local machine record or personal best.
 The course browser uses the same wheel geometry with the prepared course
 rating, track list, and records. On Profile Load, the shell installs the
 worker's completed song or course state and hands its destination to the

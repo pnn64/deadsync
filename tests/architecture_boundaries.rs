@@ -5445,6 +5445,8 @@ fn select_music_leaderboard_refresh_is_shell_owned() {
     .expect("Select Music source should be readable");
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
+    let shared_views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("shared theme views should be readable");
     let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
@@ -5455,8 +5457,8 @@ fn select_music_leaderboard_refresh_is_shell_owned() {
     assert!(screen.contains("state.scoreboxes"));
     assert!(screen.contains("SimplyLoveOnlineRequest::RefreshPlayerLeaderboard"));
     assert!(
-        views.contains("pub struct ScoreboxSideView")
-            && views.contains("pub online_active: bool")
+        shared_views.contains("pub struct ScoreboxSideView")
+            && shared_views.contains("pub online_active: bool")
             && views.contains("pub scoreboxes: Option<[ScoreboxSideView; 2]>")
     );
     assert!(effects.contains("RefreshPlayerLeaderboard {"));
@@ -5493,17 +5495,23 @@ fn simply_love_scorebox_uses_shell_prepared_runtime_data() {
     assert!(scorebox.contains("runtime.leaderboards.as_ref()"));
     assert!(scorebox.contains("runtime.pane_filter"));
 
-    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
-        .expect("Simply Love views should be readable");
+    let views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("shared theme views should be readable");
     for contract in [
         "pub struct ScoreboxLocalView",
         "pub struct ScoreboxMachineView",
         "pub struct ScoreboxSideView",
-        "pub struct SelectMusicScoreboxRequest",
         "pub pane_filter: deadsync_score::SelectMusicScoreboxFilter",
     ] {
         assert!(views.contains(contract));
     }
+    let runtime_views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love runtime views should be readable");
+    assert!(runtime_views.contains("pub struct SelectMusicScoreboxRequest"));
+    let selection = read_source(root.join("crates/deadsync-theme/src/select_music.rs"))
+        .expect("shared Select Music view should be readable");
+    assert!(selection.contains("pub local_records: ScoreboxLocalRecords<'a>"));
+    assert!(scorebox.contains("runtime.local_records(chart_hash)"));
 
     let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -10916,7 +10924,9 @@ fn concrete_theme_resources_live_in_simply_love() {
             "FONT_ASSETS",
             "SRPG10_",
             "pub mod i18n",
-            "scorebox",
+            "pub mod scorebox",
+            "crate::scorebox::",
+            "\"scorebox\"",
             "step_stats",
         ] {
             assert!(

@@ -5,13 +5,14 @@ use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_theme::select_music::{
-    SELECT_MUSIC_WHEEL_ROWS, SelectCourseItem, SelectCourseView, SelectMusicPrompt,
-    SelectMusicView, SelectMusicWheelRow,
+    SELECT_MUSIC_WHEEL_ROWS, SelectCourseItem, SelectCourseView, SelectMusicPlayerView,
+    SelectMusicPrompt, SelectMusicView, SelectMusicWheelRow,
 };
 use std::cell::RefCell;
 use std::f32::consts::{PI, TAU};
 
 const WHEEL_CENTER: [f32; 2] = [212.0, 222.0];
+const HEADER_Y: f32 = 23.0;
 const WHEEL_RADIUS: f32 = 200.0;
 const WHEEL_CURVE_X: f32 = 24.0;
 // The reference retains two additional positions outside the visible rows.
@@ -62,6 +63,11 @@ pub fn push_select_music_actors(actors: &mut Vec<Actor>, view: SelectMusicView<'
         "NO SONGS",
     );
     push_difficulties(actors, layout, &view);
+    for (side, player) in view.players.iter().enumerate() {
+        if player.joined {
+            push_chart_pane(actors, layout, side, player);
+        }
+    }
     push_footer(actors, layout, &view);
     push_prompt(actors, layout, view.prompt);
 }
@@ -294,8 +300,107 @@ fn push_difficulties(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusic
     }
 }
 
+fn push_chart_pane(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    side: usize,
+    player: &SelectMusicPlayerView<'_>,
+) {
+    let x = 280.0 + side as f32 * 165.0;
+    let side_label = if side == 0 { "P1" } else { "P2" };
+    let Some(chart) = player.chart else {
+        if !player.name.is_empty() {
+            actors.push(layout.bounded_label(
+                [x + 79.5, 389.0],
+                0.5,
+                141.0,
+                shared_text(player.name),
+                0.80,
+                opaque(INK),
+            ));
+        }
+        return;
+    };
+    actors.push(layout.panel(x, 344.0, [159.0, 77.0], [0.10, 0.16, 0.23, 1.0], 2));
+    actors.push(layout.panel(x, 344.0, [159.0, 1.0], opaque(ACCENT), 3));
+    actors.push(layout.label(
+        [x + 8.0, 355.0],
+        0.0,
+        side_label.into(),
+        0.73,
+        opaque(ACCENT),
+    ));
+    if !player.name.is_empty() && player.name != side_label {
+        actors.push(layout.bounded_label(
+            [x + 151.0, 355.0],
+            1.0,
+            112.0,
+            shared_text(player.name),
+            0.79,
+            opaque(INK),
+        ));
+    }
+    let stats = &chart.stats;
+    for (index, (label, count)) in [
+        ("TAPS", stats.total_steps),
+        ("JUMPS", stats.jumps),
+        ("HANDS", stats.hands),
+        ("HOLDS", stats.holds),
+        ("ROLLS", stats.rolls),
+        ("MINES", chart.mines_nonfake),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let label = TextContent::inline_format(format_args!("{label} {count}"))
+            .unwrap_or_else(|| TextContent::inline_u32(count));
+        actors.push(layout.bounded_label(
+            [
+                x + 8.0 + (index % 3) as f32 * 49.0,
+                369.0 + (index / 3) as f32 * 11.0,
+            ],
+            0.0,
+            46.0,
+            label,
+            0.63,
+            opaque(MUTED),
+        ));
+    }
+    actors.push(layout.panel(x + 8.0, 388.0, [143.0, 1.0], [0.28, 0.36, 0.46, 1.0], 3));
+    if let Some(record) = player.local_records.machine {
+        actors.push(layout.label([x + 8.0, 397.0], 0.0, "MACHINE".into(), 0.64, opaque(MUTED)));
+        if !record.name.is_empty() {
+            actors.push(layout.bounded_label(
+                [x + 100.0, 397.0],
+                1.0,
+                44.0,
+                shared_text(&record.name),
+                0.73,
+                opaque(INK),
+            ));
+        }
+        push_chart_score(actors, layout, x, 397.0, record.percent());
+    }
+    if let Some(record) = player.local_records.personal {
+        actors.push(layout.label(
+            [x + 8.0, 411.0],
+            0.0,
+            "PERSONAL BEST".into(),
+            0.64,
+            opaque(MUTED),
+        ));
+        push_chart_score(actors, layout, x, 411.0, record.percent());
+    }
+}
+
+fn push_chart_score(actors: &mut Vec<Actor>, layout: Layout, x: f32, y: f32, percent: f64) {
+    let score = TextContent::inline_format(format_args!("{percent:.2}%"))
+        .expect("normalized percentages fit inline");
+    actors.push(layout.label([x + 151.0, y], 1.0, score, 0.81, opaque(ACCENT)));
+}
+
 fn push_footer(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'_>) {
-    actors.push(layout.label([36.0, 32.0], 0.0, "SELECT MUSIC".into(), 1.55, opaque(INK)));
+    actors.push(layout.label([36.0, HEADER_Y], 0.0, "SELECT MUSIC".into(), 1.55, opaque(INK)));
     actors.push(layout.panel(36.0, 425.0, [568.0, 1.0], [0.32, 0.40, 0.48, 1.0], 2));
     if let Some(stage) = view.stage_number {
         let label = TextContent::inline_format(format_args!("STAGE {stage}"))
@@ -306,19 +411,6 @@ fn push_footer(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'
         let label = TextContent::inline_format(format_args!("{:.2}x", view.music_rate))
             .unwrap_or_else(|| "RATE".into());
         actors.push(layout.label([604.0, 447.0], 1.0, label, 0.9, opaque(ACCENT)));
-    }
-    let [first, second] = &view.players;
-    for (side, x) in [(first, 368.0), (second, 517.0)] {
-        if side.joined && !side.name.is_empty() {
-            actors.push(layout.bounded_label(
-                [x, 389.0],
-                0.5,
-                135.0,
-                shared_text(side.name),
-                0.80,
-                opaque(INK),
-            ));
-        }
     }
 }
 
@@ -361,7 +453,7 @@ pub fn push_select_course_actors(actors: &mut Vec<Actor>, view: SelectCourseView
         view.selection_elapsed,
         "NO COURSES",
     );
-    actors.push(layout.label([36.0, 32.0], 0.0, "PICK A COURSE".into(), 1.55, opaque(INK)));
+    actors.push(layout.label([36.0, HEADER_Y], 0.0, "PICK A COURSE".into(), 1.55, opaque(INK)));
     actors.push(layout.panel(36.0, 425.0, [568.0, 1.0], [0.32, 0.40, 0.48, 1.0], 2));
     if let Some(course) = &view.item {
         push_course_details(actors, layout, course);
@@ -484,7 +576,7 @@ mod tests {
     use deadlib_present::actors::SizeSpec;
     use deadlib_present::space::{Metrics, with_current_metrics};
     use deadsync_theme::select_music::{
-        SelectMusicDifficultyRow, SelectMusicPlayerView, SelectMusicSongView, SelectMusicWheelRow,
+        SelectMusicDifficultyRow, SelectMusicSongView, SelectMusicWheelRow,
     };
     use std::sync::Arc;
 
@@ -511,6 +603,7 @@ mod tests {
                 name: "",
                 chart: None,
                 step_index: 0,
+                local_records: Default::default(),
             }; 2],
             difficulty_rows: std::array::from_fn(|index| SelectMusicDifficultyRow {
                 step_index: index,

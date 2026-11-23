@@ -109,7 +109,7 @@ impl Layout {
         actor.xy(x, y);
         actor.halign(alignment);
         actor.zoom(zoom * self.scale);
-        actor.font("game");
+        actor.font("miso");
         actor.settext(content);
         actor.diffuse(rgba);
         actor.z(16);

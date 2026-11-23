@@ -47,6 +47,78 @@ pub struct AudioPlaybackView {
     pub music_position_seconds: f64,
 }
 
+/// A normalized local score from the selected chart's score snapshot.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ScoreboxLocalView {
+    pub score_10000: f64,
+    pub failed: bool,
+}
+
+impl ScoreboxLocalView {
+    pub fn percent(self) -> f64 {
+        deadsync_score::leaderboard::scorebox_score_percent(self.score_10000)
+    }
+}
+
+/// The cabinet record and its holder for the selected chart.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ScoreboxMachineView {
+    pub name: String,
+    pub score_10000: f64,
+    pub failed: bool,
+}
+
+impl ScoreboxMachineView {
+    pub fn percent(&self) -> f64 {
+        deadsync_score::leaderboard::scorebox_score_percent(self.score_10000)
+    }
+}
+
+/// Local ITG records ready to present for a matching chart.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ScoreboxLocalRecords<'a> {
+    pub machine: Option<&'a ScoreboxMachineView>,
+    pub personal: Option<ScoreboxLocalView>,
+}
+
+/// Shell-prepared scores and leaderboards for one physical player side.
+#[derive(Clone, Debug, Default)]
+pub struct ScoreboxSideView {
+    pub joined: bool,
+    pub chart_hash: Option<String>,
+    /// Any online leaderboard service can serve this side.
+    pub online_active: bool,
+    pub show_ex_score: bool,
+    pub pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+    pub display_name: Arc<str>,
+    pub groovestats_username: Arc<str>,
+    pub player_initials: Arc<str>,
+    pub local_itg: Option<ScoreboxLocalView>,
+    pub local_ex: Option<ScoreboxLocalView>,
+    pub local_hard_ex: Option<ScoreboxLocalView>,
+    pub local_itl: Option<ScoreboxLocalView>,
+    pub machine_itg: Option<ScoreboxMachineView>,
+    pub leaderboards: Option<CachedPlayerLeaderboardData>,
+}
+
+impl ScoreboxSideView {
+    /// Borrow the displayable local records if the snapshot belongs to the current chart.
+    pub fn local_records(&self, chart_hash: Option<&str>) -> ScoreboxLocalRecords<'_> {
+        if chart_hash.is_none() || self.chart_hash.as_deref() != chart_hash {
+            return ScoreboxLocalRecords::default();
+        }
+        ScoreboxLocalRecords {
+            machine: self
+                .machine_itg
+                .as_ref()
+                .filter(|score| !score.failed || score.score_10000 > 0.0),
+            personal: self
+                .local_itg
+                .filter(|score| !score.failed || score.score_10000 > 0.0),
+        }
+    }
+}
+
 /// One shell-resolved application path and its platform-friendly label.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AppPathView {

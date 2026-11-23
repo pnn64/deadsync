@@ -17,6 +17,7 @@ use deadsync_theme::select_music::{
     SelectMusicPlayerView, SelectMusicPrompt, SelectMusicSongView, SelectMusicView,
     SelectMusicWheelRow,
 };
+use deadsync_theme::views::ScoreboxSideView;
 use null_or_die::GraphOrientation;
 
 use crate::color;
@@ -35,7 +36,7 @@ use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, input as scre
 use crate::views::{
     MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
     MusicWheelSideRuntimeRequest, MusicWheelSlotRuntimeRequest, ProfilePickerView,
-    ScoreboxSideView, SelectMusicDownloadView, SelectMusicHistorySideView, SelectMusicHistoryView,
+    SelectMusicDownloadView, SelectMusicHistorySideView, SelectMusicHistoryView,
     SelectMusicInitView, SelectMusicLastPlayedView, SelectMusicLeaderboardRequest,
     SelectMusicPadProfileView, SelectMusicPlaylistView, SelectMusicPolicyView,
     SelectMusicProfileView, SelectMusicRuntimeView, SelectMusicScoreboxRequest,
@@ -2548,11 +2549,15 @@ pub fn select_music_view<'a>(
         }),
         players: std::array::from_fn(|side| {
             let slot = if play_style.is_versus() { side } else { 0 };
+            let joined = state.session.joined[side];
+            let chart = charts[slot].filter(|_| joined);
             SelectMusicPlayerView {
-                joined: state.session.joined[side],
+                joined,
                 name: state.profiles.display_names[side].as_ref(),
-                chart: charts[slot],
+                chart,
                 step_index: step_indexes[slot],
+                local_records: state.scoreboxes[side]
+                    .local_records(chart.map(|chart| chart.short_hash.as_str())),
             }
         }),
         difficulty_rows,
@@ -15061,12 +15066,16 @@ mod tests {
                 .expect("test song should have a selected chart")
                 .short_hash
                 .clone();
-        let scorebox = |chart_hash: String| crate::views::ScoreboxSideView {
+        let scorebox = |chart_hash: String| deadsync_theme::views::ScoreboxSideView {
             joined: true,
             chart_hash: Some(chart_hash),
-            machine_itg: Some(crate::views::ScoreboxMachineView {
+            machine_itg: Some(deadsync_theme::views::ScoreboxMachineView {
                 name: "LEAK".to_string(),
                 score_10000: 9999.0,
+                failed: false,
+            }),
+            local_itg: Some(deadsync_theme::views::ScoreboxLocalView {
+                score_10000: 9876.0,
                 failed: false,
             }),
             ..Default::default()
@@ -15077,7 +15086,7 @@ mod tests {
             crate::views::SelectMusicRuntimeView {
                 scoreboxes: Some([
                     scorebox("previous-chart".to_string()),
-                    crate::views::ScoreboxSideView::default(),
+                    deadsync_theme::views::ScoreboxSideView::default(),
                 ]),
                 ..Default::default()
             },
@@ -15093,13 +15102,17 @@ mod tests {
                 .iter()
                 .any(|actor| actor_has_text(actor, "99.99%"))
         );
+        let stale = super::select_music_view(&state, 1, None).players[0];
+        assert!(stale.chart.is_some());
+        assert!(stale.local_records.machine.is_none());
+        assert!(stale.local_records.personal.is_none());
 
         super::sync_runtime_view(
             &mut state,
             crate::views::SelectMusicRuntimeView {
                 scoreboxes: Some([
-                    scorebox(current_hash),
-                    crate::views::ScoreboxSideView::default(),
+                    scorebox(current_hash.clone()),
+                    deadsync_theme::views::ScoreboxSideView::default(),
                 ]),
                 ..Default::default()
             },
@@ -15115,6 +15128,21 @@ mod tests {
                 .iter()
                 .any(|actor| actor_has_text(actor, "99.99%"))
         );
+
+        state.session.player_side = profile_data::PlayerSide::P2;
+        state.session.joined = [false, true];
+        super::sync_runtime_view(
+            &mut state,
+            crate::views::SelectMusicRuntimeView {
+                scoreboxes: Some([scorebox(current_hash.clone()), scorebox(current_hash)]),
+                ..Default::default()
+            },
+        );
+        let [p1, p2] = super::select_music_view(&state, 1, None).players;
+        assert!(p1.chart.is_none());
+        assert!(p1.local_records.machine.is_none());
+        assert_eq!(p2.local_records.machine.unwrap().name, "LEAK");
+        assert_eq!(p2.local_records.personal.unwrap().percent(), 98.76);
     }
 
     fn versus_scorebox_state(
@@ -15143,7 +15171,7 @@ mod tests {
                     .expect("versus test song should have a chart for each side")
                     .short_hash
                     .clone();
-            state.scoreboxes[side_idx] = crate::views::ScoreboxSideView {
+            state.scoreboxes[side_idx] = deadsync_theme::views::ScoreboxSideView {
                 joined: true,
                 chart_hash: Some(chart_hash),
                 online_active: true,
@@ -16541,8 +16569,8 @@ mod tests {
         fn side(
             hash: &str,
             leaderboards: deadsync_score::CachedPlayerLeaderboardData,
-        ) -> crate::views::ScoreboxSideView {
-            crate::views::ScoreboxSideView {
+        ) -> deadsync_theme::views::ScoreboxSideView {
+            deadsync_theme::views::ScoreboxSideView {
                 joined: true,
                 chart_hash: Some(hash.to_string()),
                 online_active: true,
@@ -16550,11 +16578,11 @@ mod tests {
                 ..Default::default()
             }
         }
-        fn sync(state: &mut super::State, p1: crate::views::ScoreboxSideView) {
+        fn sync(state: &mut super::State, p1: deadsync_theme::views::ScoreboxSideView) {
             super::sync_runtime_view(
                 state,
                 crate::views::SelectMusicRuntimeView {
-                    scoreboxes: Some([p1, crate::views::ScoreboxSideView::default()]),
+                    scoreboxes: Some([p1, deadsync_theme::views::ScoreboxSideView::default()]),
                     ..Default::default()
                 },
             );
@@ -16659,7 +16687,7 @@ mod tests {
         .expect("test song should have a selected chart")
         .short_hash
         .clone();
-        state.scoreboxes[0] = crate::views::ScoreboxSideView {
+        state.scoreboxes[0] = deadsync_theme::views::ScoreboxSideView {
             joined: true,
             chart_hash: Some(chart_hash),
             online_active: true,
@@ -17159,11 +17187,11 @@ mod tests {
                     ..Default::default()
                 }),
                 scoreboxes: Some([
-                    crate::views::ScoreboxSideView {
+                    deadsync_theme::views::ScoreboxSideView {
                         online_active: true,
                         ..Default::default()
                     },
-                    crate::views::ScoreboxSideView::default(),
+                    deadsync_theme::views::ScoreboxSideView::default(),
                 ]),
                 leaderboard: Some(crate::views::SelectMusicLeaderboardView::default()),
                 unlock_downloads_available: Some(true),

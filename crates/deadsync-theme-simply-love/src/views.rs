@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use deadsync_theme::views::{
     AudioTimingView, CourseGraphStageView, CourseStageView, DensityGraphView, EvaluationView,
-    FrameStatsSample, SelectedCourseView, TimingHealthView,
+    FrameStatsSample, ScoreboxSideView, SelectedCourseView, TimingHealthView,
 };
 
 /// Concrete evaluation view used by the Simply Love screens.
@@ -501,42 +501,6 @@ pub struct EvaluationInitView {
     pub stage_duration_seconds: f32,
     pub fail_stream_progress: [Option<(u32, u32)>; 2],
     pub context: EvaluationContextView,
-}
-
-/// One normalized local score used by Simply Love's selected-chart scorebox.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct ScoreboxLocalView {
-    pub score_10000: f64,
-    pub failed: bool,
-}
-
-/// One normalized machine record used by Simply Love's selected-chart pane.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct ScoreboxMachineView {
-    pub name: String,
-    pub score_10000: f64,
-    pub failed: bool,
-}
-
-/// Shell-prepared score and leaderboard data for one Select Music side.
-#[derive(Clone, Debug, Default)]
-pub struct ScoreboxSideView {
-    pub joined: bool,
-    pub chart_hash: Option<String>,
-    /// Any online leaderboard service (GrooveStats, BoogieStats, or ArrowCloud)
-    /// can serve this side.
-    pub online_active: bool,
-    pub show_ex_score: bool,
-    pub pane_filter: deadsync_score::SelectMusicScoreboxFilter,
-    pub display_name: Arc<str>,
-    pub groovestats_username: Arc<str>,
-    pub player_initials: Arc<str>,
-    pub local_itg: Option<ScoreboxLocalView>,
-    pub local_ex: Option<ScoreboxLocalView>,
-    pub local_hard_ex: Option<ScoreboxLocalView>,
-    pub local_itl: Option<ScoreboxLocalView>,
-    pub machine_itg: Option<ScoreboxMachineView>,
-    pub leaderboards: Option<deadsync_score::CachedPlayerLeaderboardData>,
 }
 
 /// Selected player-slot charts whose scorebox data shell should prepare.

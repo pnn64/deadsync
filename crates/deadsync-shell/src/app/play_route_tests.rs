@@ -150,6 +150,30 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     }
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
+    let openitg = app.state.screens.menu_state.theme_flag() == ThemeFlag::OpenItg;
+    if openitg {
+        let font = actors
+            .iter()
+            .find_map(|actor| match actor {
+                Actor::Text {
+                    content,
+                    offset,
+                    font,
+                    ..
+                } if content.as_str() == "TAPS 6" && offset[0] > 400.0 => Some(*font),
+                _ => None,
+            })
+            .expect("the selected chart renders its tap count on P2's side");
+        assert!(
+            app.asset_manager
+                .with_font(font, |font| {
+                    "TAPS 6"
+                        .chars()
+                        .all(|character| font.glyph_map.contains_key(&character))
+                })
+                .unwrap_or(false)
+        );
+    }
 
     // The first Start confirms the chart and offers the options window.
     press(app, event_loop, VirtualAction::p2_start);
@@ -164,7 +188,6 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
         .unwrap()
         .selection();
     assert_eq!(selection.song.title, SONG_TITLE);
-    let openitg = app.state.screens.menu_state.theme_flag() == ThemeFlag::OpenItg;
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert_eq!(actor_tree_has_text(&actors, "PLAYER OPTIONS"), openitg);
     // The editor's first Start moves focus to Exit and the next starts play.

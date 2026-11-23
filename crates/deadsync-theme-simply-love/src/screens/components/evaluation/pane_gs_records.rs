@@ -6,12 +6,12 @@ use crate::color;
 use crate::screens::components::shared::gs_scorebox::{
     entries_with_local_self_state, srpg_logo_texture_key,
 };
-use crate::views::ScoreboxSideView;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadsync_config::theme::SrpgVariant;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
+use deadsync_theme::views::ScoreboxSideView;
 
 use super::utils::pane_origin_x;
 
@@ -281,7 +281,7 @@ impl OnlineRecordsPresentation {
 
 impl Default for OnlineRecordsPresentation {
     fn default() -> Self {
-        Self::new(&crate::views::ScoreboxSideView::default())
+        Self::new(&deadsync_theme::views::ScoreboxSideView::default())
     }
 }
 

@@ -1,5 +1,6 @@
 //! Read-only data for presenting a music wheel and its current selection.
 
+use crate::views::ScoreboxLocalRecords;
 use deadsync_chart::ChartData;
 use deadsync_core::input::MAX_PLAYERS;
 use std::sync::Arc;
@@ -30,6 +31,7 @@ pub struct SelectMusicPlayerView<'a> {
     pub name: &'a str,
     pub chart: Option<&'a ChartData>,
     pub step_index: usize,
+    pub local_records: ScoreboxLocalRecords<'a>,
 }
 
 #[derive(Clone, Copy)]

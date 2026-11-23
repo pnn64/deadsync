@@ -29,7 +29,7 @@ legacy DirectX 9 development headers and libraries. The build host has the
 ## Title screen
 
 - The theme renders original DeadSync graphics with the reference column and
-  animation timings. It uses shared text rendering, the bundled game font,
+  animation timings. It uses shared text rendering, the bundled Miso font,
   and DeadSync's common interaction cues.
 - Home mode offers Play, Options, Find Content, Exit, and Shutdown when enabled.
   Free and Pay mode expose Play and use the same host credit rules as Simply
@@ -158,7 +158,26 @@ and `MusicWheel` metrics and `WheelBase.cpp`. The layout uses the source
 wheel center `(212, 222)`, 15 rows on a radius-200 arc, the banner at
 `(480, 112)`, and a 20.5 px difficulty-row pitch. Actor tests check the 640×480
 and 854×480 layouts. The renderer uses original graphics. Exact 3D perspective,
-banner framing, score panes, and special-item presentation are pending.
+banner framing, and special-item presentation are pending.
+
+Each joined side's chart pane shows steps, jumps, hands, holds, rolls, and
+judgable mines. The machine record and holder and the personal best use the
+same local ITG snapshots as Simply Love. When the selected chart changes, the
+previous record disappears until the matching snapshot is ready. The panes
+appear for joined sides and display personal bests when the profile has one.
+The effective patched `ScreenSelectMusic` enables panes while hiding the older
+integer score fields. `PaneDisplay.cpp` supplies the six counts and two local
+records. The source's pane entry and exit animation and separate song
+popularity indicator remain open.
+
+Vulkan captures at 640×480 and 854×480 verified the title and two-player
+music wheel with the bundled Miso font, with a fixture supplying both local
+records. The title, wheel rows, and chart counts render with letter and number
+glyphs. The configured play route also checks the P2 pane against the chart's
+actual tap count and checks that its font contains the displayed characters.
+At 854×480, two sets of seven 8,000-frame batches measured median actor
+construction at 22.5–23.3 µs before and 35.7–36.6 µs with both panes and
+their records. The layout builds 90 actors for this fixture, up from 60.
 
 Circular indexing now gives short wheels the same wrap order in navigation,
 media requests, score requests, and drawing. An index-only benchmark on lists
