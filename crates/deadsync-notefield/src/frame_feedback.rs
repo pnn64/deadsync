@@ -1476,11 +1476,18 @@ mod tests {
         };
         let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
         let mut hold_reference = None;
-        for (transformed, captured) in [(false, false), (true, false), (true, true)] {
+        for (transformed, captured, direct) in [
+            (false, false, false),
+            (false, false, true),
+            (false, true, false),
+            (true, false, false),
+            (true, true, false),
+        ] {
             let mut req = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
             req.visual.mini_percent = 100.0;
             req.options.judgment_animation = crate::TapJudgmentAnimation::Still;
             req.capture_requests.judgment = captured;
+            req.capture_requests.direct_judgment = direct;
             let prepared = prepare_notefield(&req).unwrap();
             let hud = NotefieldHudFrameView {
                 combo: None,
@@ -1523,12 +1530,25 @@ mod tests {
                 &mut CapturedActorScratch::with_capacities(16, 8),
             );
             assert_eq!(result.judgment_actors.is_some(), captured);
-            let frame = deadlib_present::compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-                &[ActorSegment::new(&actors).with_flat_draws(&draws, None)], [0.0; 4], &metrics,
-                &deadlib_present::font::FontMap::default(), 0.1,
-                &mut TextLayoutCache::default(), &mut ComposeScratch::default(),
-                &Textures, &deadlib_present::actors::ActorResourceArena::new(0),
-            );
+            let build = |segment| {
+                deadlib_present::compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                    &[segment], [0.0; 4], &metrics,
+                    &deadlib_present::font::FontMap::default(), 0.1,
+                    &mut TextLayoutCache::default(), &mut ComposeScratch::default(),
+                    &Textures, &deadlib_present::actors::ActorResourceArena::new(0),
+                )
+            };
+            if let Some([source]) = &result.judgment_actors {
+                let capture = build(ActorSegment::new(source));
+                assert!(matches!(&capture.ops[..], [deadlib_render_core::DrawOp::Sprite(run)]
+                    if run.texture_handle == 1 && run.instance_count == 1));
+            }
+            assert_eq!(result.judgment_draw_range.is_some(), direct);
+            if let Some(range) = result.judgment_draw_range {
+                assert!(matches!(&draws[range], [FlatDraw::Sprite(sprite)]
+                    if sprite.source.texture_key() == Some("tap")));
+            }
+            let frame = build(ActorSegment::new(&actors).with_flat_draws(&draws, None));
             assert_eq!(frame.sprite_instances.len(), 2, "tap and independent hold");
             for op in &frame.ops {
                 let deadlib_render_core::DrawOp::Sprite(run) = op else {

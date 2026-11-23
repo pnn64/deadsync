@@ -311,11 +311,12 @@ pub fn compose_notefield_hud<S>(
 
     let judgment_capture_start = actors.len();
     let judgment_draw_start = draws.len();
+    let mut judgment_draw_range = None;
     if let Some(judgment) = frame.judgment.as_ref() {
         let tap_draws = compose_judgment(draws, request, prepared, judgment);
+        // Only the tap Judgment belongs to that child and its wrapper chain.
+        // Hold feedback remains part of the whole-Player draw.
         if let Some(transform) = judgment.tap.as_ref().and_then(|tap| tap.transform) {
-            // Hold results are separate Player children. Only the tap Judgment
-            // belongs inside this root and its AddWrapperState chain.
             actors.extend(draws.drain(tap_draws).map(actor_from_flat_draw));
             transform_hud_actors(
                 actors,
@@ -325,10 +326,11 @@ pub fn compose_notefield_hud<S>(
                 transform,
                 &mut capture_scratch.judgment_transform,
             );
+        } else if request.capture_requests.judgment {
+            actors.extend(draws.drain(tap_draws).map(actor_from_flat_draw));
+        } else if request.capture_requests.direct_judgment && !tap_draws.is_empty() {
+            judgment_draw_range = Some(tap_draws);
         }
-    }
-    if request.capture_requests.judgment || request.capture_requests.player {
-        actors.extend(draws.drain(judgment_draw_start..).map(actor_from_flat_draw));
     }
     let judgment_actors = request
         .capture_requests
@@ -341,11 +343,9 @@ pub fn compose_notefield_hud<S>(
             )
         })
         .flatten();
-    let judgment_draw_range = request
-        .capture_requests
-        .direct_judgment
-        .then_some(judgment_draw_start..draws.len())
-        .filter(|range| !range.is_empty());
+    if request.capture_requests.player {
+        actors.extend(draws.drain(judgment_draw_start..).map(actor_from_flat_draw));
+    }
 
     NotefieldHudComposeResult {
         parts: NotefieldHudParts {

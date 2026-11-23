@@ -326,6 +326,10 @@ and authored callbacks that run between feedback phases. The wider live-scene
 suite passes 141 of 152 cases. Both judgment-tree cases now pass. The 11
 remaining failures also occur on the pre-change build.
 
+The shared notefield now limits both forms of a Judgment capture to tap
+feedback. The hold sprite and the held-miss indicator stay with the lane and
+remain available to whole-Player captures.
+
 In an optimized two-player combo draw benchmark, nine runs of one million
 frames gave medians of 65.1 ns for Simply Love before the change, 71.4 ns for
 Simply Love with the shared style input, and 247.2 ns for OpenITG with the
@@ -412,9 +416,20 @@ With song Lua set to Runtime, the 600-frame Quartz comparison averaged 8.57 ms
 in Simply Love on both builds. An OpenITG repeat after the test build finished
 averaged 8.74 ms before and 8.60 ms after. Its 95th percentile was 8.78 ms before
 and 8.67 ms after. These captures recorded zero audio underruns and zero buffer
-growth events. On the same executable, the corresponding OpenITG baked frame
-shows Quartz's authored Judgment proxy beside the built-in award. The Runtime
-capture still omits the proxy.
+growth events. That Quartz script queued zero tween time on its foreground.
+Runtime expired the foreground at its start beat, following the lifetime
+rule in OpenITG's and ITGmania's `Foreground.cpp`. The Baked path still
+omits this expiry rule.
+
+A Quartz foreground with three seconds of authored tween time drew the
+offset tap judgment in both Lua modes and both themes at 854×480. The
+shell regression checks the same behavior and confirms expiry in
+Runtime. In the early-hold Quartz capture, the lane badge and both tap
+judgments are visible after the capture fix. The copied hold badge is gone
+from both themes. The paired 600-frame Baked runs at 854×480 measured
+8.56 ms before and after in OpenITG and 8.56 ms before and 8.57 ms after
+in Simply Love. All four runs reported zero audio underruns or buffer
+growth events.
 
 ## Windows release verification
 

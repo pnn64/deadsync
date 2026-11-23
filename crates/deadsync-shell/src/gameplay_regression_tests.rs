@@ -4299,6 +4299,7 @@ return Def.ActorFrame{
             lua_dir.join("default.lua"),
             r#"
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(3) end,
     Def.ActorProxy{
         OnCommand=function(self)
             local hud = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("HUD_CHILD")
@@ -4324,7 +4325,7 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn root_judgment_proxies_reuse_retained_draws_in_both_themes() {
+    fn root_judgment_proxies_match_in_baked_and_runtime_playback() {
         let simfile = write_direct_hud_proxy_fixture("direct-judgment", "Judgment");
         with_session(
             profile_data::PlayStyle::Single,
@@ -4332,31 +4333,53 @@ return Def.ActorFrame{
             true,
             false,
             || {
-                space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
-                let mut state = build_compiled_test_state(
-                    &simfile,
-                    GameplayViewport::design(),
-                    GameplaySession::default(),
-                    std::array::from_fn(|_| profile_data::Profile::default()),
-                );
-                set_fixture_time(&mut state, 2.5);
-                add_sprite_core_feedback(&mut state, 0, 0, 100);
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(854, 480);
                 let assets = fixture_assets();
                 let mut actors = Vec::new();
-                for hud in [None, Some(deadsync_theme_openitg::GAMEPLAY_HUD)] {
-                    if let Some(hud) = hud {
-                        state.presentation.set_hud(hud);
-                    }
-                    actors.clear();
-                    let segments = crate::gameplay_runtime::push_actors(
-                        &mut actors,
-                        &mut state,
-                        &assets,
-                        screen_gameplay::ActorViewOverride::default(),
-                        123.0,
-                        deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                for live in [false, true] {
+                    let mut state = build_test_state_with_lua_mode(
+                        &simfile,
+                        GameplayViewport::new(854.0, 480.0),
+                        GameplaySession::default(),
+                        std::array::from_fn(|_| profile_data::Profile::default()),
+                        "Software",
+                        None,
+                        live,
                     );
-                    assert_eq!(segments.direct_proxy_count(), 2);
+                    assert_eq!(state.song_lua.is_some(), live);
+                    set_fixture_time(&mut state, 2.5);
+                    add_sprite_core_feedback(&mut state, 0, 0, 100);
+                    for hud in [None, Some(deadsync_theme_openitg::GAMEPLAY_HUD)] {
+                        if let Some(hud) = hud {
+                            state.presentation.set_hud(hud);
+                        }
+                        actors.clear();
+                        let segments = crate::gameplay_runtime::push_actors(
+                            &mut actors,
+                            &mut state,
+                            &assets,
+                            screen_gameplay::ActorViewOverride::default(),
+                            123.0,
+                            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                        );
+                        assert_eq!(segments.direct_proxy_count(), 2, "live={live}");
+                    }
+                    if live {
+                        set_fixture_time(&mut state, 3.5);
+                        add_sprite_core_feedback(&mut state, 0, 0, 100);
+                        actors.clear();
+                        let segments = crate::gameplay_runtime::push_actors(
+                            &mut actors,
+                            &mut state,
+                            &assets,
+                            screen_gameplay::ActorViewOverride::default(),
+                            123.0,
+                            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                        );
+                        assert_eq!(segments.direct_proxy_count(), 0, "foreground has expired");
+                    }
                 }
             },
         );
