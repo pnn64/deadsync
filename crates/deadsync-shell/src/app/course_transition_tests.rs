@@ -216,6 +216,32 @@ fn press_course_start(app: &mut App) {
 }
 
 #[test]
+fn openitg_course_wheel_draws_the_prepared_rating_and_tracklist() {
+    on_app_thread(|| {
+        let root = tempfile::tempdir().unwrap();
+        let mut app = test_app(root.path());
+        let (_, first_song, second_song) = prepare_course_wheel(&mut app, root.path(), false);
+        app.state.screens.menu_state =
+            crate::title_menu::InstalledMenu::new(config::theme::ThemeFlag::OpenItg, 2);
+        app.state.screens.current_screen = CurrentScreen::SelectCourse;
+        app.state.shell.transition = TransitionState::Idle;
+        let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+        let has_text = |label: &str| {
+            actors.iter().any(|actor| matches!(actor,
+                Actor::Text { content, .. } if content.as_str() == label
+            ))
+        };
+        let view = select_course::select_course_view(&app.state.screens.select_course_state, None);
+        let course = view.item.expect("prepared course");
+        assert!(has_text("PICK A COURSE"));
+        assert_eq!(course.title, "PR845 transition");
+        assert!(has_text(course.rating.expect("prepared rating")));
+        assert!(has_text(&first_song.title));
+        assert!(has_text(&second_song.title));
+    });
+}
+
+#[test]
 fn course_launch_uses_confirmed_rating_after_wheel_replacement() {
     on_app_thread(|| {
         with_session(

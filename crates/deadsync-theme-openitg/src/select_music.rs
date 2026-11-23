@@ -4,7 +4,10 @@ use crate::presentation::{ACCENT, HEIGHT, INK, Layout, MUTED, WIDTH, quad};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
 use deadlib_present::space::{screen_height, screen_width};
-use deadsync_theme::select_music::{SELECT_MUSIC_WHEEL_ROWS, SelectMusicPrompt, SelectMusicView};
+use deadsync_theme::select_music::{
+    SELECT_MUSIC_WHEEL_ROWS, SelectCourseItem, SelectCourseView, SelectMusicPrompt,
+    SelectMusicView, SelectMusicWheelRow,
+};
 use std::cell::RefCell;
 use std::f32::consts::{PI, TAU};
 
@@ -48,6 +51,22 @@ fn wheel_row(slot: usize, scroll_offset: f32) -> ([f32; 2], f32) {
 
 /// Draws the browsing wheel, banner, currently available charts, and launch feedback.
 pub fn push_select_music_actors(actors: &mut Vec<Actor>, view: SelectMusicView<'_>) {
+    let layout = push_backdrop(actors);
+    push_banner(actors, layout, &view);
+    push_wheel(
+        actors,
+        layout,
+        &view.rows,
+        view.wheel_offset,
+        view.selection_elapsed,
+        "NO SONGS",
+    );
+    push_difficulties(actors, layout, &view);
+    push_footer(actors, layout, &view);
+    push_prompt(actors, layout, view.prompt);
+}
+
+fn push_backdrop(actors: &mut Vec<Actor>) -> Layout {
     let (width, height) = (screen_width(), screen_height());
     let layout = Layout::centered(width, height);
     actors.push(quad(
@@ -57,14 +76,14 @@ pub fn push_select_music_actors(actors: &mut Vec<Actor>, view: SelectMusicView<'
         -20,
     ));
     actors.push(layout.panel(0.0, 0.0, [WIDTH, HEIGHT], [0.063, 0.087, 0.126, 1.0], -19));
-    push_banner(actors, layout, &view);
-    push_wheel(actors, layout, &view);
-    push_difficulties(actors, layout, &view);
-    push_footer(actors, layout, &view);
-    push_prompt(actors, layout, view.prompt);
+    layout
 }
 
-fn push_banner(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'_>) {
+fn push_banner_plate(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    texture: Option<&std::sync::Arc<str>>,
+) {
     let banner_left = BANNER_CENTER[0] - BANNER_SIZE[0] * 0.5;
     let banner_top = BANNER_CENTER[1] - BANNER_SIZE[1] * 0.5;
     actors.push(layout.panel(
@@ -74,7 +93,7 @@ fn push_banner(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'
         [0.10, 0.16, 0.23, 1.0],
         -7,
     ));
-    if let Some(key) = view.banner_texture {
+    if let Some(key) = texture {
         actors.push(layout.image(BANNER_CENTER, BANNER_SIZE, key, -6));
     }
     actors.push(layout.panel(
@@ -84,7 +103,10 @@ fn push_banner(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'
         [0.04, 0.07, 0.11, 0.88],
         0,
     ));
+}
 
+fn push_banner(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'_>) {
+    push_banner_plate(actors, layout, view.banner_texture);
     if let Some(song) = &view.song {
         actors.push(layout.bounded_label(
             [280.0, 168.0],
@@ -135,12 +157,19 @@ fn push_banner(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'
     }
 }
 
-fn push_wheel(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'_>) {
-    let phase = view.selection_elapsed.rem_euclid(1.0);
+fn push_wheel(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    rows: &[Option<SelectMusicWheelRow<'_>>; SELECT_MUSIC_WHEEL_ROWS],
+    wheel_offset: f32,
+    selection_elapsed: f32,
+    empty_text: &'static str,
+) {
+    let phase = selection_elapsed.rem_euclid(1.0);
     let pulse = 1.0 - (2.0 * phase - 1.0).abs();
-    for (index, row) in view.rows.iter().enumerate() {
+    for (index, row) in rows.iter().enumerate() {
         let Some(row) = row else { continue };
-        let ([x, y], depth) = wheel_row(index, view.wheel_offset);
+        let ([x, y], depth) = wheel_row(index, wheel_offset);
         let focused = index == SELECT_MUSIC_WHEEL_ROWS / 2;
         let section = row.song_count.is_some();
         let row_height = 22.0 * depth.clamp(0.45, 1.0);
@@ -198,11 +227,11 @@ fn push_wheel(actors: &mut Vec<Actor>, layout: Layout, view: &SelectMusicView<'_
             ));
         }
     }
-    if view.rows.iter().all(Option::is_none) {
+    if rows.iter().all(Option::is_none) {
         actors.push(layout.label(
             [83.0, WHEEL_CENTER[1]],
             0.0,
-            "NO SONGS".into(),
+            empty_text.into(),
             1.0,
             opaque(MUTED),
         ));
@@ -318,6 +347,135 @@ fn push_prompt(actors: &mut Vec<Actor>, layout: Layout, prompt: SelectMusicPromp
         *z = 1402;
     }
     actors.push(heading);
+}
+
+/// Present the course variant of the music wheel using its current rating and records.
+pub fn push_select_course_actors(actors: &mut Vec<Actor>, view: SelectCourseView<'_>) {
+    let layout = push_backdrop(actors);
+    push_banner_plate(actors, layout, view.banner_texture);
+    push_wheel(
+        actors,
+        layout,
+        &view.rows,
+        view.wheel_offset,
+        view.selection_elapsed,
+        "NO COURSES",
+    );
+    actors.push(layout.label([36.0, 32.0], 0.0, "PICK A COURSE".into(), 1.55, opaque(INK)));
+    actors.push(layout.panel(36.0, 425.0, [568.0, 1.0], [0.32, 0.40, 0.48, 1.0], 2));
+    if let Some(course) = &view.item {
+        push_course_details(actors, layout, course);
+    }
+    for (player, name) in view.player_names.into_iter().enumerate() {
+        if let Some(name) = name.filter(|name| !name.is_empty()) {
+            let x = 343.0 + player as f32 * 125.0;
+            actors.push(layout.bounded_label(
+                [x, 447.0],
+                0.0,
+                112.0,
+                shared_text(name),
+                0.79,
+                opaque(INK),
+            ));
+        }
+    }
+    if (view.music_rate - 1.0).abs() >= 0.005 {
+        let label = TextContent::inline_format(format_args!("{:.2}x", view.music_rate))
+            .unwrap_or_else(|| "RATE".into());
+        actors.push(layout.label([604.0, 447.0], 1.0, label, 0.9, opaque(ACCENT)));
+    }
+    push_prompt(actors, layout, view.prompt);
+}
+
+fn push_course_details(actors: &mut Vec<Actor>, layout: Layout, course: &SelectCourseItem<'_>) {
+    actors.push(layout.bounded_label(
+        [280.0, 168.0],
+        0.0,
+        330.0,
+        shared_text(course.title),
+        1.10,
+        opaque(INK),
+    ));
+    if !course.author.is_empty() {
+        actors.push(layout.bounded_label(
+            [280.0, 189.0],
+            0.0,
+            325.0,
+            shared_text(course.author),
+            0.83,
+            opaque(MUTED),
+        ));
+    }
+    for (x, label, value, width) in [
+        (280.0, "SONGS", course.songs, 88.0),
+        (380.0, "BPM", course.bpm, 137.0),
+        (529.0, "TIME", course.length, 98.0),
+    ] {
+        let text = TextContent::inline_format(format_args!("{label} {value}"))
+            .unwrap_or_else(|| shared_text(value));
+        actors.push(layout.bounded_label([x, 211.0], 0.0, width, text, 0.83, opaque(INK)));
+    }
+    if let Some(rating) = course.rating {
+        let fill = if course.rating_focused {
+            [0.33, 0.27, 0.16, 1.0]
+        } else {
+            [0.19, 0.30, 0.39, 1.0]
+        };
+        actors.push(layout.panel(280.0, 226.0, [324.0, 22.0], fill, 2));
+        actors.push(layout.bounded_label(
+            [442.0, 237.0],
+            0.5,
+            238.0,
+            shared_text(rating),
+            0.94,
+            opaque(ACCENT),
+        ));
+        if course.can_change_rating {
+            for (x, arrow) in [(297.0, "<"), (587.0, ">")] {
+                actors.push(layout.label([x, 237.0], 0.5, arrow.into(), 0.90, opaque(ACCENT)));
+            }
+        }
+    }
+    for (index, track) in course.tracks.iter().enumerate() {
+        let Some(track) = track else { continue };
+        let y = 261.0 + index as f32 * 20.0;
+        actors.push(layout.panel(280.0, y - 9.0, [324.0, 18.0], [0.10, 0.16, 0.23, 1.0], 2));
+        actors.push(layout.bounded_label(
+            [289.0, y],
+            0.0,
+            250.0,
+            track.title.into(),
+            0.81,
+            opaque(INK),
+        ));
+        actors.push(layout.bounded_label(
+            [591.0, y],
+            1.0,
+            45.0,
+            track.meter.into(),
+            0.81,
+            opaque(ACCENT),
+        ));
+    }
+    if !course.description.is_empty() {
+        actors.push(layout.paragraph(
+            [280.0, 379.0],
+            [324.0, 41.0],
+            course.description.into(),
+            0.77,
+            opaque(MUTED),
+        ));
+    }
+    for (x, label, record) in [
+        (36.0, "MACHINE", course.machine_record),
+        (185.0, "PERSONAL", course.player_record),
+    ] {
+        if let Some([name, score]) = record {
+            let value = TextContent::inline_format(format_args!("{label} {name} {score}"))
+                .unwrap_or_else(|| shared_text(score));
+            actors.push(layout.bounded_label([x, 447.0], 0.0, 142.0, value, 0.78, opaque(MUTED)));
+        }
+    }
 }
 
 #[cfg(test)]

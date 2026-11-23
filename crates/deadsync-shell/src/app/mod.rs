@@ -2510,7 +2510,7 @@ impl App {
         let Some(prepared) = self.profile_load.poll() else {
             return;
         };
-        match prepared {
+        let target = match prepared {
             crate::profile_load::PreparedState::Music(mut state) => {
                 state.active_color_index = self.state.screens.profile_load_state.active_color_index;
                 let preferred = self.state.session.preferred_difficulty_index;
@@ -2524,14 +2524,16 @@ impl App {
                     &self.state.screens.select_music_state,
                 );
                 self.state.screens.select_music_state = *state;
+                CurrentScreen::SelectMusic
             }
             crate::profile_load::PreparedState::Course(mut state) => {
                 state.active_color_index = self.state.screens.profile_load_state.active_color_index;
                 select_course::trigger_immediate_refresh(&mut state);
                 self.state.screens.select_course_state = *state;
+                CurrentScreen::SelectCourse
             }
-        }
-        profile_load::sync_ready(&mut self.state.screens.profile_load_state, true);
+        };
+        profile_load::sync_ready(&mut self.state.screens.profile_load_state, target);
     }
 
     fn poll_profile_import(&mut self) {
@@ -7987,11 +7989,19 @@ impl App {
                 }
             }
             CurrentScreen::ProfileLoad => {
-                profile_load::push_actors(
-                    &mut actors,
-                    &self.state.screens.profile_load_state,
-                    visual_policy,
-                );
+                let state = &self.state.screens.profile_load_state;
+                match self.state.screens.menu_state.theme_flag() {
+                    config::theme::ThemeFlag::SimplyLove => {
+                        profile_load::push_actors(&mut actors, state, visual_policy);
+                    }
+                    config::theme::ThemeFlag::OpenItg => {
+                        deadsync_theme_openitg::push_profile_load_actors(
+                            &mut actors,
+                            &deadsync_theme_simply_love::i18n::tr("Common", "Loading"),
+                            profile_load::elapsed_seconds(state),
+                        );
+                    }
+                }
             }
             CurrentScreen::SelectMusic => {
                 let state = &self.state.screens.select_music_state;
@@ -8016,12 +8026,25 @@ impl App {
                     }
                 }
             }
-            CurrentScreen::SelectCourse => select_course::push_actors(
-                &mut actors,
-                &self.state.screens.select_course_state,
-                &self.asset_manager,
-                visual_policy,
-            ),
+            CurrentScreen::SelectCourse => {
+                let state = &self.state.screens.select_course_state;
+                match self.state.screens.menu_state.theme_flag() {
+                    config::theme::ThemeFlag::SimplyLove => select_course::push_actors(
+                        &mut actors,
+                        state,
+                        &self.asset_manager,
+                        visual_policy,
+                    ),
+                    config::theme::ThemeFlag::OpenItg => {
+                        let view = select_course::select_course_view(
+                            state,
+                            self.dynamic_media.loaded_banner_key(),
+                        );
+                        deadsync_theme_openitg::push_select_course_actors(&mut actors, view);
+                        select_course::push_exit_prompt(&mut actors, state, visual_policy);
+                    }
+                }
+            }
             CurrentScreen::Sandbox => sandbox::push_actors(
                 &mut actors,
                 &self.state.screens.sandbox_state,
@@ -9246,7 +9269,6 @@ impl App {
             let profiles = profile::load_default_profiles_for_joined_sides();
             self.sync_profile_load_state(&profiles);
             let play_mode = profile::get_session_play_mode();
-            profile_load::on_enter(&mut self.state.screens.profile_load_state, play_mode);
             let select_music =
                 self.coin_select_music_init_view(crate::select_music::init_view(&self.dirs));
             self.profile_load.start(play_mode, select_music);

@@ -6027,8 +6027,9 @@ fn profile_load_preparation_worker_is_shell_owned() {
         );
     }
     assert!(profile_load.contains("pub const fn sync_ready"));
-    assert!(profile_load.contains("state.ready"));
-    assert!(profile_load.contains("ThemeEffect::Navigate(state.next_screen)"));
+    assert!(profile_load.contains("state.next_screen = Some(next)"));
+    assert!(profile_load.contains("state.next_screen.map(ThemeEffect::Navigate)"));
+    assert!(!profile_load.contains("PlayMode"));
 
     let select_course = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
@@ -6068,7 +6069,10 @@ fn profile_load_preparation_worker_is_shell_owned() {
         "crate::select_music::init_view(&self.dirs)",
         "self.profile_load.start(play_mode, select_music)",
         "self.profile_load.poll()",
-        "profile_load::sync_ready",
+        "let target = match prepared",
+        "profile_load::sync_ready(&mut self.state.screens.profile_load_state, target)",
+        "deadsync_theme_openitg::push_profile_load_actors(",
+        "deadsync_theme_openitg::push_select_course_actors(",
     ] {
         assert!(
             app.contains(integration),

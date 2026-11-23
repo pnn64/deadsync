@@ -608,6 +608,11 @@ current values, and availability through `deadsync-theme`. The music wheel
 shares the game's catalog entries and circular index, and both layouts use the
 same prepared difficulty window. The alternate base layout borrows song, chart,
 player, and banner data from the existing controller.
+The course browser uses the same wheel geometry with the prepared course
+rating, track list, and records. On Profile Load, the shell installs the
+worker's completed song or course state and hands its destination to the
+loading screen. The loading view supplies the minimum presentation time for
+both themes.
 The shell continues to use that controller for input, previews, and launching
 stages. At stage entry it can install alternate HUD drawing functions through
 `deadsync-theme`. The gameplay composer supplies the already resolved life and

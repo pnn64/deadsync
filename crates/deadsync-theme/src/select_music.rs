@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 pub const SELECT_MUSIC_WHEEL_ROWS: usize = 15;
 pub const SELECT_MUSIC_DIFFICULTY_ROWS: usize = 5;
+pub const SELECT_COURSE_TRACK_ROWS: usize = 6;
 
 #[derive(Clone, Copy)]
 pub struct SelectMusicWheelRow<'a> {
@@ -55,6 +56,41 @@ pub struct SelectMusicView<'a> {
     pub players: [SelectMusicPlayerView<'a>; MAX_PLAYERS],
     pub difficulty_rows: [SelectMusicDifficultyRow<'a>; SELECT_MUSIC_DIFFICULTY_ROWS],
     pub stage_number: Option<usize>,
+    pub music_rate: f32,
+    pub prompt: SelectMusicPrompt,
+}
+
+/// Track and meter data prepared for the current course rating.
+#[derive(Clone, Copy)]
+pub struct SelectCourseTrack<'a> {
+    pub title: &'a Arc<str>,
+    pub meter: &'a Arc<str>,
+}
+
+/// Information about the currently highlighted course and rating.
+pub struct SelectCourseItem<'a> {
+    pub title: &'a str,
+    pub author: &'a str,
+    pub description: &'a Arc<str>,
+    pub songs: &'a str,
+    pub bpm: &'a str,
+    pub length: &'a str,
+    pub rating: Option<&'a str>,
+    pub can_change_rating: bool,
+    pub rating_focused: bool,
+    pub tracks: [Option<SelectCourseTrack<'a>>; SELECT_COURSE_TRACK_ROWS],
+    pub machine_record: Option<[&'a str; 2]>,
+    pub player_record: Option<[&'a str; 2]>,
+}
+
+/// The course browser uses the same circular wheel window as song selection.
+pub struct SelectCourseView<'a> {
+    pub rows: [Option<SelectMusicWheelRow<'a>>; SELECT_MUSIC_WHEEL_ROWS],
+    pub wheel_offset: f32,
+    pub selection_elapsed: f32,
+    pub item: Option<SelectCourseItem<'a>>,
+    pub banner_texture: Option<&'a Arc<str>>,
+    pub player_names: [Option<&'a str>; MAX_PLAYERS],
     pub music_rate: f32,
     pub prompt: SelectMusicPrompt,
 }

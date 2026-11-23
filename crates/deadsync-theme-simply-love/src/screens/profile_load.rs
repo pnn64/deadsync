@@ -5,7 +5,6 @@ use crate::i18n::tr;
 use crate::screens::Screen;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadsync_profile as profile_data;
 use deadsync_theme::FontRole;
 
 // Simply Love: BGAnimations/ScreenProfileLoad overlay.lua
@@ -18,8 +17,7 @@ const MIN_SHOW_SECS: f32 = TWEENTIME * 3.0 + CONTINUE_DELAY;
 pub struct State {
     pub active_color_index: i32,
     elapsed: f32,
-    ready: bool,
-    next_screen: Screen,
+    next_screen: Option<Screen>,
 }
 
 #[must_use]
@@ -27,31 +25,23 @@ pub const fn init() -> State {
     State {
         active_color_index: crate::color::DEFAULT_COLOR_INDEX,
         elapsed: 0.0,
-        ready: false,
-        next_screen: Screen::SelectMusic,
+        next_screen: None,
     }
 }
 
-pub const fn on_enter(state: &mut State, play_mode: profile_data::PlayMode) {
-    state.elapsed = 0.0;
-    state.ready = false;
-    state.next_screen = match play_mode {
-        profile_data::PlayMode::Marathon => Screen::SelectCourse,
-        profile_data::PlayMode::Regular | profile_data::PlayMode::PremiumFree => {
-            Screen::SelectMusic
-        }
-    };
+pub const fn elapsed_seconds(state: &State) -> f32 {
+    state.elapsed
 }
 
 #[inline(always)]
-pub const fn sync_ready(state: &mut State, ready: bool) {
-    state.ready = ready;
+pub const fn sync_ready(state: &mut State, next: Screen) {
+    state.next_screen = Some(next);
 }
 
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     state.elapsed += dt.max(0.0);
-    if state.elapsed >= MIN_SHOW_SECS && state.ready {
-        return Some(ThemeEffect::Navigate(state.next_screen));
+    if state.elapsed >= MIN_SHOW_SECS {
+        return state.next_screen.map(ThemeEffect::Navigate);
     }
     None
 }
@@ -132,12 +122,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn readiness_gates_the_theme_owned_redirect() {
+    fn readiness_gates_the_prepared_destination() {
         let mut state = init();
-        on_enter(&mut state, profile_data::PlayMode::Regular);
         assert!(update(&mut state, MIN_SHOW_SECS).is_none());
 
-        sync_ready(&mut state, true);
+        sync_ready(&mut state, Screen::SelectMusic);
         assert!(matches!(
             update(&mut state, 0.0),
             Some(ThemeEffect::Navigate(Screen::SelectMusic))
@@ -145,10 +134,10 @@ mod tests {
     }
 
     #[test]
-    fn marathon_mode_redirects_to_select_course() {
+    fn prepared_courses_wait_for_the_loading_presentation() {
         let mut state = init();
-        on_enter(&mut state, profile_data::PlayMode::Marathon);
-        sync_ready(&mut state, true);
+        sync_ready(&mut state, Screen::SelectCourse);
+        assert!(update(&mut state, 0.0).is_none());
         assert!(matches!(
             update(&mut state, MIN_SHOW_SECS),
             Some(ThemeEffect::Navigate(Screen::SelectCourse))

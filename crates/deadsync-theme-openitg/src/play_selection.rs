@@ -5,9 +5,27 @@ use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_theme::views::{PlaySelectionKind, PlaySelectionView};
 use std::f32::consts::TAU;
+use std::sync::Arc;
 
 const ITEM_SECONDS: f32 = 0.3;
 const PLAYER_TWO: [f32; 3] = [0.48, 0.94, 0.51];
+
+/// Present the pending catalog load using the shared screen's elapsed time.
+pub fn push_profile_load_actors(actors: &mut Vec<Actor>, label: &Arc<str>, elapsed_seconds: f32) {
+    let (width, height) = (screen_width(), screen_height());
+    let layout = Layout::centered(width, height);
+    actors.push(quad(
+        [0.0, 0.0],
+        [width, height],
+        [0.025, 0.037, 0.064, 1.0],
+        -20,
+    ));
+    actors.push(layout.bounded_label([320.0, 231.0], 0.5, 384.0, label.into(), 1.48, rgba(INK)));
+    actors.push(layout.panel(200.0, 262.0, [240.0, 3.0], [0.17, 0.26, 0.38, 1.0], 1));
+    let phase = elapsed_seconds.rem_euclid(0.9) / 0.9;
+    let sweep = 1.0 - (2.0 * phase - 1.0).abs();
+    actors.push(layout.panel(200.0 + 180.0 * sweep, 262.0, [60.0, 3.0], rgba(ACCENT), 2));
+}
 
 /// Visual scroll position for the active style or mode screen.
 #[derive(Default)]

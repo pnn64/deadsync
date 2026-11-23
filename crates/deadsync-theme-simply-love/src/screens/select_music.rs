@@ -2469,6 +2469,33 @@ fn difficulty_rows<'a>(
     (rows, selections)
 }
 
+pub(super) fn select_wheel_rows<'a>(
+    entries: &'a [MusicWheelEntry],
+    center: usize,
+    translated: bool,
+    is_expanded: impl Fn(&MusicWheelEntry) -> bool,
+) -> [Option<SelectMusicWheelRow<'a>>; SELECT_MUSIC_WHEEL_ROWS] {
+    if entries.is_empty() {
+        return [None; SELECT_MUSIC_WHEEL_ROWS];
+    }
+    std::array::from_fn(|slot| {
+        let offset = slot as isize - (SELECT_MUSIC_WHEEL_ROWS / 2) as isize;
+        let entry = &entries[wheel_entry_index(center, offset, entries.len())];
+        Some(match entry {
+            MusicWheelEntry::Song(song) => SelectMusicWheelRow {
+                title: song.display_title(translated),
+                song_count: None,
+                expanded: false,
+            },
+            MusicWheelEntry::PackHeader { name, song_count, .. } => SelectMusicWheelRow {
+                title: name,
+                song_count: Some(*song_count),
+                expanded: is_expanded(entry),
+            },
+        })
+    })
+}
+
 /// Read the wheel and prepared chart and media data without cloning songs or rebuilding caches.
 pub fn select_music_view<'a>(
     state: &'a State,
@@ -2476,35 +2503,16 @@ pub fn select_music_view<'a>(
     loaded_banner: Option<&'a Arc<str>>,
 ) -> SelectMusicView<'a> {
     let translated = state.music_wheel.translated_titles;
-    let rows = if state.entries.is_empty() {
-        [None; SELECT_MUSIC_WHEEL_ROWS]
-    } else {
-        std::array::from_fn(|slot| {
-            let offset = slot as isize - (SELECT_MUSIC_WHEEL_ROWS / 2) as isize;
-            let index = wheel_entry_index(state.selected_index, offset, state.entries.len());
-            let entry = &state.entries[index];
-            Some(match entry {
-                MusicWheelEntry::Song(song) => SelectMusicWheelRow {
-                    title: song.display_title(translated),
-                    song_count: None,
-                    expanded: false,
-                },
-                MusicWheelEntry::PackHeader {
-                    name, song_count, ..
-                } => SelectMusicWheelRow {
-                    title: name,
-                    song_count: Some(*song_count),
-                    expanded: if entry.is_series_header() {
-                        state.expanded_series_name.as_deref() == Some(name.as_ref())
-                    } else {
-                        entry.section_key().is_some_and(|key| {
-                            state.expanded_pack_name.as_deref() == Some(key)
-                        })
-                    },
-                },
+    let rows = select_wheel_rows(&state.entries, state.selected_index, translated, |entry| {
+        if entry.is_series_header() {
+            matches!(entry, MusicWheelEntry::PackHeader { name, .. }
+                if state.expanded_series_name.as_deref() == Some(name.as_ref()))
+        } else {
+            entry.section_key().is_some_and(|key| {
+                state.expanded_pack_name.as_deref() == Some(key)
             })
-        })
-    };
+        }
+    });
     let song = match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(song)) => Some(song),
         _ => None,

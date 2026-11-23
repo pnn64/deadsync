@@ -16,10 +16,10 @@ use deadsync_theme::{Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, Transi
 pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, push_evaluation_overview};
 pub use gameplay::{GAMEPLAY_HUD, TAP_RESULTS_PNG};
 pub use menu::MenuState;
-pub use play_selection::PlaySelectionCarousel;
+pub use play_selection::{PlaySelectionCarousel, push_profile_load_actors};
 pub use player_options::push_player_options_actors;
 pub use profile_picker::push_profile_picker_actors;
-pub use select_music::push_select_music_actors;
+pub use select_music::{push_select_course_actors, push_select_music_actors};
 pub use system_options::SYSTEM_OPTIONS;
 
 type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;

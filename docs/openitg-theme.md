@@ -3,9 +3,9 @@
 Choose **OpenITG** in **Options → System → Theme**, then restart DeadSync.
 The equivalent setting is `Theme=OpenITG` under `[Options]` in `deadsync.ini`.
 Simply Love is the default. The selection mounts that theme's title, System
-Options, Profile Picker, Select Style, Select Play Mode, Player Options, base
-Select Music layout, supported gameplay HUD widgets, and Evaluation overview.
-Both themes use the same DeadSync session flow.
+Options, Profile Picker, Select Style, Select Play Mode, Profile Load, Player
+Options, the song and course wheels, supported gameplay HUD widgets, and
+Evaluation overview. Both themes use the same DeadSync session flow.
 
 ## Reference
 
@@ -133,8 +133,8 @@ cues. Labels stay readable on the far side of the ring.
 DeadSync's flow shows Style first and retains its Regular and Marathon modes.
 Premium Free appears when the configured session permits it. Mode descriptions
 use the configured language and wrap to the panel. The three short style
-explanations are in English. Color selection and profile loading use the
-existing screens. The reference's perspective, artwork,
+explanations are in English. Color selection uses the existing screen. The
+reference's perspective, artwork,
 explanation panels, and transitions still need comparison against a live build.
 
 Actor checks cover the native and wide anchors, available modes, joined-player
@@ -170,6 +170,29 @@ Circular indexing now gives short wheels the same wrap order in navigation,
 media requests, score requests, and drawing. An index-only benchmark on lists
 of 3, 128, 701, and 10,000 entries measured medians of 4.78 ns before and
 5.60 ns after the fix. Full-frame timing remains to be measured.
+
+## Profile Load and Select Course
+
+The loading screen advances once the worker supplies a prepared song or course
+wheel and the minimum display time has elapsed. The OpenITG loading animation
+uses elapsed time. It remains visible if catalog preparation takes longer.
+
+OpenITG's effective `ScreenSelectMusicCourse` inherits `ScreenSelectMusic`. Its
+header actor reads “PICK A COURSE”. The course browser uses the song wheel's
+arc and banner anchors with DeadSync's current course, rating, track list,
+BPM, duration, authored description, and records. It shows when a rating can
+be changed and highlights rating focus in three-button navigation. Both themes
+use the same course launch and second Start into Player Options. The exit
+confirmation uses the existing overlay. The track-list window steps through
+long courses. The original header tween, artwork, and live reference captures
+remain open.
+
+The shell's course fixture checks that the installed OpenITG layout draws the
+prepared rating and tracks. Course launch, recovery, and evaluation tests pass.
+At 854×480, paired runs of seven 8,000-frame batches measured 19.6–19.8 µs
+before and 19.5–20.0 µs after for song-wheel actor construction. The course
+wheel measured 27.4–27.5 µs with six tracks and two records. These are
+steady-state actor-build timings using dev-profile libraries.
 
 ## Gameplay HUD
 
