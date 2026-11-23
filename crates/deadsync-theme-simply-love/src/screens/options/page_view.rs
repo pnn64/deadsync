@@ -3,7 +3,7 @@ use deadsync_config::options::{
     auto_screenshot_bit_from_choice, groovestats_scorebox_bit_from_choice,
     select_music_chart_info_bit_from_choice,
 };
-use deadsync_theme::views::{SystemOptionsPage, SystemOptionsRow};
+use deadsync_theme::views::{SystemOptionsPage, SystemOptionsPageKind, SystemOptionsRow};
 
 pub(super) fn push_page(
     actors: &mut Vec<Actor>,
@@ -27,7 +27,7 @@ pub(super) fn push_page(
                 actors,
                 SystemOptionsPage {
                     title: "OPTIONS",
-                    main_menu: true,
+                    kind: SystemOptionsPageKind::ServiceMenu,
                     selected,
                     row_count,
                     row: &|index| {
@@ -51,17 +51,9 @@ pub(super) fn push_page(
         OptionsView::Submenu(kind) => {
             let rows = submenu_rows(kind);
             let items = submenu_items(kind);
-            let visible_rows =
-                (!is_launcher_submenu(kind)).then(|| cached_submenu_visible_rows(state, kind));
-            let row_count = visible_rows.as_ref().map_or(rows.len(), |rows| rows.len());
-            let actual_index = |index: usize| {
-                if index >= row_count {
-                    return None;
-                }
-                visible_rows
-                    .as_ref()
-                    .map_or(Some(index), |rows| rows.get(index).copied())
-            };
+            let visible_rows = cached_submenu_visible_rows(state, kind);
+            let row_count = visible_rows.len();
+            let actual_index = |index| visible_rows.get(index).copied();
             let selected = state.sub_selected.min(row_count);
             let selected_item = actual_index(selected)
                 .and_then(|index| items.get(index))
@@ -72,7 +64,11 @@ pub(super) fn push_page(
                 actors,
                 SystemOptionsPage {
                     title: submenu_title(state, kind),
-                    main_menu: false,
+                    kind: if kind == SubmenuKind::GraphicsBasic {
+                        SystemOptionsPageKind::BasicGraphics
+                    } else {
+                        SystemOptionsPageKind::Settings
+                    },
                     selected,
                     row_count,
                     row: &|index| {

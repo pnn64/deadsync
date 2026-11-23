@@ -242,11 +242,15 @@ use deadsync_theme_simply_love::{
 /// The main Options rows that launch standalone child screens should regain
 /// focus when those children return. Other entries either start at the first
 /// row or reopen a specific nested submenu below.
-const fn options_entry_restores_main_selection(from: CurrentScreen) -> bool {
+const fn options_entry_restores_main_selection(
+    from: CurrentScreen,
+    input_started_from_main: bool,
+) -> bool {
     matches!(
         from,
         CurrentScreen::Credits | CurrentScreen::ManageLocalProfiles
-    )
+    ) || (input_started_from_main
+        && matches!(from, CurrentScreen::Mappings | CurrentScreen::Input))
 }
 
 /// Returning from a played song refreshes wheel data in place so Guest
@@ -1187,6 +1191,11 @@ fn options_init_view(
     OptionsInitView {
         config: config::runtime::get(),
         split_graphics: theme == config::theme::ThemeFlag::OpenItg,
+        service_order: if theme == config::theme::ThemeFlag::OpenItg {
+            deadsync_theme_openitg::SYSTEM_OPTIONS.service_order
+        } else {
+            &[]
+        },
         judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog(
             ActiveTheme::JUDGMENT_PRESET,
         ))
@@ -5428,8 +5437,9 @@ impl App {
             options::open_graphics_submenu(&mut self.state.screens.options_state);
             return;
         }
-        let main_selection = options_entry_restores_main_selection(from)
-            .then_some(self.state.screens.options_state.selected);
+        let old_options = &self.state.screens.options_state;
+        let main_selection = options_entry_restores_main_selection(from, old_options.is_main_view())
+            .then_some(old_options.selected);
         let current_color_index = self.state.screens.options_state.active_color_index;
         self.state.screens.options_state = options::init(options_init_view(
             &self.dirs,
@@ -5446,10 +5456,12 @@ impl App {
         }
         self.options_song_pack_generation =
             deadsync_simfile::runtime_cache::song_cache_generation();
-        if matches!(
-            from,
-            CurrentScreen::Mappings | CurrentScreen::Input | CurrentScreen::ConfigurePads
-        ) {
+        if main_selection.is_none()
+            && matches!(
+                from,
+                CurrentScreen::Mappings | CurrentScreen::Input | CurrentScreen::ConfigurePads
+            )
+        {
             options::open_input_submenu(&mut self.state.screens.options_state);
         } else if from == CurrentScreen::TestLights {
             options::open_lights_submenu(&mut self.state.screens.options_state);
@@ -11128,22 +11140,24 @@ mod tests {
 
     #[test]
     fn options_restores_main_row_only_from_standalone_main_list_children() {
-        assert!(options_entry_restores_main_selection(
-            CurrentScreen::ManageLocalProfiles
-        ));
-        assert!(options_entry_restores_main_selection(
-            CurrentScreen::Credits
-        ));
-
-        for screen in [
-            CurrentScreen::Menu,
-            CurrentScreen::Mappings,
-            CurrentScreen::Input,
-            CurrentScreen::ConfigurePads,
-            CurrentScreen::TestLights,
-            CurrentScreen::SmxAssignPads,
-        ] {
-            assert!(!options_entry_restores_main_selection(screen));
+        for from_main in [false, true] {
+            for screen in [CurrentScreen::ManageLocalProfiles, CurrentScreen::Credits] {
+                assert!(options_entry_restores_main_selection(screen, from_main));
+            }
+            for screen in [CurrentScreen::Mappings, CurrentScreen::Input] {
+                assert_eq!(
+                    options_entry_restores_main_selection(screen, from_main),
+                    from_main,
+                );
+            }
+            for screen in [
+                CurrentScreen::Menu,
+                CurrentScreen::ConfigurePads,
+                CurrentScreen::TestLights,
+                CurrentScreen::SmxAssignPads,
+            ] {
+                assert!(!options_entry_restores_main_selection(screen, from_main));
+            }
         }
     }
 

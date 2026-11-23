@@ -54,6 +54,7 @@ fn options_init_view(
     OptionsInitView {
         config,
         split_graphics: false,
+        service_order: &[],
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
         ),
@@ -119,7 +120,7 @@ fn main_visible_items_match_updater_capabilities_and_are_stable() {
     assert!(first.iter().any(|item| item.id == ItemId::RollBackVersion));
     assert!(first.iter().any(|item| item.id == ItemId::Downloads));
 
-    let unavailable = build_visible_items(SimplyLoveUpdaterCapabilities::default());
+    let unavailable = build_visible_items(SimplyLoveUpdaterCapabilities::default(), &[]);
     assert!(unavailable.iter().any(|item| item.id == ItemId::Downloads));
     assert!(unavailable.iter().all(|item| !matches!(
         item.id,
@@ -389,6 +390,7 @@ fn smx_gif_choices_come_from_shell_catalog() {
     let state = super::init(OptionsInitView {
         config: config::app_config::Config::default(),
         split_graphics: false,
+        service_order: &[],
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
         ),
@@ -1103,6 +1105,7 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
             ..config::app_config::Config::default()
         },
         split_graphics: false,
+        service_order: &[],
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
         ),
@@ -2924,6 +2927,7 @@ fn alternate_service_page_reads_live_choices_and_yields_to_reload() {
     use deadsync_theme::views::{SystemOptionsPage, SystemOptionsRenderer};
 
     let renderer = SystemOptionsRenderer {
+        service_order: &[],
         background: |actors| actors.push(act!(text: font("miso"): settext("SERVICE BACKGROUND"))),
         page: |actors, page: SystemOptionsPage<'_>| {
             assert_eq!(page.title, "SOUND OPTIONS");
@@ -3129,6 +3133,74 @@ fn input_launcher_three_key_start_opens_test_input() {
             .iter()
             .any(|effect| matches!(effect, ThemeEffect::Navigate(Screen::Input)))
     );
+}
+
+#[test]
+fn operator_menu_launches_input_tools_directly_and_lists_them_once_in_search() {
+    use deadsync_theme::views::SystemOptionsServiceRow as ServiceRow;
+
+    search_i18n();
+    let asset_manager = AssetManager::new();
+    let mut view = options_init_view(
+        config::app_config::Config::default(),
+        AudioOptionsView::default(),
+    );
+    view.service_order = &[
+        ServiceRow::Arcade,
+        ServiceRow::System,
+        ServiceRow::Graphics,
+        ServiceRow::SongPacks,
+        ServiceRow::Downloads,
+        ServiceRow::TestInput,
+        ServiceRow::ConfigureMappings,
+        ServiceRow::ReloadSongsCourses,
+    ];
+    let mut state = super::init(view);
+    let rows = visible_items(&state);
+    let ids: Vec<_> = rows.iter().map(|item| item.id).collect();
+    assert!(ids.starts_with(&[
+        ItemId::ArcadeOptions,
+        ItemId::SystemOptions,
+        ItemId::GraphicsOptions,
+        ItemId::DownloadPacks,
+        ItemId::Downloads,
+        ItemId::InpTestInput,
+        ItemId::InpConfigureMappings,
+        ItemId::ReloadSongsCourses,
+    ]));
+    assert_eq!(ids.last(), Some(&ItemId::Exit));
+
+    let kind = SubmenuKind::Input;
+    let settings = search::rebuild_matches(&state, "");
+    for (item, row, screen) in [
+        (ItemId::InpTestInput, SubRowId::TestInput, Screen::Input),
+        (
+            ItemId::InpConfigureMappings,
+            SubRowId::ConfigureMappings,
+            Screen::Mappings,
+        ),
+    ] {
+        let index = ids.iter().position(|&id| id == item).unwrap();
+        assert!(settings
+            .iter()
+            .any(|entry| entry.target == search::SearchTarget::Main(index)));
+        let nested = row_target(kind, row);
+        assert!(settings.iter().all(|entry| entry.target != nested));
+        state.restore_main_selection(index);
+        let effects = press(&mut state, &asset_manager, VirtualAction::p1_start);
+        assert!(effects.iter().any(|effect| matches!(
+            effect,
+            ThemeEffect::Navigate(target) if *target == screen
+        )));
+    }
+
+    let launcher = ids.iter().position(|&id| id == ItemId::InputOptions).unwrap();
+    state.restore_main_selection(launcher);
+    press(&mut state, &asset_manager, VirtualAction::p1_start);
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Submenu(kind));
+    assert_eq!(&*cached_submenu_visible_rows(&state, kind), &[2, 3]);
+    assert_eq!(submenu_total_rows(&state, kind), 3);
 }
 
 #[test]

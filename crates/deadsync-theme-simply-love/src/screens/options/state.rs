@@ -192,6 +192,7 @@ pub struct State {
     pub(super) twitch_channel_entry: Option<String>,
     pub(super) twitch_channel_invalid: bool,
     pub(super) main_visible_items: Vec<&'static Item>,
+    pub(super) service_order: &'static [deadsync_theme::views::SystemOptionsServiceRow],
     pub(super) app_paths: AppPathsView,
     pub(super) audio_options: AudioOptionsView,
     pub(super) song_packs: Vec<OptionsSongPackView>,
@@ -348,6 +349,11 @@ impl State {
         self.selected = selected;
         self.prev_selected = selected;
     }
+
+    /// Whether the service list is active or launched a standalone tool.
+    pub const fn is_main_view(&self) -> bool {
+        matches!(self.view, OptionsView::Main)
+    }
 }
 
 fn nearest_u8_index(values: &[u8], target: u8) -> usize {
@@ -371,6 +377,7 @@ pub fn init(view: OptionsInitView) -> State {
     let OptionsInitView {
         config: cfg,
         split_graphics,
+        service_order,
         judgment_palettes,
         updater_capabilities,
         app_paths,
@@ -436,12 +443,13 @@ pub fn init(view: OptionsInitView) -> State {
         .iter()
         .position(|name| name.eq_ignore_ascii_case(machine_player_options.noteskin.as_str()))
         .unwrap_or(0);
-    let main_visible_items = build_visible_items(updater_capabilities);
+    let main_visible_items = build_visible_items(updater_capabilities, service_order);
     let mut state = State {
         twitch: cfg.twitch,
         twitch_channel_entry: None,
         twitch_channel_invalid: false,
         main_visible_items,
+        service_order,
         app_paths,
         audio_options,
         song_packs,

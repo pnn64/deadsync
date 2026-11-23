@@ -1756,6 +1756,14 @@ pub(super) fn activate_current_selection(
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
+                ItemId::InpConfigureMappings => {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    return ThemeEffect::Navigate(Screen::Mappings);
+                }
+                ItemId::InpTestInput => {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    return ThemeEffect::Navigate(Screen::Input);
+                }
                 ItemId::LightsOptions => {
                     queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Lights);

@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_theme::views::SystemOptionsServiceRow;
 
 pub(super) fn golf_features_enabled(state: &State) -> bool {
     get_choice_by_id(
@@ -196,6 +197,18 @@ pub(super) fn submenu_visible_row_indices(
                     .then_some(idx)
             })
             .collect(),
+        SubmenuKind::Input => {
+            let test_input_on_main = state.service_order.contains(&SystemOptionsServiceRow::TestInput);
+            let mappings_on_main = state.service_order.contains(&SystemOptionsServiceRow::ConfigureMappings);
+            rows.iter()
+                .enumerate()
+                .filter_map(|(index, row)| match row.id {
+                    SubRowId::TestInput if test_input_on_main => None,
+                    SubRowId::ConfigureMappings if mappings_on_main => None,
+                    _ => Some(index),
+                })
+                .collect()
+        }
         SubmenuKind::Graphics => {
             let show_sw = graphics_show_software_threads(state);
             let show_max_fps = graphics_show_max_fps(state);

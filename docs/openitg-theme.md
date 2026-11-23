@@ -58,6 +58,15 @@ graphics and input changes, and sends requests to the shell. Both layouts
 read the same formatted values and multiselect bits. Search, reload, pack
 and updater workflows, and confirmation dialogs use their existing overlays.
 
+The service menu prioritizes the current equivalents of the home theme's
+arcade, system, graphics, pack, update, input-test, key-mapping, and reload
+actions. Other DeadSync settings follow in their existing order. Test Input
+and Configure Keyboard/Pad Mappings open directly from the service menu and
+return to the selected launcher. Settings search lists each action once.
+Simply Love reaches the same tools through its Input submenu. The native
+credit, diagnostics, and reset rows, pack workflows, and tool styling remain
+open. Long explanations can be compressed, as seen on Configure Pads.
+
 Graphics Options opens a basic page with display mode, aspect ratio, resolution,
 and the Advanced Graphic Options link. The advanced page contains renderer,
 refresh rate, presentation, and performance settings. Both pages edit a single
@@ -68,25 +77,29 @@ its row in Advanced and preserves pending display changes. Simply Love presents
 the combined Graphics Options page.
 
 The route follows `ScreenGraphicOptionsBasic` in the home theme's
-`metrics.ini`. The Graphic Quality preset in `Scripts/SimpleGraphics.lua`
-controls legacy color depths, texture limits, caches, and filtering. That
-preset and the reference's explicit row spacing remain open.
+`metrics.ini`. Its display mode, aspect ratio, resolution, and Advanced link
+use the reference's y positions of 127, 183, 211, and 267 at 640×480. The
+Graphic Quality preset in `Scripts/SimpleGraphics.lua` controls legacy color
+depths, texture limits, caches, and filtering. Its slot between display mode
+and aspect ratio remains open.
 
 The effective `ScreenOptions` reference places the heading at `(36, 38)`,
 eight rows at y=127 with 28 px spacing, the scrollbar near `(34, 242)`, and
 the Done row at y=353. The OpenITG panel uses these anchors at 640×480 and
 centers the layout at 854×480. The panel slides between submenus
-on DeadSync's existing transition clock. The menu presents supported
-DeadSync actions in their current order, with shared persistence semantics.
+on DeadSync's existing transition clock. Both layouts use the same settings
+validation and persistence.
 Reference cursor tweens, header motion, and modal styling remain open.
 
 Tests cover the viewport and Done row, prepared values, disabled and
 multiselect rows, an edited volume appearing in the alternate renderer, and
 the reload modal taking over that renderer. Graphics tests cover both return
 paths, a single deferred apply, settings search, and pending display changes
-surviving an Overscan round trip. Vulkan captures at both supported fixture
-sizes exercise the route through the shared controller and show the launcher
-focus, the advanced title, and the centered row layout.
+surviving an Overscan round trip. Input tests cover direct and nested launch,
+search results, and the shell's return selection. Vulkan captures at 640×480
+and 854×480 show the service order, focused Test Input, remaining nested Input
+rows, and Basic Graphics positions through the shared controller. The
+reference positions and service order were checked against the home metrics.
 
 At 854×480, nine warm actor-construction runs of 12,000 frames per layout
 measured medians of 32.6 μs for Simply Love and 19.1 μs for OpenITG on the
@@ -97,6 +110,11 @@ Two repetitions of the same warm actor-construction benchmark measured
 19.4–19.5 μs for Basic and 27.1–27.5 μs for Advanced. The previous combined
 OpenITG page took 28.9–29.1 μs. Simply Love's combined page measured
 57.7–57.9 μs before the split and 57.9–59.8 μs with the new controller.
+
+The service order and spacing changes measured 19.0 μs on the OpenITG
+service menu and 18.6–18.9 μs on Basic Graphics. The same fixture previously
+measured 18.5–18.9 μs and 18.5–18.6 μs, respectively. Simply Love's service menu
+measured 31.2–31.8 μs, compared with 30.6–31.4 μs in the previous build.
 
 ## Player Options
 

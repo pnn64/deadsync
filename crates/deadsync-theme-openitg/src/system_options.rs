@@ -1,10 +1,23 @@
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
-use deadsync_theme::views::{SystemOptionsPage, SystemOptionsRenderer, SystemOptionsRow};
+use deadsync_theme::views::{
+    SystemOptionsPage, SystemOptionsPageKind, SystemOptionsRenderer, SystemOptionsRow,
+    SystemOptionsServiceRow,
+};
 
 use crate::presentation::{ACCENT, INK, Layout, quad};
 
 pub const SYSTEM_OPTIONS: SystemOptionsRenderer<Actor> = SystemOptionsRenderer {
+    service_order: &[
+        SystemOptionsServiceRow::Arcade,
+        SystemOptionsServiceRow::System,
+        SystemOptionsServiceRow::Graphics,
+        SystemOptionsServiceRow::SongPacks,
+        SystemOptionsServiceRow::Downloads,
+        SystemOptionsServiceRow::TestInput,
+        SystemOptionsServiceRow::ConfigureMappings,
+        SystemOptionsServiceRow::ReloadSongsCourses,
+    ],
     background: push_background,
     page: push_page,
 };
@@ -12,6 +25,8 @@ pub const SYSTEM_OPTIONS: SystemOptionsRenderer<Actor> = SystemOptionsRenderer {
 const ROWS_SHOWN: usize = 8;
 const FIRST_ROW_Y: f32 = 127.0;
 const ROW_PITCH: f32 = 28.0;
+// The native preset occupies slot 1. Its three resolution rows share slot 3.
+const BASIC_GRAPHICS_SLOTS: [usize; 4] = [0, 2, 3, 5];
 const DONE_Y: f32 = 353.0;
 const LABEL_X: f32 = 53.0;
 const VALUE_X: f32 = 160.0;
@@ -50,7 +65,7 @@ fn push_page(actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>) {
     let layout =
         Layout::centered(width, screen_height()).translated_x(page.slide.clamp(-1.0, 1.0) * width);
     push_panel(actors, layout);
-    let (title, title_zoom) = if page.main_menu {
+    let (title, title_zoom) = if page.kind == SystemOptionsPageKind::ServiceMenu {
         ("SERVICE OPTIONS", 1.9)
     } else {
         (page.title, 1.55)
@@ -62,7 +77,13 @@ fn push_page(actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>) {
     let end = (first + ROWS_SHOWN).min(page.row_count);
     for index in first..end {
         if let Some(row) = (page.row)(index) {
-            let y = (index - first) as f32 * ROW_PITCH + FIRST_ROW_Y;
+            let slot = index - first;
+            let slot = if page.kind == SystemOptionsPageKind::BasicGraphics {
+                BASIC_GRAPHICS_SLOTS.get(slot).copied().unwrap_or(slot)
+            } else {
+                slot
+            };
+            let y = slot as f32 * ROW_PITCH + FIRST_ROW_Y;
             push_row(actors, layout, y, &row, index == page.selected);
         }
     }
@@ -244,7 +265,7 @@ mod tests {
     ) -> SystemOptionsPage<'a> {
         SystemOptionsPage {
             title: "OPTIONS",
-            main_menu: true,
+            kind: SystemOptionsPageKind::ServiceMenu,
             selected,
             row_count,
             row,
@@ -287,7 +308,7 @@ mod tests {
                     &mut actors,
                     SystemOptionsPage {
                         title: "GRAPHICS OPTIONS",
-                        main_menu: false,
+                        kind: SystemOptionsPageKind::Settings,
                         slide: -0.25,
                         ..page(&|_| Some(action("Renderer")), 1, 0)
                     },
@@ -322,6 +343,34 @@ mod tests {
             assert_eq!(*visited.borrow(), (10..18).collect::<Vec<_>>());
             assert!(has_text(&actors, "DONE", [320.0, 353.0]));
         });
+    }
+
+    #[test]
+    fn basic_graphics_uses_the_native_row_slots_at_both_widths() {
+        let rows = [
+            ("Display Mode", 127.0),
+            ("Aspect Ratio", 183.0),
+            ("Resolution", 211.0),
+            ("Advanced Graphic Options", 267.0),
+        ];
+        let row = |index: usize| rows.get(index).map(|(label, _)| action(label));
+        for (width, delta) in [(640.0, 0.0), (854.0, 107.0)] {
+            with_current_metrics(Metrics::centered(width, 480.0), || {
+                let mut actors = Vec::new();
+                push_page(
+                    &mut actors,
+                    SystemOptionsPage {
+                        title: "GRAPHIC OPTIONS",
+                        kind: SystemOptionsPageKind::BasicGraphics,
+                        ..page(&row, rows.len(), 3)
+                    },
+                );
+                for (label, y) in rows {
+                    assert!(has_text(&actors, label, [160.0 + delta, y]));
+                }
+                assert!(has_text(&actors, "DONE", [320.0 + delta, 353.0]));
+            });
+        }
     }
 
     #[test]

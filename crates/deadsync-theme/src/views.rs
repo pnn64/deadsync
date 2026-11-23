@@ -232,13 +232,35 @@ pub struct GraphicsOptionsView {
 
 /// Presentation hooks for the shared service-options controller.
 pub struct SystemOptionsRenderer<A> {
+    pub service_order: &'static [SystemOptionsServiceRow],
     pub background: fn(&mut Vec<A>),
     pub page: fn(&mut Vec<A>, SystemOptionsPage<'_>),
 }
 
+/// Existing actions a service menu can place first. Listed input tools move
+/// from the Input submenu to the service menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SystemOptionsServiceRow {
+    Arcade,
+    System,
+    Graphics,
+    SongPacks,
+    Downloads,
+    TestInput,
+    ConfigureMappings,
+    ReloadSongsCourses,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SystemOptionsPageKind {
+    ServiceMenu,
+    BasicGraphics,
+    Settings,
+}
+
 pub struct SystemOptionsPage<'a> {
     pub title: &'static str,
-    pub main_menu: bool,
+    pub kind: SystemOptionsPageKind,
     /// Selection in the visible controller order. `row_count` selects Done.
     pub selected: usize,
     pub row_count: usize,
