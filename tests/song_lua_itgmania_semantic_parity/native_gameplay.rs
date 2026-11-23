@@ -2312,7 +2312,7 @@ end }}
             let output = state.stage.take_output();
             assert!(output.errors.is_empty() && output.source_broadcasts.is_empty(), "{:?}", output.errors);
             if effects.iter().any(|effect| matches!(effect,
-                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme_simply_love::screens::Screen::Evaluation))) {
+                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme::Screen::Evaluation))) {
                 navigated = true;
                 break;
             }
@@ -3341,7 +3341,7 @@ return Def.ActorFrame {
                 after_end += usize::from(event.name == "AfterEnd");
             }
             if effects.iter().any(|effect| matches!(effect,
-                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme_simply_love::screens::Screen::Evaluation))) {
+                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme::Screen::Evaluation))) {
                 assert!(!output.source_broadcasts.iter().any(|event| event.name == "AliveDraw"),
                     "a popped screen is not drawn");
                 navigated = true;
