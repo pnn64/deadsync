@@ -9,8 +9,8 @@ use deadsync_theme::views::{
     SystemOptionsRow, SystemOptionsServiceRow, SystemOptionsTiming,
 };
 
-use crate::presentation::{ACCENT, INK, Layout, LinearMotion, quad};
-use choice_layout::{ChoiceLayout, CursorLabel, TextMetrics};
+use crate::presentation::{ACCENT, INK, Layout, LinearMotion, TextMetrics, quad};
+use choice_layout::{ChoiceLayout, CursorLabel};
 use help::OptionsHelp;
 
 #[derive(Default)]
@@ -236,7 +236,7 @@ impl OpenItgSystemOptions {
         let focus_y = self.rows[page.selected].target[0];
         push_row_band(actors, layout, focus_y, true);
         let moving = now < self.rows_move_until;
-        let metrics = TextMetrics::new(assets.fonts());
+        let metrics = TextMetrics::new(assets.fonts(), "miso");
         let range = if moving {
             0..page.row_count
         } else {
@@ -747,7 +747,7 @@ mod tests {
         .expect("bundled font");
         let mut assets = AssetManager::new();
         assets.register_font("miso", font.font);
-        let metrics = TextMetrics::new(assets.fonts());
+        let metrics = TextMetrics::new(assets.fonts(), "miso");
         let narrow_width = metrics.width("iii") * INLINE_ZOOM;
         let wide_width = metrics.width("WWW") * INLINE_ZOOM;
         assert!(narrow_width < wide_width);

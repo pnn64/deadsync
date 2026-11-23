@@ -237,7 +237,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
         .selection();
     assert_eq!(selection.song.title, SONG_TITLE);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
-    assert_eq!(actor_tree_has_text(&actors, "PLAYER OPTIONS"), openitg);
+    assert_eq!(actor_tree_has_text(&actors, "PICK MODIFIERS"), openitg);
     // The editor's first Start moves focus to Exit and the next starts play.
     press(app, event_loop, VirtualAction::p2_start);
     press(app, event_loop, VirtualAction::p2_start);

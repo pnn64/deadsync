@@ -655,7 +655,7 @@ mod tests {
                             deadlib_present::actors::Actor::Text { content, .. } if content.as_str() == text
                         ));
                         assert!(has_text("Hallway"));
-                        assert_eq!(has_text("PLAYER OPTIONS"), flag == ThemeFlag::OpenItg);
+                        assert_eq!(has_text("PICK MODIFIERS"), flag == ThemeFlag::OpenItg);
                         let mut previews = Vec::new();
                         deadsync_theme_simply_love::screens::player_options::take_noteskin_preview_requests(
                             editor.editor_mut(),

@@ -2,8 +2,12 @@
 
 mod help;
 
-use crate::presentation::{ACCENT, HEIGHT, INK, Layout, LinearMotion, MUTED, WIDTH, quad};
+use crate::presentation::{
+    Layout, LinearMotion, TextMetrics, WIDTH, italic, push_red_backdrop, push_red_streaks, sprite,
+};
+use crate::resources::{MENU_HEADING_FONT, MENU_NORMAL_FONT};
 use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::anim::bounceend_p;
 use deadlib_present::font::FontMap;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_core::input::MAX_PLAYERS;
@@ -16,12 +20,17 @@ pub(super) const TRANSITION_SECONDS: f32 = 0.3;
 const FIRST_ROW_Y: f32 = 127.0;
 const ROW_PITCH: f32 = 28.0;
 const EXIT_Y: f32 = 353.0;
-const ROW_X: f32 = 42.0;
-const ROW_WIDTH: f32 = 562.0;
 const LABEL_X: f32 = 53.0;
-const INLINE_LEFT: f32 = 210.0;
+const INLINE_LEFT: f32 = 160.0;
 const INLINE_RIGHT: f32 = 594.0;
-const PLAYER_HUES: [[f32; 3]; MAX_PLAYERS] = [ACCENT, [0.48, 0.94, 0.51]];
+const ITEM_ZOOM: f32 = 0.62;
+const INLINE_ZOOM: f32 = 0.54;
+const INK: [f32; 3] = [1.0; 3];
+const MUTED: [f32; 3] = [0.78, 0.72, 0.72];
+const PLAYER_HUES: [[f32; 3]; MAX_PLAYERS] = [
+    [251.0 / 255.0, 190.0 / 255.0, 3.0 / 255.0],
+    [86.0 / 255.0, 1.0, 72.0 / 255.0],
+];
 const PLAYER_NAMES: [&str; MAX_PLAYERS] = ["P1", "P2"];
 const SCROLLBAR_X: f32 = 34.0;
 const SCROLLBAR_TOP: f32 = 122.0;
@@ -62,6 +71,7 @@ impl Seats {
 #[derive(Default)]
 pub struct OpenItgPlayerOptions {
     pane: Option<&'static str>,
+    entered_at: f64,
     thumbs: [Option<LinearMotion<1>>; MAX_PLAYERS],
     help: help::PlayerHelp,
 }
@@ -83,6 +93,7 @@ impl OpenItgPlayerOptions {
         let new_pane = self.pane != Some(page.title);
         if new_pane {
             self.pane = Some(page.title);
+            self.entered_at = now;
             self.thumbs = [None; MAX_PLAYERS];
         }
         let tops = std::array::from_fn(|player| {
@@ -97,7 +108,15 @@ impl OpenItgPlayerOptions {
             Some((SCROLLBAR_HEIGHT - THUMB_HEIGHT).mul_add(fraction, SCROLLBAR_TOP))
         });
         self.help.update(&page, fonts, new_pane, now);
-        push_page(actors, page, tops, &self.help, now);
+        push_page(
+            actors,
+            page,
+            tops,
+            &self.help,
+            TextMetrics::new(fonts, MENU_NORMAL_FONT),
+            now,
+            (now - self.entered_at) as f32,
+        );
     }
 }
 
@@ -106,7 +125,9 @@ fn push_page(
     page: Page<'_>,
     thumbs: [Option<f32>; MAX_PLAYERS],
     help: &help::PlayerHelp,
+    metrics: TextMetrics<'_>,
     now: f64,
+    elapsed: f32,
 ) {
     let (width, height) = (screen_width(), screen_height());
     let layout = Layout::centered(width, height);
@@ -114,32 +135,12 @@ fn push_page(
     let pitch = ROW_PITCH * (8.0 / page.visible_slots.max(8) as f32);
     let alpha = page.alpha.clamp(0.0, 1.0);
 
-    actors.push(quad(
-        [0.0, 0.0],
-        [width, height],
-        [0.035, 0.048, 0.072, 1.0],
-        -20,
-    ));
-    actors.push(layout.panel(0.0, 0.0, [WIDTH, HEIGHT], [0.063, 0.087, 0.126, 1.0], -19));
-    actors.push(layout.label([36.0, 38.0], 0.0, page.title.into(), 1.8, rgba(INK, alpha)));
-    actors.push(layout.panel(
-        36.0,
-        70.0,
-        [568.0, 1.0],
-        rgba([0.32, 0.40, 0.48], alpha),
-        -17,
-    ));
-    for (player, name) in PLAYER_NAMES.into_iter().enumerate() {
-        if seats.active[player] {
-            actors.push(layout.label(
-                [seats.values[player], 92.0],
-                0.5,
-                name.into(),
-                1.1,
-                rgba(PLAYER_HUES[player], alpha),
-            ));
-        }
-    }
+    push_red_backdrop(actors, [width, height], now.rem_euclid(60.0) as f32, -30);
+    push_red_streaks(actors, [width, height], 1.0, -28);
+    let panel_bottom = help.panel_bottom();
+    draw_panel(actors, layout, panel_bottom, alpha);
+    draw_heading(actors, layout, page.title, elapsed, alpha);
+    draw_seats(actors, layout, seats, alpha);
 
     for index in 0..page.row_count {
         let Some(row) = (page.row)(index) else {
@@ -157,25 +158,22 @@ fn push_page(
         }
 
         let y = row.slot.mul_add(pitch, FIRST_ROW_Y);
-        let height = pitch * row.slots.max(1) as f32 - 2.0;
-        let fill = if focused.contains(&true) {
-            [0.14, 0.19, 0.27]
-        } else {
-            [0.09, 0.13, 0.19]
-        };
-        actors.push(layout.panel(
-            ROW_X,
-            y - height * 0.5,
-            [ROW_WIDTH, height],
-            rgba(fill, row.alpha),
-            -18,
-        ));
-        draw_row_focus(actors, layout, y, height, focused, row.alpha);
+        if focused.contains(&true) {
+            draw_row_focus(
+                actors,
+                layout,
+                y,
+                pitch * row.slots.max(1) as f32 + 2.0,
+                row.alpha,
+            );
+        }
         draw_row_label(actors, layout, y, &row, focused.contains(&true));
         if let Some(inline) = row.inline.as_ref() {
-            draw_inline(actors, layout, y, pitch, &row, inline, seats, focused);
+            draw_inline(
+                actors, layout, y, pitch, &row, inline, seats, focused, metrics,
+            );
         } else {
-            draw_values(actors, layout, y, &row, seats, focused);
+            draw_values(actors, layout, y, &row, seats, focused, metrics);
         }
         if row.has_preview {
             let [p1_x, _] = layout.position(seats.previews[0], y);
@@ -185,6 +183,120 @@ fn push_page(
     }
     draw_scrollbar(actors, layout, thumbs, alpha);
     help.push(actors, layout, alpha, now);
+    if panel_bottom <= 437.0 {
+        actors.push(option_label(
+            layout,
+            [320.0, 446.0],
+            0.5,
+            500.0,
+            "Choose Exit when ready".into(),
+            0.62,
+            rgba(INK, alpha),
+        ));
+    }
+}
+
+fn draw_panel(actors: &mut Vec<Actor>, layout: Layout, bottom: f32, alpha: f32) {
+    let extra = bottom - 426.0;
+    for (key, y, z) in [
+        ("openitg/options-page.png", 257.0, -24),
+        ("openitg/options-frame.png", 258.0, -17),
+    ] {
+        if extra <= 0.0 {
+            actors.push(
+                sprite(
+                    key,
+                    layout.position(320.0, y),
+                    layout.size([610.0, 336.0]),
+                    rgba(INK, alpha),
+                    z,
+                )
+                .build(0),
+            );
+            continue;
+        }
+        // The divider stays at its source height when longer help needs more room.
+        const TOP: f32 = 286.0;
+        let start = y - 168.0;
+        for (offset, height, v0, v1) in [
+            (0.0, TOP, 0.0, TOP / 336.0),
+            (TOP, 336.0 - TOP + extra, TOP / 336.0, 1.0),
+        ] {
+            let mut section = sprite(
+                key,
+                layout.position(320.0, start + offset + height * 0.5),
+                layout.size([610.0, height]),
+                rgba(INK, alpha),
+                z,
+            );
+            section.customtexturerect([0.0, v0, 1.0, v1]);
+            actors.push(section.build(0));
+        }
+    }
+}
+
+fn draw_heading(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    pane: &'static str,
+    elapsed: f32,
+    alpha: f32,
+) {
+    let title = if pane == "PLAYER OPTIONS" {
+        "PICK MODIFIERS"
+    } else {
+        pane
+    };
+    let t = bounceend_p((elapsed / TRANSITION_SECONDS).clamp(0.0, 1.0));
+    let mut heading = layout.text([36.0, 38.0], 0.0, title.into(), 1.0, rgba(INK, alpha));
+    heading.font(MENU_HEADING_FONT);
+    let [x, y] = layout.size([t, (6.0 - 5.0 * t).max(0.0)]);
+    heading.zoomx(x);
+    heading.zoomy(y);
+    heading.shadowlength(layout.size([4.0, 0.0])[0]);
+    actors.push(italic(heading.build(0), -0.16));
+}
+
+fn draw_seats(actors: &mut Vec<Actor>, layout: Layout, seats: Seats, alpha: f32) {
+    for (player, (name, icon)) in PLAYER_NAMES
+        .into_iter()
+        .zip(["openitg/options-seat-p1.png", "openitg/options-seat-p2.png"])
+        .enumerate()
+    {
+        if !seats.active[player] {
+            continue;
+        }
+        let x = seats.values[player];
+        actors.push(
+            sprite(
+                "openitg/options-seat.png",
+                layout.position(x, 81.0),
+                layout.size([152.0, 34.0]),
+                rgba(INK, alpha),
+                -22,
+            )
+            .build(0),
+        );
+        actors.push(
+            sprite(
+                icon,
+                layout.position(x + 44.0, [77.0, 83.0][player]),
+                layout.size([26.0, 8.0]),
+                rgba(INK, alpha),
+                -21,
+            )
+            .build(0),
+        );
+        actors.push(option_label(
+            layout,
+            [x - 16.0, 79.0],
+            0.5,
+            90.0,
+            name.into(),
+            0.52,
+            rgba(PLAYER_HUES[player], alpha),
+        ));
+    }
 }
 
 fn draw_scrollbar(
@@ -224,47 +336,64 @@ const fn rgba([red, green, blue]: [f32; 3], alpha: f32) -> [f32; 4] {
     [red, green, blue, alpha]
 }
 
+fn option_label(
+    layout: Layout,
+    position: [f32; 2],
+    align: f32,
+    max_width: f32,
+    content: TextContent,
+    zoom: f32,
+    color: [f32; 4],
+) -> Actor {
+    let mut label = layout.text(position, align, content, zoom, color);
+    label.font(MENU_NORMAL_FONT);
+    label.maxwidth(layout.size([max_width, 0.0])[0]);
+    label.shadowlength(layout.size([1.0, 0.0])[0]);
+    label.build(0)
+}
+
 fn draw_row_label(actors: &mut Vec<Actor>, layout: Layout, y: f32, row: &Row<'_>, focused: bool) {
     let label_y = if row.detail.is_some() { y - 4.5 } else { y };
-    actors.push(layout.bounded_label(
+    actors.push(option_label(
+        layout,
         [LABEL_X, label_y],
         0.0,
         INLINE_LEFT - LABEL_X - 10.0,
         row.label.clone(),
-        0.94,
+        0.60,
         rgba(if focused { INK } else { MUTED }, row.alpha),
     ));
     if let Some(detail) = row.detail {
-        actors.push(layout.bounded_label(
+        actors.push(option_label(
+            layout,
             [LABEL_X, y + 6.0],
             0.0,
             INLINE_LEFT - LABEL_X - 10.0,
             detail.clone(),
-            0.66,
+            0.42,
             rgba(MUTED, row.alpha),
         ));
     }
 }
 
-fn draw_row_focus(
-    actors: &mut Vec<Actor>,
-    layout: Layout,
-    y: f32,
-    height: f32,
-    focused: [bool; MAX_PLAYERS],
-    alpha: f32,
-) {
-    for (player, x) in [ROW_X, ROW_X + ROW_WIDTH - 3.0].into_iter().enumerate() {
-        if focused[player] {
-            actors.push(layout.panel(
-                x,
-                y - height * 0.5,
-                [3.0, height],
-                rgba(PLAYER_HUES[player], alpha),
-                -16,
-            ));
-        }
+fn draw_row_focus(actors: &mut Vec<Actor>, layout: Layout, y: f32, height: f32, alpha: f32) {
+    let top = (y - height * 0.5).max(104.0);
+    let bottom = (y + height * 0.5).min(370.0);
+    if bottom <= top {
+        return;
     }
+    // Inset the first highlight inside the top panel corners.
+    let width = (top - 104.0).mul_add(3.0, 566.0).min(WIDTH);
+    actors.push(
+        sprite(
+            "openitg/options-highlight.png",
+            layout.position(320.0, (top + bottom) * 0.5 + 1.0),
+            layout.size([width, bottom - top]),
+            rgba(INK, alpha),
+            -18,
+        )
+        .build(0),
+    );
 }
 
 fn draw_exit(
@@ -274,19 +403,18 @@ fn draw_exit(
     focused: [bool; MAX_PLAYERS],
     alpha: f32,
 ) {
-    let fill = if focused.contains(&true) {
-        [0.22, 0.30, 0.39]
-    } else {
-        [0.10, 0.15, 0.22]
-    };
-    actors.push(layout.panel(
-        ROW_X,
-        EXIT_Y - 13.0,
-        [ROW_WIDTH, 26.0],
-        rgba(fill, alpha),
-        -18,
-    ));
-    draw_row_focus(actors, layout, EXIT_Y, 26.0, focused, alpha);
+    if focused.contains(&true) {
+        draw_row_focus(actors, layout, EXIT_Y, 33.0, alpha);
+        draw_choice_marks(
+            actors,
+            layout,
+            [320.0, EXIT_Y],
+            35.0,
+            [false; MAX_PLAYERS],
+            focused,
+            alpha,
+        );
+    }
     let label = row
         .values
         .iter()
@@ -294,12 +422,13 @@ fn draw_exit(
         .copied()
         .next()
         .unwrap_or(row.label);
-    actors.push(layout.bounded_label(
+    actors.push(option_label(
+        layout,
         [320.0, EXIT_Y],
         0.5,
         400.0,
         label.clone(),
-        1.04,
+        0.69,
         rgba(INK, alpha),
     ));
 }
@@ -311,6 +440,7 @@ fn draw_values(
     row: &Row<'_>,
     seats: Seats,
     focused: [bool; MAX_PLAYERS],
+    metrics: TextMetrics<'_>,
 ) {
     for player in 0..MAX_PLAYERS {
         if !seats.active[player] {
@@ -325,16 +455,24 @@ fn draw_values(
         } else {
             (content_x, 150.0)
         };
-        let focus_color = rgba(PLAYER_HUES[player], row.alpha);
         if focused[player] && !row.next_row[player] {
-            actors.push(layout.panel(x - width * 0.5, y + 7.0, [width, 2.0], focus_color, -15));
+            draw_choice_sprite(
+                actors,
+                layout,
+                [x, y],
+                marker_width(metrics, text, width, ITEM_ZOOM),
+                player,
+                true,
+                row.alpha,
+            );
         }
-        actors.push(layout.bounded_label(
+        actors.push(option_label(
+            layout,
             [x, y],
             0.5,
             width,
             text.clone(),
-            0.95,
+            ITEM_ZOOM,
             rgba(if focused[player] { INK } else { MUTED }, row.alpha),
         ));
     }
@@ -357,6 +495,7 @@ fn draw_inline(
     inline: &PlayerOptionsInline<'_, TextContent>,
     seats: Seats,
     focused: [bool; MAX_PLAYERS],
+    metrics: TextMetrics<'_>,
 ) {
     let next_column = row
         .next_row
@@ -373,15 +512,17 @@ fn draw_inline(
     }
     let columns = count.div_ceil(row.slots.max(1));
     let width = (INLINE_RIGHT - first) / columns as f32;
-    let fits = inline
+    let widest = inline
         .choices
         .iter()
-        .all(|text| (text.as_str().chars().count() as f32).mul_add(8.0, 8.0) <= width);
+        .map(|text| metrics.width(text.as_str()))
+        .fold(1.0, f32::max);
+    let zoom = INLINE_ZOOM.min((width - 10.0) / widest);
     if next_column {
         draw_next_row(actors, layout, y, row, focused);
     }
-    if !fits {
-        draw_compact_choices(actors, layout, y, row, inline, seats, focused);
+    if zoom < 0.43 {
+        draw_compact_choices(actors, layout, y, row, inline, seats, focused, metrics);
         return;
     }
 
@@ -402,23 +543,26 @@ fn draw_inline(
         } else {
             MUTED
         };
-        actors.push(layout.bounded_label(
+        actors.push(option_label(
+            layout,
             [x, y],
             0.5,
             width - 8.0,
             choice.clone(),
-            0.9,
+            zoom,
             rgba(tint, row.alpha),
         ));
-        draw_choice_marks(
-            actors,
-            layout,
-            [x, y],
-            (width - 12.0).min(56.0),
-            choice_enabled,
-            choice_focused,
-            row.alpha,
-        );
+        if choice_enabled.contains(&true) || choice_focused.contains(&true) {
+            draw_choice_marks(
+                actors,
+                layout,
+                [x, y],
+                marker_width(metrics, choice, width - 8.0, zoom),
+                choice_enabled,
+                choice_focused,
+                row.alpha,
+            );
+        }
     }
 }
 
@@ -430,6 +574,7 @@ fn draw_compact_choices(
     inline: &PlayerOptionsInline<'_, TextContent>,
     seats: Seats,
     focused: [bool; MAX_PLAYERS],
+    metrics: TextMetrics<'_>,
 ) {
     for player in 0..MAX_PLAYERS {
         if !seats.active[player] {
@@ -441,22 +586,24 @@ fn draw_compact_choices(
             .min(inline.choices.len() - 1);
         let choice_on = enabled(inline, player, choice);
         let x = seats.values[player];
-        actors.push(layout.bounded_label(
+        actors.push(option_label(
+            layout,
             [x, y],
             0.5,
             120.0,
             inline.choices[choice].clone(),
-            0.92,
+            ITEM_ZOOM,
             rgba(if focus || choice_on { INK } else { MUTED }, row.alpha),
         ));
         if inline.enabled[player].is_some() {
             let status = if choice_on { "ON" } else { "OFF" };
-            actors.push(layout.bounded_label(
+            actors.push(option_label(
+                layout,
                 [x + 62.0, y],
                 0.0,
                 22.0,
                 status.into(),
-                0.65,
+                0.43,
                 rgba(PLAYER_HUES[player], row.alpha),
             ));
         }
@@ -464,7 +611,7 @@ fn draw_compact_choices(
             actors,
             layout,
             [x, y],
-            56.0,
+            marker_width(metrics, &inline.choices[choice], 120.0, ITEM_ZOOM),
             std::array::from_fn(|side| side == player && choice_on),
             std::array::from_fn(|side| side == player && focus),
             row.alpha,
@@ -487,12 +634,13 @@ fn draw_next_row(
     focused: [bool; MAX_PLAYERS],
 ) {
     let position = [235.0, y];
-    actors.push(layout.bounded_label(
+    actors.push(option_label(
+        layout,
         position,
         0.5,
         50.0,
         "NEXT ROW".into(),
-        0.8,
+        0.50,
         rgba(INK, row.alpha),
     ));
     draw_choice_marks(
@@ -515,27 +663,57 @@ fn draw_choice_marks(
     focused: [bool; MAX_PLAYERS],
     alpha: f32,
 ) {
+    let overlapping = focused == [true; MAX_PLAYERS];
     for player in 0..MAX_PLAYERS {
-        let mark_x = x + if player == 0 { -width * 0.5 } else { 1.0 };
-        let mark_width = (width * 0.5 - 1.0).max(1.0);
-        if enabled[player] {
-            actors.push(layout.panel(
-                mark_x,
-                y + 7.0,
-                [mark_width, 2.0],
-                rgba(PLAYER_HUES[player], alpha),
-                -14,
-            ));
-        }
         if focused[player] {
-            actors.push(layout.panel(
-                mark_x,
-                y - 9.0,
-                [mark_width, 2.0],
-                rgba(PLAYER_HUES[player], alpha),
-                -14,
-            ));
+            let shift = if overlapping {
+                [-4.0, 4.0][player]
+            } else {
+                0.0
+            };
+            draw_choice_sprite(actors, layout, [x, y + shift], width, player, true, alpha);
         }
+        if enabled[player] {
+            draw_choice_sprite(actors, layout, [x, y], width, player, false, alpha);
+        }
+    }
+}
+
+fn marker_width(metrics: TextMetrics<'_>, choice: &TextContent, max_width: f32, zoom: f32) -> f32 {
+    (metrics.width(choice.as_str()) * zoom)
+        .min(max_width)
+        .max(8.0)
+}
+
+fn draw_choice_sprite(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    [x, y]: [f32; 2],
+    width: f32,
+    player: usize,
+    cursor: bool,
+    alpha: f32,
+) {
+    let (key, cap, z) = if cursor {
+        ("openitg/options-cursor.png", 14.0, -14)
+    } else {
+        ("openitg/options-underline.png", 8.0, -13)
+    };
+    let start = (width + cap) * 0.5;
+    let v = 0.5 * player as f32;
+    for (cell, (x, w)) in [(x - start, cap), (x, width), (x + start, cap)]
+        .into_iter()
+        .enumerate()
+    {
+        let mut part = sprite(
+            key,
+            layout.position(x, y),
+            layout.size([w, 26.0]),
+            rgba(INK, alpha),
+            z,
+        );
+        part.customtexturerect([cell as f32 / 3.0, v, (cell + 1) as f32 / 3.0, v + 0.5]);
+        actors.push(part.build(0));
     }
 }
 
@@ -567,11 +745,20 @@ mod tests {
         ))
     }
 
-    fn has_mark(actors: &[Actor], position: [f32; 2], tint: [f32; 4]) -> bool {
+    fn has_mark(
+        actors: &[Actor],
+        position: [f32; 2],
+        key: &str,
+        player: usize,
+        alpha: f32,
+    ) -> bool {
+        use deadlib_present::actors::SpriteSource;
+        let v = player as f32 * 0.5;
         actors.iter().any(|actor| {
             matches!(actor,
-                Actor::Sprite { offset, tint: color, z: -14, .. }
-                    if *offset == position && *color == tint
+                Actor::Sprite { source: SpriteSource::TextureStatic(texture), offset, tint, uv_rect, .. }
+                    if *texture == key && *offset == position && tint[3] == alpha
+                        && *uv_rect == Some([1.0 / 3.0, v, 2.0 / 3.0, v + 0.5])
             )
         })
     }
@@ -583,14 +770,14 @@ mod tests {
 
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets");
         let font = deadlib_assets::parse_font_with_asset_context(
-            &root.join("fonts/miso/_miso light.ini"),
+            &root.join("fonts/openitg/_eurostile normal.ini"),
             vec![root.clone()],
         )
         .expect("bundled font");
         let mut assets = deadlib_assets::AssetManager::new();
-        assets.register_font("miso", font.font);
+        assets.register_font(MENU_NORMAL_FONT, font.font);
         let fonts = assets.fonts();
-        let font = fonts.get("miso").unwrap();
+        let font = fonts.get(MENU_NORMAL_FONT).unwrap();
         let first = [
             Arc::<str>::from("Choose an option."),
             Arc::<str>::from("Choose an option."),
@@ -666,11 +853,11 @@ mod tests {
                                 wrap_width_pixels.unwrap(),
                             );
                             assert!(
-                                w as f32 * scale[0] <= 250.001 && h as f32 * scale[1] <= 86.001
+                                w as f32 * scale[0] <= 250.001 && h as f32 * scale[1] <= 70.001
                             );
                             if right {
                                 assert!(content.as_str().contains('\n'));
-                                assert!(scale[0] < 0.82);
+                                assert!(scale[0] < 0.54);
                             }
                             reveal[seen] = match attributes {
                                 TextAttributes::GlyphReveal(fraction) => *fraction,
@@ -805,9 +992,9 @@ mod tests {
                     &FontMap::default(),
                     0.0,
                 );
-                assert!(has_text(&actors, "PLAYER OPTIONS", [36.0 + delta, 38.0]));
-                assert!(has_text(&actors, "P2", [395.0 + delta, 92.0]));
-                assert!(!has_text(&actors, "P1", [395.0 + delta, 92.0]));
+                assert!(has_text(&actors, "PICK MODIFIERS", [36.0 + delta, 38.0]));
+                assert!(has_text(&actors, "P2", [379.0 + delta, 79.0]));
+                assert!(!has_text(&actors, "P1", [379.0 + delta, 79.0]));
                 assert!(has_text(&actors, "Scroll Speed", [53.0 + delta, 127.0]));
                 assert!(has_text(&actors, "2.50x", [395.0 + delta, 127.0]));
                 assert!(has_text(&actors, "Leaf", [362.0 + delta, 239.0]));
@@ -855,17 +1042,17 @@ mod tests {
                 &FontMap::default(),
                 0.0,
             );
-            assert!(has_text(&actors, "Normal", [306.0, 127.0]));
-            assert!(has_text(&actors, "Reverse", [498.0, 127.0]));
-            assert!(has_text(&actors, "Split", [306.0, 155.0]));
-            let p1 = rgba(PLAYER_HUES[0], 1.0);
-            let p2 = rgba(PLAYER_HUES[1], 1.0);
-            assert!(has_mark(&actors, [278.0, 134.0], p1));
-            assert!(has_mark(&actors, [278.0, 162.0], p1));
-            assert!(has_mark(&actors, [499.0, 134.0], p2));
-            assert!(has_mark(&actors, [470.0, 118.0], p1));
-            assert!(has_mark(&actors, [307.0, 146.0], p2));
-            assert!(!has_mark(&actors, [470.0, 134.0], p1));
+            assert!(has_text(&actors, "Normal", [268.5, 127.0]));
+            assert!(has_text(&actors, "Reverse", [485.5, 127.0]));
+            assert!(has_text(&actors, "Split", [268.5, 155.0]));
+            let underline = "openitg/options-underline.png";
+            let cursor = "openitg/options-cursor.png";
+            assert!(has_mark(&actors, [268.5, 127.0], underline, 0, 1.0));
+            assert!(has_mark(&actors, [268.5, 155.0], underline, 0, 1.0));
+            assert!(has_mark(&actors, [485.5, 127.0], underline, 1, 1.0));
+            assert!(has_mark(&actors, [485.5, 127.0], cursor, 0, 1.0));
+            assert!(has_mark(&actors, [268.5, 155.0], cursor, 1, 1.0));
+            assert!(!has_mark(&actors, [485.5, 127.0], underline, 0, 1.0));
         });
     }
 
@@ -907,8 +1094,10 @@ mod tests {
             assert!(has_text(&actors, "NEXT ROW", [235.0, 127.0]));
             assert!(has_mark(
                 &actors,
-                [212.0, 118.0],
-                rgba(PLAYER_HUES[0], 0.25)
+                [235.0, 127.0],
+                "openitg/options-cursor.png",
+                0,
+                0.25
             ));
             assert!(actors.iter().any(|actor| matches!(actor,
                 Actor::Text { content, color, .. }

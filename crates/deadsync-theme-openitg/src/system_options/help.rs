@@ -54,8 +54,9 @@ impl OptionsHelp {
 
     fn fit(&mut self, assets: &AssetManager) {
         let measure = |text: &Option<Explanation>| {
-            text.as_ref()
-                .map_or([0; 2], |text| text.measure(assets.fonts(), WRAP_WIDTH))
+            text.as_ref().map_or([0; 2], |text| {
+                text.measure(assets.fonts(), "miso", WRAP_WIDTH)
+            })
         };
         let [description, detail] = [measure(&self.description), measure(&self.detail)];
         let gap = if self.description.is_some() && self.detail.is_some() {
@@ -109,6 +110,7 @@ impl OptionsHelp {
             align: TextAlign::Left,
             zoom: self.zoom,
             wrap_width: WRAP_WIDTH,
+            font: "miso",
         }
     }
 }

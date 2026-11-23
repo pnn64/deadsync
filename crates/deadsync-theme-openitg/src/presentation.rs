@@ -1,5 +1,6 @@
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder, TweenSteps};
+use deadlib_present::font::{self, Font, FontMap};
 use deadlib_present::space::{screen_height, screen_width};
 use deadlib_present::{anim, runtime};
 
@@ -8,6 +9,39 @@ pub(crate) const HEIGHT: f32 = 480.0;
 pub(crate) const INK: [f32; 3] = [0.92, 0.95, 0.99];
 pub(crate) const MUTED: [f32; 3] = [0.57, 0.65, 0.74];
 pub(crate) const ACCENT: [f32; 3] = [1.0, 0.69, 0.25];
+
+#[derive(Clone, Copy)]
+pub(crate) struct TextMetrics<'a> {
+    fonts: &'a FontMap,
+    font: Option<&'a Font>,
+}
+
+impl<'a> TextMetrics<'a> {
+    pub(crate) fn new(fonts: &'a FontMap, font_name: &'static str) -> Self {
+        Self {
+            fonts,
+            font: fonts.get(font_name),
+        }
+    }
+
+    pub(crate) fn chain_key(self) -> Option<u64> {
+        self.font.map(|font| font.chain_key)
+    }
+
+    pub(crate) fn width(self, text: &str) -> f32 {
+        let text = font::replace_markers(text);
+        let width = self.font.map_or_else(
+            || text.chars().count() as i32 * 8,
+            |font| {
+                text.split('\n')
+                    .map(|line| font::measure_line_width_logical(font, line, self.fonts))
+                    .max()
+                    .unwrap_or_default()
+            },
+        );
+        (width + (width & 1)) as f32
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(crate) struct LinearMotion<const N: usize> {

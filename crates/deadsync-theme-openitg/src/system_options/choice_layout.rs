@@ -1,39 +1,6 @@
 use std::sync::Arc;
 
-use deadlib_present::font::{self, Font, FontMap};
-
-#[derive(Clone, Copy)]
-pub(super) struct TextMetrics<'a> {
-    fonts: &'a FontMap,
-    font: Option<&'a Font>,
-}
-
-impl<'a> TextMetrics<'a> {
-    pub(super) fn new(fonts: &'a FontMap) -> Self {
-        Self {
-            fonts,
-            font: fonts.get("miso"),
-        }
-    }
-
-    fn chain_key(self) -> Option<u64> {
-        self.font.map(|font| font.chain_key)
-    }
-
-    pub(super) fn width(self, text: &str) -> f32 {
-        let text = font::replace_markers(text);
-        let width = self.font.map_or_else(
-            || text.chars().count() as i32 * 8,
-            |font| {
-                text.split('\n')
-                    .map(|line| font::measure_line_width_logical(font, line, self.fonts))
-                    .max()
-                    .unwrap_or_default()
-            },
-        );
-        (width + (width & 1)) as f32
-    }
-}
+use crate::presentation::TextMetrics;
 
 #[derive(Default)]
 pub(super) struct ChoiceLayout {

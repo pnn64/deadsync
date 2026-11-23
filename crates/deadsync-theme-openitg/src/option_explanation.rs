@@ -18,6 +18,7 @@ pub(crate) struct ExplanationPlacement {
     pub(crate) align: TextAlign,
     pub(crate) zoom: f32,
     pub(crate) wrap_width: i32,
+    pub(crate) font: &'static str,
 }
 
 impl Explanation {
@@ -32,8 +33,13 @@ impl Explanation {
         }
     }
 
-    pub(crate) fn measure(&self, fonts: &font::FontMap, wrap_width: i32) -> [i32; 2] {
-        fonts.get("miso").map_or([0; 2], |font| {
+    pub(crate) fn measure(
+        &self,
+        fonts: &font::FontMap,
+        face: &'static str,
+        wrap_width: i32,
+    ) -> [i32; 2] {
+        fonts.get(face).map_or([0; 2], |font| {
             measure_wrapped_text(font, fonts, &self.text, wrap_width)
         })
     }
@@ -57,6 +63,7 @@ impl Explanation {
             placement.zoom,
             color,
         );
+        text.font(placement.font);
         text.valign(0.0);
         text.horizalign(placement.align);
         text.wrapwidthpixels(placement.wrap_width as f32);

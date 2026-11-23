@@ -241,6 +241,13 @@ around their selection. Exit appears at its separate anchor when the window
 reaches the final row. The shared editor supplies the row order and navigation,
 including the optional arcade bindings and full-height wrapped rows.
 
+Player Options continues the red menu backdrop and streaks from Select Music.
+It uses the source *Pick Modifiers* heading, Eurostile bitmap fonts, panel
+and frame, seat emblems, amber row highlight, and each player's three-piece
+choice cursor and underline. The nameplates identify the physical seats.
+Inline choices fit the available width from the font's glyph advances.
+Wider translated lists use the compact player columns.
+
 The scrollbar centers at `(34, 242)` and travels within 240 px. The thumb
 for each joined seat follows its position in the selectable row order over
 200 ms, with Exit at the bottom. The two thumbs share the width when they
@@ -253,7 +260,8 @@ x=68 and P2 right-aligned at x=568. Each column has the equivalent of the
 reference's 250 px displayed wrap width. The renderer keeps translated line
 breaks and scales the full paragraph uniformly when it needs to fit.
 The two 500 ms glyph reveals run independently and restart when the associated
-explanation changes or the editor switches panes.
+explanation changes or the editor switches panes. Longer help text extends
+the frame below the divider, keeping the main rows at their authored positions.
 
 Tests cover P2-only perspective edits, profile requests, stage recovery and
 resubmission, and noteskin preview requests through both layouts. Actor checks
@@ -273,6 +281,17 @@ four-line P2 paragraph also fits in the P2-only layout. The tests check both
 anchors, paragraph bounds, and the reveal when another row has identical help.
 System Options actor traces for Test Input and Configure Pads match at both
 widths across the change to the shared explanation renderer.
+
+This visual pass uses the supplied artwork and the effective metrics. Vulkan
+captures at 640×480 and 854×480 check the new panel and cursor art for versus
+and P2-only, at the settled opening and while scrolling to Visual Delay.
+A settled native Player Options capture remains open.
+
+With the source artwork and fonts at 854×480, median OpenITG actor build time
+went from 27 to 45 µs in solo and from 35 to 59 µs in versus. The settled
+versus fixture went from 39 to 70 draw operations and from 70 to 109 µs for
+CPU composition. The measured actor and composition medians add up to
+about 0.06 ms more CPU time per frame for the settled versus fixture.
 
 At 854×480, nine warm runs of 8,000 actor builds with dev-profile theme libraries
 measured Simply Love at 60.6 µs before the change and 60.2 µs afterward in solo,
