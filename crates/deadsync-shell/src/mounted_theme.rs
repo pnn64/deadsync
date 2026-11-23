@@ -6,12 +6,15 @@ use deadlib_present::actors::TextContent;
 use deadsync_assets::gameplay_stage::{
     ActiveGameplayStage, GameplayStageAssets, PreparedGameplayStage,
 };
+use deadsync_assets::progress::LibraryLoadView;
+use deadsync_config::app_config::Config;
 use deadsync_profile_gameplay::stage_scores::GameplayScoreSnapshots;
 use deadsync_theme::ThemeSounds;
 use deadsync_theme::attract::AttractPresentation;
 use deadsync_theme::player_options::PlayerOptionsLayout;
 use deadsync_theme::selection::SelectionPresentation;
 use deadsync_theme::stage::StagePresentation;
+use deadsync_theme::startup::StartupPresentation;
 use deadsync_theme::system_options::SystemOptionsPresentation;
 use deadsync_theme::views::GameplayStageView;
 use deadsync_theme_simply_love::{
@@ -26,9 +29,11 @@ pub struct SupplementalResources {
 }
 
 pub type PlayerOptionsLayoutFactory = fn() -> Box<dyn PlayerOptionsLayout<Actor, TextContent>>;
+pub type StartupScreen = dyn StartupPresentation<Actor, LibraryLoadView, Config>;
 
 pub struct ThemeMount {
     pub title: fn(i32) -> InstalledMenu,
+    pub startup: fn(i32) -> Box<StartupScreen>,
     pub resources: SupplementalResources,
     pub stage: Box<dyn StagePresentation<Actor>>,
     pub gameplay: GameplayPresentationMount,

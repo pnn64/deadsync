@@ -14,7 +14,7 @@ use deadsync_theme::views::GameplayLivePresentation;
 use super::{
     App, CurrentScreen, GameplayInitView, GameplayLobbySession, GameplaySession,
     GameplaySfx, GameplayStageInput, GameplayStageIntro, GameplayStageView, GameplayState,
-    LeadInTiming, config, gameplay_config_from_config, gameplay_viewport, init,
+    LeadInTiming, config, gameplay_config_from_config, gameplay_viewport,
     prepare_gameplay_stage, prewarm_gameplay_assets, prewarm_gameplay_sfx, profile_data,
     song_loading,
 };
@@ -63,7 +63,7 @@ pub(crate) struct AttractDemo {
 impl App {
     pub(super) fn step_attract_demonstration(&mut self, delta_time: f32) {
         let screens = &mut self.state.screens;
-        if screens.current_screen != CurrentScreen::Init || init::is_loading(&screens.init_state) {
+        if screens.current_screen != CurrentScreen::Init || screens.startup_load.is_loading() {
             return;
         }
         let Some(intro) = screens.attract.as_mut() else {

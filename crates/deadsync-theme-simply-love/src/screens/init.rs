@@ -9,13 +9,14 @@ use deadlib_present::actors::Actor;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use deadsync_assets::progress::{ContentReloadEvent, ContentReloadPhase};
-use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_assets::progress::{ContentReloadPhase, LibraryLoadView};
+use deadsync_config::app_config::Config;
+use deadsync_theme::startup::StartupPresentation;
+
+use crate::views::SimplyLoveVisualPolicyView;
 use deadsync_theme::FontRole;
 use std::cell::RefCell;
-use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
-use std::time::Instant;
 
 /* ----------------------- timing & layout ----------------------- */
 
@@ -48,62 +49,11 @@ struct SpeedTextCache {
     text: Arc<str>,
 }
 
-struct LoadingState {
-    phase: ContentReloadPhase,
-    line2: Arc<str>,
-    line3: Arc<str>,
-    count_text: Arc<str>,
-    songs_done: usize,
-    songs_total: usize,
-    courses_done: usize,
-    courses_total: usize,
-    artwork_done: usize,
-    artwork_total: usize,
-    noteskins_done: usize,
-    noteskins_total: usize,
-    replaygain_done: usize,
-    replaygain_total: usize,
-    replaygain_skip_requested: bool,
-    done: bool,
-    started_at: Instant,
-    phase_started_at: Instant,
-    speed_text_cache: RefCell<Option<SpeedTextCache>>,
-}
-
-impl LoadingState {
-    fn new() -> Self {
-        Self {
-            phase: ContentReloadPhase::Songs,
-            line2: EMPTY_TEXT.clone(),
-            line3: EMPTY_TEXT.clone(),
-            count_text: EMPTY_TEXT.clone(),
-            songs_done: 0,
-            songs_total: 0,
-            courses_done: 0,
-            courses_total: 0,
-            artwork_done: 0,
-            artwork_total: 0,
-            noteskins_done: 0,
-            noteskins_total: 0,
-            replaygain_done: 0,
-            replaygain_total: 0,
-            replaygain_skip_requested: false,
-            done: false,
-            started_at: Instant::now(),
-            phase_started_at: Instant::now(),
-            speed_text_cache: RefCell::new(None),
-        }
-    }
-
-    /// Switch the active phase, resetting the per-phase timer (used for the ETA
-    /// estimate) whenever the phase actually changes so each phase's rate is
-    /// measured from its own start rather than from boot.
-    fn set_phase(&mut self, phase: ContentReloadPhase) {
-        if self.phase != phase {
-            self.phase = phase;
-            self.phase_started_at = Instant::now();
-        }
-    }
+struct CountTextCache {
+    done: usize,
+    total: usize,
+    finished: bool,
+    text: Arc<str>,
 }
 
 static EMPTY_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from(""));
@@ -130,7 +80,6 @@ fn remaining(from_time: f32, now: f32) -> f32 {
 
 #[derive(PartialEq, Eq)]
 enum InitPhase {
-    Loading,
     Playing,
     FadingOut,
 }
@@ -138,36 +87,83 @@ enum InitPhase {
 pub struct State {
     elapsed: f32,
     phase: InitPhase,
-    loader_started: bool,
-    loading: Option<LoadingState>,
-    songs_root: PathBuf,
-    courses_root: PathBuf,
-    pub active_color_index: i32,
+    active_color_index: i32,
     bg: visual_style_bg::State,
+    count_text_cache: RefCell<Option<CountTextCache>>,
+    speed_text_cache: RefCell<Option<SpeedTextCache>>,
 }
 
-#[must_use]
-pub const fn init(songs_root: PathBuf, courses_root: PathBuf) -> State {
-    State {
-        elapsed: 0.0,
-        phase: InitPhase::Loading,
-        loader_started: false,
-        loading: None,
-        songs_root,
-        courses_root,
-        active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: visual_style_bg::State::new(),
+impl State {
+    #[must_use]
+    pub const fn new(color_index: i32) -> Self {
+        Self {
+            elapsed: 0.0,
+            phase: InitPhase::Playing,
+            active_color_index: color_index,
+            bg: visual_style_bg::State::new(),
+            count_text_cache: RefCell::new(None),
+            speed_text_cache: RefCell::new(None),
+        }
+    }
+
+    fn count_text(&self, loading: &LibraryLoadView) -> Arc<str> {
+        let LibraryLoadView {
+            done,
+            total,
+            finished,
+            ..
+        } = *loading;
+        if let Some(cache) = self.count_text_cache.borrow().as_ref()
+            && (cache.done, cache.total, cache.finished) == (done, total, finished)
+        {
+            return cache.text.clone();
+        }
+        let text = if finished || (total > 0 && done >= total) {
+            tr("Init", "DoneText")
+        } else if total == 0 {
+            EMPTY_TEXT.clone()
+        } else {
+            Arc::<str>::from(crate::screens::progress_count_text(done, total))
+        };
+        *self.count_text_cache.borrow_mut() = Some(CountTextCache {
+            done,
+            total,
+            finished,
+            text: text.clone(),
+        });
+        text
     }
 }
 
-pub fn replay_intro(state: &mut State) {
-    state.elapsed = 0.0;
-    state.phase = InitPhase::Playing;
-    state.loading = None;
-}
+impl StartupPresentation<Actor, LibraryLoadView, Config> for State {
+    fn reset_intro(&mut self, color_index: i32) {
+        self.elapsed = 0.0;
+        self.phase = InitPhase::Playing;
+        self.active_color_index = color_index;
+    }
 
-pub fn is_loading(state: &State) -> bool {
-    state.phase == InitPhase::Loading
+    fn advance_intro(&mut self, delta_time: f32) -> ThemeEffect {
+        update(self, delta_time)
+    }
+
+    fn push_loading(
+        &self,
+        actors: &mut Vec<Actor>,
+        progress: Option<&LibraryLoadView>,
+        config: &Config,
+    ) {
+        let visual_policy = SimplyLoveVisualPolicyView::from_config(config);
+        push_background(actors, self, visual_policy);
+        push_loading_overlay(self, actors, progress, visual_policy.machine_font);
+    }
+
+    fn push_intro(&self, actors: &mut Vec<Actor>, config: &Config) {
+        push_intro(
+            actors,
+            self,
+            SimplyLoveVisualPolicyView::from_config(config),
+        );
+    }
 }
 
 #[inline(always)]
@@ -176,67 +172,18 @@ fn arc_phase_label(phase: ContentReloadPhase) -> Arc<str> {
         ContentReloadPhase::Songs => tr("Init", "LoadingSongsText"),
         ContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
         ContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
-        ContentReloadPhase::Noteskins => {
-            tr("Init", "CompilingNoteskinsText")
-        }
-        ContentReloadPhase::ReplayGain => {
-            tr("Init", "AnalyzingLoudnessText")
-        }
+        ContentReloadPhase::Noteskins => tr("Init", "CompilingNoteskinsText"),
+        ContentReloadPhase::ReplayGain => tr("Init", "AnalyzingLoudnessText"),
     }
 }
 
-#[inline(always)]
-fn loading_progress_values(loading: &LoadingState) -> (usize, usize, f32) {
-    let (done, mut total) = match loading.phase {
-        ContentReloadPhase::Songs => {
-            (loading.songs_done, loading.songs_total)
-        }
-        ContentReloadPhase::Courses => {
-            (loading.courses_done, loading.courses_total)
-        }
-        ContentReloadPhase::Artwork => {
-            (loading.artwork_done, loading.artwork_total)
-        }
-        ContentReloadPhase::Noteskins => {
-            (loading.noteskins_done, loading.noteskins_total)
-        }
-        ContentReloadPhase::ReplayGain => {
-            (loading.replaygain_done, loading.replaygain_total)
-        }
-    };
-    if total < done {
-        total = done;
-    }
-    let mut progress = if total > 0 {
-        (done as f32 / total as f32).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    if !loading.done && total > 0 && progress >= 1.0 {
-        progress = 0.999;
-    }
-    (done, total, progress)
-}
-
-fn refresh_loading_count_text(loading: &mut LoadingState) {
-    let (done, total, _) = loading_progress_values(loading);
-    loading.count_text = if loading.done || (total > 0 && done >= total) {
-        tr("Init", "DoneText")
-    } else if total == 0 {
-        EMPTY_TEXT.clone()
-    } else {
-        Arc::<str>::from(crate::screens::progress_count_text(done, total))
-    };
-    *loading.speed_text_cache.borrow_mut() = None;
-}
-
-fn speed_text(loading: &LoadingState, done: usize, elapsed_s: f32) -> Arc<str> {
+fn speed_text(state: &State, done: usize, elapsed_s: f32) -> Arc<str> {
     let tenths_per_sec = if elapsed_s > 0.0 {
         ((done as f32 / elapsed_s) * 10.0).round().max(0.0) as u32
     } else {
         0
     };
-    if let Some(cache) = loading.speed_text_cache.borrow().as_ref()
+    if let Some(cache) = state.speed_text_cache.borrow().as_ref()
         && cache.done == done
         && cache.tenths_per_sec == tenths_per_sec
     {
@@ -247,7 +194,7 @@ fn speed_text(loading: &LoadingState, done: usize, elapsed_s: f32) -> Arc<str> {
         tenths_per_sec / 10,
         tenths_per_sec % 10
     ));
-    *loading.speed_text_cache.borrow_mut() = Some(SpeedTextCache {
+    *state.speed_text_cache.borrow_mut() = Some(SpeedTextCache {
         done,
         tenths_per_sec,
         text: text.clone(),
@@ -286,160 +233,7 @@ fn format_eta(secs: u64) -> String {
     format!("{hours}h {rem_m:02}m")
 }
 
-fn start_loading(state: &mut State) -> ThemeEffect {
-    state.loading = Some(LoadingState::new());
-    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
-        crate::SimplyLoveContentRequest::InitializeLibrary {
-            songs_root: state.songs_root.clone(),
-            courses_root: state.courses_root.clone(),
-        },
-    ))
-}
-
-pub fn sync_loading_events(
-    state: &mut State,
-    events: impl IntoIterator<Item = ContentReloadEvent>,
-) {
-    let Some(loading) = state.loading.as_mut() else {
-        return;
-    };
-    for event in events {
-        match event {
-            ContentReloadEvent::Phase(phase) => {
-                loading.set_phase(phase);
-                loading.line2 = EMPTY_TEXT.clone();
-                loading.line3 = EMPTY_TEXT.clone();
-                refresh_loading_count_text(loading);
-            }
-            ContentReloadEvent::Song {
-                done,
-                total,
-                pack,
-                song,
-            } => {
-                loading.set_phase(ContentReloadPhase::Songs);
-                loading.songs_done = done;
-                loading.songs_total = total;
-                loading.line2 = Arc::<str>::from(pack);
-                loading.line3 = Arc::<str>::from(song);
-                refresh_loading_count_text(loading);
-            }
-            ContentReloadEvent::Course {
-                done,
-                total,
-                group,
-                course,
-            } => {
-                loading.set_phase(ContentReloadPhase::Courses);
-                loading.courses_done = done;
-                loading.courses_total = total;
-                loading.line2 = Arc::<str>::from(group);
-                loading.line3 = Arc::<str>::from(course);
-                refresh_loading_count_text(loading);
-            }
-            ContentReloadEvent::Artwork {
-                done,
-                total,
-                line2,
-                line3,
-            } => {
-                loading.set_phase(ContentReloadPhase::Artwork);
-                loading.artwork_done = done;
-                loading.artwork_total = total;
-                loading.line2 = Arc::<str>::from(line2);
-                loading.line3 = Arc::<str>::from(line3);
-                refresh_loading_count_text(loading);
-            }
-            ContentReloadEvent::Noteskins {
-                done,
-                total,
-                skin,
-                status,
-            } => {
-                loading.set_phase(ContentReloadPhase::Noteskins);
-                loading.noteskins_done = done;
-                loading.noteskins_total = total;
-                loading.line2 = Arc::<str>::from(skin);
-                loading.line3 = Arc::<str>::from(status);
-                refresh_loading_count_text(loading);
-            }
-            ContentReloadEvent::ReplayGain {
-                done,
-                total,
-                line2,
-                line3,
-            } => {
-                loading.set_phase(ContentReloadPhase::ReplayGain);
-                loading.replaygain_done = done;
-                loading.replaygain_total = total;
-                loading.line2 = Arc::<str>::from(line2);
-                loading.line3 = Arc::<str>::from(line3);
-                refresh_loading_count_text(loading);
-            }
-            ContentReloadEvent::Finished { .. } => {
-                loading.done = true;
-                refresh_loading_count_text(loading);
-            }
-        }
-    }
-}
-
-/* -------------------------- input -> nav ----------------------- */
-
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if state.phase == InitPhase::Loading {
-        // While loading, Start/Back skips only the ReplayGain (loudness) pass,
-        // which is the last and longest phase; the rest of the library is
-        // already usable and the skipped songs get analyzed lazily on preview.
-        if ev.pressed
-            && is_start_or_back(ev.action)
-            && let Some(loading) = state.loading.as_mut()
-            && loading.phase == ContentReloadPhase::ReplayGain
-            && !loading.replaygain_skip_requested
-        {
-            loading.replaygain_skip_requested = true;
-            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
-                crate::SimplyLoveContentRequest::SkipReplayGain,
-            ));
-        }
-        return ThemeEffect::None;
-    }
-    if ev.pressed && is_start_or_back(ev.action) {
-        return ThemeEffect::Navigate(Screen::Menu);
-    }
-    ThemeEffect::None
-}
-
-#[inline(always)]
-const fn is_start_or_back(action: VirtualAction) -> bool {
-    matches!(
-        action,
-        VirtualAction::p1_start
-            | VirtualAction::p1_back
-            | VirtualAction::p2_start
-            | VirtualAction::p2_back
-    )
-}
-
-/* ---------------------------- update --------------------------- */
-
-pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
-    if state.phase == InitPhase::Loading {
-        if !state.loader_started {
-            state.loader_started = true;
-            return start_loading(state);
-        }
-
-        let done = state.loading.as_ref().is_some_and(|loading| loading.done);
-
-        if done {
-            state.loading = None;
-            state.phase = InitPhase::Playing;
-            state.elapsed = 0.0;
-        }
-        return ThemeEffect::None;
-    }
-
+fn update(state: &mut State, dt: f32) -> ThemeEffect {
     state.elapsed += dt.max(0.0);
 
     if state.phase == InitPhase::Playing && state.elapsed >= arrows_finished_at() {
@@ -514,29 +308,28 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     (vec![actor], 0.35)
 }
 
-fn loading_progress(loading: Option<&LoadingState>) -> (usize, usize, f32) {
-    let Some(loading) = loading else {
-        return (0, 0, 0.0);
-    };
-    loading_progress_values(loading)
+fn loading_progress(loading: &LibraryLoadView) -> f32 {
+    if loading.total == 0 {
+        return 0.0;
+    }
+    let progress = loading.done as f32 / loading.total as f32;
+    progress.min(if loading.finished { 1.0 } else { 0.999 })
 }
 
 fn push_loading_overlay(
     state: &State,
     actors: &mut Vec<Actor>,
-    loading_elapsed_s: f32,
+    loading: Option<&LibraryLoadView>,
     machine_font: deadsync_config::theme::MachineFont,
 ) {
-    let loading = state.loading.as_ref();
-    let phase = loading
-        .map(|loading| loading.phase)
-        .unwrap_or(ContentReloadPhase::Songs);
-    let (done, total, progress) = loading_progress(loading);
-    let show_speed_row = total > 0;
-    let speed_text = loading.filter(|_| show_speed_row).map(|loading| {
-        let speed = speed_text(loading, done, loading_elapsed_s.max(0.0));
-        let phase_elapsed_s = loading.phase_started_at.elapsed().as_secs_f32().max(0.0);
-        match eta_seconds(done, total, phase_elapsed_s) {
+    let speed_text = loading.filter(|loading| loading.total > 0).map(|loading| {
+        let speed = speed_text(
+            state,
+            loading.done,
+            loading.started_at.elapsed().as_secs_f32(),
+        );
+        let phase_elapsed_s = loading.phase_started_at.elapsed().as_secs_f32();
+        match eta_seconds(loading.done, loading.total, phase_elapsed_s) {
             Some(eta_secs) => Arc::<str>::from(format!(
                 "{speed}  \u{2022}  {}",
                 tr_fmt(
@@ -548,11 +341,7 @@ fn push_loading_overlay(
             None => speed,
         }
     });
-    let show_skip_hint = matches!(
-        phase,
-        ContentReloadPhase::ReplayGain
-    ) && loading
-        .is_some_and(|loading| !loading.done && !loading.replaygain_skip_requested);
+    let show_skip_hint = loading.is_some_and(|loading| loading.can_skip_replaygain);
     let fill = color::decorative_rgba(state.active_color_index);
 
     let bar_w = widescale(360.0, 520.0);
@@ -579,7 +368,7 @@ fn push_loading_overlay(
     ));
     let phase_label = loading.map_or_else(
         || tr("Init", "InitializingText"),
-        |_| arc_phase_label(phase),
+        |loading| arc_phase_label(loading.phase),
     );
     actors.push(act!(text:
         font("miso"):
@@ -624,9 +413,9 @@ fn push_loading_overlay(
         offset: [bar_cx, bar_cy],
         width: bar_w,
         height: bar_h,
-        progress,
+        progress: loading.map_or(0.0, loading_progress),
         label: loading
-            .map_or_else(|| EMPTY_TEXT.clone(), |loading| loading.count_text.clone())
+            .map_or_else(|| EMPTY_TEXT.clone(), |loading| state.count_text(loading))
             .into(),
         fill_rgba: [fill[0], fill[1], fill[2], 1.0],
         bg_rgba: [0.0, 0.0, 0.0, 1.0],
@@ -664,39 +453,25 @@ fn push_loading_overlay(
 
 /* --------------------------- combined build --------------------------- */
 
-fn push_actors_with_elapsed_overrides(
+fn push_background(
     actors: &mut Vec<Actor>,
     state: &State,
-    loading_elapsed_override: Option<f32>,
-    bg_elapsed_override: Option<f32>,
-    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    visual_policy: SimplyLoveVisualPolicyView,
 ) {
+    state.bg.push(
+        actors,
+        visual_style_bg::Params {
+            active_color_index: state.active_color_index,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+            visual_policy,
+        },
+    );
+}
+
+fn push_intro(actors: &mut Vec<Actor>, state: &State, visual_policy: SimplyLoveVisualPolicyView) {
     actors.reserve(32 + ARROW_COUNT);
-
-    /* 1) HEART BACKGROUND — visible immediately */
-    let bg_params = visual_style_bg::Params {
-        active_color_index: state.active_color_index,
-        backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-        alpha_mul: 1.0,
-        visual_policy,
-    };
-    if let Some(bg_elapsed_s) = bg_elapsed_override {
-        state
-            .bg
-            .push_at_elapsed(actors, bg_params, f64::from(bg_elapsed_s));
-    } else {
-        state.bg.push(actors, bg_params);
-    }
-
-    if state.phase == InitPhase::Loading {
-        let loading_elapsed_s = loading_elapsed_override.unwrap_or_else(|| {
-            state.loading.as_ref().map_or(0.0, |loading| {
-                loading.started_at.elapsed().as_secs_f32().max(0.0)
-            })
-        });
-        push_loading_overlay(state, actors, loading_elapsed_s, visual_policy.machine_font);
-        return;
-    }
+    push_background(actors, state, visual_policy);
 
     /* If we’re still in pre-roll, stop here: no squish/backdrop/arrows yet. */
     if state.elapsed < PRE_ROLL {
@@ -754,166 +529,31 @@ fn push_actors_with_elapsed_overrides(
     }
 }
 
-pub fn push_actors(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    visual_policy: crate::views::SimplyLoveVisualPolicyView,
-) {
-    push_actors_with_elapsed_overrides(actors, state, None, None, visual_policy);
-}
-
-pub fn get_actors(state: &State) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(32 + ARROW_COUNT);
-    push_actors(
-        &mut actors,
-        state,
-        crate::views::SimplyLoveVisualPolicyView::default(),
-    );
-    actors
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn startup_loading_emits_shell_request() {
-        let mut state = init(PathBuf::from("Songs"), PathBuf::from("Courses"));
-
-        let effect = update(&mut state, 0.0);
-
+    fn replay_intro_returns_to_menu() {
+        let mut state = State::new(2);
         assert!(matches!(
-            effect,
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
-                crate::SimplyLoveContentRequest::InitializeLibrary {
-                    songs_root,
-                    courses_root,
-                }
-            )) if songs_root == std::path::Path::new("Songs")
-                && courses_root == std::path::Path::new("Courses")
-        ));
-        assert!(state.loading.is_some());
-    }
-
-    #[test]
-    fn shell_events_drive_startup_progress_and_completion() {
-        let mut state = init(PathBuf::from("Songs"), PathBuf::from("Courses"));
-        let _ = update(&mut state, 0.0);
-
-        sync_loading_events(
-            &mut state,
-            vec![
-                crate::views::SimplyLoveContentReloadEvent::Artwork {
-                    done: 4,
-                    total: 9,
-                    line2: "Pack".to_owned(),
-                    line3: "Song".to_owned(),
-                },
-                crate::views::SimplyLoveContentReloadEvent::Noteskins {
-                    done: 2,
-                    total: 3,
-                    skin: "metal".to_owned(),
-                    status: "built".to_owned(),
-                },
-                crate::views::SimplyLoveContentReloadEvent::Finished {
-                    song_packs: Vec::new(),
-                },
-            ],
-        );
-
-        let loading = state
-            .loading
-            .as_ref()
-            .expect("loading chrome should remain");
-        assert_eq!((loading.artwork_done, loading.artwork_total), (4, 9));
-        assert_eq!((loading.noteskins_done, loading.noteskins_total), (2, 3));
-        assert_eq!(
-            (loading.line2.as_ref(), loading.line3.as_ref()),
-            ("metal", "built")
-        );
-        assert!(loading.done);
-
-        assert!(matches!(update(&mut state, 0.0), ThemeEffect::None));
-        assert!(state.loading.is_none());
-        assert!(matches!(state.phase, InitPhase::Playing));
-    }
-
-    fn press(action: VirtualAction) -> InputEvent {
-        let now = std::time::Instant::now();
-        InputEvent {
-            action,
-            input_slot: 0,
-            pressed: true,
-            source: deadsync_core::input::InputSource::Gamepad,
-            timestamp: now,
-            timestamp_host_nanos: 0,
-            stored_at: now,
-            emitted_at: now,
-        }
-    }
-
-    #[test]
-    fn start_skips_only_during_replaygain_phase() {
-        let mut state = init(PathBuf::from("Songs"), PathBuf::from("Courses"));
-        let _ = update(&mut state, 0.0);
-
-        // Earlier phases ignore Start; nothing is skipped.
-        sync_loading_events(
-            &mut state,
-            vec![crate::views::SimplyLoveContentReloadEvent::Artwork {
-                done: 1,
-                total: 10,
-                line2: "Pack".to_owned(),
-                line3: "Song".to_owned(),
-            }],
-        );
-        assert!(matches!(
-            handle_input(&mut state, &press(VirtualAction::p1_start)),
+            state.advance_intro(arrows_finished_at()),
             ThemeEffect::None
         ));
+        assert!(matches!(state.phase, InitPhase::FadingOut));
 
-        // Once in the ReplayGain phase, Start requests a skip exactly once.
-        sync_loading_events(
-            &mut state,
-            vec![crate::views::SimplyLoveContentReloadEvent::ReplayGain {
-                done: 2,
-                total: 100,
-                line2: "Pack".to_owned(),
-                line3: "Song".to_owned(),
-            }],
-        );
-        assert!(matches!(
-            handle_input(&mut state, &press(VirtualAction::p1_start)),
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
-                crate::SimplyLoveContentRequest::SkipReplayGain,
-            ))
-        ));
-        // A second press is a no-op (skip already requested).
-        assert!(matches!(
-            handle_input(&mut state, &press(VirtualAction::p1_back)),
-            ThemeEffect::None
-        ));
-    }
-
-    #[test]
-    fn replay_intro_bypasses_loading_and_returns_to_menu() {
-        let mut state = init(PathBuf::from("Songs"), PathBuf::from("Courses"));
-        let _ = update(&mut state, 0.0);
-        state.active_color_index = 7;
-
-        replay_intro(&mut state);
+        state.reset_intro(7);
 
         assert!(matches!(state.phase, InitPhase::Playing));
-        assert!(state.loading.is_none());
         assert_eq!(state.active_color_index, 7);
-        assert!(matches!(update(&mut state, 0.0), ThemeEffect::None));
+        assert!(matches!(state.advance_intro(0.0), ThemeEffect::None));
         assert!(matches!(
-            update(&mut state, arrows_finished_at()),
+            state.advance_intro(arrows_finished_at()),
             ThemeEffect::None
         ));
         assert!(matches!(state.phase, InitPhase::FadingOut));
         assert!(matches!(
-            update(&mut state, BAR_SQUISH_DURATION + 0.001),
+            state.advance_intro(BAR_SQUISH_DURATION + 0.001),
             ThemeEffect::Navigate(Screen::Menu)
         ));
     }

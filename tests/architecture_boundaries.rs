@@ -6287,6 +6287,9 @@ fn content_reload_execution_is_shell_owned() {
         "mpsc::",
         "prewarm_artwork_cache_with_progress",
         "compile_all_itg_caches_with_progress",
+        "ContentReloadEvent",
+        "InitializeLibrary",
+        "request_replaygain_skip",
     ] {
         assert!(
             !init.contains(runtime_work),
@@ -6294,11 +6297,9 @@ fn content_reload_execution_is_shell_owned() {
         );
     }
     for prepared_boundary in [
-        "SimplyLoveContentRequest::InitializeLibrary",
-        "pub fn sync_loading_events",
-        "ContentReloadEvent::Artwork",
-        "ContentReloadEvent::Noteskins",
-        "ContentReloadEvent::Finished { .. }",
+        "impl StartupPresentation<Actor, LibraryLoadView, Config>",
+        "progress: Option<&LibraryLoadView>",
+        "loading.can_skip_replaygain",
     ] {
         assert!(
             init.contains(prepared_boundary),
@@ -6340,6 +6341,7 @@ fn content_reload_execution_is_shell_owned() {
         .expect("Simply Love effects should be readable");
     assert!(effects.contains("pub enum ContentRequest"));
     assert!(effects.contains("Content(ContentRequest)"));
+    assert!(!effects.contains("InitializeLibrary"));
 
     let progress = read_source(root.join("crates/deadsync-assets/src/progress.rs"))
         .expect("game content progress contract should be readable");
@@ -6347,6 +6349,8 @@ fn content_reload_execution_is_shell_owned() {
         "pub enum ContentReloadPhase",
         "pub enum ContentReloadEvent",
         "pub enum ApplyReplayGainEvent",
+        "pub struct LibraryLoadView",
+        "pub struct LibraryLoadProgress",
         "Artwork {",
         "Noteskins {",
         "Finished {",
@@ -6371,6 +6375,8 @@ fn content_reload_execution_is_shell_owned() {
     );
     for shell_owner in [
         "std::thread::spawn",
+        "service.start_initialization",
+        "LibraryLoadProgress::new",
         "scan_and_load_songs_with_progress_counts",
         "scan_and_load_courses_with_progress_counts",
         "reload_song_dirs_with_progress_counts",
@@ -6391,12 +6397,14 @@ fn content_reload_execution_is_shell_owned() {
         "content_reload: crate::content_reload::Service",
         "RuntimeRequest::Content(request)",
         "self.content_reload.start_library",
-        ".start_initialization(",
+        "startup_load.start_if_pending",
         "self.audio.is_available()",
         "self.content_reload.start_song_dirs",
         "crate::content_reload::reload_song",
         "fn sync_content_reload_events",
-        "init::sync_loading_events",
+        "startup_load.apply(events)",
+        "startup_load.complete_if_finished()",
+        "startup_screen.push_loading",
         "options::sync_reload_events",
         "select_music::sync_reload_events",
         "self.content_reload.poll()",
@@ -7942,24 +7950,21 @@ fn simply_love_platform_access_is_limited_to_physical_input() {
         assets.contains("pub fn resolve_asset_path(path: &str)")
             && assets.contains("pub fn open_bundled_image(path: &str)")
     );
-    let init = read_source(crate_dir.join("src/screens/init.rs"))
-        .expect("Simply Love Init screen should be readable");
-    assert!(
-        init.contains("pub const fn init(songs_root: PathBuf, courses_root: PathBuf)")
-            && init.contains("SimplyLoveContentRequest::InitializeLibrary")
-            && init.contains("songs_root: state.songs_root.clone()")
-            && init.contains("courses_root: state.courses_root.clone()")
-    );
     let content_reload =
         read_source(root.join("crates/deadsync-shell/src/content_reload.rs"))
             .expect("shell content reload service should be readable");
     assert!(
         content_reload.contains("scan_and_load_songs_with_progress_counts")
             && content_reload.contains("scan_and_load_courses_with_progress_counts")
+            && content_reload.contains("service.start_initialization(dirs.songs_dir(), dirs.courses_dir(), audio_available)")
     );
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    assert!(shell.contains("init::init(init_songs_root, init_courses_root)"));
+    assert!(shell.contains("startup_screen: (mount.startup)(color_index)"));
+    assert!(!shell.contains("init::State"));
+    let composition = read_source(root.join("src/theme_registry.rs"))
+        .expect("executable theme registry should be readable");
+    assert!(composition.contains("startup: startup_screen"));
 }
 
 #[test]

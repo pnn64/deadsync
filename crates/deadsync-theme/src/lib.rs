@@ -12,6 +12,7 @@ mod screen;
 pub mod select_music;
 pub mod selection;
 pub mod stage;
+pub mod startup;
 pub mod system_options;
 mod transition;
 pub mod views;

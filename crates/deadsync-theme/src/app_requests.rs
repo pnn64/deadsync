@@ -49,10 +49,6 @@ pub enum MediaRequest {
 /// Song/course cache work requested by a theme and executed by the shell.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ContentRequest {
-    InitializeLibrary {
-        songs_root: PathBuf,
-        courses_root: PathBuf,
-    },
     ReloadLibrary {
         songs_root: PathBuf,
         courses_root: PathBuf,

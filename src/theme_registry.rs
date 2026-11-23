@@ -1,7 +1,8 @@
 //! The executable connects installed themes to the application runtime.
 
 use super::mounted_theme::{
-    ChatPresentation, GameplayPresentationMount, InstalledMenu, SupplementalResources, ThemeMount,
+    ChatPresentation, GameplayPresentationMount, InstalledMenu, StartupScreen,
+    SupplementalResources, ThemeMount,
 };
 use deadsync_config::theme::ThemeFlag;
 use deadsync_theme::ThemeResources;
@@ -24,6 +25,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
     match theme {
         ThemeFlag::SimplyLove => ThemeMount {
             title: |index| InstalledMenu::mount::<SimplyLoveTheme>(index, |policy| policy),
+            startup: startup_screen,
             resources: SupplementalResources::default(),
             stage: Box::new(SimplyLoveTheme),
             gameplay: GAMEPLAY_COMPOSER,
@@ -35,6 +37,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
         },
         ThemeFlag::OpenItg => ThemeMount {
             title: |index| InstalledMenu::mount::<OpenItgTheme>(index, |_| ()),
+            startup: startup_screen,
             resources: resources::<OpenItgTheme>(),
             stage: Box::new(OpenItgStagePresentation::default()),
             gameplay: GAMEPLAY_COMPOSER,
@@ -46,6 +49,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
         },
         ThemeFlag::DdrExtreme => ThemeMount {
             title: |index| InstalledMenu::mount::<DdrExtremeTheme>(index, |_| ()),
+            startup: startup_screen,
             resources: resources::<DdrExtremeTheme>(),
             stage: Box::new(ExtremeStage::default()),
             gameplay: GAMEPLAY_COMPOSER,
@@ -56,6 +60,12 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             chat: chat_overlay,
         },
     }
+}
+
+fn startup_screen(color_index: i32) -> Box<StartupScreen> {
+    Box::new(deadsync_theme_simply_love::screens::init::State::new(
+        color_index,
+    ))
 }
 
 fn chat_overlay() -> Box<ChatPresentation> {

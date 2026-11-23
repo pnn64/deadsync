@@ -1,4 +1,5 @@
 use deadsync_assets::progress::{ContentReloadEvent, ContentReloadPhase};
+use deadsync_assets::progress::{LibraryLoadProgress, LibraryLoadView};
 use deadsync_config as config;
 use deadsync_simfile::scan::SongScanMode;
 use log::info;
@@ -76,6 +77,61 @@ impl ProgressGate {
 #[derive(Default)]
 pub(crate) struct Service {
     rx: Option<Receiver<ContentReloadEvent>>,
+}
+
+#[derive(Default)]
+pub(crate) enum StartupLoad {
+    #[default]
+    Pending,
+    Loading(LibraryLoadProgress),
+    Ready,
+}
+
+impl StartupLoad {
+    pub(crate) fn start_if_pending(
+        &mut self,
+        service: &mut Service,
+        dirs: &config::dirs::AppDirs,
+        audio_available: bool,
+    ) {
+        if matches!(self, Self::Pending) && !service.is_busy() {
+            *self = Self::Loading(LibraryLoadProgress::new(Instant::now()));
+            service.start_initialization(dirs.songs_dir(), dirs.courses_dir(), audio_available);
+        }
+    }
+
+    pub(crate) const fn is_loading(&self) -> bool {
+        !matches!(self, Self::Ready)
+    }
+
+    pub(crate) const fn view(&self) -> Option<&LibraryLoadView> {
+        match self {
+            Self::Loading(progress) => Some(progress.view()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn apply(&mut self, events: impl IntoIterator<Item = ContentReloadEvent>) {
+        if let Self::Loading(progress) = self {
+            for event in events {
+                progress.apply(event, Instant::now());
+            }
+        }
+    }
+
+    pub(crate) fn complete_if_finished(&mut self) {
+        if self.view().is_some_and(|progress| progress.finished) {
+            *self = Self::Ready;
+        }
+    }
+
+    pub(crate) fn request_replaygain_skip(&mut self) {
+        if let Self::Loading(progress) = self
+            && progress.request_replaygain_skip()
+        {
+            deadsync_audio_replaygain::request_skip_blocking_analysis();
+        }
+    }
 }
 
 impl Service {

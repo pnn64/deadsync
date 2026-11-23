@@ -517,7 +517,22 @@ impl App {
                 screens::sandbox::handle_input(&mut self.state.screens.sandbox_state, &ev)
             }
             CurrentScreen::Init => {
-                screens::init::handle_input(&mut self.state.screens.init_state, &ev)
+                use logical_input::VirtualAction;
+                let startup = &mut self.state.screens.startup_load;
+                if !ev.pressed
+                    || !matches!(
+                        ev.action,
+                        VirtualAction::p1_start | VirtualAction::p2_start
+                            | VirtualAction::p1_back | VirtualAction::p2_back
+                    )
+                {
+                    ThemeEffect::None
+                } else if startup.is_loading() {
+                    startup.request_replaygain_skip();
+                    ThemeEffect::None
+                } else {
+                    ThemeEffect::Navigate(CurrentScreen::Menu)
+                }
             }
             CurrentScreen::Gameplay => unreachable!("Gameplay input routed directly"),
             CurrentScreen::Practice => unreachable!("Practice input uses the flat buffer"),

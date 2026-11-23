@@ -34,9 +34,11 @@ use self::evaluation_views::CourseEvaluationPage;
 use self::lua_loading::SongLuaLoading;
 use self::screenshot::EvaluationCapture;
 use self::stage_start::{StageSelection, StageStart};
+use crate::content_reload::StartupLoad;
 use crate::{ActiveTheme, ThemeScreen as CurrentScreen, TransitionState};
 use crate::mounted_theme::{
-    GameplayPresentationMount, PlayerOptionsLayoutFactory, SupplementalResources, ThemeMount,
+    GameplayPresentationMount, PlayerOptionsLayoutFactory, StartupScreen, SupplementalResources,
+    ThemeMount,
 };
 use crate::command::Command;
 use crate::course::{
@@ -144,7 +146,7 @@ use deadsync_theme_simply_love::views::{
 };
 use deadsync_theme_simply_love::{
     screens::{
-        self, content_browser, credits, evaluation_summary, gameover, gameplay, init,
+        self, content_browser, credits, evaluation_summary, gameover, gameplay,
         initials, input as input_screen, manage_local_profiles, mappings, options,
         overscan_adjustment, practice, profile_load, sandbox, select_color,
         select_course, select_mode, select_music, select_style, test_lights,
@@ -664,7 +666,8 @@ pub struct ScreensState {
     smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview,
     player_options_state: Option<crate::player_options::PlayerOptionsState>,
     player_options_layout: Option<PlayerOptionsLayoutFactory>,
-    init_state: init::State,
+    startup_load: StartupLoad,
+    startup_screen: Box<StartupScreen>,
     attract: Option<attract_demo::AttractRuntime>,
     select_profile_state: <ActiveTheme as ThemeProfilePicker>::ProfilePickerState,
     select_color_state: select_color::State,
@@ -1251,9 +1254,6 @@ impl ScreensState {
         let mut profile_load_state = profile_load::init();
         profile_load_state.active_color_index = color_index;
 
-        let app_paths = app_paths_view(dirs);
-        let init_songs_root = app_paths.songs.path.clone();
-        let init_courses_root = app_paths.courses.path;
         let system_options_presentation = mount.system_options;
         let options_layout = system_options_presentation
             .as_ref()
@@ -1285,9 +1285,6 @@ impl ScreensState {
 
         let mut smx_assign_state = screens::smx_assign::init();
         smx_assign_state.active_color_index = color_index;
-
-        let mut init_state = init::init(init_songs_root, init_courses_root);
-        init_state.active_color_index = color_index;
 
         let evaluation_state =
             ActiveTheme::init_evaluation(Default::default(), Default::default(), color_index);
@@ -1332,7 +1329,8 @@ impl ScreensState {
             smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview::default(),
             player_options_state: None,
             player_options_layout: mount.player_options,
-            init_state,
+            startup_load: StartupLoad::default(),
+            startup_screen: (mount.startup)(color_index),
             attract: mount.attract.map(attract_demo::AttractRuntime::new),
             gameplay_outro: None,
             evaluation_departure: None,
@@ -1391,16 +1389,17 @@ impl ScreensState {
                 (None, false)
             }
             CurrentScreen::Init => {
-                let effect = if let Some(intro) = self.attract.as_mut()
-                    && !init::is_loading(&self.init_state)
-                {
+                let effect = if self.startup_load.is_loading() {
+                    self.startup_load.complete_if_finished();
+                    ThemeEffect::None
+                } else if let Some(intro) = self.attract.as_mut() {
                     if intro.timeline.demonstration().is_none() && intro.timeline.advance(delta_time) {
                         ThemeEffect::NavigateNoFade(CurrentScreen::Menu)
                     } else {
                         ThemeEffect::None
                     }
                 } else {
-                    init::update(&mut self.init_state, delta_time)
+                    self.startup_screen.advance_intro(delta_time)
                 };
                 (Some(effect), false)
             }
@@ -2099,7 +2098,7 @@ impl App {
         }
         match screen {
             CurrentScreen::Init => {
-                init::sync_loading_events(&mut self.state.screens.init_state, events);
+                self.state.screens.startup_load.apply(events);
             }
             CurrentScreen::Options => {
                 options::sync_reload_events(&mut self.state.screens.options_state, events);
@@ -4546,6 +4545,13 @@ impl App {
     }
 
     fn step_idle_screen(&mut self, dt: f32, now: Instant, event_loop: &ActiveEventLoop) {
+        if self.state.screens.current_screen == CurrentScreen::Init {
+            self.state.screens.startup_load.start_if_pending(
+                &mut self.content_reload,
+                &self.dirs,
+                self.audio.is_available(),
+            );
+        }
         let smx_assignment = matches!(
             self.state.screens.current_screen,
             CurrentScreen::Options
@@ -4590,7 +4596,7 @@ impl App {
 
     fn sync_attract_media(&mut self) {
         let screens = &mut self.state.screens;
-        if screens.current_screen != CurrentScreen::Init || init::is_loading(&screens.init_state) {
+        if screens.current_screen != CurrentScreen::Init || screens.startup_load.is_loading() {
             return;
         }
         let Some(backend) = self.backend.as_mut() else {
@@ -5986,14 +5992,6 @@ impl App {
                 }
                 RuntimeRequest::Content(request) => {
                     match request {
-                        ContentRequest::InitializeLibrary {
-                            songs_root,
-                            courses_root,
-                        } => self.content_reload.start_initialization(
-                            songs_root,
-                            courses_root,
-                            self.audio.is_available(),
-                        ),
                         ContentRequest::ReloadLibrary {
                             songs_root,
                             courses_root,
@@ -8240,9 +8238,13 @@ impl App {
             ),
             CurrentScreen::Init => {
                 let screens = &mut self.state.screens;
-                if let Some(intro) = &mut screens.attract
-                    && !init::is_loading(&screens.init_state)
-                {
+                if screens.startup_load.is_loading() {
+                    screens.startup_screen.push_loading(
+                        &mut actors,
+                        screens.startup_load.view(),
+                        &self.frame_config,
+                    );
+                } else if let Some(intro) = &mut screens.attract {
                     if let Some(demo) = intro.demo.as_mut() {
                         let music_time = demo.stage.current_music_time_display();
                         intro.timeline.push_demo_underlay(&mut actors, music_time);
@@ -8262,7 +8264,7 @@ impl App {
                         intro.timeline.push_actors(&mut actors, intro.video_key.as_ref());
                     }
                 } else {
-                    init::push_actors(&mut actors, &screens.init_state, visual_policy);
+                    screens.startup_screen.push_intro(&mut actors, &self.frame_config);
                 }
             }
             CurrentScreen::Evaluation => {
@@ -9424,8 +9426,7 @@ impl App {
             self.state.screens.menu_state.reset();
         } else if target == CurrentScreen::Init {
             let active_color_index = self.state.screens.menu_state.color_index();
-            init::replay_intro(&mut self.state.screens.init_state);
-            self.state.screens.init_state.active_color_index = active_color_index;
+            self.state.screens.startup_screen.reset_intro(active_color_index);
             if prev == CurrentScreen::Menu
                 && let Some(intro) = self.state.screens.attract.as_mut()
             {
