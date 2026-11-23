@@ -725,13 +725,17 @@ device and asset views and manages preview uploads for both layouts.
 and rate rules, and the `StageOptions` submitted for gameplay, practice, and
 recovery after a load failure.
 
-Stage and course Evaluation mount through the selected theme for entry, input,
-updates, and actor composition. The shell tracks the game result separately and
-uses it to resolve chart queries. The theme reports which leaderboard panes need
-data and receives the available results, heart-rate readings, and loaded result
-dialogs from the shell. The theme selects entry audio and carries animation,
-audio, and noteskin previews across course pages. The shell loads and plays the
-audio and tracks which course result is active.
+The shell passes a shared `EvaluationStageView` and a separate presentation
+context to the Evaluation mount. Stage and course entries use the same
+per-player `EvaluationView`. A stage carries the completed song's round
+number from the session or course cursor, captured before the result is
+recorded. OpenITG reads it through the overview view. The shell tracks the
+game result separately and uses it to resolve chart queries. The theme
+reports which leaderboard panes need data and receives the available results,
+heart-rate readings, and loaded result dialogs from the shell. The theme
+selects entry audio and carries animation, audio, and noteskin previews
+across course pages. The shell loads and plays the audio and tracks which
+course result is active.
 
 Video banners, screenshot labels, and StepManiaX result lighting use the
 completed stage's song, chart, and grade. The shell captures the automatic
@@ -739,4 +743,5 @@ screenshot criteria before giving the result to the theme, and the theme
 reports when it has finished showing animations and dialogs.
 
 Several screens and runtime requests still use concrete Simply Love types.
-The shell builds Evaluation's view data using Simply Love input types.
+The Evaluation mount still uses Simply Love's presentation context, runtime
+views, and auxiliary pane controller.

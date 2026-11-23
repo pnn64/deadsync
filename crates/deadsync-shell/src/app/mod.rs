@@ -120,6 +120,7 @@ use deadlib_render as renderer_backend;
 use deadlib_render_core as renderer;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_assets::media_cache;
+use deadsync_assets::noteskin::Noteskin;
 use deadsync_config as config;
 use deadsync_config::dirs::AppDirs;
 use deadsync_config::frame_pacing::stutter_severity;
@@ -205,7 +206,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing as timing_rules;
 use deadsync_theme::views::{
     AppPathView, AppPathsView, AudioOptionsView, DensityGraphView as DensityGraphSource,
-    GameplayReplayView, GameplayStageIntro, GameplayStageView, NoteskinCatalogView,
+    EvaluationStageView, GameplayReplayView, GameplayStageIntro, GameplayStageView, NoteskinCatalogView,
     ScoreboxLocalView, ScoreboxMachineView, ScoreboxSideView, SmxAssignmentView,
 };
 use deadsync_theme::color::ThemeJudgmentPalette;
@@ -221,7 +222,7 @@ use deadsync_theme_simply_love::screens::transitions::{
     gameplay_smx_overlay_alpha, screen_fade_view,
 };
 use deadsync_theme_simply_love::views::{
-    EvaluationContextView, EvaluationInitView, EvaluationPlayerView, EvaluationPolicyView,
+    EvaluationContextView, EvaluationPlayerView, EvaluationPolicyView,
     EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource,
     MusicWheelRuntimeRequest, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest,
     MusicWheelSlotRuntimeView, PostSelectStageView, ScreenBarBackgroundView, SelectCourseContextView,
@@ -1305,7 +1306,7 @@ impl ScreensState {
         init_state.active_color_index = color_index;
 
         let evaluation_state =
-            ActiveTheme::init_evaluation(EvaluationInitView::default(), color_index);
+            ActiveTheme::init_evaluation(Default::default(), Default::default(), color_index);
 
         let mut evaluation_summary_state = evaluation_summary::init(
             deadsync_theme_simply_love::views::PostSongRuntimeView::default(),
@@ -3467,24 +3468,32 @@ impl App {
         deadsync_profile_gameplay::results::stage_result(&gameplay.gameplay, online)
     }
 
-    fn evaluation_init_view(
+    fn evaluation_entry(
         gameplay: &ActiveGameplayStage,
         stage: &stage_stats::StageSummary,
+        stage_number: usize,
         config: &config::app_config::Config,
-    ) -> EvaluationInitView {
+    ) -> (
+        EvaluationStageView<Arc<Noteskin>, profile_data::PlayerSide>,
+        EvaluationContextView,
+    ) {
+        let result = crate::session_results::evaluation_view(
+            gameplay,
+            stage,
+            stage_number,
+            config,
+            |player| screens::components::gameplay::notefield::preferred_mods_text(gameplay, player),
+        );
         let profile = profile_data::runtime_music_profile_snapshot(
             config.enable_groovestats,
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
         );
-        crate::session_results::evaluation_view(
-            gameplay,
-            stage,
-            evaluation_context_view(
-                evaluation_views::EvaluationFramePolicy::from_config(config).context(),
-                &profile,
-            ),
-        )
+        let context = evaluation_context_view(
+            evaluation_views::EvaluationFramePolicy::from_config(config).context(),
+            &profile,
+        );
+        (result, context)
     }
 
     fn execute_evaluation_score_runtime(gameplay: &ActiveGameplayStage, pack_group: &str) {
@@ -9810,10 +9819,12 @@ impl App {
                     &stage,
                     gameplay_results.setup.session.joined_sides,
                 );
+                let stage_number = self.state.session.active_stage_number();
                 let _ = self.record_stage_result(stage.clone(), failed, &config, false);
-                let init_view = Self::evaluation_init_view(&gameplay_results, &stage, &config);
+                let (init_view, context) =
+                    Self::evaluation_entry(&gameplay_results, &stage, stage_number, &config);
                 let capture = EvaluationCapture::from_scores(&init_view.score_info);
-                let eval_state = ActiveTheme::init_evaluation(init_view, color_idx);
+                let eval_state = ActiveTheme::init_evaluation(init_view, context, color_idx);
                 self.state.screens.course_evaluation.stages.push(CourseEvaluationPage {
                     view: eval_state,
                     stage: evaluation_stage,
@@ -10212,15 +10223,16 @@ impl App {
             } else {
                 EvaluationOrigin::Song
             };
-            let (init_view, evaluation_stage, failed, completed_course) = if let Some(gameplay) =
+            let ((init_view, context), evaluation_stage, failed, completed_course) = if let Some(gameplay) =
                 gameplay_results.as_ref()
             {
                 let stage = Self::gameplay_stage_result(&gameplay.stage);
                 let failed =
                     stage_stats::all_players_failed(&stage, gameplay.setup.session.joined_sides);
+                let stage_number = self.state.session.active_stage_number();
                 let completed = self.record_stage_result(stage.clone(), failed, &config, true);
                 (
-                    Self::evaluation_init_view(gameplay, &stage, &config),
+                    Self::evaluation_entry(gameplay, &stage, stage_number, &config),
                     EvaluationStage::from_gameplay_result(&gameplay.stage.gameplay, &stage),
                     failed,
                     completed,
@@ -10230,10 +10242,11 @@ impl App {
                 if completed.is_some() {
                     self.state.coin.record_course_stage();
                 }
-                (EvaluationInitView::default(), None, false, completed)
+                ((Default::default(), Default::default()), None, false, completed)
             };
             self.state.screens.evaluation_capture = EvaluationCapture::from_scores(&init_view.score_info);
-            self.state.screens.evaluation_state = ActiveTheme::init_evaluation(init_view, color_idx);
+            self.state.screens.evaluation_state =
+                ActiveTheme::init_evaluation(init_view, context, color_idx);
             self.state.screens.evaluation_stage = evaluation_stage;
             let session_elapsed = self.state.session.session_start_time.map_or(0.0, |start| {
                 Instant::now().duration_since(start).as_secs_f32()
@@ -11726,8 +11739,8 @@ mod tests {
         hash: &str,
         speed_mod: ScrollSpeedSetting,
         music_rate: f32,
-    ) -> deadsync_theme_simply_love::views::ScoreInfo {
-        deadsync_theme_simply_love::views::ScoreInfo {
+    ) -> crate::session_results::EvaluationScoreView {
+        deadsync_theme::views::EvaluationView {
             song: song.clone(),
             chart: Arc::new(test_chart(hash)),
             course_graph_stages: Vec::new(),
@@ -12271,7 +12284,10 @@ mod tests {
             stage_summaries: Vec::new(),
         };
         let mut session = SessionState::new(0, [0; MAX_PLAYERS]);
+        session.record_stage_result(stages[0].clone());
+        assert_eq!(session.active_stage_number(), 2);
         session.course_run = Some(course.clone());
+        assert_eq!(session.active_stage_number(), 1);
         session.record_stage_result(stages[0].clone());
         assert!(session.take_final_course(false).is_none());
         session
@@ -12281,11 +12297,12 @@ mod tests {
             .run
             .progress
             .finish_entry(false);
+        assert_eq!(session.active_stage_number(), 2);
         session.record_stage_result(stages[1].clone());
         let completed = session.take_final_course(false).expect("completed course");
         assert!(session.course_run.is_none());
-        assert_eq!(session.played_stages.len(), 2);
-        assert_eq!(session.course_individual_stage_indices, [0, 1]);
+        assert_eq!(session.played_stages.len(), 3);
+        assert_eq!(session.course_individual_stage_indices, [1, 2]);
         let summary = build_course_summary_stage(&completed).expect("canonical course result");
         let player = summary.players[1].as_ref().expect("P2 result");
         assert_eq!(player.calories_burned, 25.0);

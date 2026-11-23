@@ -89,6 +89,18 @@ pub fn push_evaluation_overview(actors: &mut Vec<Actor>, page: EvaluationOvervie
 
     if stats_progress > 0.0 {
         push_banner(actors, layout, &page, stats_progress);
+        if let Some(stage_number) = page.stage_number {
+            let slide_x = (stats_progress - 1.0) * width * 0.5;
+            let mut round = layout.translated_x(slide_x - layout.position(0.0, 0.0)[0]).text(
+                [24.0, 72.0],
+                0.0,
+                value(format_args!("ROUND {stage_number}")),
+                1.12,
+                WHITE,
+            );
+            round.shadowlength(layout.size([4.0, 0.0])[0]);
+            actors.push(round.build(0));
+        }
         let footer_alpha = ((elapsed - STATS_START_SECONDS) / STATS_ENTER_SECONDS).clamp(0.0, 1.0);
         actors.push(layout.label(
             [320.0, 445.0],
@@ -364,13 +376,17 @@ fn push_player_stats(
     let percent_x = seat.percent_x + shift;
     actors.push(layout.panel(x - 3.0, 177.0, [277.0, 262.0], [0.076, 0.117, 0.17, 1.0], 1));
     actors.push(layout.panel(x, 177.0, [271.0, 2.0], seat.tint, 2));
-    actors.push(layout.label(
-        [x + 109.0, 188.0],
-        0.0,
-        if player.p2 { "P2" } else { "P1" }.into(),
-        0.76,
-        QUIET,
-    ));
+    if !player.mods.is_empty() {
+        let options_x = percent_x - if player.p2 { 2.0 } else { 0.0 };
+        actors.push(layout.bounded_label(
+            [options_x, 183.0],
+            0.5,
+            168.0,
+            TextContent::from(player.mods),
+            0.85,
+            WHITE,
+        ));
+    }
     actors.push(layout.bounded_label(
         [percent_x, 212.0],
         0.5,
@@ -436,16 +452,6 @@ fn push_player_stats(
         }
     }
     push_counts(actors, layout, x, seat.tint, player);
-    if !player.mods.is_empty() {
-        actors.push(layout.bounded_label(
-            [x + 6.0, 429.0],
-            0.0,
-            258.0,
-            TextContent::from(player.mods),
-            0.78,
-            QUIET,
-        ));
-    }
 }
 
 fn push_counts(
@@ -574,6 +580,7 @@ mod tests {
                         artist: &artist,
                         banner_key: Some(&banner),
                         course_summary: false,
+                        stage_number: Some(1),
                         double_side_style: false,
                         elapsed: EVALUATION_OVERVIEW_SETTLED_SECONDS,
                         players: [
@@ -604,6 +611,9 @@ mod tests {
                         (1, [329.0 + delta, 239.0], LIFE_SIZE, P2, 8),
                     ]
                 );
+                assert!(has_text(&actors, "ROUND 1", [24.0, 72.0]));
+                assert!(has_text(&actors, "C500, Overhead", [220.0 + delta, 183.0]));
+                assert!(has_text(&actors, "C500, Overhead", [502.0 + delta, 183.0]));
                 assert!(has_text(&actors, "97.65%", [220.0 + delta, 212.0]));
                 assert!(has_text(&actors, "65.00%", [504.0 + delta, 212.0]));
                 assert!(has_text(&actors, "A+", [86.0 + delta, 202.0]));
@@ -646,6 +656,7 @@ mod tests {
                         artist: &empty,
                         banner_key: None,
                         course_summary: false,
+                        stage_number: Some(1),
                         double_side_style: false,
                         elapsed,
                         players: [Some(player(&empty)), None],
@@ -660,6 +671,9 @@ mod tests {
                     elapsed > 2.0
                 );
                 assert!(!has_text(&actors, "97.65%", [220.0, 212.0]));
+                assert!(!actors.iter().any(|actor| {
+                    matches!(actor, Actor::Text { content, .. } if content.as_str() == "ROUND 1")
+                }));
             }
             let mut actors = Vec::new();
             let graph_x = std::cell::Cell::new(0.0);
@@ -670,6 +684,7 @@ mod tests {
                     artist: &empty,
                     banner_key: None,
                     course_summary: false,
+                    stage_number: Some(1),
                     double_side_style: false,
                     elapsed: 3.15,
                     players: [Some(player(&empty)), None],
@@ -680,6 +695,12 @@ mod tests {
                 },
             );
             assert!((graph_x.get() - (-41.0)).abs() < 0.001);
+            assert!(actors.iter().any(|actor| matches!(actor,
+                Actor::Text { content, offset, .. }
+                    if content.as_str() == "ROUND 1"
+                        && (offset[0] - (-56.0)).abs() < 0.001
+                        && offset[1] == 72.0
+            )));
         });
     }
 
@@ -696,6 +717,7 @@ mod tests {
                     artist: &Arc::from(""),
                     banner_key: None,
                     course_summary: true,
+                    stage_number: None,
                     double_side_style: true,
                     elapsed: 5.0,
                     players: [

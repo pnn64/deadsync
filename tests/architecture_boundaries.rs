@@ -7009,12 +7009,16 @@ fn evaluation_leaderboards_are_shell_prepared() {
             && evaluation.contains("&scoreboxes[player_idx]")
     );
 
-    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("Shared theme views should be readable");
+    assert!(
+        views.contains("pub struct EvaluationStageView<N, S>")
+            && views.contains("pub score_info: [Option<EvaluationView<N, S>>; MAX_PLAYERS]")
+    );
+    let runtime_views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     assert!(
-        views.contains("pub score_info: [Option<ScoreInfo>; 2]")
-            && views.contains("pub struct EvaluationInitView")
-            && views.contains("pub scoreboxes: Option<[ScoreboxSideView; 2]>")
+        runtime_views.contains("pub scoreboxes: Option<[ScoreboxSideView; 2]>")
     );
 
     let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
@@ -7028,7 +7032,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
             .expect("shell result view adapter should be readable"),
     );
     for shell_owner in [
-        "fn evaluation_init_view",
+        "fn evaluation_entry",
         "scores::get_machine_leaderboard_local",
         "scores::get_personal_leaderboard_local_for_side",
         "scores::groovestats_eval_state_from_gameplay",
@@ -14012,7 +14016,10 @@ fn stage_results_are_independent_of_evaluation() {
             "theme still assembles results: {forbidden}"
         );
     }
-    assert!(evaluation.contains("pub fn init(init_view: EvaluationInitView)"));
+    assert!(contains_rust(
+        &evaluation,
+        "pub fn init(stage: EvaluationStageView<Arc<Noteskin>, profile_data::PlayerSide>,",
+    ));
     let results = read_source(root.join("crates/deadsync-profile-gameplay/src/results.rs"))
         .expect("gameplay result owner");
     assert!(results.contains("pub fn stage_result"));
@@ -14038,6 +14045,10 @@ fn stage_results_are_independent_of_evaluation() {
     }
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell source");
+    for source in ["session_results.rs", "course.rs"] {
+        let adapter = production_source(&root.join("crates/deadsync-shell/src").join(source));
+        assert!(!adapter.contains("deadsync_theme_simply_love"));
+    }
     assert!(!shell.contains("append_stage_results_from_eval"));
     assert!(contains_rust(&shell, "fn gameplay_stage_result(gameplay: &ActiveGameplayStage)"));
     assert!(contains_rust(

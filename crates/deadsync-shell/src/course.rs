@@ -1,3 +1,4 @@
+use crate::session_results::EvaluationScoreView;
 use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::course_run::CourseRun;
@@ -8,7 +9,7 @@ use deadsync_online::score_compat as scores;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide};
 use deadsync_score::{self as score_data, stage_stats};
 use deadsync_simfile::course_selection::{EndlessCourseSource, PreparedCourseStart};
-use deadsync_theme_simply_love::views::{CourseGraphStage, ScoreInfo};
+use deadsync_theme::views::CourseGraphStageView;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -85,7 +86,7 @@ pub fn routine_shared_course_player(
 pub fn score_info_from_stage(
     stage: &stage_stats::StageSummary,
     side: PlayerSide,
-) -> Option<ScoreInfo> {
+) -> Option<EvaluationScoreView> {
     let idx = profile_data::player_side_index(side);
     score_info_from_stage_with_record(
         stage, side, stage.players[idx].as_ref(), &profile_data::runtime_profile_for_side(side),
@@ -99,7 +100,7 @@ fn score_info_from_stage_with_record(
     side: PlayerSide,
     record: Option<&stage_stats::PlayerStageSummary>,
     profile: &profile_data::Profile,
-) -> Option<ScoreInfo> {
+) -> Option<EvaluationScoreView> {
     let idx = profile_data::player_side_index(side);
     let player = stage.players[idx].as_ref()?;
     let chart_hash = player.chart.short_hash.as_str();
@@ -126,7 +127,7 @@ fn score_info_from_stage_with_record(
     let mods_text = profile_data::evaluation_mods_text(profile, speed_mod);
     let disabled_timing_windows = profile.timing_windows.disabled_windows();
 
-    Some(ScoreInfo {
+    Some(EvaluationScoreView {
         song: stage.song.clone(),
         chart: player.chart.clone(),
         course_graph_stages: Vec::new(),
@@ -222,10 +223,10 @@ pub fn course_summary_profiles(
 pub fn build_course_summary_score_info(
     stage: &stage_stats::StageSummary,
     routine_shared: Option<&stage_stats::PlayerStageSummary>,
-    course_graph_stages: &[Vec<CourseGraphStage>; MAX_PLAYERS],
+    course_graph_stages: &[Vec<CourseGraphStageView>; MAX_PLAYERS],
     play_style: PlayStyle,
     profiles: &[Option<(PlayerSide, profile_data::Profile)>; MAX_PLAYERS],
-) -> [Option<ScoreInfo>; MAX_PLAYERS] {
+) -> [Option<EvaluationScoreView>; MAX_PLAYERS] {
     let mut score_info = std::array::from_fn(|_| None);
     let records = course_summary_records(stage, routine_shared);
     let solo = play_style.player_count() == 1;
@@ -244,14 +245,14 @@ pub fn build_course_summary_score_info(
 pub fn build_course_graph_stages(
     course: &CourseRunState,
     chart_type: &str,
-) -> [Vec<CourseGraphStage>; MAX_PLAYERS] {
+) -> [Vec<CourseGraphStageView>; MAX_PLAYERS] {
     let mut out = std::array::from_fn(|_| Vec::with_capacity(course.run.stages.len()));
     for stage in &course.run.stages {
         let build = |index| {
             stage
                 .song
                 .chart_for_steps_index(chart_type, index)
-                .map(|chart| CourseGraphStage {
+                .map(|chart| CourseGraphStageView {
                     chart: Arc::new(chart.clone()),
                     song_last_second: stage.song.precise_last_second(),
                 })

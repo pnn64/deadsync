@@ -491,18 +491,6 @@ impl Default for EvaluationContextView {
     }
 }
 
-/// A view of the canonical completed stage; constructing a screen cannot
-/// determine the result later consumed by session or course bookkeeping.
-#[derive(Clone, Default)]
-pub struct EvaluationInitView {
-    pub score_info: [Option<ScoreInfo>; 2],
-    /// ScoreKeeperShared's Routine score, shown beside each participant's own.
-    pub routine_shared_score_percent: Option<f64>,
-    pub stage_duration_seconds: f32,
-    pub fail_stream_progress: [Option<(u32, u32)>; 2],
-    pub context: EvaluationContextView,
-}
-
 /// Selected player-slot charts whose scorebox data shell should prepare.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SelectMusicScoreboxRequest<'a> {

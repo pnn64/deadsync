@@ -635,13 +635,20 @@ remain open.
 
 The native 640×480 Quartz capture was taken after the panel entrance, with
 P1 Single, Hard 5, and AutoPlay. It confirms the Jumps row above Holds and
-the graph area above the counts. The reference shows the round label below
-the header and modifiers above the percentage. DeadSync's overview places
-modifiers at the bottom of the panel and still needs the round label. Native
-AutoPlay produced an empty combo graph. A DeadSync Vulkan fixture supplied
+the graph area above the counts. DeadSync now slides the round label in
+below the header from the left after 3.0 seconds and centers the modifiers
+above each player's percentage. The label uses DeadSync's text font.
+Native AutoPlay produced an empty combo graph. A DeadSync Vulkan fixture supplied
 the same Quartz result to compare the counts, rank-free layout, and empty
 graph at 640×480. Separate solo and versus captures at 640×480 and 854×480
 showed filled runs, maximum-run labels, and record ranks.
+
+The round and modifier placements were checked in 18 paired Vulkan captures
+at 640×480 and 854×480. The captures covered Quartz, solo, and versus at 3.0,
+3.15, and 3.4 seconds. Pixel differences were confined to the round and
+modifier rows. Both themes' configured play routes passed with the shared
+completed-stage view. The OpenITG route displayed the recorded first round
+after a P2-only stage.
 
 At 854×480, nine warm runs of 8,000 settled-frame actor builds measured
 34.9 μs for Simply Love and 22.3 μs for OpenITG in solo, and 33.2 μs and
@@ -655,6 +662,13 @@ actor construction was 22.1 µs before and 28.0 µs afterward in solo, and
 39.4 µs and 52.0 µs in versus. The layouts added six actors per player.
 The padded counts use inline text formatting. Simply Love measured 34.4 µs
 and 33.1 µs in solo, and 32.9 µs and 33.2 µs in versus.
+
+With the round label and new modifier positions, two paired CPU measurements
+of settled Evaluation actor construction at 854×480 measured 27.3 µs before
+and 29.3 µs after in solo OpenITG. Versus measured 50.8 µs before and
+50.8–52.7 µs after. Simply Love measured 31.3–35.2 µs across the four runs
+and both layouts. Each measurement used the median of nine 8,000-frame
+dev-profile batches.
 
 In paired 600-frame Windows gameplay runs with Vulkan through wgpu and WASAPI,
 95th-percentile frame time was 8.61 ms before and 8.69 ms after in OpenITG,

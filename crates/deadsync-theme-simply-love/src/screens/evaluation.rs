@@ -44,7 +44,8 @@ use deadsync_online::lobby_wait::{
     EvaluationPlayerStatsFacts, LocalLobbyPlayers, LobbyWaitReason,
 };
 use deadsync_theme::FontRole;
-use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview};
+use deadsync_assets::noteskin::Noteskin;
+use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, EvaluationStageView};
 use log::warn;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -52,8 +53,7 @@ use std::sync::Arc;
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::views::{CourseGraphStage, ScoreInfo};
 use crate::views::{
-    EvaluationContextView, EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
-    SimplyLoveGrooveStatsService,
+    EvaluationContextView, EvaluationRuntimeView, EvaluationSubmissionView, SimplyLoveGrooveStatsService,
 };
 use deadlib_platform::input::PadEvent;
 use deadlib_platform::input::RawKeyboardEvent;
@@ -946,7 +946,7 @@ mod tests {
         use deadsync_core::session_flow::EvaluationOrigin;
         use deadsync_theme::AudioRequest;
 
-        let mut state = super::init(super::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.return_to_course = true;
         state.auto_advance_seconds = Some(1.0);
         let start = press(VirtualAction::p1_start);
@@ -1164,7 +1164,7 @@ mod tests {
 
     #[test]
     fn elapsed_sync_retains_timer_text_until_the_visible_second_changes() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         super::sync_elapsed(&mut state, 65.1, 3_600.0);
         let session_text = state.session_timer.text().to_owned();
 
@@ -1198,7 +1198,7 @@ mod tests {
 
     #[test]
     fn result_dialog_and_event_overlays_open_sequentially() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.event_overlay_visible = true;
         state.result_dialogs[0] =
             super::ResultDialog::new(vec![Arc::<str>::from("result")].into_boxed_slice());
@@ -1236,7 +1236,7 @@ mod tests {
 
     #[test]
     fn result_dialog_input_pages_and_dismisses_before_normal_evaluation_actions() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.result_dialogs[0] = super::ResultDialog::new(
             vec![Arc::<str>::from("first"), Arc::<str>::from("second")].into_boxed_slice(),
         );
@@ -1306,7 +1306,7 @@ mod tests {
 
     #[test]
     fn retry_availability_uses_prepared_submission_status() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         assert!(!submission_retry_available(&state));
 
         state.submissions[0].groovestats_status =
@@ -1324,7 +1324,7 @@ mod tests {
 
     #[test]
     fn leaderboard_requests_are_plain_screen_state() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         assert_eq!(leaderboard_requests(&state), [false, false]);
 
         state.leaderboards_requested[1] = true;
@@ -1333,7 +1333,7 @@ mod tests {
 
     #[test]
     fn partial_runtime_view_retains_clean_subviews() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.context.players[0].display_name = "Retained".to_owned();
         state.favorites = [true, false];
         state.groovestats_service = SimplyLoveGrooveStatsService::BoogieStats;
@@ -1390,7 +1390,7 @@ mod tests {
 
     #[test]
     fn nice_eligibility_is_compiled_and_preserved_by_state_clone() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         assert_eq!(state.nice_scores, [false; 2]);
 
         state.nice_scores = [true, false];
@@ -2218,7 +2218,8 @@ mod tests {
         );
 
         crate::tests::init_paths();
-        let mut state = SimplyLoveTheme::init_evaluation(Default::default(), 0);
+        let mut state =
+            SimplyLoveTheme::init_evaluation(Default::default(), Default::default(), 0);
         let ecs15 = SimplyLoveVisualPolicyView {
             background: VisualBackgroundView::Ecs15,
             ..Default::default()
@@ -2712,6 +2713,7 @@ pub struct State {
     // has not published another sample since the previous evaluation.
     heart_rate_generation: Option<(bool, u64, u64)>,
     pub stage_duration_seconds: f32,
+    stage_number: Option<usize>,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
     routine_shared_score_percent: Option<f64>,
     /// Routine's shared grade, shown for both participants.
@@ -2819,6 +2821,7 @@ impl Clone for State {
             heart_rate_view: self.heart_rate_view,
             heart_rate_generation: self.heart_rate_generation,
             stage_duration_seconds: self.stage_duration_seconds,
+            stage_number: self.stage_number,
             score_info: self.score_info.clone(),
             routine_shared_score_percent: self.routine_shared_score_percent,
             routine_shared_grade: self.routine_shared_grade,
@@ -2970,14 +2973,17 @@ fn stats_presentations(
     })
 }
 
-pub fn init(init_view: EvaluationInitView) -> State {
-    let EvaluationInitView {
+pub fn init(
+    stage: EvaluationStageView<Arc<Noteskin>, profile_data::PlayerSide>,
+    context: EvaluationContextView,
+) -> State {
+    let EvaluationStageView {
         score_info,
+        stage_number,
         routine_shared_score_percent,
         stage_duration_seconds,
         fail_stream_progress,
-        context,
-    } = init_view;
+    } = stage;
     let policy = context.policy;
     let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
@@ -3320,6 +3326,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
         heart_rate_view: heart_rate::HeartRateView::default(),
         heart_rate_generation: None,
         stage_duration_seconds,
+        stage_number,
         score_info,
         routine_shared_score_percent,
         routine_shared_grade,
@@ -3637,6 +3644,7 @@ pub fn init_from_score_info(
         heart_rate_view: heart_rate::HeartRateView::default(),
         heart_rate_generation: None,
         stage_duration_seconds,
+        stage_number: None,
         score_info,
         routine_shared_score_percent,
         routine_shared_grade,
@@ -4971,7 +4979,7 @@ mod input_audio_effect_tests {
 
     #[test]
     fn nice_sfx_uses_entry_selection_once() {
-        let mut state = super::init(super::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.nice_scores = [true, false];
         state.sfx_paths.nice = Some("selected/nice.ogg".into());
         state.context.policy.machine_nice_sound = false;
@@ -4994,7 +5002,7 @@ mod input_audio_effect_tests {
 
     #[test]
     fn missing_nice_sfx_does_not_pick_a_late_replacement() {
-        let mut state = super::init(super::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.nice_scores = [true, true];
         state.context.policy.machine_nice_sound = true;
         assert!(matches!(
@@ -5642,6 +5650,7 @@ fn push_overview(
             course_summary: state.score_info[index]
                 .as_ref()
                 .is_some_and(ScoreInfo::is_course_summary),
+            stage_number: state.stage_number,
             double_side_style: state.context.play_style.is_double(),
             elapsed: state.screen_elapsed,
             players: state.score_info.each_ref().map(|score| {

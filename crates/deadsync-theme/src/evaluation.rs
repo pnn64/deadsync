@@ -1,7 +1,7 @@
 //! Presentation interface for a completed stage or course.
 
 use crate::{ThemeEffect, ThemeTransitions};
-use crate::views::HeartRateView;
+use crate::views::{EvaluationStageView, EvaluationView, HeartRateView};
 use deadlib_assets::AssetManager;
 use deadsync_core::{input::MAX_PLAYERS, session_flow::EvaluationOrigin};
 use std::path::{Path, PathBuf};
@@ -9,8 +9,7 @@ use std::sync::Arc;
 
 pub trait ThemeEvaluation: ThemeTransitions {
     type EvaluationState: Clone;
-    type EvaluationEntry;
-    type EvaluationCourseScore;
+    type EvaluationNoteskin;
     type EvaluationContext;
     type EvaluationRuntime;
     type EvaluationInput;
@@ -19,9 +18,13 @@ pub trait ThemeEvaluation: ThemeTransitions {
     type EvaluationVisualPolicy;
     type EvaluationSide;
 
-    fn init_evaluation(entry: Self::EvaluationEntry, color_index: i32) -> Self::EvaluationState;
+    fn init_evaluation(
+        stage: EvaluationStageView<Self::EvaluationNoteskin, Self::EvaluationSide>,
+        context: Self::EvaluationContext,
+        color_index: i32,
+    ) -> Self::EvaluationState;
     fn init_course_evaluation(
-        scores: [Option<Self::EvaluationCourseScore>; MAX_PLAYERS],
+        scores: [Option<EvaluationView<Self::EvaluationNoteskin, Self::EvaluationSide>>; MAX_PLAYERS],
         routine_shared_score_percent: Option<f64>,
         duration_seconds: f32,
         context: Self::EvaluationContext,

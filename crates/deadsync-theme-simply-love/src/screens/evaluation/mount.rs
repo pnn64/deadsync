@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 
 impl ThemeEvaluation for crate::SimplyLoveTheme {
     type EvaluationState = State;
-    type EvaluationEntry = EvaluationInitView;
-    type EvaluationCourseScore = ScoreInfo;
+    type EvaluationNoteskin = Arc<Noteskin>;
     type EvaluationContext = EvaluationContextView;
     type EvaluationRuntime = EvaluationRuntimeView;
     type EvaluationInput = InputEvent;
@@ -17,8 +16,12 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
     type EvaluationVisualPolicy = crate::views::SimplyLoveVisualPolicyView;
     type EvaluationSide = profile_data::PlayerSide;
 
-    fn init_evaluation(entry: EvaluationInitView, color_index: i32) -> State {
-        let mut state = init(entry);
+    fn init_evaluation(
+        stage: EvaluationStageView<Arc<Noteskin>, profile_data::PlayerSide>,
+        context: EvaluationContextView,
+        color_index: i32,
+    ) -> State {
+        let mut state = init(stage, context);
         state.active_color_index = color_index;
         state
     }

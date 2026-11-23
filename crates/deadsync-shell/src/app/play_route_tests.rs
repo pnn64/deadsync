@@ -239,6 +239,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop) {
     }
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
+    assert_eq!(actor_tree_has_text(&actors, "ROUND 1"), openitg);
     press(app, event_loop, VirtualAction::p2_start);
     settle(app, event_loop, CurrentScreen::SelectMusic);
     if openitg {

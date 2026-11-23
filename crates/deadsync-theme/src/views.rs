@@ -651,6 +651,29 @@ impl<N, S> EvaluationView<N, S> {
     }
 }
 
+/// Completed-stage data supplied to the result screen at entry.
+#[derive(Clone)]
+pub struct EvaluationStageView<N, S> {
+    pub score_info: [Option<EvaluationView<N, S>>; MAX_PLAYERS],
+    pub stage_number: Option<usize>,
+    /// The shared Routine score displayed alongside individual results.
+    pub routine_shared_score_percent: Option<f64>,
+    pub stage_duration_seconds: f32,
+    pub fail_stream_progress: [Option<(u32, u32)>; MAX_PLAYERS],
+}
+
+impl<N, S> Default for EvaluationStageView<N, S> {
+    fn default() -> Self {
+        Self {
+            score_info: [const { None }; MAX_PLAYERS],
+            stage_number: None,
+            routine_shared_score_percent: None,
+            stage_duration_seconds: 0.0,
+            fail_stream_progress: [None; MAX_PLAYERS],
+        }
+    }
+}
+
 /// The result overview for the active evaluation page. The shared visit
 /// supplies completed results and the cached life-graph geometry.
 pub struct EvaluationOverview<'a, A> {
@@ -658,6 +681,7 @@ pub struct EvaluationOverview<'a, A> {
     pub artist: &'a Arc<str>,
     pub banner_key: Option<&'a Arc<str>>,
     pub course_summary: bool,
+    pub stage_number: Option<usize>,
     pub double_side_style: bool,
     pub elapsed: f32,
     pub players: [Option<EvaluationPlayerOverview<'a>>; MAX_PLAYERS],

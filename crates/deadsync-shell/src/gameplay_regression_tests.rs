@@ -2944,7 +2944,17 @@ M000
                 for (player, joined) in context.players.iter_mut().zip(joined) {
                     player.joined = joined;
                 }
-                let view = crate::session_results::evaluation_view(&state, &stage, context);
+                let view = crate::session_results::evaluation_view(
+                    &state,
+                    &stage,
+                    1,
+                    &deadsync_config::app_config::Config::default(),
+                    |player| {
+                        deadsync_theme_simply_love::screens::components::gameplay::notefield::preferred_mods_text(
+                            &state, player,
+                        )
+                    },
+                );
                 for runtime in 0..state.num_players() {
                     let score = view.score_info[runtime].as_ref().expect("evaluation view");
                     let result = stage.players[profile_data::player_side_index(score.side)]
@@ -2958,7 +2968,7 @@ M000
                     assert_eq!(score.scatter.len(), result.scatter.len());
                     assert_eq!(score.histogram.bins, result.histogram.bins);
                 }
-                let mut screen = evaluation::init(view);
+                let mut screen = evaluation::init(view, context);
                 assert_eq!(screen.stage_duration_seconds, 12.5);
                 assert!(!evaluation::all_joined_players_failed(&screen));
                 assert!(evaluation::overview_pane_selected(&screen));
