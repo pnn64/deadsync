@@ -25,6 +25,74 @@ pub(super) fn unfilter<const N: usize, const PAETH: bool>(
     }
 }
 
+/// Sub-unfilter `row`, of pixels of `N` (3 or 4) bytes, where the vector
+/// kernel applies.
+pub(super) fn sub<const N: usize>(row: &mut [u8]) -> bool {
+    assert!(matches!(N, 3 | 4));
+    if row.len() >= 64 && std::is_x86_feature_detected!("sse4.1") {
+        // SAFETY: SSE4.1 availability is checked above. Byte accesses use
+        // checked slices and fixed-size arrays.
+        let done = unsafe { sub_run::<N>(row) };
+        // The last reconstructed pixel is the left pixel of the rest.
+        super::unfilter_first_pixels::<N, false>(&mut row[done - N..]);
+        true
+    } else {
+        false
+    }
+}
+
+/// Sub reconstruction in groups of four pixels, returning the reconstructed
+/// length. Shifted additions sum each group's residuals within its pixels,
+/// independently of earlier groups; adding the preceding group's last pixel,
+/// spread to every pixel, is the only dependency between groups. Stores write
+/// exactly the group, so the next group's load never overlaps a pending store.
+#[target_feature(enable = "sse4.1")]
+unsafe fn sub_run<const N: usize>(row: &mut [u8]) -> usize {
+    let spread = if N == 4 {
+        _mm_setr_epi8(
+            12, 13, 14, 15, 12, 13, 14, 15, 12, 13, 14, 15, 12, 13, 14, 15,
+        )
+    } else {
+        _mm_setr_epi8(9, 10, 11, 9, 10, 11, 9, 10, 11, 9, 10, 11, -1, -1, -1, -1)
+    };
+    let mut carry = _mm_setzero_si128();
+    let mut pos = 0;
+    while row.len() - pos >= 16 {
+        let bytes: &mut [u8; 16] = (&mut row[pos..pos + 16]).try_into().unwrap();
+        let residual = load(bytes);
+        let pixels = if N == 4 {
+            let sum = _mm_add_epi8(residual, _mm_slli_si128::<4>(residual));
+            _mm_add_epi8(_mm_add_epi8(sum, _mm_slli_si128::<8>(sum)), carry)
+        } else {
+            let sum = _mm_add_epi8(residual, _mm_slli_si128::<3>(residual));
+            _mm_add_epi8(_mm_add_epi8(sum, _mm_slli_si128::<6>(sum)), carry)
+        };
+        carry = _mm_shuffle_epi8(pixels, spread);
+        if N == 4 {
+            store(bytes, pixels);
+        } else {
+            bytes[..8].copy_from_slice(&_mm_cvtsi128_si64(pixels).to_le_bytes());
+            bytes[8..12].copy_from_slice(&_mm_extract_epi32::<2>(pixels).to_le_bytes());
+        }
+        pos += 4 * N;
+    }
+    pos
+}
+
+#[inline]
+#[target_feature(enable = "sse4.1")]
+fn load(bytes: &[u8; 16]) -> __m128i {
+    // SAFETY: the array holds the 16 bytes read; the load is unaligned.
+    unsafe { _mm_loadu_si128(bytes.as_ptr().cast()) }
+}
+
+#[inline]
+#[target_feature(enable = "sse4.1")]
+fn store(bytes: &mut [u8; 16], value: __m128i) {
+    // SAFETY: the array holds the 16 bytes written; the store is unaligned.
+    unsafe { _mm_storeu_si128(bytes.as_mut_ptr().cast(), value) }
+}
+
 #[inline]
 #[target_feature(enable = "sse4.1")]
 fn step<const N: usize, const PAETH: bool>(
@@ -374,6 +442,46 @@ mod tests {
                 assert_eq!((x, y), (a, b), "N={N} len={len} mask={mask}");
             }
         }
+    }
+
+    fn subs<const N: usize>() {
+        for offset in [0, 1, 7] {
+            for len in (0..200).chain([255, 256, 257, 4095, 4096, 4097]) {
+                let len = len / N * N;
+                for pattern in 0..3 {
+                    let mut actual = vec![0xa5; offset + len + 32];
+                    for n in 0..len {
+                        actual[offset + n] = match pattern {
+                            0 => 255,
+                            1 => n as u8,
+                            _ => ((n * 173 + n * n * 47 + 71) ^ (n >> 2)) as u8,
+                        };
+                    }
+                    let mut expected = actual.clone();
+                    for n in N..len {
+                        expected[offset + n] =
+                            expected[offset + n].wrapping_add(expected[offset + n - N]);
+                    }
+                    let row = &mut actual[offset..offset + len];
+                    let mut copy = row.to_vec();
+                    assert_eq!(sub::<N>(&mut copy), len >= 64);
+                    super::super::unfilter(row, &[], N, 1).unwrap();
+                    assert_eq!(
+                        actual, expected,
+                        "N={N} offset={offset} len={len} pattern={pattern}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn vector_sub_rows_match_bytewise_left_sums() {
+        if !std::is_x86_feature_detected!("sse4.1") {
+            return;
+        }
+        subs::<3>();
+        subs::<4>();
     }
 
     #[test]
