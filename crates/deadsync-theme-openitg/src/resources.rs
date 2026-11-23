@@ -10,6 +10,7 @@ pub(crate) const TITLE_FONT: &str = "openitg/title";
 pub(crate) const MENU_HEADING_FONT: &str = "openitg/eurostile-glow";
 pub(crate) const MENU_NORMAL_FONT: &str = "openitg/eurostile";
 pub(crate) const GAMEPLAY_SCORE_FONT: &str = "openitg/futurist-metalic";
+pub(crate) const TUTORIAL_FONT: &str = "openitg/tutorial";
 
 macro_rules! png {
     ($name:literal) => {
@@ -47,6 +48,11 @@ impl ThemeResources for OpenItgTheme {
     fn asset_manifest() -> ThemeAssetManifest<impl Iterator<Item = TextureAssetSpec>> {
         ThemeAssetManifest {
             fonts: &[
+                FontAssetSpec {
+                    name: TUTORIAL_FONT,
+                    ini_path: "assets/fonts/openitg/_big blue glow.ini",
+                    fallback_font_name: Some(TITLE_FONT),
+                },
                 FontAssetSpec {
                     name: TITLE_FONT,
                     ini_path: "assets/fonts/openitg/_eurostile outline.ini",
@@ -86,6 +92,17 @@ impl ThemeResources for OpenItgTheme {
                 png!("attract-logo-roxor"),
                 png!("attract-ranking-rule"),
                 png!("attract-ranking-frame"),
+                png!("demo-arrow"),
+                png!("demo-focus-rect"),
+                png!("demo-focus-square"),
+                png!("demo-gradient"),
+                png!("demo-instructions"),
+                png!("demo-instructions-white"),
+                png!("demo-light-frame"),
+                png!("demo-light-green"),
+                png!("demo-light-red"),
+                png!("demo-light-yellow"),
+                png!("demo-logo"),
                 png!("gameplay-difficulty"),
                 png!("gameplay-fallback"),
                 png!("gameplay-life-background"),

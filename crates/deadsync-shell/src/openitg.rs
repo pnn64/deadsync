@@ -18,6 +18,7 @@ pub(crate) type Effect = ThemeEffect<OpenItgScreen, OpenItgRuntimeRequest>;
 pub(crate) struct IntroRuntime {
     pub timeline: OpenItgIntro,
     pub video_key: Option<Arc<str>>,
+    pub demo: Option<Box<crate::app::AttractDemo>>,
     current_media: Option<OpenItgIntroMedia>,
 }
 

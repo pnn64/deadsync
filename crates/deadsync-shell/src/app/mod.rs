@@ -3,6 +3,7 @@ use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
 mod arrowcloud_result_dialog;
+mod attract_demo;
 mod audio_requests;
 mod browser_skin;
 mod commands;
@@ -27,6 +28,8 @@ mod select_music_views;
 mod smx_runtime;
 mod stage_start;
 mod updater;
+
+pub(crate) use attract_demo::AttractDemo;
 
 use self::evaluation_views::CourseEvaluationPage;
 use self::lua_loading::SongLuaLoading;
@@ -1408,7 +1411,7 @@ impl ScreensState {
                 let effect = if let Some(intro) = self.openitg_intro.as_mut()
                     && !init::is_loading(&self.init_state)
                 {
-                    if intro.timeline.advance(delta_time) {
+                    if intro.timeline.demonstration().is_none() && intro.timeline.advance(delta_time) {
                         ThemeEffect::NavigateNoFade(CurrentScreen::Menu)
                     } else {
                         ThemeEffect::None
@@ -4589,6 +4592,7 @@ impl App {
         );
         let _ = self.drain_theme_effects(event_loop);
         self.sync_openitg_intro_media();
+        self.step_openitg_demonstration(dt);
         if let Some(target) = self.advance_stage_launch(dt) {
             let _ = self.drain_theme_effects(event_loop);
             self.handle_immediate_navigation(target, event_loop);
@@ -5215,11 +5219,11 @@ impl App {
         }
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();
-        let uses_gameplay_present = matches!(
+        let collect_text_layout_stats = stutter_diag_enabled();
+        let uses_gameplay_present = gameplay_segments.is_some() || matches!(
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
         );
-        let collect_text_layout_stats = stutter_diag_enabled();
         let collect_pacing_stats = uses_gameplay_present
             && (self.state.shell.gameplay_pacing_trace.capture_active()
                 || log::log_enabled!(
@@ -5234,6 +5238,13 @@ impl App {
                 .practice_state
                 .as_ref()
                 .map(|state| &state.gameplay),
+            CurrentScreen::Init => self
+                .state
+                .screens
+                .openitg_intro
+                .as_ref()
+                .and_then(|intro| intro.demo.as_ref())
+                .map(|demo| &demo.stage),
             _ => None,
         };
         let actor_resources = gameplay_state.map(|state| state.stage.actor_resources());
@@ -7736,7 +7747,9 @@ impl App {
         if matches!(
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
-        ) {
+        ) || (self.state.screens.current_screen == CurrentScreen::Init
+            && self.state.screens.openitg_intro.is_some())
+        {
             return;
         }
 
@@ -8203,11 +8216,31 @@ impl App {
                 visual_policy,
             ),
             CurrentScreen::Init => {
-                let screens = &self.state.screens;
-                if let Some(intro) = &screens.openitg_intro
+                let screens = &mut self.state.screens;
+                if let Some(intro) = &mut screens.openitg_intro
                     && !init::is_loading(&screens.init_state)
                 {
-                    intro.timeline.push_actors(&mut actors, intro.video_key.as_ref());
+                    if let Some(demo) = intro.demo.as_mut() {
+                        let hide_gameplay_hud = demo.is_training();
+                        gameplay_segments = Some(crate::gameplay_runtime::push_actors(
+                            &mut actors,
+                            &mut demo.stage,
+                            &self.asset_manager,
+                            gameplay::ActorViewOverride {
+                                hide_gameplay_hud,
+                                ..Default::default()
+                            },
+                            arrow_effect_time_s,
+                            visual_policy,
+                        ));
+                        intro.timeline.push_demonstration_overlay(
+                            &mut actors,
+                            demo.stage.current_music_time_display(),
+                            demo.training_lights(),
+                        );
+                    } else {
+                        intro.timeline.push_actors(&mut actors, intro.video_key.as_ref());
+                    }
                 } else {
                     init::push_actors(&mut actors, &screens.init_state, visual_policy);
                 }
@@ -9279,6 +9312,9 @@ impl App {
             && let Some(intro) = self.state.screens.openitg_intro.as_mut()
         {
             self.audio.stop_music();
+            if intro.demo.is_some() {
+                self.audio.stop_mine_sfx();
+            }
             if let Some(backend) = self.backend.as_mut() {
                 self.dynamic_media.set_background(&mut self.asset_manager, backend, None, 0.0, false);
             }
@@ -9313,7 +9349,7 @@ impl App {
             if prev == CurrentScreen::Menu
                 && let Some(intro) = self.state.screens.openitg_intro.as_mut()
             {
-                intro.timeline.show_records(
+                intro.timeline.start_idle(
                     deadsync_profile_gameplay::cabinet_records::recent_records(40, 15),
                 );
             }

@@ -131,6 +131,7 @@ impl crate::SimplyLoveTheme {
                 }
                 GameplayStageIntro::Restart(count) => Arc::from(format!("RESTART {count}")),
                 GameplayStageIntro::Practice => Arc::from("PRACTICE MODE"),
+                GameplayStageIntro::Demonstration => Arc::from(""),
             };
             let status = if matches!(view.intro, GameplayStageIntro::Practice) {
                 Some(Arc::from("Practice Mode"))

@@ -1,5 +1,6 @@
 //! OpenITG-inspired presentation for DeadSync's shared game and session flow.
 
+mod demonstration;
 mod evaluation;
 mod gameplay;
 mod intro;
@@ -18,7 +19,7 @@ use deadsync_theme::{Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, Transi
 
 pub use evaluation::{EVALUATION_OVERVIEW_SETTLED_SECONDS, push_evaluation_overview};
 pub use gameplay::GAMEPLAY_HUD;
-pub use intro::{OpenItgIntro, OpenItgIntroMedia};
+pub use intro::{OpenItgDemonstration, OpenItgIntro, OpenItgIntroMedia};
 pub use menu::MenuState;
 pub use play_selection::{PlaySelectionCarousel, push_profile_load_actors};
 pub use player_options::OpenItgPlayerOptions;

@@ -396,6 +396,7 @@ pub enum GameplayStageIntro {
     Course { number: usize, total: Option<usize> },
     Restart(u32),
     Practice,
+    Demonstration,
 }
 
 pub struct GameplayReplayView {

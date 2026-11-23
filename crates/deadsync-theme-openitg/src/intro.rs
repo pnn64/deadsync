@@ -20,9 +20,16 @@ enum Phase {
     Company,
     Intro,
     Logo,
+    Demonstration(OpenItgDemonstration),
     Records,
     MarathonRecords,
     SurvivalRecords,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OpenItgDemonstration {
+    Autoplay,
+    Training,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -39,6 +46,8 @@ impl Phase {
         match self {
             Self::Company | Self::Logo => 6.0,
             Self::Intro => 30.5,
+            Self::Demonstration(OpenItgDemonstration::Autoplay) => 30.0,
+            Self::Demonstration(OpenItgDemonstration::Training) => 41.0,
             Self::Records => {
                 RECORD_PAGE_SECONDS * records.songs.len().div_ceil(RECORDS_PER_PAGE).max(1) as f32
             }
@@ -70,6 +79,13 @@ impl Phase {
                 rate: 2.0,
                 poster: "openitg/attract-logo-poster.png",
             },
+            Self::Demonstration(_) => OpenItgIntroMedia {
+                movie: None,
+                music: None,
+                loop_music: false,
+                rate: 1.0,
+                poster: "openitg/gameplay-fallback.png",
+            },
             Self::Records | Self::MarathonRecords | Self::SurvivalRecords => OpenItgIntroMedia {
                 movie: None,
                 music: Some("assets/media/openitg/ranking.ogg"),
@@ -89,10 +105,26 @@ pub struct OpenItgIntro {
 }
 
 impl OpenItgIntro {
-    pub fn show_records(&mut self, records: AttractRecords) {
-        self.phase = Phase::Records;
+    pub fn start_idle(&mut self, records: AttractRecords) {
+        self.phase = Phase::Demonstration(OpenItgDemonstration::Autoplay);
         self.elapsed = 0.0;
         self.records = records;
+    }
+
+    pub const fn demonstration(&self) -> Option<OpenItgDemonstration> {
+        match self.phase {
+            Phase::Demonstration(demo) => Some(demo),
+            _ => None,
+        }
+    }
+
+    pub fn finish_demonstration(&mut self) {
+        self.phase = match self.demonstration() {
+            Some(OpenItgDemonstration::Autoplay) => Phase::Demonstration(OpenItgDemonstration::Training),
+            Some(OpenItgDemonstration::Training) => Phase::Records,
+            None => return,
+        };
+        self.elapsed = 0.0;
     }
 
     pub fn advance(&mut self, delta_time: f32) -> bool {
@@ -106,6 +138,10 @@ impl OpenItgIntro {
                 Phase::Company => Phase::Intro,
                 Phase::Intro => Phase::Logo,
                 Phase::Logo => return true,
+                Phase::Demonstration(_) => {
+                    self.finish_demonstration();
+                    return false;
+                }
                 Phase::Records => Phase::MarathonRecords,
                 Phase::MarathonRecords => Phase::SurvivalRecords,
                 Phase::SurvivalRecords => Phase::Company,
@@ -121,6 +157,17 @@ impl OpenItgIntro {
 
     pub const fn playback_time(&self) -> f32 {
         self.elapsed * self.media().rate
+    }
+
+    pub fn push_demonstration_overlay(
+        &self,
+        actors: &mut Vec<Actor>,
+        music_time: f32,
+        training_lights: [f32; 4],
+    ) {
+        if let Some(demo) = self.demonstration() {
+            crate::demonstration::push_actors(actors, demo, self.elapsed, music_time, training_lights);
+        }
     }
 
     pub fn push_actors(&self, actors: &mut Vec<Actor>, video_key: Option<&Arc<str>>) {
@@ -174,9 +221,9 @@ impl OpenItgIntro {
         }
         actors.push(backdrop);
         match self.phase {
-            _ => {}
             Phase::Intro => push_intro_layers(actors, layout, self.elapsed),
             Phase::Logo => push_logo_layers(actors, layout, self.elapsed),
+            _ => {}
         }
     }
 }
@@ -606,16 +653,29 @@ mod tests {
         assert!(!intro.advance(6.5));
         assert_eq!(intro.media().movie, Some("assets/media/openitg/intro.mpg"));
         assert_eq!(intro.playback_time(), 0.5);
+        let mut actors = Vec::new();
+        intro.push_actors(&mut actors, None);
+        assert!(actors.len() > 1, "intro should add overlays over the poster");
         assert!(!intro.advance(31.0));
         assert_eq!(intro.media().movie, Some("assets/media/openitg/logo.mpg"));
         assert_eq!(intro.playback_time(), 2.0);
+        actors.clear();
+        intro.push_actors(&mut actors, None);
+        assert!(actors.len() > 1, "logo should add overlays over the poster");
         assert!(intro.advance(5.0));
     }
 
     #[test]
     fn idle_records_use_the_ranking_music_then_return_to_attract() {
         let mut intro = OpenItgIntro::default();
-        intro.show_records(AttractRecords::default());
+        intro.start_idle(AttractRecords::default());
+        assert_eq!(intro.demonstration(), Some(OpenItgDemonstration::Autoplay));
+        assert!(!intro.advance(29.9));
+        assert_eq!(intro.demonstration(), Some(OpenItgDemonstration::Autoplay));
+        assert!(!intro.advance(0.1));
+        assert_eq!(intro.demonstration(), Some(OpenItgDemonstration::Training));
+        assert!(!intro.advance(41.0));
+        assert_eq!(intro.demonstration(), None);
         assert!(intro.media().loop_music);
         assert_eq!(
             intro.media().music,
@@ -632,7 +692,7 @@ mod tests {
     fn idle_records_render_the_supplied_chart_and_score() {
         use deadlib_present::space::{Metrics, with_current_metrics};
         let mut intro = OpenItgIntro::default();
-        intro.show_records(AttractRecords {
+        intro.start_idle(AttractRecords {
             songs: vec![AttractRecord {
                 title: Arc::from("Quartz"),
                 difficulty: Arc::from("Hard"),
@@ -641,6 +701,8 @@ mod tests {
             }],
             ..AttractRecords::default()
         });
+        intro.finish_demonstration();
+        intro.finish_demonstration();
         assert!(!intro.advance(1.0));
         let mut actors = Vec::new();
         with_current_metrics(Metrics::centered(640.0, 480.0), || {
@@ -657,7 +719,7 @@ mod tests {
     fn idle_course_pages_scroll_in_order_without_switching_music() {
         use deadlib_present::space::{Metrics, with_current_metrics};
         let mut intro = OpenItgIntro::default();
-        intro.show_records(AttractRecords {
+        intro.start_idle(AttractRecords {
             marathon: vec![AttractCourseRecord {
                 title: Arc::from("Quartz Marathon"),
                 best: Some(("ABC".into(), 91.5)),
@@ -668,6 +730,8 @@ mod tests {
             }],
             ..AttractRecords::default()
         });
+        intro.finish_demonstration();
+        intro.finish_demonstration();
         let ranking_media = intro.media();
         let mut actors = Vec::new();
         with_current_metrics(Metrics::centered(640.0, 480.0), || {

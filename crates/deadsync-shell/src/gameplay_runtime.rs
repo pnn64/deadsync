@@ -583,6 +583,24 @@ pub(crate) fn drain_core(
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
+    drain_audio(state, audio, sounds, music_clock);
+    for command in state.drain_session_commands() {
+        match command {
+            GameplaySessionCommand::SetTimingTickMode(mode) => {
+                deadsync_profile::compat::set_session_timing_tick_mode(
+                    profile_tick_mode_from_gameplay(mode),
+                );
+            }
+        }
+    }
+}
+
+pub(crate) fn drain_audio(
+    state: &mut GameplayCoreState,
+    audio: &mut deadsync_audio_stream::AudioControl,
+    sounds: &crate::gameplay_prewarm::GameplaySfx,
+    music_clock: &mut deadsync_audio_stream::MusicClock,
+) {
     for command in state.drain_audio_commands() {
         match command {
             GameplayAudioCommand::StopMusic => {
@@ -619,16 +637,6 @@ pub(crate) fn drain_core(
                         audio.play_resolved_assist_tick(sound);
                     }
                 }
-            }
-        }
-    }
-
-    for command in state.drain_session_commands() {
-        match command {
-            GameplaySessionCommand::SetTimingTickMode(mode) => {
-                deadsync_profile::compat::set_session_timing_tick_mode(
-                    profile_tick_mode_from_gameplay(mode),
-                );
             }
         }
     }
