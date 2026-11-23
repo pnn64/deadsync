@@ -60,3 +60,21 @@ impl From<std::io::Error> for Error {
 pub(crate) fn reserve<T>(v: &mut Vec<T>, additional: usize) -> Result<(), Error> {
     v.try_reserve(additional).map_err(|_| Error::Allocation)
 }
+
+/// `len` zero bytes with exact capacity, from a zeroed allocation. Fresh
+/// pages are already zero, so this skips the pass `resize` would make.
+#[allow(unsafe_code)]
+pub(crate) fn zeroed(len: usize) -> Result<Vec<u8>, Error> {
+    if len == 0 {
+        return Ok(Vec::new());
+    }
+    let layout = std::alloc::Layout::array::<u8>(len).map_err(|_| Error::Allocation)?;
+    // SAFETY: `layout` has a nonzero size.
+    let bytes = unsafe { std::alloc::alloc_zeroed(layout) };
+    if bytes.is_null() {
+        return Err(Error::Allocation);
+    }
+    // SAFETY: the global allocator returned `bytes` for `layout`: `len`
+    // bytes at alignment 1, all initialized to zero.
+    Ok(unsafe { Vec::from_raw_parts(bytes, len, len) })
+}
