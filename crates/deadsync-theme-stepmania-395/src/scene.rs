@@ -6,7 +6,9 @@ use deadlib_assets::{
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::space::{screen_center_x, screen_center_y};
 
-use crate::{BackgroundPlayback, BackgroundTexture, ThemePackage};
+use crate::{
+    ActorAnimation, BackgroundPlayback, BackgroundTexture, ResourceCategory, ThemePackage,
+};
 
 pub(crate) const CANVAS: [f32; 2] = [640.0, 480.0];
 
@@ -49,6 +51,19 @@ impl SceneTextures {
         self.entries.into_iter().map(|(job, _)| job).collect()
     }
 
+    pub(crate) fn graphic(
+        &mut self,
+        package: &ThemePackage,
+        section: &str,
+        name: &str,
+    ) -> io::Result<Option<BackgroundTexture>> {
+        package
+            .screen_resource(ResourceCategory::Graphics, section, name)
+            .map_err(io::Error::other)?
+            .map(|path| self.bind(path, false))
+            .transpose()
+    }
+
     fn bind(&mut self, path: &Path, repeat: bool) -> io::Result<BackgroundTexture> {
         let stem = path.file_stem().unwrap_or_default().to_string_lossy();
         let hints = parse_texture_hints(&stem);
@@ -82,4 +97,9 @@ impl SceneTextures {
         ));
         Ok(binding)
     }
+}
+
+pub(crate) fn coordinate(value: &str) -> Result<f32, crate::AnimationError> {
+    let animation = ActorAnimation::parse(&format!("x,{value}"), CANVAS)?;
+    Ok(animation.start(Default::default()).state().x)
 }

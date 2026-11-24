@@ -2953,7 +2953,7 @@ fn alternate_service_page_reads_live_choices_and_yields_to_reload() {
             crate::views::SimplyLoveVisualPolicyView::default(),
             Some(SystemOptionsRenderer {
                 phase: SystemOptionsPhase::Steady,
-                background: |actors| {
+                background: &|actors| {
                     actors.push(act!(text: font("miso"): settext("SERVICE BACKGROUND")));
                 },
                 page: &mut draw,

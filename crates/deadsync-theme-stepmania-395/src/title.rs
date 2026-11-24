@@ -7,7 +7,6 @@ use std::{
 use deadlib_assets::TextureDecodeJob;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
-use deadlib_present::anim::TweenState;
 use deadsync_config::{coin::CoinMode, theme::GameFlag};
 use deadsync_input::InputEvent;
 use deadsync_noteskin::script::parse_script_number;
@@ -18,8 +17,8 @@ use deadsync_theme::main_menu::{
 use deadsync_theme::{Screen, Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, TransitionKind};
 
 use crate::bitmap_text::{BitmapText, TextPlayback};
-use crate::scene::{CANVAS, SceneTextures, frame};
-use crate::{ActorAnimation, BackgroundPlayback, ResourceCategory, ThemePackage};
+use crate::scene::{SceneTextures, coordinate, frame};
+use crate::{BackgroundPlayback, ResourceCategory, ThemePackage};
 
 const SECTION: &str = "ScreenTitleMenu";
 pub const TITLE_FONT: &str = "local-theme-title";
@@ -100,8 +99,8 @@ impl PackageTitle {
             .map(|playback| (playback.clone(), playback));
         let mut state = PackageTitleState {
             origin: [
-                coordinate("ScrollerX", metric("ScrollerX")?)?,
-                coordinate("ScrollerY", metric("ScrollerY")?)?,
+                title_coordinate("ScrollerX", metric("ScrollerX")?)?,
+                title_coordinate("ScrollerY", metric("ScrollerY")?)?,
             ],
             step: scroller_step(
                 metric("ScrollerTransform")?.ok_or_else(|| invalid("missing ScrollerTransform"))?,
@@ -306,11 +305,9 @@ fn host_action(command: &str) -> Option<MainMenuItem> {
     })
 }
 
-fn coordinate(key: &str, value: Option<&str>) -> io::Result<f32> {
+fn title_coordinate(key: &str, value: Option<&str>) -> io::Result<f32> {
     let value = value.ok_or_else(|| invalid(format!("missing {key}")))?;
-    let animation =
-        ActorAnimation::parse(&format!("x,{value}"), CANVAS).map_err(io::Error::other)?;
-    Ok(animation.start(TweenState::default()).state().x)
+    coordinate(value).map_err(io::Error::other)
 }
 
 fn scroller_step(transform: &str) -> io::Result<[f32; 2]> {

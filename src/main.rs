@@ -14,7 +14,7 @@ use deadsync_shell::app;
 use deadsync_shell::mounted_theme;
 use deadsync_theme::main_menu::ThemeMainMenu;
 use deadsync_theme_simply_love::{i18n, visual_styles};
-use deadsync_theme_stepmania_395::{PackageIntro, PackageTitle, TITLE_FONT};
+use deadsync_theme_stepmania_395::{PackageIntro, PackageOptions, PackageTitle, TITLE_FONT};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 use std::path::Path;
@@ -272,6 +272,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let package_title = package_arg_path(&cli.remaining, "--theme-title")?
         .map(|path| PackageTitle::open(path, Some(&locale)))
         .transpose()?;
+    let package_options = package_arg_path(&cli.remaining, "--theme-options")?
+        .map(|path| PackageOptions::open(path, Some(&locale)))
+        .transpose()?;
 
     #[cfg(windows)]
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
@@ -343,6 +346,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
             mount.resources.font_paths.push((TITLE_FONT, font));
             mount.resources.textures.extend(textures);
+        }
+        if let Some(options) = package_options {
+            mount.system_options = Some(Box::new(options.presentation));
+            mount.resources.font_paths.extend(options.fonts);
+            mount.resources.textures.extend(options.textures);
         }
         mount
     })

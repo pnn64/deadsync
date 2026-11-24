@@ -233,7 +233,7 @@ pub struct GraphicsOptionsView {
 /// Presentation hooks for the shared service-options controller.
 pub struct SystemOptionsRenderer<'a, A> {
     pub phase: SystemOptionsPhase,
-    pub background: fn(&mut Vec<A>),
+    pub background: &'a dyn Fn(&mut Vec<A>),
     pub page: &'a mut dyn FnMut(&mut Vec<A>, SystemOptionsPage<'_>),
 }
 

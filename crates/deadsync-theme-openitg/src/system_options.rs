@@ -76,7 +76,7 @@ impl SystemOptionsPresentation<Actor> for OpenItgSystemOptions {
         };
         draw(SystemOptionsRenderer {
             phase,
-            background: push_background,
+            background: &push_background,
             page: &mut page,
         });
     }

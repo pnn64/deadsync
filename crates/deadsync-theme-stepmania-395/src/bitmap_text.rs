@@ -24,12 +24,15 @@ struct TextCommand {
     mode: Option<EffectMode>,
     period: Option<f32>,
     colors: [Option<[f32; 4]>; 2],
+    wrap_width: Option<f32>,
 }
 
+#[derive(Clone)]
 pub(crate) struct TextPlayback {
     tween: TweenSeq,
     shadow: f32,
     effect: EffectState,
+    wrap_width: Option<f32>,
 }
 
 impl BitmapText {
@@ -100,11 +103,7 @@ impl BitmapText {
     }
 
     pub(crate) fn start(&self) -> TextPlayback {
-        let mut playback = TextPlayback {
-            tween: TweenSeq::new(TweenState::default()),
-            shadow: 0.0,
-            effect: EffectState::default(),
-        };
+        let mut playback = TextPlayback::new(TweenState::default());
         playback.run(&self.on);
         playback
     }
@@ -124,28 +123,12 @@ impl BitmapText {
         at: [f32; 2],
         alpha: f32,
     ) -> Option<Actor> {
-        let state = playback.tween.state();
-        if !state.visible {
-            return None;
-        }
-        let mut text = TextBuilder::new();
-        text.font(font);
-        text.settext(TextContent::Shared(self.content.clone()));
-        text.xy(at[0] + state.x, at[1] + state.y);
-        text.align(state.hx, state.vy);
-        text.zoomx(state.scale[0]);
-        text.zoomy(state.scale[1]);
-        let [r, g, b, a] = state.tint;
-        text.diffuse([r, g, b, a * alpha]);
-        let [r, g, b, a] = state.glow;
-        text.glow([r, g, b, a * alpha]);
-        text.shadowlength(playback.shadow);
-        text.effectmode(playback.effect.mode);
-        text.effectperiod(playback.effect.period);
-        text.effectcolor1(playback.effect.color1);
-        text.effectcolor2(playback.effect.color2);
-        text.z(1);
-        Some(text.build(0))
+        playback.actor(
+            font,
+            TextContent::Shared(self.content.clone()),
+            at,
+            [1.0, 1.0, 1.0, alpha],
+        )
     }
 }
 
@@ -157,6 +140,7 @@ impl TextCommand {
         let mut mode = None;
         let mut period = None;
         let mut colors = [None, None];
+        let mut wrap_width = None;
         for statement in raw.split(';') {
             let Some(token) = split_script_token(statement) else {
                 continue;
@@ -164,6 +148,10 @@ impl TextCommand {
             let name = token.command().as_str().to_ascii_lowercase();
             let invalid = || format!("invalid arguments for {name}");
             match name.as_str() {
+                "wrapwidthpixels" => {
+                    let [width] = numbers(token.args()).ok_or_else(invalid)?;
+                    wrap_width = Some(width);
+                }
                 "shadowlength" => {
                     let [length] = numbers(token.args()).ok_or_else(invalid)?;
                     shadow = Some(length);
@@ -200,11 +188,66 @@ impl TextCommand {
             mode,
             period,
             colors,
+            wrap_width,
         })
     }
 }
 
 impl TextPlayback {
+    pub(crate) fn new(state: TweenState) -> Self {
+        Self {
+            tween: TweenSeq::new(state),
+            shadow: 0.0,
+            effect: EffectState::default(),
+            wrap_width: None,
+        }
+    }
+
+    pub(crate) fn styled(state: TweenState, commands: &str) -> Result<Self, String> {
+        let mut playback = Self::new(state);
+        playback.run(&TextCommand::parse(commands)?);
+        Ok(playback)
+    }
+
+    pub(crate) fn scale_x(&self) -> f32 {
+        self.tween.state().scale[0]
+    }
+
+    pub(crate) fn actor(
+        &self,
+        font: &'static str,
+        content: TextContent,
+        at: [f32; 2],
+        tint: [f32; 4],
+    ) -> Option<Actor> {
+        let state = self.tween.state();
+        if !state.visible {
+            return None;
+        }
+        let mut text = TextBuilder::new();
+        text.font(font);
+        text.settext(content);
+        text.xy(at[0] + state.x, at[1] + state.y);
+        text.align(state.hx, state.vy);
+        text.zoomx(state.scale[0]);
+        text.zoomy(state.scale[1]);
+        text.diffuse(std::array::from_fn(|channel| {
+            state.tint[channel] * tint[channel]
+        }));
+        let [r, g, b, a] = state.glow;
+        text.glow([r, g, b, a * tint[3]]);
+        text.shadowlength(self.shadow);
+        text.effectmode(self.effect.mode);
+        text.effectperiod(self.effect.period);
+        text.effectcolor1(self.effect.color1);
+        text.effectcolor2(self.effect.color2);
+        if let Some(width) = self.wrap_width {
+            text.wrapwidthpixels(width);
+        }
+        text.z(1);
+        Some(text.build(0))
+    }
+
     pub(crate) fn advance(&mut self, delta: f32) {
         self.tween.update(delta);
     }
@@ -221,5 +264,6 @@ impl TextPlayback {
         self.effect.period = command.period.unwrap_or(self.effect.period);
         self.effect.color1 = command.colors[0].unwrap_or(self.effect.color1);
         self.effect.color2 = command.colors[1].unwrap_or(self.effect.color2);
+        self.wrap_width = command.wrap_width.or(self.wrap_width);
     }
 }
