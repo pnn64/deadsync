@@ -100,16 +100,14 @@ fn rgba(png: &Png, image: &Image, index: usize, factor: u16) -> [u16; 4] {
             [scale(values[0]), scale(values[1]), scale(values[2]), a]
         }
         ColorType::Indexed => palette_rgba(png, usize::from(raw(base))),
-        ColorType::GrayscaleAlpha => {
-            let g = scale(raw(base));
-            [g, g, g, scale(raw(base + 1))]
+        ColorType::GrayscaleAlpha | ColorType::Rgba => {
+            unreachable!("frames with alpha samples are rendered directly")
         }
-        ColorType::Rgba => unreachable!("RGBA frames are rendered directly"),
     }
 }
 
 #[inline]
-fn over(dst: &mut [u16; 4], src: [u16; 4]) {
+fn over<const GRAY: bool>(dst: &mut [u16; 4], src: [u16; 4]) {
     if src[3] == 0 {
         return;
     }
@@ -120,7 +118,7 @@ fn over(dst: &mut [u16; 4], src: [u16; 4]) {
         // numerator is at most 65535^2 + 32767, which fits in u32.
         let sa = u32::from(src[3]);
         let inv = 65535 - sa;
-        for n in 0..3 {
+        for n in 0..if GRAY { 1 } else { 3 } {
             dst[n] = ((u32::from(src[n]) * sa + u32::from(dst[n]) * inv + 32767) / 65535) as u16;
         }
     } else {
@@ -131,13 +129,17 @@ fn over(dst: &mut [u16; 4], src: [u16; 4]) {
         let alpha = source_weight + destination_weight;
         let inverse = 1.0 / f64::from(alpha);
         let round = u64::from(alpha / 2);
-        for n in 0..3 {
+        for n in 0..if GRAY { 1 } else { 3 } {
             let numerator = u64::from(src[n]) * u64::from(source_weight)
                 + u64::from(dst[n]) * u64::from(destination_weight)
                 + round;
             dst[n] = divide_color(numerator, alpha, inverse);
         }
         dst[3] = ((alpha + 32767) / 65535) as u16;
+    }
+    if GRAY {
+        dst[1] = dst[0];
+        dst[2] = dst[0];
     }
 }
 
@@ -177,18 +179,34 @@ fn source_rgba_rows(canvas: &mut [u16], stride: usize, width: usize, samples: &S
     }
 }
 
-fn over_rgba_rows<T: Copy>(
+fn render_alpha_rows<T: Copy, const N: usize>(
     canvas: &mut [u16],
     stride: usize,
     width: usize,
     samples: &[T],
-    convert: impl Fn([T; 4]) -> [u16; 4],
+    blend: BlendOp,
+    convert: impl Fn([T; N]) -> [u16; 4],
 ) {
-    let rows = samples.as_chunks::<4>().0.chunks_exact(width);
+    let rows = samples.as_chunks::<N>().0.chunks_exact(width);
     for (dst, src) in canvas.chunks_mut(stride).zip(rows) {
         let dst = dst[..width * 4].as_chunks_mut::<4>().0;
-        for (dst, &src) in dst.iter_mut().zip(src) {
-            over(dst, convert(src));
+        let pixels = dst.iter_mut().zip(src);
+        if N == 2 {
+            if blend == BlendOp::Source {
+                for (dst, &src) in pixels {
+                    *dst = convert(src);
+                }
+            } else {
+                // All frames share the grayscale format, and disposal and
+                // reset preserve equal RGB channels on the canvas.
+                for (dst, &src) in pixels {
+                    over::<true>(dst, convert(src));
+                }
+            }
+        } else {
+            for (dst, &src) in pixels {
+                over::<false>(dst, convert(src));
+            }
         }
     }
 }
@@ -216,7 +234,7 @@ fn render_indexed_rows(
             }
         } else {
             for (dst, &index) in pixels {
-                over(dst, palette[usize::from(index)]);
+                over::<false>(dst, palette[usize::from(index)]);
             }
         }
     }
@@ -447,11 +465,33 @@ impl Compositor<'_> {
             let canvas = &mut self.canvas[offset..];
             let width = c.width as usize;
             match &image.samples {
-                Samples::U8(samples) => over_rgba_rows(canvas, stride, width, samples, |pixel| {
-                    pixel.map(|channel| u16::from(channel) * 257)
-                }),
+                Samples::U8(samples) => render_alpha_rows(
+                    canvas,
+                    stride,
+                    width,
+                    samples,
+                    BlendOp::Over,
+                    |pixel: [u8; 4]| pixel.map(|channel| u16::from(channel) * 257),
+                ),
                 Samples::U16(samples) => {
-                    over_rgba_rows(canvas, stride, width, samples, |pixel| pixel);
+                    render_alpha_rows(canvas, stride, width, samples, BlendOp::Over, |pixel| pixel);
+                }
+            }
+        } else if image.color_type == ColorType::GrayscaleAlpha {
+            let offset = c.y_offset as usize * stride + c.x_offset as usize * 4;
+            let canvas = &mut self.canvas[offset..];
+            let width = c.width as usize;
+            match &image.samples {
+                Samples::U8(samples) => {
+                    render_alpha_rows(canvas, stride, width, samples, c.blend, |[g, a]| {
+                        let g = u16::from(g) * 257;
+                        [g, g, g, u16::from(a) * 257]
+                    });
+                }
+                Samples::U16(samples) => {
+                    render_alpha_rows(canvas, stride, width, samples, c.blend, |[g, a]| {
+                        [g, g, g, a]
+                    });
                 }
             }
         } else if let (ColorType::Indexed, Samples::U8(samples)) =
@@ -469,7 +509,7 @@ impl Compositor<'_> {
                     if c.blend == BlendOp::Source {
                         *dst = src;
                     } else {
-                        over(dst, src);
+                        over::<false>(dst, src);
                     }
                 }
             }
