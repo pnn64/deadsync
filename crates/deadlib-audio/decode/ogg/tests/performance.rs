@@ -323,7 +323,9 @@ fn benchmark_container() {
             black_box(writer.into_inner().0);
         });
     }
-    for size in [128, 1024, 8192, 65025] {
+    for size in [
+        32, 48, 63, 64, 65, 72, 80, 96, 112, 127, 128, 129, 192, 256, 1024, 8192, 65025,
+    ] {
         let data: Vec<_> = (0..size).map(|i| (i * 37) as u8).collect();
         measure(&format!("crc/{size}"), 100_000, size, || {
             black_box(crc32(black_box(&data)));

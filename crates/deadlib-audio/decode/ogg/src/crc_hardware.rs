@@ -9,7 +9,7 @@ use std::arch::x86_64::*;
 /// The only safe entry to the feature-specific implementation.
 #[inline]
 pub(crate) fn update(seed: u32, bytes: &[u8]) -> Option<u32> {
-    if bytes.len() < 128 {
+    if bytes.len() < 64 {
         return None;
     }
     if is_x86_feature_detected!("pclmulqdq") && is_x86_feature_detected!("ssse3") {
