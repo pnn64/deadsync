@@ -199,6 +199,51 @@ fn keyed_gray_and_rgb_source_and_over_match_the_model() {
 }
 
 #[test]
+fn full_and_partial_previous_restore_across_buffer_swaps() {
+    let mut png = Png::new(image([4000, 21000, 59000, 57000].repeat(3)));
+    let mut frames = vec![Frame {
+        control: control(3, 1),
+        image: None,
+    }];
+    for (width, x_offset, blend, dispose) in [
+        (3, 0, BlendOp::Source, DisposeOp::Previous),
+        (3, 0, BlendOp::Source, DisposeOp::Previous),
+        (3, 0, BlendOp::Over, DisposeOp::Previous),
+        (1, 1, BlendOp::Over, DisposeOp::Previous),
+        (1, 2, BlendOp::Source, DisposeOp::None),
+    ] {
+        let color = frames.len() as u16 * 7000;
+        frames.push(Frame {
+            control: FrameControl {
+                x_offset,
+                blend,
+                dispose,
+                ..control(width, 1)
+            },
+            image: Some(image([color, 7200, 1900, 22000].repeat(width as usize))),
+        });
+    }
+    png.animation = Some(Animation {
+        plays: 0,
+        default_is_frame: true,
+        frames,
+    });
+    let limits = Limits {
+        max_output_bytes: 3 * 8 * 2,
+        ..Limits::default()
+    };
+    let expected = oracle::render(&png);
+    let mut compositor = png.compositor(limits).unwrap();
+    for _ in 0..2 {
+        for frame in &expected {
+            assert_eq!(compositor.next_frame().unwrap().unwrap().samples, frame);
+        }
+        assert!(compositor.next_frame().unwrap().is_none());
+        compositor.reset();
+    }
+}
+
+#[test]
 fn opaque_white_blends_stay_white_at_every_source_alpha() {
     let mut png = Png::new(image(vec![65535; 65536 * 4]));
     png.animation = Some(Animation {

@@ -435,6 +435,37 @@ fn clear_region(canvas: &mut [u16], control: FrameControl, stride: usize) {
     }
 }
 
+#[inline(never)]
+fn save_region(canvas: &[u16], previous: &mut Vec<u16>, control: FrameControl, stride: usize) {
+    let width = control.width as usize * 4;
+    let start = control.y_offset as usize * stride + control.x_offset as usize * 4;
+    let end = start + (control.height as usize - 1) * stride + width;
+    let region = &canvas[start..end];
+    previous.clear();
+    if width == stride {
+        previous.extend_from_slice(region);
+    } else {
+        for row in region.chunks(stride) {
+            previous.extend_from_slice(&row[..width]);
+        }
+    }
+}
+
+#[inline(never)]
+fn restore_region(canvas: &mut [u16], previous: &[u16], control: FrameControl, stride: usize) {
+    let width = control.width as usize * 4;
+    let start = control.y_offset as usize * stride + control.x_offset as usize * 4;
+    let end = start + (control.height as usize - 1) * stride + width;
+    let region = &mut canvas[start..end];
+    if width == stride {
+        region.copy_from_slice(previous);
+    } else {
+        for (dst, src) in region.chunks_mut(stride).zip(previous.chunks_exact(width)) {
+            dst[..width].copy_from_slice(src);
+        }
+    }
+}
+
 impl Compositor<'_> {
     pub fn reset(&mut self) {
         self.index = 0;
@@ -454,7 +485,8 @@ impl Compositor<'_> {
         let frame = &animation.frames[self.index];
         let c = frame.control;
         let image = frame.image.as_ref().unwrap_or(&self.png.image);
-        if c.dispose == DisposeOp::Previous && self.index != 0 {
+        let save_previous = c.dispose == DisposeOp::Previous && self.index != 0;
+        if save_previous {
             let count = c.width as usize * c.height as usize * 4;
             if self
                 .canvas
@@ -473,24 +505,27 @@ impl Compositor<'_> {
             match control.dispose {
                 DisposeOp::None => (),
                 DisposeOp::Previous if self.index > 1 => {
-                    let width = control.width as usize * 4;
-                    for y in 0..control.height as usize {
-                        let start = (control.y_offset as usize + y) * stride
-                            + control.x_offset as usize * 4;
-                        self.canvas[start..start + width]
-                            .copy_from_slice(&self.previous[y * width..(y + 1) * width]);
+                    if self.previous.len() == self.canvas.len() {
+                        core::mem::swap(&mut self.canvas, &mut self.previous);
+                    } else {
+                        restore_region(&mut self.canvas, &self.previous, control, stride);
                     }
                 }
                 _ => clear_region(&mut self.canvas, control, stride),
             }
         }
-        self.previous.clear();
-        if c.dispose == DisposeOp::Previous && self.index != 0 {
-            for y in 0..c.height as usize {
-                let start = (c.y_offset as usize + y) * stride + c.x_offset as usize * 4;
-                self.previous
-                    .extend_from_slice(&self.canvas[start..start + c.width as usize * 4]);
+        if save_previous {
+            let width = c.width as usize * 4;
+            let height = c.height as usize;
+            if c.blend == BlendOp::Source && width * height == self.canvas.len() {
+                // SOURCE overwrites the whole canvas, so reuse the scratch buffer for it.
+                self.previous.resize(self.canvas.len(), 0);
+                core::mem::swap(&mut self.canvas, &mut self.previous);
+            } else {
+                save_region(&self.canvas, &mut self.previous, c, stride);
             }
+        } else {
+            self.previous.clear();
         }
         if c.blend == BlendOp::Source && image.color_type == ColorType::Rgba {
             let offset = c.y_offset as usize * stride + c.x_offset as usize * 4;
