@@ -244,6 +244,7 @@ fn benchmark_container() {
     for (label, size, count, target) in [
         ("small", 24, 32, 8192),
         ("audio", 300, 256, 8192),
+        ("wide", 640, 256, 8192),
         ("dense", 1, 1020, 8192),
         ("spanning", 200_000, 4, 8192),
     ] {
