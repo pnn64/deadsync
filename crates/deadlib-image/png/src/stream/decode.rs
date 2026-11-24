@@ -1,4 +1,7 @@
-use super::{DecodeEvent, DecodeProgress, DecodeStatus, ImageInfo, ImageKind, rows::ImageRows};
+use super::{
+    DecodeEvent, DecodeProgress, DecodeStatus, ImageInfo, ImageKind,
+    rows::{ImageRows, RowBuffers},
+};
 use crate::{
     AncillaryChunk, AnimationPolicy, ChunkPosition, ColorType, DecodeOptions, Error, FrameControl,
     Metadata, MetadataPolicy, Transparency,
@@ -88,7 +91,7 @@ pub struct StreamDecoder {
     pre_control: Option<FrameControl>,
     frames_ended: u32,
     rows: Option<ImageRows>,
-    history: Vec<u8>,
+    buffers: RowBuffers,
     image_kind: Option<ImageKind>,
     sample_bytes: usize,
     peak_image_buffers: usize,
@@ -147,7 +150,7 @@ impl StreamDecoder {
             pre_control: None,
             frames_ended: 0,
             rows: None,
-            history: Vec::new(),
+            buffers: RowBuffers::default(),
             image_kind: None,
             sample_bytes: 0,
             peak_image_buffers: 0,
@@ -264,7 +267,7 @@ impl StreamDecoder {
             self.animation_error = Some(error);
         }
         self.animation = None;
-        self.history = Vec::new();
+        self.buffers = RowBuffers::default();
         self.default_control = false;
         self.pre_control = None;
         if matches!(self.image_kind, Some(ImageKind::AnimationFrame(_))) {
@@ -307,7 +310,7 @@ impl StreamDecoder {
             h,
             kind,
             self.options.limits.max_output_bytes,
-            core::mem::take(&mut self.history),
+            core::mem::take(&mut self.buffers),
         )?);
         self.image_kind = Some(kind);
         self.update_memory();
@@ -318,7 +321,7 @@ impl StreamDecoder {
             .rows
             .take()
             .ok_or(Error::Invalid("missing image data"))?;
-        let (kind, history) = rows.finish()?;
+        let (kind, buffers) = rows.finish()?;
         if kind != ImageKind::Default || self.default_control {
             self.frames_ended += 1;
         }
@@ -326,7 +329,7 @@ impl StreamDecoder {
             .animation
             .is_some_and(|(frames, _)| self.frames_ended < frames)
         {
-            self.history = history;
+            self.buffers = buffers;
         }
         self.image_kind = None;
         Ok(kind)

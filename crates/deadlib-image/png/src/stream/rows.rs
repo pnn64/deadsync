@@ -6,6 +6,13 @@ use crate::{
     zlib::{Inflater, StreamStatus},
 };
 
+#[derive(Default)]
+pub(super) struct RowBuffers {
+    history: Vec<u8>,
+    row: Vec<u8>,
+    previous: Vec<u8>,
+}
+
 pub(super) struct ImageRows {
     header: Header,
     kind: ImageKind,
@@ -31,7 +38,7 @@ impl ImageRows {
         header: Header,
         kind: ImageKind,
         limit: usize,
-        history: Vec<u8>,
+        buffers: RowBuffers,
     ) -> Result<Self, Error> {
         let expected = scanline::filtered_size(
             header.width,
@@ -43,12 +50,25 @@ impl ImageRows {
         if expected > limit || header.sample_bytes()? > limit {
             return Err(Error::LimitExceeded);
         }
+        let RowBuffers {
+            history,
+            mut row,
+            mut previous,
+        } = buffers;
+        // Only reuse plain rows of the same length. A different first-pass
+        // capacity would change the stream's reported peak storage.
+        if header.interlaced || row.len().checked_mul(header.height as usize) != Some(expected) {
+            row = Vec::new();
+            previous = Vec::new();
+        } else if header.height == 1 {
+            previous = Vec::new();
+        }
         let mut rows = Self {
             header,
             kind,
             inflater: Inflater::with_history(expected, history)?,
-            row: Vec::new(),
-            previous: Vec::new(),
+            row,
+            previous,
             native8: Vec::new(),
             native16: Vec::new(),
             pass: 0,
@@ -211,13 +231,21 @@ impl ImageRows {
     pub(super) fn is_done(&self) -> bool {
         self.inflater.is_done()
     }
-    pub(super) fn finish(mut self) -> Result<(ImageKind, Vec<u8>), Error> {
+    pub(super) fn finish(mut self) -> Result<(ImageKind, RowBuffers), Error> {
         self.advance()?;
         self.inflater.finish()?;
         if !self.complete {
             return Err(Error::Invalid("image data length"));
         }
-        Ok((self.kind, self.inflater.into_history()))
+        let mut buffers = RowBuffers {
+            history: self.inflater.into_history(),
+            ..RowBuffers::default()
+        };
+        if !self.header.interlaced {
+            buffers.row = self.row;
+            buffers.previous = self.previous;
+        }
+        Ok((self.kind, buffers))
     }
     pub(super) fn memory_bytes(&self) -> usize {
         self.inflater.working_memory_bytes()
@@ -225,5 +253,73 @@ impl ImageRows {
             + self.previous.capacity()
             + self.native8.capacity()
             + self.native16.capacity() * 2
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        PalettePolicy,
+        zlib::{Compression, compress},
+    };
+
+    #[test]
+    fn reused_row_storage_matches_fresh_rows_and_capacities() {
+        let mut buffers = RowBuffers::default();
+        let shapes = [
+            (17, 3, false),
+            (17, 1, false),
+            (17, 5, false),
+            (29, 3, false),
+            (29, 3, true),
+            (29, 3, false),
+        ];
+        for (frame, (width, height, interlaced)) in shapes.into_iter().enumerate() {
+            let header = Header {
+                width,
+                height,
+                color: ColorType::Grayscale,
+                depth: 8,
+                interlaced,
+            };
+            let mut filtered = Vec::new();
+            for &(x, y, dx, dy) in scanline::passes(interlaced) {
+                let width = scanline::extent(width, x, dx);
+                if width == 0 {
+                    continue;
+                }
+                for row in 0..scanline::extent(height, y, dy) {
+                    filtered.push(2);
+                    filtered.resize(filtered.len() + width, (frame + row + 1) as u8);
+                }
+            }
+            let encoded = compress(&filtered, Compression::Fast).unwrap();
+            let kind = ImageKind::AnimationFrame(frame as u32);
+            let mut reused = ImageRows::new(header, kind, 65536, buffers).unwrap();
+            let mut fresh = ImageRows::new(header, kind, 65536, RowBuffers::default()).unwrap();
+            let mut remaining = encoded.as_slice();
+            loop {
+                reused.advance().unwrap();
+                fresh.advance().unwrap();
+                assert_eq!(reused.memory_bytes(), fresh.memory_bytes());
+                let (used, ready) = reused.feed(remaining, 0, PalettePolicy::Strict).unwrap();
+                assert_eq!(
+                    (used, ready),
+                    fresh.feed(remaining, 0, PalettePolicy::Strict).unwrap()
+                );
+                assert_eq!(reused.memory_bytes(), fresh.memory_bytes());
+                remaining = &remaining[used..];
+                if ready {
+                    assert_eq!(reused.row(), fresh.row());
+                } else {
+                    assert!(reused.is_done());
+                    assert!(fresh.is_done());
+                    assert!(remaining.is_empty());
+                    break;
+                }
+            }
+            buffers = reused.finish().unwrap().1;
+        }
     }
 }
