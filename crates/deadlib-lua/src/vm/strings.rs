@@ -823,7 +823,7 @@ impl Vm {
         while let Some(&c) = self.strings.bytes[slot].get(pos) {
             let complete = if c != b'%' {
                 let rest = &self.strings.bytes[slot][pos..];
-                if rest.len() >= 16 {
+                if rest.len() >= 3 {
                     let output = &mut self.substitutions[index].output;
                     // Leave flushes and their resumptions to substitution_byte.
                     let available = &rest[..rest.len().min(io::LINE_BUFFER - output.len())];
