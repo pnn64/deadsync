@@ -665,28 +665,25 @@ impl StreamDecoder {
                     }
                 }
                 State::ChunkBody => {
-                    if &self.kind == b"fdAT"
-                        && self.prefix_have < 4
-                        && !self.discarded_animation_chunk()
-                    {
-                        let start = pos;
-                        let complete = fill(
-                            input,
-                            &mut pos,
-                            &mut self.prefix,
-                            &mut self.prefix_have,
-                            &mut self.input_left,
-                        )?;
-                        self.crc.update(&input[start..pos]);
-                        self.left -= pos - start;
-                        if !complete {
-                            break;
+                    let frame_data = &self.kind == b"fdAT";
+                    if &self.kind == b"IDAT" || (frame_data && self.animation_error.is_none()) {
+                        if frame_data && self.prefix_have < 4 {
+                            let start = pos;
+                            let complete = fill(
+                                input,
+                                &mut pos,
+                                &mut self.prefix,
+                                &mut self.prefix_have,
+                                &mut self.input_left,
+                            )?;
+                            self.crc.update(&input[start..pos]);
+                            self.left -= pos - start;
+                            if !complete {
+                                break;
+                            }
+                            let result = self.sequence(be32(&self.prefix));
+                            self.animation_result(result, AnimationFault::Body)?;
                         }
-                        let result = self.sequence(be32(&self.prefix));
-                        self.animation_result(result, AnimationFault::Body)?;
-                    }
-                    if matches!(&self.kind, b"IDAT" | b"fdAT") && !self.discarded_animation_chunk()
-                    {
                         let available = self.left.min(input.len() - pos).min(self.input_left);
                         let rows = self
                             .rows
@@ -699,21 +696,16 @@ impl StreamDecoder {
                                 self.options.palette_policy,
                             );
                             let buffers_can_grow = rows.buffers_can_grow();
-                            let (used, event) = if &self.kind == b"fdAT" {
-                                // This inflater is capped at the exact filtered
-                                // frame length; exceeding it is malformed frame
-                                // data, not a caller resource-limit exception.
-                                let result = result.map_err(|error| {
+                            let (used, event) = result.map_err(|error| {
+                                if frame_data {
+                                    self.animation_fault = Some(AnimationFault::Body);
+                                    // This limit is the frame's exact filtered size.
                                     if error == Error::LimitExceeded {
-                                        Error::Invalid("APNG frame data length")
-                                    } else {
-                                        error
+                                        return Error::Invalid("APNG frame data length");
                                     }
-                                });
-                                self.animation_result(result, AnimationFault::Body)?
-                            } else {
-                                result?
-                            };
+                                }
+                                error
+                            })?;
                             self.crc.update(&input[pos..pos + used]);
                             self.left -= used;
                             self.input_left -= used;
