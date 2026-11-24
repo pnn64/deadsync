@@ -742,7 +742,11 @@ pub fn decode_with_options(input: &[u8], options: &DecodeOptions) -> Result<Gif,
         match progress.event {
             Some(Event::Header) => {}
             Some(Event::Block(block)) => {
-                reserve(&mut blocks, 1)?;
+                if blocks.is_empty() && input.get(at) == Some(&0x3b) {
+                    blocks.try_reserve_exact(1).map_err(|_| Error::Allocation)?;
+                } else {
+                    reserve(&mut blocks, 1)?;
+                }
                 blocks.push(block);
             }
             Some(Event::End) => {
