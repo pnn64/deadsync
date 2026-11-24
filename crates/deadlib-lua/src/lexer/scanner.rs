@@ -298,6 +298,15 @@ impl Scanner {
     /// `false` leaves the cursor at the token start for the resumable states.
     /// Produced tokens, spans and line counts match the state machine exactly.
     fn fast(&mut self, input: &[u8], out: &mut Token) -> Result<bool, Error> {
+        if self.pos == 0 && input.len() >= 64 {
+            let first = input[0];
+            if matches!(first, b'\n' | b'\r') && input[..8] == [first; 8] {
+                // Leave the last newline for pairing and overflow checks.
+                let count = (byte_run(input, first) - 1).min((u32::MAX - self.line) as usize);
+                self.pos = count;
+                self.line += count as u32;
+            }
+        }
         loop {
             match input.get(self.pos) {
                 Some(b' ' | b'\t' | 11 | 12) => {
@@ -951,6 +960,23 @@ mod tests {
                 let ends = (0..=source.len()).collect::<Vec<_>>();
                 assert_eq!(tokens(&source, &ends), closed, "{source:?}");
             }
+        }
+    }
+
+    #[test]
+    fn leading_blank_lines_preserve_pairing_at_the_line_limit() {
+        let source = [&[b'\n'; 64][..], b"\rreturn"].concat();
+        for (remaining, position) in [(62, 63), (63, 65)] {
+            let mut scanner = Scanner {
+                line: u32::MAX - remaining,
+                ..Scanner::default()
+            };
+            let error = scanner
+                .next_closed(&source, &mut Token::default())
+                .unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::Limit);
+            assert_eq!(error.line(), u32::MAX);
+            assert_eq!(scanner.pos, position);
         }
     }
 
