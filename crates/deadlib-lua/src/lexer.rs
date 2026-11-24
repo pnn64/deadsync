@@ -160,8 +160,21 @@ pub(crate) fn short_decimal_integer(bytes: &[u8]) -> Option<f64> {
     if !(1..=15).contains(&bytes.len()) {
         return None;
     }
-    let mut integer = 0u64;
-    for &byte in bytes {
+    let (mut integer, tail) = if let Some((head, tail)) = bytes.split_first_chunk::<8>() {
+        let word = u64::from_le_bytes(*head);
+        let digits = word.wrapping_sub(0x3030_3030_3030_3030);
+        // In the first invalid lane, either subtracting '0' or adding 0x46
+        // sets the high bit. Valid lower lanes cannot borrow or carry into it.
+        if (digits | word.wrapping_add(0x4646_4646_4646_4646)) & 0x8080_8080_8080_8080 != 0 {
+            return None;
+        }
+        let pairs = (digits * 10 + (digits >> 8)) & 0x00ff_00ff_00ff_00ff;
+        let quads = (pairs * 100 + (pairs >> 16)) & 0x0000_ffff_0000_ffff;
+        ((quads & 0xffff) * 10_000 + (quads >> 32), tail)
+    } else {
+        (0, bytes)
+    };
+    for &byte in tail {
         let digit = byte.wrapping_sub(b'0');
         if digit > 9 {
             return None;
@@ -244,7 +257,7 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_number;
+    use super::{parse_number, short_decimal_integer};
 
     #[test]
     fn short_decimal_integers_match_binary64_parsing_at_every_length() {
@@ -308,6 +321,22 @@ mod tests {
                 expected.map(f64::to_bits),
                 "{input:?}"
             );
+        }
+    }
+
+    #[test]
+    fn decimal_integer_checks_every_byte_in_the_word() {
+        for lane in 0..8 {
+            for byte in u8::MIN..=u8::MAX {
+                let mut input = *b"876543210123456";
+                input[lane] = byte;
+                let expected = std::str::from_utf8(&input)
+                    .ok()
+                    .and_then(|text| text.parse::<u64>().ok())
+                    .filter(|_| byte.is_ascii_digit())
+                    .map(|number| number as f64);
+                assert_eq!(short_decimal_integer(&input), expected, "{input:?}");
+            }
         }
     }
 
