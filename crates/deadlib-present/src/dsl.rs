@@ -1382,6 +1382,10 @@ impl SpriteBuilder {
             self.sy = -self.sy;
         }
 
+        // Zero dimensions also request native size/aspect in the compositor.
+        // A zero zoom must remain collapsed, including its glow pass.
+        self.vis &= self.sx != 0.0 && self.sy != 0.0;
+
         let scale_carry = if self.w != 0.0 || self.h != 0.0 {
             self.w *= self.sx;
             self.h *= self.sy;
@@ -2206,6 +2210,29 @@ mod tests {
         };
 
         assert_eq!(scale, [0.5, 0.25]);
+    }
+
+    #[test]
+    fn sprite_zero_zoom_does_not_restore_native_dimensions() {
+        let metrics = crate::space::Metrics::centered(640.0, 480.0);
+        let fonts = crate::font::FontMap::default();
+        for zoom in [[1.0, 1.0], [0.0, 1.0], [1.0, 0.0], [0.0, 0.0]] {
+            let mut sprite = SpriteBuilder::static_texture("banner");
+            sprite.size(160.0, 60.0);
+            sprite.xy(320.0, 240.0);
+            sprite.zoomx(zoom[0]);
+            sprite.zoomy(zoom[1]);
+            sprite.glow([1.0, 1.0, 1.0, 0.5]);
+            let frame = crate::compose::build_screen_with_texture_context(
+                &[sprite.build(0)],
+                [0.0; 4],
+                &metrics,
+                &fonts,
+                0.0,
+                &TestTextureContext,
+            );
+            assert_eq!(frame.ops.is_empty(), zoom.contains(&0.0), "zoom {zoom:?}");
+        }
     }
 
     #[test]

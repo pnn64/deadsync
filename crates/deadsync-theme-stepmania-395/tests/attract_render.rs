@@ -113,6 +113,17 @@ fn native_attract_captures() {
         &assets,
     );
     let mut intro = StepManiaIntro::default();
+    for (name, elapsed) in [("title-delayed-logo", 0.25), ("title-revealed-logo", 1.0)] {
+        capture_actors(
+            name,
+            &support::title_actors(elapsed),
+            elapsed,
+            &output,
+            &metrics,
+            &mut backend,
+            &assets,
+        );
+    }
     capture_actors(
         "select-music",
         &support::music_actors(),

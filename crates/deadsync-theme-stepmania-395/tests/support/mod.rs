@@ -175,3 +175,25 @@ pub fn transition_actors(arriving: bool, elapsed: f32) -> (Vec<Actor>, f32) {
     deadlib_present::runtime::tick(elapsed);
     actors()
 }
+
+pub fn title_actors(elapsed: f32) -> Vec<Actor> {
+    use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
+    use deadsync_theme::{ThemeEffect, TransitionState};
+    use deadsync_theme_stepmania_395::StepManiaTheme;
+    let mut state = StepManiaTheme::init_menu(0);
+    let _: ThemeEffect<_, ()> =
+        StepManiaTheme::update_menu(&mut state, elapsed, MainMenuPhase::Active);
+    let mut actors = Vec::new();
+    StepManiaTheme::push_menu_actors(
+        &mut actors,
+        &state,
+        MainMenuFrame {
+            update_banner_tag: None,
+            background_key: None,
+            alpha_multiplier: 1.0,
+            transition: &TransitionState::Idle,
+            visual_policy: (),
+        },
+    );
+    actors
+}

@@ -15,6 +15,20 @@ use deadsync_theme::{Screen, ThemeEffect, ThemeResources, TransitionState};
 use deadsync_theme_stepmania_395::{StepManiaIntro, StepManiaStageCard, StepManiaTheme};
 
 #[test]
+fn title_logo_stays_hidden_until_its_original_reveal_delay() {
+    let hidden = support::title_actors(0.25);
+    let shown = support::title_actors(1.0);
+    assert!(hidden.iter().any(|actor| matches!(actor,
+        Actor::Sprite { source, visible: false, .. }
+        if source.texture_key() == Some("stepmania-395/title-dance")
+    )));
+    assert!(shown.iter().any(|actor| matches!(actor,
+        Actor::Sprite { source, visible: true, .. }
+        if source.texture_key() == Some("stepmania-395/title-dance")
+    )));
+}
+
+#[test]
 fn native_menu_transition_collapses_and_song_exit_holds_the_original_black_fade() {
     use deadlib_present::space::{Metrics, with_current_metrics};
     use deadsync_theme::{ThemeTransitionAudio, ThemeTransitions, TransitionKind};
