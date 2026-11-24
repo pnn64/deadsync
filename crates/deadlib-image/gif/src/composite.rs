@@ -361,11 +361,11 @@ fn draw_indices(
     transparent: Option<u8>,
     opaque: Option<u8>,
 ) {
-    for row in 0..r.h {
-        let source = row * width;
-        let target = (r.y + row) * stride + r.x;
-        let indices = &indices[source..source + r.w];
-        let dest = &mut canvas[target..target + r.w];
+    let sources = indices.chunks_exact(width);
+    let targets = canvas.chunks_exact_mut(stride).skip(r.y);
+    for (source, target) in sources.zip(targets).take(r.h) {
+        let indices = &source[..r.w];
+        let dest = &mut target[r.x..r.x + r.w];
         if let Some(index) = uniform_index(indices) {
             if transparent != Some(index) {
                 dest.fill(table[index as usize]);
