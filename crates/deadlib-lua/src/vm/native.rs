@@ -54,18 +54,21 @@ impl Vm {
         wanted: u32,
         tail: bool,
     ) -> Result<Option<usize>, Error> {
-        if !matches!(self.registers[call], Value::Function(_) | Value::Native(_)) {
-            let target = self.registers[call];
-            let handler = self.metafield(target, Meta::Call);
-            if !matches!(handler, Value::Function(_) | Value::Native(_)) {
-                return Err(self.type_error(target, "call", Some(call)));
+        let callee = match self.registers[call] {
+            callable @ (Value::Function(_) | Value::Native(_)) => callable,
+            target => {
+                let handler = self.metafield(target, Meta::Call);
+                if !matches!(handler, Value::Function(_) | Value::Native(_)) {
+                    return Err(self.type_error(target, "call", Some(call)));
+                }
+                self.resize_registers(self.registers.len().max(call + count + 2));
+                self.registers.copy_within(call..call + count + 1, call + 1);
+                self.registers[call] = handler;
+                count += 1;
+                handler
             }
-            self.resize_registers(self.registers.len().max(call + count + 2));
-            self.registers.copy_within(call..call + count + 1, call + 1);
-            self.registers[call] = handler;
-            count += 1;
-        }
-        match self.registers[call] {
+        };
+        match callee {
             Value::Function(id) => {
                 if tail {
                     if self.hooks.mask & hooks::CALL != 0 && self.hooks.allowed() {
