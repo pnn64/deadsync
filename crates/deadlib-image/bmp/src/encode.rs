@@ -1,5 +1,8 @@
 use crate::{Bitmap, Error, Pixels, reserve};
 
+const RGB_HEADER: [u8; 54] = header_template(24);
+const RGBA_HEADER: [u8; 122] = header_template(32);
+
 /// Storage orientation and output size limit for BMP encoding.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EncodeOptions {
@@ -37,9 +40,9 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
     bitmap.validate()?;
     let width = i32::try_from(bitmap.width).map_err(|_| Error::LimitExceeded)?;
     let height = i32::try_from(bitmap.height).map_err(|_| Error::LimitExceeded)?;
-    let (header_size, channels): (usize, usize) = match &bitmap.pixels {
-        Pixels::Indexed { .. } | Pixels::Rgb(_) => (40, 3),
-        Pixels::Rgba(_) => (108, 4),
+    let (header, channels): (&[u8], usize) = match &bitmap.pixels {
+        Pixels::Indexed { .. } | Pixels::Rgb(_) => (&RGB_HEADER, 3),
+        Pixels::Rgba(_) => (&RGBA_HEADER, 4),
     };
     let row_bytes = (width as usize)
         .checked_mul(channels)
@@ -48,7 +51,7 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
     let pixel_bytes = pitch
         .checked_mul(height as usize)
         .ok_or(Error::LimitExceeded)?;
-    let offset = 14 + header_size;
+    let offset = header.len();
     let file_size = offset
         .checked_add(pixel_bytes)
         .ok_or(Error::LimitExceeded)?;
@@ -59,25 +62,13 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
 
     let mut output = Vec::new();
     reserve(&mut output, file_size)?;
-    output.resize(offset, 0);
-    output[..2].copy_from_slice(b"BM");
-    put_u32(&mut output, 2, file_size_u32);
-    put_u32(&mut output, 10, offset as u32);
-    put_u32(&mut output, 14, header_size as u32);
-    put_u32(&mut output, 18, width as u32);
+    output.extend_from_slice(header);
+    let fields = &mut output[..RGB_HEADER.len()];
+    put_u32(fields, 2, file_size_u32);
+    put_u32(fields, 18, width as u32);
     let stored_height = if options.top_down { -height } else { height };
-    put_u32(&mut output, 22, stored_height as u32);
-    output[26..28].copy_from_slice(&1u16.to_le_bytes());
-    output[28..30].copy_from_slice(&((channels * 8) as u16).to_le_bytes());
-    put_u32(&mut output, 34, pixel_bytes as u32);
-    if channels == 4 {
-        put_u32(&mut output, 30, 3); // BI_BITFIELDS
-        put_u32(&mut output, 54, 0x00ff_0000);
-        put_u32(&mut output, 58, 0x0000_ff00);
-        put_u32(&mut output, 62, 0x0000_00ff);
-        put_u32(&mut output, 66, 0xff00_0000);
-        put_u32(&mut output, 70, 0x7352_4742); // LCS_sRGB
-    }
+    put_u32(fields, 22, stored_height as u32);
+    put_u32(fields, 34, pixel_bytes as u32);
 
     let width = width as usize;
     let height = height as usize;
@@ -131,6 +122,29 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
     Ok(output)
 }
 
-fn put_u32(output: &mut [u8], offset: usize, value: u32) {
-    output[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+const fn header_template<const SIZE: usize>(bit_depth: u8) -> [u8; SIZE] {
+    let mut header = [0; SIZE];
+    header[0] = b'B';
+    header[1] = b'M';
+    put_u32(&mut header, 10, SIZE as u32);
+    put_u32(&mut header, 14, (SIZE - 14) as u32);
+    header[26] = 1;
+    header[28] = bit_depth;
+    if bit_depth == 32 {
+        put_u32(&mut header, 30, 3); // BI_BITFIELDS
+        put_u32(&mut header, 54, 0x00ff_0000);
+        put_u32(&mut header, 58, 0x0000_ff00);
+        put_u32(&mut header, 62, 0x0000_00ff);
+        put_u32(&mut header, 66, 0xff00_0000);
+        put_u32(&mut header, 70, 0x7352_4742); // LCS_sRGB
+    }
+    header
+}
+
+const fn put_u32(output: &mut [u8], offset: usize, value: u32) {
+    let (_, field) = output.split_at_mut(offset);
+    field
+        .split_at_mut(4)
+        .0
+        .copy_from_slice(&value.to_le_bytes());
 }
