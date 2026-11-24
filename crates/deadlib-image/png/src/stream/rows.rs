@@ -152,9 +152,9 @@ impl ImageRows {
                 reserve(&mut self.native8, additional)?;
                 self.native8.resize(count, 0);
                 match self.header.depth {
-                    1 => scanline::unpack::<1>(&self.row[1..], &mut self.native8),
-                    2 => scanline::unpack::<2>(&self.row[1..], &mut self.native8),
-                    4 => scanline::unpack::<4>(&self.row[1..], &mut self.native8),
+                    1 => scanline::unpack::<1>(&self.row[1..], &mut self.native8, 1),
+                    2 => scanline::unpack::<2>(&self.row[1..], &mut self.native8, 1),
+                    4 => scanline::unpack::<4>(&self.row[1..], &mut self.native8, 1),
                     _ => unreachable!("validated packed PNG depth"),
                 }
             }

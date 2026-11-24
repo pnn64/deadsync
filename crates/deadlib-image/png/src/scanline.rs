@@ -190,18 +190,31 @@ static ONE_BIT_SAMPLES: [[u8; 8]; 256] = {
     table
 };
 
-pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
+pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8], step: usize) {
     match DEPTH {
-        1 => unpack_groups::<8>(row, out, |byte| ONE_BIT_SAMPLES[usize::from(byte)]),
-        2 => unpack_groups::<4>(row, out, |byte| {
+        1 => unpack_groups::<8>(row, out, step, |byte| ONE_BIT_SAMPLES[usize::from(byte)]),
+        2 => unpack_groups::<4>(row, out, step, |byte| {
             [byte >> 6, (byte >> 4) & 3, (byte >> 2) & 3, byte & 3]
         }),
-        4 => unpack_groups::<2>(row, out, |byte| [byte >> 4, byte & 15]),
+        4 => unpack_groups::<2>(row, out, step, |byte| [byte >> 4, byte & 15]),
         _ => unreachable!("validated packed PNG depth"),
     }
 }
 
-fn unpack_groups<const N: usize>(row: &[u8], out: &mut [u8], expand: impl Fn(u8) -> [u8; N]) {
+fn unpack_groups<const N: usize>(
+    row: &[u8],
+    out: &mut [u8],
+    step: usize,
+    expand: impl Fn(u8) -> [u8; N],
+) {
+    if step != 1 {
+        for (&byte, group) in row.iter().zip(out.chunks_mut(N * step)) {
+            for (pixel, sample) in group.chunks_mut(step).zip(expand(byte)) {
+                pixel[0] = sample;
+            }
+        }
+        return;
+    }
     // Complete bytes have a fixed number of independent output lanes. Keep the
     // short final group out of this loop so its length cannot limit unrolling.
     let (groups, tail) = out.as_chunks_mut::<N>();
@@ -224,6 +237,17 @@ pub(crate) fn scatter<T: Copy, const CHANNELS: usize>(row: &[T], out: &mut [T], 
         .zip(out.chunks_mut(step * CHANNELS))
     {
         dst[..CHANNELS].copy_from_slice(pixel);
+    }
+}
+
+fn scatter_words<const CHANNELS: usize>(row: &[[u8; 2]], out: &mut [u16], step: usize) {
+    for (pixel, dst) in row
+        .as_chunks::<CHANNELS>()
+        .0
+        .iter()
+        .zip(out.chunks_mut(step * CHANNELS))
+    {
+        dst[..CHANNELS].copy_from_slice(&pixel.map(u16::from_be_bytes));
     }
 }
 
@@ -369,57 +393,38 @@ pub(crate) fn decode(
                 continue;
             }
             let dst_y = y as usize + row_index * dy as usize;
-            if dx == 1 {
-                let dst = (dst_y * width as usize + x as usize) * channels;
-                match &mut samples {
-                    Samples::U8(v) => {
-                        let out = &mut v[dst..dst + w * channels];
-                        match depth {
-                            1 => unpack::<1>(row, out),
-                            2 => unpack::<2>(row, out),
-                            4 => unpack::<4>(row, out),
-                            _ => out.copy_from_slice(row),
-                        }
+            let dst = (dst_y * width as usize + x as usize) * channels;
+            let end = (dst_y + 1) * width as usize * channels;
+            let step = dx as usize;
+            match &mut samples {
+                Samples::U8(v) => {
+                    let out = &mut v[dst..end];
+                    match depth {
+                        1 => unpack::<1>(row, out, step),
+                        2 => unpack::<2>(row, out, step),
+                        4 => unpack::<4>(row, out, step),
+                        _ if step == 1 => out.copy_from_slice(row),
+                        _ => match channels {
+                            1 => scatter::<_, 1>(row, out, step),
+                            2 => scatter::<_, 2>(row, out, step),
+                            3 => scatter::<_, 3>(row, out, step),
+                            _ => scatter::<_, 4>(row, out, step),
+                        },
                     }
-                    Samples::U16(v) => {
-                        for (out, &bytes) in v[dst..dst + w * channels]
-                            .iter_mut()
-                            .zip(row.as_chunks::<2>().0)
-                        {
+                }
+                Samples::U16(v) => {
+                    let row = row.as_chunks::<2>().0;
+                    let out = &mut v[dst..end];
+                    if step == 1 {
+                        for (out, &bytes) in out.iter_mut().zip(row) {
                             *out = u16::from_be_bytes(bytes);
                         }
-                    }
-                }
-                position += stride + 1;
-                continue;
-            }
-            if depth == 8 {
-                if let Samples::U8(v) = &mut samples {
-                    let dst = (dst_y * width as usize + x as usize) * channels;
-                    let out = &mut v[dst..];
-                    match channels {
-                        1 => scatter::<_, 1>(row, out, dx as usize),
-                        2 => scatter::<_, 2>(row, out, dx as usize),
-                        3 => scatter::<_, 3>(row, out, dx as usize),
-                        _ => scatter::<_, 4>(row, out, dx as usize),
-                    }
-                }
-                position += stride + 1;
-                continue;
-            }
-            for pixel in 0..w {
-                let dst = (dst_y * width as usize + x as usize + pixel * dx as usize) * channels;
-                for channel in 0..channels {
-                    let src = pixel * channels + channel;
-                    match &mut samples {
-                        Samples::U16(v) => {
-                            v[dst + channel] = u16::from_be_bytes([row[src * 2], row[src * 2 + 1]])
-                        }
-                        Samples::U8(v) if depth == 8 => v[dst + channel] = row[src],
-                        Samples::U8(v) => {
-                            v[dst + channel] = (row[src * depth as usize / 8]
-                                >> (8 - depth - (src * depth as usize % 8) as u8))
-                                & ((1 << depth) - 1)
+                    } else {
+                        match channels {
+                            1 => scatter_words::<1>(row, out, step),
+                            2 => scatter_words::<2>(row, out, step),
+                            3 => scatter_words::<3>(row, out, step),
+                            _ => scatter_words::<4>(row, out, step),
                         }
                     }
                 }
@@ -793,9 +798,9 @@ mod tests {
 
     fn unpack_depth(depth: u8, row: &[u8], out: &mut [u8]) {
         match depth {
-            1 => unpack::<1>(row, out),
-            2 => unpack::<2>(row, out),
-            4 => unpack::<4>(row, out),
+            1 => unpack::<1>(row, out, 1),
+            2 => unpack::<2>(row, out, 1),
+            4 => unpack::<4>(row, out, 1),
             _ => unreachable!(),
         }
     }
