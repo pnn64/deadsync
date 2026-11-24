@@ -161,15 +161,22 @@ impl Inflater {
             }
         }
     }
-    fn remember(&mut self, mut bytes: &[u8]) {
+    fn remember(&mut self, bytes: &[u8]) {
         self.total_out += bytes.len();
         let size = self.history.len();
-        while !bytes.is_empty() {
-            let n = bytes.len().min(size - self.history_pos);
-            self.history[self.history_pos..self.history_pos + n].copy_from_slice(&bytes[..n]);
-            self.history_pos = (self.history_pos + n) & (size - 1);
-            bytes = &bytes[n..];
+        let end = self.history_pos + bytes.len();
+        let next = end & (size - 1);
+        if end <= size {
+            self.history[self.history_pos..end].copy_from_slice(bytes);
+        } else {
+            // A whole window can overwrite everything older in this copy.
+            let bytes = &bytes[bytes.len().saturating_sub(size)..];
+            let start = (next + size - bytes.len()) & (size - 1);
+            let (tail, head) = bytes.split_at(size - start);
+            self.history[start..].copy_from_slice(tail);
+            self.history[..head.len()].copy_from_slice(head);
         }
+        self.history_pos = next;
     }
     #[inline]
     fn begin_copy(&mut self, length: usize, distance: usize) -> Result<(), Error> {
@@ -503,6 +510,36 @@ impl Inflater {
                 }
                 State::Done => stop!(StreamStatus::Done),
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn history_writes_preserve_the_ring_after_oversized_copies() {
+        let mut inflater = Inflater::new(1 << 18).unwrap();
+        let mut history = vec![0; inflater.history.len()];
+        let mut position = 0;
+        let mut total = 0;
+        for (step, length) in [0, 17, 32749, 31, 32768, 65535, 32770, 5]
+            .into_iter()
+            .enumerate()
+        {
+            let bytes: Vec<u8> = (0..length)
+                .map(|n| (n * 37 + (n >> 8) + step * 93) as u8)
+                .collect();
+            inflater.remember(&bytes);
+            for byte in bytes {
+                history[position] = byte;
+                position = (position + 1) % history.len();
+            }
+            total += length;
+            assert_eq!(inflater.history, history);
+            assert_eq!(inflater.history_pos, position);
+            assert_eq!(inflater.total_out(), total);
         }
     }
 }
