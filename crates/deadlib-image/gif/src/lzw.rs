@@ -262,6 +262,31 @@ impl Encoder {
             bits |= (clear + 1) << used;
             return emit(bits, usize::from((used + width).div_ceil(8)));
         }
+        if pixels == 3 {
+            // The iterator preserves GIF's row order even for an interlaced column.
+            let mut ordered = rows.flatten().copied();
+            let first = u64::from(ordered.next().unwrap());
+            let second = u64::from(ordered.next().unwrap());
+            let third = u64::from(ordered.next().unwrap());
+            let clear = 1u64 << minimum;
+            let width = minimum + 1;
+            let prefix = clear | (first << width);
+            let (bits, count) = if first == second && second == third {
+                // The last two literals match the first dictionary phrase.
+                (
+                    prefix | ((clear + 2) << (2 * width)) | ((clear + 1) << (3 * width)),
+                    4 * width,
+                )
+            } else {
+                let bits = prefix
+                    | (second << (2 * width))
+                    | (third << (3 * width))
+                    | ((clear + 1) << (4 * width));
+                // Two insertions grow the width at EOI only for a two-bit alphabet.
+                (bits, 5 * width + u8::from(minimum == 2))
+            };
+            return emit(bits, usize::from(count.div_ceil(8)));
+        }
         // Each insertion needs a new pixel, so the small tables stay below half full.
         if pixels <= 256 {
             if pixels <= 32 {
