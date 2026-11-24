@@ -269,6 +269,24 @@ fn benchmark_container() {
                 }
             },
         );
+        for chunk in [17, 512, 4096] {
+            measure(
+                &format!("decoder/{label}/{chunk}"),
+                (4_000_000 / bytes.len()).max(1),
+                bytes.len(),
+                || {
+                    let mut decoder = PageDecoder::new();
+                    for mut input in black_box(bytes.as_slice()).chunks(chunk) {
+                        while !input.is_empty() {
+                            let progress = decoder.push(input).unwrap();
+                            black_box(progress.page);
+                            input = &input[progress.consumed..];
+                        }
+                    }
+                    decoder.finish().unwrap();
+                },
+            );
+        }
         let mut demux = Demuxer::default();
         measure(&format!("demux/{label}"), iterations, bytes.len(), || {
             demux.reset();

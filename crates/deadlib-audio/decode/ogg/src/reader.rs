@@ -320,7 +320,16 @@ impl PageDecoder {
     fn fill_page(&mut self, input: &[u8]) -> Result<(usize, bool), Error> {
         // A partial body chunk needs no header planning or input split.
         if self.length != 0 && input.len() < self.length - self.buffer.len() {
-            reserve(&mut self.buffer, input.len())?;
+            // Skip intermediate growth on shorter pages. Large pages grow with input.
+            if input.len() > self.buffer.capacity() - self.buffer.len()
+                && (self.length > 32 * 1024
+                    || self
+                        .buffer
+                        .try_reserve(self.length - self.buffer.len())
+                        .is_err())
+            {
+                reserve(&mut self.buffer, input.len())?;
+            }
             self.buffer.extend_from_slice(input);
             return Ok((input.len(), false));
         }
