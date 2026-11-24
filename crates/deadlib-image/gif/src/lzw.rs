@@ -183,8 +183,7 @@ impl Decoder {
 
 /// Reusable flat hash-table encoder; no production codec dependencies.
 pub struct Encoder {
-    keys: [u32; 8192],
-    values: [u16; 8192],
+    table: [u32; 8192],
 }
 impl Default for Encoder {
     fn default() -> Self {
@@ -193,16 +192,13 @@ impl Default for Encoder {
 }
 impl Encoder {
     pub fn new() -> Self {
-        Self {
-            keys: [u32::MAX; 8192],
-            values: [0; 8192],
-        }
+        Self { table: [0; 8192] }
     }
     pub fn encode(&mut self, input: &[u8], minimum: u8, output: &mut Vec<u8>) -> Result<(), Error> {
         if !(2..=8).contains(&minimum) || input.iter().any(|&v| u16::from(v) >= 1 << minimum) {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
-        self.keys.fill(u32::MAX);
+        self.table.fill(0);
         let clear = 1u16 << minimum;
         let mut next = clear + 2;
         let mut bits = BitWriter {
@@ -217,24 +213,28 @@ impl Encoder {
         bits.code(clear)?;
         if let Some((&first, rest)) = input.split_first() {
             let mut prefix = u16::from(first);
-            for &symbol in rest {
+            'symbols: for &symbol in rest {
                 let key = (u32::from(prefix) << 8) | u32::from(symbol);
                 let mut slot = (key.wrapping_mul(0x9e3779b1) >> 19) as usize;
-                while self.keys[slot] != key && self.keys[slot] != u32::MAX {
+                loop {
+                    let entry = self.table[slot];
+                    if entry == 0 {
+                        break;
+                    }
+                    if entry >> 12 == key {
+                        prefix = (entry as u16) & 4095;
+                        continue 'symbols;
+                    }
                     slot = (slot + 1) & 8191;
-                }
-                if self.keys[slot] == key {
-                    prefix = self.values[slot];
-                    continue;
                 }
                 bits.code(prefix)?;
                 if next < 4096 {
-                    self.keys[slot] = key;
-                    self.values[slot] = next;
+                    // The assigned code is never zero, even when the key is.
+                    self.table[slot] = (key << 12) | u32::from(next);
                     next += 1;
                 } else {
                     bits.code(clear)?;
-                    self.keys.fill(u32::MAX);
+                    self.table.fill(0);
                     next = clear + 2;
                 }
                 prefix = symbol.into();
