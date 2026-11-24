@@ -248,8 +248,12 @@ fn masked_samples(
             [0x7c00, 0x03e0, 0x001f] => map_rows(source, header, rgb16::<5>),
             [0xf800, 0x07e0, 0x001f] => map_rows(source, header, rgb16::<6>),
             _ => map_rows::<2, 3>(source, header, |packed| {
-                let word = u32::from(u16::from_le_bytes(packed));
-                [red.sample(word), green.sample(word), blue.sample(word)]
+                let word = u16::from_le_bytes(packed);
+                [
+                    red.sample16(word),
+                    green.sample16(word),
+                    blue.sample16(word),
+                ]
             }),
         },
         (16, Some(alpha)) => match [red.mask, green.mask, blue.mask, alpha.mask] {
@@ -257,12 +261,12 @@ fn masked_samples(
                 [high & 15, low >> 4, low & 15, high >> 4].map(|nibble| nibble * 17)
             }),
             _ => map_rows::<2, 4>(source, header, |packed| {
-                let word = u32::from(u16::from_le_bytes(packed));
+                let word = u16::from_le_bytes(packed);
                 [
-                    red.sample(word),
-                    green.sample(word),
-                    blue.sample(word),
-                    alpha.sample(word),
+                    red.sample16(word),
+                    green.sample16(word),
+                    blue.sample16(word),
+                    alpha.sample16(word),
                 ]
             }),
         },
@@ -386,6 +390,11 @@ impl Channel {
 
     fn sample(self, word: u32) -> u8 {
         ((((word & self.mask) >> self.shift) * self.multiplier) >> self.downshift) as u8
+    }
+
+    fn sample16(self, word: u16) -> u8 {
+        // Multiplying the unshifted 16-bit field still fits in a u32.
+        (((u32::from(word) & self.mask) * self.multiplier) >> (self.shift + self.downshift)) as u8
     }
 }
 
