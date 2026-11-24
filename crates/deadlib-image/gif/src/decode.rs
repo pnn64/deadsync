@@ -90,8 +90,8 @@ pub struct Decoder {
     header: Option<Header>,
     scratch: [u8; 768],
     filled: usize,
+    // Fixed field size or bytes still needed in a sub-block.
     wanted: usize,
-    remaining: usize,
     pending: Option<GraphicControl>,
     frame: Frame,
     spare: Vec<u8>,
@@ -118,7 +118,6 @@ impl Decoder {
             scratch: [0; 768],
             filled: 0,
             wanted: 13,
-            remaining: 0,
             pending: None,
             frame: Frame::default(),
             spare: Vec::new(),
@@ -245,7 +244,7 @@ impl Decoder {
                     if size != 0 {
                         self.transition(State::GlobalPalette, size);
                     } else {
-                        self.transition(State::Block, 0);
+                        self.state = State::Block;
                         break Some(Event::Header);
                     }
                 }
@@ -261,7 +260,7 @@ impl Decoder {
                     } else {
                         header.validate_structure()?;
                     }
-                    self.transition(State::Block, 0);
+                    self.state = State::Block;
                     break Some(Event::Header);
                 }
                 State::Block => {
@@ -275,7 +274,7 @@ impl Decoder {
                         }
                         0x21 => {
                             charge(&mut self.remaining_blocks, 1)?;
-                            self.transition(State::Extension, 0);
+                            self.state = State::Extension;
                         }
                         0x3b => {
                             if self.options.strict && self.pending.is_some() {
@@ -340,7 +339,7 @@ impl Decoder {
                         transparent_index: (s[1] & 1 != 0).then_some(s[4]),
                         user_input: s[1] & 2 != 0,
                     });
-                    self.transition(State::Block, 0);
+                    self.state = State::Block;
                 }
                 State::Application => {
                     if !self.fill(input, &mut at)? {
@@ -355,7 +354,7 @@ impl Decoder {
                         authentication: self.scratch[9..12].try_into().unwrap(),
                         data: Vec::new(),
                     });
-                    self.transition(State::MetadataSize, 0);
+                    self.state = State::MetadataSize;
                 }
                 State::PlainText => {
                     if !self.fill(input, &mut at)? {
@@ -390,7 +389,7 @@ impl Decoder {
                         self.options.check_bounds,
                     )?;
                     self.extension = Some(Extension::PlainText(text));
-                    self.transition(State::MetadataSize, 0);
+                    self.state = State::MetadataSize;
                 }
                 State::Image => {
                     if !self.fill(input, &mut at)? {
@@ -447,7 +446,7 @@ impl Decoder {
                     if size != 0 {
                         self.transition(State::LocalPalette, size);
                     } else {
-                        self.transition(State::Minimum, 0);
+                        self.state = State::Minimum;
                     }
                 }
                 State::LocalPalette => {
@@ -455,7 +454,7 @@ impl Decoder {
                         break None;
                     }
                     self.frame.local_palette = Some(palette(&self.scratch[..self.wanted])?);
-                    self.transition(State::Minimum, 0);
+                    self.state = State::Minimum;
                 }
                 State::Minimum => {
                     let Some(minimum) = self.byte(input, &mut at)? else {
@@ -466,18 +465,18 @@ impl Decoder {
                     } else {
                         self.lzw.reset_compatible(minimum)?;
                     }
-                    self.remaining = 0;
+                    self.wanted = 0;
                     self.state = State::ImageData;
                 }
                 State::ImageData => {
                     let width = usize::from(self.frame.width);
                     let height = usize::from(self.frame.height);
                     let pixels = width * height;
-                    let mut remaining = self.remaining;
+                    let mut remaining = self.wanted;
                     loop {
                         if remaining == 0 {
                             let Some(size) = self.byte(input, &mut at)? else {
-                                self.remaining = 0;
+                                self.wanted = 0;
                                 break 'events None;
                             };
                             if size == 0 {
@@ -497,11 +496,11 @@ impl Decoder {
                         }
                         remaining -= count;
                         if remaining != 0 {
-                            self.remaining = remaining;
+                            self.wanted = remaining;
                             break 'events None;
                         }
                     }
-                    self.remaining = 0;
+                    self.wanted = 0;
                     // The image-data terminator supplies the framing needed
                     // to recover a missing EOI. LZW errors stay fatal, and
                     // neither truncated framing nor missing pixels qualifies.
@@ -541,14 +540,14 @@ impl Decoder {
                 State::MetadataSize | State::MetadataData => {
                     let data = Self::data_mut(self.extension.as_mut().unwrap());
                     if self.state == State::MetadataData {
-                        let count = self.remaining.min(input.len() - at);
+                        let count = self.wanted.min(input.len() - at);
                         charge(&mut self.remaining_input_bytes, count)?;
                         data.last_mut()
                             .unwrap()
                             .extend_from_slice(&input[at..at + count]);
                         at += count;
-                        self.remaining -= count;
-                        if self.remaining != 0 {
+                        self.wanted -= count;
+                        if self.wanted != 0 {
                             break None;
                         }
                     }
@@ -577,7 +576,7 @@ impl Decoder {
                         data.push(block);
                         at += count;
                         if count != size {
-                            self.remaining = size - count;
+                            self.wanted = size - count;
                             self.state = State::MetadataData;
                             break 'events None;
                         }
