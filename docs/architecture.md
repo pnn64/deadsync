@@ -719,7 +719,10 @@ routes profile confirmation through the theme's available login and startup
 screens.
 
 The game resolves session startup and post-play routes from the optional screen
-roles supplied by each theme. The shell records the side that pressed Start at
+roles supplied by each theme. Each mounted theme also declares a session-screen
+support mask, intersected with cabinet preferences without changing the saved
+configuration. Requests from profile-login screens pass through the same routing
+policy. The shell records the side that pressed Start at
 the menu and uses it for profile selection and machine defaults.
 
 The title menu mounts through the selected theme's presentation interface. The

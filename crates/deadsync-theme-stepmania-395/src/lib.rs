@@ -111,6 +111,13 @@ impl Theme for StepManiaTheme {
     type Screen = Screen;
     type RuntimeRequest = std::convert::Infallible;
 
+    fn session_screen_support() -> deadsync_core::session_flow::SessionNavigationPolicy {
+        deadsync_core::session_flow::SessionNavigationPolicy {
+            show_select_color: false,
+            ..Default::default()
+        }
+    }
+
     fn screen_id(screen: Screen) -> ThemeScreenId {
         ThemeScreenId::new(screen.current_screen_file_name())
     }

@@ -13,6 +13,7 @@ const TEST_NAME: &str = "app::play_route_tests::configured_themes_complete_song_
 const CHILD_THEME: &str = "DEADSYNC_TEST_PLAY_ROUTE_THEME";
 const CHILD_COMPLETED: &str = "configured play route completed";
 const SONG_TITLE: &str = "Route verification";
+const COURSE_TITLE: &str = "Route verification Nonstop";
 const STEP_SECONDS: f32 = 0.125;
 
 #[test]
@@ -41,6 +42,8 @@ fn configured_themes_complete_song_route() {
 }
 
 fn run_child(theme: &str) {
+    let expected_theme: ThemeFlag = theme.parse().unwrap();
+    let color_step = u8::from(expected_theme == ThemeFlag::StepMania395);
     let root = tempfile::tempdir().unwrap();
     let dirs = AppDirs {
         data_dir: root.path().join("data"),
@@ -55,7 +58,7 @@ fn run_child(theme: &str) {
         format!(
             "[Options]\nTheme={theme}\nVideoRenderer=Software\nLogToFile=0\nCoinMode=Home\n\
              EnableArrowCloud=0\nEnableGrooveStats=0\n\
-             [Theme]\nMachineShowSelectProfile=1\nMachineShowSelectColor=0\n\
+             [Theme]\nMachineShowSelectProfile=1\nMachineShowSelectColor={color_step}\n\
              MachineShowSelectStyle=1\nMachineShowSelectPlayMode=1\n\
              MachineShowEvalSummary=1\nMachineShowNameEntry=1\nMachineShowGameover=1\n",
         ),
@@ -65,7 +68,9 @@ fn run_child(theme: &str) {
     config::runtime::flush_pending_saves();
     deadsync_theme_simply_love::i18n::init_for_tests();
     seed_library(&dirs);
-    let expected_theme: ThemeFlag = theme.parse().unwrap();
+    if expected_theme == ThemeFlag::StepMania395 {
+        seed_course(&dirs);
+    }
     let (generation, cfg) = config::runtime::snapshot();
     assert_eq!(cfg.theme_flag, expected_theme);
     let paths = dirs.asset_paths(None);
@@ -115,7 +120,7 @@ fn seed_library(dirs: &AppDirs) {
     std::fs::write(
         &song_path,
         format!(
-            "#TITLE:{SONG_TITLE};\n#BPMS:0=120;\n#NOTES:dance-single::Hard:5:0,0,0,0,0:\n\
+            "#TITLE:{SONG_TITLE};\n#ARTIST:Route Artist;\n#BPMS:0=120;\n#NOTES:dance-single::Hard:5:0,0,0,0,0:\n\
              0000\n,\n0000\n,\n0000\n1000\n0100\n0010\n,\n0001\n1000\n0000\n1000\n;\n",
         ),
     )
@@ -134,6 +139,17 @@ fn seed_library(dirs: &AppDirs) {
         banner_path: None,
         songs: vec![Arc::new(song)],
     }]);
+}
+
+fn seed_course(dirs: &AppDirs) {
+    let path = dirs.courses_dir().join("Route/route.crs");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        format!("#COURSE:{COURSE_TITLE};\n#SONG:Route/{SONG_TITLE}:Hard;\n#SONG:Route/{SONG_TITLE}:Hard;\n"),
+    ).unwrap();
+    let course = deadsync_simfile::course::parse_course_file(&path).unwrap();
+    deadsync_simfile::runtime_cache::set_course_cache(vec![(path, course)]);
 }
 
 struct RouteTest {
@@ -178,6 +194,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     }
     if theme == ThemeFlag::StepMania395 {
         assert_eq!(app.state.screens.select_music_state.p2_preferred_difficulty_index, 3);
+        assert!(config::runtime::get().machine_show_select_color, "screen availability must not rewrite the saved preference");
     }
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
@@ -389,6 +406,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
             if source.texture_key() == Some("stepmania-395/game-over"))));
         settle(app, event_loop, CurrentScreen::Init);
         assert!(app.state.screens.attract.as_ref().unwrap().timeline.media().music.is_some());
+        play_native_course_route(app, event_loop);
     }
     if openitg {
         for _ in 0..2 {
@@ -421,6 +439,72 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
         );
         check_failed_stage_outro(app, event_loop);
     }
+}
+
+fn play_native_course_route(app: &mut App, event_loop: &ActiveEventLoop) {
+    app.on_fade_complete(CurrentScreen::Menu, event_loop);
+    settle(app, event_loop, CurrentScreen::Menu);
+    for next in [CurrentScreen::SelectProfile, CurrentScreen::SelectStyle, CurrentScreen::SelectPlayMode] {
+        press(app, event_loop, VirtualAction::p2_start);
+        settle(app, event_loop, next);
+    }
+    // Select the native Nonstop card through the mounted mode controller.
+    for _ in 0..8 {
+        let mut selected = usize::MAX;
+        select_mode::with_play_selection_view(
+            &app.state.screens.select_play_mode_state, |view| selected = view.selected,
+        );
+        if selected == 4 { break; }
+        press(app, event_loop, VirtualAction::p2_right);
+    }
+    select_mode::with_play_selection_view(&app.state.screens.select_play_mode_state, |view| {
+        assert_eq!(view.selected, 4);
+    });
+    press(app, event_loop, VirtualAction::p2_start);
+    settle(app, event_loop, CurrentScreen::SelectCourse);
+    if select_course::selected_course_choice(&app.state.screens.select_course_state).is_none() {
+        press(app, event_loop, VirtualAction::p2_start);
+        menu_frame(app, event_loop);
+    }
+    assert!(select_course::has_selected_course(&app.state.screens.select_course_state));
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(actor_tree_has_text(&actors, SONG_TITLE));
+    assert!(actor_tree_has_text(&actors, "/Route Artist"));
+    press(app, event_loop, VirtualAction::p2_start);
+    menu_frame(app, event_loop);
+    press(app, event_loop, VirtualAction::p2_start);
+    settle(app, event_loop, CurrentScreen::PlayerOptions);
+    press(app, event_loop, VirtualAction::p2_start);
+    press(app, event_loop, VirtualAction::p2_start);
+    settle(app, event_loop, CurrentScreen::Gameplay);
+    for stage in 0..2 {
+        let gameplay = app.state.screens.gameplay_state.as_ref().unwrap();
+        assert_eq!(gameplay.song().title, SONG_TITLE);
+        assert_eq!(gameplay.setup.session.joined_sides, [false, true]);
+        complete_stage(app, event_loop);
+        settle(app, event_loop, if stage == 0 { CurrentScreen::Gameplay } else { CurrentScreen::Evaluation });
+    }
+    assert_eq!(app.state.session.played_stages.len(), 3);
+    assert_eq!(app.state.screens.course_evaluation.pages.len(), 3);
+    assert!(app.state.session.course_run.is_none());
+    let summary = app.state.session.played_stages.last().unwrap();
+    assert_eq!(summary.song.title, COURSE_TITLE);
+    assert!(summary.players[0].is_none());
+    let player = summary.players[1].as_ref().unwrap();
+    assert!(player.score_valid);
+    assert_eq!(player.notes_hit, 12);
+    assert_eq!(player.stages_passed, 2);
+    let numeric_score = format!("{:09}", player.numeric_score);
+    for _ in 0..48 { menu_frame(app, event_loop); }
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
+        if source.texture_key() == Some("stepmania-395/evaluation-survived-p2"))));
+    assert!(!actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
+        if source.texture_key() == Some("stepmania-395/evaluation-survived-p1"))));
+    assert!(actor_tree_has_text(&actors, "02"));
+    assert!(actor_tree_has_text(&actors, &numeric_score));
+    press(app, event_loop, VirtualAction::p2_start);
+    settle(app, event_loop, CurrentScreen::SelectCourse);
 }
 
 fn check_failed_stage_outro(app: &mut App, event_loop: &ActiveEventLoop) {

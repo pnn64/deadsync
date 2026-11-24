@@ -35,6 +35,7 @@ pub type PlayerOptionsLayoutFactory =
 pub type StartupScreen = dyn StartupPresentation<Actor, LibraryLoadView, Config>;
 
 pub struct ThemeMount {
+    pub session_screen_support: deadsync_core::session_flow::SessionNavigationPolicy,
     pub title: Box<dyn FnOnce(i32) -> InstalledMenu>,
     pub startup: fn(i32) -> Box<StartupScreen>,
     pub transitions: ScreenTransitionMount,

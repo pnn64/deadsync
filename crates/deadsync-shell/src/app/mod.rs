@@ -636,6 +636,7 @@ const fn saturating_u32(value: usize) -> u32 {
 /// Active screen data bundle.
 pub struct ScreensState {
     current_screen: CurrentScreen,
+    session_screen_support: deadsync_core::session_flow::SessionNavigationPolicy,
     menu_state: crate::title_menu::InstalledMenu,
     gameplay_state: Option<GameplayState>,
     gameplay_outro: Option<Box<dyn deadsync_theme::stage::StageOutroPresentation<Actor>>>,
@@ -1407,6 +1408,7 @@ impl ScreensState {
             stage_presentation: mount.stage,
             stage_card: mount.stage_card,
             session_end: mount.session_end.map(crate::post_game::SessionEndRuntime::new),
+            session_screen_support: mount.session_screen_support,
             select_profile_state,
             select_color_state,
             arrowcloud_login_state,

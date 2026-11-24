@@ -32,6 +32,8 @@ Course selection uses `ScreenSelectCourse` artwork and the original `CourseEntry
 
 Select this installed native theme through System Options or `[Options] Theme=StepMania 3.95` in `deadsync.ini`. The reference theme folder is used during development to inspect and copy assets. The game uses the bundled assets and Rust presentation modules.
 
+The theme declares its supported session screens through the shared theme contract. Its fixed source palette has no color-selection page, so the router skips that step even when the cabinet preference enables it, including returns from profile login. The saved preference remains available for themes that support that page.
+
 Screen transitions use the source `_fade in normal`, `_fade out normal`, `_menu in`, `_menu out`, and `_options to options` sequences expressed as Rust tweens. The original `_moveon.png` supplies the menu transition graphic, while `_swoosh.ogg` and `_swoosh and more.ogg` supply menu and evaluation effects. The executable mounts these transition handlers directly. The shared shell forwards optional fixed entry/exit effects and keeps screen opacity separate from overlays.
 
 Idle attract scenes use the original tutorial background, hand/message graphics, default dance note/receptor sheets, demonstration overlay, ranking background, ranking bullets, `_ScreenRanking common` font and imports, and tutorial/ranking music. Tutorial chart beats, stops, prompts, and scene transitions are expressed as native Rust data and actors.

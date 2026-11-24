@@ -368,8 +368,10 @@ impl App {
         let from = self.state.screens.current_screen;
         let cfg = config::runtime::get();
         self.lights.clear_button_pressed();
+        let policy = crate::screen_flow::navigation_policy(&cfg)
+            .intersection(self.state.screens.session_screen_support);
         let plan = navigation_route_plan(
-            &cfg,
+            policy,
             from,
             target,
             !self.state.session.played_stages.is_empty(),

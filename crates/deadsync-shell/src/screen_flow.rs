@@ -11,7 +11,7 @@ use deadsync_theme_simply_love::screens::{
     LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, SelectMusicJoinPlan,
     late_join_side, profile_selection_plan, select_music_join_plan,
 };
-const fn navigation_policy(config: &Config) -> SessionNavigationPolicy {
+pub(crate) const fn navigation_policy(config: &Config) -> SessionNavigationPolicy {
     SessionNavigationPolicy {
         show_select_profile: config.machine_show_select_profile,
         show_select_color: config.machine_show_select_color,
@@ -24,14 +24,14 @@ const fn navigation_policy(config: &Config) -> SessionNavigationPolicy {
 }
 
 pub(crate) fn navigation_route_plan(
-    config: &Config,
+    policy: SessionNavigationPolicy,
     from: Screen,
     requested: Screen,
     has_played_stages: bool,
 ) -> SessionNavigationPlan<Screen> {
     session_flow::resolve_navigation(
         Screen::SESSION_SCREENS,
-        navigation_policy(config),
+        policy,
         from,
         requested,
         has_played_stages,
@@ -279,13 +279,13 @@ mod tests {
         let action = AlternateTheme::handle_menu_input::<()>(&mut menu, &start);
         let ThemeEffect::Navigate(target) = action else { panic!("menu should request a startup screen") };
         assert_eq!(session.menu_start_side, PlayerSide::P2);
-        let plan = navigation_route_plan(&config, Screen::Menu, target, false);
+        let plan = navigation_route_plan(navigation_policy(&config), Screen::Menu, target, false);
         assert_eq!(plan.target, Screen::ProfileLoad);
         assert!(plan.initialize_session_side);
         assert!(plan.apply_preferred_style);
         assert!(plan.apply_preferred_play_mode);
 
-        let plan = navigation_route_plan(&config, Screen::SelectCourse, Screen::Menu, true);
+        let plan = navigation_route_plan(navigation_policy(&config), Screen::SelectCourse, Screen::Menu, true);
         assert_eq!(plan.target, Screen::EvaluationSummary);
         assert_eq!(plan.pending_post_select_summary_exit, Some(true));
         assert_eq!(evaluation_summary_return_to(Screen::SelectCourse, false), Screen::SelectCourse);
@@ -301,11 +301,11 @@ mod tests {
             machine_show_eval_summary: true,
             ..Config::default()
         };
-        let plan = navigation_route_plan(&cfg, Screen::SelectMusic, Screen::Menu, true);
+        let plan = navigation_route_plan(navigation_policy(&cfg), Screen::SelectMusic, Screen::Menu, true);
         assert_eq!(plan.target, Screen::EvaluationSummary);
         assert_eq!(plan.pending_post_select_summary_exit, Some(true));
 
-        let plan = navigation_route_plan(&cfg, Screen::SelectMusic, Screen::Menu, false);
+        let plan = navigation_route_plan(navigation_policy(&cfg), Screen::SelectMusic, Screen::Menu, false);
         assert_eq!(plan.target, Screen::Menu);
         assert_eq!(plan.pending_post_select_summary_exit, None);
     }
@@ -319,11 +319,46 @@ mod tests {
             machine_show_select_play_mode: false,
             ..Config::default()
         };
-        let plan = navigation_route_plan(&cfg, Screen::Menu, Screen::SelectProfile, false);
+        let plan = navigation_route_plan(navigation_policy(&cfg), Screen::Menu, Screen::SelectProfile, false);
         assert_eq!(plan.target, Screen::ProfileLoad);
         assert!(plan.apply_preferred_style);
         assert!(plan.apply_preferred_play_mode);
         assert!(plan.initialize_session_side);
+    }
+
+    #[test]
+    fn theme_screen_support_applies_after_profile_login_without_changing_preferences() {
+        let cfg = Config {
+            machine_show_select_color: true,
+            machine_show_select_style: true,
+            machine_show_select_play_mode: true,
+            ..Config::default()
+        };
+        let support = SessionNavigationPolicy {
+            show_select_color: false,
+            ..Default::default()
+        };
+        for from in [Screen::GrooveStatsLogin, Screen::ArrowCloudLogin] {
+            let policy = navigation_policy(&cfg).intersection(support);
+            let plan = navigation_route_plan(policy, from, Screen::SelectColor, false);
+            assert_eq!(plan.target, Screen::SelectStyle);
+            assert!(!plan.apply_preferred_style);
+            assert!(!plan.initialize_session_side);
+
+            let policy = policy.intersection(SessionNavigationPolicy {
+                show_select_style: false,
+                show_select_play_mode: false,
+                ..Default::default()
+            });
+            let plan = navigation_route_plan(policy, from, Screen::SelectColor, false);
+            assert_eq!(plan.target, Screen::ProfileLoad);
+            assert!(plan.apply_preferred_style);
+            assert!(plan.apply_preferred_play_mode);
+            assert!(!plan.initialize_session_side);
+        }
+        assert!(cfg.machine_show_select_color);
+        assert!(cfg.machine_show_select_style);
+        assert!(cfg.machine_show_select_play_mode);
     }
 
     #[test]
@@ -353,7 +388,7 @@ mod tests {
                     true,
                 );
                 let navigation =
-                    navigation_route_plan(&cfg, Screen::SelectProfile, Screen::SelectColor, false);
+                    navigation_route_plan(navigation_policy(&cfg), Screen::SelectProfile, Screen::SelectColor, false);
                 assert_eq!(navigation.target, Screen::ProfileLoad);
                 assert!(navigation.apply_preferred_style);
                 assert_eq!(
@@ -395,7 +430,7 @@ mod tests {
     #[test]
     fn direct_summary_navigation_clears_pending_exit() {
         let plan = navigation_route_plan(
-            &Config::default(),
+            navigation_policy(&Config::default()),
             Screen::Evaluation,
             Screen::EvaluationSummary,
             false,

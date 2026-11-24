@@ -56,7 +56,13 @@ pub fn profile_selection_target<S: Copy + Eq>(
         screens.select_style,
         screens.select_play_mode,
     ];
-    let enabled = [show_groovestats_login, show_arrowcloud_login, true, true, true];
+    let enabled = [
+        show_groovestats_login,
+        show_arrowcloud_login,
+        true,
+        true,
+        true,
+    ];
     Some(next_enabled_screen(&startup, &enabled).unwrap_or(screens.profile_load))
 }
 
@@ -69,6 +75,21 @@ pub struct SessionNavigationPolicy {
     pub show_eval_summary: bool,
     pub show_name_entry: bool,
     pub show_gameover: bool,
+}
+
+impl SessionNavigationPolicy {
+    /// A step is visible only when both the caller and the installed presentation allow it.
+    pub const fn intersection(self, other: Self) -> Self {
+        Self {
+            show_select_profile: self.show_select_profile && other.show_select_profile,
+            show_select_color: self.show_select_color && other.show_select_color,
+            show_select_style: self.show_select_style && other.show_select_style,
+            show_select_play_mode: self.show_select_play_mode && other.show_select_play_mode,
+            show_eval_summary: self.show_eval_summary && other.show_eval_summary,
+            show_name_entry: self.show_name_entry && other.show_name_entry,
+            show_gameover: self.show_gameover && other.show_gameover,
+        }
+    }
 }
 
 impl Default for SessionNavigationPolicy {
@@ -113,8 +134,16 @@ pub fn resolve_navigation<S: Copy + Eq>(
         policy.show_select_style,
         policy.show_select_play_mode,
     ];
-    let post_play = [screens.evaluation_summary, screens.initials, screens.gameover];
-    let post_play_enabled = [policy.show_eval_summary, policy.show_name_entry, policy.show_gameover];
+    let post_play = [
+        screens.evaluation_summary,
+        screens.initials,
+        screens.gameover,
+    ];
+    let post_play_enabled = [
+        policy.show_eval_summary,
+        policy.show_name_entry,
+        policy.show_gameover,
+    ];
 
     let leaving_selection = from == screens.select_music || from == screens.select_course;
     let mut target = requested;
@@ -127,8 +156,9 @@ pub fn resolve_navigation<S: Copy + Eq>(
     }
 
     let startup_index = startup.iter().position(|screen| *screen == Some(target));
-    let startup_flow = (from == screens.menu || startup.contains(&Some(from)))
-        && (startup_index.is_some() || target == screens.profile_load);
+    let startup_flow = startup_index.is_some()
+        || (target == screens.profile_load
+            && (from == screens.menu || startup.contains(&Some(from))));
     if startup_flow && let Some(index) = startup_index {
         target = next_enabled_screen(&startup[index..], &startup_enabled[index..])
             .unwrap_or(screens.profile_load);
@@ -147,15 +177,18 @@ pub fn resolve_navigation<S: Copy + Eq>(
         apply_preferred_style: startup_flow
             && !style_visible
             && (Some(target) == screens.select_play_mode || target == screens.profile_load),
-        apply_preferred_play_mode: startup_flow && !play_mode_visible && target == screens.profile_load,
+        apply_preferred_play_mode: startup_flow
+            && !play_mode_visible
+            && target == screens.profile_load,
         initialize_session_side: startup_flow && from == screens.menu && !profile_visible,
     }
 }
 
 fn next_enabled_screen<S: Copy>(screens: &[Option<S>], enabled: &[bool]) -> Option<S> {
-    screens.iter().zip(enabled).find_map(|(&screen, &enabled)| {
-        if enabled { screen } else { None }
-    })
+    screens
+        .iter()
+        .zip(enabled)
+        .find_map(|(&screen, &enabled)| if enabled { screen } else { None })
 }
 
 pub fn evaluation_summary_return_to<S: Copy + Eq>(
@@ -168,6 +201,9 @@ pub fn evaluation_summary_return_to<S: Copy + Eq>(
     {
         previous
     } else {
-        screens.initials.or(screens.gameover).unwrap_or(screens.menu)
+        screens
+            .initials
+            .or(screens.gameover)
+            .unwrap_or(screens.menu)
     }
 }

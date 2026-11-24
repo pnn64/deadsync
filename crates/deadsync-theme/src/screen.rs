@@ -165,6 +165,11 @@ pub trait Theme {
     type Screen: Copy + Eq;
     type RuntimeRequest;
 
+    /// Optional session pages supported by this presentation.
+    fn session_screen_support() -> deadsync_core::session_flow::SessionNavigationPolicy {
+        Default::default()
+    }
+
     fn screen_id(screen: Self::Screen) -> ThemeScreenId;
 }
 

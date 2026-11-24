@@ -5,7 +5,7 @@ use super::mounted_theme::{
     StartupScreen, SupplementalResources, ThemeMount,
 };
 use deadsync_config::theme::ThemeFlag;
-use deadsync_theme::{ThemeResources, ThemeTransitionAudio, ThemeTransitions};
+use deadsync_theme::{Theme, ThemeResources, ThemeTransitionAudio, ThemeTransitions};
 use deadsync_theme_openitg::{
     OpenItgIntro, OpenItgPlayerOptions, OpenItgSelectionPresentation, OpenItgStagePresentation,
     OpenItgSystemOptions, OpenItgTheme,
@@ -63,6 +63,7 @@ const FALLBACK_TRANSITIONS: ScreenTransitionMount = ScreenTransitionMount {
 pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
     match theme {
         ThemeFlag::StepMania395 => ThemeMount {
+            session_screen_support: StepManiaTheme::session_screen_support(),
             title: Box::new(|index| InstalledMenu::mount::<StepManiaTheme>(index, |_| ())),
             startup: |_| Box::new(StepManiaStartup::default()),
             transitions: ScreenTransitionMount {
@@ -93,6 +94,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             chat: chat_overlay,
         },
         ThemeFlag::SimplyLove => ThemeMount {
+            session_screen_support: SimplyLoveTheme::session_screen_support(),
             title: Box::new(|index| {
                 InstalledMenu::mount::<SimplyLoveTheme>(index, |policy| policy)
             }),
@@ -111,6 +113,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             chat: chat_overlay,
         },
         ThemeFlag::OpenItg => ThemeMount {
+            session_screen_support: OpenItgTheme::session_screen_support(),
             title: Box::new(|index| InstalledMenu::mount::<OpenItgTheme>(index, |_| ())),
             startup: startup_screen,
             transitions: FALLBACK_TRANSITIONS,
