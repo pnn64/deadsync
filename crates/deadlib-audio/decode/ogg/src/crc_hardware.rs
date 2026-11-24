@@ -61,8 +61,8 @@ const RECIPROCAL: i64 = {
 #[inline]
 #[target_feature(enable = "ssse3")]
 fn reversed_word(bytes: &[u8; 16], reverse: __m128i) -> __m128i {
-    // SAFETY: an unaligned load reads exactly the sixteen bytes of the array.
-    _mm_shuffle_epi8(unsafe { _mm_loadu_si128(bytes.as_ptr().cast()) }, reverse)
+    let bits = u128::from_ne_bytes(*bytes);
+    _mm_shuffle_epi8(_mm_set_epi64x((bits >> 64) as i64, bits as i64), reverse)
 }
 
 #[target_feature(enable = "pclmulqdq,ssse3")]
