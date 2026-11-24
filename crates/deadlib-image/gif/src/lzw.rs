@@ -104,9 +104,6 @@ impl Decoder {
                     }
                     reserve(output, 1)?;
                     output.push(code as u8);
-                    if self.previous.is_none() {
-                        self.origin = start;
-                    }
                     1
                 } else {
                     if code == self.clear {
@@ -117,8 +114,8 @@ impl Decoder {
                         self.ended = true;
                         break;
                     }
-                    let (offset, length) = if code < self.next {
-                        let entry = self.dictionary[(code - self.clear - 2) as usize];
+                    let index = usize::from(code - self.clear - 2);
+                    let (offset, length) = if let Some(&entry) = self.dictionary.get(index) {
                         (
                             self.origin + (entry >> 12) as usize,
                             (entry & 4095) as usize,
@@ -134,22 +131,22 @@ impl Decoder {
                     if length > limit.saturating_sub(start) {
                         return Err(Error::Invalid("LZW output exceeds frame size"));
                     }
-                    let first = output[offset];
-                    let count = length.min(start - offset);
-                    if count <= 8 && start - offset >= 8 && limit - start >= 8 {
+                    let available = start - offset;
+                    if length <= 8 && available >= 8 && limit - start >= 8 {
                         // A constant-size copy avoids a variable-size memmove
                         // for short phrases. Both source and temporary output
                         // are initialized and within the caller's bound; drop
                         // the extra suffix before exposing the output again.
-                        reserve(output, length.max(8))?;
+                        reserve(output, 8)?;
                         output.extend_from_within(offset..offset + 8);
-                        output.truncate(start + count);
+                        output.truncate(start + length);
                     } else {
+                        let count = length.min(available);
                         reserve(output, length)?;
                         output.extend_from_within(offset..offset + count);
-                    }
-                    if count < length {
-                        output.push(first);
+                        if count < length {
+                            output.push(output[offset]);
+                        }
                     }
                     length
                 };
@@ -178,6 +175,8 @@ impl Decoder {
                     if self.next >= 1 << self.width && self.width < 12 {
                         self.width += 1;
                     }
+                } else {
+                    self.origin = start;
                 }
                 self.previous = Some((start, length));
             }
