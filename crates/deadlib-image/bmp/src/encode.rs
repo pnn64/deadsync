@@ -194,9 +194,10 @@ fn append_indexed_rows(
     top_down: bool,
     padding: &[u8],
 ) {
-    let mut bgr = [[0; 3]; 256];
+    // Use a word stride for the indexed color load.
+    let mut bgr = [0u32; 256];
     for (&[red, green, blue], color) in palette.iter().zip(&mut bgr) {
-        *color = [blue, green, red];
+        *color = u32::from_le_bytes([blue, green, red, 0]);
     }
     let mut rows = indices.chunks_exact(chunk_pixels);
     while let Some(row) = if top_down {
@@ -204,7 +205,10 @@ fn append_indexed_rows(
     } else {
         rows.next_back()
     } {
-        output.extend(row.iter().flat_map(|&index| bgr[usize::from(index)]));
+        output.extend(row.iter().flat_map(|&index| {
+            let [blue, green, red, _] = bgr[usize::from(index)].to_le_bytes();
+            [blue, green, red]
+        }));
         output.extend_from_slice(padding);
     }
 }
