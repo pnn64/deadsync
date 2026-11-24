@@ -21,6 +21,7 @@ pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     difficulty: push_difficulty,
     stage_badge: push_stage_badge,
     danger_threshold: 0.3,
+    warning_scope: deadsync_theme::views::GameplayWarningScope::PerPlayer,
     background_warning: push_background_warning,
     fallback_background: push_fallback_background,
     unjoined_seat: push_unjoined_seat,

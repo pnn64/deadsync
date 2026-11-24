@@ -18,6 +18,7 @@ pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     difficulty: push_difficulty,
     stage_badge: push_stage,
     danger_threshold: 0.2,
+    warning_scope: deadsync_theme::views::GameplayWarningScope::AllPlayers,
     background_warning: push_warning,
     fallback_background: push_background,
     unjoined_seat: push_unjoined,
@@ -254,7 +255,60 @@ fn push_stage(actors: &mut Vec<Actor>, view: GameplayStageBadgeView<'_>) {
     );
 }
 
-fn push_warning(_actors: &mut Vec<Actor>, _view: GameplayBackgroundWarningView) {}
+fn push_warning(actors: &mut Vec<Actor>, view: GameplayBackgroundWarningView) {
+    if view.failed || !view.both_sides || view.danger_seconds.rem_euclid(1.0) >= 0.5 {
+        return;
+    }
+    let layout = Layout::current();
+    let elapsed = view.danger_seconds.max(0.0);
+    // The reference updates this animation only during the visible half of each blink.
+    let time = elapsed.floor() * 0.5 + elapsed.fract();
+    let brightness = view.brightness.clamp(0.0, 1.0);
+    let frames = [0, 2, 4, 6, 1, 3, 5, 7, 5, 3, 1, 6, 4, 2];
+    let frame = frames[(time / 0.05) as usize % frames.len()];
+    let col = (frame % 2) as f32 * 0.5;
+    let row = (frame / 2) as f32 * 0.25;
+    for y in 0..5 {
+        for x in 0..6 {
+            let center = [
+                20.0 + x as f32 * 120.0,
+                20.0 + y as f32 * 128.0 * 440.0 / 480.0,
+            ];
+            let size = [120.0, 128.0 * 440.0 / 480.0];
+            let mut tile = layout.sprite("stepmania-395/gameplay-danger-tiles", center, size, -99);
+            tile.customtexturerect([col, row, col + 0.5, row + 0.25]);
+            tile.cropleft(((20.0 - center[0]) / size[0] + 0.5).max(0.0));
+            tile.cropright(((center[0] - 620.0) / size[0] + 0.5).max(0.0));
+            tile.croptop(((20.0 - center[1]) / size[1] + 0.5).max(0.0));
+            tile.cropbottom(((center[1] - 460.0) / size[1] + 0.5).max(0.0));
+            tile.diffuse([brightness, brightness, brightness, 1.0]);
+            actors.push(tile.build(0));
+        }
+    }
+    let phase = (time * std::f32::consts::PI).cos() * 0.5 + 0.5;
+    let mut glow = layout.sprite(
+        "stepmania-395/gameplay-danger-glow",
+        [320.0, 240.0],
+        [480.0, 128.0 * 440.0 / 480.0],
+        -98,
+    );
+    glow.diffuse([brightness, brightness, brightness, phase]);
+    actors.push(glow.build(0));
+    let mut text = layout.sprite(
+        "stepmania-395/gameplay-danger-text",
+        [320.0, 240.0],
+        [480.0, 128.0 * 440.0 / 480.0],
+        -97,
+    );
+    let rainbow = std::array::from_fn::<_, 3, _>(|index| {
+        brightness
+            * ((phase * std::f32::consts::TAU + index as f32 * std::f32::consts::TAU / 3.0).cos()
+                * 0.5
+                + 0.5)
+    });
+    text.diffuse([rainbow[0], rainbow[1], rainbow[2], 1.0]);
+    actors.push(text.build(0));
+}
 fn push_unjoined(_actors: &mut Vec<Actor>, _p2: bool) {}
 fn push_background(actors: &mut Vec<Actor>, _brightness: f32) {
     actors.push(Layout::current().solid(

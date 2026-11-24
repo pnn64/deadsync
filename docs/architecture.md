@@ -84,6 +84,11 @@ combo runs. Song results retain these optional ratios; course results retain the
 number of passed stages. Evaluation views forward these game facts, while each
 theme decides whether to draw bars, survived counters, or other result artwork.
 
+Gameplay HUDs also declare whether life warnings follow individual playfields or
+require every joined player to be low. The common composer applies that scope to
+the live player facts and warning preferences, then invokes the mounted artwork.
+The scope affects presentation only, with no changes to life or failure rules.
+
 Session-ending presentations receive a prepared session summary, banner keys,
 record facts and a game-owned timed name editor. The score layer aggregates
 recent passed stages and resolves timed character selections; the shell maps

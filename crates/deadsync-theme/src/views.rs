@@ -406,6 +406,13 @@ pub struct GameplayReplayView {
     pub score_10000: f64,
 }
 
+/// Whether warnings follow each playfield or require every joined player to be low.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayWarningScope {
+    PerPlayer,
+    AllPlayers,
+}
+
 /// Draw the standard gameplay HUD from values already resolved by the stage.
 pub struct GameplayHud<A> {
     pub standard_life: fn(&mut Vec<A>, GameplayLifeView),
@@ -415,6 +422,7 @@ pub struct GameplayHud<A> {
     pub stage_badge: fn(&mut Vec<A>, GameplayStageBadgeView<'_>),
     /// Display threshold for the theme's warning. It has no effect on stage life or failure.
     pub danger_threshold: f32,
+    pub warning_scope: GameplayWarningScope,
     pub background_warning: fn(&mut Vec<A>, GameplayBackgroundWarningView),
     pub fallback_background: fn(&mut Vec<A>, f32),
     pub unjoined_seat: fn(&mut Vec<A>, bool),

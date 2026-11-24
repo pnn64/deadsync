@@ -3686,6 +3686,33 @@ pub fn frame_layers<'a>(
                 } else {
                     state.num_players()
                 };
+                if hud.warning_scope == deadsync_theme::views::GameplayWarningScope::AllPlayers {
+                    let mut active = false;
+                    let mut clock = 0.0f32;
+                    let all_low = count > 0 && (0..count).all(|index| {
+                        let profile = &state.profiles()[index];
+                        let player = &state.players()[index];
+                        let failed = player.is_failing || player.life <= 0.0;
+                        active |= !failed;
+                        clock = clock.max(presentation.warning_seconds[index]);
+                        player.life < hud.danger_threshold
+                            && !profile.hide_lifebar
+                            && !profile.hide_danger
+                    });
+                    if all_low && active {
+                        (hud.background_warning)(
+                            actors,
+                            GameplayBackgroundWarningView {
+                                p2: false,
+                                both_sides: true,
+                                failed: false,
+                                danger_seconds: clock,
+                                brightness: policy.background_brightness,
+                            },
+                        );
+                    }
+                    return;
+                }
                 for player_idx in 0..count {
                     let profile = &state.profiles()[player_idx];
                     let player = &state.players()[player_idx];

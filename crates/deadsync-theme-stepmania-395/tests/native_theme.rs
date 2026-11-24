@@ -447,6 +447,10 @@ fn native_stage_uses_the_captured_numeric_score_and_physical_player_side() {
     assert_eq!(presentation.gameplay_entry_seconds(false), Some(5.0));
     assert_eq!(presentation.gameplay_entry_seconds(true), None);
     let hud = presentation.gameplay_hud().unwrap();
+    assert_eq!(
+        hud.warning_scope,
+        deadsync_theme::views::GameplayWarningScope::AllPlayers
+    );
     let mut entry = Vec::new();
     let empty = std::sync::Arc::from("");
     (hud.song_meter)(

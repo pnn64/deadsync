@@ -290,6 +290,8 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     assert_eq!(gameplay.setup.session.joined_sides, [false, true]);
     if openitg {
         check_openitg_gameplay_hud(app);
+    } else if native_stage {
+        check_native_gameplay_warning(app);
     }
 
     complete_stage(app, event_loop);
@@ -500,6 +502,26 @@ fn check_openitg_gameplay_hud(app: &mut App) {
     let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
     game.update_player(0, |player| player.life = full_life);
     game.update_profile(0, |profile| profile.hide_danger = was_hidden);
+}
+
+fn check_native_gameplay_warning(app: &mut App) {
+    let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
+    let full_life = game.players()[0].life;
+    let hidden = game.profiles()[0].hide_danger;
+    game.update_player(0, |player| player.life = 0.1);
+    game.update_profile(0, |profile| profile.hide_danger = false);
+    let warning_visible = |actors: &[Actor]| actors.iter().any(|actor| matches!(actor,
+        Actor::Sprite { source, .. } if source.texture_key() == Some("stepmania-395/gameplay-danger-tiles")
+    ));
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(warning_visible(&actors));
+    let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
+    game.update_profile(0, |profile| profile.hide_danger = true);
+    let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+    assert!(!warning_visible(&actors));
+    let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
+    game.update_player(0, |player| player.life = full_life);
+    game.update_profile(0, |profile| profile.hide_danger = hidden);
 }
 
 fn press(app: &mut App, event_loop: &ActiveEventLoop, action: VirtualAction) {

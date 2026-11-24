@@ -90,6 +90,25 @@ fn native_attract_captures() {
     }
     let output = root.join("target/native-395-attract-captures");
     std::fs::create_dir_all(&output).unwrap();
+    for (name, actors) in [
+        ("select-style", selection_actors(false, 0)),
+        ("select-difficulty", selection_actors(true, 2)),
+        ("select-nonstop", selection_actors(true, 4)),
+        ("system-options", options_actors(&assets, None)),
+        (
+            "player-options",
+            options_actors(&assets, Some([true, true])),
+        ),
+        (
+            "player-options-p2",
+            options_actors(&assets, Some([false, true])),
+        ),
+        ("gameplay-hud", gameplay_hud_actors()),
+        ("gameplay-danger", gameplay_warning_actors(0.25)),
+        ("gameplay-danger-blink-off", gameplay_warning_actors(0.75)),
+    ] {
+        capture_actors(name, &actors, 2.0, &output, &metrics, &mut backend, &assets);
+    }
     let progress = deadsync_assets::progress::LibraryLoadView {
         phase: deadsync_assets::progress::ContentReloadPhase::Songs,
         done: 47,
@@ -294,4 +313,292 @@ fn capture_actors(
     let image = backend.capture_frame().unwrap();
     assert_eq!(image.dimensions(), (640, 480));
     image.save(output.join(format!("{name}.png"))).unwrap();
+}
+
+fn selection_actors(mode: bool, selected: usize) -> Vec<Actor> {
+    use deadsync_theme::selection::SelectionPresentation;
+    use deadsync_theme::views::{PlaySelectionChoice, PlaySelectionKind, PlaySelectionView};
+    use deadsync_theme_stepmania_395::StepManiaMusicWheel;
+    use std::sync::Arc;
+
+    let mut selection = StepManiaMusicWheel::default();
+    let title = Arc::from(if mode {
+        "Select Difficulty"
+    } else {
+        "Select Style"
+    });
+    let prompt = Arc::from("Press Start");
+    let labels: Vec<Arc<str>> = if mode {
+        selection
+            .play_mode_menu()
+            .unwrap()
+            .choices
+            .iter()
+            .map(|choice| choice.label.into())
+            .collect()
+    } else {
+        ["Single", "Versus", "Double"].map(Arc::from).into()
+    };
+    let choices: Vec<_> = labels
+        .iter()
+        .enumerate()
+        .map(|(index, label)| PlaySelectionChoice {
+            label,
+            description: None,
+            enabled: !mode || index < 5,
+        })
+        .collect();
+    let mut actors = Vec::new();
+    for now in [0.0, 2.0] {
+        actors.clear();
+        selection.push_play_selection(
+            &mut actors,
+            PlaySelectionView {
+                kind: if mode {
+                    PlaySelectionKind::Mode
+                } else {
+                    PlaySelectionKind::Style { pump: false }
+                },
+                title: &title,
+                choices: &choices,
+                selected,
+                player_names: [Some("P1"), Some("P2")],
+                join_prompt: &prompt,
+                exit_progress: 0.0,
+            },
+            now,
+        );
+    }
+    actors
+}
+
+fn options_actors(assets: &deadlib_assets::AssetManager, players: Option<[bool; 2]>) -> Vec<Actor> {
+    use deadlib_present::actors::TextContent;
+    use deadsync_theme::player_options::{
+        PlayerOptionsInline, PlayerOptionsLayout, PlayerOptionsPage, PlayerOptionsRow,
+    };
+    use deadsync_theme::system_options::SystemOptionsPresentation;
+    use deadsync_theme::views::{
+        SystemOptionsPage, SystemOptionsPageKind, SystemOptionsPhase, SystemOptionsRow,
+    };
+    use deadsync_theme_stepmania_395::{StepManiaPlayerOptions, StepManiaSystemOptions};
+    use std::sync::Arc;
+
+    let mut actors = Vec::new();
+    if let Some(active) = players {
+        let labels = [
+            "Speed",
+            "Accel",
+            "Effect",
+            "Appearance",
+            "Turn",
+            "Scroll",
+            "NoteSkin",
+            "Holds",
+            "EXIT",
+        ]
+        .map(TextContent::from);
+        let choices: Vec<Vec<TextContent>> = [
+            &["1x", "1.5x", "2x", "3x"][..],
+            &["Off", "Boost", "Brake"],
+            &["Off", "Drunk", "Dizzy"],
+            &["Visible", "Hidden", "Sudden"],
+            &["None", "Mirror", "Left", "Right"],
+            &["Normal", "Reverse"],
+            &["default"],
+            &["On", "Off"],
+            &[],
+        ]
+        .into_iter()
+        .map(|choices| {
+            choices
+                .iter()
+                .map(|value| TextContent::from(*value))
+                .collect()
+        })
+        .collect();
+        let row = |index: usize| {
+            Some(PlayerOptionsRow {
+                label: &labels[index],
+                detail: None,
+                slot: index as f32,
+                slots: 1,
+                alpha: 1.0,
+                exit: index == labels.len() - 1,
+                values: [None; 2],
+                next_row: [false; 2],
+                inline: Some(PlayerOptionsInline {
+                    choices: &choices[index],
+                    focused: [Some(0), Some(0)],
+                    selected: [0; 2],
+                    enabled: [None; 2],
+                }),
+                has_preview: false,
+            })
+        };
+        let mut presentation = StepManiaPlayerOptions::default();
+        for now in [0.0, 2.0] {
+            actors.clear();
+            presentation.push_page(
+                &mut actors,
+                PlayerOptionsPage {
+                    title: "Player Options",
+                    active,
+                    selected_rows: [0, 1],
+                    scroll_position: [0.0, 1.0],
+                    row_count: labels.len(),
+                    visible_slots: 10,
+                    alpha: 1.0,
+                    row: &row,
+                    help: &|_, _| None,
+                    draw_preview: &|_, _, _, _| {},
+                },
+                assets,
+                now,
+                &deadsync_theme::TransitionState::Idle,
+            );
+        }
+    } else {
+        let rows = [
+            (
+                "Theme",
+                &["Simply Love", "OpenITG", "StepMania 3.95"][..],
+                2,
+            ),
+            ("Display Mode", &["Windowed", "Fullscreen"], 0),
+            ("Resolution", &["1600x900"], 0),
+            ("Vsync", &["Off", "On"], 0),
+            ("Renderer", &["Vulkan", "OpenGL", "Software"], 0),
+            ("Sound Device", &["Auto"], 0),
+        ];
+        let row = |index: usize| {
+            rows.get(index)
+                .map(|(label, values, selected)| SystemOptionsRow {
+                    label: Arc::from(*label),
+                    choices: Some(values.iter().map(|value| Arc::from(*value)).collect()),
+                    selected_choice: *selected,
+                    inline: true,
+                    disabled: false,
+                    enabled_choices: None,
+                    choice_tint: None,
+                })
+        };
+        StepManiaSystemOptions.with_renderer(
+            SystemOptionsPhase::Steady,
+            2.0,
+            assets,
+            &mut |renderer| {
+                (renderer.background)(&mut actors);
+                (renderer.page)(
+                    &mut actors,
+                    SystemOptionsPage {
+                        id: 0,
+                        title: "System Options",
+                        kind: SystemOptionsPageKind::Settings,
+                        selected: 0,
+                        row_count: rows.len(),
+                        row: &row,
+                        description: Some("Select the installed presentation theme.".into()),
+                        detail: None,
+                        phase: SystemOptionsPhase::Steady,
+                    },
+                );
+            },
+        );
+    }
+    actors
+}
+
+fn gameplay_hud_actors() -> Vec<Actor> {
+    use deadsync_theme::stage::StagePresentation;
+    use deadsync_theme::views::{
+        GameplayDifficultyView, GameplayHudMotion, GameplayLifeView, GameplayScoreView,
+        GameplaySongMeterView, GameplayStageBadgeView,
+    };
+    use deadsync_theme_stepmania_395::StepManiaStagePresentation;
+    use std::sync::Arc;
+
+    let hud = StepManiaStagePresentation::default()
+        .gameplay_hud()
+        .unwrap();
+    let motion = GameplayHudMotion::Settled;
+    let mut actors = Vec::new();
+    (hud.fallback_background)(&mut actors, 1.0);
+    let title = Arc::from("Quartz");
+    let rate = Arc::from("");
+    (hud.song_meter)(
+        &mut actors,
+        GameplaySongMeterView {
+            title: &title,
+            rate: &rate,
+            progress: 0.3,
+            motion,
+        },
+    );
+    (hud.stage_badge)(
+        &mut actors,
+        GameplayStageBadgeView {
+            text: &rate,
+            round: Some(1),
+            motion,
+        },
+    );
+    for p2 in [false, true] {
+        (hud.standard_life)(
+            &mut actors,
+            GameplayLifeView {
+                p2,
+                level: if p2 { 0.6 } else { 0.8 },
+                failed: false,
+                hot: false,
+                song_beat: 20.0,
+                percent_label: None,
+                motion,
+            },
+        );
+        (hud.percentage_score)(
+            &mut actors,
+            GameplayScoreView {
+                p2,
+                doubles: false,
+                numeric_score: 12_345_678,
+                percent: 97.65,
+                rgba: [1.0; 4],
+                ex: false,
+                motion,
+            },
+        );
+        (hud.difficulty)(
+            &mut actors,
+            GameplayDifficultyView {
+                p2,
+                reverse: false,
+                difficulty: "Hard",
+                description: "",
+                meter: 8,
+                motion,
+            },
+        );
+    }
+    actors
+}
+
+fn gameplay_warning_actors(elapsed: f32) -> Vec<Actor> {
+    use deadsync_theme::{stage::StagePresentation, views::GameplayBackgroundWarningView};
+    use deadsync_theme_stepmania_395::StepManiaStagePresentation;
+    let mut actors = gameplay_hud_actors();
+    let hud = StepManiaStagePresentation::default()
+        .gameplay_hud()
+        .unwrap();
+    (hud.background_warning)(
+        &mut actors,
+        GameplayBackgroundWarningView {
+            p2: false,
+            both_sides: true,
+            failed: false,
+            danger_seconds: elapsed,
+            brightness: 1.0,
+        },
+    );
+    actors
 }

@@ -146,7 +146,7 @@ fn push_style(actors: &mut Vec<Actor>, view: &PlaySelectionView<'_>, elapsed: f3
                 1.0,
                 1.0,
                 1.0,
-                0.5 + 0.5 * (focus * std::f32::consts::TAU / 0.5).cos(),
+                0.5 - 0.3 * (focus * std::f32::consts::TAU / 0.5).cos(),
             ]);
         }
         actors.push(icon.build(0));
