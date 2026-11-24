@@ -122,8 +122,13 @@ impl<R: Read> PageReader<R> {
         if self.failed {
             return Err(Error::Failed);
         }
-        self.discard(self.returned);
-        self.returned = 0;
+        if self.returned != 0 {
+            self.discard(self.returned);
+            self.returned = 0;
+        } else if self.buffer.capacity() == 0 {
+            // Leave room for lacing and the first small packet.
+            let _ = self.buffer.try_reserve(64);
+        }
         loop {
             let result = self.candidate();
             match result {
