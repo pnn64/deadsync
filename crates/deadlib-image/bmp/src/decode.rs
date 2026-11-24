@@ -338,10 +338,10 @@ fn masked_samples(
             _ => map_rows::<4, 4>(source, header, |packed| {
                 let word = u32::from_le_bytes(packed);
                 [
-                    red.sample(word),
-                    green.sample(word),
-                    blue.sample(word),
-                    alpha.sample(word),
+                    red.sample_wide(word),
+                    green.sample_wide(word),
+                    blue.sample_wide(word),
+                    alpha.sample_wide(word),
                 ]
             }),
         },
@@ -436,6 +436,12 @@ impl Channel {
 
     fn sample(self, word: u32) -> u8 {
         ((((word & self.mask) >> self.shift) * self.multiplier) >> self.downshift) as u8
+    }
+
+    fn sample_wide(self, word: u32) -> u8 {
+        // Widen before multiplying so the field can stay at its original offset.
+        let field = u64::from(word & self.mask);
+        ((field * u64::from(self.multiplier)) >> (self.shift + self.downshift)) as u8
     }
 
     fn sample16(self, word: u16) -> u8 {
