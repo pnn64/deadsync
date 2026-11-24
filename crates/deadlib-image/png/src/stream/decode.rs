@@ -690,6 +690,7 @@ impl StreamDecoder {
                                 self.palette.len(),
                                 self.options.palette_policy,
                             );
+                            let buffers_can_grow = rows.buffers_can_grow();
                             let (used, event) = if &self.kind == b"fdAT" {
                                 // This inflater is capped at the exact filtered
                                 // frame length; exceeding it is malformed frame
@@ -709,7 +710,9 @@ impl StreamDecoder {
                             self.left -= used;
                             self.input_left -= used;
                             pos += used;
-                            self.update_memory();
+                            if buffers_can_grow {
+                                self.update_memory();
+                            }
                             if event {
                                 return Ok(self.emit(Event::Row, pos));
                             }

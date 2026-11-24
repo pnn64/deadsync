@@ -247,6 +247,11 @@ impl ImageRows {
         }
         Ok((self.kind, buffers))
     }
+    pub(super) fn buffers_can_grow(&self) -> bool {
+        // A pass can grow the filter rows at setup and the native rows when
+        // its first row finishes. Later rows only overwrite or swap buffers.
+        self.row_index == 0
+    }
     pub(super) fn memory_bytes(&self) -> usize {
         self.inflater.working_memory_bytes()
             + self.row.capacity()
@@ -268,19 +273,22 @@ mod tests {
     fn reused_row_storage_matches_fresh_rows_and_capacities() {
         let mut buffers = RowBuffers::default();
         let shapes = [
-            (17, 3, false),
-            (17, 1, false),
-            (17, 5, false),
-            (29, 3, false),
-            (29, 3, true),
-            (29, 3, false),
+            (17, 3, 8, false),
+            (17, 1, 8, false),
+            (17, 5, 8, false),
+            (29, 3, 8, false),
+            (29, 3, 8, true),
+            (29, 3, 8, false),
+            (17, 3, 4, false),
+            (18, 2, 4, false),
+            (29, 3, 16, true),
         ];
-        for (frame, (width, height, interlaced)) in shapes.into_iter().enumerate() {
+        for (frame, (width, height, depth, interlaced)) in shapes.into_iter().enumerate() {
             let header = Header {
                 width,
                 height,
                 color: ColorType::Grayscale,
-                depth: 8,
+                depth,
                 interlaced,
             };
             let mut filtered = Vec::new();
@@ -289,9 +297,10 @@ mod tests {
                 if width == 0 {
                     continue;
                 }
+                let bytes = scanline::row_bytes(width, 1, depth).unwrap();
                 for row in 0..scanline::extent(height, y, dy) {
                     filtered.push(2);
-                    filtered.resize(filtered.len() + width, (frame + row + 1) as u8);
+                    filtered.resize(filtered.len() + bytes, (frame + row + 1) as u8);
                 }
             }
             let encoded = compress(&filtered, Compression::Fast).unwrap();
@@ -300,6 +309,7 @@ mod tests {
             let mut fresh = ImageRows::new(header, kind, 65536, RowBuffers::default()).unwrap();
             let mut remaining = encoded.as_slice();
             loop {
+                let before = reused.memory_bytes();
                 reused.advance().unwrap();
                 fresh.advance().unwrap();
                 assert_eq!(reused.memory_bytes(), fresh.memory_bytes());
@@ -309,6 +319,9 @@ mod tests {
                     fresh.feed(remaining, 0, PalettePolicy::Strict).unwrap()
                 );
                 assert_eq!(reused.memory_bytes(), fresh.memory_bytes());
+                if !reused.buffers_can_grow() {
+                    assert_eq!(reused.memory_bytes(), before);
+                }
                 remaining = &remaining[used..];
                 if ready {
                     assert_eq!(reused.row(), fresh.row());
