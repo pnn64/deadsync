@@ -209,49 +209,20 @@ impl Compositor {
             &self.palette
         };
         let two_colors = local.map(<[_]>::len).or(self.palette_len) == Some(2);
-        let stride = self.width as usize;
-        for row in 0..r.h {
-            let indices =
-                &frame.indices[row * frame.width as usize..row * frame.width as usize + r.w];
-            let dest =
-                &mut self.pixels[(r.y + row) * stride + r.x..(r.y + row) * stride + r.x + r.w];
-            // Short rows are cheaper to expand directly.
-            if indices.len() >= 32 {
-                let index = indices[0];
-                // Fixed-size equality lets the compiler compare whole vectors.
-                let (chunks, tail) = indices.as_chunks::<16>();
-                if chunks.iter().all(|chunk| *chunk == [index; 16])
-                    && tail.iter().all(|&value| value == index)
-                {
-                    if transparent != Some(index) {
-                        dest.fill(table[index as usize]);
-                    }
-                    continue;
-                }
-            }
-            if let Some(t) = transparent {
-                if two_colors {
-                    // With two colors there is only one opaque value. Blend
-                    // whole RGBA words so the loop can vectorize.
-                    let paint = u32::from_ne_bytes(table[usize::from(t ^ 1)]);
-                    for (pixel, &index) in dest.iter_mut().zip(indices) {
-                        let keep = u32::from(index == t).wrapping_neg();
-                        let old = u32::from_ne_bytes(*pixel);
-                        *pixel = ((old & keep) | (paint & !keep)).to_ne_bytes();
-                    }
-                } else {
-                    for (pixel, &index) in dest.iter_mut().zip(indices) {
-                        if index != t {
-                            *pixel = table[index as usize];
-                        }
-                    }
-                }
-            } else {
-                for (pixel, &index) in dest.iter_mut().zip(indices) {
-                    *pixel = table[index as usize];
-                }
-            }
-        }
+        let opaque = if two_colors {
+            transparent.map(|index| index ^ 1)
+        } else {
+            None
+        };
+        draw_indices(
+            (&mut self.pixels, self.width as usize),
+            r,
+            &frame.indices,
+            frame.width as usize,
+            table,
+            transparent,
+            opaque,
+        );
         Ok(RenderedFrame {
             width: self.width,
             height: self.height,
@@ -316,25 +287,89 @@ impl Compositor {
                 }
             }
         }
-        let frame = Frame {
-            left: text.left,
-            top: text.top,
-            width: text.width,
-            height: text.height,
-            indices: std::mem::take(&mut self.text_indices),
-            control: text.control,
-            ..Default::default()
-        };
-        // Restore the reusable text allocation even if rendering fails.
-        let result = self.render(&frame).map(|_| ());
-        self.text_indices = frame.indices;
-        result?;
+        let rect = self.clip(text.left, text.top, text.width, text.height);
+        self.prepare(rect, text.control)?;
+        // The validated text colors are the only two indices rasterization writes.
+        let transparent = text
+            .control
+            .and_then(|c| c.transparent_index)
+            .filter(|&index| index == text.foreground_index || index == text.background_index);
+        let opaque = transparent.map(|index| {
+            if index == text.foreground_index {
+                text.background_index
+            } else {
+                text.foreground_index
+            }
+        });
+        draw_indices(
+            (&mut self.pixels, self.width as usize),
+            rect,
+            &self.text_indices,
+            text.width as usize,
+            &self.palette,
+            transparent,
+            opaque,
+        );
         Ok(RenderedFrame {
             width: self.width,
             height: self.height,
             rgba: self.pixels.as_flattened(),
             control: text.control,
         })
+    }
+}
+
+#[inline(always)]
+fn draw_indices(
+    (canvas, stride): (&mut [[u8; 4]], usize),
+    r: Rect,
+    indices: &[u8],
+    width: usize,
+    table: &[[u8; 4]; 256],
+    transparent: Option<u8>,
+    opaque: Option<u8>,
+) {
+    for row in 0..r.h {
+        let source = row * width;
+        let target = (r.y + row) * stride + r.x;
+        let indices = &indices[source..source + r.w];
+        let dest = &mut canvas[target..target + r.w];
+        // Short rows are cheaper to expand directly.
+        if indices.len() >= 32 {
+            let index = indices[0];
+            // Fixed-size equality lets the compiler compare whole vectors.
+            let (chunks, tail) = indices.as_chunks::<16>();
+            if chunks.iter().all(|chunk| *chunk == [index; 16])
+                && tail.iter().all(|&value| value == index)
+            {
+                if transparent != Some(index) {
+                    dest.fill(table[index as usize]);
+                }
+                continue;
+            }
+        }
+        if let Some(t) = transparent {
+            if let Some(index) = opaque {
+                // With two colors there is only one opaque value. Blend
+                // whole RGBA words so the loop can vectorize.
+                let paint = u32::from_ne_bytes(table[usize::from(index)]);
+                for (pixel, &index) in dest.iter_mut().zip(indices) {
+                    let keep = u32::from(index == t).wrapping_neg();
+                    let old = u32::from_ne_bytes(*pixel);
+                    *pixel = ((old & keep) | (paint & !keep)).to_ne_bytes();
+                }
+            } else {
+                for (pixel, &index) in dest.iter_mut().zip(indices) {
+                    if index != t {
+                        *pixel = table[index as usize];
+                    }
+                }
+            }
+        } else {
+            for (pixel, &index) in dest.iter_mut().zip(indices) {
+                *pixel = table[index as usize];
+            }
+        }
     }
 }
 

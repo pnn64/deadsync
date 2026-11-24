@@ -151,6 +151,50 @@ fn repeated_text_uses_active_palette_without_allocation_churn() {
         });
     }
 }
+
+#[test]
+fn rasterizer_error_leaves_canvas_and_disposal_pending() {
+    struct FailingFont;
+    impl TextRasterizer for FailingFont {
+        fn rasterize(&mut self, ch: u8, _w: u8, _h: u8, mask: &mut [u8]) -> Result<(), Error> {
+            mask.fill(1);
+            if ch == b'B' {
+                return Err(Error::Invalid("font failed"));
+            }
+            Ok(())
+        }
+    }
+
+    let mut compositor = Compositor::new(&header()).unwrap();
+    compositor
+        .render(&frame(0, 0, 4, 3, 1, Disposal::Previous))
+        .unwrap();
+    let text = PlainText {
+        left: 3,
+        top: 2,
+        width: 4,
+        height: 2,
+        cell_width: 2,
+        cell_height: 2,
+        foreground_index: 2,
+        background_index: 0,
+        control: None,
+        data: vec![b"A".to_vec(), b"B".to_vec()],
+    };
+    assert!(matches!(
+        compositor.render_text(&text, &mut FailingFont),
+        Err(Error::Invalid("font failed"))
+    ));
+    assert_eq!(compositor.pixels(), rgba(&[1; 12], [0; 4]));
+    assert_eq!(
+        compositor
+            .render(&frame(0, 0, 1, 1, 3, Disposal::Keep))
+            .unwrap()
+            .rgba,
+        rgba(&[3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0; 4])
+    );
+}
+
 #[test]
 fn extensions_roundtrip_scope_and_text_rendering() {
     let mut g = Gif::new(header());
