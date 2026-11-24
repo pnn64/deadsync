@@ -360,6 +360,9 @@ impl Compositor<'_> {
                         *dst = src;
                     } else if src[3] == 0 {
                         continue;
+                    } else if dst[3] == 0 {
+                        // OVER on a transparent destination reproduces the source.
+                        *dst = src;
                     } else if dst[3] == 65535 {
                         // An opaque destination stays opaque. The exact rounded
                         // numerator is at most 65535^2 + 32767, which fits in u32.
