@@ -623,9 +623,15 @@ fn deinterlace(
     if height <= 2 {
         return Ok(());
     }
-    let extra = width.saturating_sub(row.len());
-    reserve(row, extra)?;
-    row.resize(width, 0);
+    let mut narrow = [0; 64];
+    let row = if width <= narrow.len() {
+        &mut narrow[..width]
+    } else {
+        let extra = width.saturating_sub(row.len());
+        reserve(row, extra)?;
+        row.resize(width, 0);
+        row.as_mut_slice()
+    };
     // GIF heights fit u16. Walk each row-permutation cycle once, keeping only
     // its first row aside. Every other row moves directly to its destination.
     let mut visited = [0u64; 1024];
@@ -730,7 +736,7 @@ mod tests {
     fn interlace_permutation_all_pass_tails_and_long_cycles() {
         let mut row = Vec::new();
         for height in (1..=257).chain([511, 512, 513, 8193, 65535, 17, 17, 3, 65, 2, 1]) {
-            for width in [1, 3, 17] {
+            for width in [1, 3, 17, 64, 65] {
                 let expected: Vec<_> = (0..height)
                     .flat_map(|y| (0..width).map(move |x| ((y * 137 + x * 71) % 251) as u8))
                     .collect();
@@ -742,7 +748,7 @@ mod tests {
                 assert_eq!(wire, expected, "{width}x{height}");
                 assert_eq!(
                     row.len(),
-                    if height <= 2 {
+                    if height <= 2 || width <= 64 {
                         previous_scratch_len
                     } else {
                         width
