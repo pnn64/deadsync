@@ -382,10 +382,21 @@ fn draw_indices(
                     let old = u32::from_ne_bytes(*pixel);
                     *pixel = ((old & keep) | (paint & !keep)).to_ne_bytes();
                 }
+            } else if indices.len() >= 64
+                && frequent_transparency_changes(*indices.first_chunk::<8>().unwrap(), t)
+            {
+                for (pixel, &index) in dest.iter_mut().zip(indices) {
+                    let source = if index == t {
+                        &*pixel
+                    } else {
+                        &table[usize::from(index)]
+                    };
+                    *pixel = *source;
+                }
             } else {
                 for (pixel, &index) in dest.iter_mut().zip(indices) {
                     if index != t {
-                        *pixel = table[index as usize];
+                        *pixel = table[usize::from(index)];
                     }
                 }
             }
@@ -395,6 +406,14 @@ fn draw_indices(
             }
         }
     }
+}
+
+fn frequent_transparency_changes(sample: [u8; 8], transparent: u8) -> bool {
+    const HIGH_BITS: u64 = 0x8080_8080_8080_8080;
+    let different = u64::from_le_bytes(sample) ^ u64::from_le_bytes([transparent; 8]);
+    // A byte's high bit stays clear only when all of its bits were zero.
+    let matches = !(((different & !HIGH_BITS).wrapping_add(!HIGH_BITS)) | different) & HIGH_BITS;
+    (matches ^ (matches << 8)).count_ones() >= 3
 }
 
 #[inline(never)]
