@@ -88,6 +88,27 @@ fn byte_string_primitives_and_methods() {
 }
 
 #[test]
+fn reverse_handles_each_binary_tail_at_the_block_boundary() {
+    let mut vm = Vm::new();
+    let reverse = compile(b"return string.reverse(...)").unwrap();
+    for len in 4095..=4160 {
+        let source: Vec<u8> = (0..len).map(|i| (i * 67 + i / 97) as u8).collect();
+        let value = vm.intern(&source);
+        let result = match vm.execute_with_args(&reverse, &[value]).unwrap() {
+            [Value::String(id)] => *id,
+            output => panic!("expected one string, got {output:?}"),
+        };
+        assert!(
+            vm.string_bytes(result)
+                .unwrap()
+                .iter()
+                .eq(source.iter().rev()),
+            "input length {len}"
+        );
+    }
+}
+
+#[test]
 fn repeated_binary_strings_copy_complete_source_at_all_boundaries() {
     let source = br#"
         for _,piece in ipairs({string.char(0), string.char(255), string.char(0,255,65,66,0,67,68)}) do

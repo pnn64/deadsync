@@ -246,6 +246,22 @@ impl Vm {
         }
         Ok(count)
     }
+    #[inline(never)]
+    fn reverse_large_string(&mut self, source: StringId, len: usize) -> Result<Value, Error> {
+        let mut bytes = self.try_take_buffer(len)?;
+        let text = &self.strings.bytes[slot_index(source.0)];
+        let (prefix, blocks) = text.as_rchunks::<64>();
+        for block in blocks.iter().rev() {
+            let mut reversed = *block;
+            reversed.reverse();
+            bytes.extend_from_slice(&reversed);
+        }
+        for &byte in prefix.iter().rev() {
+            bytes.push(byte);
+        }
+        self.try_finish_buffer(bytes)
+    }
+
     pub(super) fn string_native(
         &mut self,
         id: u64,
@@ -387,6 +403,7 @@ impl Vm {
                 }
                 self.try_finish_buffer(bytes)?
             }
+            STR_REVERSE if len >= 4096 => self.reverse_large_string(source, len)?,
             STR_REVERSE | STR_LOWER | STR_UPPER => {
                 let mut bytes = self.try_take_buffer(len)?;
                 bytes.extend_from_slice(&self.strings.bytes[slot_index(source.0)]);
