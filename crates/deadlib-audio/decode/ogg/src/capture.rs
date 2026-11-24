@@ -323,10 +323,11 @@ impl PacketCapture {
                 })
                 .is_break();
             }
-            self.next_number = self
-                .next_number
-                .map(|n| n.checked_add(1).ok_or(Error::LimitExceeded("packet count")))
-                .transpose()?;
+            if let Some(number) = &mut self.next_number {
+                *number = number
+                    .checked_add(1)
+                    .ok_or(Error::LimitExceeded("packet count"))?;
+            }
             self.skipping = false;
             self.partial.clear();
             if self.partial.capacity() > MAX_PAGE_SIZE {
