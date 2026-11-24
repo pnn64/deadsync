@@ -201,14 +201,17 @@ impl<T> Arena<T> {
         self.values.get_mut(slot)?.as_mut()
     }
     pub fn mark(&mut self, key: u64) -> bool {
-        if !self.contains(key) {
+        let slot = index(key);
+        let word = slot / 64;
+        let bit = 1u64 << (slot % 64);
+        let Some(&old) = self.marks.get(word) else {
+            return false;
+        };
+        if old & bit != 0 || !self.contains(key) {
             return false;
         }
-        let slot = index(key);
-        let bit = 1u64 << (slot % 64);
-        let old = self.marks[slot / 64];
-        self.marks[slot / 64] |= bit;
-        old & bit == 0
+        self.marks[word] = old | bit;
+        true
     }
     pub fn marked(&self, key: u64) -> bool {
         let slot = index(key);
