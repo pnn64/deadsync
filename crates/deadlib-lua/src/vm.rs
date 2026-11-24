@@ -1639,8 +1639,10 @@ impl Vm {
         } else {
             frame.wanted as usize
         };
+        let top = frame.result + wanted;
+        let end = frame.stack_start.max(top);
         if self.frames.len() > 1 {
-            self.reserve_registers(frame.stack_start.max(frame.result + wanted))?;
+            self.reserve_registers(end)?;
         }
         if frame.is_call() {
             self.relocate_native_error_functions(
@@ -1666,19 +1668,26 @@ impl Vm {
         // An API call on a suspended state can truncate the spare storage of
         // its pending Lua caller. A resumed native yield must restore that
         // caller's register window, as luaD_poscall restores ci->top.
-        self.resize_registers(
-            self.registers
-                .len()
-                .max(frame.stack_start)
-                .max(frame.result + wanted),
-        );
+        if self.registers.len() < end {
+            self.registers.resize(end, Value::Nil);
+        }
         let copied = count.min(wanted);
-        self.registers
-            .copy_within(source..source + copied, frame.result);
-        self.registers[frame.result + copied..frame.result + wanted].fill(Value::Nil);
-        self.registers
-            .truncate(frame.stack_start.max(frame.result + wanted));
-        self.top = frame.result + wanted;
+        match copied {
+            0 => {}
+            1 => self.registers[frame.result] = self.registers[source],
+            2 => {
+                let values = [self.registers[source], self.registers[source + 1]];
+                self.registers[frame.result..frame.result + 2].copy_from_slice(&values);
+            }
+            _ => self
+                .registers
+                .copy_within(source..source + copied, frame.result),
+        }
+        if copied < wanted {
+            self.registers[frame.result + copied..top].fill(Value::Nil);
+        }
+        self.registers.truncate(end);
+        self.top = top;
         self.frames.pop();
         Ok(None)
     }
