@@ -9,7 +9,7 @@ use std::arch::x86_64::*;
 /// The only safe entry to the feature-specific implementation.
 #[inline]
 pub(crate) fn update(seed: u32, bytes: &[u8]) -> Option<u32> {
-    if bytes.len() < 64 {
+    if bytes.len() < 32 {
         return None;
     }
     if is_x86_feature_detected!("pclmulqdq") && is_x86_feature_detected!("ssse3") {
@@ -68,10 +68,7 @@ fn reversed_word(bytes: &[u8; 16], reverse: __m128i) -> __m128i {
 #[target_feature(enable = "pclmulqdq,ssse3")]
 fn fold(seed: u32, bytes: &[u8]) -> u32 {
     let (words, tail) = bytes.as_chunks::<16>();
-    let (groups, words) = words.as_chunks::<4>();
-    let Some(([first_a, first_b, first_c, first_d], groups)) = groups.split_first() else {
-        return crate::crc::update_scalar::<false>(seed, bytes);
-    };
+    let (groups, extra) = words.as_chunks::<4>();
     let reverse = _mm_setr_epi8(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
     let k = _mm_set_epi64x(K576 as i64, K512 as i64);
     let k1 = _mm_set_epi64x(K192 as i64, K128 as i64);
@@ -83,23 +80,35 @@ fn fold(seed: u32, bytes: &[u8]) -> u32 {
             )
         };
     }
-    let mut a = _mm_xor_si128(
-        reversed_word(first_a, reverse),
-        _mm_set_epi32(seed as i32, 0, 0, 0),
-    );
-    let mut b = reversed_word(first_b, reverse);
-    let mut c = reversed_word(first_c, reverse);
-    let mut d = reversed_word(first_d, reverse);
-    for [word_a, word_b, word_c, word_d] in groups {
-        a = _mm_xor_si128(fold!(a, k), reversed_word(word_a, reverse));
-        b = _mm_xor_si128(fold!(b, k), reversed_word(word_b, reverse));
-        c = _mm_xor_si128(fold!(c, k), reversed_word(word_c, reverse));
-        d = _mm_xor_si128(fold!(d, k), reversed_word(word_d, reverse));
-    }
-    // Advance each lane by the number of words that follow it.
-    let a = fold!(a, _mm_set_epi64x(K448 as i64, K384 as i64));
-    let b = fold!(b, _mm_set_epi64x(K320 as i64, K256 as i64));
-    let mut state = _mm_xor_si128(_mm_xor_si128(a, b), _mm_xor_si128(fold!(c, k1), d));
+    let (mut state, words) =
+        if let Some(([first_a, first_b, first_c, first_d], groups)) = groups.split_first() {
+            let mut a = _mm_xor_si128(
+                reversed_word(first_a, reverse),
+                _mm_set_epi32(seed as i32, 0, 0, 0),
+            );
+            let mut b = reversed_word(first_b, reverse);
+            let mut c = reversed_word(first_c, reverse);
+            let mut d = reversed_word(first_d, reverse);
+            for [word_a, word_b, word_c, word_d] in groups {
+                a = _mm_xor_si128(fold!(a, k), reversed_word(word_a, reverse));
+                b = _mm_xor_si128(fold!(b, k), reversed_word(word_b, reverse));
+                c = _mm_xor_si128(fold!(c, k), reversed_word(word_c, reverse));
+                d = _mm_xor_si128(fold!(d, k), reversed_word(word_d, reverse));
+            }
+            // Advance each lane by the number of words that follow it.
+            let a = fold!(a, _mm_set_epi64x(K448 as i64, K384 as i64));
+            let b = fold!(b, _mm_set_epi64x(K320 as i64, K256 as i64));
+            let state = _mm_xor_si128(_mm_xor_si128(a, b), _mm_xor_si128(fold!(c, k1), d));
+            (state, extra)
+        } else if let Some((first, rest)) = words.split_first() {
+            let state = _mm_xor_si128(
+                reversed_word(first, reverse),
+                _mm_set_epi32(seed as i32, 0, 0, 0),
+            );
+            (state, rest)
+        } else {
+            return crate::crc::update_scalar::<false>(seed, tail);
+        };
     for word in words {
         state = _mm_xor_si128(fold!(state, k1), reversed_word(word, reverse));
     }
