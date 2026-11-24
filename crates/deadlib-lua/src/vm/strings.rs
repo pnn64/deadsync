@@ -79,7 +79,7 @@ impl Substitution {
     }
 }
 
-fn relative(index: i64, len: usize) -> i64 {
+pub(super) fn relative(index: i64, len: usize) -> i64 {
     if index < 0 {
         index.saturating_add(len as i64).saturating_add(1).max(0)
     } else {

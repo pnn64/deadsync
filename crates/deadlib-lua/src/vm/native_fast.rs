@@ -72,7 +72,22 @@ impl Vm {
                 self.registers[call] = Value::Number(size);
                 Some(1)
             }
-            // Other arities, coercion, and errors use ordinary dispatch.
+            // Ranges with an explicit end, coercion, and errors use ordinary dispatch.
+            strings::STR_BYTE
+                if count == 2
+                    && let (Value::String(source), Value::Number(index)) =
+                        (self.registers[call + 1], self.registers[call + 2]) =>
+            {
+                let bytes = self.strings.bytes.get(source.0)?;
+                let offset =
+                    (strings::relative(lua_integer(index), bytes.len()) as usize).wrapping_sub(1);
+                if let Some(&byte) = bytes.get(offset) {
+                    self.registers[call] = Value::Number(f64::from(byte));
+                    Some(1)
+                } else {
+                    Some(0)
+                }
+            }
             strings::STR_LEN | strings::STR_BYTE
                 if count == 1
                     && let Value::String(source) = self.registers[call + 1] =>
