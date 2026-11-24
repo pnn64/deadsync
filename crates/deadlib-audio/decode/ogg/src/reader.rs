@@ -205,6 +205,40 @@ impl<R: Read> PageReader<R> {
     }
 }
 
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[allow(unsafe_code)]
+fn capture_pattern(bytes: &[u8]) -> Option<usize> {
+    // SAFETY: SSE2 is enabled for this build target.
+    unsafe { capture_pattern_sse2(bytes) }
+}
+
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[target_feature(enable = "sse2")]
+fn capture_pattern_sse2(bytes: &[u8]) -> Option<usize> {
+    use core::arch::x86_64::{_mm_cmpeq_epi8, _mm_movemask_epi8, _mm_set_epi64x, _mm_set1_epi8};
+
+    let mut rest = bytes;
+    while let Some(word) = rest.first_chunk::<16>() {
+        let bits = u128::from_ne_bytes(*word);
+        let lanes = _mm_set_epi64x((bits >> 64) as i64, bits as i64);
+        let o = _mm_movemask_epi8(_mm_cmpeq_epi8(lanes, _mm_set1_epi8(b'O' as i8)));
+        if o != 0 {
+            let g = _mm_movemask_epi8(_mm_cmpeq_epi8(lanes, _mm_set1_epi8(b'g' as i8)));
+            let s = _mm_movemask_epi8(_mm_cmpeq_epi8(lanes, _mm_set1_epi8(b'S' as i8)));
+            let matches = o & (g >> 1) & (g >> 2) & (s >> 3);
+            if matches != 0 {
+                return Some(bytes.len() - rest.len() + matches.trailing_zeros() as usize);
+            }
+        }
+        // Retain three bytes so the next load sees any pattern crossing this one.
+        rest = &rest[13..];
+    }
+    rest.windows(4)
+        .position(|word| word == b"OggS")
+        .map(|i| bytes.len() - rest.len() + i)
+}
+
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
 fn capture_pattern(bytes: &[u8]) -> Option<usize> {
     let zero_bytes =
         |word: u64| word.wrapping_sub(0x0101_0101_0101_0101) & !word & 0x8080_8080_8080_8080;
