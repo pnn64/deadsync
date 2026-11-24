@@ -85,57 +85,63 @@ impl<W: Write> PacketWriter<W> {
     }
     fn packet_inner(&mut self, data: &[u8], granule: u64, eos: bool) -> Result<(), Error> {
         let first_packet = !self.started;
-        let mut position = 0;
-        loop {
-            if self.header_len == MAX_HEADER_SIZE {
+        if self.header_len == MAX_HEADER_SIZE {
+            self.emit(false, &[])?;
+        }
+        let mut remaining = data;
+        let mut available = (MAX_HEADER_SIZE - self.header_len) * 255;
+        while remaining.len() >= available {
+            let (payload, rest) = remaining.split_at(available);
+            self.header[self.header_len..].fill(255);
+            self.header_len = MAX_HEADER_SIZE;
+            if self.body.is_empty() {
+                self.emit(false, payload)?;
+            } else {
+                self.append_body(payload, data.len())?;
                 self.emit(false, &[])?;
             }
-            let len = (data.len() - position).min((MAX_HEADER_SIZE - self.header_len) * 255);
-            let payload = &data[position..position + len];
-            let mut tail = len;
-            if len >= 255 {
-                let full = len / 255;
-                self.header[self.header_len..self.header_len + full].fill(255);
-                self.header_len += full;
-                tail -= full * 255;
-            }
-            position += len;
-            let packet_open = self.header_len == MAX_HEADER_SIZE;
-            if !packet_open {
-                self.header[self.header_len] = tail as u8;
-                self.header_len += 1;
-                self.granule = granule;
-                self.last_granule = granule;
-            }
-            let flush = packet_open
-                || first_packet
-                || eos
-                || self.body.len() + len >= self.options.target_page_body;
-            let page_eos = eos && !packet_open;
-            if self.body.is_empty() && flush {
-                self.emit(page_eos, payload)?;
-            } else {
-                if len > self.body.capacity() - self.body.len() {
-                    // Reserve around the soft target for packets that fit a page.
-                    let additional = if self.body.capacity() == 0 && data.len() < 255 * 255 {
-                        self.options
-                            .target_page_body
-                            .saturating_add(len)
-                            .min(255 * 255)
-                    } else {
-                        len
-                    };
-                    reserve(&mut self.body, additional)?;
-                }
-                self.body.extend_from_slice(payload);
-                if flush {
-                    self.emit(page_eos, &[])?;
-                }
-            }
-            if !packet_open {
-                return Ok(());
-            }
+            remaining = rest;
+            available = 255 * 255;
         }
+        let len = remaining.len();
+        let mut tail = len;
+        if len >= 255 {
+            let full = len / 255;
+            self.header[self.header_len..self.header_len + full].fill(255);
+            self.header_len += full;
+            tail -= full * 255;
+        }
+        self.header[self.header_len] = tail as u8;
+        self.header_len += 1;
+        self.granule = granule;
+        self.last_granule = granule;
+
+        let flush = first_packet || eos || self.body.len() + len >= self.options.target_page_body;
+        if self.body.is_empty() && flush {
+            return self.emit(eos, remaining);
+        }
+        self.append_body(remaining, data.len())?;
+        if flush {
+            self.emit(eos, &[])?;
+        }
+        Ok(())
+    }
+    fn append_body(&mut self, data: &[u8], packet_len: usize) -> Result<(), Error> {
+        let len = data.len();
+        if len > self.body.capacity() - self.body.len() {
+            // Reserve around the soft target for packets that fit a page.
+            let additional = if self.body.capacity() == 0 && packet_len < 255 * 255 {
+                self.options
+                    .target_page_body
+                    .saturating_add(len)
+                    .min(255 * 255)
+            } else {
+                len
+            };
+            reserve(&mut self.body, additional)?;
+        }
+        self.body.extend_from_slice(data);
+        Ok(())
     }
     fn emit(&mut self, eos: bool, direct: &[u8]) -> Result<(), Error> {
         let flags = if !self.started { BOS } else { 0 }
