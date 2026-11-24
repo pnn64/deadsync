@@ -75,6 +75,13 @@ impl Decoder {
         output: &mut Vec<u8>,
         limit: usize,
     ) -> Result<(), Error> {
+        if let [byte] = input
+            && u16::from(self.bit_count) + 8 < u16::from(self.width)
+        {
+            self.bits |= u64::from(*byte) << self.bit_count;
+            self.bit_count += 8;
+            return Ok(());
+        }
         if self.ended() {
             return Ok(());
         }
