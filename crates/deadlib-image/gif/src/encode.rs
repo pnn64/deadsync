@@ -27,16 +27,16 @@ pub struct Encoder<W: Write> {
 }
 impl<W: Write> Encoder<W> {
     pub fn new(writer: W, header: Header, options: EncodeOptions) -> Result<Self, Error> {
-        Ok(Self {
-            output: EncoderOutput::new(writer, &header, options)?,
-            header,
-        })
+        let mut output = EncoderOutput::new(writer, options);
+        output.write_header(&header)?;
+        Ok(Self { output, header })
     }
     pub fn write_block(&mut self, block: &Block) -> Result<(), Error> {
         self.output.write_block(&self.header, block)
     }
-    pub fn finish(self) -> Result<W, Error> {
-        self.output.finish()
+    pub fn finish(mut self) -> Result<W, Error> {
+        self.output.write_trailer()?;
+        Ok(self.output.writer)
     }
 }
 
@@ -47,14 +47,23 @@ struct EncoderOutput<W: Write> {
     failed: bool,
 }
 impl<W: Write> EncoderOutput<W> {
-    fn new(mut writer: W, header: &Header, options: EncodeOptions) -> Result<Self, Error> {
+    fn new(writer: W, options: EncodeOptions) -> Self {
+        Self {
+            writer,
+            options,
+            lzw: lzw::Encoder::new(),
+            failed: false,
+        }
+    }
+    fn write_header(&mut self, header: &Header) -> Result<(), Error> {
         header.validate()?;
-        if options.image_sub_block_size == 0 {
+        if self.options.image_sub_block_size == 0 {
             return Err(Error::Invalid("zero image sub-block size"));
         }
         if header.version == Version::Gif87a && (header.sorted || header.pixel_aspect_ratio != 0) {
             return Err(Error::Invalid("GIF89a fields in GIF87a header"));
         }
+        let writer = &mut self.writer;
         writer.write_all(match header.version {
             Version::Gif87a => b"GIF87a",
             Version::Gif89a => b"GIF89a",
@@ -76,12 +85,7 @@ impl<W: Write> EncoderOutput<W> {
         if let Some(p) = &header.global_palette {
             writer.write_all(p.as_flattened())?;
         }
-        Ok(Self {
-            writer,
-            options,
-            lzw: lzw::Encoder::new(),
-            failed: false,
-        })
+        Ok(())
     }
     fn write_block(&mut self, header: &Header, block: &Block) -> Result<(), Error> {
         if self.failed {
@@ -96,12 +100,12 @@ impl<W: Write> EncoderOutput<W> {
         }
         result
     }
-    fn finish(mut self) -> Result<W, Error> {
+    fn write_trailer(&mut self) -> Result<(), Error> {
         if self.failed {
             return Err(Error::Invalid("encoder is failed"));
         }
         self.writer.write_all(&[0x3b])?;
-        Ok(self.writer)
+        Ok(())
     }
     fn require89(version: Version) -> Result<(), Error> {
         if version == Version::Gif87a {
@@ -275,9 +279,11 @@ pub fn encode(gif: &Gif, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     encode_into(gif, options, Vec::new())
 }
 pub fn encode_into<W: Write>(gif: &Gif, options: &EncodeOptions, writer: W) -> Result<W, Error> {
-    let mut encoder = EncoderOutput::new(writer, &gif.header, options.clone())?;
+    let mut encoder = EncoderOutput::new(writer, options.clone());
+    encoder.write_header(&gif.header)?;
     for block in &gif.blocks {
         encoder.write_block(&gif.header, block)?;
     }
-    encoder.finish()
+    encoder.write_trailer()?;
+    Ok(encoder.writer)
 }
