@@ -11,13 +11,13 @@ pub struct Decoder {
     origin: usize,
     clear: u16,
     next: u16,
+    mask: u16,
+    // Zero after EOI. A reset restores the initial code width.
     width: u8,
-    minimum: u8,
     // Same layout as a dictionary entry, with zero for an empty history.
     previous: u64,
     bits: u64,
     bit_count: u8,
-    ended: bool,
 }
 impl Default for Decoder {
     fn default() -> Self {
@@ -31,12 +31,11 @@ impl Decoder {
             origin: 0,
             clear: 4,
             next: 6,
+            mask: 7,
             width: 3,
-            minimum: 2,
             previous: 0,
             bits: 0,
             bit_count: 0,
-            ended: false,
         }
     }
     pub fn reset(&mut self, minimum: u8) -> Result<(), Error> {
@@ -51,22 +50,21 @@ impl Decoder {
         if !(1..=8).contains(&minimum) {
             return Err(Error::Invalid("LZW minimum code size"));
         }
-        self.minimum = minimum;
         self.clear = 1 << minimum;
         self.clear_table();
         self.bits = 0;
         self.bit_count = 0;
-        self.ended = false;
         Ok(())
     }
     fn clear_table(&mut self) {
         self.dictionary.clear();
         self.next = self.clear + 2;
-        self.width = self.minimum + 1;
+        self.width = self.clear.trailing_zeros() as u8 + 1;
+        self.mask = (self.clear << 1) - 1;
         self.previous = 0;
     }
     pub fn ended(&self) -> bool {
-        self.ended
+        self.width == 0
     }
     pub(crate) fn literal_count(&self) -> usize {
         usize::from(self.clear)
@@ -77,8 +75,11 @@ impl Decoder {
         output: &mut Vec<u8>,
         limit: usize,
     ) -> Result<(), Error> {
+        if self.ended() {
+            return Ok(());
+        }
         let mut input = input;
-        while !input.is_empty() && !self.ended {
+        while !input.is_empty() {
             if input.len() >= 4 {
                 // A safe unaligned word refill amortizes the byte/width
                 // loop. At most 11 bits remain, so 32 more fit in u64.
@@ -94,7 +95,7 @@ impl Decoder {
                 break;
             }
             while self.bit_count >= self.width {
-                let code = (self.bits & ((1 << self.width) - 1)) as u16;
+                let code = self.bits as u16 & self.mask;
                 self.bits >>= self.width;
                 self.bit_count -= self.width;
                 let start = output.len();
@@ -112,8 +113,8 @@ impl Decoder {
                         continue;
                     }
                     if code == self.clear + 1 {
-                        self.ended = true;
-                        break;
+                        self.width = 0;
+                        return Ok(());
                     }
                     let index = usize::from(code - self.clear - 2);
                     let (offset, length) = if let Some(&entry) = self.dictionary.get(index) {
@@ -171,8 +172,9 @@ impl Decoder {
                     self.next += 1;
                     // A one-bit minimum starts with next == 1 << width, so
                     // its first insertion crosses (rather than reaches) it.
-                    if self.next >= 1 << self.width && self.width < 12 {
+                    if self.next > self.mask && self.width < 12 {
                         self.width += 1;
+                        self.mask = (self.mask << 1) | 1;
                     }
                 } else {
                     self.origin = start;
