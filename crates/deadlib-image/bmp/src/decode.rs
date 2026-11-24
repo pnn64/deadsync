@@ -83,7 +83,12 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 Ok(())
             };
             let rows = display_rows(source, header.row_pitch, header.info.top_down);
-            if header.info.bit_depth == 8 {
+            if palette_len == 1 {
+                if !indices_are_zero(source, header.row_pitch, width, header.info.bit_depth) {
+                    return Err(Error::Invalid("pixel index exceeds the palette"));
+                }
+                indices.resize(header.pixel_count, 0);
+            } else if header.info.bit_depth == 8 {
                 if header.info.top_down && width == header.row_pitch {
                     validate_indices(source)?;
                     indices.extend_from_slice(source);
@@ -174,6 +179,25 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
         height: header.info.height,
         pixels,
     })
+}
+
+#[inline(never)]
+fn indices_are_zero(source: &[u8], pitch: usize, width: usize, bit_depth: u16) -> bool {
+    let packing_shift = 3 - bit_depth.trailing_zeros();
+    let complete_bytes = width >> packing_shift;
+    let tail_pixels = width & ((1 << packing_shift) - 1);
+    let tail_bits = tail_pixels * usize::from(bit_depth);
+    let tail_mask = (0xff_u16 << (8 - tail_bits)) as u8;
+    let bytes_are_zero = |bytes: &[u8]| bytes.iter().copied().max().unwrap_or(0) == 0;
+    if complete_bytes == pitch {
+        bytes_are_zero(source)
+    } else {
+        // Check only used bits and bytes. Every valid pixel has index zero.
+        source.chunks_exact(pitch).all(|row| {
+            bytes_are_zero(&row[..complete_bytes])
+                && (tail_mask == 0 || row[complete_bytes] & tail_mask == 0)
+        })
+    }
 }
 
 fn unpack_one_bit_indices(row: &[u8], output: &mut [u8]) {
