@@ -400,6 +400,16 @@ impl OggIndex {
             return None;
         }
         let pages = &self.pages[stream.pages.clone()];
+        // Equal totals are a hint. Verify the candidate starts and completes the packet.
+        if pages.len() as u64 == stream.packets {
+            let page = &pages[number as usize];
+            if page.first_packet == number
+                && page.completed_packets != 0
+                && page.first_packet_offset == page.offset
+            {
+                return Some(page);
+            }
+        }
         let end = pages.partition_point(|page| page.first_packet <= number);
         let (page, earlier) = pages[..end].split_last()?;
         let offset = page.first_packet_offset;
