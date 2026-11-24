@@ -59,7 +59,7 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
 
     let mut output = Vec::new();
     reserve(&mut output, file_size)?;
-    output.resize(file_size, 0);
+    output.resize(offset, 0);
     output[..2].copy_from_slice(b"BM");
     put_u32(&mut output, 2, file_size_u32);
     put_u32(&mut output, 10, offset as u32);
@@ -81,47 +81,50 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
 
     let width = width as usize;
     let height = height as usize;
-    for file_row in 0..height {
-        let source_row = if options.top_down {
+    let source_rows = (0..height).map(|file_row| {
+        if options.top_down {
             file_row
         } else {
             height - 1 - file_row
-        };
-        let first_pixel = source_row * width;
-        let row = &mut output[offset + file_row * pitch..][..row_bytes];
-        match &bitmap.pixels {
-            Pixels::Indexed {
-                indices, palette, ..
-            } => {
-                for (&index, bgr) in indices[first_pixel..first_pixel + width]
-                    .iter()
-                    .zip(row.as_chunks_mut::<3>().0)
-                {
-                    let rgb = palette[usize::from(index)];
-                    bgr.copy_from_slice(&[rgb[2], rgb[1], rgb[0]]);
+        }
+    });
+    match &bitmap.pixels {
+        Pixels::Indexed {
+            indices, palette, ..
+        } => {
+            output.resize(file_size, 0);
+            for (y, row) in source_rows.zip(output[offset..].chunks_exact_mut(pitch)) {
+                let source = &indices[y * width..][..width];
+                for (&index, bgr) in source.iter().zip(row[..row_bytes].as_chunks_mut::<3>().0) {
+                    let [red, green, blue] = palette[usize::from(index)];
+                    *bgr = [blue, green, red];
                 }
             }
-            Pixels::Rgb(samples) => {
-                let source = &samples[first_pixel * 3..(first_pixel + width) * 3];
-                for (rgb, bgr) in source
-                    .as_chunks::<3>()
-                    .0
-                    .iter()
-                    .zip(row.as_chunks_mut::<3>().0)
-                {
-                    bgr.copy_from_slice(&[rgb[2], rgb[1], rgb[0]]);
-                }
+        }
+        Pixels::Rgb(samples) => {
+            let padding = &[0; 3][..pitch - row_bytes];
+            for y in source_rows {
+                let source = &samples[y * row_bytes..][..row_bytes];
+                output.extend(
+                    source
+                        .as_chunks::<3>()
+                        .0
+                        .iter()
+                        .flat_map(|&[red, green, blue]| [blue, green, red]),
+                );
+                output.extend_from_slice(padding);
             }
-            Pixels::Rgba(samples) => {
-                let source = &samples[first_pixel * 4..(first_pixel + width) * 4];
-                for (rgba, bgra) in source
-                    .as_chunks::<4>()
-                    .0
-                    .iter()
-                    .zip(row.as_chunks_mut::<4>().0)
-                {
-                    bgra.copy_from_slice(&[rgba[2], rgba[1], rgba[0], rgba[3]]);
-                }
+        }
+        Pixels::Rgba(samples) => {
+            for y in source_rows {
+                let source = &samples[y * row_bytes..][..row_bytes];
+                output.extend(
+                    source
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .flat_map(|&[red, green, blue, alpha]| [blue, green, red, alpha]),
+                );
             }
         }
     }
