@@ -10,8 +10,8 @@ use deadsync_theme::select_music::{
 };
 use deadsync_theme::selection::{MusicWheelPresentation, WheelMediaFrame};
 
-use crate::presentation::{Layout, push_footer};
-use crate::resources::{NORMAL_FONT, TITLE_FONT, WHEEL_FONT};
+use crate::presentation::{Layout, push_footer, push_style_icon};
+use crate::resources::{BPM_FONT, NORMAL_FONT, TITLE_FONT, WHEEL_FONT};
 
 #[derive(Default)]
 pub struct StepManiaMusicWheel {
@@ -68,16 +68,14 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
                 )
                 .build(0),
         );
-        actors.push(
-            layout
-                .sprite(
-                    "stepmania-395/music-header",
-                    [320.0, 22.0],
-                    [640.0, 44.0],
-                    10,
-                )
-                .build(0),
+        let header_exit = (media.exit_elapsed / 0.5).clamp(0.0, 1.0);
+        crate::play_selection::push_header(
+            actors,
+            "stepmania-395/music-header",
+            elapsed,
+            header_exit,
         );
+        push_style_icon(actors, view.session_style, elapsed, header_exit);
 
         push_wheel(
             actors,
@@ -129,11 +127,14 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
                 .build(0),
         );
         if let Some(song) = view.song {
-            let value = TextContent::inline_str(song.display_bpm)
-                .unwrap_or_else(|| TextContent::Owned(song.display_bpm.to_owned()));
-            let mut bpm = layout.text(NORMAL_FONT, value, [160.0 + banner_shift, 121.0], 1.0);
-            bpm.z(6);
-            actors.push(bpm.build(0));
+            push_bpm(
+                actors,
+                layout,
+                song.display_bpm_range,
+                view.music_rate,
+                elapsed,
+                banner_shift,
+            );
         }
         push_sort(actors, layout, view.sort, banner_shift);
 
@@ -304,6 +305,54 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
         push_footer(actors, help, fade);
         self.push_options_prompt(actors, view.prompt, media.now);
     }
+}
+
+fn push_bpm(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    range: Option<(f64, f64)>,
+    rate: f32,
+    elapsed: f32,
+    shift: f32,
+) {
+    let range = range.filter(|(lo, hi)| lo.is_finite() && hi.is_finite());
+    let varying = range.is_some_and(|(lo, hi)| (lo - hi).abs() > 1.0e-6);
+    let color = if varying {
+        [1.0, 0.5, 0.0, 1.0]
+    } else {
+        [1.0, 1.0, 0.0, 1.0]
+    };
+    let value = range.map_or(TextContent::Static("..."), |(lo, hi)| {
+        let phase = elapsed.rem_euclid(4.0);
+        let mix = if phase < 1.0 {
+            0.0
+        } else if phase < 2.0 {
+            phase - 1.0
+        } else if phase < 3.0 {
+            1.0
+        } else {
+            4.0 - phase
+        };
+        let rate = if rate.is_finite() && rate > 0.0 {
+            f64::from(rate)
+        } else {
+            1.0
+        };
+        let bpm = (lo + (hi - lo) * f64::from(mix)) * rate;
+        TextContent::inline_format(format_args!("{bpm:03.0}"))
+            .unwrap_or_else(|| TextContent::Owned(format!("{bpm:03.0}")))
+    });
+    let at = [160.0 + shift, 121.0];
+    let mut digits = layout.text(BPM_FONT, value, at, 1.0);
+    digits.align(1.0, 0.5);
+    digits.horizalign(TextAlign::Right);
+    digits.diffuse(color);
+    digits.z(6);
+    actors.push(digits.build(0));
+    let mut label = layout.sprite("stepmania-395/music-bpm-label", at, [46.0, 12.0], 6);
+    label.align(0.0, 0.5);
+    label.diffuse(color);
+    actors.push(label.build(0));
 }
 
 fn push_sort(

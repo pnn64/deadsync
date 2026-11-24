@@ -1,8 +1,29 @@
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 use deadlib_present::space::{screen_height, screen_width};
+use deadsync_theme::select_music::SessionStyleView;
 
 use crate::resources::NORMAL_FONT;
+
+pub(crate) fn push_style_icon(
+    actors: &mut Vec<Actor>,
+    session: SessionStyleView,
+    elapsed: f32,
+    exit: f32,
+) {
+    let key = if session.double {
+        "stepmania-395/menu-style-double"
+    } else if session.versus {
+        "stepmania-395/menu-style-versus"
+    } else {
+        "stepmania-395/menu-style-single"
+    };
+    let x = 440.0 + crate::play_selection::header_shift(elapsed, exit);
+    let mut icon = Layout::current().sprite(key, [x, 26.0], [54.0, 24.0], 97);
+    let u = session.primary_side.min(1) as f32 * 0.5;
+    icon.customtexturerect([u, 0.0, u + 0.5, 1.0]);
+    actors.push(icon.build(0));
+}
 
 pub(crate) fn push_footer(actors: &mut Vec<Actor>, value: &str, alpha: f32) {
     let layout = Layout::current();

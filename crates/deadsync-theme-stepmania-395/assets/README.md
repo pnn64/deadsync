@@ -14,6 +14,10 @@ The song-selection radar draws the original half-transparent player polygons and
 
 The current sort uses the original `MusicSortDisplay` artwork for title, artist, BPM, group, popularity, and top grades. Extra catalog sorts and player filters use the bundled normal font with their actual names. The shared wheel view supplies the active ordering; the theme owns its label and animation.
 
+The speed display uses the original `Numbers/BPMDisplay bpm 5x3.png` and `Graphics/BPMDisplay label.png`, with right-aligned yellow digits and the adjoining label. Variable display ranges cycle in orange, using the resolved chart/song BPM range and current music rate supplied by the shared view. Song and course headers use the original `MenuElements icon single/versus/double 2x1.png` badges, including the primary player's sprite frame and the header's entry/exit motion. Their session style remains available when no chart is focused.
+
+The title's live library count is retained as shared text when the catalog totals change. It uses the original normal font and placement; the sentence is longer than the renderer's short-text payload and must not be silently omitted.
+
 The bundled bitmap fonts also include the original `Common default` imports for button symbols, Japanese, Korean, and miscellaneous glyphs.
 
 Gameplay uses the original `ScreenGameplay` life/score frames and difficulty sheet, `LifeMeterBar` textures, `Judgment` and `HoldJudgment` sheets, `Combo` artwork, and the ready/go, cleared/failed, and entry/exit animation graphics. Rust code reproduces their authored layout and animation. The failed sound is copied from `BGAnimations/ScreenGameplay failed/failed.ogg`.

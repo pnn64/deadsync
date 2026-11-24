@@ -9,6 +9,22 @@ use deadsync_theme::selection::{MusicWheelPresentation, WheelMediaFrame};
 use deadsync_theme_stepmania_395::StepManiaMusicWheel;
 
 pub fn music_actors() -> Vec<Actor> {
+    music_actors_for(
+        deadsync_theme::select_music::SessionStyleView {
+            double: false,
+            versus: true,
+            primary_side: 0,
+        },
+        Some((120.0, 120.0)),
+        3.0,
+    )
+}
+
+pub fn music_actors_for(
+    session_style: deadsync_theme::select_music::SessionStyleView,
+    display_bpm_range: Option<(f64, f64)>,
+    elapsed: f32,
+) -> Vec<Actor> {
     // A real parsed chart keeps the capture independent of fabricated radar values.
     let source = b"#TITLE:Radar Fixture;\n#ARTIST:Fixture Artist;\n#BPMS:0=120;\n\
         #NOTES:dance-single::Hard:8:0,0,0,0,0:\n\
@@ -34,11 +50,12 @@ pub fn music_actors() -> Vec<Actor> {
     );
     let now = Instant::now();
     let mut wheel = StepManiaMusicWheel::default();
-    wheel.enter_wheel(now - Duration::from_secs(3));
+    wheel.enter_wheel(now - Duration::from_secs_f32(elapsed));
     let mut actors = Vec::new();
     wheel.push_music(
         &mut actors,
         SelectMusicView {
+            session_style,
             rows: std::array::from_fn(|index| {
                 Some(SelectMusicWheelRow {
                     title: if index.is_multiple_of(3) {
@@ -64,11 +81,12 @@ pub fn music_actors() -> Vec<Actor> {
                 subtitle: "",
                 artist: &song.artist,
                 display_bpm: "120",
+                display_bpm_range,
                 music_length_seconds: song.music_length_seconds,
             }),
             banner_texture: None,
             players: std::array::from_fn(|side| SelectMusicPlayerView {
-                joined: true,
+                joined: session_style.versus || side == session_style.primary_side,
                 name: if side == 0 { "P1" } else { "P2" },
                 chart: Some(chart),
                 step_index: 3,

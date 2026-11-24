@@ -206,6 +206,25 @@ fn native_attract_captures() {
         &mut backend,
         &assets,
     );
+    for (name, range, style, elapsed) in [
+        ("select-music-variable-bpm", Some((135.0, 175.0)), true, 1.5),
+        ("select-music-solo-p2", Some((120.0, 120.0)), false, 3.0),
+    ] {
+        let session_style = deadsync_theme::select_music::SessionStyleView {
+            double: false,
+            versus: style,
+            primary_side: 1,
+        };
+        capture_actors(
+            name,
+            &support::music_actors_for(session_style, range, elapsed),
+            elapsed,
+            &output,
+            &metrics,
+            &mut backend,
+            &assets,
+        );
+    }
     for (name, delta) in [("company", 3.0), ("logo", 9.0)] {
         intro.advance(delta);
         capture(name, &intro, &output, &metrics, &mut backend, &assets);
@@ -686,6 +705,11 @@ fn course_actors() -> Vec<Actor> {
     selection.push_course(
         &mut actors,
         SelectCourseView {
+            session_style: deadsync_theme::select_music::SessionStyleView {
+                double: false,
+                versus: true,
+                primary_side: 0,
+            },
             rows: std::array::from_fn::<_, SELECT_MUSIC_WHEEL_ROWS, _>(|index| {
                 Some(SelectMusicWheelRow {
                     title: ["NAOKI STANDARD", "PARANOIA BROTHERS", "PLAYER'S BEST"][index % 3],

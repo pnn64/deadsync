@@ -5,6 +5,14 @@ use deadsync_chart::ChartData;
 use deadsync_core::input::MAX_PLAYERS;
 use std::sync::Arc;
 
+/// Session facts for the style badge, independent of the focused wheel item.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SessionStyleView {
+    pub double: bool,
+    pub versus: bool,
+    pub primary_side: usize,
+}
+
 /// The centered window includes one retained row beyond each visible edge.
 pub const SELECT_MUSIC_WHEEL_ROWS: usize = 17;
 pub const SELECT_MUSIC_DIFFICULTY_ROWS: usize = 5;
@@ -40,6 +48,8 @@ pub struct SelectMusicSongView<'a> {
     pub subtitle: &'a str,
     pub artist: &'a str,
     pub display_bpm: &'a str,
+    /// Resolved song/chart display BPM before the current music-rate multiplier.
+    pub display_bpm_range: Option<(f64, f64)>,
     pub music_length_seconds: f32,
 }
 
@@ -84,6 +94,7 @@ pub enum SelectMusicSortView {
 }
 
 pub struct SelectMusicView<'a> {
+    pub session_style: SessionStyleView,
     /// The focused row is the center slot. The window wraps with the game wheel.
     pub rows: [Option<SelectMusicWheelRow<'a>>; SELECT_MUSIC_WHEEL_ROWS],
     pub wheel_offset: f32,
@@ -132,6 +143,7 @@ pub struct SelectCourseItem<'a> {
 
 /// The course browser uses the same circular wheel window as song selection.
 pub struct SelectCourseView<'a> {
+    pub session_style: SessionStyleView,
     pub rows: [Option<SelectMusicWheelRow<'a>>; SELECT_MUSIC_WHEEL_ROWS],
     pub wheel_offset: f32,
     pub selection_beat: f32,

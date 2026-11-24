@@ -88,13 +88,16 @@ pub(crate) fn push_background(actors: &mut Vec<Actor>) {
 }
 
 pub(crate) fn push_header(actors: &mut Vec<Actor>, key: &'static str, elapsed: f32, exit: f32) {
-    let shift =
-        640.0 * (1.0 - anim::spring_p((elapsed / 0.5).clamp(0.0, 1.0)) + anim::bouncebegin_p(exit));
+    let shift = header_shift(elapsed, exit);
     actors.push(
         Layout::current()
             .sprite(key, [320.0 + shift, 22.0], [640.0, 44.0], 95)
             .build(0),
     );
+}
+
+pub(crate) fn header_shift(elapsed: f32, exit: f32) -> f32 {
+    640.0 * (1.0 - anim::spring_p((elapsed / 0.5).clamp(0.0, 1.0)) + anim::bouncebegin_p(exit))
 }
 
 impl StepManiaMusicWheel {

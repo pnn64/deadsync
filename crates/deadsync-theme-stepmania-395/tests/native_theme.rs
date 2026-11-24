@@ -126,6 +126,15 @@ fn wheel_radar_displays_both_players_from_parsed_chart_data() {
     ));
     let actors = support::music_actors();
     assert!(actors.iter().any(|actor| matches!(actor,
+        Actor::Text { font: "stepmania-395/bpm", content, color, offset, .. }
+        if content.as_str() == "120" && *color == [1.0, 1.0, 0.0, 1.0]
+            && *offset == [160.0, 121.0]
+    )));
+    assert!(actors.iter().any(|actor| matches!(actor,
+        Actor::Sprite { source, .. }
+        if source.texture_key() == Some("stepmania-395/menu-style-versus")
+    )));
+    assert!(actors.iter().any(|actor| matches!(actor,
         Actor::Sprite { source, offset, .. }
         if source.texture_key() == Some("stepmania-395/music-sort-title")
             && *offset == [252.0, 121.0]
@@ -210,6 +219,10 @@ fn installed_native_title_uses_bundled_resources_and_shared_navigation() {
             .count(),
         7
     );
+    assert!(actors.iter().any(|actor| matches!(actor,
+        Actor::Text { content, .. }
+        if content.as_str() == "37 songs in 0 groups, 0 courses"
+    )));
     let now = Instant::now();
     let event = |action| InputEvent::new(action, 0, true, InputSource::Keyboard, now, 0, now, now);
     let mut effects = Vec::new();
@@ -659,6 +672,11 @@ fn native_wheel_centers_live_rows_and_crops_the_prepared_banner() {
     let banner: Arc<str> = "native-wheel-test-banner".into();
     register_texture_dims(&banner, 400, 400);
     let view = SelectMusicView {
+        session_style: deadsync_theme::select_music::SessionStyleView {
+            double: true,
+            versus: false,
+            primary_side: 1,
+        },
         rows,
         wheel_offset: 0.0,
         wheel_locked: false,
@@ -692,6 +710,15 @@ fn native_wheel_centers_live_rows_and_crops_the_prepared_banner() {
         },
     );
     let scale = (screen_width() / 640.0).min(screen_height() / 480.0);
+    let icon = actors.iter().find(|actor| matches!(actor,
+        Actor::Sprite { source, .. }
+        if source.texture_key() == Some("stepmania-395/menu-style-double")
+    )).expect("the session's P2 Double badge remains visible without a focused chart");
+    let Actor::Sprite { uv_rect, offset, .. } = icon else { unreachable!() };
+    assert_eq!(*uv_rect, Some([0.5, 0.0, 1.0, 1.0]));
+    let expected = [screen_width() * 0.5 + 120.0 * scale, screen_height() * 0.5 - 214.0 * scale];
+    assert!((offset[0] - expected[0]).abs() < 0.01 && (offset[1] - expected[1]).abs() < 0.01,
+        "badge at {offset:?}, expected {expected:?}");
     let center = [
         screen_width() * 0.5 + 40.0 * scale,
         screen_height() * 0.5 - 4.0 * scale,
@@ -987,6 +1014,7 @@ fn native_profile_overlay_and_course_use_shared_live_data() {
             selection.push_course(
                 &mut actors,
                 SelectCourseView {
+                    session_style: Default::default(),
                     rows: [None; SELECT_MUSIC_WHEEL_ROWS],
                     wheel_offset: 0.0,
                     selection_beat: 0.0,

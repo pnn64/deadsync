@@ -79,6 +79,11 @@ metadata cache. The simfile loader computes them from chart rows and hold
 endpoints; `ChartData::radar_values` normalizes them by the song's music length.
 Themes receive that duration with the selected song and own the polygon drawing.
 
+Wheel views also forward the resolved chart/song display-BPM range and plain
+session layout facts, including the primary side, without exposing runtime
+profile objects. Presentations choose their own numeric font, BPM animation,
+and style artwork even when no chart is focused.
+
 The score layer computes chart achievement ratios from judged notes and recorded
 combo runs. Song results retain these optional ratios; course results retain the
 number of passed stages. Evaluation views forward these game facts, while each

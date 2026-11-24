@@ -2659,6 +2659,11 @@ pub fn select_music_view<'a>(
         }
     };
     SelectMusicView {
+        session_style: deadsync_theme::select_music::SessionStyleView {
+            double: play_style.is_double(),
+            versus: play_style.is_versus(),
+            primary_side: profile_data::player_side_index(state.session.player_side),
+        },
         rows,
         wheel_offset: state.wheel_offset_from_selection,
         wheel_locked: state.chance_lock_velocity.is_some(),
@@ -2702,6 +2707,9 @@ pub fn select_music_view<'a>(
                 &song.artist
             },
             display_bpm: &song.display_bpm,
+            display_bpm_range: song.chart_display_bpm_range(charts[if play_style.is_versus() {
+                profile_data::player_side_index(state.session.player_side)
+            } else { 0 }]),
         }),
         banner_texture: loaded_banner.filter(|key| {
             state.policy.media.show_banners && key.as_ref() == state.current_banner_key.as_ref()

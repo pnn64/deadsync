@@ -957,6 +957,7 @@ mod tests {
             action: None,
         });
         SelectMusicView {
+            session_style: Default::default(),
             rows,
             wheel_offset: 0.0,
             wheel_locked: false,
@@ -968,6 +969,7 @@ mod tests {
                 subtitle: "",
                 artist: "Artist",
                 display_bpm: "150",
+                display_bpm_range: Some((150.0, 150.0)),
             }),
             banner_texture: Some(banner),
             players: [SelectMusicPlayerView {

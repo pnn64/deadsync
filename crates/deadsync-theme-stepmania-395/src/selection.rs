@@ -11,7 +11,7 @@ use deadsync_theme::selection::{
 use deadsync_theme::views::PlaySelectionView;
 
 use crate::play_selection::{MODE_MENU, push_background, push_header};
-use crate::presentation::{Layout, push_footer};
+use crate::presentation::{Layout, push_footer, push_style_icon};
 use crate::resources::{NORMAL_FONT, TITLE_FONT, WHEEL_FONT};
 use crate::select_music::{StepManiaMusicWheel, difficulty_color, push_wheel};
 
@@ -67,6 +67,12 @@ impl SelectionPresentation<Actor> for StepManiaMusicWheel {
         push_header(
             actors,
             "stepmania-395/course-header",
+            elapsed,
+            (media.exit_elapsed / 0.5).clamp(0.0, 1.0),
+        );
+        push_style_icon(
+            actors,
+            view.session_style,
             elapsed,
             (media.exit_elapsed / 0.5).clamp(0.0, 1.0),
         );

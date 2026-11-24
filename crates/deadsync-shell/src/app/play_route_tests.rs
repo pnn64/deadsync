@@ -120,7 +120,7 @@ fn seed_library(dirs: &AppDirs) {
     std::fs::write(
         &song_path,
         format!(
-            "#TITLE:{SONG_TITLE};\n#ARTIST:Route Artist;\n#BPMS:0=120;\n#NOTES:dance-single::Hard:5:0,0,0,0,0:\n\
+            "#TITLE:{SONG_TITLE};\n#ARTIST:Route Artist;\n#BPMS:0=120;\n#DISPLAYBPM:135:175;\n#NOTES:dance-single::Hard:5:0,0,0,0,0:\n\
              0000\n,\n0000\n,\n0000\n1000\n0100\n0010\n,\n0001\n1000\n0000\n1000\n;\n",
         ),
     )
@@ -198,6 +198,19 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     }
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
+    if theme == ThemeFlag::StepMania395 {
+        let view = select_music::select_music_view(&app.state.screens.select_music_state, 1, None);
+        assert_eq!(view.song.unwrap().display_bpm_range, Some((135.0, 175.0)));
+        assert_eq!(view.session_style.primary_side, 1);
+        assert!(actors.iter().any(|actor| matches!(actor,
+            Actor::Sprite { source, uv_rect: Some([0.5, 0.0, 1.0, 1.0]), .. }
+            if source.texture_key() == Some("stepmania-395/menu-style-single")
+        )));
+        assert!(actors.iter().any(|actor| matches!(actor,
+            Actor::Text { font: "stepmania-395/bpm", color, .. }
+            if *color == [1.0, 0.5, 0.0, 1.0]
+        )));
+    }
     let openitg = theme == ThemeFlag::OpenItg;
     let native_stage = theme == ThemeFlag::StepMania395;
     assert_eq!(actor_tree_has_text(&actors, "CHANCE"), openitg);

@@ -1922,6 +1922,11 @@ pub fn select_course_view<'a>(
         }
     });
     SelectCourseView {
+        session_style: deadsync_theme::select_music::SessionStyleView {
+            double: state.context.play_style.is_double(),
+            versus: state.context.play_style.is_versus(),
+            primary_side: profile_data::player_side_index(state.context.player_side),
+        },
         rows,
         wheel_offset: state.wheel_offset_from_selection,
         selection_beat: course_selection_anim_beat(state),

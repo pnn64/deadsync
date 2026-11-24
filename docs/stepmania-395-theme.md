@@ -37,7 +37,7 @@ Game Over. It then selects Nonstop through the normal menu, plays a parsed
 two-stage course, checks its real song/artist metadata and accumulated P2
 results, and returns to the course wheel. No reference scripts participate.
 
-The hidden-window GPU capture fixture in `tests/attract_render.rs` renders 46
+The hidden-window GPU capture fixture in `tests/attract_render.rs` renders 48
 native scenes at 640 by 480, including transition frames, gameplay sequences,
 P2-only results and Nonstop evaluation. Captures are written to
 `target/native-395-attract-captures`. Focused presentation, navigation and

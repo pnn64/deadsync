@@ -8,6 +8,7 @@ use deadsync_theme::main_menu::{
     ThemeMainMenu,
 };
 use deadsync_theme::{Screen, ThemeEffect, TransitionState};
+use std::sync::Arc;
 
 use crate::StepManiaTheme;
 use crate::presentation::Layout;
@@ -33,6 +34,7 @@ pub struct MenuState {
     selection: MainMenuSelection,
     color_index: i32,
     runtime: RuntimeView,
+    library_text: Arc<str>,
     elapsed: f32,
     idle: f32,
     focus_age: f32,
@@ -65,6 +67,7 @@ impl ThemeMainMenu for StepManiaTheme {
             selection: MainMenuSelection::default(),
             color_index,
             runtime: RuntimeView::default(),
+            library_text: "0 songs in 0 groups, 0 courses".into(),
             elapsed: 0.0,
             idle: 0.0,
             focus_age: 0.0,
@@ -89,6 +92,18 @@ impl ThemeMainMenu for StepManiaTheme {
     }
 
     fn sync_menu_runtime(state: &mut MenuState, view: RuntimeView) {
+        if (
+            state.runtime.song_count,
+            state.runtime.pack_count,
+            state.runtime.course_count,
+        ) != (view.song_count, view.pack_count, view.course_count)
+        {
+            state.library_text = format!(
+                "{} songs in {} groups, {} courses",
+                view.song_count, view.pack_count, view.course_count
+            )
+            .into();
+        }
         state.runtime = view;
         state
             .selection
@@ -181,17 +196,12 @@ impl ThemeMainMenu for StepManiaTheme {
             text.shadowlength(5.0 * layout.scale);
             actors.push(text.build(0));
         }
-        if let Some(counts) = TextContent::inline_format(format_args!(
-            "{} songs in {} groups, {} courses",
-            state.runtime.song_count, state.runtime.pack_count, state.runtime.course_count
-        )) {
-            let mut text = layout.text(NORMAL_FONT, counts, [20.0, 20.0], 0.5);
-            text.align(0.0, 0.5);
-            text.horizalign(TextAlign::Left);
-            text.diffuse([0.6, 0.6, 0.6, alpha]);
-            text.shadowlength(2.0 * layout.scale);
-            actors.push(text.build(0));
-        }
+        let mut text = layout.text(NORMAL_FONT, (&state.library_text).into(), [20.0, 20.0], 0.5);
+        text.align(0.0, 0.5);
+        text.horizalign(TextAlign::Left);
+        text.diffuse([0.6, 0.6, 0.6, alpha]);
+        text.shadowlength(2.0 * layout.scale);
+        actors.push(text.build(0));
     }
 }
 
