@@ -99,8 +99,8 @@ pub struct Decoder {
     interlace: Vec<u8>,
     extension: Option<Extension>,
     lzw: lzw::Decoder,
-    input_bytes: usize,
-    metadata_bytes: usize,
+    remaining_input_bytes: usize,
+    remaining_metadata_bytes: usize,
     block_count: usize,
     frame_count: usize,
     total_pixels: usize,
@@ -114,7 +114,6 @@ impl Default for Decoder {
 impl Decoder {
     pub fn new(options: DecodeOptions) -> Self {
         Self {
-            options,
             state: State::Header,
             header: None,
             scratch: [0; 768],
@@ -127,11 +126,12 @@ impl Decoder {
             interlace: Vec::new(),
             extension: None,
             lzw: lzw::Decoder::new(),
-            input_bytes: 0,
-            metadata_bytes: 0,
+            remaining_input_bytes: options.limits.max_input_bytes,
+            remaining_metadata_bytes: options.limits.max_metadata_bytes,
             block_count: 0,
             frame_count: 0,
             total_pixels: 0,
+            options,
         }
     }
     pub fn header(&self) -> Option<&Header> {
@@ -167,15 +167,11 @@ impl Decoder {
         self.filled = 0;
     }
     fn charge_input(&mut self, amount: usize) -> Result<(), Error> {
-        self.input_bytes = self
-            .input_bytes
-            .checked_add(amount)
+        self.remaining_input_bytes = self
+            .remaining_input_bytes
+            .checked_sub(amount)
             .ok_or(Error::LimitExceeded)?;
-        if self.input_bytes > self.options.limits.max_input_bytes {
-            Err(Error::LimitExceeded)
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
     fn charge_block(&mut self) -> Result<(), Error> {
         self.block_count += 1;
@@ -186,15 +182,11 @@ impl Decoder {
         }
     }
     fn charge_metadata(&mut self, amount: usize) -> Result<(), Error> {
-        self.metadata_bytes = self
-            .metadata_bytes
-            .checked_add(amount)
+        self.remaining_metadata_bytes = self
+            .remaining_metadata_bytes
+            .checked_sub(amount)
             .ok_or(Error::LimitExceeded)?;
-        if self.metadata_bytes > self.options.limits.max_metadata_bytes {
-            Err(Error::LimitExceeded)
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
     fn fill(&mut self, input: &[u8], at: &mut usize) -> Result<bool, Error> {
         let count = (self.wanted - self.filled).min(input.len() - *at);
