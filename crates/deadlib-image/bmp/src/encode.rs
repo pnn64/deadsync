@@ -83,12 +83,24 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
         Pixels::Indexed {
             indices, palette, ..
         } => {
-            output.resize(file_size, 0);
-            for (y, row) in source_rows.zip(output[offset..].chunks_exact_mut(pitch)) {
-                let source = &indices[y * width..][..width];
-                for (&index, bgr) in source.iter().zip(row[..row_bytes].as_chunks_mut::<3>().0) {
-                    let [red, green, blue] = palette[usize::from(index)];
-                    *bgr = [blue, green, red];
+            if indices.len() >= 1024 {
+                append_indexed_rows(
+                    &mut output,
+                    indices,
+                    palette,
+                    width,
+                    options.top_down,
+                    &[0; 3][..pitch - row_bytes],
+                );
+            } else {
+                output.resize(file_size, 0);
+                for (y, row) in source_rows.zip(output[offset..].chunks_exact_mut(pitch)) {
+                    let source = &indices[y * width..][..width];
+                    for (&index, bgr) in source.iter().zip(row[..row_bytes].as_chunks_mut::<3>().0)
+                    {
+                        let [red, green, blue] = palette[usize::from(index)];
+                        *bgr = [blue, green, red];
+                    }
                 }
             }
         }
@@ -120,6 +132,31 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
         }
     }
     Ok(output)
+}
+
+// Keep the palette table off the stack of small encodes.
+#[inline(never)]
+fn append_indexed_rows(
+    output: &mut Vec<u8>,
+    indices: &[u8],
+    palette: &[[u8; 3]],
+    width: usize,
+    top_down: bool,
+    padding: &[u8],
+) {
+    let mut bgr = [[0; 3]; 256];
+    for (&[red, green, blue], color) in palette.iter().zip(&mut bgr) {
+        *color = [blue, green, red];
+    }
+    let mut rows = indices.chunks_exact(width);
+    while let Some(row) = if top_down {
+        rows.next()
+    } else {
+        rows.next_back()
+    } {
+        output.extend(row.iter().flat_map(|&index| bgr[usize::from(index)]));
+        output.extend_from_slice(padding);
+    }
 }
 
 const fn header_template<const SIZE: usize>(bit_depth: u8) -> [u8; SIZE] {
