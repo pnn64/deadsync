@@ -67,6 +67,9 @@ impl Decoder {
     pub fn ended(&self) -> bool {
         self.ended
     }
+    pub(crate) fn literal_count(&self) -> usize {
+        usize::from(self.clear)
+    }
     pub fn update(
         &mut self,
         input: &[u8],

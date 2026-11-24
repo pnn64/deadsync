@@ -514,15 +514,27 @@ impl Decoder {
                             )?;
                         }
                         let header = self.header.as_ref().unwrap();
-                        self.frame.validate::<false>(
-                            (header.width, header.height),
-                            header
-                                .global_palette
-                                .as_ref()
-                                .or(self.options.external_palette.as_ref())
-                                .map(Vec::len),
-                            self.options.check_bounds,
-                        )?;
+                        if let Some(palette) = self
+                            .frame
+                            .local_palette
+                            .as_ref()
+                            .or(header.global_palette.as_ref())
+                            .or(self.options.external_palette.as_ref())
+                        {
+                            // Every expanded phrase contains only LZW literals.
+                            if self.lzw.literal_count() > palette.len()
+                                && self
+                                    .frame
+                                    .indices
+                                    .iter()
+                                    .copied()
+                                    .max()
+                                    .is_some_and(|index| usize::from(index) >= palette.len())
+                            {
+                                return Err(Error::Invalid("pixel index outside active palette"));
+                            }
+                            validate_control(self.frame.control, palette.len())?;
+                        }
                         self.state = State::Block;
                         break Some(Event::Block(Block::Frame(std::mem::take(&mut self.frame))));
                     }

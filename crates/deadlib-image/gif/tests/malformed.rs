@@ -11,6 +11,29 @@ fn insert(bytes: &[u8], data: &[u8]) -> Vec<u8> {
 }
 
 #[test]
+fn lzw_alphabet_bound_preserves_pixel_and_control_validation() {
+    let mut bytes = tiny();
+    bytes[31] = 0x54; // CLEAR, literal 2, EOI.
+    assert_eq!(
+        decode(&bytes),
+        Err(Error::Invalid("pixel index outside active palette"))
+    );
+    let mut controlled = insert(&bytes, &[0x21, 0xf9, 4, 1, 0, 0, 4, 0]);
+    for gif in [&mut bytes, &mut controlled] {
+        gif[10] = 0x81;
+        gif.splice(19..19, [255, 0, 0, 0, 255, 0]);
+    }
+    assert_eq!(
+        decode(&bytes).unwrap().frames().next().unwrap().indices,
+        [2]
+    );
+    assert_eq!(
+        decode(&controlled),
+        Err(Error::Invalid("transparent index outside active palette"))
+    );
+}
+
+#[test]
 fn every_truncation_and_every_stream_split() {
     let base = tiny();
     let bytes = insert(
