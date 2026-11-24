@@ -252,13 +252,13 @@ impl Decoder {
                     if !self.fill(input, &mut at)? {
                         break None;
                     }
-                    self.header.as_mut().unwrap().global_palette =
-                        Some(palette(&self.scratch[..self.wanted])?);
-                    let header = self.header.as_ref().unwrap();
-                    if self.options.strict {
-                        header.validate()?;
-                    } else {
-                        header.validate_structure()?;
+                    let colors = palette(&self.scratch[..self.wanted])?;
+                    let count = colors.len();
+                    let header = self.header.as_mut().unwrap();
+                    header.global_palette = Some(colors);
+                    // The header is already valid, and the packed size defines a valid palette length.
+                    if self.options.strict && usize::from(header.background_index) >= count {
+                        return Err(Error::Invalid("background index outside global palette"));
                     }
                     self.state = State::Block;
                     break Some(Event::Header);
