@@ -160,8 +160,8 @@ impl<W: Write> EncoderOutput<W> {
         self.writer.write_all(&[minimum])?;
         let size = self.options.image_sub_block_size;
         let capacity = usize::from(size);
-        // Write whole words into the padding, then count only the emitted bytes.
-        let mut buffer = [0; 255 + size_of::<u64>()];
+        // Pad for whole-word stores and for loading the tail after a drain.
+        let mut buffer = [0; 255 + 2 * size_of::<u64>()];
         let writer = &mut self.writer;
         let mut filled = 0;
         let emit = |bits: u64, count: usize| {
@@ -178,9 +178,8 @@ impl<W: Write> EncoderOutput<W> {
                         break;
                     }
                 }
-                if written != filled {
-                    buffer.copy_within(written..filled, 0);
-                }
+                let tail = *buffer[written..].first_chunk::<8>().unwrap();
+                buffer[..8].copy_from_slice(&tail);
                 filled -= written;
             }
             Ok(())
