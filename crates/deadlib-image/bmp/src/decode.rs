@@ -268,7 +268,9 @@ fn masked_samples(
         },
         (16, Some(alpha)) => match [red.mask, green.mask, blue.mask, alpha.mask] {
             [0x0f00, 0x00f0, 0x000f, 0xf000] => map_rows(source, header, |[low, high]| {
-                [high & 15, low >> 4, low & 15, high >> 4].map(|nibble| nibble * 17)
+                let nibbles = u32::from_le_bytes([high & 15, low >> 4, low & 15, high >> 4]);
+                // Repeat each nibble within its own byte.
+                (nibbles * 17).to_le_bytes()
             }),
             _ => map_rows::<2, 4>(source, header, |packed| {
                 let word = u16::from_le_bytes(packed);
