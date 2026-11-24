@@ -169,7 +169,6 @@ fn image<W: Write>(
 ) -> Result<usize, Error> {
     let mut rows = Rows::new(image, options.interlaced, options.filter)?;
     let mut compressed = Compressed::new(writer, sequence, options, output, encoder)?;
-    let mut peak = compressed.memory_bytes();
     while let Some(row) = rows.next_row()? {
         if row.zero {
             compressed.pump(&row.bytes[..1], false)?;
@@ -177,12 +176,12 @@ fn image<W: Write>(
         } else {
             compressed.pump(row.bytes, false)?;
         }
-        peak = peak.max(
-            compressed
-                .memory_bytes()
-                .saturating_add(rows.memory_bytes()),
-        );
     }
+    // Capacity only grows while rows are processed. Measure it at the last
+    // row, before flushing the final deflate block.
+    let peak = compressed
+        .memory_bytes()
+        .saturating_add(rows.memory_bytes());
     compressed.pump(&[], true)?;
     Ok(peak)
 }
