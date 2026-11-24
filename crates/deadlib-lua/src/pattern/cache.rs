@@ -2,6 +2,7 @@
 //! insertion can rebuild tombstones or grow before publishing a new pattern.
 use super::{Buffer, Memory, Pattern};
 use crate::{Error, StringId};
+#[cfg(test)]
 use std::ops::Index;
 
 type Key = (StringId, bool);
@@ -141,6 +142,7 @@ impl Cache {
     }
 }
 
+#[cfg(test)]
 impl Index<&Key> for Cache {
     type Output = Pattern;
     fn index(&self, key: &Key) -> &Pattern {

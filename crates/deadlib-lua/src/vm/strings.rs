@@ -61,6 +61,7 @@ pub(super) struct Substitution {
     // Continuations allocate only when such a metamethod actually suspends us.
     actions: Buffer<SubAction>,
     matched: Option<Matched>,
+    anchored: bool,
     done: bool,
 }
 impl Substitution {
@@ -803,9 +804,7 @@ impl Vm {
         };
         let state = &mut self.substitutions[index];
         state.matched = None;
-        if self.strings.bytes[slot_index(state.pattern.0)].first() == Some(&b'^') {
-            state.done = true;
-        }
+        state.done |= state.anchored;
         byte.map_or(Ok(true), |b| self.substitution_byte(index, b))
     }
     fn replacement_string(
@@ -928,7 +927,8 @@ impl Vm {
             ) {
                 return Err(self.argument_error(2, b"string/function/table expected"));
             }
-            self.prepare_pattern(pattern, true)?;
+            let pattern_index = self.prepare_pattern(pattern, true)?;
+            let anchored = self.patterns.get_at(pattern_index).anchored;
             let mut output = Buffer::new_in(self.registers.memory().clone());
             output
                 .try_reserve_exact(io::LINE_BUFFER)
@@ -960,6 +960,7 @@ impl Vm {
                 output,
                 actions: Buffer::new_in(self.registers.memory().clone()),
                 matched: None,
+                anchored,
                 done: false,
             });
             self.frames[owner].pc = ((index + 1) << 2) as u32;
@@ -1087,22 +1088,13 @@ impl Vm {
                         }
                     }
                 }
+            } else if let Some(&byte) = self.strings.bytes[slot_index(source.0)].get(cursor) {
+                let state = &mut self.substitutions[index];
+                state.cursor += 1;
+                state.done |= state.anchored;
+                self.substitution_byte(index, byte)?;
             } else {
-                if cursor < self.strings.bytes[slot_index(source.0)].len() {
-                    self.substitutions[index].cursor += 1;
-                    if self.patterns[&(pattern, true)].anchored {
-                        self.substitutions[index].done = true;
-                    }
-                    self.substitution_byte(
-                        index,
-                        self.strings.bytes[slot_index(source.0)][cursor],
-                    )?;
-                } else {
-                    self.substitutions[index].done = true;
-                }
-                if self.patterns[&(pattern, true)].anchored {
-                    self.substitutions[index].done = true;
-                }
+                self.substitutions[index].done = true;
             }
             let state = &self.substitutions[index];
             if !(batch
