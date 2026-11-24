@@ -331,38 +331,41 @@ impl Inflater {
                     if length > self.limit - self.total_out {
                         return Err(Error::LimitExceeded);
                     }
-                    self.state = State::Stored(length);
+                    if length == 0 {
+                        self.end_block();
+                    } else {
+                        self.state = State::Stored(length);
+                    }
                 }
                 State::Stored(left) => {
-                    if left == 0 {
-                        self.end_block();
-                        continue;
-                    }
-                    if written == output.len() {
-                        stop!(StreamStatus::NeedOutput);
-                    }
-                    let n = if bits.count >= 8 {
-                        output[written] = read!(8) as u8;
-                        1
-                    } else {
-                        let n = left
-                            .min(output.len() - written)
-                            .min(bits.input.len() - bits.pos);
-                        if n == 0 {
-                            stop!(StreamStatus::NeedInput);
-                        }
-                        output[written..written + n]
-                            .copy_from_slice(&bits.input[bits.pos..bits.pos + n]);
+                    // A Huffman end code leaves at most 39 bits. The next
+                    // block tag and byte alignment leave at most 32, which
+                    // are consumed by the stored length and its complement.
+                    debug_assert_eq!(bits.count, 0);
+                    debug_assert!(left != 0);
+                    let available = output.len() - written;
+                    let n = left.min(available).min(bits.input.len() - bits.pos);
+                    if n != 0 {
+                        let bytes = &mut output[written..written + n];
+                        bytes.copy_from_slice(&bits.input[bits.pos..bits.pos + n]);
                         bits.pos += n;
-                        n
-                    };
-                    if self.final_block {
-                        self.total_out += n;
-                    } else {
-                        self.remember(&output[written..written + n]);
+                        if self.final_block {
+                            self.total_out += n;
+                        } else {
+                            self.remember(bytes);
+                        }
+                        written += n;
                     }
-                    written += n;
-                    self.state = State::Stored(left - n);
+                    if n == left {
+                        self.end_block();
+                    } else {
+                        self.state = State::Stored(left - n);
+                        stop!(if n == available {
+                            StreamStatus::NeedOutput
+                        } else {
+                            StreamStatus::NeedInput
+                        });
+                    }
                 }
                 State::DynamicCounts => {
                     let fields = read!(14);

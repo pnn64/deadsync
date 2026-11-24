@@ -102,6 +102,41 @@ fn short_period_matches_wrap_history_and_resume_at_any_phase() {
 }
 
 #[test]
+fn stored_copy_reports_the_output_boundary_before_an_input_boundary() {
+    let raw = b"abcd";
+    let mut wire = wire::Wire::default();
+    wire.stored(b"", false);
+    wire.stored(raw, true);
+    let compressed = wire.finish(raw, false);
+    let split = compressed.len() - 4 - 2; // Leave two stored bytes and the Adler trailer.
+    let mut inflater = Inflater::new(raw.len()).unwrap();
+    let mut output = [0; 4];
+
+    let p = inflater
+        .process(&compressed[..split], &mut output[..2])
+        .unwrap();
+    assert_eq!(
+        (p.consumed, p.written, p.status),
+        (split, 2, StreamStatus::NeedOutput)
+    );
+
+    let p = inflater.process(&[], &mut output[2..]).unwrap();
+    assert_eq!(
+        (p.consumed, p.written, p.status),
+        (0, 0, StreamStatus::NeedInput)
+    );
+
+    let p = inflater
+        .process(&compressed[split..], &mut output[2..])
+        .unwrap();
+    assert_eq!(
+        (p.consumed, p.written, p.status),
+        (6, 2, StreamStatus::Done)
+    );
+    assert_eq!(&output, raw);
+}
+
+#[test]
 fn exact_small_output_limits_and_power_of_two_boundaries() {
     let mut random = 0x109b_4131u32;
     for len in [
