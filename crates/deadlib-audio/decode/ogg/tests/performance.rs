@@ -484,6 +484,12 @@ fn benchmark_container() {
                 black_box(page);
             }
         });
+        measure(&format!("sync-recover/{label}"), 4000, bytes.len(), || {
+            let mut reader = SyncReader::new(black_box(bytes.as_slice()));
+            while let SyncRead::Page(page) = reader.next_page(SyncBoundary::Unbounded).unwrap() {
+                black_box(page);
+            }
+        });
     }
     for size in [
         32, 48, 63, 64, 65, 72, 80, 96, 112, 127, 128, 129, 192, 256, 1024, 8192, 65025,

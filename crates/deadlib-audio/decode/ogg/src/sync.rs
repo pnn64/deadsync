@@ -204,8 +204,10 @@ impl SyncBuffer {
             2
         } else if bytes[3] == b'O' {
             3
+        } else if bytes[4] == b'O' {
+            4
         } else {
-            capture_byte(&bytes[4..]).map_or(bytes.len(), |n| n + 4)
+            capture_byte(&bytes[5..]).map_or(bytes.len(), |n| n + 5)
         };
         self.advance(skip)?;
         Ok(Step::Skipped(skip))
