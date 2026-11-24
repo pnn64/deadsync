@@ -327,6 +327,10 @@ fn masked_samples(
             [0xff, 0xff00, 0xff0000] => {
                 map_rows::<4, 3>(source, header, |rgbx| [rgbx[0], rgbx[1], rgbx[2]])
             }
+            #[cfg(target_pointer_width = "64")]
+            _ => masked_rgb32_samples(source, header, rgb),
+            // A wide product needs extra instructions on 32-bit targets.
+            #[cfg(not(target_pointer_width = "64"))]
             _ => map_rows::<4, 3>(source, header, |packed| {
                 let word = u32::from_le_bytes(packed);
                 [red.sample(word), green.sample(word), blue.sample(word)]
@@ -351,6 +355,24 @@ fn masked_samples(
         },
         _ => unreachable!("validated masked bit depth"),
     }
+}
+
+#[cfg(target_pointer_width = "64")]
+#[inline(never)]
+fn masked_rgb32_samples(
+    source: &[u8],
+    header: &Header,
+    rgb: [Channel; 3],
+) -> Result<Vec<u8>, Error> {
+    let scaled = rgb.map(|channel| {
+        // Keep the repeated bits in the top byte of the product.
+        let shift = 56 - channel.shift - channel.downshift;
+        (channel.mask, u64::from(channel.multiplier) << shift)
+    });
+    map_rows::<4, 3>(source, header, |packed| {
+        let word = u32::from_le_bytes(packed);
+        scaled.map(|(mask, multiplier)| ((u64::from(word & mask) * multiplier) >> 56) as u8)
+    })
 }
 
 struct Header {
@@ -438,6 +460,7 @@ impl Channel {
         })
     }
 
+    #[cfg(not(target_pointer_width = "64"))]
     fn sample(self, word: u32) -> u8 {
         ((((word & self.mask) >> self.shift) * self.multiplier) >> self.downshift) as u8
     }

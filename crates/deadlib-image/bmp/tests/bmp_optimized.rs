@@ -346,6 +346,7 @@ fn common_and_unusual_32_bit_masks_preserve_channel_order_and_bit_replication() 
         [(8, 8), (0, 8), (24, 8), (16, 8)],
         [(0, 3), (3, 5), (8, 7), (15, 8)],
         [(1, 2), (6, 6), (17, 4), (27, 1)],
+        [(25, 7), (14, 7), (4, 6), (0, 0)],
     ] {
         let masks = layout.map(|(shift, bits)| ((1u32 << bits) - 1) << shift);
         let format = Format {
