@@ -238,15 +238,20 @@ fn masked_samples(
                 [red.sample(word), green.sample(word), blue.sample(word)]
             }),
         },
-        (16, Some(alpha)) => map_rows::<2, 4>(source, header, |packed| {
-            let word = u32::from(u16::from_le_bytes(packed));
-            [
-                red.sample(word),
-                green.sample(word),
-                blue.sample(word),
-                alpha.sample(word),
-            ]
-        }),
+        (16, Some(alpha)) => match [red.mask, green.mask, blue.mask, alpha.mask] {
+            [0x0f00, 0x00f0, 0x000f, 0xf000] => map_rows(source, header, |[low, high]| {
+                [high & 15, low >> 4, low & 15, high >> 4].map(|nibble| nibble * 17)
+            }),
+            _ => map_rows::<2, 4>(source, header, |packed| {
+                let word = u32::from(u16::from_le_bytes(packed));
+                [
+                    red.sample(word),
+                    green.sample(word),
+                    blue.sample(word),
+                    alpha.sample(word),
+                ]
+            }),
+        },
         (32, None) => match rgb.map(|channel| channel.mask) {
             [0xff0000, 0xff00, 0xff] => {
                 map_rows::<4, 3>(source, header, |bgrx| [bgrx[2], bgrx[1], bgrx[0]])
