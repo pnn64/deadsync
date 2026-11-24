@@ -131,6 +131,11 @@ impl Vm {
                 {
                     return Ok(Some(actual));
                 }
+                if matches!(id, 42 | 45 | 52)
+                    && let Some(actual) = self.try_fast_binary_math(id, call, count)
+                {
+                    return Ok(Some(actual));
+                }
                 let index = self.frames.len();
                 let base = self.registers.len();
                 let host = self.host_callback(id);

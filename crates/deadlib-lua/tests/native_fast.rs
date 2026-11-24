@@ -198,7 +198,7 @@ return table.concat(out,',')
 }
 
 #[test]
-fn unary_math_fast_results_match_observed_dispatch_bit_for_bit() {
+fn math_fast_results_match_observed_dispatch_bit_for_bit() {
     let program = compile(
         br#"
 local functions={math.abs,math.floor,math.ceil,math.sqrt,math.sin,math.cos,
@@ -209,6 +209,13 @@ local results={}
 for _,f in ipairs(functions) do
   for _,x in ipairs(numbers) do
     results[#results+1]=f(x,'ignored extra argument')
+  end
+end
+for _,f in ipairs{math.pow,math.fmod,math.atan2} do
+  for _,x in ipairs(numbers) do
+    for _,y in ipairs(numbers) do
+      results[#results+1]=f(x,y,'ignored extra argument')
+    end
   end
 end
 return unpack(results)
@@ -227,12 +234,12 @@ return unpack(results)
                 .iter()
                 .map(|value| match value {
                     Value::Number(number) => number.to_bits(),
-                    other => panic!("unary math returned non-number: {other:?}"),
+                    other => panic!("math returned non-number: {other:?}"),
                 })
                 .collect::<Vec<_>>(),
         );
     }
-    assert_eq!(outputs[0].len(), 144);
+    assert_eq!(outputs[0].len(), 144 + 3 * 8 * 8);
     assert_eq!(outputs[0], outputs[1]);
     assert_eq!(outputs[0][0], 0.0f64.to_bits()); // abs(-0) is +0.
     assert_eq!(outputs[0][4 * 8], (-0.0f64).to_bits()); // sin(-0) is -0.
@@ -240,7 +247,7 @@ return unpack(results)
 }
 
 #[test]
-fn unary_math_non_numeric_arguments_and_hooks_keep_native_behavior() {
+fn math_non_numeric_arguments_and_hooks_keep_native_behavior() {
     check_both(
         br#"
 for _,value in ipairs{false,{},'not a number'} do
@@ -249,19 +256,23 @@ end
 assert(math.floor('42.9')==42)
 assert(math.abs(-42,'ignored')==42)
 assert(not pcall(math.sin))
+assert(math.pow('2',3)==8 and math.fmod(9,'4')==1)
+assert(not pcall(math.pow,2) and not pcall(math.atan2,0,false))
 local callable=setmetatable({},{__call=math.abs})
 assert(not pcall(callable,-42))
-local fn=math.abs
+local fn,binary=math.abs,math.fmod
 local calls,returns=0,0
 debug.sethook(function(event)
-  if debug.getinfo(2,'f').func==fn then
+  local active=debug.getinfo(2,'f').func
+  if active==fn or active==binary then
     if event=='call' then calls=calls+1 end
     if event=='return' then returns=returns+1 end
   end
 end,'cr')
 local result=fn(-42)
+local remainder=binary(-9,4)
 debug.sethook()
-assert(calls==1 and returns==1)
+assert(calls==2 and returns==2 and remainder==-1)
 local function tail(x) return math.abs(x) end
 assert(result==42)
 return tail(-42)

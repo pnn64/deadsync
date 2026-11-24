@@ -100,4 +100,23 @@ impl Vm {
         self.registers[call] = Value::Number(result);
         Some(1)
     }
+
+    #[inline(never)]
+    pub(super) fn try_fast_binary_math(
+        &mut self,
+        id: u64,
+        call: usize,
+        count: usize,
+    ) -> Option<usize> {
+        if count < 2 || !self.sort_fast_context() {
+            return None;
+        }
+        let (Value::Number(left), Value::Number(right)) =
+            (self.registers[call + 1], self.registers[call + 2])
+        else {
+            return None;
+        };
+        self.registers[call] = Value::Number(Self::math_binary(id, left, right));
+        Some(1)
+    }
 }

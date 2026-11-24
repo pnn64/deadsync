@@ -135,6 +135,14 @@ impl Vm {
             _ => return None,
         })
     }
+    pub(super) fn math_binary(id: u64, x: f64, y: f64) -> f64 {
+        match id {
+            42 => x.powf(y),
+            45 => x % y,
+            52 => x.atan2(y),
+            _ => unreachable!("binary math IDs are fixed"),
+        }
+    }
     fn math_number(&self, base: usize, count: usize, index: usize) -> Result<f64, Error> {
         self.number(self.argument(base, count, index))
             .ok_or_else(|| self.argument_type_error(base, count, index, "number"))
@@ -202,13 +210,7 @@ impl Vm {
                 let x = self.math_number(base, count, 0)?;
                 (x, self.math_number(base, count, 1)?)
             };
-            let value = match id {
-                42 => x.powf(y),
-                45 => x % y,
-                52 => x.atan2(y),
-                _ => unreachable!("binary math IDs are fixed"),
-            };
-            self.registers[base] = Value::Number(value);
+            self.registers[base] = Value::Number(Self::math_binary(id, x, y));
             return Ok(1);
         }
         let x = self.math_number(base, count, 0)?;
