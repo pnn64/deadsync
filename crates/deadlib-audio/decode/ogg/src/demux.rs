@@ -44,13 +44,27 @@ pub struct Packet<'a> {
     pub info: PacketInfo,
 }
 
+enum PartialPacket {
+    Bytes(Vec<u8>),
+    Length(usize),
+}
+
+impl PartialPacket {
+    fn len(&self) -> usize {
+        match self {
+            Self::Bytes(bytes) => bytes.len(),
+            Self::Length(length) => *length,
+        }
+    }
+}
+
 struct Stream {
     serial: u32,
     chain: u32,
     next_sequence: u32,
     ended: bool,
     continuing: bool,
-    partial: Vec<u8>,
+    partial: PartialPacket,
     packet_offset: u64,
     packets: u64,
     granule: u64,
@@ -221,7 +235,11 @@ impl Demuxer {
                     next_sequence: 0,
                     ended: false,
                     continuing: false,
-                    partial: Vec::new(),
+                    partial: if OBSERVE {
+                        PartialPacket::Bytes(Vec::new())
+                    } else {
+                        PartialPacket::Length(0)
+                    },
                     packet_offset: offset,
                     packets: 0,
                     granule: UNKNOWN_GRANULE_POSITION,
@@ -243,7 +261,8 @@ impl Demuxer {
         } else {
             offset
         };
-        let mut length = stream.partial.len();
+        let carried = stream.partial.len();
+        let mut length = carried;
         let mut pending = self.pending - length;
         let body = page.body().len();
         // An empty body cannot enlarge a previously validated cached packet.
@@ -300,23 +319,18 @@ impl Demuxer {
         {
             return Err(Error::Invalid("unfinished packet at EOS"));
         }
-        if !OBSERVE && complete > 1 && !stream.continuing && page.lacing().last() != Some(&255) {
-            stream.packets = stream
-                .packets
-                .checked_add(complete as u64)
-                .ok_or(Error::LimitExceeded("packet count"))?;
-            if complete != 0 {
-                stream.packet_offset = offset;
-            }
-        } else {
+        if OBSERVE {
+            let PartialPacket::Bytes(partial) = &mut stream.partial else {
+                unreachable!("observers require packet bytes");
+            };
             let mut remaining = complete;
             for fragment in page.fragments() {
                 if fragment.starts_packet {
                     stream.packet_offset = offset;
                 }
                 if !fragment.starts_packet || !fragment.ends_packet {
-                    reserve(&mut stream.partial, fragment.data.len())?;
-                    stream.partial.extend_from_slice(fragment.data);
+                    reserve(partial, fragment.data.len())?;
+                    partial.extend_from_slice(fragment.data);
                     stream.continuing = !fragment.ends_packet;
                     if stream.continuing {
                         break;
@@ -340,27 +354,56 @@ impl Demuxer {
                 let data = if fragment.starts_packet {
                     fragment.data
                 } else {
-                    &stream.partial
+                    &*partial
                 };
                 emit(Packet { data, info });
                 stream.packets = stream
                     .packets
                     .checked_add(1)
                     .ok_or(Error::LimitExceeded("packet count"))?;
-                if !stream.partial.is_empty() {
-                    stream.partial.clear();
-                    if stream.partial.capacity() > MAX_PAGE_SIZE {
-                        stream.partial = Vec::new();
+                if !partial.is_empty() {
+                    partial.clear();
+                    if partial.capacity() > MAX_PAGE_SIZE {
+                        *partial = Vec::new();
                     }
                 }
             }
+        } else {
+            let lacing = page.lacing();
+            // Nil pages leave a carried packet alone.
+            if let Some(&last) = lacing.last() {
+                let continuing = last == 255;
+                if continuing || stream.continuing {
+                    let PartialPacket::Length(length) = &mut stream.partial else {
+                        unreachable!("an index without observers only needs lengths");
+                    };
+                    *length = if !continuing {
+                        0
+                    } else if complete == 0 {
+                        carried + body
+                    } else {
+                        lacing.iter().rev().take_while(|&&lace| lace == 255).count() * 255
+                    };
+                    stream.continuing = continuing;
+                }
+                // Only the leading continuation started on an earlier page.
+                if !header.is_continued() || complete > 1 || (complete == 1 && continuing) {
+                    stream.packet_offset = offset;
+                }
+            }
+            stream.packets = stream
+                .packets
+                .checked_add(complete as u64)
+                .ok_or(Error::LimitExceeded("packet count"))?;
         }
         pending += stream.partial.len();
         self.pending = pending;
         stream.next_sequence = header.sequence.wrapping_add(1);
         if header.is_eos() {
             stream.ended = true;
-            stream.partial = Vec::new();
+            if let PartialPacket::Bytes(partial) = &mut stream.partial {
+                *partial = Vec::new();
+            }
             self.active -= 1;
         }
         if !header.is_bos() {
