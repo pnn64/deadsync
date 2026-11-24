@@ -1482,9 +1482,15 @@ impl Vm {
         );
         let base = self.registers.len();
         self.reserve_registers(base + registers)?;
-        self.registers.resize(base + registers, Value::Nil);
         let fixed = call + 1..call + 1 + count.min(params);
-        self.registers.copy_within(fixed.clone(), base);
+        if fixed.len() >= 32 {
+            // A wide argument prefix already supplies initialized values.
+            self.registers.extend_from_within(fixed.clone());
+            self.registers.resize(base + registers, Value::Nil);
+        } else {
+            self.registers.resize(base + registers, Value::Nil);
+            self.registers.copy_within(fixed.clone(), base);
+        }
         // lua_pcall keeps a stack-slot reference, including when that slot is
         // passed as a parameter. Follow moved fixed arguments; vararg entry
         // clears their original slots as Lua 5.1 adjust_varargs does.
