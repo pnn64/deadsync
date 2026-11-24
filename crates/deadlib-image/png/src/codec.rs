@@ -514,36 +514,7 @@ pub(crate) fn validate_encoding(png: &Png, options: &EncodeOptions) -> Result<He
         depth: png.image.bit_depth,
         interlaced: options.interlaced,
     };
-    let metadata = crate::metadata::validate_encoding(
-        &png.ancillary,
-        header,
-        png.palette.len(),
-        Limits {
-            max_metadata_bytes: usize::MAX,
-            ..Default::default()
-        },
-    )?;
-    if header.color == ColorType::Indexed {
-        for value in &metadata {
-            if let crate::Metadata::Histogram(frequencies) = value {
-                for image in core::iter::once(&png.image).chain(
-                    png.animation
-                        .iter()
-                        .flat_map(|a| a.frames.iter().filter_map(|f| f.image.as_ref())),
-                ) {
-                    if let Samples::U8(samples) = &image.samples
-                        && samples
-                            .iter()
-                            .any(|&v| frequencies.get(v as usize) == Some(&0))
-                    {
-                        return Err(Error::Invalid(
-                            "zero histogram frequency for used palette index",
-                        ));
-                    }
-                }
-            }
-        }
-    }
+    crate::metadata::validate_encoding(png, header)?;
     crate::apng::validate(png, header, PalettePolicy::Strict)?;
     match &png.transparency {
         None => (),

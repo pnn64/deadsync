@@ -1,7 +1,7 @@
 use deadlib_image_png::{
-    AncillaryChunk, Animation, BlendOp, ChunkPosition, ColorType, DisposeOp, Frame, FrameControl,
-    Image, Limits, Metadata, Png, Samples, Transparency, decode, decode_reader, encode,
-    encode_writer,
+    AncillaryChunk, Animation, BlendOp, ChunkPosition, ColorType, DisposeOp, Error, Frame,
+    FrameControl, Image, Limits, Metadata, Png, Samples, Transparency, decode, decode_reader,
+    encode, encode_writer,
 };
 
 fn crc(bytes: &[u8]) -> u32 {
@@ -194,6 +194,21 @@ fn histograms_cannot_claim_used_indices_are_unused() {
         assert!(encode_writer(&png, &Default::default(), &mut out).is_err());
         assert!(out.is_empty());
     }
+    // A later invalid chunk takes priority over histogram usage.
+    png.ancillary.push(AncillaryChunk {
+        kind: *b"gAMA",
+        data: vec![0; 4],
+        position: ChunkPosition::BeforePalette,
+    });
+    let expected = Error::Invalid("metadata length or value");
+    assert_eq!(encode(&png, &Default::default()).unwrap_err(), expected);
+    let mut out = Vec::new();
+    assert_eq!(
+        encode_writer(&png, &Default::default(), &mut out).unwrap_err(),
+        expected
+    );
+    assert!(out.is_empty());
+
     // Usage in animation frames also forbids a zero frequency.
     png.image.samples = Samples::U8(vec![0, 0]);
     png.ancillary = vec![histogram(&[1, 0, 0])];

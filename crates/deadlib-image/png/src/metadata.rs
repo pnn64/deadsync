@@ -27,7 +27,9 @@ pub(crate) fn is_known(kind: &[u8; 4]) -> bool {
             | b"iTXt"
     )
 }
-use crate::{AncillaryChunk, ChunkPosition, ColorType, Error, Limits, MetadataPolicy, Png, zlib};
+use crate::{
+    AncillaryChunk, ChunkPosition, ColorType, Error, Limits, MetadataPolicy, Png, Samples, zlib,
+};
 use std::borrow::Cow;
 use std::collections::HashSet;
 
@@ -462,7 +464,15 @@ pub(crate) fn validate(
     palette: usize,
     limits: Limits,
 ) -> Result<Vec<Metadata>, Error> {
-    validate_impl(chunks, h, palette, limits, false)
+    let mut validator = Validator::new(limits.max_metadata_bytes, MetadataPolicy::Recover);
+    let mut out = Vec::new();
+    for c in chunks {
+        if let Some(value) = validator.check(c, h, palette)? {
+            out.push(value);
+        }
+    }
+    validator.finish()?;
+    Ok(out)
 }
 
 pub(crate) fn retain_valid(
@@ -490,39 +500,39 @@ pub(crate) fn retain_valid(
     validator.finish()
 }
 
-pub(crate) fn validate_encoding(
-    chunks: &[AncillaryChunk],
-    h: Header,
-    palette: usize,
-    limits: Limits,
-) -> Result<Vec<Metadata>, Error> {
-    validate_impl(chunks, h, palette, limits, true)
-}
-
-fn validate_impl(
-    chunks: &[AncillaryChunk],
-    h: Header,
-    palette: usize,
-    limits: Limits,
-    encoding: bool,
-) -> Result<Vec<Metadata>, Error> {
-    let mut validator = Validator::new(
-        limits.max_metadata_bytes,
-        if encoding {
-            MetadataPolicy::Strict
-        } else {
-            MetadataPolicy::Recover
-        },
-    );
-    validator.encoding = encoding;
-    let mut out = Vec::new();
-    for c in chunks {
-        if let Some(value) = validator.check(c, h, palette)? {
-            out.push(value);
+pub(crate) fn validate_encoding(png: &Png, h: Header) -> Result<(), Error> {
+    let mut validator = Validator::new(usize::MAX, MetadataPolicy::Strict);
+    validator.encoding = true;
+    let mut histogram = None;
+    for c in &png.ancillary {
+        validator.check_impl::<false>(c, h, png.palette.len())?;
+        if &c.kind == b"hIST" {
+            histogram = Some(c.data.as_chunks::<2>().0);
         }
     }
     validator.finish()?;
-    Ok(out)
+
+    // Validate all metadata before checking histogram frequencies against pixels.
+    if h.color == ColorType::Indexed
+        && let Some(frequencies) = histogram
+    {
+        let frames = png
+            .animation
+            .iter()
+            .flat_map(|a| a.frames.iter().filter_map(|f| f.image.as_ref()));
+        for image in core::iter::once(&png.image).chain(frames) {
+            if let Samples::U8(samples) = &image.samples
+                && samples
+                    .iter()
+                    .any(|&v| frequencies.get(v as usize) == Some(&[0, 0]))
+            {
+                return Err(Error::Invalid(
+                    "zero histogram frequency for used palette index",
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(crate) struct Validator {
