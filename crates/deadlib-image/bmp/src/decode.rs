@@ -61,31 +61,48 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
             }
             let mut indices = Vec::new();
             reserve(&mut indices, header.pixel_count)?;
-            indices.resize(header.pixel_count, 0);
+            // Full palettes cover the entire encoded index domain.
             let check_indices = palette_len < 1usize << header.info.bit_depth;
-            for (encoded_y, row) in source.chunks_exact(header.row_pitch).enumerate() {
-                let y = if header.info.top_down {
-                    encoded_y
-                } else {
-                    height - 1 - encoded_y
-                };
-                let output = &mut indices[y * width..(y + 1) * width];
-                match header.info.bit_depth {
-                    1 => unpack_indices::<8>(row, output),
-                    4 => unpack_indices::<2>(row, output),
-                    8 => output.copy_from_slice(&row[..width]),
-                    _ => unreachable!("validated indexed depth"),
-                }
-                // Unpacking bounds every index to the encoded domain. A full
-                // palette needs no scan; short palettes use one byte reduction.
+            let validate_row = |row: &[u8]| {
                 if check_indices
-                    && output
+                    && row
                         .iter()
                         .copied()
                         .max()
                         .is_some_and(|index| usize::from(index) >= palette_len)
                 {
                     return Err(Error::Invalid("pixel index exceeds the palette"));
+                }
+                Ok(())
+            };
+            let mut encoded_rows = source.chunks_exact(header.row_pitch);
+            let rows = std::iter::from_fn(|| {
+                if header.info.top_down {
+                    encoded_rows.next()
+                } else {
+                    encoded_rows.next_back()
+                }
+            });
+            if header.info.bit_depth == 8 {
+                if header.info.top_down && width == header.row_pitch {
+                    validate_row(source)?;
+                    indices.extend_from_slice(source);
+                } else {
+                    for row in rows {
+                        let row = &row[..width];
+                        validate_row(row)?;
+                        indices.extend_from_slice(row);
+                    }
+                }
+            } else {
+                indices.resize(header.pixel_count, 0);
+                for (row, output) in rows.zip(indices.chunks_exact_mut(width)) {
+                    if header.info.bit_depth == 1 {
+                        unpack_indices::<8>(row, output);
+                    } else {
+                        unpack_indices::<2>(row, output);
+                    }
+                    validate_row(output)?;
                 }
             }
             Pixels::Indexed {

@@ -317,6 +317,16 @@ fn byte_indices_validate_short_palettes_without_including_padding() {
     }
 }
 
+#[test]
+fn aligned_top_down_byte_indices_validate_the_last_row() {
+    let colors = palette(2);
+    let rows = [1, 0, 1, 0, 0, 1, 0, 2];
+    assert_eq!(
+        decode(&wire(Format::rgb(8), 4, 2, true, &colors, &rows)),
+        Err(Error::Invalid("pixel index exceeds the palette"))
+    );
+}
+
 // Repeat bits from most significant to least significant until eight are filled.
 // This avoids using the decoder's multiplier/downshift expansion formula.
 fn repeat_bits(value: u32, bits: u32) -> u8 {
