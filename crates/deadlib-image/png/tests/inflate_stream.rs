@@ -1,4 +1,6 @@
 mod support;
+#[path = "support/huffman.rs"]
+mod wire;
 use deadlib_image_png::{
     Error,
     zlib::{self, Compression, Inflater, StreamStatus},
@@ -65,6 +67,35 @@ fn ring_wrap_history_and_long_matches() {
         for (input, output) in [(1, 1), (1, 4096), (4096, 1), (7, 31), (32768, 65536)] {
             let (actual, used) = support::inflate(&compressed, input, output, raw.len()).unwrap();
             assert_eq!(actual, raw);
+            assert_eq!(used, compressed.len());
+        }
+    }
+}
+
+#[test]
+fn short_period_matches_wrap_history_and_resume_at_any_phase() {
+    let mut lengths = [8; 288];
+    lengths[144..256].fill(9);
+    lengths[256..280].fill(7);
+    let literals = wire::Codes::new(&lengths);
+    let distances = wire::Codes::new(&[5; 32]);
+    for pattern in [&[17, 99][..], &[1, 7, 251, 184][..]] {
+        let distance = pattern.len();
+        let mut raw = vec![0; 32769 - distance];
+        raw.extend_from_slice(pattern);
+        let mut stream = wire::Wire::default();
+        stream.stored(&raw, false);
+        stream.put(3, 3); // Final fixed-Huffman block.
+        for _ in 0..2 {
+            literals.symbol(&mut stream, 285); // Length 258.
+            distances.symbol(&mut stream, distance - 1);
+        }
+        literals.symbol(&mut stream, 256);
+        raw.extend((0..516).map(|n| pattern[n % distance]));
+        let compressed = stream.finish(&raw, false);
+        for output in [15, 16, 17, 31, 258, 4096] {
+            let (actual, used) = support::inflate(&compressed, 7, output, raw.len()).unwrap();
+            assert_eq!(actual, raw, "distance={distance} output={output}");
             assert_eq!(used, compressed.len());
         }
     }
