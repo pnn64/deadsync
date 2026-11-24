@@ -53,9 +53,8 @@ pub(crate) struct Rows<'a> {
     pixels: Option<&'a [u8]>,
     interlaced: bool,
     filter: Filter,
-    pass: usize,
+    next_pass: usize,
     index: usize,
-    initialized: bool,
     width: usize,
     height: usize,
     x: u32,
@@ -91,9 +90,8 @@ impl<'a> Rows<'a> {
             pixels: None,
             interlaced,
             filter,
-            pass: 0,
+            next_pass: 0,
             index: 0,
-            initialized: false,
             width: 0,
             height: 0,
             x: 0,
@@ -116,53 +114,53 @@ impl<'a> Rows<'a> {
             Samples::U8(pixels) if image.bit_depth == 8 && !self.interlaced => Some(pixels),
             _ => None,
         };
-        self.pass = 0;
-        self.initialized = false;
+        self.next_pass = 0;
+        self.index = 0;
+        self.height = 0;
         self.last_kind = 1;
     }
     fn start_pass(&mut self) -> Result<bool, Error> {
         let passes = scanline::passes(self.interlaced);
-        while self.pass < passes.len() {
-            let (x, y, dx, dy) = passes[self.pass];
-            self.width = scanline::extent(self.image.width, x, dx);
-            self.height = scanline::extent(self.image.height, y, dy);
-            if self.width != 0 && self.height != 0 {
-                self.x = x;
-                self.y = y;
-                self.dx = dx;
-                self.dy = dy;
-                self.index = 0;
-                self.initialized = true;
-                let bytes = scanline::row_bytes(
-                    self.width,
-                    self.image.color_type.channels(),
-                    self.image.bit_depth,
-                )?;
-                if self.filter != Filter::None {
-                    if self.pixels.is_none() {
-                        resize(&mut self.row, bytes)?;
-                        if self.filter != Filter::Sub && self.height > 1 {
-                            resize(&mut self.previous, bytes)?;
-                        }
-                    }
-                    if self.filter == Filter::Adaptive {
-                        resize(&mut self.candidate, bytes + 1)?;
+        while self.next_pass < passes.len() {
+            let (x, y, dx, dy) = passes[self.next_pass];
+            let width = scanline::extent(self.image.width, x, dx);
+            let height = scanline::extent(self.image.height, y, dy);
+            if width == 0 || height == 0 {
+                self.next_pass += 1;
+                continue;
+            }
+            let bytes = scanline::row_bytes(
+                width,
+                self.image.color_type.channels(),
+                self.image.bit_depth,
+            )?;
+            if self.filter != Filter::None {
+                if self.pixels.is_none() {
+                    resize(&mut self.row, bytes)?;
+                    if self.filter != Filter::Sub && height > 1 {
+                        resize(&mut self.previous, bytes)?;
                     }
                 }
-                resize(&mut self.output, bytes + 1)?;
-                self.zeroed = false;
-                return Ok(true);
+                if self.filter == Filter::Adaptive {
+                    resize(&mut self.candidate, bytes + 1)?;
+                }
             }
-            self.pass += 1;
+            resize(&mut self.output, bytes + 1)?;
+            self.next_pass += 1;
+            self.index = 0;
+            self.width = width;
+            self.height = height;
+            self.x = x;
+            self.y = y;
+            self.dx = dx;
+            self.dy = dy;
+            self.zeroed = false;
+            return Ok(true);
         }
         Ok(false)
     }
     pub(super) fn next_row(&mut self) -> Result<Option<FilteredRow<'_>>, Error> {
-        if self.initialized && self.index == self.height {
-            self.pass += 1;
-            self.initialized = false;
-        }
-        if !self.initialized && !self.start_pass()? {
+        if self.index == self.height && !self.start_pass()? {
             return Ok(None);
         }
         let y = self.y as usize + self.index * self.dy as usize;
