@@ -239,11 +239,14 @@ enum Phase {
 
 impl Strings {
     fn sweep_some(&mut self, cursor: &mut usize, budget: usize) -> u64 {
+        let index_mask = self.bucket_index_mask();
         let buckets = &mut self.buckets;
         self.bytes.sweep_with(cursor, budget, |bytes, index| {
             let mask = buckets.len() - 1;
-            let mut hole = Self::hash(&bytes[index]) & mask;
-            while buckets[hole] != index as u32 + 1 {
+            let hash = Self::hash(&bytes[index]);
+            let removed = (index as u32 + 1) | (hash as u32 & !index_mask);
+            let mut hole = hash & mask;
+            while buckets[hole] != removed {
                 debug_assert_ne!(buckets[hole], 0);
                 hole = (hole + 1) & mask;
             }
@@ -251,7 +254,7 @@ impl Strings {
             while buckets[cursor] != 0 {
                 // Backshift the cluster before freeing/reusing its arena slot.
                 let entry = buckets[cursor];
-                let home = Self::hash(&bytes[entry as usize - 1]) & mask;
+                let home = Self::hash(&bytes[(entry & index_mask) as usize - 1]) & mask;
                 if (cursor.wrapping_sub(home) & mask) >= (hole.wrapping_sub(home) & mask) {
                     buckets[hole] = entry;
                     hole = cursor;
@@ -277,12 +280,9 @@ impl Strings {
         }
         self.buckets.resize(size, 0);
         self.buckets.fill(0);
+        let index_mask = self.bucket_index_mask();
         for (i, bytes) in self.bytes.entries() {
-            let mut slot = Self::hash(bytes) & (size - 1);
-            while self.buckets[slot] != 0 {
-                slot = (slot + 1) & (size - 1);
-            }
-            self.buckets[slot] = i as u32 + 1;
+            Self::place_bucket(&mut self.buckets, i, Self::hash(bytes), index_mask);
         }
     }
 }
@@ -2699,6 +2699,31 @@ mod tests {
         pool.sweep_some(&mut cursor, usize::MAX);
         assert_eq!(pool.find(b"new-after-sweep"), None);
         assert_eq!(pool.bytes.live_len(), 0);
+    }
+
+    #[test]
+    fn string_index_widens_in_place_and_keeps_high_slots_after_rebuild() {
+        let mut pool = Strings::default();
+        let first = pool.intern(b"first");
+        for n in 1..Strings::BUCKET_INDEX_MASK {
+            pool.intern(&n.to_le_bytes());
+        }
+        let capacity = pool.buckets.len();
+        let last = pool.intern(b"last");
+        assert_eq!(pool.buckets.len(), capacity);
+        assert_eq!(slot_index(last.0), Strings::BUCKET_INDEX_MASK as usize);
+        assert_eq!(pool.find(b"first"), Some(first));
+        assert_eq!(pool.find(b"last"), Some(last));
+
+        pool.bytes.mark(first.0);
+        pool.bytes.mark(last.0);
+        let mut cursor = pool.bytes.len();
+        pool.sweep_some(&mut cursor, usize::MAX);
+        pool.rebuild();
+        assert!(pool.buckets.len() < capacity);
+        assert_eq!(pool.intern(b"first"), first);
+        assert_eq!(pool.intern(b"last"), last);
+        assert_eq!(pool.find(&1u32.to_le_bytes()), None);
     }
 
     #[test]

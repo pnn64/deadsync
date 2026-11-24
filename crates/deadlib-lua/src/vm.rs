@@ -99,6 +99,10 @@ struct Strings {
 }
 
 impl Strings {
+    // Arena slots are one-based in buckets. Use the remaining bits for a hash
+    // tag until the arena's high-water mark requires the entire word.
+    const BUCKET_INDEX_MASK: u32 = (1 << if cfg!(test) { 10 } else { 24 }) - 1;
+
     fn new_in(memory: Memory) -> Self {
         Self {
             bytes: Arena::new_in(memory.clone()),
@@ -169,17 +173,41 @@ impl Strings {
         if self.buckets.is_empty() {
             return None;
         }
-        let mut slot = hash & (self.buckets.len() - 1);
-        while self.buckets[slot] != 0 {
-            let id = self.buckets[slot] - 1;
-            if self.bytes[id as usize].as_ref() == bytes {
-                return self.bytes.key(id as usize).map(StringId);
+        let mask = self.buckets.len() - 1;
+        let index_mask = self.bucket_index_mask();
+        let tag = hash as u32 & !index_mask;
+        let mut slot = hash & mask;
+        loop {
+            let entry = self.buckets[slot];
+            if entry == 0 {
+                return None;
             }
-            slot = (slot + 1) & (self.buckets.len() - 1);
+            if entry & !index_mask == tag {
+                let index = (entry & index_mask) as usize - 1;
+                if self.bytes[index].as_ref() == bytes {
+                    return self.bytes.key(index).map(StringId);
+                }
+            }
+            slot = (slot + 1) & mask;
         }
-        None
+    }
+    fn bucket_index_mask(&self) -> u32 {
+        if self.bytes.len() <= Self::BUCKET_INDEX_MASK as usize {
+            Self::BUCKET_INDEX_MASK
+        } else {
+            u32::MAX
+        }
+    }
+    fn place_bucket(buckets: &mut [u32], index: usize, hash: usize, index_mask: u32) {
+        let mask = buckets.len() - 1;
+        let mut slot = hash & mask;
+        while buckets[slot] != 0 {
+            slot = (slot + 1) & mask;
+        }
+        buckets[slot] = (index as u32 + 1) | (hash as u32 & !index_mask);
     }
     fn try_add(&mut self, bytes: ByteString, hash: usize) -> Result<StringId, Error> {
+        let old_index_mask = self.bucket_index_mask();
         let mut replacement = None;
         if (self.bytes.live_len() + 1) * 4 >= self.buckets.len() * 3 {
             let size = self
@@ -194,11 +222,7 @@ impl Strings {
                 .map_err(|_| Error::memory())?;
             buckets.resize(size, 0);
             for (id, text) in self.bytes.entries() {
-                let mut slot = Self::hash(text) & (buckets.len() - 1);
-                while buckets[slot] != 0 {
-                    slot = (slot + 1) & (buckets.len() - 1);
-                }
-                buckets[slot] = id as u32 + 1;
+                Self::place_bucket(&mut buckets, id, Self::hash(text), old_index_mask);
             }
             replacement = Some(buckets);
         }
@@ -212,12 +236,15 @@ impl Strings {
             self.bytes.note_alloc(growth);
             self.buckets = buckets;
         }
-        let mut slot = hash & (self.buckets.len() - 1);
-        while self.buckets[slot] != 0 {
-            slot = (slot + 1) & (self.buckets.len() - 1);
+        let index_mask = self.bucket_index_mask();
+        if index_mask != old_index_mask {
+            // Widen the index in place even if only the arena needed to grow.
+            for entry in &mut *self.buckets {
+                *entry &= old_index_mask;
+            }
         }
         self.bytes.note_alloc(storage);
-        self.buckets[slot] = slot_index(id) as u32 + 1;
+        Self::place_bucket(&mut self.buckets, slot_index(id), hash, index_mask);
         Ok(StringId(id))
     }
     #[cfg(test)]
