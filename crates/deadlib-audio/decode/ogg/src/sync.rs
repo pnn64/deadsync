@@ -361,6 +361,36 @@ impl<R: Read + Seek> SyncReader<R> {
 }
 
 #[inline(never)]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[allow(unsafe_code)]
+fn capture_byte(bytes: &[u8]) -> Option<usize> {
+    // SAFETY: SSE2 is enabled for this build target.
+    unsafe { capture_byte_sse2(bytes) }
+}
+
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[cold]
+#[inline(never)]
+#[target_feature(enable = "sse2")]
+fn capture_byte_sse2(bytes: &[u8]) -> Option<usize> {
+    use core::arch::x86_64::{_mm_cmpeq_epi8, _mm_movemask_epi8, _mm_set_epi64x, _mm_set1_epi8};
+
+    let (words, tail) = bytes.as_chunks::<16>();
+    for (i, word) in words.iter().enumerate() {
+        let bits = u128::from_ne_bytes(*word);
+        let lanes = _mm_set_epi64x((bits >> 64) as i64, bits as i64);
+        let matches = _mm_movemask_epi8(_mm_cmpeq_epi8(lanes, _mm_set1_epi8(b'O' as i8)));
+        if matches != 0 {
+            return Some(i * 16 + matches.trailing_zeros() as usize);
+        }
+    }
+    tail.iter()
+        .position(|&byte| byte == b'O')
+        .map(|i| bytes.len() - tail.len() + i)
+}
+
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
+#[inline(never)]
 fn capture_byte(bytes: &[u8]) -> Option<usize> {
     let (words, tail) = bytes.as_chunks::<8>();
     for (i, word) in words.iter().enumerate() {
