@@ -40,7 +40,7 @@ pub(crate) struct Matched {
     pub count: u8,
 }
 impl Matched {
-    pub fn capture(self, index: usize) -> Result<Capture, Error> {
+    pub fn capture(&self, index: usize) -> Result<Capture, Error> {
         if self.count == 0 && index == 0 {
             return Ok(Capture {
                 start: self.start,

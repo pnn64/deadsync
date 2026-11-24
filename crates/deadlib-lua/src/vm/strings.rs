@@ -779,17 +779,18 @@ impl Vm {
         let frame = self.frames[state.owner];
         let last = frame.vararg_start + state.top - 1;
         if !self.registers[last].is_truthy() {
-            let found = state.matched.expect("substitution has a match");
+            let found = state.matched.as_ref().expect("substitution has a match");
+            let range = found.start..found.end;
             let source = state.source;
             self.substitution_pop(index, 1);
-            let value = self.string_slice(source, found.start..found.end)?;
+            let value = self.string_slice(source, range)?;
             self.substitution_push(index, value)?;
         }
         self.substitution_value(index)
     }
     fn substitution_advance(&mut self, index: usize) -> Result<bool, Error> {
         let state = &self.substitutions[index];
-        let matched = state.matched.expect("substitution has a match");
+        let matched = state.matched.as_ref().expect("substitution has a match");
         let source = state.source;
         let cursor = state.cursor;
         let byte = if matched.end > matched.start {
@@ -815,7 +816,8 @@ impl Vm {
     ) -> Result<bool, Error> {
         let queued = self.substitutions[index].actions.len();
         let state = &self.substitutions[index];
-        let found = state.matched.expect("substitution has a match");
+        let found = state.matched.as_ref().expect("substitution has a match");
+        let (start, end) = (found.start, found.end);
         let source = state.source;
         let slot = slot_index(text.0);
         while let Some(&c) = self.strings.bytes[slot].get(pos) {
@@ -838,9 +840,13 @@ impl Vm {
                 let c = self.strings.bytes[slot].get(pos + 1).copied().unwrap_or(0);
                 pos += 2;
                 if c == b'0' {
-                    self.substitution_string(index, source, found.start..found.end)?
+                    self.substitution_string(index, source, start..end)?
                 } else if crate::locale::is_digit(c) {
-                    let capture = found.capture(usize::from(c - b'1'))?;
+                    let capture = self.substitutions[index]
+                        .matched
+                        .as_ref()
+                        .expect("substitution has a match")
+                        .capture(usize::from(c - b'1'))?;
                     let value = self.capture_value(source, capture)?;
                     self.substitution_push(index, value)?;
                     self.substitution_value(index)?
@@ -1025,8 +1031,8 @@ impl Vm {
             } else {
                 Scan::Single
             };
-            let found = match scan {
-                Scan::Found => self.substitutions[index].matched,
+            match scan {
+                Scan::Found => {}
                 Scan::Skipped => continue,
                 Scan::Single => {
                     let found =
@@ -1034,10 +1040,9 @@ impl Vm {
                             pattern.match_at(text, cursor, work)
                         })?;
                     self.substitutions[index].matched = found;
-                    found
                 }
-            };
-            if let Some(found) = found {
+            }
+            if self.substitutions[index].matched.is_some() {
                 self.substitutions[index].count += 1;
                 let frame = self.frames[owner];
                 let replacement =
@@ -1054,7 +1059,12 @@ impl Vm {
                         }
                     }
                     Value::Table(_) => {
-                        let key = self.capture_value(source, found.capture(0)?)?;
+                        let capture = self.substitutions[index]
+                            .matched
+                            .as_ref()
+                            .expect("substitution has a match")
+                            .capture(0)?;
+                        let key = self.capture_value(source, capture)?;
                         self.substitution_push(index, key)?;
                         let call = frame.vararg_start + self.substitutions[index].top - 1;
                         self.frames[owner].pc |= 2;
@@ -1062,6 +1072,9 @@ impl Vm {
                         return Ok(None);
                     }
                     Value::Function(_) | Value::Native(_) => {
+                        let found = self.substitutions[index]
+                            .matched
+                            .expect("substitution has a match");
                         let call = frame.vararg_start + self.substitutions[index].top;
                         let argc = self.capture_results(call + 1, source, found, true)?;
                         self.registers[call] = replacement;
