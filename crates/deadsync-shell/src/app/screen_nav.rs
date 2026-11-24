@@ -233,8 +233,10 @@ impl App {
             {
                 self.dynamic_media.expire_outgoing_banners(&mut self.asset_manager, backend, None);
             }
-            if matches!(target, CurrentScreen::SelectMusic | CurrentScreen::SelectCourse)
-                && let Some(selection) = self.state.screens.selection_presentation.as_mut()
+            if matches!(
+                target,
+                CurrentScreen::SelectMusic | CurrentScreen::SelectCourse
+            ) && let Some(selection) = self.state.screens.wheel_mut(target)
             {
                 selection.enter_wheel(super::Instant::now());
             }
@@ -616,8 +618,14 @@ impl App {
             return (Vec::new(), duration);
         }
         if target == CurrentScreen::PlayerOptions
-            && matches!(screen, CurrentScreen::SelectMusic | CurrentScreen::SelectCourse)
-            && let Some(duration) = self.state.screens.selection_presentation.as_ref()
+            && matches!(
+                screen,
+                CurrentScreen::SelectMusic | CurrentScreen::SelectCourse
+            )
+            && let Some(duration) = self
+                .state
+                .screens
+                .wheel(screen)
                 .and_then(|selection| selection.player_options_exit_seconds())
         {
             return (Vec::new(), duration);

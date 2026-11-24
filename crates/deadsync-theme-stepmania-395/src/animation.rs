@@ -78,7 +78,9 @@ impl ActorAnimation {
                 statement: index + 1,
                 command: name.clone(),
             };
-            if matches!(name.as_str(), "horizalign" | "vertalign") {
+            if name == "stoptweening" && token.args().is_empty() && segments.is_empty() {
+                continue;
+            } else if matches!(name.as_str(), "horizalign" | "vertalign") {
                 let axis = usize::from(name == "vertalign");
                 let value = anchor(axis, token.args()).ok_or_else(invalid)?;
                 anchors[axis] = Some(value);
@@ -219,6 +221,8 @@ fn timing_command(name: &str) -> Option<TimingCommand> {
         "decelerate" => anim::decelerate,
         "smooth" => anim::smooth,
         "spring" => anim::spring,
+        "bouncebegin" => anim::bouncebegin,
+        "bounceend" => anim::bounceend,
         "sleep" => return Some(TimingCommand::Sleep),
         _ => return None,
     };

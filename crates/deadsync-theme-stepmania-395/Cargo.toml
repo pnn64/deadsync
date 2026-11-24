@@ -15,6 +15,7 @@ deadsync-theme = { path = "../deadsync-theme" }
 roxmltree = "0.20.0"
 
 [dev-dependencies]
+deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 tempfile = "3.27.0"

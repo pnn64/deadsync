@@ -15,21 +15,23 @@ pub struct WheelMediaFrame<'a> {
     pub exit_elapsed: f32,
 }
 
-pub trait SelectionPresentation<A> {
+pub trait MusicWheelPresentation<A> {
     fn show_random_entries(&self) -> bool;
     fn banner_crossfade(&self) -> Option<Duration>;
     fn player_options_exit_seconds(&self) -> Option<f32>;
     fn enter_wheel(&mut self, now: Instant);
     fn confirm_wheel(&mut self, now: Instant);
     fn cancel_wheel_confirmation(&mut self);
-    fn enter_play_selection(&mut self);
-
     fn push_music(
         &self,
         actors: &mut Vec<A>,
         view: SelectMusicView<'_>,
         media: WheelMediaFrame<'_>,
     );
+}
+
+pub trait SelectionPresentation<A>: MusicWheelPresentation<A> {
+    fn enter_play_selection(&mut self);
     fn push_course(
         &self,
         actors: &mut Vec<A>,

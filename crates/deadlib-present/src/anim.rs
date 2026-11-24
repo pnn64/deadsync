@@ -41,6 +41,8 @@ pub enum Ease {
     EaseInOut { bias: f32 },
     /// `StepMania`: `spring(t)`.
     Spring,
+    BounceBegin,
+    BounceEnd,
     /// Native `ITween` cubic Bezier with scalar control values.
     CubicBezier { control: [f32; 4] },
 }
@@ -100,6 +102,8 @@ fn ease_apply(e: Ease, t: f32) -> f32 {
         Ease::Smooth => ease_weighted_inout(t, 0.0),
         Ease::EaseInOut { bias } => eval_ease_p_for_f_ease(t, bias),
         Ease::Spring => 1.0 - (t * std::f32::consts::PI * 2.5).cos() / (1.0 + t * 3.0),
+        Ease::BounceBegin => bouncebegin_p(t),
+        Ease::BounceEnd => bounceend_p(t),
         Ease::CubicBezier { control } => {
             let u = 1.0 - t;
             u * u * u * control[0]
@@ -1370,6 +1374,16 @@ pub fn decelerate(dur: f32) -> SegmentBuilder {
 #[must_use]
 pub fn spring(dur: f32) -> SegmentBuilder {
     SegmentBuilder::new(Ease::Spring, dur)
+}
+
+#[must_use]
+pub fn bouncebegin(dur: f32) -> SegmentBuilder {
+    SegmentBuilder::new(Ease::BounceBegin, dur)
+}
+
+#[must_use]
+pub fn bounceend(dur: f32) -> SegmentBuilder {
+    SegmentBuilder::new(Ease::BounceEnd, dur)
 }
 
 /// Construct a scalar cubic-Bezier segment as accepted by native `ITween`.

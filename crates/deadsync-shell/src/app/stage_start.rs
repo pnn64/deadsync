@@ -115,7 +115,10 @@ impl App {
             self.state.screens.stage_launch.request(request);
             if launch_was_hidden
                 && self.state.screens.stage_launch.prompt() == StageLaunchPrompt::OfferOptions
-                && let Some(selection) = self.state.screens.selection_presentation.as_mut()
+                && let Some(selection) = self
+                    .state
+                    .screens
+                    .wheel_mut(self.state.screens.current_screen)
             {
                 selection.confirm_wheel(super::Instant::now());
             }
@@ -137,6 +140,9 @@ impl App {
         self.state.screens.stage_launch = Default::default();
         if let Some(selection) = self.state.screens.selection_presentation.as_mut() {
             selection.cancel_wheel_confirmation();
+        }
+        if let Some(wheel) = self.state.screens.music_wheel.as_mut() {
+            wheel.cancel_wheel_confirmation();
         }
         self.sync_stage_launch_prompt();
     }

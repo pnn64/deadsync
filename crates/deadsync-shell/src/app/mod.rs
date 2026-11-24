@@ -674,6 +674,7 @@ pub struct ScreensState {
     select_style_state: select_style::State,
     select_play_mode_state: select_mode::State,
     selection_presentation: Option<Box<dyn deadsync_theme::selection::SelectionPresentation<Actor>>>,
+    music_wheel: Option<Box<dyn deadsync_theme::selection::MusicWheelPresentation<Actor>>>,
     profile_load_state: profile_load::State,
     select_music_state: select_music::State,
     stage_launch: StageLaunch<StageSelection>,
@@ -1201,6 +1202,34 @@ fn options_init_view(
 }
 
 impl ScreensState {
+    fn wheel(
+        &self,
+        screen: CurrentScreen,
+    ) -> Option<&dyn deadsync_theme::selection::MusicWheelPresentation<Actor>> {
+        if screen == CurrentScreen::SelectMusic
+            && let Some(wheel) = self.music_wheel.as_deref()
+        {
+            return Some(wheel);
+        }
+        self.selection_presentation.as_deref().map(|selection| {
+            selection as &dyn deadsync_theme::selection::MusicWheelPresentation<Actor>
+        })
+    }
+
+    fn wheel_mut(
+        &mut self,
+        screen: CurrentScreen,
+    ) -> Option<&mut dyn deadsync_theme::selection::MusicWheelPresentation<Actor>> {
+        if screen == CurrentScreen::SelectMusic
+            && let Some(wheel) = self.music_wheel.as_deref_mut()
+        {
+            return Some(wheel);
+        }
+        self.selection_presentation.as_deref_mut().map(|selection| {
+            selection as &mut dyn deadsync_theme::selection::MusicWheelPresentation<Actor>
+        })
+    }
+
     fn new(
         dirs: &AppDirs,
         color_index: i32,
@@ -1341,6 +1370,7 @@ impl ScreensState {
             select_style_state,
             select_play_mode_state,
             selection_presentation: mount.selection,
+            music_wheel: mount.music_wheel,
             profile_load_state,
             select_music_state,
             stage_launch: StageLaunch::default(),
@@ -4067,9 +4097,10 @@ impl App {
     }
 
     fn coin_select_music_init_view(&self, mut view: SelectMusicInitView) -> SelectMusicInitView {
-        view.policy.interaction.show_random_entries = self.state.screens
-            .selection_presentation
-            .as_ref()
+        view.policy.interaction.show_random_entries = self
+            .state
+            .screens
+            .wheel(CurrentScreen::SelectMusic)
             .is_some_and(|selection| selection.show_random_entries());
         let options = config::runtime::get().coin;
         let session = profile::get_session_snapshot();
@@ -8189,7 +8220,7 @@ impl App {
             CurrentScreen::SelectMusic => {
                 let state = &self.state.screens.select_music_state;
                 let stage_number = self.state.session.played_stages.len() + 1;
-                if let Some(selection) = &self.state.screens.selection_presentation {
+                if let Some(selection) = self.state.screens.wheel(CurrentScreen::SelectMusic) {
                     let loaded_banner = self.dynamic_media.loaded_banner_key()
                         .filter(|_| policy.show_select_music_banners);
                     let view = select_music::select_music_view(state, stage_number, loaded_banner);
@@ -8204,7 +8235,8 @@ impl App {
                         &self.asset_manager,
                         visual_policy,
                         false,
-                        Some(selection.profile_picker()),
+                        self.state.screens.selection_presentation.as_deref()
+                            .map(|selection| selection.profile_picker()),
                     );
                 } else {
                     select_music::push_actors(

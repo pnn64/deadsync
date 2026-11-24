@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 
 use deadlib_present::actors::Actor;
 use deadsync_theme::select_music::{SelectCourseView, SelectMusicView};
-use deadsync_theme::selection::{ProfilePickerRenderer, SelectionPresentation, WheelMediaFrame};
+use deadsync_theme::selection::{
+    MusicWheelPresentation, ProfilePickerRenderer, SelectionPresentation, WheelMediaFrame,
+};
 use deadsync_theme::views::PlaySelectionView;
 
 use crate::play_selection::{PlaySelectionCarousel, push_profile_load_actors};
@@ -19,7 +21,7 @@ pub struct OpenItgSelectionPresentation {
     carousel: PlaySelectionCarousel,
 }
 
-impl SelectionPresentation<Actor> for OpenItgSelectionPresentation {
+impl MusicWheelPresentation<Actor> for OpenItgSelectionPresentation {
     fn show_random_entries(&self) -> bool {
         true
     }
@@ -44,10 +46,6 @@ impl SelectionPresentation<Actor> for OpenItgSelectionPresentation {
         self.banner.cancel_confirmation();
     }
 
-    fn enter_play_selection(&mut self) {
-        self.carousel = PlaySelectionCarousel::default();
-    }
-
     fn push_music(
         &self,
         actors: &mut Vec<Actor>,
@@ -58,6 +56,12 @@ impl SelectionPresentation<Actor> for OpenItgSelectionPresentation {
             .banner
             .frame(media.now, media.outgoing, media.exit_elapsed);
         push_select_music_actors(actors, view, banner);
+    }
+}
+
+impl SelectionPresentation<Actor> for OpenItgSelectionPresentation {
+    fn enter_play_selection(&mut self) {
+        self.carousel = PlaySelectionCarousel::default();
     }
 
     fn push_course(

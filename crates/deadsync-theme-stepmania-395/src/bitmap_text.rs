@@ -25,6 +25,7 @@ struct TextCommand {
     period: Option<f32>,
     colors: [Option<[f32; 4]>; 2],
     wrap_width: Option<f32>,
+    max_width: Option<f32>,
 }
 
 #[derive(Clone)]
@@ -33,6 +34,7 @@ pub(crate) struct TextPlayback {
     shadow: f32,
     effect: EffectState,
     wrap_width: Option<f32>,
+    max_width: Option<f32>,
 }
 
 impl BitmapText {
@@ -141,6 +143,7 @@ impl TextCommand {
         let mut period = None;
         let mut colors = [None, None];
         let mut wrap_width = None;
+        let mut max_width = None;
         for statement in raw.split(';') {
             let Some(token) = split_script_token(statement) else {
                 continue;
@@ -151,6 +154,10 @@ impl TextCommand {
                 "wrapwidthpixels" => {
                     let [width] = numbers(token.args()).ok_or_else(invalid)?;
                     wrap_width = Some(width);
+                }
+                "maxwidth" => {
+                    let [width] = numbers(token.args()).ok_or_else(invalid)?;
+                    max_width = Some(width);
                 }
                 "shadowlength" => {
                     let [length] = numbers(token.args()).ok_or_else(invalid)?;
@@ -189,6 +196,7 @@ impl TextCommand {
             period,
             colors,
             wrap_width,
+            max_width,
         })
     }
 }
@@ -200,6 +208,7 @@ impl TextPlayback {
             shadow: 0.0,
             effect: EffectState::default(),
             wrap_width: None,
+            max_width: None,
         }
     }
 
@@ -244,6 +253,9 @@ impl TextPlayback {
         if let Some(width) = self.wrap_width {
             text.wrapwidthpixels(width);
         }
+        if let Some(width) = self.max_width {
+            text.maxwidth(width);
+        }
         text.z(1);
         Some(text.build(0))
     }
@@ -265,5 +277,6 @@ impl TextPlayback {
         self.effect.color1 = command.colors[0].unwrap_or(self.effect.color1);
         self.effect.color2 = command.colors[1].unwrap_or(self.effect.color2);
         self.wrap_width = command.wrap_width.or(self.wrap_width);
+        self.max_width = command.max_width.or(self.max_width);
     }
 }

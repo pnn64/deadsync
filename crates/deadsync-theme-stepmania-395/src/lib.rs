@@ -9,6 +9,7 @@ mod options;
 mod package;
 mod resources;
 mod scene;
+mod select_music;
 mod title;
 
 pub use animation::{ActorAnimation, AnimationError};
@@ -18,4 +19,5 @@ pub use metrics::MetricLookupError;
 pub use options::{PackageOptions, PackagePlayerOptions, PreparedOptions, PreparedPlayerOptions};
 pub use package::ThemePackage;
 pub use resources::{ResourceCatalog, ResourceCategory, ResourceLookupError};
+pub use select_music::{PackageMusic, PreparedMusic};
 pub use title::{PackageTitle, PackageTitleState, TITLE_FONT};

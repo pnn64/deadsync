@@ -104,7 +104,10 @@ impl App {
         let fade = if self.frame_policy.show_select_music_banners
             && matches!(self.state.shell.transition, super::TransitionState::Idle)
         {
-            self.state.screens.selection_presentation.as_ref().and_then(|selection| selection.banner_crossfade())
+            self.state
+                .screens
+                .wheel(self.state.screens.current_screen)
+                .and_then(|selection| selection.banner_crossfade())
         } else {
             None
         };

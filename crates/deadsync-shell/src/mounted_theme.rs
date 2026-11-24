@@ -13,7 +13,7 @@ use deadsync_online::gameplay_lobby::GameplayLobbySession;
 use deadsync_profile_gameplay::stage_scores::GameplayScoreSnapshots;
 use deadsync_theme::attract::AttractPresentation;
 use deadsync_theme::player_options::PlayerOptionsLayout;
-use deadsync_theme::selection::SelectionPresentation;
+use deadsync_theme::selection::{MusicWheelPresentation, SelectionPresentation};
 use deadsync_theme::stage::StagePresentation;
 use deadsync_theme::startup::StartupPresentation;
 use deadsync_theme::system_options::SystemOptionsPresentation;
@@ -44,6 +44,7 @@ pub struct ThemeMount {
     pub stage: Box<dyn StagePresentation<Actor>>,
     pub gameplay: GameplayPresentationMount,
     pub selection: Option<Box<dyn SelectionPresentation<Actor>>>,
+    pub music_wheel: Option<Box<dyn MusicWheelPresentation<Actor>>>,
     pub player_options: Option<PlayerOptionsLayoutFactory>,
     pub system_options: Option<Box<dyn SystemOptionsPresentation<Actor>>>,
     pub attract: Option<Box<dyn AttractPresentation<Actor>>>,
