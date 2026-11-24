@@ -357,10 +357,10 @@ pub(crate) fn decode(
             }
             let (before, after) = raw.split_at_mut(position);
             let filter = *after.first().ok_or(Error::Truncated)?;
-            if reuse
+            if filter == 4
+                && reuse
                 && row_index != 0
                 && row_index + 1 < h
-                && filter == 4
                 && after.get(stride + 1) == Some(&4)
                 && after.len() >= 2 * (stride + 1)
             {
@@ -377,15 +377,17 @@ pub(crate) fn decode(
                 }
             }
             let row = after.get_mut(1..1 + stride).ok_or(Error::Truncated)?;
-            if row_index == 0 {
-                unfilter_first(row, bpp, filter)?;
-            } else {
-                let previous = if reuse {
-                    &before[(row_index - 1) * stride..row_index * stride]
+            if filter != 0 {
+                if row_index == 0 {
+                    unfilter_first(row, bpp, filter)?;
                 } else {
-                    &before[position - stride..position]
-                };
-                unfilter(row, previous, bpp, filter)?;
+                    let previous = if reuse {
+                        &before[(row_index - 1) * stride..row_index * stride]
+                    } else {
+                        &before[position - stride..position]
+                    };
+                    unfilter(row, previous, bpp, filter)?;
+                }
             }
             if reuse {
                 // Read the next row's predictor from the compacted output.
