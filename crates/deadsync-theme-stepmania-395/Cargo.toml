@@ -5,7 +5,9 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-present = { path = "../deadlib-present" }
 deadsync-config = { path = "../deadsync-config" }
+deadsync-noteskin = { path = "../deadsync-noteskin" }
 
 [dev-dependencies]
 tempfile = "3.27.0"

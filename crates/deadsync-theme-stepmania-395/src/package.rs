@@ -2,7 +2,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::metrics::MetricCatalog;
-use crate::{MetricLookupError, ResourceCatalog, ResourceCategory, ResourceLookupError};
+use crate::{
+    ActorAnimation, AnimationError, MetricLookupError, ResourceCatalog, ResourceCategory,
+    ResourceLookupError,
+};
 
 /// Presentation data and resource paths for the same ordered theme folders.
 pub struct ThemePackage {
@@ -28,6 +31,19 @@ impl ThemePackage {
 
     pub fn metric(&self, section: &str, key: &str) -> Result<Option<&str>, MetricLookupError> {
         self.metrics.lookup(section, key)
+    }
+
+    /// Compiles an inherited command metric for the theme's logical canvas.
+    pub fn animation_metric(
+        &self,
+        section: &str,
+        key: &str,
+        canvas: [f32; 2],
+    ) -> Result<Option<ActorAnimation>, AnimationError> {
+        self.metric(section, key)
+            .map_err(AnimationError::Metric)?
+            .map(|commands| ActorAnimation::parse(commands, canvas))
+            .transpose()
     }
 
     /// Looks up a resource through the screen section's fallback chain.

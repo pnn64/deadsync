@@ -427,6 +427,8 @@ enum BuildOp {
     ZoomX(Target),
     ZoomY(Target),
     ZoomTo(f32, f32),
+    ZoomToWidth(f32),
+    ZoomToHeight(f32),
     Tint(Target, Target, Target, Target),
     TintRgb(f32, f32, f32),
     TintAlpha(f32),
@@ -750,6 +752,18 @@ impl RuntimeSegment {
                     },
                 }
             }
+            BuildOp::ZoomToWidth(width) => OpPrepared {
+                kind: PreparedKind::ScaleX {
+                    from: s.scale[0],
+                    to: if s.w == 0.0 { 0.0 } else { width / s.w },
+                },
+            },
+            BuildOp::ZoomToHeight(height) => OpPrepared {
+                kind: PreparedKind::ScaleY {
+                    from: s.scale[1],
+                    to: if s.h == 0.0 { 0.0 } else { height / s.h },
+                },
+            },
             BuildOp::Tint(tr, tg, tb, ta) => {
                 let to0 = match tr {
                     Target::Abs(v) => v,
@@ -1143,6 +1157,18 @@ impl SegmentBuilder {
         self
     }
 
+    #[must_use]
+    pub fn zoom_to_width(mut self, width: f32) -> Self {
+        self.ops.push(BuildOp::ZoomToWidth(width));
+        self
+    }
+
+    #[must_use]
+    pub fn zoom_to_height(mut self, height: f32) -> Self {
+        self.ops.push(BuildOp::ZoomToHeight(height));
+        self
+    }
+
     // --- tint / alpha ---
     #[must_use]
     pub fn diffuse(mut self, r: f32, g: f32, b: f32, a: f32) -> Self {
@@ -1365,6 +1391,19 @@ pub fn sleep(dur: f32) -> Step {
 /// would allocate during per-frame actor construction.
 #[derive(Clone, Debug)]
 pub struct Step(Segment);
+
+impl Step {
+    /// Applies the final property values of this step to the supplied state.
+    #[must_use]
+    pub fn end_state(&self, mut state: TweenState) -> TweenState {
+        let mut segment = RuntimeSegment::new(&self.0);
+        segment.prepare(self.0.build_ops.clone(), &state);
+        for operation in &segment.prepared {
+            operation.apply_final(&mut state);
+        }
+        state
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct TweenSeq {

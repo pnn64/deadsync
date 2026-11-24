@@ -2028,7 +2028,9 @@ dependencies = [
 name = "deadsync-theme-stepmania-395"
 version = "0.6.177"
 dependencies = [
+ "deadlib-present",
  "deadsync-config",
+ "deadsync-noteskin",
  "tempfile",
 ]
 
