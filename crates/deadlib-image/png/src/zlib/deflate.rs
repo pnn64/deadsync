@@ -149,21 +149,23 @@ impl Deflater {
     ) -> Result<DeflateProgress, Error> {
         let (mut consumed, mut written) = (0, 0);
         loop {
-            let n = (self.writer.bytes.len() - self.pending).min(output.len() - written);
-            output[written..written + n]
-                .copy_from_slice(&self.writer.bytes[self.pending..self.pending + n]);
-            self.pending += n;
-            written += n;
-            self.total_out = self.total_out.checked_add(n).ok_or(Error::LimitExceeded)?;
-            if self.pending != self.writer.bytes.len() {
-                return Ok(DeflateProgress {
-                    consumed,
-                    written,
-                    status: StreamStatus::NeedOutput,
-                });
+            if !self.writer.bytes.is_empty() {
+                let n = (self.writer.bytes.len() - self.pending).min(output.len() - written);
+                output[written..written + n]
+                    .copy_from_slice(&self.writer.bytes[self.pending..self.pending + n]);
+                self.pending += n;
+                written += n;
+                self.total_out = self.total_out.checked_add(n).ok_or(Error::LimitExceeded)?;
+                if self.pending != self.writer.bytes.len() {
+                    return Ok(DeflateProgress {
+                        consumed,
+                        written,
+                        status: StreamStatus::NeedOutput,
+                    });
+                }
+                self.writer.bytes.clear();
+                self.pending = 0;
             }
-            self.writer.bytes.clear();
-            self.pending = 0;
             if self.finishing {
                 self.done = true;
                 return Ok(DeflateProgress {
