@@ -56,7 +56,8 @@ fn run_child(theme: &str) {
             "[Options]\nTheme={theme}\nVideoRenderer=Software\nLogToFile=0\nCoinMode=Home\n\
              EnableArrowCloud=0\nEnableGrooveStats=0\n\
              [Theme]\nMachineShowSelectProfile=1\nMachineShowSelectColor=0\n\
-             MachineShowSelectStyle=1\nMachineShowSelectPlayMode=1\n",
+             MachineShowSelectStyle=1\nMachineShowSelectPlayMode=1\n\
+             MachineShowEvalSummary=1\nMachineShowNameEntry=1\nMachineShowGameover=1\n",
         ),
     )
     .unwrap();
@@ -370,6 +371,23 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     }
     settle(app, event_loop, CurrentScreen::SelectMusic);
     assert!(app.state.screens.evaluation_departure.is_none());
+    if native_stage {
+        app.handle_navigation_action(CurrentScreen::Menu);
+        settle(app, event_loop, CurrentScreen::EvaluationSummary);
+        let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+        assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
+            if source.texture_key() == Some("stepmania-395/evaluation-summary-header"))));
+        assert!(actor_tree_has_text(&actors, &numeric_score));
+        press(app, event_loop, VirtualAction::p2_start);
+        settle(app, event_loop, CurrentScreen::Initials);
+        press(app, event_loop, VirtualAction::p2_start);
+        settle(app, event_loop, CurrentScreen::GameOver);
+        let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+        assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
+            if source.texture_key() == Some("stepmania-395/game-over"))));
+        settle(app, event_loop, CurrentScreen::Init);
+        assert!(app.state.screens.attract.as_ref().unwrap().timeline.media().music.is_some());
+    }
     if openitg {
         for _ in 0..2 {
             press(app, event_loop, VirtualAction::p2_right);
@@ -521,6 +539,12 @@ fn menu_frame(app: &mut App, event_loop: &ActiveEventLoop) {
     }
     finish_pending_stage(app);
     deadlib_present::runtime::tick(STEP_SECONDS);
+    if matches!(
+        app.state.shell.transition,
+        TransitionState::FadingIn { .. } | TransitionState::ActorsFadeIn { .. }
+    ) {
+        app.state.screens.advance_session_end_entry(STEP_SECONDS);
+    }
     let transition = app.state.shell.transition.advance_frame(STEP_SECONDS);
     if transition.step_screen && app.state.screens.current_screen != CurrentScreen::Gameplay {
         app.step_idle_screen(STEP_SECONDS, Instant::now(), event_loop);

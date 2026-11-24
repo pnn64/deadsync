@@ -973,6 +973,39 @@ mod tests {
     }
 
     #[test]
+    fn session_summary_selects_recent_passes_and_aggregates_physical_player_sides() {
+        let song = test_song("Songs/Test/session.ssc", "session", 60.0);
+        let make = |grade, earned, numeric, combo| {
+            let mut player = test_player_summary(test_chart("session-chart"), grade, earned, 100);
+            player.numeric_score = numeric;
+            player.max_combo = combo;
+            player.judgment_counts = [earned as u32, 0, 0, 0, 0, 0];
+            player.radar_achievement = Some([0.5; 5]);
+            StageSummary {
+                song: song.clone(),
+                music_rate: 1.0,
+                duration_seconds: 60.0,
+                players: [None, Some(player)],
+            }
+        };
+        let stages = [
+            make(Grade::Tier09, 20, 10, 3),
+            make(Grade::Tier09, 60, 20, 7),
+            make(Grade::Failed, 0, 1, 0),
+            make(Grade::Tier09, 80, 30, 9),
+        ];
+        let summary = crate::session_summary::recent_passed(&stages, 2);
+        assert_eq!(summary.stage_indices, [3, 1]);
+        assert!(summary.players[0].is_none());
+        let player = summary.players[1].as_ref().unwrap();
+        assert_eq!(player.numeric_score, 50);
+        assert_eq!(player.combo_total, 16);
+        assert_eq!(player.judgments[0], 140);
+        assert!((player.percent - 0.7).abs() <= f64::EPSILON);
+        assert_eq!(player.radar_achievement, Some([0.5; 5]));
+    }
+
+    #[test]
     fn course_life_timeline_keeps_one_steps_clock_and_never_restarts_the_colored_prefix() {
         use judgment::JudgeGrade;
         let song = test_song("Songs/Test/a.ssc", "a", 60.0);

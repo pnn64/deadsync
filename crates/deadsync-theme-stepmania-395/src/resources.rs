@@ -14,6 +14,8 @@ pub(crate) const JUDGE_FONT: &str = "stepmania-395/judge";
 pub(crate) const COMBO_FONT: &str = "stepmania-395/combo";
 pub(crate) const PERCENT_FONT: &str = "stepmania-395/percent";
 pub(crate) const STAGE_FONT: &str = "stepmania-395/stages";
+pub(crate) const ENTRY_FONT: &str = "stepmania-395/name-entry";
+pub(crate) const TIMER_FONT: &str = "stepmania-395/timer";
 pub(crate) const SWOOSH: &str = "assets/media/stepmania-395/swoosh.ogg";
 pub(crate) const RESULT_SWOOSH: &str = "assets/media/stepmania-395/result-swoosh.ogg";
 
@@ -77,6 +79,16 @@ impl ThemeResources for StepManiaTheme {
         ThemeAssetManifest {
             fonts: &[
                 FontAssetSpec {
+                    name: ENTRY_FONT,
+                    ini_path: "assets/fonts/stepmania-395/name-entry.ini",
+                    fallback_font_name: Some(NORMAL_FONT),
+                },
+                FontAssetSpec {
+                    name: TIMER_FONT,
+                    ini_path: "assets/fonts/stepmania-395/timer.ini",
+                    fallback_font_name: Some(NORMAL_FONT),
+                },
+                FontAssetSpec {
                     name: STAGE_FONT,
                     ini_path: "assets/fonts/stepmania-395/stages.ini",
                     fallback_font_name: Some(NORMAL_FONT),
@@ -129,6 +141,8 @@ impl ThemeResources for StepManiaTheme {
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("name-entry"),
+                png!("game-over"),
                 png!("loading-splash"),
                 png!("attract-bullets"),
                 png!("attract-demo"),

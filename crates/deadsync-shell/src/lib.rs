@@ -38,6 +38,7 @@ mod options_runtime;
 mod pad_config;
 mod player_options;
 mod post_song;
+mod post_game;
 mod profile_import;
 mod profile_load;
 mod profile_session;

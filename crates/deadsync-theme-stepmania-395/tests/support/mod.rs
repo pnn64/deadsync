@@ -197,3 +197,76 @@ pub fn title_actors(elapsed: f32) -> Vec<Actor> {
     );
     actors
 }
+
+pub fn session_actors(screen: deadsync_theme::Screen, elapsed: f32, p2_only: bool) -> Vec<Actor> {
+    use deadlib_assets::AssetManager;
+    use deadsync_theme::post_game::{
+        NameEntryPage, NameEntryRecord, SessionEndPresentation, SessionPlayerSummary,
+        SessionSummary, SessionSummaryPage, TimedNameEntry,
+    };
+    use deadsync_theme_stepmania_395::StepManiaSessionEnd;
+    use std::sync::Arc;
+    let presentation = StepManiaSessionEnd;
+    let mut actors = Vec::new();
+    match screen {
+        deadsync_theme::Screen::GameOver => presentation.push_game_over(&mut actors, elapsed),
+        deadsync_theme::Screen::Initials => {
+            let mut editor = TimedNameEntry::new(
+                presentation.policy().name_entry,
+                [!p2_only, true],
+                ["AAA", "BBB"],
+            );
+            editor.advance(elapsed);
+            let _ = editor.select(1, 2);
+            let records = vec![NameEntryRecord {
+                title: "Quartz".into(),
+                difficulty: "Hard".into(),
+                rank: 1,
+                personal: false,
+            }];
+            presentation.push_name_entry(
+                &mut actors,
+                NameEntryPage {
+                    editor: &editor,
+                    diagonal: false,
+                    wide: false,
+                    records: [if p2_only { &[] } else { &records }, &records],
+                },
+            );
+        }
+        deadsync_theme::Screen::EvaluationSummary => {
+            let results = SessionSummary {
+                stage_indices: vec![2, 1, 0],
+                players: std::array::from_fn(|side| {
+                    if p2_only && side == 0 {
+                        return None;
+                    }
+                    Some(SessionPlayerSummary {
+                        judgments: [963, 104, 27, 4, 2, 8],
+                        grade: deadsync_score::Grade::Tier08,
+                        percent: 0.9765,
+                        numeric_score: 36_543_210,
+                        combo_total: 945,
+                        holds: 21,
+                        rolls: 6,
+                        radar_possible: [0.8, 0.7, 0.6, 0.5, 0.4],
+                        radar_achievement: Some([0.9, 0.8, 0.7, 1.0, 0.95]),
+                    })
+                }),
+            };
+            let banners: [Arc<str>; 3] = std::array::from_fn(|_| "".into());
+            presentation.push_summary(
+                &mut actors,
+                &AssetManager::new(),
+                SessionSummaryPage {
+                    results: &results,
+                    banners: &banners,
+                    elapsed,
+                    departure_elapsed: None,
+                },
+            );
+        }
+        _ => unreachable!(),
+    }
+    actors
+}

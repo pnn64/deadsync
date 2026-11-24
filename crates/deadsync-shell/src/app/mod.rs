@@ -642,6 +642,7 @@ pub struct ScreensState {
     evaluation_departure: Option<deadsync_theme::stage::EvaluationDeparture<Actor>>,
     stage_presentation: Box<dyn deadsync_theme::stage::StagePresentation<Actor>>,
     stage_card: Option<Box<dyn deadsync_theme::stage::StageCardPresentation<Actor>>>,
+    session_end: Option<crate::post_game::SessionEndRuntime>,
     practice_state: Option<PracticeState>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor,
@@ -1232,6 +1233,17 @@ fn options_init_view(
 }
 
 impl ScreensState {
+    fn advance_session_end_entry(&mut self, delta: f32) {
+        if matches!(
+            self.current_screen,
+            CurrentScreen::EvaluationSummary | CurrentScreen::Initials | CurrentScreen::GameOver
+        )
+            && let Some(ending) = self.session_end.as_mut()
+        {
+            ending.advance_entry(self.current_screen, delta);
+        }
+    }
+
     fn wheel(
         &self,
         screen: CurrentScreen,
@@ -1394,6 +1406,7 @@ impl ScreensState {
             evaluation_departure: None,
             stage_presentation: mount.stage,
             stage_card: mount.stage_card,
+            session_end: mount.session_end.map(crate::post_game::SessionEndRuntime::new),
             select_profile_state,
             select_color_state,
             arrowcloud_login_state,
@@ -1432,6 +1445,17 @@ impl ScreensState {
         smx_assignment: Option<&SmxAssignmentView>,
         effects: &mut Vec<ThemeEffect>,
     ) {
+        if matches!(
+            self.current_screen,
+            CurrentScreen::EvaluationSummary | CurrentScreen::Initials | CurrentScreen::GameOver
+        )
+            && let Some(ending) = self.session_end.as_mut()
+        {
+            if let Some(effect) = ending.advance(self.current_screen, delta_time) {
+                effects.push(effect);
+            }
+            return;
+        }
         let (effect, _) = match self.current_screen {
             CurrentScreen::Gameplay => unreachable!("gameplay has its own frame handoff"),
             CurrentScreen::Practice => {
@@ -4966,6 +4990,12 @@ impl App {
             self.state.screens.current_screen,
             &self.state.shell.transition,
         );
+        if matches!(
+            self.state.shell.transition,
+            TransitionState::FadingIn { .. } | TransitionState::ActorsFadeIn { .. }
+        ) {
+            self.state.screens.advance_session_end_entry(transition_dt);
+        }
         let transition_plan = self.state.shell.transition.advance_frame(transition_dt);
         if transition_plan.sync_input_capture {
             self.sync_gameplay_input_capture();
@@ -8377,6 +8407,18 @@ impl App {
                     );
                 }
             }
+            screen @ (CurrentScreen::EvaluationSummary
+            | CurrentScreen::Initials
+            | CurrentScreen::GameOver)
+                if self.state.screens.session_end.is_some() =>
+            {
+                self.state.screens.session_end.as_ref().unwrap().push(
+                    screen,
+                    &mut actors,
+                    &self.asset_manager,
+                    &self.state.shell.transition,
+                );
+            }
             CurrentScreen::EvaluationSummary => {
                 let stages = PostSelectStageView::new(
                     &self.state.session.played_stages,
@@ -9501,7 +9543,7 @@ impl App {
         } else if target == CurrentScreen::Init {
             let active_color_index = self.state.screens.menu_state.color_index();
             self.state.screens.startup_screen.reset_intro(active_color_index);
-            if prev == CurrentScreen::Menu
+            if matches!(prev, CurrentScreen::Menu | CurrentScreen::GameOver)
                 && let Some(intro) = self.state.screens.attract.as_mut()
             {
                 let (song_limit, course_limit) = intro.timeline.record_limits();
@@ -10646,6 +10688,9 @@ impl App {
             let display_stages = self
                 .post_select_display_stages(config::runtime::get().show_course_individual_scores)
                 .into_owned();
+            if let Some(ending) = self.state.screens.session_end.as_mut() {
+                ending.enter_summary(&display_stages, return_to);
+            }
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {
                     if let Some(path) = stage.song.banner_path.as_ref() {
@@ -10677,8 +10722,18 @@ impl App {
             let display_stages = self
                 .post_select_display_stages(config::runtime::get().show_course_individual_scores)
                 .into_owned();
-            self.state.screens.initials_state =
-                initials::init(crate::post_song::initials_runtime_view(&display_stages));
+            let runtime = crate::post_song::initials_runtime_view(&display_stages);
+            if let Some(ending) = self.state.screens.session_end.as_mut() {
+                let records = crate::post_song::name_entry_records(&display_stages, &runtime);
+                ending.enter_names(
+                    runtime.players.each_ref().map(|player| player.name_entry_eligible),
+                    runtime.players.each_ref().map(|player| player.player_initials.as_str()),
+                    runtime.play_style.is_pump(),
+                    matches!(runtime.play_style, profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble),
+                    records,
+                );
+            }
+            self.state.screens.initials_state = initials::init(runtime);
             self.state.screens.initials_state.active_color_index = color_idx;
             initials::set_highscore_lists(&mut self.state.screens.initials_state, &display_stages);
 
@@ -10692,6 +10747,9 @@ impl App {
         }
 
         if target == CurrentScreen::GameOver {
+            if let Some(ending) = self.state.screens.session_end.as_mut() {
+                ending.enter_game_over();
+            }
             let color_idx = match prev {
                 CurrentScreen::Initials => self.state.screens.initials_state.active_color_index,
                 CurrentScreen::EvaluationSummary => {

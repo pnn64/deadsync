@@ -7,6 +7,7 @@ mod intro;
 mod menu;
 mod options;
 mod play_selection;
+mod post_game;
 mod presentation;
 mod radar;
 mod ranking;
@@ -27,6 +28,7 @@ use deadsync_theme::{
 pub use intro::StepManiaIntro;
 pub use menu::MenuState;
 pub use options::{StepManiaPlayerOptions, StepManiaSystemOptions};
+pub use post_game::StepManiaSessionEnd;
 pub use select_music::StepManiaMusicWheel;
 pub use stage::StepManiaStageCard;
 pub use stage_presentation::StepManiaStagePresentation;
@@ -44,7 +46,15 @@ impl ThemeTransitionAudio for StepManiaTheme {
         music_enabled: bool,
     ) -> TransitionMusic {
         match to {
-            Screen::Menu | Screen::Options | Screen::Init => TransitionMusic::Stop,
+            Screen::Menu
+            | Screen::Options
+            | Screen::Init
+            | Screen::GameOver
+            | Screen::EvaluationSummary => TransitionMusic::Stop,
+            Screen::Initials if music_enabled => TransitionMusic::Play {
+                path: "assets/media/stepmania-395/name-entry.ogg".into(),
+                looping: true,
+            },
             Screen::SelectProfile | Screen::SelectStyle | Screen::SelectPlayMode
                 if music_enabled =>
             {
@@ -79,7 +89,7 @@ impl ThemeTransitionAudio for StepManiaTheme {
             | Screen::SelectCourse
             | Screen::Options
             | Screen::PlayerOptions => Some(resources::SWOOSH),
-            Screen::Evaluation => Some(resources::RESULT_SWOOSH),
+            Screen::Evaluation | Screen::EvaluationSummary => Some(resources::RESULT_SWOOSH),
             _ => None,
         }
     }
@@ -91,7 +101,7 @@ impl ThemeTransitionAudio for StepManiaTheme {
             | Screen::SelectPlayMode
             | Screen::Options
             | Screen::PlayerOptions => Some(resources::SWOOSH),
-            Screen::Evaluation => Some(resources::RESULT_SWOOSH),
+            Screen::Evaluation | Screen::EvaluationSummary => Some(resources::RESULT_SWOOSH),
             _ => None,
         }
     }

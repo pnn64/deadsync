@@ -113,6 +113,33 @@ fn native_attract_captures() {
         &assets,
     );
     let mut intro = StepManiaIntro::default();
+    for (name, screen, elapsed, p2) in [
+        (
+            "session-summary",
+            deadsync_theme::Screen::EvaluationSummary,
+            5.0,
+            false,
+        ),
+        (
+            "session-summary-p2",
+            deadsync_theme::Screen::EvaluationSummary,
+            5.0,
+            true,
+        ),
+        ("name-entry", deadsync_theme::Screen::Initials, 2.0, false),
+        ("name-entry-p2", deadsync_theme::Screen::Initials, 2.0, true),
+        ("game-over", deadsync_theme::Screen::GameOver, 1.0, false),
+    ] {
+        capture_actors(
+            name,
+            &support::session_actors(screen, elapsed, p2),
+            elapsed,
+            &output,
+            &metrics,
+            &mut backend,
+            &assets,
+        );
+    }
     for (name, elapsed) in [("title-delayed-logo", 0.25), ("title-revealed-logo", 1.0)] {
         capture_actors(
             name,

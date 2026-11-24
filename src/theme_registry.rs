@@ -16,8 +16,9 @@ use deadsync_theme_simply_love::screens::{
 };
 use deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView;
 use deadsync_theme_stepmania_395::{
-    StepManiaIntro, StepManiaMusicWheel, StepManiaPlayerOptions, StepManiaStageCard,
-    StepManiaStagePresentation, StepManiaStartup, StepManiaSystemOptions, StepManiaTheme,
+    StepManiaIntro, StepManiaMusicWheel, StepManiaPlayerOptions, StepManiaSessionEnd,
+    StepManiaStageCard, StepManiaStagePresentation, StepManiaStartup, StepManiaSystemOptions,
+    StepManiaTheme,
 };
 
 const GAMEPLAY_COMPOSER: GameplayPresentationMount = GameplayPresentationMount {
@@ -82,6 +83,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             resources: resources::<StepManiaTheme>(),
             stage: Box::new(StepManiaStagePresentation::default()),
             stage_card: Some(Box::new(StepManiaStageCard)),
+            session_end: Some(Box::new(StepManiaSessionEnd)),
             gameplay: GAMEPLAY_COMPOSER,
             selection: Some(Box::new(StepManiaMusicWheel::default())),
             music_wheel: None,
@@ -99,6 +101,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             resources: SupplementalResources::default(),
             stage: Box::new(SimplyLoveTheme),
             stage_card: None,
+            session_end: None,
             gameplay: GAMEPLAY_COMPOSER,
             selection: None,
             music_wheel: None,
@@ -114,6 +117,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             resources: resources::<OpenItgTheme>(),
             stage: Box::new(OpenItgStagePresentation::default()),
             stage_card: None,
+            session_end: None,
             gameplay: GAMEPLAY_COMPOSER,
             selection: Some(Box::new(OpenItgSelectionPresentation::default())),
             music_wheel: None,

@@ -497,6 +497,13 @@ impl App {
                 &mut self.state.screens.evaluation_state,
                 &ev,
             ),
+            screen @ (CurrentScreen::EvaluationSummary
+            | CurrentScreen::Initials
+            | CurrentScreen::GameOver)
+                if self.state.screens.session_end.is_some() =>
+            {
+                self.state.screens.session_end.as_mut().unwrap().input(screen, &ev)
+            }
             CurrentScreen::EvaluationSummary => {
                 let num_stages = self.post_select_display_stage_count(
                     config::runtime::get().show_course_individual_scores,

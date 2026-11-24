@@ -15,6 +15,56 @@ use deadsync_theme::{Screen, ThemeEffect, ThemeResources, TransitionState};
 use deadsync_theme_stepmania_395::{StepManiaIntro, StepManiaStageCard, StepManiaTheme};
 
 #[test]
+fn session_endings_use_small_banner_stack_timed_letters_and_the_original_game_over() {
+    use deadlib_present::space::{Metrics, with_current_metrics};
+    use deadsync_theme::{ThemeTransitionAudio, ThemeTransitions};
+    with_current_metrics(Metrics::centered(640.0, 480.0), || {
+        assert_eq!(
+            StepManiaTheme::in_transition(Screen::EvaluationSummary, ()).1,
+            1.3
+        );
+        assert_eq!(
+            StepManiaTheme::entry_sound(Screen::EvaluationSummary),
+            StepManiaTheme::entry_sound(Screen::Evaluation),
+        );
+        let summary = support::session_actors(Screen::EvaluationSummary, 5.0, true);
+        let frames: Vec<_> = summary
+            .iter()
+            .filter_map(|actor| match actor {
+                Actor::Sprite {
+                    source,
+                    offset,
+                    size: [SizeSpec::Px(128.0), SizeSpec::Px(44.0)],
+                    ..
+                } if source.texture_key() == Some("stepmania-395/evaluation-banner-frame") => {
+                    Some(*offset)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(frames, [[260.0, 80.0], [290.0, 90.0], [320.0, 100.0]]);
+        assert!(summary.iter().any(
+            |actor| matches!(actor, Actor::Text { content, .. } if content.as_str() == "036543210")
+        ));
+        let names = support::session_actors(Screen::Initials, 2.0, true);
+        assert!(
+            !names
+                .iter()
+                .any(|actor| matches!(actor, Actor::Text { font: "miso", .. }))
+        );
+        assert!(names.iter().any(|actor| matches!(actor, Actor::Text { font: "stepmania-395/name-entry", content, offset, .. } if content.as_str() == "B" && offset[0] > 320.0)));
+        let ending = support::session_actors(Screen::GameOver, 1.0, false);
+        assert_eq!(ending.len(), 2);
+        assert!(
+            ending
+                .iter()
+                .any(|actor| matches!(actor, Actor::Sprite { source, tint, .. }
+            if source.texture_key() == Some("stepmania-395/game-over") && tint[3] == 0.75))
+        );
+    });
+}
+
+#[test]
 fn title_logo_stays_hidden_until_its_original_reveal_delay() {
     let hidden = support::title_actors(0.25);
     let shown = support::title_actors(1.0);

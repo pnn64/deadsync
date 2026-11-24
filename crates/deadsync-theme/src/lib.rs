@@ -5,6 +5,7 @@ mod effect;
 pub mod evaluation;
 pub mod main_menu;
 pub mod player_options;
+pub mod post_game;
 pub mod profile_picker;
 mod resources;
 mod runtime;

@@ -84,6 +84,13 @@ combo runs. Song results retain these optional ratios; course results retain the
 number of passed stages. Evaluation views forward these game facts, while each
 theme decides whether to draw bars, survived counters, or other result artwork.
 
+Session-ending presentations receive a prepared session summary, banner keys,
+record facts and a game-owned timed name editor. The score layer aggregates
+recent passed stages and resolves timed character selections; the shell maps
+physical input, forwards profile updates and handles navigation. The mounted
+presentation supplies its clock policy and draws summary, name entry and Game
+Over without loading an external theme directory.
+
 Simply Love resolves its Step Statistics and upper NPS graph dimensions,
 scroll window, and scale from the prepared stage. The stage allocates the
 optional graph's life sample buffers before play and samples the same game

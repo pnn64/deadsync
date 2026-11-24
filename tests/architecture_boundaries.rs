@@ -7600,6 +7600,7 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
     assert!(!main.contains("\"--theme-"));
     assert!(registry.contains("ThemeFlag::StepMania395 => ThemeMount"));
     assert!(registry.contains("InstalledMenu::mount::<StepManiaTheme>"));
+    assert!(registry.contains("session_end: Some(Box::new(StepManiaSessionEnd))"));
     let native_mount = registry.split("ThemeFlag::StepMania395 => ThemeMount").nth(1).unwrap()
         .split("ThemeFlag::SimplyLove => ThemeMount").next().unwrap();
     assert!(!native_mount.contains("FALLBACK_TRANSITIONS"));

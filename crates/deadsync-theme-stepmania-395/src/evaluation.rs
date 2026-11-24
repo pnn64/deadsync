@@ -24,31 +24,75 @@ impl EvaluationOverviewPresentation<Actor> for StepManiaEvaluation {
         _assets: &AssetManager,
         page: EvaluationOverview<'_>,
     ) {
-        let layout = Layout::current();
-        let elapsed = page.elapsed.max(0.0);
-        let departure = page.departure_elapsed;
-        let banner_y = 100.0 + 480.0 * (1.0 - arrive(elapsed, 0.0) + leave(departure, 0.8));
-        actors.push(
-            layout
-                .sprite(
-                    "stepmania-395/music-background",
-                    [320.0, 240.0],
-                    [640.0, 480.0],
-                    -100,
-                )
-                .build(0),
-        );
-        let mut header = layout.sprite(
-            "stepmania-395/evaluation-header",
-            [
-                320.0 + 640.0 * (1.0 - arrive(elapsed, 0.0) + leave(departure, 0.0)),
-                22.0,
-            ],
-            [640.0, 44.0],
-            95,
-        );
-        header.z(95);
-        actors.push(header.build(0));
+        push_page(actors, page, None);
+    }
+}
+
+fn push_page(
+    actors: &mut Vec<Actor>,
+    page: EvaluationOverview<'_>,
+    summary: Option<(&AssetManager, &[std::sync::Arc<str>])>,
+) {
+    let layout = Layout::current();
+    let elapsed = page.elapsed.max(0.0);
+    let departure = page.departure_elapsed;
+    let banner_y = 100.0 + 480.0 * (1.0 - arrive(elapsed, 0.0) + leave(departure, 0.8));
+    actors.push(
+        layout
+            .sprite(
+                "stepmania-395/music-background",
+                [320.0, 240.0],
+                [640.0, 480.0],
+                -100,
+            )
+            .build(0),
+    );
+    let mut header = layout.sprite(
+        if summary.is_some() {
+            "stepmania-395/evaluation-summary-header"
+        } else {
+            "stepmania-395/evaluation-header"
+        },
+        [
+            320.0 + 640.0 * (1.0 - arrive(elapsed, 0.0) + leave(departure, 0.0)),
+            22.0,
+        ],
+        [640.0, 44.0],
+        95,
+    );
+    header.z(95);
+    actors.push(header.build(0));
+    if let Some((assets, banners)) = summary {
+        for (index, key) in banners.iter().take(5).enumerate() {
+            let x = 260.0 + index as f32 * 30.0;
+            let y = banner_y - 20.0 + index as f32 * 10.0;
+            let key = if assets.has_texture_key(key) {
+                key.clone()
+            } else {
+                "stepmania-395/music-fallback".into()
+            };
+            let [px, py] = layout.position([x, y]);
+            actors.push(cover_sprite(
+                key,
+                px,
+                py,
+                124.0,
+                39.0,
+                layout.scale,
+                2 + index as i16 * 2,
+            ));
+            actors.push(
+                layout
+                    .sprite(
+                        "stepmania-395/evaluation-banner-frame",
+                        [x, y],
+                        [128.0, 44.0],
+                        3 + index as i16 * 2,
+                    )
+                    .build(0),
+            );
+        }
+    } else {
         let banner = page
             .banner_key
             .cloned()
@@ -81,43 +125,42 @@ impl EvaluationOverviewPresentation<Actor> for StepManiaEvaluation {
                     .build(0),
             );
         }
-
-        for index in 0..7 {
-            let delay = (index + 1) as f32 * 0.1;
-            let y = 160.0
-                + index as f32 * 32.0
-                + 480.0
-                    * (1.0 - arrive(elapsed, delay) + leave(departure, 0.7 - index as f32 * 0.1));
-            let mut label = layout.sprite(
-                "stepmania-395/evaluation-judgments",
-                [320.0, y],
-                [106.0, 30.0],
-                3,
-            );
-            label.customtexturerect([0.0, index as f32 / 8.0, 1.0, (index + 1) as f32 / 8.0]);
-            actors.push(label.build(0));
-        }
-        let score_y = 380.0 + 480.0 * (1.0 - arrive(elapsed, 0.8) + leave(departure, 0.0));
-        actors.push(
-            layout
-                .sprite(
-                    "stepmania-395/evaluation-score",
-                    [320.0, score_y],
-                    [102.0, 22.0],
-                    3,
-                )
-                .build(0),
-        );
-        for player in page.players.iter().flatten() {
-            push_player(actors, layout, player, &page, banner_y);
-        }
-        push_footer(
-            actors,
-            "Press &START; to continue",
-            (elapsed / 0.5).clamp(0.0, 1.0)
-                * (1.0 - departure.unwrap_or_default() / 0.5).clamp(0.0, 1.0),
-        );
     }
+
+    for index in 0..7 {
+        let delay = (index + 1) as f32 * 0.1;
+        let y = 160.0
+            + index as f32 * 32.0
+            + 480.0 * (1.0 - arrive(elapsed, delay) + leave(departure, 0.7 - index as f32 * 0.1));
+        let mut label = layout.sprite(
+            "stepmania-395/evaluation-judgments",
+            [320.0, y],
+            [106.0, 30.0],
+            3,
+        );
+        label.customtexturerect([0.0, index as f32 / 8.0, 1.0, (index + 1) as f32 / 8.0]);
+        actors.push(label.build(0));
+    }
+    let score_y = 380.0 + 480.0 * (1.0 - arrive(elapsed, 0.8) + leave(departure, 0.0));
+    actors.push(
+        layout
+            .sprite(
+                "stepmania-395/evaluation-score",
+                [320.0, score_y],
+                [102.0, 22.0],
+                3,
+            )
+            .build(0),
+    );
+    for player in page.players.iter().flatten() {
+        push_player(actors, layout, player, &page, banner_y, summary.is_some());
+    }
+    push_footer(
+        actors,
+        "Press &START; to continue",
+        (elapsed / 0.5).clamp(0.0, 1.0)
+            * (1.0 - departure.unwrap_or_default() / 0.5).clamp(0.0, 1.0),
+    );
 }
 
 fn push_player(
@@ -126,6 +169,7 @@ fn push_player(
     player: &EvaluationPlayerOverview<'_>,
     page: &EvaluationOverview<'_>,
     banner_y: f32,
+    summary: bool,
 ) {
     let elapsed = page.elapsed.max(0.0);
     let departure = page.departure_elapsed;
@@ -151,36 +195,38 @@ fn push_player(
         if departure.is_some() { 5.0 } else { elapsed },
     );
 
-    let icon_x = if p2 { 426.0 } else { 214.0 };
-    let mut icon = layout.sprite(
-        "stepmania-395/music-difficulty",
-        [icon_x, banner_y - 20.0],
-        [32.0, 32.0],
-        3,
-    );
-    let difficulty = difficulty_index(player.difficulty);
-    icon.customtexturerect([
-        0.0,
-        difficulty as f32 / 6.0,
-        1.0,
-        (difficulty + 1) as f32 / 6.0,
-    ]);
-    actors.push(icon.build(0));
-    let mut mods = layout.text(
-        NORMAL_FONT,
-        player.mods.into(),
-        [if p2 { 440.0 } else { 200.0 }, banner_y + 40.0],
-        0.5,
-    );
-    mods.align(if p2 { 1.0 } else { 0.0 }, 1.0);
-    mods.horizalign(if p2 {
-        TextAlign::Right
-    } else {
-        TextAlign::Left
-    });
-    mods.maxwidth(240.0 * layout.scale);
-    mods.z(4);
-    actors.push(mods.build(0));
+    if !summary {
+        let icon_x = if p2 { 426.0 } else { 214.0 };
+        let mut icon = layout.sprite(
+            "stepmania-395/music-difficulty",
+            [icon_x, banner_y - 20.0],
+            [32.0, 32.0],
+            3,
+        );
+        let difficulty = difficulty_index(player.difficulty);
+        icon.customtexturerect([
+            0.0,
+            difficulty as f32 / 6.0,
+            1.0,
+            (difficulty + 1) as f32 / 6.0,
+        ]);
+        actors.push(icon.build(0));
+        let mut mods = layout.text(
+            NORMAL_FONT,
+            player.mods.into(),
+            [if p2 { 440.0 } else { 200.0 }, banner_y + 40.0],
+            0.5,
+        );
+        mods.align(if p2 { 1.0 } else { 0.0 }, 1.0);
+        mods.horizalign(if p2 {
+            TextAlign::Right
+        } else {
+            TextAlign::Left
+        });
+        mods.maxwidth(240.0 * layout.scale);
+        mods.z(4);
+        actors.push(mods.build(0));
+    }
 
     for index in 0..7 {
         let value = if index < 6 {
@@ -422,4 +468,65 @@ pub(crate) fn push_departure(actors: &mut Vec<Actor>, elapsed: f32) {
     sign.zoomy(t);
     sign.alpha(t);
     actors.push(sign.build(0));
+}
+
+pub(crate) fn push_session_summary(
+    actors: &mut Vec<Actor>,
+    assets: &AssetManager,
+    summary: deadsync_theme::post_game::SessionSummaryPage<'_>,
+) {
+    use std::sync::Arc;
+    let empty: Arc<str> = "".into();
+    let life = Default::default();
+    let players = std::array::from_fn(|side| {
+        summary.results.players[side]
+            .as_ref()
+            .map(|result| EvaluationPlayerOverview {
+                p2: side == 1,
+                grade: result.grade,
+                percent: result.percent * 100.0,
+                numeric_score: result.numeric_score,
+                radar_possible: result.radar_possible,
+                radar_achievement: result.radar_achievement,
+                stages_passed: 0,
+                individual_percent: None,
+                ex_percent: None,
+                hard_ex_percent: None,
+                difficulty: "",
+                meter: 0,
+                mods: &empty,
+                judgments: result.judgments,
+                row_window_counts: Default::default(),
+                score_valid: true,
+                dropped_hold_or_roll: false,
+                jumps: [0; 2],
+                holds: [result.holds, 0],
+                mines: [0; 2],
+                hands: [0; 2],
+                rolls: [result.rolls, 0],
+                max_combo: result.combo_total,
+                combo_runs: &[],
+                graph_seconds: [0.0; 2],
+                course_graph_stages: &[],
+                steps_life: &life,
+                machine_rank: None,
+                personal_rank: None,
+                disqualified: false,
+            })
+    });
+    push_page(
+        actors,
+        EvaluationOverview {
+            title: &empty,
+            artist: &empty,
+            banner_key: None,
+            course_summary: false,
+            stage_number: None,
+            double_side_style: false,
+            elapsed: summary.elapsed,
+            departure_elapsed: summary.departure_elapsed,
+            players,
+        },
+        Some((assets, summary.banners)),
+    );
 }

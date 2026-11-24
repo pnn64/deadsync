@@ -41,6 +41,7 @@ pub struct ThemeMount {
     pub resources: SupplementalResources,
     pub stage: Box<dyn StagePresentation<Actor>>,
     pub stage_card: Option<Box<dyn StageCardPresentation<Actor>>>,
+    pub session_end: Option<Box<dyn deadsync_theme::post_game::SessionEndPresentation<Actor>>>,
     pub gameplay: GameplayPresentationMount,
     pub selection: Option<Box<dyn SelectionPresentation<Actor>>>,
     pub music_wheel: Option<Box<dyn MusicWheelPresentation<Actor>>>,

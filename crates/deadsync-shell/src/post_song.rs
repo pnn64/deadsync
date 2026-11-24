@@ -113,3 +113,54 @@ pub(crate) fn initials_runtime_view(stages: &[StageSummary]) -> PostSongRuntimeV
     }
     view
 }
+
+pub(crate) fn name_entry_records(
+    stages: &[StageSummary],
+    runtime: &PostSongRuntimeView,
+) -> [Vec<deadsync_theme::post_game::NameEntryRecord>; 2] {
+    std::array::from_fn(|side| {
+        if !runtime.players[side].name_entry_eligible {
+            return Vec::new();
+        }
+        let owner = if side == 1 {
+            PlayerSide::P2
+        } else {
+            PlayerSide::P1
+        };
+        stages
+            .iter()
+            .flat_map(|stage| {
+                let Some(player) = stage.players[side]
+                    .as_ref()
+                    .filter(|player| player.score_valid && !player.disqualified)
+                else {
+                    return Vec::new();
+                };
+                let hash = player.chart.short_hash.as_str();
+                let machine = (player.grade != deadsync_score::Grade::Failed)
+                    .then(|| runtime.machine_leaderboards.get(hash))
+                    .flatten()
+                    .and_then(|entries| {
+                        deadsync_score::leaderboard_rank_for_score(entries, player.score_percent)
+                    });
+                let personal =
+                    scores::get_personal_leaderboard_local_for_side(hash, owner, usize::MAX);
+                let personal =
+                    deadsync_score::leaderboard_rank_for_score(&personal, player.score_percent);
+                [(false, machine), (true, personal)]
+                    .into_iter()
+                    .filter_map(|(personal, rank)| {
+                        rank.filter(|rank| *rank <= 5).map(|rank| {
+                            deadsync_theme::post_game::NameEntryRecord {
+                                title: stage.song.display_title(runtime.translated_titles).into(),
+                                difficulty: player.chart.difficulty.as_str().into(),
+                                rank,
+                                personal,
+                            }
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    })
+}

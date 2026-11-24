@@ -37,3 +37,9 @@ Idle attract scenes use the original tutorial background, hand/message graphics,
 The ranking table displays real, recent per-chart cabinet leaderboards and percentages. The host does not store the original category-wide numeric score histories, so this adaptation uses song titles rather than invented category totals. Unlock-point and warning pages are not part of the current native attract sequence.
 
 The ignored `attract_render` integration test renders the native scenes into a hidden window and writes PNG captures under `target/native-395-attract-captures` for visual inspection. It uses only the bundled native assets.
+
+Session summary reuses the evaluation panels with the original summary header and half-size banner stack. The score layer selects the three most recent stages where a player passed, sums the judgments, scores and per-stage best combos, and averages the five radar axes. The source's extra-stage category records are unavailable in the host and are not fabricated.
+
+Name entry uses the original `ScreenNameEntry background`, `ScreenNameEntry letters`, `MenuTimer numbers`, category font and looping music. Its four timed letter columns run at the original 2.5 characters per second, retain previous initials, accept each pad direction independently, and finish on Start or the 24-second timer. The host forwards real machine/personal song record ranks and commits names through its shared profile request. The supplied reference has only dance noteskins; other game families use the bundled gray receptors as an adaptation.
+
+Game Over uses the original centered image on black, fading to 75% opacity over 0.3 seconds and holding for five seconds before returning to attract. The shared session-ending mount owns no artwork or concrete theme names; game results and the timed name editor live in the score layer.
