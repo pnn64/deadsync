@@ -242,7 +242,10 @@ impl Encoder {
             };
             'symbols: for symbol in symbols {
                 let key = (u32::from(prefix) << 8) | u32::from(symbol);
-                let mut slot = (key.wrapping_mul(0x9e3779b1) >> 19) as usize;
+                let hash = key.wrapping_mul(0x9e3779b1);
+                let mut slot = (hash >> 19) as usize;
+                // An odd stride visits every slot in a power-of-two table.
+                let step = (hash as usize & 8191) | 1;
                 loop {
                     let entry = table[slot];
                     if entry == 0 {
@@ -252,7 +255,7 @@ impl Encoder {
                         prefix = (entry as u16) & 4095;
                         continue 'symbols;
                     }
-                    slot = (slot + 1) & 8191;
+                    slot = (slot + step) & 8191;
                 }
                 // The decoder adds this phrase after reading the next code.
                 bits.code(prefix, (next - 1).ilog2() as u8 + 1)?;
