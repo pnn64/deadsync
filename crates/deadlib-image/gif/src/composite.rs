@@ -436,19 +436,13 @@ fn draw_binary_indices<const NORMALIZE: bool>(
             u32::from_ne_bytes(if t == 0 { foreground } else { background }),
         )
     });
-    let rows = &mut canvas[r.y * stride..(r.y + r.h) * stride];
-    for (src, dst) in indices
-        .chunks_exact(width)
-        .zip(rows.chunks_exact_mut(stride))
-    {
-        let src = &src[..r.w];
-        let dst = &mut dst[r.x..r.x + r.w];
+    let draw_span = |src: &[u8], dst: &mut [[u8; 4]]| {
         if let Some(index) = uniform_index(src) {
             let index = binary(index);
             if transparent != Some(index) {
                 dst.fill(if index == 0 { background } else { foreground });
             }
-            continue;
+            return;
         }
         if let Some((t, paint)) = blend {
             for (pixel, &index) in dst.iter_mut().zip(src) {
@@ -461,6 +455,18 @@ fn draw_binary_indices<const NORMALIZE: bool>(
                 let select = u32::from(binary(index)).wrapping_neg();
                 *pixel = (first ^ (difference & select)).to_ne_bytes();
             }
+        }
+    };
+    let rows = &mut canvas[r.y * stride..(r.y + r.h) * stride];
+    // Short, full-width rows can share one vectorized span and its tail.
+    if r.w == stride && r.w == width && width < 32 {
+        draw_span(&indices[..rows.len()], rows);
+    } else {
+        for (src, dst) in indices
+            .chunks_exact(width)
+            .zip(rows.chunks_exact_mut(stride))
+        {
+            draw_span(&src[..r.w], &mut dst[r.x..r.x + r.w]);
         }
     }
 }
