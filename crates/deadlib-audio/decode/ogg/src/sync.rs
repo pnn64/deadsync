@@ -1,6 +1,5 @@
 //! Buffered transport synchronization, separate from strict page grammar.
 use crate::{Error, MAX_PAGE_SIZE, Page, PageHeader, crc};
-use core::ops::Range;
 use std::io::{Read, Seek, SeekFrom};
 
 /// A complete, CRC-verified transport page. Synchronization preserves unknown
@@ -62,7 +61,7 @@ pub struct SyncBuffer {
     filled: usize,
     length: usize,
     position: u64,
-    current: Option<(u64, Range<usize>)>,
+    returned: usize,
     unsynced: bool,
     limit: usize,
 }
@@ -88,7 +87,7 @@ impl SyncBuffer {
             filled: 0,
             length: 0,
             position: 0,
-            current: None,
+            returned: 0,
             unsynced: false,
             limit: max_buffered_bytes,
         }
@@ -113,7 +112,7 @@ impl SyncBuffer {
         self.filled = 0;
         self.length = 0;
         self.position = position;
-        self.current = None;
+        self.returned = 0;
         self.unsynced = false;
     }
     /// Append bytes, compacting consumed storage when needed. A rejected append
@@ -123,7 +122,7 @@ impl SyncBuffer {
         self.data.truncate(self.filled);
         self.data.extend_from_slice(bytes);
         self.filled = self.data.len();
-        self.current = None;
+        self.returned = 0;
         Ok(())
     }
     fn prepare(&mut self, additional: usize) -> Result<(), Error> {
@@ -152,14 +151,12 @@ impl SyncBuffer {
         Ok(())
     }
     pub fn current_page(&self) -> Option<LocatedSyncedPage<'_>> {
-        self.current
-            .as_ref()
-            .map(|(offset, range)| LocatedSyncedPage {
-                offset: *offset,
-                page: SyncedPage {
-                    bytes: &self.data[range.clone()],
-                },
-            })
+        (self.returned != 0).then(|| LocatedSyncedPage {
+            offset: self.position - self.returned as u64,
+            page: SyncedPage {
+                bytes: &self.data[self.start - self.returned..self.start],
+            },
+        })
     }
     fn advance(&mut self, bytes: usize) -> Result<(), Error> {
         let next = self
@@ -173,7 +170,7 @@ impl SyncBuffer {
     }
     fn step(&mut self) -> Result<Step, Error> {
         let bytes = &self.data[self.start..self.filled];
-        self.current = None;
+        self.returned = 0;
         // Appends preserve an already recognized header and its declared length.
         if self.length != 0 && bytes.len() < self.length {
             return Ok(Step::NeedMore);
@@ -197,10 +194,8 @@ impl SyncBuffer {
             }
             let expected = u32::from_le_bytes(bytes[22..26].try_into().unwrap());
             if crc::page_crc(&bytes[..length]) == expected {
-                let offset = self.position;
-                let range = self.start..self.start + length;
                 self.advance(length)?;
-                self.current = Some((offset, range));
+                self.returned = length;
                 self.unsynced = false;
                 return Ok(Step::Page);
             }
