@@ -3,7 +3,7 @@ use std::{fs, time::Instant};
 use deadlib_assets::{AssetManager, parse_font_with_asset_context};
 use deadlib_present::actors::Actor;
 use deadlib_present::anim::EffectMode;
-use deadsync_config::coin::CoinMode;
+use deadsync_config::{coin::CoinMode, theme::GameFlag};
 use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, MainMenuRuntimeView, ThemeMainMenu};
@@ -17,10 +17,13 @@ fn authored_title_uses_its_layout_font_and_focus_commands_with_shared_navigation
     fs::write(
         root.join("metrics.ini"),
         concat!(
-            "[ScreenTitleMenu]\nFallback=ScreenTitleDefaults\nChoiceNames=1,2\n",
-            "Choice1=screen,ScreenSelectProfile\nChoice2=screen,ScreenOptionsMenu\n",
+            "[ScreenTitleMenu]\nFallback=ScreenTitleDefaults\nChoiceNames=1,extra,2\n",
+            "Choice1=@\"ApplyDefaultOptions;screen,\" .. ScreenCautionBranch()\n",
+            "Choiceextra=screen,ScreenArchive\nChoice2=screen,ScreenOptionsMenu\n",
             "[ScreenTitleDefaults]\nScrollerX=SCREEN_CENTER_X\nScrollerY=160\n",
             "ScrollerTransform=function(self,offset,itemIndex,numItems) self:y(40*offset) end\n",
+            "LogoX=410\nLogoY=185\n",
+            "LogoOnCommand=zoomy,0;linear,0.5;zoomy,1;glowshift;effectperiod,2.5\n",
             "IdleTimeoutSeconds=10\n",
         ),
     )
@@ -41,6 +44,16 @@ fn authored_title_uses_its_layout_font_and_focus_commands_with_shared_navigation
         "GainFocusCommand=\"stoptweening;diffuseshift;effectperiod,0.5;effectcolor1,1,1,1,1;",
         "effectcolor2,0.25,0.5,0.75,1;linear,0.25;zoom,1.25\" LoseFocusCommand=\"stopeffect;zoom,1\"/>",
     )).unwrap();
+    fs::write(
+        graphics.join("ScreenTitleMenu scroll choiceextra.xml"),
+        "<BitmapText File=\"banner\" Text=\"Archive\" DisabledCommand=\"diffuse,0.4,0.4,0.4,1\"/>",
+    )
+    .unwrap();
+    for (game, width) in [("dance", 56), ("pump", 72)] {
+        image::RgbaImage::from_pixel(width, 26, image::Rgba([64, 128, 96, 255]))
+            .save(graphics.join(format!("ScreenTitleMenu {game}.png")))
+            .unwrap();
+    }
     let fonts = root.join("Fonts");
     fs::create_dir(&fonts).unwrap();
     fs::write(fonts.join("banner.redir"), "heading\n").unwrap();
@@ -65,7 +78,7 @@ fn authored_title_uses_its_layout_font_and_focus_commands_with_shared_navigation
 
     let (mut title, font_path, textures) = PackageTitle::open(root, None).unwrap();
     assert!(font_path.ends_with("heading.ini"));
-    assert_eq!(textures.len(), 1);
+    assert_eq!(textures.len(), 3);
     assert!(textures[0].path.ends_with("matte.png"));
     let font = parse_font_with_asset_context(&font_path, [root.to_path_buf()])
         .unwrap()
@@ -82,7 +95,30 @@ fn authored_title_uses_its_layout_font_and_focus_commands_with_shared_navigation
         matches!(&first[0], Actor::Text { font: TITLE_FONT, content, offset, scale, shadow_len, .. }
         if content.as_str() == "Begin & Dance" && *offset == [320.0,160.0] && *scale == [1.25,1.25] && *shadow_len == [3.0,-3.0])
     );
-    assert!(matches!(&first[1], Actor::Text { offset, .. } if *offset == [320.0,200.0]));
+    assert!(
+        matches!(&first[1], Actor::Text { content, color, offset, .. }
+        if content.as_str() == "Archive" && color[..3].iter().all(|value| (*value - 0.4).abs() < 1e-6)
+            && color[3] == 0.5 && *offset == [320.0,200.0]),
+        "{:?}",
+        first[1]
+    );
+    assert!(matches!(&first[2], Actor::Text { offset, .. } if *offset == [320.0,240.0]));
+    let mut start_effects = Vec::new();
+    PackageTitle::handle_menu_input::<()>(&mut title, &input(VirtualAction::p1_start))
+        .append_to(&mut start_effects);
+    assert!(matches!(
+        start_effects.as_slice(),
+        [
+            ThemeEffect::UiCue(UiCue::Confirm),
+            ThemeEffect::Navigate(Screen::SelectProfile)
+        ]
+    ));
+    assert!(matches!(
+        title_actors(&title).get(1),
+        Some(Actor::Sprite { source, effect, z: -1, offset, tint, .. })
+        if source.texture_key() == Some(textures[1].key.as_str()) && effect.mode == EffectMode::GlowShift
+            && effect.period == 2.5 && *offset == [410.0,185.0] && tint[3] == 0.5
+    ));
 
     let moved =
         PackageTitle::handle_menu_input::<()>(&mut title, &input(VirtualAction::p2_menu_down));
@@ -90,7 +126,7 @@ fn authored_title_uses_its_layout_font_and_focus_commands_with_shared_navigation
     PackageTitle::update_menu::<()>(&mut title, 0.125, MainMenuPhase::Active);
     let focused = choice_actors(&title);
     assert!(
-        matches!(&focused[1], Actor::Text { effect, offset, color, scale, .. }
+        matches!(&focused[2], Actor::Text { effect, offset, color, scale, .. }
         if effect.mode == EffectMode::DiffuseShift && effect.period == 0.5 && *offset == [320.0,160.0] && color[3] == 0.4 && *scale == [1.125,1.125])
     );
     let mut effects = Vec::new();
@@ -107,11 +143,16 @@ fn authored_title_uses_its_layout_font_and_focus_commands_with_shared_navigation
     PackageTitle::sync_menu_runtime(
         &mut title,
         MainMenuRuntimeView {
+            game: GameFlag::Pump,
             coin_mode: CoinMode::Pay,
             ..Default::default()
         },
     );
     assert_eq!(choice_actors(&title).len(), 1);
+    assert!(matches!(
+        title_actors(&title).get(1), Some(Actor::Sprite { source, z: -1, .. })
+        if source.texture_key() == Some(textures[2].key.as_str())
+    ));
     assert!(matches!(
         PackageTitle::update_menu::<()>(&mut title, 10.0, MainMenuPhase::Active),
         ThemeEffect::Navigate(Screen::Init)
@@ -119,6 +160,13 @@ fn authored_title_uses_its_layout_font_and_focus_commands_with_shared_navigation
 }
 
 fn choice_actors(title: &PackageTitleState) -> Vec<Actor> {
+    title_actors(title)
+        .into_iter()
+        .filter(|actor| matches!(actor, Actor::Text { .. }))
+        .collect()
+}
+
+fn title_actors(title: &PackageTitleState) -> Vec<Actor> {
     let mut actors = Vec::new();
     PackageTitle::push_menu_actors(
         &mut actors,
@@ -138,7 +186,7 @@ fn choice_actors(title: &PackageTitleState) -> Vec<Actor> {
         children.first(),
         Some(Actor::Sprite { z: i16::MIN, .. })
     ));
-    children.drain(1..).collect()
+    std::mem::take(children)
 }
 
 fn input(action: VirtualAction) -> InputEvent {

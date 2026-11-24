@@ -15,7 +15,7 @@ use deadsync_theme::views::{
 };
 
 use crate::animation::numbers;
-use crate::bitmap_text::TextPlayback;
+use crate::bitmap_text::StyledPlayback;
 use crate::scene::{CANVAS, SceneTextures, coordinate, frame};
 use crate::{
     ActorAnimation, BackgroundPlayback, BackgroundTexture, ResourceCategory, ThemePackage,
@@ -74,9 +74,9 @@ struct OptionsPageStyle {
     long_value_x: Option<f32>,
     item_gap: f32,
     heading: Option<[f32; 2]>,
-    label: TextPlayback,
-    item: TextPlayback,
-    help: Option<([f32; 2], TextPlayback)>,
+    label: StyledPlayback,
+    item: StyledPlayback,
+    help: Option<([f32; 2], StyledPlayback)>,
     colors: [[f32; 4]; 3],
     seconds: Option<f32>,
     enter: TweenSeq,
@@ -211,7 +211,7 @@ impl OptionsPageStyle {
                 .ok_or_else(|| invalid(section, format!("invalid {key}")))
         };
         let text_style = |key: &str, state: TweenState| {
-            TextPlayback::styled(state, metric(key)?.unwrap_or_default())
+            StyledPlayback::styled(state, metric(key)?.unwrap_or_default())
                 .map_err(|error| invalid(section, format!("{key}: {error}")))
         };
         let motion = |key: &str, state: TweenState| {
@@ -389,7 +389,7 @@ impl OptionsPageStyle {
             actors.push(actor);
         }
         if let Some(heading) = self.heading {
-            let style = TextPlayback::new(TweenState::default());
+            let style = StyledPlayback::new(TweenState::default());
             actors.extend(style.actor(
                 font,
                 TextContent::Static(title),
@@ -428,7 +428,7 @@ impl OptionsPageStyle {
     fn push_choices(
         &self,
         actors: &mut Vec<Actor>,
-        style: &TextPlayback,
+        style: &StyledPlayback,
         row: &SystemOptionsRow,
         y: f32,
         focused: bool,

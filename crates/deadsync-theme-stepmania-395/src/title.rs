@@ -6,7 +6,8 @@ use std::{
 
 use deadlib_assets::TextureDecodeJob;
 use deadlib_platform::input::RawKeyboardEvent;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, SpriteSource};
+use deadlib_present::anim::TweenState;
 use deadsync_config::{coin::CoinMode, theme::GameFlag};
 use deadsync_input::InputEvent;
 use deadsync_noteskin::script::parse_script_number;
@@ -16,7 +17,7 @@ use deadsync_theme::main_menu::{
 };
 use deadsync_theme::{Screen, Theme, ThemeEffect, ThemeScreenId, ThemeTransitions, TransitionKind};
 
-use crate::bitmap_text::{BitmapText, TextPlayback};
+use crate::bitmap_text::{BitmapText, StyledPlayback};
 use crate::scene::{SceneTextures, coordinate, frame};
 use crate::{BackgroundPlayback, ResourceCategory, ThemePackage};
 
@@ -34,16 +35,25 @@ pub struct PackageTitleState {
     idle_timeout: Option<f32>,
     idle: f32,
     background: Option<(BackgroundPlayback, BackgroundPlayback)>,
+    game: GameFlag,
+    logos: Vec<(GameFlag, Logo)>,
     choices: Vec<Choice>,
     visible: Vec<usize>,
+    action_rows: Vec<usize>,
     actions: Vec<MainMenuItem>,
     selection: MainMenuSelection,
 }
 
 struct Choice {
-    action: MainMenuItem,
+    action: Option<MainMenuItem>,
     text: BitmapText,
-    playback: TextPlayback,
+    playback: StyledPlayback,
+}
+
+struct Logo {
+    source: SpriteSource,
+    initial: StyledPlayback,
+    playback: StyledPlayback,
 }
 
 impl PackageTitle {
@@ -61,14 +71,17 @@ impl PackageTitle {
             .map(str::trim)
             .filter(|name| !name.is_empty())
         {
-            let Some(action) = metric(&format!("Choice{name}"))?.and_then(host_action) else {
-                continue;
-            };
+            let action = metric(&format!("Choice{name}"))?.and_then(host_action);
             let resource = format!("scroll choice{name}");
-            let path = package
+            let Some(path) = package
                 .screen_resource(ResourceCategory::Graphics, SECTION, &resource)
                 .map_err(io::Error::other)?
-                .ok_or_else(|| invalid(format!("missing {resource}")))?;
+            else {
+                if action.is_some() {
+                    return Err(invalid(format!("missing {resource}")));
+                }
+                continue;
+            };
             let text = BitmapText::read(path)?;
             let font = package
                 .screen_resource(ResourceCategory::Fonts, "", &text.font)
@@ -78,7 +91,7 @@ impl PackageTitle {
                 return Err(invalid("title choices must share their bitmap font"));
             }
             font_path = Some(font);
-            let playback = text.start();
+            let playback = text.start(action.is_some());
             choices.push(Choice {
                 action,
                 text,
@@ -87,16 +100,50 @@ impl PackageTitle {
         }
         if !choices
             .iter()
-            .any(|choice| choice.action == MainMenuItem::Play)
+            .any(|choice| choice.action == Some(MainMenuItem::Play))
         {
-            return Err(invalid(
-                "title needs a choice with a direct play destination",
-            ));
+            return Err(invalid("title needs a supported play destination"));
         }
         let mut textures = SceneTextures::new("title");
         let background = textures
             .background(&package, SECTION)?
             .map(|playback| (playback.clone(), playback));
+        let mut logos = Vec::new();
+        if let (Some(x), Some(y)) = (metric("LogoX")?, metric("LogoY")?)
+            && !x.trim().is_empty()
+            && !y.trim().is_empty()
+        {
+            let position = [
+                title_coordinate("LogoX", Some(x))?,
+                title_coordinate("LogoY", Some(y))?,
+            ];
+            let commands = metric("LogoOnCommand")?.unwrap_or_default();
+            for game in [GameFlag::Dance, GameFlag::Pump] {
+                if let Some(logo) = textures.graphic(&package, SECTION, game.as_str())? {
+                    let [x, y] = position;
+                    let [w, h] = logo.dimensions;
+                    let initial = StyledPlayback::styled(
+                        TweenState {
+                            x,
+                            y,
+                            w,
+                            h,
+                            ..Default::default()
+                        },
+                        commands,
+                    )
+                    .map_err(|error| invalid(format!("LogoOnCommand: {error}")))?;
+                    logos.push((
+                        game,
+                        Logo {
+                            source: logo.source,
+                            playback: initial.clone(),
+                            initial,
+                        },
+                    ));
+                }
+            }
+        }
         let mut state = PackageTitleState {
             origin: [
                 title_coordinate("ScrollerX", metric("ScrollerX")?)?,
@@ -109,6 +156,7 @@ impl PackageTitle {
                 .and_then(parse_script_number)
                 .filter(|seconds| seconds.is_finite() && *seconds > 0.0),
             background,
+            logos,
             choices,
             ..Default::default()
         };
@@ -129,7 +177,9 @@ impl PackageTitleState {
     }
 
     fn focused_row(&self) -> Option<usize> {
-        self.visible.get(self.selection.index()).copied()
+        self.action_rows
+            .get(self.selection.index())
+            .map(|&index| self.visible[index])
     }
 }
 
@@ -193,21 +243,30 @@ impl ThemeMainMenu for PackageTitle {
         if let Some((initial, current)) = &mut state.background {
             *current = initial.clone();
         }
+        for (_, logo) in &mut state.logos {
+            logo.playback = logo.initial.clone();
+        }
         for choice in &mut state.choices {
-            choice.playback = choice.text.start();
+            choice.playback = choice.text.start(choice.action.is_some());
         }
         state.focus_row(state.focused_row(), true);
     }
 
     fn sync_menu_runtime(state: &mut PackageTitleState, view: RuntimeView) {
         let old = state.focused_row();
-        let allowed = main_menu_items(view.coin_mode == CoinMode::Home, view.allow_shutdown_host);
+        let home = view.coin_mode == CoinMode::Home;
+        let allowed = main_menu_items(home, view.allow_shutdown_host);
+        state.game = view.game;
         state.visible.clear();
+        state.action_rows.clear();
         state.actions.clear();
         for (index, choice) in state.choices.iter().enumerate() {
-            if allowed.contains(&choice.action) {
+            if let Some(action) = choice.action.filter(|action| allowed.contains(action)) {
+                state.action_rows.push(state.visible.len());
                 state.visible.push(index);
-                state.actions.push(choice.action);
+                state.actions.push(action);
+            } else if home && choice.action.is_none() {
+                state.visible.push(index);
             }
         }
         state
@@ -230,6 +289,9 @@ impl ThemeMainMenu for PackageTitle {
         }
         if let Some((_, background)) = &mut state.background {
             background.advance(delta);
+        }
+        for (_, logo) in &mut state.logos {
+            logo.playback.advance(delta);
         }
         for choice in &mut state.choices {
             choice.playback.advance(delta);
@@ -269,9 +331,20 @@ impl ThemeMainMenu for PackageTitle {
         if let Some((_, background)) = &state.background {
             background.push_actors(&mut children, i16::MIN);
         }
+        if let Some((_, logo)) = state.logos.iter().find(|(game, _)| *game == state.game) {
+            children.push(
+                logo.playback
+                    .sprite(logo.source.clone(), view.alpha_multiplier, -1),
+            );
+        }
+        let focused = state
+            .action_rows
+            .get(state.selection.index())
+            .copied()
+            .unwrap_or(0);
         for (item, &row) in state.visible.iter().enumerate() {
             let choice = &state.choices[row];
-            let offset = item as f32 - state.selection.index() as f32;
+            let offset = item as f32 - focused as f32;
             let [x, y] = state.origin;
             let at = [
                 state.step[0].mul_add(offset, x),
@@ -289,9 +362,23 @@ impl ThemeMainMenu for PackageTitle {
 }
 
 fn host_action(command: &str) -> Option<MainMenuItem> {
-    // Authored screen routes map to shared host actions. Computed destinations
-    // require a script runtime and cannot be selected by this presentation.
-    let (verb, destination) = command.trim().split_once(',')?;
+    let command = command.trim();
+    let command = if let Some(expression) = command.strip_prefix("@\"") {
+        let (literal, tail) = expression.split_once('"')?;
+        if !tail.trim().is_empty() {
+            // The title branch starts the shared play flow, which selects its own entry screen.
+            let (branch, close) = tail.trim().strip_prefix("..")?.trim().split_once('(')?;
+            let route = literal.rsplit(';').next()?.trim();
+            return (route.eq_ignore_ascii_case("screen,")
+                && branch.trim() == "ScreenCautionBranch"
+                && close.trim() == ")")
+                .then_some(MainMenuItem::Play);
+        }
+        literal
+    } else {
+        command
+    };
+    let (verb, destination) = command.rsplit(';').next()?.trim().split_once(',')?;
     if !verb.eq_ignore_ascii_case("screen") {
         return None;
     }

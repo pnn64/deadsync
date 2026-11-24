@@ -16,7 +16,7 @@ use deadsync_theme::player_options::{
 use deadsync_theme::{Screen, TransitionState};
 
 use super::{
-    CANVAS, OPTIONS, OptionsPageStyle, SystemOptionsPhase, TextPlayback, font_paths, frame,
+    CANVAS, OPTIONS, OptionsPageStyle, SystemOptionsPhase, StyledPlayback, font_paths, frame,
     invalid, option_metric, option_number, page_frame,
 };
 use crate::scene::SceneTextures;
@@ -27,7 +27,7 @@ const LABEL: &str = "local-theme-player-options-label";
 const ITEM: &str = "local-theme-player-options-item";
 const HELP: &str = "local-theme-player-options-explanation";
 type Page<'a> = PlayerOptionsPage<'a, TextContent, Actor>;
-type Help = ([f32; 2], TextPlayback);
+type Help = ([f32; 2], StyledPlayback);
 
 pub struct PreparedPlayerOptions {
     pub presentation: PackagePlayerOptions,
@@ -54,7 +54,7 @@ struct PlayerStyle {
 }
 
 struct PlayerValues<'a> {
-    item: &'a TextPlayback,
+    item: &'a StyledPlayback,
     font: &'a FontMap,
     active: [bool; 2],
     seats: [f32; 2],
@@ -94,7 +94,7 @@ impl PackagePlayerOptions {
                     };
                     let commands =
                         option_metric(&package, SECTION, &command_key)?.unwrap_or_default();
-                    let style = TextPlayback::styled(state, commands)
+                    let style = StyledPlayback::styled(state, commands)
                         .map_err(|error| invalid(SECTION, format!("{command_key}: {error}")))?;
                     Ok(([x, y], style))
                 })

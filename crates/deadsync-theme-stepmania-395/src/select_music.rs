@@ -12,7 +12,7 @@ use deadlib_present::dsl::SpriteBuilder;
 use deadsync_theme::select_music::{SELECT_MUSIC_WHEEL_ROWS, SelectMusicPrompt, SelectMusicView};
 use deadsync_theme::selection::{MusicWheelPresentation, WheelMediaFrame};
 
-use crate::bitmap_text::TextPlayback;
+use crate::bitmap_text::StyledPlayback;
 use crate::scene::{CANVAS, SceneTextures, coordinate, frame};
 use crate::{
     ActorAnimation, BackgroundPlayback, BackgroundTexture, ResourceCategory, ThemePackage,
@@ -85,7 +85,7 @@ struct PlacedSprite {
 }
 
 struct Label {
-    text: TextPlayback,
+    text: StyledPlayback,
     position: [f32; 2],
 }
 
@@ -629,7 +629,7 @@ impl Label {
         let commands = metrics
             .value(&format!("{key}OnCommand"))?
             .unwrap_or_default();
-        let text = TextPlayback::styled(TweenState::default(), commands)
+        let text = StyledPlayback::styled(TweenState::default(), commands)
             .map_err(|error| invalid(metrics.section, error))?;
         Ok(Some(Self { text, position }))
     }

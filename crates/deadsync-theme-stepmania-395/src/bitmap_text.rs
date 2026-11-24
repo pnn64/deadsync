@@ -1,8 +1,8 @@
 use std::{fs, io, path::Path, sync::Arc};
 
-use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::actors::{Actor, SpriteSource, TextContent};
 use deadlib_present::anim::{EffectMode, EffectState, TweenSeq, TweenState};
-use deadlib_present::dsl::TextBuilder;
+use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 use deadsync_noteskin::script::split_script_token;
 
 use crate::ActorAnimation;
@@ -12,12 +12,13 @@ use crate::scene::CANVAS;
 pub(crate) struct BitmapText {
     content: Arc<str>,
     pub(crate) font: String,
-    on: TextCommand,
-    focused: TextCommand,
-    unfocused: TextCommand,
+    on: StyleCommand,
+    focused: StyleCommand,
+    unfocused: StyleCommand,
+    disabled: StyleCommand,
 }
 
-struct TextCommand {
+struct StyleCommand {
     animation: Option<ActorAnimation>,
     stop_tweening: bool,
     shadow: Option<f32>,
@@ -29,7 +30,7 @@ struct TextCommand {
 }
 
 #[derive(Clone)]
-pub(crate) struct TextPlayback {
+pub(crate) struct StyledPlayback {
     tween: TweenSeq,
     shadow: f32,
     effect: EffectState,
@@ -82,7 +83,7 @@ impl BitmapText {
             }
         }
         let command = |name| {
-            TextCommand::parse(node.attribute(name).unwrap_or_default())
+            StyleCommand::parse(node.attribute(name).unwrap_or_default())
                 .map_err(|error| invalid(&format!("{name}: {error}")))
         };
         let text = node
@@ -101,16 +102,20 @@ impl BitmapText {
             on: command("OnCommand")?,
             focused: command("GainFocusCommand")?,
             unfocused: command("LoseFocusCommand")?,
+            disabled: command("DisabledCommand")?,
         })
     }
 
-    pub(crate) fn start(&self) -> TextPlayback {
-        let mut playback = TextPlayback::new(TweenState::default());
+    pub(crate) fn start(&self, enabled: bool) -> StyledPlayback {
+        let mut playback = StyledPlayback::new(TweenState::default());
         playback.run(&self.on);
+        if !enabled {
+            playback.run(&self.disabled);
+        }
         playback
     }
 
-    pub(crate) fn focus(&self, playback: &mut TextPlayback, focused: bool) {
+    pub(crate) fn focus(&self, playback: &mut StyledPlayback, focused: bool) {
         playback.run(if focused {
             &self.focused
         } else {
@@ -120,7 +125,7 @@ impl BitmapText {
 
     pub(crate) fn draw(
         &self,
-        playback: &TextPlayback,
+        playback: &StyledPlayback,
         font: &'static str,
         at: [f32; 2],
         alpha: f32,
@@ -134,7 +139,7 @@ impl BitmapText {
     }
 }
 
-impl TextCommand {
+impl StyleCommand {
     fn parse(raw: &str) -> Result<Self, String> {
         let mut tween = Vec::new();
         let mut stop_tweening = false;
@@ -173,9 +178,12 @@ impl TextCommand {
                     colors[usize::from(name == "effectcolor2")] =
                         Some(numbers(token.args()).ok_or_else(invalid)?);
                 }
-                "diffuseshift" | "stopeffect" | "stoptweening" if token.args().is_empty() => {
+                "diffuseshift" | "glowshift" | "stopeffect" | "stoptweening"
+                    if token.args().is_empty() =>
+                {
                     match name.as_str() {
                         "diffuseshift" => mode = Some(EffectMode::DiffuseShift),
+                        "glowshift" => mode = Some(EffectMode::GlowShift),
                         "stopeffect" => mode = Some(EffectMode::None),
                         _ if tween.is_empty() => stop_tweening = true,
                         _ => return Err("StopTweening must precede tween commands".to_owned()),
@@ -201,7 +209,7 @@ impl TextCommand {
     }
 }
 
-impl TextPlayback {
+impl StyledPlayback {
     pub(crate) fn new(state: TweenState) -> Self {
         Self {
             tween: TweenSeq::new(state),
@@ -214,12 +222,27 @@ impl TextPlayback {
 
     pub(crate) fn styled(state: TweenState, commands: &str) -> Result<Self, String> {
         let mut playback = Self::new(state);
-        playback.run(&TextCommand::parse(commands)?);
+        playback.run(&StyleCommand::parse(commands)?);
         Ok(playback)
     }
 
     pub(crate) fn scale_x(&self) -> f32 {
         self.tween.state().scale[0]
+    }
+
+    pub(crate) fn sprite(&self, source: SpriteSource, alpha: f32, z: i16) -> Actor {
+        let mut state = *self.tween.state();
+        state.tint[3] *= alpha;
+        state.glow[3] *= alpha;
+        let mut sprite = SpriteBuilder::with_source(source);
+        sprite.apply_tween_state(&state);
+        sprite.shadowlength(self.shadow);
+        sprite.effectmode(self.effect.mode);
+        sprite.effectperiod(self.effect.period);
+        sprite.effectcolor1(self.effect.color1);
+        sprite.effectcolor2(self.effect.color2);
+        sprite.z(z);
+        sprite.build(0)
     }
 
     pub(crate) fn actor(
@@ -264,7 +287,7 @@ impl TextPlayback {
         self.tween.update(delta);
     }
 
-    fn run(&mut self, command: &TextCommand) {
+    fn run(&mut self, command: &StyleCommand) {
         if command.stop_tweening {
             self.tween.clear();
         }
