@@ -2,11 +2,11 @@ use crate::{EncodeOptions, Error, Filter, Image, Samples, reserve, scanline, zli
 
 /// Filter and compress an image into the stream that `zlib::compress` gives
 /// for its whole filtered bytes, holding only rows and a compression window.
-pub(crate) fn compress_image(
+pub(crate) fn compress_image<'a>(
     image: &Image,
     options: &EncodeOptions,
-    buffer: Vec<u8>,
-) -> Result<Vec<u8>, Error> {
+    compressor: &'a mut zlib::Compressor,
+) -> Result<&'a [u8], Error> {
     let size = scanline::filtered_size(
         image.width,
         image.height,
@@ -14,7 +14,7 @@ pub(crate) fn compress_image(
         image.bit_depth,
         options.interlaced,
     )?;
-    let mut compressor = zlib::Compressor::new(options.compression, size, buffer)?;
+    compressor.reset(size)?;
     if options.compression == zlib::Compression::Rle
         && !options.interlaced
         && options.filter == Filter::None

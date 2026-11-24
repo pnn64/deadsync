@@ -29,6 +29,10 @@ impl Matcher {
             previous: table(0)?,
         })
     }
+    pub(super) fn reset(&mut self) {
+        self.heads.fill(u32::MAX);
+        self.previous.fill(0);
+    }
     pub(super) fn memory(&self) -> usize {
         HASHES * 4 + WINDOW * 2
     }

@@ -1715,7 +1715,7 @@ fn fast_block(
 const STORED_BLOCK_SIZE: usize = u16::MAX as usize;
 
 /// A zlib header with room for the worst-case encoding of `len` bytes.
-fn zlib_output(mut bytes: Vec<u8>, len: usize, mode: Compression) -> Result<Vec<u8>, Error> {
+fn zlib_output(bytes: &mut Vec<u8>, len: usize, mode: Compression) -> Result<(), Error> {
     let bound = len
         .checked_add(len.div_ceil(if mode == Compression::Rle { 4 } else { 8 }))
         .and_then(|n| n.checked_add(64))
@@ -1725,12 +1725,13 @@ fn zlib_output(mut bytes: Vec<u8>, len: usize, mode: Compression) -> Result<Vec<
         .try_reserve_exact(bound)
         .map_err(|_| Error::Allocation)?;
     bytes.extend_from_slice(&[0x78, 0x01]);
-    Ok(bytes)
+    Ok(())
 }
 
 /// Encode zlib with stored blocks, fixed LZ77 codes, or an analytic zero-run tree.
 pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
-    let mut bytes = zlib_output(Vec::new(), input.len(), mode)?;
+    let mut bytes = Vec::new();
+    zlib_output(&mut bytes, input.len(), mode)?;
     if mode == Compression::Stored {
         if input.is_empty() {
             bytes.extend_from_slice(&[1, 0, 0, 255, 255]);
@@ -1788,7 +1789,7 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
 
 /// `compress` fed in pieces. Coded blocks keep the same lookahead and
 /// history as `compress`. Stored blocks are appended directly because
-/// their sizes and the last block are known at construction.
+/// their sizes and the last block are known before input arrives.
 pub(crate) struct Compressor {
     mode: Compression,
     w: Writer,
@@ -1805,31 +1806,50 @@ pub(crate) struct Compressor {
 impl Compressor {
     const LOOKAHEAD: usize = 3;
 
-    /// `len` is the complete filtered input length.
-    pub(crate) fn new(mode: Compression, len: usize, output: Vec<u8>) -> Result<Self, Error> {
-        let mut window = Vec::new();
-        let fast = mode == Compression::Fast;
-        let history = if fast { matcher::WINDOW } else { 0 };
-        if mode != Compression::Stored {
-            let maximum = history + matcher::WINDOW + Self::LOOKAHEAD;
-            reserve(&mut window, len.min(maximum))?;
-        }
-        let matcher = fast.then(matcher::Matcher::new).transpose()?;
-        Ok(Self {
+    pub(crate) fn new(mode: Compression) -> Self {
+        Self {
             mode,
             w: Writer {
-                bytes: zlib_output(output, len, mode)?,
+                bytes: Vec::new(),
                 word: 0,
                 count: 0,
             },
-            matcher,
-            window,
+            matcher: None,
+            window: Vec::new(),
             history: 0,
             position: 0,
-            stored_remaining: len,
+            stored_remaining: 0,
             stored_block_left: 0,
             checksum: Adler32::new(),
-        })
+        }
+    }
+    /// Start an independent stream with `len` bytes of filtered input.
+    pub(crate) fn reset(&mut self, len: usize) -> Result<(), Error> {
+        self.window.clear();
+        if self.mode != Compression::Stored {
+            let history = if self.mode == Compression::Fast {
+                matcher::WINDOW
+            } else {
+                0
+            };
+            let maximum = history + matcher::WINDOW + Self::LOOKAHEAD;
+            reserve(&mut self.window, len.min(maximum))?;
+        }
+        if self.mode == Compression::Fast {
+            if let Some(matcher) = &mut self.matcher {
+                matcher.reset();
+            } else {
+                self.matcher = Some(matcher::Matcher::new()?);
+            }
+        }
+        self.history = 0;
+        self.position = 0;
+        self.stored_remaining = len;
+        self.stored_block_left = 0;
+        self.checksum = Adler32::new();
+        self.w.word = 0;
+        self.w.count = 0;
+        zlib_output(&mut self.w.bytes, len, self.mode)
     }
     pub(crate) fn push(&mut self, input: &[u8]) {
         self.append(Some(input), input.len());
@@ -1915,7 +1935,7 @@ impl Compressor {
         self.history = end - keep;
         self.position += len;
     }
-    pub(crate) fn finish(mut self) -> Vec<u8> {
+    pub(crate) fn finish(&mut self) -> &[u8] {
         if self.mode == Compression::Stored {
             debug_assert_eq!(self.stored_remaining, 0);
             if self.w.bytes.len() == 2 {
@@ -1932,7 +1952,7 @@ impl Compressor {
         self.w
             .bytes
             .extend_from_slice(&self.checksum.finish().to_be_bytes());
-        self.w.bytes
+        &self.w.bytes
     }
 }
 
@@ -1946,6 +1966,7 @@ mod tests {
 
     #[test]
     fn stored_rows_and_zero_runs_preserve_block_boundaries() {
+        let mut compressor = Compressor::new(Compression::Stored);
         for len in [
             0,
             1,
@@ -1963,13 +1984,36 @@ mod tests {
             }
             let expected = compress(&input, Compression::Stored).unwrap();
             for chunk in [127, 4096, STORED_BLOCK_SIZE + 5] {
-                let mut compressor = Compressor::new(Compression::Stored, len, Vec::new()).unwrap();
+                compressor.reset(len).unwrap();
                 for part in input.chunks(chunk) {
                     let zeros = part.iter().take_while(|&&byte| byte == 0).count();
                     compressor.push_zeros(zeros);
                     compressor.push(&part[zeros..]);
                 }
                 assert_eq!(compressor.finish(), expected, "length {len}, chunk {chunk}");
+            }
+        }
+    }
+
+    #[test]
+    fn coded_stream_resets_match_independent_streams() {
+        for mode in [Compression::Fast, Compression::Rle] {
+            let mut compressor = Compressor::new(mode);
+            for (frame, len) in [137, 98325, 4117, 0, 65537].into_iter().enumerate() {
+                let input: Vec<u8> = (0..len)
+                    .map(|i| {
+                        if i % 19 < 5 {
+                            0
+                        } else {
+                            (i * 37 + frame) as u8
+                        }
+                    })
+                    .collect();
+                compressor.reset(len).unwrap();
+                for part in input.chunks(273) {
+                    compressor.push(part);
+                }
+                assert_eq!(compressor.finish(), compress(&input, mode).unwrap());
             }
         }
     }

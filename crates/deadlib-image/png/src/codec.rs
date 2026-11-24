@@ -604,13 +604,14 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     write_transparency(png, |data| write_chunk(&mut out, b"tRNS", [data]))?;
     write_ancillary(&mut out, png, ChunkPosition::BeforeData)?;
     crate::apng::write_control(&mut out, png)?;
-    let compressed = crate::stream::compress_image(&png.image, options, Vec::new())?;
+    let mut compressor = crate::zlib::Compressor::new(options.compression);
+    let compressed = crate::stream::compress_image(&png.image, options, &mut compressor)?;
     let chunks = compressed.chunks(options.idat_chunk_size);
     reserve_chunk_run(&mut out, compressed.len(), chunks.len(), 12)?;
     for part in chunks {
         write_chunk(&mut out, b"IDAT", [part])?;
     }
-    crate::apng::write_frames(&mut out, png, options, compressed)?;
+    crate::apng::write_frames(&mut out, png, options, &mut compressor)?;
     write_ancillary(&mut out, png, ChunkPosition::AfterData)?;
     write_chunk(&mut out, b"IEND", [])?;
     Ok(out)
