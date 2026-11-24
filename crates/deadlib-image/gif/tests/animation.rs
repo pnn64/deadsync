@@ -110,6 +110,11 @@ fn consecutive_previous_first_previous_local_palette_clipping_and_timing() {
         c.render(&second).unwrap().rgba,
         rgba(&[0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 2, 2], [0; 4])
     );
+    let same_clipped_rect = frame(2, 1, 2, 2, 3, Disposal::Previous);
+    assert_eq!(
+        c.render(&same_clipped_rect).unwrap().rgba,
+        rgba(&[0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 3, 3], [0; 4])
+    );
     let mut third = frame(3, 2, 1, 1, 0, Disposal::Unspecified);
     third.local_palette = Some(vec![[23, 24, 25], [3, 4, 5]]);
     let c3 = third.control.as_mut().unwrap();

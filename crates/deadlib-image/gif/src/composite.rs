@@ -46,7 +46,7 @@ pub trait TextRasterizer {
     ) -> Result<(), Error>;
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct Rect {
     x: usize,
     y: usize,
@@ -178,27 +178,32 @@ impl Compositor {
                 offset..offset + width
             })
         };
-        if let Some((r, method)) = self.pending {
-            let mut saved = self.saved.as_slice();
-            for span in spans(r) {
-                let dest = &mut self.pixels[span];
-                match method {
-                    Disposal::Background => {
-                        dest.fill(self.background);
-                    }
-                    Disposal::Previous => {
-                        let (source, remaining) = saved.split_at(dest.len());
-                        dest.copy_from_slice(source);
-                        saved = remaining;
-                    }
-                    _ => {}
+        let keep_saved = match self.pending {
+            Some((r, Disposal::Background)) => {
+                for span in spans(r) {
+                    self.pixels[span].fill(self.background);
                 }
+                false
             }
-        }
-        self.saved.clear();
-        if save {
-            for span in spans(rect) {
-                self.saved.extend_from_slice(&self.pixels[span]);
+            Some((r, Disposal::Previous)) => {
+                let mut saved = self.saved.as_slice();
+                for span in spans(r) {
+                    let dest = &mut self.pixels[span];
+                    let (source, remaining) = saved.split_at(dest.len());
+                    dest.copy_from_slice(source);
+                    saved = remaining;
+                }
+                // The restored pixels already match this snapshot.
+                save && r == rect
+            }
+            _ => false,
+        };
+        if !keep_saved {
+            self.saved.clear();
+            if save {
+                for span in spans(rect) {
+                    self.saved.extend_from_slice(&self.pixels[span]);
+                }
             }
         }
         self.pending = (visible && matches!(disposal, Disposal::Background | Disposal::Previous))
