@@ -442,12 +442,31 @@ pub(crate) fn validate_pixels(png: &Png, policy: PalettePolicy) -> Result<(), Er
         if png.palette.is_empty()
             || png.palette.len() > 1usize << png.image.bit_depth
             || (policy == PalettePolicy::Strict
-                && samples.iter().any(|&v| v as usize >= png.palette.len()))
+                && indices_outside_palette(samples, png.palette.len(), png.image.bit_depth))
         {
             return Err(Error::Invalid("palette index outside PLTE"));
         }
     }
     Ok(())
+}
+
+// Samples have already been unpacked or validated against the bit depth.
+pub(crate) fn indices_outside_palette(samples: &[u8], palette: usize, depth: u8) -> bool {
+    if palette >= 1usize << depth {
+        return false;
+    }
+    let threshold = palette as u8;
+    let (words, tail) = samples.as_chunks::<8>();
+    const HIGH: u64 = 0x8080_8080_8080_8080;
+    let bias = u64::from_ne_bytes([128 - (threshold & 127); 8]);
+    let lower_half = u64::from_ne_bytes([!(threshold & 128); 8]);
+    words.iter().any(|&bytes| {
+        let word = u64::from_ne_bytes(bytes);
+        // Low seven bits plus bias fit in each byte. The sum's high bit
+        // reports a low-part match without carrying into adjacent bytes.
+        let carry = (word & !HIGH) + bias;
+        ((word & carry) | ((word | carry) & lower_half)) & HIGH != 0
+    }) || tail.iter().any(|&value| value >= threshold)
 }
 
 pub(crate) fn write_chunk<const N: usize>(
@@ -574,4 +593,32 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     write_ancillary(&mut out, png, ChunkPosition::AfterData)?;
     write_chunk(&mut out, b"IEND", [])?;
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::indices_outside_palette;
+
+    #[test]
+    fn palette_word_check_matches_scalar_in_every_lane_and_tail() {
+        for depth in [1, 2, 4, 8] {
+            let range = 1usize << depth;
+            for palette in 0..=range {
+                for value in 0..range {
+                    let mut backing = [palette.saturating_sub(1) as u8; 18];
+                    let samples = &mut backing[1..];
+                    for lane in 0..samples.len() {
+                        let previous = samples[lane];
+                        samples[lane] = value as u8;
+                        assert_eq!(
+                            indices_outside_palette(samples, palette, depth),
+                            samples.iter().any(|&sample| usize::from(sample) >= palette),
+                            "depth {depth}, palette {palette}, value {value}, lane {lane}"
+                        );
+                        samples[lane] = previous;
+                    }
+                }
+            }
+        }
+    }
 }

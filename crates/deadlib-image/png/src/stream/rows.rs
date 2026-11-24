@@ -164,7 +164,7 @@ impl ImageRows {
                 } else {
                     &self.native8
                 };
-                if values.iter().any(|&v| v as usize >= palette) {
+                if crate::codec::indices_outside_palette(values, palette, self.header.depth) {
                     return Err(Error::Invalid("palette index outside PLTE"));
                 }
             }

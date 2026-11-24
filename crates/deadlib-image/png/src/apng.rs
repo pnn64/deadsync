@@ -312,7 +312,9 @@ fn validate_image(
         let Samples::U8(values) = &image.samples else {
             return Err(Error::Invalid("indexed APNG storage"));
         };
-        if policy == crate::PalettePolicy::Strict && values.iter().any(|&v| v as usize >= palette) {
+        if policy == crate::PalettePolicy::Strict
+            && crate::codec::indices_outside_palette(values, palette, h.depth)
+        {
             return Err(Error::Invalid("APNG palette index"));
         }
     }
