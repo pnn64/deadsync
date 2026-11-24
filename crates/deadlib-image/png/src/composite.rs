@@ -152,6 +152,31 @@ fn divide_color(numerator: u64, alpha: u32, inverse: f64) -> u16 {
     (estimate + u32::from(next <= numerator)) as u16
 }
 
+#[inline(never)]
+fn source_rgba_rows(canvas: &mut [u16], stride: usize, width: usize, samples: &Samples) {
+    let (width, stride) = if width == stride {
+        let len = samples.len();
+        (len, len)
+    } else {
+        (width, stride)
+    };
+    let rows = canvas.chunks_mut(stride);
+    match samples {
+        Samples::U8(samples) => {
+            for (dst, src) in rows.zip(samples.chunks_exact(width)) {
+                for (out, &value) in dst[..width].iter_mut().zip(src) {
+                    *out = u16::from(value) * 257;
+                }
+            }
+        }
+        Samples::U16(samples) => {
+            for (dst, src) in rows.zip(samples.chunks_exact(width)) {
+                dst[..width].copy_from_slice(src);
+            }
+        }
+    }
+}
+
 fn over_rgba_rows<T: Copy>(
     canvas: &mut [u16],
     stride: usize,
@@ -410,20 +435,13 @@ impl Compositor<'_> {
             }
         }
         if c.blend == BlendOp::Source && image.color_type == ColorType::Rgba {
-            let width = c.width as usize * 4;
-            for y in 0..c.height as usize {
-                let offset = (c.y_offset as usize + y) * stride + c.x_offset as usize * 4;
-                let row = &mut self.canvas[offset..offset + width];
-                let start = y * width;
-                match &image.samples {
-                    Samples::U8(samples) => {
-                        for (out, &value) in row.iter_mut().zip(&samples[start..start + width]) {
-                            *out = u16::from(value) * 257;
-                        }
-                    }
-                    Samples::U16(samples) => row.copy_from_slice(&samples[start..start + width]),
-                }
-            }
+            let offset = c.y_offset as usize * stride + c.x_offset as usize * 4;
+            source_rgba_rows(
+                &mut self.canvas[offset..],
+                stride,
+                c.width as usize * 4,
+                &image.samples,
+            );
         } else if image.color_type == ColorType::Rgba {
             let offset = c.y_offset as usize * stride + c.x_offset as usize * 4;
             let canvas = &mut self.canvas[offset..];
