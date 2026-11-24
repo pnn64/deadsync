@@ -73,8 +73,6 @@ fn collect(png: &mut Option<Png>, decoder: &mut StreamDecoder) -> Result<(), Err
     let png = png.as_mut().ok_or(Error::Invalid("missing IHDR"))?;
     match event {
         DecodeEvent::Header(_) => unreachable!(),
-        DecodeEvent::Palette(values) => png.palette.extend_from_slice(values),
-        DecodeEvent::Transparency(value) => png.transparency = Some(value.clone()),
         DecodeEvent::Metadata { .. } => {
             reserve(&mut png.ancillary, 1)?;
             png.ancillary.push(
@@ -134,7 +132,7 @@ fn collect(png: &mut Option<Png>, decoder: &mut StreamDecoder) -> Result<(), Err
             };
             scatter(image, row)?;
         }
-        DecodeEvent::ImageEnd(_) => (),
+        DecodeEvent::Palette(_) | DecodeEvent::Transparency(_) | DecodeEvent::ImageEnd(_) => (),
     }
     Ok(())
 }
@@ -172,17 +170,19 @@ pub fn decode_reader(mut reader: impl Read, options: &DecodeOptions) -> Result<P
                 end = read(&mut reader, &mut input)?;
                 pos = 0;
                 if end == 0 {
-                    decoder.finish()?;
-                    return png.ok_or(Error::Invalid("missing IHDR"));
+                    break;
                 }
             }
             DecodeStatus::Done => {
                 if pos != end || read(&mut reader, &mut [0; 1])? != 0 {
                     return Err(Error::Invalid("data after IEND"));
                 }
-                decoder.finish()?;
-                return png.ok_or(Error::Invalid("missing IHDR"));
+                break;
             }
         }
     }
+    decoder.finish()?;
+    let mut png = png.ok_or(Error::Invalid("missing IHDR"))?;
+    (png.palette, png.transparency) = decoder.take_palette_and_transparency();
+    Ok(png)
 }

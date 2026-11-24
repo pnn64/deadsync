@@ -217,6 +217,9 @@ impl StreamDecoder {
             Some(chunk.clone())
         }
     }
+    pub(super) fn take_palette_and_transparency(&mut self) -> (Vec<[u8; 3]>, Option<Transparency>) {
+        (core::mem::take(&mut self.palette), self.transparency.take())
+    }
     pub fn process(&mut self, input: &[u8]) -> Result<DecodeProgress, Error> {
         if let Some(error) = &self.failure {
             return Err(error.clone());
