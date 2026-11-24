@@ -120,16 +120,32 @@ fn over(dst: &mut [u16; 4], src: [u16; 4]) {
             dst[n] = ((u32::from(src[n]) * sa + u32::from(dst[n]) * inv + 32767) / 65535) as u16;
         }
     } else {
-        let sa = u64::from(src[3]);
-        let da = u64::from(dst[3]);
-        let inv = 65535 - sa;
-        let alpha = sa * 65535 + da * inv;
+        let sa = u32::from(src[3]);
+        let source_weight = sa * 65535;
+        let destination_weight = u32::from(dst[3]) * (65535 - sa);
+        // The weights sum to at most 65535^2, leaving room to round alpha.
+        let alpha = source_weight + destination_weight;
+        let inverse = 1.0 / f64::from(alpha);
+        let round = u64::from(alpha / 2);
         for n in 0..3 {
-            dst[n] = ((u64::from(src[n]) * sa * 65535 + u64::from(dst[n]) * da * inv + alpha / 2)
-                / alpha) as u16;
+            let numerator = u64::from(src[n]) * u64::from(source_weight)
+                + u64::from(dst[n]) * u64::from(destination_weight)
+                + round;
+            dst[n] = divide_color(numerator, alpha, inverse);
         }
         dst[3] = ((alpha + 32767) / 65535) as u16;
     }
+}
+
+#[inline]
+fn divide_color(numerator: u64, alpha: u32, inverse: f64) -> u16 {
+    // The numerator is below 2^48 and converts exactly. For quotients
+    // below 2^16 the reciprocal and multiply err by less than 2^-35,
+    // smaller than the 2^-32 gap of a noninteger ratio to any integer.
+    // Only an exact integer can truncate one too low. Check it in integers.
+    let estimate = (numerator as i64 as f64 * inverse) as u32;
+    let next = u64::from(estimate + 1) * u64::from(alpha);
+    (estimate + u32::from(next <= numerator)) as u16
 }
 
 fn over_rgba_rows<T: Copy>(
@@ -422,5 +438,37 @@ impl Compositor<'_> {
             control: c,
             samples: &self.canvas,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::divide_color;
+
+    #[test]
+    fn reciprocal_keeps_exact_color_division_at_integer_boundaries() {
+        let mut state = 1u32;
+        for alpha in [1, 65535, 65536, 65535 * 65535]
+            .into_iter()
+            .chain((1..=65535).map(|sa| {
+                state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+                sa * 65535 + (state >> 16) * (65535 - sa)
+            }))
+        {
+            let inverse = 1.0 / f64::from(alpha);
+            for quotient in [0u64, 1, 127, 255, 32768, 65534, 65535] {
+                let exact = quotient * u64::from(alpha);
+                for numerator in [exact.saturating_sub(1), exact, exact + 1] {
+                    let expected = numerator / u64::from(alpha);
+                    if expected <= u64::from(u16::MAX) {
+                        assert_eq!(
+                            u64::from(divide_color(numerator, alpha, inverse)),
+                            expected,
+                            "{numerator} / {alpha}"
+                        );
+                    }
+                }
+            }
+        }
     }
 }
