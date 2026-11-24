@@ -326,6 +326,46 @@ fn unknown_extension_scope_uses_specification_label_ranges() {
     }
 }
 #[test]
+fn image_data_write_error_latches_encoder_failure() {
+    struct LimitedWriter(usize);
+    impl std::io::Write for LimitedWriter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if self.0 == 0 {
+                return Err(std::io::Error::other("image data write failed"));
+            }
+            let accepted = self.0.min(bytes.len());
+            self.0 -= accepted;
+            Ok(accepted)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let gif = decode(&tiny()).unwrap();
+    let options = EncodeOptions {
+        image_sub_block_size: 1,
+    };
+    let bytes = encode(&gif, &options).unwrap();
+    // The final payload byte precedes the sub-block terminator and GIF trailer.
+    let writer = LimitedWriter(bytes.len() - 3);
+    let mut encoder = Encoder::new(writer, gif.header.clone(), options).unwrap();
+    assert_eq!(
+        encoder.write_block(&gif.blocks[0]),
+        Err(Error::Io("image data write failed".into()))
+    );
+    assert_eq!(
+        encoder.write_block(&gif.blocks[0]),
+        Err(Error::Invalid("encoder is failed"))
+    );
+    assert!(matches!(
+        encoder.finish(),
+        Err(Error::Invalid("encoder is failed"))
+    ));
+}
+
+#[test]
 fn cumulative_limits_and_encoder_validation() {
     let bytes = insert(&tiny(), &[0x21, 0xfe, 1, b'a', 1, b'b', 0]);
     for field in 0..6 {

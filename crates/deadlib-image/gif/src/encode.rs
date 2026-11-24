@@ -44,7 +44,6 @@ struct EncoderOutput<W: Write> {
     writer: W,
     options: EncodeOptions,
     lzw: lzw::Encoder,
-    compressed: Vec<u8>,
     failed: bool,
 }
 impl<W: Write> EncoderOutput<W> {
@@ -81,7 +80,6 @@ impl<W: Write> EncoderOutput<W> {
             writer,
             options,
             lzw: lzw::Encoder::new(),
-            compressed: Vec::new(),
             failed: false,
         })
     }
@@ -142,21 +140,6 @@ impl<W: Write> EncoderOutput<W> {
         // Derive the minimum from actual indices; unused palette colors need
         // not increase the code width. No indices or palette entries change.
         let minimum = (8 - maximum.leading_zeros() as u8).max(2);
-        self.compressed.clear();
-        if f.interlaced {
-            let w = f.width as usize;
-            let rows = interlace_rows(f.height as usize).map(|y| {
-                let start = y * w;
-                &f.indices[start..start + w]
-            });
-            self.lzw.encode_rows(rows, minimum, &mut self.compressed)?;
-        } else {
-            self.lzw.encode_rows(
-                std::iter::once(f.indices.as_slice()),
-                minimum,
-                &mut self.compressed,
-            )?;
-        }
         self.control(header.version, f.control)?;
         self.writer.write_all(&[0x2c])?;
         for n in [f.left, f.top, f.width, f.height] {
@@ -175,14 +158,41 @@ impl<W: Write> EncoderOutput<W> {
             self.writer.write_all(p.as_flattened())?;
         }
         self.writer.write_all(&[minimum])?;
-        for part in self
-            .compressed
-            .chunks(self.options.image_sub_block_size as usize)
-        {
-            self.writer.write_all(&[part.len() as u8])?;
-            self.writer.write_all(part)?;
+        let size = self.options.image_sub_block_size;
+        let mut buffer = [0; 255];
+        let part = &mut buffer[..usize::from(size)];
+        let writer = &mut self.writer;
+        let mut filled = 0;
+        let emit = |mut bytes: &[u8]| {
+            while !bytes.is_empty() {
+                let count = bytes.len().min(part.len() - filled);
+                part[filled..filled + count].copy_from_slice(&bytes[..count]);
+                bytes = &bytes[count..];
+                filled += count;
+                if filled == part.len() {
+                    writer.write_all(&[size])?;
+                    writer.write_all(part)?;
+                    filled = 0;
+                }
+            }
+            Ok(())
+        };
+        if f.interlaced {
+            let w = f.width as usize;
+            let rows = interlace_rows(f.height as usize).map(|y| {
+                let start = y * w;
+                &f.indices[start..start + w]
+            });
+            self.lzw.encode_rows(rows, minimum, emit)?;
+        } else {
+            self.lzw
+                .encode_rows(std::iter::once(f.indices.as_slice()), minimum, emit)?;
         }
-        self.writer.write_all(&[0])?;
+        if filled != 0 {
+            writer.write_all(&[filled as u8])?;
+            writer.write_all(&part[..filled])?;
+        }
+        writer.write_all(&[0])?;
         Ok(())
     }
     fn extension(&mut self, header: &Header, extension: &Extension) -> Result<(), Error> {

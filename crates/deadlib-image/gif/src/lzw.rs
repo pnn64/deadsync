@@ -205,7 +205,11 @@ impl Encoder {
         {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
-        self.encode_rows(std::iter::once(input), minimum, output)
+        self.encode_rows(std::iter::once(input), minimum, |bytes| {
+            reserve(output, bytes.len())?;
+            output.extend_from_slice(bytes);
+            Ok(())
+        })
     }
 
     // Input rows are validated against the minimum. Phrases can span rows.
@@ -213,7 +217,7 @@ impl Encoder {
         &mut self,
         rows: impl Iterator<Item = &'a [u8]>,
         minimum: u8,
-        output: &mut Vec<u8>,
+        emit: impl FnMut(&[u8]) -> Result<(), Error>,
     ) -> Result<(), Error> {
         let table = match &mut self.table {
             Some(table) => {
@@ -225,7 +229,7 @@ impl Encoder {
         let clear = 1u16 << minimum;
         let mut next = clear + 2;
         let mut bits = BitWriter {
-            output,
+            emit,
             bits: 0,
             count: 0,
         };
@@ -272,28 +276,25 @@ impl Encoder {
         bits.code(clear + 1, next.min(4095).ilog2() as u8 + 1)?;
         if bits.count != 0 {
             let count = bits.count.div_ceil(8) as usize;
-            reserve(bits.output, count)?;
-            bits.output
-                .extend_from_slice(&bits.bits.to_le_bytes()[..count]);
+            (bits.emit)(&bits.bits.to_le_bytes()[..count])?;
         }
         Ok(())
     }
 }
 
-struct BitWriter<'a> {
-    output: &'a mut Vec<u8>,
+struct BitWriter<F> {
+    emit: F,
     bits: u64,
     count: u8,
 }
-impl BitWriter<'_> {
+impl<F: FnMut(&[u8]) -> Result<(), Error>> BitWriter<F> {
     fn code(&mut self, code: u16, width: u8) -> Result<(), Error> {
         self.bits |= u64::from(code) << self.count;
         self.count += width;
         // At most 47 buffered bits plus a 12-bit code fit in u64. Flush six
         // bytes at a time to amortize fallible growth across more codes.
         if self.count >= 48 {
-            reserve(self.output, 6)?;
-            self.output.extend_from_slice(&self.bits.to_le_bytes()[..6]);
+            (self.emit)(&self.bits.to_le_bytes()[..6])?;
             self.bits >>= 48;
             self.count -= 48;
         }
