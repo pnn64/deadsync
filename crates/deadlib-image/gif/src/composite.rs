@@ -364,9 +364,11 @@ fn draw_indices(
     table: &[[u8; 4]; 256],
     transparent: Option<u8>,
 ) {
-    let sources = indices.chunks_exact(width);
-    let targets = canvas.chunks_exact_mut(stride).skip(r.y);
-    for (source, target) in sources.zip(targets).take(r.h) {
+    let rows = &mut canvas[r.y * stride..(r.y + r.h) * stride];
+    for (source, target) in indices
+        .chunks_exact(width)
+        .zip(rows.chunks_exact_mut(stride))
+    {
         let indices = &source[..r.w];
         let dest = &mut target[r.x..r.x + r.w];
         if let Some(index) = uniform_index(indices) {
