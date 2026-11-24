@@ -1545,14 +1545,9 @@ impl Vm {
         Ok(())
     }
     fn clear_weak_tables(&mut self) {
-        for index in 0..self.tables.len() {
-            if !self
-                .tables
-                .key(index)
-                .is_some_and(|key| self.tables.marked(key))
-            {
-                continue;
-            }
+        let mut start = 0;
+        while let Some(index) = self.tables.next_marked_slot(start) {
+            start = index + 1;
             let (weak_keys, weak_values) = self.table_mode(&self.tables[index]);
             if !weak_keys && !weak_values {
                 continue;

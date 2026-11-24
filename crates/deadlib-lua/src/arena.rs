@@ -217,6 +217,16 @@ impl<T> Arena<T> {
         let slot = index(key);
         self.contains(key) && self.marks[slot / 64] & (1u64 << (slot % 64)) != 0
     }
+    pub(crate) fn next_marked_slot(&self, start: usize) -> Option<usize> {
+        let word = start / 64;
+        let (first, rest) = self.marks.get(word..)?.split_first()?;
+        let bits = first & (u64::MAX << (start % 64));
+        if bits != 0 {
+            return Some(word * 64 + bits.trailing_zeros() as usize);
+        }
+        let (offset, bits) = rest.iter().enumerate().find(|(_, bits)| **bits != 0)?;
+        Some((word + 1 + offset) * 64 + bits.trailing_zeros() as usize)
+    }
     pub fn clear_marks(&mut self) {
         self.marks.fill(0);
     }
