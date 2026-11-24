@@ -197,6 +197,28 @@ impl Vm {
     }
 
     #[inline(never)]
+    pub(super) fn try_fast_char(&mut self, call: usize, count: usize) -> Option<usize> {
+        // Preserve the allocation behavior of reserving and taking scratch storage.
+        if self.buffers.len() == self.buffers.capacity()
+            || self.buffers.last()?.capacity() < count
+            || !self.sort_fast_context()
+        {
+            return None;
+        }
+        let id = if count == 0 {
+            self.strings.find(b"")?
+        } else {
+            let Value::Number(number) = self.registers[call + 1] else {
+                return None;
+            };
+            self.strings.find(&[strings::char_byte(number)?])?
+        };
+        self.strings.bytes.preserve_new_reference(id.0);
+        self.registers[call] = Value::String(id);
+        Some(1)
+    }
+
+    #[inline(never)]
     pub(super) fn try_fast_repeat(&mut self, call: usize, repeat: f64) -> Option<usize> {
         let Value::String(source) = self.registers[call + 1] else {
             return None;

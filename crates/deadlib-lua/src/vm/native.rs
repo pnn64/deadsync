@@ -105,6 +105,7 @@ impl Vm {
                     42 | 45 | 52 => self.try_fast_binary_math(id, call, count),
                     strings::STR_LEN | strings::STR_BYTE => self.try_fast_string(id, call, count),
                     strings::STR_FIND => self.try_fast_find_byte(call, count),
+                    strings::STR_CHAR if count <= 1 => self.try_fast_char(call, count),
                     strings::STR_REP if count >= 2 => match self.registers[call + 2] {
                         Value::Number(repeat) if repeat < 2.0 => self.try_fast_repeat(call, repeat),
                         _ => None,
