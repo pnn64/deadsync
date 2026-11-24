@@ -101,8 +101,8 @@ pub struct Decoder {
     remaining_input_bytes: usize,
     remaining_metadata_bytes: usize,
     remaining_blocks: usize,
-    frame_count: usize,
-    total_pixels: usize,
+    remaining_frames: usize,
+    remaining_pixels: usize,
 }
 
 impl Default for Decoder {
@@ -127,8 +127,8 @@ impl Decoder {
             remaining_input_bytes: options.limits.max_input_bytes,
             remaining_metadata_bytes: options.limits.max_metadata_bytes,
             remaining_blocks: options.limits.max_blocks,
-            frame_count: 0,
-            total_pixels: 0,
+            remaining_frames: options.limits.max_frames,
+            remaining_pixels: options.limits.max_total_pixels,
             options,
         }
     }
@@ -436,17 +436,11 @@ impl Decoder {
                         self.options.check_bounds,
                     )?;
                     let count = self.frame.width as usize * self.frame.height as usize;
-                    self.total_pixels = self
-                        .total_pixels
-                        .checked_add(count)
-                        .ok_or(Error::LimitExceeded)?;
-                    self.frame_count += 1;
-                    if count > self.options.limits.max_frame_pixels
-                        || self.total_pixels > self.options.limits.max_total_pixels
-                        || self.frame_count > self.options.limits.max_frames
-                    {
+                    if count > self.options.limits.max_frame_pixels {
                         return Err(Error::LimitExceeded);
                     }
+                    charge(&mut self.remaining_pixels, count)?;
+                    charge(&mut self.remaining_frames, 1)?;
                     reserve(&mut self.frame.indices, count)?;
                     let size = if flags & 128 != 0 {
                         3usize << ((flags & 7) + 1)
