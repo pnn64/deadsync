@@ -188,9 +188,7 @@ impl Decoder {
 }
 
 /// Reusable flat hash-table encoder; no production codec dependencies.
-pub struct Encoder {
-    table: Option<[u32; 8192]>,
-}
+pub struct Encoder(());
 impl Default for Encoder {
     fn default() -> Self {
         Self::new()
@@ -198,7 +196,7 @@ impl Default for Encoder {
 }
 impl Encoder {
     pub fn new() -> Self {
-        Self { table: None }
+        Self(())
     }
     pub fn encode(&mut self, input: &[u8], minimum: u8, output: &mut Vec<u8>) -> Result<(), Error> {
         if !(2..=8).contains(&minimum)
@@ -210,7 +208,7 @@ impl Encoder {
         {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
-        self.encode_rows(std::iter::once(input), input, minimum, |bits, count| {
+        Self::encode_rows(std::iter::once(input), input, minimum, |bits, count| {
             reserve(output, count)?;
             output.extend_from_slice(&bits.to_le_bytes()[..count]);
             Ok(())
@@ -219,7 +217,6 @@ impl Encoder {
 
     // The rows contain the validated indices in wire order. Phrases can span rows.
     pub(crate) fn encode_rows<'a>(
-        &mut self,
         rows: impl Iterator<Item = &'a [u8]>,
         indices: &[u8],
         minimum: u8,
@@ -238,14 +235,7 @@ impl Encoder {
             }
         }
         if pixels > 1024 {
-            let table = match &mut self.table {
-                Some(table) => {
-                    table.fill(0);
-                    table
-                }
-                empty => empty.insert([0; 8192]),
-            };
-            return Self::encode_table(rows, minimum, table, emit);
+            return Self::encode_large(rows, minimum, emit);
         }
         if pixels <= 1 {
             // CLEAR, at most one literal, and EOI all use the initial width.
@@ -268,6 +258,15 @@ impl Encoder {
             return Self::encode_table(rows, minimum, &mut [0; 512], emit);
         }
         Self::encode_table(rows, minimum, &mut [0; 2048], emit)
+    }
+
+    #[inline(never)]
+    fn encode_large<'a>(
+        rows: impl Iterator<Item = &'a [u8]>,
+        minimum: u8,
+        emit: impl FnMut(u64, usize) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        Self::encode_table(rows, minimum, &mut [0; 8192], emit)
     }
 
     #[inline(never)]

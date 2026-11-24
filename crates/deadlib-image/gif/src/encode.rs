@@ -44,7 +44,6 @@ impl<W: Write> Encoder<W> {
 struct EncoderOutput<W: Write> {
     writer: W,
     options: EncodeOptions,
-    lzw: lzw::Encoder,
     failed: bool,
 }
 impl<W: Write> EncoderOutput<W> {
@@ -52,7 +51,6 @@ impl<W: Write> EncoderOutput<W> {
         Self {
             writer,
             options,
-            lzw: lzw::Encoder::new(),
             failed: false,
         }
     }
@@ -188,9 +186,9 @@ impl<W: Write> EncoderOutput<W> {
                 let start = y * w;
                 &f.indices[start..start + w]
             });
-            self.lzw.encode_rows(rows, &f.indices, minimum, emit)?;
+            lzw::Encoder::encode_rows(rows, &f.indices, minimum, emit)?;
         } else {
-            self.lzw.encode_rows(
+            lzw::Encoder::encode_rows(
                 std::iter::once(f.indices.as_slice()),
                 &f.indices,
                 minimum,
