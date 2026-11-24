@@ -104,34 +104,47 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
                 }
             }
         }
-        Pixels::Rgb(samples) => {
-            let padding = &[0; 3][..pitch - row_bytes];
-            for y in source_rows {
-                let source = &samples[y * row_bytes..][..row_bytes];
-                output.extend(
-                    source
-                        .as_chunks::<3>()
-                        .0
-                        .iter()
-                        .flat_map(|&[red, green, blue]| [blue, green, red]),
-                );
-                output.extend_from_slice(padding);
-            }
-        }
-        Pixels::Rgba(samples) => {
-            for y in source_rows {
-                let source = &samples[y * row_bytes..][..row_bytes];
-                output.extend(
-                    source
-                        .as_chunks::<4>()
-                        .0
-                        .iter()
-                        .flat_map(|&[red, green, blue, alpha]| [blue, green, red, alpha]),
-                );
-            }
-        }
+        Pixels::Rgb(samples) => append_truecolor_rows(
+            &mut output,
+            samples,
+            row_bytes,
+            &[0; 3][..pitch - row_bytes],
+            options.top_down,
+            |&[red, green, blue]| [blue, green, red],
+        ),
+        Pixels::Rgba(samples) => append_truecolor_rows(
+            &mut output,
+            samples,
+            row_bytes,
+            &[],
+            options.top_down,
+            |&[red, green, blue, alpha]| [blue, green, red, alpha],
+        ),
     }
     Ok(output)
+}
+
+fn append_truecolor_rows<const N: usize>(
+    output: &mut Vec<u8>,
+    samples: &[u8],
+    row_bytes: usize,
+    padding: &[u8],
+    top_down: bool,
+    mut reorder: impl FnMut(&[u8; N]) -> [u8; N],
+) {
+    if top_down && padding.is_empty() {
+        output.extend(samples.as_chunks::<N>().0.iter().flat_map(reorder));
+    } else {
+        let mut rows = samples.chunks_exact(row_bytes);
+        while let Some(row) = if top_down {
+            rows.next()
+        } else {
+            rows.next_back()
+        } {
+            output.extend(row.as_chunks::<N>().0.iter().flat_map(&mut reorder));
+            output.extend_from_slice(padding);
+        }
+    }
 }
 
 // Keep the palette table off the stack of small encodes.
