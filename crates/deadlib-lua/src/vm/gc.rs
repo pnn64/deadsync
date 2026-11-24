@@ -484,10 +484,21 @@ fn clear_unused_registers(registers: &mut [Value], frames: &[Frame], live: &[u64
             .get(index + 1)
             .map_or(registers.len(), |next| next.stack_start)
             .min(registers.len());
-        for position in frame.base.min(end)..end {
-            if live[position / 64] & (1u64 << (position % 64)) == 0 {
-                registers[position] = Value::Nil;
+        let mut start = frame.base.min(end);
+        while start < end {
+            let offset = start % 64;
+            let count = (64 - offset).min(end - start);
+            let mask = u64::MAX >> (64 - count);
+            let mut dead = (!live[start / 64] >> offset) & mask;
+            if dead == mask {
+                registers[start..start + count].fill(Value::Nil);
+            } else {
+                while dead != 0 {
+                    registers[start + dead.trailing_zeros() as usize] = Value::Nil;
+                    dead &= dead - 1;
+                }
             }
+            start += count;
         }
     }
 }
