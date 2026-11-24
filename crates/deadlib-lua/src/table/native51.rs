@@ -138,22 +138,32 @@ impl Table {
             self.array[index] = value;
             return Ok(());
         }
-        if let Some((_, Some(index))) = self.slot(key) {
-            self.entries[index].value = value;
-            self.touch_fields();
-            if matches!(key, Key::String(_)) {
-                self.remember_hash_entry(index as u32 + 1);
+        let vacant = match self.slot(key) {
+            Some((_, Some(index))) => {
+                self.entries[index].value = value;
+                self.touch_fields();
+                if matches!(key, Key::String(_)) {
+                    self.remember_hash_entry(index as u32 + 1);
+                }
+                return Ok(());
             }
-            return Ok(());
-        }
-        self.native_insert(key, value, hash(key, string_hash))
+            Some((slot, None)) => Some(slot),
+            None => None,
+        };
+        self.native_insert(key, value, hash(key, string_hash), vacant)
     }
 
-    fn native_insert(&mut self, key: Key, value: Value, hash: u32) -> Result<(), Error> {
-        if self.entries.is_empty() {
+    fn native_insert(
+        &mut self,
+        key: Key,
+        value: Value,
+        hash: u32,
+        vacant: Option<usize>,
+    ) -> Result<(), Error> {
+        let Some(mut vacant) = vacant else {
             self.native_rehash(key)?;
             return self.native_set(key, value, |_| hash);
-        }
+        };
         let mut position = main_position(key, hash, self.entries.len());
         if self.entries[position].value != Value::Nil {
             let free = (0..self.last_free)
@@ -185,11 +195,13 @@ impl Table {
         {
             // A deleted main node is reusable, but its collision chain remains.
             self.native_index_remove_at(slot);
+            // Deletion can shift the identity probe chain before insertion.
+            vacant = self.slot(key).expect("allocated identity index").0;
         }
         self.entries[position].key = key;
         self.entries[position].value = value;
         self.entries[position].native_hash = hash;
-        self.native_index_set(key, position);
+        self.slots[vacant] = (position as u32 + 1) | Self::slot_tag(self.slots.len(), key.hash()).0;
         self.touch_fields();
         self.invalidate_trace();
         if matches!(key, Key::String(_)) {
@@ -302,6 +314,22 @@ impl Table {
 mod tests {
     use super::*;
     use crate::allocation_probe::probe;
+
+    #[test]
+    fn reusing_a_deleted_main_node_keeps_the_new_key_reachable() {
+        let mut table = Table::with_native51_capacity(0, 8, Memory::default()).unwrap();
+        // These keys collide in both the native node array and the identity index.
+        let old = Value::Number(-3.0);
+        let new = Value::Number(-39.0);
+        let value = Value::Boolean(true);
+        table.set(old, value).unwrap();
+        table.set(old, Value::Nil).unwrap();
+        table.set(new, value).unwrap();
+        assert_eq!(table.get(old), Value::Nil);
+        assert_eq!(table.get(new), value);
+        assert_eq!(table.next(Value::Nil).unwrap(), Some((new, value)));
+        assert_eq!(table.next(new).unwrap(), None);
+    }
 
     #[test]
     fn native_length_searches_the_hash_and_falls_back_across_the_array() {
