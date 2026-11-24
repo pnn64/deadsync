@@ -70,7 +70,7 @@ struct Compressed<'a, W> {
     writer: &'a mut Count<W>,
     sequence: Option<&'a mut u32>,
     encoder: Deflater,
-    output: Vec<u8>,
+    output: &'a mut Vec<u8>,
     have: usize,
 }
 impl<'a, W: Write> Compressed<'a, W> {
@@ -78,11 +78,13 @@ impl<'a, W: Write> Compressed<'a, W> {
         writer: &'a mut Count<W>,
         sequence: Option<&'a mut u32>,
         options: &EncodeOptions,
+        output: &'a mut Vec<u8>,
     ) -> Result<Self, Error> {
-        let capacity = options.idat_chunk_size.min(65536);
-        let mut output = Vec::new();
-        reserve(&mut output, capacity)?;
-        output.resize(capacity, 0);
+        if output.is_empty() {
+            let capacity = options.idat_chunk_size.min(65536);
+            reserve(output, capacity)?;
+            output.resize(capacity, 0);
+        }
         Ok(Self {
             writer,
             sequence,
@@ -154,9 +156,10 @@ fn image<W: Write>(
     image: &Image,
     options: &EncodeOptions,
     sequence: Option<&mut u32>,
+    output: &mut Vec<u8>,
 ) -> Result<usize, Error> {
     let mut rows = Rows::new(image, options.interlaced, options.filter)?;
-    let mut compressed = Compressed::new(writer, sequence, options)?;
+    let mut compressed = Compressed::new(writer, sequence, options, output)?;
     let mut peak = compressed.memory_bytes();
     while let Some(row) = rows.next_row()? {
         if row.zero {
@@ -204,7 +207,8 @@ pub fn encode_writer(
             chunk(&mut out, b"fcTL", &[&a.frames[0].control.wire(0)])?;
         }
     }
-    let mut peak = image(&mut out, &png.image, options, None)?;
+    let mut output = Vec::new();
+    let mut peak = image(&mut out, &png.image, options, None, &mut output)?;
     if let Some(a) = &png.animation {
         let mut sequence = u32::from(a.default_is_frame);
         for frame in &a.frames[usize::from(a.default_is_frame)..] {
@@ -217,7 +221,13 @@ pub fn encode_writer(
                 .image
                 .as_ref()
                 .ok_or(Error::Invalid("missing APNG frame"))?;
-            peak = peak.max(image(&mut out, pixels, options, Some(&mut sequence))?);
+            peak = peak.max(image(
+                &mut out,
+                pixels,
+                options,
+                Some(&mut sequence),
+                &mut output,
+            )?);
         }
     }
     ancillary(&mut out, png, ChunkPosition::AfterData)?;
