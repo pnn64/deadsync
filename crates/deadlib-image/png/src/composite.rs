@@ -68,40 +68,65 @@ fn expanded_palette(png: &Png) -> [[u16; 4]; 256] {
     palette
 }
 
-#[inline(always)]
-fn rgba(png: &Png, image: &Image, index: usize, factor: u16) -> [u16; 4] {
-    let raw = |n| match &image.samples {
-        Samples::U8(v) => u16::from(v[n]),
-        Samples::U16(v) => v[n],
-    };
+#[inline(never)]
+fn render_color_rows<T: Copy + Into<u16>>(
+    png: &Png,
+    image: &Image,
+    canvas: &mut [u16],
+    stride: usize,
+    control: FrameControl,
+    samples: &[T],
+) {
     let mask = ((1u32 << image.bit_depth) - 1) as u16;
-    let scale = |v: u16| v * factor;
-    let base = index * image.color_type.channels();
+    let factor = u16::MAX / mask;
     match image.color_type {
         ColorType::Grayscale => {
-            let value = raw(base);
-            let g = scale(value);
-            let a = if matches!(png.transparency,Some(Transparency::Grayscale(v)) if value==(v&mask))
-            {
-                0
-            } else {
-                65535
+            let key = match png.transparency {
+                Some(Transparency::Grayscale(value)) => Some([value & mask]),
+                _ => None,
             };
-            [g, g, g, a]
+            render_keyed_rows(canvas, stride, control, samples, key, factor);
         }
         ColorType::Rgb => {
-            let values = [raw(base), raw(base + 1), raw(base + 2)];
-            let a = if matches!(png.transparency,Some(Transparency::Rgb(v)) if values==v.map(|v| v&mask))
-            {
-                0
-            } else {
-                65535
+            let key = match png.transparency {
+                Some(Transparency::Rgb(rgb)) => Some(rgb.map(|value| value & mask)),
+                _ => None,
             };
-            [scale(values[0]), scale(values[1]), scale(values[2]), a]
+            render_keyed_rows(canvas, stride, control, samples, key, factor);
         }
-        ColorType::Indexed => palette_rgba(png, usize::from(raw(base))),
-        ColorType::GrayscaleAlpha | ColorType::Rgba => {
-            unreachable!("frames with alpha samples are rendered directly")
+        _ => unreachable!("other formats have their own frame loops"),
+    }
+}
+
+fn render_keyed_rows<T: Copy + Into<u16>, const N: usize>(
+    canvas: &mut [u16],
+    stride: usize,
+    control: FrameControl,
+    samples: &[T],
+    key: Option<[u16; N]>,
+    factor: u16,
+) {
+    let (width, stride) = if control.width as usize * 4 == stride {
+        let pixels = samples.len() / N;
+        (pixels, pixels * 4)
+    } else {
+        (control.width as usize, stride)
+    };
+    let rows = samples.as_chunks::<N>().0.chunks_exact(width);
+    for (dst, src) in canvas.chunks_mut(stride).zip(rows) {
+        for (dst, pixel) in dst[..width * 4].as_chunks_mut::<4>().0.iter_mut().zip(src) {
+            let values = pixel.map(Into::into);
+            let transparent = key == Some(values);
+            if transparent && control.blend == BlendOp::Over {
+                continue;
+            }
+            let alpha = if transparent { 0 } else { u16::MAX };
+            let gray_or_red = values[0] * factor;
+            *dst = if N == 1 {
+                [gray_or_red, gray_or_red, gray_or_red, alpha]
+            } else {
+                [gray_or_red, values[1] * factor, values[2] * factor, alpha]
+            };
         }
     }
 }
@@ -429,7 +454,6 @@ impl Compositor<'_> {
         let frame = &animation.frames[self.index];
         let c = frame.control;
         let image = frame.image.as_ref().unwrap_or(&self.png.image);
-        let factor = (65535 / ((1u32 << image.bit_depth) - 1)) as u16;
         if c.dispose == DisposeOp::Previous && self.index != 0 {
             let count = c.width as usize * c.height as usize * 4;
             if self
@@ -512,21 +536,35 @@ impl Compositor<'_> {
             }
         } else if let (ColorType::Indexed, Samples::U8(samples)) =
             (image.color_type, &image.samples)
-            && samples.len() >= 256
         {
-            render_indexed_rows(self.png, &mut self.canvas, stride, c, samples);
-        } else {
-            for y in 0..c.height as usize {
-                for x in 0..c.width as usize {
-                    let src = rgba(self.png, image, y * c.width as usize + x, factor);
-                    let offset = (c.y_offset as usize + y) * stride + (c.x_offset as usize + x) * 4;
-                    let dst: &mut [u16; 4] =
-                        (&mut self.canvas[offset..offset + 4]).try_into().unwrap();
-                    if c.blend == BlendOp::Source {
-                        *dst = src;
-                    } else {
-                        over::<false>(dst, src);
+            if samples.len() >= 256 {
+                render_indexed_rows(self.png, &mut self.canvas, stride, c, samples);
+            } else {
+                for y in 0..c.height as usize {
+                    for x in 0..c.width as usize {
+                        let src =
+                            palette_rgba(self.png, usize::from(samples[y * c.width as usize + x]));
+                        let offset =
+                            (c.y_offset as usize + y) * stride + (c.x_offset as usize + x) * 4;
+                        let dst: &mut [u16; 4] =
+                            (&mut self.canvas[offset..offset + 4]).try_into().unwrap();
+                        if c.blend == BlendOp::Source {
+                            *dst = src;
+                        } else {
+                            over::<false>(dst, src);
+                        }
                     }
+                }
+            }
+        } else {
+            let offset = c.y_offset as usize * stride + c.x_offset as usize * 4;
+            let canvas = &mut self.canvas[offset..];
+            match &image.samples {
+                Samples::U8(samples) => {
+                    render_color_rows(self.png, image, canvas, stride, c, samples)
+                }
+                Samples::U16(samples) => {
+                    render_color_rows(self.png, image, canvas, stride, c, samples)
                 }
             }
         }
