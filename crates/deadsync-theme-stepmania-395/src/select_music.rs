@@ -5,7 +5,10 @@ use deadlib_assets::present_dsl::cover_uv;
 use deadlib_present::actors::{Actor, SpriteSource, TextAlign, TextContent};
 use deadlib_present::anim;
 use deadlib_present::dsl::SpriteBuilder;
-use deadsync_theme::select_music::{SELECT_MUSIC_WHEEL_ROWS, SelectMusicPrompt, SelectMusicView};
+use deadsync_config::theme::SelectMusicSort;
+use deadsync_theme::select_music::{
+    SELECT_MUSIC_WHEEL_ROWS, SelectMusicPrompt, SelectMusicSortView, SelectMusicView,
+};
 use deadsync_theme::selection::{MusicWheelPresentation, WheelMediaFrame};
 
 use crate::presentation::{Layout, push_footer};
@@ -133,6 +136,7 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
             bpm.z(6);
             actors.push(bpm.build(0));
         }
+        push_sort(actors, layout, view.sort, banner_shift);
 
         if let Some(stage) = view.stage_number {
             let (stage_key, stage_width) = match stage {
@@ -301,6 +305,42 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
         push_footer(actors, help, fade);
         self.push_options_prompt(actors, view.prompt, media.now);
     }
+}
+
+fn push_sort(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    sort: SelectMusicSortView,
+    banner_shift: f32,
+) {
+    let at = [252.0 + banner_shift, 121.0];
+    let artwork = match sort {
+        SelectMusicSortView::Library(order) => match order {
+            SelectMusicSort::Title => Some("stepmania-395/music-sort-title"),
+            SelectMusicSort::Artist => Some("stepmania-395/music-sort-artist"),
+            SelectMusicSort::Bpm => Some("stepmania-395/music-sort-bpm"),
+            SelectMusicSort::Group => Some("stepmania-395/music-sort-group"),
+            SelectMusicSort::Popularity => Some("stepmania-395/music-sort-popularity"),
+            SelectMusicSort::TopGrades => Some("stepmania-395/music-sort-grades"),
+            _ => None,
+        },
+        _ => None,
+    };
+    if let Some(key) = artwork {
+        actors.push(layout.sprite(key, at, [68.0, 16.0], 6).build(0));
+        return;
+    }
+    // Extra catalog sorts have no artwork in the reference theme.
+    let label = match sort {
+        SelectMusicSortView::Library(order) => order.as_str().to_owned(),
+        SelectMusicSortView::Player { order, side } => format!("P{} {}", side + 1, order.as_str()),
+        SelectMusicSortView::Favorites { side } => format!("P{} Favorites", side + 1),
+        SelectMusicSortView::Playlist => "Playlist".to_owned(),
+    };
+    let mut text = layout.text(NORMAL_FONT, TextContent::Owned(label), at, 0.6);
+    text.maxwidth(68.0 * layout.scale);
+    text.z(6);
+    actors.push(text.build(0));
 }
 
 fn text(value: &str) -> TextContent {

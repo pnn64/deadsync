@@ -2,6 +2,7 @@
 
 use crate::views::ScoreboxLocalRecords;
 use deadsync_chart::ChartData;
+use deadsync_config::theme::SelectMusicSort;
 use deadsync_core::input::MAX_PLAYERS;
 use std::sync::Arc;
 
@@ -65,11 +66,21 @@ pub enum SelectMusicPrompt {
     EnteringOptions,
 }
 
+/// Active catalog ordering, including temporary player and collection filters.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SelectMusicSortView {
+    Library(SelectMusicSort),
+    Player { order: SelectMusicSort, side: usize },
+    Favorites { side: usize },
+    Playlist,
+}
+
 pub struct SelectMusicView<'a> {
     /// The focused row is the center slot. The window wraps with the game wheel.
     pub rows: [Option<SelectMusicWheelRow<'a>>; SELECT_MUSIC_WHEEL_ROWS],
     pub wheel_offset: f32,
     pub wheel_locked: bool,
+    pub sort: SelectMusicSortView,
     /// Preview beat or the browsing clock when no preview is active.
     pub selection_beat: f32,
     pub song: Option<SelectMusicSongView<'a>>,

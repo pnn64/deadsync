@@ -12,6 +12,8 @@ Options use the original `ScreenOptions` page, cursor, and underline artwork, wi
 
 The song-selection radar draws the original half-transparent player polygons and two-pixel outlines using the source colors, radius, and rotations. Values come from the shared chart catalog's computed Stream, Voltage, Air, Freeze, and Chaos data, normalized by music length. Chart analysis and persistence remain in the game layer.
 
+The current sort uses the original `MusicSortDisplay` artwork for title, artist, BPM, group, popularity, and top grades. Extra catalog sorts and player filters use the bundled normal font with their actual names. The shared wheel view supplies the active ordering; the theme owns its label and animation.
+
 The bundled bitmap fonts also include the original `Common default` imports for button symbols, Japanese, Korean, and miscellaneous glyphs.
 
 Gameplay uses the original `ScreenGameplay` life/score frames and difficulty sheet, `LifeMeterBar` textures, `Judgment` and `HoldJudgment` sheets, `Combo` artwork, and the ready/go, cleared/failed, and entry/exit animation graphics. Rust code reproduces their authored layout and animation. The failed sound is copied from `BGAnimations/ScreenGameplay failed/failed.ogg`.

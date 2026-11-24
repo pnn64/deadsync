@@ -57,6 +57,9 @@ pub fn music_actors() -> Vec<Actor> {
             }),
             wheel_offset: 0.0,
             wheel_locked: false,
+            sort: deadsync_theme::select_music::SelectMusicSortView::Library(
+                deadsync_config::theme::SelectMusicSort::Title,
+            ),
             selection_beat: 1.0,
             song: Some(SelectMusicSongView {
                 title: &song.title,

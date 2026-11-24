@@ -2662,6 +2662,28 @@ pub fn select_music_view<'a>(
         rows,
         wheel_offset: state.wheel_offset_from_selection,
         wheel_locked: state.chance_lock_velocity.is_some(),
+        sort: {
+            use deadsync_theme::select_music::SelectMusicSortView;
+            match state.sort_mode {
+                WheelSortMode::PopularityP1 | WheelSortMode::PopularityP2 => SelectMusicSortView::Player {
+                    order: SelectMusicSort::Popularity,
+                    side: usize::from(state.sort_mode == WheelSortMode::PopularityP2),
+                },
+                WheelSortMode::RecentP1 | WheelSortMode::RecentP2 => SelectMusicSortView::Player {
+                    order: SelectMusicSort::Recent,
+                    side: usize::from(state.sort_mode == WheelSortMode::RecentP2),
+                },
+                WheelSortMode::TopGradesP1 | WheelSortMode::TopGradesP2 => SelectMusicSortView::Player {
+                    order: SelectMusicSort::TopGrades,
+                    side: usize::from(state.sort_mode == WheelSortMode::TopGradesP2),
+                },
+                WheelSortMode::Favorites(side) => SelectMusicSortView::Favorites {
+                    side: usize::from(side == profile_data::PlayerSide::P2),
+                },
+                WheelSortMode::Playlist => SelectMusicSortView::Playlist,
+                order => SelectMusicSortView::Library(saved_sort(order).expect("stable library sort")),
+            }
+        },
         selection_beat: selection_anim_beat(state),
         song: song.map(|song| SelectMusicSongView {
             music_length_seconds: song.music_length_seconds,

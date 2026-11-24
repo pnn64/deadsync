@@ -20,6 +20,11 @@ fn wheel_radar_displays_both_players_from_parsed_chart_data() {
         640.0, 480.0,
     ));
     let actors = support::music_actors();
+    assert!(actors.iter().any(|actor| matches!(actor,
+        Actor::Sprite { source, offset, .. }
+        if source.texture_key() == Some("stepmania-395/music-sort-title")
+            && *offset == [252.0, 121.0]
+    )));
     let fills: Vec<_> = actors
         .iter()
         .filter_map(|actor| match actor {
@@ -537,6 +542,9 @@ fn native_wheel_centers_live_rows_and_crops_the_prepared_banner() {
         rows,
         wheel_offset: 0.0,
         wheel_locked: false,
+        sort: deadsync_theme::select_music::SelectMusicSortView::Library(
+            deadsync_config::theme::SelectMusicSort::Title,
+        ),
         selection_beat: 0.0,
         song: None,
         banner_texture: Some(&banner),

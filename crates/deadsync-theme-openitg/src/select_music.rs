@@ -960,6 +960,9 @@ mod tests {
             rows,
             wheel_offset: 0.0,
             wheel_locked: false,
+            sort: deadsync_theme::select_music::SelectMusicSortView::Library(
+                deadsync_config::theme::SelectMusicSort::Title,
+            ),
             selection_beat: 0.0,
             song: Some(SelectMusicSongView {
                 music_length_seconds: 90.0,
