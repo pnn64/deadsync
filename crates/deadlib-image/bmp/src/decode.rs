@@ -425,16 +425,6 @@ enum Format {
     },
 }
 
-impl Format {
-    fn channels(self) -> usize {
-        match self {
-            Self::Indexed { .. } => 1,
-            Self::Bgra32 | Self::Masked { alpha: Some(_), .. } => 4,
-            _ => 3,
-        }
-    }
-}
-
 #[derive(Clone, Copy)]
 struct Channel {
     mask: u32,
@@ -656,21 +646,20 @@ fn parse_header(input: &[u8], limits: Limits) -> Result<Header, Error> {
         32 => Format::Bgra32,
         _ => unreachable!("validated BMP bit depth"),
     };
-    let palette_bytes = match format {
-        Format::Indexed { palette_len, .. } => palette_len * 3,
-        _ => 0,
+    // Dimensions are at most i32::MAX and each raster uses at most four
+    // bytes per pixel, so even adding the palette stays within u64.
+    let pixels = count as u64;
+    let decoded_bytes = match format {
+        Format::Indexed { palette_len, .. } => pixels + palette_len as u64 * 3,
+        Format::Bgra32 | Format::Masked { alpha: Some(_), .. } => pixels * 4,
+        _ => pixels * 3,
     };
-    let decoded_bytes = count
-        .checked_mul(format.channels())
-        .and_then(|bytes| bytes.checked_add(palette_bytes))
-        .ok_or(Error::LimitExceeded)?;
-    if decoded_bytes > limits.max_decoded_bytes {
+    if decoded_bytes > limits.max_decoded_bytes as u64 {
         return Err(Error::LimitExceeded);
     }
+    // The padded source row is also at most four bytes per pixel.
     let row_pitch = (u64::from(width) * u64::from(bit_depth)).div_ceil(32) * 4;
-    let source_bytes = row_pitch
-        .checked_mul(u64::from(height))
-        .ok_or(Error::LimitExceeded)?;
+    let source_bytes = row_pitch * u64::from(height);
     Ok(Header {
         info: Info {
             width,

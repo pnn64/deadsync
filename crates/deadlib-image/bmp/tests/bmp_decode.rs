@@ -704,3 +704,39 @@ fn positive_maximum_signed_dimensions_hit_limits_before_pixel_allocation() {
         ));
     }
 }
+
+#[test]
+fn maximum_32_bit_raster_respects_address_space_limits() {
+    let limits = Limits {
+        max_pixels: usize::MAX,
+        max_decoded_bytes: usize::MAX,
+        ..Limits::default()
+    };
+    for height in [1, i32::MAX] {
+        let bytes = bmp(Header::new(i32::MAX, height, 32), &[], &[]);
+        if usize::BITS == 64 {
+            assert_eq!(
+                probe_with_limits(&bytes, limits).unwrap(),
+                Info {
+                    width: i32::MAX as u32,
+                    height: height as u32,
+                    bit_depth: 32,
+                    top_down: false,
+                }
+            );
+            assert!(matches!(
+                decode_with_limits(&bytes, limits),
+                Err(Error::Truncated)
+            ));
+        } else {
+            assert!(matches!(
+                probe_with_limits(&bytes, limits),
+                Err(Error::LimitExceeded)
+            ));
+            assert!(matches!(
+                decode_with_limits(&bytes, limits),
+                Err(Error::LimitExceeded)
+            ));
+        }
+    }
+}
