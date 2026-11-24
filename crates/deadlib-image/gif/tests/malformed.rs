@@ -509,8 +509,8 @@ fn lzw_literal_range_is_checked_before_appending() {
     let prefix = [0xfa, 0xfb];
     let mut output = prefix.to_vec();
     for minimum in 2..8 {
-        for offset in [0, 31, 65] {
-            let mut input = [0; 66];
+        for offset in [0, 31, 255, 256, 513] {
+            let mut input = [0; 514];
             input[offset] = 1 << minimum;
             assert_eq!(
                 encoder.encode(&input, minimum, &mut output),

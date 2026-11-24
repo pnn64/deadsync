@@ -197,11 +197,10 @@ impl Encoder {
     pub fn encode(&mut self, input: &[u8], minimum: u8, output: &mut Vec<u8>) -> Result<(), Error> {
         if !(2..=8).contains(&minimum)
             || (minimum < 8
-                && input
-                    .iter()
-                    .copied()
-                    .max()
-                    .is_some_and(|maximum| maximum >= 1 << minimum))
+                && input.chunks(256).any(|chunk| {
+                    // A high bit in any literal survives the OR reduction.
+                    chunk.iter().fold(0, |bits, &pixel| bits | pixel) >> minimum != 0
+                }))
         {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
