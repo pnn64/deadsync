@@ -386,24 +386,20 @@ impl OggIndex {
             return None;
         }
         let pages = &self.pages[stream.pages.clone()];
-        let page = pages.get(
-            pages
-                .partition_point(|p| p.first_packet <= number)
-                .checked_sub(1)?,
-        )?;
-        let offset = if number == page.first_packet {
-            page.first_packet_offset
-        } else {
-            page.offset
-        };
-        if offset == page.offset {
+        let end = pages.partition_point(|page| page.first_packet <= number);
+        let (page, earlier) = pages[..end].split_last()?;
+        let offset = page.first_packet_offset;
+        if number != page.first_packet || offset == page.offset {
             return Some(page);
         }
-        let result = pages.get(
-            pages
-                .partition_point(|page| page.offset <= offset)
-                .checked_sub(1)?,
-        )?;
-        (result.offset == offset).then_some(result)
+        if let Some(previous) = earlier.last()
+            && previous.offset == offset
+        {
+            return Some(previous);
+        }
+        let origin = earlier
+            .binary_search_by_key(&offset, |page| page.offset)
+            .ok()?;
+        Some(&earlier[origin])
     }
 }

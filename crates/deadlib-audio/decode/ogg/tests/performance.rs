@@ -379,6 +379,28 @@ fn benchmark_container() {
             OggIndex::read(black_box(many_pages.as_slice()), IndexOptions::default()).unwrap(),
         );
     });
+    let mut state = 7u32;
+    let queries: Vec<_> = (0..256)
+        .map(|_| {
+            state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+            (state >> 16) as u64
+        })
+        .collect();
+    let query_bytes = std::mem::size_of_val(queries.as_slice());
+    for (label, size, count, target) in [
+        ("ordinary", 1, 4096, 1),
+        ("two-page", 80_000, 512, 8192),
+        ("long", 260_000, 128, 8192),
+    ] {
+        let bytes = stream(size, count, target);
+        let index = OggIndex::read(bytes.as_slice(), IndexOptions::default()).unwrap();
+        measure(&format!("seek/packet/{label}"), 20_000, query_bytes, || {
+            for &query in &queries {
+                let number = 1 + black_box(query) % count as u64;
+                black_box(black_box(&index).packet_start_page(7, number).unwrap());
+            }
+        });
+    }
     let clean = stream(24, 32, 8192);
     let mut seed = 17u32;
     let random = (0..32_768)
