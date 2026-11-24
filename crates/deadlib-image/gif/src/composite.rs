@@ -254,9 +254,11 @@ impl Compositor {
         if count > self.max_pixels {
             return Err(Error::LimitExceeded);
         }
+        let rect = self.clip(text.left, text.top, text.width, text.height);
         self.text_indices.clear();
-        reserve(&mut self.text_indices, count)?;
-        self.text_indices.resize(count, text.background_index);
+        let visible = rect.w * rect.h;
+        reserve(&mut self.text_indices, visible)?;
+        self.text_indices.resize(visible, text.background_index);
         let cw = text.cell_width as usize;
         let ch = text.cell_height as usize;
         self.mask.clear();
@@ -264,7 +266,9 @@ impl Compositor {
         self.mask.resize(cw * ch, 0);
         let columns = text.width as usize / cw;
         let rows = text.height as usize / ch;
-        for (n, &character) in text.data.iter().flatten().take(columns * rows).enumerate() {
+        let right = columns * cw;
+        let (mut x, mut y) = (0, 0);
+        for &character in text.data.iter().flatten().take(columns * rows) {
             self.mask.fill(0);
             rasterizer.rasterize(
                 if !(0x20..=0xf7).contains(&character) {
@@ -276,18 +280,26 @@ impl Compositor {
                 text.cell_height,
                 &mut self.mask,
             )?;
-            let x = n % columns * cw;
-            let y = n / columns * ch;
-            for row in 0..ch {
-                for col in 0..cw {
-                    if self.mask[row * cw + col] != 0 {
-                        self.text_indices[(y + row) * text.width as usize + x + col] =
-                            text.foreground_index;
+            if x < rect.w && y < rect.h {
+                let width = cw.min(rect.w - x);
+                for (row, mask) in self.mask.chunks_exact(cw).take(rect.h - y).enumerate() {
+                    let start = (y + row) * rect.w + x;
+                    let dest = &mut self.text_indices[start..start + width];
+                    for (index, &covered) in dest.iter_mut().zip(mask) {
+                        *index = if covered == 0 {
+                            text.background_index
+                        } else {
+                            text.foreground_index
+                        };
                     }
                 }
             }
+            x += cw;
+            if x == right {
+                x = 0;
+                y += ch;
+            }
         }
-        let rect = self.clip(text.left, text.top, text.width, text.height);
         self.prepare(rect, text.control)?;
         // The validated text colors are the only two indices rasterization writes.
         let transparent = text
@@ -305,7 +317,7 @@ impl Compositor {
             (&mut self.pixels, self.width as usize),
             rect,
             &self.text_indices,
-            text.width as usize,
+            rect.w,
             &self.palette,
             transparent,
             opaque,
