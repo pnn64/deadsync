@@ -248,13 +248,14 @@ impl Encoder {
         if pixels > 1024 {
             return Self::encode_large(rows, minimum, emit);
         }
-        if pixels <= 1 {
-            // CLEAR, at most one literal, and EOI all use the initial width.
+        if pixels <= 2 {
+            // CLEAR, up to two literals, and EOI all use the initial width.
+            // With at most two pixels, interlacing preserves the input order.
             let clear = 1u64 << minimum;
             let width = minimum + 1;
             let mut bits = clear;
             let mut used = width;
-            if let Some(&pixel) = indices.first() {
+            for &pixel in indices {
                 bits |= u64::from(pixel) << used;
                 used += width;
             }

@@ -65,7 +65,7 @@ fn verify_reference(bytes: &[u8], expected: &Gif) {
 #[test]
 fn native_encoder_reference_decoder_all_palette_sizes_and_interlace() {
     for colors in [2, 4, 8, 16, 32, 64, 128, 256] {
-        for (width, height) in [(1, 1), (3, 2), (17, 13), (257, 73)] {
+        for (width, height) in [(1, 1), (1, 2), (3, 2), (17, 13), (257, 73)] {
             for interlaced in [false, true] {
                 let mut header = Header::new(width, height);
                 header.global_palette = Some(palette(colors));
