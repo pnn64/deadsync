@@ -1,4 +1,4 @@
-use crate::codec::{Header, be16, be32, write_chunk};
+use crate::codec::{Header, be16, be32, reserve_chunk_run, write_chunk};
 use crate::{ColorType, EncodeOptions, Error, Image, Limits, Png, Samples, scanline, zlib};
 use std::borrow::Cow;
 
@@ -393,8 +393,13 @@ pub(crate) fn write_frames(
                 .as_ref()
                 .ok_or(Error::Invalid("missing APNG frame"))?;
             let compressed = crate::stream::compress_image(image, options)?;
-            let chunk_size = options.idat_chunk_size.min(0x7fff_fffb);
-            for part in compressed.chunks(chunk_size) {
+            let chunks = compressed.chunks(options.idat_chunk_size.min(0x7fff_fffb));
+            let count = chunks.len();
+            if count <= (0x8000_0000 - sequence) as usize {
+                // Each fdAT carries a four-byte sequence number in its payload.
+                reserve_chunk_run(out, compressed.len(), count, 16)?;
+            }
+            for part in chunks {
                 if sequence > 0x7fff_ffff {
                     return Err(Error::LimitExceeded);
                 }

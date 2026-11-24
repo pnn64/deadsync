@@ -493,6 +493,24 @@ pub(crate) fn write_chunk<const N: usize>(
     Ok(())
 }
 
+pub(crate) fn reserve_chunk_run(
+    output: &mut Vec<u8>,
+    payload: usize,
+    chunks: usize,
+    framing: usize,
+) -> Result<(), Error> {
+    if chunks > 1 {
+        // Include room for the final IEND.
+        let additional = chunks
+            .checked_mul(framing)
+            .and_then(|headers| headers.checked_add(payload))
+            .and_then(|bytes| bytes.checked_add(12))
+            .ok_or(Error::Allocation)?;
+        reserve(output, additional)?;
+    }
+    Ok(())
+}
+
 fn write_ancillary(out: &mut Vec<u8>, png: &Png, position: ChunkPosition) -> Result<(), Error> {
     for c in png.ancillary.iter().filter(|c| c.position == position) {
         if ancillary_writable(c)? {
@@ -587,19 +605,9 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     write_ancillary(&mut out, png, ChunkPosition::BeforeData)?;
     crate::apng::write_control(&mut out, png)?;
     let compressed = crate::stream::compress_image(&png.image, options)?;
-    let chunk_size = options.idat_chunk_size;
-    if compressed.len() > chunk_size {
-        // Reserve the IDAT run together, including the final IEND.
-        let additional = compressed
-            .len()
-            .div_ceil(chunk_size)
-            .checked_mul(12)
-            .and_then(|headers| headers.checked_add(compressed.len()))
-            .and_then(|bytes| bytes.checked_add(12))
-            .ok_or(Error::Allocation)?;
-        reserve(&mut out, additional)?;
-    }
-    for part in compressed.chunks(chunk_size) {
+    let chunks = compressed.chunks(options.idat_chunk_size);
+    reserve_chunk_run(&mut out, compressed.len(), chunks.len(), 12)?;
+    for part in chunks {
         write_chunk(&mut out, b"IDAT", [part])?;
     }
     crate::apng::write_frames(&mut out, png, options)?;
