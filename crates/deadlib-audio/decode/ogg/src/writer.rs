@@ -150,7 +150,6 @@ impl<W: Write> PacketWriter<W> {
         header[5] = flags;
         header[6..14].copy_from_slice(&granule.to_le_bytes());
         header[18..22].copy_from_slice(&self.sequence.to_le_bytes());
-        header[22..26].fill(0);
         header[26] = (self.header_len - FIXED_HEADER_SIZE) as u8;
         write_page_inner(
             &mut self.inner,

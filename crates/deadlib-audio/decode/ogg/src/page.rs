@@ -267,13 +267,13 @@ pub fn write_page(
     write_page_inner(writer, &mut header[..len], body)
 }
 
-// The prefix contains the header and laces with a zeroed checksum field.
+// The prefix contains the header and laces.
 pub(crate) fn write_page_inner(
     mut writer: impl Write,
     header: &mut [u8],
     body: &[u8],
 ) -> Result<usize, Error> {
-    let checksum = crc::update(crc::update(0, header), body);
+    let checksum = crc::update(crc::page_crc(header), body);
     header[22..26].copy_from_slice(&checksum.to_le_bytes());
     writer.write_all(header)?;
     writer.write_all(body)?;

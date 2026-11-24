@@ -103,7 +103,7 @@ pub fn crc32(bytes: &[u8]) -> u32 {
     update(0, bytes)
 }
 
-// Both callers have already checked the capture pattern.
+// The capture pattern is known. Input may stop after the lacing table.
 pub(crate) fn page_crc(bytes: &[u8]) -> u32 {
     const CAPTURE_CRC: u32 = {
         let mut crc = u32::from_be_bytes(*b"OggS");
