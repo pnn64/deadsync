@@ -60,6 +60,7 @@ struct Rect {
 pub struct Compositor {
     header: Header,
     options: CompositeOptions,
+    expanded_palette: Option<[[u8; 4]; 256]>,
     background: [u8; 4],
     pixels: Vec<[u8; 4]>,
     saved: Vec<[u8; 4]>,
@@ -110,6 +111,7 @@ impl Compositor {
         Ok(Self {
             header: header.clone(),
             options,
+            expanded_palette: None,
             background,
             pixels,
             saved: Vec::new(),
@@ -192,17 +194,31 @@ impl Compositor {
             self.options.external_palette.as_deref(),
             false,
         )?;
-        let p = frame
-            .palette(&self.header)
-            .or(self.options.external_palette.as_deref())
-            .ok_or(Error::MissingPalette)?;
-        let mut table = [[0u8; 4]; 256];
-        for (dest, src) in table.iter_mut().zip(p) {
-            *dest = [src[0], src[1], src[2], 255];
+        let local = frame.local_palette.as_deref();
+        if local.is_none()
+            && self.header.global_palette.is_none()
+            && self.options.external_palette.is_none()
+        {
+            return Err(Error::MissingPalette);
         }
         let transparent = frame.control.and_then(|c| c.transparent_index);
         let r = self.clip(frame.left, frame.top, frame.width, frame.height);
         self.prepare(r, frame.control)?;
+        let local_table;
+        let table = if let Some(p) = local {
+            local_table = expand_palette(p);
+            &local_table
+        } else {
+            self.expanded_palette.get_or_insert_with(|| {
+                expand_palette(
+                    self.header
+                        .global_palette
+                        .as_deref()
+                        .or(self.options.external_palette.as_deref())
+                        .unwrap(),
+                )
+            })
+        };
         let stride = self.header.width as usize;
         for row in 0..r.h {
             let indices =
@@ -324,4 +340,12 @@ impl Compositor {
             control: text.control,
         })
     }
+}
+
+fn expand_palette(colors: &[[u8; 3]]) -> [[u8; 4]; 256] {
+    let mut table = [[0; 4]; 256];
+    for (dest, &[r, g, b]) in table.iter_mut().zip(colors) {
+        *dest = [r, g, b, 255];
+    }
+    table
 }
