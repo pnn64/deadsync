@@ -37,6 +37,10 @@ const fn power(bits: usize) -> u32 {
 }
 const K128: u32 = power(128);
 const K192: u32 = power(192);
+const K256: u32 = power(256);
+const K320: u32 = power(320);
+const K384: u32 = power(384);
+const K448: u32 = power(448);
 const K512: u32 = power(512);
 const K576: u32 = power(576);
 const K32: i64 = power(32) as i64;
@@ -92,9 +96,10 @@ fn fold(seed: u32, bytes: &[u8]) -> u32 {
         c = _mm_xor_si128(fold!(c, k), reversed_word(word_c, reverse));
         d = _mm_xor_si128(fold!(d, k), reversed_word(word_d, reverse));
     }
-    let mut state = _mm_xor_si128(fold!(a, k1), b);
-    state = _mm_xor_si128(fold!(state, k1), c);
-    state = _mm_xor_si128(fold!(state, k1), d);
+    // Advance each lane by the number of words that follow it.
+    let a = fold!(a, _mm_set_epi64x(K448 as i64, K384 as i64));
+    let b = fold!(b, _mm_set_epi64x(K320 as i64, K256 as i64));
+    let mut state = _mm_xor_si128(_mm_xor_si128(a, b), _mm_xor_si128(fold!(c, k1), d));
     for word in words {
         state = _mm_xor_si128(fold!(state, k1), reversed_word(word, reverse));
     }
