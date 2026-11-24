@@ -289,14 +289,13 @@ impl BitWriter<'_> {
     fn code(&mut self, code: u16, width: u8) -> Result<(), Error> {
         self.bits |= u64::from(code) << self.count;
         self.count += width;
-        // At most 31 buffered bits plus a 12-bit code fit in u64. Flush a
-        // whole word, amortizing fallible growth and writes across codes.
-        if self.count >= 32 {
-            reserve(self.output, 4)?;
-            self.output
-                .extend_from_slice(&(self.bits as u32).to_le_bytes());
-            self.bits >>= 32;
-            self.count -= 32;
+        // At most 47 buffered bits plus a 12-bit code fit in u64. Flush six
+        // bytes at a time to amortize fallible growth across more codes.
+        if self.count >= 48 {
+            reserve(self.output, 6)?;
+            self.output.extend_from_slice(&self.bits.to_le_bytes()[..6]);
+            self.bits >>= 48;
+            self.count -= 48;
         }
         Ok(())
     }
