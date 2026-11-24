@@ -375,11 +375,12 @@ pub(crate) fn write_control(out: &mut Vec<u8>, png: &Png) -> Result<(), Error> {
     }
     Ok(())
 }
-pub(crate) fn write_frames(
+pub(crate) fn write_frames<'a>(
     out: &mut Vec<u8>,
-    png: &Png,
+    png: &'a Png,
     options: &EncodeOptions,
     compressor: &mut zlib::Compressor,
+    rows: &mut crate::stream::Rows<'a>,
 ) -> Result<(), Error> {
     if let Some(a) = &png.animation {
         let mut sequence = u32::from(a.default_is_frame);
@@ -393,7 +394,7 @@ pub(crate) fn write_frames(
                 .image
                 .as_ref()
                 .ok_or(Error::Invalid("missing APNG frame"))?;
-            let compressed = crate::stream::compress_image(image, options, compressor)?;
+            let compressed = crate::stream::compress_image(image, options, compressor, rows)?;
             let chunks = compressed.chunks(options.idat_chunk_size.min(0x7fff_fffb));
             let count = chunks.len();
             if count <= (0x8000_0000 - sequence) as usize {

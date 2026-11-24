@@ -2,10 +2,11 @@ use crate::{EncodeOptions, Error, Filter, Image, Samples, reserve, scanline, zli
 
 /// Filter and compress an image into the stream that `zlib::compress` gives
 /// for its whole filtered bytes, holding only rows and a compression window.
-pub(crate) fn compress_image<'a>(
-    image: &Image,
+pub(crate) fn compress_image<'a, 'image>(
+    image: &'image Image,
     options: &EncodeOptions,
     compressor: &'a mut zlib::Compressor,
+    rows: &mut Rows<'image>,
 ) -> Result<&'a [u8], Error> {
     let size = scanline::filtered_size(
         image.width,
@@ -28,7 +29,7 @@ pub(crate) fn compress_image<'a>(
         }
         return Ok(compressor.finish());
     }
-    let mut rows = Rows::new(image, options.interlaced, options.filter)?;
+    rows.reset(image);
     while let Some(row) = rows.next_row()? {
         if row.zero {
             compressor.push(&row.bytes[..1]);
@@ -47,7 +48,7 @@ pub(super) struct FilteredRow<'a> {
     pub(super) zero: bool,
 }
 
-pub(super) struct Rows<'a> {
+pub(crate) struct Rows<'a> {
     image: &'a Image,
     pixels: Option<&'a [u8]>,
     interlaced: bool,
@@ -77,7 +78,7 @@ fn resize(bytes: &mut Vec<u8>, length: usize) -> Result<(), Error> {
     Ok(())
 }
 impl<'a> Rows<'a> {
-    pub(super) fn new(image: &'a Image, interlaced: bool, filter: Filter) -> Result<Self, Error> {
+    pub(crate) fn new(image: &'a Image, interlaced: bool, filter: Filter) -> Result<Self, Error> {
         scanline::filtered_size(
             image.width,
             image.height,
@@ -85,13 +86,9 @@ impl<'a> Rows<'a> {
             image.bit_depth,
             interlaced,
         )?;
-        let pixels = match &image.samples {
-            Samples::U8(pixels) if image.bit_depth == 8 && !interlaced => Some(pixels.as_slice()),
-            _ => None,
-        };
-        Ok(Self {
+        let mut rows = Self {
             image,
-            pixels,
+            pixels: None,
             interlaced,
             filter,
             pass: 0,
@@ -109,7 +106,19 @@ impl<'a> Rows<'a> {
             output: Vec::new(),
             zeroed: false,
             last_kind: 1,
-        })
+        };
+        rows.reset(image);
+        Ok(rows)
+    }
+    fn reset(&mut self, image: &'a Image) {
+        self.image = image;
+        self.pixels = match &image.samples {
+            Samples::U8(pixels) if image.bit_depth == 8 && !self.interlaced => Some(pixels),
+            _ => None,
+        };
+        self.pass = 0;
+        self.initialized = false;
+        self.last_kind = 1;
     }
     fn start_pass(&mut self) -> Result<bool, Error> {
         let passes = scanline::passes(self.interlaced);
@@ -286,6 +295,34 @@ impl<'a> Rows<'a> {
 mod tests {
     use super::*;
     use crate::ColorType;
+
+    #[test]
+    fn reset_reuses_rows_without_changing_packed_adam7_filters() {
+        let image = |width, height, seed| Image {
+            width,
+            height,
+            color_type: ColorType::Grayscale,
+            bit_depth: 4,
+            samples: Samples::U8(
+                (0..width * height)
+                    .map(|index| ((index / width + seed) % 16) as u8)
+                    .collect(),
+            ),
+        };
+        let wide = image(19, 17, 1);
+        let narrow = image(3, 3, 4);
+        let mut reused = Rows::new(&wide, true, Filter::Adaptive).unwrap();
+        for image in [&wide, &narrow, &wide] {
+            reused.reset(image);
+            let mut fresh = Rows::new(image, true, Filter::Adaptive).unwrap();
+            while let Some(expected) = fresh.next_row().unwrap() {
+                let row = reused.next_row().unwrap().unwrap();
+                assert_eq!(row.bytes, expected.bytes);
+                assert_eq!(row.zero, expected.zero);
+            }
+            assert!(reused.next_row().unwrap().is_none());
+        }
+    }
 
     /// Adaptive rows chosen by scoring every filter in full, in order.
     fn reference(pixels: &[u8], stride: usize) -> Vec<Vec<u8>> {
