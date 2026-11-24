@@ -10,7 +10,7 @@ mod theme_registry;
 use deadlib_platform::logging::{self, StartupBuildInfo};
 use deadsync_config as config;
 use deadsync_profile::compat as profile;
-use deadsync_shell::app;
+use deadsync_shell::{app, mounted_theme};
 use deadsync_theme_simply_love::{i18n, visual_styles};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
