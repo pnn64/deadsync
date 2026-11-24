@@ -254,9 +254,12 @@ impl Strings {
         }
         let index_mask = self.bucket_index_mask();
         let buckets = &mut self.buckets;
+        let payload_bytes = &mut self.payload_bytes;
         self.bytes.sweep_with(cursor, budget, |bytes, index| {
             let mask = buckets.len() - 1;
-            let hash = Self::hash(&bytes[index]);
+            let string = &bytes[index];
+            let hash = Self::hash(string);
+            *payload_bytes -= string.storage_bytes();
             let removed = (index as u32 + 1) | (hash as u32 & !index_mask);
             let mut hole = hash & mask;
             while buckets[hole] != removed {
@@ -297,8 +300,10 @@ impl Strings {
     fn reindex(&mut self) {
         self.buckets.fill(0);
         let index_mask = self.bucket_index_mask();
+        self.payload_bytes = 0;
         for (i, bytes) in self.bytes.entries() {
             Self::place_bucket(&mut self.buckets, i, Self::hash(bytes), index_mask);
+            self.payload_bytes += bytes.storage_bytes();
         }
     }
 }
@@ -626,13 +631,7 @@ impl Vm {
     }
     /// Inspect live object counts and estimated VM-owned heap storage.
     pub fn heap_stats(&mut self) -> HeapStats {
-        let mut payload = self
-            .strings
-            .bytes
-            .iter()
-            .map(ByteString::storage_bytes)
-            .sum::<usize>()
-            + self.strings.buckets.capacity() * 4;
+        let mut payload = self.strings.payload_bytes + self.strings.buckets.capacity() * 4;
         payload += self.tables.iter().map(Table::heap_bytes).sum::<usize>();
         payload += self
             .functions
@@ -2738,6 +2737,10 @@ mod tests {
             assert!(!pool.bytes.contains(ids[index].0));
         }
         assert_eq!(pool.find(b"new-after-sweep"), Some(fresh));
+        assert_eq!(
+            pool.payload_bytes,
+            pool.bytes.iter().map(ByteString::storage_bytes).sum()
+        );
         pool.bytes.protect_new(false);
         pool.bytes.clear_marks();
         let mut cursor = pool.bytes.len();
@@ -2770,6 +2773,10 @@ mod tests {
         assert_eq!(pool.find(&1u32.to_le_bytes()), None);
         pool.rebuild();
         assert!(pool.buckets.len() < capacity);
+        assert_eq!(
+            pool.payload_bytes,
+            pool.bytes.iter().map(ByteString::storage_bytes).sum()
+        );
         assert_eq!(pool.intern(b"first"), first);
         assert_eq!(pool.intern(b"last"), last);
         assert_eq!(pool.find(&1u32.to_le_bytes()), None);

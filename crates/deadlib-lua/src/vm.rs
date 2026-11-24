@@ -96,6 +96,7 @@ impl AsRef<[u8]> for ByteString {
 struct Strings {
     bytes: Arena<ByteString>,
     buckets: Buffer<u32>,
+    payload_bytes: usize,
 }
 
 impl Strings {
@@ -107,6 +108,7 @@ impl Strings {
         Self {
             bytes: Arena::new_in(memory.clone()),
             buckets: Buffer::new_in(memory),
+            payload_bytes: 0,
         }
     }
     fn hash(bytes: &[u8]) -> usize {
@@ -190,6 +192,7 @@ impl Strings {
             }
         }
         self.bytes.note_alloc(storage);
+        self.payload_bytes += storage;
         Self::place_bucket(&mut self.buckets, slot_index(id), hash, index_mask);
         Ok(StringId(id))
     }
