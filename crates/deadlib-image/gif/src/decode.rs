@@ -180,11 +180,10 @@ impl Decoder {
         Ok(self.filled == self.wanted)
     }
     fn byte(&mut self, input: &[u8], at: &mut usize) -> Result<Option<u8>, Error> {
-        if *at == input.len() {
+        let Some(&byte) = input.get(*at) else {
             return Ok(None);
-        }
+        };
         charge(&mut self.remaining_input_bytes, 1)?;
-        let byte = input[*at];
         *at += 1;
         Ok(Some(byte))
     }
