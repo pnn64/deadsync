@@ -58,9 +58,11 @@ struct Rect {
 /// whole-screen snapshot. Disposal is applied just before the next graphic.
 /// Unspecified/reserved disposal keeps pixels. Zero delay is never clamped.
 pub struct Compositor {
-    header: Header,
-    options: CompositeOptions,
-    expanded_palette: Option<[[u8; 4]; 256]>,
+    width: u16,
+    height: u16,
+    max_pixels: usize,
+    palette: [[u8; 4]; 256],
+    palette_len: Option<usize>,
     background: [u8; 4],
     pixels: Vec<[u8; 4]>,
     saved: Vec<[u8; 4]>,
@@ -87,15 +89,15 @@ impl Compositor {
         if count > options.max_pixels {
             return Err(Error::LimitExceeded);
         }
+        let palette = header
+            .global_palette
+            .as_deref()
+            .or(options.external_palette.as_deref());
         let background = match options.background {
             Background::Transparent => [0; 4],
             Background::Color(c) => c,
             Background::LogicalScreen => {
-                let p = header
-                    .global_palette
-                    .as_deref()
-                    .or(options.external_palette.as_deref())
-                    .ok_or(Error::MissingPalette)?;
+                let p = palette.ok_or(Error::MissingPalette)?;
                 let c = p
                     .get(header.background_index as usize)
                     .ok_or(Error::Invalid("background palette index"))?;
@@ -109,9 +111,11 @@ impl Compositor {
             .map_err(|_| Error::Allocation)?;
         pixels.resize(count, background);
         Ok(Self {
-            header: header.clone(),
-            options,
-            expanded_palette: None,
+            width: header.width,
+            height: header.height,
+            max_pixels: options.max_pixels,
+            palette: expand_palette(palette.unwrap_or_default()),
+            palette_len: palette.map(<[_]>::len),
             background,
             pixels,
             saved: Vec::new(),
@@ -126,8 +130,8 @@ impl Compositor {
     /// Move the current composited RGBA8 canvas into a shared image without copying.
     pub fn into_image(self) -> Image {
         Image {
-            width: self.header.width.into(),
-            height: self.header.height.into(),
+            width: self.width.into(),
+            height: self.height.into(),
             color_type: ColorType::Rgba,
             bit_depth: 8,
             samples: Samples::U8(self.pixels.into_flattened()),
@@ -140,13 +144,13 @@ impl Compositor {
         self.saved.clear();
     }
     fn clip(&self, left: u16, top: u16, width: u16, height: u16) -> Rect {
-        let x = (left as usize).min(self.header.width as usize);
-        let y = (top as usize).min(self.header.height as usize);
+        let x = (left as usize).min(self.width as usize);
+        let y = (top as usize).min(self.height as usize);
         Rect {
             x,
             y,
-            w: (width as usize).min(self.header.width as usize - x),
-            h: (height as usize).min(self.header.height as usize - y),
+            w: (width as usize).min(self.width as usize - x),
+            h: (height as usize).min(self.height as usize - y),
         }
     }
     fn prepare(&mut self, rect: Rect, control: Option<GraphicControl>) -> Result<(), Error> {
@@ -160,7 +164,7 @@ impl Compositor {
             let extra = required.saturating_sub(self.saved.len());
             reserve(&mut self.saved, extra)?;
         }
-        let stride = self.header.width as usize;
+        let stride = self.width as usize;
         if let Some((r, method)) = self.pending {
             for row in 0..r.h {
                 let dest =
@@ -189,16 +193,9 @@ impl Compositor {
         Ok(())
     }
     pub fn render(&mut self, frame: &Frame) -> Result<RenderedFrame<'_>, Error> {
-        frame.validate::<false>(
-            &self.header,
-            self.options.external_palette.as_deref(),
-            false,
-        )?;
+        frame.validate::<false>((self.width, self.height), self.palette_len, false)?;
         let local = frame.local_palette.as_deref();
-        if local.is_none()
-            && self.header.global_palette.is_none()
-            && self.options.external_palette.is_none()
-        {
+        if local.is_none() && self.palette_len.is_none() {
             return Err(Error::MissingPalette);
         }
         let transparent = frame.control.and_then(|c| c.transparent_index);
@@ -209,17 +206,9 @@ impl Compositor {
             local_table = expand_palette(p);
             &local_table
         } else {
-            self.expanded_palette.get_or_insert_with(|| {
-                expand_palette(
-                    self.header
-                        .global_palette
-                        .as_deref()
-                        .or(self.options.external_palette.as_deref())
-                        .unwrap(),
-                )
-            })
+            &self.palette
         };
-        let stride = self.header.width as usize;
+        let stride = self.width as usize;
         for row in 0..r.h {
             let indices =
                 &frame.indices[row * frame.width as usize..row * frame.width as usize + r.w];
@@ -252,8 +241,8 @@ impl Compositor {
             }
         }
         Ok(RenderedFrame {
-            width: self.header.width,
-            height: self.header.height,
+            width: self.width,
+            height: self.height,
             rgba: self.pixels.as_flattened(),
             control: frame.control,
         })
@@ -274,17 +263,12 @@ impl Compositor {
         text: &PlainText,
         rasterizer: &mut impl TextRasterizer,
     ) -> Result<RenderedFrame<'_>, Error> {
-        validate_text(
-            text,
-            &self.header,
-            self.options.external_palette.as_deref(),
-            false,
-        )?;
-        if self.header.global_palette.is_none() && self.options.external_palette.is_none() {
+        validate_text(text, (self.width, self.height), self.palette_len, false)?;
+        if self.palette_len.is_none() {
             return Err(Error::MissingPalette);
         }
         let count = text.width as usize * text.height as usize;
-        if count > self.options.max_pixels {
+        if count > self.max_pixels {
             return Err(Error::LimitExceeded);
         }
         self.text_indices.clear();
@@ -334,8 +318,8 @@ impl Compositor {
         self.text_indices = frame.indices;
         result?;
         Ok(RenderedFrame {
-            width: self.header.width,
-            height: self.header.height,
+            width: self.width,
+            height: self.height,
             rgba: self.pixels.as_flattened(),
             control: text.control,
         })

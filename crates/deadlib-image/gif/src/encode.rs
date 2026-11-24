@@ -131,7 +131,11 @@ impl<W: Write> EncoderOutput<W> {
         Ok(())
     }
     fn frame(&mut self, header: &Header, f: &Frame) -> Result<(), Error> {
-        let maximum = f.validate::<true>(header, None, true)?;
+        let maximum = f.validate::<true>(
+            (header.width, header.height),
+            header.global_palette.as_ref().map(Vec::len),
+            true,
+        )?;
         if f.sorted || f.control.is_some() {
             Self::require89(header.version)?;
         }
@@ -209,7 +213,12 @@ impl<W: Write> EncoderOutput<W> {
             }
             Extension::PlainText(text) => {
                 Self::require89(header.version)?;
-                validate_text(text, header, None, true)?;
+                validate_text(
+                    text,
+                    (header.width, header.height),
+                    header.global_palette.as_ref().map(Vec::len),
+                    true,
+                )?;
                 self.control(header.version, text.control)?;
                 self.writer.write_all(&[0x21, 1, 12])?;
                 for n in [text.left, text.top, text.width, text.height] {

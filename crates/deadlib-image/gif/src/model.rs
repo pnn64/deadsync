@@ -156,29 +156,32 @@ impl Frame {
     }
     pub(crate) fn validate<const MAX_INDEX: bool>(
         &self,
-        header: &Header,
-        external: Option<&[[u8; 3]]>,
+        screen: (u16, u16),
+        fallback_colors: Option<usize>,
         bounds: bool,
     ) -> Result<u8, Error> {
-        validate_rect(self.left, self.top, self.width, self.height, header, bounds)?;
+        validate_rect(self.left, self.top, self.width, self.height, screen, bounds)?;
         if self.indices.len() != self.width as usize * self.height as usize {
             return Err(Error::Invalid("frame sample count"));
         }
-        if let Some(p) = &self.local_palette {
-            validate_palette(p)?;
-        }
-        let palette = self.palette(header).or(external);
+        let colors = match &self.local_palette {
+            Some(p) => {
+                validate_palette(p)?;
+                Some(p.len())
+            }
+            None => fallback_colors,
+        };
         // A byte maximum vectorizes. Encoders also use it to choose the LZW width.
-        let maximum = if MAX_INDEX || palette.is_some_and(|p| p.len() < 256) {
+        let maximum = if MAX_INDEX || colors.is_some_and(|len| len < 256) {
             self.indices.iter().copied().max().unwrap_or(0)
         } else {
             0
         };
-        if let Some(p) = palette {
-            if usize::from(maximum) >= p.len() {
+        if let Some(len) = colors {
+            if usize::from(maximum) >= len {
                 return Err(Error::Invalid("pixel index outside active palette"));
             }
-            validate_control(self.control, p.len())?;
+            validate_control(self.control, len)?;
         }
         Ok(maximum)
     }
@@ -325,14 +328,14 @@ pub(crate) fn validate_rect(
     top: u16,
     width: u16,
     height: u16,
-    h: &Header,
+    screen: (u16, u16),
     bounds: bool,
 ) -> Result<(), Error> {
     if width == 0
         || height == 0
         || (bounds
-            && (u32::from(left) + u32::from(width) > u32::from(h.width)
-                || u32::from(top) + u32::from(height) > u32::from(h.height)))
+            && (u32::from(left) + u32::from(width) > u32::from(screen.0)
+                || u32::from(top) + u32::from(height) > u32::from(screen.1)))
     {
         Err(Error::Invalid(
             "graphic rectangle outside logical screen or empty",

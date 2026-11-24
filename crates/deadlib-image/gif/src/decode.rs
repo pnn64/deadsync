@@ -401,10 +401,15 @@ impl Decoder {
                         control: self.pending.take(),
                         data: Vec::new(),
                     };
+                    let header = self.header.as_ref().unwrap();
                     validate_text(
                         &text,
-                        self.header.as_ref().unwrap(),
-                        self.options.external_palette.as_deref(),
+                        (header.width, header.height),
+                        header
+                            .global_palette
+                            .as_ref()
+                            .or(self.options.external_palette.as_ref())
+                            .map(Vec::len),
                         self.options.check_bounds,
                     )?;
                     self.extension = Some(Extension::PlainText(text));
@@ -435,12 +440,13 @@ impl Decoder {
                         control: self.pending.take(),
                         indices,
                     };
+                    let header = self.header.as_ref().unwrap();
                     validate_rect(
                         self.frame.left,
                         self.frame.top,
                         self.frame.width,
                         self.frame.height,
-                        self.header.as_ref().unwrap(),
+                        (header.width, header.height),
                         self.options.check_bounds,
                     )?;
                     let count = self.frame.width as usize * self.frame.height as usize;
@@ -507,9 +513,14 @@ impl Decoder {
                                 &mut self.interlace,
                             )?;
                         }
+                        let header = self.header.as_ref().unwrap();
                         self.frame.validate::<false>(
-                            self.header.as_ref().unwrap(),
-                            self.options.external_palette.as_deref(),
+                            (header.width, header.height),
+                            header
+                                .global_palette
+                                .as_ref()
+                                .or(self.options.external_palette.as_ref())
+                                .map(Vec::len),
                             self.options.check_bounds,
                         )?;
                         self.state = State::Block;
@@ -666,19 +677,19 @@ fn deinterlace(
 
 pub(crate) fn validate_text(
     text: &PlainText,
-    header: &Header,
-    external: Option<&[[u8; 3]]>,
+    screen: (u16, u16),
+    palette_len: Option<usize>,
     bounds: bool,
 ) -> Result<(), Error> {
-    validate_rect(text.left, text.top, text.width, text.height, header, bounds)?;
+    validate_rect(text.left, text.top, text.width, text.height, screen, bounds)?;
     if text.cell_width == 0 || text.cell_height == 0 {
         return Err(Error::Invalid("zero text cell dimensions"));
     }
-    if let Some(p) = header.global_palette.as_deref().or(external) {
-        if text.foreground_index as usize >= p.len() || text.background_index as usize >= p.len() {
+    if let Some(len) = palette_len {
+        if text.foreground_index as usize >= len || text.background_index as usize >= len {
             return Err(Error::Invalid("plain-text palette index"));
         }
-        validate_control(text.control, p.len())?;
+        validate_control(text.control, len)?;
     }
     Ok(())
 }
