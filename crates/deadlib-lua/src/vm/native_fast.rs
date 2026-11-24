@@ -32,7 +32,11 @@ impl Vm {
             5 if count >= 2
                 && let Value::Table(id) = self.registers[call + 1] =>
             {
-                self.registers[call] = self.tables.get(id.0)?.get(self.registers[call + 2]);
+                let table = self.tables.get(id.0)?;
+                self.registers[call] = match self.registers[call + 2] {
+                    Value::String(key) => table.get_string(key),
+                    key => table.get(key),
+                };
                 Some(1)
             }
             6 if count >= 3
