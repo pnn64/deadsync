@@ -328,7 +328,9 @@ pub(crate) fn decode(
     } else if depth == 16 {
         let mut v = Vec::new();
         reserve(&mut v, count)?;
-        v.resize(count, 0u16);
+        if interlaced {
+            v.resize(count, 0u16);
+        }
         Samples::U16(v)
     } else {
         let mut v = Vec::new();
@@ -414,12 +416,14 @@ pub(crate) fn decode(
                 }
                 Samples::U16(v) => {
                     let row = row.as_chunks::<2>().0;
-                    let out = &mut v[dst..end];
-                    if step == 1 {
-                        for (out, &bytes) in out.iter_mut().zip(row) {
+                    if !interlaced {
+                        v.extend(row.iter().map(|&bytes| u16::from_be_bytes(bytes)));
+                    } else if step == 1 {
+                        for (out, &bytes) in v[dst..end].iter_mut().zip(row) {
                             *out = u16::from_be_bytes(bytes);
                         }
                     } else {
+                        let out = &mut v[dst..end];
                         match channels {
                             1 => scatter_words::<1>(row, out, step),
                             2 => scatter_words::<2>(row, out, step),
