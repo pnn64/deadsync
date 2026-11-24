@@ -2,6 +2,7 @@ pub mod audio_folder;
 pub mod dynamic_media;
 pub mod fonts;
 pub mod gameplay_noteskin;
+pub mod gameplay_presentation;
 pub mod gameplay_stage;
 pub mod language;
 pub mod media_cache;

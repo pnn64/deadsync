@@ -1,4 +1,4 @@
-use crate::screens::gameplay::GameplayCoreState as State;
+use crate::gameplay_stage::GameplayCoreState as State;
 use deadlib_present::actors::{InlineText, TextContent};
 use deadlib_present::cache::{TextCache, cached_text};
 use deadsync_gameplay::{
@@ -65,7 +65,7 @@ struct GameplayModsTextKey {
 }
 
 #[inline(always)]
-pub(super) fn cached_int_i32(value: i32) -> Arc<str> {
+pub fn cached_int_i32(value: i32) -> Arc<str> {
     cached_text(&INT_CACHE_I32, value, TEXT_CACHE_LIMIT, || {
         value.to_string()
     })

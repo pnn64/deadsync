@@ -1,4 +1,4 @@
-use crate::screens::gameplay::GameplayCoreState as State;
+use crate::gameplay_stage::GameplayCoreState as State;
 use deadlib_present::actors::TextContent;
 use deadsync_gameplay::{GameplayTargetScoreProgress, PlayerRuntime, player_has_judged_score};
 use deadsync_notefield::{
@@ -14,12 +14,12 @@ use deadsync_notefield::{
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, JudgeGrade};
 
-use super::super::FRAME_TEXT_MINI_BASE;
+use super::super::text_slots::FRAME_TEXT_MINI_BASE;
 use super::player_blue_window_ms;
 use super::text::zmod_mini_indicator_text_content;
 
 #[inline(always)]
-pub(super) const fn zmod_small_combo_font(combo_font: profile_data::ComboFont) -> &'static str {
+pub const fn zmod_small_combo_font(combo_font: profile_data::ComboFont) -> &'static str {
     match combo_font {
         profile_data::ComboFont::Wendy | profile_data::ComboFont::WendyCursed => "wendy",
         profile_data::ComboFont::ArialRounded => "combo_arial_rounded",
@@ -34,9 +34,7 @@ pub(super) const fn zmod_small_combo_font(combo_font: profile_data::ComboFont) -
 }
 
 #[inline(always)]
-pub(super) const fn zmod_combo_font_name(
-    combo_font: profile_data::ComboFont,
-) -> Option<&'static str> {
+pub const fn zmod_combo_font_name(combo_font: profile_data::ComboFont) -> Option<&'static str> {
     match combo_font {
         profile_data::ComboFont::Wendy => Some("wendy_combo"),
         profile_data::ComboFont::ArialRounded => Some("combo_arial_rounded"),
@@ -261,7 +259,7 @@ const fn mini_indicator_mode(mode: profile_data::MiniIndicator) -> MiniIndicator
 }
 
 #[inline(always)]
-pub(super) const fn zmod_indicator_mode(profile: &profile_data::Profile) -> MiniIndicatorMode {
+pub const fn zmod_indicator_mode(profile: &profile_data::Profile) -> MiniIndicatorMode {
     zmod_resolved_mini_indicator_mode(
         mini_indicator_mode(profile.mini_indicator),
         profile.subtractive_scoring,

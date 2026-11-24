@@ -165,20 +165,18 @@ impl App {
         let path_key = path.as_deref().map(media_path_key);
 
         if let Some(state) = &mut self.state.screens.gameplay_state {
-            let was_dirty = state.presentation.background_path_dirty;
-            state.presentation.current_background_path.clone_from(&path);
-            state.presentation.current_background_key.clone_from(&path_key);
-            state.presentation.background_allow_video = allow_video;
-            state.presentation.background_path_dirty = was_dirty;
-            state.presentation.background_texture_key = texture_key.clone();
+            let background = state.presentation.background_mut();
+            background.current_background_path.clone_from(&path);
+            background.current_background_key.clone_from(&path_key);
+            background.background_allow_video = allow_video;
+            background.background_texture_key = texture_key.clone();
         }
         if let Some(state) = &mut self.state.screens.practice_state {
-            let was_dirty = state.gameplay.presentation.background_path_dirty;
-            state.gameplay.presentation.current_background_path = path;
-            state.gameplay.presentation.current_background_key = path_key;
-            state.gameplay.presentation.background_allow_video = allow_video;
-            state.gameplay.presentation.background_path_dirty = was_dirty;
-            state.gameplay.presentation.background_texture_key = texture_key;
+            let background = state.gameplay.presentation.background_mut();
+            background.current_background_path = path;
+            background.current_background_key = path_key;
+            background.background_allow_video = allow_video;
+            background.background_texture_key = texture_key;
         }
     }
 

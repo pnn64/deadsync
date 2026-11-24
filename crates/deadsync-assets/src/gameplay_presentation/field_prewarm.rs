@@ -1,23 +1,37 @@
-use crate::screens::gameplay::{GameplayCoreState as State, State as GameplayHost};
+use crate::gameplay_stage::GameplayCoreState as State;
 use deadlib_present::actors::{InlineText, TextAlign};
 use deadlib_present::compose::{ComposeScratch, TextLayoutCache, prewarm_u32_text_slot};
 use deadlib_present::font;
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_notefield::{
     COUNTER_TEXT_SLOTS_PER_PLAYER, MEASURE_COUNTER_LOOKAHEAD_MAX, MiniIndicatorMode,
     zmod_broken_run_end,
 };
 use deadsync_profile as profile_data;
 
-use super::super::display_mods::DISPLAY_MODS_WRAP_WIDTH_PX;
-use super::super::{
-    FRAME_TEXT_COMBO_BASE, FRAME_TEXT_COMBO_LABEL_BASE, FRAME_TEXT_COUNTDOWN_BASE,
-    FRAME_TEXT_COUNTER_BASE, FRAME_TEXT_EDIT_MEASURE_BASE, FRAME_TEXT_ERROR_BASE,
-    FRAME_TEXT_MINI_BASE, FRAME_TEXT_VERTEX_BUFFERS,
-};
-use super::text::{cached_int_i32, preferred_mods_text};
+use super::super::{GameplayTextPrewarm, display_mods::DISPLAY_MODS_WRAP_WIDTH_PX, text_slots::*};
 use super::{
-    MEASURE_PREWARM_CAP, zmod_combo_font_name, zmod_indicator_mode, zmod_small_combo_font,
+    GameplayNotefieldPlan, cached_int_i32, preferred_mods_text, zmod_indicator_mode,
+    zmod_small_combo_font,
 };
+
+const MEASURE_PREWARM_CAP: i32 = 64;
+
+pub fn prewarm_text(
+    prewarm: GameplayTextPrewarm<'_>,
+    state: &State,
+    plans: [&GameplayNotefieldPlan; MAX_PLAYERS],
+) {
+    let GameplayTextPrewarm {
+        cache,
+        scratch,
+        assets,
+        edit_measure_text,
+    } = prewarm;
+    let fonts = assets.fonts();
+    prewarm_text_layout(cache, fonts, state);
+    prewarm_frame_text_scratch(cache, scratch, fonts, state, plans, edit_measure_text);
+}
 
 pub fn prewarm_text_layout(cache: &mut TextLayoutCache, fonts: &font::FontMap, state: &State) {
     let prewarm_i32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: i32| {
@@ -66,7 +80,8 @@ pub fn prewarm_frame_text_scratch(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
     fonts: &font::FontMap,
-    state: &GameplayHost,
+    state: &State,
+    plans: [&GameplayNotefieldPlan; MAX_PLAYERS],
     edit_measure_text: bool,
 ) {
     let mini_glyphs = InlineText::copy_from("+-.%0123456789")
@@ -83,12 +98,8 @@ pub fn prewarm_frame_text_scratch(
         InlineText::copy_from(" .0123456789").expect("the run-timer glyph domain fits inline");
     for player in 0..state.num_players() {
         let profile = &state.profiles()[player];
-        if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
-            let feedback = state
-                .presentation
-                .notefield_plan(player)
-                .hud_style
-                .field_feedback;
+        if let Some(font_name) = plans[player].combo_font {
+            let feedback = plans[player].hud_style.field_feedback;
             let font_name = feedback
                 .and_then(|style| style.combo_artwork)
                 .map_or(font_name, |artwork| artwork.number_font);
@@ -99,11 +110,7 @@ pub fn prewarm_frame_text_scratch(
                 FRAME_TEXT_COMBO_BASE + player as u8,
                 TextAlign::Center,
             );
-            if let Some(style) = state
-                .presentation
-                .notefield_plan(player)
-                .hud_style
-                .field_feedback
+            if let Some(style) = plans[player].hud_style.field_feedback
                 && style.combo_artwork.is_none()
                 && let Some(label) = InlineText::copy_from(style.combo_label)
             {

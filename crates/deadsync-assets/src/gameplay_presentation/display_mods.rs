@@ -1,30 +1,40 @@
-use crate::act;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::screen_height;
 use std::sync::Arc;
 
-// Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
+macro_rules! act {
+    (quad: $($tail:tt)+) => {
+        deadlib_present::__act_from_builder!(
+            ($($tail)+) deadlib_present::dsl::SpriteBuilder::solid()
+        )
+    };
+    (text: $($tail:tt)+) => {
+        deadlib_present::__act_from_builder!(
+            ($($tail)+) deadlib_present::dsl::TextBuilder::new()
+        )
+    };
+}
+
 const TRANSITION_IN_DURATION: f32 = 2.0;
 const SL_DISPLAY_MODS_HOLD_S: f32 = 5.0;
 const MODS_FADE_S: f32 = 0.5;
 const DISPLAY_MODS_ZOOM: f32 = 0.8;
-pub(super) const DISPLAY_MODS_WRAP_WIDTH_PX: f32 = 125.0;
+pub const DISPLAY_MODS_WRAP_WIDTH_PX: f32 = 125.0;
 const DISPLAY_MODS_LINE_STEP: f32 = 15.0;
 const DISPLAY_MODS_WARNING_W: f32 = 90.0;
 const DISPLAY_MODS_WARNING_H: f32 = 30.0;
 const DISPLAY_MODS_WARNING_ZOOM: f32 = 1.5;
 
 #[derive(Clone)]
-pub(super) struct DisplayModsFrame {
+pub struct DisplayModsFrame {
     pub mods_text: Arc<str>,
-    pub warn_cmod_for_itl_chart: bool,
     pub alpha: f32,
     pub playfield_center_x: f32,
     pub notefield_offset_y: f32,
 }
 
 #[inline]
-pub(super) fn active_alpha(hidden: bool, elapsed_screen_s: f32) -> Option<f32> {
+pub fn active_alpha(hidden: bool, elapsed_screen_s: f32) -> Option<f32> {
     if hidden {
         return None;
     }
@@ -32,9 +42,8 @@ pub(super) fn active_alpha(hidden: bool, elapsed_screen_s: f32) -> Option<f32> {
     (alpha > 0.0).then_some(alpha)
 }
 
-/// Compose Simply Love's concrete `DisplayMods` chrome between the canonical
-/// field and HUD passes.
-pub(super) fn compose(actors: &mut Vec<Actor>, frame: DisplayModsFrame) {
+/// Draw the current modifiers and an optional presenter-provided warning.
+pub fn compose(actors: &mut Vec<Actor>, frame: DisplayModsFrame, warning: Option<TextContent>) {
     let mods_line_y = (screen_height() * 0.25).mul_add(1.3, frame.notefield_offset_y);
     let mods_line_count = frame
         .mods_text
@@ -53,7 +62,7 @@ pub(super) fn compose(actors: &mut Vec<Actor>, frame: DisplayModsFrame) {
             z(84)
         ));
     }
-    if frame.warn_cmod_for_itl_chart {
+    if let Some(warning) = warning {
         let warning_y = DISPLAY_MODS_LINE_STEP.mul_add(mods_line_count, mods_line_y);
         actors.push(act!(quad:
             align(0.5, 0.5):
@@ -63,7 +72,7 @@ pub(super) fn compose(actors: &mut Vec<Actor>, frame: DisplayModsFrame) {
             z(84)
         ));
         actors.push(act!(text:
-            font("miso"): settext(crate::i18n::tr("Gameplay", "CModOn")):
+            font("miso"): settext(warning):
             align(0.5, 0.5): xy(frame.playfield_center_x, warning_y):
             zoom(DISPLAY_MODS_WARNING_ZOOM):
             diffuse(1.0, 0.0, 0.0, frame.alpha):

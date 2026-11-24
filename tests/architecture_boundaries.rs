@@ -541,10 +541,18 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(contains_rust(&host, "pub presentation: P"));
     assert!(contains_rust(&app, "type GameplayState = GameplayHost<"));
     assert!(app.contains("(presentation.prepare)(&mut prepared)"));
-    assert!(app.contains("(presentation.build)(stage, assets, &view, presentation_init, scores)"));
+    assert!(app.contains("(presentation.build)(stage, assets, &view, &init_config, Some(presentation_init), scores)"));
     assert!(!app.contains("SimplyLoveTheme::build_gameplay_presentation"));
     let registry = production_source(&root.join("src/theme_registry.rs"));
-    assert!(registry.contains("build: SimplyLoveTheme::build_gameplay_presentation"));
+    assert!(registry.contains("MountedGameplay::new(SimplyLoveTheme::mount_gameplay"));
+    assert!(registry.contains("MountedGameplay::new(OpenItgTheme::mount_gameplay"));
+    assert!(registry.contains("gameplay: OPENITG_GAMEPLAY"));
+    let mount = production_source(&root.join("crates/deadsync-shell/src/mounted_theme.rs"));
+    assert!(!mount.contains("deadsync_theme_simply_love"));
+    assert!(!app.contains("gameplay_stats::refresh_density_graph_meshes("));
+    assert!(!app.contains("notefield::prewarm_frame_text_scratch("));
+    assert!(app.contains(".presentation.prewarm_text("));
+    assert!(app.contains(".presentation.refresh_frame("));
     for concrete in [
         "deadsync_theme_simply_love", "SimplyLove", "crate::ActiveTheme", "crate::ThemeScreen",
         "GameplayStageView",
@@ -3149,7 +3157,7 @@ fn practice_runtime_is_shell_prepared() {
             && !shell.contains("PracticeRuntimeView")
             && shell.contains("hud: hud.clone()")
             && shell_app.contains("init: practice_init")
-            && contains_rust(&loading, "crate::gameplay_runtime::prepare_practice(gs, finish.init, practice::PracticePresentation::new,")
+            && contains_rust(&loading, "crate::gameplay_runtime::prepare_practice(gs, finish.init, practice::PracticePresentation::new_mounted,")
             && stage_host.contains("let mut session = PracticeSession::new(")
             && stage_host.contains("session.snap_display_to_cursor(")
             && shell.contains("gameplay.into_practice(init.editor,")
@@ -6741,9 +6749,8 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         .expect("shell should assemble the active theme's presentation inputs")
         .0;
     for input in [
-        "profile::get_session_snapshot()",
         "profile::gameplay_hud_snapshot()",
-        "GameplayPolicyView::from_config(config, scorebox_pane_filter(config))",
+        "scorebox_pane_filter: scorebox_pane_filter(config)",
     ] {
         assert!(presentation_init.contains(input), "Gameplay presentation is missing {input}");
     }
@@ -6793,7 +6800,7 @@ fn authored_song_backgrounds_use_the_game_timeline() {
     let charts = production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_charts.rs"));
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell background sync");
-    let theme = read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+    let theme = read_source(root.join("crates/deadsync-assets/src/gameplay_presentation/background.rs"))
         .expect("theme background presentation");
 
     assert!(contains_rust(&init, "SongBackgroundTimeline::new("));
@@ -11283,7 +11290,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
     let display_mods =
         read_source(root.join(
-            "crates/deadsync-theme-simply-love/src/screens/components/gameplay/display_mods.rs",
+            "crates/deadsync-assets/src/gameplay_presentation/display_mods.rs",
         ))
         .expect("Simply Love DisplayMods component should be readable");
     let field_frame = read_source(root.join("crates/deadsync-notefield/src/field_frame.rs"))
@@ -11374,7 +11381,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         !source.contains("act!("),
         "Simply Love's notefield adapter must assemble canonical DTOs, not actors"
     );
-    assert!(display_mods.contains("pub(super) fn compose("));
+    assert!(display_mods.contains("pub fn compose("));
     assert!(display_mods.contains("actors.push(act!("));
 
     assert!(
@@ -11382,9 +11389,11 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
             && compositor.contains("prepare_notefield(&request)"),
         "gameplay compositor must enter the canonical notefield request boundary"
     );
-    assert!(source.contains("NotefieldHudFrameView {"));
+    let shared = production_source(&root.join("crates/deadsync-assets/src/gameplay_presentation/field.rs"));
+    assert!(shared.contains("NotefieldHudFrameView {"));
     assert_eq!(compositor.match_indices("scratch.compose(").count(), 1);
-    assert_eq!(source.match_indices("compose_notefield_hud(").count(), 1);
+    assert_eq!(shared.match_indices("compose_notefield_hud(").count(), 1);
+    assert_eq!(source.match_indices("field::compose_hud(").count(), 1);
     for field_owner in ["NotefieldComposeRequest {", "prepare_notefield(", "notefield_scratch"] {
         assert!(!source.contains(field_owner), "Simply Love HUD owns {field_owner}");
     }
@@ -11619,7 +11628,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         .find("display_mods::compose(")
         .expect("Simply Love must retain its concrete DisplayMods insertion point");
     let hud_call = source
-        .find("compose_notefield_hud(")
+        .find("field::compose_hud(")
         .expect("Simply Love must compose the canonical post-chrome HUD pass");
     assert!(display_mods_call < hud_call);
 
@@ -11738,10 +11747,8 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     let game_contract = read_source(root.join("crates/deadsync-core/src/hud_style.rs"))
         .expect("game-owned HUD contract should be readable");
     assert!(game_contract.contains("pub struct ComboFeedbackStyle"));
-    let simply_love_style =
-        read_source(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
-            .expect("Simply Love notefield style should be readable");
-    assert!(simply_love_style.contains("combo_feedback: ComboFeedbackStyle"));
+    let shared_style = production_source(&root.join("crates/deadsync-assets/src/gameplay_presentation/field_style.rs"));
+    assert!(shared_style.contains("combo_feedback: ComboFeedbackStyle"));
 
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -11794,12 +11801,8 @@ fn error_bar_presentation_stays_on_the_direct_hud_path() {
     let hud = read_source(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD-frame composer should be readable");
 
-    let adapter = read_source(root.join(
-        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
-    ))
-    .expect("Simply Love notefield adapter should be readable");
     let prewarm = read_source(root.join(
-        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
+        "crates/deadsync-assets/src/gameplay_presentation/field_prewarm.rs",
     ))
     .expect("Simply Love notefield prewarm policy should be readable");
     let plan = read_source(root.join("crates/deadsync-notefield/src/actor_builder.rs"))
@@ -11822,7 +11825,8 @@ fn error_bar_presentation_stays_on_the_direct_hud_path() {
     assert!(hud.contains("draws: &mut Vec<FlatDraw>"));
     assert!(hud.contains("compose_error(draws, request, prepared, error_bar);"));
     assert!(hud.contains("actors.extend(draws.drain(..).map(actor_from_flat_draw));"));
-    assert!(adapter.contains("frame_text_slot: super::FRAME_TEXT_ERROR_BASE"));
+    let shared = production_source(&root.join("crates/deadsync-assets/src/gameplay_presentation/field.rs"));
+    assert!(shared.contains("frame_text_slot: FRAME_TEXT_ERROR_BASE"));
     assert!(prewarm.contains("let error_slot = FRAME_TEXT_ERROR_BASE"));
     assert!(prewarm.contains("error_slot + 3"));
     for removed in [
@@ -11856,7 +11860,7 @@ fn column_countdowns_stay_on_the_prepared_hud_path() {
     let compositor =
         production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
     let prewarm = read_source(root.join(
-        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
+        "crates/deadsync-assets/src/gameplay_presentation/field_prewarm.rs",
     ))
     .expect("Simply Love notefield prewarm policy should be readable");
 
@@ -11956,11 +11960,11 @@ fn zmod_numeric_hud_stays_on_the_prepared_direct_path() {
         .expect("canonical HUD-frame composer should be readable");
 
     let theme_zmod = read_source(root.join(
-        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/zmod.rs",
+        "crates/deadsync-assets/src/gameplay_presentation/field_zmod.rs",
     ))
     .expect("Simply Love ZMod adapter should be readable");
     let prewarm = read_source(root.join(
-        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
+        "crates/deadsync-assets/src/gameplay_presentation/field_prewarm.rs",
     ))
     .expect("Simply Love notefield prewarm policy should be readable");
 
@@ -12856,7 +12860,7 @@ fn field_metrics_are_shared() {
     let contract = read_source(root.join("crates/deadsync-core/src/hud_style.rs"))
         .expect("game-owned HUD contract should be readable");
     let theme_style =
-        read_source(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
+        read_source(root.join("crates/deadsync-assets/src/gameplay_presentation/field_style.rs"))
             .expect("Simply Love notefield style should be readable");
     let theme = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
@@ -12923,7 +12927,8 @@ fn field_metrics_are_shared() {
     ] {
         assert!(contains_rust(&compositor, handoff), "missing notefield handoff {handoff}");
     }
-    assert!(contains_rust(&theme, "frame.judgment_texture"));
+    let shared_hud = production_source(&root.join("crates/deadsync-assets/src/gameplay_presentation/field.rs"));
+    assert!(contains_rust(&shared_hud, "frame.judgment_texture"));
     for resolved in [
         "resolve_notefield_motion(",
         "NotefieldChartView::from_gameplay(state, player)",
@@ -13850,7 +13855,7 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
         "target.current_screen_file_name()",
         "(self.state.screens.transitions.exit)(screen, target)",
         "(self.state.screens.transitions.entry)(screen)",
-        "(self.gameplay_presentation.entry)(",
+        "state.presentation.entry(",
         "self.state.screens.transitions.kind",
         "options.entry_transition()",
         "options.exit_transition(target)",

@@ -12,7 +12,7 @@ use deadsync_theme::attract::{
 use deadsync_theme::views::GameplayLivePresentation;
 
 use super::{
-    App, CurrentScreen, GameplayInitView, GameplayLobbySession, GameplaySession, GameplaySfx,
+    App, CurrentScreen, GameplayLobbySession, GameplaySession, GameplaySfx,
     GameplayStageInput, GameplayStageIntro, GameplayStageView, GameplayState, LeadInTiming, config,
     gameplay_config_from_config, gameplay_viewport, prepare_gameplay_stage,
     prewarm_gameplay_assets, prewarm_gameplay_sfx, profile_data, song_loading,
@@ -252,13 +252,14 @@ impl App {
                     stage,
                     assets,
                     &view,
-                    GameplayInitView::default(),
+                    &config,
+                    None,
                     Default::default(),
                 )
             },
         );
         if let Some(hud) = self.state.screens.stage_presentation.gameplay_hud() {
-            stage.presentation.set_hud(hud);
+            stage.presentation.install_hud(hud);
         }
         let sounds = prewarm_gameplay_sfx(
             &mut self.audio,
@@ -280,7 +281,7 @@ impl App {
                 stage.song_lua_visuals(),
             );
             let path = stage.song().background_path.to_owned();
-            stage.presentation.background_texture_key =
+            stage.presentation.background_mut().background_texture_key =
                 Arc::from(self.dynamic_media.set_background(
                     &mut self.asset_manager,
                     backend,

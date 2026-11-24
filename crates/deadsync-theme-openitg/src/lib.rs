@@ -4,6 +4,7 @@ mod demonstration;
 mod evaluation;
 mod gameplay;
 mod gameplay_outro;
+mod gameplay_screen;
 mod intro;
 mod menu;
 mod option_explanation;

@@ -9,7 +9,7 @@ use crate::screens::components::gameplay::step_stats_gifs;
 use crate::screens::components::shared::density;
 use crate::screens::components::shared::heart_rate;
 use crate::screens::gameplay::GameplayCoreState;
-use crate::screens::gameplay::{self as gameplay_screen, GameplayScreenView, State};
+use crate::screens::gameplay::{self as gameplay_screen, DensityGraphRenderState, GameplayScreenView};
 use crate::step_stats as step_stats_theme;
 use crate::step_stats::{
     STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsGraphRect, StepStatsPaneLayout,
@@ -636,11 +636,13 @@ mod density_life_clip_tests {
     }
 }
 
-fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize) {
-    let game = &mut state.stage.gameplay;
+fn refresh_density_graph_meshes_for_player(
+    game: &mut GameplayCoreState,
+    render: &mut DensityGraphRenderState,
+    player_idx: usize,
+) {
     let graph = game.density_graph_view();
     let num_players = game.num_players();
-    let render = &mut state.presentation.density_graph;
     let graph_w = graph.graph_w;
     let graph_h = graph.graph_h;
     let scaled_width = graph.scaled_width;
@@ -704,9 +706,9 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
     );
 }
 
-pub fn refresh_density_graph_meshes(state: &mut State) {
-    for player_idx in 0..state.num_players() {
-        refresh_density_graph_meshes_for_player(state, player_idx);
+pub(crate) fn refresh_density_graph_meshes(game: &mut GameplayCoreState, render: &mut DensityGraphRenderState) {
+    for player_idx in 0..game.num_players() {
+        refresh_density_graph_meshes_for_player(game, render, player_idx);
     }
 }
 

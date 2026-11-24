@@ -62,7 +62,7 @@ pub(super) fn stage_motion_view(
     };
     StageMotionView {
         chart_outro, give_up_outro, transition, restarting,
-        hide_intro: state.presentation.hide_song_intro,
+        hide_intro: state.presentation.hide_song_intro(),
     }
 }
 
@@ -704,9 +704,13 @@ impl App {
             return (actors, duration);
         }
         let (actors, visual_duration) = if let Some((gameplay, restart)) = play {
-            (self.gameplay_presentation.entry)(
-                gameplay, &self.asset_manager, restart, &config::runtime::get(),
-            )
+            if let Some(state) = gameplay {
+                state.presentation.entry(
+                    &state.stage, &state.lobby_session, &self.asset_manager, restart, &config::runtime::get(),
+                )
+            } else {
+                (deadsync_assets::gameplay_presentation::loading_cover(), 0.0)
+            }
         } else {
             (self.state.screens.transitions.entry)(screen)
         };

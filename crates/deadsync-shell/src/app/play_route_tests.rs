@@ -733,14 +733,13 @@ fn complete_stage(app: &mut App, event_loop: &ActiveEventLoop) {
                 instant,
                 instant,
             );
-            deadsync_theme_simply_love::screens::gameplay::handle_input(
-                state,
-                &event,
-                &mut effects,
-            );
+            let action = state.stage.handle_input(&event, None);
+            if action != deadsync_gameplay::GameplayAction::None {
+                effects.push(action);
+            }
         }
-        deadsync_theme_simply_love::screens::gameplay::update(
-            state,
+        let presentation = &mut state.presentation;
+        state.stage.update(
             0.020,
             GameplayAudioSnapshot {
                 stream_clock: GameplayStreamClockSnapshot {
@@ -754,23 +753,23 @@ fn complete_stage(app: &mut App, event_loop: &ActiveEventLoop) {
                 ..Default::default()
             },
             || host,
-            &mut effects,
+            crate::navigation::song_lua_presentation_screen,
+            |effect| {
+                if let deadsync_song_lua::gameplay_session::SongLuaGameplayEffect::Action(action) = effect {
+                    effects.push(action);
+                }
+            },
+            |game, delta| presentation.update_gameplay_visuals(game, delta),
         );
         if state.song_completed_naturally() {
             assert_eq!(state.players()[0].judgment_counts.iter().sum::<u32>(), 6);
             let complete = effects
-                .iter()
-                .find(|effect| {
-                    matches!(
-                        gameplay_action_for_effect(effect),
-                        Some(deadsync_gameplay::GameplayAction::Navigate(
-                            deadsync_gameplay::GameplayExit::Complete
-                        ))
-                    )
-                })
+                .iter().copied()
+                .find(|&action| action == deadsync_gameplay::GameplayAction::Navigate(
+                    deadsync_gameplay::GameplayExit::Complete,
+                ))
                 .expect("completed stage queues navigation");
-            let action = gameplay_action_for_effect(complete).unwrap();
-            app.handle_gameplay_action(action, event_loop);
+            app.handle_gameplay_action(complete, event_loop);
             return;
         }
         effects.clear();

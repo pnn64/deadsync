@@ -281,6 +281,20 @@ impl PracticeMenuText {
 
 pub type State = PracticeHost<gameplay_screen::State, PracticePresentation>;
 
+use deadsync_assets::gameplay_presentation::PracticeGameplayHud;
+
+impl PracticeGameplayHud for gameplay_screen::GameplayPresentation {
+    fn set_practice_timing_labels(&mut self, labels: [Box<[PracticeTimingLabel]>; 2]) {
+        self.set_practice_timing_labels(labels);
+    }
+
+    fn music_rate_changed(&mut self, stage: &ActiveGameplayStage) {
+        gameplay_screen::sync_music_rate_text(stage, self);
+    }
+
+    fn machine_font(&self) -> deadsync_config::theme::MachineFont { self.machine_font() }
+}
+
 pub struct PracticePresentation {
     hud: profile_data::GameplayHudSnapshot,
     density_graph: PracticeDensityGraph,
@@ -357,6 +371,22 @@ impl PracticePresentation {
         gameplay_hud: &mut gameplay_screen::GameplayPresentation,
         hud: profile_data::GameplayHudSnapshot,
     ) -> Self {
+        Self::for_gameplay(stage, gameplay_hud, hud)
+    }
+
+    pub fn new_mounted(
+        stage: &ActiveGameplayStage,
+        gameplay_hud: &mut impl PracticeGameplayHud,
+        hud: profile_data::GameplayHudSnapshot,
+    ) -> Self {
+        Self::for_gameplay(stage, gameplay_hud, hud)
+    }
+
+    fn for_gameplay(
+        stage: &ActiveGameplayStage,
+        gameplay_hud: &mut impl PracticeGameplayHud,
+        hud: profile_data::GameplayHudSnapshot,
+    ) -> Self {
         let active_players = stage.num_players();
         let density_graph = build_practice_density_graph(stage);
         let timing_labels = std::array::from_fn(|player| {
@@ -398,7 +428,7 @@ impl PracticePresentation {
     }
 }
 
-impl PracticeLivePresentation<gameplay_screen::GameplayPresentation> for PracticePresentation {
+impl<P: PracticeGameplayHud> PracticeLivePresentation<P> for PracticePresentation {
     type Feedback<'a> = EditorPresentation<'a>;
     type Effect = ThemeEffect;
     type EditSnapshot = usize;
@@ -468,13 +498,13 @@ pub struct EditorPresentation<'a> {
     music_rate_text_dirty: bool,
 }
 
-impl PracticeEditorPresentation<gameplay_screen::GameplayPresentation> for EditorPresentation<'_> {
+impl<P: PracticeGameplayHud> PracticeEditorPresentation<P> for EditorPresentation<'_> {
     fn emit(&mut self, game: &gameplay_screen::GameplayCoreState, feedback: PracticeEditorFeedback) {
         self.emit(game, feedback);
     }
 
-    fn finish(self, stage: &ActiveGameplayStage, gameplay_hud: &mut gameplay_screen::GameplayPresentation) {
-        self.finish(stage, gameplay_hud);
+    fn finish(self, stage: &ActiveGameplayStage, gameplay_hud: &mut P) {
+        self.finish_for(stage, gameplay_hud);
     }
 }
 
@@ -484,8 +514,12 @@ impl EditorPresentation<'_> {
         stage: &ActiveGameplayStage,
         gameplay_hud: &mut gameplay_screen::GameplayPresentation,
     ) {
+        self.finish_for(stage, gameplay_hud);
+    }
+
+    fn finish_for(self, stage: &ActiveGameplayStage, gameplay_hud: &mut impl PracticeGameplayHud) {
         if self.music_rate_text_dirty {
-            gameplay_screen::sync_music_rate_text(stage, gameplay_hud);
+            gameplay_hud.music_rate_changed(stage);
         }
     }
 
@@ -740,7 +774,8 @@ pub fn process_key(
 }
 
 struct PracticeOverlay<'a> {
-    gameplay: &'a gameplay_screen::State,
+    gameplay: &'a ActiveGameplayStage,
+    machine_font: deadsync_config::theme::MachineFont,
     session: &'a PracticeSession,
     presentation: &'a mut PracticePresentation,
 }
@@ -751,7 +786,17 @@ pub fn push_overlay(
     session: &PracticeSession,
     presentation: &mut PracticePresentation,
 ) {
-    let mut state = PracticeOverlay { gameplay, session, presentation };
+    push_overlay_for(actors, &gameplay.stage, gameplay.presentation.machine_font(), session, presentation);
+}
+
+fn push_overlay_for(
+    actors: &mut Vec<Actor>,
+    gameplay: &ActiveGameplayStage,
+    machine_font: deadsync_config::theme::MachineFont,
+    session: &PracticeSession,
+    presentation: &mut PracticePresentation,
+) {
+    let mut state = PracticeOverlay { gameplay, machine_font, session, presentation };
     if !session.is_playing() {
         append_edit_markers(&state, actors);
         append_density_graph(&state, actors);
@@ -781,8 +826,11 @@ pub fn practice_view(
     }
 }
 
-impl PracticeStagePresenter<GameplayLobbySession, gameplay_screen::GameplayPresentation>
-    for PracticePresentation
+impl<P> PracticeStagePresenter<GameplayLobbySession, P> for PracticePresentation
+where
+    P: PracticeGameplayHud + deadsync_assets::gameplay_stage::GameplayStagePresenter<
+        GameplayLobbySession, View = gameplay_screen::ActorViewOverride,
+    >,
 {
     fn frame_view(&self, session: &PracticeSession) -> gameplay_screen::ActorViewOverride {
         practice_view(session, self)
@@ -791,10 +839,10 @@ impl PracticeStagePresenter<GameplayLobbySession, gameplay_screen::GameplayPrese
     fn append_practice_overlay(
         &mut self,
         actors: &mut Vec<Actor>,
-        gameplay: &gameplay_screen::State,
+        gameplay: &deadsync_assets::gameplay_stage::GameplayHost<GameplayLobbySession, P>,
         session: &PracticeSession,
     ) {
-        push_overlay(actors, gameplay, session, self);
+        push_overlay_for(actors, &gameplay.stage, gameplay.presentation.machine_font(), session, self);
     }
 }
 
@@ -1306,7 +1354,7 @@ fn append_edit_overlay(state: &mut PracticeOverlay<'_>, actors: &mut Vec<Actor>)
         selection_end: editor.selection_end(),
         snap_index: editor.snap_index(),
     };
-    state.presentation.edit_text.sync(&state.gameplay.stage, source);
+    state.presentation.edit_text.sync(state.gameplay, source);
     let labels = state.presentation.edit_text
         .labels
         .as_ref()
@@ -1317,7 +1365,7 @@ fn append_edit_overlay(state: &mut PracticeOverlay<'_>, actors: &mut Vec<Actor>)
         .expect("Practice edit info sync before actor construction")
         .1;
     let pc = practice_player_color(state);
-    let header_font = machine_font_key(state.gameplay.presentation.machine_font(), FontRole::Header);
+    let header_font = machine_font_key(state.machine_font, FontRole::Header);
     actors.push(act!(text:
         font(header_font):
         settext(&labels.title):

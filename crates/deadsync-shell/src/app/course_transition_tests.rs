@@ -1,5 +1,5 @@
 use super::*;
-use crate::gameplay_regression_tests::tests::{build_compiled_test_state, with_session};
+use crate::gameplay_regression_tests::tests::{build_mounted_test_state, with_session};
 use deadsync_chart::{SongPack, SyncPref};
 use deadsync_core::input::InputSource;
 use deadsync_gameplay::course_progress::CourseProgress;
@@ -166,7 +166,7 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
     app.state.session.begin_play_session(Instant::now());
     app.state.session.last_course_wheel_path = Some(course_path);
     app.state.session.course_run = Some(run);
-    let mut stage = build_compiled_test_state(
+    let mut stage = build_mounted_test_state(
         &a.simfile_path,
         GameplayViewport::new(640.0, 480.0),
         GameplaySession {
@@ -179,6 +179,7 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
             ..Default::default()
         },
         std::array::from_fn(|_| profile_data::Profile::default()),
+        app.gameplay_presentation,
     );
     stage.progress.stage.song_completed_naturally = true;
     app.state.screens.gameplay_state = Some(stage);
@@ -297,7 +298,8 @@ fn course_launch_uses_confirmed_rating_after_wheel_replacement() {
                         let gameplay = app.state.screens.gameplay_state.as_ref().unwrap();
                         assert!(Arc::ptr_eq(&gameplay.song_arc(), &first_song));
                         assert_eq!(gameplay.pack_group.as_ref(), "PR845 transition");
-                        assert_eq!(gameplay.presentation.stage_intro_text.as_ref(), "STAGE 1");
+                        let (intro, _) = app.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                        assert!(crate::gameplay_regression_tests::tests::actor_tree_has_text(&intro, "STAGE 1"));
                     }
                 }
             },

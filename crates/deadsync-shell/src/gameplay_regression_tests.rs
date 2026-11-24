@@ -428,6 +428,49 @@ pub(crate) mod tests {
             &deadlib_render_core::BackendType::Software.to_string(), Some(32.0))
     }
 
+    pub(crate) fn build_mounted_test_state(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        session: GameplaySession,
+        profiles: [profile_data::Profile; MAX_PLAYERS],
+        presentation: crate::mounted_theme::GameplayPresentationMount,
+    ) -> deadsync_assets::gameplay_stage::GameplayHost<
+        deadsync_online::gameplay_lobby::GameplayLobbySession,
+        crate::mounted_theme::MountedGameplay,
+    > {
+        use deadsync_theme::views::{GameplayStageIntro, GameplayStageView};
+
+        let (mut prepared, scene, init) = prepare_stage_fixture(
+            simfile, viewport, session, profiles, "Software", Some(32.0), false, None, None, false,
+        );
+        (presentation.prepare)(&mut prepared);
+        crate::gameplay_runtime::present_stage(
+            prepared, scene, None,
+            crate::gameplay_runtime::GameplayStartup {
+                mini_indicator: Default::default(),
+                lobby_session: deadsync_online::gameplay_lobby::GameplayLobbySession::new(
+                    Default::default(), init.runtime.joined, init.runtime.player_side,
+                ),
+                score_refresh: Default::default(),
+                scores: init.scores,
+            },
+            |stage, assets, scores| {
+                (presentation.build)(
+                    stage,
+                    assets,
+                    &GameplayStageView { intro: GameplayStageIntro::Song { round: Some(1) }, replay: None, course: None },
+                    &Default::default(),
+                    Some(deadsync_assets::gameplay_presentation::GameplayPresentationInit {
+                        hud: init.hud,
+                        judgment_palettes: init.judgment_palettes,
+                        scorebox_pane_filter: init.runtime.policy.scorebox_pane_filter,
+                    }),
+                    scores,
+                )
+            },
+        )
+    }
+
     fn build_test_state_with_renderer(
         simfile: &Path,
         viewport: GameplayViewport,
@@ -1301,7 +1344,7 @@ end }
                     noteskin: profile_data::NoteSkin::new("cel"), ..Default::default()
                 }), "Vulkan (wgpu)");
             assert!(state.song_lua.is_none(), "Vulkan must render compiled Lua");
-            state.presentation.background_texture_key = deadlib_assets::media_path_key(
+            state.presentation.background.media.background_texture_key = deadlib_assets::media_path_key(
                 state.song().background_path.as_deref().expect("Sharkmode background"));
             set_fixture_time(&mut state, 0.0);
             let mut gpu = SongLuaNotePixelCapture::new(&state, &metrics,
@@ -5146,6 +5189,7 @@ return Def.ActorFrame{
     #[test]
     fn openitg_hud_uses_live_score_in_lua_proxy() {
         use deadsync_theme::views::GameplayHudMotion;
+        use deadsync_assets::gameplay_presentation::GameplayRenderView;
 
         let simfile = write_hidden_score_proxy_fixture("openitg-score-proxy");
         with_session(
@@ -5161,14 +5205,31 @@ return Def.ActorFrame{
                 let mode = deadsync_profile_gameplay::score_display_mode_from_profile(
                     profiles[0].score_display_mode,
                 );
-                let mut state = build_compiled_test_state(
+                let mut state = build_mounted_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
                     profiles,
+                    crate::theme_registry::mount(deadsync_config::theme::ThemeFlag::OpenItg).gameplay,
                 );
-                state.presentation.set_hud(deadsync_theme_openitg::GAMEPLAY_HUD);
-                set_fixture_time(&mut state, 0.75);
+                let time = deadsync_core::song_time::song_time_ns_from_seconds(0.75);
+                state.boundary.total_elapsed_in_screen = 10.0;
+                state.set_current_music_time_ns(time);
+                state.stage.update(
+                    0.0,
+                    deadsync_gameplay::GameplayAudioSnapshot {
+                        stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                            music_nanos: time, has_music_mapping: true, valid_at_host_nanos: 1_000_000,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                    || 1_000_000,
+                    crate::navigation::song_lua_presentation_screen,
+                    |_| {},
+                    |_, _| {},
+                );
+                assert!(state.stage.take_output().errors.is_empty());
                 let score = state.gameplay.display_gameplay_itg_score_percent(0, mode);
                 let expected = format!("{:.2}%", (score * 100.0).trunc() / 100.0);
                 let mut actors = Vec::new();
@@ -5176,12 +5237,12 @@ return Def.ActorFrame{
                     &mut actors,
                     &mut state,
                     &fixture_assets(),
-                    screen_gameplay::ActorViewOverride {
+                    GameplayRenderView {
                         hud_motion: GameplayHudMotion::Leaving { elapsed_seconds: 0.4 },
                         ..Default::default()
                     },
                     123.0,
-                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                    (),
                 );
                 assert_eq!(segments.direct_field_proxy_count(state.song_frame()), 1);
                 assert!(actor_tree_has_text(&actors, &expected));

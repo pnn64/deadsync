@@ -1,7 +1,7 @@
 //! The executable connects installed themes to the application runtime.
 
 use super::mounted_theme::{
-    ChatPresentation, GameplayPresentationMount, InstalledMenu, ScreenTransitionMount,
+    ChatPresentation, GameplayPresentationMount, InstalledMenu, MountedGameplay, ScreenTransitionMount,
     StartupScreen, SupplementalResources, ThemeMount,
 };
 use deadsync_config::theme::ThemeFlag;
@@ -11,28 +11,27 @@ use deadsync_theme_openitg::{
     OpenItgSystemOptions, OpenItgTheme,
 };
 use deadsync_theme_simply_love::SimplyLoveTheme;
-use deadsync_theme_simply_love::screens::{
-    gameplay, transition_audio::TransitionAudioContext, transitions,
-};
-use deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView;
+use deadsync_theme_simply_love::screens::{transition_audio::TransitionAudioContext, transitions};
 use deadsync_theme_stepmania_395::{
     StepManiaIntro, StepManiaMusicWheel, StepManiaPlayerOptions, StepManiaSessionEnd,
     StepManiaStageCard, StepManiaStagePresentation, StepManiaStartup, StepManiaSystemOptions,
     StepManiaTheme,
 };
 
-const GAMEPLAY_COMPOSER: GameplayPresentationMount = GameplayPresentationMount {
+const SIMPLY_LOVE_GAMEPLAY: GameplayPresentationMount = GameplayPresentationMount {
     prepare: SimplyLoveTheme::prepare_gameplay_presentation,
-    build: SimplyLoveTheme::build_gameplay_presentation,
-    entry: |state, assets, restart, config| {
-        gameplay::in_transition(
-            state,
-            assets,
-            restart,
-            SimplyLoveVisualPolicyView::from_config(config),
-        )
+    build: |stage, assets, view, config, init, scores| {
+        MountedGameplay::new(SimplyLoveTheme::mount_gameplay(stage, assets, view, config, init, scores))
     },
     smx_overlay_alpha: transitions::gameplay_smx_overlay_alpha,
+};
+
+const OPENITG_GAMEPLAY: GameplayPresentationMount = GameplayPresentationMount {
+    prepare: |_| {},
+    build: |stage, assets, view, config, init, scores| {
+        MountedGameplay::new(OpenItgTheme::mount_gameplay(stage, assets, view, config, init, scores))
+    },
+    smx_overlay_alpha: |_, _| 1.0,
 };
 
 const FALLBACK_TRANSITIONS: ScreenTransitionMount = ScreenTransitionMount {
@@ -85,7 +84,8 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             stage: Box::new(StepManiaStagePresentation::default()),
             stage_card: Some(Box::new(StepManiaStageCard)),
             session_end: Some(Box::new(StepManiaSessionEnd)),
-            gameplay: GAMEPLAY_COMPOSER,
+            gameplay: SIMPLY_LOVE_GAMEPLAY,
+            practice_gameplay: SIMPLY_LOVE_GAMEPLAY,
             selection: Some(Box::new(StepManiaMusicWheel::default())),
             music_wheel: None,
             player_options: Some(Box::new(|| Box::new(StepManiaPlayerOptions::default()))),
@@ -104,7 +104,8 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             stage: Box::new(SimplyLoveTheme),
             stage_card: None,
             session_end: None,
-            gameplay: GAMEPLAY_COMPOSER,
+            gameplay: SIMPLY_LOVE_GAMEPLAY,
+            practice_gameplay: SIMPLY_LOVE_GAMEPLAY,
             selection: None,
             music_wheel: None,
             player_options: None,
@@ -121,7 +122,8 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             stage: Box::new(OpenItgStagePresentation::default()),
             stage_card: None,
             session_end: None,
-            gameplay: GAMEPLAY_COMPOSER,
+            gameplay: OPENITG_GAMEPLAY,
+            practice_gameplay: SIMPLY_LOVE_GAMEPLAY,
             selection: Some(Box::new(OpenItgSelectionPresentation::default())),
             music_wheel: None,
             player_options: Some(Box::new(|| Box::new(OpenItgPlayerOptions::default()))),

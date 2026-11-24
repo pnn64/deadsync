@@ -448,12 +448,12 @@ mod tests {
                     );
 
                     let game = app.state.screens.gameplay_state.as_mut().unwrap();
-                    game.presentation.hide_song_intro = true;
+                    game.presentation.set_hide_song_intro(true);
                     assert_eq!(
                         app.state.screens.stage_presentation.gameplay_motion(super::super::screen_nav::stage_motion_view(game, &entering, false)),
                         GameplayHudMotion::Settled,
                     );
-                    game.presentation.hide_song_intro = false;
+                    game.presentation.set_hide_song_intro(false);
 
                     app.state.session.gameplay_restart_count = 1;
                     let (restart, duration) =
@@ -471,7 +471,8 @@ mod tests {
                     app.state.screens.stage_presentation = crate::theme_registry::mount(ThemeFlag::SimplyLove).stage;
                     let (entry, duration) =
                         app.get_in_transition_for_screen(CurrentScreen::Gameplay);
-                    assert!(!entry.is_empty());
+                    // The stage hooks can change independently of the mounted gameplay screen.
+                    assert!(entry.is_empty());
                     assert_eq!(duration, GAMEPLAY_ENTRY_TRANSITION_SECONDS);
                 },
             )
@@ -743,7 +744,7 @@ mod tests {
                     let state = app.state.screens.gameplay_state.as_mut().unwrap();
                     assert!(Arc::ptr_eq(&state.song_arc(), &song));
                     assert_eq!(
-                        state.presentation.replay_status_text.as_deref(),
+                        state.presentation.replay_status_text(),
                         Some("Autoplay - AAA 98.76%")
                     );
                     assert!(state.progress.replay.mode);

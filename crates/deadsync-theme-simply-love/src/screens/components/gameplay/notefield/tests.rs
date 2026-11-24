@@ -1,7 +1,6 @@
 use super::{
-    JudgmentSpriteMetadata, ResolvedComboMilestoneAssets, ResolvedJudgmentAssets,
-    combo_milestone_assets, error_bar_trim_max_window_ix, gameplay_notefield_plan,
-    judgment_frame_size,
+    ResolvedComboMilestoneAssets, ResolvedJudgmentAssets,
+    combo_milestone_assets, gameplay_notefield_plan,
 };
 use crate::notefield_style::notefield_style;
 use deadlib_present::actors::SpriteSource;
@@ -106,47 +105,6 @@ fn combo_milestone_sizes_refresh_only_when_visual_sources_change() {
     assert_eq!(refreshed, [[99.0, 101.0]; 4]);
 }
 
-#[test]
-fn cached_judgment_metadata_refreshes_only_when_registry_generation_changes() {
-    crate::tests::init_paths();
-    let cached = ResolvedJudgmentAssets::from_profile(&profile_data::Profile::default());
-    let first = JudgmentSpriteMetadata {
-        frame_size: [128.0, 64.0],
-        frame_cols: 2,
-        frame_rows: 7,
-    };
-    let refreshed = JudgmentSpriteMetadata {
-        frame_size: [256.0, 128.0],
-        frame_cols: 4,
-        frame_rows: 8,
-    };
-
-    assert_eq!(
-        cached.judgment_sprite_metadata_for_generation(10, |_| first),
-        Some(first)
-    );
-    assert_eq!(
-        cached.judgment_sprite_metadata_for_generation(10, |_| {
-            panic!("same registry generation must reuse cached metadata")
-        }),
-        Some(first)
-    );
-    assert_eq!(
-        cached.judgment_sprite_metadata_for_generation(11, |_| refreshed),
-        Some(refreshed)
-    );
-}
-
-fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
-    if let Some(model) = slot.model() {
-        let size = model.size();
-        if size[0] > f32::EPSILON && size[1] > f32::EPSILON {
-            return [size[0] * scale, size[1] * scale];
-        }
-    }
-    let logical = slot.logical_size();
-    [logical[0] * scale, logical[1] * scale]
-}
 
 #[test]
 fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
@@ -293,24 +251,15 @@ fn average_error_bar_keeps_its_hud_layer() {
     assert_eq!(notefield_style().error_bar.average_z, 88);
 }
 
-#[test]
-fn judgment_frame_size_uses_logical_atlas_frame_dims() {
-    crate::tests::init_paths();
-    let censored = "judgements/Test Censored 1x7 (doubleres).png";
-    let tight_censored = "judgements/Test Censored Tight 1x7 (doubleres).png";
-    let love = "judgements/Test Love 2x7 (doubleres).png";
-    deadlib_assets::register_texture_dims(censored, 600, 1400);
-    deadlib_assets::register_texture_dims(tight_censored, 600, 1050);
-    deadlib_assets::register_texture_dims(love, 880, 1036);
-
-    assert_eq!(judgment_frame_size(censored), [300.0, 100.0]);
-    assert_eq!(judgment_frame_size(tight_censored), [300.0, 75.0]);
-    assert_eq!(judgment_frame_size(love), [220.0, 74.0]);
-
-    let visible_art_h = 68.0 / 2.0;
-    let original_drawn_art_h = visible_art_h * judgment_frame_size(censored)[1] / 100.0;
-    let tight_drawn_art_h = visible_art_h * judgment_frame_size(tight_censored)[1] / 75.0;
-    assert_eq!(original_drawn_art_h, tight_drawn_art_h);
+fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
+    if let Some(model) = slot.model() {
+        let size = model.size();
+        if size[0] > f32::EPSILON && size[1] > f32::EPSILON {
+            return [size[0] * scale, size[1] * scale];
+        }
+    }
+    let logical = slot.logical_size();
+    [logical[0] * scale, logical[1] * scale]
 }
 
 #[test]
@@ -321,7 +270,7 @@ fn error_bar_boundaries_use_10ms_blue_fantastic_window() {
         windows,
         Some(timing::FA_PLUS_W010_MS / 1000.0),
         true,
-        error_bar_trim_max_window_ix(profile_data::ErrorBarTrim::Fantastic),
+        deadsync_gameplay::gameplay_error_bar_trim_max_window_ix(deadsync_gameplay::GameplayErrorBarTrim::Fantastic),
     );
 
     assert_eq!(len, 2);

@@ -130,11 +130,12 @@ and ranking in `deadsync-simfile`. Each theme owns any search overlay and
 passes the current chart type in its request.
 
 The shell still depends on the default theme for the Player Options editor,
-parts of Select Music, System Options, Evaluation, and the gameplay frame
-composer's types. The executable mounts the composer and Twitch overlay.
-Gameplay, Practice and the attract demonstration use the supplied construction
-hooks on the shared stage. The installed stage presentation supplies each
-theme's HUD where available.
+parts of Select Music, System Options, and Evaluation. The executable mounts
+gameplay presenters through the shell. `deadsync-assets` shares the asset-backed
+background drawing, profile-selected field feedback, and text prewarming.
+OpenITG owns its Gameplay and demonstration presenters. StepMania 3.95
+supplies HUD widgets to the Simply Love gameplay adapter. Practice uses that
+adapter with the existing editor. All presenters use the same prepared stage.
 
 ## Shared contracts
 

@@ -293,6 +293,43 @@ pub struct NotefieldHudStyle {
     pub error_bar: ErrorBarStyle,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayTapAtlas {
+    pub key: &'static str,
+    pub frame_size: [f32; 2],
+    pub frame_cols: usize,
+    pub frame_rows: usize,
+    pub tween: &'static TapFeedbackTween,
+}
+
+/// The stock hold feedback sheet, with one completed and one released cell.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayHoldAtlas {
+    pub key: &'static str,
+    pub frame_size: [f32; 2],
+    pub style: &'static HoldFeedbackStyle,
+}
+
+/// Stage transition time available to gameplay presenters.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum GameplayHudMotion {
+    #[default]
+    Settled,
+    Entering { elapsed_seconds: f32 },
+    Leaving { elapsed_seconds: f32 },
+}
+
+/// Field occupancy provided to an optional chat overlay during gameplay.
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayChatLayout {
+    pub two_players: bool,
+    pub p2: bool,
+    pub centered: bool,
+    pub field_left: f32,
+    pub field_right: f32,
+    pub statistics: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

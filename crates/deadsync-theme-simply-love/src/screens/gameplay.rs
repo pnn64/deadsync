@@ -13,7 +13,6 @@ use crate::screens::components::gameplay::{
     FRAME_TEXT_BPM, FRAME_TEXT_COUNTDOWN_BASE, FRAME_TEXT_EDIT_MEASURE_BASE, FRAME_TEXT_LIFE_BASE,
     FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats, notefield, step_stats_gifs,
 };
-use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::density::{self, DensityHistCache};
 use crate::screens::components::shared::heart_rate;
 pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
@@ -43,10 +42,9 @@ use deadsync_assets::gameplay_stage::{
     attach_prepared_song_lua, prepare_gameplay_stage,
 };
 use deadsync_assets::noteskin;
-use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
+use deadsync_chart::{ChartData, GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::song_time::song_time_ns_to_seconds;
-use deadsync_gameplay::song_backgrounds::SongLayer2Flash;
 use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
     CourseDisplayTotals, CourseLifeConfig, ExitTransitionKind,
@@ -54,7 +52,7 @@ use deadsync_gameplay::{
     GameplaySession, GameplayViewport, HoldToExitKey, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     autosync_mode_status_line, blue_fantastic_window_ms,
-    exit_transition_alpha, scroll_receptor_y, spacing_multiplier_for_percent,
+    exit_transition_alpha, scroll_receptor_y,
 };
 use deadsync_input::InputEvent;
 use deadsync_notefield::{BrokenRunLookup, ModelMeshCache, StreamProgressLookup};
@@ -71,13 +69,10 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score as score_data;
 use deadsync_song_lua::gameplay_presentation::{
     FieldHudBuffers, FieldPresentation, FramePresentationContext, GameplayFrameBuffers,
-    GameplayFramePresenter, GameplayFrameView, SongFrameContent, compose_stage_frame,
+    GameplayFramePresenter, SongFrameContent, compose_stage_frame,
 };
 use deadsync_song_lua::gameplay_session::{self, SongLuaGameplayHost, SongLuaGameplaySession};
 use deadsync_song_lua::playback::song_meter_progress;
-use deadsync_song_lua::playback::{
-    NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY, PLAYER_ACTOR_SCRATCH_CAPACITY,
-};
 use deadsync_theme::FontRole;
 use std::cell::{Cell, RefCell};
 use std::ops::Deref;
@@ -85,19 +80,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 /// Selects the entry cue during song preparation, including indexed restarts.
-#[must_use]
-pub fn start_sfx(restart_count: u32) -> Option<PathBuf> {
-    if restart_count == 0 {
-        deadsync_assets::audio_folder::random_sfx("assets/sounds/song_start")
-    } else {
-        deadsync_assets::audio_folder::indexed_sfx(
-            "assets/sounds/song_start/restart",
-            restart_count,
-            "restart.ogg",
-        )
-    }
-}
-
 #[must_use]
 pub fn replay_status_text(name: &str, score_10000: f64) -> Arc<str> {
     Arc::from(format!("Autoplay - {name} {:.2}%", score_10000 / 100.0))
@@ -164,61 +146,11 @@ const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand 
 const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;
 const DIFFICULTY_METER_Y: f32 = 56.0;
 const DIFFICULTY_METER_SIZE: f32 = 30.0;
-const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
 const DEFAULT_NOTEFIELD_WIDTH: f32 = 256.0;
 
-fn notefield_layout_width(
-    column_xs: &[i32],
-    receptor_size: [i32; 2],
-    cols: usize,
-    spacing_multiplier: f32,
-) -> f32 {
-    let cols = cols.min(column_xs.len());
-    if cols == 0 {
-        return DEFAULT_NOTEFIELD_WIDTH;
-    }
-    let (min_x, max_x) =
-        column_xs[..cols]
-            .iter()
-            .fold((f32::INFINITY, f32::NEG_INFINITY), |(min_x, max_x), &x| {
-                let x = x as f32 * spacing_multiplier;
-                (min_x.min(x), max_x.max(x))
-            });
-    let [width, height] = receptor_size.map(|value| value.max(0) as f32);
-    let arrow_width = if height > 0.0 {
-        width * (TARGET_ARROW_PIXEL_SIZE / height)
-    } else {
-        width
-    };
-    (max_x - min_x) + arrow_width
-}
-
-fn gameplay_notefield_widths(
-    gameplay: &GameplayCoreState,
-    assets: &GameplayNoteskinAssets,
-) -> [f32; MAX_PLAYERS] {
-    std::array::from_fn(|player| {
-        let Some(noteskin) = assets.noteskin[player].as_deref() else {
-            return DEFAULT_NOTEFIELD_WIDTH;
-        };
-        let receptor = assets.receptor_noteskin[player]
-            .as_deref()
-            .unwrap_or(noteskin);
-        let cols = gameplay
-            .cols_per_player()
-            .min(noteskin.column_xs.len())
-            .min(receptor.receptor_off.len());
-        let Some(receptor) = receptor.receptor_off.first() else {
-            return DEFAULT_NOTEFIELD_WIDTH;
-        };
-        notefield_layout_width(
-            &noteskin.column_xs,
-            receptor.size(),
-            cols,
-            spacing_multiplier_for_percent(gameplay.profiles()[player].spacing_percent),
-        )
-    })
-}
+use deadsync_assets::gameplay_presentation::field::{TARGET_ARROW_PIXEL_SIZE, gameplay_notefield_widths};
+#[cfg(test)]
+use deadsync_assets::gameplay_presentation::field::notefield_layout_width;
 
 pub use deadsync_notefield::ViewOverride as NotefieldViewOverride;
 
@@ -289,36 +221,12 @@ pub fn gameplay_score_leader_alphas(state: &GameplayCoreState) -> [f32; MAX_PLAY
     score_leader_alphas(scores)
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct ActorViewOverride {
-    pub notefield: NotefieldViewOverride,
-    pub hide_gameplay_hud: bool,
-    pub hud_motion: GameplayHudMotion,
-    /// Alpha multiplier applied to SMX overlay actors (FSR sensor display and pad
-    /// input display). Used to fade them in with the screen transition.
-    pub smx_overlay_alpha: f32,
-}
+pub use deadsync_assets::gameplay_presentation::GameplayRenderView as ActorViewOverride;
 
-impl Default for ActorViewOverride {
-    fn default() -> Self {
-        let view = GameplayFrameView::default();
-        Self {
-            notefield: view.notefield,
-            hide_gameplay_hud: view.hide_gameplay_hud,
-            hud_motion: GameplayHudMotion::Settled,
-            smx_overlay_alpha: 1.0,
-        }
-    }
-}
-
-impl From<ActorViewOverride> for GameplayFrameView {
-    fn from(view: ActorViewOverride) -> Self {
-        Self {
-            notefield: view.notefield,
-            hide_gameplay_hud: view.hide_gameplay_hud,
-        }
-    }
-}
+mod mounted;
+use deadsync_assets::gameplay_presentation::background::{GameplayBackground, custom_gameplay_backdrop_enabled, push_background};
+#[cfg(test)]
+use deadsync_assets::gameplay_presentation::background::push_custom_gameplay_backdrop;
 #[derive(Clone, Debug)]
 pub struct CourseDisplayInfo {
     pub name: Arc<str>,
@@ -338,62 +246,6 @@ pub const TRANSITION_IN_BLACK_FADE_DURATION: f32 = 0.6;
 pub const TRANSITION_OUT_DELAY: f32 = gameplay_session::SONG_LUA_OUT_DELAY;
 pub const TRANSITION_OUT_FADE_DURATION: f32 = gameplay_session::SONG_LUA_OUT_FADE_DURATION;
 const TRANSITION_OUT_DURATION: f32 = gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum BackgroundTransition {
-    CrossFade(f32),
-    FadeCenterHorizontal,
-    FadeCenterVertical,
-    FadeDown,
-    FadeLeft,
-    FadeRight,
-    FadeUp,
-    SlideDown,
-    SlideLeft,
-    SlideRight,
-    SlideUp,
-}
-
-impl BackgroundTransition {
-    const fn from_name(name: &str) -> Option<Self> {
-        if name.eq_ignore_ascii_case("CrossFade_Fastest") {
-            Some(Self::CrossFade(0.5))
-        } else if name.eq_ignore_ascii_case("CrossFade_Faster") {
-            Some(Self::CrossFade(0.75))
-        } else if name.eq_ignore_ascii_case("CrossFade") {
-            Some(Self::CrossFade(1.0))
-        } else if name.eq_ignore_ascii_case("FadeCenterHorizontal") {
-            Some(Self::FadeCenterHorizontal)
-        } else if name.eq_ignore_ascii_case("FadeCenterVertical") {
-            Some(Self::FadeCenterVertical)
-        } else if name.eq_ignore_ascii_case("FadeDown") {
-            Some(Self::FadeDown)
-        } else if name.eq_ignore_ascii_case("FadeLeft") {
-            Some(Self::FadeLeft)
-        } else if name.eq_ignore_ascii_case("FadeRight") {
-            Some(Self::FadeRight)
-        } else if name.eq_ignore_ascii_case("FadeUp") {
-            Some(Self::FadeUp)
-        } else if name.eq_ignore_ascii_case("SlideDown") {
-            Some(Self::SlideDown)
-        } else if name.eq_ignore_ascii_case("SlideLeft") {
-            Some(Self::SlideLeft)
-        } else if name.eq_ignore_ascii_case("SlideRight") {
-            Some(Self::SlideRight)
-        } else if name.eq_ignore_ascii_case("SlideUp") {
-            Some(Self::SlideUp)
-        } else {
-            None
-        }
-    }
-
-    const fn duration(self) -> f32 {
-        match self {
-            Self::CrossFade(duration) => duration,
-            _ => 1.0,
-        }
-    }
-}
 
 pub struct DensityGraphRenderState {
     pub cache: [Option<DensityHistCache>; MAX_PLAYERS],
@@ -538,128 +390,11 @@ pub struct GameplayFrameScratch {
     presentation_skeleton: GameplayPresentationSkeleton,
 }
 
-const LIFE_BOUNCE_S: f32 = 0.1;
-const LIFE_SMOOTH_S: f32 = 0.2;
-const LIFE_PERCENT_FADE_S: f32 = 1.0;
-
-#[derive(Clone, Copy, Debug)]
-struct LifeMeterVisual {
-    from_life: f32,
-    target_life: f32,
-    tween_age: f32,
-    hot_age: f32,
-    is_hot: bool,
-    vertical_swoosh_alpha: f32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct LifePercentVisual {
-    outer_w: f32,
-    inner_w: f32,
-    alpha: f32,
-}
-
-impl LifeMeterVisual {
-    fn new(life: f32, dead: bool) -> Self {
-        let target_life = visible_life(life, dead);
-        let is_hot = !dead && target_life >= 1.0;
-        Self {
-            from_life: target_life,
-            target_life,
-            tween_age: LIFE_SMOOTH_S,
-            hot_age: 0.0,
-            is_hot,
-            vertical_swoosh_alpha: 0.2,
-        }
-    }
-
-    fn update(&mut self, life: f32, dead: bool, delta_time: f32) {
-        let target_life = visible_life(life, dead);
-        let is_hot = !dead && target_life >= 1.0;
-        let delta_time = finite_nonnegative(delta_time);
-
-        if target_life != self.target_life {
-            self.from_life = self.target_life;
-            self.vertical_swoosh_alpha = if target_life > self.target_life || target_life >= 1.0 {
-                1.0
-            } else {
-                0.2
-            };
-            self.target_life = target_life;
-            self.tween_age = 0.0;
-        } else {
-            self.tween_age += delta_time;
-        }
-
-        if is_hot != self.is_hot {
-            self.is_hot = is_hot;
-            self.hot_age = 0.0;
-        } else {
-            self.hot_age += delta_time;
-        }
-    }
-
-    fn rendered_life(self, lifemeter_type: profile_data::LifeMeterType) -> f32 {
-        let (duration, progress) = match lifemeter_type {
-            profile_data::LifeMeterType::Surround => {
-                (LIFE_SMOOTH_S, smooth_life_p(self.tween_age / LIFE_SMOOTH_S))
-            }
-            profile_data::LifeMeterType::Standard | profile_data::LifeMeterType::Vertical => (
-                LIFE_BOUNCE_S,
-                deadlib_present::anim::bouncebegin_p(self.tween_age / LIFE_BOUNCE_S),
-            ),
-        };
-        if self.tween_age >= duration {
-            self.target_life
-        } else {
-            (self.target_life - self.from_life).mul_add(progress, self.from_life)
-        }
-    }
-
-    fn percent_visual(self) -> LifePercentVisual {
-        if !self.is_hot {
-            return LifePercentVisual {
-                outer_w: 44.0,
-                inner_w: 42.0,
-                alpha: 1.0,
-            };
-        }
-        let t = (self.hot_age / LIFE_PERCENT_FADE_S).clamp(0.0, 1.0);
-        LifePercentVisual {
-            outer_w: 52.0,
-            inner_w: 50.0,
-            alpha: 1.0 - t * t,
-        }
-    }
-}
-
-#[inline]
-const fn visible_life(life: f32, dead: bool) -> f32 {
-    if dead || !life.is_finite() {
-        0.0
-    } else {
-        life.clamp(0.0, 1.0)
-    }
-}
-
-#[inline]
-const fn finite_nonnegative(value: f32) -> f32 {
-    if value.is_finite() {
-        value.max(0.0)
-    } else {
-        0.0
-    }
-}
-
-#[inline]
-fn smooth_life_p(value: f32) -> f32 {
-    let t = value.clamp(0.0, 1.0);
-    if t <= 0.5 {
-        2.0 * t * t
-    } else {
-        (2.0 * (1.0 - t)).mul_add(-(1.0 - t), 1.0)
-    }
-}
+use deadsync_assets::gameplay_presentation::life::{LifeMeterVisual, finite_nonnegative, visible_life};
+#[cfg(test)]
+use deadsync_assets::gameplay_presentation::life::{
+    LIFE_BOUNCE_S, LIFE_PERCENT_FADE_S, LIFE_SMOOTH_S, LifePercentVisual,
+};
 
 pub type State = GameplayHost<GameplayLobbySession, GameplayPresentation>;
 
@@ -692,11 +427,6 @@ pub struct GameplayPresentation {
     step_stats_mode: GameplayStepStatsMode,
     pub(crate) song_banner_key: Option<Arc<str>>,
     pub(crate) pack_banner_key: Option<Arc<str>>,
-    /// Immutable song background texture identity resolved at screen entry.
-    /// `SongBgWithMovieViz` frames clone this handle instead of allocating a new
-    /// path string. There are no misses, growth, eviction, or gameplay-thread
-    /// destruction; the single optional entry is released with the screen.
-    song_background_key: Option<Arc<str>>,
     notefield_broken_run_lookup: [BrokenRunLookup; MAX_PLAYERS],
     notefield_stream_progress_lookup: [StreamProgressLookup; MAX_PLAYERS],
     /// Fixed song-lifetime width derived at screen entry from immutable noteskin
@@ -740,19 +470,7 @@ pub struct GameplayPresentation {
     /// live frames borrow text without formatting, invalidation, or growth.
     practice_timing_labels: [Box<[deadsync_notefield::TimingSegmentLabel]>; MAX_PLAYERS],
     sync_overlay_text_cache: RefCell<SyncOverlayTextCache>,
-    pub background_path_dirty: bool,
-    pub current_background_path: Option<PathBuf>,
-    pub current_background_key: Option<Arc<str>>,
-    pub background_allow_video: bool,
-    pub background_texture_key: Arc<str>,
-    pub previous_background_texture_key: Option<Arc<str>>,
-    /// Screen-owned compiled transition state. Names are parsed when the shell
-    /// changes the background; gameplay frames perform no lookup or allocation.
-    /// Expiry saturates to one comparison and rewinds can reactivate it. There
-    /// is no eviction or growth, and destruction happens with the screen.
-    background_transition: Option<BackgroundTransition>,
-    background_transition_expired: Cell<bool>,
-    background_transition_start_time: f32,
+    pub background: GameplayBackground,
     smx_sensor_views: [Option<SmxSensorPadView>; 2],
     pub heart_rate_view: HeartRateView,
     heart_rate_generation: (u64, u64),
@@ -1038,10 +756,6 @@ impl GameplayPresentation {
         let pack_banner_key = pack_banner_path
             .as_deref()
             .map(deadlib_assets::media_path_key);
-        let song_background_key = song
-            .background_path
-            .as_deref()
-            .map(deadlib_assets::media_path_key);
         let notefield_broken_run_lookup = std::array::from_fn(|player| {
             BrokenRunLookup::new(gameplay.measure_counter_segments(player))
         });
@@ -1063,7 +777,7 @@ impl GameplayPresentation {
         });
         notefield::prewarm_hud_actor_resources(
             stage.actor_resources(),
-            &step_stats_profiles,
+            step_stats_profiles.each_ref(),
             gameplay.num_players(),
         );
         for assets in notefield_judgment_assets
@@ -1072,7 +786,6 @@ impl GameplayPresentation {
         {
             assets.prewarm();
         }
-        let background_transition_start_time = gameplay.current_music_time_display();
         let frame_scratch = GameplayFrameScratch {
             lobby_hud_cache: lobby_hud::LobbyHudCache::default(),
             lobby_hud_status_scratch: String::with_capacity(128),
@@ -1110,7 +823,6 @@ impl GameplayPresentation {
             step_stats_mode,
             song_banner_key,
             pack_banner_key,
-            song_background_key,
             notefield_broken_run_lookup,
             notefield_stream_progress_lookup,
             notefield_widths,
@@ -1126,15 +838,7 @@ impl GameplayPresentation {
             notefield_plans,
             practice_timing_labels: std::array::from_fn(|_| Box::default()),
             sync_overlay_text_cache: RefCell::new(SyncOverlayTextCache::default()),
-            background_path_dirty: true,
-            current_background_path: None,
-            current_background_key: None,
-            background_allow_video: false,
-            background_texture_key: Arc::from("__black"),
-            previous_background_texture_key: None,
-            background_transition: None,
-            background_transition_expired: Cell::new(false),
-            background_transition_start_time,
+            background: GameplayBackground::new(stage),
             smx_sensor_views: [None, None],
             heart_rate_view: HeartRateView::default(),
             heart_rate_generation: (u64::MAX, u64::MAX),
@@ -1198,7 +902,7 @@ impl GameplayPresentation {
 
     pub fn set_hud(&mut self, hud: GameplayHud<Actor>) {
         for plan in &mut self.notefield_plans {
-            plan.install_feedback(&hud);
+            plan.install_feedback(hud.field_feedback, hud.default_tap_atlas, hud.default_hold_atlas);
         }
         self.hud = Some(hud);
         if let Some(scratch) = &mut self.frame_scratch {
@@ -1492,6 +1196,13 @@ fn banner_visibility(
 
 /// Video banner sources that the current Gameplay Step Statistics layout will draw.
 pub fn visible_banner_paths(state: &impl GameplayScreenView) -> [Option<&Path>; 2] {
+    visible_banner_paths_for(state, state.presentation())
+}
+
+fn visible_banner_paths_for<'a>(
+    state: &'a ActiveGameplayStage,
+    presentation: &'a GameplayPresentation,
+) -> [Option<&'a Path>; 2] {
     let first_mask = state
         .profiles()
         .first()
@@ -1505,7 +1216,7 @@ pub fn visible_banner_paths(state: &impl GameplayScreenView) -> [Option<&Path>; 
             p.step_statistics
         });
     let (song_visible, pack_visible) = banner_visibility(
-        state.presentation().runtime_view.play_style,
+        presentation.runtime_view.play_style,
         state.num_cols(),
         is_wide(),
         screen_width() / screen_height().max(1.0) > (21.0 / 9.0),
@@ -1520,7 +1231,7 @@ pub fn visible_banner_paths(state: &impl GameplayScreenView) -> [Option<&Path>; 
             None
         },
         if pack_visible {
-            state.presentation().pack_banner_path.as_deref()
+            presentation.pack_banner_path.as_deref()
         } else {
             None
         },
@@ -3066,22 +2777,21 @@ pub fn prewarm_text_layout(
 /// actor envelope before the song starts. Song Lua can still exceed this base
 /// envelope and is measured separately by its fixture class.
 pub fn prewarm_compose_storage(scratch: &mut ComposeScratch, state: &impl GameplayScreenView) {
-    let players = state.num_players();
-    let draw_floor = PLAYER_ACTOR_SCRATCH_CAPACITY.saturating_mul(players);
-    let sorted_sprite_floor = usize::from(players > 1).saturating_mul(draw_floor);
-    let textured_mesh_floor =
-        NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY.saturating_mul(players.saturating_add(1));
-    scratch.retain_working_set_headroom(
-        draw_floor,
-        sorted_sprite_floor,
-        textured_mesh_floor,
-        NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
-    );
+    deadsync_assets::gameplay_presentation::prewarm_compose_storage(scratch, state.num_players());
 }
 
 // --- TRANSITIONS ---
 pub fn in_transition(
     state: Option<&State>,
+    asset_manager: &AssetManager,
+    is_restart: bool,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) -> (Vec<Actor>, f32) {
+    in_transition_for(state, asset_manager, is_restart, visual_policy)
+}
+
+fn in_transition_for(
+    state: Option<&impl GameplayScreenView>,
     asset_manager: &AssetManager,
     is_restart: bool,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
@@ -3093,25 +2803,20 @@ pub fn in_transition(
     };
     let Some(state) = state else {
         // Song initialization must finish before the entry animation begins.
-        let cover = act!(quad:
-            align(0.0, 0.0): xy(0.0, 0.0):
-            zoomto(screen_width(), screen_height()):
-            diffuse(0.0, 0.0, 0.0, 1.0):
-            z(1200)
-        );
-        return (vec![cover], duration);
+        return (deadsync_assets::gameplay_presentation::loading_cover(), duration);
     };
-    if state.presentation.hide_song_intro {
+    let presentation = state.presentation();
+    if presentation.hide_song_intro {
         return (Vec::new(), duration);
     }
     if is_restart {
         let _ = intro_text_target_x(
             state,
             asset_manager,
-            state.presentation.stage_intro_text.as_ref(),
-            state.presentation.runtime_view.play_style,
-            state.presentation.runtime_view.player_side,
-            state.presentation.runtime_view.policy.center_single_notefield,
+            presentation.stage_intro_text.as_ref(),
+            presentation.runtime_view.play_style,
+            presentation.runtime_view.player_side,
+            presentation.runtime_view.policy.center_single_notefield,
         );
         // SL/zmod parity: on a song restart, skip the splode + stage-text
         // splash and run only a brief fade-from-black so the first gameplay
@@ -3127,15 +2832,15 @@ pub fn in_transition(
         );
         return (vec![actor], TRANSITION_IN_RESTART_DURATION);
     }
-    let text = state.presentation.stage_intro_text.clone();
+    let text = presentation.stage_intro_text.clone();
     let intro_color = color::decorative_rgba(state.player_color_index());
     let text_target_x = intro_text_target_x(
         state,
         asset_manager,
         text.as_ref(),
-        state.presentation.runtime_view.play_style,
-        state.presentation.runtime_view.player_side,
-        state.presentation.runtime_view.policy.center_single_notefield,
+        presentation.runtime_view.play_style,
+        presentation.runtime_view.player_side,
+        presentation.runtime_view.policy.center_single_notefield,
     );
     let splode_tex = visual_policy.assets.effects.gameplayin_splode;
     let minisplode_tex = visual_policy.assets.effects.gameplayin_minisplode;
@@ -3225,319 +2930,13 @@ fn push_song_lua_fade(actors: &mut Vec<Actor>, alpha: f32) {
 
 // --- DRAWING ---
 
-#[inline(always)]
-fn white_texture_key() -> Arc<str> {
-    static WHITE_TEXTURE_KEY: OnceLock<Arc<str>> = OnceLock::new();
-    Arc::clone(WHITE_TEXTURE_KEY.get_or_init(|| Arc::from("__white")))
-}
-
-fn push_background(
-    actors: &mut Vec<Actor>,
-    state: &impl GameplayScreenView,
-    bg_brightness: f32,
-    base_color: deadlib_present::color::Color,
-) {
-    let sw = screen_width();
-    let sh = screen_height();
-    let cx = screen_center_x();
-    let cy = screen_center_y();
-    let bg_brightness = bg_brightness.clamp(0.0, 1.0);
-
-    // Solid base fill behind everything. This is what shows when the song has no
-    // background image, and what the song background is dimmed toward as
-    // BGBrightness drops on the default path.
-    let mut base = shared_banner::cover_sprite(white_texture_key(), cx, cy, sw, sh, 1.0, -101);
-    if let Actor::Sprite { tint, .. } = &mut base {
-        *tint = base_color.to_rgba();
-    }
-    actors.push(base);
-
-    push_current_bgchange_media(actors, state, bg_brightness, cx, cy, sw, sh);
-    push_bgchange_transition(actors, state, bg_brightness, cx, cy, sw, sh);
-    // A non-default GameplayBgColor mirrors Chris's Simply Love underlay quad:
-    // it covers song art but stays behind the notefield, filters, and HUD.
-    push_custom_gameplay_backdrop(actors, base_color);
-    push_layer2_bganimations(actors, state);
-}
-
 pub fn begin_background_transition(
     state: &mut State,
     previous_texture_key: Arc<str>,
     transition_name: &str,
     start_time: f32,
 ) {
-    let transition = if &*previous_texture_key == "__black" {
-        None
-    } else {
-        BackgroundTransition::from_name(transition_name)
-    };
-    state.presentation.previous_background_texture_key = transition.map(|_| previous_texture_key);
-    state.presentation.background_transition = transition;
-    state.presentation.background_transition_expired.set(false);
-    state.presentation.background_transition_start_time = start_time;
-}
-
-fn bgchange_tint(change: Option<&SongBackgroundChange>, brightness: f32) -> [f32; 4] {
-    let color = change.and_then(|change| change.color1).unwrap_or([1.0; 4]);
-    [color[0], color[1], color[2], color[3] * brightness]
-}
-
-fn bgchange_movie_viz_tint(change: Option<&SongBackgroundChange>, brightness: f32) -> [f32; 4] {
-    let color = change.and_then(|change| change.color2).unwrap_or([1.0; 4]);
-    [color[0], color[1], color[2], color[3] * brightness]
-}
-
-fn background_media_sprite(
-    key: Arc<str>,
-    tint: [f32; 4],
-    blend: BlendMode,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) -> Actor {
-    let mut actor = shared_banner::cover_sprite(key, x, y, w, h, 1.0, -100);
-    if let Actor::Sprite {
-        tint: actor_tint,
-        blend: actor_blend,
-        ..
-    } = &mut actor
-    {
-        *actor_tint = tint;
-        *actor_blend = blend;
-    }
-    actor
-}
-
-fn push_current_bgchange_media(
-    actors: &mut Vec<Actor>,
-    state: &impl GameplayScreenView,
-    bg_brightness: f32,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) {
-    let presentation = state.presentation();
-    let change = state.song_backgrounds().active_change();
-    if &*presentation.background_texture_key == "__black" {
-        if let Some(hud) = &presentation.hud
-            && presentation.song_background_key.is_none()
-            && change.is_none()
-            && bg_brightness > 0.0
-        {
-            (hud.fallback_background)(actors, bg_brightness);
-        }
-        return;
-    }
-    if change.is_some_and(|change| change.effect_is("SongBgWithMovieViz")) {
-        if let Some(key) = state.presentation().song_background_key.as_ref() {
-            actors.push(background_media_sprite(
-                Arc::clone(key),
-                bgchange_tint(change, bg_brightness),
-                BlendMode::Alpha,
-                x,
-                y,
-                w,
-                h,
-            ));
-        }
-        actors.push(background_media_sprite(
-            state.presentation().background_texture_key.clone(),
-            bgchange_movie_viz_tint(change, bg_brightness),
-            BlendMode::Add,
-            x,
-            y,
-            w,
-            h,
-        ));
-    } else {
-        actors.push(background_media_sprite(
-            state.presentation().background_texture_key.clone(),
-            bgchange_tint(change, bg_brightness),
-            BlendMode::Alpha,
-            x,
-            y,
-            w,
-            h,
-        ));
-    }
-}
-
-fn push_bgchange_transition(
-    actors: &mut Vec<Actor>,
-    state: &impl GameplayScreenView,
-    bg_brightness: f32,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) {
-    let Some(key) = state.presentation().previous_background_texture_key.as_ref() else {
-        return;
-    };
-    if &**key == "__black" {
-        return;
-    }
-    let now = state.current_music_time_display();
-    let start_time = state.presentation().background_transition_start_time;
-    let Some((transition, progress)) = background_transition_frame(
-        state.presentation().background_transition,
-        &state.presentation().background_transition_expired,
-        start_time,
-        now,
-    ) else {
-        return;
-    };
-    let mut actor = background_media_sprite(
-        key.clone(),
-        [1.0, 1.0, 1.0, bg_brightness],
-        BlendMode::Alpha,
-        x,
-        y,
-        w,
-        h,
-    );
-    apply_bgchange_transition(&mut actor, transition, progress, w, h);
-    actors.push(actor);
-}
-
-fn background_transition_frame(
-    transition: Option<BackgroundTransition>,
-    expired: &Cell<bool>,
-    start_time: f32,
-    now: f32,
-) -> Option<(BackgroundTransition, f32)> {
-    let current = transition?;
-    if expired.get() && now >= start_time + current.duration() {
-        return None;
-    }
-    let progress = ((now - start_time) / current.duration()).clamp(0.0, 1.0);
-    if progress >= 1.0 {
-        expired.set(true);
-        return None;
-    }
-    expired.set(false);
-    Some((current, progress))
-}
-
-fn apply_bgchange_transition(
-    actor: &mut Actor,
-    transition: BackgroundTransition,
-    progress: f32,
-    screen_w: f32,
-    screen_h: f32,
-) {
-    let Actor::Sprite {
-        offset,
-        tint,
-        cropleft,
-        cropright,
-        croptop,
-        cropbottom,
-        fadeleft,
-        faderight,
-        fadetop,
-        fadebottom,
-        ..
-    } = actor
-    else {
-        return;
-    };
-    match transition {
-        BackgroundTransition::CrossFade(_) => tint[3] *= 1.0 - progress,
-        BackgroundTransition::SlideLeft => {
-            offset[0] = screen_w.mul_add(-progress, offset[0]);
-            tint[3] *= 1.0 - progress;
-        }
-        BackgroundTransition::SlideRight => {
-            offset[0] = screen_w.mul_add(progress, offset[0]);
-            tint[3] *= 1.0 - progress;
-        }
-        BackgroundTransition::SlideUp => {
-            offset[1] = screen_h.mul_add(-progress, offset[1]);
-            tint[3] *= 1.0 - progress;
-        }
-        BackgroundTransition::SlideDown => {
-            offset[1] = screen_h.mul_add(progress, offset[1]);
-            tint[3] *= 1.0 - progress;
-        }
-        BackgroundTransition::FadeUp => {
-            *cropbottom = 1.6f32.mul_add(progress, -0.3);
-            *fadebottom = 0.3;
-        }
-        BackgroundTransition::FadeDown => {
-            *croptop = 1.6f32.mul_add(progress, -0.3);
-            *fadetop = 0.3;
-        }
-        BackgroundTransition::FadeRight => {
-            *cropleft = 1.6f32.mul_add(progress, -0.3);
-            *fadeleft = 0.3;
-        }
-        BackgroundTransition::FadeLeft => {
-            *cropright = 1.6f32.mul_add(progress, -0.3);
-            *faderight = 0.3;
-        }
-        BackgroundTransition::FadeCenterHorizontal => {
-            *croptop = 0.8f32.mul_add(progress, -0.3);
-            *cropbottom = 0.8f32.mul_add(progress, -0.3);
-            *fadetop = 0.3;
-            *fadebottom = 0.3;
-        }
-        BackgroundTransition::FadeCenterVertical => {
-            *cropleft = 0.8f32.mul_add(progress, -0.3);
-            *cropright = 0.8f32.mul_add(progress, -0.3);
-            *fadeleft = 0.3;
-            *faderight = 0.3;
-        }
-    }
-}
-
-const LAYER2_FLASH_SECONDS: f32 = 0.6;
-
-fn layer2_flash_color(flash: SongLayer2Flash, elapsed: f32) -> Option<[f32; 4]> {
-    if !(0.0..=LAYER2_FLASH_SECONDS).contains(&elapsed) {
-        return None;
-    }
-    let progress = (elapsed / LAYER2_FLASH_SECONDS).clamp(0.0, 1.0);
-    let blue = match flash {
-        SongLayer2Flash::White => 1.0,
-        SongLayer2Flash::Yellow => 160.0 / 255.0,
-    };
-    Some([1.0, 1.0, blue, 1.0 - progress * progress])
-}
-
-fn push_layer2_bganimations(actors: &mut Vec<Actor>, state: &impl GameplayScreenView) {
-    let Some(color) = state
-        .song_backgrounds()
-        .active_layer2_flash(state.current_music_time_display())
-        .and_then(|(flash, elapsed)| layer2_flash_color(flash, elapsed))
-    else {
-        return;
-    };
-    actors.push(act!(quad:
-        align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-        setsize(screen_width() * 2.0, screen_height() * 2.0):
-        diffuse(color[0], color[1], color[2], color[3]):
-        z(-98)
-    ));
-}
-
-fn custom_gameplay_backdrop_enabled(color: deadlib_present::color::Color) -> bool {
-    color != deadlib_present::color::Color::BLACK
-}
-
-fn push_custom_gameplay_backdrop(actors: &mut Vec<Actor>, color: deadlib_present::color::Color) {
-    if !custom_gameplay_backdrop_enabled(color) {
-        return;
-    }
-    let rgba = color.to_rgba();
-    actors.push(act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        setsize(screen_width(), screen_height()):
-        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
-        z(-99)
-    ));
+    state.presentation.background.begin_transition(previous_texture_key, transition_name, start_time);
 }
 
 fn gameplay_header_rgba(color: deadlib_present::color::Color) -> [f32; 4] {
@@ -3590,6 +2989,8 @@ pub fn frame_layers<'a>(
             push_background(
                 actors,
                 state,
+                &presentation.background,
+                presentation.hud.as_ref().map(|hud| hud.fallback_background),
                 policy.background_brightness,
                 policy.background_color,
             );
@@ -5374,20 +4775,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn layer2_flash_keeps_its_tint_and_fade() {
-        assert_eq!(
-            layer2_flash_color(SongLayer2Flash::White, 0.0),
-            Some([1.0; 4])
-        );
-        assert_eq!(
-            layer2_flash_color(SongLayer2Flash::Yellow, LAYER2_FLASH_SECONDS * 0.5),
-            Some([1.0, 1.0, 160.0 / 255.0, 0.75]),
-        );
-        assert_eq!(layer2_flash_color(SongLayer2Flash::White, 1.0), None);
-    }
-
-    #[test]
+        #[test]
     fn frame_scratch_pointer_transfer_preserves_storage() {
         let mut scratch = GameplayFrameScratch::default();
         scratch.lobby_hud_status_scratch = String::with_capacity(128);
