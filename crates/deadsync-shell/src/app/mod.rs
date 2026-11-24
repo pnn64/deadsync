@@ -9618,6 +9618,15 @@ impl App {
                 select_mode::init(crate::select_flow::runtime_view());
             self.state.screens.select_play_mode_state.active_color_index = current_color_index;
             select_mode::on_enter(&mut self.state.screens.select_play_mode_state);
+            if let Some(menu) = self.state.screens.selection_presentation.as_ref()
+                .and_then(|selection| selection.play_mode_menu())
+            {
+                select_mode::set_menu(
+                    &mut self.state.screens.select_play_mode_state,
+                    menu,
+                    self.state.session.preferred_difficulty_index,
+                );
+            }
         } else if target == CurrentScreen::ProfileLoad {
             let current_color_index = match prev {
                 CurrentScreen::SelectPlayMode => {
@@ -9638,6 +9647,17 @@ impl App {
             self.state.screens.profile_load_state = profile_load::init();
             self.state.screens.profile_load_state.active_color_index = current_color_index;
             let profiles = profile::load_default_profiles_for_joined_sides();
+            let profiles = if let Some(index) = self.state.session.pending_difficulty_index.take() {
+                let session = profile::get_session_snapshot();
+                for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+                    if session.side_joined(side) {
+                        profile::update_preferred_difficulty_for_side(side, session.play_style, index);
+                    }
+                }
+                std::array::from_fn(|side| profile::get_for_side(profile_data::player_side_for_index(side)))
+            } else {
+                profiles
+            };
             self.sync_profile_load_state(&profiles);
             let play_mode = profile::get_session_play_mode();
             let select_music =

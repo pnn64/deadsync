@@ -511,6 +511,7 @@ mod tests {
         let choices = labels.each_ref().map(|label| PlaySelectionChoice {
             label,
             description: None,
+            enabled: true,
         });
         with_current_metrics(Metrics::centered(854.0, 480.0), || {
             let mut draw = |selected, time| {
@@ -572,6 +573,7 @@ mod tests {
         let choices = labels.each_ref().map(|label| PlaySelectionChoice {
             label,
             description: Some(&description),
+            enabled: true,
         });
         let mut actors = Vec::new();
         for (width, count) in [(640.0, 2), (854.0, 3)] {

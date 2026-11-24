@@ -82,6 +82,7 @@ pub fn with_play_selection_view(state: &State, draw: impl FnOnce(PlaySelectionVi
     let choices = labels.each_ref().map(|label| PlaySelectionChoice {
         label,
         description: None,
+        enabled: true,
     });
     let join_prompt = tr("Common", "PressStart");
     draw(PlaySelectionView {

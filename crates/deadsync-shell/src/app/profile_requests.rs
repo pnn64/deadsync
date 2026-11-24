@@ -33,6 +33,9 @@ impl App {
             }
             ProfileRequest::SetMusicRate(rate) => profile::set_session_music_rate(rate),
             ProfileRequest::SetPlayMode(play_mode) => profile::set_session_play_mode(play_mode),
+            ProfileRequest::SetPreferredDifficulty(index) => {
+                self.state.session.pending_difficulty_index = Some(index);
+            }
             ProfileRequest::SetMachineDefaultScrollSpeed(setting) => {
                 profile::update_machine_default_scroll_speed(setting);
             }

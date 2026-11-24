@@ -14,4 +14,8 @@ Gameplay uses the original `ScreenGameplay` life/score frames and difficulty she
 
 Evaluation uses the original stage/summary headers, banner and grade frames, grade and judgment sheets, bonus frames, score label, record badges, and `_moveon.png`. Numeric fonts preserve the original `Numbers/_numbers2`, `_numbers3`, `Combo numbers`, and `ScreenEvaluation percent text` bitmap sheets; their local descriptors map the original 5-by-3 character layout.
 
+Style selection uses the original five `ScreenSelectStyle` icons, illustrations, information panels, header, explanation, and warning. Difficulty/mode selection uses the eight `ScreenSelectDifficulty` cards, explanation, paging arrows, player cursors, shadows, and OK graphics. The shared game controller accepts the four regular difficulties and Nonstop; unsupported Challenge, Endless, and Magic Dance outcomes are visibly disabled. No unsupported game mode is substituted for those labels.
+
+Course selection uses `ScreenSelectCourse` artwork and the original `CourseEntryDisplay` bar, sharing this theme's wheel drawing with song selection. The source has no local-profile catalog browser; the host's existing profile picker is adapted with the original options page/cursors and blank `ScreenSelectPlayer` header.
+
 Select this installed native theme through System Options or `[Options] Theme=StepMania 3.95` in `deadsync.ini`. The reference theme folder is used during development to inspect and copy assets. The game uses the bundled assets and Rust presentation modules.

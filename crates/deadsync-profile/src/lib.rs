@@ -9847,6 +9847,16 @@ impl Profile {
         true
     }
 
+    pub fn set_preferred_difficulty(&mut self, style: PlayStyle, index: usize) -> bool {
+        let path = self.last_played(style).song_music_path.clone();
+        self.set_last_played(
+            style,
+            path,
+            None,
+            index.min(deadsync_chart::STANDARD_DIFFICULTY_COUNT.saturating_sub(1)),
+        )
+    }
+
     pub fn set_last_played_course(
         &mut self,
         style: PlayStyle,
@@ -11529,6 +11539,18 @@ mod tests {
                 .as_deref(),
             Some("Songs/Pack/Song.ogg")
         );
+    }
+
+    #[test]
+    fn explicit_difficulty_keeps_song_and_releases_previous_chart_choice() {
+        let mut profile = Profile::default();
+        profile.set_last_played(PlayStyle::Single, Some("Songs/Pack/Song.ogg".into()), Some("old-hard-chart".into()), 3);
+        assert!(profile.set_preferred_difficulty(PlayStyle::Single, 1));
+        let last = profile.last_played(PlayStyle::Single);
+        assert_eq!(last.song_music_path.as_deref(), Some("Songs/Pack/Song.ogg"));
+        assert_eq!(last.chart_hash, None);
+        assert_eq!(last.difficulty_index, 1);
+        assert!(!profile.set_preferred_difficulty(PlayStyle::Single, 1));
     }
 
     #[test]

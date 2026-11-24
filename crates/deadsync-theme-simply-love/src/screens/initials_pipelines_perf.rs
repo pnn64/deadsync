@@ -184,6 +184,7 @@ fn test_player_summary(
         itl: ItlEvalState::default(),
         grade,
         score_percent: 1.0,
+        numeric_score: 0,
         earned_grade_points,
         possible_grade_points,
         ex_score_percent: 100.0,

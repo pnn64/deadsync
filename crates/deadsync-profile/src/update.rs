@@ -45,6 +45,12 @@ pub fn update_last_played_for_side(
     });
 }
 
+/// Selecting a difficulty supersedes the previous chart hash while retaining
+/// the last song. Guest preferences remain available for the current session.
+pub fn update_preferred_difficulty_for_side(side: PlayerSide, style: PlayStyle, index: usize) {
+    profile_ini_update(side, |profile| profile.set_preferred_difficulty(style, index));
+}
+
 pub fn update_last_played_course_for_side(
     side: PlayerSide,
     style: PlayStyle,

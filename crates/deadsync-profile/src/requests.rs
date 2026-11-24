@@ -29,6 +29,7 @@ pub enum ProfileRequest {
     },
     SetMusicRate(f32),
     SetPlayMode(PlayMode),
+    SetPreferredDifficulty(usize),
     SetMachineDefaultScrollSpeed(ScrollSpeedSetting),
     SetMachineDefaultScroll(ScrollOption),
     SetMachineDefaultBackgroundFilter(BackgroundFilter),

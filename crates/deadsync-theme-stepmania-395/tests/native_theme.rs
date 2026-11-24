@@ -1,6 +1,6 @@
 use std::{path::Path, time::Instant};
 
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, SizeSpec};
 use deadsync_config::{
     coin::CoinMode,
     theme::{GameFlag, ThemeFlag},
@@ -526,4 +526,217 @@ fn native_options_accept_shared_rows_and_preserve_second_player_focus() {
         |actor| matches!(actor, Actor::Sprite { source, uv_rect: Some([_, 0.0, _, 0.5]), .. }
         if source.texture_key() == Some("stepmania-395/options-cursor"))
     ));
+}
+
+#[test]
+fn native_selection_uses_the_original_style_and_difficulty_cards() {
+    use deadlib_present::space::{Metrics, with_current_metrics};
+    use deadsync_theme::selection::{PlaySelectionMode, SelectionPresentation};
+    use deadsync_theme::views::{PlaySelectionChoice, PlaySelectionKind, PlaySelectionView};
+    use deadsync_theme_stepmania_395::StepManiaMusicWheel;
+    use std::sync::Arc;
+
+    let mut selection = StepManiaMusicWheel::default();
+    let title = Arc::from("Select Style");
+    let prompt = Arc::from("Press Start");
+    let names = ["Single", "Versus", "Double"].map(Arc::<str>::from);
+    let choices = names.each_ref().map(|label| PlaySelectionChoice {
+        label,
+        description: None,
+        enabled: true,
+    });
+    for width in [640.0, 854.0] {
+        selection.enter_play_selection();
+        with_current_metrics(Metrics::centered(width, 480.0), || {
+            let mut actors = Vec::new();
+            for now in [0.0, 1.0] {
+                actors.clear();
+                selection.push_play_selection(
+                    &mut actors,
+                    PlaySelectionView {
+                        kind: PlaySelectionKind::Style { pump: false },
+                        title: &title,
+                        choices: &choices,
+                        selected: 2,
+                        player_names: [None, Some("P2")],
+                        join_prompt: &prompt,
+                        exit_progress: 0.0,
+                    },
+                    now,
+                );
+            }
+            assert!(actors.iter().any(
+                |actor| matches!(actor, Actor::Sprite { source, offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], .. }
+                if source.texture_key() == Some("stepmania-395/style-picture-4")
+                    && *offset == [160.0 + (width - 640.0) * 0.5, 260.0] && *w == 336.0 && *h == 352.0)
+            ));
+            assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, tint, .. }
+                if source.texture_key() == Some("stepmania-395/style-icon-3") && *tint == [0.2, 0.2, 0.2, 1.0])));
+        });
+    }
+
+    let menu = selection.play_mode_menu().unwrap();
+    assert_eq!(menu.choices.len(), 8);
+    assert_eq!(menu.choices[3].mode, Some(PlaySelectionMode::Regular));
+    assert_eq!(menu.choices[3].difficulty_index, Some(3));
+    assert_eq!(menu.choices[4].mode, Some(PlaySelectionMode::Course));
+    assert!(menu.choices[5..].iter().all(|choice| choice.mode.is_none()));
+    let labels: Vec<Arc<str>> = menu
+        .choices
+        .iter()
+        .map(|choice| Arc::from(choice.label))
+        .collect();
+    let choices: Vec<_> = menu
+        .choices
+        .iter()
+        .zip(&labels)
+        .map(|(choice, label)| PlaySelectionChoice {
+            label,
+            description: None,
+            enabled: choice.mode.is_some(),
+        })
+        .collect();
+    selection.enter_play_selection();
+    let mut actors = Vec::new();
+    for (selected, now) in [(2, 0.0), (4, 2.0)] {
+        actors.clear();
+        selection.push_play_selection(
+            &mut actors,
+            PlaySelectionView {
+                kind: PlaySelectionKind::Mode,
+                title: &title,
+                choices: &choices,
+                selected,
+                player_names: [None, Some("P2")],
+                join_prompt: &prompt,
+                exit_progress: 0.0,
+            },
+            now,
+        );
+    }
+    assert!(
+        actors
+            .iter()
+            .any(|actor| matches!(actor, Actor::Sprite { source, .. }
+        if source.texture_key() == Some("stepmania-395/mode-picture-5")))
+    );
+    assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, tint, .. }
+        if source.texture_key() == Some("stepmania-395/mode-picture-6") && *tint == [0.2, 0.2, 0.2, 1.0])));
+    assert!(actors.iter().any(
+        |actor| matches!(actor, Actor::Sprite { source, uv_rect: Some([0.5, 0.0, 1.0, 1.0]), .. }
+        if source.texture_key() == Some("stepmania-395/mode-cursor"))
+    ));
+}
+
+#[test]
+fn native_profile_overlay_and_course_use_shared_live_data() {
+    use deadsync_theme::profile_picker::{ProfilePickerPanel, ProfilePickerScreenView};
+    use deadsync_theme::select_music::{
+        SELECT_MUSIC_WHEEL_ROWS, SelectCourseItem, SelectCourseTrack, SelectCourseView,
+        SelectMusicPrompt,
+    };
+    use deadsync_theme::selection::{
+        MusicWheelPresentation, SelectionPresentation, WheelMediaFrame,
+    };
+    use deadsync_theme_stepmania_395::StepManiaMusicWheel;
+    use std::{sync::Arc, time::Duration};
+    deadlib_present::space::with_current_metrics(
+        deadlib_present::space::Metrics::centered(640.0, 480.0),
+        || {
+            let mut selection = StepManiaMusicWheel::default();
+            let title = Arc::from("Select Profile");
+            let join = Arc::from("Press Start");
+            let wait = Arc::from("Waiting");
+            let name = Arc::from("Ready player");
+            let mut actors = Vec::new();
+            selection.profile_picker()(
+                &mut actors,
+                ProfilePickerScreenView {
+                    title: &title,
+                    join_text: &join,
+                    waiting_text: &wait,
+                    alpha: 1.0,
+                    panels: std::array::from_fn(|seat| ProfilePickerPanel {
+                        joined: seat == 0,
+                        ready: seat == 0,
+                        names: [None, None, Some(&name), None, None],
+                        avatar: None,
+                        songs_played: None,
+                        invalid_choice: false,
+                    }),
+                },
+                true,
+            );
+            for value in ["Ready player", "Press Start", "Waiting"] {
+                assert!(actors.iter().any(
+            |actor| matches!(actor, Actor::Text { content, .. } if content.as_str() == value)
+        ));
+            }
+            assert!(actors.iter().all(|actor| match actor {
+                Actor::Sprite { z, .. } | Actor::Text { z, .. } => *z >= 1450,
+                _ => true,
+            }));
+
+            let now = Instant::now();
+            selection.enter_wheel(now);
+            let meter = Arc::from("8");
+            let description = Arc::from("Course fixture");
+            actors.clear();
+            selection.push_course(
+                &mut actors,
+                SelectCourseView {
+                    rows: [None; SELECT_MUSIC_WHEEL_ROWS],
+                    wheel_offset: 0.0,
+                    selection_beat: 0.0,
+                    banner_texture: None,
+                    player_names: [None, Some("P2")],
+                    music_rate: 1.0,
+                    prompt: SelectMusicPrompt::Hidden,
+                    item: Some(SelectCourseItem {
+                        title: "Course fixture",
+                        author: "",
+                        description: &description,
+                        songs: "1",
+                        bpm: "120",
+                        length: "1:30",
+                        rating: None,
+                        can_change_rating: false,
+                        rating_focused: false,
+                        tracks: [
+                            Some(SelectCourseTrack {
+                                number: 7,
+                                title: &description,
+                                meter: &meter,
+                                difficulty: "Hard",
+                            }),
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        ],
+                        machine_record: None,
+                        player_record: None,
+                    }),
+                },
+                WheelMediaFrame {
+                    now: now + Duration::from_secs(1),
+                    outgoing: [None; 4],
+                    exit_elapsed: 0.0,
+                },
+            );
+            assert!(
+        actors
+            .iter()
+            .any(|actor| matches!(actor, Actor::Sprite { source, size: [SizeSpec::Px(w), SizeSpec::Px(h)], .. }
+        if source.texture_key() == Some("stepmania-395/course-track") && *w == 270.0 && *h == 44.0))
+    );
+            assert!(
+                !actors
+                    .iter()
+                    .any(|actor| matches!(actor, Actor::Sprite { source, .. }
+        if source.texture_key() == Some("stepmania-395/music-radar")))
+            );
+        },
+    );
 }

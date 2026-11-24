@@ -35,6 +35,7 @@ pub enum PlaySelectionKind {
 pub struct PlaySelectionChoice<'a> {
     pub label: &'a Arc<str>,
     pub description: Option<&'a Arc<str>>,
+    pub enabled: bool,
 }
 
 /// The visible choices and selection for the current play flow screen.

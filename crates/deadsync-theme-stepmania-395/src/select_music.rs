@@ -13,7 +13,10 @@ use crate::resources::{NORMAL_FONT, TITLE_FONT, WHEEL_FONT};
 
 #[derive(Default)]
 pub struct StepManiaMusicWheel {
-    entered: Option<Instant>,
+    pub(crate) entered: Option<Instant>,
+    pub(crate) play_entered: Option<f64>,
+    pub(crate) play_selected: Option<usize>,
+    pub(crate) focus_started: f64,
     confirmed: Option<Instant>,
 }
 
@@ -74,92 +77,15 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
                 .build(0),
         );
 
-        for (index, row) in view.rows.iter().enumerate() {
-            let Some(row) = row else { continue };
-            let relative = index as f32 - (SELECT_MUSIC_WHEEL_ROWS / 2) as f32 + view.wheel_offset;
-            if relative.abs() > 6.5 {
-                continue;
-            }
-            let delay = relative.abs() * 0.04;
-            let enter = ((elapsed - delay) / 0.2).clamp(0.0, 1.0);
-            let shift = if media.exit_elapsed > 0.0 {
-                let t = ((media.exit_elapsed - delay) / 0.2).clamp(0.0, 1.0);
-                320.0 * (1.0 - (1.0 - t).powi(2))
-            } else {
-                320.0 * (1.0 - enter * enter)
-            };
-            let x =
-                480.0 + ((1.0 - (relative / std::f32::consts::PI).cos()) * 85.0).round() + shift;
-            let y = 244.0 + (relative * 46.0).round();
-            let section = row.song_count.is_some() || row.action.is_some();
-            let key = if section {
-                "stepmania-395/music-section"
-            } else {
-                "stepmania-395/music-song"
-            };
-            actors.push(layout.sprite(key, [x, y], [324.0, 46.0], 0).build(0));
-            if section {
-                let value = if row.action.is_some() {
-                    "RANDOM"
-                } else {
-                    row.title
-                };
-                let mut label = layout.text(TITLE_FONT, text(value), [x - 30.0, y], 1.0);
-                label.maxwidth(200.0 * layout.scale);
-                actors.push(label.build(0));
-            } else {
-                let three_lines = !row.subtitle.is_empty();
-                let line_offset = if three_lines { 10.0 } else { 8.0 };
-                let mut title = layout.text(
-                    WHEEL_FONT,
-                    text(row.title),
-                    [x - 120.0, y - line_offset],
-                    1.0,
-                );
-                title.horizalign(TextAlign::Left);
-                title.align(0.0, 0.5);
-                title.maxwidth(180.0 * layout.scale);
-                actors.push(title.build(0));
-                if three_lines {
-                    let mut subtitle =
-                        layout.text(WHEEL_FONT, text(row.subtitle), [x - 120.0, y], 0.5);
-                    subtitle.horizalign(TextAlign::Left);
-                    subtitle.align(0.0, 0.5);
-                    subtitle.maxwidth(180.0 * layout.scale);
-                    actors.push(subtitle.build(0));
-                }
-                let mut artist = layout.text(
-                    WHEEL_FONT,
-                    TextContent::Owned(format!("/{}", row.artist)),
-                    [x - 120.0, y + line_offset],
-                    0.6,
-                );
-                artist.horizalign(TextAlign::Left);
-                artist.align(0.0, 0.5);
-                artist.maxwidth(159.6 * layout.scale);
-                actors.push(artist.build(0));
-            }
-        }
-        let reveal = ((elapsed - 0.05) / 0.4).clamp(0.0, 1.0);
-        let highlight_shift = if media.exit_elapsed > 0.0 {
-            let t = (media.exit_elapsed / 0.2).clamp(0.0, 1.0);
-            320.0 * (1.0 - (1.0 - t).powi(2))
-        } else {
-            320.0 * (1.0 - reveal * reveal)
-        };
-        let mut highlight = layout.sprite(
-            "stepmania-395/music-highlight",
-            [480.0 + highlight_shift, 244.0],
-            [324.0, 46.0],
-            2,
+        push_wheel(
+            actors,
+            layout,
+            &view.rows,
+            view.wheel_offset,
+            elapsed,
+            media.exit_elapsed,
+            false,
         );
-        highlight.glow([
-            1.0,
-            1.0,
-            1.0,
-            0.6 + 0.4 * (elapsed * std::f32::consts::TAU / 2.0).cos(),
-        ]);
-        actors.push(highlight.build(0));
 
         let banner_shift = if media.exit_elapsed > 0.0 {
             -384.0 * anim::bouncebegin_p((media.exit_elapsed / 0.5).clamp(0.0, 1.0))
@@ -316,14 +242,7 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
                 .iter()
                 .position(|name| name.eq_ignore_ascii_case(&chart.difficulty))
                 .unwrap_or(5);
-            let difficulty_color = [
-                [0.0, 0.9, 1.0, 1.0],
-                [0.9, 0.9, 0.0, 1.0],
-                [1.0, 0.1, 0.1, 1.0],
-                [0.2, 1.0, 0.2, 1.0],
-                [0.2, 0.6, 1.0, 1.0],
-                [0.8, 0.8, 0.8, 1.0],
-            ][difficulty];
+            let difficulty_color = difficulty_color(&chart.difficulty);
             let mut border = layout.sprite(frame, [frame_x, 248.0], [78.0, 40.0], 6);
             border.alpha(fade);
             actors.push(border.build(0));
@@ -365,27 +284,7 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
             _ => "&UP;&DOWN;&UP;&DOWN; to change sort",
         };
         push_footer(actors, help, fade);
-        if view.prompt != SelectMusicPrompt::Hidden {
-            let time = self.confirmed.map_or(0.0, |at| {
-                media.now.saturating_duration_since(at).as_secs_f32()
-            });
-            let zoom =
-                (time / 0.25).clamp(0.0, 1.0) * (1.0 - ((time - 1.25) / 0.25).clamp(0.0, 1.0));
-            let top = if view.prompt == SelectMusicPrompt::EnteringOptions {
-                0.5
-            } else {
-                0.0
-            };
-            let mut prompt = layout.sprite(
-                "stepmania-395/music-options",
-                [320.0, 240.0],
-                [480.0, 32.0],
-                20,
-            );
-            prompt.zoomy(zoom);
-            prompt.customtexturerect([0.0, top, 1.0, top + 0.5]);
-            actors.push(prompt.build(0));
-        }
+        self.push_options_prompt(actors, view.prompt, media.now);
     }
 }
 
@@ -414,4 +313,152 @@ fn push_banner(
         banner.customtexturerect(uv);
     }
     actors.push(banner.build(0));
+}
+
+pub(crate) fn push_wheel(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    rows: &[Option<deadsync_theme::select_music::SelectMusicWheelRow<'_>>; SELECT_MUSIC_WHEEL_ROWS],
+    offset: f32,
+    elapsed: f32,
+    exit: f32,
+    course: bool,
+) {
+    for (index, row) in rows.iter().enumerate() {
+        let Some(row) = row else { continue };
+        let relative = index as f32 - (SELECT_MUSIC_WHEEL_ROWS / 2) as f32 + offset;
+        if relative.abs() > 6.5 {
+            continue;
+        }
+        let delay = relative.abs() * 0.04;
+        let enter = ((elapsed - delay) / 0.2).clamp(0.0, 1.0);
+        let shift = if exit > 0.0 {
+            let t = ((exit - delay) / 0.2).clamp(0.0, 1.0);
+            320.0 * (1.0 - (1.0 - t).powi(2))
+        } else {
+            320.0 * (1.0 - enter * enter)
+        };
+        let x = 480.0 + ((1.0 - (relative / std::f32::consts::PI).cos()) * 85.0).round() + shift;
+        let y = 244.0 + (relative * 46.0).round();
+        let section = row.song_count.is_some() || row.action.is_some();
+        let key = if section {
+            "stepmania-395/music-section"
+        } else {
+            "stepmania-395/music-song"
+        };
+        actors.push(layout.sprite(key, [x, y], [324.0, 46.0], 0).build(0));
+        if section {
+            let value = if row.action.is_some() {
+                "RANDOM"
+            } else {
+                row.title
+            };
+            let mut label = layout.text(TITLE_FONT, text(value), [x - 30.0, y], 1.0);
+            label.maxwidth(200.0 * layout.scale);
+            actors.push(label.build(0));
+        } else if course {
+            let mut title = layout.text(TITLE_FONT, text(row.title), [x - 130.0, y], 1.3);
+            title.align(0.0, 0.5);
+            title.horizalign(TextAlign::Left);
+            title.maxwidth(200.0 * layout.scale);
+            actors.push(title.build(0));
+        } else {
+            let three_lines = !row.subtitle.is_empty();
+            let line_offset = if three_lines { 10.0 } else { 8.0 };
+            let mut title = layout.text(
+                WHEEL_FONT,
+                text(row.title),
+                [x - 120.0, y - line_offset],
+                1.0,
+            );
+            title.horizalign(TextAlign::Left);
+            title.align(0.0, 0.5);
+            title.maxwidth(180.0 * layout.scale);
+            actors.push(title.build(0));
+            if three_lines {
+                let mut subtitle = layout.text(WHEEL_FONT, text(row.subtitle), [x - 120.0, y], 0.5);
+                subtitle.horizalign(TextAlign::Left);
+                subtitle.align(0.0, 0.5);
+                subtitle.maxwidth(180.0 * layout.scale);
+                actors.push(subtitle.build(0));
+            }
+            let mut artist = layout.text(
+                WHEEL_FONT,
+                TextContent::Owned(format!("/{}", row.artist)),
+                [x - 120.0, y + line_offset],
+                0.6,
+            );
+            artist.horizalign(TextAlign::Left);
+            artist.align(0.0, 0.5);
+            artist.maxwidth(159.6 * layout.scale);
+            actors.push(artist.build(0));
+        }
+    }
+    let reveal = ((elapsed - 0.05) / 0.4).clamp(0.0, 1.0);
+    let highlight_shift = if exit > 0.0 {
+        let t = (exit / 0.2).clamp(0.0, 1.0);
+        320.0 * (1.0 - (1.0 - t).powi(2))
+    } else {
+        320.0 * (1.0 - reveal * reveal)
+    };
+    let mut highlight = layout.sprite(
+        "stepmania-395/music-highlight",
+        [480.0 + highlight_shift, 244.0],
+        [324.0, 46.0],
+        2,
+    );
+    highlight.glow([
+        1.0,
+        1.0,
+        1.0,
+        0.6 + 0.4 * (elapsed * std::f32::consts::TAU / 2.0).cos(),
+    ]);
+    actors.push(highlight.build(0));
+}
+
+impl StepManiaMusicWheel {
+    pub(crate) fn push_options_prompt(
+        &self,
+        actors: &mut Vec<Actor>,
+        prompt: SelectMusicPrompt,
+        now: Instant,
+    ) {
+        let layout = Layout::current();
+        if prompt != SelectMusicPrompt::Hidden {
+            let time = self
+                .confirmed
+                .map_or(0.0, |at| now.saturating_duration_since(at).as_secs_f32());
+            let zoom =
+                (time / 0.25).clamp(0.0, 1.0) * (1.0 - ((time - 1.25) / 0.25).clamp(0.0, 1.0));
+            let top = if prompt == SelectMusicPrompt::EnteringOptions {
+                0.5
+            } else {
+                0.0
+            };
+            let mut prompt = layout.sprite(
+                "stepmania-395/music-options",
+                [320.0, 240.0],
+                [480.0, 32.0],
+                20,
+            );
+            prompt.zoomy(zoom);
+            prompt.customtexturerect([0.0, top, 1.0, top + 0.5]);
+            actors.push(prompt.build(0));
+        }
+    }
+}
+
+pub(crate) fn difficulty_color(name: &str) -> [f32; 4] {
+    let index = ["Beginner", "Easy", "Medium", "Hard", "Challenge", "Edit"]
+        .iter()
+        .position(|value| value.eq_ignore_ascii_case(name))
+        .unwrap_or(5);
+    [
+        [0.0, 0.9, 1.0, 1.0],
+        [0.9, 0.9, 0.0, 1.0],
+        [1.0, 0.1, 0.1, 1.0],
+        [0.2, 1.0, 0.2, 1.0],
+        [0.2, 0.6, 1.0, 1.0],
+        [0.8, 0.8, 0.8, 1.0],
+    ][index]
 }

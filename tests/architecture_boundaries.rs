@@ -7612,6 +7612,7 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
         ("StagePresentation", "OpenItgStagePresentation"),
         ("StagePresentation", "StepManiaStagePresentation"),
         ("SelectionPresentation", "OpenItgSelectionPresentation"),
+        ("SelectionPresentation", "StepManiaMusicWheel"),
         ("SystemOptionsPresentation", "OpenItgSystemOptions"),
         ("AttractPresentation", "OpenItgIntro"),
         ("MusicWheelPresentation", "StepManiaMusicWheel"),

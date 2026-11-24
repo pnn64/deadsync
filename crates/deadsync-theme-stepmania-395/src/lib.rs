@@ -6,9 +6,11 @@ mod gameplay_transition;
 mod intro;
 mod menu;
 mod options;
+mod play_selection;
 mod presentation;
 mod resources;
 mod select_music;
+mod selection;
 mod stage;
 mod stage_presentation;
 

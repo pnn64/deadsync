@@ -1,6 +1,25 @@
 use crate::screens::Screen;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayMode;
+use deadsync_theme::selection::{PlayModeMenu, PlaySelectionMode};
+
+fn selection_mode(mode: PlayMode) -> PlaySelectionMode {
+    match mode {
+        PlayMode::Regular => PlaySelectionMode::Regular,
+        PlayMode::Marathon => PlaySelectionMode::Course,
+        PlayMode::PremiumFree => PlaySelectionMode::Free,
+    }
+}
+
+fn runtime_mode(mode: PlaySelectionMode) -> PlayMode {
+    match mode {
+        PlaySelectionMode::Regular => PlayMode::Regular,
+        PlaySelectionMode::Course => PlayMode::Marathon,
+        PlaySelectionMode::Free => PlayMode::PremiumFree,
+    }
+}
+
+const MAX_CHOICES: usize = 16;
 
 pub const CHOICE_COUNT: usize = 3;
 pub const CHOICE_ZOOM_FOCUSED: f32 = 0.75;
@@ -51,7 +70,8 @@ pub enum InputEffect {
 pub struct State {
     selected_index: usize,
     cursor_y: f32,
-    choice_zooms: [f32; CHOICE_COUNT],
+    choice_zooms: [f32; MAX_CHOICES],
+    menu: Option<&'static PlayModeMenu>,
     choice_count: usize,
     demo_time: f32,
     exit_requested: bool,
@@ -63,7 +83,8 @@ impl Default for State {
         Self {
             selected_index: 0,
             cursor_y: CURSOR_START_Y,
-            choice_zooms: [CHOICE_ZOOM_UNFOCUSED; CHOICE_COUNT],
+            choice_zooms: [CHOICE_ZOOM_UNFOCUSED; MAX_CHOICES],
+            menu: None,
             choice_count: 2,
             demo_time: 0.0,
             exit_requested: false,
@@ -74,6 +95,7 @@ impl Default for State {
 
 impl State {
     pub fn reset(&mut self, play_mode: PlayMode, premium_free_available: bool) {
+        self.menu = None;
         self.choice_count = if premium_free_available { 3 } else { 2 };
         self.selected_index = match play_mode {
             PlayMode::Regular => 0,
@@ -92,6 +114,48 @@ impl State {
         }
         self.exit_requested = false;
         self.exit_target = None;
+    }
+
+    pub fn set_menu(&mut self, menu: &'static PlayModeMenu, mode: PlayMode, difficulty: usize) {
+        assert!(!menu.choices.is_empty() && menu.choices.len() <= MAX_CHOICES);
+        assert!(menu.choices.iter().any(|choice| choice.mode.is_some()));
+        self.choice_count = menu.choices.len();
+        self.selected_index = menu
+            .choices
+            .iter()
+            .position(|choice| {
+                choice.mode == Some(selection_mode(mode))
+                    && choice
+                        .difficulty_index
+                        .is_none_or(|index| index == difficulty)
+            })
+            .or_else(|| menu.choices.iter().position(|choice| choice.mode.is_some()))
+            .unwrap();
+        self.menu = Some(menu);
+        self.cursor_y = cursor_target_y(self.selected_index);
+    }
+
+    pub const fn menu(&self) -> Option<&'static PlayModeMenu> {
+        self.menu
+    }
+
+    pub fn selected_difficulty(&self) -> Option<usize> {
+        self.menu
+            .and_then(|menu| menu.choices[self.selected_index].difficulty_index)
+    }
+
+    fn move_selection(&mut self, direction: isize) {
+        for _ in 0..self.choice_count {
+            self.selected_index = (self.selected_index as isize + direction)
+                .rem_euclid(self.choice_count as isize) as usize;
+            if self
+                .menu
+                .is_none_or(|menu| menu.choices[self.selected_index].mode.is_some())
+            {
+                break;
+            }
+        }
+        self.demo_time = 0.0;
     }
 
     #[inline(always)]
@@ -171,7 +235,7 @@ pub fn finish_exit(state: &mut State, exit_elapsed: f32) -> Option<Screen> {
     None
 }
 
-pub const fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
     if !ev.pressed || state.exit_requested {
         return InputEffect::None;
     }
@@ -185,9 +249,7 @@ pub const fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
         | VirtualAction::p2_menu_left
         | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
-            state.selected_index =
-                (state.selected_index + state.choice_count - 1) % state.choice_count;
-            state.demo_time = 0.0;
+            state.move_selection(-1);
             InputEffect::Move
         }
         VirtualAction::p1_right
@@ -198,14 +260,22 @@ pub const fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
         | VirtualAction::p2_menu_right
         | VirtualAction::p2_down
         | VirtualAction::p2_menu_down => {
-            state.selected_index = (state.selected_index + 1) % state.choice_count;
-            state.demo_time = 0.0;
+            state.move_selection(1);
             InputEffect::Move
         }
         VirtualAction::p1_start | VirtualAction::p2_start => {
             state.exit_requested = true;
             state.exit_target = Some(Screen::ProfileLoad);
-            InputEffect::Confirm(Choice::from_index(state.selected_index).play_mode())
+            InputEffect::Confirm(state.menu.map_or_else(
+                || Choice::from_index(state.selected_index).play_mode(),
+                |menu| {
+                    runtime_mode(
+                        menu.choices[state.selected_index]
+                            .mode
+                            .expect("selection skips unavailable outcomes"),
+                    )
+                },
+            ))
         }
         VirtualAction::p1_back | VirtualAction::p2_back => {
             state.exit_requested = true;
@@ -213,5 +283,85 @@ pub const fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
             InputEffect::Back
         }
         _ => InputEffect::None,
+    }
+}
+
+#[cfg(test)]
+mod menu_tests {
+    use super::*;
+    use deadsync_core::input::InputSource;
+    use deadsync_theme::selection::PlayModeMenuChoice;
+    use std::time::Instant;
+
+    static MENU: PlayModeMenu = PlayModeMenu {
+        choices: &[
+            PlayModeMenuChoice {
+                label: "First",
+                mode: Some(PlaySelectionMode::Regular),
+                difficulty_index: Some(0),
+            },
+            PlayModeMenuChoice {
+                label: "Unavailable",
+                mode: None,
+                difficulty_index: None,
+            },
+            PlayModeMenuChoice {
+                label: "Second",
+                mode: Some(PlaySelectionMode::Regular),
+                difficulty_index: Some(3),
+            },
+            PlayModeMenuChoice {
+                label: "Course",
+                mode: Some(PlaySelectionMode::Course),
+                difficulty_index: None,
+            },
+        ],
+    };
+
+    fn input(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent::new(action, 0, true, InputSource::Keyboard, now, 0, now, now)
+    }
+
+    #[test]
+    fn authored_menu_keeps_difficulty_and_skips_unavailable_outcomes() {
+        let mut state = State::default();
+        state.set_menu(&MENU, PlayMode::Regular, 3);
+        assert_eq!(state.selected_index(), 2);
+        assert_eq!(
+            handle_input(&mut state, &input(VirtualAction::p2_left)),
+            InputEffect::Move
+        );
+        assert_eq!(state.selected_index(), 0);
+        assert_eq!(
+            handle_input(&mut state, &input(VirtualAction::p2_right)),
+            InputEffect::Move
+        );
+        assert_eq!(state.selected_difficulty(), Some(3));
+        assert_eq!(
+            handle_input(&mut state, &input(VirtualAction::p2_start)),
+            InputEffect::Confirm(PlayMode::Regular)
+        );
+        assert_eq!(
+            handle_input(&mut state, &input(VirtualAction::p2_right)),
+            InputEffect::None
+        );
+        assert_eq!(
+            finish_exit(&mut state, EXIT_TOTAL_SECONDS),
+            Some(Screen::ProfileLoad)
+        );
+    }
+
+    #[test]
+    fn default_menu_resets_custom_choices_and_keeps_optional_free_play() {
+        let mut state = State::default();
+        state.set_menu(&MENU, PlayMode::Marathon, 0);
+        state.reset(PlayMode::Regular, false);
+        assert_eq!(state.choice_count(), 2);
+        assert_eq!(state.menu(), None);
+        assert_eq!(state.selected_difficulty(), None);
+        state.reset(PlayMode::PremiumFree, true);
+        assert_eq!(state.choice_count(), 3);
+        assert_eq!(state.selected_index(), 2);
     }
 }

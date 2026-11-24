@@ -152,8 +152,20 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
         CurrentScreen::SelectPlayMode,
         CurrentScreen::SelectMusic,
     ] {
+        if theme == ThemeFlag::StepMania395 && next == CurrentScreen::SelectMusic {
+            select_mode::with_play_selection_view(&app.state.screens.select_play_mode_state, |view| {
+                assert_eq!(view.choices.len(), 8);
+                assert_eq!(view.selected, 2);
+                assert!(view.choices[..5].iter().all(|choice| choice.enabled));
+                assert!(view.choices[5..].iter().all(|choice| !choice.enabled));
+            });
+            press(app, event_loop, VirtualAction::p2_right);
+        }
         press(app, event_loop, VirtualAction::p2_start);
         settle(app, event_loop, next);
+    }
+    if theme == ThemeFlag::StepMania395 {
+        assert_eq!(app.state.screens.select_music_state.p2_preferred_difficulty_index, 3);
     }
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));

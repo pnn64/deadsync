@@ -183,6 +183,13 @@ pub fn bouncebegin_p(x: f32) -> f32 {
     bezier_y_from_x(x, 0.0, 0.0, 0.42, -0.42, 2.0 / 3.0, 0.3, 1.0, 1.0)
 }
 
+/// Evaluate the same spring curve used by queued animation segments.
+#[inline(always)]
+#[must_use]
+pub fn spring_p(x: f32) -> f32 {
+    ease_apply(Ease::Spring, x)
+}
+
 /// StepMania/ITGmania `bounceend` tween curve parameterization.
 /// Ported from `itgmania/Themes/_fallback/Scripts/02 Actor.lua`.
 #[inline(always)]

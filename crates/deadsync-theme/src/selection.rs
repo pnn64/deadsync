@@ -7,6 +7,27 @@ use crate::select_music::{
 };
 use crate::views::PlaySelectionView;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaySelectionMode {
+    Regular,
+    Course,
+    Free,
+}
+
+/// An authored entry into the shared play flow. An unavailable outcome remains
+/// visible so a presentation can retain its layout without offering a false action.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlayModeMenuChoice {
+    pub label: &'static str,
+    pub mode: Option<PlaySelectionMode>,
+    pub difficulty_index: Option<usize>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlayModeMenu {
+    pub choices: &'static [PlayModeMenuChoice],
+}
+
 pub type ProfilePickerRenderer<A> = fn(&mut Vec<A>, ProfilePickerScreenView<'_>, bool);
 
 pub struct WheelMediaFrame<'a> {
@@ -31,6 +52,9 @@ pub trait MusicWheelPresentation<A> {
 }
 
 pub trait SelectionPresentation<A>: MusicWheelPresentation<A> {
+    fn play_mode_menu(&self) -> Option<&'static PlayModeMenu> {
+        None
+    }
     fn enter_play_selection(&mut self);
     fn push_course(
         &self,

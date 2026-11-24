@@ -10,6 +10,8 @@ use crate::CourseRunState;
 /// Session-wide values that survive screen swaps.
 pub struct SessionState {
     pub preferred_difficulty_index: usize,
+    /// A selection made before the active profiles are reloaded for play.
+    pub pending_difficulty_index: Option<usize>,
     pub session_start_time: Option<Instant>,
     pub menu_start_side: PlayerSide,
     pub played_stages: Vec<stage_stats::StageSummary>,
@@ -29,6 +31,7 @@ impl SessionState {
     pub const fn new(preferred_difficulty_index: usize, combo_carry: [u32; MAX_PLAYERS]) -> Self {
         Self {
             preferred_difficulty_index,
+            pending_difficulty_index: None,
             session_start_time: None,
             menu_start_side: PlayerSide::P1,
             played_stages: Vec::new(),
@@ -96,6 +99,7 @@ impl SessionState {
     }
 
     pub fn reset_for_menu(&mut self, combo_carry: [u32; MAX_PLAYERS]) {
+        self.pending_difficulty_index = None;
         self.session_start_time = None;
         self.menu_start_side = PlayerSide::P1;
         self.played_stages.clear();
@@ -155,11 +159,13 @@ mod tests {
     #[test]
     fn menu_reset_clears_session_and_course_navigation() {
         let mut state = SessionState::new(4, [1, 2]);
+        state.pending_difficulty_index = Some(3);
         state.session_start_time = Some(Instant::now());
         state.pre_practice_music_rate = Some(1.25);
         state.last_course_wheel_path = Some(PathBuf::from("course.crs"));
         state.last_course_wheel_difficulty_name = Some("Hard".to_string());
         state.reset_for_menu([8, 13]);
+        assert_eq!(state.pending_difficulty_index, None);
         assert!(state.session_start_time.is_none());
         assert_eq!(state.combo_carry, [8, 13]);
         assert!(state.pre_practice_music_rate.is_none());

@@ -1884,8 +1884,10 @@ pub fn select_course_view<'a>(
             rating_focused: matches!(state.three_key_focus, ThreeKeyFocus::Rating),
             tracks: std::array::from_fn(|slot| {
                 entries.get(start + slot).map(|entry| SelectCourseTrack {
+                    number: start + slot + 1,
                     title: &entry.title,
                     meter: &entry.meter_text,
+                    difficulty: &entry.difficulty,
                 })
             }),
             machine_record: state.score_view.machine_score_percent.map(|_| {

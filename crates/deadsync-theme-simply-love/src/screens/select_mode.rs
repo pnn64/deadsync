@@ -58,7 +58,7 @@ fn choice_description(choice: Choice) -> Arc<str> {
 struct SelectModeText {
     i18n_revision: u64,
     title: Arc<str>,
-    labels: [Arc<str>; 3],
+    labels: [Arc<str>; mode_flow::CHOICE_COUNT],
     descriptions: [Arc<str>; 3],
     flowing_descriptions: [Arc<str>; 3],
 }
@@ -190,6 +190,7 @@ pub struct State {
     bg: visual_style_bg::State,
     runtime: SelectFlowRuntimeView,
     text: RefCell<SelectModeText>,
+    menu_labels: Vec<Arc<str>>,
 }
 
 #[must_use]
@@ -202,6 +203,7 @@ pub fn init(runtime: SelectFlowRuntimeView) -> State {
         bg: visual_style_bg::State::new(),
         runtime,
         text: RefCell::new(SelectModeText::build(i18n::revision())),
+        menu_labels: Vec::new(),
     }
 }
 
@@ -210,6 +212,19 @@ pub fn on_enter(state: &mut State) {
         state.runtime.play_mode,
         state.runtime.premium_free_available,
     );
+}
+
+pub fn set_menu(
+    state: &mut State,
+    menu: &'static deadsync_theme::selection::PlayModeMenu,
+    difficulty: usize,
+) {
+    state.flow.set_menu(menu, state.runtime.play_mode, difficulty);
+    state.menu_labels = menu
+        .choices
+        .iter()
+        .map(|choice| Arc::from(choice.label))
+        .collect();
 }
 
 pub fn sync_runtime_view(state: &mut State, runtime: SelectFlowRuntimeView) {
@@ -287,11 +302,22 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         InputEffect::Confirm(play_mode) => {
             let _ = exit_anim_t(true);
             state.runtime.play_mode = play_mode;
+            let mode = ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::SetPlayMode(play_mode),
+            ));
+            let selection = if let Some(index) = state.flow.selected_difficulty() {
+                ThemeEffect::Batch(vec![
+                    mode,
+                    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                        crate::SimplyLoveProfileRequest::SetPreferredDifficulty(index),
+                    )),
+                ])
+            } else {
+                mode
+            };
             crate::effects::sfx_then(
                 "assets/sounds/start.ogg",
-                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                    crate::SimplyLoveProfileRequest::SetPlayMode(play_mode),
-                )),
+                selection,
             )
         }
         InputEffect::Back => {
@@ -343,15 +369,30 @@ fn ease01(x: f32, f_ease: f32) -> f32 {
 pub fn with_play_selection_view(state: &State, draw: impl FnOnce(PlaySelectionView<'_>)) {
     let mut text = state.text.borrow_mut();
     text.sync();
-    let choices: [_; mode_flow::CHOICE_COUNT] = std::array::from_fn(|index| PlaySelectionChoice {
-        label: &text.labels[index],
-        description: Some(&text.flowing_descriptions[index]),
-    });
+    let choices: smallvec::SmallVec<[PlaySelectionChoice<'_>; 8]> = if let Some(menu) = state.flow.menu() {
+        menu.choices
+            .iter()
+            .zip(&state.menu_labels)
+            .map(|(choice, label)| PlaySelectionChoice {
+                label,
+                description: None,
+                enabled: choice.mode.is_some(),
+            })
+            .collect()
+    } else {
+        (0..state.flow.choice_count())
+            .map(|index| PlaySelectionChoice {
+                label: &text.labels[index],
+                description: Some(&text.flowing_descriptions[index]),
+                enabled: true,
+            })
+            .collect()
+    };
     let join_prompt = tr("Common", "PressStart");
     draw(PlaySelectionView {
         kind: PlaySelectionKind::Mode,
         title: &text.title,
-        choices: &choices[..state.flow.choice_count()],
+        choices: &choices,
         selected: state.flow.selected_index(),
         player_names: state
             .runtime

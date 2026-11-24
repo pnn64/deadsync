@@ -84,8 +84,10 @@ pub struct SelectMusicView<'a> {
 /// Track and meter data prepared for the current course rating.
 #[derive(Clone, Copy)]
 pub struct SelectCourseTrack<'a> {
+    pub number: usize,
     pub title: &'a Arc<str>,
     pub meter: &'a Arc<str>,
+    pub difficulty: &'a str,
 }
 
 /// Information about the currently highlighted course and rating.
