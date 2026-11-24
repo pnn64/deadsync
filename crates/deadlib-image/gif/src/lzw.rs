@@ -205,9 +205,9 @@ impl Encoder {
         {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
-        self.encode_rows(std::iter::once(input), minimum, |bytes| {
-            reserve(output, bytes.len())?;
-            output.extend_from_slice(bytes);
+        self.encode_rows(std::iter::once(input), minimum, |bits, count| {
+            reserve(output, count)?;
+            output.extend_from_slice(&bits.to_le_bytes()[..count]);
             Ok(())
         })
     }
@@ -217,7 +217,7 @@ impl Encoder {
         &mut self,
         rows: impl Iterator<Item = &'a [u8]>,
         minimum: u8,
-        emit: impl FnMut(&[u8]) -> Result<(), Error>,
+        emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
         let table = match &mut self.table {
             Some(table) => {
@@ -276,7 +276,7 @@ impl Encoder {
         bits.code(clear + 1, next.min(4095).ilog2() as u8 + 1)?;
         if bits.count != 0 {
             let count = bits.count.div_ceil(8) as usize;
-            (bits.emit)(&bits.bits.to_le_bytes()[..count])?;
+            (bits.emit)(bits.bits, count)?;
         }
         Ok(())
     }
@@ -287,14 +287,14 @@ struct BitWriter<F> {
     bits: u64,
     count: u8,
 }
-impl<F: FnMut(&[u8]) -> Result<(), Error>> BitWriter<F> {
+impl<F: FnMut(u64, usize) -> Result<(), Error>> BitWriter<F> {
     fn code(&mut self, code: u16, width: u8) -> Result<(), Error> {
         self.bits |= u64::from(code) << self.count;
         self.count += width;
         // At most 47 buffered bits plus a 12-bit code fit in u64. Flush six
         // bytes at a time to amortize fallible growth across more codes.
         if self.count >= 48 {
-            (self.emit)(&self.bits.to_le_bytes()[..6])?;
+            (self.emit)(self.bits, 6)?;
             self.bits >>= 48;
             self.count -= 48;
         }

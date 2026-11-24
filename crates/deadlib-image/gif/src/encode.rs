@@ -159,21 +159,29 @@ impl<W: Write> EncoderOutput<W> {
         }
         self.writer.write_all(&[minimum])?;
         let size = self.options.image_sub_block_size;
-        let mut buffer = [0; 255];
-        let part = &mut buffer[..usize::from(size)];
+        let capacity = usize::from(size);
+        // Write whole words into the padding, then count only the emitted bytes.
+        let mut buffer = [0; 255 + size_of::<u64>()];
         let writer = &mut self.writer;
         let mut filled = 0;
-        let emit = |mut bytes: &[u8]| {
-            while !bytes.is_empty() {
-                let count = bytes.len().min(part.len() - filled);
-                part[filled..filled + count].copy_from_slice(&bytes[..count]);
-                bytes = &bytes[count..];
-                filled += count;
-                if filled == part.len() {
+        let emit = |bits: u64, count: usize| {
+            buffer[filled..filled + size_of::<u64>()].copy_from_slice(&bits.to_le_bytes());
+            filled += count;
+            if filled >= capacity {
+                let mut written = 0;
+                loop {
+                    let end = written + capacity;
                     writer.write_all(&[size])?;
-                    writer.write_all(part)?;
-                    filled = 0;
+                    writer.write_all(&buffer[written..end])?;
+                    written = end;
+                    if filled - written < capacity {
+                        break;
+                    }
                 }
+                if written != filled {
+                    buffer.copy_within(written..filled, 0);
+                }
+                filled -= written;
             }
             Ok(())
         };
@@ -190,7 +198,7 @@ impl<W: Write> EncoderOutput<W> {
         }
         if filled != 0 {
             writer.write_all(&[filled as u8])?;
-            writer.write_all(&part[..filled])?;
+            writer.write_all(&buffer[..filled])?;
         }
         writer.write_all(&[0])?;
         Ok(())
