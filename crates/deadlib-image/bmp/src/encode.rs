@@ -71,14 +71,6 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
     put_u32(fields, 34, pixel_bytes as u32);
 
     let width = width as usize;
-    let height = height as usize;
-    let source_rows = (0..height).map(|file_row| {
-        if options.top_down {
-            file_row
-        } else {
-            height - 1 - file_row
-        }
-    });
     match &bitmap.pixels {
         Pixels::Indexed {
             indices, palette, ..
@@ -100,8 +92,15 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
                 );
             } else {
                 output.resize(file_size, 0);
-                for (y, row) in source_rows.zip(output[offset..].chunks_exact_mut(pitch)) {
-                    let source = &indices[y * width..][..width];
+                let mut sources = indices.chunks_exact(width);
+                let rows = std::iter::from_fn(|| {
+                    if options.top_down {
+                        sources.next()
+                    } else {
+                        sources.next_back()
+                    }
+                });
+                for (source, row) in rows.zip(output[offset..].chunks_exact_mut(pitch)) {
                     for (&index, bgr) in source.iter().zip(row[..row_bytes].as_chunks_mut::<3>().0)
                     {
                         let [red, green, blue] = palette[usize::from(index)];
