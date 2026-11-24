@@ -222,9 +222,14 @@ impl Inflater {
         }
         let seed = distance.min(n);
         let start = (self.history_pos + size - distance) & (size - 1);
-        let first = seed.min(size - start);
-        output[..first].copy_from_slice(&self.history[start..start + first]);
-        output[first..seed].copy_from_slice(&self.history[..seed - first]);
+        let end = start + seed;
+        if end <= size {
+            output[..seed].copy_from_slice(&self.history[start..end]);
+        } else {
+            let first = size - start;
+            output[..first].copy_from_slice(&self.history[start..]);
+            output[first..seed].copy_from_slice(&self.history[..end - size]);
+        }
         let mut filled = seed;
         while filled < n {
             let count = filled.min(n - filled);
