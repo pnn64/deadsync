@@ -1483,12 +1483,15 @@ impl Writer {
         self.word = 0;
         self.count = 0;
     }
-    fn stored(&mut self, input: &[u8], final_block: bool) {
+    fn stored_header(&mut self, len: usize, final_block: bool) {
         self.write(u32::from(final_block), 3);
         self.align();
-        let len = input.len() as u16;
+        let len = len as u16;
         self.bytes.extend_from_slice(&len.to_le_bytes());
         self.bytes.extend_from_slice(&(!len).to_le_bytes());
+    }
+    fn stored(&mut self, input: &[u8], final_block: bool) {
+        self.stored_header(input.len(), final_block);
         self.bytes.extend_from_slice(input);
     }
     fn start_fixed(&mut self, final_block: bool) -> Checkpoint {
@@ -1709,6 +1712,8 @@ fn fast_block(
     w.finish_fixed(checkpoint, &data[start..end], final_block);
 }
 
+const STORED_BLOCK_SIZE: usize = u16::MAX as usize;
+
 /// A zlib header with room for the worst-case encoding of `len` bytes.
 fn zlib_output(len: usize, mode: Compression) -> Result<Vec<u8>, Error> {
     let bound = len
@@ -1728,7 +1733,7 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
         if input.is_empty() {
             bytes.extend_from_slice(&[1, 0, 0, 255, 255]);
         }
-        let blocks = input.chunks(65535);
+        let blocks = input.chunks(STORED_BLOCK_SIZE);
         let count = blocks.len();
         for (n, block) in blocks.enumerate() {
             bytes.push(u8::from(n + 1 == count));
@@ -1779,10 +1784,9 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
     Ok(bytes)
 }
 
-/// `compress` fed in pieces, without holding the whole input. Each block is
-/// encoded once three bytes beyond it have arrived, or at the end, so it sees
-/// the lookahead, history and final flag that `compress` gives it and the
-/// output is identical.
+/// `compress` fed in pieces. Coded blocks keep the same lookahead and
+/// history as `compress`. Stored blocks are appended directly because
+/// their sizes and the last block are known at construction.
 pub(crate) struct Compressor {
     mode: Compression,
     w: Writer,
@@ -1792,6 +1796,8 @@ pub(crate) struct Compressor {
     history: usize,
     /// Stream position of `window[history]`.
     position: usize,
+    stored_remaining: usize,
+    stored_block_left: usize,
     checksum: Adler32,
 }
 impl Compressor {
@@ -1802,8 +1808,10 @@ impl Compressor {
         let mut window = Vec::new();
         let fast = mode == Compression::Fast;
         let history = if fast { matcher::WINDOW } else { 0 };
-        let maximum = history + Self::block(mode) + Self::LOOKAHEAD;
-        reserve(&mut window, len.min(maximum))?;
+        if mode != Compression::Stored {
+            let maximum = history + matcher::WINDOW + Self::LOOKAHEAD;
+            reserve(&mut window, len.min(maximum))?;
+        }
         let matcher = fast.then(matcher::Matcher::new).transpose()?;
         Ok(Self {
             mode,
@@ -1816,15 +1824,10 @@ impl Compressor {
             window,
             history: 0,
             position: 0,
+            stored_remaining: len,
+            stored_block_left: 0,
             checksum: Adler32::new(),
         })
-    }
-    fn block(mode: Compression) -> usize {
-        if mode == Compression::Stored {
-            65535
-        } else {
-            matcher::WINDOW
-        }
     }
     pub(crate) fn push(&mut self, input: &[u8]) {
         self.append(Some(input), input.len());
@@ -1834,28 +1837,55 @@ impl Compressor {
         self.append(None, len);
     }
     fn append(&mut self, mut input: Option<&[u8]>, mut len: usize) {
+        if self.mode == Compression::Stored {
+            self.append_stored(input, len);
+            return;
+        }
         while len != 0 {
-            let full = self.history + Self::block(self.mode) + Self::LOOKAHEAD;
+            let full = self.history + matcher::WINDOW + Self::LOOKAHEAD;
             let n = (full - self.window.len()).min(len);
             match &mut input {
                 Some(bytes) => {
                     self.window.extend_from_slice(&bytes[..n]);
-                    if self.mode != Compression::Rle {
+                    if self.mode == Compression::Fast {
                         self.checksum.update(&bytes[..n]);
                     }
                     *bytes = &bytes[n..];
                 }
                 None => {
                     self.window.resize(self.window.len() + n, 0);
-                    if self.mode != Compression::Rle {
+                    if self.mode == Compression::Fast {
                         self.checksum.update_zeros(n);
                     }
                 }
             }
             len -= n;
             if self.window.len() == full {
-                self.encode(Self::block(self.mode), false);
+                self.encode(matcher::WINDOW, false);
             }
+        }
+    }
+    fn append_stored(&mut self, mut input: Option<&[u8]>, mut len: usize) {
+        debug_assert!(len <= self.stored_remaining);
+        while len != 0 {
+            if self.stored_block_left == 0 {
+                let block = self.stored_remaining.min(STORED_BLOCK_SIZE);
+                self.w.stored_header(block, block == self.stored_remaining);
+                self.stored_block_left = block;
+            }
+            let n = len.min(self.stored_block_left);
+            if let Some(bytes) = &mut input {
+                let (part, tail) = bytes.split_at(n);
+                self.w.bytes.extend_from_slice(part);
+                self.checksum.update(part);
+                *bytes = tail;
+            } else {
+                self.w.bytes.resize(self.w.bytes.len() + n, 0);
+                self.checksum.update_zeros(n);
+            }
+            self.stored_remaining -= n;
+            self.stored_block_left -= n;
+            len -= n;
         }
     }
     fn encode(&mut self, len: usize, final_block: bool) {
@@ -1872,11 +1902,9 @@ impl Compressor {
                 end,
                 final_block,
             );
-        } else if self.mode == Compression::Rle {
+        } else {
             let block = &self.window[start..end];
             self.w.rle_block(block, final_block, &mut self.checksum);
-        } else {
-            self.w.stored(&self.window[start..end], final_block);
         }
         // Fast keeps the block as history; every mode keeps the lookahead.
         let keep = if self.matcher.is_some() { start } else { end };
@@ -1886,13 +1914,19 @@ impl Compressor {
         self.position += len;
     }
     pub(crate) fn finish(mut self) -> Vec<u8> {
-        // One full block and part of its lookahead can remain.
-        let block = Self::block(self.mode);
-        if self.window.len() - self.history > block {
-            self.encode(block, false);
+        if self.mode == Compression::Stored {
+            debug_assert_eq!(self.stored_remaining, 0);
+            if self.w.bytes.len() == 2 {
+                self.w.stored_header(0, true);
+            }
+        } else {
+            // One full block and part of its lookahead can remain.
+            if self.window.len() - self.history > matcher::WINDOW {
+                self.encode(matcher::WINDOW, false);
+            }
+            self.encode(self.window.len() - self.history, true);
+            self.w.align();
         }
-        self.encode(self.window.len() - self.history, true);
-        self.w.align();
         self.w
             .bytes
             .extend_from_slice(&self.checksum.finish().to_be_bytes());
@@ -1907,6 +1941,36 @@ mod huffman_fixtures;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stored_rows_and_zero_runs_preserve_block_boundaries() {
+        for len in [
+            0,
+            1,
+            STORED_BLOCK_SIZE - 1,
+            STORED_BLOCK_SIZE,
+            STORED_BLOCK_SIZE + 1,
+            2 * STORED_BLOCK_SIZE,
+            2 * STORED_BLOCK_SIZE + 1,
+        ] {
+            let mut input = vec![0; len];
+            for (i, byte) in input.iter_mut().enumerate() {
+                if i % 4096 >= 1024 {
+                    *byte = i.wrapping_mul(193) as u8;
+                }
+            }
+            let expected = compress(&input, Compression::Stored).unwrap();
+            for chunk in [127, 4096, STORED_BLOCK_SIZE + 5] {
+                let mut compressor = Compressor::new(Compression::Stored, len).unwrap();
+                for part in input.chunks(chunk) {
+                    let zeros = part.iter().take_while(|&&byte| byte == 0).count();
+                    compressor.push_zeros(zeros);
+                    compressor.push(&part[zeros..]);
+                }
+                assert_eq!(compressor.finish(), expected, "length {len}, chunk {chunk}");
+            }
+        }
+    }
 
     #[test]
     fn wide_code_lookahead_preserves_prefetched_prefixes() {
