@@ -153,7 +153,14 @@ impl Decoder {
         }
     }
     pub fn update(&mut self, input: &[u8]) -> Result<Progress, Error> {
-        let result = self.process(input);
+        self.update_with_palette(input, None)
+    }
+    fn update_with_palette(
+        &mut self,
+        input: &[u8],
+        external_palette: Option<&Palette>,
+    ) -> Result<Progress, Error> {
+        let result = self.process(input, external_palette);
         if result.is_err() {
             self.state = State::Failed;
         }
@@ -196,7 +203,11 @@ impl Decoder {
             Extension::PlainText(text) => &mut text.data,
         }
     }
-    fn process(&mut self, input: &[u8]) -> Result<Progress, Error> {
+    fn process(
+        &mut self,
+        input: &[u8],
+        external_palette: Option<&Palette>,
+    ) -> Result<Progress, Error> {
         let mut at = 0;
         let event = 'events: loop {
             match self.state {
@@ -232,7 +243,7 @@ impl Decoder {
                     {
                         return Err(Error::LimitExceeded);
                     }
-                    if let Some(p) = &self.options.external_palette {
+                    if let Some(p) = external_palette.or(self.options.external_palette.as_ref()) {
                         validate_palette(p)?;
                     }
                     let size = if s[10] & 128 != 0 {
@@ -384,6 +395,7 @@ impl Decoder {
                         header
                             .global_palette
                             .as_ref()
+                            .or(external_palette)
                             .or(self.options.external_palette.as_ref())
                             .map(Vec::len),
                         self.options.check_bounds,
@@ -518,6 +530,7 @@ impl Decoder {
                         .local_palette
                         .as_ref()
                         .or(header.global_palette.as_ref())
+                        .or(external_palette)
                         .or(self.options.external_palette.as_ref())
                     {
                         // Every expanded phrase contains only LZW literals.
@@ -733,11 +746,17 @@ pub fn decode_with_options(input: &[u8], options: &DecodeOptions) -> Result<Gif,
     if input.len() > options.limits.max_input_bytes {
         return Err(Error::LimitExceeded);
     }
-    let mut decoder = Decoder::new(options.clone());
+    let mut decoder = Decoder::new(DecodeOptions {
+        limits: options.limits.clone(),
+        strict: options.strict,
+        check_bounds: options.check_bounds,
+        external_palette: None,
+    });
+    let external_palette = options.external_palette.as_ref();
     let mut at = 0;
     let mut blocks = Vec::new();
     loop {
-        let progress = decoder.update(&input[at..])?;
+        let progress = decoder.update_with_palette(&input[at..], external_palette)?;
         at += progress.consumed;
         match progress.event {
             Some(Event::Header) => {}
