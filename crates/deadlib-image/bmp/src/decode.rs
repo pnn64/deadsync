@@ -95,8 +95,15 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     }
                 }
             } else if header.info.bit_depth == 4 {
-                let pairs = width / 2;
-                let has_tail = !width.is_multiple_of(2);
+                let (packed_chunk_bytes, unpacked_chunk_pixels) =
+                    if header.info.top_down && width.is_multiple_of(8) {
+                        (source.len(), header.pixel_count)
+                    } else {
+                        (header.row_pitch, width)
+                    };
+                let pairs = unpacked_chunk_pixels / 2;
+                let has_tail = !unpacked_chunk_pixels.is_multiple_of(2);
+                let rows = display_rows(source, packed_chunk_bytes, header.info.top_down);
                 for row in rows {
                     let start = indices.len();
                     indices.extend(row[..pairs].iter().flat_map(|&byte| [byte >> 4, byte & 15]));
