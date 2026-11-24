@@ -2663,25 +2663,32 @@ pub fn select_music_view<'a>(
         wheel_offset: state.wheel_offset_from_selection,
         wheel_locked: state.chance_lock_velocity.is_some(),
         sort: {
-            use deadsync_theme::select_music::SelectMusicSortView;
+            use deadsync_theme::select_music::SelectMusicSortView as Sort;
             match state.sort_mode {
-                WheelSortMode::PopularityP1 | WheelSortMode::PopularityP2 => SelectMusicSortView::Player {
-                    order: SelectMusicSort::Popularity,
-                    side: usize::from(state.sort_mode == WheelSortMode::PopularityP2),
+                WheelSortMode::Series => Sort::Series,
+                WheelSortMode::Group => Sort::Group,
+                WheelSortMode::Title => Sort::Title,
+                WheelSortMode::Artist => Sort::Artist,
+                WheelSortMode::Genre => Sort::Genre,
+                WheelSortMode::Bpm => Sort::Bpm,
+                WheelSortMode::Length => Sort::Length,
+                WheelSortMode::Meter => Sort::Meter,
+                WheelSortMode::Popularity => Sort::Popularity { side: None },
+                WheelSortMode::Recent => Sort::Recent { side: None },
+                WheelSortMode::TopGrades => Sort::TopGrades { side: None },
+                WheelSortMode::PopularityP1 | WheelSortMode::PopularityP2 => Sort::Popularity {
+                    side: Some(usize::from(state.sort_mode == WheelSortMode::PopularityP2)),
                 },
-                WheelSortMode::RecentP1 | WheelSortMode::RecentP2 => SelectMusicSortView::Player {
-                    order: SelectMusicSort::Recent,
-                    side: usize::from(state.sort_mode == WheelSortMode::RecentP2),
+                WheelSortMode::RecentP1 | WheelSortMode::RecentP2 => Sort::Recent {
+                    side: Some(usize::from(state.sort_mode == WheelSortMode::RecentP2)),
                 },
-                WheelSortMode::TopGradesP1 | WheelSortMode::TopGradesP2 => SelectMusicSortView::Player {
-                    order: SelectMusicSort::TopGrades,
-                    side: usize::from(state.sort_mode == WheelSortMode::TopGradesP2),
+                WheelSortMode::TopGradesP1 | WheelSortMode::TopGradesP2 => Sort::TopGrades {
+                    side: Some(usize::from(state.sort_mode == WheelSortMode::TopGradesP2)),
                 },
-                WheelSortMode::Favorites(side) => SelectMusicSortView::Favorites {
+                WheelSortMode::Favorites(side) => Sort::Favorites {
                     side: usize::from(side == profile_data::PlayerSide::P2),
                 },
-                WheelSortMode::Playlist => SelectMusicSortView::Playlist,
-                order => SelectMusicSortView::Library(saved_sort(order).expect("stable library sort")),
+                WheelSortMode::Playlist => Sort::Playlist,
             }
         },
         selection_beat: selection_anim_beat(state),

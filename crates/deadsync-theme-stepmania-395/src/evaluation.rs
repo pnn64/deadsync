@@ -5,7 +5,7 @@ use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, Grade}
 
 use crate::gameplay::{difficulty_index, stage_artwork};
 use crate::presentation::{Layout, push_footer};
-use crate::resources::{JUDGE_FONT, NORMAL_FONT, SCORE_FONT};
+use crate::resources::{JUDGE_FONT, NORMAL_FONT, SCORE_FONT, STAGE_FONT};
 
 #[derive(Default)]
 pub(crate) struct StepManiaEvaluation;
@@ -38,13 +38,8 @@ impl EvaluationOverviewPresentation<Actor> for StepManiaEvaluation {
                 )
                 .build(0),
         );
-        let header_key = if page.course_summary {
-            "stepmania-395/evaluation-summary-header"
-        } else {
-            "stepmania-395/evaluation-header"
-        };
         let mut header = layout.sprite(
-            header_key,
+            "stepmania-395/evaluation-header",
             [
                 320.0 + 640.0 * (1.0 - arrive(elapsed, 0.0) + leave(departure, 0.0)),
                 22.0,
@@ -206,10 +201,11 @@ fn push_player(
     }
     let alpha = (elapsed / 0.7).clamp(0.0, 1.0)
         * (1.0 - departure.unwrap_or_default() / 0.7).clamp(0.0, 1.0);
-    let bonus_key = if p2 {
-        "stepmania-395/evaluation-bonus-p2"
-    } else {
-        "stepmania-395/evaluation-bonus-p1"
+    let bonus_key = match (page.course_summary, p2) {
+        (false, false) => "stepmania-395/evaluation-bonus-p1",
+        (false, true) => "stepmania-395/evaluation-bonus-p2",
+        (true, false) => "stepmania-395/evaluation-survived-p1",
+        (true, true) => "stepmania-395/evaluation-survived-p2",
     };
     let mut bonus = layout.sprite(
         bonus_key,
@@ -219,7 +215,25 @@ fn push_player(
     );
     bonus.alpha(alpha);
     actors.push(bonus.build(0));
-    if let Some(value) = TextContent::inline_format(format_args!("{:04}", player.max_combo)) {
+    if page.course_summary {
+        if let Some(value) = TextContent::inline_format(format_args!("{:02}", player.stages_passed))
+        {
+            let mut survived = layout.text(
+                STAGE_FONT,
+                value,
+                [if p2 { 544.0 } else { 96.0 }, 240.0],
+                1.0,
+            );
+            survived.alpha(alpha);
+            survived.z(4);
+            actors.push(survived.build(0));
+        }
+    } else {
+        push_bonus_bars(actors, layout, player, page);
+    }
+    if !page.course_summary
+        && let Some(value) = TextContent::inline_format(format_args!("{:04}", player.max_combo))
+    {
         let mut combo = layout.text(
             JUDGE_FONT,
             value,
@@ -241,6 +255,64 @@ fn push_player(
     if !player.disqualified {
         push_record(actors, layout, player.machine_rank, p2, false, alpha);
         push_record(actors, layout, player.personal_rank, p2, true, alpha);
+    }
+}
+
+fn push_bonus_bars(
+    actors: &mut Vec<Actor>,
+    layout: Layout,
+    player: &EvaluationPlayerOverview<'_>,
+    page: &EvaluationOverview<'_>,
+) {
+    let p2 = player.p2;
+    let alpha = (1.0 - page.departure_elapsed.unwrap_or_default() / 0.7).clamp(0.0, 1.0);
+    for (axis, possible) in player.radar_possible.into_iter().enumerate() {
+        let possible = possible.clamp(0.0, 1.0);
+        let at = [if p2 { 466.0 } else { 176.0 }, 194.0 + axis as f32 * 27.0];
+        let direction = if p2 { 1.0 } else { -1.0 };
+        let delay = [0.2, 0.3, 0.4, 1.0, 0.6][axis];
+        let width = 160.0 * possible;
+        let progress = (page.elapsed - delay).clamp(0.0, 1.0);
+        let mut bar = layout.sprite(
+            if p2 {
+                "stepmania-395/evaluation-bar-possible-p2"
+            } else {
+                "stepmania-395/evaluation-bar-possible-p1"
+            },
+            [at[0] + direction * width * progress * 0.5, at[1]],
+            [width, 16.0],
+            2,
+        );
+        bar.rotationz(if p2 { 0.0 } else { 180.0 });
+        bar.zoomx(progress);
+        bar.visible(width > 0.0 && progress > 0.0);
+        bar.alpha(alpha);
+        actors.push(bar.build(0));
+        let Some(achievement) = player.radar_achievement else {
+            continue;
+        };
+        let achieved = achievement[axis].clamp(0.0, 1.0);
+        let width = width * achieved;
+        let progress = (page.elapsed - 0.7 - axis as f32 * 0.1).clamp(0.0, 1.0);
+        let mut actual = layout.sprite(
+            if p2 {
+                "stepmania-395/evaluation-bar-actual-p2"
+            } else {
+                "stepmania-395/evaluation-bar-actual-p1"
+            },
+            [at[0] + direction * width * progress * 0.5, at[1]],
+            [width, 16.0],
+            3,
+        );
+        actual.rotationz(if p2 { 0.0 } else { 180.0 });
+        actual.zoomx(progress);
+        actual.visible(width > 0.0 && progress > 0.0);
+        actual.alpha(alpha);
+        if achieved > 0.99999 {
+            actual.effectmode(deadlib_present::anim::EffectMode::GlowShift);
+            actual.effectperiod(0.5);
+        }
+        actors.push(actual.build(0));
     }
 }
 

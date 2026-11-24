@@ -430,66 +430,9 @@ fn native_stage_uses_the_captured_numeric_score_and_physical_player_side() {
 
 #[test]
 fn native_evaluation_keeps_real_scores_records_and_one_banner_for_solo_p2() {
-    use deadlib_assets::AssetManager;
     use deadlib_present::space::{Metrics, with_current_metrics};
-    use deadsync_theme::stage::StagePresentation;
-    use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, Grade};
-    use deadsync_theme_stepmania_395::StepManiaStagePresentation;
-    use std::sync::Arc;
-
-    let mut presentation = StepManiaStagePresentation::default();
-    let title = Arc::from("Native result fixture");
-    let artist = Arc::from("Fixture artist");
-    let mods = Arc::from("1.5x");
-    let life = Default::default();
     with_current_metrics(Metrics::centered(640.0, 480.0), || {
-        let mut actors = Vec::new();
-        presentation.evaluation_overview().unwrap().push_overview(
-            &mut actors,
-            &AssetManager::new(),
-            EvaluationOverview {
-                title: &title,
-                artist: &artist,
-                banner_key: None,
-                course_summary: false,
-                stage_number: Some(2),
-                double_side_style: false,
-                elapsed: 5.0,
-                departure_elapsed: None,
-                players: [
-                    Some(EvaluationPlayerOverview {
-                        p2: true,
-                        grade: Grade::Tier08,
-                        percent: 97.65,
-                        numeric_score: 12_345_678,
-                        individual_percent: None,
-                        ex_percent: None,
-                        hard_ex_percent: None,
-                        difficulty: "Hard",
-                        meter: 8,
-                        mods: &mods,
-                        judgments: [321, 123, 17, 4, 2, 1],
-                        row_window_counts: Default::default(),
-                        score_valid: true,
-                        dropped_hold_or_roll: false,
-                        jumps: [0; 2],
-                        holds: [7, 7],
-                        mines: [0; 2],
-                        hands: [0; 2],
-                        rolls: [2, 2],
-                        max_combo: 315,
-                        combo_runs: &[],
-                        graph_seconds: [0.0, 90.0],
-                        course_graph_stages: &[],
-                        steps_life: &life,
-                        machine_rank: Some(1),
-                        personal_rank: Some(2),
-                        disqualified: false,
-                    }),
-                    None,
-                ],
-            },
-        );
+        let actors = support::evaluation_actors(false, true, 5.0);
         let texture_count = |key| {
             actors.iter().filter(|actor| matches!(actor, Actor::Sprite { source, .. } if source.texture_key() == Some(key))).count()
         };
@@ -509,6 +452,52 @@ fn native_evaluation_keeps_real_scores_records_and_one_banner_for_solo_p2() {
         ));
         assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, uv_rect: Some([_, top, _, bottom]), .. }
             if source.texture_key() == Some("stepmania-395/evaluation-grades") && (*top - 0.25).abs() < 1e-5 && (*bottom - 0.375).abs() < 1e-5)));
+    });
+}
+
+#[test]
+fn evaluation_bars_share_each_players_anchor_and_nonstop_shows_survived_stages() {
+    use deadlib_present::space::{Metrics, with_current_metrics};
+    with_current_metrics(Metrics::centered(640.0, 480.0), || {
+        let actors = support::evaluation_actors(false, false, 5.0);
+        for (side, x, rotation) in [("p1", 176.0, 180.0), ("p2", 466.0, 0.0)] {
+            let key = format!("stepmania-395/evaluation-bar-actual-{side}");
+            let bars: Vec<_> = actors
+                .iter()
+                .filter(|actor| {
+                    matches!(actor,
+                        Actor::Sprite { source, .. } if source.texture_key() == Some(key.as_str())
+                    )
+                })
+                .collect();
+            assert_eq!(bars.len(), 5);
+            assert!(matches!(bars[0], Actor::Sprite {
+                offset, size: [SizeSpec::Px(width), SizeSpec::Px(16.0)], rot_z_deg, ..
+            } if (offset[0] + if side == "p1" { width * 0.5 } else { -width * 0.5 } - x).abs() < 1e-4
+                && offset[1] == 194.0 && (*width - 115.2).abs() < 1e-4
+                && (*rot_z_deg - rotation).abs() < 1e-4));
+        }
+        let course = support::evaluation_actors(true, false, 5.0);
+        assert!(!course.iter().any(|actor| matches!(actor,
+            Actor::Sprite { source, .. } if source.texture_key().is_some_and(|key|
+                key.contains("evaluation-bar-") || key.contains("evaluation-bonus-")
+                    || key == "stepmania-395/evaluation-summary-header")
+        )));
+        for x in [96.0, 544.0] {
+            assert!(course.iter().any(|actor| matches!(actor,
+                Actor::Text { font: "stepmania-395/stages", content, offset, .. }
+                if content.as_str() == "03" && *offset == [x, 240.0]
+            )));
+        }
+        let entering = support::evaluation_actors(false, false, 0.9);
+        assert!(entering.iter().any(|actor| matches!(actor,
+            Actor::Sprite { source, size: [SizeSpec::Px(0.0), _], visible: false, .. }
+            if source.texture_key() == Some("stepmania-395/evaluation-bar-actual-p1")
+        )));
+        assert!(!entering.iter().any(|actor| matches!(actor,
+            Actor::Sprite { source, size: [SizeSpec::Px(0.0), _], visible: true, .. }
+            if source.texture_key().is_some_and(|key| key.contains("evaluation-bar-"))
+        )));
     });
 }
 
@@ -542,9 +531,7 @@ fn native_wheel_centers_live_rows_and_crops_the_prepared_banner() {
         rows,
         wheel_offset: 0.0,
         wheel_locked: false,
-        sort: deadsync_theme::select_music::SelectMusicSortView::Library(
-            deadsync_config::theme::SelectMusicSort::Title,
-        ),
+        sort: deadsync_theme::select_music::SelectMusicSortView::Title,
         selection_beat: 0.0,
         song: None,
         banner_texture: Some(&banner),

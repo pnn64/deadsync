@@ -5,7 +5,6 @@ use deadlib_assets::present_dsl::cover_uv;
 use deadlib_present::actors::{Actor, SpriteSource, TextAlign, TextContent};
 use deadlib_present::anim;
 use deadlib_present::dsl::SpriteBuilder;
-use deadsync_config::theme::SelectMusicSort;
 use deadsync_theme::select_music::{
     SELECT_MUSIC_WHEEL_ROWS, SelectMusicPrompt, SelectMusicSortView, SelectMusicView,
 };
@@ -315,15 +314,14 @@ fn push_sort(
 ) {
     let at = [252.0 + banner_shift, 121.0];
     let artwork = match sort {
-        SelectMusicSortView::Library(order) => match order {
-            SelectMusicSort::Title => Some("stepmania-395/music-sort-title"),
-            SelectMusicSort::Artist => Some("stepmania-395/music-sort-artist"),
-            SelectMusicSort::Bpm => Some("stepmania-395/music-sort-bpm"),
-            SelectMusicSort::Group => Some("stepmania-395/music-sort-group"),
-            SelectMusicSort::Popularity => Some("stepmania-395/music-sort-popularity"),
-            SelectMusicSort::TopGrades => Some("stepmania-395/music-sort-grades"),
-            _ => None,
-        },
+        SelectMusicSortView::Title => Some("stepmania-395/music-sort-title"),
+        SelectMusicSortView::Artist => Some("stepmania-395/music-sort-artist"),
+        SelectMusicSortView::Bpm => Some("stepmania-395/music-sort-bpm"),
+        SelectMusicSortView::Group => Some("stepmania-395/music-sort-group"),
+        SelectMusicSortView::Popularity { side: None } => {
+            Some("stepmania-395/music-sort-popularity")
+        }
+        SelectMusicSortView::TopGrades { side: None } => Some("stepmania-395/music-sort-grades"),
         _ => None,
     };
     if let Some(key) = artwork {
@@ -332,10 +330,17 @@ fn push_sort(
     }
     // Extra catalog sorts have no artwork in the reference theme.
     let label = match sort {
-        SelectMusicSortView::Library(order) => order.as_str().to_owned(),
-        SelectMusicSortView::Player { order, side } => format!("P{} {}", side + 1, order.as_str()),
+        SelectMusicSortView::Series => "Series".to_owned(),
+        SelectMusicSortView::Genre => "Genre".to_owned(),
+        SelectMusicSortView::Length => "Length".to_owned(),
+        SelectMusicSortView::Meter => "Meter".to_owned(),
+        SelectMusicSortView::Recent { side: None } => "Recent".to_owned(),
+        SelectMusicSortView::Popularity { side: Some(side) } => format!("P{} Popularity", side + 1),
+        SelectMusicSortView::Recent { side: Some(side) } => format!("P{} Recent", side + 1),
+        SelectMusicSortView::TopGrades { side: Some(side) } => format!("P{} Top Grades", side + 1),
         SelectMusicSortView::Favorites { side } => format!("P{} Favorites", side + 1),
         SelectMusicSortView::Playlist => "Playlist".to_owned(),
+        _ => return,
     };
     let mut text = layout.text(NORMAL_FONT, TextContent::Owned(label), at, 0.6);
     text.maxwidth(68.0 * layout.scale);

@@ -57,9 +57,7 @@ pub fn music_actors() -> Vec<Actor> {
             }),
             wheel_offset: 0.0,
             wheel_locked: false,
-            sort: deadsync_theme::select_music::SelectMusicSortView::Library(
-                deadsync_config::theme::SelectMusicSort::Title,
-            ),
+            sort: deadsync_theme::select_music::SelectMusicSortView::Title,
             selection_beat: 1.0,
             song: Some(SelectMusicSongView {
                 title: &song.title,
@@ -90,5 +88,74 @@ pub fn music_actors() -> Vec<Actor> {
             exit_elapsed: 0.0,
         },
     );
+    actors
+}
+
+pub fn evaluation_actors(course: bool, p2_only: bool, elapsed: f32) -> Vec<Actor> {
+    use deadlib_assets::AssetManager;
+    use deadsync_theme::stage::StagePresentation;
+    use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, Grade};
+    use deadsync_theme_stepmania_395::StepManiaStagePresentation;
+    use std::sync::Arc;
+
+    let title = Arc::from("Native result fixture");
+    let artist = Arc::from("Fixture artist");
+    let mods = Arc::from("1.5x");
+    let life = Default::default();
+    let mut actors = Vec::new();
+    StepManiaStagePresentation::default()
+        .evaluation_overview()
+        .unwrap()
+        .push_overview(
+            &mut actors,
+            &AssetManager::new(),
+            EvaluationOverview {
+                title: &title,
+                artist: &artist,
+                banner_key: None,
+                course_summary: course,
+                stage_number: (!course).then_some(2),
+                double_side_style: false,
+                elapsed,
+                departure_elapsed: None,
+                players: std::array::from_fn(|side| {
+                    if p2_only && side == 0 {
+                        return None;
+                    }
+                    Some(EvaluationPlayerOverview {
+                        p2: side == 1,
+                        grade: Grade::Tier08,
+                        percent: 97.65,
+                        numeric_score: 12_345_678,
+                        radar_possible: [0.8, 0.7, 0.6, 0.5, 0.4],
+                        radar_achievement: (!course).then_some([0.9, 0.8, 0.7, 1.0, 0.95]),
+                        stages_passed: if course { 3 } else { 1 },
+                        individual_percent: None,
+                        ex_percent: None,
+                        hard_ex_percent: None,
+                        difficulty: "Hard",
+                        meter: 8,
+                        mods: &mods,
+                        judgments: [321, 123, 17, 4, 2, 1],
+                        row_window_counts: Default::default(),
+                        score_valid: true,
+                        dropped_hold_or_roll: false,
+                        jumps: [0; 2],
+                        holds: [7, 7],
+                        mines: [0; 2],
+                        hands: [0; 2],
+                        rolls: [2, 2],
+                        max_combo: 315,
+                        combo_runs: &[],
+                        graph_seconds: [0.0, 90.0],
+                        course_graph_stages: &[],
+                        steps_life: &life,
+                        machine_rank: Some(1),
+                        personal_rank: Some(2),
+                        disqualified: false,
+                    })
+                }),
+            },
+        );
     actors
 }

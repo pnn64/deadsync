@@ -25,6 +25,7 @@ pub mod import;
 pub mod itl;
 pub mod leaderboard;
 pub mod local_store;
+pub mod radar;
 pub mod select_music;
 pub mod stage_stats;
 pub use column_judgments::*;

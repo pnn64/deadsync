@@ -186,6 +186,8 @@ fn test_player_summary(
         grade,
         score_percent: 1.0,
         numeric_score: 0,
+        radar_achievement: None,
+        stages_passed: 1,
         earned_grade_points,
         possible_grade_points,
         ex_score_percent: 100.0,

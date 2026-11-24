@@ -99,6 +99,9 @@ impl<N, S> EvaluationOverviewPage<N, S> {
                     grade: self.routine_grade.unwrap_or(score.grade),
                     percent: self.routine_percent.unwrap_or(score.score_percent) * 100.0,
                     numeric_score: score.numeric_score,
+                    radar_possible: score.chart.radar_values(score.song.music_length_seconds),
+                    radar_achievement: score.radar_achievement,
+                    stages_passed: score.stages_passed,
                     individual_percent: self.routine_percent.map(|_| score.score_percent * 100.0),
                     ex_percent: score.show_ex_score.then_some(score.ex_score_percent.max(0.0)),
                     hard_ex_percent: score

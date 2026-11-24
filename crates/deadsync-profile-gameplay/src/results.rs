@@ -364,6 +364,13 @@ pub fn stage_result<A, C, D>(
             grade,
             score_percent,
             numeric_score: p.stage_score.score,
+            radar_achievement: Some(score_data::radar::achievement(
+                notes,
+                &p.combo_runs,
+                stage_stats::song_step_seconds(gs.song()) / gs.music_rate(),
+                [p.earned_grade_points, totals.possible_grade_points],
+            )),
+            stages_passed: u32::from(outcome.song_completed_naturally && !outcome.is_failing),
             earned_grade_points: p.earned_grade_points,
             possible_grade_points: totals.possible_grade_points,
             ex_score_percent,

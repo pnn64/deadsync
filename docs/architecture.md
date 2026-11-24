@@ -74,6 +74,11 @@ metadata cache. The simfile loader computes them from chart rows and hold
 endpoints; `ChartData::radar_values` normalizes them by the song's music length.
 Themes receive that duration with the selected song and own the polygon drawing.
 
+The score layer computes chart achievement ratios from judged notes and recorded
+combo runs. Song results retain these optional ratios; course results retain the
+number of passed stages. Evaluation views forward these game facts, while each
+theme decides whether to draw bars, survived counters, or other result artwork.
+
 Simply Love resolves its Step Statistics and upper NPS graph dimensions,
 scroll window, and scale from the prepared stage. The stage allocates the
 optional graph's life sample buffers before play and samples the same game

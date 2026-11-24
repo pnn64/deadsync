@@ -2,7 +2,6 @@
 
 use crate::views::ScoreboxLocalRecords;
 use deadsync_chart::ChartData;
-use deadsync_config::theme::SelectMusicSort;
 use deadsync_core::input::MAX_PLAYERS;
 use std::sync::Arc;
 
@@ -69,8 +68,17 @@ pub enum SelectMusicPrompt {
 /// Active catalog ordering, including temporary player and collection filters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectMusicSortView {
-    Library(SelectMusicSort),
-    Player { order: SelectMusicSort, side: usize },
+    Series,
+    Group,
+    Title,
+    Artist,
+    Genre,
+    Bpm,
+    Length,
+    Meter,
+    Popularity { side: Option<usize> },
+    Recent { side: Option<usize> },
+    TopGrades { side: Option<usize> },
     Favorites { side: usize },
     Playlist,
 }

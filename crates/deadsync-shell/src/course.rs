@@ -142,6 +142,8 @@ fn score_info_from_stage_with_record(
         judgment_counts: player.judgment_counts,
         score_percent: player.score_percent,
         numeric_score: player.numeric_score,
+        radar_achievement: player.radar_achievement,
+        stages_passed: player.stages_passed,
         earned_grade_points: player.earned_grade_points,
         possible_grade_points: player.possible_grade_points,
         grade: player.grade,

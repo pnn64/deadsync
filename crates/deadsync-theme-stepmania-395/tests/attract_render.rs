@@ -126,6 +126,22 @@ fn native_attract_captures() {
         intro.advance(delta);
         capture(name, &intro, &output, &metrics, &mut backend, &assets);
     }
+    for (name, course, p2_only, elapsed) in [
+        ("evaluation-stage", false, false, 5.0),
+        ("evaluation-stage-entering", false, false, 0.9),
+        ("evaluation-solo-p2", false, true, 5.0),
+        ("evaluation-nonstop", true, false, 5.0),
+    ] {
+        capture_actors(
+            name,
+            &support::evaluation_actors(course, p2_only, elapsed),
+            elapsed,
+            &output,
+            &metrics,
+            &mut backend,
+            &assets,
+        );
+    }
     intro.start_idle(AttractRecords::default());
     intro.advance(18.0);
     for (name, delta) in [

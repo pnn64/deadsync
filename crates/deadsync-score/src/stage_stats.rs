@@ -65,6 +65,9 @@ pub struct PlayerStageSummary {
     pub grade: Grade,
     pub score_percent: f64,
     pub numeric_score: u32,
+    /// Achievement ratios for a single played chart; aggregate courses omit them.
+    pub radar_achievement: Option<[f32; 5]>,
+    pub stages_passed: u32,
     pub earned_grade_points: i32,
     pub possible_grade_points: i32,
     pub ex_score_percent: f64,
@@ -243,6 +246,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         let course_totals = input.totals[idx];
         let mut earned_grade_points = 0i32;
         let mut numeric_score = 0u32;
+        let mut stages_passed = 0u32;
         let mut possible_grade_points = course_totals.possible_grade_points;
         let mut notes_hit: u32 = 0;
         let mut played_total_steps: u32 = 0;
@@ -310,6 +314,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             };
             first_player.get_or_insert(player);
             numeric_score = numeric_score.saturating_add(player.numeric_score);
+            stages_passed = stages_passed.saturating_add(player.stages_passed);
             earned_grade_points = earned_grade_points.saturating_add(player.earned_grade_points);
             played_possible_grade_points =
                 played_possible_grade_points.saturating_add(player.possible_grade_points);
@@ -470,6 +475,8 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             grade,
             score_percent,
             numeric_score,
+            radar_achievement: None,
+            stages_passed,
             earned_grade_points,
             possible_grade_points,
             ex_score_percent,
@@ -566,6 +573,8 @@ pub fn routine_shared_course_player(
 ) -> PlayerStageSummary {
     let mut shared = first.clone();
     shared.numeric_score = first.numeric_score.saturating_add(second.numeric_score);
+    shared.radar_achievement = None;
+    shared.stages_passed = first.stages_passed.min(second.stages_passed);
     shared.judgment_counts = std::array::from_fn(|ix| {
         first.judgment_counts[ix].saturating_add(second.judgment_counts[ix])
     });
@@ -800,6 +809,8 @@ mod tests {
             grade,
             score_percent: 1.0,
             numeric_score: 0,
+            radar_achievement: None,
+            stages_passed: u32::from(grade != Grade::Failed),
             earned_grade_points,
             possible_grade_points,
             ex_score_percent: 100.0,
@@ -954,6 +965,8 @@ mod tests {
         assert!(player.chart.description.is_empty());
         assert!(player.chart.chart_name.is_empty());
         assert_eq!(player.numeric_score, 12_345_678);
+        assert_eq!(player.stages_passed, 0);
+        assert!(player.radar_achievement.is_none());
         assert_eq!(player.scatter.len(), 1);
         assert!(!player.histogram.bins.is_empty());
         assert!((player.timing.mean_ms - 10.0).abs() <= f32::EPSILON);
@@ -1001,6 +1014,7 @@ mod tests {
             stage_summaries: &stages,
         }).unwrap();
         assert!(summary.players[0].is_none());
+        assert_eq!(summary.players[1].as_ref().unwrap().stages_passed, 2);
         let timeline = &summary.players[1].as_ref().unwrap().steps_life;
         assert_eq!(timeline.judgment_times.thresholds(), [8.0, 58.0, 62.0]);
         assert_eq!(timeline.elapsed_seconds, 114.0);

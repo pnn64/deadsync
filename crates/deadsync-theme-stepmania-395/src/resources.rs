@@ -13,6 +13,7 @@ pub(crate) const SCORE_FONT: &str = "stepmania-395/score";
 pub(crate) const JUDGE_FONT: &str = "stepmania-395/judge";
 pub(crate) const COMBO_FONT: &str = "stepmania-395/combo";
 pub(crate) const PERCENT_FONT: &str = "stepmania-395/percent";
+pub(crate) const STAGE_FONT: &str = "stepmania-395/stages";
 
 macro_rules! png {
     ($name:literal) => {
@@ -73,6 +74,11 @@ impl ThemeResources for StepManiaTheme {
     fn asset_manifest() -> ThemeAssetManifest<impl Iterator<Item = TextureAssetSpec>> {
         ThemeAssetManifest {
             fonts: &[
+                FontAssetSpec {
+                    name: STAGE_FONT,
+                    ini_path: "assets/fonts/stepmania-395/stages.ini",
+                    fallback_font_name: Some(NORMAL_FONT),
+                },
                 FontAssetSpec {
                     name: RANKING_FONT,
                     ini_path: "assets/fonts/stepmania-395/_ScreenRanking common.ini",
@@ -212,6 +218,12 @@ impl ThemeResources for StepManiaTheme {
                 png!("evaluation-judgments"),
                 png!("evaluation-bonus-p1"),
                 png!("evaluation-bonus-p2"),
+                png!("evaluation-bar-possible-p1"),
+                png!("evaluation-bar-possible-p2"),
+                png!("evaluation-bar-actual-p1"),
+                png!("evaluation-bar-actual-p2"),
+                png!("evaluation-survived-p1"),
+                png!("evaluation-survived-p2"),
                 png!("evaluation-score"),
                 png!("evaluation-machinerecord-1"),
                 png!("evaluation-machinerecord-2"),
