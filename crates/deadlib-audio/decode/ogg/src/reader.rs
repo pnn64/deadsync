@@ -203,36 +203,29 @@ impl<R: Read> PageReader<R> {
 }
 
 fn capture_pattern(bytes: &[u8]) -> Option<usize> {
-    let (words, _) = bytes[..bytes.len().saturating_sub(3)].as_chunks::<8>();
-    for (i, word) in words.iter().enumerate() {
-        let word = u64::from_le_bytes(*word);
-        let o = word ^ 0x4f4f_4f4f_4f4f_4f4f;
-        let g = word ^ 0x6767_6767_6767_6767;
-        let o = o.wrapping_sub(0x0101_0101_0101_0101) & !o & 0x8080_8080_8080_8080;
-        let g = g.wrapping_sub(0x0101_0101_0101_0101) & !g & 0x8080_8080_8080_8080;
-        // Filter on Og; the last byte may pair with g in the next word.
-        // Borrow propagation can add candidates, so verify the complete capture.
-        let candidates = o & ((g >> 8) | 0x8000_0000_0000_0000);
-        // Dense false prefixes favor the original scalar search.
-        if candidates & candidates.wrapping_sub(1) != 0 {
-            let offset = i * 8;
-            return bytes[offset..]
-                .windows(4)
-                .position(|bytes| bytes == b"OggS")
-                .map(|i| offset + i);
-        }
-        if candidates != 0 {
-            let offset = i * 8 + candidates.trailing_zeros() as usize / 8;
-            if bytes[offset..].starts_with(b"OggS") {
-                return Some(offset);
+    let zero_bytes =
+        |word: u64| word.wrapping_sub(0x0101_0101_0101_0101) & !word & 0x8080_8080_8080_8080;
+    let mut rest = bytes;
+    while let Some(window) = rest.first_chunk::<11>() {
+        let o = u64::from_le_bytes(window[..8].try_into().unwrap()) ^ u64::from_le_bytes([b'O'; 8]);
+        if zero_bytes(o) != 0 {
+            // The extra three bytes let all eight lanes test the full pattern.
+            let g1 = u64::from_le_bytes(window[1..9].try_into().unwrap());
+            let g2 = u64::from_le_bytes(window[2..10].try_into().unwrap());
+            let s = u64::from_le_bytes(window[3..11].try_into().unwrap());
+            let g = u64::from_le_bytes([b'g'; 8]);
+            let mismatches = o | (g1 ^ g) | (g2 ^ g) | (s ^ u64::from_le_bytes([b'S'; 8]));
+            let matches = zero_bytes(mismatches);
+            if matches != 0 {
+                // Borrow propagation can mark later lanes; the first is exact.
+                return Some(bytes.len() - rest.len() + matches.trailing_zeros() as usize / 8);
             }
         }
+        rest = &rest[8..];
     }
-    let offset = words.len() * 8;
-    bytes[offset..]
-        .windows(4)
-        .position(|bytes| bytes == b"OggS")
-        .map(|i| offset + i)
+    rest.windows(4)
+        .position(|word| word == b"OggS")
+        .map(|i| bytes.len() - rest.len() + i)
 }
 
 impl<R: Read + Seek> PageReader<R> {

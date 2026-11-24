@@ -323,6 +323,27 @@ fn benchmark_container() {
             black_box(writer.into_inner().0);
         });
     }
+    let clean = stream(24, 32, 8192);
+    let mut seed = 17u32;
+    let random = (0..32_768)
+        .map(|_| {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            (seed >> 24) as u8
+        })
+        .collect::<Vec<_>>();
+    for (label, mut bytes) in [
+        ("zero", vec![0; 32_768]),
+        ("random", random),
+        ("prefix", b"OggX".repeat(8192)),
+    ] {
+        bytes.extend_from_slice(&clean);
+        measure(&format!("recover/{label}"), 4000, bytes.len(), || {
+            let mut reader = PageReader::with_mode(black_box(bytes.as_slice()), SyncMode::Recover);
+            while let Some(page) = reader.next_page().unwrap() {
+                black_box(page);
+            }
+        });
+    }
     for size in [
         32, 48, 63, 64, 65, 72, 80, 96, 112, 127, 128, 129, 192, 256, 1024, 8192, 65025,
     ] {
