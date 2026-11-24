@@ -204,12 +204,14 @@ impl<'a> Rows<'a> {
         let zero = self.filter == Filter::Adaptive && self.index != 0 && row == previous;
         if zero {
             // Up is zero; None/Sub can tie it only for an all-zero row.
-            selected = if row.iter().all(|&byte| byte == 0) {
-                0
+            if self.zeroed {
+                selected = self.output[0];
             } else {
-                2
-            };
-            if !self.zeroed {
+                selected = if row.iter().all(|&byte| byte == 0) {
+                    0
+                } else {
+                    2
+                };
                 self.output[1..].fill(0);
             }
         } else if self.filter == Filter::Adaptive {
@@ -380,7 +382,7 @@ mod tests {
                 } else {
                     pixels[start - stride + x]
                 };
-                pixels.push(match y % 8 {
+                pixels.push(match y % 11 {
                     0 => state as u8,
                     // Up wins: small residuals against the row above.
                     1 if x < 4 => 0,
@@ -390,10 +392,10 @@ mod tests {
                     // when the previous row's choice is tried first.
                     2 => pixels.get(start - stride + x + 4).copied().unwrap_or(7),
                     // Constant and zero rows tie Sub with Up and None.
-                    3 => 0,
-                    4 => 9,
-                    5 => above,
-                    6 => (x / 4 * 3) as u8,
+                    3..=5 => 0,
+                    6 => 9,
+                    7 | 8 => above,
+                    9 => (x / 4 * 3) as u8,
                     _ => (state as u8) & 3,
                 });
             }
