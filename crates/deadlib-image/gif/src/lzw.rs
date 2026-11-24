@@ -208,27 +208,32 @@ impl Encoder {
         {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
-        self.encode_rows(
-            std::iter::once(input),
-            input.len(),
-            minimum,
-            |bits, count| {
-                reserve(output, count)?;
-                output.extend_from_slice(&bits.to_le_bytes()[..count]);
-                Ok(())
-            },
-        )
+        self.encode_rows(std::iter::once(input), input, minimum, |bits, count| {
+            reserve(output, count)?;
+            output.extend_from_slice(&bits.to_le_bytes()[..count]);
+            Ok(())
+        })
     }
 
-    // The rows contain exactly `pixels` validated indices. Phrases can span rows.
+    // The rows contain the validated indices in wire order. Phrases can span rows.
     pub(crate) fn encode_rows<'a>(
         &mut self,
-        mut rows: impl Iterator<Item = &'a [u8]>,
-        pixels: usize,
+        rows: impl Iterator<Item = &'a [u8]>,
+        indices: &[u8],
         minimum: u8,
         mut emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
+        let pixels = indices.len();
         if pixels > 1024 {
+            let pixel = indices[0];
+            if indices[1] == pixel {
+                let (chunks, tail) = indices.as_chunks::<16>();
+                if chunks.iter().all(|chunk| *chunk == [pixel; 16])
+                    && tail.iter().all(|&index| index == pixel)
+                {
+                    return Self::encode_repeated(pixel, pixels, minimum, emit);
+                }
+            }
             let table = match &mut self.table {
                 Some(table) => {
                     table.fill(0);
@@ -244,7 +249,7 @@ impl Encoder {
             let width = minimum + 1;
             let mut bits = clear;
             let mut used = width;
-            if let Some(&pixel) = rows.find_map(|row| row.first()) {
+            if let Some(&pixel) = indices.first() {
                 bits |= u64::from(pixel) << used;
                 used += width;
             }
@@ -256,6 +261,44 @@ impl Encoder {
             return Self::encode_table(rows, minimum, &mut [0; 512], emit);
         }
         Self::encode_table(rows, minimum, &mut [0; 2048], emit)
+    }
+
+    fn encode_repeated(
+        pixel: u8,
+        mut remaining: usize,
+        minimum: u8,
+        emit: impl FnMut(u64, usize) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let clear = 1u16 << minimum;
+        let mut bits = BitWriter {
+            emit,
+            bits: 0,
+            count: 0,
+        };
+        bits.code(clear, minimum + 1)?;
+        // Each insertion extends the longest run by one. The first run
+        // is a literal, then length n takes dictionary code CLEAR + n.
+        let code = |length| {
+            if length == 1 {
+                u16::from(pixel)
+            } else {
+                clear + length
+            }
+        };
+        let mut longest = 1;
+        while remaining > usize::from(longest) {
+            bits.code(code(longest), (clear + longest).ilog2() as u8 + 1)?;
+            remaining -= usize::from(longest);
+            if clear + longest == 4095 {
+                bits.code(clear, 12)?;
+                longest = 1;
+            } else {
+                longest += 1;
+            }
+        }
+        bits.code(code(remaining as u16), (clear + longest).ilog2() as u8 + 1)?;
+        bits.code(clear + 1, (clear + longest + 1).min(4095).ilog2() as u8 + 1)?;
+        bits.finish()
     }
 
     fn encode_table<'a, const SLOTS: usize>(
@@ -324,11 +367,7 @@ impl Encoder {
         }
         // The final prefix has caught the decoder up to the encoder's table.
         bits.code(clear + 1, next.min(4095).ilog2() as u8 + 1)?;
-        if bits.count != 0 {
-            let count = bits.count.div_ceil(8) as usize;
-            (bits.emit)(bits.bits, count)?;
-        }
-        Ok(())
+        bits.finish()
     }
 }
 
@@ -347,6 +386,12 @@ impl<F: FnMut(u64, usize) -> Result<(), Error>> BitWriter<F> {
             (self.emit)(self.bits, 6)?;
             self.bits >>= 48;
             self.count -= 48;
+        }
+        Ok(())
+    }
+    fn finish(mut self) -> Result<(), Error> {
+        if self.count != 0 {
+            (self.emit)(self.bits, usize::from(self.count.div_ceil(8)))?;
         }
         Ok(())
     }

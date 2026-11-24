@@ -527,6 +527,22 @@ fn longest_dictionary_chain_and_exact_output_limits() {
 }
 
 #[test]
+fn uniform_encoder_preserves_codes_at_dictionary_reset() {
+    let mut codes = vec![4, 1];
+    codes.extend(6..4096);
+    let full_table_pixels = (1..=4091).sum::<usize>();
+    let pixels = vec![1; full_table_pixels + 3];
+    let mut frozen = codes.clone();
+    frozen.push(5);
+    assert_eq!(
+        lzw::encode(&pixels[..full_table_pixels], 2).unwrap(),
+        pack(&frozen, 2)
+    );
+    codes.extend_from_slice(&[4, 1, 6, 5]);
+    assert_eq!(lzw::encode(&pixels, 2).unwrap(), pack(&codes, 2));
+}
+
+#[test]
 fn lzw_literal_range_is_checked_before_appending() {
     let mut encoder = lzw::Encoder::new();
     let prefix = [0xfa, 0xfb];
