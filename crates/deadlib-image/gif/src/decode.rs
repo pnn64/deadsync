@@ -636,6 +636,22 @@ fn deinterlace(
     if height <= 2 {
         return Ok(());
     }
+    if height <= 64 {
+        permute_interlace::<1, false>(pixels, width, height, row)
+    } else if width == 1 {
+        permute_interlace::<1024, true>(pixels, width, height, row)
+    } else {
+        permute_interlace::<1024, false>(pixels, width, height, row)
+    }
+}
+
+#[inline(never)]
+fn permute_interlace<const WORDS: usize, const SINGLE_PIXEL: bool>(
+    pixels: &mut [u8],
+    width: usize,
+    height: usize,
+    row: &mut Vec<u8>,
+) -> Result<(), Error> {
     let mut narrow = [0; 64];
     let row = if width <= narrow.len() {
         &mut narrow[..width]
@@ -647,7 +663,8 @@ fn deinterlace(
     };
     // GIF heights fit u16. Walk each row-permutation cycle once, keeping only
     // its first row aside. Every other row moves directly to its destination.
-    let mut visited = [0u64; 1024];
+    let mut visited = [0u64; WORDS];
+    let word = |row: usize| if WORDS == 1 { 0 } else { row / 64 };
     let pass2 = height.div_ceil(8);
     let pass3 = pass2 + (height + 3) / 8;
     let pass4 = pass3 + (height + 1) / 4;
@@ -662,7 +679,7 @@ fn deinterlace(
         (pass >> 2) + (dest >> (pass & 3))
     };
     for start in 0..height {
-        if visited[start / 64] & (1 << (start % 64)) != 0 {
+        if visited[word(start)] & (1 << (start % 64)) != 0 {
             continue;
         }
         let mut source = source_row(start);
@@ -672,12 +689,16 @@ fn deinterlace(
         row.copy_from_slice(&pixels[start * width..(start + 1) * width]);
         let mut dest = start;
         loop {
-            visited[dest / 64] |= 1 << (dest % 64);
+            visited[word(dest)] |= 1 << (dest % 64);
             if source == start {
                 pixels[dest * width..(dest + 1) * width].copy_from_slice(row);
                 break;
             }
-            pixels.copy_within(source * width..(source + 1) * width, dest * width);
+            if SINGLE_PIXEL {
+                pixels[dest] = pixels[source];
+            } else {
+                pixels.copy_within(source * width..(source + 1) * width, dest * width);
+            }
             dest = source;
             source = source_row(dest);
         }
