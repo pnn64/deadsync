@@ -13,9 +13,8 @@ pub struct Decoder {
     next: u16,
     width: u8,
     minimum: u8,
-    previous_start: usize,
-    // A zero length denotes an empty dictionary history after CLEAR.
-    previous_length: usize,
+    // Same layout as a dictionary entry, with zero for an empty history.
+    previous: u64,
     bits: u64,
     bit_count: u8,
     ended: bool,
@@ -34,8 +33,7 @@ impl Decoder {
             next: 6,
             width: 3,
             minimum: 2,
-            previous_start: 0,
-            previous_length: 0,
+            previous: 0,
             bits: 0,
             bit_count: 0,
             ended: false,
@@ -65,7 +63,7 @@ impl Decoder {
         self.dictionary.clear();
         self.next = self.clear + 2;
         self.width = self.minimum + 1;
-        self.previous_length = 0;
+        self.previous = 0;
     }
     pub fn ended(&self) -> bool {
         self.ended
@@ -124,10 +122,13 @@ impl Decoder {
                             (entry & 4095) as usize,
                         )
                     } else if code == self.next && self.next < 4096 {
-                        if self.previous_length == 0 {
+                        if self.previous == 0 {
                             return Err(Error::Invalid("LZW first code is not a literal"));
                         }
-                        (self.previous_start, self.previous_length + 1)
+                        (
+                            self.origin + (self.previous >> 12) as usize,
+                            (self.previous & 4095) as usize + 1,
+                        )
                     } else {
                         return Err(Error::Invalid("undefined LZW code"));
                     };
@@ -157,8 +158,7 @@ impl Decoder {
                 if self.next == 4096 {
                     continue;
                 }
-                let previous_length = self.previous_length;
-                if previous_length != 0 {
+                if self.previous != 0 {
                     if self.dictionary.len() == self.dictionary.capacity() {
                         let bound = limit
                             .saturating_sub(self.origin)
@@ -167,13 +167,7 @@ impl Decoder {
                             .try_reserve_exact(bound - self.dictionary.len())
                             .map_err(|_| Error::Allocation)?;
                     }
-                    // Before the table freezes, even a one-bit minimum keeps
-                    // phrase lengths at most 4093. Thus relative offsets fit
-                    // 24 bits even when a caller's output prefix exceeds 4 GiB.
-                    // A frozen table adds no entries; CLEAR starts a new epoch.
-                    let entry = ((self.previous_start - self.origin) as u64) << 12
-                        | (previous_length + 1) as u64;
-                    self.dictionary.push(entry);
+                    self.dictionary.push(self.previous + 1);
                     self.next += 1;
                     // A one-bit minimum starts with next == 1 << width, so
                     // its first insertion crosses (rather than reaches) it.
@@ -183,8 +177,10 @@ impl Decoder {
                 } else {
                     self.origin = start;
                 }
-                self.previous_start = start;
-                self.previous_length = length;
+                // Before the table freezes, even a one-bit minimum keeps
+                // phrase lengths at most 4093. Relative offsets fit 24 bits
+                // even when a caller's output prefix exceeds 4 GiB.
+                self.previous = ((start - self.origin) as u64) << 12 | length as u64;
             }
         }
         Ok(())
