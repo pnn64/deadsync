@@ -209,6 +209,8 @@ impl<'a> Iterator for Fragments<'a> {
             [len @ 0..=254, rest @ ..] => (rest, *len as usize, true),
             [255, len @ 0..=254, rest @ ..] => (rest, 255 + *len as usize, true),
             [255, 255, len @ 0..=254, rest @ ..] => (rest, 510 + *len as usize, true),
+            // A maximum-sized body requires all 255 laces to be 255.
+            _ if self.body.len() == 255 * 255 => (&[][..], 255 * 255, false),
             lacing => {
                 let count = fragment_segment_count(lacing);
                 let last = lacing[count - 1];
