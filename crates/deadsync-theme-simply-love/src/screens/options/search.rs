@@ -70,11 +70,11 @@ impl SettingSearchState {
 
 /// The submenu a main Options entry opens, if any. Bookkeeping is left out:
 /// its rows are read-only counters, not settings.
-const fn item_submenu(id: ItemId) -> Option<SubmenuKind> {
+const fn item_submenu(state: &State, id: ItemId) -> Option<SubmenuKind> {
     Some(match id {
         ItemId::ArcadeOptions => SubmenuKind::Coin,
         ItemId::SystemOptions => SubmenuKind::System,
-        ItemId::GraphicsOptions => SubmenuKind::Graphics,
+        ItemId::GraphicsOptions => graphics_entry_kind(state),
         ItemId::InputOptions => SubmenuKind::Input,
         ItemId::LightsOptions => SubmenuKind::Lights,
         ItemId::MachineOptions => SubmenuKind::Machine,
@@ -96,6 +96,7 @@ const fn item_submenu(id: ItemId) -> Option<SubmenuKind> {
 /// The nested submenu a launcher row opens, mirroring `activate_current_selection`.
 const fn row_submenu(kind: SubmenuKind, id: SubRowId) -> Option<SubmenuKind> {
     Some(match (kind, id) {
+        (SubmenuKind::GraphicsBasic, SubRowId::AdvancedGraphics) => SubmenuKind::Graphics,
         (SubmenuKind::Input, SubRowId::InputOptions) => SubmenuKind::InputBackend,
         (SubmenuKind::InputBackend, SubRowId::SmxConfig) => SubmenuKind::SmxConfig,
         (SubmenuKind::OnlineScoring, SubRowId::GsBsOptions) => SubmenuKind::GrooveStats,
@@ -180,7 +181,7 @@ pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
             &main_location,
             item.help,
         );
-        if let Some(kind) = item_submenu(item.id) {
+        if let Some(kind) = item_submenu(state, item.id) {
             push_submenu_matches(state, &q, kind, &label, &mut matches);
         }
     }
@@ -396,7 +397,7 @@ fn prepare_submenu(state: &mut State, kind: SubmenuKind) {
 
 fn start_fade_to_submenu(state: &mut State, kind: SubmenuKind) {
     state.pending_submenu_kind = Some(kind);
-    state.pending_submenu_parent_kind = submenu_parent_kind_of(kind);
+    state.pending_submenu_parent_kind = submenu_parent_kind_of(state, kind);
     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
 }
 
@@ -413,6 +414,13 @@ pub(super) fn jump(state: &mut State, target: SearchTarget) {
         }
         (OptionsView::Main, SearchTarget::Row { kind, .. }) => {
             prepare_submenu(state, kind);
+            state.search_jump = Some(target);
+            start_fade_to_submenu(state, kind);
+            state.submenu_fade_t = 0.0;
+        }
+        (OptionsView::Submenu(current), SearchTarget::Row { kind, .. })
+            if current.is_graphics() && kind.is_graphics() =>
+        {
             state.search_jump = Some(target);
             start_fade_to_submenu(state, kind);
             state.submenu_fade_t = 0.0;

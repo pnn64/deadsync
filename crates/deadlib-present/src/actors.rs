@@ -1129,24 +1129,39 @@ pub enum TextAttributes {
     Owned(Vec<TextAttribute>),
     Shared(Arc<[TextAttribute]>),
     Reusable(Arc<Vec<TextAttribute>>),
+    /// Reveal a fraction of the laid-out glyphs of a plain text actor in
+    /// reading order. The complete text still determines wrap and alignment.
+    GlyphReveal(f32),
 }
 
 impl TextAttributes {
+    /// The per-character color and glow spans, when present.
     #[inline(always)]
     #[must_use]
     pub fn as_slice(&self) -> &[TextAttribute] {
         match self {
-            Self::Empty => &[],
+            Self::Empty | Self::GlyphReveal(_) => &[],
             Self::Owned(attributes) => attributes,
             Self::Shared(attributes) => attributes,
             Self::Reusable(attributes) => attributes,
         }
     }
 
+    /// Whether there are no spans or other per-glyph effects.
     #[inline(always)]
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.as_slice().is_empty()
+        !matches!(self, Self::GlyphReveal(_)) && self.as_slice().is_empty()
+    }
+
+    #[inline]
+    pub(crate) fn visible_glyphs(&self, count: usize) -> usize {
+        match self {
+            Self::GlyphReveal(fraction) => {
+                ((fraction.clamp(0.0, 1.0) * count as f32).round() as usize).min(count)
+            }
+            _ => count,
+        }
     }
 }
 

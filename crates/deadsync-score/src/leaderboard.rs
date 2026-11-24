@@ -13,6 +13,26 @@ use crate::{LocalReplayEdge, ScoreImportEndpoint};
 
 pub const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 
+pub struct CabinetSongRecord {
+    pub title: Arc<str>,
+    pub difficulty: Arc<str>,
+    pub initials: String,
+    pub percent: f64,
+}
+
+pub struct CabinetCourseRecord {
+    pub title: Arc<str>,
+    /// Cabinet initials and percentage on the 0–100 scale.
+    pub best: Option<(String, f64)>,
+}
+
+#[derive(Default)]
+pub struct CabinetRecords {
+    pub songs: Vec<CabinetSongRecord>,
+    pub marathon: Vec<CabinetCourseRecord>,
+    pub survival: Vec<CabinetCourseRecord>,
+}
+
 #[derive(Debug, Clone)]
 pub struct LeaderboardEntry {
     pub rank: u32,

@@ -11,7 +11,7 @@ use deadsync_config::frame_pacing::{
     OverlayMode, StutterSampleRing, seconds_to_us_u32, stutter_severity,
 };
 use deadsync_profile::PlayerSide;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme::Screen as Screen;
 use std::time::{Duration, Instant};
 use winit::dpi::PhysicalPosition;
 

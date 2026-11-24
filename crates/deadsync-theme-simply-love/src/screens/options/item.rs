@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_theme::views::SystemOptionsServiceRow;
 
 /// Typed identifier for each top-level Options menu row and submenu item.
 /// Used for dispatch so that item selection is string-free.
@@ -85,6 +86,7 @@ pub enum ItemId {
     GfxHideMouseCursor,
     GfxVisualDelay,
     GfxOverscanAdjustment,
+    GfxAdvanced,
 
     // Input Options submenu (launcher)
     InpConfigureMappings,
@@ -361,11 +363,35 @@ pub(super) fn submenu_inline_widths_fit(widths: &[f32], spacing: f32) -> bool {
 /// Builds the top-level rows shown for this host/config.
 pub(super) fn build_visible_items(
     capabilities: SimplyLoveUpdaterCapabilities,
+    service_order: &[SystemOptionsServiceRow],
 ) -> Vec<&'static Item> {
-    ITEMS
+    let mut items: Vec<_> = ITEMS
         .iter()
         .filter(|item| item_visible(item.id, capabilities))
-        .collect()
+        .collect();
+    if !service_order.is_empty() {
+        let priority = |item: &Item| {
+            let row = match item.id {
+                ItemId::ArcadeOptions => SystemOptionsServiceRow::Arcade,
+                ItemId::SystemOptions => SystemOptionsServiceRow::System,
+                ItemId::GraphicsOptions => SystemOptionsServiceRow::Graphics,
+                ItemId::DownloadPacks => SystemOptionsServiceRow::SongPacks,
+                ItemId::Downloads => SystemOptionsServiceRow::Downloads,
+                ItemId::InpTestInput => SystemOptionsServiceRow::TestInput,
+                ItemId::InpConfigureMappings => SystemOptionsServiceRow::ConfigureMappings,
+                ItemId::ReloadSongsCourses => SystemOptionsServiceRow::ReloadSongsCourses,
+                _ => return service_order.len(),
+            };
+            service_order
+                .iter()
+                .position(|&entry| entry == row)
+                .unwrap_or(service_order.len())
+        };
+        items.extend(INPUT_OPTIONS_ITEMS.iter().filter(|item| priority(item) < service_order.len()));
+        // Stable sorting keeps the original order of additional DeadSync rows.
+        items.sort_by_key(|item| priority(item));
+    }
+    items
 }
 
 /// Returns the initialization-time list of top-level rows for this host/config.

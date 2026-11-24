@@ -5,13 +5,19 @@
 // `--console` is set). No effect on non-Windows targets.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod theme_registry;
+
 use deadlib_platform::logging::{self, StartupBuildInfo};
 use deadsync_config as config;
 use deadsync_profile::compat as profile;
 use deadsync_shell::app;
+use deadsync_shell::mounted_theme;
+use deadsync_theme::main_menu::ThemeMainMenu;
 use deadsync_theme_simply_love::{i18n, visual_styles};
+use deadsync_theme_stepmania_395::{PackageIntro, PackageOptions, PackageTitle, TITLE_FONT};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
+use std::path::Path;
 
 fn startup_lines(
     cfg: &config::app_config::Config,
@@ -260,6 +266,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // and before profile/audio/screens which may use tr() for display strings.
     let locale = deadsync_assets::language::resolve_locale(cfg.language_flag);
     i18n::init(deadsync_assets::language::load(&locale));
+    let package_intro = package_arg_path(&cli.remaining, "--theme-intro")?
+        .map(|path| PackageIntro::open(path, Some(&locale)))
+        .transpose()?;
+    let package_title = package_arg_path(&cli.remaining, "--theme-title")?
+        .map(|path| PackageTitle::open(path, Some(&locale)))
+        .transpose()?;
+    let package_options = package_arg_path(&cli.remaining, "--theme-options")?
+        .map(|path| PackageOptions::open(path, Some(&locale)))
+        .transpose()?;
 
     #[cfg(windows)]
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
@@ -318,5 +333,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    app::run(dirs, audio, music_clock, live_case)
+    app::run(dirs, audio, music_clock, live_case, move |config| {
+        let mut mount = theme_registry::mount(config.theme_flag);
+        if let Some((intro, textures)) = package_intro {
+            mount.attract = Some(Box::new(intro));
+            mount.resources.textures.extend(textures);
+        }
+        if let Some((mut title, font, textures)) = package_title {
+            mount.title = Box::new(|color_index| {
+                PackageTitle::set_menu_color_index(&mut title, color_index);
+                mounted_theme::InstalledMenu::mount_state::<PackageTitle>(title, |_| ())
+            });
+            mount.resources.font_paths.push((TITLE_FONT, font));
+            mount.resources.textures.extend(textures);
+        }
+        if let Some(options) = package_options {
+            mount.system_options = Some(Box::new(options.presentation));
+            mount.resources.font_paths.extend(options.fonts);
+            mount.resources.textures.extend(options.textures);
+        }
+        mount
+    })
+}
+
+fn package_arg_path<'a>(args: &'a [String], flag: &str) -> std::io::Result<Option<&'a Path>> {
+    let mut path = None;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        if arg != flag {
+            continue;
+        }
+        if path.is_some() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("{flag} may be supplied only once"),
+            ));
+        }
+        path = Some(Path::new(
+            args.next()
+                .filter(|value| !value.is_empty() && !value.starts_with("--"))
+                .ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("{flag} requires a theme folder"),
+                    )
+                })?,
+        ));
+    }
+    Ok(path)
 }

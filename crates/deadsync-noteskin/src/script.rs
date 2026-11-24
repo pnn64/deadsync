@@ -437,55 +437,65 @@ pub fn parse_script_number(raw: &str) -> Option<f32> {
 /// Bind logical screen globals when an actor is loaded. Compiled commands stay
 /// independent of the display, so the same cache can be used at another size.
 pub fn resolve_screen_args(commands: &mut HashMap<String, String>, width: f32, height: f32) {
+    for script in commands.values_mut() {
+        if let Cow::Owned(resolved) = bind_screen_args(script, width, height) {
+            *script = resolved;
+        }
+    }
+}
+
+/// Binds logical screen globals in a single actor command string.
+#[must_use]
+pub fn bind_screen_args(script: &str, width: f32, height: f32) -> Cow<'_, str> {
+    if !script.contains("SCREEN_") {
+        return Cow::Borrowed(script);
+    }
     // ScreenDimensions::ReloadScreenDimensions publishes integer Lua globals,
     // including truncated centers when a logical dimension is odd.
     let center_x = f64::from((width * 0.5) as i32);
     let center_y = f64::from((height * 0.5) as i32);
     let width = f64::from(width as i32);
     let height = f64::from(height as i32);
-    for script in commands.values_mut() {
-        if !script.contains("SCREEN_") {
+    let normalized = normalized_script_command(script);
+    let mut out = String::with_capacity(normalized.len());
+    let mut changed = false;
+    for raw in normalized.split(';') {
+        if !out.is_empty() {
+            out.push(';');
+        }
+        let Some(token) = split_script_token(raw) else {
+            out.push_str(raw);
             continue;
-        }
-        let normalized = normalized_script_command(script);
-        let mut out = String::with_capacity(normalized.len());
-        let mut changed = false;
-        for raw in normalized.split(';') {
-            if !out.is_empty() {
-                out.push(';');
-            }
-            let Some(token) = split_script_token(raw) else {
-                out.push_str(raw);
-                continue;
-            };
-            out.push_str(token.command().as_str());
-            for arg in token.args() {
-                out.push(',');
-                let value = arg
-                    .contains("SCREEN_")
-                    .then(|| {
-                        crate::lua::parse_float_expr(arg, &mut |name| match name {
-                            "SCREEN_WIDTH" | "SCREEN_RIGHT" => Some(width),
-                            "SCREEN_HEIGHT" | "SCREEN_BOTTOM" => Some(height),
-                            "SCREEN_CENTER_X" => Some(center_x),
-                            "SCREEN_CENTER_Y" => Some(center_y),
-                            "SCREEN_LEFT" | "SCREEN_TOP" => Some(0.0),
-                            _ => None,
-                        })
+        };
+        out.push_str(token.command().as_str());
+        for arg in token.args() {
+            out.push(',');
+            let value = arg
+                .contains("SCREEN_")
+                .then(|| {
+                    crate::lua::parse_float_expr(arg, &mut |name| match name {
+                        "SCREEN_WIDTH" | "SCREEN_RIGHT" => Some(width),
+                        "SCREEN_HEIGHT" | "SCREEN_BOTTOM" => Some(height),
+                        "SCREEN_CENTER_X" => Some(center_x),
+                        "SCREEN_CENTER_Y" => Some(center_y),
+                        "SCREEN_LEFT" | "SCREEN_TOP" => Some(0.0),
+                        _ => None,
                     })
-                    .flatten();
-                if let Some(value) = value {
-                    use std::fmt::Write;
-                    let _ = write!(out, "{value}");
-                    changed = true;
-                } else {
-                    out.push_str(arg);
-                }
+                })
+                .flatten();
+            if let Some(value) = value {
+                use std::fmt::Write;
+                let _ = write!(out, "{value}");
+                changed = true;
+            } else {
+                out.push_str(arg);
             }
         }
-        if changed {
-            *script = out;
-        }
+    }
+    if changed {
+        Cow::Owned(out)
+    } else {
+        Cow::Borrowed(script)
     }
 }
 

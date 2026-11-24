@@ -493,7 +493,12 @@ pub(super) mod tests {
         assert!(!is_row_visible(row_map, 1, visibility));
 
         let visible_rows = count_visible_row_slots(row_map, visibility);
-        let window = compute_row_window(visible_rows, [0, 0], active);
+        let window = compute_row_window(
+            visible_rows,
+            [0, 0],
+            active,
+            usize::from(super::DEFAULT_VIEWPORT.slots),
+        );
         let mut visible_idx = 0;
         let (parent_f_pos, parent_hidden) =
             row_f_pos_for_index(row_map, 0, visibility, &mut visible_idx, window, 0.0, 0.0);
@@ -3695,39 +3700,79 @@ pub(super) mod tests {
         let visibility =
             super::super::row_visibility(rows, state.active, state.option_masks, state.policy);
         let (_, step) = row_layout_params();
-        for p1 in 0..rows.len() {
-            for p2 in 0..rows.len() {
-                if !is_row_visible(rows, p1, visibility) || !is_row_visible(rows, p2, visibility) {
-                    continue;
-                }
-                let tweens = init_row_tweens(
-                    rows,
-                    [p1, p2],
-                    state.active,
-                    state.option_masks,
-                    state.policy,
+        let alternate = deadsync_theme::player_options::PlayerOptionsViewport {
+            slots: 8,
+            separate_exit: true,
+            row_tween_seconds: 0.15,
+        };
+        for (viewport, p1, p2) in [state.viewport, alternate]
+            .into_iter()
+            .flat_map(|viewport| {
+                (0..rows.len())
+                    .flat_map(move |p1| (0..rows.len()).map(move |p2| (viewport, p1, p2)))
+            })
+        {
+            if !is_row_visible(rows, p1, visibility) || !is_row_visible(rows, p2, visibility) {
+                continue;
+            }
+            let tweens = init_row_tweens(
+                rows,
+                [p1, p2],
+                state.active,
+                state.option_masks,
+                state.policy,
+                viewport,
+            );
+            for player_row in [p1, p2] {
+                assert_eq!(
+                    tweens[player_row].to_a, 1.0,
+                    "selected row must be fully visible: {p1}, {p2}"
                 );
-                for player_row in [p1, p2] {
-                    assert_eq!(
-                        tweens[player_row].to_a, 1.0,
-                        "selected row must be fully visible: {p1}, {p2}"
-                    );
-                }
-                let mut bottom = 0.0_f32;
-                for (i, tween) in tweens.iter().enumerate().filter(|(_, t)| t.to_a > 0.0) {
-                    let height = ROW_HEIGHT + (row_layout_slots(rows.id_at(i)) - 1) as f32 * step;
-                    assert!(
-                        tween.to_y - height * 0.5 >= bottom - 0.01,
-                        "rows overlap at {p1}, {p2}: {i}"
-                    );
-                    bottom = tween.to_y + height * 0.5;
-                    assert!(bottom < 404.0, "row must remain above help box");
-                }
-                if p1 == extras || p2 == extras {
-                    assert_eq!(tweens[extras].to_a, 1.0);
-                }
+            }
+            let mut bottom = 0.0_f32;
+            for (i, tween) in tweens.iter().enumerate().filter(|(_, t)| t.to_a > 0.0) {
+                let height = ROW_HEIGHT + (row_layout_slots(rows.id_at(i)) - 1) as f32 * step;
+                assert!(
+                    tween.to_y - height * 0.5 >= bottom - 0.01,
+                    "rows overlap at {p1}, {p2}: {i}"
+                );
+                bottom = tween.to_y + height * 0.5;
+                assert!(bottom < 404.0, "row must remain above help box");
+            }
+            if p1 == extras || p2 == extras {
+                assert_eq!(tweens[extras].to_a, 1.0);
             }
         }
+    }
+
+    #[test]
+    fn separate_exit_and_scroll_positions_follow_the_selectable_order() {
+        use super::super::*;
+        use deadsync_theme::player_options::PlayerOptionsViewport;
+
+        let (mut state, assets) = setup_versus_state();
+        apply_pane(&mut state, OptionsPane::Advanced);
+        set_viewport(
+            &mut state,
+            PlayerOptionsViewport {
+                slots: 8,
+                separate_exit: true,
+                row_tween_seconds: 0.15,
+            },
+        );
+        let exit = state.pane().row_map.len() - 1;
+        assert_eq!(state.pane().row_map.id_at(exit), RowId::Exit);
+        assert_eq!(state.pane().row_tweens[exit].to_a, 0.0);
+
+        state.pane_mut().selected_row[P2] = exit;
+        update(&mut state, 0.15, &assets, &mut Vec::new());
+        assert_eq!(state.pane().scroll_position, [0.0, 1.0]);
+        assert_eq!(state.pane().row_tweens[exit].a(), 1.0);
+        let (first_y, pitch) = row_layout_params();
+        assert_eq!(
+            state.pane().row_tweens[exit].y(),
+            pitch.mul_add(8.0, first_y)
+        );
     }
 
     #[cfg(target_os = "windows")]
@@ -3776,6 +3821,7 @@ pub(super) mod tests {
             deadsync_theme::ThemeAssetManifest {
                 fonts: &crate::resources::FONT_ASSETS,
                 textures: std::iter::empty(),
+                embedded_pngs: &[],
                 texture_needs_repeat_sampler: crate::resources::texture_needs_repeat_sampler,
             },
         )
@@ -3839,6 +3885,7 @@ pub(super) mod tests {
                 state.active,
                 state.option_masks,
                 state.policy,
+                state.viewport,
             );
             for (player, choice) in [(P1, 2), (P2, 7)] {
                 state
@@ -4502,6 +4549,7 @@ pub(super) mod tests {
             state.active,
             state.option_masks,
             state.policy,
+            state.viewport,
         );
         for (actual, expected) in state.pane().row_tweens.iter().zip(expected) {
             assert!((actual.to_y - expected.to_y).abs() < 0.001);

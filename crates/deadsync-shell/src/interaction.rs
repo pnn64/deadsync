@@ -7,7 +7,7 @@ use deadsync_config::frame_pacing::apply_tab_acceleration;
 use winit::keyboard::KeyCode;
 
 use crate::{
-    ActiveTheme, Command, ThemeScreen as Screen, TransitionState, navigation::menu_exit_uses_fade,
+    Command, ThemeScreen as Screen, TransitionState, navigation::menu_exit_uses_fade,
 };
 
 const MESSAGE_HOLD_SECONDS: f32 = 3.33;
@@ -179,7 +179,7 @@ impl ShellInteractionState {
         screen: Screen,
         transition: &TransitionState,
     ) -> ProcessExitPlan {
-        if menu_exit_uses_fade::<ActiveTheme>(screen, transition) {
+        if menu_exit_uses_fade(screen, transition) {
             self.exit_intent = match request {
                 ProcessExitRequest::Exit => ExitIntent::Exit,
                 ProcessExitRequest::Shutdown => ExitIntent::Shutdown,

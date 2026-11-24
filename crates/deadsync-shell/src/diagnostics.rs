@@ -1,7 +1,8 @@
 use deadlib_audio_core::OutputTimingSnapshot;
-use deadlib_render_core::{ClockDomainTrace, PresentStats};
-use deadsync_theme::views::AudioTimingView;
-use deadsync_theme_simply_love::views::TimingHealth;
+use deadlib_render_core::{ClockDomainTrace, PresentModeTrace, PresentStats};
+use deadsync_theme::views::{AudioTimingView, TimingHealthView};
+
+pub(crate) type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, AudioTimingView>;
 
 const fn audio_timing_view(audio: OutputTimingSnapshot) -> AudioTimingView {
     AudioTimingView {

@@ -20,6 +20,7 @@ use deadsync_profile as profile_data;
 use deadsync_song_lua::gameplay_presentation::FieldHudBuffers;
 use deadsync_song_lua::playback::FieldFrame;
 use deadsync_theme::NotefieldHudStyle;
+use deadsync_theme::views::{GameplayHoldAtlas, GameplayHud, GameplayTapAtlas};
 use std::cell::Cell;
 
 use super::display_mods::{self, DisplayModsFrame};
@@ -401,6 +402,18 @@ pub(crate) struct GameplayNotefieldPlan {
     pub(crate) options: NotefieldOptions,
     pub(crate) small_combo_font: &'static str,
     combo_font: Option<&'static str>,
+    uses_default_tap: bool,
+    tap_atlas: Option<GameplayTapAtlas>,
+    uses_default_hold: bool,
+    hold_atlas: Option<GameplayHoldAtlas>,
+}
+
+impl GameplayNotefieldPlan {
+    pub(crate) fn install_feedback<A>(&mut self, hud: &GameplayHud<A>) {
+        self.hud_style.field_feedback = Some(hud.field_feedback);
+        self.tap_atlas = self.uses_default_tap.then_some(hud.default_tap_atlas);
+        self.hold_atlas = self.uses_default_hold.then_some(hud.default_hold_atlas);
+    }
 }
 
 pub(crate) fn gameplay_notefield_plan(
@@ -520,6 +533,12 @@ pub(crate) fn gameplay_notefield_plan(
         options,
         small_combo_font: zmod_small_combo_font(profile.combo_font),
         combo_font: zmod_combo_font_name(profile.combo_font),
+        uses_default_tap: profile.judgment_graphic.texture_key()
+            == Some(profile_data::JudgmentGraphic::DEFAULT_KEY),
+        tap_atlas: None,
+        uses_default_hold: profile.hold_judgment_graphic.texture_key()
+            == Some(profile_data::HoldJudgmentGraphic::DEFAULT_KEY),
+        hold_atlas: None,
     }
 }
 
@@ -635,6 +654,12 @@ pub(crate) fn compose_hud(
             combo_color,
             font: notefield_plan.combo_font,
             number_text_slot: super::FRAME_TEXT_COMBO_BASE + player_idx as u8,
+            label_text_slot: super::FRAME_TEXT_COMBO_LABEL_BASE + player_idx as u8,
+            recent_tap_age: style.field_feedback.and_then(|_| {
+                p.last_judgment
+                    .as_ref()
+                    .map(|tap| (elapsed_screen - tap.started_at_screen_s).max(0.0))
+            }),
             transform: frame.combo_transform,
         }
     });
@@ -689,19 +714,42 @@ pub(crate) fn compose_hud(
             },
         );
 
-    let judgment_sprite = frame
-        .judgment_texture
-        .map(|texture| TapJudgmentSprite {
-            source: SpriteSource::TextureHandle {
-                key: texture.key.clone(),
-                handle: textures.texture_handle(&texture.key),
-                generation: textures.texture_registry_generation(),
-            },
-            frame_size: texture.frame_size,
-            frame_cols: texture.frame_cols,
-            frame_rows: texture.frame_rows,
-        })
-        .or_else(|| {
+    let tap = if frame.judgment_visible
+        && !blind_active
+        && let Some(render) = p.last_judgment.as_ref()
+    {
+        use deadsync_notefield::TapJudgmentAnimation;
+        let theme_atlas = notefield_plan.tap_atlas.filter(|atlas| {
+            frame.judgment_texture.is_none()
+                && textures.texture_handle(atlas.key) != deadlib_render_core::INVALID_TEXTURE_HANDLE
+        });
+        let animation = match (options.judgment_animation, theme_atlas) {
+            (TapJudgmentAnimation::Default, Some(atlas)) => {
+                TapJudgmentAnimation::Tween(atlas.tween)
+            }
+            (animation, _) => animation,
+        };
+        let sprite = if !TapJudgmentHudFrame::render_active(render, elapsed_screen, animation) {
+            None
+        } else if let Some(texture) = frame.judgment_texture {
+            Some(TapJudgmentSprite {
+                source: SpriteSource::TextureHandle {
+                    key: texture.key.clone(),
+                    handle: textures.texture_handle(&texture.key),
+                    generation: textures.texture_registry_generation(),
+                },
+                frame_size: texture.frame_size,
+                frame_cols: texture.frame_cols,
+                frame_rows: texture.frame_rows,
+            })
+        } else if let Some(atlas) = theme_atlas {
+            Some(TapJudgmentSprite {
+                source: SpriteSource::static_texture(atlas.key),
+                frame_size: atlas.frame_size,
+                frame_cols: atlas.frame_cols,
+                frame_rows: atlas.frame_rows,
+            })
+        } else {
             judgment_texture
                 .zip(judgment_assets.judgment_sprite_metadata())
                 .map(|(texture, sprite)| TapJudgmentSprite {
@@ -710,16 +758,11 @@ pub(crate) fn compose_hud(
                     frame_cols: sprite.frame_cols,
                     frame_rows: sprite.frame_rows,
                 })
-        });
-    let tap = if frame.judgment_visible
-        && !blind_active
-        && let Some(render) = p.last_judgment.as_ref()
-        && TapJudgmentHudFrame::render_active(render, elapsed_screen, options.judgment_animation)
-        && let Some(sprite) = judgment_sprite
-    {
-        Some(TapJudgmentHudFrame {
+        };
+        sprite.map(|sprite| TapJudgmentHudFrame {
             render,
             sprite,
+            animation,
             transform: frame.judgment_transform,
         })
     } else {
@@ -730,12 +773,13 @@ pub(crate) fn compose_hud(
     } else {
         &[]
     };
-    let hold_judgments =
-        if frame.judgment_visible && !blind_active && hold_judgment_texture.is_some() {
-            state.hold_judgments_for_columns(col_start, num_cols)
-        } else {
-            &[]
-        };
+    let hold_judgments = if frame.judgment_visible && !blind_active
+        && (hold_judgment_texture.is_some() || notefield_plan.hold_atlas.is_some())
+    {
+        state.hold_judgments_for_columns(col_start, num_cols)
+    } else {
+        &[]
+    };
     let held_miss_sprite = if held_misses.iter().any(Option::is_some)
         && let Some((texture, scale)) = held_miss_texture
         && let Some(sprite) = judgment_assets.held_miss_sprite_metadata()
@@ -750,19 +794,32 @@ pub(crate) fn compose_hud(
     } else {
         None
     };
-    let hold_sprite = if hold_judgments.iter().any(Option::is_some)
-        && let Some(texture) = hold_judgment_texture
-        && let Some(sprite) = judgment_assets.hold_judgment_sprite_metadata()
-    {
-        Some(IndicatorSprite {
-            source: texture.actor_texture_source(actor_resources, textures),
-            frame_size: sprite.frame_size,
-            frame_cols: sprite.frame_cols,
-            frame_rows: sprite.frame_rows,
-            scale: 1.0,
-        })
+    let (hold_sprite, hold_style) = if !hold_judgments.iter().any(Option::is_some) {
+        (None, None)
+    } else if let Some(atlas) = notefield_plan.hold_atlas.filter(|atlas| {
+        textures.texture_handle(atlas.key) != deadlib_render_core::INVALID_TEXTURE_HANDLE
+    }) {
+        (
+            Some(IndicatorSprite {
+                source: SpriteSource::static_texture(atlas.key),
+                frame_size: atlas.frame_size,
+                frame_cols: 1,
+                frame_rows: 2,
+                scale: 1.0,
+            }),
+            Some(atlas.style),
+        )
     } else {
-        None
+        let sprite = hold_judgment_texture
+            .zip(judgment_assets.hold_judgment_sprite_metadata())
+            .map(|(texture, sprite)| IndicatorSprite {
+                source: texture.actor_texture_source(actor_resources, textures),
+                frame_size: sprite.frame_size,
+                frame_cols: sprite.frame_cols,
+                frame_rows: sprite.frame_rows,
+                scale: 1.0,
+            });
+        (sprite, None)
     };
     let judgment_frame = (tap.is_some() || held_miss_sprite.is_some() || hold_sprite.is_some())
         .then_some(JudgmentHudFrame {
@@ -771,6 +828,7 @@ pub(crate) fn compose_hud(
             held_miss_sprite,
             hold_judgments,
             hold_sprite,
+            hold_style,
         });
     let hud_frame = NotefieldHudFrameView {
         combo: combo_frame,

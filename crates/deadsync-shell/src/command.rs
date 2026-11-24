@@ -1,45 +1,12 @@
-use deadlib_render_core::MeshVertex;
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_profile::{PlayStyle, PlayerSide};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme::views::DensityGraphView as DensityGraphSource;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
-use deadsync_theme_simply_love::screens::components::shared::density;
-use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
+use deadsync_theme::Screen as Screen;
+use deadsync_theme::select_music::DensityGraphSlot;
 use log::{debug, warn};
 use std::path::PathBuf;
-use std::sync::Arc;
-
-#[inline(always)]
-pub fn fallback_banner_key(color_index: i32) -> String {
-    let banner_num = color_index.rem_euclid(12) + 1;
-    format!("banner{banner_num}.png")
-}
-
-pub fn build_density_graph_mesh(
-    chart_opt: Option<DensityGraphSource>,
-    wide_screen: bool,
-) -> Option<Arc<[MeshVertex]>> {
-    let graph_w = if wide_screen { 286.0 } else { 276.0 };
-    let graph_h = 64.0;
-    chart_opt.and_then(|chart| {
-        let verts = density::build_density_histogram_mesh(
-            &chart.measure_nps_vec,
-            chart.max_nps,
-            &chart.measure_seconds_vec,
-            chart.first_second,
-            chart.last_second,
-            graph_w,
-            graph_h,
-            0.0,
-            graph_w,
-            None,
-            1.0,
-        );
-        (!verts.is_empty()).then(|| Arc::from(verts))
-    })
-}
 
 pub struct CommandTimingResult {
     #[cfg(test)]
@@ -273,26 +240,5 @@ mod tests {
         assert_eq!(timing.kind, CommandKind::SetBanner);
         assert_eq!(timing.label, "SetBanner");
         assert_eq!(timing.log, CommandTimingLog::CommandTiming);
-    }
-
-    #[test]
-    fn fallback_banner_key_preserves_color_cycle() {
-        assert_eq!(fallback_banner_key(0), "banner1.png");
-        assert_eq!(fallback_banner_key(12), "banner1.png");
-        assert_eq!(fallback_banner_key(-1), "banner12.png");
-    }
-
-    #[test]
-    fn density_graph_wrapper_handles_missing_and_populated_charts() {
-        assert!(build_density_graph_mesh(None, false).is_none());
-        let source = DensityGraphSource {
-            max_nps: 8.0,
-            measure_nps_vec: vec![2.0, 8.0, 4.0],
-            measure_seconds_vec: vec![0.0, 1.0, 2.0],
-            first_second: 0.0,
-            last_second: 2.0,
-        };
-
-        assert!(build_density_graph_mesh(Some(source), true).is_some());
     }
 }

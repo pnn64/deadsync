@@ -10,10 +10,77 @@ scoring, failure, input semantics, and chart behavior belong to the game.
 | Game | `deadsync-*`, excluding themes and the application shell | Timing, judgments, scoring, player/session state, logical input, receptors, arrows, notefields, noteskins, song Lua, profiles, and game services. No dependency on theme crates. |
 | Themes | `deadsync-theme`, `deadsync-theme-*` | Screen presentation, layout, fonts, colors, menus, evaluation, and HUD appearance. Consume game data and translate user actions into requests. |
 
-Production dependencies point downward. Themes can use game and engine crates;
-game crates can use engine crates. The `deadsync` executable and `deadsync-shell`
-are the composition roots that select and connect the concrete implementation.
-Neither is a dependency of engine, game, or theme crates.
+Production dependencies point downward. Themes can use game and engine crates.
+Game crates can use engine crates. The `deadsync` executable selects the
+installed theme in `src/theme_registry.rs` and passes its presentation to
+`deadsync-shell`. Neither crate is a dependency of engine, game, or theme crates.
+
+The mount supplies title, stage, selection, System Options, Player Options,
+attract, and chat presentations and their supplemental assets. The shell
+passes game state, elapsed time, input intent, and ready media through
+contracts in `deadsync-theme`. Themes own the layout, animation, resource
+choices, and presentation state. OpenITG is a production dependency of
+the executable. Shell integration tests exercise the same
+registry as the executable.
+
+The title mount adapts each theme once at startup. OpenITG uses the shared
+focus and input handling for the list of menu actions.
+Each theme owns its presentation clock and receives the same prepared
+credit and session facts. The shell admits Start and records the physical
+side before the title requests profile selection.
+
+The shell uses shared `Screen` roles for stage launch, restart, Practice,
+profile selection, and Evaluation return. `deadsync-core::session_flow`
+resolves optional session steps using machine settings and those roles.
+The title presentation emits a destination after the session records the
+side that pressed Start. Theme screen IDs remain available to presentation.
+Song Lua's legacy screen names resolve to the same roles, and normal stage
+completion and reload still go through the game-owned lifecycle.
+
+Evaluation input emits a departure intent. The game selects the song or
+course return from the recorded origin. The mounted overview can supply
+its departure cue, readiness time, duration, and overlay through
+`StagePresentation`. The shell advances its existing transition clock.
+The result view borrows that elapsed time for animation while the visit
+clock holds its original value.
+
+The shell prepares one immutable score snapshot for each song or course
+result. The mounted Evaluation overview and the Simply Love panes borrow
+those records. Course paging shares the same records, including the timing
+and life histories. The score crate resolves the displayed Routine grade
+from the combined percentage and the participants' failure states.
+The shell prepares the visible song or course banner through the same cache
+when a result page opens. The mounted stage chooses its results music and
+which cues the fallback panes may play during the visit.
+
+All Player Options layouts consume the same editor and submit
+`deadsync-profile-gameplay::stage_options::StageOptions`. The mounted layout
+supplies its viewport and transitions. The game resolves stage scroll speed,
+tournament restrictions, and Golf settings on owned profile copies.
+Content reload and bulk ReplayGain workers publish progress through
+`deadsync-assets::progress`. Simply Love resolves its visual style, screen
+bars, background movie, wheel fallback banners, and density mesh in its theme
+crate.
+
+Simply Love resolves its Step Statistics and upper NPS graph dimensions,
+scroll window, and scale from the prepared stage. The stage allocates the
+optional graph's life sample buffers before play and samples the same game
+life and timing data. The shell forwards the saved step artist preference
+to Select Music for the layout to interpret. Twitch connection state stays
+with the shell service. The mounted overlay reads a borrowed chat snapshot
+and owns placement, text, and its actor cache.
+
+Shell services accept runtime requests and publish events through
+`deadsync-theme::app_requests`. The song search worker uses the game catalog
+and ranking in `deadsync-simfile`. Each theme owns any search overlay and
+passes the current chart type in its request.
+
+The shell still depends on the default theme for the Player Options editor,
+parts of Select Music, System Options, Evaluation, and the gameplay frame
+composer's types. The executable mounts the composer and Twitch overlay.
+Gameplay, Practice and the attract demonstration use the supplied construction
+hooks on the shared stage. The installed stage presentation supplies each
+theme's HUD where available.
 
 ## Shared contracts
 
@@ -72,8 +139,8 @@ Normal gameplay effects carry the original game action to the shell instead of
 first becoming a concrete screen request. The shell calls the game policy for
 each effect when it executes, after preceding effects have changed session state.
 It reads failure state only for normal completion from gameplay, and consumes a
-pending restart before offset-prompt or transition-busy early returns. The theme
-maps the resulting destination to its screens. Explicit song-Lua navigation to
+pending restart before offset-prompt or transition-busy early returns. The shared
+screen contract maps the destination to a screen role. Explicit song-Lua navigation to
 Evaluation or Select Music uses the same policy through a compatibility adapter;
 other named destinations and validation before End retain their existing paths.
 No-op actions still become empty effects, and existing effect buffers are reused.
@@ -178,6 +245,12 @@ clocks at their existing media boundaries, and plays scheduled Lua sounds
 after draining gameplay audio. Themes supply HUD and field presentation
 separately.
 
+`deadsync-theme::views::GameplayHud` receives read-only stage facts for the
+standard life meter, percentage score, song meter, difficulty, and stage
+badge. The shared layer order keeps those actors reachable through the
+existing song Lua hooks. The presenter may also supply fallback background
+art for songs without media.
+
 `deadsync-song-lua::gameplay_presentation` drives frame composition through
 `GameplayFramePresenter`. The presenter supplies screen layers, notefield
 actors, and any final overlays. The game builds frame options from the live
@@ -194,7 +267,30 @@ and live attack effects for gameplay. Practice editing uses base options and
 its explicit scroll override. The compositor sends these resolved inputs,
 the borrowed Lua columns and note visibility, and the current authored judgment
 texture to the field presenter. Both native and Lua composition use the same
-preparation. The presenter supplies HUD assets and layout.
+preparation and resolve the notefield perspective from the Player position.
+Native playback takes the stage's prepared position, and scripted playback
+supplies the evaluated Player state. The presenter supplies HUD assets and
+layout. The system overlay draws outside song cameras and captures, while
+the gameplay exit prompt participates in the song's Overlay.
+Eligible Judgment proxies borrow the retained HUD draw range. Judgment proxies
+inside render-target captures use the prepared actor source. Both paths capture
+the tap sprite and its optional overlay. Lane hold feedback stays in the
+whole-Player draw. The song Lua host loads the frame metadata when it binds
+a judgment texture to a generated actor.
+A tap judgment actor created without a texture exposes logical frame indices
+until a chart loads a sprite sheet.
+
+Game results count jumps from finalized rows on the playable chart and retain
+combo intervals at the existing row and checkpoint scoring boundaries. Course
+assembly adds planned jumps for unplayed finite-course songs and joins combo
+runs carried across songs. Themes receive these results through the evaluation
+view, alongside the existing song times and life graph.
+
+Runtime Song Lua measures a foreground actor tree's remaining tween time after
+`On` and converts it to an inclusive final song beat. Baked Song Lua records
+the same window during stage preparation. Composition uses the window for the
+foreground's actors, proxy requests, and render targets. Shared screen and
+player tracks are evaluated on their own timelines.
 
 Stage preparation prewarms the notefield model cache against the selected
 noteskins and sizes the hold mesh and field capture buffers. The stage retains
@@ -508,15 +604,14 @@ cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 
 ## Screen transitions
 
-The shell runs the shared transition clock using the selected theme's screen
-type. `ThemeTransitions` supplies transition actors, actor-fade timing, and
-presentation routing for non-play screens. Simply Love owns menu fades, overlay
-opacity, and its compatibility names for `current_screen.txt`.
+The shell runs the transition clock with the shared `deadsync_theme::Screen`
+roles. The installed theme supplies its title and modifier-entry actors, fade
+timing, and local screen identity. External consumers of `current_screen.txt`
+use the shared compatibility names for both themes.
 
-`ThemeScreenFlow` identifies the theme's screens for play, results, selection,
-and player options. The shell uses those IDs for stage transitions, course
-continuation, and keeping the temporary Practice rate across player options.
-Themes can choose other IDs and add screens while using the same stage routing.
+The shared roles drive stage transitions, course continuation, and retention
+of the temporary Practice rate across a visit to Player Options. Concrete
+themes supply their own `ThemeScreenId` values for presentation.
 
 `ThemeTransitionAudio` supplies presentation music, preview continuity, and
 screen sound cleanup. Simply Love resolves tracks when a cue starts. The shell
@@ -534,16 +629,15 @@ Normal gameplay sends stage actions, Lua reload requests, and lobby work
 directly to the shell in frame order. The shell keeps course continuation and
 stage restart on the gameplay lifecycle. The game interprets the default and
 `ScreenEvaluationStage` as completion, `ScreenSelectMusic` as cancellation, and
-`ScreenGameplay` as reload. The shell maps other standard Lua destinations to
-screen roles. Themes can expose additional named presentation screens, which
-are validated before the live scene ends.
+`ScreenGameplay` as reload. The shell validates other supported legacy Lua
+destinations against shared roles before the live scene ends.
 Gameplay frames under a screen transition still dispatch lobby work in order.
 
 The game-owned Practice session coordinates editor input, the edit seek clock,
 chart playback, and loop restarts. The shell drives the session directly and
 applies its rate changes after draining game audio commands. The session chooses
-the destination on menu activation, and the shell resolves it through the theme's
-screen roles. A reload restores the game editor state and the theme's saved view.
+the destination on menu activation, and the shell maps it to a shared role.
+A reload restores the game editor state and the theme's saved view.
 
 `deadsync-profile-gameplay` resolves stage-local scroll options for preloading,
 Practice, and Gameplay. The resolver applies the No CMod alternative and any
@@ -598,19 +692,146 @@ The title menu mounts through the selected theme's presentation interface. The
 shell prepares credit and service status, and the theme owns menu state, input
 feedback, animation, and actor composition.
 
-Player Options mounts through the selected theme for song and course entry,
-input, updates, and actor composition. The shell supplies device and asset
-views, manages preview work and uploads, and reads the submitted game settings
-through the interface. Recovery restores the submitted scroll speeds through
-the same entry path. `deadsync-profile-gameplay` defines the session and settings
-view used for startup and recovery. Simply Love's standalone initializer keeps
-its existing defaults and converts them to that shared view.
+The shell prepares UI cues from the selected theme at startup. The OpenITG
+manifest supplies embedded WAVs. The shared audio loader resamples them for
+the output device and retains the same handles used by file-backed cues.
+Shared controllers submit wheel movements by cue. Their existing named menu
+effects resolve to the matching installed cue through the fallback manifest.
+Other effects used on those screens and their supporting assets still come
+from the current Simply Love manifest. The graphics loader reads embedded PNGs
+from the asset manifest on startup and renderer recreation.
 
-Stage and course Evaluation mount through the selected theme for entry, input,
-updates, and actor composition. The shell tracks the game result separately and
-uses it to resolve chart queries. The theme reports which leaderboard panes need
-data and receives the available results as a runtime view.
+The `Theme` setting selects the installed presentation at startup. All title menus
+use the same session start, cabinet permissions, and navigation commands.
+OpenITG mounts its title, System Options, Profile Picker, Select Style, Select
+Play Mode, Player Options, and base Select Music layouts. The existing Options
+controller and shell still handle input, settings edits, and modal workflows.
+An alternate page renderer lazily reads the controller's visible row order,
+current values, and availability through `deadsync-theme`. OpenITG supplies its
+service menu order through that contract. The controller uses the same tool
+requests for direct and nested input launchers. The shell uses the originating
+page to restore service-list focus when a direct tool closes. Options uses the
+mounted theme's transition durations and passes elapsed time to its renderer.
+The renderer owns the panel, heading, and focus motion. OpenITG's system and
+player options share the native panel assets, title font, and three-piece
+cursor drawing. Retained row positions are keyed by the controller's page
+and row order. The system options renderer
+also measures and caches displayed choice widths using the current font
+chain. The shell passes the frame clock and resets presentation on Options
+entry.
+OpenITG retains the current explanation and its reveal timing. It uses the
+engine bitmap text layout to measure wrapped paragraphs and reveal a glyph
+prefix while keeping the full paragraph's placement. The engine reuses the
+cached layout's geometry for atlas pages that are fully revealed and copies
+the visible vertices of partially revealed pages into recycled frame buffers.
+The Player Options mount supplies the viewport size, exit-row placement mode,
+and row animation time to the shared editor. The editor exposes the joined
+seats' positions in the selectable row order with the prepared rows. OpenITG
+owns the panel, fonts, choice markers, and scrollbar artwork. It retargets each
+thumb on the shell's frame clock.
+The same mount lends the editor's prepared help lines to OpenITG. OpenITG
+retains one paragraph and reveal clock per seat and uses the same measurement
+and glyph reveal code as System Options.
+OpenITG's basic and advanced Graphics pages share the same pending display
+settings as the combined Simply Love editor. The shell adapts host monitor
+capabilities to the theme contract, whose video mode records come from
+`deadsync-core`. `deadsync-config::graphics`
+builds resolution and refresh rate choices and seeds the FPS cap editor.
+The controller keeps the row selections and emits one graphics request when
+the user leaves Graphics. The shell applies it through the shared graphics
+change plan.
+The music wheel shares the game's catalog entries and circular index, and both
+layouts use the same prepared difficulty window. The alternate base layout
+borrows song, chart, player, banner, and preview beat data from the existing
+controller. The OpenITG song and course wheels use the shared presentation
+camera for projected cards and labels. The notefield uses the same perspective
+calculation with its own camera parameters. The shell media manager retains
+recently replaced banner textures for the transition lifetime requested by the
+theme. OpenITG animates those layers and derives its exit motion from the
+shared launch confirmation.
+
+`deadsync-profile-gameplay::cabinet_records` resolves recency, catalog
+identity, and machine bests for idle rankings. The shell requests a snapshot
+when leaving the title screen and passes its score records to the theme.
+Course ranking uses the same persisted course identities as course evaluation.
+The theme controls the scroll geometry, page order, and music.
+
+OpenITG requests two random-selection rows. The game-owned candidate pool
+uses the active sort and style, and either action reaches the same chart
+selection and stage launch path as a song row. The shell prepares one score
+snapshot per physical side for both themes. The shared view checks the
+current chart hash before exposing its local machine record or personal best.
+The course browser uses the same wheel geometry with the prepared course
+rating, track list, and records. On Profile Load, the shell installs the
+worker's completed song or course state and hands its destination to the
+loading screen. The loading view supplies the minimum presentation time for
+both themes.
+The shell continues to use that controller for input, previews, and launching
+stages. At stage entry it can install alternate HUD drawing functions through
+`deadsync-theme`. The gameplay composer supplies the already resolved life and
+percentage score at the established HUD and Lua score capture sites. The shared
+notefield accepts a theme-selected tap graphic, feedback metrics, and combo
+label. It also accepts a stock hold atlas and its animation style. Gameplay
+records the current hold result and alternating phase per lane. The canonical
+renderer applies the style to the hold range. Judgment proxies capture the
+tap range, and held-miss indicators use their own style. See
+[the OpenITG progress record](openitg-theme.md) for the
+reference, implemented behavior, and fidelity checks.
+
+Select Style and Select Play Mode use their existing input and confirmation
+controllers for both themes. The shell passes a borrowed `PlaySelectionView`
+to the OpenITG carousel. The theme owns the carousel animation, projection,
+and presentation assets. The controllers supply the available choices,
+selected index, and joined players.
+
+`deadsync-profile::picker` owns the per-side join and confirmation state,
+including duplicate local-profile validation and late join. The standalone
+picker and the Select Music overlay share that flow and the shell's profile
+requests. OpenITG borrows a visible profile window and status through
+`ProfilePickerScreenView` for both surfaces.
+
+The evaluation visit receives completed stages before the shell chooses the
+overview renderer. The overview view borrows prepared artwork and exposes the
+canonical grade, scores, result counters, record ranks, and life graph. The
+recorded maximum combo travels with each stage and aggregates by maximum on
+course pages. Auxiliary panes and visit overlays remain with the existing
+controller, and theme selection stays out of result routing and persistence.
+
+The shell mounts one Player Options editor for song and course entry. Theme
+selection chooses the layout and screen transitions. The alternate layout
+borrows rows, focus, and help through `deadsync-theme` and draws the same live
+samples at its own positions. Input, updates, search, profile requests, and
+preview preparation use the existing editor in Simply Love. The shell supplies
+device and asset views and manages preview uploads for both layouts.
+`deadsync-profile-gameplay` defines the session and settings view, stage scroll
+and rate rules, and the `StageOptions` submitted for gameplay, practice, and
+recovery after a load failure.
+
+The shell passes a shared `EvaluationStageView` and a separate presentation
+context to the Evaluation mount. Stage and course entries use the same
+per-player `EvaluationView`. A stage carries the completed song's round
+number from the session or course cursor, captured before the result is
+recorded. OpenITG reads it through the overview view. The shell tracks the
+game result separately and uses it to resolve chart queries. The theme
+reports which leaderboard panes need data and receives the available results,
+heart-rate readings, and loaded result dialogs from the shell. The theme
+selects entry audio and carries animation, audio, and noteskin previews
+across course pages. The shell loads and plays the audio and tracks which
+course result is active.
+
+The mounted stage presentation supplies any Evaluation music loop. The
+shared transition plan applies that loop on entry and keeps it across result
+pages. The overview receives unweighted judgment counts, the dropped-hold
+fact, and combo carry so themes can present awards from the completed result.
+
+Video banners, screenshot labels, and StepManiaX result lighting use the
+completed stage's song, chart, and grade. The shell captures the automatic
+screenshot criteria before giving the result to the theme, and the theme
+reports when it has finished showing animations and dialogs.
 
 Several screens and runtime requests still use concrete Simply Love types.
-Evaluation also uses Simply Love support code for course noteskin previews,
-entry audio, screenshots, and other screen integrations.
+The Evaluation mount still uses Simply Love's presentation context, runtime
+views, and auxiliary pane controller.
+Both title menus emit shared navigation effects and semantic UI cues directly.
+Several screen controllers and their service requests still come from Simply
+Love through `ActiveTheme`.

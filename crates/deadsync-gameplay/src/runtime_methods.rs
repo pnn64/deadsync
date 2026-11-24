@@ -841,10 +841,10 @@ where
         self.record_ghost_judgment(player);
         self.display.hold_feedback.set_hold_judgment(
             column,
-            Some(HoldJudgmentRenderInfo {
-                result: HoldResult::Missed,
-                started_at_screen_s: self.boundary.total_elapsed_in_screen,
-            }),
+            Some(hold_judgment_render_info(
+                HoldResult::Missed,
+                self.boundary.total_elapsed_in_screen,
+            )),
         );
     }
 
@@ -1185,6 +1185,7 @@ where
             player_runtime.checkpoints_missed = player_runtime.checkpoints_missed.saturating_add(1);
         }
         let mut combo_state = player_combo_state(player_runtime);
+        let previous_combo = combo_state.combo;
         let combo_update = combo::apply_row_combo_state(
             &mut combo_state,
             grade,
@@ -1195,8 +1196,9 @@ where
         update_itg_grade_totals(player_runtime);
         // Native checkpoint handling updates ComboList before ChangeLife;
         // PlayerStageStats:MaxCombo reads that list during the notification.
-        player_runtime.recorded_max_combo =
-            player_runtime.recorded_max_combo.max(player_runtime.combo);
+        let checkpoint_second =
+            song_time_ns_to_seconds(self.hold_runtime.pump_events[row_start].time_ns);
+        player_runtime.record_combo(previous_combo, checkpoint_second);
         let life_delta = if checkpoint_hit {
             deadsync_rules::life::LIFE_HELD
         } else {
@@ -1204,7 +1206,7 @@ where
         };
         self.apply_player_life_event(
             player,
-            song_time_ns_to_seconds(self.hold_runtime.pump_events[row_start].time_ns),
+            checkpoint_second,
             life_delta,
             if checkpoint_hit {
                 CourseLifeEvent::CheckpointHit
@@ -1950,6 +1952,7 @@ where
                 row_index,
             );
             let mut row_state = row_finalization_player_state(p);
+            let previous_combo = row_state.combo.combo;
             let update = apply_row_finalization_player_state(
                 &mut row_state,
                 &final_judgment,
@@ -1968,7 +1971,7 @@ where
                 update_itg_grade_totals(p);
             }
             // Player updates its best combo before ChangeLife broadcasts.
-            p.recorded_max_combo = p.recorded_max_combo.max(p.combo);
+            p.record_combo(previous_combo, current_music_time);
             if let Some(routine) = self.players_runtime.routine.as_mut() {
                 routine.tap_row(
                     &final_judgment,
@@ -1979,6 +1982,9 @@ where
                 );
             }
             if plan.apply_life_change {
+                p.life_judgment_times.record(
+                    final_judgment.grade, p.stage_life_record.steps_seconds,
+                );
                 self.apply_player_life_event(
                     player,
                     current_music_time,

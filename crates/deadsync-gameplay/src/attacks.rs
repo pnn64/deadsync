@@ -1887,6 +1887,7 @@ pub struct SongLuaOverlayEaseWindowRuntime<StateDelta> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SongLuaVisualLayerRuntime<OverlayActor, CapturedActor, StateDelta> {
     pub start_second: f32,
+    pub foreground_beats: Option<std::ops::RangeInclusive<f32>>,
     pub screen_width: f32,
     pub screen_height: f32,
     pub overlays: Vec<OverlayActor>,
@@ -1900,6 +1901,7 @@ pub struct SongLuaVisualLayerRuntime<OverlayActor, CapturedActor, StateDelta> {
 #[derive(Clone, Debug)]
 pub struct SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta> {
     pub overlays: Vec<OverlayActor>,
+    pub foreground_beats: Option<std::ops::RangeInclusive<f32>>,
     pub screen_overlay_index: Option<usize>,
     pub overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
     pub overlay_ease_ranges: Vec<std::ops::Range<usize>>,
@@ -1959,6 +1961,7 @@ pub const fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDe
 ) -> SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta> {
     SongLuaRuntimeVisuals {
         overlays,
+        foreground_beats: None,
         screen_overlay_index,
         overlay_eases,
         overlay_ease_ranges,
@@ -2125,6 +2128,7 @@ pub fn build_song_lua_visual_layer_runtime<OverlayActor, CapturedActor, StateDel
     offset_song_lua_message_events(&mut song_foreground_events, start_second);
     SongLuaVisualLayerRuntime {
         start_second,
+        foreground_beats: None,
         screen_width,
         screen_height,
         overlays,

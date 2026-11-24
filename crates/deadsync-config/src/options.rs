@@ -3603,6 +3603,23 @@ mod tests {
     }
 
     #[test]
+    fn installed_title_themes_round_trip_in_runtime_options() {
+        for (index, flag) in ThemeFlag::CHOICES.into_iter().enumerate() {
+            let line = format!("Theme={}", flag.as_str());
+            let mut conf = SimpleIni::new();
+            conf.load_str(&format!("[Options]\n{line}\n"));
+            let loaded = load_runtime_options(&conf, default_runtime_options());
+            assert_eq!(loaded.theme_flag, flag);
+            assert_eq!(flag.choice_index(), index);
+            assert_eq!(ThemeFlag::from_choice(index), flag);
+
+            let mut output = String::new();
+            push_runtime_worker_theme_option_lines(&mut output, loaded);
+            assert!(output.lines().any(|candidate| candidate == line));
+        }
+    }
+
+    #[test]
     fn load_runtime_options_keeps_defaults_for_bad_values() {
         let default = default_runtime_options();
         let mut conf = SimpleIni::new();

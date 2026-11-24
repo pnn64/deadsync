@@ -3,6 +3,7 @@ use std::{path::Path, sync::Arc};
 use deadsync_chart::{ChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_rules::judgment;
+use deadsync_rules::life::LifeJudgmentTimes;
 use deadsync_rules::timing::{
     ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, TimingStatsAccum, WindowCounts,
 };
@@ -19,6 +20,35 @@ pub struct StageSummary {
     pub duration_seconds: f32,
     /// Physical sides (P1, P2), including P2-only play in slot 1.
     pub players: [Option<PlayerStageSummary>; MAX_PLAYERS],
+}
+
+/// Grade shown with the shared ITG percentage on a Routine result page.
+#[must_use]
+pub fn routine_result_grade(score_percent: f64, participant_failed: bool) -> Grade {
+    if participant_failed {
+        Grade::Failed
+    } else {
+        score_to_grade(score_percent * 10000.0)
+    }
+}
+
+/// A life record in elapsed steps time. A course keeps the same clock across songs.
+#[derive(Clone, Debug, Default)]
+pub struct StageLifeTimeline {
+    pub samples: Arc<[(f32, f32)]>,
+    pub judgment_times: LifeJudgmentTimes,
+    pub possible_seconds: f32,
+    pub elapsed_seconds: f32,
+}
+
+impl StageLifeTimeline {
+    pub fn sample(&self, seconds: f32) -> f32 {
+        deadsync_rules::life::sample_steps_life(&self.samples, seconds)
+    }
+}
+
+pub fn song_step_seconds(song: &SongData) -> f32 {
+    (song.precise_last_second() - song.precise_first_second()).max(0.0)
 }
 
 #[derive(Clone, Debug)]
@@ -38,10 +68,15 @@ pub struct PlayerStageSummary {
     pub possible_grade_points: i32,
     pub ex_score_percent: f64,
     pub hard_ex_score_percent: f64,
+    pub max_combo: u32,
+    pub combo_runs: Arc<[deadsync_rules::combo::ComboRun]>,
+    pub jumps: [u32; 2],
     pub hands_achieved: u32,
     pub hands_total: u32,
     pub holds_held: u32,
     pub holds_held_for_score: u32,
+    /// A started hold or roll ended with a LetGo judgment.
+    pub dropped_hold_or_roll: bool,
     pub holds_total: u32,
     pub rolls_held: u32,
     pub rolls_held_for_score: u32,
@@ -62,6 +97,7 @@ pub struct PlayerStageSummary {
     pub graph_first_second: f32,
     pub graph_last_second: f32,
     pub life_history: Vec<(f32, f32)>,
+    pub steps_life: StageLifeTimeline,
     pub fail_time: Option<f32>,
     pub show_w0: bool,
     pub show_ex_score: bool,
@@ -91,7 +127,9 @@ pub struct CourseSummaryInput<'a> {
     pub meter: Option<u32>,
     pub song_stub: &'a SongData,
     pub course_total_seconds: f32,
+    pub course_step_seconds: f32,
     pub totals: [CourseSummaryTotals; MAX_PLAYERS],
+    pub unplayed_jumps: [u32; MAX_PLAYERS],
     pub stage_summaries: &'a [StageSummary],
 }
 
@@ -221,6 +259,9 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         let mut counts = WindowCounts::default();
         let mut column_judgments = ColumnJudgmentList::new();
         let mut counts_10ms = WindowCounts::default();
+        let mut max_combo = 0;
+        let mut combo_runs: Vec<deadsync_rules::combo::ComboRun> = Vec::new();
+        let mut jumps = [0u32, input.unplayed_jumps[idx]];
         let mut hands_achieved = 0u32;
         let mut hands_total = 0u32;
         let mut holds_held = 0u32;
@@ -248,11 +289,19 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         let mut graph_first_second = 0.0_f32;
         let mut graph_last_second = duration_seconds.max(0.001);
         let mut life_history = Vec::with_capacity(life_capacity);
+        let mut step_samples = Vec::new();
+        let mut life_judgments = LifeJudgmentTimes::default();
+        let mut steps_elapsed = 0.0;
         let mut fail_time = None;
+        let mut dropped_hold_or_roll = false;
         let mut elapsed = 0.0_f32;
         let mut first_player: Option<&PlayerStageSummary> = None;
         for stage in input.stage_summaries {
             let stage_offset = elapsed;
+            let steps_offset = steps_elapsed;
+            if let Some(player) = stage.players.iter().flatten().next() {
+                steps_elapsed += player.steps_life.elapsed_seconds;
+            }
             let Some(player) = stage.players[idx].as_ref() else {
                 elapsed += stage.duration_seconds.max(0.0);
                 continue;
@@ -270,6 +319,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             any_failed |= player.grade == Grade::Failed;
             score_valid &= player.score_valid;
             disqualified |= player.disqualified;
+            dropped_hold_or_roll |= player.dropped_hold_or_roll;
             show_w0 |= player.show_w0;
             show_fa_plus_pane |= player.show_fa_plus_pane;
             show_ex |= player.show_ex_score;
@@ -278,6 +328,24 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             counts = merge_window_counts(counts, player.window_counts);
             merge_column_judgments(&mut column_judgments, &player.column_judgments);
             counts_10ms = merge_window_counts(counts_10ms, player.window_counts_10ms);
+            max_combo = max_combo.max(player.max_combo);
+            for (index, run) in player.combo_runs.iter().enumerate() {
+                let mut run = *run;
+                run.start_second += stage_offset;
+                run.end_second += stage_offset;
+                if index == 0 && run.carried != 0
+                    && let Some(previous) = combo_runs.last_mut()
+                    && previous.carried.saturating_add(previous.count) == run.carried
+                {
+                    previous.end_second = previous.end_second.max(run.end_second);
+                    previous.count = previous.count.saturating_add(run.count);
+                } else {
+                    combo_runs.push(run);
+                }
+            }
+            for (total, count) in jumps.iter_mut().zip(player.jumps) {
+                *total = total.saturating_add(count);
+            }
             hands_achieved = hands_achieved.saturating_add(player.hands_achieved);
             hands_total = hands_total.saturating_add(player.hands_total);
             holds_held = holds_held.saturating_add(player.holds_held);
@@ -303,6 +371,10 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             for &(time, life) in &player.life_history {
                 life_history.push((time + stage_offset, life));
             }
+            step_samples.extend(
+                player.steps_life.samples.iter().map(|&(time, life)| (time + steps_offset, life)),
+            );
+            life_judgments.merge_shifted(player.steps_life.judgment_times, steps_offset);
             if fail_time.is_none() {
                 fail_time = player.fail_time.map(|time| time + stage_offset);
             }
@@ -311,6 +383,9 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         let Some(first_player) = first_player else {
             continue;
         };
+        if step_samples.windows(2).any(|pair| pair[0].0 > pair[1].0) {
+            step_samples.sort_by(|left, right| left.0.total_cmp(&right.0));
+        }
         if possible_grade_points <= 0 {
             possible_grade_points = played_possible_grade_points;
         }
@@ -395,6 +470,10 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             possible_grade_points,
             ex_score_percent,
             hard_ex_score_percent,
+            max_combo,
+            combo_runs: combo_runs.into(),
+            dropped_hold_or_roll,
+            jumps,
             hands_achieved,
             hands_total,
             holds_held,
@@ -422,6 +501,12 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             graph_first_second,
             graph_last_second,
             life_history,
+            steps_life: StageLifeTimeline {
+                samples: step_samples.into(),
+                judgment_times: life_judgments,
+                possible_seconds: input.course_step_seconds,
+                elapsed_seconds: steps_elapsed,
+            },
             fail_time,
             show_w0,
             show_fa_plus_pane,
@@ -481,6 +566,7 @@ pub fn routine_shared_course_player(
     });
     shared.score_valid &= second.score_valid;
     shared.disqualified |= second.disqualified;
+    shared.dropped_hold_or_roll |= second.dropped_hold_or_roll;
     shared.earned_grade_points = first
         .earned_grade_points
         .saturating_add(second.earned_grade_points);
@@ -494,6 +580,8 @@ pub fn routine_shared_course_player(
     shared.window_counts = merge_window_counts(first.window_counts, second.window_counts);
     shared.window_counts_10ms =
         merge_window_counts(first.window_counts_10ms, second.window_counts_10ms);
+    shared.max_combo = first.max_combo.max(second.max_combo);
+    shared.jumps = std::array::from_fn(|idx| first.jumps[idx].saturating_add(second.jumps[idx]));
     shared.hands_achieved = first.hands_achieved.saturating_add(second.hands_achieved);
     shared.hands_total = first.hands_total.saturating_add(second.hands_total);
     shared.holds_held = first.holds_held.saturating_add(second.holds_held);
@@ -709,10 +797,14 @@ mod tests {
             possible_grade_points,
             ex_score_percent: 100.0,
             hard_ex_score_percent: 100.0,
+            max_combo: 0,
+            combo_runs: Arc::from([]),
+            jumps: [0, 0],
             hands_achieved: 0,
             hands_total: 0,
             holds_held: 2,
             holds_held_for_score: 2,
+            dropped_hold_or_roll: false,
             holds_total: 2,
             rolls_held: 1,
             rolls_held_for_score: 1,
@@ -757,6 +849,7 @@ mod tests {
             graph_first_second: 0.0,
             graph_last_second: 60.0,
             life_history: vec![(1.0, 1.0)],
+            steps_life: Default::default(),
             fail_time: Some(40.0),
             show_w0: true,
             show_ex_score: true,
@@ -819,6 +912,7 @@ mod tests {
             course_total_seconds: song_a.precise_last_second()
                 + song_b.precise_last_second()
                 + 0.25,
+            course_step_seconds: song_step_seconds(&song_a) + song_step_seconds(&song_b),
             totals: [
                 CourseSummaryTotals {
                     possible_grade_points: 1000,
@@ -829,6 +923,7 @@ mod tests {
                 },
                 CourseSummaryTotals::default(),
             ],
+            unplayed_jumps: [12, 0],
             stage_summaries: stages.as_slice(),
         })
         .expect("course summary");
@@ -842,6 +937,7 @@ mod tests {
         assert_eq!(player.holds_total, 4);
         assert_eq!(player.rolls_total, 2);
         assert_eq!(player.mines_total, 6);
+        assert_eq!(player.jumps, [0, 12]);
         assert_eq!(player.grade, Grade::Failed);
         assert_eq!(player.chart.short_hash, "course-hash");
         assert_eq!(player.chart.difficulty, "Hard");
@@ -852,6 +948,55 @@ mod tests {
         assert_eq!(player.scatter.len(), 1);
         assert!(!player.histogram.bins.is_empty());
         assert!((player.timing.mean_ms - 10.0).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn course_life_timeline_keeps_one_steps_clock_and_never_restarts_the_colored_prefix() {
+        use judgment::JudgeGrade;
+        let song = test_song("Songs/Test/a.ssc", "a", 60.0);
+        let stage = |played, samples, judgments: &[(JudgeGrade, f32)]| {
+            let mut player = test_player_summary(test_chart("chart"), Grade::Tier09, 400, 500);
+            player.steps_life.samples = samples;
+            player.steps_life.possible_seconds = 60.0;
+            player.steps_life.elapsed_seconds = played;
+            for &(grade, second) in judgments {
+                player.steps_life.judgment_times.record(grade, second);
+            }
+            StageSummary {
+                song: Arc::clone(&song),
+                duration_seconds: 66.0,
+                music_rate: 1.0,
+                players: [None, Some(player)],
+            }
+        };
+        let stages = [
+            stage(55.0, Arc::from([(5.0, 0.5), (54.0, 0.8)]), &[(JudgeGrade::Excellent, 8.0)]),
+            stage(59.0, Arc::from([(1.0, 0.5), (57.0, 0.7)]), &[
+                (JudgeGrade::Excellent, 1.0),
+                (JudgeGrade::Great, 3.0),
+                (JudgeGrade::Miss, 7.0),
+            ]),
+        ];
+        let summary = build_course_summary_stage(CourseSummaryInput {
+            path: Path::new("Courses/Test.crs"),
+            name: "Test Course",
+            banner_path: None,
+            score_hash: "course-life",
+            difficulty_name: "Hard",
+            meter: None,
+            song_stub: song.as_ref(),
+            course_total_seconds: 180.0,
+            course_step_seconds: 180.0,
+            totals: Default::default(),
+            unplayed_jumps: [0, 0],
+            stage_summaries: &stages,
+        }).unwrap();
+        assert!(summary.players[0].is_none());
+        let timeline = &summary.players[1].as_ref().unwrap().steps_life;
+        assert_eq!(timeline.judgment_times.thresholds(), [8.0, 58.0, 62.0]);
+        assert_eq!(timeline.elapsed_seconds, 114.0);
+        assert_eq!(timeline.possible_seconds, 180.0);
+        assert_eq!(&*timeline.samples, &[(5.0, 0.5), (54.0, 0.8), (56.0, 0.5), (112.0, 0.7)]);
     }
 
     #[test]
@@ -880,7 +1025,9 @@ mod tests {
                 meter: None,
                 song_stub: song.as_ref(),
                 course_total_seconds: 120.0,
+                course_step_seconds: 120.0,
                 totals,
+                unplayed_jumps: [0, 0],
                 stage_summaries: stages.as_slice(),
             })
             .expect("course summary")
@@ -927,10 +1074,25 @@ mod tests {
 
     #[test]
     fn course_summary_streams_offsets_and_borrows_stage_histograms() {
+        use deadsync_rules::combo::ComboRun;
         let song = test_song("Songs/Test/a.ssc", "a", 60.0);
         let mut first = test_player_summary(test_chart("stage-a"), Grade::Tier01, 500, 500);
+        first.max_combo = 43;
+        first.jumps = [1, 2];
+        first.combo_runs = Arc::from([ComboRun {
+            start_second: 4.0,
+            end_second: 42.0,
+            count: 40,
+            carried: 3,
+        }]);
         first.life_history.push((30.0, 0.75));
         let mut second = test_player_summary(test_chart("stage-b"), Grade::Tier02, 400, 500);
+        second.max_combo = 37;
+        second.jumps = [3, 4];
+        second.combo_runs = Arc::from([
+            ComboRun { start_second: 1.0, end_second: 5.0, count: 5, carried: 43 },
+            ComboRun { start_second: 9.0, end_second: 12.0, count: 6, carried: 0 },
+        ]);
         second.scatter[0].offset_ms = Some(-20.0);
         second.histogram.bins = vec![(-20, 1)];
         second.histogram.worst_observed_ms = 20.0;
@@ -971,12 +1133,20 @@ mod tests {
             meter: Some(12),
             song_stub: song.as_ref(),
             course_total_seconds: 120.0,
+            course_step_seconds: 120.0,
             totals: [CourseSummaryTotals::default(); MAX_PLAYERS],
+            unplayed_jumps: [0, 0],
             stage_summaries: &stages,
         })
         .expect("course summary");
         let player = summary.players[0].as_ref().expect("P1 summary");
 
+        assert_eq!(player.max_combo, 43);
+        assert_eq!(player.jumps, [4, 6]);
+        assert_eq!(player.combo_runs.as_ref(), &[
+            ComboRun { start_second: 4.0, end_second: 65.0, count: 45, carried: 3 },
+            ComboRun { start_second: 69.0, end_second: 72.0, count: 6, carried: 0 },
+        ]);
         assert_eq!(player.scatter.len(), 2);
         assert_eq!(player.scatter[0].time_sec.to_bits(), 5.0_f32.to_bits());
         assert_eq!(player.scatter[1].time_sec.to_bits(), 65.0_f32.to_bits());

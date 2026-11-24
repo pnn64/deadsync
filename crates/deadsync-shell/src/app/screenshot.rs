@@ -1,17 +1,20 @@
-use super::App;
+use super::{App, AppState, CurrentScreen, MAX_PLAYERS};
+use crate::ActiveTheme;
 use crate::screenshot::{
-    AutoScreenshotEvalResult, PendingScreenshotResult, ScreenshotFlowError, ScreenshotSongInfo,
-    append_screenshot_overlay_actors, capture_pending_screenshot, screenshot_preview_visible,
+    AutoScreenshotEvalResult, AutoScreenshotFrameContext, PendingScreenshotResult,
+    ScreenshotFlowError, ScreenshotSongInfo, append_screenshot_overlay_actors,
+    auto_screenshot_frame_plan, capture_pending_screenshot, screenshot_preview_visible,
     screenshot_song_info,
 };
 use deadlib_present::actors::Actor;
 use deadlib_present::space;
 use deadsync_profile::compat as profile;
-use deadsync_theme_simply_love::screens::evaluation;
+use deadsync_theme::evaluation::ThemeEvaluation;
+use deadsync_theme::views::EvaluationView;
 use log::{info, warn};
 use std::time::Instant;
 
-fn current_song_title(state: &super::AppState) -> Option<ScreenshotSongInfo> {
+pub(super) fn current_song_title(state: &AppState) -> Option<ScreenshotSongInfo> {
     let gameplay = state.screens.gameplay_state.as_ref().map(|gs| {
         let title = gs.gameplay.song().title.clone();
         let meter = gs
@@ -24,32 +27,64 @@ fn current_song_title(state: &super::AppState) -> Option<ScreenshotSongInfo> {
     });
     let evaluation = state
         .screens
-        .evaluation_state
-        .score_info
-        .iter()
-        .flatten()
-        .next()
-        .map(|info| ScreenshotSongInfo {
-            title: info.song.title.clone(),
-            meter: Some(info.chart.meter),
+        .evaluation_stage
+        .as_ref()
+        .map(|stage| ScreenshotSongInfo {
+            title: stage.song.title.clone(),
+            meter: stage.players().next().map(|player| player.chart.meter),
         });
     screenshot_song_info(state.screens.current_screen, gameplay, evaluation)
 }
 
-pub(super) fn auto_screenshot_eval_results(
-    eval: &evaluation::State,
-) -> impl Iterator<Item = AutoScreenshotEvalResult> + '_ {
-    eval.score_info
-        .iter()
-        .flatten()
-        .map(|info| AutoScreenshotEvalResult {
-            personal_best: info.personal_record_highlight_rank == Some(1),
-            failed: info.fail_time.is_some(),
-            grade: info.grade,
-        })
+/// Host-owned capture facts copied before the result is passed to presentation.
+#[derive(Clone, Copy, Default)]
+pub(super) struct EvaluationCapture {
+    results: [Option<AutoScreenshotEvalResult>; MAX_PLAYERS],
+    taken: bool,
+}
+
+impl EvaluationCapture {
+    pub(super) fn from_scores<N, S>(scores: &[Option<EvaluationView<N, S>>; MAX_PLAYERS]) -> Self {
+        Self {
+            results: scores.each_ref().map(|score| {
+                score.as_ref().map(|info| AutoScreenshotEvalResult {
+                    personal_best: info.personal_record_highlight_rank == Some(1),
+                    failed: info.fail_time.is_some(),
+                    grade: info.grade,
+                })
+            }),
+            taken: false,
+        }
+    }
 }
 
 impl App {
+    pub(super) fn update_evaluation_capture(&mut self, mask: u8) {
+        let screens = &mut self.state.screens;
+        let on_evaluation = screens.current_screen == CurrentScreen::Evaluation;
+        let intro_settled = on_evaluation && {
+            let view = ActiveTheme::evaluation_capture_view(&screens.evaluation_state);
+            screens.stage_presentation.evaluation_intro_settled(view.elapsed, view.overview)
+        };
+        let capture = &mut screens.evaluation_capture;
+        let plan = auto_screenshot_frame_plan(
+            AutoScreenshotFrameContext {
+                screen: screens.current_screen,
+                already_taken: capture.taken,
+                ready: intro_settled
+                    && ActiveTheme::evaluation_capture_ready(&screens.evaluation_state),
+                mask: if on_evaluation { mask } else { 0 },
+            },
+            capture.results.iter().flatten().copied(),
+        );
+        if plan.mark_taken {
+            capture.taken = true;
+        }
+        if plan.request_capture {
+            self.state.shell.screenshot.request(None);
+        }
+    }
+
     pub(super) fn capture_pending_screenshot(&mut self, now: Instant) {
         // Most frames have no request; skip copying the song title for them.
         if !self.state.shell.screenshot.pending() {

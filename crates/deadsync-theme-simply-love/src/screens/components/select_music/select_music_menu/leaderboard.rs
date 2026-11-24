@@ -6,8 +6,7 @@ use crate::screens::components::shared::gs_scorebox::{
     GolfPanePattern, SCOREBOX_GOLF_GREEN, entries_with_local_self_state, push_golf_pane_pattern,
 };
 use crate::views::{
-    ScoreboxSideView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
-    SelectMusicLeaderboardView,
+    SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView, SelectMusicLeaderboardView,
 };
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -15,6 +14,7 @@ use deadsync_config::theme::MachineFont;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_score as score_data;
 use deadsync_theme::FontRole;
+use deadsync_theme::views::ScoreboxSideView;
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -938,7 +938,7 @@ mod tests {
                     online_active: true,
                     ..Default::default()
                 },
-                crate::views::ScoreboxSideView::default(),
+                deadsync_theme::views::ScoreboxSideView::default(),
             ],
         )
         .expect("joined player should open the overlay");

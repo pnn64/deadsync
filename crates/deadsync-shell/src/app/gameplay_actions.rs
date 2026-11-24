@@ -1,19 +1,18 @@
 use super::App;
 use crate::gameplay_runtime::{self, GameplayFrameEffect, GameplayFrameEffects};
-use crate::navigation::gameplay_exit_screen;
-use crate::{ActiveTheme, TransitionState};
+use crate::{ThemeScreen as Screen, TransitionState};
 use deadsync_gameplay::exit_route::{GameplayExitRouteContext, resolve_gameplay_exit_route};
 use deadsync_gameplay::{GameplayAction, GameplayExit};
 use deadsync_online::gameplay_lobby::{GAMEPLAY_SCREEN_NAME, GameplayLobbyAction};
 use deadsync_online::lobbies;
 use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
-use deadsync_theme::ThemeScreenFlow;
+use deadsync_theme::app_requests::gameplay_exit_screen;
 use log::warn;
 use winit::event_loop::ActiveEventLoop;
 
 const MAX_TRANSITION_LOBBY_EFFECTS: usize = 3;
 
-fn retain_lobby_effects<S>(effects: &mut GameplayFrameEffects<S>) {
+fn retain_lobby_effects(effects: &mut GameplayFrameEffects) {
     effects.retain(|effect| matches!(effect, GameplayFrameEffect::Lobby(_)));
     debug_assert!(effects.len() <= MAX_TRANSITION_LOBBY_EFFECTS);
 }
@@ -28,7 +27,7 @@ impl App {
         let Some(gameplay) = self.state.screens.gameplay_state.as_mut() else {
             return;
         };
-        let mut effects = gameplay_runtime::update::<ActiveTheme, _>(
+        let mut effects = gameplay_runtime::update(
             gameplay,
             delta_time,
             self.state.play_input_policy.smx_input,
@@ -86,7 +85,7 @@ impl App {
             }
             GameplayAction::Navigate(_) | GameplayAction::NavigateNoFade(_) => {}
         }
-        let from_gameplay = self.state.screens.current_screen == ActiveTheme::SCREENS.gameplay;
+        let from_gameplay = self.state.screens.current_screen == Screen::Gameplay;
         let course = self.state.session.course_run.as_ref();
         let all_joined_players_failed =
             matches!(action, GameplayAction::Navigate(GameplayExit::Complete))
@@ -106,7 +105,7 @@ impl App {
         if route.consume_restart_pending {
             self.state.session.restart_pending = false;
         }
-        let target = gameplay_exit_screen::<ActiveTheme>(route.destination);
+        let target = gameplay_exit_screen(route.destination);
         if route.immediate {
             self.handle_immediate_navigation(target, event_loop);
         } else {
@@ -115,7 +114,7 @@ impl App {
     }
 
     pub(super) fn handle_song_lua_reload(&mut self, event_loop: &ActiveEventLoop) {
-        if self.state.screens.current_screen != ActiveTheme::SCREENS.gameplay
+        if self.state.screens.current_screen != Screen::Gameplay
             || self.pending_gameplay_init.is_some()
             || !self
                 .state
@@ -142,7 +141,7 @@ impl App {
         self.state.shell.transition = TransitionState::Idle;
         self.state.session.restart_pending = false;
         self.state.gameplay_offset_save_prompt = None;
-        self.on_fade_complete(ActiveTheme::SCREENS.gameplay, event_loop);
+        self.on_fade_complete(Screen::Gameplay, event_loop);
     }
 }
 
@@ -152,7 +151,7 @@ mod tests {
 
     #[test]
     fn transition_gameplay_retains_bounded_lobby_order() {
-        let mut effects = GameplayFrameEffects::<()>::new();
+        let mut effects = GameplayFrameEffects::new();
         effects.extend([
             GameplayFrameEffect::Session(SongLuaGameplayEffect::ReloadSongLua),
             GameplayFrameEffect::Lobby(GameplayLobbyAction::Disconnect),

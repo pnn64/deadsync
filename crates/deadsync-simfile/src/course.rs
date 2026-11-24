@@ -11,12 +11,19 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
+const AUTOGEN_NONSTOP_FILE: &str = "__deadsync_autogen_nonstop_random.crs";
+
 pub use rssp::course::{
     CourseEntry, CourseFile, CourseSong, Difficulty, SongSelect, SongSort, StepsSpec,
     difficulty_label, resolve_course_banner_path,
 };
 
 pub type LoadedCourse = (PathBuf, CourseFile);
+
+#[must_use]
+pub fn is_autogen_course_path(path: &Path) -> bool {
+    path.file_name().is_some_and(|name| name == AUTOGEN_NONSTOP_FILE)
+}
 
 pub const COURSE_RATING_ORDER: [Difficulty; 6] = [
     Difficulty::Beginner,
@@ -1162,7 +1169,7 @@ pub fn autogen_nonstop_group_courses(
         out.push((
             courses_root
                 .join(group_name)
-                .join("__deadsync_autogen_nonstop_random.crs"),
+                .join(AUTOGEN_NONSTOP_FILE),
             CourseFile {
                 name: format!("{display_name} Random"),
                 name_translit: String::new(),

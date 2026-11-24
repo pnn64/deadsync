@@ -56,6 +56,109 @@ pub struct LifeDeltaResult {
 
 pub const LIFE_HISTORY_SAME_TIME_SHIFT: f32 = 0.003_906_25_f32;
 
+/// First finalized tap row below each of Fantastic, Excellent, and Great.
+/// Missing thresholds use infinity. The clock matches the accompanying life record.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LifeJudgmentTimes([f32; 3]);
+
+impl Default for LifeJudgmentTimes {
+    fn default() -> Self {
+        Self([f32::INFINITY; 3])
+    }
+}
+
+impl LifeJudgmentTimes {
+    #[inline]
+    pub fn record(&mut self, grade: JudgeGrade, seconds: f32) {
+        let crossed = match grade {
+            JudgeGrade::Fantastic => return,
+            JudgeGrade::Excellent => 1,
+            JudgeGrade::Great => 2,
+            JudgeGrade::Decent | JudgeGrade::WayOff | JudgeGrade::Miss => 3,
+        };
+        if self.0[crossed - 1].is_finite() {
+            return;
+        }
+        for time in &mut self.0[..crossed] {
+            if !time.is_finite() {
+                *time = seconds;
+            }
+        }
+    }
+
+    pub fn merge_shifted(&mut self, next: Self, offset: f32) {
+        for (time, next) in self.0.iter_mut().zip(next.0) {
+            *time = time.min(next + offset);
+        }
+    }
+
+    pub const fn thresholds(self) -> [f32; 3] {
+        self.0
+    }
+}
+
+/// Interpolate a steps-time life record as PlayerStageStats does.
+#[inline]
+pub fn sample_steps_life(samples: &[(f32, f32)], seconds: f32) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    let later = samples.partition_point(|&(time, _)| !(seconds < time));
+    let (from, before) = samples[later.saturating_sub(1)];
+    let Some(&(to, after)) = samples.get(later) else {
+        return before;
+    };
+    if from == to {
+        return before;
+    }
+    (seconds - from) * (after - before) / (to - from) + before
+}
+
+/// Reuses the chart-start anchor when sampling a music-time life history.
+pub struct LifeRecordSampler<'a> {
+    records: &'a [(f32, f32)],
+    record_start: f32,
+    start_life: f32,
+}
+
+impl<'a> LifeRecordSampler<'a> {
+    pub fn new(life_history: &'a [(f32, f32)], record_start: f32) -> Self {
+        let start_life = life_history
+            .first()
+            .map_or(0.0, |&(_, life)| life.clamp(0.0, 1.0));
+        let first = life_history.partition_point(|&(t, _)| t < record_start);
+        Self {
+            records: &life_history[first..],
+            record_start,
+            start_life,
+        }
+    }
+
+    #[inline]
+    pub fn sample(&self, sample_time: f32) -> f32 {
+        if sample_time <= self.record_start {
+            return self.start_life;
+        }
+        let later_ix = self.records.partition_point(|&(t, _)| t <= sample_time);
+        let (earlier_t, earlier_life) = if later_ix == 0 {
+            (self.record_start, self.start_life)
+        } else {
+            self.records[later_ix - 1]
+        };
+        let Some(&(later_t, later_life)) = self.records.get(later_ix) else {
+            return earlier_life.clamp(0.0, 1.0);
+        };
+        let dt = later_t - earlier_t;
+        if dt.abs() <= f32::EPSILON {
+            return earlier_life.clamp(0.0, 1.0);
+        }
+        let alpha = ((sample_time - earlier_t) / dt).clamp(0.0, 1.0);
+        (later_life - earlier_life)
+            .mul_add(alpha, earlier_life)
+            .clamp(0.0, 1.0)
+    }
+}
+
 #[inline(always)]
 #[must_use]
 pub const fn judge_life_delta(grade: JudgeGrade) -> f32 {

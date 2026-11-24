@@ -128,7 +128,10 @@ fn dependency_violations(metadata: &Metadata, test_owner: Option<&str>) -> Vec<S
                 }
                 let mut next = path.clone();
                 next.push(dependency);
-                if points_upward(source_layer, layer(dependency)) {
+                if points_upward(source_layer, layer(dependency))
+                    || (matches!(source_layer, Layer::Theme)
+                        && dependency.starts_with("deadsync-theme-"))
+                {
                     failures.push(next.join(" -> "));
                 } else {
                     pending.push_back(next);
@@ -171,6 +174,28 @@ fn production_crate_dependencies_follow_layer_direction() {
          only deadsync and deadsync-shell may compose all layers:\n{}",
         failures.join("\n")
     );
+}
+
+#[test]
+fn optional_themes_are_registered_by_the_executable() {
+    let metadata = workspace_metadata();
+    let shell = metadata
+        .packages
+        .iter()
+        .find(|package| package.name == "deadsync-shell")
+        .expect("shell workspace package");
+    let executable = metadata
+        .packages
+        .iter()
+        .find(|package| package.name == "deadsync")
+        .expect("executable workspace package");
+    let theme = "deadsync-theme-openitg";
+    assert!(executable.dependencies.iter().any(|dependency| {
+        dependency.name == theme && dependency.kind.is_none()
+    }));
+    assert!(shell.dependencies.iter().all(|dependency| {
+        dependency.name != theme || dependency.kind.as_deref() == Some("dev")
+    }));
 }
 
 #[test]

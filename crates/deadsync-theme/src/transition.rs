@@ -26,16 +26,9 @@ pub trait ThemeTransitionAudio: Theme {
         to: Self::Screen,
         kind: TransitionKind,
         context: Self::AudioContext,
-    ) -> TransitionAudio;
+    ) -> TransitionMusic;
 
     fn stop_screen_sfx_on_exit(from: Self::Screen, to: Self::Screen) -> bool;
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct TransitionAudio {
-    pub music: TransitionMusic,
-    /// Finish the outgoing preview after the application commits selection settings.
-    pub stop_preview_on_exit: bool,
 }
 
 /// Music on the shared preview and presentation channel.

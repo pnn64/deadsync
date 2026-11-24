@@ -335,6 +335,7 @@ fn mesh_vertices_publish_before_texture_errors_and_empty_meshes_still_read_the_t
 fn add_layers(v: &mut Visuals) {
     let layer = deadsync_gameplay::SongLuaVisualLayerRuntime {
         start_second: 0.,
+        foreground_beats: None,
         screen_width: v.screen_width,
         screen_height: v.screen_height,
         overlays: v.overlays.clone(),
@@ -604,6 +605,7 @@ fn late_wrapper_visuals_keep_owned_slots_and_publish_all_layers() {
     let make_layer = |output: song::CompiledSongLua<Actor>| {
         deadsync_gameplay::SongLuaVisualLayerRuntime {
             start_second: 0., screen_width: output.screen_width, screen_height: output.screen_height,
+            foreground_beats: None,
             overlays: output.overlays, overlay_eases: Vec::new(), overlay_ease_ranges: Vec::new(),
             overlay_events: Vec::new(), song_foreground: output.song_foreground,
             song_foreground_events: Vec::new(),

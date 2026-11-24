@@ -2,7 +2,7 @@ use crate::act;
 use crate::color;
 use crate::fonts::machine_font_key;
 use crate::screens::components::shared::banner as shared_banner;
-use crate::screens::select_music::MusicWheelEntry;
+use deadsync_gameplay::music_wheel::{MusicWheelEntry, wheel_entry_index};
 use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest};
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{
@@ -198,9 +198,7 @@ fn visit_visible_song_select_bg_paths(
         if offset_from_center_f.abs() > WHEEL_DRAW_RADIUS {
             continue;
         }
-        let list_index = ((selected_index as isize + offset_from_center + num_entries as isize)
-            as usize)
-            % num_entries;
+        let list_index = wheel_entry_index(selected_index, offset_from_center, num_entries);
         let path = match entries.get(list_index) {
             Some(MusicWheelEntry::PackHeader {
                 banner_path: Some(path),
@@ -731,9 +729,9 @@ pub(crate) fn runtime_slot_requests<'a>(
         });
     std::array::from_fn(|slot| {
         let offset = slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
-        let list_index =
-            ((selected_index as isize + offset + entries.len() as isize) as usize) % entries.len();
+        let list_index = wheel_entry_index(selected_index, offset, entries.len());
         match &entries[list_index] {
+            MusicWheelEntry::Random(_) => MusicWheelSlotRuntimeRequest::Empty,
             MusicWheelEntry::PackHeader {
                 name,
                 pack_key: None,
@@ -938,11 +936,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                 continue;
             }
             let y_center_item = offset_from_center_f.mul_add(slot_spacing, center_y);
-            // The selected_index from the state now freely increments/decrements. We use it as a base
-            // and apply the modulo here for safe list access.
-            let list_index =
-                ((p.selected_index as isize + offset_from_center + num_entries as isize) as usize)
-                    % num_entries;
+            let list_index = wheel_entry_index(p.selected_index, offset_from_center, num_entries);
 
             let Some(entry) = p.entries.get(list_index) else {
                 continue;
@@ -953,6 +947,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
             };
 
             match entry {
+                MusicWheelEntry::Random(_) => {}
                 MusicWheelEntry::PackHeader {
                     name,
                     original_index,

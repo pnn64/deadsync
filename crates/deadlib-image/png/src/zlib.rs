@@ -2,7 +2,7 @@
 use crate::{
     Error,
     checksum::{Adler32, adler32},
-    reserve,
+    reserve, zeroed,
 };
 
 #[path = "zlib/deflate.rs"]
@@ -1101,9 +1101,17 @@ fn decompress_bits_into<const DISPATCH: bool>(
     }
     let window = 1usize << ((cmf >> 4) + 8);
     if sized {
-        output
-            .try_reserve_exact(limit)
-            .map_err(|_| Error::Allocation)?;
+        // Coded blocks write into an initialized slice. A zeroed allocation
+        // provides it without a pass over fresh pages, unless the first block
+        // is stored: stored blocks append, often never needing the slice.
+        bits.fill(3);
+        if bits.count >= 3 && bits.word & 6 == 0 {
+            output
+                .try_reserve_exact(limit)
+                .map_err(|_| Error::Allocation)?;
+        } else {
+            *output = zeroed(limit)?;
+        }
     }
     let mut written = 0;
     // Checksum each block's output while it is still cached, rather than
@@ -1157,7 +1165,7 @@ fn inflate_blocks<const DISPATCH: bool>(
     // Stored blocks append into the output until a coded block needs an
     // initialized slice: zeroed to its exact size when sized, or grown as
     // needed. The produced prefix remains its history.
-    let mut initialized = false;
+    let mut initialized = !output.is_empty();
     loop {
         let last = bits.read(1)? != 0;
         let kind = bits.read(2)?;

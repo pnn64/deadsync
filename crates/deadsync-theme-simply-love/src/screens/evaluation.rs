@@ -3,7 +3,7 @@ mod mount;
 #[cfg(test)]
 use graph_build::life_record_lerp_at;
 use graph_build::{
-    GRAPH_LIFE_SAMPLE_COUNT, LifeRecordSampler, build_course_density_graph_mesh,
+    GRAPH_LIFE_SAMPLE_COUNT, build_course_density_graph_mesh,
     course_graph_raw_seconds, course_graph_stage_seconds, graph_display_life_layout,
     graph_display_life_points, valid_music_rate,
 };
@@ -28,6 +28,7 @@ use deadlib_present::cache::{
 };
 use deadlib_present::space::{is_wide, widescale};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_rules::life::LifeRecordSampler;
 use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_config::theme::GameFlag;
 use deadsync_score as score_data;
@@ -44,6 +45,8 @@ use deadsync_online::lobby_wait::{
     EvaluationPlayerStatsFacts, LocalLobbyPlayers, LobbyWaitReason,
 };
 use deadsync_theme::FontRole;
+use deadsync_assets::noteskin::Noteskin;
+use deadsync_theme::views::{EvaluationScores, EvaluationStageView};
 use log::warn;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -51,8 +54,7 @@ use std::sync::Arc;
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::views::{CourseGraphStage, ScoreInfo};
 use crate::views::{
-    EvaluationContextView, EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
-    SimplyLoveGrooveStatsService,
+    EvaluationContextView, EvaluationRuntimeView, EvaluationSubmissionView, SimplyLoveGrooveStatsService,
 };
 use deadlib_platform::input::PadEvent;
 use deadlib_platform::input::RawKeyboardEvent;
@@ -940,28 +942,17 @@ mod tests {
     }
 
     #[test]
-    fn evaluation_session_leave_uses_the_game_origin_for_feedback() {
+    fn evaluation_session_emits_a_departure_and_keeps_its_cue_separate() {
         use super::{Screen, ThemeEffect, handle_input, handle_session_input};
+        use crate::SimplyLoveTheme;
         use deadsync_core::session_flow::EvaluationOrigin;
-        use deadsync_theme::AudioRequest;
+        use deadsync_theme::{UiCue, evaluation::ThemeEvaluation};
 
-        let mut state = super::init(super::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.return_to_course = true;
         state.auto_advance_seconds = Some(1.0);
         let start = press(VirtualAction::p1_start);
-        let effect = handle_session_input(&mut state, &start, EvaluationOrigin::Song);
-        let ThemeEffect::Batch(effects) = effect else {
-            panic!("song results should play their cue before leaving");
-        };
-        assert!(matches!(
-            effects.as_slice(),
-            [
-                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-                    AudioRequest::PlaySfx("assets/sounds/start.ogg"),
-                )),
-                ThemeEffect::LeaveEvaluation,
-            ],
-        ));
+        assert!(matches!(handle_session_input(&mut state, &start), ThemeEffect::LeaveEvaluation));
         assert!(matches!(handle_input(&mut state, &start), ThemeEffect::None));
         state.auto_advance_seconds = None;
         assert!(matches!(
@@ -969,12 +960,13 @@ mod tests {
             ThemeEffect::Navigate(Screen::SelectCourse),
         ));
 
-        state.return_to_course = false;
         let back = press(VirtualAction::p2_back);
-        assert!(matches!(
-            handle_session_input(&mut state, &back, EvaluationOrigin::Course),
-            ThemeEffect::LeaveEvaluation,
-        ));
+        assert!(matches!(handle_session_input(&mut state, &back), ThemeEffect::LeaveEvaluation));
+        assert_eq!(
+            SimplyLoveTheme::evaluation_departure_cue(EvaluationOrigin::Song),
+            Some(UiCue::Confirm),
+        );
+        assert_eq!(SimplyLoveTheme::evaluation_departure_cue(EvaluationOrigin::Course), None);
     }
 
     #[test]
@@ -1163,7 +1155,7 @@ mod tests {
 
     #[test]
     fn elapsed_sync_retains_timer_text_until_the_visible_second_changes() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         super::sync_elapsed(&mut state, 65.1, 3_600.0);
         let session_text = state.session_timer.text().to_owned();
 
@@ -1197,7 +1189,7 @@ mod tests {
 
     #[test]
     fn result_dialog_and_event_overlays_open_sequentially() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.event_overlay_visible = true;
         state.result_dialogs[0] =
             super::ResultDialog::new(vec![Arc::<str>::from("result")].into_boxed_slice());
@@ -1235,7 +1227,7 @@ mod tests {
 
     #[test]
     fn result_dialog_input_pages_and_dismisses_before_normal_evaluation_actions() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.result_dialogs[0] = super::ResultDialog::new(
             vec![Arc::<str>::from("first"), Arc::<str>::from("second")].into_boxed_slice(),
         );
@@ -1305,7 +1297,7 @@ mod tests {
 
     #[test]
     fn retry_availability_uses_prepared_submission_status() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         assert!(!submission_retry_available(&state));
 
         state.submissions[0].groovestats_status =
@@ -1323,7 +1315,7 @@ mod tests {
 
     #[test]
     fn leaderboard_requests_are_plain_screen_state() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         assert_eq!(leaderboard_requests(&state), [false, false]);
 
         state.leaderboards_requested[1] = true;
@@ -1332,7 +1324,7 @@ mod tests {
 
     #[test]
     fn partial_runtime_view_retains_clean_subviews() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.context.players[0].display_name = "Retained".to_owned();
         state.favorites = [true, false];
         state.groovestats_service = SimplyLoveGrooveStatsService::BoogieStats;
@@ -1389,7 +1381,7 @@ mod tests {
 
     #[test]
     fn nice_eligibility_is_compiled_and_preserved_by_state_clone() {
-        let mut state = super::init(crate::views::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         assert_eq!(state.nice_scores, [false; 2]);
 
         state.nice_scores = [true, false];
@@ -1437,6 +1429,7 @@ mod tests {
                 max_bpm: 120.0,
             }),
             song_last_second,
+            step_seconds: song_last_second,
         }
     }
 
@@ -2198,8 +2191,11 @@ mod tests {
     #[test]
     fn ecs15_evaluation_uses_dedicated_pass_and_fail_cues() {
         use super::entry_sfx;
+        use crate::SimplyLoveTheme;
         use crate::visual_styles;
+        use crate::views::{SimplyLoveVisualPolicyView, VisualBackgroundView};
         use deadsync_config::theme::{SrpgVariant, VisualStyle};
+        use deadsync_theme::evaluation::ThemeEvaluation;
         assert_eq!(
             entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Ecs15),
             Some(visual_styles::ECS15_EVAL_PASSED_SFX.into())
@@ -2212,6 +2208,23 @@ mod tests {
             entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Srpg10),
             Some(visual_styles::SRPG10_EVAL_PASSED_SFX.into())
         );
+
+        crate::tests::init_paths();
+        let mut state =
+            SimplyLoveTheme::init_evaluation(Default::default(), Default::default(), 0);
+        let ecs15 = SimplyLoveVisualPolicyView {
+            background: VisualBackgroundView::Ecs15,
+            ..Default::default()
+        };
+        let (_, cue) = SimplyLoveTheme::prepare_evaluation_audio(&mut state, true, ecs15);
+        assert_eq!(cue, Some(visual_styles::ECS15_EVAL_FAILED_SFX.into()));
+
+        let srpg10 = SimplyLoveVisualPolicyView {
+            srpg10_tint: true,
+            ..Default::default()
+        };
+        let (_, cue) = SimplyLoveTheme::prepare_evaluation_audio(&mut state, false, srpg10);
+        assert_eq!(cue, Some(visual_styles::SRPG10_EVAL_PASSED_SFX.into()));
     }
 }
 
@@ -2686,7 +2699,9 @@ pub struct State {
     // has not published another sample since the previous evaluation.
     heart_rate_generation: Option<(bool, u64, u64)>,
     pub stage_duration_seconds: f32,
-    pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    pub score_info: EvaluationScores<Arc<Noteskin>, profile_data::PlayerSide>,
+    course_noteskins: [Option<Arc<Noteskin>>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
     /// Routine's shared grade, shown for both participants.
     routine_shared_grade: Option<score_data::Grade>,
     /// Immutable per-result Nice eligibility compiled with `score_info`.
@@ -2727,7 +2742,6 @@ pub struct State {
     pub return_to_course: bool,
     pub auto_advance_seconds: Option<f32>,
     pub allow_online_panes: bool,
-    pub auto_screenshot_taken: bool,
     pub event_overlay_visible: bool,
     event_overlay_shown: bool,
     event_overlay_pending: bool,
@@ -2748,6 +2762,7 @@ pub struct State {
     lobby_hud_status_scratch: RefCell<String>,
     event_overlay_page: [usize; MAX_PLAYERS],
     active_pane: [EvalPane; MAX_PLAYERS],
+    entry_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; MAX_PLAYERS],
@@ -2791,7 +2806,9 @@ impl Clone for State {
             heart_rate_view: self.heart_rate_view,
             heart_rate_generation: self.heart_rate_generation,
             stage_duration_seconds: self.stage_duration_seconds,
-            score_info: self.score_info.clone(),
+            score_info: Arc::clone(&self.score_info),
+            course_noteskins: self.course_noteskins.clone(),
+            routine_shared_score_percent: self.routine_shared_score_percent,
             routine_shared_grade: self.routine_shared_grade,
             nice_scores: self.nice_scores,
             result_text: self.result_text.clone(),
@@ -2828,7 +2845,6 @@ impl Clone for State {
             return_to_course: self.return_to_course,
             auto_advance_seconds: self.auto_advance_seconds,
             allow_online_panes: self.allow_online_panes,
-            auto_screenshot_taken: self.auto_screenshot_taken,
             event_overlay_visible: self.event_overlay_visible,
             event_overlay_shown: self.event_overlay_shown,
             event_overlay_pending: self.event_overlay_pending,
@@ -2849,6 +2865,7 @@ impl Clone for State {
             lobby_hud_status_scratch: RefCell::new(String::new()),
             event_overlay_page: self.event_overlay_page,
             active_pane: self.active_pane,
+            entry_pane: self.entry_pane,
             active_graph: self.active_graph,
             menu_lr_chord: self.menu_lr_chord,
             menu_lr_undo: self.menu_lr_undo,
@@ -2902,11 +2919,7 @@ fn routine_shared_grade(
             .iter()
             .flatten()
             .any(|si| si.grade == score_data::Grade::Failed);
-        if failed {
-            score_data::Grade::Failed
-        } else {
-            score_data::score_to_grade(percent * 10000.0)
-        }
+        score_data::stage_stats::routine_result_grade(percent, failed)
     })
 }
 
@@ -2940,14 +2953,17 @@ fn stats_presentations(
     })
 }
 
-pub fn init(init_view: EvaluationInitView) -> State {
-    let EvaluationInitView {
+pub fn init(
+    stage: EvaluationStageView<Arc<Noteskin>, profile_data::PlayerSide>,
+    context: EvaluationContextView,
+) -> State {
+    let EvaluationStageView {
         score_info,
+        stage_number: _,
         routine_shared_score_percent,
         stage_duration_seconds,
         fail_stream_progress,
-        context,
-    } = init_view;
+    } = stage;
     let policy = context.policy;
     let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
@@ -3291,6 +3307,8 @@ pub fn init(init_view: EvaluationInitView) -> State {
         heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
+        course_noteskins: [None, None],
+        routine_shared_score_percent,
         routine_shared_grade,
         nice_scores,
         result_text,
@@ -3327,7 +3345,6 @@ pub fn init(init_view: EvaluationInitView) -> State {
         return_to_course: false,
         auto_advance_seconds: None,
         allow_online_panes: true,
-        auto_screenshot_taken: false,
         event_overlay_visible: false,
         event_overlay_shown: false,
         event_overlay_pending: false,
@@ -3348,6 +3365,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
         lobby_hud_status_scratch: RefCell::new(String::new()),
         event_overlay_page: [0; MAX_PLAYERS],
         active_pane,
+        entry_pane: active_pane,
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
@@ -3364,11 +3382,12 @@ pub fn init(init_view: EvaluationInitView) -> State {
 
 #[must_use]
 pub fn init_from_score_info(
-    score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    score_info: impl Into<EvaluationScores<Arc<Noteskin>, profile_data::PlayerSide>>,
     routine_shared_score_percent: Option<f64>,
     stage_duration_seconds: f32,
     context: EvaluationContextView,
 ) -> State {
+    let score_info = score_info.into();
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let play_style = context.play_style;
@@ -3606,6 +3625,8 @@ pub fn init_from_score_info(
         heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
+        course_noteskins: [None, None],
+        routine_shared_score_percent,
         routine_shared_grade,
         nice_scores,
         result_text,
@@ -3642,7 +3663,6 @@ pub fn init_from_score_info(
         return_to_course: false,
         auto_advance_seconds: None,
         allow_online_panes: true,
-        auto_screenshot_taken: false,
         event_overlay_visible: false,
         event_overlay_shown: false,
         event_overlay_pending: false,
@@ -3663,6 +3683,7 @@ pub fn init_from_score_info(
         lobby_hud_status_scratch: RefCell::new(String::new()),
         event_overlay_page: [0; MAX_PLAYERS],
         active_pane,
+        entry_pane: active_pane,
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
@@ -3843,7 +3864,15 @@ pub fn entry_sfx(
     visual_style: deadsync_config::theme::VisualStyle,
     srpg_variant: deadsync_config::theme::SrpgVariant,
 ) -> Option<std::path::PathBuf> {
-    if visual_styles::srpg10_active(visual_style, srpg_variant) {
+    entry_sfx_for_style(
+        failed,
+        visual_styles::srpg10_active(visual_style, srpg_variant),
+        visual_styles::ecs15_active(visual_style, srpg_variant),
+    )
+}
+
+fn entry_sfx_for_style(failed: bool, srpg10: bool, ecs15: bool) -> Option<std::path::PathBuf> {
+    if srpg10 {
         Some(
             if failed {
                 visual_styles::SRPG10_EVAL_FAILED_SFX
@@ -3852,7 +3881,7 @@ pub fn entry_sfx(
             }
             .into(),
         )
-    } else if visual_styles::ecs15_active(visual_style, srpg_variant) {
+    } else if ecs15 {
         Some(
             if failed {
                 visual_styles::ECS15_EVAL_FAILED_SFX
@@ -4929,7 +4958,7 @@ mod input_audio_effect_tests {
 
     #[test]
     fn nice_sfx_uses_entry_selection_once() {
-        let mut state = super::init(super::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.nice_scores = [true, false];
         state.sfx_paths.nice = Some("selected/nice.ogg".into());
         state.context.policy.machine_nice_sound = false;
@@ -4952,7 +4981,7 @@ mod input_audio_effect_tests {
 
     #[test]
     fn missing_nice_sfx_does_not_pick_a_late_replacement() {
-        let mut state = super::init(super::EvaluationInitView::default());
+        let mut state = super::init(Default::default(), Default::default());
         state.nice_scores = [true, true];
         state.context.policy.machine_nice_sound = true;
         assert!(matches!(
@@ -5055,24 +5084,14 @@ mod input_audio_effect_tests {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    handle_input_impl(state, ev, None)
+    handle_input_impl(state, ev, false)
 }
 
-pub fn handle_session_input(
-    state: &mut State,
-    ev: &InputEvent,
-    origin: deadsync_core::session_flow::EvaluationOrigin,
-) -> ThemeEffect {
-    handle_input_impl(state, ev, Some(origin))
+pub fn handle_session_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+    handle_input_impl(state, ev, true)
 }
 
-fn handle_input_impl(
-    state: &mut State,
-    ev: &InputEvent,
-    session_origin: Option<deadsync_core::session_flow::EvaluationOrigin>,
-) -> ThemeEffect {
-    use deadsync_core::session_flow::EvaluationOrigin;
-
+fn handle_input_impl(state: &mut State, ev: &InputEvent, game_session: bool) -> ThemeEffect {
     // Feed virtual input through the test_input state so the highlight feedback on the
     // EvalPane::TestInput pad reflects MENU buttons / Start / Select while the pane is active.
     test_input::apply_virtual_input(&mut state.test_input_state, ev);
@@ -5128,7 +5147,7 @@ fn handle_input_impl(
     if !ev.pressed {
         return ThemeEffect::sequence(favorite_effect, ThemeEffect::None);
     }
-    if session_origin.is_none() && state.auto_advance_seconds.is_some() {
+    if !game_session && state.auto_advance_seconds.is_some() {
         return ThemeEffect::sequence(favorite_effect, ThemeEffect::None);
     }
     if state.event_overlay_visible {
@@ -5411,21 +5430,13 @@ fn handle_input_impl(
         | VirtualAction::p1_start
         | VirtualAction::p2_back
         | VirtualAction::p2_start => {
-            let (origin, exit) = match session_origin {
-                Some(origin) => (origin, ThemeEffect::LeaveEvaluation),
-                None if state.return_to_course => (
-                    EvaluationOrigin::Course,
-                    ThemeEffect::Navigate(Screen::SelectCourse),
-                ),
-                None => (
-                    EvaluationOrigin::Song,
-                    ThemeEffect::Navigate(Screen::SelectMusic),
-                ),
-            };
-            prepend_sfx(
-                (origin == EvaluationOrigin::Song).then_some("assets/sounds/start.ogg"),
-                exit,
-            )
+            if game_session {
+                ThemeEffect::LeaveEvaluation
+            } else if state.return_to_course {
+                ThemeEffect::Navigate(Screen::SelectCourse)
+            } else {
+                prepend_sfx(Some("assets/sounds/start.ogg"), ThemeEffect::Navigate(Screen::SelectMusic))
+            }
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
@@ -5521,6 +5532,28 @@ fn push_heart_rates(actors: &mut Vec<Actor>, state: &State) {
             );
         }
     }
+}
+
+/// Whether the visit is showing its ordinary result and graph selection.
+pub fn overview_pane_selected(state: &State) -> bool {
+    let mut populated = false;
+    for score in state.score_info.iter().flatten() {
+        populated = true;
+        let side = profile_data::player_side_index(score.side);
+        if !matches!(state.active_pane[side], EvalPane::Standard | EvalPane::FaPlus)
+            || state.active_pane[side] != state.entry_pane[side]
+            || state.active_graph[side]
+                != eval_graph_default_for(score.show_fa_plus_pane, score.show_hard_ex_score)
+        {
+            return false;
+        }
+    }
+    populated
+        && (state.context.play_style.is_versus()
+            || {
+                let other = 1 - profile_data::player_side_index(state.context.player_side);
+                state.active_pane[other] == state.entry_pane[other]
+            })
 }
 
 /// # Panics
@@ -6318,7 +6351,7 @@ pub fn push_actors(
                     if let Some(text) = state.timing_arrows_text[player_idx].as_ref() {
                         eval_panes::push_timing_arrows_pane(
                             actors,
-                            si,
+                            si.noteskin.as_deref().or(state.course_noteskins[player_idx].as_deref()),
                             text,
                             controller,
                             state.screen_elapsed,
@@ -6899,6 +6932,97 @@ pub fn push_actors(
         }
     }
 
+    push_submission_overlay(actors, state, asset_manager);
+
+    // --- "DS" text and Pads (top right) ---
+    {
+        let ds_text_x = screen_width() - widescale(55.0, 62.0);
+        let ds_text = "DS";
+        let ds_font = machine_font_key_for_text(policy.machine_font, FontRole::Header, ds_text);
+        actors.push(act!(text: font(ds_font): settext(ds_text): align(1.0, 0.5): xy(ds_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
+        actors.extend(mode_pads::build(
+            state.context.play_style,
+            std::array::from_fn(|idx| state.context.players[idx].joined),
+        ));
+    }
+
+    // 3. Bottom Bar
+    let p1 = &state.context.players[0];
+    let p2 = &state.context.players[1];
+    let p1_avatar = p1
+        .avatar_texture_key
+        .as_deref()
+        .map(|texture_key| AvatarParams { texture_key });
+    let p2_avatar = p2
+        .avatar_texture_key
+        .as_deref()
+        .map(|texture_key| AvatarParams { texture_key });
+
+    // Only guest footers show this label.
+    let insert_card =
+        ((p1.joined && p1.guest) || (p2.joined && p2.guest)).then(|| tr("Common", "InsertCard"));
+
+    let (p1_footer_text, p1_footer_avatar) = if p1.joined {
+        if p1.guest {
+            (insert_card.as_deref(), None)
+        } else {
+            (Some(p1.display_name.as_str()), p1_avatar)
+        }
+    } else {
+        (None, None)
+    };
+    let (p2_footer_text, p2_footer_avatar) = if p2.joined {
+        if p2.guest {
+            (insert_card.as_deref(), None)
+        } else {
+            (Some(p2.display_name.as_str()), p2_avatar)
+        }
+    } else {
+        (None, None)
+    };
+
+    let (footer_left, footer_right, left_avatar, right_avatar) = if play_style.is_versus() {
+        (
+            p1_footer_text,
+            p2_footer_text,
+            p1_footer_avatar,
+            p2_footer_avatar,
+        )
+    } else {
+        match player_side {
+            profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
+            profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+        }
+    };
+    actors.push(screen_bar::build_no_background(ScreenBarParams {
+        visual_policy,
+        title: "",
+        title_placement: screen_bar::ScreenBarTitlePlacement::Center,
+        position: screen_bar::ScreenBarPosition::Bottom,
+        transparent: true,
+        fg_color: [1.0; 4],
+        left_text: footer_left,
+        center_text: None,
+        right_text: footer_right,
+        left_avatar,
+        right_avatar,
+    }));
+
+    actors.push(act!(text:
+        font(machine_font_key(policy.machine_font, FontRole::Numbers)):
+        settext(Arc::clone(state.footer_clock.text())):
+        align(0.5, 1.0): // align bottom-center of text block
+        xy(screen_center_x(), screen_height() - 14.0):
+        zoom(0.18):
+        horizalign(center):
+        z(121) // a bit above the screen bar (z=120)
+    ));
+
+    push_visit_overlays(actors, state, asset_manager, true);
+}
+
+fn push_submission_overlay(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+    let play_style = state.context.play_style;
     // Auto-submit UI text (SL/zmod parity with AutoSubmitScore.lua):
     // top PB/WR banner plus bottom submit-status actors.
     // Common Normal/MachineFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
@@ -7005,91 +7129,17 @@ pub fn push_actors(
             }
         }
     }
+}
 
-    // --- "DS" text and Pads (top right) ---
-    {
-        let ds_text_x = screen_width() - widescale(55.0, 62.0);
-        let ds_text = "DS";
-        let ds_font = machine_font_key_for_text(policy.machine_font, FontRole::Header, ds_text);
-        actors.push(act!(text: font(ds_font): settext(ds_text): align(1.0, 0.5): xy(ds_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
-        actors.extend(mode_pads::build(
-            state.context.play_style,
-            std::array::from_fn(|idx| state.context.players[idx].joined),
-        ));
-    }
-
-    // 3. Bottom Bar
-    let p1 = &state.context.players[0];
-    let p2 = &state.context.players[1];
-    let p1_avatar = p1
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = p2
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-
-    // Only guest footers show this label.
-    let insert_card =
-        ((p1.joined && p1.guest) || (p2.joined && p2.guest)).then(|| tr("Common", "InsertCard"));
-
-    let (p1_footer_text, p1_footer_avatar) = if p1.joined {
-        if p1.guest {
-            (insert_card.as_deref(), None)
-        } else {
-            (Some(p1.display_name.as_str()), p1_avatar)
-        }
-    } else {
-        (None, None)
-    };
-    let (p2_footer_text, p2_footer_avatar) = if p2.joined {
-        if p2.guest {
-            (insert_card.as_deref(), None)
-        } else {
-            (Some(p2.display_name.as_str()), p2_avatar)
-        }
-    } else {
-        (None, None)
-    };
-
-    let (footer_left, footer_right, left_avatar, right_avatar) = if play_style.is_versus() {
-        (
-            p1_footer_text,
-            p2_footer_text,
-            p1_footer_avatar,
-            p2_footer_avatar,
-        )
-    } else {
-        match player_side {
-            profile_data::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
-            profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
-        }
-    };
-    actors.push(screen_bar::build_no_background(ScreenBarParams {
-        visual_policy,
-        title: "",
-        title_placement: screen_bar::ScreenBarTitlePlacement::Center,
-        position: screen_bar::ScreenBarPosition::Bottom,
-        transparent: true,
-        fg_color: [1.0; 4],
-        left_text: footer_left,
-        center_text: None,
-        right_text: footer_right,
-        left_avatar,
-        right_avatar,
-    }));
-
-    actors.push(act!(text:
-        font(machine_font_key(policy.machine_font, FontRole::Numbers)):
-        settext(Arc::clone(state.footer_clock.text())):
-        align(0.5, 1.0): // align bottom-center of text block
-        xy(screen_center_x(), screen_height() - 14.0):
-        zoom(0.18):
-        horizalign(center):
-        z(121) // a bit above the screen bar (z=120)
-    ));
-
+fn push_visit_overlays(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    show_stinger: bool,
+) {
+    let play_style = state.context.play_style;
+    let player_side = state.context.player_side;
+    let policy = &state.context.policy;
     if let Some(joined) = state.lobby_session.runtime_view().snapshot.joined_lobby.as_ref() {
         let mut status_scratch = state.lobby_hud_status_scratch.borrow_mut();
         let status_text = evaluation_lobby_status_text_into(state, &mut status_scratch);
@@ -7110,7 +7160,9 @@ pub fn push_actors(
     }
 
     // ScreenEvaluationStage in stinger (standard Simply Love visual style).
-    actors.extend(build_stage_in_stinger(state));
+    if show_stinger {
+        actors.extend(build_stage_in_stinger(state));
+    }
 
     if state.event_overlay_visible {
         let progress_single = [(0, player_side)];

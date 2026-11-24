@@ -1328,6 +1328,12 @@ impl SpriteBuilder {
 
         let sid = runtime::site_id(site_base, self.tween_salt);
         let state = runtime::materialize_lazy(sid, init, build_steps);
+        self.apply_tween_state(&state);
+        self.build_with_native_dims(site_base, None)
+    }
+
+    /// Copies a sampled tween into a sprite before building its draw actor.
+    pub fn apply_tween_state(&mut self, state: &anim::TweenState) {
         self.x = state.x;
         self.y = state.y;
         self.w = state.w;
@@ -1352,7 +1358,6 @@ impl SpriteBuilder {
         self.cb = state.crop_b;
         self.sx = state.scale[0];
         self.sy = state.scale[1];
-        self.build_with_native_dims(site_base, None)
     }
 
     #[inline(always)]

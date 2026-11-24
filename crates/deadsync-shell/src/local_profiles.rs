@@ -2,8 +2,8 @@ use deadsync_profile::compat as profile;
 use deadsync_profile::picker::{ProfilePickerEntryView, ProfilePickerView};
 use deadsync_profile::{ActiveProfile, PlayerSide};
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_theme_simply_love::SimplyLoveLocalProfileEvent;
-use deadsync_theme_simply_love::views::{LocalProfileView, ManageLocalProfilesView};
+use deadsync_theme::app_requests::LocalProfileEvent;
+use deadsync_theme::profile_picker::{LocalProfileView, ManageLocalProfilesView};
 use std::str::FromStr;
 
 pub fn view() -> ManageLocalProfilesView {
@@ -133,37 +133,37 @@ fn parse_ini_bool(raw: &str) -> Option<bool> {
     }
 }
 
-pub fn create(display_name: &str) -> SimplyLoveLocalProfileEvent {
+pub fn create(display_name: &str) -> LocalProfileEvent {
     let result = profile::create_local_profile(display_name).map_err(|error| {
         log::warn!("Failed to create local profile: {error}");
     });
-    SimplyLoveLocalProfileEvent::Created {
+    LocalProfileEvent::Created {
         result,
         view: view(),
     }
 }
 
-pub fn rename(profile_id: &str, display_name: &str) -> SimplyLoveLocalProfileEvent {
+pub fn rename(profile_id: &str, display_name: &str) -> LocalProfileEvent {
     let result = profile::rename_local_profile(profile_id, display_name).map_err(|error| {
         log::warn!("Failed to rename local profile {profile_id}: {error}");
     });
-    SimplyLoveLocalProfileEvent::Renamed {
+    LocalProfileEvent::Renamed {
         profile_id: profile_id.to_owned(),
         result,
         view: view(),
     }
 }
 
-pub fn set_default(side: PlayerSide, profile_id: String) -> SimplyLoveLocalProfileEvent {
+pub fn set_default(side: PlayerSide, profile_id: String) -> LocalProfileEvent {
     profile::set_default_profile_for_side(side, ActiveProfile::Local { id: profile_id });
-    SimplyLoveLocalProfileEvent::DefaultSet { view: view() }
+    LocalProfileEvent::DefaultSet { view: view() }
 }
 
-pub fn delete(profile_id: &str) -> SimplyLoveLocalProfileEvent {
+pub fn delete(profile_id: &str) -> LocalProfileEvent {
     let result = profile::delete_local_profile(profile_id).map_err(|error| {
         log::warn!("Failed to delete local profile {profile_id}: {error}");
     });
-    SimplyLoveLocalProfileEvent::Deleted {
+    LocalProfileEvent::Deleted {
         result,
         view: view(),
     }

@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
 
@@ -22,8 +22,8 @@ pub(crate) struct OpenFile {
     pub frames_total_hint: Option<u64>,
 }
 
-pub struct Reader {
-    reader: BufReader<File>,
+pub struct Reader<R = File> {
+    reader: BufReader<R>,
     spec: Spec,
     packet_buf: Vec<u8>,
     pending: Option<Vec<i16>>,
@@ -70,8 +70,24 @@ pub(crate) fn path_is_wav(path: &Path) -> bool {
 }
 
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
-    let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
+    let reader = open_buffered(BufReader::new(File::open(path)?), path.display())?;
+    Ok(OpenFile {
+        channels: reader.channels(),
+        sample_rate_hz: reader.sample_rate_hz(),
+        frames_total_hint: Some(reader.frames_total()),
+        reader,
+    })
+}
+
+/// Opens an in-memory RIFF/WAVE buffer with the same decoder as a WAV file.
+pub fn open_bytes(bytes: &[u8]) -> Result<Reader<Cursor<&[u8]>>, Box<dyn std::error::Error + Send + Sync>> {
+    open_buffered(BufReader::new(Cursor::new(bytes)), "embedded audio")
+}
+
+fn open_buffered<R: Read + Seek>(
+    mut reader: BufReader<R>,
+    source: impl std::fmt::Display,
+) -> Result<Reader<R>, Box<dyn std::error::Error + Send + Sync>> {
     let spec = parse_spec(&mut reader)?;
     // parse_spec seeks to the data start, leaving no buffered bytes to lose.
     // Decode whole packets from this buffer instead of keeping a second copy.
@@ -90,19 +106,10 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
     };
     let mut first_packet = Vec::new();
     if !reader.decode_next_packet_into(&mut first_packet)? {
-        return Err(format!(
-            "WAV '{}' contained no decodable audio frames",
-            path.display()
-        )
-        .into());
+        return Err(format!("WAV '{source}' contained no decodable audio frames").into());
     }
     reader.pending = Some(first_packet);
-    Ok(OpenFile {
-        reader,
-        channels: spec.channels,
-        sample_rate_hz: spec.sample_rate_hz,
-        frames_total_hint: Some(spec.frames_total),
-    })
+    Ok(reader)
 }
 
 pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
@@ -112,8 +119,20 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
     Ok((spec.frames_total as f64 / f64::from(spec.sample_rate_hz)) as f32)
 }
 
-impl Reader {
-    pub(crate) fn read_dec_packet_into(
+impl<R: Read + Seek> Reader<R> {
+    pub const fn channels(&self) -> usize {
+        self.spec.channels
+    }
+
+    pub const fn sample_rate_hz(&self) -> u32 {
+        self.spec.sample_rate_hz
+    }
+
+    pub const fn frames_total(&self) -> u64 {
+        self.spec.frames_total
+    }
+
+    pub fn read_dec_packet_into(
         &mut self,
         out: &mut Vec<i16>,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
@@ -180,7 +199,7 @@ impl Reader {
 }
 
 fn parse_spec(
-    reader: &mut BufReader<File>,
+    reader: &mut BufReader<impl Read + Seek>,
 ) -> Result<Spec, Box<dyn std::error::Error + Send + Sync>> {
     let mut riff = [0u8; 12];
     reader.read_exact(&mut riff)?;
@@ -228,7 +247,7 @@ fn parse_spec(
 }
 
 fn read_chunk_header(
-    reader: &mut BufReader<File>,
+    reader: &mut BufReader<impl Read + Seek>,
 ) -> Result<Option<([u8; 4], u32)>, Box<dyn std::error::Error + Send + Sync>> {
     let mut chunk = [0u8; 8];
     match reader.read_exact(&mut chunk) {
@@ -242,7 +261,7 @@ fn read_chunk_header(
 }
 
 fn parse_format_chunk(
-    reader: &mut BufReader<File>,
+    reader: &mut BufReader<impl Read + Seek>,
     chunk_size: u32,
 ) -> Result<Spec, Box<dyn std::error::Error + Send + Sync>> {
     if chunk_size < 16 {

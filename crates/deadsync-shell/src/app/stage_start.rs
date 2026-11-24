@@ -1,16 +1,15 @@
 use super::{
-    ActiveTheme, App, Arc, CurrentScreen, MAX_PLAYERS, SongData, StageOptions, TransitionState,
+    App, Arc, CurrentScreen, MAX_PLAYERS, SongData, StageOptions, TransitionState,
     gameplay_play_style_from_profile, noteskin_catalog_view, profile, profile_data, select_course,
     select_music,
 };
 use crate::player_options::PlayerOptionsState;
 use deadsync_gameplay::song_launch::{SongSelection, resolve_song_chart_slots};
-use deadsync_gameplay::stage_launch::{StageLaunchRequest, StageLaunchTarget};
+use deadsync_gameplay::stage_launch::{StageLaunchPrompt, StageLaunchRequest, StageLaunchTarget};
 use deadsync_profile_gameplay::stage_charts::stage_difficulty_indices;
 use deadsync_profile_gameplay::stage_replay::StageReplayRequest;
 use deadsync_simfile::course_selection::ConfirmedCourse;
-use deadsync_theme::ThemeScreenFlow;
-use deadsync_theme::player_options::{PlayerOptionsEntry, ThemePlayerOptions};
+use deadsync_theme::player_options::PlayerOptionsEntry;
 
 pub(super) enum StageSelection {
     Song(SongSelection),
@@ -18,9 +17,9 @@ pub(super) enum StageSelection {
 }
 
 pub(super) fn stage_launch_target(screen: CurrentScreen) -> Option<StageLaunchTarget> {
-    if screen == ActiveTheme::SCREENS.gameplay {
+    if screen == CurrentScreen::Gameplay {
         Some(StageLaunchTarget::Gameplay)
-    } else if screen == ActiveTheme::SCREENS.player_options {
+    } else if screen == CurrentScreen::PlayerOptions {
         Some(StageLaunchTarget::PlayerOptions)
     } else {
         None
@@ -83,8 +82,8 @@ impl StageStart {
     }
 
     fn from_player_options(state: &PlayerOptionsState) -> Self {
-        let selection = ActiveTheme::player_options_selection(state);
-        let mut options = ActiveTheme::player_options_stage(state);
+        let selection = state.selection();
+        let mut options = state.stage();
         let (steps, chart_difficulty_index) = resolve_song_chart_slots(
             selection.song,
             gameplay_play_style_from_profile(options.play_style),
@@ -111,7 +110,15 @@ impl App {
         request: StageLaunchRequest<StageSelection>,
     ) {
         if self.state.screens.current_screen == source {
+            let launch_was_hidden =
+                self.state.screens.stage_launch.prompt() == StageLaunchPrompt::Hidden;
             self.state.screens.stage_launch.request(request);
+            if launch_was_hidden
+                && self.state.screens.stage_launch.prompt() == StageLaunchPrompt::OfferOptions
+                && let Some(selection) = self.state.screens.selection_presentation.as_mut()
+            {
+                selection.confirm_wheel(super::Instant::now());
+            }
             self.sync_stage_launch_prompt();
         }
     }
@@ -119,22 +126,25 @@ impl App {
     fn sync_stage_launch_prompt(&mut self) {
         let screens = &mut self.state.screens;
         let prompt = screens.stage_launch.prompt();
-        if screens.current_screen == ActiveTheme::SCREENS.song_selection {
+        if screens.current_screen == CurrentScreen::SelectMusic {
             select_music::sync_song_launch_prompt(&mut screens.select_music_state, prompt);
-        } else if screens.current_screen == ActiveTheme::SCREENS.course_selection {
+        } else if screens.current_screen == CurrentScreen::SelectCourse {
             select_course::sync_stage_launch_prompt(&mut screens.select_course_state, prompt);
         }
     }
 
     pub(super) fn clear_stage_launch(&mut self) {
         self.state.screens.stage_launch = Default::default();
+        if let Some(selection) = self.state.screens.selection_presentation.as_mut() {
+            selection.cancel_wheel_confirmation();
+        }
         self.sync_stage_launch_prompt();
     }
 
     pub(super) fn advance_stage_launch(&mut self, delta_time: f32) -> Option<CurrentScreen> {
         let current = self.state.screens.current_screen;
-        let song_selection = current == ActiveTheme::SCREENS.song_selection;
-        if (!song_selection && current != ActiveTheme::SCREENS.course_selection)
+        let song_selection = current == CurrentScreen::SelectMusic;
+        if (!song_selection && current != CurrentScreen::SelectCourse)
             || !matches!(self.state.shell.transition, TransitionState::Idle)
         {
             return None;
@@ -155,9 +165,9 @@ impl App {
                         &mut self.theme_effect_scratch,
                     );
                 }
-                Some(ActiveTheme::SCREENS.gameplay)
+                Some(CurrentScreen::Gameplay)
             }
-            StageLaunchTarget::PlayerOptions => Some(ActiveTheme::SCREENS.player_options),
+            StageLaunchTarget::PlayerOptions => Some(CurrentScreen::PlayerOptions),
         }
     }
 
@@ -181,7 +191,7 @@ impl App {
             steps,
             preferred,
             self.state.screens.select_music_state.active_color_index,
-            ActiveTheme::SCREENS.song_selection,
+            CurrentScreen::SelectMusic,
             session,
             &crate::player_options::active_profiles(),
         )
@@ -242,31 +252,34 @@ impl App {
                 player.judgment_palette_id = palette;
                 player.heart_rate_device_id = monitor;
             }
-            ActiveTheme::init_player_options(PlayerOptionsEntry {
-                song: start.song,
-                steps: chart_steps_index,
-                preferred: start.chart_difficulty_index,
-                color_index: start.color_index,
-                return_screen: start.return_screen,
-                fixed_stepchart_label: start.fixed_stepchart_label,
-                noteskin_catalog: noteskin_catalog_view(&self.dirs),
-                smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
-                heart_rate_devices: crate::heart_rate::devices_view(),
-                view,
-                scroll_speeds: Some(scroll_speeds),
-            })
+            PlayerOptionsState::new(
+                PlayerOptionsEntry {
+                    song: start.song,
+                    steps: chart_steps_index,
+                    preferred: start.chart_difficulty_index,
+                    color_index: start.color_index,
+                    return_screen: start.return_screen,
+                    fixed_stepchart_label: start.fixed_stepchart_label,
+                    noteskin_catalog: noteskin_catalog_view(&self.dirs),
+                    smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
+                    heart_rate_devices: crate::heart_rate::devices_view(),
+                    view,
+                    scroll_speeds: Some(scroll_speeds),
+                },
+                self.state.screens.player_options_layout,
+            )
         });
-        ActiveTheme::prepare_player_options(&mut screen, &self.asset_manager);
-        self.commit_screen_change(ActiveTheme::SCREENS.player_options);
+        screen.prepare(&self.asset_manager);
+        self.commit_screen_change(CurrentScreen::PlayerOptions);
         self.state.screens.player_options_state = Some(screen);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::{SimplyLoveRuntimeRequest, ThemeEffect};
+    use super::super::{RuntimeRequest, ThemeEffect};
     use super::*;
-    use crate::app::course_transition_tests::{finish_pending_stage, on_app_thread, test_app};
+    use crate::app::course_transition_tests::{finish_pending_stage, on_app_thread, test_app, test_app_with_theme};
     use crate::gameplay_regression_tests::tests::with_session;
     use deadsync_core::input::InputSource;
     use deadsync_gameplay::stage_launch::{OPTIONS_ENTRY_SECONDS, OPTIONS_WINDOW_SECONDS};
@@ -296,14 +309,14 @@ mod tests {
         let request = effects
             .into_iter()
             .find_map(|effect| match effect {
-                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::SongLaunch(request)) => {
+                ThemeEffect::Runtime(RuntimeRequest::SongLaunch(request)) => {
                     Some(request)
                 }
                 _ => None,
             })
             .expect("confirming the wheel emits a song launch request");
         app.request_stage_launch(
-            ActiveTheme::SCREENS.song_selection,
+            CurrentScreen::SelectMusic,
             request.map_selection(StageSelection::Song),
         );
         song
@@ -338,7 +351,7 @@ mod tests {
                     );
                     assert!(matches!(
                         app.theme_effect_scratch.as_slice(),
-                        [ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                        [ThemeEffect::Runtime(RuntimeRequest::Audio(
                             AudioRequest::StopMusic
                         ))]
                     ));
@@ -357,6 +370,96 @@ mod tests {
                     assert!(Arc::ptr_eq(&state.song_arc(), &song));
                     let expected = song.chart_for_steps_index("dance-single", 3).unwrap();
                     assert_eq!(state.chart(0).unwrap().short_hash, expected.short_hash);
+                },
+            )
+        });
+    }
+
+    #[test]
+    fn gameplay_intro_uses_the_installed_theme_on_the_shared_stage_clock() {
+        use deadsync_config::theme::ThemeFlag;
+        use deadsync_gameplay::{
+            GAMEPLAY_ENTRY_TRANSITION_SECONDS, GAMEPLAY_RESTART_TRANSITION_SECONDS,
+        };
+        use deadsync_theme::views::GameplayHudMotion;
+
+        on_app_thread(|| {
+            with_session(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P1,
+                true,
+                false,
+                || {
+                    let root = tempfile::tempdir().unwrap();
+                    let mut app = test_app_with_theme(root.path(), ThemeFlag::OpenItg);
+                    let (cover, duration) =
+                        app.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    assert!(!cover.is_empty());
+                    assert_eq!(duration, GAMEPLAY_ENTRY_TRANSITION_SECONDS);
+
+                    confirm_test_song(&mut app, root.path());
+                    assert_eq!(
+                        app.advance_stage_launch(OPTIONS_WINDOW_SECONDS),
+                        Some(CurrentScreen::Gameplay)
+                    );
+                    app.prepare_global_fade_entry(CurrentScreen::Gameplay);
+                    finish_pending_stage(&mut app);
+
+                    let (entry, duration) =
+                        app.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    assert!(entry.is_empty());
+                    assert_eq!(duration, GAMEPLAY_ENTRY_TRANSITION_SECONDS);
+                    let game = app.state.screens.gameplay_state.as_ref().unwrap();
+                    let entering = TransitionState::FadingIn {
+                        elapsed: 0.75,
+                        duration,
+                    };
+                    assert_eq!(
+                        app.state.screens.stage_presentation.gameplay_motion(super::super::screen_nav::stage_motion_view(game, &entering, false)),
+                        GameplayHudMotion::Entering {
+                            elapsed_seconds: 0.75
+                        },
+                    );
+                    assert_eq!(
+                        app.state.screens.stage_presentation.gameplay_motion(super::super::screen_nav::stage_motion_view(game, &entering, true)),
+                        GameplayHudMotion::Settled,
+                    );
+                    let leaving = TransitionState::FadingOut {
+                        elapsed: 0.25,
+                        duration: app
+                            .get_out_transition_for_route(
+                                CurrentScreen::Gameplay,
+                                CurrentScreen::Evaluation,
+                            )
+                            .1,
+                        target: CurrentScreen::Evaluation,
+                    };
+                    assert_eq!(
+                        app.state.screens.stage_presentation.gameplay_motion(super::super::screen_nav::stage_motion_view(game, &leaving, false)),
+                        GameplayHudMotion::Leaving {
+                            elapsed_seconds: 0.25
+                        },
+                    );
+
+                    let game = app.state.screens.gameplay_state.as_mut().unwrap();
+                    game.presentation.hide_song_intro = true;
+                    assert_eq!(
+                        app.state.screens.stage_presentation.gameplay_motion(super::super::screen_nav::stage_motion_view(game, &entering, false)),
+                        GameplayHudMotion::Settled,
+                    );
+                    game.presentation.hide_song_intro = false;
+
+                    app.state.session.gameplay_restart_count = 1;
+                    let (restart, duration) =
+                        app.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    assert!(!restart.is_empty());
+                    assert_eq!(duration, GAMEPLAY_RESTART_TRANSITION_SECONDS);
+                    app.state.session.gameplay_restart_count = 0;
+                    app.state.screens.stage_presentation = crate::theme_registry::mount(ThemeFlag::SimplyLove).stage;
+                    let (entry, duration) =
+                        app.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    assert!(!entry.is_empty());
+                    assert_eq!(duration, GAMEPLAY_ENTRY_TRANSITION_SECONDS);
                 },
             )
         });
@@ -388,11 +491,11 @@ mod tests {
                     assert_eq!(start.chart_difficulty_index, [2, 2]);
 
                     app.request_stage_launch(
-                        ActiveTheme::SCREENS.song_selection,
+                        CurrentScreen::SelectMusic,
                         StageLaunchRequest::Confirm(StageSelection::Song(selection)),
                     );
                     app.request_stage_launch(
-                        ActiveTheme::SCREENS.song_selection,
+                        CurrentScreen::SelectMusic,
                         StageLaunchRequest::PlayerOptions,
                     );
                     assert_eq!(
@@ -401,7 +504,8 @@ mod tests {
                     );
                     let (target, _) = app.prepare_global_fade_entry(CurrentScreen::PlayerOptions);
                     assert_eq!(target, CurrentScreen::PlayerOptions);
-                    let options = app.state.screens.player_options_state.as_mut().unwrap();
+                    let options = app.state.screens.player_options_state.as_mut().unwrap()
+                        .editor_mut();
                     assert_eq!(options.chart_steps_index, [2, 2]);
                     assert_eq!(options.chart_difficulty_index, [2, 2]);
 
@@ -432,7 +536,7 @@ mod tests {
                         None
                     );
                     app.request_stage_launch(
-                        ActiveTheme::SCREENS.song_selection,
+                        CurrentScreen::SelectMusic,
                         StageLaunchRequest::PlayerOptions,
                     );
                     assert!(app.state.screens.stage_launch.preload_selection().is_none());
@@ -440,7 +544,7 @@ mod tests {
 
                     assert_eq!(app.advance_stage_launch(OPTIONS_ENTRY_SECONDS / 2.0), None);
                     app.request_stage_launch(
-                        ActiveTheme::SCREENS.song_selection,
+                        CurrentScreen::SelectMusic,
                         StageLaunchRequest::PlayerOptions,
                     );
                     assert_eq!(
@@ -451,16 +555,118 @@ mod tests {
 
                     let (target, _) = app.prepare_global_fade_entry(CurrentScreen::PlayerOptions);
                     assert_eq!(target, CurrentScreen::PlayerOptions);
-                    let options = app.state.screens.player_options_state.as_ref().unwrap();
-                    assert!(Arc::ptr_eq(&options.song, &song));
-                    assert_eq!(options.chart_steps_index, [3; MAX_PLAYERS]);
-                    assert_eq!(options.chart_difficulty_index, [3; MAX_PLAYERS]);
+                    let options = app.state.screens.player_options_state.as_ref().unwrap().selection();
+                    assert!(Arc::ptr_eq(options.song, &song));
+                    assert_eq!(options.steps, [3; MAX_PLAYERS]);
+                    assert_eq!(options.preferred, [3; MAX_PLAYERS]);
                     assert!(
                         !app.state
                             .screens
                             .stage_launch
                             .ready_for(StageLaunchTarget::PlayerOptions)
                     );
+                },
+            )
+        });
+    }
+
+    #[test]
+    fn both_player_options_mounts_restore_and_submit_the_same_stage_selection() {
+        use deadsync_config::theme::ThemeFlag;
+        use deadsync_input::{InputEvent, VirtualAction};
+        use deadsync_profile::Perspective;
+        use deadsync_rules::scroll::ScrollSpeedSetting;
+
+        on_app_thread(|| {
+            with_session(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P2,
+                false,
+                true,
+                || {
+                    for flag in ThemeFlag::CHOICES {
+                        let root = tempfile::tempdir().unwrap();
+                        let mut app = test_app_with_theme(root.path(), flag);
+                        deadsync_theme_simply_love::i18n::init_for_tests();
+                        let font = deadsync_theme_simply_love::asset_manifest()
+                            .fonts
+                            .iter()
+                            .find(|font| font.name == "miso")
+                            .unwrap();
+                        let bundle = &app.dirs.exe_dir;
+                        let font = deadlib_assets::parse_font_with_asset_context(
+                            &bundle.join(font.ini_path),
+                            vec![bundle.join("assets")],
+                        )
+                        .unwrap();
+                        app.asset_manager.register_font("miso", font.font);
+                        let song = confirm_test_song(&mut app, root.path());
+                        app.request_stage_launch(
+                            CurrentScreen::SelectMusic,
+                            StageLaunchRequest::PlayerOptions,
+                        );
+                        assert_eq!(
+                            app.advance_stage_launch(OPTIONS_ENTRY_SECONDS),
+                            Some(CurrentScreen::PlayerOptions),
+                        );
+                        assert_eq!(
+                            app.prepare_global_fade_entry(CurrentScreen::PlayerOptions).0,
+                            CurrentScreen::PlayerOptions,
+                        );
+                        let (mut start, _) = app.take_stage_start().unwrap();
+
+                        let speeds = [
+                            ScrollSpeedSetting::CMod(605.0),
+                            ScrollSpeedSetting::MMod(775.0),
+                        ];
+                        start.options.scroll_speeds = speeds;
+                        start.options.music_rate = 1.25;
+                        app.recover_player_options(start, None);
+                        let editor = app.state.screens.player_options_state.as_mut().unwrap();
+                        let mut effects = Vec::new();
+                        for action in [
+                            VirtualAction::p2_down,
+                            VirtualAction::p2_down,
+                            VirtualAction::p2_down,
+                            VirtualAction::p2_down,
+                            VirtualAction::p2_right,
+                        ] {
+                            for pressed in [true, false] {
+                                let now = std::time::Instant::now();
+                                let event = InputEvent::new(
+                                    action, 0, pressed, InputSource::Keyboard, now, 0, now, now,
+                                );
+                                editor.handle_input(&app.asset_manager, &event, &mut effects);
+                            }
+                        }
+                        assert!(effects.iter().any(|effect| matches!(effect,
+                            ThemeEffect::Runtime(RuntimeRequest::Profile(
+                                profile_data::requests::ProfileRequest::UpdatePlayerOptions {
+                                    side: profile_data::PlayerSide::P2, options, ..
+                                }
+                            )) if options.perspective == Perspective::Hallway
+                        )));
+                        let mut actors = Vec::new();
+                        editor.push_actors(&mut actors, &app.asset_manager, Default::default(), 0.0);
+                        let has_text = |text| actors.iter().any(|actor| matches!(actor,
+                            deadlib_present::actors::Actor::Text { content, .. } if content.as_str() == text
+                        ));
+                        assert!(has_text("Hallway"));
+                        assert_eq!(has_text("PICK MODIFIERS"), flag == ThemeFlag::OpenItg);
+                        let mut previews = Vec::new();
+                        editor.take_noteskin_requests(&mut previews);
+                        assert!(previews.iter().any(|preview| preview.parts & 1 != 0));
+                        let (resubmitted, _) = app.take_stage_start().unwrap();
+                        assert!(Arc::ptr_eq(&resubmitted.song, &song));
+                        assert_eq!(resubmitted.options.chart_steps_index, [3; MAX_PLAYERS]);
+                        assert_eq!(resubmitted.options.scroll_speeds, speeds);
+                        assert_eq!(resubmitted.options.music_rate, 1.25);
+                        assert_eq!(
+                            resubmitted.options.player_options[1].perspective,
+                            Perspective::Hallway,
+                        );
+                        assert_eq!(resubmitted.return_screen, CurrentScreen::SelectMusic);
+                    }
                 },
             )
         });

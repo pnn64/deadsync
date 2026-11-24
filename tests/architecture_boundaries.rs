@@ -29,7 +29,12 @@ fn renderer_and_shell_cues_use_theme_resources() {
     let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
     let screenshot = production_source(&shell.join("app/screenshot.rs"));
     assert!(graphics_app.contains("ActiveTheme::asset_manifest()"));
-    assert!(app.contains("UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS)"));
+    let registry = production_source(&root.join("src/theme_registry.rs"));
+    assert!(graphics_app.contains("manifest.embedded_pngs = supplemental.embedded_pngs"));
+    assert!(graphics_app.contains("supplemental.fonts"));
+    assert!(registry.contains("let manifest = T::asset_manifest()"));
+    assert!(registry.contains("sounds: T::SOUNDS"));
+    assert!(contains_rust(app, "UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, theme_resources.sounds)"));
     assert!(app.contains("AudioRequest::PlayUiCue(UiCue::Confirm)"));
     assert!(screenshot.contains("UiCue::Screenshot"));
     for cue_file in [app, &screenshot] {
@@ -108,8 +113,8 @@ fn confirmed_song_and_course_launches_share_game_policy() {
     }
     let shell = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
     assert!(shell.contains("stage_launch.advance(delta_time)"));
-    assert!(shell.contains("Some(ActiveTheme::SCREENS.gameplay)"));
-    assert!(shell.contains("Some(ActiveTheme::SCREENS.player_options)"));
+    assert!(shell.contains("Some(CurrentScreen::Gameplay)"));
+    assert!(shell.contains("Some(CurrentScreen::PlayerOptions)"));
 }
 
 #[test]
@@ -535,7 +540,11 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(contains_rust(&host, "pub score_refresh: GameplayScoreRefresh"));
     assert!(contains_rust(&host, "pub presentation: P"));
     assert!(contains_rust(&app, "type GameplayState = GameplayHost<"));
-    assert!(app.contains("ActiveTheme::gameplay_presenter(presentation_init)"));
+    assert!(app.contains("(presentation.prepare)(&mut prepared)"));
+    assert!(app.contains("(presentation.build)(stage, assets, &view, presentation_init, scores)"));
+    assert!(!app.contains("SimplyLoveTheme::build_gameplay_presentation"));
+    let registry = production_source(&root.join("src/theme_registry.rs"));
+    assert!(registry.contains("build: SimplyLoveTheme::build_gameplay_presentation"));
     for concrete in [
         "deadsync_theme_simply_love", "SimplyLove", "crate::ActiveTheme", "crate::ThemeScreen",
         "GameplayStageView",
@@ -788,7 +797,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         "let presentation = &mut state.presentation",
         "presentation.update_gameplay_visuals(game, delta)",
         "stage.update(",
-        "crate::navigation::song_lua_presentation_screen::<T>",
+        "crate::navigation::song_lua_presentation_screen,",
         "stage.handle_input(ev, physical)",
         "stage.take_output()",
         ".for_each_scheduled_song_sound(previous_song_lua_time,",
@@ -2576,7 +2585,18 @@ fn generic_theme_contract_stays_runtime_independent() {
     for file in files {
         let text = read_source(&file).expect("contract crate file should be readable");
         let rel = rel_path(&root, &file);
+        let owns_app_requests = matches!(rel.as_str(),
+            "crates/deadsync-theme/src/app_requests.rs" | "crates/deadsync-theme/Cargo.toml");
         for token in CONTRACT_CRATE_FORBIDDEN_TOKENS {
+            if owns_app_requests && matches!(*token,
+                "deadsync-config" | "deadsync_config" | "deadsync-gameplay" | "deadsync_gameplay"
+                | "deadsync-online" | "deadsync_online" | "deadsync-profile" | "deadsync_profile"
+                | "deadsync-simfile" | "deadsync_simfile" | "deadlib-input-native" | "deadlib_input_native"
+                | "deadlib-platform" | "deadlib_platform" | "deadsync-smx" | "deadsync_smx")
+            {
+                // The request protocol names the owning crates' data types.
+                continue;
+            }
             let count = text.match_indices(token).count();
             if count != 0 {
                 failures.push(format!(
@@ -2599,8 +2619,8 @@ fn generic_runtime_requests_stay_backend_neutral() {
     let contract = read_source(root.join("crates/deadsync-theme/src/runtime.rs"))
         .expect("generic runtime-request contract should be readable");
     let concrete =
-        read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
-            .expect("Simply Love runtime requests should be readable");
+        read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
+            .expect("shared runtime requests should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
     let audio = read_source(root.join("crates/deadsync-shell/src/app/audio_requests.rs"))
@@ -2640,21 +2660,21 @@ fn generic_runtime_requests_stay_backend_neutral() {
     }
     for wrapper in [
         "Audio(AudioRequest)",
-        "Media(SimplyLoveMediaRequest)",
-        "Content(SimplyLoveContentRequest)",
-        "Profile(SimplyLoveProfileRequest)",
-        "Online(SimplyLoveOnlineRequest)",
+        "Media(MediaRequest)",
+        "Content(ContentRequest)",
+        "Profile(ProfileRequest)",
+        "Online(OnlineRequest)",
         "Graphics(GraphicsRequest)",
         "Platform(PlatformRequest)",
-        "Sync(SimplyLoveSyncRequest)",
-        "Config(SimplyLoveConfigRequest)",
-        "Hardware(SimplyLoveHardwareRequest)",
-        "Debug(SimplyLoveDebugRequest)",
-        "Updater(SimplyLoveUpdaterRequest)",
+        "Sync(SyncRequest)",
+        "Config(ConfigRequest)",
+        "Hardware(HardwareRequest)",
+        "Debug(DebugRequest)",
+        "Updater(UpdaterRequest)",
     ] {
         assert!(
             concrete.contains(wrapper),
-            "Simply Love runtime request is missing generic wrapper {wrapper}"
+            "shared runtime request is missing generic wrapper {wrapper}"
         );
     }
     for concrete_type in [
@@ -2664,7 +2684,7 @@ fn generic_runtime_requests_stay_backend_neutral() {
     ] {
         assert!(
             !concrete.contains(concrete_type),
-            "Simply Love runtime request still exposes concrete graphics type {concrete_type}"
+            "shared runtime request still exposes concrete graphics type {concrete_type}"
         );
     }
     for category in [
@@ -2672,23 +2692,23 @@ fn generic_runtime_requests_stay_backend_neutral() {
         "Hardware", "Debug", "Updater",
     ] {
         assert!(
-            shell.contains(&format!("SimplyLoveRuntimeRequest::{category}(")),
+            shell.contains(&format!("RuntimeRequest::{category}(")),
             "shell runtime executor is missing the {category} request category"
         );
     }
     assert!(
-        shell.contains("SimplyLoveRuntimeRequest::Audio(request)")
+        shell.contains("RuntimeRequest::Audio(request)")
             && shell.contains("audio_requests::execute(&mut self.audio, &self.ui_sfx, request)")
             && audio.contains("AudioRequest::PlaySfx(path)")
             && audio.contains("sounds.play(audio, path)")
             && audio.contains("AudioRequest::PlayScreenSfxPath(path)")
             && audio.contains("AudioRequest::PrewarmReplayGain(paths)")
             && audio.contains("deadsync_audio_replaygain::prewarm_paths(")
-            && shell.contains("SimplyLoveRuntimeRequest::Graphics(request)")
+            && shell.contains("RuntimeRequest::Graphics(request)")
             && shell.contains("self.handle_graphics_change(request, event_loop)")
-            && shell.contains("SimplyLoveRuntimeRequest::Platform(request)")
+            && shell.contains("RuntimeRequest::Platform(request)")
             && shell.contains("execute_platform_request(&self.dirs, request)")
-            && shell.contains("SimplyLoveRuntimeRequest::Updater(request)")
+            && shell.contains("RuntimeRequest::Updater(request)")
             && shell.contains("updater::execute(request, &self.dirs)"),
         "shell must execute generic and grouped runtime requests"
     );
@@ -2745,8 +2765,8 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
     let theme_sync = theme.join("src/screens/components/select_music/sync_analysis.rs");
     let pack_sync = read_source(theme.join("src/screens/pack_sync.rs"))
         .expect("Pack Sync UI should be readable");
-    let effects = read_source(theme.join("src/effects.rs"))
-        .expect("Simply Love runtime requests should be readable");
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
+        .expect("shared runtime requests should be readable");
     let shell_manifest = read_source(root.join("crates/deadsync-shell/Cargo.toml"))
         .expect("shell manifest should be readable");
     let shell_sync = read_source(root.join("crates/deadsync-shell/src/sync_analysis.rs"))
@@ -2760,12 +2780,12 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
         !effects.contains("null_or_die::")
             && !effects.contains("BiasStreamEvent")
             && !effects.contains("BiasEstimateWithPlot"),
-        "Simply Love sync events must expose plain theme-owned DTOs"
+        "sync events must expose plain request data"
     );
     for dto in [
-        "pub enum SimplyLoveSyncStreamEvent",
-        "pub struct SimplyLoveSyncSongResult",
-        "pub struct SimplyLoveSyncPlotView",
+        "pub enum SyncStreamEvent",
+        "pub struct SyncSongResult",
+        "pub struct SyncPlotView",
     ] {
         assert!(
             effects.contains(dto),
@@ -2859,7 +2879,7 @@ fn overscan_runtime_and_persistence_are_shell_owned() {
     .expect("Overscan Adjustment source should be readable");
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell_nav = read_source(root.join("crates/deadsync-shell/src/app/screen_nav.rs"))
         .expect("shell navigation should be readable");
@@ -2887,7 +2907,7 @@ fn overscan_runtime_and_persistence_are_shell_owned() {
         shell_nav.contains("fn overscan_view() -> OverscanAdjustmentView")
             && shell_nav.contains("config.center_image_translate_x")
             && shell_nav.contains("config.center_image_add_height")
-            && shell.contains("SimplyLoveConfigRequest::Overscan {")
+            && shell.contains("ConfigRequest::Overscan {")
             && shell.split_whitespace().collect::<String>().contains(
                 "config::runtime_update::update_overscan(translate_x,translate_y,add_width,add_height,)"
             ),
@@ -2937,10 +2957,10 @@ fn manage_local_profiles_import_execution_is_shell_owned() {
         .expect("Simply Love manifest should be readable");
     let screen = read_source(theme.join("src/screens/manage_local_profiles.rs"))
         .expect("Manage Local Profiles should be readable");
-    let effects = read_source(theme.join("src/effects.rs"))
-        .expect("Simply Love requests should be readable");
-    let views = read_source(theme.join("src/views.rs"))
-        .expect("Simply Love views should be readable");
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
+        .expect("shared requests should be readable");
+    let profile_picker =
+        production_source(&root.join("crates/deadsync-theme/src/profile_picker.rs"));
     let shell_manifest = read_source(root.join("crates/deadsync-shell/Cargo.toml"))
         .expect("shell manifest should be readable");
     let shell_service =
@@ -2980,10 +3000,7 @@ fn manage_local_profiles_import_execution_is_shell_owned() {
         "pub struct ManageLocalProfilesView",
         "pub struct LocalProfileView",
     ] {
-        assert!(
-            views.contains(contract),
-            "Simply Love local-profile boundary is missing {contract}"
-        );
+        assert!(profile_picker.contains(contract), "local-profile view is missing {contract}");
     }
     let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
         .expect("game profile requests should be readable");
@@ -3003,10 +3020,10 @@ fn manage_local_profiles_import_execution_is_shell_owned() {
         );
     }
     for contract in [
-        "pub enum SimplyLoveLocalProfileEvent",
-        "pub struct SimplyLoveItgProfileCandidate",
-        "pub struct SimplyLoveItgImportSummary",
-        "pub enum SimplyLoveProfileImportEvent",
+        "pub enum LocalProfileEvent",
+        "pub struct ItgProfileCandidate",
+        "pub struct ItgImportSummary",
+        "pub enum ProfileImportEvent",
     ] {
         assert!(
             effects.contains(contract),
@@ -3082,6 +3099,9 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
     assert!(shell_app.contains("<ActiveTheme as ThemeProfilePicker>::ProfilePickerState"));
     assert!(shell_app.contains("ActiveTheme::init_profile_picker("));
     assert!(shell_app.contains("ActiveTheme::push_profile_picker_actors("));
+    assert!(shell_app.contains("ActiveTheme::with_profile_picker_view("));
+    assert!(picker.contains("state.seats.start(side, choices)"));
+    assert!(picker.contains("state.seats.back(side)"));
     assert!(shell_input.contains("ActiveTheme::handle_profile_picker_input("));
     assert!(!shell_app.contains("select_profile::"));
     assert!(!shell_input.contains("select_profile::"));
@@ -3146,8 +3166,8 @@ fn practice_runtime_is_shell_prepared() {
         "state.presentation.restore_edit_snapshot(snapshot.view)",
         "state.presentation.apply_view_request(request)",
         "PracticeViewRequest::Navigate(PracticeDestination::PlayerOptions)",
-        "ThemeEffect::Navigate(T::SCREENS.player_options)",
-        "ThemeEffect::Navigate(T::SCREENS.song_selection)",
+        "ThemeEffect::Navigate(Screen::PlayerOptions)",
+        "ThemeEffect::Navigate(Screen::SelectMusic)",
         "let rates = state.session.drain_music_rates();",
         "profile::set_session_music_rate(rate)",
         "state.presentation.append_effects(effects)",
@@ -3175,7 +3195,7 @@ fn practice_runtime_is_shell_prepared() {
         assert!(!live.contains(concrete), "live Practice still requires {concrete}");
     }
     assert!(stage_host.contains("pub trait PracticeLivePresentation<P>"));
-    assert!(!shell.contains("SimplyLoveProfileRequest::SetMusicRate"));
+    assert!(!shell.contains("ProfileRequest::SetMusicRate"));
 }
 
 #[test]
@@ -3215,8 +3235,8 @@ fn options_score_import_execution_is_shell_owned() {
     let theme = root.join("crates/deadsync-theme-simply-love");
     let score_import = read_source(theme.join("src/screens/options/score_import.rs"))
         .expect("Simply Love score-import UI should be readable");
-    let effects = read_source(theme.join("src/effects.rs"))
-        .expect("Simply Love requests should be readable");
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
+        .expect("shared requests should be readable");
     let shell_service = read_source(root.join("crates/deadsync-shell/src/score_import.rs"))
         .expect("shell score-import service should be readable");
     let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
@@ -3236,11 +3256,11 @@ fn options_score_import_execution_is_shell_owned() {
         );
     }
     for contract in [
-        "pub struct SimplyLoveScoreImportProfile",
-        "pub struct SimplyLoveScoreImportRequest",
-        "pub struct SimplyLoveScoreImportProgress",
-        "pub struct SimplyLoveScoreImportSummary",
-        "pub enum SimplyLoveScoreImportEvent",
+        "pub struct ScoreImportProfile",
+        "pub struct ScoreImportRequest",
+        "pub struct ScoreImportProgress",
+        "pub struct ScoreImportSummary",
+        "pub enum ScoreImportEvent",
         "StartScoreImport",
         "CancelScoreImport",
     ] {
@@ -3259,8 +3279,8 @@ fn options_score_import_execution_is_shell_owned() {
             && shell_service.contains("AtomicBool")
             && shell_app.contains("self.score_import.poll()")
             && shell_app.contains("options::apply_score_import_events")
-            && shell_app.contains("SimplyLoveOnlineRequest::StartScoreImport")
-            && shell_app.contains("SimplyLoveOnlineRequest::CancelScoreImport"),
+            && shell_app.contains("OnlineRequest::StartScoreImport")
+            && shell_app.contains("OnlineRequest::CancelScoreImport"),
         "shell must own score-import execution, cancellation, conversion, and event polling"
     );
 }
@@ -3323,7 +3343,7 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
 
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -3344,8 +3364,8 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
             && runtime.contains("profile::scan_local_profiles()")
             && runtime.contains("groovestats.ini")
             && runtime.contains("arrowcloud.ini")
-            && effects.contains("pub enum SimplyLoveOptionsConfigRequest")
-            && effects.contains("Options(SimplyLoveOptionsConfigRequest)")
+            && effects.contains("pub enum OptionsConfigRequest")
+            && effects.contains("Options(OptionsConfigRequest)")
             && profile_requests.contains("SetMachineDefaultScrollSpeed")
             && profile_requests.contains("SetMachineDefaultScroll")
             && profile_requests.contains("SetMachineDefaultBackgroundFilter")
@@ -3555,7 +3575,7 @@ fn simply_love_select_music_options_persist_through_shell() {
         );
     }
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -3563,8 +3583,8 @@ fn simply_love_select_music_options_persist_through_shell() {
         read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
-        effects.contains("pub enum SimplyLoveSelectMusicConfigRequest")
-            && effects.contains("SelectMusic(SimplyLoveSelectMusicConfigRequest)")
+        effects.contains("pub enum SelectMusicConfigRequest")
+            && effects.contains("SelectMusic(SelectMusicConfigRequest)")
             && options_source.contains("SimplyLoveSelectMusicConfigRequest::ShowBanners")
             && options_source.contains("SimplyLoveSelectMusicConfigRequest::ChartInfoMask")
             && shell.contains("config_requests::execute_select_music(request)")
@@ -3619,7 +3639,7 @@ fn simply_love_machine_options_persist_through_shell() {
         );
     }
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -3627,8 +3647,8 @@ fn simply_love_machine_options_persist_through_shell() {
         read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
-        effects.contains("pub enum SimplyLoveMachineConfigRequest")
-            && effects.contains("Machine(SimplyLoveMachineConfigRequest)")
+        effects.contains("pub enum MachineConfigRequest")
+            && effects.contains("Machine(MachineConfigRequest)")
             && options_source.contains("SimplyLoveMachineConfigRequest::ShowSelectProfile")
             && options_source.contains("SimplyLoveConfigRequest::PersistColor")
             && shell.contains("config_requests::execute_machine(request)")
@@ -3663,7 +3683,7 @@ fn simply_love_advanced_options_persist_through_shell() {
         );
     }
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -3671,8 +3691,8 @@ fn simply_love_advanced_options_persist_through_shell() {
         read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
-        effects.contains("pub enum SimplyLoveAdvancedConfigRequest")
-            && effects.contains("Advanced(SimplyLoveAdvancedConfigRequest)")
+        effects.contains("pub enum AdvancedConfigRequest")
+            && effects.contains("Advanced(AdvancedConfigRequest)")
             && options_source.contains("SimplyLoveAdvancedConfigRequest::DefaultFailType")
             && options_source.contains("SimplyLoveAdvancedConfigRequest::SongParsingThreads")
             && shell.contains("config_requests::execute_advanced(request)")
@@ -3705,7 +3725,7 @@ fn simply_love_course_options_persist_through_shell() {
         );
     }
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -3713,8 +3733,8 @@ fn simply_love_course_options_persist_through_shell() {
         read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
-        effects.contains("pub enum SimplyLoveCourseConfigRequest")
-            && effects.contains("Course(SimplyLoveCourseConfigRequest)")
+        effects.contains("pub enum CourseConfigRequest")
+            && effects.contains("Course(CourseConfigRequest)")
             && options_source.contains("SimplyLoveCourseConfigRequest::ShowRandom")
             && options_source.contains("SimplyLoveCourseConfigRequest::AutosubmitIndividual")
             && options_source.contains("SimplyLoveCourseConfigRequest::AutosubmitPostFailPasses")
@@ -3761,7 +3781,7 @@ fn simply_love_gameplay_options_persist_through_shell() {
         "Simply Love Options input should emit neutral BPM placement instead of config types"
     );
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -3769,8 +3789,8 @@ fn simply_love_gameplay_options_persist_through_shell() {
         read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
-        effects.contains("pub enum SimplyLoveGameplayConfigRequest")
-            && effects.contains("Gameplay(SimplyLoveGameplayConfigRequest)")
+        effects.contains("pub enum GameplayConfigRequest")
+            && effects.contains("Gameplay(GameplayConfigRequest)")
             && options_source.contains("SimplyLoveGameplayConfigRequest::BpmNearField")
             && options_source.contains("SimplyLoveGameplayConfigRequest::AutoScreenshotMask")
             && shell.contains("config_requests::execute_gameplay(request)")
@@ -3810,7 +3830,7 @@ fn simply_love_lights_options_persist_through_shell() {
         );
     }
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -3818,10 +3838,10 @@ fn simply_love_lights_options_persist_through_shell() {
         read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
-        effects.contains("pub enum SimplyLoveLightsConfigRequest")
-            && effects.contains("Lights(SimplyLoveLightsConfigRequest)")
-            && effects.contains("pub enum SimplyLoveLightsDriver")
-            && effects.contains("pub enum SimplyLoveGameplayPadLights")
+        effects.contains("pub enum LightsConfigRequest")
+            && effects.contains("Lights(LightsConfigRequest)")
+            && effects.contains("pub enum LightsDriver")
+            && effects.contains("pub enum GameplayPadLights")
             && options_source.contains("SimplyLoveLightsConfigRequest::Driver")
             && options_source.contains("SimplyLoveLightsConfigRequest::GameplayPadLights")
             && shell.contains("config_requests::execute_lights(request)")
@@ -3858,7 +3878,7 @@ fn simply_love_null_or_die_options_persist_through_shell() {
         );
     }
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -3866,16 +3886,16 @@ fn simply_love_null_or_die_options_persist_through_shell() {
         read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
-        effects.contains("pub enum SimplyLoveNullOrDieConfigRequest")
-            && effects.contains("pub enum SimplyLoveGraphOrigin")
-            && effects.contains("NullOrDie(SimplyLoveNullOrDieConfigRequest)")
+        effects.contains("pub enum NullOrDieConfigRequest")
+            && effects.contains("pub enum GraphOrigin")
+            && effects.contains("NullOrDie(NullOrDieConfigRequest)")
             && options_source.contains("SimplyLoveNullOrDieConfigRequest::FingerprintTenths")
             && options_source.contains("SimplyLoveNullOrDieConfigRequest::GraphOrigin")
             && options_source.contains("SimplyLoveNullOrDieConfigRequest::KernelTarget")
             && shell.contains("config_requests::execute_null_or_die(request)")
             && executor.contains("pub(super) fn execute_null_or_die")
             && executor.contains("config::theme::SyncGraphMode::PostKernelFingerprint")
-            && executor.contains("SimplyLoveGraphOrigin::Bottom")
+            && executor.contains("GraphOrigin::Bottom")
             && executor.contains("KernelTarget::Accumulator")
             && executor.contains("f64::from(tenths) / 10.0"),
         "Null-or-Die option values must cross neutral requests and be mapped by shell"
@@ -3921,7 +3941,7 @@ fn simply_love_online_options_persist_through_shell() {
         );
     }
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -3929,10 +3949,10 @@ fn simply_love_online_options_persist_through_shell() {
         read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
-        effects.contains("pub enum SimplyLoveOnlineConfigRequest")
-            && effects.contains("Online(SimplyLoveOnlineConfigRequest)")
-            && effects.contains("pub enum SimplyLoveQrLoginPolicy")
-            && effects.contains("pub enum SimplyLoveSrpgShopFolder")
+        effects.contains("pub enum OnlineConfigRequest")
+            && effects.contains("Online(OnlineConfigRequest)")
+            && effects.contains("pub enum QrLoginPolicy")
+            && effects.contains("pub enum SrpgShopFolder")
             && options_source.contains("SimplyLoveOnlineConfigRequest::EnableGrooveStats")
             && options_source.contains("queue_online_reinitialize(state)")
             && shell.contains("config_requests::execute_online(request)")
@@ -4140,7 +4160,7 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && state.contains("heart_rate_device_ids: [Option<String>; PLAYER_SLOTS]")
             && !state.contains("deadsync_profile::Profile")
             && shell.contains("crate::player_options::init_view()")
-            && shell.contains("crate::player_options::gameplay_profiles(")
+            && shell.contains("deadsync_profile_gameplay::stage_options::gameplay_profiles(")
             && preload.contains("StageOptions::from_profiles(")
             && !preload.contains("player_options::init")
             && !preload.contains("noteskin_catalog_view(")
@@ -4148,12 +4168,14 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && !preload.contains("heart_rate::devices_view(")
             && shell.matches("self.take_stage_start()").count() == 2
             && shell.matches("self.recover_player_options(start, options_screen)").count() == 2
-            && contains_rust(&stage_start, "ActiveTheme::player_options_stage(state)")
+            && contains_rust(&stage_start, "state.stage()")
             && contains_rust(&stage_start, "StageOptions::from_profiles(")
             && !shell.contains("player_options::init_for_gameplay")
             && !live_case.contains("player_options::init_for_gameplay")
             && !shell.contains("player_options::apply_no_cmod_alternative(")
-            && contains_rust(&adapter, "stage.resolve_scroll(")
+            && contains_rust(&stage_options, "stage.resolve_scroll(")
+            && !adapter.contains("fn apply_tournament_policy")
+            && !adapter.contains("fn apply_golf_policy")
             && !adapter.contains("screen::State")
             && !adapter.contains("apply_routine_master_options")
             && contains_rust(&stage_options, "pub struct StageOptions")
@@ -4165,14 +4187,30 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && profile_executor.contains("profile::update_player_options_for_side")
             && profile_update.contains("pub fn update_player_options_for_side")
     );
-    assert!(adapter.contains("<crate::ActiveTheme as ThemePlayerOptions>::PlayerOptionsState"));
-    assert!(shell.contains("ActiveTheme::init_player_options(PlayerOptionsEntry"));
-    assert!(shell.contains("ActiveTheme::push_player_options_actors("));
-    assert!(shell.contains("ActiveTheme::update_player_options("));
-    assert!(shell.contains("ActiveTheme::handle_player_options_raw_key("));
-    assert!(input.contains("ActiveTheme::handle_player_options_input("));
-    assert!(previews.contains("ActiveTheme::take_player_options_noteskin_requests("));
-    assert!(heart_rate.contains("ActiveTheme::sync_player_options_heart_rate("));
+    let mount = production_source(&root.join("crates/deadsync-shell/src/mounted_player_options.rs"));
+    let factory = production_source(&root.join("src/theme_registry.rs"));
+    assert!(shell.contains("PlayerOptionsState::new("));
+    assert!(shell.contains("pos.push_actors("));
+    assert!(shell.contains("state.update(delta_time, asset_manager, effects)"));
+    assert!(shell.contains("po_state.handle_raw_key("));
+    assert!(input.contains("state.handle_input("));
+    for hook in ["init_player_options", "handle_player_options_input", "player_options_stage"] {
+        assert!(mount.contains(&format!("ActiveTheme::{hook}(")));
+        assert!(!mount.contains(&format!("OpenItgTheme::{hook}(")));
+    }
+    assert!(mount.contains("ActiveTheme::push_player_options_actors("));
+    assert!(mount.contains("ActiveTheme::with_player_options_page("));
+    assert!(mount.contains("layout.push_page("));
+    assert!(mount.contains("layout.entry_transition("));
+    assert!(mount.contains("layout.exit_transition("));
+    assert!(factory.contains("OpenItgPlayerOptions::default()"));
+    assert!(!mount.contains("OpenItg"));
+    assert!(!mount.contains("ThemeFlag"));
+    assert!(previews.contains("state.take_noteskin_requests("));
+    assert!(heart_rate.contains("state.sync_heart_rate("));
+    for source in [&shell, &previews, &heart_rate] {
+        assert!(!source.contains(".editor_mut()"));
+    }
     assert!(!shell.contains("screens::player_options::"));
     assert!(!input.contains("screens::player_options::"));
     assert!(!previews.contains("screens::player_options::"));
@@ -4226,7 +4264,7 @@ fn simply_love_smx_assignment_uses_shell_prepared_hardware_state() {
         root.join("crates/deadsync-theme-simply-love/src/screens/smx_assign.rs"),
     )
     .expect("Simply Love SMX assignment screen should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let generic_views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
@@ -4271,7 +4309,7 @@ fn simply_love_smx_assignment_uses_shell_prepared_hardware_state() {
             "Simply Love hardware requests are missing {request}"
         );
         assert!(
-            shell_app.contains(&format!("SimplyLoveHardwareRequest::{request}")),
+            shell_app.contains(&format!("HardwareRequest::{request}")),
             "shell runtime executor is missing {request}"
         );
     }
@@ -4314,7 +4352,7 @@ fn simply_love_options_smx_assignment_uses_prepared_hardware_state() {
                 panic!("Simply Love Options source {path} should be readable")
             }));
     }
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
@@ -4342,7 +4380,7 @@ fn simply_love_options_smx_assignment_uses_prepared_hardware_state() {
             "Simply Love Options is missing hardware request {request}"
         );
         assert!(
-            shell_app.contains(&format!("SimplyLoveHardwareRequest::{request}")),
+            shell_app.contains(&format!("HardwareRequest::{request}")),
             "shell runtime executor is missing Options hardware request {request}"
         );
     }
@@ -4355,7 +4393,7 @@ fn select_music_smx_pad_profile_hardware_is_shell_owned() {
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Simply Love Select Music source should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let generic_views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
@@ -4388,7 +4426,7 @@ fn select_music_smx_pad_profile_hardware_is_shell_owned() {
             "Simply Love is missing SMX pad-profile request {request}"
         );
         assert!(
-            shell_app.contains(&format!("SimplyLoveHardwareRequest::{request}")),
+            shell_app.contains(&format!("HardwareRequest::{request}")),
             "shell runtime executor is missing SMX pad-profile request {request}"
         );
     }
@@ -4472,7 +4510,7 @@ fn smx_hardware_side_effects_are_shell_owned_not_config_owned() {
         .expect("shell SMX service should be readable");
     let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
 
     for forbidden in [
@@ -4497,7 +4535,7 @@ fn smx_hardware_side_effects_are_shell_owned_not_config_owned() {
             "Simply Love hardware requests are missing {request}"
         );
         assert!(
-            shell_app.contains(&format!("SimplyLoveHardwareRequest::{request}")),
+            shell_app.contains(&format!("HardwareRequest::{request}")),
             "shell runtime executor is missing {request}"
         );
     }
@@ -4586,6 +4624,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         );
         assert!(
             source.contains("crate::effects::sfx")
+                || source.contains("ThemeEffect::UiCue(")
                 || source.contains("append_dismiss_effects")
                 || source.contains("AudioRequest::PlayScreenSfxPath"),
             "{path} must emit a typed audio effect"
@@ -4691,13 +4730,16 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
 
     let select_color = read_source(screens.join("select_color.rs"))
         .expect("SelectColor should be readable");
-    assert!(!select_color.contains("config::runtime_update::update_simply_love_color"));
+    assert!(!select_color.contains("config::runtime_update::update_theme_color"));
     assert!(select_color.contains("SimplyLoveConfigRequest::PersistColor"));
 
     let profile_boxes = read_source(screens.join("components/shared/profile_boxes.rs"))
         .expect("profile boxes should be readable");
-    assert!(profile_boxes.contains("p1_joined: state.p1_joined"));
-    assert!(profile_boxes.contains("p2_joined: state.p2_joined"));
+    assert!(contains_rust(
+        &profile_boxes,
+        "let [p1_joined, p2_joined] = state.seats.states().map(PickerSeat::joined);",
+    ));
+    assert!(contains_rust(&profile_boxes, "p1_joined, p2_joined, fast_switch: state.fast_switch"));
     assert!(profile_boxes.contains("fast_switch: state.fast_switch"));
     assert!(!profile_boxes.contains("fast_profile_switch_from_select_music"));
     for direct_session_write in [
@@ -4740,10 +4782,10 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         .expect("game profile requests should be readable");
     let profile_executor = read_source(root.join("crates/deadsync-shell/src/app/profile_requests.rs"))
         .expect("shell profile executor should be readable");
-    let theme_effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
-        .expect("Simply Love requests should be readable");
-    assert!(theme_effects.contains("ProfileRequest as SimplyLoveProfileRequest"));
-    assert!(!theme_effects.contains("pub enum SimplyLoveProfileRequest"));
+    let theme_effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
+        .expect("shared requests should be readable");
+    assert!(theme_effects.contains("pub use deadsync_profile::requests::ProfileRequest;"));
+    assert!(!theme_effects.contains("pub enum ProfileRequest"));
     assert!(shell_app.contains("self.handle_profile_request(request)"));
     assert!(profile_executor.contains("request: ProfileRequest"));
     assert!(profile_executor.contains("select_profiles(p1, p2, p1_joined, p2_joined)"));
@@ -5160,7 +5202,7 @@ fn select_music_session_runtime_is_shell_prepared() {
     assert!(runtime_shell.contains("deadsync_profile::compat::load_pad_configs()"));
     assert!(runtime_shell.contains(".profiles_stale("));
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
         .expect("game profile requests should be readable");
@@ -5205,11 +5247,11 @@ fn select_music_session_runtime_is_shell_prepared() {
         "profile::toggle_pack_favorite(side, &pack_name)",
         "ProfileRequest::MarkPacksKnown",
         "profile::mark_packs_known(",
-        "SimplyLoveHardwareRequest::RenameSmxPadConfig",
+        "HardwareRequest::RenameSmxPadConfig",
         "profile::rename_pad_config(&old_name, &new_name)",
-        "SimplyLoveHardwareRequest::SetSmxPadConfigDefault",
+        "HardwareRequest::SetSmxPadConfigDefault",
         "profile::set_default_pad_config(&serial, &name)",
-        "SimplyLoveHardwareRequest::DeleteSmxPadConfig",
+        "HardwareRequest::DeleteSmxPadConfig",
         "profile::delete_pad_config(&name)",
     ] {
         assert!(
@@ -5343,7 +5385,7 @@ fn select_music_feature_policy_is_shell_prepared() {
         "pub scorebox_in_step_pane: bool",
         "pub show_stage_display: bool",
         "pub show_gameplay_timer: bool",
-        "pub step_artist_expanded: bool",
+        "pub step_artist_box_mode:",
         "pub breakdown_style:",
         "pub pattern_info_mode:",
         "pub chart_info_peak_nps: bool",
@@ -5419,7 +5461,7 @@ fn select_music_feature_policy_is_shell_prepared() {
             && screen.contains("state.policy.interaction.song_search_shortcut")
             && screen.contains("state.policy.presentation")
             && screen.contains("presentation.show_scorebox")
-            && screen.contains("presentation.step_artist_expanded")
+            && screen.contains("presentation.step_artist_box_mode")
             && screen.contains("presentation.default_sync_offset")
     );
 }
@@ -5433,7 +5475,9 @@ fn select_music_leaderboard_refresh_is_shell_owned() {
     .expect("Select Music source should be readable");
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let shared_views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("shared theme views should be readable");
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -5443,13 +5487,13 @@ fn select_music_leaderboard_refresh_is_shell_owned() {
     assert!(screen.contains("state.scoreboxes"));
     assert!(screen.contains("SimplyLoveOnlineRequest::RefreshPlayerLeaderboard"));
     assert!(
-        views.contains("pub struct ScoreboxSideView")
-            && views.contains("pub online_active: bool")
+        shared_views.contains("pub struct ScoreboxSideView")
+            && shared_views.contains("pub online_active: bool")
             && views.contains("pub scoreboxes: Option<[ScoreboxSideView; 2]>")
     );
     assert!(effects.contains("RefreshPlayerLeaderboard {"));
     assert!(shell.contains("profile_data::runtime_music_profile_snapshot"));
-    assert!(shell.contains("SimplyLoveOnlineRequest::RefreshPlayerLeaderboard"));
+    assert!(shell.contains("OnlineRequest::RefreshPlayerLeaderboard"));
     assert!(shell.contains("scores::refresh_player_leaderboards_for_side"));
 }
 
@@ -5481,17 +5525,23 @@ fn simply_love_scorebox_uses_shell_prepared_runtime_data() {
     assert!(scorebox.contains("runtime.leaderboards.as_ref()"));
     assert!(scorebox.contains("runtime.pane_filter"));
 
-    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
-        .expect("Simply Love views should be readable");
+    let views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("shared theme views should be readable");
     for contract in [
         "pub struct ScoreboxLocalView",
         "pub struct ScoreboxMachineView",
         "pub struct ScoreboxSideView",
-        "pub struct SelectMusicScoreboxRequest",
         "pub pane_filter: deadsync_score::SelectMusicScoreboxFilter",
     ] {
         assert!(views.contains(contract));
     }
+    let runtime_views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love runtime views should be readable");
+    assert!(runtime_views.contains("pub struct SelectMusicScoreboxRequest"));
+    let selection = read_source(root.join("crates/deadsync-theme/src/select_music.rs"))
+        .expect("shared Select Music view should be readable");
+    assert!(selection.contains("pub local_records: ScoreboxLocalRecords<'a>"));
+    assert!(scorebox.contains("runtime.local_records(chart_hash)"));
 
     let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -5612,7 +5662,7 @@ fn select_music_replay_cache_is_shell_owned() {
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -5798,7 +5848,8 @@ fn selection_screen_chrome_and_search_use_prepared_player_state() {
     }
     assert!(song_search.contains("pub chart_type: &'static str"));
     // Ranking takes the prepared chart type as an input, not from runtime state.
-    assert!(song_search.contains("chart_type: &str"));
+    let ranking = production_source(&root.join("crates/deadsync-simfile/src/song_search_index.rs"));
+    assert!(ranking.contains("chart_type: &str"));
 
     let select_music = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
@@ -6015,8 +6066,9 @@ fn profile_load_preparation_worker_is_shell_owned() {
         );
     }
     assert!(profile_load.contains("pub const fn sync_ready"));
-    assert!(profile_load.contains("state.ready"));
-    assert!(profile_load.contains("ThemeEffect::Navigate(state.next_screen)"));
+    assert!(profile_load.contains("state.next_screen = Some(next)"));
+    assert!(profile_load.contains("state.next_screen.map(ThemeEffect::Navigate)"));
+    assert!(!profile_load.contains("PlayMode"));
 
     let select_course = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
@@ -6056,7 +6108,10 @@ fn profile_load_preparation_worker_is_shell_owned() {
         "crate::select_music::init_view(&self.dirs)",
         "self.profile_load.start(play_mode, select_music)",
         "self.profile_load.poll()",
-        "profile_load::sync_ready",
+        "let target = match prepared",
+        "profile_load::sync_ready(&mut self.state.screens.profile_load_state, target)",
+        "selection.push_profile_load(",
+        "selection.push_course(",
     ] {
         assert!(
             app.contains(integration),
@@ -6077,13 +6132,13 @@ fn options_online_reinitialization_is_shell_owned() {
     assert!(input.contains("SubRowId::EnableGrooveStats | SubRowId::EnableBoogieStats"));
     assert!(input.contains("row.id == SubRowId::EnableArrowCloud"));
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
-    assert!(effects.contains("pub enum SimplyLoveOnlineRequest"));
+    assert!(effects.contains("pub enum OnlineRequest"));
     assert!(effects.contains("Reinitialize,"));
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    assert!(shell.contains("SimplyLoveOnlineRequest::Reinitialize"));
+    assert!(shell.contains("OnlineRequest::Reinitialize"));
     assert!(shell.contains("deadsync_online::runtime::init()"));
 }
 
@@ -6206,7 +6261,7 @@ fn content_reload_execution_is_shell_owned() {
         "SimplyLoveContentRequest::ReloadSongDirs",
         "SimplyLoveContentRequest::ReloadSong",
         "pub fn sync_reload_events",
-        "SimplyLoveContentReloadEvent::Finished { song_packs }",
+        "ContentReloadEvent::Finished { song_packs }",
         "pub fn refresh_from_song_packs",
     ] {
         assert!(
@@ -6232,6 +6287,9 @@ fn content_reload_execution_is_shell_owned() {
         "mpsc::",
         "prewarm_artwork_cache_with_progress",
         "compile_all_itg_caches_with_progress",
+        "ContentReloadEvent",
+        "InitializeLibrary",
+        "request_replaygain_skip",
     ] {
         assert!(
             !init.contains(runtime_work),
@@ -6239,11 +6297,9 @@ fn content_reload_execution_is_shell_owned() {
         );
     }
     for prepared_boundary in [
-        "SimplyLoveContentRequest::InitializeLibrary",
-        "pub fn sync_loading_events",
-        "SimplyLoveContentReloadEvent::Artwork",
-        "SimplyLoveContentReloadEvent::Noteskins",
-        "SimplyLoveContentReloadEvent::Finished { .. }",
+        "impl StartupPresentation<Actor, LibraryLoadView, Config>",
+        "progress: Option<&LibraryLoadView>",
+        "loading.can_skip_replaygain",
     ] {
         assert!(
             init.contains(prepared_boundary),
@@ -6273,7 +6329,7 @@ fn content_reload_execution_is_shell_owned() {
         "SimplyLoveContentRequest::ReloadLibrary",
         "SimplyLoveContentRequest::ReloadSongDirs",
         "pub fn sync_reload_events",
-        "SimplyLoveContentReloadEvent::Finished { .. }",
+        "ContentReloadEvent::Finished { .. }",
     ] {
         assert!(
             options.contains(prepared_boundary),
@@ -6281,31 +6337,46 @@ fn content_reload_execution_is_shell_owned() {
         );
     }
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
-    assert!(effects.contains("pub enum SimplyLoveContentRequest"));
-    assert!(effects.contains("Content(SimplyLoveContentRequest)"));
+    assert!(effects.contains("pub enum ContentRequest"));
+    assert!(effects.contains("Content(ContentRequest)"));
+    assert!(!effects.contains("InitializeLibrary"));
 
-    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
-        .expect("Simply Love views should be readable");
-    for contract in [
-        "pub enum SimplyLoveContentReloadPhase",
-        "pub enum SimplyLoveContentReloadEvent",
+    let progress = read_source(root.join("crates/deadsync-assets/src/progress.rs"))
+        .expect("game content progress contract should be readable");
+    for definition in [
+        "pub enum ContentReloadPhase",
+        "pub enum ContentReloadEvent",
+        "pub enum ApplyReplayGainEvent",
+        "pub struct LibraryLoadView",
+        "pub struct LibraryLoadProgress",
         "Artwork {",
         "Noteskins {",
         "Finished {",
         "song_packs: Vec<deadsync_chart::SongPack>",
     ] {
         assert!(
-            views.contains(contract),
-            "missing reload contract {contract}"
+            progress.contains(definition),
+            "missing game progress contract {definition}"
         );
     }
 
     let service = read_source(root.join("crates/deadsync-shell/src/content_reload.rs"))
         .expect("shell content reload service should be readable");
+    let replaygain = read_source(root.join("crates/deadsync-shell/src/apply_replaygain.rs"))
+        .expect("shell library ReplayGain service should be readable");
+    assert!(
+        service.contains("use deadsync_assets::progress::{ContentReloadEvent, ContentReloadPhase};")
+            && replaygain.contains("use deadsync_assets::progress::ApplyReplayGainEvent;")
+            && !service.contains("deadsync_theme")
+            && !replaygain.contains("deadsync_theme"),
+        "library progress workers must publish game-owned reports"
+    );
     for shell_owner in [
         "std::thread::spawn",
+        "service.start_initialization",
+        "LibraryLoadProgress::new",
         "scan_and_load_songs_with_progress_counts",
         "scan_and_load_courses_with_progress_counts",
         "reload_song_dirs_with_progress_counts",
@@ -6324,14 +6395,16 @@ fn content_reload_execution_is_shell_owned() {
         .expect("shell app should be readable");
     for integration in [
         "content_reload: crate::content_reload::Service",
-        "SimplyLoveRuntimeRequest::Content(request)",
+        "RuntimeRequest::Content(request)",
         "self.content_reload.start_library",
-        ".start_initialization(",
+        "startup_load.start_if_pending",
         "self.audio.is_available()",
         "self.content_reload.start_song_dirs",
         "crate::content_reload::reload_song",
         "fn sync_content_reload_events",
-        "init::sync_loading_events",
+        "startup_load.apply(events)",
+        "startup_load.complete_if_finished()",
+        "startup_screen.push_loading",
         "options::sync_reload_events",
         "select_music::sync_reload_events",
         "self.content_reload.poll()",
@@ -6438,14 +6511,14 @@ fn select_music_lobby_runtime_is_shell_owned() {
 
     let views =
         read_source(theme.join("views.rs")).expect("Simply Love views should be readable");
-    let effects = read_source(theme.join("effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let lobby_view = production_source(&root.join("crates/deadsync-online/src/gameplay_lobby.rs"));
     assert!(
         views.contains("LobbyRuntimeView as SimplyLoveLobbyRuntimeView")
             && lobby_view.contains("pub struct LobbyRuntimeView")
             && contains_rust(&lobby_view, "pub snapshot: Arc<lobbies::Snapshot>")
-            && effects.contains("pub enum SimplyLoveLobbyRequest")
+            && effects.contains("pub enum LobbyRequest")
     );
 
     let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
@@ -6456,7 +6529,7 @@ fn select_music_lobby_runtime_is_shell_owned() {
     );
     for shell_owner in [
         "deadsync_online::lobbies::runtime_refresh_view_state_default",
-        "SimplyLoveOnlineRequest::Lobby(request)",
+        "OnlineRequest::Lobby(request)",
         "runtime_search_lobbies_default()",
         "runtime_create_lobby_with_password_default",
         "runtime_join_lobby_with_password_default",
@@ -6541,7 +6614,7 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
         "fn sync_active_online_runtime_view",
         "state.lobby_session.sync_runtime_view(lobby)",
         "ActiveTheme::sync_evaluation_runtime",
-        "SimplyLoveLobbyRequest::UpdateMachineStats",
+        "LobbyRequest::UpdateMachineStats",
         "runtime_update_machine_state_sides_with_stats_default",
     ] {
         assert!(
@@ -6983,12 +7056,16 @@ fn evaluation_leaderboards_are_shell_prepared() {
             && evaluation.contains("&scoreboxes[player_idx]")
     );
 
-    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("Shared theme views should be readable");
+    assert!(
+        views.contains("pub struct EvaluationStageView<N, S>")
+            && views.contains("pub score_info: EvaluationScores<N, S>")
+    );
+    let runtime_views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     assert!(
-        views.contains("pub score_info: [Option<ScoreInfo>; 2]")
-            && views.contains("pub struct EvaluationInitView")
-            && views.contains("pub scoreboxes: Option<[ScoreboxSideView; 2]>")
+        runtime_views.contains("pub scoreboxes: Option<[ScoreboxSideView; 2]>")
     );
 
     let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
@@ -7002,7 +7079,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
             .expect("shell result view adapter should be readable"),
     );
     for shell_owner in [
-        "fn evaluation_init_view",
+        "fn evaluation_entry",
         "scores::get_machine_leaderboard_local",
         "scores::get_personal_leaderboard_local_for_side",
         "scores::groovestats_eval_state_from_gameplay",
@@ -7134,13 +7211,13 @@ fn qr_login_workers_and_persistence_are_shell_owned() {
             && qr.contains("SimplyLoveQrLoginEvent::Failed")
     );
 
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     assert!(
-        effects.contains("pub struct SimplyLoveQrLoginRequest")
-            && effects.contains("pub enum SimplyLoveQrLoginEvent")
-            && effects.contains("StartQrLogin(SimplyLoveQrLoginRequest)")
-            && effects.contains("CancelQrLogin(SimplyLoveQrLoginService)")
+        effects.contains("pub struct QrLoginRequest")
+            && effects.contains("pub enum QrLoginEvent")
+            && effects.contains("StartQrLogin(QrLoginRequest)")
+            && effects.contains("CancelQrLogin(QrLoginService)")
             && !effects.contains("RefreshArrowCloudStatus")
     );
 
@@ -7175,8 +7252,8 @@ fn qr_login_workers_and_persistence_are_shell_owned() {
         .expect("shell app should be readable");
     assert!(
         shell_app.contains("self.qr_login.poll()")
-            && shell_app.contains("SimplyLoveOnlineRequest::StartQrLogin")
-            && shell_app.contains("SimplyLoveOnlineRequest::CancelQrLogin")
+            && shell_app.contains("OnlineRequest::StartQrLogin")
+            && shell_app.contains("OnlineRequest::CancelQrLogin")
             && shell_app.contains("screens::arrowcloud_login::apply_events")
             && shell_app.contains("screens::groovestats_login::apply_events")
     );
@@ -7245,19 +7322,26 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
         .expect("shell app should be readable");
     assert!(app.contains("crate::main_menu::runtime_view(self.state.coin.credits(coin))"));
     for hook in [
-        "menu_state: <ActiveTheme as ThemeMainMenu>::MenuState",
-        "ActiveTheme::init_menu(",
-        "ActiveTheme::sync_menu_runtime(",
-        "ActiveTheme::update_menu(",
+        "menu_state: crate::title_menu::InstalledMenu",
+        "(mount.title)(color_index)",
+        "menu_state.sync_runtime(",
+        "menu_state.update(",
         "MainMenuPhase::Entering",
-        "ActiveTheme::handle_menu_raw_key(",
-        "ActiveTheme::push_menu_actors(",
-        "ActiveTheme::push_menu_exit_overlay(",
+        "menu_state.handle_raw_key(",
+        "menu_state.push_actors(",
+        "menu_state.push_exit_overlay(",
     ] {
         assert!(app.contains(hook), "shell main menu is missing {hook}");
     }
     for concrete in ["screens::menu::", "menu_state.active_color_index", "menu_splash::build(", "fade.menu_exit_elapsed"] {
         assert!(!app.contains(concrete), "shell still applies menu presentation through {concrete}");
+    }
+    let factory = production_source(&root.join("crates/deadsync-shell/src/title_menu.rs"));
+    for hook in [
+        "T::handle_menu_input(&mut self.state, input)",
+        "T::push_menu_actors(",
+    ] {
+        assert!(contains_rust(&factory, hook), "installed title menu is missing {hook}");
     }
 }
 
@@ -7290,7 +7374,7 @@ fn simply_love_three_key_navigation_uses_prepared_policy() {
 }
 
 #[test]
-fn simply_love_shared_visuals_use_shell_prepared_policy() {
+fn simply_love_shared_visuals_use_theme_resolved_policy() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let shared = root.join("crates/deadsync-theme-simply-love/src/screens/components/shared");
     let screen_bar =
@@ -7357,10 +7441,11 @@ fn simply_love_shared_visuals_use_shell_prepared_policy() {
         }
     }
     assert!(
-        shell.contains("fn simply_love_visual_policy(")
-            && shell.contains("let visual = simply_love_visual_policy(config)")
-            && contains_rust(&shell, "machine_bar_color.resolve(config.visual_style.presentation_style(config.srpg_variant))")
-            && shell.contains("visual_styles::for_style_and_variant(")
+        shell.contains("let visual = SimplyLoveVisualPolicyView::from_config(config)")
+            && shell.contains("visual.background_video(config.show_video_backgrounds)")
+            && !shell.contains("visual_styles::for_style_and_variant(")
+            && contains_rust(&views, "machine_bar_color.resolve(config.visual_style.presentation_style(config.srpg_variant))")
+            && views.contains("visual_styles::for_style_and_variant(")
     );
 }
 
@@ -7372,7 +7457,7 @@ fn simply_love_mappings_uses_shell_prepared_config_state() {
             .expect("Simply Love mappings screen should be readable");
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme/src/app_requests.rs"))
         .expect("Simply Love effects should be readable");
     let shell = read_source(root.join("crates/deadsync-shell/src/mappings.rs"))
         .expect("shell mappings adapter should be readable");
@@ -7401,8 +7486,8 @@ fn simply_love_mappings_uses_shell_prepared_config_state() {
             && views.contains("pub dedicated_three_key_nav: bool")
     );
     assert!(
-        effects.contains("pub enum SimplyLoveMappingsConfigRequest")
-            && effects.contains("Mappings(SimplyLoveMappingsConfigRequest)")
+        effects.contains("pub enum MappingsConfigRequest")
+            && effects.contains("Mappings(MappingsConfigRequest)")
             && screen.contains("updated_keymap_unique_keyboard")
             && screen.contains("updated_keymap_unique_gamepad")
             && screen.contains("cleared_keymap")
@@ -7412,12 +7497,12 @@ fn simply_love_mappings_uses_shell_prepared_config_state() {
             && shell.contains("keymap: get_keymap()")
             && shell.contains("machine_font: cfg.machine_font")
             && screen.contains("machine_font_key(state.runtime.machine_font")
-            && shell.contains("pub(crate) fn execute(request: SimplyLoveMappingsConfigRequest)")
+            && shell.contains("pub(crate) fn execute(request: MappingsConfigRequest)")
             && shell.contains("config::keybinds::update_keymap_binding_unique_keyboard_saved")
             && shell.contains("config::keybinds::update_keymap_binding_unique_gamepad_saved")
             && shell.contains("config::keybinds::clear_keymap_binding_saved")
             && shell.contains("config::runtime_update::update_only_dedicated_menu_buttons(false)")
-            && shell_app.contains("SimplyLoveConfigRequest::Mappings(request)")
+            && shell_app.contains("ConfigRequest::Mappings(request)")
     );
 }
 
@@ -7465,7 +7550,7 @@ fn simply_love_select_flow_uses_shell_prepared_session_state() {
         "profile::get_session_play_style()",
         "profile::get_session_play_mode()",
         "let cfg = config::runtime::get()",
-        "color_index: cfg.simply_love_color",
+        "color_index: cfg.theme_color",
     ] {
         assert!(
             shell.contains(shell_access),
@@ -7474,6 +7559,112 @@ fn simply_love_select_flow_uses_shell_prepared_session_state() {
     }
     assert!(profile_executor.contains("ProfileRequest::SetPlayStyle"));
     assert!(profile_executor.contains("ProfileRequest::SetPlayMode"));
+}
+
+#[test]
+fn both_music_wheels_use_the_game_catalog_and_keep_auxiliary_screens() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let game = production_source(&root.join("crates/deadsync-gameplay/src/music_wheel.rs"));
+    let theme = root.join("crates/deadsync-theme-simply-love/src/screens");
+    let selection = read_source(theme.join("select_music.rs")).expect("Select Music source");
+    let wheel = production_source(&theme.join("components/select_music/music_wheel.rs"));
+    let openitg = production_source(&root.join("crates/deadsync-theme-openitg/src/select_music.rs"));
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).expect("application source");
+    assert!(game.contains("pub use deadsync_chart::music_wheel::{MusicWheelEntry, WheelRandomAction}"));
+    assert!(selection.contains("pub use deadsync_gameplay::music_wheel::MusicWheelEntry"));
+    assert!(selection.contains("wheel_entry_index(state.selected_index, direction,"));
+    assert!(wheel.contains("wheel_entry_index(p.selected_index,"));
+    assert!(openitg.contains("SelectMusicView<'_>"));
+    assert!(app.contains("select_music::select_music_view("));
+    assert!(app.contains("selection.push_music("));
+    assert!(app.contains("select_music::push_select_music_overlays("));
+    assert!(selection.contains("push_select_music_overlays(actors, state, asset_manager, visual_policy, true, None)"));
+    assert!(app.contains("Some(selection.profile_picker())"));
+}
+
+#[test]
+fn application_dispatches_mounted_presentations_through_shared_contracts() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    let mounting = production_source(&shell.join("mounted_theme.rs"));
+    let registry = production_source(&root.join("src/theme_registry.rs"));
+    let app = read_source(shell.join("app/mod.rs")).expect("application source");
+    let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
+
+    for (interface, implementation) in [
+        ("StagePresentation", "OpenItgStagePresentation"),
+        ("SelectionPresentation", "OpenItgSelectionPresentation"),
+        ("SystemOptionsPresentation", "OpenItgSystemOptions"),
+        ("AttractPresentation", "OpenItgIntro"),
+    ] {
+        assert!(mounting.contains(interface));
+        assert!(registry.contains(implementation));
+        assert!(!app.contains(implementation));
+    }
+
+    for path in production_rust_files(&shell) {
+        let source = production_source(&path);
+        for concrete in [
+            "deadsync_theme_openitg",
+            "ThemeFlag::OpenItg",
+        ] {
+            assert!(
+                !source.contains(concrete),
+                "{} uses {concrete} outside theme composition",
+                path.display()
+            );
+        }
+    }
+}
+
+#[test]
+fn selection_theme_owns_density_mesh_and_fallback_artwork() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    for path in ["command.rs", "app/commands.rs"] {
+        let source = production_source(&shell.join(path));
+        for concrete in ["276.0", "286.0", "build_density_histogram_mesh(", "\"banner1.png\""] {
+            assert!(!source.contains(concrete), "{path} chooses {concrete}");
+        }
+    }
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    );
+    assert!(theme.contains("fn resolve_wheel_banner("));
+    assert!(theme.contains("fn set_density_graph("));
+    assert!(theme.contains("build_density_histogram_mesh("));
+}
+
+#[test]
+fn gameplay_graph_geometry_is_supplied_by_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates");
+    let game = root.join("deadsync-gameplay/src");
+    let init = production_source(&game.join("runtime_init.rs"));
+    let graph = production_source(&game.join("density_graph.rs"));
+    assert!(!init.contains("step_stats_density_graph_width"));
+    assert!(!init.contains("nps_graph_at_top"));
+    assert!(!graph.contains("StepStatsPlayStyle"));
+    assert!(graph.contains("pub struct DensityGraphLayout"));
+
+    let theme = root.join("deadsync-theme-simply-love/src");
+    let layout = production_source(&theme.join("step_stats.rs"));
+    let gameplay = production_source(&theme.join("screens/gameplay.rs"));
+    assert!(layout.contains("fn density_graph_layout("));
+    assert!(layout.contains("fn step_stats_density_graph_width("));
+    assert!(gameplay.contains("prepared.configure_density_graph(crate::step_stats::density_graph_layout)"));
+}
+
+#[test]
+fn twitch_service_does_not_own_overlay_presentation() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates");
+    let shell = root.join("deadsync-shell/src");
+    let twitch = production_source(&shell.join("twitch.rs"));
+    let mounting = production_source(&shell.join("mounted_theme.rs"));
+    assert!(!twitch.contains("deadsync_theme_simply_love"));
+    assert!(!twitch.contains("placement("));
+    assert!(!twitch.contains("Set Twitch Channel"));
+    assert!(twitch.contains("fn snapshot("));
+    assert!(mounting.contains("TwitchChatPresentation"));
 }
 
 #[test]
@@ -7524,19 +7715,17 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
             && shell.contains("show_select_profile: config.machine_show_select_profile")
             && shell.contains("show_eval_summary: config.machine_show_eval_summary")
             && shell.contains("session_flow::resolve_navigation(")
-            && shell.contains("T::SESSION_SCREENS")
+            && shell.contains("Screen::SESSION_SCREENS")
             && profile_requests.contains("profile_combo_carry(&profiles)")
             && profile_requests.contains("preferred_difficulty_indices(&profiles, session.play_style)")
             && shell.contains("session_flow::profile_selection_target(")
-            && profile_executor.contains("profile_selection_target::<ActiveTheme>("),
+            && profile_executor.contains("profile_selection_target("),
         "theme navigation must receive prepared inputs from the game and shell"
     );
     let input = production_source(&root.join("crates/deadsync-shell/src/app/input_routing.rs"));
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).unwrap();
-    let menu_runtime = production_source(&root.join("crates/deadsync-shell/src/main_menu.rs"));
-    assert!(input.contains("crate::main_menu::handle_input::<ActiveTheme>("));
-    assert!(contains_rust(&menu_runtime, "session.remember_menu_start(input); T::handle_menu_input(state, input)"));
+    assert!(contains_rust(&input, "self.state.session.remember_menu_start(&ev); self.state.screens.menu_state.handle_input(&ev)"));
     for entry in [&app, &navigation] {
         assert!(entry.contains("self.state.session.menu_start_side"));
         assert!(!entry.contains("menu_state.started_by_p2"));
@@ -7759,24 +7948,21 @@ fn simply_love_platform_access_is_limited_to_physical_input() {
         assets.contains("pub fn resolve_asset_path(path: &str)")
             && assets.contains("pub fn open_bundled_image(path: &str)")
     );
-    let init = read_source(crate_dir.join("src/screens/init.rs"))
-        .expect("Simply Love Init screen should be readable");
-    assert!(
-        init.contains("pub const fn init(songs_root: PathBuf, courses_root: PathBuf)")
-            && init.contains("SimplyLoveContentRequest::InitializeLibrary")
-            && init.contains("songs_root: state.songs_root.clone()")
-            && init.contains("courses_root: state.courses_root.clone()")
-    );
     let content_reload =
         read_source(root.join("crates/deadsync-shell/src/content_reload.rs"))
             .expect("shell content reload service should be readable");
     assert!(
         content_reload.contains("scan_and_load_songs_with_progress_counts")
             && content_reload.contains("scan_and_load_courses_with_progress_counts")
+            && content_reload.contains("service.start_initialization(dirs.songs_dir(), dirs.courses_dir(), audio_available)")
     );
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    assert!(shell.contains("init::init(init_songs_root, init_courses_root)"));
+    assert!(shell.contains("startup_screen: (mount.startup)(color_index)"));
+    assert!(!shell.contains("init::State"));
+    let composition = read_source(root.join("src/theme_registry.rs"))
+        .expect("executable theme registry should be readable");
+    assert!(composition.contains("startup: startup_screen"));
 }
 
 #[test]
@@ -10861,6 +11047,7 @@ fn concrete_theme_resources_live_in_simply_love() {
         "generic theme must expose contract source files"
     );
     for file in generic_files {
+        let app_requests = file.ends_with("app_requests.rs");
         let generic_source =
             read_source(&file).expect("generic theme source should be readable");
         for token in [
@@ -10870,11 +11057,14 @@ fn concrete_theme_resources_live_in_simply_love() {
             "FONT_ASSETS",
             "SRPG10_",
             "pub mod i18n",
-            "scorebox",
+            "pub mod scorebox",
+            "crate::scorebox::",
+            "\"scorebox\"",
             "step_stats",
         ] {
             assert!(
-                !generic_source.contains(token),
+                !generic_source.contains(token)
+                    || (app_requests && matches!(token, "MachineFont" | "VisualStyle" | "SrpgVariant")),
                 "{} still owns concrete resource token {token}",
                 rel_path(&root, &file)
             );
@@ -10883,7 +11073,7 @@ fn concrete_theme_resources_live_in_simply_love() {
 
     let generic_manifest = read_source(generic_theme.join("Cargo.toml"))
         .expect("generic theme manifest should be readable");
-    for dependency in ["deadsync-config", "deadsync-profile", "log =", "rand ="] {
+    for dependency in ["deadsync-theme-", "log =", "rand ="] {
         assert!(
             !generic_manifest.contains(dependency),
             "generic theme still depends on concrete resource dependency {dependency}"
@@ -11708,7 +11898,8 @@ fn combo_presentation_stays_on_the_direct_hud_path() {
     assert!(hud.contains("compose_combo_milestones(draws, &feedback);"));
     assert!(hud.contains("compose_combo_number(draws, &feedback);"));
     assert!(hud.contains("draws.drain(draw_start..).map(actor_from_flat_draw)"));
-    assert!(playback.contains("COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 7"));
+    assert!(combo.contains("draws.push(FlatDraw::PreparedInline(FlatPreparedInline {"));
+    assert!(playback.contains("COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 8"));
     assert!(adapter.contains("ResolvedComboMilestoneAssets"));
     assert!(!adapter.contains("fn combo_number_text"));
     assert!(gameplay.contains("notefield_combo_assets"));
@@ -12917,8 +13108,8 @@ fn shell_public_facade_does_not_grow_accidentally() {
         .collect();
     assert_eq!(
         public_lines,
-        ["pub mod app;", "pub mod gameplay_entry;", "pub mod live_case;"],
-        "only startup, gameplay preparation and the live-case CLI belong on the shell facade"
+        ["pub mod app;", "pub mod gameplay_entry;", "pub mod live_case;", "pub mod mounted_theme;"],
+        "only startup, game preparation, theme mounts and the live-case CLI belong on the shell facade"
     );
 }
 
@@ -13293,9 +13484,12 @@ fn evaluation_leaves_using_game_session_origin() {
     assert!(input.contains("ActiveTheme::handle_evaluation_input("));
     assert!(contains_rust(
         &nav,
-        "evaluation_return_to::<ActiveTheme>(self.state.screens.evaluation_origin)",
+        "self.handle_navigation_action(evaluation_return_to(origin))",
     ));
-    assert!(theme.contains("Some(origin) => (origin, ThemeEffect::LeaveEvaluation)"));
+    assert!(contains_rust(&theme, "if game_session { ThemeEffect::LeaveEvaluation }"));
+    assert!(nav.contains("screens.stage_presentation.evaluation_departure()"));
+    assert!(nav.contains("view.elapsed < exit.input_ready_seconds"));
+    assert!(app.contains("(exit.push_overlay)(&mut actors, *elapsed)"));
     assert!(!app.contains(".return_to_course"));
     assert!(!app.contains(".auto_advance_seconds"));
 }
@@ -13307,29 +13501,75 @@ fn evaluation_lifecycle_uses_the_installed_theme() {
     let app = read_source(shell.join("mod.rs")).expect("Evaluation entry source");
     let input = production_source(&shell.join("input_routing.rs"));
     let runtime = production_source(&shell.join("evaluation_views.rs"));
+    let heart_rate = production_source(&shell.join("../heart_rate.rs"));
     assert!(app.contains("type EvaluationState = <ActiveTheme as ThemeEvaluation>::EvaluationState"));
     assert!(app.contains("evaluation_state: EvaluationState"));
+    let draw = app.split_once("let departure_elapsed = match").unwrap().1
+        .split_once("CurrentScreen::EvaluationSummary =>").unwrap().0;
+    assert!(draw.contains("presentation.push_overview("));
+    assert!(draw.contains("page.view("));
+    assert!(draw.contains("ActiveTheme::push_evaluation_overlays("));
+    let legacy = production_source(&root.join(
+        "crates/deadsync-theme-simply-love/src/screens/evaluation/mount.rs",
+    ));
+    assert!(!legacy.contains("EvaluationOverviewPresentation"));
+    let shared = production_source(&root.join("crates/deadsync-theme/src/evaluation.rs"));
+    assert!(shared.contains("scores: Arc::clone(scores)"));
     assert!(runtime.contains("view: EvaluationState"));
     for call in [
         "init_evaluation",
         "init_course_evaluation",
+        "prepare_course_evaluation",
+        "prepare_evaluation_audio",
+        "resume_evaluation_page",
         "sync_evaluation_elapsed",
         "update_evaluation",
         "handle_evaluation_raw_key",
         "handle_evaluation_raw_pad",
         "push_evaluation_actors",
+        "sync_evaluation_result_dialog",
     ] {
         assert!(app.contains(&format!("ActiveTheme::{call}(")), "missing {call}");
     }
     assert!(input.contains("ActiveTheme::evaluation_test_input_pane_active("));
     assert!(runtime.contains("chart_queries(self.state.screens.evaluation_stage.as_ref())"));
+    assert!(heart_rate.contains("ActiveTheme::sync_evaluation_heart_rate("));
+    for member in [".sfx_paths", ".screen_elapsed", ".score_info"] {
+        assert!(!app.contains(&format!("evaluation_state{member}")));
+    }
+}
+
+#[test]
+fn evaluation_media_uses_host_results_and_theme_capture_readiness() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    let app = read_source(shell.join("app/mod.rs")).expect("Evaluation entry source");
+    let screenshot = production_source(&shell.join("app/screenshot.rs"));
+    let lighting = production_source(&shell.join("lighting.rs"));
+
+    assert!(contains_rust(
+        &app,
+        "screens.evaluation_stage.as_ref().and_then(|stage| stage.song.banner_path.as_deref())",
+    ));
+    assert!(contains_rust(
+        &app,
+        "options::is_smx_config_view(&self.state.screens.options_state), self.state.screens.evaluation_stage.as_ref()",
+    ));
+    assert!(screenshot.contains("ActiveTheme::evaluation_capture_ready("));
+    assert!(screenshot.contains("ActiveTheme::evaluation_capture_view("));
+    assert!(screenshot.contains(".evaluation_stage"));
+    assert!(!screenshot.contains("deadsync_theme_simply_love"));
+    assert!(!screenshot.contains(".score_info"));
+    assert!(lighting.contains("EvaluationStage::players"));
+    assert!(!lighting.contains("ScoreInfo"));
+    assert!(!lighting.contains("deadsync_theme_simply_love::color"));
 }
 
 #[test]
 fn gameplay_exit_routing_stays_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let policy = production_source(&root.join("crates/deadsync-gameplay/src/exit_route.rs"));
-    let theme = production_source(&root.join("crates/deadsync-theme-simply-love/src/effects.rs"));
+    let theme = production_source(&root.join("crates/deadsync-theme/src/app_requests.rs"));
     let gameplay = production_source(
         &root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"),
     );
@@ -13345,7 +13585,6 @@ fn gameplay_exit_routing_stays_below_the_theme() {
     let shell_runtime = production_source(&root.join("crates/deadsync-shell/src/gameplay_runtime.rs"));
     let shell_flow = production_source(&root.join("crates/deadsync-shell/src/screen_flow.rs"));
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
-    let stage_screens = production_source(&root.join("crates/deadsync-shell/src/navigation.rs"));
 
     for contract in [
         "pub struct GameplayExitRouteContext",
@@ -13443,7 +13682,7 @@ fn gameplay_exit_routing_stays_below_the_theme() {
         "lobby.prepare_update(&mut stage.gameplay,"
     ));
     assert!(!shell.contains("effect_for_gameplay_exit("));
-    assert!(!shell_actions.contains("SimplyLoveRuntimeRequest"));
+    assert!(!shell_actions.contains("RuntimeRequest"));
     assert!(!shell_actions.contains("ThemeEffect"));
     for old_router in ["theme_effect_route_plan", "resolve_effect_route"] {
         assert!(
@@ -13477,13 +13716,13 @@ fn gameplay_exit_routing_stays_below_the_theme() {
         "action: GameplayAction",
         "GameplayAction::None => return",
         "GameplayAction::Restart => { self.try_gameplay_restart(event_loop,",
-        "self.state.screens.current_screen == ActiveTheme::SCREENS.gameplay",
+        "self.state.screens.current_screen == Screen::Gameplay",
         "self.state.session.course_run.as_ref()",
         "restart_pending: self.state.session.restart_pending",
         "course_active: course.is_some()",
         "course_has_next_stage: course.is_some_and(|course| course.run.has_next_stage())",
         "resolve_gameplay_exit_route(",
-        "gameplay_exit_screen::<ActiveTheme>(route.destination)",
+        "gameplay_exit_screen(route.destination)",
         "route.consume_restart_pending",
     ] {
         assert!(
@@ -13492,12 +13731,12 @@ fn gameplay_exit_routing_stays_below_the_theme() {
         );
     }
     for destination in [
-        "GameplayExitDestination::Results => T::SCREENS.results",
-        "GameplayExitDestination::SongSelection => T::SCREENS.song_selection",
-        "GameplayExitDestination::CourseSelection => T::SCREENS.course_selection",
-        "GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => { T::SCREENS.gameplay }",
+        "GameplayExitDestination::Results => Screen::Evaluation",
+        "GameplayExitDestination::SongSelection => Screen::SelectMusic",
+        "GameplayExitDestination::CourseSelection => Screen::SelectCourse",
+        "GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => { Screen::Gameplay }",
     ] {
-        assert!(contains_rust(&stage_screens, destination), "missing game route {destination}");
+        assert!(contains_rust(&theme, destination), "missing game route {destination}");
     }
     assert!(
         contains_rust(
@@ -13555,10 +13794,11 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
         assert!(owner.contains(presentation), "missing theme transition {presentation}");
     }
     let navigation = production_source(&root.join("crates/deadsync-shell/src/navigation.rs"));
+    assert!(!navigation.contains("ActiveTheme"));
     for policy in [
-        "if is_play_screen::<T>(from) || is_play_screen::<T>(target)",
-        "T::transition_kind(from, target)",
-        "screen == T::SCREENS.gameplay || screen == T::SCREENS.practice",
+        "if from.is_play() || target.is_play()",
+        "presentation_kind(from, target)",
+        "target.is_play()",
         "then_some(deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS)",
         "Some(deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS)",
         "then_some(deadsync_gameplay::GAMEPLAY_ENTRY_TRANSITION_SECONDS)",
@@ -13567,25 +13807,43 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
     }
     let adapter = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     for handoff in [
-        "ActiveTheme::current_screen_file_name(target)",
-        "ActiveTheme::out_transition(screen, target)",
-        "ActiveTheme::in_transition(screen, context)",
-        "stage_exit_duration::<ActiveTheme>(screen).unwrap_or(duration)",
-        "stage_entry_duration::<ActiveTheme>(screen, restarting).unwrap_or(duration)",
+        "target.current_screen_file_name()",
+        "(self.state.screens.transitions.exit)(screen, target)",
+        "(self.state.screens.transitions.entry)(screen)",
+        "(self.gameplay_presentation.entry)(",
+        "self.state.screens.transitions.kind",
+        "options.entry_transition()",
+        "options.exit_transition(target)",
+        "stage_exit_duration(screen).unwrap_or(duration)",
+        "let duration = stage_entry_duration(screen, restarting)",
+        "duration.unwrap_or(visual_duration)",
     ] {
         assert!(contains_rust(&adapter, handoff), "missing shell transition handoff {handoff}");
     }
+    for inline_presentation in [
+        "screens::transitions::",
+        "ActiveTheme::in_transition",
+        "ActiveTheme::out_transition",
+    ] {
+        assert!(!adapter.contains(inline_presentation));
+    }
+    let player_options = production_source(&root.join("crates/deadsync-shell/src/mounted_player_options.rs"));
+    assert!(!player_options.contains("ActiveTheme::in_transition"));
+    assert!(!player_options.contains("ActiveTheme::out_transition"));
+    let registry = production_source(&root.join("src/theme_registry.rs"));
+    assert!(registry.contains("transitions: FALLBACK_TRANSITIONS"));
+    assert!(registry.contains("entry: |screen| SimplyLoveTheme::in_transition(screen, None)"));
 
     // The endpoint still receives the final tick on the completion frame.
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell frame loop");
-    let tick_policy = app.find("let tick_gameplay = tick_gameplay_during_transition::<ActiveTheme>(")
+    let tick_policy = app.find("let tick_gameplay = tick_gameplay_during_transition(")
         .expect("shell gameplay tick policy");
     let advance = app.find(".advance_frame(transition_dt)")
         .expect("advance transition clock");
     assert!(tick_policy < advance);
-    assert!(contains_rust(&app, "screen_fade_view(self.state.screens.current_screen, &self.state.shell.transition)"));
-    assert!(app.contains("let smx_overlay_alpha = gameplay_smx_overlay_alpha("));
+    assert!(app.contains("(self.state.screens.transitions.screen_alpha)("));
+    assert!(app.contains("(self.gameplay_presentation.smx_overlay_alpha)("));
 }
 
 #[test]
@@ -13621,17 +13879,27 @@ fn transition_audio_presentation_is_owned_by_the_theme() {
         }
     }
     for handoff in [
-        "T::transition_audio(",
-        "let entering_gameplay = context.target == T::SCREENS.gameplay",
-        "if context.target == T::SCREENS.practice { TransitionMusic::Stop }",
+        "transition_music(context.previous, context.target)",
+        "let entering_gameplay = context.target == Screen::Gameplay",
+        "if context.target == Screen::Practice { TransitionMusic::Stop }",
         "commands.push(Command::UpdateSessionMusicRate(options.music_rate))",
-        "if audio.stop_preview_on_exit { commands.push(Command::StopMusic); }",
+        "entry_music.unwrap_or(music)",
+        "if !entering_gameplay && !replaces_preview && matches!(context.previous, Screen::SelectMusic | Screen::PlayerOptions)",
     ] {
         assert!(contains_rust(&shell, handoff), "missing fade audio handoff {handoff}");
     }
-    assert!(contains_rust(fade, "transition_effect_plan::<ActiveTheme>("));
-    assert!(contains_rust(&screen_nav, "ActiveTheme::transition_audio("));
-    assert!(contains_rust(&screen_nav, "!is_play_screen::<ActiveTheme>(current) && ActiveTheme::stop_screen_sfx_on_exit(current, target)"));
+    assert!(contains_rust(fade, "transition_effect_plan("));
+    assert!(contains_rust(fade, "(transitions.music)(from, to, deadsync_theme::TransitionKind::Global, &config)"));
+    assert!(contains_rust(fade, ".evaluation_audio().music_loop"));
+    assert!(app.contains("EvaluationFallbackSounds::None"));
+    let openitg_stage = production_source(&root.join("crates/deadsync-theme-openitg/src/stage_mount.rs"));
+    let loop_path = "assets/media/openitg/evaluation.ogg";
+    assert!(openitg_stage.contains(loop_path));
+    assert!(!app.contains(loop_path));
+    assert!(contains_rust(&screen_nav, "(self.state.screens.transitions.music)("));
+    assert!(contains_rust(&screen_nav, "!current.is_play() && (self.state.screens.transitions.stop_screen_sfx_on_exit)(current, target)"));
+    assert!(!screen_nav.contains("TransitionAudioContext"));
+    assert!(!theme.contains("stop_preview_on_exit"));
 }
 
 #[test]
@@ -13645,10 +13913,11 @@ fn theme_screen_contract_has_explicit_owners() {
         read_source(root.join("crates/deadsync-theme-simply-love/src/screens/flow.rs"))
             .expect("Simply Love flow should be readable");
     for token in [
+        "pub enum Screen",
         "pub struct ThemeScreenId",
         "pub trait Theme",
-        "pub struct ThemeScreens<S>",
-        "pub trait ThemeScreenFlow: Theme",
+        "pub const SESSION_SCREENS:",
+        "pub fn from_song_lua_name(",
     ] {
         assert!(
             generic_screen.contains(token),
@@ -13665,7 +13934,7 @@ fn theme_screen_contract_has_explicit_owners() {
             "deadsync-theme is missing generic effect contract token {token}"
         );
     }
-    for token in ["pub enum SimplyLoveScreen", "pub fn resolve_navigation"] {
+    for token in ["fn screen_id(screen: Screen)", "pub fn resolve_navigation"] {
         assert!(
             simply_love_flow.contains(token),
             "Simply Love is missing concrete flow token {token}"
@@ -13673,7 +13942,24 @@ fn theme_screen_contract_has_explicit_owners() {
     }
     let simply_love = read_source(root.join("crates/deadsync-theme-simply-love/src/lib.rs"))
         .expect("Simply Love theme should be readable");
-    assert!(simply_love.contains("impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme"));
+    assert!(simply_love.contains("impl deadsync_theme::Theme for SimplyLoveTheme"));
+    let openitg = production_source(&root.join("crates/deadsync-theme-openitg/src/lib.rs"));
+    let shell = production_source(&root.join("crates/deadsync-shell/src/lib.rs"));
+    let title = production_source(&root.join("crates/deadsync-shell/src/title_menu.rs"));
+    assert!(shell.contains("pub(crate) use deadsync_theme::Screen as ThemeScreen;"));
+    assert!(simply_love.contains("type Screen = screens::Screen;"));
+    assert!(openitg.contains("type Screen = Screen;"));
+    for path in production_rust_files(&root.join("crates/deadsync-shell/src")) {
+        let body = production_source(&path);
+        for obsolete in ["ThemeScreenFlow", "ThemeSessionFlow", "ActiveTheme::SCREENS"] {
+            assert!(!body.contains(obsolete), "{} still uses {obsolete}", path.display());
+        }
+    }
+    assert!(!title.contains("SessionState"));
+
+    for adapter in ["host_screen(", "openitg_transition(", "host_effect("] {
+        assert!(!title.contains(adapter));
+    }
     let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(
@@ -13747,7 +14033,7 @@ fn root_source_is_binary_only() {
         .collect();
     assert_eq!(
         files,
-        ["src/main.rs"],
+        ["src/main.rs", "src/theme_registry.rs"],
         "the root package should remain a binary-only entry point"
     );
 }
@@ -13919,7 +14205,10 @@ fn stage_results_are_independent_of_evaluation() {
             "theme still assembles results: {forbidden}"
         );
     }
-    assert!(evaluation.contains("pub fn init(init_view: EvaluationInitView)"));
+    assert!(contains_rust(
+        &evaluation,
+        "pub fn init(stage: EvaluationStageView<Arc<Noteskin>, profile_data::PlayerSide>,",
+    ));
     let results = read_source(root.join("crates/deadsync-profile-gameplay/src/results.rs"))
         .expect("gameplay result owner");
     assert!(results.contains("pub fn stage_result"));
@@ -13945,6 +14234,10 @@ fn stage_results_are_independent_of_evaluation() {
     }
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell source");
+    for source in ["session_results.rs", "course.rs"] {
+        let adapter = production_source(&root.join("crates/deadsync-shell/src").join(source));
+        assert!(!adapter.contains("deadsync_theme_simply_love"));
+    }
     assert!(!shell.contains("append_stage_results_from_eval"));
     assert!(contains_rust(&shell, "fn gameplay_stage_result(gameplay: &ActiveGameplayStage)"));
     assert!(contains_rust(

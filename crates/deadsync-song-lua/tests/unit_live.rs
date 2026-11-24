@@ -9051,6 +9051,7 @@ return Def.ActorFrame {
     scene.bind_targets(bindings).unwrap();
     let mut visuals = deadsync_gameplay::SongLuaRuntimeVisuals {
         overlays: compiled.overlays,
+        foreground_beats: None,
         screen_overlay_index: compiled.screen_overlay_index,
         overlay_eases: Vec::new(),
         overlay_ease_ranges: Vec::new(),
@@ -11387,6 +11388,19 @@ return Def.ActorFrame {
             .abs()
             < 1e-6
     );
+
+    scene_exec(
+        &scene,
+        r#"
+local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+local sprite = player:GetChild('Judgment'):GetChild('JudgmentWithOffsets')
+sprite:Load('judgment fixture 2x7.png'):setstate(13)
+assert(sprite:GetNumStates() == 14 and sprite:GetState() == 13)
+sprite:setstate(14)
+assert(sprite:GetState() == 13)
+"#,
+    )
+    .expect("a judgment texture loaded by a chart uses its sprite frames");
 }
 
 #[test]
@@ -11428,6 +11442,7 @@ return Def.ActorFrame {
     input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
         result: deadsync_rules::note::HoldResult::Held,
         started_at_screen_s: 0.125,
+        alternate: false,
     });
     scene
         .advance(input.clone())
@@ -11470,6 +11485,7 @@ return Def.ActorFrame {
     input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
         result: deadsync_rules::note::HoldResult::LetGo,
         started_at_screen_s: 0.25,
+        alternate: false,
     });
     scene
         .advance(input.clone())
@@ -11484,6 +11500,7 @@ return Def.ActorFrame {
     input.players[0].hold_judgments[1] = Some(deadsync_gameplay::HoldJudgmentRenderInfo {
         result: deadsync_rules::note::HoldResult::Missed,
         started_at_screen_s: 0.3125,
+        alternate: false,
     });
     scene
         .advance(input.clone())

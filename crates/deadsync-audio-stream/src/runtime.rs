@@ -150,6 +150,21 @@ impl AudioControl {
         engine.sfx_cache.prepare(path, engine.output)
     }
 
+    /// Prepares an embedded WAV for retained playback on this output device.
+    pub fn prepare_embedded_sfx(&self, name: &str, wav: &[u8]) -> Option<SfxId> {
+        let engine = self.engine.as_ref()?;
+        match SfxId::from_wav(wav, engine.output) {
+            Ok(sound) => {
+                log::debug!("Prepared embedded SFX: {name}");
+                Some(sound)
+            }
+            Err(error) => {
+                log::warn!("Failed to prepare embedded SFX '{name}': {error}");
+                None
+            }
+        }
+    }
+
     /// Enqueues a prepared effect without filesystem access or decoding.
     pub fn play_sfx(&mut self, sound: &SfxId) {
         if let Some(engine) = self.engine.as_mut() {

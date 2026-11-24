@@ -48,6 +48,69 @@ impl Metrics {
     }
 }
 
+/// Perspective for a top-left layout plane. Objects at Z=0 keep their layout
+/// positions, and positive Z moves toward the eye. The field of view is horizontal.
+#[must_use]
+pub fn menu_perspective(
+    [width, height]: [f32; 2],
+    [vanish_x, vanish_y]: [f32; 2],
+    horizontal_fov_deg: f32,
+) -> Option<(Matrix4, Matrix4)> {
+    if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let half_w = 0.5 * width;
+    let half_h = 0.5 * height;
+    let tan_theta = (0.5 * horizontal_fov_deg).to_radians().tan();
+    if !tan_theta.is_finite() || tan_theta.abs() < 1e-6 {
+        return None;
+    }
+    let dist = half_w / tan_theta;
+    if !dist.is_finite() || dist <= 0.0 {
+        return None;
+    }
+
+    let reverse_viewport = |at: f32, size: f32| {
+        if size < 1e-6 {
+            0.0
+        } else {
+            (at / size).mul_add(-size, size)
+        }
+    };
+    let vp_x = reverse_viewport(vanish_x, width) - half_w;
+    let vp_y = reverse_viewport(vanish_y, height) - half_h;
+    let left = (vp_x - half_w) / dist;
+    let right = (vp_x + half_w) / dist;
+    let bottom = (vp_y + half_h) / dist;
+    let top = (vp_y - half_h) / dist;
+    let near = 1.0_f32;
+    let far = dist + 1000.0_f32;
+    let projection = Matrix4::from_cols_array(&[
+        2.0 * near / (right - left),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.0 * near / (top - bottom),
+        0.0,
+        0.0,
+        (right + left) / (right - left),
+        (top + bottom) / (top - bottom),
+        -(far + near) / (far - near),
+        -1.0,
+        0.0,
+        0.0,
+        -2.0 * far * near / (far - near),
+        0.0,
+    ]);
+    let eye = Vec3::new(-vp_x + half_w, -vp_y + half_h, dist);
+    let at = Vec3::new(eye.x, eye.y, 0.0);
+    Some((
+        projection,
+        glam::camera::rh::view::look_at_mat4(eye, at, Vec3::Y),
+    ))
+}
+
 // Logical bounds and surface pixels are independent, caller-owned choices.
 thread_local! {
     static CURRENT_METRICS: Cell<Metrics> = const { Cell::new(Metrics::centered(2.0, 2.0)) };

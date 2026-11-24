@@ -39,10 +39,12 @@ pub enum SubmenuKind {
     ScoreImport,
     Folders,
     Downloads,
+    GraphicsBasic,
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 25] = [
+    // Logical graphics pages share one set of editable values and cursors.
+    pub(super) const STORED: [Self; 25] = [
         Self::Coin,
         Self::Bookkeeping,
         Self::System,
@@ -69,11 +71,18 @@ impl SubmenuKind {
         Self::Folders,
         Self::Downloads,
     ];
-    pub(super) const COUNT: usize = Self::ALL.len();
+    pub(super) const COUNT: usize = Self::STORED.len();
 
     #[inline]
     pub(super) const fn index(self) -> usize {
-        self as usize
+        match self {
+            Self::GraphicsBasic => Self::Graphics as usize,
+            _ => self as usize,
+        }
+    }
+
+    pub(super) const fn is_graphics(self) -> bool {
+        matches!(self, Self::Graphics | Self::GraphicsBasic)
     }
 }
 
@@ -183,6 +192,8 @@ pub struct State {
     pub(super) twitch_channel_entry: Option<String>,
     pub(super) twitch_channel_invalid: bool,
     pub(super) main_visible_items: Vec<&'static Item>,
+    pub(super) service_order: &'static [deadsync_theme::views::SystemOptionsServiceRow],
+    pub(super) page_timing: Option<deadsync_theme::views::SystemOptionsTiming>,
     pub(super) app_paths: AppPathsView,
     pub(super) audio_options: AudioOptionsView,
     pub(super) song_packs: Vec<OptionsSongPackView>,
@@ -205,6 +216,7 @@ pub struct State {
     pub(super) nav_lr_held_for: Duration,
     pub(super) nav_lr_next_repeat_at: Duration,
     pub(super) view: OptionsView,
+    pub(super) split_graphics: bool,
     pub(super) submenu_transition: SubmenuTransition,
     pub(super) pending_submenu_kind: Option<SubmenuKind>,
     pub(super) pending_submenu_parent_kind: Option<SubmenuKind>,
@@ -252,7 +264,7 @@ pub struct State {
     pub(super) smx_bg_pack_choices: Vec<String>,
     pub(super) smx_judge_pack_choices: Vec<String>,
     pub(super) smx_assignment: SmxAssignmentView,
-    pub(super) smx_assignment_status: String,
+    pub(super) smx_assignment_status: Arc<str>,
     pub(super) score_import_profiles: Vec<crate::SimplyLoveScoreImportProfile>,
     pub(super) score_import_profile_choices: Vec<String>,
     pub(super) score_import_profile_ids: Vec<Option<String>>,
@@ -338,6 +350,22 @@ impl State {
         self.selected = selected;
         self.prev_selected = selected;
     }
+
+    /// Whether the service list is active or launched a standalone tool.
+    pub const fn is_main_view(&self) -> bool {
+        matches!(self.view, OptionsView::Main)
+    }
+
+    /// Duration of the mounted page's entry or exit.
+    pub fn page_transition_seconds(&self) -> f32 {
+        self.page_timing.map_or(SUBMENU_FADE_DURATION, |timing| {
+            if self.is_main_view() {
+                timing.service_seconds
+            } else {
+                timing.settings_seconds
+            }
+        })
+    }
 }
 
 fn nearest_u8_index(values: &[u8], target: u8) -> usize {
@@ -360,6 +388,9 @@ fn nearest_u16_index(values: &[u16], target: u16) -> usize {
 pub fn init(view: OptionsInitView) -> State {
     let OptionsInitView {
         config: cfg,
+        split_graphics,
+        service_order,
+        page_timing,
         judgment_palettes,
         updater_capabilities,
         app_paths,
@@ -402,7 +433,7 @@ pub fn init(view: OptionsInitView) -> State {
     let music_volume_pct = i32::from(audio_options.music_volume.min(100));
     #[cfg(target_os = "linux")]
     let linux_backend_choices = build_linux_backend_choices(&audio_options);
-    let smx_assignment_status = smx_assignment_status(&smx_assignment);
+    let smx_assignment_status = Arc::from(smx_assignment_status(&smx_assignment));
     let system_scroll_speed_values =
         system_scroll_speed_values(machine_player_options.scroll_speed);
     let machine_scroll_speed_idx = system_scroll_speed_values
@@ -425,12 +456,14 @@ pub fn init(view: OptionsInitView) -> State {
         .iter()
         .position(|name| name.eq_ignore_ascii_case(machine_player_options.noteskin.as_str()))
         .unwrap_or(0);
-    let main_visible_items = build_visible_items(updater_capabilities);
+    let main_visible_items = build_visible_items(updater_capabilities, service_order);
     let mut state = State {
         twitch: cfg.twitch,
         twitch_channel_entry: None,
         twitch_channel_invalid: false,
         main_visible_items,
+        service_order,
+        page_timing,
         app_paths,
         audio_options,
         song_packs,
@@ -442,7 +475,7 @@ pub fn init(view: OptionsInitView) -> State {
         chart_info_mask: select_music_chart_info_mask_from_config(&cfg),
         selected: 0,
         prev_selected: 0,
-        active_color_index: cfg.simply_love_color,
+        active_color_index: cfg.theme_color,
         bg: visual_style_bg::State::new(),
 
         nav_key_held_direction: None,
@@ -486,11 +519,12 @@ pub fn init(view: OptionsInitView) -> State {
         updater_i18n_revision: u64::MAX,
         pending_audio: smallvec::SmallVec::new(),
         view: OptionsView::Main,
+        split_graphics,
         sub_selected: 0,
         sub_prev_selected: 0,
         sub_inline_x: f32::NAN,
         sub: SubmenuStates::new(|i| {
-            let len = submenu_rows(SubmenuKind::ALL[i]).len();
+            let len = submenu_rows(SubmenuKind::STORED[i]).len();
             SubmenuState {
                 choice_indices: vec![0; len],
                 cursor_indices: vec![0; len],
@@ -675,7 +709,7 @@ pub fn init(view: OptionsInitView) -> State {
         &mut state.sub[SubmenuKind::System].choice_indices,
         SYSTEM_OPTIONS_ROWS,
         SubRowId::Theme,
-        0,
+        cfg.theme_flag.choice_index(),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::System].choice_indices,
@@ -929,7 +963,7 @@ pub fn init(view: OptionsInitView) -> State {
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::PreferredColor,
-        cfg.simply_love_color
+        cfg.theme_color
             .rem_euclid(color::DECORATIVE_RGBA.len() as i32) as usize,
     );
     set_choice_by_id(

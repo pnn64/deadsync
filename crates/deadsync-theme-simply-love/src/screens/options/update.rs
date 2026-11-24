@@ -213,7 +213,16 @@ pub const fn is_smx_config_view(state: &State) -> bool {
 }
 
 pub fn open_graphics_submenu(state: &mut State) {
+    let restore = (state.split_graphics && state.view == OptionsView::Submenu(SubmenuKind::Graphics))
+        .then_some(state.sub_selected);
     open_submenu_now(state, SubmenuKind::Graphics);
+    state.submenu_parent_kind = submenu_parent_kind_of(state, SubmenuKind::Graphics);
+    if let Some(selected) = restore {
+        let last = submenu_total_rows(state, SubmenuKind::Graphics).saturating_sub(1);
+        let selected = selected.min(last);
+        state.sub_selected = selected;
+        state.sub_prev_selected = selected;
+    }
 }
 
 fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
@@ -255,7 +264,7 @@ pub(super) fn sync_smx_assignment(state: &mut State, view: &SmxAssignmentView) {
         return;
     }
     state.smx_assignment.clone_from(view);
-    state.smx_assignment_status = smx_assignment_status(view);
+    state.smx_assignment_status = Arc::from(smx_assignment_status(view));
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
         SMX_CONFIG_OPTIONS_ROWS,
@@ -319,17 +328,16 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
 
     let mut pending_action: Option<ThemeEffect> = None;
     // ------------------------- local submenu fade ------------------------- //
+    if state.submenu_transition != SubmenuTransition::None {
+        let duration = state.page_transition_seconds();
+        let step = if duration > 0.0 { dt / duration } else { 1.0 };
+        state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
+    }
     match state.submenu_transition {
         SubmenuTransition::None => {
             state.content_alpha = 1.0;
         }
         SubmenuTransition::FadeOutToSubmenu => {
-            let step = if SUBMENU_FADE_DURATION > 0.0 {
-                dt / SUBMENU_FADE_DURATION
-            } else {
-                1.0
-            };
-            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
             state.content_alpha = 1.0 - state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
                 // Apply deferred settings before leaving the submenu.
@@ -342,10 +350,23 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 }
                 // Switch view to the target submenu, then fade it in.
                 let target_kind = state.pending_submenu_kind.unwrap_or(SubmenuKind::System);
+                let returning_to_basic = target_kind == SubmenuKind::GraphicsBasic
+                    && state.view == OptionsView::Submenu(SubmenuKind::Graphics);
                 state.view = OptionsView::Submenu(target_kind);
                 state.pending_submenu_kind = None;
                 state.submenu_parent_kind = state.pending_submenu_parent_kind.take();
-                let landing = search::take_jump_row(state, target_kind).unwrap_or(0);
+                let landing = search::take_jump_row(state, target_kind).unwrap_or_else(|| {
+                    if returning_to_basic {
+                        cached_submenu_visible_rows(state, target_kind)
+                            .iter()
+                            .position(|&index| {
+                                GRAPHICS_OPTIONS_ROWS[index].id == SubRowId::AdvancedGraphics
+                            })
+                            .unwrap_or(0)
+                    } else {
+                        0
+                    }
+                });
                 state.sub_selected = landing;
                 state.sub_prev_selected = landing;
                 state.sub_inline_x = f32::NAN;
@@ -363,12 +384,6 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
             }
         }
         SubmenuTransition::FadeInSubmenu => {
-            let step = if SUBMENU_FADE_DURATION > 0.0 {
-                dt / SUBMENU_FADE_DURATION
-            } else {
-                1.0
-            };
-            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
             state.content_alpha = state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
                 state.submenu_transition = SubmenuTransition::None;
@@ -378,7 +393,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
         }
         SubmenuTransition::FadeOutToMain => {
             let leaving_graphics =
-                matches!(state.view, OptionsView::Submenu(SubmenuKind::Graphics));
+                matches!(state.view, OptionsView::Submenu(kind) if kind.is_graphics());
             let (
                 desired_renderer,
                 desired_display_mode,
@@ -418,12 +433,6 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
             let refresh_rate_change = leaving_graphics
                 .then(|| selected_refresh_rate_millihertz(state))
                 .filter(|rate| *rate != state.refresh_rate_at_load);
-            let step = if SUBMENU_FADE_DURATION > 0.0 {
-                dt / SUBMENU_FADE_DURATION
-            } else {
-                1.0
-            };
-            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
             state.content_alpha = 1.0 - state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
                 // Return to the main options list and fade it in.
@@ -540,12 +549,6 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
             }
         }
         SubmenuTransition::FadeInMain => {
-            let step = if SUBMENU_FADE_DURATION > 0.0 {
-                dt / SUBMENU_FADE_DURATION
-            } else {
-                1.0
-            };
-            state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
             state.content_alpha = state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
                 state.submenu_transition = SubmenuTransition::None;

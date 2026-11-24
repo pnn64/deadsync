@@ -64,6 +64,16 @@ use image::{AnimationDecoder, RgbaImage};
 
 use crate::panels::{LEDS_PER_PANEL, PANELS};
 
+/// Maps a chart's file difficulty to its tag in a results GIF filename.
+/// Unknown difficulties use the `medium` tag.
+#[must_use]
+pub fn difficulty_tag(difficulty: &str) -> &'static str {
+    ["beginner", "easy", "medium", "hard", "challenge", "edit"]
+        .into_iter()
+        .find(|tag| tag.eq_ignore_ascii_case(difficulty))
+        .unwrap_or("medium")
+}
+
 /// RGB bytes for one panel's LEDs in the 25-LED layout.
 pub const PANEL_RGB_BYTES: usize = LEDS_PER_PANEL * 3;
 
@@ -1213,6 +1223,23 @@ fn visit_pack(dir: &Path, pack: &str, visit: &mut impl FnMut(&str, &Path)) {
 mod tests {
     use super::*;
     use image::Rgba;
+
+    #[test]
+    fn difficulty_gif_tag_uses_the_file_difficulty() {
+        for (file_difficulty, tag) in [
+            ("Beginner", "beginner"),
+            ("Easy", "easy"),
+            ("Medium", "medium"),
+            ("Hard", "hard"),
+            ("Challenge", "challenge"),
+            ("Edit", "edit"),
+            ("hard", "hard"),
+            ("EDIT", "edit"),
+            ("Unknown", "medium"),
+        ] {
+            assert_eq!(difficulty_tag(file_difficulty), tag);
+        }
+    }
 
     // Pixel sampling (pure, on raw images)
 

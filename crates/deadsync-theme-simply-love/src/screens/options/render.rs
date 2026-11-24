@@ -344,7 +344,7 @@ pub(super) fn description_layout<'a>(
             item,
             s,
             &state.app_paths,
-            state.smx_assignment_status.as_str(),
+            state.smx_assignment_status.as_ref(),
             golf_features_enabled(state),
         );
         *state.description_layout_cache.borrow_mut() = Some(layout);
@@ -531,23 +531,40 @@ pub fn push_actors(
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
+    push_actors_with_layout(actors, state, asset_manager, alpha_multiplier, visual_policy, None);
+}
+
+pub fn push_actors_with_layout(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    renderer: Option<deadsync_theme::views::SystemOptionsRenderer<'_, Actor>>,
+) {
     actors.reserve(320);
-    let is_fading_submenu = !matches!(state.submenu_transition, SubmenuTransition::None);
 
     /* -------------------------- HEART BACKGROUND -------------------------- */
-    state.bg.push(
-        actors,
-        visual_style_bg::Params {
-            active_color_index: state.active_color_index, // <-- CHANGED
-            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
-            // Keep hearts always visible for actor-only fades (Options/Menu/Mappings);
-            // local submenu fades are handled via content_alpha on UI actors only.
-            alpha_mul: 1.0,
-            visual_policy,
-        },
-    );
+    if let Some(renderer) = &renderer {
+        (renderer.background)(actors);
+    } else {
+        state.bg.push(
+            actors,
+            visual_style_bg::Params {
+                active_color_index: state.active_color_index, // <-- CHANGED
+                backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+                // Keep hearts always visible for actor-only fades (Options/Menu/Mappings);
+                // local submenu fades are handled via content_alpha on UI actors only.
+                alpha_mul: 1.0,
+                visual_policy,
+            },
+        );
+    }
 
-    if alpha_multiplier <= 0.0 {
+    let page_transition = renderer.as_ref().is_some_and(|renderer| {
+        !matches!(renderer.phase, deadsync_theme::views::SystemOptionsPhase::Steady)
+    });
+    if alpha_multiplier <= 0.0 && !page_transition {
         return;
     }
 
@@ -612,12 +629,86 @@ pub fn push_actors(
         return;
     }
 
-    let ui_start = actors.len();
+    let mut ui_start = actors.len();
+    if let Some(renderer) = renderer {
+        super::page_view::push_page(actors, state, asset_manager, renderer.page, renderer.phase);
+        if !page_transition {
+            for actor in &mut actors[ui_start..] {
+                actor.mul_alpha(alpha_multiplier);
+            }
+        }
+        ui_start = actors.len();
+        search::push_hint(actors, state);
+    } else {
+        push_legacy_page(actors, state, asset_manager, visual_policy);
+    }
+    if state.score_import_pack_picker.is_some() {
+        push_score_import_pack_picker_actors(
+            actors,
+            state,
+            state.active_color_index,
+            visual_policy.machine_font,
+        );
+    }
+    if let Some(confirm) = &state.score_import_confirm {
+        push_yes_no_confirm_overlay(
+            actors,
+            &confirm.prompt,
+            confirm.active_choice,
+            state.active_color_index,
+            visual_policy.machine_font,
+        );
+    }
+    if let Some(confirm) = &state.sync_pack_confirm {
+        push_yes_no_confirm_overlay(
+            actors,
+            &confirm.prompt,
+            confirm.active_choice,
+            state.active_color_index,
+            visual_policy.machine_font,
+        );
+    }
 
+    let combined_alpha = alpha_multiplier * state.content_alpha;
+    push_twitch_channel_entry(actors, state);
+    for actor in &mut actors[ui_start..] {
+        actor.mul_alpha(combined_alpha);
+    }
+    // The search overlay stays opaque while the page under it fades.
+    let search_start = actors.len();
+    search::push_overlay(actors, state);
+    for actor in &mut actors[search_start..] {
+        actor.mul_alpha(alpha_multiplier);
+    }
+
+    crate::screens::components::shared::update_overlay::push(
+        actors,
+        state.update_panel.as_ref(),
+        state.active_color_index,
+    );
+    crate::screens::components::shared::ffmpeg_overlay::push(
+        actors,
+        state.ffmpeg_panel.as_ref(),
+        state.active_color_index,
+    );
+    crate::screens::components::shared::update_overlay::push(
+        actors,
+        state.workshop_panel.as_ref(),
+        state.active_color_index,
+    );
+}
+
+fn push_legacy_page(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
+    let is_fading_submenu = !matches!(state.submenu_transition, SubmenuTransition::None);
     /* ------------------------------ TOP BAR ------------------------------- */
     let title_text = match state.view {
         OptionsView::Main => "OPTIONS",
-        OptionsView::Submenu(kind) => submenu_title(kind),
+        OptionsView::Submenu(kind) => submenu_title(state, kind),
     };
     actors.push(top_bar_actor(state, title_text, visual_policy));
     search::push_hint(actors, state);
@@ -1048,32 +1139,11 @@ pub fn push_actors(
                                 .copied()
                                 .unwrap_or(0)
                                 .min(layout.texts.len().saturating_sub(1));
-                            let is_chart_info_row = matches!(kind, SubmenuKind::SelectMusic)
-                                && row.id == SubRowId::ChartInfo;
-                            let is_scorebox_boards_row = matches!(kind, SubmenuKind::GrooveStats)
-                                && row.id == SubRowId::GrooveStatsScoreboxBoards;
-                            let is_auto_screenshot_row = matches!(kind, SubmenuKind::Gameplay)
-                                && row.id == SubRowId::AutoScreenshot;
                             let is_color_choice_row = matches!(kind, SubmenuKind::Machine)
                                 && row.id == SubRowId::PreferredColor;
-                            let is_multi_toggle_row = is_chart_info_row
-                                || is_scorebox_boards_row
-                                || is_auto_screenshot_row;
-                            let chart_info_enabled_mask = if is_chart_info_row {
-                                select_music_chart_info_enabled_mask(state)
-                            } else {
-                                0
-                            };
-                            let scorebox_enabled_mask = if is_scorebox_boards_row {
-                                groovestats_scorebox_enabled_mask(state)
-                            } else {
-                                0
-                            };
-                            let auto_screenshot_mask = if is_auto_screenshot_row {
-                                auto_screenshot_enabled_mask(state)
-                            } else {
-                                0
-                            };
+                            let enabled_choices = super::page_view::enabled_choice_bits(
+                                state, kind, row.id, layout.texts.len(),
+                            );
                             let mut selected_left_x: Option<f32> = None;
                             let choice_inner_left =
                                 SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
@@ -1086,25 +1156,10 @@ pub fn push_actors(
                                     if is_choice_selected {
                                         selected_left_x = Some(x);
                                     }
-                                    let is_choice_enabled = if is_chart_info_row {
-                                        (chart_info_enabled_mask
-                                            & select_music_chart_info_bit_from_choice(idx))
-                                            != 0
-                                    } else if is_scorebox_boards_row {
-                                        (scorebox_enabled_mask
-                                            & groovestats_scorebox_bit_from_choice(idx))
-                                            != 0
-                                    } else if is_auto_screenshot_row {
-                                        (auto_screenshot_mask
-                                            & auto_screenshot_bit_from_choice(idx))
-                                            != 0
-                                    } else {
-                                        false
-                                    };
                                     let mut choice_color = if is_disabled && !is_choice_selected {
                                         sl_gray
-                                    } else if is_multi_toggle_row {
-                                        if is_choice_enabled {
+                                    } else if let Some(enabled) = enabled_choices {
+                                        if idx < u64::BITS as usize && (enabled >> idx) & 1 != 0 {
                                             col_white
                                         } else {
                                             sl_gray
@@ -1176,25 +1231,15 @@ pub fn push_actors(
 
                             // For normal rows, underline the selected option.
                             // For multi-toggle rows, underline each enabled option.
-                            if layout.inline_row && is_multi_toggle_row {
+                            if let Some(enabled) = enabled_choices.filter(|_| layout.inline_row) {
                                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                                 let offset = widescale(3.0, 4.0);
                                 let underline_y = layout.text_h.mul_add(0.5, row_mid_y) + offset;
                                 let mut line_color =
                                     color::decorative_rgba(state.active_color_index);
                                 line_color[3] *= row_alpha;
-                                for idx in 0..layout.texts.len() {
-                                    let enabled = if is_chart_info_row {
-                                        let bit = select_music_chart_info_bit_from_choice(idx);
-                                        bit != 0 && (chart_info_enabled_mask & bit) != 0
-                                    } else if is_scorebox_boards_row {
-                                        let bit = groovestats_scorebox_bit_from_choice(idx);
-                                        bit != 0 && (scorebox_enabled_mask & bit) != 0
-                                    } else {
-                                        let bit = auto_screenshot_bit_from_choice(idx);
-                                        bit != 0 && (auto_screenshot_mask & bit) != 0
-                                    };
-                                    if !enabled {
+                                for idx in 0..layout.texts.len().min(u64::BITS as usize) {
+                                    if (enabled >> idx) & 1 == 0 {
                                         continue;
                                     }
                                     let underline_left_x = choice_inner_left
@@ -1396,60 +1441,7 @@ pub fn push_actors(
             }
         }
     }
-    if state.score_import_pack_picker.is_some() {
-        push_score_import_pack_picker_actors(
-            actors,
-            state,
-            state.active_color_index,
-            visual_policy.machine_font,
-        );
-    }
-    if let Some(confirm) = &state.score_import_confirm {
-        push_yes_no_confirm_overlay(
-            actors,
-            &confirm.prompt,
-            confirm.active_choice,
-            state.active_color_index,
-            visual_policy.machine_font,
-        );
-    }
-    if let Some(confirm) = &state.sync_pack_confirm {
-        push_yes_no_confirm_overlay(
-            actors,
-            &confirm.prompt,
-            confirm.active_choice,
-            state.active_color_index,
-            visual_policy.machine_font,
-        );
-    }
 
-    let combined_alpha = alpha_multiplier * state.content_alpha;
-    push_twitch_channel_entry(actors, state);
-    for actor in &mut actors[ui_start..] {
-        actor.mul_alpha(combined_alpha);
-    }
-    // The search overlay stays opaque while the page under it fades.
-    let search_start = actors.len();
-    search::push_overlay(actors, state);
-    for actor in &mut actors[search_start..] {
-        actor.mul_alpha(alpha_multiplier);
-    }
-
-    crate::screens::components::shared::update_overlay::push(
-        actors,
-        state.update_panel.as_ref(),
-        state.active_color_index,
-    );
-    crate::screens::components::shared::ffmpeg_overlay::push(
-        actors,
-        state.ffmpeg_panel.as_ref(),
-        state.active_color_index,
-    );
-    crate::screens::components::shared::update_overlay::push(
-        actors,
-        state.workshop_panel.as_ref(),
-        state.active_color_index,
-    );
 }
 
 pub fn sync_updater_panels(

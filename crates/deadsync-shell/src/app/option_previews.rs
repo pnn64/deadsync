@@ -5,14 +5,14 @@
 //! survive screen exits; only unneeded entries are evicted while browsing options.
 //! Existing session textures are borrowed and never counted as eviction candidates.
 
-use crate::{ActiveTheme, player_options::PlayerOptionsState};
+use crate::player_options::PlayerOptionsState;
 use deadlib_assets::AssetManager;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
 use deadsync_assets::noteskin::{self, Noteskin, Style};
 use deadsync_noteskin::pack::InstalledPack;
 use deadsync_theme::player_options::{
-    NoteskinPreviewPriority, NoteskinPreviewRequest, ThemePlayerOptions,
+    NoteskinPreviewPriority, NoteskinPreviewRequest,
 };
 use image::RgbaImage;
 use std::collections::{HashMap, HashSet};
@@ -41,14 +41,14 @@ impl Runtime {
             return;
         }
         self.parts = parts;
-        self.textures = ActiveTheme::player_options_noteskin_textures(&self.skin, parts);
+        self.textures = PlayerOptionsState::noteskin_preview_textures(&self.skin, parts);
         self.components.clear();
         for part in 0..11 {
             let bit = 1 << part;
             if parts & bit != 0 {
                 self.components.push((
                     bit,
-                    ActiveTheme::player_options_noteskin_textures(&self.skin, bit)
+                    PlayerOptionsState::noteskin_preview_textures(&self.skin, bit)
                         .into_iter()
                         .map(|(key, _)| key)
                         .collect(),
@@ -124,21 +124,20 @@ impl Service {
         assets: &mut AssetManager,
         backend: &mut Backend,
     ) {
-        let Some(cols) = ActiveTheme::take_player_options_noteskin_requests(state, &mut self.requests)
+        let Some(cols) = state.take_noteskin_requests(&mut self.requests)
         else {
             self.idle();
             return;
         };
         self.update_cache(cols, assets, backend);
-        ActiveTheme::retain_player_options_noteskin_previews(state, &self.requests);
+        state.retain_noteskin_previews(&self.requests);
         for request in &self.requests {
             if request.priority == NoteskinPreviewPriority::Nearby {
                 continue;
             }
             let ready = self.runtimes.get(&request.name);
             let parts = ready.map_or(0, |runtime| runtime.ready_parts(assets));
-            ActiveTheme::set_player_options_noteskin_preview(
-                state,
+            state.set_noteskin_preview(
                 &request.name,
                 parts,
                 ready.map(|runtime| runtime.skin.clone()),
@@ -626,6 +625,7 @@ return Def.Sprite {
             deadlib_assets::AssetManifest {
                 fonts: &[],
                 textures: [deadlib_assets::texture_asset("alternate-tile.png")],
+                embedded_pngs: &[],
                 texture_needs_repeat_sampler: |key| key == "alternate-tile.png",
             },
         )

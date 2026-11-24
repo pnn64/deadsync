@@ -242,6 +242,16 @@ fn unfilter_first_pixels<const N: usize, const HALF: bool>(row: &mut [u8]) {
 }
 
 fn unfilter_first_neighbors<const HALF: bool>(row: &mut [u8], bpp: usize) {
+    #[cfg(target_arch = "x86_64")]
+    if !HALF
+        && match bpp {
+            3 => x86::sub::<3>(row),
+            4 => x86::sub::<4>(row),
+            _ => false,
+        }
+    {
+        return;
+    }
     match bpp {
         1 => unfilter_first_pixels::<1, HALF>(row),
         2 => {

@@ -22,21 +22,24 @@ pub const fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplay
 /// denominators must use only the notes assigned to the participant, just as
 /// song gameplay does.
 #[must_use]
-pub fn course_display_totals_for_chart_side(
+pub(crate) fn course_display_totals_for_chart_side(
     chart: &ChartData,
     payload: &GameplayChartData,
     style: GameplayInputPlayStyle,
     player: usize,
-) -> CourseDisplayTotals {
+) -> (CourseDisplayTotals, u32) {
     if !matches!(
         style,
         GameplayInputPlayStyle::Couple | GameplayInputPlayStyle::PumpCouple
     ) && !style.is_routine()
     {
-        return course_display_totals_for_chart(chart);
+        return (course_display_totals_for_chart(chart), chart.stats.jumps);
     }
     let mut totals = CourseDisplayTotals::default();
     let mut last_step = None;
+    let mut jump_row = None;
+    let mut heads = 0u32;
+    let mut jumps = 0u32;
     for note in &payload.parsed_notes {
         if style.runtime_column(note.column, player).is_none()
             || (style.is_routine() && usize::from(note.player) != player)
@@ -58,6 +61,14 @@ pub fn course_display_totals_for_chart_side(
             NoteType::Roll => totals.rolls_total += 1,
             _ => {}
         }
+        if matches!(note.note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll) {
+            if jump_row != Some(note.row_index) {
+                jump_row = Some(note.row_index);
+                heads = 0;
+            }
+            heads += 1;
+            jumps += u32::from(heads == 2);
+        }
         if last_step != Some(note.row_index) {
             totals.total_steps += 1;
             last_step = Some(note.row_index);
@@ -69,7 +80,7 @@ pub fn course_display_totals_for_chart_side(
         totals.rolls_total,
         0,
     );
-    totals
+    (totals, jumps)
 }
 
 #[must_use]

@@ -66,6 +66,11 @@ fn fixture(root: &std::path::Path, name: &str, pump: bool) -> Arc<SongData> {
 }
 
 pub(super) fn test_app(root: &std::path::Path) -> App {
+    test_app_with_theme(root, config::theme::ThemeFlag::SimplyLove)
+}
+
+pub(super) fn test_app_with_theme(root: &std::path::Path, theme_flag: config::theme::ThemeFlag) -> App {
+    crate::tests::init_paths();
     let dirs = AppDirs {
         data_dir: root.join("data"),
         cache_dir: root.join("cache"),
@@ -78,6 +83,7 @@ pub(super) fn test_app(root: &std::path::Path) -> App {
     dirs.ensure_dirs_exist();
     let cfg = config::app_config::Config {
         video_renderer: BackendType::Software,
+        theme_flag,
         ..Default::default()
     };
     App::new(
@@ -90,6 +96,7 @@ pub(super) fn test_app(root: &std::path::Path) -> App {
         deadsync_audio_stream::AudioControl::without_audio(),
         deadsync_audio_stream::MusicClock::without_audio(),
         None,
+        crate::theme_registry::mount(theme_flag),
     )
 }
 
@@ -200,19 +207,43 @@ fn press_course_start(app: &mut App) {
     let mut effects = effects.into_iter();
     assert!(matches!(
         effects.next(),
-        Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+        Some(ThemeEffect::Runtime(RuntimeRequest::Audio(
             AudioRequest::PlaySfx("assets/sounds/start.ogg")
         )))
     ));
-    let Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::CourseLaunch(request))) = effects.next()
+    let Some(ThemeEffect::Runtime(RuntimeRequest::CourseLaunch(request))) = effects.next()
     else {
         panic!("course Start should signal launch intent");
     };
     assert!(effects.next().is_none());
     app.request_stage_launch(
-        ActiveTheme::SCREENS.course_selection,
+        CurrentScreen::SelectCourse,
         request.map_selection(StageSelection::Course),
     );
+}
+
+#[test]
+fn openitg_course_wheel_draws_the_prepared_rating_and_tracklist() {
+    on_app_thread(|| {
+        let root = tempfile::tempdir().unwrap();
+        let mut app = test_app_with_theme(root.path(), config::theme::ThemeFlag::OpenItg);
+        let (_, first_song, second_song) = prepare_course_wheel(&mut app, root.path(), false);
+        app.state.screens.current_screen = CurrentScreen::SelectCourse;
+        app.state.shell.transition = TransitionState::Idle;
+        let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+        let has_text = |label: &str| {
+            actors.iter().any(|actor| matches!(actor,
+                Actor::Text { content, .. } if content.as_str() == label
+            ))
+        };
+        let view = select_course::select_course_view(&app.state.screens.select_course_state, None);
+        let course = view.item.expect("prepared course");
+        assert!(has_text("PICK A COURSE"));
+        assert_eq!(course.title, "PR845 transition");
+        assert!(has_text(course.rating.expect("prepared rating")));
+        assert!(has_text(&first_song.title));
+        assert!(has_text(&second_song.title));
+    });
 }
 
 #[test]
@@ -260,7 +291,7 @@ fn course_launch_uses_confirmed_rating_after_wheel_replacement() {
                     assert!(course.endless_source.is_some());
                     if options {
                         let options = app.state.screens.player_options_state.as_ref().unwrap();
-                        assert!(Arc::ptr_eq(&options.song, &first_song));
+                        assert!(Arc::ptr_eq(options.selection().song, &first_song));
                     } else {
                         finish_pending_stage(&mut app);
                         let gameplay = app.state.screens.gameplay_state.as_ref().unwrap();
@@ -277,8 +308,14 @@ fn course_launch_uses_confirmed_rating_after_wheel_replacement() {
 #[test]
 fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
     on_app_thread(|| {
+        use config::theme::ThemeFlag;
+
         for pump in [false, true] {
-            for failure in ["payload", "plan", "cursor"] {
+            for (failure, theme) in [
+                ("payload", ThemeFlag::SimplyLove),
+                ("plan", ThemeFlag::OpenItg),
+                ("cursor", ThemeFlag::SimplyLove),
+            ] {
                 let style = if pump {
                     profile_data::PlayStyle::PumpRoutine
                 } else {
@@ -289,7 +326,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         .prefix(&format!("pr845-transition-failure-{pump}-{failure}-"))
                         .tempdir()
                         .unwrap();
-                    let mut app = test_app(root.path());
+                    let mut app = test_app_with_theme(root.path(), theme);
                     let b = prepare_boundary(&mut app, root.path(), pump);
                     match failure {
                         // The run retains B's metadata, but its payload load fails.
@@ -334,13 +371,44 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     assert!(app.state.screens.course_evaluation.stages.is_empty());
                     assert_eq!(app.state.screens.course_evaluation.pages.len(), 2);
                     assert_eq!(app.state.screens.evaluation_origin, EvaluationOrigin::Course);
+                    app.state.screens.evaluation_state.screen_elapsed = 3.0;
+                    let clocks = ActiveTheme::evaluation_elapsed_times(&app.state.screens.evaluation_state);
                     app.step_course_eval_page(-1);
+                    assert_eq!(app.state.screens.evaluation_state.screen_elapsed, 3.0);
+                    assert_eq!(ActiveTheme::evaluation_elapsed_times(&app.state.screens.evaluation_state), clocks);
                     assert_eq!(
                         app.state.screens.evaluation_state.score_info[0].as_ref().unwrap().song.title,
                         "A",
                     );
                     let completed_song = Arc::clone(&app.state.session.played_stages[0].song);
-                    app.state.screens.evaluation_state.score_info = [None, None];
+                    assert!(Arc::ptr_eq(
+                        &app.state.screens.course_evaluation.pages[1].view.score_info,
+                        &app.state.screens.evaluation_state.score_info,
+                    ));
+                    app.state.screens.evaluation_state.score_info = Arc::new([None, None]);
+                    if theme != ThemeFlag::SimplyLove {
+                        let page = app.state.screens.evaluation_overview.as_ref().expect("mounted song overview");
+                        let view = page.view(&app.asset_manager, false, 5.0, None);
+                        assert_eq!(view.title.as_ref(), "A");
+                        assert!(view.players[0].is_some());
+                    }
+                    let stage = app.state.screens.evaluation_stage.as_ref().unwrap();
+                    let first = stage.players().next().unwrap();
+                    let title = screenshot::current_song_title(&app.state).unwrap();
+                    assert_eq!(title.title, completed_song.title);
+                    assert_eq!(title.meter, Some(first.chart.meter));
+                    let lit_player = stage.players().min_by_key(|player| player.grade.to_sprite_state()).unwrap();
+                    let lighting = crate::lighting::smx_result_context(CurrentScreen::Evaluation, Some(stage));
+                    assert_eq!(lighting.grade, Some(lit_player.grade));
+                    assert_eq!(lighting.difficulty, Some(deadsync_smx::gifs::difficulty_tag(&lit_player.chart.difficulty)));
+
+                    let screenshot_mask = config::theme::AUTO_SS_FAILS | config::theme::AUTO_SS_CLEARS;
+                    app.state.screens.evaluation_state.screen_elapsed = 10.0;
+                    app.update_evaluation_capture(screenshot_mask);
+                    assert_eq!(app.state.shell.screenshot.take_pending_request(), Some(None));
+                    app.update_evaluation_capture(screenshot_mask);
+                    assert!(!app.state.shell.screenshot.pending());
+
                     let side = profile_data::PlayerSide::P2;
                     let chart_hash = app.state.session.played_stages[0].players[1]
                         .as_ref().unwrap().chart.short_hash.clone();
@@ -370,6 +438,18 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     assert_eq!(practice.return_screen, CurrentScreen::Practice);
                     assert_eq!(practice.options, restart.options);
                     app.step_course_eval_page(1);
+                    if theme != ThemeFlag::SimplyLove {
+                        let page = app.state.screens.evaluation_overview.as_ref().expect("mounted course overview");
+                        let view = page.view(&app.asset_manager, false, 5.0, None);
+                        assert!(view.course_summary);
+                        assert_eq!(view.title.as_ref(), "PR845 transition");
+                        let first = view.players[0].as_ref().expect("P1's Routine result");
+                        let second = view.players[1].as_ref().expect("P2's Routine result");
+                        assert_eq!(first.percent, second.percent);
+                        assert_eq!(first.grade, second.grade);
+                        assert!(first.individual_percent.is_some());
+                        assert!(second.individual_percent.is_some());
+                    }
                     assert_eq!(
                         app.state.screens.evaluation_state.score_info[0].as_ref().unwrap().song.title,
                         "PR845 transition",
@@ -386,12 +466,14 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         Some(root.path().join("endless.crs").as_path())
                     );
                     app.state.shell.transition = TransitionState::Idle;
+                    app.state.screens.evaluation_state.screen_elapsed = 5.0;
                     app.leave_evaluation();
                     assert!(matches!(
                         app.state.shell.transition,
                         TransitionState::FadingOut { target: CurrentScreen::SelectCourse, .. }
                             | TransitionState::ActorsFadeOut { target: CurrentScreen::SelectCourse, .. }
                     ));
+                    assert_eq!(app.state.screens.evaluation_departure.is_some(), theme != ThemeFlag::SimplyLove);
                 });
             }
         }

@@ -1464,7 +1464,10 @@ dependencies = [
  "deadsync-shell",
  "deadsync-simfile",
  "deadsync-song-lua",
+ "deadsync-theme",
+ "deadsync-theme-openitg",
  "deadsync-theme-simply-love",
+ "deadsync-theme-stepmania-395",
  "deadsync-updater",
  "deadsync-version",
  "fs_extra",
@@ -1838,6 +1841,7 @@ dependencies = [
  "deadsync-smx",
  "deadsync-song-lua",
  "deadsync-theme",
+ "deadsync-theme-openitg",
  "deadsync-theme-simply-love",
  "deadsync-updater",
  "hashbrown 0.17.1",
@@ -1876,7 +1880,9 @@ dependencies = [
  "rustc-hash 2.1.3",
  "serde",
  "smallvec",
+ "strsim",
  "twox-hash",
+ "unicode-normalization",
 ]
 
 [[package]]
@@ -1940,10 +1946,35 @@ name = "deadsync-theme"
 version = "0.1.0"
 dependencies = [
  "deadlib-assets",
+ "deadlib-input-native",
+ "deadlib-platform",
  "deadsync-chart",
+ "deadsync-config",
  "deadsync-core",
+ "deadsync-gameplay",
+ "deadsync-input",
+ "deadsync-online",
+ "deadsync-profile",
+ "deadsync-profile-gameplay",
  "deadsync-rules",
  "deadsync-score",
+ "deadsync-simfile",
+ "deadsync-smx",
+]
+
+[[package]]
+name = "deadsync-theme-openitg"
+version = "0.6.177"
+dependencies = [
+ "deadlib-assets",
+ "deadlib-platform",
+ "deadlib-present",
+ "deadsync-config",
+ "deadsync-core",
+ "deadsync-input",
+ "deadsync-rules",
+ "deadsync-theme",
+ "glam",
 ]
 
 [[package]]
@@ -1989,11 +2020,26 @@ dependencies = [
  "rustc-hash 2.1.3",
  "serde_json",
  "smallvec",
- "strsim",
  "tempfile",
  "twox-hash",
- "unicode-normalization",
  "winit",
+]
+
+[[package]]
+name = "deadsync-theme-stepmania-395"
+version = "0.6.177"
+dependencies = [
+ "deadlib-assets",
+ "deadlib-platform",
+ "deadlib-present",
+ "deadsync-config",
+ "deadsync-core",
+ "deadsync-input",
+ "deadsync-noteskin",
+ "deadsync-theme",
+ "image",
+ "roxmltree",
+ "tempfile",
 ]
 
 [[package]]

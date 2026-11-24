@@ -57,12 +57,14 @@ fn attach_part(
     append(call, parent, child)
 }
 
-fn texture(call: &mut HostCall<'_>, actor: TableId, value: Value) -> Result<(), Error> {
+fn load_texture(call: &mut HostCall<'_>, actor: TableId, value: Value) -> Result<(), Error> {
     let path = assets::text(call, value)?;
     let path = path.trim();
     if !path.is_empty() {
         let value = call.try_intern(path.as_bytes())?;
         sprites::set_texture(call, actor, value, false)?;
+        // The native Sprite was constructed before binding its texture.
+        sprite_animation::load(call, actor, false)?;
     }
     Ok(())
 }
@@ -90,8 +92,12 @@ fn judgment(
         Value::Number(index as f64),
     )?;
     let path = field(call, player, "__songlua_judgment_texture")?;
-    if path != Value::Nil {
-        texture(call, sprite, path)?;
+    if path == Value::Nil {
+        // The compatibility actor still exposes logical tap states when the
+        // renderer owns the judgment graphic or the graphic is disabled.
+        call.store().actors.get_mut(&sprite).unwrap().sprite_animation = None;
+    } else {
+        load_texture(call, sprite, path)?;
     }
     append(call, frame, sprite)?;
     native_children::insert(call, frame, "JudgmentWithOffsets", Value::Table(sprite))?;
@@ -209,7 +215,7 @@ fn hold_judgments(
                     Value::Boolean(false),
                 )?;
                 let path = call.try_intern(path.as_bytes())?;
-                texture(call, sprite, path)?;
+                load_texture(call, sprite, path)?;
                 let alpha = field(call, sprite, "diffusealpha")?;
                 if !matches!(alpha, Value::Function(_) | Value::Native(_)) {
                     return Err(call.error(b"diffusealpha function expected"));

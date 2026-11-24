@@ -1,4 +1,4 @@
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme::Screen as Screen;
 use log::trace;
 use std::time::{Duration, Instant};
 

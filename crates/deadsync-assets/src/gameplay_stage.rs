@@ -208,6 +208,14 @@ impl GameplayStageAssets {
 }
 
 impl PreparedGameplayStage {
+    /// Apply optional graph geometry before the stage is presented or run.
+    pub fn configure_density_graph(
+        &mut self,
+        layout: impl FnOnce(&GameplayCoreState) -> deadsync_gameplay::DensityGraphLayout,
+    ) {
+        self.gameplay.configure_density_graph(layout(&self.gameplay));
+    }
+
     /// Present the prepared stage, then attach its live callbacks before returning the host.
     pub fn into_host<L, P>(
         self,

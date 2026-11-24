@@ -41,6 +41,10 @@ use deadsync_simfile::course_selection::{
     CourseChoice, EndlessCourseSource, PreparedCourseCatalog, course_song_stub,
 };
 use deadsync_theme::FontRole;
+use deadsync_theme::select_music::{
+    SELECT_COURSE_TRACK_ROWS, SelectCourseItem, SelectCourseTrack, SelectCourseView,
+    SelectMusicPrompt,
+};
 use deadsync_theme::views::CoursePresentationView;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -657,7 +661,8 @@ fn rebuild_displayed_entries(state: &mut State) {
                         && (state.context.policy.show_most_played_courses
                             || !meta.has_most_played_entries)
                 }),
-            _ => true,
+            MusicWheelEntry::PackHeader { .. } => true,
+            MusicWheelEntry::Random(_) => false,
         };
         if include {
             state.entries.push(entry.clone());
@@ -734,7 +739,7 @@ fn sync_course_selection(state: &mut State) {
         .get(state.selected_index)
         .and_then(|entry| match entry {
             MusicWheelEntry::Song(song) => state.course_meta_by_path.get(&song.simfile_path),
-            MusicWheelEntry::PackHeader { .. } => None,
+            MusicWheelEntry::PackHeader { .. } | MusicWheelEntry::Random(_) => None,
         })
         .cloned();
     let rating_index = meta
@@ -909,7 +914,7 @@ fn selected_banner_path(state: &State) -> Option<&Path> {
     match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(song)) => song.banner_path.as_deref(),
         Some(MusicWheelEntry::PackHeader { banner_path, .. }) => banner_path.as_deref(),
-        None => None,
+        Some(MusicWheelEntry::Random(_)) | None => None,
     }
 }
 
@@ -1847,6 +1852,76 @@ pub fn sync_runtime_view(state: &mut State, view: SelectCourseRuntimeView) {
     }
 }
 
+/// Borrow the active wheel window, selected rating, and prepared records.
+pub fn select_course_view<'a>(
+    state: &'a State,
+    loaded_banner: Option<&'a Arc<str>>,
+) -> SelectCourseView<'a> {
+    let rows = super::select_music::select_wheel_rows(
+        &state.entries,
+        state.selected_index,
+        state.music_wheel.translated_titles,
+        |_| false,
+    );
+    let item = selected_course_meta(state).map(|meta| {
+        let rating = selected_course_rating(state, meta);
+        let entries = rating.map_or(&[][..], |rating| rating.entries.as_slice());
+        let (start, _, _) = course_tracklist_scroll(
+            entries.len(),
+            SELECT_COURSE_TRACK_ROWS,
+            state.session_elapsed,
+        );
+        let summary = &state.summary_text;
+        SelectCourseItem {
+            title: &meta.name,
+            author: &meta.scripter,
+            description: &summary.description,
+            songs: &summary.songs,
+            bpm: &summary.bpm,
+            length: &summary.length,
+            rating: rating.map(|rating| rating.course_stepchart_label.as_str()),
+            can_change_rating: selected_course_has_multiple_ratings(state),
+            rating_focused: matches!(state.three_key_focus, ThreeKeyFocus::Rating),
+            tracks: std::array::from_fn(|slot| {
+                entries.get(start + slot).map(|entry| SelectCourseTrack {
+                    title: &entry.title,
+                    meter: &entry.meter_text,
+                })
+            }),
+            machine_record: state.score_view.machine_score_percent.map(|_| {
+                [
+                    state.score_text.machine_name.as_ref(),
+                    state.score_text.machine_score.as_ref(),
+                ]
+            }),
+            player_record: state.score_view.player_score_percent.map(|_| {
+                [
+                    state.score_text.player_name.as_ref(),
+                    state.score_text.player_score.as_ref(),
+                ]
+            }),
+        }
+    });
+    SelectCourseView {
+        rows,
+        wheel_offset: state.wheel_offset_from_selection,
+        selection_beat: course_selection_anim_beat(state),
+        item,
+        banner_texture: loaded_banner
+            .filter(|key| key.as_ref() == state.current_banner_key.as_ref()),
+        player_names: state
+            .players
+            .each_ref()
+            .map(|player| player.joined.then_some(player.display_name.as_str())),
+        music_rate: state.context.music_rate,
+        prompt: match state.launch_prompt {
+            StageLaunchPrompt::Hidden => SelectMusicPrompt::Hidden,
+            StageLaunchPrompt::OfferOptions => SelectMusicPrompt::OfferOptions,
+            StageLaunchPrompt::EnteringOptions => SelectMusicPrompt::EnteringOptions,
+        },
+    }
+}
+
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
@@ -2349,6 +2424,15 @@ pub fn push_actors(
         }
     }
 
+    push_exit_prompt(actors, state, visual_policy);
+}
+
+/// The existing confirmation remains available over alternate course layouts.
+pub fn push_exit_prompt(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
     if let ExitPromptState::Active {
         elapsed,
         active_choice,

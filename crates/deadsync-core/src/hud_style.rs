@@ -209,6 +209,43 @@ pub struct ErrorBarStyle {
     pub average_z: i16,
 }
 
+/// Tap animation metrics supplied by the theme for its default graphic.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TapFeedbackTween {
+    pub initial_scale: [f32; 2],
+    pub settle_s: f32,
+    pub shrink_start_s: f32,
+    pub end_s: f32,
+}
+
+/// Presentation for the theme's default hold result atlas.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HoldFeedbackStyle {
+    pub initial_zoom: f32,
+    pub final_zoom: f32,
+    pub release_rotation_deg: f32,
+    pub show_missed_head: bool,
+}
+
+/// Optional feedback-only layout, independent of receptors and auxiliary HUD.
+/// Pairs are ordered normal, reverse. Centered offsets are additive.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FieldFeedbackStyle {
+    pub judgment_y: [f32; 2],
+    pub judgment_centered_add: [f32; 2],
+    pub combo_y: [f32; 2],
+    pub combo_centered_add: [f32; 2],
+    pub combo_label: &'static str,
+    pub combo_label_font: &'static str,
+    pub combo_label_y: f32,
+    pub combo_number_zoom: f32,
+    pub combo_number_zoom_step: f32,
+    pub combo_number_zoom_limit: u32,
+    pub combo_label_zoom: f32,
+    pub combo_pulse_duration: f32,
+    pub combo_pulse_scale: f32,
+}
+
 /// Theme-owned HUD and guide appearance around the canonical notefield.
 ///
 /// Field placement, receptor anchors, note/hold layers, mine geometry, and
@@ -216,6 +253,7 @@ pub struct ErrorBarStyle {
 /// style feedback without changing the field's geometry or note ordering.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct NotefieldHudStyle {
+    pub field_feedback: Option<&'static FieldFeedbackStyle>,
     pub judgment_normal_y: f32,
     pub judgment_reverse_y: f32,
     pub combo_normal_y: f32,
@@ -251,6 +289,7 @@ mod tests {
     #[allow(clippy::approx_constant)]
     fn hud_style_is_a_plain_metric_contract() {
         let style = NotefieldHudStyle {
+            field_feedback: None,
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
             combo_normal_y: 30.0,

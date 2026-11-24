@@ -13,6 +13,7 @@ const fn rgba8(r: u8, g: u8, b: u8) -> [f32; 4] {
 }
 
 pub const SIMPLY_LOVE_HUD_STYLE: NotefieldHudStyle = NotefieldHudStyle {
+    field_feedback: None,
     judgment_normal_y: -30.0,
     judgment_reverse_y: 30.0,
     combo_normal_y: 30.0,

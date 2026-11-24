@@ -34,7 +34,6 @@ mod runtime_regression_tests {
         target_score: GameplayTargetScoreSetting,
         target_score_kind: GameplayTargetScoreKind,
         target_score_miss_policy: GameplayTargetScoreMissPolicy,
-        density_graph: bool,
         golf_enabled: bool,
         combo_milestones_enabled: bool,
     }
@@ -61,7 +60,6 @@ mod runtime_regression_tests {
                 target_score: GameplayTargetScoreSetting::default(),
                 target_score_kind: GameplayTargetScoreKind::Itg,
                 target_score_miss_policy: GameplayTargetScoreMissPolicy::Nothing,
-                density_graph: false,
                 golf_enabled: false,
                 combo_milestones_enabled: true,
             }
@@ -177,10 +175,6 @@ mod runtime_regression_tests {
             None
         }
 
-        fn step_statistics_density_graph(&self) -> bool {
-            self.density_graph
-        }
-
         fn note_field_offset_x(&self) -> f32 {
             0.0
         }
@@ -222,10 +216,6 @@ mod runtime_regression_tests {
         }
 
         fn crossover_cue_brackets(&self) -> bool {
-            false
-        }
-
-        fn nps_graph_at_top(&self) -> bool {
             false
         }
 
@@ -1691,8 +1681,15 @@ mod runtime_regression_tests {
             long_average_enabled: true,
             ..GameplayErrorBarOptions::default()
         };
-        profiles[0].density_graph = true;
-        let state = regression_state_with_profiles(profiles);
+        let mut state = regression_state_with_profiles(profiles);
+        assert_eq!(state.display.density_graph.life_points[0].capacity(), 0);
+        state.configure_density_graph(DensityGraphLayout {
+            width: 400.0,
+            height: 100.0,
+            visible_seconds: 240.0,
+            cursor_fraction: 0.25,
+            ..DensityGraphLayout::default()
+        });
         let note_range = state.chart_runtime.note_ranges.range(0);
         let row_range = state.chart_runtime.row_indices.row_entry_ranges[0];
         let note_count = note_range.1 - note_range.0;
@@ -4106,6 +4103,7 @@ mod runtime_regression_tests {
         state.chart_runtime.row_indices.judged_row_cursor = [0; MAX_PLAYERS];
         state.clock.song_position.current_music_time_ns = song_time_ns_from_seconds(1.096);
         state.boundary.total_elapsed_in_screen = 12.0;
+        state.players_runtime.players[0].stage_life_record.steps_seconds = 0.625;
 
         state.set_final_note_result(
             0,
@@ -4158,6 +4156,10 @@ mod runtime_regression_tests {
             .expect("row-final judgment should update the judgment sprite");
         assert_eq!(last.judgment.grade, JudgeGrade::Decent);
         assert_eq!(last.judgment.time_error_ms, 96.0);
+        assert_eq!(
+            state.players_runtime.players[0].life_judgment_times.thresholds(),
+            [0.625; 3],
+        );
         assert_eq!(last.started_at_screen_s, 12.0);
     }
 
@@ -4704,6 +4706,7 @@ mod runtime_regression_tests {
             Some(HoldJudgmentRenderInfo {
                 result: HoldResult::Held,
                 started_at_screen_s: 4.201,
+                alternate: false,
             }),
         );
         state.tick_visual_effects(0.0);
@@ -4714,6 +4717,7 @@ mod runtime_regression_tests {
             Some(HoldJudgmentRenderInfo {
                 result: HoldResult::Held,
                 started_at_screen_s: 4.2,
+                alternate: false,
             }),
         );
         state.tick_visual_effects(0.0);
@@ -4736,6 +4740,7 @@ mod runtime_regression_tests {
             vec![0, 1],
         )];
         state.chart_runtime.row_indices.note_row_entry_indices = vec![0, 0];
+        state.chart_runtime.row_indices.row_entry_ranges[0] = (0, 1);
         state.hold_runtime.tap_miss_held_at_note.fill(true);
 
         state.set_final_note_result(
@@ -4758,6 +4763,19 @@ mod runtime_regression_tests {
                 .map(|judgment| judgment.grade),
             Some(JudgeGrade::Fantastic)
         );
+        assert_eq!(state.stage_jumps_for_player(0), [0, 1]);
+        state.set_final_note_result(1, state.chart_runtime.notes[0].result.unwrap());
+        state.set_current_music_time_ns(song_time_ns_from_seconds(1.0));
+        state.finalize_row_judgment(0, row_index, 0, true);
+        assert_eq!(state.stage_jumps_for_player(0), [1, 1]);
+        assert_eq!(state.players()[0].combo_runs.as_slice(), &[
+            deadsync_rules::combo::ComboRun {
+                start_second: 1.0,
+                end_second: 1.0,
+                count: 2,
+                carried: 0,
+            },
+        ]);
     }
 
     #[test]

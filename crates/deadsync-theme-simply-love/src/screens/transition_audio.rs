@@ -2,7 +2,7 @@ use super::Screen;
 use crate::{SimplyLoveTheme, visual_styles};
 use deadsync_assets::{audio_folder::random_music_path, resolve_asset_path};
 use deadsync_config::theme::{SrpgVariant, VisualStyle};
-use deadsync_theme::{ThemeTransitionAudio, TransitionAudio, TransitionKind, TransitionMusic};
+use deadsync_theme::{ThemeTransitionAudio, TransitionKind, TransitionMusic};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy)]
@@ -58,16 +58,16 @@ fn transition_audio(
     kind: TransitionKind,
     context: TransitionAudioContext,
     resolve_cue: impl FnOnce(Cue, TransitionAudioContext) -> PathBuf,
-) -> TransitionAudio {
+) -> TransitionMusic {
     if kind == TransitionKind::Direct {
-        return TransitionAudio::default();
+        return TransitionMusic::Keep;
     }
     let previous = cue(from, kind, context);
     let keep_preview = matches!(
         (from, to),
         (Screen::SelectMusic, Screen::PlayerOptions) | (Screen::PlayerOptions, Screen::SelectMusic)
     );
-    let music = match cue(to, kind, context) {
+    match cue(to, kind, context) {
         Some(cue) if previous != Some(cue) => TransitionMusic::Play {
             path: resolve_cue(cue, context),
             looping: !matches!(cue, Cue::GameOver(_)),
@@ -75,15 +75,6 @@ fn transition_audio(
         Some(_) => TransitionMusic::Keep,
         None if keep_preview => TransitionMusic::Keep,
         None => TransitionMusic::Stop,
-    };
-    TransitionAudio {
-        music,
-        stop_preview_on_exit: kind == TransitionKind::Global
-            && matches!(from, Screen::SelectMusic | Screen::PlayerOptions)
-            && !matches!(
-                to,
-                Screen::SelectMusic | Screen::PlayerOptions | Screen::SelectCourse
-            ),
     }
 }
 
@@ -95,7 +86,7 @@ impl ThemeTransitionAudio for SimplyLoveTheme {
         to: Screen,
         kind: TransitionKind,
         context: TransitionAudioContext,
-    ) -> TransitionAudio {
+    ) -> TransitionMusic {
         transition_audio(from, to, kind, context, Cue::path)
     }
 
@@ -125,7 +116,7 @@ mod tests {
                 let audio = transition_audio(from, to, kind, CONTEXT, |_, _| {
                     panic!("a continuing stream must reuse its current track")
                 });
-                assert_eq!(audio, TransitionAudio::default());
+                assert_eq!(audio, TransitionMusic::Keep);
             }
         }
     }
@@ -178,7 +169,7 @@ mod tests {
                 "selected.ogg".into()
             });
             assert_eq!(
-                audio.music,
+                audio,
                 TransitionMusic::Play {
                     path: "selected.ogg".into(),
                     looping
@@ -198,12 +189,12 @@ mod tests {
                 CONTEXT,
                 |_, _| panic!("this route must not start a track"),
             );
-            assert_eq!(audio.music, TransitionMusic::Stop);
+            assert_eq!(audio, TransitionMusic::Stop);
         }
     }
 
     #[test]
-    fn global_wheel_exit_finishes_preview_and_results_owns_its_cue_cleanup() {
+    fn leaving_player_options_or_results_stops_the_screen_audio() {
         let audio = transition_audio(
             Screen::PlayerOptions,
             Screen::Menu,
@@ -211,8 +202,7 @@ mod tests {
             CONTEXT,
             |_, _| unreachable!(),
         );
-        assert_eq!(audio.music, TransitionMusic::Stop);
-        assert!(audio.stop_preview_on_exit);
+        assert_eq!(audio, TransitionMusic::Stop);
         assert!(SimplyLoveTheme::stop_screen_sfx_on_exit(
             Screen::Evaluation,
             Screen::Menu

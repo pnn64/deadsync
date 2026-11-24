@@ -247,13 +247,13 @@ fn srpg_fallback_key(fallback_key: &'static str) -> Arc<str> {
     Arc::clone(cache.get_or_init(|| Arc::<str>::from(fallback_key)))
 }
 
-pub fn set_srpg_background_key(key: Option<String>) {
+pub fn set_srpg_background_key(key: Option<Arc<str>>) {
     SRPG_BACKGROUND_KEY.with(|slot| {
         let mut slot = slot.borrow_mut();
         if slot.as_deref() == key.as_deref() {
             return;
         }
-        *slot = key.map(Arc::<str>::from);
+        *slot = key;
     });
 }
 
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn ecs15_curtain_keeps_authored_colors_and_ignores_stale_srpg_video() {
-        set_srpg_background_key(Some("previous_srpg_video_frame".to_owned()));
+        set_srpg_background_key(Some(Arc::from("previous_srpg_video_frame")));
         let state = State::new();
         for color_index in 0..12 {
             let mut params = params_for(
@@ -468,11 +468,11 @@ mod tests {
 
     #[test]
     fn publishing_the_same_srpg_key_preserves_its_allocation() {
-        set_srpg_background_key(Some("dynamic/same-video".to_string()));
+        set_srpg_background_key(Some(Arc::from("dynamic/same-video")));
         let first = SRPG_BACKGROUND_KEY
             .with(|key| key.borrow().clone())
             .expect("published key");
-        set_srpg_background_key(Some("dynamic/same-video".to_string()));
+        set_srpg_background_key(Some(Arc::from("dynamic/same-video")));
         let second = SRPG_BACKGROUND_KEY
             .with(|key| key.borrow().clone())
             .expect("published key");

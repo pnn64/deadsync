@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_theme::views::SystemOptionsServiceRow;
 
 pub(super) fn golf_features_enabled(state: &State) -> bool {
     get_choice_by_id(
@@ -80,7 +81,7 @@ pub(super) const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow] {
         SubmenuKind::Coin => COIN_OPTIONS_ROWS,
         SubmenuKind::Bookkeeping => BOOKKEEPING_ROWS,
         SubmenuKind::System => SYSTEM_OPTIONS_ROWS,
-        SubmenuKind::Graphics => GRAPHICS_OPTIONS_ROWS,
+        SubmenuKind::Graphics | SubmenuKind::GraphicsBasic => GRAPHICS_OPTIONS_ROWS,
         SubmenuKind::Input => INPUT_OPTIONS_ROWS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ROWS,
         SubmenuKind::SmxConfig => SMX_CONFIG_OPTIONS_ROWS,
@@ -110,7 +111,7 @@ pub(super) const fn submenu_items(kind: SubmenuKind) -> &'static [Item] {
         SubmenuKind::Coin => COIN_OPTIONS_ITEMS,
         SubmenuKind::Bookkeeping => BOOKKEEPING_ITEMS,
         SubmenuKind::System => SYSTEM_OPTIONS_ITEMS,
-        SubmenuKind::Graphics => GRAPHICS_OPTIONS_ITEMS,
+        SubmenuKind::Graphics | SubmenuKind::GraphicsBasic => GRAPHICS_OPTIONS_ITEMS,
         SubmenuKind::Input => INPUT_OPTIONS_ITEMS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ITEMS,
         SubmenuKind::SmxConfig => SMX_CONFIG_OPTIONS_ITEMS,
@@ -135,11 +136,13 @@ pub(super) const fn submenu_items(kind: SubmenuKind) -> &'static [Item] {
     }
 }
 
-pub(super) const fn submenu_title(kind: SubmenuKind) -> &'static str {
+pub(super) const fn submenu_title(state: &State, kind: SubmenuKind) -> &'static str {
     match kind {
         SubmenuKind::Coin => "ARCADE OPTIONS",
         SubmenuKind::Bookkeeping => "BOOKKEEPING",
         SubmenuKind::System => "SYSTEM OPTIONS",
+        SubmenuKind::GraphicsBasic => "GRAPHIC OPTIONS",
+        SubmenuKind::Graphics if state.split_graphics => "ADVANCED GRAPHIC OPTIONS",
         SubmenuKind::Graphics => "GRAPHICS OPTIONS",
         SubmenuKind::Input => "INPUT OPTIONS",
         SubmenuKind::InputBackend => "INPUT OPTIONS",
@@ -165,12 +168,47 @@ pub(super) const fn submenu_title(kind: SubmenuKind) -> &'static str {
     }
 }
 
+pub(super) const fn graphics_entry_kind(state: &State) -> SubmenuKind {
+    if state.split_graphics {
+        SubmenuKind::GraphicsBasic
+    } else {
+        SubmenuKind::Graphics
+    }
+}
+
+const fn is_basic_graphics_setting(id: SubRowId) -> bool {
+    matches!(
+        id,
+        SubRowId::DisplayMode | SubRowId::DisplayAspectRatio | SubRowId::DisplayResolution
+    )
+}
+
 pub(super) fn submenu_visible_row_indices(
     state: &State,
     kind: SubmenuKind,
     rows: &[SubRow],
 ) -> Vec<usize> {
     match kind {
+        SubmenuKind::GraphicsBasic => rows
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, row)| {
+                (is_basic_graphics_setting(row.id) || row.id == SubRowId::AdvancedGraphics)
+                    .then_some(idx)
+            })
+            .collect(),
+        SubmenuKind::Input => {
+            let test_input_on_main = state.service_order.contains(&SystemOptionsServiceRow::TestInput);
+            let mappings_on_main = state.service_order.contains(&SystemOptionsServiceRow::ConfigureMappings);
+            rows.iter()
+                .enumerate()
+                .filter_map(|(index, row)| match row.id {
+                    SubRowId::TestInput if test_input_on_main => None,
+                    SubRowId::ConfigureMappings if mappings_on_main => None,
+                    _ => Some(index),
+                })
+                .collect()
+        }
         SubmenuKind::Graphics => {
             let show_sw = graphics_show_software_threads(state);
             let show_max_fps = graphics_show_max_fps(state);
@@ -179,7 +217,11 @@ pub(super) fn submenu_visible_row_indices(
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
-                    if row.id == SubRowId::SoftwareRendererThreads && !show_sw {
+                    if row.id == SubRowId::AdvancedGraphics
+                        || (state.split_graphics && is_basic_graphics_setting(row.id))
+                    {
+                        None
+                    } else if row.id == SubRowId::SoftwareRendererThreads && !show_sw {
                         None
                     } else if row.id == SubRowId::MaxFps && !show_max_fps {
                         None

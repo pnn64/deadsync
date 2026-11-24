@@ -1,7 +1,8 @@
 use super::*;
+use deadsync_assets::progress::{ContentReloadEvent, ContentReloadPhase};
 
 pub(super) struct ReloadUiState {
-    pub(super) phase: crate::views::SimplyLoveContentReloadPhase,
+    pub(super) phase: ContentReloadPhase,
     pub(super) line2: String,
     pub(super) line3: String,
     pub(super) songs_done: usize,
@@ -35,7 +36,7 @@ struct ReloadPresentation {
 impl ReloadUiState {
     pub(super) fn new() -> Self {
         Self {
-            phase: crate::views::SimplyLoveContentReloadPhase::Songs,
+            phase: ContentReloadPhase::Songs,
             line2: String::new(),
             line3: String::new(),
             songs_done: 0,
@@ -57,7 +58,7 @@ impl ReloadUiState {
         self.presentation.get_mut().take();
     }
 
-    fn set_phase(&mut self, phase: crate::views::SimplyLoveContentReloadPhase) {
+    fn set_phase(&mut self, phase: ContentReloadPhase) {
         if self.phase != phase {
             self.phase = phase;
             self.phase_started_at = Instant::now();
@@ -99,7 +100,7 @@ pub(super) fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>)
 
 pub fn sync_reload_events(
     state: &mut State,
-    events: impl IntoIterator<Item = crate::views::SimplyLoveContentReloadEvent>,
+    events: impl IntoIterator<Item = ContentReloadEvent>,
 ) {
     let Some(reload) = state.reload_ui.as_mut() else {
         return;
@@ -107,50 +108,50 @@ pub fn sync_reload_events(
     for event in events {
         reload.invalidate_presentation();
         match event {
-            crate::views::SimplyLoveContentReloadEvent::Phase(phase) => {
+            ContentReloadEvent::Phase(phase) => {
                 reload.set_phase(phase);
                 reload.line2.clear();
                 reload.line3.clear();
             }
-            crate::views::SimplyLoveContentReloadEvent::Song {
+            ContentReloadEvent::Song {
                 done,
                 total,
                 pack,
                 song,
             } => {
-                reload.set_phase(crate::views::SimplyLoveContentReloadPhase::Songs);
+                reload.set_phase(ContentReloadPhase::Songs);
                 reload.songs_done = done;
                 reload.songs_total = total;
                 reload.line2 = pack;
                 reload.line3 = song;
             }
-            crate::views::SimplyLoveContentReloadEvent::Course {
+            ContentReloadEvent::Course {
                 done,
                 total,
                 group,
                 course,
             } => {
-                reload.set_phase(crate::views::SimplyLoveContentReloadPhase::Courses);
+                reload.set_phase(ContentReloadPhase::Courses);
                 reload.courses_done = done;
                 reload.courses_total = total;
                 reload.line2 = group;
                 reload.line3 = course;
             }
-            crate::views::SimplyLoveContentReloadEvent::ReplayGain {
+            ContentReloadEvent::ReplayGain {
                 done,
                 total,
                 line2,
                 line3,
             } => {
-                reload.set_phase(crate::views::SimplyLoveContentReloadPhase::ReplayGain);
+                reload.set_phase(ContentReloadPhase::ReplayGain);
                 reload.replaygain_done = done;
                 reload.replaygain_total = total;
                 reload.line2 = line2;
                 reload.line3 = line3;
             }
-            crate::views::SimplyLoveContentReloadEvent::Artwork { .. }
-            | crate::views::SimplyLoveContentReloadEvent::Noteskins { .. } => {}
-            crate::views::SimplyLoveContentReloadEvent::Finished { .. } => {
+            ContentReloadEvent::Artwork { .. }
+            | ContentReloadEvent::Noteskins { .. } => {}
+            ContentReloadEvent::Finished { .. } => {
                 reload.done = true;
             }
         }
@@ -160,7 +161,7 @@ pub fn sync_reload_events(
 #[inline(always)]
 pub(super) fn reload_progress(reload: &ReloadUiState) -> (usize, usize, f32) {
     let (done, mut total) =
-        if reload.phase == crate::views::SimplyLoveContentReloadPhase::ReplayGain {
+        if reload.phase == ContentReloadPhase::ReplayGain {
             (reload.replaygain_done, reload.replaygain_total)
         } else {
             (
@@ -262,13 +263,13 @@ pub(super) fn push_reload_overlay_actors_unreserved(
         z(300)
     ));
     let phase_label = match reload.phase {
-        crate::views::SimplyLoveContentReloadPhase::Songs => tr("Init", "LoadingSongsText"),
-        crate::views::SimplyLoveContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
-        crate::views::SimplyLoveContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
-        crate::views::SimplyLoveContentReloadPhase::Noteskins => {
+        ContentReloadPhase::Songs => tr("Init", "LoadingSongsText"),
+        ContentReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
+        ContentReloadPhase::Artwork => tr("Init", "CachingArtworkText"),
+        ContentReloadPhase::Noteskins => {
             tr("Init", "CompilingNoteskinsText")
         }
-        crate::views::SimplyLoveContentReloadPhase::ReplayGain => {
+        ContentReloadPhase::ReplayGain => {
             tr("Init", "AnalyzingLoudnessText")
         }
     };

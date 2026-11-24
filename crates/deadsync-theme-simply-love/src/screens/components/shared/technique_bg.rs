@@ -528,6 +528,7 @@ mod tests {
                 fonts: &[],
                 textures: crate::resources::initial_texture_assets()
                     .filter(|asset| asset.path.starts_with("menu_bg_technique/")),
+                embedded_pngs: &[],
                 texture_needs_repeat_sampler: crate::resources::texture_needs_repeat_sampler,
             },
         )

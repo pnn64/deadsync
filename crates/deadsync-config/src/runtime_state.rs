@@ -321,8 +321,8 @@ impl RuntimeConfigStore {
         self.update_config(|cfg| config_update::set_enable_replaygain(cfg, enabled))
     }
 
-    pub fn update_simply_love_color(&self, index: i32) -> bool {
-        self.update_config(|cfg| config_update::set_simply_love_color(cfg, index))
+    pub fn update_theme_color(&self, index: i32) -> bool {
+        self.update_config(|cfg| config_update::set_theme_color(cfg, index))
     }
 
     pub fn update_log_level(&self, level: crate::theme::LogLevel) -> bool {
@@ -1137,7 +1137,7 @@ SmxP1Serial= pad-1\n"),
             cfg.smx_input = true;
             cfg.smx_underglow_theme = true;
             cfg.smx_underglow_grb = true;
-            cfg.simply_love_color = 4;
+            cfg.theme_color = 4;
             true
         });
 
@@ -1151,8 +1151,8 @@ SmxP1Serial= pad-1\n"),
             .expect("enabled underglow should produce colors");
         assert_eq!(lone_plan.colors[0], lone_plan.colors[1]);
 
-        assert!(store.update_simply_love_color(5));
-        assert!(!store.update_simply_love_color(5));
+        assert!(store.update_theme_color(5));
+        assert!(!store.update_theme_color(5));
     }
 
     #[test]

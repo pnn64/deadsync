@@ -317,6 +317,7 @@ pub(super) struct MusicRatePresentation {
 }
 
 pub struct State {
+    pub(super) viewport: deadsync_theme::player_options::PlayerOptionsViewport,
     pub(super) pack_menu: super::pack_options::PackMenu,
     pub song: Arc<SongData>,
     pub return_screen: Screen,
@@ -449,6 +450,7 @@ pub struct PaneState {
     /// geometry allocation is the bounded miss cost.
     pub(super) choice_layout_ready: bool,
     pub(super) row_tweens: Vec<RowTween>,
+    pub(super) scroll_position: [f32; PLAYER_SLOTS],
     pub(super) layout_key: Option<RowLayoutKey>,
     // Cursor ring tween (StopTweening/BeginTweening parity with ITGmania ScreenOptions::TweenCursor).
     pub(super) cursor_initialized: [bool; PLAYER_SLOTS],
@@ -467,6 +469,7 @@ impl PaneState {
             arcade_row_focus: [false; PLAYER_SLOTS],
             choice_layout_ready: false,
             row_tweens: Vec::new(),
+            scroll_position: [0.0; PLAYER_SLOTS],
             layout_key: None,
             cursor_initialized: [false; PLAYER_SLOTS],
             cursor_from: [CursorRect::default(); PLAYER_SLOTS],
@@ -483,6 +486,7 @@ impl PaneState {
         self.prev_selected_row = [0; PLAYER_SLOTS];
         self.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
         self.arcade_row_focus = [false; PLAYER_SLOTS];
+        self.scroll_position = [0.0; PLAYER_SLOTS];
         self.layout_key = None;
         self.cursor_initialized = [false; PLAYER_SLOTS];
         self.cursor_from = [CursorRect::default(); PLAYER_SLOTS];

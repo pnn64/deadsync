@@ -310,6 +310,7 @@ pub(crate) fn policy_view(config: &config::app_config::Config) -> SelectMusicPol
         interaction: SelectMusicInteractionPolicyView {
             wheel_switch_speed: config.music_wheel_switch_speed,
             wheel_style: config.select_music_wheel_style,
+            show_random_entries: false,
             hide_inactive_series: config.hide_inactive_series,
             initial_sort: config
                 .select_music_default_sort
@@ -338,9 +339,7 @@ pub(crate) fn policy_view(config: &config::app_config::Config) -> SelectMusicPol
                 == config::theme::SelectMusicScoreboxPlacement::StepPane,
             show_stage_display: config.show_select_music_stage_display,
             show_gameplay_timer: config.show_select_music_gameplay_timer,
-            step_artist_expanded: config
-                .select_music_step_artist_box_mode
-                .is_expanded(config.theme_flag),
+            step_artist_box_mode: config.select_music_step_artist_box_mode,
             breakdown_style: config.select_music_breakdown_style,
             pattern_info_mode: config.select_music_pattern_info_mode,
             chart_info_peak_nps: config.select_music_chart_info_peak_nps,
@@ -673,7 +672,10 @@ mod tests {
         assert!(view.presentation.scorebox_in_step_pane);
         assert!(!view.presentation.show_stage_display);
         assert!(!view.presentation.show_gameplay_timer);
-        assert!(view.presentation.step_artist_expanded);
+        assert_eq!(
+            view.presentation.step_artist_box_mode,
+            config::theme::SelectMusicStepArtistBoxMode::Expanded
+        );
         assert_eq!(
             view.presentation.breakdown_style,
             config::theme::BreakdownStyle::Sn

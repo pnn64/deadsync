@@ -7,7 +7,7 @@ use deadsync_gameplay::{GameplayRuntimeState, build_crossover_rows};
 use deadsync_profile as profile_data;
 use deadsync_rules::course::CourseType;
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::{judgment, timing as timing_stats};
+use deadsync_rules::{judgment, note::HoldResult, timing as timing_stats};
 use deadsync_score::stage_stats::{self, PlayerStageSummary, StageSummary};
 use deadsync_score::{self as score_data, GrooveStatsEvalState, ItlEvalState};
 use std::collections::HashMap;
@@ -17,9 +17,16 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct EvaluationStage {
     pub song: Arc<SongData>,
-    charts: [Option<(profile_data::PlayerSide, Arc<ChartData>)>; MAX_PLAYERS],
+    players: [Option<EvaluationPlayer>; MAX_PLAYERS],
     pub music_rate: f32,
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
+}
+
+#[derive(Clone)]
+pub struct EvaluationPlayer {
+    pub side: profile_data::PlayerSide,
+    pub chart: Arc<ChartData>,
+    pub grade: score_data::Grade,
 }
 
 impl EvaluationStage {
@@ -44,16 +51,20 @@ impl EvaluationStage {
         players: [Option<(profile_data::PlayerSide, ScrollSpeedSetting)>; MAX_PLAYERS],
     ) -> Option<Self> {
         let mut scroll_speed = [ScrollSpeedSetting::default(); MAX_PLAYERS];
-        let charts = players.map(|player| {
+        let players = players.map(|player| {
             let (side, speed) = player?;
             let index = profile_data::player_side_index(side);
             let result = result.players[index].as_ref()?;
             scroll_speed[index] = speed;
-            Some((side, Arc::clone(&result.chart)))
+            Some(EvaluationPlayer {
+                side,
+                chart: Arc::clone(&result.chart),
+                grade: result.grade,
+            })
         });
-        charts.iter().any(Option::is_some).then(|| Self {
+        players.iter().any(Option::is_some).then(|| Self {
             song: Arc::clone(&result.song),
-            charts,
+            players,
             music_rate: if result.music_rate.is_finite() && result.music_rate > 0.0 {
                 result.music_rate
             } else {
@@ -71,9 +82,14 @@ impl EvaluationStage {
         hashes
     }
 
+    /// The players in result slot order, including P2 as the first slot in solo P2.
+    pub fn players(&self) -> impl Iterator<Item = &EvaluationPlayer> {
+        self.players.iter().flatten()
+    }
+
     pub fn player_chart_queries(&self) -> [Option<(profile_data::PlayerSide, &str)>; MAX_PLAYERS] {
-        self.charts.each_ref().map(|entry| {
-            entry.as_ref().map(|(side, chart)| (*side, chart.short_hash.as_str()))
+        self.players.each_ref().map(|entry| {
+            entry.as_ref().map(|player| (player.side, player.chart.short_hash.as_str()))
         })
     }
 }
@@ -107,7 +123,14 @@ pub fn course_summary_stage(
         meter: run.course_meter,
         song_stub,
         course_total_seconds: run.total_seconds(),
+        course_step_seconds: run.stages.iter().map(|stage| stage_stats::song_step_seconds(&stage.song)).sum(),
         totals: course_summary_totals(run),
+        unplayed_jumps: run.stages[stage_summaries.len().min(run.stages.len())..]
+            .iter()
+            .filter(|_| run.course_type != CourseType::Endless)
+            .fold([0u32; MAX_PLAYERS], |totals, stage| {
+                std::array::from_fn(|player| totals[player].saturating_add(stage.jumps[player]))
+            }),
         stage_summaries,
     })
 }
@@ -165,6 +188,9 @@ pub fn stage_result<A, C, D>(
         let p = &gs.players()[player_idx];
         let prof = &gs.profiles()[player_idx];
         let col_offset = player_idx.saturating_mul(cols_per_player);
+        let dropped_hold_or_roll = notes.iter().any(|note| {
+            note.hold.as_ref().is_some_and(|hold| hold.result == Some(HoldResult::LetGo))
+        });
         let fail_stream_progress = p.fail_time.and_then(|fail_time| {
             let timing = gs.timing_for_player(player_idx)?;
             let chart = gs.gameplay_chart(player_idx)?;
@@ -316,6 +342,11 @@ pub fn stage_result<A, C, D>(
                 .saturating_add(column.w5)
         });
         let side = gs.setup.session.runtime_player_side(player_idx);
+        let step_samples = if disqualified && p.judgment_counts.iter().all(|&count| count == 0) {
+            &[]
+        } else {
+            p.stage_life_record.samples.as_slice()
+        };
         let golf_par = deadsync_chart::golf::par(
             &gs.song().simfile_path,
             &gs.charts()[player_idx].difficulty,
@@ -336,10 +367,14 @@ pub fn stage_result<A, C, D>(
             possible_grade_points: totals.possible_grade_points,
             ex_score_percent,
             hard_ex_score_percent,
+            max_combo: p.recorded_max_combo,
+            combo_runs: p.combo_runs.as_slice().into(),
+            jumps: gs.stage_jumps_for_player(player_idx),
             hands_achieved: p.hands_achieved,
             hands_total: gs.hands_total_for_player(player_idx),
             holds_held: p.holds_held,
             holds_held_for_score: p.holds_held_for_score,
+            dropped_hold_or_roll,
             holds_total: totals.holds_total,
             rolls_held: p.rolls_held,
             rolls_held_for_score: p.rolls_held_for_score,
@@ -359,6 +394,12 @@ pub fn stage_result<A, C, D>(
             graph_first_second,
             graph_last_second,
             life_history: p.life_history.clone(),
+            steps_life: stage_stats::StageLifeTimeline {
+                samples: step_samples.into(),
+                judgment_times: p.life_judgment_times,
+                possible_seconds: stage_stats::song_step_seconds(gs.song()),
+                elapsed_seconds: p.stage_life_record.steps_seconds,
+            },
             fail_time: p.fail_time,
             show_w0: (prof.show_fa_plus_window && prof.show_fa_plus_pane) || prof.show_ex_score,
             show_fa_plus_pane: prof.show_fa_plus_pane,

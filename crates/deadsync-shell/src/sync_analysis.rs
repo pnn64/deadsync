@@ -5,10 +5,16 @@ use deadlib_audio_decode as decode;
 use deadsync_chart::SongData;
 use deadsync_config as config;
 use deadsync_simfile::app_runtime as song_loading;
-use deadsync_theme_simply_love::{
-    SimplyLoveSyncEvent, SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner,
-    SimplyLoveSyncPlotView, SimplyLoveSyncResult, SimplyLoveSyncSongResult,
-    SimplyLoveSyncStreamEvent, SimplyLoveSyncTarget,
+use deadsync_theme::app_requests::{
+    SyncEvent,
+    SyncKernel,
+    SyncKernelTarget,
+    SyncOwner,
+    SyncPlotView,
+    SyncResult,
+    SyncSongResult,
+    SyncStreamEvent,
+    SyncTarget,
 };
 use null_or_die::{
     BiasCfg, BiasEstimateWithPlot, BiasKernel, BiasRuntime, BiasStreamCfg, BiasStreamEvent,
@@ -31,9 +37,9 @@ struct SyncAudio {
 }
 
 struct Job {
-    owner: SimplyLoveSyncOwner,
+    owner: SyncOwner,
     cancel: Arc<AtomicBool>,
-    rx: mpsc::Receiver<SimplyLoveSyncEvent>,
+    rx: mpsc::Receiver<SyncEvent>,
 }
 
 /// Shell-owned sync-analysis workers and result queues.
@@ -48,10 +54,10 @@ pub(crate) struct Service {
 
 #[derive(Default)]
 struct RoutedEvents {
-    song: Vec<SimplyLoveSyncEvent>,
-    select_pack: Vec<SimplyLoveSyncEvent>,
-    options_pack: Vec<SimplyLoveSyncEvent>,
-    browser_pack: Vec<SimplyLoveSyncEvent>,
+    song: Vec<SyncEvent>,
+    select_pack: Vec<SyncEvent>,
+    options_pack: Vec<SyncEvent>,
+    browser_pack: Vec<SyncEvent>,
 }
 
 impl RoutedEvents {
@@ -62,12 +68,12 @@ impl RoutedEvents {
         self.browser_pack.clear();
     }
 
-    fn push(&mut self, owner: SimplyLoveSyncOwner, event: SimplyLoveSyncEvent) {
+    fn push(&mut self, owner: SyncOwner, event: SyncEvent) {
         match owner {
-            SimplyLoveSyncOwner::SelectMusicSong => self.song.push(event),
-            SimplyLoveSyncOwner::SelectMusicPack => self.select_pack.push(event),
-            SimplyLoveSyncOwner::OptionsPack => self.options_pack.push(event),
-            SimplyLoveSyncOwner::ContentBrowserPack => self.browser_pack.push(event),
+            SyncOwner::SelectMusicSong => self.song.push(event),
+            SyncOwner::SelectMusicPack => self.select_pack.push(event),
+            SyncOwner::OptionsPack => self.options_pack.push(event),
+            SyncOwner::ContentBrowserPack => self.browser_pack.push(event),
         }
     }
 
@@ -86,10 +92,10 @@ impl RoutedEvents {
 }
 
 pub(crate) struct EventBatches<'a> {
-    pub(crate) song: &'a mut Vec<SimplyLoveSyncEvent>,
-    pub(crate) select_pack: &'a mut Vec<SimplyLoveSyncEvent>,
-    pub(crate) options_pack: &'a mut Vec<SimplyLoveSyncEvent>,
-    pub(crate) browser_pack: &'a mut Vec<SimplyLoveSyncEvent>,
+    pub(crate) song: &'a mut Vec<SyncEvent>,
+    pub(crate) select_pack: &'a mut Vec<SyncEvent>,
+    pub(crate) options_pack: &'a mut Vec<SyncEvent>,
+    pub(crate) browser_pack: &'a mut Vec<SyncEvent>,
 }
 
 impl EventBatches<'_> {
@@ -106,12 +112,12 @@ impl EventBatches<'_> {
 const SYNC_OWNERS: usize = 4;
 
 #[inline(always)]
-const fn sync_owner_index(owner: SimplyLoveSyncOwner) -> usize {
+const fn sync_owner_index(owner: SyncOwner) -> usize {
     match owner {
-        SimplyLoveSyncOwner::SelectMusicSong => 0,
-        SimplyLoveSyncOwner::SelectMusicPack => 1,
-        SimplyLoveSyncOwner::OptionsPack => 2,
-        SimplyLoveSyncOwner::ContentBrowserPack => 3,
+        SyncOwner::SelectMusicSong => 0,
+        SyncOwner::SelectMusicPack => 1,
+        SyncOwner::OptionsPack => 2,
+        SyncOwner::ContentBrowserPack => 3,
     }
 }
 
@@ -126,15 +132,15 @@ impl Service {
 
     pub(crate) fn start(
         &mut self,
-        owner: SimplyLoveSyncOwner,
-        targets: Vec<SimplyLoveSyncTarget>,
+        owner: SyncOwner,
+        targets: Vec<SyncTarget>,
         emit_freq_delta: bool,
     ) {
         self.cancel(owner);
         let cache_results = config::runtime::get().null_or_die_cache_results;
         let cancel = Arc::new(AtomicBool::new(false));
         let thread_cancel = Arc::clone(&cancel);
-        let rx = if owner == SimplyLoveSyncOwner::SelectMusicSong {
+        let rx = if owner == SyncOwner::SelectMusicSong {
             let (tx, rx) = mpsc::sync_channel(SONG_PENDING_EVENTS);
             let cache = Arc::clone(&self.cache);
             std::thread::spawn(move || {
@@ -174,7 +180,7 @@ impl Service {
         self.cache.flush();
     }
 
-    pub(crate) fn cancel(&mut self, owner: SimplyLoveSyncOwner) {
+    pub(crate) fn cancel(&mut self, owner: SyncOwner) {
         for job in self.jobs.iter().filter(|job| job.owner == owner) {
             job.cancel.store(true, Ordering::Relaxed);
         }
@@ -203,9 +209,9 @@ impl Service {
                     Ok(event) => {
                         let is_finished = matches!(
                             event,
-                            SimplyLoveSyncEvent::SongFinished(_)
-                                | SimplyLoveSyncEvent::Finished
-                                | SimplyLoveSyncEvent::Disconnected
+                            SyncEvent::SongFinished(_)
+                                | SyncEvent::Finished
+                                | SyncEvent::Disconnected
                         );
                         self.events.push(job.owner, event);
                         if is_finished {
@@ -216,7 +222,7 @@ impl Service {
                     Err(mpsc::TryRecvError::Empty) => continue 'jobs,
                     Err(mpsc::TryRecvError::Disconnected) => {
                         self.events
-                            .push(job.owner, SimplyLoveSyncEvent::Disconnected);
+                            .push(job.owner, SyncEvent::Disconnected);
                         finished[sync_owner_index(job.owner)] = true;
                         continue 'jobs;
                     }
@@ -230,15 +236,15 @@ impl Service {
 }
 
 fn run_song(
-    mut targets: Vec<SimplyLoveSyncTarget>,
+    mut targets: Vec<SyncTarget>,
     emit_freq_delta: bool,
     cancel: Arc<AtomicBool>,
-    tx: mpsc::SyncSender<SimplyLoveSyncEvent>,
+    tx: mpsc::SyncSender<SyncEvent>,
     cache: Arc<AnalysisCache>,
     cache_results: bool,
 ) {
     let Some(target) = targets.pop() else {
-        let _ = tx.send(SimplyLoveSyncEvent::SongFinished(Err(
+        let _ = tx.send(SyncEvent::SongFinished(Err(
             "No sync-analysis target was provided".to_owned(),
         )));
         return;
@@ -263,7 +269,7 @@ fn run_song(
     {
         if !cancel.load(Ordering::Relaxed) {
             cache.flush();
-            let _ = tx.send(SimplyLoveSyncEvent::SongFinished(Ok(cached_song_result(
+            let _ = tx.send(SyncEvent::SongFinished(Ok(cached_song_result(
                 cached,
             ))));
         }
@@ -283,7 +289,7 @@ fn run_song(
         |event| {
             if !cancel.load(Ordering::Relaxed) {
                 let event = sync_stream_event(event, kernel);
-                let _ = tx.send(SimplyLoveSyncEvent::SongStream(event));
+                let _ = tx.send(SyncEvent::SongStream(event));
             }
         },
     )
@@ -309,19 +315,19 @@ fn run_song(
             )]);
             cache.flush();
         }
-        let _ = tx.send(SimplyLoveSyncEvent::SongFinished(result));
+        let _ = tx.send(SyncEvent::SongFinished(result));
     }
 }
 
-fn cached_song_result(cached: CachedAnalysis) -> SimplyLoveSyncSongResult {
+fn cached_song_result(cached: CachedAnalysis) -> SyncSongResult {
     let bias_ms = if cached.applied { 0.0 } else { cached.bias_ms };
     let plot = cached.plot.filter(|_| !cached.applied).unwrap_or_default();
-    SimplyLoveSyncSongResult {
-        estimate: SimplyLoveSyncResult {
+    SyncSongResult {
+        estimate: SyncResult {
             bias_ms,
             confidence: cached.confidence,
         },
-        plot: SimplyLoveSyncPlotView {
+        plot: SyncPlotView {
             freq_rows: plot.freq_rows,
             digest_rows: plot.digest_rows,
             cols: plot.cols.max(plot.times_ms.len()),
@@ -338,24 +344,24 @@ fn cached_song_result(cached: CachedAnalysis) -> SimplyLoveSyncSongResult {
 }
 
 #[inline(always)]
-const fn sync_kernel_target(target: KernelTarget) -> SimplyLoveSyncKernelTarget {
+const fn sync_kernel_target(target: KernelTarget) -> SyncKernelTarget {
     match target {
-        KernelTarget::Digest => SimplyLoveSyncKernelTarget::Digest,
-        KernelTarget::Accumulator => SimplyLoveSyncKernelTarget::Accumulator,
+        KernelTarget::Digest => SyncKernelTarget::Digest,
+        KernelTarget::Accumulator => SyncKernelTarget::Accumulator,
     }
 }
 
 #[inline(always)]
-const fn sync_kernel(kernel: BiasKernel) -> SimplyLoveSyncKernel {
+const fn sync_kernel(kernel: BiasKernel) -> SyncKernel {
     match kernel {
-        BiasKernel::Rising => SimplyLoveSyncKernel::Rising,
-        BiasKernel::Loudest => SimplyLoveSyncKernel::Loudest,
+        BiasKernel::Rising => SyncKernel::Rising,
+        BiasKernel::Loudest => SyncKernel::Loudest,
     }
 }
 
-fn sync_stream_event(event: BiasStreamEvent, kernel: BiasKernel) -> SimplyLoveSyncStreamEvent {
+fn sync_stream_event(event: BiasStreamEvent, kernel: BiasKernel) -> SyncStreamEvent {
     match event {
-        BiasStreamEvent::Init(init) => SimplyLoveSyncStreamEvent::Init {
+        BiasStreamEvent::Init(init) => SyncStreamEvent::Init {
             cols: init.cols,
             freq_rows: init.freq_rows,
             planned_beats: init.planned_beats,
@@ -363,31 +369,31 @@ fn sync_stream_event(event: BiasStreamEvent, kernel: BiasKernel) -> SimplyLoveSy
             kernel: sync_kernel(kernel),
             times_ms: init.times_ms,
         },
-        BiasStreamEvent::Beat(beat) => SimplyLoveSyncStreamEvent::Beat {
+        BiasStreamEvent::Beat(beat) => SyncStreamEvent::Beat {
             beat_seq: beat.beat_seq,
             digest_row: beat.digest_row,
             freq_delta: beat.freq_delta,
         },
-        BiasStreamEvent::Convolution(conv) => SimplyLoveSyncStreamEvent::Convolution {
+        BiasStreamEvent::Convolution(conv) => SyncStreamEvent::Convolution {
             rows: conv.rows,
             post_kernel: conv.post_kernel,
             convolution: conv.convolution,
             edge_discard: conv.edge_discard,
         },
-        BiasStreamEvent::Done(estimate) => SimplyLoveSyncStreamEvent::Done(SimplyLoveSyncResult {
+        BiasStreamEvent::Done(estimate) => SyncStreamEvent::Done(SyncResult {
             bias_ms: estimate.bias_ms,
             confidence: estimate.confidence,
         }),
     }
 }
 
-fn sync_song_result(result: BiasEstimateWithPlot) -> SimplyLoveSyncSongResult {
-    SimplyLoveSyncSongResult {
-        estimate: SimplyLoveSyncResult {
+fn sync_song_result(result: BiasEstimateWithPlot) -> SyncSongResult {
+    SyncSongResult {
+        estimate: SyncResult {
             bias_ms: result.estimate.bias_ms,
             confidence: result.estimate.confidence,
         },
-        plot: SimplyLoveSyncPlotView {
+        plot: SyncPlotView {
             freq_rows: result.plot.freq_rows,
             digest_rows: result.plot.digest_rows,
             cols: result.plot.cols,
@@ -404,9 +410,9 @@ fn sync_song_result(result: BiasEstimateWithPlot) -> SimplyLoveSyncSongResult {
 }
 
 fn run_pack(
-    targets: Vec<SimplyLoveSyncTarget>,
+    targets: Vec<SyncTarget>,
     cancel: Arc<AtomicBool>,
-    tx: mpsc::Sender<SimplyLoveSyncEvent>,
+    tx: mpsc::Sender<SyncEvent>,
     cache: Arc<AnalysisCache>,
     cache_results: bool,
 ) {
@@ -417,7 +423,7 @@ fn run_pack(
         emit_freq_delta: false,
         orientation: config::runtime::get().null_or_die_graph_orientation,
     };
-    let (job_tx, job_rx) = mpsc::channel::<(usize, SimplyLoveSyncTarget)>();
+    let (job_tx, job_rx) = mpsc::channel::<(usize, SyncTarget)>();
     let job_rx = Arc::new(Mutex::new(job_rx));
     let completed = Arc::new(Mutex::new(Vec::new()));
     let mut workers = Vec::with_capacity(worker_count);
@@ -459,9 +465,9 @@ fn run_pack(
                     .as_ref()
                     .and_then(super::sync_analysis_cache::TargetPreparation::cached_analysis)
                 {
-                    let _ = tx.send(SimplyLoveSyncEvent::RowCached {
+                    let _ = tx.send(SyncEvent::RowCached {
                         index,
-                        result: SimplyLoveSyncResult {
+                        result: SyncResult {
                             bias_ms: cached.bias_ms,
                             confidence: cached.confidence,
                         },
@@ -472,7 +478,7 @@ fn run_pack(
                 let prepared =
                     prepared.and_then(super::sync_analysis_cache::TargetPreparation::into_prepared);
 
-                let _ = tx.send(SimplyLoveSyncEvent::RowStarted { index });
+                let _ = tx.send(SyncEvent::RowStarted { index });
                 let mut total_beats = 0usize;
                 let mut last_sent = 0usize;
                 let result = analyze_song_chart_stream(
@@ -483,7 +489,7 @@ fn run_pack(
                     |event| match event {
                         BiasStreamEvent::Init(init) => {
                             total_beats = init.planned_beats;
-                            let _ = tx.send(SimplyLoveSyncEvent::RowInit { index, total_beats });
+                            let _ = tx.send(SyncEvent::RowInit { index, total_beats });
                         }
                         BiasStreamEvent::Beat(beat) => {
                             let beats_processed = beat.beat_seq.saturating_add(1);
@@ -493,7 +499,7 @@ fn run_pack(
                                 || beats_processed.saturating_sub(last_sent) >= PROGRESS_STEP_BEATS
                             {
                                 last_sent = beats_processed;
-                                let _ = tx.send(SimplyLoveSyncEvent::RowBeat {
+                                let _ = tx.send(SyncEvent::RowBeat {
                                     index,
                                     beats_processed,
                                     total_beats,
@@ -503,7 +509,7 @@ fn run_pack(
                         BiasStreamEvent::Convolution(_) | BiasStreamEvent::Done(_) => {}
                     },
                 )
-                .map(|result| SimplyLoveSyncResult {
+                .map(|result| SyncResult {
                     bias_ms: result.estimate.bias_ms,
                     confidence: result.estimate.confidence,
                 });
@@ -516,7 +522,7 @@ fn run_pack(
                         result.confidence,
                     ));
                 }
-                let _ = tx.send(SimplyLoveSyncEvent::RowFinished { index, result });
+                let _ = tx.send(SyncEvent::RowFinished { index, result });
             }
         }));
     }
@@ -537,7 +543,7 @@ fn run_pack(
         cache.record_completed(std::mem::take(&mut *completed));
         cache.flush();
     }
-    let _ = tx.send(SimplyLoveSyncEvent::Finished);
+    let _ = tx.send(SyncEvent::Finished);
 }
 
 fn pack_worker_count(target_count: usize) -> usize {
@@ -559,7 +565,7 @@ fn pack_worker_count(target_count: usize) -> usize {
 mod tests {
     use super::*;
 
-    fn test_job(owner: SimplyLoveSyncOwner) -> (Job, mpsc::Sender<SimplyLoveSyncEvent>) {
+    fn test_job(owner: SyncOwner) -> (Job, mpsc::Sender<SyncEvent>) {
         let (tx, rx) = mpsc::channel();
         (
             Job {
@@ -580,18 +586,18 @@ mod tests {
 
         let (tx, rx) = mpsc::channel();
         service.jobs.push(Job {
-            owner: SimplyLoveSyncOwner::SelectMusicSong,
+            owner: SyncOwner::SelectMusicSong,
             cancel: Arc::new(AtomicBool::new(false)),
             rx,
         });
         assert!(service.poll().is_some_and(|events| events.is_empty()));
-        tx.send(SimplyLoveSyncEvent::Finished)
+        tx.send(SyncEvent::Finished)
             .expect("the service owns the matching receiver");
         let events = service.poll().expect("the job is active");
 
         assert!(matches!(
             events.song.as_slice(),
-            [SimplyLoveSyncEvent::Finished]
+            [SyncEvent::Finished]
         ));
         assert!(events.select_pack.is_empty());
         assert!(events.options_pack.is_empty());
@@ -603,10 +609,10 @@ mod tests {
         let mut service = Service::new(
             std::env::temp_dir().join(format!("deadsync-sync-routing-{}.json", std::process::id())),
         );
-        let (song_job, song_tx) = test_job(SimplyLoveSyncOwner::SelectMusicSong);
-        let (select_job, select_tx) = test_job(SimplyLoveSyncOwner::SelectMusicPack);
-        let (options_job, options_tx) = test_job(SimplyLoveSyncOwner::OptionsPack);
-        let (browser_job, browser_tx) = test_job(SimplyLoveSyncOwner::ContentBrowserPack);
+        let (song_job, song_tx) = test_job(SyncOwner::SelectMusicSong);
+        let (select_job, select_tx) = test_job(SyncOwner::SelectMusicPack);
+        let (options_job, options_tx) = test_job(SyncOwner::OptionsPack);
+        let (browser_job, browser_tx) = test_job(SyncOwner::ContentBrowserPack);
         service
             .jobs
             .extend([song_job, select_job, options_job, browser_job]);
@@ -618,7 +624,7 @@ mod tests {
             (&browser_tx, 40),
         ] {
             for index in base..base + 2 {
-                tx.send(SimplyLoveSyncEvent::RowBeat {
+                tx.send(SyncEvent::RowBeat {
                     index,
                     beats_processed: index + 1,
                     total_beats: 99,
@@ -631,29 +637,29 @@ mod tests {
         assert!(matches!(
             events.song.as_slice(),
             [
-                SimplyLoveSyncEvent::RowBeat { index: 10, .. },
-                SimplyLoveSyncEvent::RowBeat { index: 11, .. }
+                SyncEvent::RowBeat { index: 10, .. },
+                SyncEvent::RowBeat { index: 11, .. }
             ]
         ));
         assert!(matches!(
             events.select_pack.as_slice(),
             [
-                SimplyLoveSyncEvent::RowBeat { index: 20, .. },
-                SimplyLoveSyncEvent::RowBeat { index: 21, .. }
+                SyncEvent::RowBeat { index: 20, .. },
+                SyncEvent::RowBeat { index: 21, .. }
             ]
         ));
         assert!(matches!(
             events.options_pack.as_slice(),
             [
-                SimplyLoveSyncEvent::RowBeat { index: 30, .. },
-                SimplyLoveSyncEvent::RowBeat { index: 31, .. }
+                SyncEvent::RowBeat { index: 30, .. },
+                SyncEvent::RowBeat { index: 31, .. }
             ]
         ));
         assert!(matches!(
             events.browser_pack.as_slice(),
             [
-                SimplyLoveSyncEvent::RowBeat { index: 40, .. },
-                SimplyLoveSyncEvent::RowBeat { index: 41, .. }
+                SyncEvent::RowBeat { index: 40, .. },
+                SyncEvent::RowBeat { index: 41, .. }
             ]
         ));
     }
@@ -663,10 +669,10 @@ mod tests {
         let mut service = Service::new(
             std::env::temp_dir().join(format!("deadsync-sync-routing-{}.json", std::process::id())),
         );
-        let (job, tx) = test_job(SimplyLoveSyncOwner::SelectMusicSong);
+        let (job, tx) = test_job(SyncOwner::SelectMusicSong);
         service.jobs.push(job);
         for index in 0..8 {
-            tx.send(SimplyLoveSyncEvent::RowStarted { index })
+            tx.send(SyncEvent::RowStarted { index })
                 .expect("the service owns the matching receiver");
         }
 
@@ -676,7 +682,7 @@ mod tests {
             events.song.clear();
             capacity
         };
-        tx.send(SimplyLoveSyncEvent::RowStarted { index: 8 })
+        tx.send(SyncEvent::RowStarted { index: 8 })
             .expect("the service owns the matching receiver");
         let events = service.poll().expect("the job remains active");
 
@@ -690,32 +696,32 @@ mod tests {
         let mut service = Service::new(
             std::env::temp_dir().join(format!("deadsync-sync-routing-{}.json", std::process::id())),
         );
-        let (song_job, song_tx) = test_job(SimplyLoveSyncOwner::SelectMusicSong);
-        let (pack_job, pack_tx) = test_job(SimplyLoveSyncOwner::SelectMusicPack);
+        let (song_job, song_tx) = test_job(SyncOwner::SelectMusicSong);
+        let (pack_job, pack_tx) = test_job(SyncOwner::SelectMusicPack);
         service.jobs.extend([song_job, pack_job]);
         song_tx
-            .send(SimplyLoveSyncEvent::Finished)
+            .send(SyncEvent::Finished)
             .expect("the service owns the matching receiver");
         pack_tx
-            .send(SimplyLoveSyncEvent::RowStarted { index: 4 })
+            .send(SyncEvent::RowStarted { index: 4 })
             .expect("the service owns the matching receiver");
 
         let events = service.poll().expect("both jobs begin active");
         assert!(matches!(
             events.song.as_slice(),
-            [SimplyLoveSyncEvent::Finished]
+            [SyncEvent::Finished]
         ));
         assert!(matches!(
             events.select_pack.as_slice(),
-            [SimplyLoveSyncEvent::RowStarted { index: 4 }]
+            [SyncEvent::RowStarted { index: 4 }]
         ));
         assert_eq!(service.jobs.len(), 1);
-        assert_eq!(service.jobs[0].owner, SimplyLoveSyncOwner::SelectMusicPack);
+        assert_eq!(service.jobs[0].owner, SyncOwner::SelectMusicPack);
 
         pack_tx
-            .send(SimplyLoveSyncEvent::RowCached {
+            .send(SyncEvent::RowCached {
                 index: 5,
-                result: SimplyLoveSyncResult {
+                result: SyncResult {
                     bias_ms: 12.0,
                     confidence: 0.9,
                 },
@@ -725,7 +731,7 @@ mod tests {
         let events = service.poll().expect("the pack job remains active");
         assert!(matches!(
             events.select_pack.as_slice(),
-            [SimplyLoveSyncEvent::RowCached {
+            [SyncEvent::RowCached {
                 index: 5,
                 applied: false,
                 ..

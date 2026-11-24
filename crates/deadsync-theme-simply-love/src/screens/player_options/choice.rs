@@ -12,11 +12,13 @@ use deadsync_profile::PlayerSide;
 /// internally via their `apply_for_player` methods below, so the
 /// dispatcher itself never reads it.
 pub(super) const fn persist_ctx(state: &State, player_idx: usize) -> (bool, PlayerSide) {
-    let play_style = state.play_style;
-    let persisted_idx = state.persisted_player_idx;
-    let should_persist = play_style.is_versus() || player_idx == persisted_idx;
     let side = deadsync_profile::player_side_for_index(player_idx);
-    (should_persist, side)
+    let owner = deadsync_profile_gameplay::stage_options::player_options_persist_side(
+        state.play_style,
+        deadsync_profile::player_side_for_index(state.persisted_player_idx),
+        player_idx,
+    );
+    (owner.is_some(), side)
 }
 
 // ========================= Self-contained binding application =========================
@@ -310,11 +312,7 @@ pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.pane_mut().reset_cursor();
     state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
     state.help_anim_time = [0.0; PLAYER_SLOTS];
-    let active = state.active;
-    let policy = state.policy;
-    let option_masks = state.option_masks;
-    let p = state.pane_mut();
-    p.row_tweens = init_row_tweens(&p.row_map, p.selected_row, active, option_masks, policy);
+    reset_viewport_rows(state);
     state.pane_mut().arcade_row_focus = std::array::from_fn(|player_idx| {
         row_allows_arcade_next_row(state, state.pane().selected_row[player_idx])
     });
@@ -375,11 +373,7 @@ pub(super) fn jump_to_setting(
     // Snap the cursor ring to the new row instead of tweening across the screen.
     p.cursor_initialized[idx] = false;
 
-    let active = state.active;
-    let policy = state.policy;
-    let option_masks = state.option_masks;
-    let p = state.pane_mut();
-    p.row_tweens = init_row_tweens(&p.row_map, p.selected_row, active, option_masks, policy);
+    reset_viewport_rows(state);
     state.pane_mut().arcade_row_focus = std::array::from_fn(|player_idx| {
         row_allows_arcade_next_row(state, state.pane().selected_row[player_idx])
     });

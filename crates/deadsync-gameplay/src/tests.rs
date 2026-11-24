@@ -999,6 +999,7 @@ mod tests {
     fn song_lua_runtime_visuals_are_parser_free_containers() {
         let layer = SongLuaVisualLayerRuntime {
             start_second: 2.0,
+            foreground_beats: None,
             screen_width: 640.0,
             screen_height: 480.0,
             overlays: vec![1_u8],
@@ -1015,6 +1016,7 @@ mod tests {
         let visuals = SongLuaRuntimeVisuals {
             screen_overlay_index: None,
             overlays: vec![3_u8],
+            foreground_beats: None,
             overlay_eases: layer.overlay_eases.clone(),
             overlay_ease_ranges: vec![0..1],
             overlay_events: layer.overlay_events.clone(),
@@ -1260,96 +1262,6 @@ mod tests {
     }
 
     #[test]
-    fn step_stats_notefield_width_matches_sl_style_widths() {
-        assert_eq!(step_stats_notefield_width(4), Some(256.0));
-        assert_eq!(step_stats_notefield_width(8), Some(512.0));
-        assert_eq!(step_stats_notefield_width(0), None);
-    }
-
-    #[test]
-    fn step_stats_upper_density_width_matches_zmod_policy() {
-        assert_near(
-            step_stats_upper_density_graph_width(StepStatsPlayStyle::Single),
-            226.0,
-        );
-        assert_near(
-            step_stats_upper_density_graph_width(StepStatsPlayStyle::Versus),
-            226.0,
-        );
-        assert_near(
-            step_stats_upper_density_graph_width(StepStatsPlayStyle::Double),
-            226.0,
-        );
-    }
-
-    #[test]
-    fn step_stats_density_graph_width_matches_sl_double() {
-        let width = step_stats_density_graph_width(
-            StepStatsPlayStyle::Double,
-            8,
-            1,
-            854.0,
-            480.0,
-            true,
-            false,
-        );
-        let expected = ((854.0 - 512.0) * 0.5) * 0.95;
-        assert_near(width, expected);
-    }
-
-    #[test]
-    fn step_stats_density_graph_width_handles_centered_and_ultrawide() {
-        assert_near(
-            step_stats_density_graph_width(
-                StepStatsPlayStyle::Single,
-                4,
-                1,
-                640.0,
-                480.0,
-                false,
-                true,
-            ),
-            192.0,
-        );
-        assert_near(
-            step_stats_density_graph_width(
-                StepStatsPlayStyle::Single,
-                4,
-                1,
-                854.0,
-                480.0,
-                true,
-                true,
-            ),
-            299.0,
-        );
-        assert_near(
-            step_stats_density_graph_width(
-                StepStatsPlayStyle::Single,
-                4,
-                1,
-                640.0,
-                640.0,
-                false,
-                true,
-            ),
-            192.0,
-        );
-        assert_near(
-            step_stats_density_graph_width(
-                StepStatsPlayStyle::Versus,
-                4,
-                2,
-                2560.0,
-                1080.0,
-                true,
-                false,
-            ),
-            512.0,
-        );
-    }
-
-    #[test]
     fn density_life_points_skip_duplicate_and_update_same_time() {
         let mut points = vec![[1.0, 0.25]];
 
@@ -1403,6 +1315,7 @@ mod tests {
             graph_h: 40.0,
             scaled_width: 400.0,
             u_window: 0.5,
+            cursor_fraction: 0.25,
         };
 
         assert_near(density_graph_u0_for_time(window, 10.0), 0.0);
@@ -5670,6 +5583,7 @@ mod tests {
         let hold = HoldJudgmentRenderInfo {
             result: HoldResult::Held,
             started_at_screen_s: 3.0,
+            alternate: false,
         };
         assert!(!hold_judgment_expired_at(
             hold,
@@ -14626,6 +14540,69 @@ mod tests {
     }
 
     #[test]
+    fn random_song_prefers_joined_difficulties_then_open_section() {
+        use crate::music_wheel::{MusicWheelEntry, RandomSongPool};
+
+        let group = |name: &'static str| MusicWheelEntry::PackHeader {
+            name: Arc::from(name),
+            original_index: 0,
+            banner_path: None,
+            song_count: 1,
+            pack_key: None,
+            parent_series: None,
+        };
+        let song = |title: &str, style: &str, difficulties: &[&str]| {
+            let mut song = test_song(2.0, 2.0);
+            song.title = title.into();
+            song.charts = difficulties
+                .iter()
+                .map(|difficulty| {
+                    let mut chart = test_chart(ArrowStats::default(), 0, false);
+                    chart.chart_type = style.into();
+                    chart.difficulty = (*difficulty).into();
+                    chart
+                })
+                .collect();
+            MusicWheelEntry::Song(Arc::new(song))
+        };
+        let entries = Arc::from([
+            group("Local"),
+            song("Local hard", "dance-single", &["Hard"]),
+            song("Wrong style", "dance-double", &["Hard", "Challenge"]),
+            group("Remote"),
+            song("Both difficulties", "dance-single", &["Hard", "Challenge"]),
+        ]);
+        let mut pool = RandomSongPool::default();
+        pool.sync(&entries, "dance-single");
+        for seed in 0..64 {
+            let pick = |preferred| {
+                pool.pick(preferred, Some("Local"), seed)
+                    .unwrap()
+                    .title
+                    .as_str()
+            };
+            assert_eq!(pick([Some(3), Some(4)]), "Both difficulties");
+            assert_eq!(pick([Some(3), None]), "Local hard");
+            assert_eq!(pick([Some(3), Some(5)]), "Local hard");
+        }
+        pool.sync(&entries, "pump-single");
+        assert!(pool.is_empty());
+        let fallback = Arc::from([
+            song("Tutorial", "dance-single", &["Beginner"]),
+            song("Edit only", "dance-single", &["Edit"]),
+        ]);
+        pool.sync(&fallback, "dance-single");
+        assert_eq!(
+            pool.pick([Some(0), None], None, 0)
+                .unwrap()
+                .title,
+            "Edit only",
+        );
+        pool.sync(&Arc::from(&fallback[..1]), "dance-single");
+        assert_eq!(pool.pick([None, None], None, 0).unwrap().title, "Tutorial");
+    }
+
+    #[test]
     fn versus_song_charts_share_music_with_both_players() {
         use crate::song_launch::{
             SongSelection, change_song_chart, resolve_song_chart_slots, synchronize_song_charts,
@@ -16803,6 +16780,25 @@ mod tests {
     }
 
     #[test]
+    fn hold_feedback_alternates_per_lane_across_completions_and_releases() {
+        let mut state = GameplayHoldFeedbackState::default();
+        state.set_hold_judgment(0, Some(hold_judgment_render_info(HoldResult::Held, 1.0)));
+        assert!(!state.hold_judgment(0).unwrap().alternate);
+        state.tick(2.0);
+        assert!(state.hold_judgment(0).is_none());
+        state.set_hold_judgment(0, Some(hold_judgment_render_info(HoldResult::Missed, 2.0)));
+        state.set_hold_judgment(0, Some(hold_judgment_render_info(HoldResult::LetGo, 3.0)));
+        state.set_hold_judgment(1, Some(hold_judgment_render_info(HoldResult::LetGo, 3.0)));
+        assert!(state.hold_judgment(0).unwrap().alternate);
+        assert!(!state.hold_judgment(1).unwrap().alternate);
+        state.set_hold_judgment(0, Some(hold_judgment_render_info(HoldResult::LetGo, 4.0)));
+        assert!(!state.hold_judgment(0).unwrap().alternate);
+        state.clear();
+        state.set_hold_judgment(1, Some(hold_judgment_render_info(HoldResult::LetGo, 5.0)));
+        assert!(!state.hold_judgment(1).unwrap().alternate);
+    }
+
+    #[test]
     fn hold_feedback_state_returns_slices_and_clears() {
         let mut state = GameplayHoldFeedbackState::default();
         state.set_hold_judgment(
@@ -16810,6 +16806,7 @@ mod tests {
             Some(HoldJudgmentRenderInfo {
                 result: HoldResult::Held,
                 started_at_screen_s: 2.0,
+                alternate: false,
             }),
         );
         state.set_held_miss(

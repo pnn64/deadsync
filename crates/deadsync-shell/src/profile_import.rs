@@ -7,9 +7,7 @@ use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_simfile::runtime_cache::get_song_cache;
-use deadsync_theme_simply_love::{
-    SimplyLoveItgImportSummary, SimplyLoveItgProfileCandidate, SimplyLoveProfileImportEvent,
-};
+use deadsync_theme::app_requests::{ItgImportSummary, ItgProfileCandidate as CandidateView, ProfileImportEvent};
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -21,10 +19,10 @@ const TERMINALS_PER_FRAME: usize = 8;
 const FRAME_EVENTS: usize = TERMINALS_PER_FRAME + 1;
 
 enum WorkerEvent {
-    View(SimplyLoveProfileImportEvent),
+    View(ProfileImportEvent),
     ImportFinished {
         import_id: u64,
-        result: Result<SimplyLoveItgImportSummary, String>,
+        result: Result<ItgImportSummary, String>,
     },
 }
 
@@ -65,7 +63,7 @@ impl Service {
         std::thread::spawn(move || {
             let candidates = candidate_views(detect_itg_local_profiles());
             let _ = tx.send(WorkerEvent::View(
-                SimplyLoveProfileImportEvent::Candidates {
+                ProfileImportEvent::Candidates {
                     candidates,
                     browsed_dir: None,
                 },
@@ -84,13 +82,13 @@ impl Service {
                 });
             let Some(dir) = selection else {
                 let _ = tx.send(WorkerEvent::View(
-                    SimplyLoveProfileImportEvent::BrowseCanceled,
+                    ProfileImportEvent::BrowseCanceled,
                 ));
                 return;
             };
             let candidates = candidate_views(detect_itg_profiles_from_game_dir(&dir));
             let _ = tx.send(WorkerEvent::View(
-                SimplyLoveProfileImportEvent::Candidates {
+                ProfileImportEvent::Candidates {
                     candidates,
                     browsed_dir: Some(dir),
                 },
@@ -134,19 +132,19 @@ impl Service {
     /// terminal event, which keeps the activity count live until it is drained.
     pub(crate) fn poll(
         &mut self,
-    ) -> Option<SmallVec<[SimplyLoveProfileImportEvent; FRAME_EVENTS]>> {
+    ) -> Option<SmallVec<[ProfileImportEvent; FRAME_EVENTS]>> {
         if self.active_jobs == 0 {
             return None;
         }
         Some(self.drain_events())
     }
 
-    fn drain_events(&mut self) -> SmallVec<[SimplyLoveProfileImportEvent; FRAME_EVENTS]> {
+    fn drain_events(&mut self) -> SmallVec<[ProfileImportEvent; FRAME_EVENTS]> {
         let mut events = SmallVec::new();
         if let Some((import_id, _)) = self.active_import.as_ref()
             && let Some((done, total, label)) = self.progress.take(*import_id)
         {
-            events.push(SimplyLoveProfileImportEvent::Progress { done, total, label });
+            events.push(ProfileImportEvent::Progress { done, total, label });
         }
         for _ in 0..TERMINALS_PER_FRAME {
             let Ok(event) = self.rx.try_recv() else {
@@ -163,7 +161,7 @@ impl Service {
                     {
                         self.active_import = None;
                         self.progress.finish(import_id);
-                        events.push(SimplyLoveProfileImportEvent::Finished(result));
+                        events.push(ProfileImportEvent::Finished(result));
                     }
                 }
             }
@@ -172,14 +170,14 @@ impl Service {
     }
 }
 
-fn candidate_views(candidates: Vec<ItgProfileCandidate>) -> Vec<SimplyLoveItgProfileCandidate> {
+fn candidate_views(candidates: Vec<ItgProfileCandidate>) -> Vec<CandidateView> {
     let existing = profile::scan_local_profiles()
         .into_iter()
         .map(|profile| (profile.id, profile.display_name))
         .collect::<HashMap<_, _>>();
     candidates
         .into_iter()
-        .map(|candidate| SimplyLoveItgProfileCandidate {
+        .map(|candidate| CandidateView {
             dir: candidate.dir,
             display_name: candidate.display_name,
             imported_as: candidate
@@ -241,8 +239,8 @@ where
     Ok(summary)
 }
 
-fn import_summary(summary: ImportSummary) -> SimplyLoveItgImportSummary {
-    SimplyLoveItgImportSummary {
+fn import_summary(summary: ImportSummary) -> ItgImportSummary {
+    ItgImportSummary {
         profile_id: summary.profile_id,
         display_name: summary.display_name,
         scores_total: summary.scores_total,
@@ -294,12 +292,12 @@ mod tests {
         service
             .tx
             .send(WorkerEvent::View(
-                SimplyLoveProfileImportEvent::BrowseCanceled,
+                ProfileImportEvent::BrowseCanceled,
             ))
             .expect("the service owns the matching receiver");
         assert!(matches!(
             service.poll().expect("the worker is active").as_slice(),
-            [SimplyLoveProfileImportEvent::BrowseCanceled]
+            [ProfileImportEvent::BrowseCanceled]
         ));
         assert!(service.poll().is_none());
     }
@@ -320,7 +318,7 @@ mod tests {
 
         assert!(matches!(
             events.as_slice(),
-            [SimplyLoveProfileImportEvent::Progress { done: 64, total: 64, label }]
+            [ProfileImportEvent::Progress { done: 64, total: 64, label }]
                 if label.len() == 24
         ));
     }
@@ -355,7 +353,7 @@ mod tests {
             .tx
             .send(WorkerEvent::ImportFinished {
                 import_id,
-                result: Ok(SimplyLoveItgImportSummary::default()),
+                result: Ok(ItgImportSummary::default()),
             })
             .expect("the service owns the matching receiver");
 
@@ -363,12 +361,12 @@ mod tests {
         assert!(matches!(
             events.as_slice(),
             [
-                SimplyLoveProfileImportEvent::Progress {
+                ProfileImportEvent::Progress {
                     done: 8,
                     total: 10,
                     ..
                 },
-                SimplyLoveProfileImportEvent::Finished(Ok(_)),
+                ProfileImportEvent::Finished(Ok(_)),
             ]
         ));
         assert!(service.poll().is_none());
@@ -392,7 +390,7 @@ mod tests {
         let events = service.poll().expect("workers remain active");
         assert!(matches!(
             events.as_slice(),
-            [SimplyLoveProfileImportEvent::Progress { label, .. }] if label == "current"
+            [ProfileImportEvent::Progress { label, .. }] if label == "current"
         ));
         assert!(service.active_import.is_some());
         assert_eq!(service.active_jobs, 1);

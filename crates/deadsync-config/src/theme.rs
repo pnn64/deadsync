@@ -9,7 +9,7 @@ use crate::defaults::{
     DEFAULT_MACHINE_SHOW_SELECT_PLAY_MODE, DEFAULT_MACHINE_SHOW_SELECT_PROFILE,
     DEFAULT_MACHINE_SHOW_SELECT_STYLE, DEFAULT_SHOW_BPM_DECIMAL,
     DEFAULT_SHOW_SELECT_MUSIC_GAMEPLAY_TIMER, DEFAULT_SHOW_VIDEO_BACKGROUNDS,
-    DEFAULT_SIMPLY_LOVE_COLOR, DEFAULT_ZMOD_RATING_BOX_TEXT,
+    DEFAULT_THEME_COLOR, DEFAULT_ZMOD_RATING_BOX_TEXT,
 };
 use crate::ini::SimpleIni;
 use crate::writer::{push_bool, push_line};
@@ -415,21 +415,6 @@ impl SelectMusicStepArtistBoxMode {
             Self::Legacy => "Legacy",
             Self::Expanded => "Expanded",
         }
-    }
-
-    #[must_use]
-    pub const fn is_expanded(self, theme: ThemeFlag) -> bool {
-        match self {
-            Self::Default => select_music_step_artist_default_expanded(theme),
-            Self::Legacy => false,
-            Self::Expanded => true,
-        }
-    }
-}
-
-const fn select_music_step_artist_default_expanded(theme: ThemeFlag) -> bool {
-    match theme {
-        ThemeFlag::SimplyLove => false,
     }
 }
 
@@ -1465,13 +1450,34 @@ impl FromStr for GameFlag {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeFlag {
     SimplyLove,
+    OpenItg,
 }
 
 impl ThemeFlag {
+    pub const CHOICES: [Self; 2] = [Self::SimplyLove, Self::OpenItg];
+
+    #[must_use]
+    pub const fn choice_index(self) -> usize {
+        match self {
+            Self::SimplyLove => 0,
+            Self::OpenItg => 1,
+        }
+    }
+
+    #[must_use]
+    pub const fn from_choice(index: usize) -> Self {
+        if index < Self::CHOICES.len() {
+            Self::CHOICES[index]
+        } else {
+            Self::SimplyLove
+        }
+    }
+
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::SimplyLove => "Simply Love",
+            Self::OpenItg => "OpenITG",
         }
     }
 }
@@ -1485,6 +1491,7 @@ impl FromStr for ThemeFlag {
         };
         match key.as_str() {
             "simplylove" => Ok(Self::SimplyLove),
+            "openitg" => Ok(Self::OpenItg),
             _ => Err(()),
         }
     }
@@ -1776,7 +1783,7 @@ impl Default for TournamentModeOptions {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThemePresentationOptions {
-    pub simply_love_color: i32,
+    pub theme_color: i32,
     pub show_select_music_gameplay_timer: bool,
     pub keyboard_features: bool,
     pub visual_style: VisualStyle,
@@ -1793,7 +1800,7 @@ pub struct ThemePresentationOptions {
 impl Default for ThemePresentationOptions {
     fn default() -> Self {
         Self {
-            simply_love_color: DEFAULT_SIMPLY_LOVE_COLOR,
+            theme_color: DEFAULT_THEME_COLOR,
             show_select_music_gameplay_timer: DEFAULT_SHOW_SELECT_MUSIC_GAMEPLAY_TIMER,
             keyboard_features: DEFAULT_KEYBOARD_FEATURES,
             visual_style: VisualStyle::Hearts,
@@ -1819,10 +1826,10 @@ pub fn load_theme_presentation_options(
     let legacy_srpg_variant = conf.get("Theme", "ThemeVariant");
 
     ThemePresentationOptions {
-        simply_love_color: conf
+        theme_color: conf
             .get("Theme", "SimplyLoveColor")
             .and_then(|value| value.parse::<i32>().ok())
-            .unwrap_or(default.simply_love_color),
+            .unwrap_or(default.theme_color),
         show_select_music_gameplay_timer: conf
             .get("Theme", "ShowSelectMusicGameplayTimer")
             .and_then(parse_loose_bool_str)
@@ -2228,7 +2235,7 @@ pub fn push_theme_option_lines(
         "ShowSelectMusicGameplayTimer",
         presentation.show_select_music_gameplay_timer,
     );
-    push_line(content, "SimplyLoveColor", presentation.simply_love_color);
+    push_line(content, "SimplyLoveColor", presentation.theme_color);
     push_bool(
         content,
         "ZmodRatingBoxText",
@@ -2333,7 +2340,7 @@ mod tests {
 
     fn default_theme_presentation_options() -> ThemePresentationOptions {
         ThemePresentationOptions {
-            simply_love_color: 2,
+            theme_color: 2,
             show_select_music_gameplay_timer: true,
             keyboard_features: true,
             visual_style: VisualStyle::Hearts,
@@ -2709,7 +2716,7 @@ MachineEvaluationStyle=Default\n\
 
         let loaded = load_theme_presentation_options(&conf, default_theme_presentation_options());
 
-        assert_eq!(loaded.simply_love_color, 7);
+        assert_eq!(loaded.theme_color, 7);
         assert!(!loaded.show_select_music_gameplay_timer);
         assert!(!loaded.keyboard_features);
         assert_eq!(loaded.visual_style, VisualStyle::Technique);
@@ -2748,7 +2755,7 @@ MachineEvaluationStyle=Default\n\
 
         let loaded = load_theme_presentation_options(&conf, default);
 
-        assert_eq!(loaded.simply_love_color, default.simply_love_color);
+        assert_eq!(loaded.theme_color, default.theme_color);
         assert_eq!(
             loaded.show_select_music_gameplay_timer,
             default.show_select_music_gameplay_timer
@@ -3308,13 +3315,6 @@ MachineEvaluationStyle=Default\n\
                 Ok(value)
             );
         }
-    }
-
-    #[test]
-    fn step_artist_box_default_tracks_theme() {
-        assert!(!SelectMusicStepArtistBoxMode::Default.is_expanded(ThemeFlag::SimplyLove));
-        assert!(!SelectMusicStepArtistBoxMode::Legacy.is_expanded(ThemeFlag::SimplyLove));
-        assert!(SelectMusicStepArtistBoxMode::Expanded.is_expanded(ThemeFlag::SimplyLove));
     }
 
     #[test]

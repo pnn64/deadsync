@@ -7,7 +7,7 @@ use deadsync_input::VirtualAction;
 use deadsync_input::devices::{GamepadBackend, GamepadSystemEvent};
 use deadsync_profile::PlayerSide;
 use deadsync_theme::views::GamepadSystemView;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme::Screen as Screen;
 use std::time::Instant;
 use winit::keyboard::KeyCode;
 

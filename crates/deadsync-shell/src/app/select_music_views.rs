@@ -5,7 +5,8 @@ use deadsync_profile as profile_data;
 use deadsync_theme::views::AudioPlaybackView;
 #[cfg(test)]
 use deadsync_theme_simply_love::screens::select_course;
-use deadsync_theme_simply_love::screens::{SimplyLoveScreen as CurrentScreen, select_music};
+use deadsync_theme::Screen as CurrentScreen;
+use deadsync_theme_simply_love::screens::select_music;
 use deadsync_theme_simply_love::views::{
     SelectMusicDownloadView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
     SelectMusicLeaderboardView, SelectMusicPadProfileView, SelectMusicPolicyView,

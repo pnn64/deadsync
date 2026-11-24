@@ -1,7 +1,8 @@
 use super::*;
 use deadsync_profile_gameplay::stage_options::StageOptions;
 use deadsync_theme::player_options::{
-    PlayerOptionsEntry, PlayerOptionsSelection, ThemePlayerOptions,
+    PlayerOptionsEntry, PlayerOptionsPage, PlayerOptionsSelection, PlayerOptionsViewport,
+    ThemePlayerOptions,
 };
 
 impl ThemePlayerOptions for crate::SimplyLoveTheme {
@@ -12,6 +13,7 @@ impl ThemePlayerOptions for crate::SimplyLoveTheme {
     type PlayerOptionsRawKey = deadlib_platform::input::RawKeyboardEvent;
     type PlayerOptionsVisualPolicy = crate::views::SimplyLoveVisualPolicyView;
     type PlayerOptionsNoteskin = Noteskin;
+    type PlayerOptionsText = deadlib_present::actors::TextContent;
 
     fn init_player_options(entry: PlayerOptionsEntry<Screen, PlayerOptionsView>) -> State {
         let mut state = init_state(
@@ -98,6 +100,18 @@ impl ThemePlayerOptions for crate::SimplyLoveTheme {
         visual_policy: Self::PlayerOptionsVisualPolicy,
     ) {
         push_actors(actors, state, assets, visual_policy);
+    }
+
+    fn set_player_options_viewport(state: &mut State, viewport: PlayerOptionsViewport) {
+        set_viewport(state, viewport);
+    }
+
+    fn with_player_options_page(
+        actors: &mut Vec<Actor>,
+        state: &State,
+        draw: impl FnOnce(&mut Vec<Actor>, PlayerOptionsPage<'_, Self::PlayerOptionsText, Actor>),
+    ) {
+        push_actors_with_layout(actors, state, draw);
     }
 
     fn sync_player_options_heart_rate(state: &mut State, devices: &HeartRateDevicesView) {

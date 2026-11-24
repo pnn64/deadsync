@@ -1,6 +1,7 @@
 use deadsync_chart::song::{standard_difficulty_index, sync_pref_offset};
 use deadsync_chart::{SongData, SongPack, SyncPref};
 use deadsync_config::app_config::Config;
+use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -23,6 +24,28 @@ static COURSE_CACHE: std::sync::LazyLock<Mutex<Vec<CourseData>>> =
 /// Panics if an internal synchronization lock is poisoned.
 pub fn get_song_cache() -> std::sync::MutexGuard<'static, Vec<SongPack>> {
     SONG_CACHE.lock().unwrap()
+}
+
+/// Pick a catalog chart with music and a standard difficulty up to the given index.
+pub fn random_chart_with_music(
+    chart_type: &str,
+    max_difficulty: usize,
+) -> Option<(Arc<SongData>, usize)> {
+    let order = RandomState::new();
+    get_song_cache()
+        .iter()
+        .flat_map(|pack| &pack.songs)
+        .flat_map(|song| {
+            song.charts.iter().enumerate().filter_map(move |(index, chart)| {
+                (chart.chart_type.eq_ignore_ascii_case(chart_type)
+                    && standard_difficulty_index(&chart.difficulty)
+                        .is_some_and(|difficulty| difficulty <= max_difficulty)
+                    && (chart.music_path.is_some() || song.music_path.is_some()))
+                .then_some((song, index))
+            })
+        })
+        .min_by_key(|(song, index)| order.hash_one((&song.simfile_path, index)))
+        .map(|(song, index)| (Arc::clone(song), index))
 }
 
 pub fn song_cache_generation() -> u64 {

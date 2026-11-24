@@ -252,7 +252,7 @@ pub(crate) mod tests {
 
     const FIXTURE_TEXTURES: FixtureTextureContext = FixtureTextureContext;
 
-    fn actor_tree_has_text(actors: &[Actor], expected: &str) -> bool {
+    pub(crate) fn actor_tree_has_text(actors: &[Actor], expected: &str) -> bool {
         actors.iter().any(|actor| match actor {
             Actor::Text { content, .. } => content.as_str() == expected,
             Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
@@ -379,7 +379,7 @@ pub(crate) mod tests {
             .max()
     }
 
-    fn fixture_assets() -> deadlib_assets::AssetManager {
+    pub(crate) fn fixture_assets() -> deadlib_assets::AssetManager {
         let mut assets = deadlib_assets::AssetManager::new();
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let asset_root = project_root.join("assets");
@@ -509,10 +509,11 @@ pub(crate) mod tests {
         config_override: Option<GameplayConfig>,
         runtime_fallback: bool,
     ) -> screen_gameplay::State {
-        let (prepared, scene, mut init) = prepare_stage_fixture(
+        let (mut prepared, scene, mut init) = prepare_stage_fixture(
             simfile, viewport, session, player_profiles, renderer, until_beat,
             live_diagnostic, configure_compile_clocks, config_override, runtime_fallback,
         );
+        prepared.configure_density_graph(deadsync_theme_simply_love::step_stats::density_graph_layout);
         let scores = std::mem::take(&mut init.scores);
         crate::gameplay_runtime::present_stage(
             prepared,
@@ -1563,8 +1564,11 @@ return Def.ActorFrame { Name = 'Foreground',
                 for (color, x) in [([0.37, 0.19, 0.63, 1.0], 80.0 * tick as f32 + 10.0),
                     ([0.81, 0.17, 0.29, 1.0], 10.0 * progress as f32 + 10.0),
                     ([0.23, 0.71, 0.41, 1.0], 20.0 * tick as f32 + 10.0)] {
+                    // Song Lua sprites submit RageColor bytes, while the
+                    // fixture declares its identifying tint in Lua floats.
+                    let tint = color.map(|channel| f32::from((channel * 256.0) as u8) / 255.0);
                     let markers: Vec<_> = frame.sprite_instances.iter().filter(|instance|
-                        (0..4).all(|axis| (instance.tint[axis] - color[axis]).abs() < 1e-5)).collect();
+                        (0..4).all(|axis| (instance.tint[axis] - tint[axis]).abs() < 1e-5)).collect();
                     assert_eq!(markers.len(), 1, "live marker {color:?} at {now}");
                     // Renderer instances use the centered world coordinate system.
                     assert!((markers[0].center[0] + 320.0 - x).abs() < 1e-4, "rendered parent pose at {now}: {:?}", markers[0].center);
@@ -2102,6 +2106,7 @@ end
             deadsync_theme::ThemeAssetManifest {
                 fonts: &[],
                 textures: texture_assets.iter().copied(),
+                embedded_pngs: &[],
                 texture_needs_repeat_sampler: (deadsync_theme_simply_love::asset_manifest()
                     .texture_needs_repeat_sampler),
             },
@@ -2884,6 +2889,7 @@ M000
                     player.judgment_counts = [1, 1, 0, 0, 0, 1];
                     player.scoring_counts = player.judgment_counts;
                     player.earned_grade_points = 12;
+                    player.recorded_max_combo = 27 + runtime as u32;
                     player.holds_held = 1;
                     player.holds_held_for_score = 1;
                     player.rolls_held = 1;
@@ -2891,6 +2897,9 @@ M000
                     player.mines_avoided = 2;
                     player.calories_burned = 3.25 + runtime as f32;
                     player.life_history = vec![(0.0, 1.0), (5.0, 0.75)];
+                    player.stage_life_record.steps_seconds = 5.0;
+                    player.stage_life_record.samples = vec![(0.0, 1.0), (5.0, 0.75)];
+                    player.life_judgment_times.record(JudgeGrade::Excellent, 2.0);
                     state.progress.window_counts.canonical[runtime] =
                         deadsync_rules::timing::WindowCounts {
                             w0: 1,
@@ -2914,6 +2923,7 @@ M000
                         .expect("result on physical side");
                     assert_eq!(result.judgment_counts, [1, 1, 0, 0, 0, 1]);
                     assert_eq!(result.notes_hit, 2);
+                    assert_eq!(result.max_combo, 27 + runtime as u32);
                     assert_eq!(result.calories_burned, 3.25 + runtime as f32);
                     assert_eq!(result.column_judgments[0].w0, 1);
                     assert_eq!(result.column_judgments[1].w2, 1);
@@ -2928,6 +2938,8 @@ M000
                     assert_eq!(result.rolls_held, 1);
                     assert_eq!(result.mines_avoided, 2);
                     assert_eq!(result.life_history, [(0.0, 1.0), (5.0, 0.75)]);
+                    assert_eq!(&*result.steps_life.samples, &[(0.0, 1.0), (5.0, 0.75)]);
+                    assert_eq!(result.steps_life.judgment_times.thresholds()[0], 2.0);
                     assert!(!result.disqualified);
                 }
                 let mut context = EvaluationContextView {
@@ -2938,7 +2950,17 @@ M000
                 for (player, joined) in context.players.iter_mut().zip(joined) {
                     player.joined = joined;
                 }
-                let view = crate::session_results::evaluation_view(&state, &stage, context);
+                let view = crate::session_results::evaluation_view(
+                    &state,
+                    &stage,
+                    1,
+                    &deadsync_config::app_config::Config::default(),
+                    |player| {
+                        deadsync_theme_simply_love::screens::components::gameplay::notefield::preferred_mods_text(
+                            &state, player,
+                        )
+                    },
+                );
                 for runtime in 0..state.num_players() {
                     let score = view.score_info[runtime].as_ref().expect("evaluation view");
                     let result = stage.players[profile_data::player_side_index(score.side)]
@@ -2947,13 +2969,58 @@ M000
                     assert_eq!(score.grade, result.grade);
                     assert_eq!(score.score_percent, result.score_percent);
                     assert_eq!(score.ex_score_percent, result.ex_score_percent);
+                    assert_eq!(score.max_combo, result.max_combo);
                     assert_eq!(score.column_judgments, result.column_judgments);
                     assert_eq!(score.scatter.len(), result.scatter.len());
                     assert_eq!(score.histogram.bins, result.histogram.bins);
+                    assert!(Arc::ptr_eq(&score.steps_life.samples, &result.steps_life.samples));
                 }
-                let screen = evaluation::init(view);
+                let overview = deadsync_theme::evaluation::EvaluationOverviewPage::new(
+                    &view.score_info,
+                    view.routine_shared_score_percent,
+                    view.stage_number,
+                    style.is_double(),
+                    |side| *side == profile_data::PlayerSide::P2,
+                ).expect("prepared overview");
+                let scores = Arc::clone(&view.score_info);
+                let screen = evaluation::init(view, context);
+                assert!(Arc::ptr_eq(&scores, &screen.score_info));
+                assert!(Arc::ptr_eq(&scores, &screen.clone().score_info));
                 assert_eq!(screen.stage_duration_seconds, 12.5);
                 assert!(!evaluation::all_joined_players_failed(&screen));
+                assert!(evaluation::overview_pane_selected(&screen));
+                space::with_current_metrics(space::Metrics::centered(854.0, 480.0), || {
+                    let assets = deadlib_assets::AssetManager::new();
+                    let mut actors = Vec::new();
+                    let mut openitg = deadsync_theme_openitg::OpenItgEvaluation::default();
+                    let frame = overview.view(
+                        &assets, false, deadsync_theme_openitg::EVALUATION_OVERVIEW_SETTLED_SECONDS, None,
+                    );
+                    let player = frame.players[0].as_ref().expect("result slot zero");
+                    assert_eq!(player.p2, side == profile_data::PlayerSide::P2);
+                    assert!(std::ptr::eq(player.steps_life, &scores[0].as_ref().unwrap().steps_life));
+                    openitg.push_overview(
+                        &mut actors,
+                        &assets,
+                        frame,
+                    );
+                    assert!(actor_tree_has_text(&actors, "CHECK YOUR STATS"));
+                    assert!(actor_tree_has_text(&actors, "   27"));
+                    assert_eq!(actor_tree_has_text(&actors, "   28"), style.is_versus());
+                    let graph = actors.iter().find_map(|actor| match actor {
+                        Actor::TexturedMesh { vertices, z: 8, .. } => Some(Arc::clone(vertices)),
+                        _ => None,
+                    }).expect("overview life graph");
+                    actors.clear();
+                    openitg.push_overview(
+                        &mut actors,
+                        &assets,
+                        overview.view(&assets, false, deadsync_theme_openitg::EVALUATION_OVERVIEW_SETTLED_SECONDS, None),
+                    );
+                    assert!(actors.iter().any(|actor| matches!(actor,
+                        Actor::TexturedMesh { vertices, z: 8, .. } if Arc::ptr_eq(&graph, vertices)
+                    )));
+                });
                 // Session storage does not need the screen and remains unchanged by it.
                 drop(screen);
                 let mut session = crate::session::SessionState::new(0, [0; MAX_PLAYERS]);
@@ -3508,6 +3575,7 @@ mods_ease = {
 }
 
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(20) end,
     InitCommand=function(self)
         prefix_globals.ease = {
             {4, 4, 0, 18, function(value) if player then player:rotationz(value) end end, "len", ease.inOutQuad},
@@ -4084,6 +4152,7 @@ return Def.ActorFrame {
             lua_dir.join("default.lua"),
             r#"
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(4) end,
     Def.ActorProxy{
         OnCommand=function(self)
             local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
@@ -4111,6 +4180,7 @@ return Def.ActorFrame{
             lua_dir.join("default.lua"),
             r#"
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(4) end,
     Def.ActorProxy{
         OnCommand=function(self)
             local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
@@ -4154,6 +4224,7 @@ return Def.ActorFrame{
 local capture = nil
 
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(4) end,
     Def.ActorFrameTexture{
         Name="DirectCapture",
         InitCommand=function(self)
@@ -4205,6 +4276,7 @@ return Def.ActorFrame{
 local capture = nil
 
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(4) end,
     Def.ActorFrameTexture{
         Name="DirectPlayerCapture",
         InitCommand=function(self)
@@ -4250,8 +4322,8 @@ return Def.ActorFrame{
         simfile
     }
 
-    fn write_direct_combo_proxy_fixture() -> PathBuf {
-        let simfile = write_fixture("f6-direct-combo", generated_pipeline_song_lua_simfile());
+    fn write_direct_hud_proxy_fixture(name: &str, child: &str) -> PathBuf {
+        let simfile = write_fixture(name, generated_pipeline_song_lua_simfile());
         let lua_dir = simfile
             .parent()
             .expect("fixture simfile should have a song directory")
@@ -4261,27 +4333,90 @@ return Def.ActorFrame{
             lua_dir.join("default.lua"),
             r#"
 return Def.ActorFrame{
+    OnCommand=function(self) self:sleep(3) end,
     Def.ActorProxy{
         OnCommand=function(self)
-            local combo = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("Combo")
-            self:SetTarget(combo)
+            local hud = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("HUD_CHILD")
+            self:SetTarget(hud)
             self:x(SCREEN_CENTER_X)
             self:y(SCREEN_CENTER_Y)
         end,
     },
     Def.ActorProxy{
         OnCommand=function(self)
-            local combo = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("Combo")
-            self:SetTarget(combo)
+            local hud = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("HUD_CHILD")
+            self:SetTarget(hud)
             self:x(SCREEN_CENTER_X + 96)
             self:y(SCREEN_CENTER_Y + 48)
         end,
     },
 }
-"#,
+"#
+            .replace("HUD_CHILD", child),
         )
         .unwrap();
         simfile
+    }
+
+    #[test]
+    fn root_judgment_proxies_match_in_baked_and_runtime_playback() {
+        let simfile = write_direct_hud_proxy_fixture("direct-judgment", "Judgment");
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(854, 480);
+                let assets = fixture_assets();
+                let mut actors = Vec::new();
+                for live in [false, true] {
+                    let mut state = build_test_state_with_lua_mode(
+                        &simfile,
+                        GameplayViewport::new(854.0, 480.0),
+                        GameplaySession::default(),
+                        std::array::from_fn(|_| profile_data::Profile::default()),
+                        "Software",
+                        None,
+                        live,
+                    );
+                    assert_eq!(state.song_lua.is_some(), live);
+                    set_fixture_time(&mut state, 2.5);
+                    add_sprite_core_feedback(&mut state, 0, 0, 100);
+                    for hud in [None, Some(deadsync_theme_openitg::GAMEPLAY_HUD)] {
+                        if let Some(hud) = hud {
+                            state.presentation.set_hud(hud);
+                        }
+                        actors.clear();
+                        let segments = crate::gameplay_runtime::push_actors(
+                            &mut actors,
+                            &mut state,
+                            &assets,
+                            screen_gameplay::ActorViewOverride::default(),
+                            123.0,
+                            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                        );
+                        assert_eq!(segments.direct_proxy_count(), 2, "live={live}");
+                    }
+                    for (seconds, expected) in [(3.0, 2), (3.5, 0)] {
+                        set_fixture_time(&mut state, seconds);
+                        add_sprite_core_feedback(&mut state, 0, 0, 100);
+                        actors.clear();
+                        let segments = crate::gameplay_runtime::push_actors(
+                            &mut actors,
+                            &mut state,
+                            &assets,
+                            screen_gameplay::ActorViewOverride::default(),
+                            123.0,
+                            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                        );
+                        assert_eq!(segments.direct_proxy_count(), expected, "live={live}, seconds={seconds}");
+                    }
+                }
+            },
+        );
     }
 
     #[test]
@@ -4417,32 +4552,11 @@ return Def.ActorFrame{
         )
     }
 
+    use deadsync_theme::Screen;
+
     struct AlternateGameplay;
 
     impl deadsync_theme::views::GameplayLivePresentation<State> for AlternateGameplay {}
-
-    struct AlternateGameplayTheme;
-
-    impl deadsync_theme::Theme for AlternateGameplayTheme {
-        type Screen = &'static str;
-        type RuntimeRequest = ();
-
-        fn screen_id(screen: Self::Screen) -> deadsync_theme::ThemeScreenId {
-            deadsync_theme::ThemeScreenId::new(screen)
-        }
-    }
-
-    impl deadsync_theme::ThemeScreenFlow for AlternateGameplayTheme {
-        const SCREENS: deadsync_theme::ThemeScreens<Self::Screen> = deadsync_theme::ThemeScreens {
-            menu: "home",
-            gameplay: "dance",
-            practice: "rehearsal",
-            results: "record",
-            song_selection: "library",
-            course_selection: "marathon",
-            player_options: "settings",
-        };
-    }
 
     impl GameplayFramePresenter for AlternateGameplay {
         type Profile = GameplayProfile;
@@ -4519,7 +4633,7 @@ return Def.ActorFrame{
 
     impl PracticeLivePresentation<AlternateGameplay> for AlternatePractice {
         type Feedback<'a> = AlternatePracticeFeedback;
-        type Effect = deadsync_theme::ThemeEffect<&'static str, ()>;
+        type Effect = deadsync_theme::ThemeEffect<Screen, ()>;
         type EditSnapshot = bool;
 
         fn editor_feedback(&mut self) -> Self::Feedback<'_> {
@@ -4643,7 +4757,7 @@ return Def.ActorFrame{
                             Some("ScreenPractice"),
                         );
                         let destination = (0..20).find_map(|_| {
-                            gameplay_runtime::update::<AlternateGameplayTheme, _>(
+                            gameplay_runtime::update(
                                 &mut host, 0.125, false, &mut audio, &sounds, &mut clock,
                                 &mut score_cursor, &mut telemetry,
                             ).into_iter().find_map(|effect| match effect {
@@ -4651,7 +4765,7 @@ return Def.ActorFrame{
                                 _ => None,
                             })
                         });
-                        assert_eq!(destination, Some("rehearsal"));
+                        assert_eq!(destination, Some(Screen::Practice));
                         assert!(host.song_lua.is_ended());
                         gameplay_runtime::sync_initial_scores(&mut host);
                         let practice_init = gameplay_runtime::practice_init(
@@ -4673,7 +4787,7 @@ return Def.ActorFrame{
                         let mut effects = Vec::new();
                         let timestamp = std::time::Instant::now();
                         let mut raw_key = |code, pressed| {
-                            gameplay_runtime::handle_practice_raw_key::<AlternateGameplayTheme, _, _>(
+                            gameplay_runtime::handle_practice_raw_key(
                                 &mut practice,
                                 &RawKeyboardEvent { code, pressed, repeat: false, timestamp, host_nanos: 0 },
                                 &mut audio, &sounds, &mut clock, &mut effects,
@@ -4696,7 +4810,7 @@ return Def.ActorFrame{
                         let editor = practice.session.editor().snapshot();
                         let saved = gameplay_runtime::practice_edit_snapshot(&practice);
                         practice.presentation.overlay_visible = false;
-                        gameplay_runtime::handle_practice_input::<AlternateGameplayTheme, _, _>(
+                        gameplay_runtime::handle_practice_input(
                             &mut practice, &input(VirtualAction::p1_menu_down), &mut audio, &sounds,
                             &mut clock, &mut effects,
                         );
@@ -4705,7 +4819,7 @@ return Def.ActorFrame{
                         assert_eq!(practice.session.editor().snapshot(), editor);
                         assert!(practice.presentation.overlay_visible);
                         for action in [VirtualAction::p1_start, VirtualAction::p1_start] {
-                            gameplay_runtime::handle_practice_input::<AlternateGameplayTheme, _, _>(
+                            gameplay_runtime::handle_practice_input(
                                 &mut practice, &input(action), &mut audio, &sounds, &mut clock, &mut effects,
                             );
                         }
@@ -4720,12 +4834,12 @@ return Def.ActorFrame{
                             VirtualAction::p1_menu_up,
                             VirtualAction::p1_start,
                         ] {
-                            gameplay_runtime::handle_practice_input::<AlternateGameplayTheme, _, _>(
+                            gameplay_runtime::handle_practice_input(
                                 &mut practice, &input(action), &mut audio, &sounds, &mut clock, &mut effects,
                             );
                         }
                         assert!(!practice.session.is_playing());
-                        assert_eq!(effects, vec![ThemeEffect::Navigate("library")]);
+                        assert_eq!(effects, vec![ThemeEffect::Navigate(Screen::SelectMusic)]);
                     },
                 );
             })
@@ -4898,6 +5012,7 @@ return Def.ActorFrame{
 local player
 return Def.ActorFrame{
     OnCommand=function(self)
+        self:sleep(3)
         player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
         player:visible(false)
         SCREENMAN:GetTopScreen():GetChild("Underlay"):visible(false)
@@ -4921,9 +5036,8 @@ return Def.ActorFrame{
         }
     }
 
-    #[test]
-    fn hidden_score_proxy_keeps_overlay_fade() {
-        let simfile = write_fixture("hidden-score-fade", generated_pipeline_song_lua_simfile());
+    fn write_hidden_score_proxy_fixture(name: &str) -> PathBuf {
+        let simfile = write_fixture(name, generated_pipeline_song_lua_simfile());
         let dir = simfile.parent().expect("song directory").join("lua");
         fs::create_dir_all(&dir).expect("Lua directory");
         fs::write(
@@ -4932,6 +5046,7 @@ return Def.ActorFrame{
 local player, score
 return Def.ActorFrame{
     OnCommand=function(self)
+        self:sleep(4)
         local top = SCREENMAN:GetTopScreen()
         player = top:GetChild("PlayerP1")
         player:visible(false)
@@ -4953,6 +5068,12 @@ return Def.ActorFrame{
 "#,
         )
         .expect("score/fade Lua");
+        simfile
+    }
+
+    #[test]
+    fn hidden_score_proxy_keeps_overlay_fade() {
+        let simfile = write_hidden_score_proxy_fixture("hidden-score-fade");
         with_session(
             profile_data::PlayStyle::Single,
             profile_data::PlayerSide::P1,
@@ -4963,7 +5084,7 @@ return Def.ActorFrame{
                 space::set_current_window_px(1280, 720);
                 let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
-                profiles[0].display_name = "OverlayFooter".into();
+                profiles[0].display_name = "SystemFooter".into();
                 let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
@@ -4971,8 +5092,20 @@ return Def.ActorFrame{
                     profiles,
                 );
                 let assets = fixture_assets();
+                let prompt = deadsync_theme_simply_love::i18n::tr(
+                    "Gameplay",
+                    "ContinueHoldingStartGiveUp",
+                );
+                let prompt = deadlib_present::font::replace_markers(&prompt);
                 for (time, alpha) in [(0.0, 1.0), (0.75, 0.5), (2.5, 0.0), (0.75, 0.5)] {
                     set_fixture_time(&mut state, time);
+                    // The exit prompt belongs to ScreenGameplay's Overlay. Keep
+                    // its own fade settled while seeking through the Lua tween.
+                    let input = &mut state.gameplay.control.exit_input;
+                    input.hold_to_exit_key = Some(deadsync_gameplay::HoldToExitKey::Start);
+                    input.hold_to_exit_start = Some(
+                        std::time::Instant::now() - std::time::Duration::from_secs(1),
+                    );
                     let mut actors = Vec::new();
                     let segments = crate::gameplay_runtime::push_actors(
                         &mut actors,
@@ -4987,15 +5120,388 @@ return Def.ActorFrame{
                     if time > 0.0 {
                         assert!(actor_tree_has_text(&actors, "."));
                     }
-                    let actual = top_screen_text_draw(&actors, "OverlayFooter", 0, 1.0)
+                    let actual = top_screen_text_draw(&actors, &prompt, 0, 1.0)
                         .map_or(0.0, |(_, alpha)| alpha);
                     assert!(
                         (actual - alpha).abs() < 0.02,
-                        "footer fade at {time}: {actual} != {alpha}"
+                        "exit prompt fade at {time}: {actual} != {alpha}"
                     );
-                    // Simply Love's Event label belongs to In, a sibling of
-                    // Overlay. The score proxy must not make Overlay own it.
+                    // The system footer and the In child's Event label draw
+                    // independently of the song's Overlay.
+                    assert_eq!(
+                        top_screen_text_draw(&actors, "SystemFooter", 0, 1.0).unwrap().1,
+                        1.0,
+                    );
                     assert_eq!(top_screen_text_draw(&actors, "EVENT", 0, 1.0).unwrap().1, 1.0);
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn openitg_hud_uses_live_score_in_lua_proxy() {
+        use deadsync_theme::views::GameplayHudMotion;
+
+        let simfile = write_hidden_score_proxy_fixture("openitg-score-proxy");
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+                space::set_current_window_px(1280, 720);
+                let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                let mode = deadsync_profile_gameplay::score_display_mode_from_profile(
+                    profiles[0].score_display_mode,
+                );
+                let mut state = build_compiled_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                state.presentation.set_hud(deadsync_theme_openitg::GAMEPLAY_HUD);
+                set_fixture_time(&mut state, 0.75);
+                let score = state.gameplay.display_gameplay_itg_score_percent(0, mode);
+                let expected = format!("{:.2}%", (score * 100.0).trunc() / 100.0);
+                let mut actors = Vec::new();
+                let segments = crate::gameplay_runtime::push_actors(
+                    &mut actors,
+                    &mut state,
+                    &fixture_assets(),
+                    screen_gameplay::ActorViewOverride {
+                        hud_motion: GameplayHudMotion::Leaving { elapsed_seconds: 0.4 },
+                        ..Default::default()
+                    },
+                    123.0,
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                );
+                assert_eq!(segments.direct_field_proxy_count(state.song_frame()), 1);
+                assert!(actor_tree_has_text(&actors, &expected));
+                assert!(!actor_tree_has_text(&actors, &state.song().title));
+                assert_eq!(state.gameplay.display_gameplay_itg_score_percent(0, mode), score);
+            },
+        );
+    }
+
+    #[test]
+    fn simply_love_and_openitg_produce_identical_gameplay_results() {
+        use deadlib_present::actors::SizeSpec;
+        use deadsync_core::input::InputSource;
+        use deadsync_gameplay::{
+            GameplayAction, GameplayAudioSnapshot, GameplayExit, GameplayStreamClockSnapshot,
+        };
+        use deadsync_input::{InputEvent, VirtualAction};
+        use deadsync_profile_gameplay::results::stage_result;
+        use deadsync_score::{
+            Grade,
+            stage_stats::{PlayerStageSummary, all_players_failed},
+        };
+        use deadsync_theme::ThemeEffect;
+        use deadsync_theme::app_requests::RuntimeRequest;
+        use std::time::{Duration, Instant};
+
+        let simfile = write_fixture(
+            "theme-gameplay-parity",
+            "\
+#TITLE:Theme gameplay parity;
+#MUSIC:music.wav;
+#OFFSET:0;
+#BPMS:0=120;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DIFFICULTY:Challenge;
+#METER:5;
+#NOTES:
+0000
+1000
+0100
+0010
+,
+1000
+0100
+0010
+0001
+,
+1000
+0100
+0010
+0001
+,
+1000
+0100
+0010
+0001
+;",
+        );
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                space::set_current_metrics(space::Metrics::centered(640.0, 480.0));
+                space::set_current_window_px(640, 480);
+                let assets = fixture_assets();
+                let actions = [
+                    VirtualAction::p1_left,
+                    VirtualAction::p1_down,
+                    VirtualAction::p1_up,
+                    VirtualAction::p1_right,
+                ];
+                let now = Instant::now();
+                let epoch = now.checked_sub(Duration::from_secs(30)).unwrap_or(now);
+                let host_epoch = 1_000_000_000_000;
+
+                for should_fail in [false, true] {
+                    let build = || {
+                        build_test_state(
+                            &simfile,
+                            GameplayViewport::new(640.0, 480.0),
+                            GameplaySession::default(),
+                            std::array::from_fn(|_| profile_data::Profile {
+                                noteskin: profile_data::NoteSkin::new("lambda"),
+                                lifemeter_type: profile_data::LifeMeterType::Standard,
+                                ..Default::default()
+                            }),
+                        )
+                    };
+                    let mut states = [Box::new(build()), Box::new(build())];
+                    states[1]
+                        .presentation
+                        .set_hud(deadsync_theme_openitg::GAMEPLAY_HUD);
+                    let chart: Vec<_> = states[0]
+                        .notes()
+                        .iter()
+                        .zip(states[0].note_time_cache_ns())
+                        .map(|(note, &time)| (time, note.column))
+                        .collect();
+                    assert_eq!(chart.len(), 15);
+
+                    let mut previous = chart[0].0 - 60_000_000;
+                    for state in &mut states {
+                        state.set_current_music_time_ns(previous);
+                    }
+                    let mut actors = Vec::new();
+                    let mut effects = Vec::new();
+                    let mut completed = false;
+                    let mut tick = |states: &mut [Box<screen_gameplay::State>; 2],
+                                    music_ns: i64,
+                                    edge: Option<(usize, bool, i64)>,
+                                    check_presenters: bool| {
+                        let dt = (music_ns - previous) as f32 / 1_000_000_000.0;
+                        assert!(dt > 0.0);
+                        previous = music_ns;
+                        let host_ns = host_epoch + music_ns as u64;
+                        let audio = GameplayAudioSnapshot {
+                            stream_clock: GameplayStreamClockSnapshot {
+                                music_nanos: music_ns,
+                                music_seconds_per_second: 1.0,
+                                has_music_mapping: true,
+                                valid_at: epoch + Duration::from_nanos(music_ns as u64),
+                                valid_at_host_nanos: host_ns,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        };
+                        let mut completion = [false; 2];
+                        for (theme, state) in states.iter_mut().enumerate() {
+                            effects.clear();
+                            if let Some((column, pressed, captured_ns)) = edge {
+                                let timestamp = epoch + Duration::from_nanos(captured_ns as u64);
+                                let event = InputEvent {
+                                    action: actions[column],
+                                    input_slot: column as u32,
+                                    pressed,
+                                    source: InputSource::Keyboard,
+                                    timestamp,
+                                    timestamp_host_nanos: host_epoch + captured_ns as u64,
+                                    stored_at: timestamp,
+                                    emitted_at: timestamp,
+                                };
+                                screen_gameplay::handle_input(state, &event, &mut effects);
+                            }
+                            screen_gameplay::update(state, dt, audio, || host_ns, &mut effects);
+                            completion[theme] = effects.iter().any(|effect| {
+                                matches!(
+                                    effect,
+                                    ThemeEffect::Runtime(RuntimeRequest::GameplayAction(
+                                        GameplayAction::Navigate(GameplayExit::Complete)
+                                            | GameplayAction::NavigateNoFade(
+                                                GameplayExit::Complete
+                                            )
+                                    ))
+                                )
+                            });
+                            assert_eq!(state.current_music_time_ns(), music_ns);
+                            assert!(state.stage.take_output().errors.is_empty());
+
+                            actors.clear();
+                            let segments = crate::gameplay_runtime::push_actors(
+                                &mut actors,
+                                state,
+                                &assets,
+                                Default::default(),
+                                host_ns as f64 / 1_000_000_000.0,
+                                Default::default(),
+                            );
+                            assert!(segments.segments(state.song_frame(), &actors).count() > 0);
+                            if check_presenters {
+                                let openitg_life = actors.iter().any(|actor| matches!(actor,
+                                Actor::Sprite { offset, size: [SizeSpec::Px(w), SizeSpec::Px(h)], z: 92, .. }
+                                    if *offset == [24.0, 270.0] && *w == 314.0 && *h == 40.0
+                            ));
+                                assert_eq!(
+                                    openitg_life,
+                                    theme == 1,
+                                    "both concrete HUDs must render"
+                                );
+                            }
+                        }
+                        assert_eq!(completion[0], completion[1], "completion at {music_ns}");
+                        completed |= completion[0];
+
+                        let [left, right] = states;
+                        let judgment = |result: Option<Judgment>| {
+                            result.map(|hit| {
+                                (
+                                    hit.grade,
+                                    hit.window,
+                                    hit.time_error_music_ns,
+                                    hit.miss_because_held,
+                                )
+                            })
+                        };
+                        assert_eq!(left.notes().len(), right.notes().len());
+                        for (index, (a, b)) in left.notes().iter().zip(right.notes()).enumerate() {
+                            assert_eq!(
+                                judgment(a.result),
+                                judgment(b.result),
+                                "note {index} at {music_ns}"
+                            );
+                        }
+                        let l = &left.players()[0];
+                        let r = &right.players()[0];
+                        assert_eq!(l.life.to_bits(), r.life.to_bits(), "life at {music_ns}");
+                        assert_eq!(l.life_history, r.life_history);
+                        assert_eq!(l.combo_runs, r.combo_runs);
+                        assert_eq!(
+                            (l.combo, l.recorded_max_combo, l.miss_combo),
+                            (r.combo, r.recorded_max_combo, r.miss_combo)
+                        );
+                        assert_eq!(
+                            (l.is_failing, l.stage_failed, l.fail_time),
+                            (r.is_failing, r.stage_failed, r.fail_time)
+                        );
+                        assert_eq!(l.judgment_counts, r.judgment_counts);
+                        assert_eq!(l.earned_grade_points, r.earned_grade_points);
+                        assert_eq!(
+                            left.song_completed_naturally(),
+                            right.song_completed_naturally()
+                        );
+                    };
+
+                    tick(&mut states, chart[0].0 - 50_000_000, None, true);
+                    for (index, &(note_ns, column)) in chart.iter().enumerate() {
+                        let offset_ns = match index {
+                            0 => -7_000_000,
+                            1 => 30_000_000,
+                            _ => 0,
+                        };
+                        // The third note receives an input on the wrong lane in both traces.
+                        let hit_column = if index == 2 {
+                            (column + 1) % actions.len()
+                        } else {
+                            column
+                        };
+                        if !should_fail || index < 3 {
+                            let pressed_ns = note_ns + offset_ns;
+                            tick(
+                                &mut states,
+                                pressed_ns + 8_000_000,
+                                Some((hit_column, true, pressed_ns)),
+                                false,
+                            );
+                            if index == 2 {
+                                assert!(states[0].notes()[index].result.is_none());
+                            } else {
+                                let hit = states[0].notes()[index]
+                                    .result
+                                    .expect("input should score this note");
+                                let expected = if index == 1 {
+                                    JudgeGrade::Excellent
+                                } else {
+                                    JudgeGrade::Fantastic
+                                };
+                                assert_eq!(
+                                    (hit.grade, hit.time_error_music_ns),
+                                    (expected, offset_ns)
+                                );
+                            }
+                            let released_ns = pressed_ns + 25_000_000;
+                            tick(
+                                &mut states,
+                                released_ns + 8_000_000,
+                                Some((hit_column, false, released_ns)),
+                                false,
+                            );
+                            assert!(!states[0].lane_pressed(hit_column));
+                        }
+                        let life_before_miss_scan = states[0].players()[0].life;
+                        // The miss scan waits for the widest judgment window, including rolls.
+                        tick(&mut states, note_ns + 400_000_000, None, false);
+                        if index == 2 {
+                            assert_eq!(
+                                states[0].notes()[index].result.unwrap().grade,
+                                JudgeGrade::Miss
+                            );
+                            // The next update finalizes the missed row and applies its life change.
+                            tick(&mut states, note_ns + 450_000_000, None, false);
+                            assert!(states[0].players()[0].life < life_before_miss_scan);
+                        }
+                    }
+                    let finish_ns =
+                        states[0].music_end_time_ns().max(chart.last().unwrap().0) + 1_100_000_000;
+                    tick(&mut states, finish_ns, None, false);
+                    assert!(completed);
+                    assert!(states.iter().all(|state| state.song_completed_naturally()));
+
+                    let results = states
+                        .each_ref()
+                        .map(|state| stage_result(&state.gameplay, Default::default()));
+                    let fingerprint = |record: &PlayerStageSummary| {
+                        (
+                            record.grade,
+                            record.score_percent.to_bits(),
+                            record.ex_score_percent.to_bits(),
+                            record.hard_ex_score_percent.to_bits(),
+                            record.earned_grade_points,
+                            record.possible_grade_points,
+                            record.max_combo,
+                            record.judgment_counts,
+                            record.notes_hit,
+                            record.fail_time,
+                        )
+                    };
+                    let [left, right] = results
+                        .each_ref()
+                        .map(|result| result.players[0].as_ref().unwrap());
+                    assert_eq!(fingerprint(left), fingerprint(right));
+                    assert_eq!(left.life_history, right.life_history);
+                    assert_eq!(
+                        results[0].duration_seconds.to_bits(),
+                        results[1].duration_seconds.to_bits()
+                    );
+                    for result in &results {
+                        assert_eq!(all_players_failed(result, [true, false]), should_fail);
+                        let record = result.players[0].as_ref().unwrap();
+                        assert_eq!(record.grade == Grade::Failed, should_fail);
+                        assert_eq!(record.max_combo, if should_fail { 2 } else { 12 });
+                        assert_eq!(record.fail_time.is_some(), should_fail);
+                        assert!(result.players[1].is_none());
+                    }
                 }
             },
         );
@@ -5424,7 +5930,8 @@ return Def.ActorFrame {
                     fs::create_dir_all(dir.join("bg")).unwrap();
                     fs::write(
                         dir.join("lua/default.lua"),
-                        include_str!("../../../tests/fixtures/song_lua/late-shared-runtime.lua"),
+                        include_str!("../../../tests/fixtures/song_lua/late-shared-runtime.lua")
+                            .replace("self:ztest(1)", "self:ztest(1):sleep(3)"),
                     )
                     .unwrap();
                     fs::write(dir.join("bg/default.lua"), "return Def.ActorFrame{}").unwrap();
@@ -5484,9 +5991,12 @@ return Def.ActorFrame {
                             .blend,
                         deadsync_song_lua::SongLuaOverlayBlendMode::NoEffect
                     );
-                    for (second, x, stealth, screen_y) in
-                        [(2.5, -9999.0, 1.0, 12.0), (3.5, 213.5, 0.0, 0.0)]
-                    {
+                    for (second, x, stealth, screen_y, expected_markers) in [
+                        (2.5, -9999.0, 1.0, 12.0, 1),
+                        (3.5, 213.5, 0.0, 0.0, 1),
+                        (3.51, 213.5, 0.0, 0.0, 0),
+                        (2.5, -9999.0, 1.0, 12.0, 1),
+                    ] {
                         set_fixture_time(&mut state, second);
                         refresh_active_attack_masks(&mut state.gameplay, f32::MAX);
                         assert_eq!(state.gameplay.song_lua_player_transform(0).x, Some(x));
@@ -5511,29 +6021,42 @@ return Def.ActorFrame {
                             &mut compose::ComposeScratch::default(),
                         );
                         let mut markers = 0;
+                        let mut projected_quads = Vec::new();
                         for op in &frame.ops {
-                            let DrawOp::Sprite(run) = op else { continue };
+                            let DrawOp::TexturedMesh(run) = op else { continue };
+                            if !run.depth_test {
+                                continue;
+                            }
+                            // Zoom can live in either geometry or the instance
+                            // transform. Identify the authored 16px height in
+                            // projected coordinates.
+                            let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+                            if vertices.len() != 6 {
+                                continue;
+                            }
                             let camera = frame
                                 .cameras
                                 .get(run.camera as usize)
                                 .copied()
                                 .unwrap_or_else(|| metrics.projection());
-                            for instance in &frame.sprite_instances[run.instance_start as usize
+                            for instance in &frame.tmesh_instances[run.instance_start as usize
                                 ..(run.instance_start + run.instance_count) as usize]
                             {
-                                if instance.size != [16.0, 16.0] {
+                                let matrix = camera * instance.transform();
+                                let [top, bottom] = vertices.iter().fold(
+                                    [f32::INFINITY, f32::NEG_INFINITY],
+                                    |[top, bottom], vertex| {
+                                        let [x, y, z] = vertex.pos;
+                                        let p = matrix.mul_vec4([x, y, z, 1.0].into());
+                                        let y = (1.0 - p.y / p.w) * 240.0;
+                                        [top.min(y), bottom.max(y)]
+                                    },
+                                );
+                                projected_quads.push([top, bottom]);
+                                if (bottom - top - 16.0).abs() >= 0.02 {
                                     continue;
                                 }
-                                let p = camera.mul_vec4(
-                                    [
-                                        instance.center[0],
-                                        instance.center[1],
-                                        instance.center[2],
-                                        1.0,
-                                    ]
-                                    .into(),
-                                );
-                                let y = (1.0 - p.y / p.w) * 240.0;
+                                let y = f32::midpoint(top, bottom);
                                 assert!(
                                     (y - 80.0 - screen_y).abs() < 0.01,
                                     "shared screen translation: {y}"
@@ -5541,7 +6064,7 @@ return Def.ActorFrame {
                                 markers += 1;
                             }
                         }
-                        assert_eq!(markers, 1);
+                        assert_eq!(markers, expected_markers, "depth-tested quad bounds at {second}: {projected_quads:?}");
                     }
                 }
             },
@@ -7108,8 +7631,11 @@ return Def.ActorFrame {
                     123.0,
                     deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert_eq!(segments.direct_proxy_count(), 2);
+                // A whole-Player proxy carries separate Combo, Field, and
+                // Judgment segments so their draw order is preserved.
+                assert_eq!(segments.direct_proxy_count(), 3);
                 assert_eq!(segments.direct_field_proxy_count(state.song_frame()), 1);
+                assert_eq!(segments.direct_combo_proxy_count(state.song_frame()), 1);
                 let actor_segments = segments.segments(state.song_frame(), &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
@@ -7284,7 +7810,7 @@ return Def.ActorFrame {
 
     #[test]
     fn duplicate_root_combo_proxies_use_repeatable_direct_segments() {
-        let simfile = write_direct_combo_proxy_fixture();
+        let simfile = write_direct_hud_proxy_fixture("f6-direct-combo", "Combo");
         with_session(
             profile_data::PlayStyle::Single,
             profile_data::PlayerSide::P1,
@@ -7350,6 +7876,26 @@ return Def.ActorFrame {
                 );
                 assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
                 compose_scratch.recycle_frame(&mut warm);
+                let _ = assert_repeatable_frame(
+                    &mut state,
+                    &assets,
+                    &metrics,
+                    &mut actors,
+                    &mut text_cache,
+                    &mut compose_scratch,
+                );
+
+                state.presentation.set_hud(deadsync_theme_openitg::GAMEPLAY_HUD);
+                actors.clear();
+                let segments = crate::gameplay_runtime::push_actors(
+                    &mut actors,
+                    &mut state,
+                    &assets,
+                    screen_gameplay::ActorViewOverride::default(),
+                    123.0,
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                );
+                assert_eq!(segments.direct_combo_proxy_count(state.song_frame()), 2);
                 let _ = assert_repeatable_frame(
                     &mut state,
                     &assets,

@@ -18,6 +18,7 @@ pub struct SongActivation {
     pub tweens: HashMap<TableId, SongStartupState>,
     pub wrapper_initials: HashMap<TableId, crate::SongLuaOverlayState>,
     pub broadcasts: Vec<(f32, String, bool)>,
+    pub(crate) foreground_beats: Vec<Option<std::ops::RangeInclusive<f32>>>,
 }
 impl SongRuntime {
     /// Activate initialized authored layers once, in the production order.

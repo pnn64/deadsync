@@ -4,17 +4,49 @@ use crate::{DisplayModeChoice, FullscreenChoice, PresentPolicyChoice, RendererCh
 use deadsync_chart::course::CourseSessionPlan;
 use deadsync_chart::{ChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
+pub use deadsync_rules::combo::ComboRun;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{
     ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, WindowCounts,
 };
+pub use deadsync_score::Grade;
+pub use deadsync_score::stage_stats::StageLifeTimeline;
 use deadsync_score::{
-    CachedPlayerLeaderboardData, ColumnJudgmentList, Grade, GrooveStatsEvalState, ItlEvalState,
+    CachedPlayerLeaderboardData, ColumnJudgmentList, GrooveStatsEvalState, ItlEvalState,
     LeaderboardEntry,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
+
+pub use deadsync_score::leaderboard::{
+    CabinetCourseRecord as AttractCourseRecord, CabinetRecords as AttractRecords,
+    CabinetSongRecord as AttractRecord,
+};
+
+/// Which entry into the shared play flow the selector presents.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaySelectionKind {
+    Style { pump: bool },
+    Mode,
+}
+
+/// A visible choice supplied by the current style or mode controller.
+pub struct PlaySelectionChoice<'a> {
+    pub label: &'a Arc<str>,
+    pub description: Option<&'a Arc<str>>,
+}
+
+/// The visible choices and selection for the current play flow screen.
+pub struct PlaySelectionView<'a> {
+    pub kind: PlaySelectionKind,
+    pub title: &'a Arc<str>,
+    pub choices: &'a [PlaySelectionChoice<'a>],
+    pub selected: usize,
+    pub player_names: [Option<&'a str>; MAX_PLAYERS],
+    pub join_prompt: &'a Arc<str>,
+    pub exit_progress: f32,
+}
 
 /// Shell-prepared audio clock values used by theme preview presentation.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -22,11 +54,83 @@ pub struct AudioPlaybackView {
     pub music_position_seconds: f64,
 }
 
+/// A normalized local score from the selected chart's score snapshot.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ScoreboxLocalView {
+    pub score_10000: f64,
+    pub failed: bool,
+}
+
+impl ScoreboxLocalView {
+    pub fn percent(self) -> f64 {
+        deadsync_score::leaderboard::scorebox_score_percent(self.score_10000)
+    }
+}
+
+/// The cabinet record and its holder for the selected chart.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ScoreboxMachineView {
+    pub name: String,
+    pub score_10000: f64,
+    pub failed: bool,
+}
+
+impl ScoreboxMachineView {
+    pub fn percent(&self) -> f64 {
+        deadsync_score::leaderboard::scorebox_score_percent(self.score_10000)
+    }
+}
+
+/// Local ITG records ready to present for a matching chart.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ScoreboxLocalRecords<'a> {
+    pub machine: Option<&'a ScoreboxMachineView>,
+    pub personal: Option<ScoreboxLocalView>,
+}
+
+/// Shell-prepared scores and leaderboards for one physical player side.
+#[derive(Clone, Debug, Default)]
+pub struct ScoreboxSideView {
+    pub joined: bool,
+    pub chart_hash: Option<String>,
+    /// Any online leaderboard service can serve this side.
+    pub online_active: bool,
+    pub show_ex_score: bool,
+    pub pane_filter: deadsync_score::SelectMusicScoreboxFilter,
+    pub display_name: Arc<str>,
+    pub groovestats_username: Arc<str>,
+    pub player_initials: Arc<str>,
+    pub local_itg: Option<ScoreboxLocalView>,
+    pub local_ex: Option<ScoreboxLocalView>,
+    pub local_hard_ex: Option<ScoreboxLocalView>,
+    pub local_itl: Option<ScoreboxLocalView>,
+    pub machine_itg: Option<ScoreboxMachineView>,
+    pub leaderboards: Option<CachedPlayerLeaderboardData>,
+}
+
+impl ScoreboxSideView {
+    /// Borrow the displayable local records if the snapshot belongs to the current chart.
+    pub fn local_records(&self, chart_hash: Option<&str>) -> ScoreboxLocalRecords<'_> {
+        if chart_hash.is_none() || self.chart_hash.as_deref() != chart_hash {
+            return ScoreboxLocalRecords::default();
+        }
+        ScoreboxLocalRecords {
+            machine: self
+                .machine_itg
+                .as_ref()
+                .filter(|score| !score.failed || score.score_10000 > 0.0),
+            personal: self
+                .local_itg
+                .filter(|score| !score.failed || score.score_10000 > 0.0),
+        }
+    }
+}
+
 /// One shell-resolved application path and its platform-friendly label.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AppPathView {
     pub path: PathBuf,
-    pub display: String,
+    pub display: Arc<str>,
 }
 
 /// Stable identifiers for application paths exposed to theme UI.
@@ -97,13 +201,7 @@ pub struct AudioOptionsView {
     pub assist_tick_volume: u8,
 }
 
-/// One renderer-neutral video mode advertised by a host monitor.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct GraphicsVideoModeView {
-    pub width: u32,
-    pub height: u32,
-    pub refresh_rate_millihertz: u32,
-}
+pub use deadsync_core::display::VideoMode as GraphicsVideoModeView;
 
 /// Host monitor capabilities prepared by the shell for theme option UIs.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -130,6 +228,75 @@ pub struct GraphicsOptionsView {
     pub high_dpi: bool,
     pub software_thread_choices: Vec<u8>,
     pub software_threads: u8,
+}
+
+/// Presentation hooks for the shared service-options controller.
+pub struct SystemOptionsRenderer<'a, A> {
+    pub phase: SystemOptionsPhase,
+    pub background: &'a dyn Fn(&mut Vec<A>),
+    pub page: &'a mut dyn FnMut(&mut Vec<A>, SystemOptionsPage<'_>),
+}
+
+/// Time to finish entering or leaving a settings page, in seconds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SystemOptionsTiming {
+    pub service_seconds: f32,
+    pub settings_seconds: f32,
+}
+
+/// Elapsed seconds in the current page transition.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum SystemOptionsPhase {
+    #[default]
+    Steady,
+    Entering(f32),
+    Leaving(f32),
+}
+
+/// Existing actions a service menu can place first. Listed input tools move
+/// from the Input submenu to the service menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SystemOptionsServiceRow {
+    Arcade,
+    System,
+    Graphics,
+    SongPacks,
+    Downloads,
+    TestInput,
+    ConfigureMappings,
+    ReloadSongsCourses,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SystemOptionsPageKind {
+    ServiceMenu,
+    BasicGraphics,
+    Settings,
+}
+
+pub struct SystemOptionsPage<'a> {
+    /// Identity of the page within the current Options visit.
+    pub id: usize,
+    pub title: &'static str,
+    pub kind: SystemOptionsPageKind,
+    /// Selection in the visible controller order. `row_count` selects Done.
+    pub selected: usize,
+    pub row_count: usize,
+    pub row: &'a dyn Fn(usize) -> Option<SystemOptionsRow>,
+    pub description: Option<Arc<str>>,
+    pub detail: Option<Arc<str>>,
+    pub phase: SystemOptionsPhase,
+}
+
+pub struct SystemOptionsRow {
+    pub label: Arc<str>,
+    pub choices: Option<Arc<[Arc<str>]>>,
+    pub selected_choice: usize,
+    pub inline: bool,
+    pub disabled: bool,
+    /// Active bits of a multi-select row, in its choice order.
+    pub enabled_choices: Option<u64>,
+    pub choice_tint: Option<[f32; 4]>,
 }
 
 /// Audio timing telemetry translated by the shell for theme diagnostics.
@@ -226,15 +393,114 @@ pub struct GameplayStageView {
 
 #[derive(Clone, Copy)]
 pub enum GameplayStageIntro {
-    Song,
+    Song { round: Option<usize> },
     Course { number: usize, total: Option<usize> },
     Restart(u32),
     Practice,
+    Demonstration,
 }
 
 pub struct GameplayReplayView {
     pub name: String,
     pub score_10000: f64,
+}
+
+/// Draw the standard gameplay HUD from values already resolved by the stage.
+pub struct GameplayHud<A> {
+    pub standard_life: fn(&mut Vec<A>, GameplayLifeView),
+    pub percentage_score: fn(&mut Vec<A>, GameplayScoreView),
+    pub song_meter: fn(&mut Vec<A>, GameplaySongMeterView<'_>),
+    pub difficulty: fn(&mut Vec<A>, GameplayDifficultyView<'_>),
+    pub stage_badge: fn(&mut Vec<A>, GameplayStageBadgeView<'_>),
+    /// Display threshold for the theme's warning. It has no effect on stage life or failure.
+    pub danger_threshold: f32,
+    pub background_warning: fn(&mut Vec<A>, GameplayBackgroundWarningView),
+    pub fallback_background: fn(&mut Vec<A>, f32),
+    pub unjoined_seat: fn(&mut Vec<A>, bool),
+    pub autoplay_label: fn(&mut Vec<A>),
+    pub field_feedback: &'static deadsync_core::hud_style::FieldFeedbackStyle,
+    pub default_tap_atlas: GameplayTapAtlas,
+    pub default_hold_atlas: GameplayHoldAtlas,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayTapAtlas {
+    pub key: &'static str,
+    pub frame_size: [f32; 2],
+    pub frame_cols: usize,
+    pub frame_rows: usize,
+    pub tween: &'static deadsync_core::hud_style::TapFeedbackTween,
+}
+
+/// The stock hold feedback sheet, with one completed and one released cell.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayHoldAtlas {
+    pub key: &'static str,
+    pub frame_size: [f32; 2],
+    pub style: &'static deadsync_core::hud_style::HoldFeedbackStyle,
+}
+
+/// Stage transition time available to gameplay presenters.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum GameplayHudMotion {
+    #[default]
+    Settled,
+    Entering { elapsed_seconds: f32 },
+    Leaving { elapsed_seconds: f32 },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayLifeView {
+    /// The physical side even when a single player occupies runtime slot zero.
+    pub p2: bool,
+    pub level: f32,
+    pub failed: bool,
+    pub hot: bool,
+    pub song_beat: f32,
+    pub percent_label: Option<f32>,
+    pub motion: GameplayHudMotion,
+}
+
+pub struct GameplaySongMeterView<'a> {
+    pub title: &'a Arc<str>,
+    pub rate: &'a Arc<str>,
+    pub progress: f32,
+    pub motion: GameplayHudMotion,
+}
+
+pub struct GameplayDifficultyView<'a> {
+    pub p2: bool,
+    pub difficulty: &'a str,
+    pub description: &'a str,
+    pub meter: u32,
+    pub motion: GameplayHudMotion,
+}
+
+pub struct GameplayStageBadgeView<'a> {
+    pub text: &'a Arc<str>,
+    pub round: Option<usize>,
+    pub motion: GameplayHudMotion,
+}
+
+/// Facts for the warning artwork behind the playfield.
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayBackgroundWarningView {
+    pub p2: bool,
+    pub both_sides: bool,
+    pub failed: bool,
+    pub danger_seconds: f32,
+    pub brightness: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayScoreView {
+    pub p2: bool,
+    pub doubles: bool,
+    pub percent: f64,
+    /// Profile-selected EX tint and multiplayer emphasis alpha.
+    pub rgba: [f32; 4],
+    pub ex: bool,
+    pub motion: GameplayHudMotion,
 }
 
 /// Optional HUD updates from the live stage. None of these hooks control play.
@@ -348,6 +614,7 @@ impl SelectedCourseView {
 pub struct CourseGraphStageView {
     pub chart: Arc<ChartData>,
     pub song_last_second: f32,
+    pub step_seconds: f32,
 }
 
 /// Final score snapshot consumed by evaluation screens and course summaries.
@@ -374,10 +641,14 @@ pub struct EvaluationView<N, S> {
     pub grade: Grade,
     pub speed_mod: ScrollSpeedSetting,
     pub mods_text: Arc<str>,
+    pub max_combo: u32,
+    pub combo_runs: Arc<[ComboRun]>,
+    pub jumps: [u32; 2],
     pub hands_achieved: u32,
     pub hands_total: u32,
     pub holds_held: u32,
     pub holds_held_for_score: u32,
+    pub dropped_hold_or_roll: bool,
     pub holds_total: u32,
     pub rolls_held: u32,
     pub rolls_held_for_score: u32,
@@ -394,6 +665,7 @@ pub struct EvaluationView<N, S> {
     pub graph_last_second: f32,
     pub music_rate: f32,
     pub life_history: Vec<(f32, f32)>,
+    pub steps_life: StageLifeTimeline,
     pub fail_time: Option<f32>,
     pub window_counts: WindowCounts,
     pub window_counts_10ms: WindowCounts,
@@ -428,6 +700,74 @@ impl<N, S> EvaluationView<N, S> {
     pub const fn is_course_summary(&self) -> bool {
         !self.course_graph_stages.is_empty()
     }
+}
+
+/// Completed-stage data supplied to the result screen at entry.
+#[derive(Clone)]
+pub struct EvaluationStageView<N, S> {
+    pub score_info: EvaluationScores<N, S>,
+    pub stage_number: Option<usize>,
+    /// The shared Routine score displayed alongside individual results.
+    pub routine_shared_score_percent: Option<f64>,
+    pub stage_duration_seconds: f32,
+    pub fail_stream_progress: [Option<(u32, u32)>; MAX_PLAYERS],
+}
+
+impl<N, S> Default for EvaluationStageView<N, S> {
+    fn default() -> Self {
+        Self {
+            score_info: Arc::new([const { None }; MAX_PLAYERS]),
+            stage_number: None,
+            routine_shared_score_percent: None,
+            stage_duration_seconds: 0.0,
+            fail_stream_progress: [None; MAX_PLAYERS],
+        }
+    }
+}
+
+/// Shared, immutable score records for one result page.
+pub type EvaluationScores<N, S> = Arc<[Option<EvaluationView<N, S>>; MAX_PLAYERS]>;
+
+/// Completed results for the active evaluation page.
+pub struct EvaluationOverview<'a> {
+    pub title: &'a Arc<str>,
+    pub artist: &'a Arc<str>,
+    pub banner_key: Option<&'a Arc<str>>,
+    pub course_summary: bool,
+    pub stage_number: Option<usize>,
+    pub double_side_style: bool,
+    pub elapsed: f32,
+    /// Time since the player elected to leave. The visit clock stops at that point.
+    pub departure_elapsed: Option<f32>,
+    pub players: [Option<EvaluationPlayerOverview<'a>>; MAX_PLAYERS],
+}
+
+pub struct EvaluationPlayerOverview<'a> {
+    pub p2: bool,
+    pub grade: Grade,
+    pub percent: f64,
+    pub individual_percent: Option<f64>,
+    pub ex_percent: Option<f64>,
+    pub hard_ex_percent: Option<f64>,
+    pub difficulty: &'a str,
+    pub meter: u32,
+    pub mods: &'a Arc<str>,
+    pub judgments: judgment::JudgeCounts,
+    pub row_window_counts: WindowCounts,
+    pub score_valid: bool,
+    pub dropped_hold_or_roll: bool,
+    pub jumps: [u32; 2],
+    pub holds: [u32; 2],
+    pub mines: [u32; 2],
+    pub hands: [u32; 2],
+    pub rolls: [u32; 2],
+    pub max_combo: u32,
+    pub combo_runs: &'a [ComboRun],
+    pub graph_seconds: [f32; 2],
+    pub course_graph_stages: &'a [CourseGraphStageView],
+    pub steps_life: &'a StageLifeTimeline,
+    pub machine_rank: Option<u32>,
+    pub disqualified: bool,
 }
 
 /// Density data requested by a theme for a chart preview.
@@ -727,4 +1067,35 @@ mod tests {
         assert_eq!(OverlayStyle::from_key("minimal"), OverlayStyle::Minimal);
         assert_eq!(OverlayStyle::from_key("unknown"), OverlayStyle::Detailed);
     }
+}
+
+/// Field occupancy provided to an optional chat overlay during gameplay.
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayChatLayout {
+    pub two_players: bool,
+    pub p2: bool,
+    pub centered: bool,
+    pub field_left: f32,
+    pub field_right: f32,
+    pub statistics: bool,
+}
+
+/// Borrowed chat snapshot and current screen facts for overlay composition.
+pub struct TwitchChatView<'a, Message, Options> {
+    pub screen: crate::Screen,
+    pub gameplay: Option<GameplayChatLayout>,
+    pub tournament: bool,
+    pub sides: [bool; MAX_PLAYERS],
+    pub entries: &'a [Arc<Message>],
+    pub revision: u64,
+    pub options: Options,
+}
+
+pub trait TwitchChatPresentation<A, Message, Options> {
+    fn push_chat(
+        &mut self,
+        actors: &mut Vec<A>,
+        assets: &deadlib_assets::AssetManager,
+        view: TwitchChatView<'_, Message, Options>,
+    );
 }

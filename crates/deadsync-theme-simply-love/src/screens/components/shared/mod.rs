@@ -2,7 +2,7 @@ pub mod banner;
 pub mod density;
 pub mod ffmpeg_overlay;
 pub mod frame_stats_overlay;
-pub mod fuzzy;
+pub use deadsync_simfile::fuzzy;
 pub mod gamepad_overlay;
 pub mod gs_scorebox;
 pub mod heart_rate;

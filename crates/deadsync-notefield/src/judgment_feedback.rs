@@ -4,20 +4,21 @@ use crate::{
 };
 use deadlib_present::actors::{FlatDraw, FlatSprite, SpriteSource};
 use deadlib_render_core::BlendMode;
+use deadsync_core::hud_style::{HoldFeedbackStyle, JudgmentFeedbackStyle, TapFeedbackTween};
 use deadsync_core::input::MAX_COLS;
 use deadsync_gameplay::{
     HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, HeldMissRenderInfo,
     HoldJudgmentRenderInfo, JudgmentRenderInfo, VisualEffects,
 };
 use deadsync_rules::note::HoldResult;
-use deadsync_core::hud_style::JudgmentFeedbackStyle;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum TapJudgmentAnimation {
     #[default]
     Default,
     Still,
     Itg,
+    Tween(&'static TapFeedbackTween),
 }
 
 impl TapJudgmentAnimation {
@@ -25,6 +26,7 @@ impl TapJudgmentAnimation {
         match self {
             Self::Default | Self::Still => 0.9,
             Self::Itg => 1.0,
+            Self::Tween(tween) => tween.end_s,
         }
     }
 }
@@ -78,6 +80,7 @@ pub(crate) struct JudgmentFeedbackRequest<'a> {
     pub held_miss_sprite: Option<&'a IndicatorSprite>,
     pub hold_judgments: &'a [Option<HoldJudgmentRenderInfo>],
     pub hold_sprite: Option<&'a IndicatorSprite>,
+    pub hold_style: Option<&'static HoldFeedbackStyle>,
     pub current_beat: f32,
     pub arrow_effect_time: f32,
     pub mini: f32,
@@ -115,7 +118,7 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
         return;
     };
     let elapsed = (request.elapsed_screen - feedback.render.started_at_screen_s).max(0.0);
-    let Some(zoom) = tap_judgment_zoom(
+    let Some(scale) = tap_judgment_scale(
         elapsed,
         request.tap_zoom.unwrap_or(request.judgment_zoom),
         request.judgment_animation,
@@ -137,7 +140,7 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
         z,
         feedback.rotation_deg,
         frame_index,
-        zoom,
+        scale,
         1.0,
     );
     if let Some(overlay_row) = feedback.overlay_row {
@@ -148,7 +151,7 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
             z,
             feedback.rotation_deg,
             (overlay_row * columns + col) as u32,
-            zoom,
+            scale,
             request.style.split_overlay_alpha,
         );
     }
@@ -164,26 +167,38 @@ pub(crate) fn tap_judgment_active(
     (elapsed_screen - render.started_at_screen_s).max(0.0) < animation.duration()
 }
 
-fn tap_judgment_zoom(elapsed: f32, zoom_mod: f32, animation: TapJudgmentAnimation) -> Option<f32> {
+fn tap_judgment_scale(
+    elapsed: f32,
+    zoom_mod: f32,
+    animation: TapJudgmentAnimation,
+) -> Option<[f32; 2]> {
     if elapsed >= animation.duration() {
         return None;
     }
-    let (start_zoom, settle_duration, shrink_start) = match animation {
-        TapJudgmentAnimation::Default => (0.8, 0.1, 0.7),
-        TapJudgmentAnimation::Still => return Some(0.75 * zoom_mod),
-        TapJudgmentAnimation::Itg => (1.0, 0.2, 0.8),
-    };
-    let zoom = if elapsed < settle_duration {
+    let (start_scale, resting_scale, settle_duration, shrink_start, shrink_duration) =
+        match animation {
+            TapJudgmentAnimation::Default => ([0.8_f32; 2], 0.75, 0.1, 0.7, 0.2),
+            TapJudgmentAnimation::Still => return Some([0.75 * zoom_mod; 2]),
+            TapJudgmentAnimation::Itg => ([1.0; 2], 0.75, 0.2, 0.8, 0.2),
+            TapJudgmentAnimation::Tween(tween) => (
+                tween.initial_scale,
+                1.0,
+                tween.settle_s,
+                tween.shrink_start_s,
+                tween.end_s - tween.shrink_start_s,
+            ),
+        };
+    let scale = if elapsed < settle_duration {
         let t = elapsed / settle_duration;
         let ease = (1.0 - t).mul_add(-(1.0 - t), 1.0);
-        (0.75_f32 - start_zoom).mul_add(ease, start_zoom)
+        start_scale.map(|start| (resting_scale - start).mul_add(ease, start))
     } else if elapsed < shrink_start {
-        0.75
+        [resting_scale; 2]
     } else {
-        let t = (elapsed - shrink_start) / 0.2;
-        0.75 * t.mul_add(-t, 1.0)
+        let t = (elapsed - shrink_start) / shrink_duration;
+        [resting_scale * t.mul_add(-t, 1.0); 2]
     };
-    Some(zoom * zoom_mod)
+    Some(scale.map(|axis| axis * zoom_mod))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -194,14 +209,17 @@ fn append_tap_sprite(
     z: i16,
     rotation_deg: f32,
     frame_index: u32,
-    zoom: f32,
+    scale: [f32; 2],
     alpha: f32,
 ) {
     append_sprite(
         draws,
         sprite.source.clone(),
         xy,
-        [sprite.frame_size[0] * zoom, sprite.frame_size[1] * zoom],
+        [
+            sprite.frame_size[0] * scale[0],
+            sprite.frame_size[1] * scale[1],
+        ],
         z,
         rotation_deg,
         frame_uv(frame_index, sprite.frame_cols, sprite.frame_rows),
@@ -289,24 +307,42 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                     request.style.held_miss_reverse_y,
                 ),
             ];
-            append_indicator_sprite(draws, sprite, xy, request.style.held_miss_z, 0, zoom);
+            append_indicator_sprite(draws, sprite, xy, request.style.held_miss_z, 0, zoom, 0.0);
         }
     }
 
     if let Some(sprite) = request.hold_sprite {
+        let (initial_zoom, final_zoom, release_rotation, show_missed_head) = request.hold_style.map_or(
+            (
+                request.style.hold_initial_zoom,
+                request.style.hold_final_zoom,
+                0.0,
+                true,
+            ),
+            |style| {
+                (style.initial_zoom, style.final_zoom, style.release_rotation_deg, style.show_missed_head)
+            },
+        );
         for (i, feedback) in request.hold_judgments.iter().take(num_cols).enumerate() {
             let Some(feedback) = feedback else { continue };
             let elapsed = (request.elapsed_screen - feedback.started_at_screen_s).max(0.0);
-            if elapsed >= HOLD_JUDGMENT_TOTAL_DURATION {
+            if elapsed >= HOLD_JUDGMENT_TOTAL_DURATION
+                || (feedback.result == HoldResult::Missed && !show_missed_head)
+            {
                 continue;
             }
             let progress = (elapsed / 0.3).clamp(0.0, 1.0);
-            let zoom = (request.style.hold_initial_zoom
-                + progress * (request.style.hold_final_zoom - request.style.hold_initial_zoom))
+            let zoom = (initial_zoom + progress * (final_zoom - initial_zoom))
                 * request.judgment_zoom;
-            let frame_index = match feedback.result {
-                HoldResult::Held => 0,
-                HoldResult::LetGo | HoldResult::Missed => 1,
+            let frame_index = u32::from(feedback.result != HoldResult::Held);
+            let rotation = if release_rotation != 0.0 && feedback.result == HoldResult::LetGo {
+                if feedback.alternate {
+                    release_rotation
+                } else {
+                    -release_rotation
+                }
+            } else {
+                0.0
             };
             let xy = [
                 indicator_x(request, i, beat_push, col_offsets, invert, tornado, field_zoom),
@@ -325,6 +361,7 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                 request.style.hold_z,
                 frame_index,
                 [zoom, zoom],
+                rotation,
             );
         }
     }
@@ -401,6 +438,7 @@ fn append_indicator_sprite(
     z: i16,
     frame_index: u32,
     zoom: [f32; 2],
+    rotation: f32,
 ) {
     append_sprite(
         draws,
@@ -411,7 +449,7 @@ fn append_indicator_sprite(
             sprite.frame_size[1] * zoom[1] * sprite.scale,
         ],
         z,
-        0.0,
+        rotation,
         frame_uv(frame_index, sprite.frame_cols, sprite.frame_rows),
         [1.0; 4],
     );
@@ -568,6 +606,7 @@ mod tests {
             held_miss_sprite: None,
             hold_judgments,
             hold_sprite: None,
+            hold_style: None,
             current_beat: 4.0,
             arrow_effect_time: 10.0,
             mini: 0.0,
@@ -582,6 +621,49 @@ mod tests {
             screen_height: 480.0,
             field_center_y: 5.0,
             column_reverse_percent: &[0.0, 1.0, 0.0, 1.0],
+        }
+    }
+
+    #[test]
+    fn themed_hold_style_uses_the_correct_cell_tween_and_release_angle() {
+        static STYLE: HoldFeedbackStyle = HoldFeedbackStyle {
+            initial_zoom: 1.25,
+            final_zoom: 1.0,
+            release_rotation_deg: 20.0,
+            show_missed_head: false,
+        };
+        let atlas = IndicatorSprite {
+            source: source("themed hold"),
+            frame_size: [78.0, 44.0],
+            frame_cols: 1,
+            frame_rows: 2,
+            scale: 1.0,
+        };
+        let mut draws = Vec::new();
+        for (result, alternate, elapsed, scale, angle, row) in [
+            (HoldResult::Held, false, 0.0, 1.25, 0.0, 0),
+            (HoldResult::LetGo, false, 0.15, 1.125, -20.0, 1),
+            (HoldResult::LetGo, true, 0.3, 1.0, 20.0, 1),
+            (HoldResult::Held, true, 0.799, 1.0, 0.0, 0),
+            (HoldResult::Missed, false, 0.15, 0.0, 0.0, 1),
+            (HoldResult::Held, false, 0.8, 0.0, 0.0, 0),
+        ] {
+            let holds = [Some(HoldJudgmentRenderInfo { result, started_at_screen_s: 0.0, alternate })];
+            let mut request = empty_request(&[], &holds);
+            request.hold_sprite = Some(&atlas);
+            request.hold_style = Some(&STYLE);
+            request.elapsed_screen = elapsed;
+            draws.clear();
+            assert!(compose_judgment_feedback(&mut draws, request).is_empty());
+            if scale == 0.0 {
+                assert!(draws.is_empty());
+                continue;
+            }
+            assert_eq!(draws.len(), 1);
+            assert_sprite(
+                &draws[0], "themed hold", [224.0, 155.0], [78.0 * scale, 44.0 * scale],
+                [1.0; 4], frame_uv(row, 1, 2), angle, 195,
+            );
         }
     }
 
@@ -679,17 +761,35 @@ mod tests {
             ),
         ] {
             for (elapsed, expected) in samples {
-                let zoom = tap_judgment_zoom(elapsed, 1.5, animation).unwrap();
+                let [zoom, zoom_y] = tap_judgment_scale(elapsed, 1.5, animation).unwrap();
+                assert_eq!(zoom, zoom_y);
                 assert!(
                     (zoom - expected * 1.5).abs() < 0.00001,
                     "{animation:?} at {elapsed}"
                 );
             }
             assert_eq!(
-                tap_judgment_zoom(animation.duration(), 1.5, animation),
+                tap_judgment_scale(animation.duration(), 1.5, animation),
                 None
             );
         }
+    }
+
+    #[test]
+    fn stretch_settles_each_axis_then_shrinks() {
+        let animation = TapJudgmentAnimation::Tween(&TapFeedbackTween {
+            initial_scale: [1.3, 1.7],
+            settle_s: 0.1,
+            shrink_start_s: 1.1,
+            end_s: 1.3,
+        });
+        assert_eq!(tap_judgment_scale(0.0, 1.0, animation), Some([1.3, 1.7]));
+        assert_eq!(tap_judgment_scale(0.1, 1.0, animation), Some([1.0; 2]));
+        assert_eq!(tap_judgment_scale(1.09, 1.0, animation), Some([1.0; 2]));
+        let scale = tap_judgment_scale(1.2, 1.0, animation).unwrap();
+        assert!((scale[0] - 0.75).abs() < 0.000_01);
+        assert_eq!(scale[0], scale[1]);
+        assert_eq!(tap_judgment_scale(1.3, 1.0, animation), None);
     }
 
     #[test]
@@ -749,6 +849,7 @@ mod tests {
             Some(HoldJudgmentRenderInfo {
                 result: HoldResult::LetGo,
                 started_at_screen_s: 2.05,
+                alternate: false,
             }),
         ];
         let mut request = empty_request(&held_misses, &hold_judgments);
@@ -803,6 +904,7 @@ mod tests {
         let holds = [Some(HoldJudgmentRenderInfo {
             result: HoldResult::Held,
             started_at_screen_s: 2.0,
+            alternate: false,
         }); MAX_COLS];
         let misses = [Some(HeldMissRenderInfo {
             started_at_screen_s: 2.0,
@@ -864,6 +966,7 @@ mod tests {
         let hold_judgments = [Some(HoldJudgmentRenderInfo {
             result: HoldResult::Held,
             started_at_screen_s: 2.0,
+            alternate: false,
         }); MAX_COLS];
         let reverse = [0.0; MAX_COLS];
         let info = judgment_info(2.0);
@@ -957,6 +1060,7 @@ mod tests {
         let holds = [Some(HoldJudgmentRenderInfo {
             result: HoldResult::LetGo,
             started_at_screen_s: 2.0,
+            alternate: false,
         }); MAX_COLS];
         let misses = [Some(HeldMissRenderInfo {
             started_at_screen_s: 2.0,

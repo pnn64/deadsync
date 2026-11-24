@@ -1,4 +1,20 @@
 use super::*;
+use deadsync_theme::player_options::PlayerOptionsViewport;
+
+pub(super) const DEFAULT_VIEWPORT: PlayerOptionsViewport = PlayerOptionsViewport {
+    slots: VISIBLE_ROWS as u8,
+    separate_exit: false,
+    row_tween_seconds: ROW_TWEEN_SECONDS,
+};
+
+/// Configure the shared editor for the mounted Player Options layout.
+pub fn set_viewport(state: &mut State, viewport: PlayerOptionsViewport) {
+    state.viewport = PlayerOptionsViewport {
+        slots: viewport.slots.max(4),
+        ..viewport
+    };
+    reset_viewport_rows(state);
+}
 
 pub(super) const fn row_layout_slots(id: RowId) -> usize {
     if matches!(id, RowId::GameplayExtras) {
@@ -21,6 +37,7 @@ pub(super) fn compute_row_window(
     total_rows: usize,
     selected_row: [usize; PLAYER_SLOTS],
     active: [bool; PLAYER_SLOTS],
+    visible_slots: usize,
 ) -> RowWindow {
     if total_rows == 0 {
         return RowWindow {
@@ -32,7 +49,7 @@ pub(super) fn compute_row_window(
     }
 
     let total_rows_i = total_rows as i32;
-    if total_rows <= VISIBLE_ROWS {
+    if total_rows <= visible_slots {
         return RowWindow {
             first_start: 0,
             first_end: total_rows_i,
@@ -41,7 +58,7 @@ pub(super) fn compute_row_window(
         };
     }
 
-    let total = VISIBLE_ROWS as i32;
+    let total = visible_slots as i32;
     let halfsize = total / 2;
 
     // Mirror ITGmania ScreenOptions::PositionRows() semantics (signed math matters).
@@ -130,68 +147,47 @@ pub(super) fn player_option_column_x(player_idx: usize) -> f32 {
     }
 }
 
-#[inline(always)]
 pub(super) fn init_row_tweens(
     row_map: &RowMap,
     selected_row: [usize; PLAYER_SLOTS],
     active: [bool; PLAYER_SLOTS],
     option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
     policy: PlayerOptionsPolicyView,
+    viewport: PlayerOptionsViewport,
 ) -> Vec<RowTween> {
-    let total_rows = row_map.display_order().len();
-    if total_rows == 0 {
-        return Vec::new();
-    }
-
-    let (first_row_center_y, row_step) = row_layout_params();
     let visibility = row_visibility(row_map, active, option_masks, policy);
-    let visible_rows = count_visible_row_slots(row_map, visibility);
-    if visible_rows == 0 {
-        let y = row_step.mul_add(-0.5, first_row_center_y);
-        return (0..total_rows)
-            .map(|_| RowTween {
-                from_y: y,
-                to_y: y,
-                from_a: 0.0,
-                to_a: 0.0,
-                t: 1.0,
-            })
-            .collect();
-    }
-
-    let selected_visible = std::array::from_fn(|player_idx| {
-        let idx = selected_row[player_idx].min(total_rows.saturating_sub(1));
-        row_to_visible_index(row_map, idx, visibility).unwrap_or(0)
-    });
-    let w = compute_row_window(visible_rows, selected_visible, active);
-    let mid_pos = (VISIBLE_ROWS as f32).mul_add(0.5, -0.5);
-    let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
-
-    let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
-    let mut visible_idx = 0i32;
-    for i in 0..total_rows {
-        let (f_pos, hidden) = row_f_pos_for_index(
-            row_map,
-            i,
-            visibility,
-            &mut visible_idx,
-            w,
-            mid_pos,
-            bottom_pos,
-        );
-
-        let y = row_step.mul_add(f_pos, first_row_center_y);
-        let a = if hidden { 0.0 } else { 1.0 };
-        out.push(RowTween {
+    row_targets(row_map, selected_row, active, visibility, viewport)
+        .map(|(y, alpha)| RowTween {
             from_y: y,
             to_y: y,
-            from_a: a,
-            to_a: a,
+            from_a: alpha,
+            to_a: alpha,
             t: 1.0,
-        });
-    }
+        })
+        .collect()
+}
 
-    out
+pub(super) fn reset_viewport_rows(state: &mut State) {
+    let (active, masks, policy, viewport) = (
+        state.active,
+        state.option_masks,
+        state.policy,
+        state.viewport,
+    );
+    let pane = state.pane_mut();
+    pane.row_tweens = init_row_tweens(
+        &pane.row_map,
+        pane.selected_row,
+        active,
+        masks,
+        policy,
+        viewport,
+    );
+    pane.layout_key = None;
+    if viewport.separate_exit {
+        let visibility = row_visibility(&pane.row_map, active, masks, policy);
+        pane.scroll_position = row_scroll_position(&pane.row_map, pane.selected_row, visibility);
+    }
 }
 
 pub(super) fn retarget_row_tweens(
@@ -200,42 +196,89 @@ pub(super) fn retarget_row_tweens(
     selected_row: [usize; PLAYER_SLOTS],
     active: [bool; PLAYER_SLOTS],
     visibility: RowVisibility,
+    viewport: PlayerOptionsViewport,
 ) {
-    let total_rows = row_map.len();
-    let (first_row_center_y, row_step) = row_layout_params();
-    let visible_rows = count_visible_row_slots(row_map, visibility);
-    if visible_rows == 0 {
-        let y = row_step.mul_add(-0.5, first_row_center_y);
-        for tween in row_tweens {
-            retarget_row_tween(tween, y, 0.0);
-        }
-        return;
+    for (tween, (y, alpha)) in row_tweens.iter_mut().zip(row_targets(
+        row_map,
+        selected_row,
+        active,
+        visibility,
+        viewport,
+    )) {
+        retarget_row_tween(tween, y, alpha);
     }
+}
 
-    let selected_visible = std::array::from_fn(|player_idx| {
-        let row_idx = selected_row[player_idx].min(total_rows.saturating_sub(1));
-        row_to_visible_index(row_map, row_idx, visibility).unwrap_or(0)
+fn row_targets(
+    row_map: &RowMap,
+    selected_row: [usize; PLAYER_SLOTS],
+    active: [bool; PLAYER_SLOTS],
+    visibility: RowVisibility,
+    viewport: PlayerOptionsViewport,
+) -> impl Iterator<Item = (f32, f32)> + '_ {
+    let (first_y, row_step) = row_layout_params();
+    let rows = row_map.len();
+    let exit = viewport.separate_exit && row_map.display_order().last() == Some(&RowId::Exit);
+    let body_slots = count_visible_row_slots(row_map, visibility).saturating_sub(usize::from(exit));
+    let selected_visible = std::array::from_fn(|player| {
+        let index = selected_row[player].min(rows.saturating_sub(1));
+        row_to_visible_index(row_map, index, visibility)
+            .unwrap_or(0)
+            .min(body_slots.saturating_sub(1))
     });
-    let window = compute_row_window(visible_rows, selected_visible, active);
-    let mid_pos = (VISIBLE_ROWS as f32).mul_add(0.5, -0.5);
-    let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
-    let mut visible_idx = 0i32;
-    for (row_idx, tween) in row_tweens.iter_mut().enumerate() {
-        let (f_pos, hidden) = row_f_pos_for_index(
-            row_map,
-            row_idx,
-            visibility,
-            &mut visible_idx,
-            window,
-            mid_pos,
-            bottom_pos,
-        );
-        retarget_row_tween(
-            tween,
-            row_step.mul_add(f_pos, first_row_center_y),
+    let window = compute_row_window(
+        body_slots,
+        selected_visible,
+        active,
+        usize::from(viewport.slots),
+    );
+    let slots = f32::from(viewport.slots);
+    let mid = slots.mul_add(0.5, -0.5);
+    let bottom = slots - 0.5;
+    let mut visible_index = 0;
+    (0..rows).map(move |index| {
+        let (slot, hidden) = if exit && index + 1 == rows {
+            (slots, window.second_end as usize != body_slots)
+        } else if body_slots == 0 {
+            (-0.5, true)
+        } else {
+            row_f_pos_for_index(
+                row_map,
+                index,
+                visibility,
+                &mut visible_index,
+                window,
+                mid,
+                bottom,
+            )
+        };
+        (
+            row_step.mul_add(slot, first_y),
             if hidden { 0.0 } else { 1.0 },
-        );
+        )
+    })
+}
+
+pub(super) fn row_scroll_position(
+    row_map: &RowMap,
+    selected_row: [usize; PLAYER_SLOTS],
+    visibility: RowVisibility,
+) -> [f32; PLAYER_SLOTS] {
+    let mut positions = [0; PLAYER_SLOTS];
+    let mut count = 0usize;
+    for index in 0..row_map.len() {
+        if !is_row_visible(row_map, index, visibility) {
+            continue;
+        }
+        for player in 0..PLAYER_SLOTS {
+            if selected_row[player] == index {
+                positions[player] = count;
+            }
+        }
+        count += 1;
     }
+    let last = count.saturating_sub(1).max(1) as f32;
+    positions.map(|position| position as f32 / last)
 }
 
 #[inline(always)]

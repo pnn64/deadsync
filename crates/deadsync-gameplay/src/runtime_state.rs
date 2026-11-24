@@ -669,6 +669,7 @@ pub struct GameplayHoldFeedbackState {
     held_miss_judgments: [Option<HeldMissRenderInfo>; MAX_COLS],
     hold_mask: LaneMask,
     held_miss_mask: LaneMask,
+    next_alternate_hold_mask: LaneMask,
 }
 
 impl GameplayHoldFeedbackState {
@@ -704,11 +705,18 @@ impl GameplayHoldFeedbackState {
     pub(crate) fn set_hold_judgment(
         &mut self,
         col: usize,
-        judgment: Option<HoldJudgmentRenderInfo>,
+        mut judgment: Option<HoldJudgmentRenderInfo>,
     ) {
         let Some(slot) = self.hold_judgments.get_mut(col) else {
             return;
         };
+        if let Some(info) = judgment.as_mut()
+            && info.result != HoldResult::Missed
+        {
+            let bit = 1 << col;
+            info.alternate = self.next_alternate_hold_mask & bit != 0;
+            self.next_alternate_hold_mask ^= bit;
+        }
         *slot = judgment;
         set_feedback_bit(&mut self.hold_mask, col, judgment.is_some());
     }
@@ -754,6 +762,7 @@ impl GameplayHoldFeedbackState {
         self.held_miss_judgments.fill(None);
         self.hold_mask = 0;
         self.held_miss_mask = 0;
+        self.next_alternate_hold_mask = 0;
     }
 }
 

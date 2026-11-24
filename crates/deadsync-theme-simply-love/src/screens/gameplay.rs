@@ -104,49 +104,58 @@ pub fn replay_status_text(name: &str, score_10000: f64) -> Arc<str> {
 }
 
 impl crate::SimplyLoveTheme {
-    pub fn gameplay_presenter(
+    pub fn prepare_gameplay_presentation(prepared: &mut PreparedGameplayStage) {
+        prepared.configure_density_graph(crate::step_stats::density_graph_layout);
+    }
+
+    pub fn build_gameplay_presentation(
+        stage: &ActiveGameplayStage,
+        assets: GameplayStageAssets,
+        view: &deadsync_theme::views::GameplayStageView,
         mut init: GameplayInitView,
-    ) -> impl FnOnce(
-        &ActiveGameplayStage,
-        GameplayStageAssets,
-        &deadsync_theme::views::GameplayStageView,
-        crate::views::GameplayScoreInitView,
+        scores: crate::views::GameplayScoreInitView,
     ) -> GameplayPresentation {
         use deadsync_theme::views::GameplayStageIntro;
 
-        move |stage, assets, view, scores| {
-            init.scores = scores;
-            let intro = match view.intro {
-                GameplayStageIntro::Song => deadsync_simfile::event_intro::song_event_name(stage.song())
+        init.scores = scores;
+        let intro = match view.intro {
+            GameplayStageIntro::Song { .. } => {
+                deadsync_simfile::event_intro::song_event_name(stage.song())
                     .map(Arc::from)
-                    .unwrap_or_else(|| Arc::from("EVENT")),
-                GameplayStageIntro::Course { number, total: Some(total) } => {
-                    let total = total.max(1);
-                    Arc::from(format!("STAGE {number} / {total}"))
-                }
-                GameplayStageIntro::Course { number, total: None } => {
-                    Arc::from(format!("STAGE {number}"))
-                }
-                GameplayStageIntro::Restart(count) => Arc::from(format!("RESTART {count}")),
-                GameplayStageIntro::Practice => Arc::from("PRACTICE MODE"),
-            };
-            let status = if matches!(view.intro, GameplayStageIntro::Practice) {
-                Some(Arc::from("Practice Mode"))
+                    .unwrap_or_else(|| Arc::from("EVENT"))
+            }
+            GameplayStageIntro::Course { number, total: Some(total) } => {
+                let total = total.max(1);
+                Arc::from(format!("STAGE {number} / {total}"))
+            }
+            GameplayStageIntro::Course { number, total: None } => {
+                Arc::from(format!("STAGE {number}"))
+            }
+            GameplayStageIntro::Restart(count) => Arc::from(format!("RESTART {count}")),
+            GameplayStageIntro::Practice => Arc::from("PRACTICE MODE"),
+            GameplayStageIntro::Demonstration => Arc::from(""),
+        };
+        let status = if matches!(view.intro, GameplayStageIntro::Practice) {
+            Some(Arc::from("Practice Mode"))
+        } else {
+            view.replay
+                .as_ref()
+                .map(|replay| replay_status_text(&replay.name, replay.score_10000))
+        };
+        let course = view.course.as_ref().map(|course| CourseDisplayInfo {
+            name: if course.title.is_empty() {
+                Arc::from(super::select_course::course_title(&course.title))
             } else {
-                view.replay
-                    .as_ref()
-                    .map(|replay| replay_status_text(&replay.name, replay.score_10000))
-            };
-            let course = view.course.as_ref().map(|course| CourseDisplayInfo {
-                name: if course.title.is_empty() {
-                    Arc::from(super::select_course::course_title(&course.title))
-                } else {
-                    Arc::from(course.title.as_str())
-                },
-            });
-            let banner = view.course.as_ref().and_then(|course| course.banner_path.clone());
-            GameplayPresentation::from_stage(stage, assets, intro, status, course, banner, init)
+                Arc::from(course.title.as_str())
+            },
+        });
+        let banner = view.course.as_ref().and_then(|course| course.banner_path.clone());
+        let mut presentation =
+            GameplayPresentation::from_stage(stage, assets, intro, status, course, banner, init);
+        if let GameplayStageIntro::Song { round } = view.intro {
+            presentation.stage_round = round;
         }
+        presentation
     }
 }
 
@@ -284,6 +293,7 @@ pub fn gameplay_score_leader_alphas(state: &GameplayCoreState) -> [f32; MAX_PLAY
 pub struct ActorViewOverride {
     pub notefield: NotefieldViewOverride,
     pub hide_gameplay_hud: bool,
+    pub hud_motion: GameplayHudMotion,
     /// Alpha multiplier applied to SMX overlay actors (FSR sensor display and pad
     /// input display). Used to fade them in with the screen transition.
     pub smx_overlay_alpha: f32,
@@ -295,6 +305,7 @@ impl Default for ActorViewOverride {
         Self {
             notefield: view.notefield,
             hide_gameplay_hud: view.hide_gameplay_hud,
+            hud_motion: GameplayHudMotion::Settled,
             smx_overlay_alpha: 1.0,
         }
     }
@@ -468,6 +479,10 @@ impl DensityGraphRenderState {
     }
 }
 
+use deadsync_theme::views::{
+    GameplayBackgroundWarningView, GameplayDifficultyView, GameplayHud, GameplayHudMotion,
+    GameplayLifeView, GameplayScoreView, GameplaySongMeterView, GameplayStageBadgeView,
+};
 pub use deadsync_theme::views::{SMX_SENSOR_PANEL_COUNT, SmxSensorPadView, SmxSensorPanelView};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -661,6 +676,7 @@ pub struct GameplayPresentation {
     pub step_stats_extra_resolved: [crate::step_stats_gifs::ResolvedStepStatsExtra; MAX_PLAYERS],
     pub song_full_title: Arc<str>,
     pub stage_intro_text: Arc<str>,
+    stage_round: Option<usize>,
     pub hide_song_intro: bool,
     pub replay_status_text: Option<Arc<str>>,
     pub course_display_info: Option<CourseDisplayInfo>,
@@ -708,6 +724,9 @@ pub struct GameplayPresentation {
     /// construction reads it without allocation, synchronization, misses,
     /// eviction, or maintenance beyond constant work per active player.
     life_meter_visuals: [LifeMeterVisual; MAX_PLAYERS],
+    /// The warning animation only advances while its player's low-life cue is active.
+    warning_seconds: [f32; MAX_PLAYERS],
+    hud: Option<GameplayHud<Actor>>,
     /// One song-static logical width for the Stage/Event label. The game thread
     /// warms it during the transition, reads it without synchronization during
     /// gameplay, and drops it with the screen. There is no growth or eviction;
@@ -860,13 +879,14 @@ pub fn from_gameplay(
 }
 
 pub fn present_stage(
-    prepared: PreparedGameplayStage,
+    mut prepared: PreparedGameplayStage,
     stage_intro_text: Arc<str>,
     replay_status_text: Option<Arc<str>>,
     course_display_info: Option<CourseDisplayInfo>,
     course_banner_path: Option<PathBuf>,
     init_view: GameplayInitView,
 ) -> State {
+    prepared.configure_density_graph(crate::step_stats::density_graph_layout);
     let (stage, assets) = prepared.into_parts();
     from_stage(
         stage,
@@ -919,7 +939,11 @@ impl GameplayPresentation {
     /// Borrow the life animation cache for a game-owned update.
     pub fn life_meter_update(&mut self) -> impl FnOnce(&GameplayCoreState, f32) + '_ {
         let visuals = &mut self.life_meter_visuals;
-        move |game, delta| update_life_meter_visuals(game, visuals, delta)
+        let warning = self
+            .hud
+            .as_ref()
+            .map(|hud| (hud.danger_threshold, &mut self.warning_seconds));
+        move |game, delta| update_life_meter_visuals(game, visuals, warning, delta)
     }
 
     #[cfg(feature = "test-support")]
@@ -1070,6 +1094,7 @@ impl GameplayPresentation {
             step_stats_extra_resolved,
             song_full_title,
             stage_intro_text,
+            stage_round: None,
             hide_song_intro,
             replay_status_text,
             course_display_info,
@@ -1093,6 +1118,8 @@ impl GameplayPresentation {
             rate_text,
             life_percent_text,
             life_meter_visuals,
+            warning_seconds: [0.0; MAX_PLAYERS],
+            hud: None,
             intro_text_width: Cell::new(None),
             notefield_judgment_assets,
             notefield_combo_assets,
@@ -1167,6 +1194,21 @@ impl GameplayPresentation {
 
     pub const fn machine_font(&self) -> deadsync_config::theme::MachineFont {
         self.runtime_view.policy.machine_font
+    }
+
+    pub fn set_hud(&mut self, hud: GameplayHud<Actor>) {
+        for plan in &mut self.notefield_plans {
+            plan.install_feedback(&hud);
+        }
+        self.hud = Some(hud);
+    }
+
+    pub const fn has_hud(&self) -> bool {
+        self.hud.is_some()
+    }
+
+    pub fn prewarm_combo_milestones(&self, visual_policy: crate::views::SimplyLoveVisualPolicyView) {
+        self.notefield_combo_assets.prewarm(&visual_policy.assets.effects);
     }
 
     pub fn judgment_palette(&self, player: usize) -> deadsync_theme::color::JudgmentPalette {
@@ -1244,7 +1286,7 @@ impl deadsync_theme::views::GameplayLivePresentation<GameplayCoreState> for Game
     }
 }
 
-pub fn twitch_chat_layout(state: &impl GameplayScreenView) -> super::components::shared::twitch_chat::GameplayLayout {
+pub fn twitch_chat_layout(state: &impl GameplayScreenView) -> deadsync_theme::views::GameplayChatLayout {
     let style = state.presentation().hud_snapshot.play_style;
     let p2 = state.presentation().hud_snapshot.player_side == profile_data::PlayerSide::P2;
     let centered = style.is_double() || state.presentation().runtime_view.policy.center_single_notefield;
@@ -1258,7 +1300,7 @@ pub fn twitch_chat_layout(state: &impl GameplayScreenView) -> super::components:
         }
         + sign * state.profiles()[0].note_field_offset_x.clamp(0, 50) as f32;
     let half_width = state.presentation().notefield_width(0) * state.field_zoom_for_player(0) * 0.5;
-    super::components::shared::twitch_chat::GameplayLayout {
+    deadsync_theme::views::GameplayChatLayout {
         two_players: state.num_players() > 1,
         p2,
         centered,
@@ -1396,11 +1438,7 @@ impl SongLuaGameplayHost for GameplayEffects<'_> {
     }
 
     fn update_gameplay_visuals(&mut self, delta_time: f32) {
-        update_life_meter_visuals(
-            &self.0.stage.gameplay,
-            &mut self.0.presentation.life_meter_visuals,
-            delta_time,
-        );
+        self.0.presentation.life_meter_update()(&self.0.stage.gameplay, delta_time);
     }
 
     fn gameplay_effect(action: GameplayAction) -> ThemeEffect {
@@ -1645,11 +1683,30 @@ fn intro_text_target_x(
         .mul_add(side_sign, screen_center_x())
 }
 
-fn push_stage_label(actors: &mut Vec<Actor>, state: &impl GameplayScreenView, asset_manager: &AssetManager) {
-    let intro_text = state.presentation().stage_intro_text.as_ref();
-    let is_restart_label = intro_text.starts_with("RESTART ");
-    if intro_text.is_empty()
-        || (!is_restart_label && state.total_elapsed_in_screen() < INTRO_TEXT_SETTLE_SECONDS)
+fn push_stage_label(
+    actors: &mut Vec<Actor>,
+    state: &impl GameplayScreenView,
+    asset_manager: &AssetManager,
+    motion: GameplayHudMotion,
+) {
+    let presentation = state.presentation();
+    let intro_text = presentation.stage_intro_text.as_ref();
+    if intro_text.is_empty() {
+        return;
+    }
+    if let Some(hud) = &presentation.hud {
+        (hud.stage_badge)(
+            actors,
+            GameplayStageBadgeView {
+                text: &presentation.stage_intro_text,
+                round: presentation.stage_round,
+                motion,
+            },
+        );
+        return;
+    }
+    if !intro_text.starts_with("RESTART ")
+        && state.total_elapsed_in_screen() < INTRO_TEXT_SETTLE_SECONDS
     {
         return;
     }
@@ -2109,48 +2166,12 @@ pub fn prepare_update(state: &mut State, effects: &mut Vec<ThemeEffect>) -> bool
 
 pub(crate) fn song_lua_transition_screen(
     name: Option<&str>,
-) -> Result<crate::screens::SimplyLoveScreen, String> {
-    use crate::screens::SimplyLoveScreen as Screen;
+) -> Result<crate::screens::Screen, String> {
+    use crate::screens::Screen;
     let Some(name) = name.filter(|name| !name.is_empty()) else {
         return Ok(Screen::Evaluation);
     };
-    named_song_lua_screen(name).ok_or_else(|| format!("unsupported song Lua next screen {name}"))
-}
-
-pub(crate) fn named_song_lua_screen(name: &str) -> Option<crate::screens::SimplyLoveScreen> {
-    use crate::screens::SimplyLoveScreen as Screen;
-    [
-        Screen::Menu,
-        Screen::Practice,
-        Screen::Options,
-        Screen::Credits,
-        Screen::ContentBrowser,
-        Screen::ManageLocalProfiles,
-        Screen::Init,
-        Screen::Initials,
-        Screen::GameOver,
-        Screen::Mappings,
-        Screen::Input,
-        Screen::SelectProfile,
-        Screen::GrooveStatsLogin,
-        Screen::ArrowCloudLogin,
-        Screen::SelectColor,
-        Screen::SelectStyle,
-        Screen::SelectPlayMode,
-        Screen::ProfileLoad,
-        Screen::SelectMusic,
-        Screen::SelectCourse,
-        Screen::Sandbox,
-        Screen::Evaluation,
-        Screen::EvaluationSummary,
-        Screen::PlayerOptions,
-        Screen::TestLights,
-        Screen::OverscanAdjustment,
-        Screen::ConfigurePads,
-        Screen::SmxAssignPads,
-    ]
-    .into_iter()
-    .find(|screen| screen.current_screen_file_name() == name)
+    Screen::from_song_lua_name(name).ok_or_else(|| format!("unsupported song Lua next screen {name}"))
 }
 
 /// Advances deterministic gameplay using the shell-prepared audio snapshot.
@@ -2185,13 +2206,29 @@ pub fn update_with_input(
 fn update_life_meter_visuals(
     game: &GameplayCoreState,
     visuals: &mut [LifeMeterVisual; MAX_PLAYERS],
+    mut warning: Option<(f32, &mut [f32; MAX_PLAYERS])>,
     delta_time: f32,
 ) {
-    for (runtime, visual) in game.players().iter().zip(visuals).take(game.num_players()) {
+    for (index, (runtime, visual)) in game
+        .players()
+        .iter()
+        .zip(visuals)
+        .take(game.num_players())
+        .enumerate()
+    {
         let life = runtime.life;
         let dead = runtime.is_failing || life <= 0.0;
         visual.update(life, dead, delta_time);
+        if let Some((threshold, seconds)) = warning.as_mut()
+            && shows_life_warning(&game.profiles()[index], life, dead, *threshold)
+        {
+            seconds[index] += delta_time.max(0.0);
+        }
     }
+}
+
+fn shows_life_warning(profile: &GameplayProfile, life: f32, dead: bool, threshold: f32) -> bool {
+    !dead && life < threshold && !profile.hide_lifebar && !profile.hide_danger
 }
 
 pub fn smx_sensor_pad_view(state: &impl GameplayScreenView, store_idx: usize) -> Option<SmxSensorPadView> {
@@ -2834,17 +2871,23 @@ fn sync_overlay_text(state: &impl GameplayScreenView) -> Option<(Arc<str>, usize
 
 fn push_sync_overlay(actors: &mut Vec<Actor>, state: &impl GameplayScreenView) {
     let status_line_count = if let Some((status_text, line_count)) = sync_overlay_text(state) {
-        actors.push(act!(text:
-            font("miso"):
-            settext(status_text):
-            align(0.5, 0.5):
-            xy(screen_center_x(), screen_center_y() + 150.0):
-            horizalign(center):
-            shadowlength(2.0):
-            strokecolor(0.0, 0.0, 0.0, 1.0):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            z(TOP_SCREEN_HUD_Z)
-        ));
+        if let Some(hud) = &state.presentation().hud
+            && status_text.as_ref() == "AutoPlay"
+        {
+            (hud.autoplay_label)(actors);
+        } else {
+            actors.push(act!(text:
+                font("miso"):
+                settext(status_text):
+                align(0.5, 0.5):
+                xy(screen_center_x(), screen_center_y() + 150.0):
+                horizalign(center):
+                shadowlength(2.0):
+                strokecolor(0.0, 0.0, 0.0, 1.0):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(TOP_SCREEN_HUD_Z)
+            ));
+        }
         line_count
     } else {
         0
@@ -3048,8 +3091,6 @@ pub fn in_transition(
         );
         return (vec![cover], duration);
     };
-    state.presentation.notefield_combo_assets
-        .prewarm(&visual_policy.assets.effects);
     if state.presentation.hide_song_intro {
         return (Vec::new(), duration);
     }
@@ -3267,10 +3308,18 @@ fn push_current_bgchange_media(
     w: f32,
     h: f32,
 ) {
-    if &*state.presentation().background_texture_key == "__black" {
+    let presentation = state.presentation();
+    let change = state.song_backgrounds().active_change();
+    if &*presentation.background_texture_key == "__black" {
+        if let Some(hud) = &presentation.hud
+            && presentation.song_background_key.is_none()
+            && change.is_none()
+            && bg_brightness > 0.0
+        {
+            (hud.fallback_background)(actors, bg_brightness);
+        }
         return;
     }
-    let change = state.song_backgrounds().active_change();
     if change.is_some_and(|change| change.effect_is("SongBgWithMovieViz")) {
         if let Some(key) = state.presentation().song_background_key.as_ref() {
             actors.push(background_media_sprite(
@@ -3627,6 +3676,37 @@ pub fn frame_layers<'a>(
             }
         }
         ScreenLayer::Danger => {
+            if let Some(hud) = &presentation.hud {
+                if policy.background_brightness <= 0.0 {
+                    return;
+                }
+                let both_sides = play_style.is_double() || play_style.is_routine();
+                let count = if play_style.is_routine() {
+                    1
+                } else {
+                    state.num_players()
+                };
+                for player_idx in 0..count {
+                    let profile = &state.profiles()[player_idx];
+                    let player = &state.players()[player_idx];
+                    let failed = player.is_failing || player.life <= 0.0;
+                    if (!profile.hide_lifebar && failed)
+                        || shows_life_warning(profile, player.life, failed, hud.danger_threshold)
+                    {
+                        (hud.background_warning)(
+                            actors,
+                            GameplayBackgroundWarningView {
+                                p2: is_p2_single || player_idx > 0,
+                                both_sides,
+                                failed,
+                                danger_seconds: presentation.warning_seconds[player_idx],
+                                brightness: policy.background_brightness,
+                            },
+                        );
+                    }
+                }
+                return;
+            }
             let sw = screen_width();
             let sh = screen_height();
             let cx = screen_center_x();
@@ -3705,6 +3785,9 @@ pub fn frame_layers<'a>(
             }
         }
         ScreenLayer::Header => {
+            if presentation.hud.is_some() {
+                return;
+            }
             let header_rgba = gameplay_header_rgba(policy.background_color);
             presentation_skeleton.push(STATIC_HEADER, actors, |actors| {
                 actors.push(act!(quad:
@@ -3908,8 +3991,26 @@ pub fn frame_layers<'a>(
                 let profile = &state.profiles()[player_idx];
                 // Difficulty Box
                 let y = DIFFICULTY_METER_Y;
-                let static_slot = [STATIC_DIFFICULTY_P1, STATIC_DIFFICULTY_P2][player_idx.min(1)];
-                presentation_skeleton.push(static_slot, actors, |actors| {
+                let chart = &state.charts()[player_idx];
+                let hud_golf = presentation.hud.as_ref().and_then(|_| {
+                    crate::screens::components::gameplay::golf::score(state, player_idx)
+                });
+                if let Some(hud) = &presentation.hud
+                    && hud_golf.is_none()
+                {
+                    (hud.difficulty)(
+                        actors,
+                        GameplayDifficultyView {
+                            p2: player_side == profile_data::PlayerSide::P2,
+                            difficulty: &chart.difficulty,
+                            description: &chart.description,
+                            meter: chart.meter,
+                            motion: view.hud_motion,
+                        },
+                    );
+                } else {
+                    let static_slot = [STATIC_DIFFICULTY_P1, STATIC_DIFFICULTY_P2][player_idx.min(1)];
+                    presentation_skeleton.push(static_slot, actors, |actors| {
                 let diff_x = difficulty_meter_x(
                     state,
                     profile,
@@ -3919,8 +4020,9 @@ pub fn frame_layers<'a>(
                     presentation.notefield_width(player_idx),
                     diff_x,
                 );
-                let chart = &state.charts()[player_idx];
-                if let Some((_, par)) = crate::screens::components::gameplay::golf::score(state, player_idx) {
+                if let Some((_, par)) = hud_golf.or_else(|| {
+                    crate::screens::components::gameplay::golf::score(state, player_idx)
+                }) {
                     crate::screens::components::gameplay::golf::push_par_badge(
                         actors, presentation.machine_font(), par, [diff_x, y],
                     );
@@ -3961,7 +4063,8 @@ pub fn frame_layers<'a>(
                         z(90)
                     ));
                 }
-            });
+                    });
+                }
 
                 // Score Display
                 let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
@@ -4004,10 +4107,9 @@ pub fn frame_layers<'a>(
 
                 if !profile.hide_score && !hide_score_for_top_graph && !score_in_versus_step_stats {
                     let show_ex_score = profile.show_ex_score;
-                    let show_hard_ex_score = show_ex_score
-                        && profile.show_hard_ex_score
-                        && crate::screens::components::gameplay::golf::score(state, player_idx)
-                            .is_none();
+                    let (score_value, mut score_color, is_golf) =
+                        score_value_color(state, player_idx);
+                    let show_hard_ex_score = show_ex_score && profile.show_hard_ex_score && !is_golf;
                     let score_mode = score_display_mode_from_profile(profile.score_display_mode);
                     // EX and H.EX share one score snapshot.
                     let ex_score = show_ex_score.then(|| {
@@ -4016,26 +4118,46 @@ pub fn frame_layers<'a>(
                             player_blue_window_ms(state, player_idx),
                         )
                     });
-                    let (score_value, mut score_color) = score_value_color(state, player_idx);
                     score_color[3] *= score_alphas[player_idx];
 
                     let is_p2_side = player_side == profile_data::PlayerSide::P2;
-                    // Arrow Cloud parity: EX remains the "normal" score position/anchor.
-                    // H.EX is placed at a different x on P2 so it appears to the left of EX.
-                    push_score_counter(
-                        actors,
-                        asset_manager.fonts(),
-                        ScoreCounterParams {
-                            value: score_value,
-                            font: machine_font_key(presentation.machine_font(), FontRole::Numbers),
-                            position: [score_x, score_y],
-                            align: [1.0, 1.0],
-                            text_align: TextAlign::Right,
-                            zoom: score_zoom,
-                            color: score_color,
-                            z: 90,
-                        },
-                    );
+                    if let Some(hud) = &presentation.hud
+                        && step_stats_score_pos.is_none()
+                        && !single_score_swapped
+                        && !show_hard_ex_score
+                        && !is_golf
+                    {
+                        (hud.percentage_score)(
+                            actors,
+                            GameplayScoreView {
+                                p2: is_p2_side,
+                                doubles: play_style.is_double(),
+                                percent: score_value,
+                                rgba: score_color,
+                                ex: show_ex_score,
+                                motion: view.hud_motion,
+                            },
+                        );
+                    } else {
+                        // EX keeps the normal anchor. On P2 H.EX is placed to its left.
+                        push_score_counter(
+                            actors,
+                            asset_manager.fonts(),
+                            ScoreCounterParams {
+                                value: score_value,
+                                font: machine_font_key(
+                                    presentation.machine_font(),
+                                    FontRole::Numbers,
+                                ),
+                                position: [score_x, score_y],
+                                align: [1.0, 1.0],
+                                text_align: TextAlign::Right,
+                                zoom: score_zoom,
+                                color: score_color,
+                                z: 90,
+                            },
+                        );
+                    }
 
                     crate::screens::components::gameplay::golf::push_details(
                         actors,
@@ -4089,8 +4211,8 @@ pub fn frame_layers<'a>(
                     }
                 }
             }
-            // Current BPM Display (1:1 with Simply Love)
-            {
+            // Simply Love shows live BPM in its own header.
+            if presentation.hud.is_none() {
                 let display_bpm = display_bpm(state.current_bpm_display(), state.music_rate());
                 let bpm_text = bpm_text.resolve(display_bpm, policy.show_bpm_decimal);
                 // Final world-space positions derived from analyzing the SM Lua transforms.
@@ -4126,8 +4248,22 @@ pub fn frame_layers<'a>(
                     ));
                 }
             }
-            // Song Title Box (SongMeter)
-            {
+            let progress = song_meter_progress(
+                song_time_ns_to_seconds(state.current_music_time_ns()),
+                state.song().precise_first_second(),
+                state.song().precise_last_second(),
+            );
+            if let Some(hud) = &presentation.hud {
+                (hud.song_meter)(
+                    actors,
+                    GameplaySongMeterView {
+                        title: &presentation.song_full_title,
+                        rate: &presentation.rate_text,
+                        progress,
+                        motion: view.hud_motion,
+                    },
+                );
+            } else {
                 let w = widescale(310.0, 417.0);
                 let h = 22.0;
                 let box_cx = screen_center_x();
@@ -4148,11 +4284,6 @@ pub fn frame_layers<'a>(
                     horizalign(center): z(93)
                 ));
             });
-                let progress = song_meter_progress(
-                    song_time_ns_to_seconds(state.current_music_time_ns()),
-                    state.song().precise_first_second(),
-                    state.song().precise_last_second(),
-                );
                 if progress > f32::EPSILON {
                     actors.push(act!(quad:
                     align(0.0, 0.5): xy(box_left + 2.0, box_cy): zoomto((w - 4.0) * progress, h - 4.0):
@@ -4226,6 +4357,25 @@ pub fn frame_layers<'a>(
                     let life_visual = presentation.life_meter_visuals[player_idx];
                     let life_for_render = life_visual.rendered_life(profile.lifemeter_type);
                     let is_hot = life_visual.is_hot;
+                    if let Some(hud) = &presentation.hud
+                        && profile.lifemeter_type == profile_data::LifeMeterType::Standard
+                    {
+                        (hud.standard_life)(
+                            actors,
+                            GameplayLifeView {
+                                p2: side == profile_data::PlayerSide::P2,
+                                level: life_for_render,
+                                failed: dead,
+                                hot: is_hot,
+                                song_beat: state.current_beat(),
+                                percent_label: (profile.show_life_percent
+                                    && show_standard_life_percent)
+                                    .then_some(actual_life * 100.0),
+                                motion: view.hud_motion,
+                            },
+                        );
+                        continue;
+                    }
                     let percent_visual = life_visual.percent_visual();
                     let life_percent_text = visible_life_percent_text(
                         &presentation.life_percent_text,
@@ -4546,13 +4696,31 @@ pub fn frame_layers<'a>(
             if player >= state.num_players() {
                 return;
             }
-            let (value, color) = score_value_color(state, player);
+            let (value, color, is_golf) = score_value_color(state, player);
             let width = screen_width().clamp(640.0, 854.0);
             let p2 = if play_style.is_versus() {
                 player == 1
             } else {
                 runtime_player_is_p2
             };
+            let profile = &state.profiles()[player];
+            if let Some(hud) = &presentation.hud
+                && !is_golf
+                && !(profile.show_ex_score && profile.show_hard_ex_score)
+            {
+                (hud.percentage_score)(
+                    actors,
+                    GameplayScoreView {
+                        p2,
+                        doubles: play_style.is_double(),
+                        percent: value,
+                        rgba: color,
+                        ex: profile.show_ex_score,
+                        motion: view.hud_motion,
+                    },
+                );
+                return;
+            }
             push_score_counter(
                 actors,
                 asset_manager.fonts(),
@@ -4581,19 +4749,26 @@ pub fn frame_layers<'a>(
                 0.5,
             );
         }
-        ScreenLayer::Stage => push_stage_label(actors, state, asset_manager),
+        ScreenLayer::Stage => push_stage_label(actors, state, asset_manager, view.hud_motion),
         ScreenLayer::System => {
             push_system_profile_footer(actors, state, visual_policy, presentation_skeleton);
+            if let Some(hud) = &presentation.hud
+                && play_style.is_single()
+                && state.num_players() == 1
+            {
+                (hud.unjoined_seat)(actors, !runtime_player_is_p2);
+            }
             push_sync_overlay(actors, state);
         }
     }
 }
 
-fn score_value_color(state: &impl GameplayScreenView, player: usize) -> (f64, [f32; 4]) {
+fn score_value_color(state: &impl GameplayScreenView, player: usize) -> (f64, [f32; 4], bool) {
     if let Some((score, _)) = crate::screens::components::gameplay::golf::score(state, player) {
         return (
             score.displayed(),
             crate::screens::components::gameplay::golf::COLOR,
+            true,
         );
     }
     let profile = &state.profiles()[player];
@@ -4605,11 +4780,13 @@ fn score_value_color(state: &impl GameplayScreenView, player: usize) -> (f64, [f
             state
                 .presentation().judgment_palette(player)
                 .color(deadsync_theme::color::JudgmentColorRole::FantasticBlue),
+            false,
         )
     } else {
         (
             state.display_gameplay_itg_score_percent(player, mode),
             [1.0; 4],
+            false,
         )
     }
 }

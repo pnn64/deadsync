@@ -54,32 +54,47 @@ pub fn display_aspect_choice_index(width: u32, height: u32) -> usize {
     if height == 0 {
         return 0;
     }
+    closest_display_aspect_choice(width as f32 / height as f32)
+}
 
+/// Find the display aspect choice closest to the configured aspect ratio.
+#[must_use]
+pub fn display_aspect_choice_for_ratio(ratio: f32) -> usize {
+    if !ratio.is_finite() || ratio <= 0.0 {
+        return 0;
+    }
+    closest_display_aspect_choice(ratio)
+}
+
+fn closest_display_aspect_choice(ratio: f32) -> usize {
     if let Some(idx) = DISPLAY_ASPECT_RATIO_LABELS
         .iter()
-        .position(|label| aspect_matches(width, height, label))
+        .position(|label| aspect_ratio_matches(ratio, label))
     {
         return idx;
     }
 
-    let ratio = width as f32 / height as f32;
     let mut best_idx = 0;
     let mut best_delta = f32::INFINITY;
-    for (idx, label) in DISPLAY_ASPECT_RATIO_LABELS.iter().enumerate() {
-        let target = match *label {
-            "16:9" => 16.0 / 9.0,
-            "16:10" => 16.0 / 10.0,
-            "4:3" => 4.0 / 3.0,
-            "1:1" => 1.0,
-            _ => continue,
-        };
-        let delta = (ratio - target).abs();
+    for idx in 0..DISPLAY_ASPECT_RATIO_LABELS.len() {
+        let delta = (ratio - display_aspect_ratio_from_choice(idx)).abs();
         if delta < best_delta {
             best_delta = delta;
             best_idx = idx;
         }
     }
     best_idx
+}
+
+/// Resolve the configured ratio for a display aspect choice.
+#[must_use]
+pub const fn display_aspect_ratio_from_choice(idx: usize) -> f32 {
+    match idx {
+        1 => 16.0 / 10.0,
+        2 => 4.0 / 3.0,
+        3 => 1.0,
+        _ => 16.0 / 9.0,
+    }
 }
 
 #[must_use]
@@ -98,24 +113,33 @@ pub fn push_unique_resolution(target: &mut Vec<(u32, u32)>, width: u32, height: 
 
 #[must_use]
 pub fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
-    match label.to_ascii_lowercase().as_str() {
-        "16:9" => vec![(1280, 720), (1600, 900), (1920, 1080)],
-        "16:10" => vec![(1280, 800), (1440, 900), (1680, 1050), (1920, 1200)],
-        "4:3" => vec![
+    resolution_presets_for_aspect(label).to_vec()
+}
+
+/// Borrow the preset resolutions for a display aspect label.
+#[must_use]
+pub fn resolution_presets_for_aspect(label: &str) -> &'static [(u32, u32)] {
+    match label {
+        "16:9" => &[(1280, 720), (1600, 900), (1920, 1080)],
+        "16:10" => &[(1280, 800), (1440, 900), (1680, 1050), (1920, 1200)],
+        "4:3" => &[
             (640, 480),
             (800, 600),
             (1024, 768),
             (1280, 960),
             (1600, 1200),
         ],
-        "1:1" => vec![(342, 342), (456, 456), (608, 608), (810, 810), (1080, 1080)],
-        _ => DEFAULT_RESOLUTION_CHOICES.to_vec(),
+        "1:1" => &[(342, 342), (456, 456), (608, 608), (810, 810), (1080, 1080)],
+        _ => DEFAULT_RESOLUTION_CHOICES,
     }
 }
 
 #[must_use]
 pub fn aspect_matches(width: u32, height: u32, label: &str) -> bool {
-    let ratio = width as f32 / height as f32;
+    aspect_ratio_matches(width as f32 / height as f32, label)
+}
+
+fn aspect_ratio_matches(ratio: f32, label: &str) -> bool {
     match label {
         "16:9" => (ratio - 1.7777).abs() < 0.05,
         "16:10" => (ratio - 1.6).abs() < 0.05,

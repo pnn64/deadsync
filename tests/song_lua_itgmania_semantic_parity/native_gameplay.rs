@@ -2312,7 +2312,7 @@ end }}
             let output = state.stage.take_output();
             assert!(output.errors.is_empty() && output.source_broadcasts.is_empty(), "{:?}", output.errors);
             if effects.iter().any(|effect| matches!(effect,
-                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme_simply_love::screens::SimplyLoveScreen::Evaluation))) {
+                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme::Screen::Evaluation))) {
                 navigated = true;
                 break;
             }
@@ -2549,7 +2549,7 @@ return Def.ActorFrame {
     #[test]
     fn gameplay_out_transition_resolves_latest_explicit_next_screen() {
         use deadsync_theme_simply_love::{SimplyLoveEffect as Effect, SimplyLoveRuntimeRequest as Runtime};
-        use deadsync_theme_simply_love::screens::SimplyLoveScreen;
+        use deadsync_theme::Screen;
         let notes = std::iter::repeat_n("1000\n0000\n0000\n0000\n", 32).collect::<Vec<_>>().join(",\n");
         for target in ["ScreenGameplay", "ScreenSelectMusic"] {
             let script = format!(r#"
@@ -2600,7 +2600,7 @@ return Def.ActorFrame {{
             let effects = completion.expect("out transition completes");
             let matches_target = match effects.as_slice() {
                 [Effect::Runtime(Runtime::ReloadSongLua)] => target == "ScreenGameplay",
-                [Effect::NavigateNoFade(SimplyLoveScreen::SelectMusic)] => target == "ScreenSelectMusic",
+                [Effect::NavigateNoFade(Screen::SelectMusic)] => target == "ScreenSelectMusic",
                 _ => false,
             };
             assert!(matches_target, "explicit target must select completed transition destination: {effects:?}");
@@ -2760,7 +2760,7 @@ return Def.ActorFrame {
     #[test]
     fn gameplay_immediate_failure_draws_until_native_blank_transition_finishes() {
         use deadsync_theme_simply_love::SimplyLoveEffect as Effect;
-        use deadsync_theme_simply_love::screens::SimplyLoveScreen;
+        use deadsync_theme::Screen;
         for authored_out in [false, true] {
         let script = r#"
 local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
@@ -2805,7 +2805,7 @@ return Def.ActorFrame {
             if frame < 3 {
                 assert!(effects.is_empty(), "failure stays on screen through the last draw");
             } else {
-                assert!(matches!(effects.as_slice(), [Effect::NavigateNoFade(SimplyLoveScreen::Evaluation)]));
+                assert!(matches!(effects.as_slice(), [Effect::NavigateNoFade(Screen::Evaluation)]));
             }
         }
         }
@@ -3341,7 +3341,7 @@ return Def.ActorFrame {
                 after_end += usize::from(event.name == "AfterEnd");
             }
             if effects.iter().any(|effect| matches!(effect,
-                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme_simply_love::screens::SimplyLoveScreen::Evaluation))) {
+                deadsync_theme_simply_love::SimplyLoveEffect::NavigateNoFade(deadsync_theme::Screen::Evaluation))) {
                 assert!(!output.source_broadcasts.iter().any(|event| event.name == "AliveDraw"),
                     "a popped screen is not drawn");
                 navigated = true;

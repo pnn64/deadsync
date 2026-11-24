@@ -1,3 +1,5 @@
+pub mod app_requests;
+pub mod attract;
 pub mod color;
 mod effect;
 pub mod evaluation;
@@ -7,19 +9,24 @@ pub mod profile_picker;
 mod resources;
 mod runtime;
 mod screen;
+pub mod select_music;
+pub mod selection;
+pub mod stage;
+pub mod startup;
+pub mod system_options;
 mod transition;
 pub mod views;
 
 pub use effect::{ThemeEffect, ThemeFlowEvent, ThemeInputResult};
-pub use resources::{ThemeResources, ThemeSounds, UiCue};
+pub use resources::{ThemeResources, ThemeSounds, UiCue, UiSound};
 pub use runtime::{
     AudioCut, AudioOutputModeChoice, AudioRequest, AudioVolumeTarget, DisplayModeChoice,
     FullscreenChoice, GraphicsRequest, PlatformRequest, PresentPolicyChoice, RendererChoice,
     RevealPathKind, thread_choice_index, thread_count_from_choice,
 };
-pub use screen::{Theme, ThemeScreenFlow, ThemeScreenId, ThemeScreens, ThemeSessionFlow};
+pub use screen::{Screen, Theme, ThemeScreenId};
 pub use transition::{
-    ThemeTransitionAudio, ThemeTransitions, TransitionAudio, TransitionCompletion, TransitionFrame,
+    ThemeTransitionAudio, ThemeTransitions, TransitionCompletion, TransitionFrame,
     TransitionKind, TransitionMusic, TransitionState,
 };
 
@@ -27,8 +34,8 @@ pub use transition::{
 pub use deadlib_assets::AssetManifest as ThemeAssetManifest;
 pub use deadsync_core::hud_style::{
     ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
-    ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle, MiniIndicatorStyle,
-    NotefieldHudStyle,
+    ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, FieldFeedbackStyle, HoldFeedbackStyle,
+    JudgmentFeedbackStyle, MiniIndicatorStyle, NotefieldHudStyle, TapFeedbackTween,
 };
 
 /// Semantic font roles a concrete theme maps to its bundled font resources.

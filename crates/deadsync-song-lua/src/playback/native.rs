@@ -46,6 +46,23 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
         } else {
             FieldPlacement::P1
         };
+        let transform = if view.apply_attacks {
+            state.song_lua_player_transform(player)
+        } else {
+            Default::default()
+        };
+        // Native placement is prepared at stage entry. It supplies the same
+        // perspective anchor as scripted Player state without a timeline lookup.
+        let player_state = view
+            .show_song_visuals
+            .then(|| &state.song_lua_visuals().player_actors[player].initial_state);
+        let player_position = song_lua_field_player_position(
+            &transform,
+            player_state,
+            view.notefield.force_center_1player,
+        );
+        let mut field = FieldFrame::new(state, player, placement, view);
+        field.song_lua.player_position = Some(player_position);
         let deadsync_notefield::BuiltNotefield {
             layout_center_x,
             mut field_camera,
@@ -53,7 +70,7 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
             hud_parts,
             ..
         } = draw_field(
-            &FieldFrame::new(state, player, placement, view),
+            &field,
             &mut scratch.notefield_camera_cache,
             &mut scratch.notefield_actor_scratch[player],
             &mut scratch.notefield_flat_draw_scratch[player],
@@ -65,24 +82,8 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
             layout.playfield_center_x = layout_center_x;
         }
 
-        // Preserve the prepared native Player placement when logical viewport
-        // and display metrics differ, as well as native chart attack transforms.
-        // These are entry-time defaults; no actor timeline is evaluated here.
-        let initial = state.song_lua_visuals().player_actors[player].initial_state;
-        let (base_x, base_y) = if view.show_song_visuals {
-            (initial.x, initial.y)
-        } else {
-            (layout_center_x, screen_center_y())
-        };
-        let transform = state.song_lua_player_transform(player);
-        let transform = if view.apply_attacks {
-            transform
-        } else {
-            Default::default()
-        };
-        let target_x =
-            song_lua_player_target_x(transform.x, base_x, layout_center_x, view.notefield);
-        let target_y = transform.y.unwrap_or(base_y);
+        let target_x = player_position.x.unwrap_or(layout_center_x);
+        let target_y = player_position.y;
         let field_camera_parts = scratch.notefield_camera_cache[player].camera_parts();
         let mut assembly = if transform == deadsync_gameplay::SongLuaPlayerTransform::default()
             && target_x == layout_center_x

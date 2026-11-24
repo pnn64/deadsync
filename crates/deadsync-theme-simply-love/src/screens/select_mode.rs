@@ -18,6 +18,7 @@ use deadsync_config::theme::GameFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::AudioRequest;
 use deadsync_theme::FontRole;
+use deadsync_theme::views::{PlaySelectionChoice, PlaySelectionKind, PlaySelectionView};
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -51,23 +52,25 @@ fn choice_description(choice: Choice) -> Arc<str> {
 /// Screen-lifetime localized text retained by the game thread.
 ///
 /// Owner/thread model: the Select Mode state on the single game thread, using
-/// `RefCell` only because actor construction receives `&State`. Lifetime and
-/// capacity: exactly five `Arc<str>` values for one screen instance. Warmup:
-/// screen initialization. Miss behavior: a language revision change rebuilds
-/// all five values on that menu frame; this path never runs during gameplay.
-/// Eviction/destruction: replacement on revision change and normal screen
-/// teardown, both on the game thread. The fixed domain needs no counters or
-/// pruning; worst-case refresh work is five translation lookups and at most two
-/// escaped-newline replacements.
+/// `RefCell` only because actor construction receives `&State`. Both wrapped
+/// and flowing descriptions are prepared at initialization and on language
+/// changes. Text is released on replacement or screen teardown.
 struct SelectModeText {
     i18n_revision: u64,
     title: Arc<str>,
     labels: [Arc<str>; 3],
     descriptions: [Arc<str>; 3],
+    flowing_descriptions: [Arc<str>; 3],
 }
 
 impl SelectModeText {
     fn build(i18n_revision: u64) -> Self {
+        let descriptions =
+            [Choice::Regular, Choice::Marathon, Choice::PremiumFree].map(choice_description);
+        let flowing_descriptions = descriptions.each_ref().map(|description| {
+            // The selector's explanation panel can wrap to its own width.
+            Arc::from(description.split_whitespace().collect::<Vec<_>>().join(" "))
+        });
         Self {
             i18n_revision,
             title: tr("ScreenTitles", "SelectMode"),
@@ -76,11 +79,8 @@ impl SelectModeText {
                 tr("SelectMode", "Marathon"),
                 tr("SelectMode", "PremiumFree"),
             ],
-            descriptions: [
-                choice_description(Choice::Regular),
-                choice_description(Choice::Marathon),
-                choice_description(Choice::PremiumFree),
-            ],
+            descriptions,
+            flowing_descriptions,
         }
     }
 
@@ -338,6 +338,29 @@ fn ease01(x: f32, f_ease: f32) -> f32 {
     let x = x.clamp(0.0, 1.0);
     // Use the same curve implementation as tween segments.
     anim::eval_ease_p_for_f_ease(x, f_ease)
+}
+
+pub fn with_play_selection_view(state: &State, draw: impl FnOnce(PlaySelectionView<'_>)) {
+    let mut text = state.text.borrow_mut();
+    text.sync();
+    let choices: [_; mode_flow::CHOICE_COUNT] = std::array::from_fn(|index| PlaySelectionChoice {
+        label: &text.labels[index],
+        description: Some(&text.flowing_descriptions[index]),
+    });
+    let join_prompt = tr("Common", "PressStart");
+    draw(PlaySelectionView {
+        kind: PlaySelectionKind::Mode,
+        title: &text.title,
+        choices: &choices[..state.flow.choice_count()],
+        selected: state.flow.selected_index(),
+        player_names: state
+            .runtime
+            .players
+            .each_ref()
+            .map(|player| player.joined.then_some(player.display_name.as_str())),
+        join_prompt: &join_prompt,
+        exit_progress: exit_anim_t(state.flow.exit_requested()) / mode_flow::EXIT_TOTAL_SECONDS,
+    });
 }
 
 pub fn push_actors(

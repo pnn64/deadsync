@@ -1,20 +1,26 @@
 use deadsync_assets::gameplay_stage::ActiveGameplayStage;
+use deadsync_assets::noteskin::Noteskin;
+use deadsync_config::app_config::Config;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::score_compat as scores;
-use deadsync_profile::player_side_index;
+use deadsync_profile::{PlayerSide, player_side_index};
 use deadsync_score::{self as score_data, stage_stats::StageSummary};
-use deadsync_theme_simply_love::views::{EvaluationContextView, EvaluationInitView, ScoreInfo};
+use deadsync_theme::views::{EvaluationStageView, EvaluationView};
 use std::borrow::Cow;
 use std::ops::Range;
+use std::sync::Arc;
+
+pub(crate) type EvaluationScoreView = EvaluationView<Arc<Noteskin>, PlayerSide>;
 
 /// Adapt an already authoritative result to the current theme's evaluation
 /// view. Artwork, labels and record highlighting do not feed back into it.
 pub(crate) fn evaluation_view(
     gs: &ActiveGameplayStage,
     stage: &StageSummary,
-    context: EvaluationContextView,
-) -> EvaluationInitView {
-    let policy = context.policy;
+    stage_number: usize,
+    config: &Config,
+    mods_text: impl Fn(usize) -> Arc<str>,
+) -> EvaluationStageView<Arc<Noteskin>, PlayerSide> {
     let mut score_info = std::array::from_fn(|_| None);
     let mut fail_stream_progress = [None; MAX_PLAYERS];
     for (player_idx, score_info_slot) in score_info
@@ -76,21 +82,21 @@ pub(crate) fn evaluation_view(
         let lua_submit_allowed = gs.mods.song_lua_compile_succeeded
             || score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
         let course_life_submit_eligible = gs.course_stage_life_submit_eligible(player_idx);
-        let expected_groovestats_submit = policy.enable_groovestats
+        let expected_groovestats_submit = config.enable_groovestats
             && passed
             && player.groovestats.valid
             && course_life_submit_eligible
             && prof.groovestats_is_pad_player
             && (!gs.course_display_is_course_stage()
-                || policy.autosubmit_course_scores_individually)
+                || config.autosubmit_course_scores_individually)
             && !prof.groovestats_api_key.trim().is_empty();
-        let expected_arrowcloud_submit = policy.enable_arrowcloud
+        let expected_arrowcloud_submit = config.enable_arrowcloud
             && !disqualified
-            && (passed || (failed && policy.submit_arrowcloud_fails))
+            && (passed || (failed && config.submit_arrowcloud_fails))
             && lua_submit_allowed
-            && (course_life_submit_eligible || (failed && policy.submit_arrowcloud_fails))
+            && (course_life_submit_eligible || (failed && config.submit_arrowcloud_fails))
             && (!gs.course_display_is_course_stage()
-                || policy.autosubmit_course_scores_individually)
+                || config.autosubmit_course_scores_individually)
             && !prof.arrowcloud_api_key.trim().is_empty();
         let local_score_valid = local_score_valid && saves_score;
         let earned_machine_record =
@@ -105,7 +111,7 @@ pub(crate) fn evaluation_view(
             .flatten();
         let show_machine_personal_split = !earned_machine_record && earned_top2_personal;
 
-        *score_info_slot = Some(ScoreInfo {
+        *score_info_slot = Some(EvaluationView {
                 song: stage.song.clone(),
                 chart: player.chart.clone(),
                 course_graph_stages: Vec::new(),
@@ -123,13 +129,15 @@ pub(crate) fn evaluation_view(
                 possible_grade_points: player.possible_grade_points,
                 grade: player.grade,
                 speed_mod: gs.scroll_speed_for_player(player_idx),
-                mods_text: deadsync_theme_simply_love::screens::components::gameplay::notefield::preferred_mods_text(
-                    gs, player_idx,
-                ),
+                mods_text: mods_text(player_idx),
+                max_combo: player.max_combo,
+                combo_runs: player.combo_runs.clone(),
+                jumps: player.jumps,
                 hands_achieved: player.hands_achieved,
                 hands_total: player.hands_total,
                 holds_held: player.holds_held,
                 holds_held_for_score: player.holds_held_for_score,
+                dropped_hold_or_roll: player.dropped_hold_or_roll,
                 holds_total: player.holds_total,
                 rolls_held: player.rolls_held,
                 rolls_held_for_score: player.rolls_held_for_score,
@@ -146,6 +154,7 @@ pub(crate) fn evaluation_view(
                 graph_last_second: player.graph_last_second,
                 music_rate: stage.music_rate,
                 life_history: player.life_history.clone(),
+                steps_life: player.steps_life.clone(),
                 fail_time: player.fail_time,
                 window_counts: player.window_counts,
                 window_counts_10ms: player.window_counts_10ms,
@@ -170,11 +179,11 @@ pub(crate) fn evaluation_view(
                 show_machine_personal_split,
             });
     }
-    EvaluationInitView {
-        score_info,
+    EvaluationStageView {
+        score_info: score_info.into(),
+        stage_number: Some(stage_number),
         routine_shared_score_percent: gs.routine_shared_stage_itg_score_percent(),
         fail_stream_progress,
-        context,
         stage_duration_seconds: stage.duration_seconds,
     }
 }

@@ -20,7 +20,10 @@ pub(in crate::screens::options) const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::Theme,
         label: lookup_key("OptionsSystem", "Theme"),
-        choices: &[localized_choice("OptionsSystem", "SimplyLoveTheme")],
+        choices: &[
+            localized_choice("OptionsSystem", "SimplyLoveTheme"),
+            literal_choice("OpenITG"),
+        ],
         inline: false,
     },
     SubRow {

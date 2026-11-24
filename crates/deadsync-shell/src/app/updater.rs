@@ -1,4 +1,4 @@
-use deadsync_theme_simply_love::SimplyLoveUpdaterRequest;
+use deadsync_theme::app_requests::UpdaterRequest;
 use deadsync_theme_simply_love::views::{
     SimplyLoveFfmpegPhase, SimplyLoveReleaseAssetView, SimplyLoveReleaseView,
     SimplyLoveUpdateErrorKind, SimplyLoveUpdatePhase, SimplyLoveUpdaterCapabilities,
@@ -86,26 +86,26 @@ fn replace_on_revision<T>(
     true
 }
 
-pub(super) fn execute(request: SimplyLoveUpdaterRequest, dirs: &deadsync_config::dirs::AppDirs) {
+pub(super) fn execute(request: UpdaterRequest, dirs: &deadsync_config::dirs::AppDirs) {
     match request {
-        SimplyLoveUpdaterRequest::InstallWorkshop => deadsync_updater::workshop::request_install(
+        UpdaterRequest::InstallWorkshop => deadsync_updater::workshop::request_install(
             dirs.workshop_dir(std::env::current_dir().ok().as_deref()),
             deadsync_assets::noteskin::refresh_packs,
         ),
-        SimplyLoveUpdaterRequest::DismissWorkshop => deadsync_updater::workshop::dismiss(),
-        SimplyLoveUpdaterRequest::CheckForUpdates => action::request_check_now(),
-        SimplyLoveUpdaterRequest::CheckForRollback => action::request_rollback_check(),
-        SimplyLoveUpdaterRequest::DownloadUpdate => action::request_download(),
-        SimplyLoveUpdaterRequest::ApplyUpdate => action::request_apply(),
-        SimplyLoveUpdaterRequest::DismissUpdate => action::dismiss(),
-        SimplyLoveUpdaterRequest::CancelUpdate => action::request_cancel(),
-        SimplyLoveUpdaterRequest::MoveRollback(delta) => action::rollback_move(delta),
-        SimplyLoveUpdaterRequest::ConfirmRollback => action::request_rollback_confirm(),
-        SimplyLoveUpdaterRequest::CheckFfmpegAvailability => check_ffmpeg_availability(),
-        SimplyLoveUpdaterRequest::ConfirmFfmpegInstall => ffmpeg::request_confirm(),
-        SimplyLoveUpdaterRequest::DismissFfmpeg => ffmpeg::dismiss(),
-        SimplyLoveUpdaterRequest::CancelFfmpegCheck => ffmpeg::cancel_check(),
-        SimplyLoveUpdaterRequest::CancelFfmpegDownload => ffmpeg::request_cancel(),
+        UpdaterRequest::DismissWorkshop => deadsync_updater::workshop::dismiss(),
+        UpdaterRequest::CheckForUpdates => action::request_check_now(),
+        UpdaterRequest::CheckForRollback => action::request_rollback_check(),
+        UpdaterRequest::DownloadUpdate => action::request_download(),
+        UpdaterRequest::ApplyUpdate => action::request_apply(),
+        UpdaterRequest::DismissUpdate => action::dismiss(),
+        UpdaterRequest::CancelUpdate => action::request_cancel(),
+        UpdaterRequest::MoveRollback(delta) => action::rollback_move(delta),
+        UpdaterRequest::ConfirmRollback => action::request_rollback_confirm(),
+        UpdaterRequest::CheckFfmpegAvailability => check_ffmpeg_availability(),
+        UpdaterRequest::ConfirmFfmpegInstall => ffmpeg::request_confirm(),
+        UpdaterRequest::DismissFfmpeg => ffmpeg::dismiss(),
+        UpdaterRequest::CancelFfmpegCheck => ffmpeg::cancel_check(),
+        UpdaterRequest::CancelFfmpegDownload => ffmpeg::request_cancel(),
     }
 }
 

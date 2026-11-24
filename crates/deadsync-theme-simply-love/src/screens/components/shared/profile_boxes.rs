@@ -22,6 +22,10 @@ use deadsync_notefield::{
 };
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
 use deadsync_profile as profile_data;
+use deadsync_profile::picker::{PickerBack, PickerSeat, PickerSeats, PickerStart};
+use deadsync_theme::profile_picker::{
+    PROFILE_PICKER_VISIBLE_ROWS, ProfilePickerPanel, ProfilePickerScreenView,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -109,10 +113,7 @@ struct Choice {
 pub struct State {
     pub active_color_index: i32,
     fast_switch: bool,
-    p1_joined: bool,
-    p2_joined: bool,
-    p1_ready: bool,
-    p2_ready: bool,
+    seats: PickerSeats,
     p1_selected_index: usize,
     p2_selected_index: usize,
     exit_anim: bool,
@@ -398,10 +399,7 @@ fn init_with_profiles(
     let mut state = State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         fast_switch: false,
-        p1_joined: true,
-        p2_joined: false,
-        p1_ready: false,
-        p2_ready: false,
+        seats: PickerSeats::new([true, false]),
         p1_selected_index,
         p2_selected_index,
         exit_anim: false,
@@ -482,10 +480,7 @@ pub fn init_late_join(
 }
 
 pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
-    state.p1_joined = p1_joined;
-    state.p2_joined = p2_joined;
-    state.p1_ready = false;
-    state.p2_ready = false;
+    state.seats = PickerSeats::new([p1_joined, p2_joined]);
     state.p1_join_pulse_t = JOIN_PULSE_DURATION;
     state.p2_join_pulse_t = JOIN_PULSE_DURATION;
 
@@ -511,24 +506,11 @@ pub const fn set_fast_switch(state: &mut State, enabled: bool) {
 /// pick a profile. Used when a second player presses Start mid-set on a
 /// screen with an embedded profile-select overlay.
 pub fn enter_late_join(state: &mut State, joining_side: profile_data::PlayerSide) {
-    match joining_side {
-        profile_data::PlayerSide::P1 => {
-            state.p1_joined = true;
-            state.p1_ready = false;
-            state.p1_join_pulse_t = 0.0;
-            state.p2_joined = true;
-            state.p2_ready = true;
-            state.p2_join_pulse_t = JOIN_PULSE_DURATION;
-        }
-        profile_data::PlayerSide::P2 => {
-            state.p1_joined = true;
-            state.p1_ready = true;
-            state.p1_join_pulse_t = JOIN_PULSE_DURATION;
-            state.p2_joined = true;
-            state.p2_ready = false;
-            state.p2_join_pulse_t = 0.0;
-        }
-    }
+    state.seats = PickerSeats::late_join(joining_side);
+    (state.p1_join_pulse_t, state.p2_join_pulse_t) = match joining_side {
+        profile_data::PlayerSide::P1 => (0.0, JOIN_PULSE_DURATION),
+        profile_data::PlayerSide::P2 => (JOIN_PULSE_DURATION, 0.0),
+    };
 
     state.p1_preview_noteskin = preview_noteskin_for_choice(
         &mut state.noteskin_cache,
@@ -575,32 +557,6 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     super::transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-#[inline(always)]
-const fn both_ready(state: &State) -> bool {
-    (state.p1_ready || !state.p1_joined) && (state.p2_ready || !state.p2_joined)
-}
-
-#[inline(always)]
-fn active_choices(state: &State) -> (profile_data::ActiveProfile, profile_data::ActiveProfile) {
-    let p1 = if state.p1_joined {
-        state
-            .choices
-            .get(state.p1_selected_index)
-            .map_or(profile_data::ActiveProfile::Guest, |c| c.kind.clone())
-    } else {
-        profile_data::ActiveProfile::Guest
-    };
-    let p2 = if state.p2_joined {
-        state
-            .choices
-            .get(state.p2_selected_index)
-            .map_or(profile_data::ActiveProfile::Guest, |c| c.kind.clone())
-    } else {
-        profile_data::ActiveProfile::Guest
-    };
-    (p1, p2)
-}
-
 const fn trigger_invalid_choice(state: &mut State, is_p1: bool) -> ThemeEffect {
     if is_p1 {
         state.p1_shake_t = 0.0;
@@ -615,23 +571,18 @@ const fn trigger_invalid_choice(state: &mut State, is_p1: bool) -> ThemeEffect {
 }
 
 fn shift_choice(state: &mut State, side: profile_data::PlayerSide, dir: i32) -> bool {
-    let (joined, ready, selected_index, preview_slot) = match side {
-        profile_data::PlayerSide::P1 => (
-            state.p1_joined,
-            state.p1_ready,
-            &mut state.p1_selected_index,
-            &mut state.p1_preview_noteskin,
-        ),
-        profile_data::PlayerSide::P2 => (
-            state.p2_joined,
-            state.p2_ready,
-            &mut state.p2_selected_index,
-            &mut state.p2_preview_noteskin,
-        ),
-    };
-    if !joined || ready {
+    let player = profile_data::player_side_index(side);
+    if state.seats.states()[player] != PickerSeat::Choosing {
         return false;
     }
+    let (selected_index, preview_slot) = match side {
+        profile_data::PlayerSide::P1 => {
+            (&mut state.p1_selected_index, &mut state.p1_preview_noteskin)
+        }
+        profile_data::PlayerSide::P2 => {
+            (&mut state.p2_selected_index, &mut state.p2_preview_noteskin)
+        }
+    };
     let old_index = *selected_index;
     if dir < 0 {
         if *selected_index > 0 {
@@ -670,22 +621,13 @@ fn handle_cancel(
     side: profile_data::PlayerSide,
     effects: &mut Vec<ThemeEffect>,
 ) -> InputOutcome {
-    match side {
-        profile_data::PlayerSide::P1 => {
-            if state.p1_joined && state.p1_ready {
-                state.p1_ready = false;
-                effects.push(crate::effects::sfx("assets/sounds/unjoin.ogg"));
-                return InputOutcome::Continue;
-            }
-            if state.p1_joined {
-                state.p1_joined = false;
-                state.p1_ready = false;
-                effects.push(crate::effects::sfx("assets/sounds/unjoin.ogg"));
-                return InputOutcome::Continue;
-            }
-            if state.p2_joined {
-                return InputOutcome::Continue;
-            }
+    match state.seats.back(side) {
+        PickerBack::SeatChanged => {
+            effects.push(crate::effects::sfx("assets/sounds/unjoin.ogg"));
+            InputOutcome::Continue
+        }
+        PickerBack::OtherJoined => InputOutcome::Continue,
+        PickerBack::Cancelled => {
             state.exit_anim = true;
             let _ = exit_anim_t(true);
             InputOutcome::Cancelled(if state.fast_switch {
@@ -694,28 +636,68 @@ fn handle_cancel(
                 Screen::Menu
             })
         }
-        profile_data::PlayerSide::P2 => {
-            if state.p2_joined && state.p2_ready {
-                state.p2_ready = false;
-                effects.push(crate::effects::sfx("assets/sounds/unjoin.ogg"));
-                return InputOutcome::Continue;
+    }
+}
+
+fn handle_start(
+    state: &mut State,
+    side: profile_data::PlayerSide,
+    effects: &mut Vec<ThemeEffect>,
+) -> InputOutcome {
+    let indices = [state.p1_selected_index, state.p2_selected_index];
+    let choices = indices.map(|index| state.choices.get(index).map(|choice| &choice.kind));
+    match state.seats.start(side, choices) {
+        PickerStart::Waiting => InputOutcome::Continue,
+        PickerStart::Joined => {
+            let player = profile_data::player_side_index(side);
+            let preview = preview_noteskin_for_choice(
+                &mut state.noteskin_cache,
+                &state.choices,
+                indices[player],
+            );
+            match side {
+                profile_data::PlayerSide::P1 => {
+                    state.p1_join_pulse_t = 0.0;
+                    state.p1_preview_noteskin = preview;
+                }
+                profile_data::PlayerSide::P2 => {
+                    state.p2_join_pulse_t = 0.0;
+                    state.p2_preview_noteskin = preview;
+                }
             }
-            if state.p2_joined {
-                state.p2_joined = false;
-                state.p2_ready = false;
-                effects.push(crate::effects::sfx("assets/sounds/unjoin.ogg"));
-                return InputOutcome::Continue;
-            }
-            if state.p1_joined {
-                return InputOutcome::Continue;
-            }
+            effects.push(crate::effects::sfx("assets/sounds/start.ogg"));
+            InputOutcome::Continue
+        }
+        PickerStart::DuplicateProfile => {
+            effects.push(trigger_invalid_choice(state, side == profile_data::PlayerSide::P1));
+            InputOutcome::Continue
+        }
+        PickerStart::Confirmed => {
             state.exit_anim = true;
             let _ = exit_anim_t(true);
-            InputOutcome::Cancelled(if state.fast_switch {
-                Screen::SelectMusic
-            } else {
-                Screen::Menu
-            })
+            let [p1_joined, p2_joined] = state.seats.states().map(PickerSeat::joined);
+            let selected_profile = |choice: Option<&profile_data::ActiveProfile>, joined: bool| {
+                choice
+                    .filter(|_| joined)
+                    .cloned()
+                    .unwrap_or(profile_data::ActiveProfile::Guest)
+            };
+            let [p1, p2] = choices;
+            let p1 = selected_profile(p1, p1_joined);
+            let p2 = selected_profile(p2, p2_joined);
+            effects.extend([
+                crate::effects::sfx("assets/sounds/start.ogg"),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                    crate::SimplyLoveProfileRequest::Select {
+                        p1,
+                        p2,
+                        p1_joined,
+                        p2_joined,
+                        fast_switch: state.fast_switch,
+                    },
+                )),
+            ]);
+            InputOutcome::Selected
         }
     }
 }
@@ -784,59 +766,7 @@ fn handle_input_impl(
             }
             InputOutcome::Continue
         }
-        VirtualAction::p1_start => {
-            if !state.p1_joined {
-                state.p1_joined = true;
-                state.p1_ready = false;
-                state.p1_join_pulse_t = 0.0;
-                state.p1_preview_noteskin = preview_noteskin_for_choice(
-                    &mut state.noteskin_cache,
-                    &state.choices,
-                    state.p1_selected_index,
-                );
-                effects.push(crate::effects::sfx("assets/sounds/start.ogg"));
-                return InputOutcome::Continue;
-            }
-
-            if state.p1_ready {
-                return InputOutcome::Continue;
-            }
-
-            if state.p2_joined
-                && state.p2_ready
-                && state.choices.get(state.p1_selected_index).is_some_and(|c| {
-                    !matches!(&c.kind, profile_data::ActiveProfile::Guest)
-                        && state
-                            .choices
-                            .get(state.p2_selected_index)
-                            .is_some_and(|o| o.kind == c.kind)
-                })
-            {
-                effects.push(trigger_invalid_choice(state, true));
-                return InputOutcome::Continue;
-            }
-
-            state.p1_ready = true;
-            if both_ready(state) {
-                state.exit_anim = true;
-                let _ = exit_anim_t(true);
-                let (p1, p2) = active_choices(state);
-                effects.extend([
-                    crate::effects::sfx("assets/sounds/start.ogg"),
-                    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                        crate::SimplyLoveProfileRequest::Select {
-                            p1,
-                            p2,
-                            p1_joined: state.p1_joined,
-                            p2_joined: state.p2_joined,
-                            fast_switch: state.fast_switch,
-                        },
-                    )),
-                ]);
-                return InputOutcome::Selected;
-            }
-            InputOutcome::Continue
-        }
+        VirtualAction::p1_start => handle_start(state, profile_data::PlayerSide::P1, effects),
         VirtualAction::p1_back | VirtualAction::p1_select => {
             handle_cancel(state, profile_data::PlayerSide::P1, effects)
         }
@@ -864,59 +794,7 @@ fn handle_input_impl(
             }
             InputOutcome::Continue
         }
-        VirtualAction::p2_start => {
-            if !state.p2_joined {
-                state.p2_joined = true;
-                state.p2_ready = false;
-                state.p2_join_pulse_t = 0.0;
-                state.p2_preview_noteskin = preview_noteskin_for_choice(
-                    &mut state.noteskin_cache,
-                    &state.choices,
-                    state.p2_selected_index,
-                );
-                effects.push(crate::effects::sfx("assets/sounds/start.ogg"));
-                return InputOutcome::Continue;
-            }
-
-            if state.p2_ready {
-                return InputOutcome::Continue;
-            }
-
-            if state.p1_joined
-                && state.p1_ready
-                && state.choices.get(state.p2_selected_index).is_some_and(|c| {
-                    !matches!(&c.kind, profile_data::ActiveProfile::Guest)
-                        && state
-                            .choices
-                            .get(state.p1_selected_index)
-                            .is_some_and(|o| o.kind == c.kind)
-                })
-            {
-                effects.push(trigger_invalid_choice(state, false));
-                return InputOutcome::Continue;
-            }
-
-            state.p2_ready = true;
-            if both_ready(state) {
-                state.exit_anim = true;
-                let _ = exit_anim_t(true);
-                let (p1, p2) = active_choices(state);
-                effects.extend([
-                    crate::effects::sfx("assets/sounds/start.ogg"),
-                    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                        crate::SimplyLoveProfileRequest::Select {
-                            p1,
-                            p2,
-                            p1_joined: state.p1_joined,
-                            p2_joined: state.p2_joined,
-                            fast_switch: state.fast_switch,
-                        },
-                    )),
-                ]);
-                return InputOutcome::Selected;
-            }
-            InputOutcome::Continue
-        }
+        VirtualAction::p2_start => handle_start(state, profile_data::PlayerSide::P2, effects),
         VirtualAction::p2_back | VirtualAction::p2_select => {
             handle_cancel(state, profile_data::PlayerSide::P2, effects)
         }
@@ -1905,12 +1783,14 @@ fn push_box_actors_with_model_cache(
     let border_rgba = [1.0, 1.0, 1.0, 1.0];
     let preview_col = preview_col(state.noteskin_cache.style);
 
+    let [p1, p2] = state.seats.states();
+
     // P1: keep both frames alive (visibility via alpha) so tween state doesn't reset.
     {
         let side_start = actors.len();
-        let show_scroller = state.p1_joined && !state.p1_ready;
-        let show_join = !state.p1_joined || state.p1_ready;
-        let show_selected_name = state.p1_joined && state.p1_ready;
+        let show_scroller = p1 == PickerSeat::Choosing;
+        let show_join = !show_scroller;
+        let show_selected_name = p1 == PickerSeat::Ready;
 
         let scroller_start = actors.len();
         push_scroller_frame(
@@ -1941,12 +1821,12 @@ fn push_box_actors_with_model_cache(
 
         let join_start = actors.len();
         let join_text = if retain_static_payloads {
-            Arc::clone(if state.p1_ready {
+            Arc::clone(if p1 == PickerSeat::Ready {
                 &state.waiting_text
             } else {
                 &state.join_text
             })
-        } else if state.p1_ready {
+        } else if p1 == PickerSeat::Ready {
             tr("SelectProfile", "WaitingText")
         } else {
             tr("SelectProfile", "JoinText")
@@ -2001,9 +1881,9 @@ fn push_box_actors_with_model_cache(
     // P2
     {
         let side_start = actors.len();
-        let show_scroller = state.p2_joined && !state.p2_ready;
-        let show_join = !state.p2_joined || state.p2_ready;
-        let show_selected_name = state.p2_joined && state.p2_ready;
+        let show_scroller = p2 == PickerSeat::Choosing;
+        let show_join = !show_scroller;
+        let show_selected_name = p2 == PickerSeat::Ready;
 
         let scroller_start = actors.len();
         push_scroller_frame(
@@ -2034,12 +1914,12 @@ fn push_box_actors_with_model_cache(
 
         let join_start = actors.len();
         let join_text = if retain_static_payloads {
-            Arc::clone(if state.p2_ready {
+            Arc::clone(if p2 == PickerSeat::Ready {
                 &state.waiting_text
             } else {
                 &state.join_text
             })
-        } else if state.p2_ready {
+        } else if p2 == PickerSeat::Ready {
             tr("SelectProfile", "WaitingText")
         } else {
             tr("SelectProfile", "JoinText")
@@ -2177,11 +2057,11 @@ pub fn push_actors(
 
     let press_start = tr("Common", "PressStart");
     let not_present = tr("SelectProfile", "NotPresent");
-    let (footer_left, footer_right) = match (state.p1_joined, state.p2_joined) {
-        (false, false) => (Some(press_start.as_ref()), Some(press_start.as_ref())),
-        (true, false) => (None, Some(not_present.as_ref())),
-        (false, true) => (Some(not_present.as_ref()), None),
-        (true, true) => (None, None),
+    let (footer_left, footer_right) = match state.seats.states().map(PickerSeat::joined) {
+        [false, false] => (Some(press_start.as_ref()), Some(press_start.as_ref())),
+        [true, false] => (None, Some(not_present.as_ref())),
+        [false, true] => (Some(not_present.as_ref()), None),
+        [true, true] => (None, None),
     };
     let event_mode = tr("Common", "EventMode");
     actors.push(screen_bar::build(ScreenBarParams {
@@ -2204,6 +2084,42 @@ pub fn push_actors(
         alpha_multiplier,
         visual_policy,
     );
+}
+
+pub fn with_screen_view(
+    state: &State,
+    alpha: f32,
+    draw: impl FnOnce(ProfilePickerScreenView<'_>),
+) {
+    let seats = state.seats.states();
+    let indices = [state.p1_selected_index, state.p2_selected_index];
+    let invalid_times = [state.p1_shake_t, state.p2_shake_t];
+    let panels = std::array::from_fn(|player| {
+        let index = indices[player];
+        let choice = state.choices.get(index);
+        let names = std::array::from_fn(|row| {
+            let offset = row as isize - (PROFILE_PICKER_VISIBLE_ROWS / 2) as isize;
+            let neighbor = index.checked_add_signed(offset)?;
+            state.choices.get(neighbor).map(|entry| &entry.display_name)
+        });
+        ProfilePickerPanel {
+            joined: seats[player].joined(),
+            ready: seats[player] == PickerSeat::Ready,
+            names,
+            avatar: choice.and_then(|entry| entry.avatar_key.as_ref()),
+            songs_played: choice.map(|entry| &entry.total_songs),
+            invalid_choice: invalid_times[player] < SHAKE_DUR,
+        }
+    });
+    let title = tr("ScreenTitles", "SelectProfile");
+    let exit_alpha = 1.0 - exit_anim_t(state.exit_anim) / EXIT_ANIM_DURATION;
+    draw(ProfilePickerScreenView {
+        title: &title,
+        join_text: &state.join_text,
+        waiting_text: &state.waiting_text,
+        panels,
+        alpha: alpha * exit_alpha,
+    });
 }
 
 pub fn get_actors(

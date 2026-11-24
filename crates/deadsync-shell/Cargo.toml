@@ -52,6 +52,7 @@ smallvec = "1.16.5"
 winit = "0.30.13"
 
 [dev-dependencies]
+deadsync-theme-openitg = { path = "../deadsync-theme-openitg" }
 zstd = "0.14.4"
 tar = "0.4.46"
 tempfile = "3.27.0"

@@ -1,4 +1,5 @@
 pub mod color;
+pub mod display;
 pub mod hud_style;
 pub mod input;
 pub mod note;

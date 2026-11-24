@@ -5,12 +5,12 @@ use crate::scorebox::{
     SCOREBOX_BORDER, SCOREBOX_H, SCOREBOX_W, ScoreboxCycleState, color_with_alpha, lerp_color,
     logo_alpha, scorebox_cycle_state,
 };
-use crate::views::ScoreboxSideView;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadsync_config::theme::SrpgVariant;
 use deadsync_score as score_data;
 use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
+use deadsync_theme::views::ScoreboxSideView;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
@@ -287,7 +287,7 @@ impl SelectMusicScoreboxPresentation {
 
 impl Default for SelectMusicScoreboxPresentation {
     fn default() -> Self {
-        Self::new(&crate::views::ScoreboxSideView::default())
+        Self::new(&deadsync_theme::views::ScoreboxSideView::default())
     }
 }
 
@@ -486,10 +486,10 @@ fn build_select_music_scorebox_view(
     chart_present: bool,
     show_rivals: bool,
 ) -> SelectMusicScoreboxView {
-    let fallback_player = chart_matches
-        .then_some(runtime.local_itg)
-        .flatten()
-        .filter(|score| !score.failed || score.score_10000 > 0.0)
+    let chart_hash = runtime.chart_hash.as_deref().filter(|_| chart_matches);
+    let records = runtime.local_records(chart_hash);
+    let fallback_player = records
+        .personal
         .map(|score| {
             (
                 Arc::clone(&runtime.player_initials),
@@ -497,10 +497,8 @@ fn build_select_music_scorebox_view(
             )
         })
         .unwrap_or_else(|| (placeholder_text(), unknown_score_percent_text()));
-    let fallback_machine = chart_matches
-        .then_some(runtime.machine_itg.as_ref())
-        .flatten()
-        .filter(|score| !score.failed || score.score_10000 > 0.0)
+    let fallback_machine = records
+        .machine
         .map(|score| {
             (
                 Arc::<str>::from(score.name.as_str()),
@@ -1538,7 +1536,7 @@ mod tests {
         );
 
         let entries =
-            entries_with_local_self_state(&crate::views::ScoreboxSideView::default(), &pane);
+            entries_with_local_self_state(&deadsync_theme::views::ScoreboxSideView::default(), &pane);
 
         assert_eq!(entries.len(), 2);
         assert!(!entries.iter().any(|entry| entry.is_self));
@@ -1550,11 +1548,11 @@ mod tests {
         let runtime = ScoreboxSideView {
             chart_hash: Some("chart".to_string()),
             player_initials: "P1".into(),
-            local_itg: Some(crate::views::ScoreboxLocalView {
+            local_itg: Some(deadsync_theme::views::ScoreboxLocalView {
                 score_10000: 9876.0,
                 failed: false,
             }),
-            machine_itg: Some(crate::views::ScoreboxMachineView {
+            machine_itg: Some(deadsync_theme::views::ScoreboxMachineView {
                 name: "AAA".to_string(),
                 score_10000: 9999.0,
                 failed: false,

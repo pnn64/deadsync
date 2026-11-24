@@ -69,6 +69,14 @@ impl SessionState {
         }
     }
 
+    /// Number of the active song before its result is recorded.
+    pub(crate) fn active_stage_number(&self) -> usize {
+        self.course_run.as_ref().map_or_else(
+            || self.played_stages.len().saturating_add(1),
+            |course| course.run.progress.next_stage_index(),
+        )
+    }
+
     /// Record authoritative data independently of any optional evaluation page.
     pub fn record_stage_result(&mut self, stage: stage_stats::StageSummary) {
         if let Some(course) = self.course_run.as_mut() {

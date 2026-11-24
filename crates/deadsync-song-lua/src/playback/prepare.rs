@@ -696,7 +696,7 @@ fn build_song_lua_compiled_visual_layer_runtime<S: Clone + std::fmt::Debug>(
     );
     let overlays = song_lua_runtime_overlays(compiled, timing_player, global_offset_seconds);
 
-    Some(deadsync_gameplay::build_song_lua_visual_layer_runtime(
+    let mut layer = deadsync_gameplay::build_song_lua_visual_layer_runtime(
         start_second,
         compiled.screen_width,
         compiled.screen_height,
@@ -705,7 +705,9 @@ fn build_song_lua_compiled_visual_layer_runtime<S: Clone + std::fmt::Debug>(
         overlay_events,
         compiled.song_foreground.clone(),
         song_foreground_events,
-    ))
+    );
+    layer.foreground_beats = compiled.foreground_beats.clone();
+    Some(layer)
 }
 
 fn song_lua_runtime_overlays<S: Clone + std::fmt::Debug>(
@@ -1341,33 +1343,34 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
         }
     }
 
-    (
-        constant_windows,
-        ease_windows,
-        deadsync_gameplay::build_song_lua_runtime_visuals(
-            overlays,
-            screen_overlay_index,
-            overlay_eases,
-            overlay_ease_ranges,
-            overlay_events,
-            background_visual_layers,
-            foreground_visual_layers,
-            player_actors,
-            player_events,
-            player_judgment_events,
-            player_combo_events,
-            song_foreground,
-            song_foreground_events,
-            hidden_players,
-            screen_layers,
-            screen_layer_events,
-            note_hides,
-            column_offsets,
-            column_splines,
-            out_screen_width,
-            out_screen_height,
-        ),
-    )
+    let mut visuals = deadsync_gameplay::build_song_lua_runtime_visuals(
+        overlays,
+        screen_overlay_index,
+        overlay_eases,
+        overlay_ease_ranges,
+        overlay_events,
+        background_visual_layers,
+        foreground_visual_layers,
+        player_actors,
+        player_events,
+        player_judgment_events,
+        player_combo_events,
+        song_foreground,
+        song_foreground_events,
+        hidden_players,
+        screen_layers,
+        screen_layer_events,
+        note_hides,
+        column_offsets,
+        column_splines,
+        out_screen_width,
+        out_screen_height,
+    );
+    visuals.foreground_beats = song_lua_data
+        .primary
+        .as_ref()
+        .and_then(|primary| primary.compiled.foreground_beats.clone());
+    (constant_windows, ease_windows, visuals)
 }
 
 fn song_lua_sound_time_crossed(previous: f32, now: f32, event_second: f32) -> bool {

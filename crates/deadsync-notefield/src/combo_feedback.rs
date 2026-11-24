@@ -1,13 +1,14 @@
 use crate::combo_actor_zoom;
 use deadlib_present::actors::{
-    FlatDraw, FlatPreparedU32, FlatSprite, InlineU32Text, SpriteSource, TextAlign,
+    FlatDraw, FlatPreparedInline, FlatPreparedU32, FlatSprite, InlineText, InlineU32Text,
+    SpriteSource, TextAlign,
 };
 use deadlib_render_core::BlendMode;
+use deadsync_core::hud_style::{ComboFeedbackStyle, FieldFeedbackStyle};
 use deadsync_gameplay::{
     ActiveComboMilestone, COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
     ComboMilestoneKind,
 };
-use deadsync_core::hud_style::ComboFeedbackStyle;
 #[cfg(test)]
 use std::sync::Arc;
 
@@ -28,6 +29,7 @@ pub struct ComboMilestoneAssets {
 
 pub(crate) struct ComboFeedbackRequest<'a> {
     pub style: ComboFeedbackStyle,
+    pub field_feedback: Option<&'static FieldFeedbackStyle>,
     pub show: bool,
     pub milestone_assets: Option<&'a ComboMilestoneAssets>,
     pub milestones: &'a [ActiveComboMilestone],
@@ -40,6 +42,8 @@ pub(crate) struct ComboFeedbackRequest<'a> {
     pub combo_color: [f32; 4],
     pub font: Option<&'static str>,
     pub number_text_slot: u8,
+    pub label_text_slot: u8,
+    pub recent_tap_age: Option<f32>,
 }
 
 /// Compose canonical hundred/thousand milestone feedback as resolved sprites.
@@ -84,9 +88,41 @@ pub(crate) fn compose_combo_number(draws: &mut Vec<FlatDraw>, request: &ComboFee
         return;
     };
 
-    let scale = request.style.number_zoom * combo_actor_zoom(request.mini);
+    let mini = combo_actor_zoom(request.mini);
+    let mut scale = request.style.number_zoom * mini;
+    let mut align = [0.5, 0.5];
+    if let Some(style) = request.field_feedback {
+        let pulse = request.recent_tap_age.map_or(1.0, |age| {
+            let progress = (age / style.combo_pulse_duration).clamp(0.0, 1.0);
+            (style.combo_pulse_scale - 1.0).mul_add(1.0 - progress, 1.0)
+        });
+        scale = (value.min(style.combo_number_zoom_limit) as f32)
+            .mul_add(style.combo_number_zoom_step, style.combo_number_zoom)
+            * mini
+            * pulse;
+        align[1] = 1.0;
+        if let Some(text) = InlineText::copy_from(style.combo_label) {
+            draws.push(FlatDraw::PreparedInline(FlatPreparedInline {
+                align: [0.5, 0.0],
+                offset: [
+                    request.number_xy[0],
+                    request.number_xy[1] + style.combo_label_y,
+                ],
+                color,
+                font: style.combo_label_font,
+                text,
+                slot: request.label_text_slot,
+                align_text: TextAlign::Center,
+                z: request.style.number_z,
+                scale: [style.combo_label_zoom * mini * pulse; 2],
+                blend: BlendMode::Alpha,
+                shadow_len: [request.style.shadow_len, -request.style.shadow_len],
+                shadow_color: [0.0, 0.0, 0.0, 0.5],
+            }));
+        }
+    }
     draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {
-        align: [0.5, 0.5],
+        align,
         offset: request.number_xy,
         color,
         font,
@@ -306,6 +342,7 @@ mod tests {
     ) -> ComboFeedbackRequest<'a> {
         ComboFeedbackRequest {
             style: style(),
+            field_feedback: None,
             show: true,
             milestone_assets: assets,
             milestones,
@@ -318,6 +355,8 @@ mod tests {
             combo_color: [0.1, 0.8, 0.3, 0.9],
             font: Some("combo-font"),
             number_text_slot: 0,
+            label_text_slot: 0,
+            recent_tap_age: None,
         }
     }
 

@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::views::SimplyLoveApplyReplayGainEvent;
+use deadsync_assets::progress::ApplyReplayGainEvent;
 
 /// Modal overlay state for the Sound options "Apply `ReplayGain`" action. Drives
 /// a full-library EBU R128 loudness analysis with a progress bar, ETA readout,
@@ -83,20 +83,20 @@ pub(super) fn begin_apply_replaygain(state: &mut State) -> ThemeEffect {
 
 pub(super) fn apply_apply_replaygain_event(
     state: &mut State,
-    event: SimplyLoveApplyReplayGainEvent,
+    event: ApplyReplayGainEvent,
 ) {
     let Some(ui) = state.apply_replaygain_ui.as_mut() else {
         return;
     };
     ui.invalidate_presentation();
     match event {
-        SimplyLoveApplyReplayGainEvent::Started { total } => {
+        ApplyReplayGainEvent::Started { total } => {
             ui.total = total;
             if total == 0 {
                 ui.line3 = tr("OptionsSound", "ApplyReplayGainNoSongs").to_string();
             }
         }
-        SimplyLoveApplyReplayGainEvent::Progress {
+        ApplyReplayGainEvent::Progress {
             done,
             total,
             line2,
@@ -107,7 +107,7 @@ pub(super) fn apply_apply_replaygain_event(
             ui.line2 = line2;
             ui.line3 = line3;
         }
-        SimplyLoveApplyReplayGainEvent::Finished {
+        ApplyReplayGainEvent::Finished {
             done,
             total,
             cancelled,

@@ -218,6 +218,9 @@ pub(super) fn initialize(
 
 pub(super) fn load(call: &mut HostCall<'_>, actor: TableId, preserve: bool) -> Result<(), Error> {
     if call.store().actors[&actor].sprite_animation.is_none() {
+        if call.store().clock.live.load(std::sync::atomic::Ordering::Relaxed) {
+            return initialize(call, actor, false);
+        }
         return Ok(());
     }
     let resource = resource(call, actor)?;

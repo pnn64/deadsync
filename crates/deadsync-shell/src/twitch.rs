@@ -1,13 +1,7 @@
 //! App-lifetime read-only chat connection, independent of screen transitions.
 use crate::latest_worker_value::LatestWorkerValue;
-use deadlib_assets::AssetManager;
-use deadlib_present::{actors::Actor, space};
 use deadsync_config::streaming::{TwitchChannel, TwitchOptions};
 use deadsync_online::twitch::{self, Entry, Snapshot};
-use deadsync_theme_simply_love::screens::{
-    SimplyLoveScreen,
-    components::shared::twitch_chat::{self, GameplayLayout, Overlay},
-};
 use std::{
     sync::{
         Arc,
@@ -31,9 +25,6 @@ pub(crate) struct Runtime {
     next_id: u64,
     entries: Vec<Arc<Entry>>,
     revision: u64,
-    overlay: Overlay,
-    screen: Option<SimplyLoveScreen>,
-    sides: [bool; 2],
     options: TwitchOptions,
 }
 
@@ -43,7 +34,6 @@ impl Runtime {
         if self.desired != desired || self.options.enabled != options.enabled {
             self.desired = desired;
             self.entries.clear();
-            self.overlay.clear();
             self.revision = self.revision.wrapping_add(1);
             if let Some(worker) = &self.worker {
                 worker.cancel.store(true, Ordering::Release);
@@ -101,54 +91,10 @@ impl Runtime {
             self.entries = snapshot.entries;
             self.revision = self.revision.wrapping_add(1);
         }
-        if options.enabled && options.channel.is_empty() && self.entries.is_empty() {
-            self.entries.push(Arc::new(Entry::Status {
-                text: "Set Twitch Channel in Streaming Services.".into(),
-                notice: None,
-            }));
-            self.revision = self.revision.wrapping_add(1);
-        }
     }
 
-    pub(crate) fn push(
-        &mut self,
-        actors: &mut Vec<Actor>,
-        screen: SimplyLoveScreen,
-        gameplay: Option<GameplayLayout>,
-        tournament: bool,
-        assets: &AssetManager,
-    ) {
-        if !self.options.enabled {
-            return;
-        }
-        if self.screen != Some(screen) {
-            self.screen = Some(screen);
-            let session = deadsync_profile::compat::get_session_snapshot();
-            self.sides = [
-                session.side_joined(deadsync_profile::PlayerSide::P1),
-                session.side_joined(deadsync_profile::PlayerSide::P2),
-            ];
-        }
-        if screen == SimplyLoveScreen::Gameplay && !self.options.show_gameplay {
-            return;
-        }
-        if let Some(rect) = twitch_chat::placement(
-            screen,
-            space::screen_width(),
-            space::screen_height(),
-            self.sides,
-            gameplay,
-            tournament,
-        ) {
-            self.overlay.push(
-                actors,
-                &self.entries,
-                self.revision,
-                rect,
-                self.options,
-                assets,
-            );
-        }
+    pub(crate) fn snapshot(&self) -> (&[Arc<Entry>], u64) {
+        (&self.entries, self.revision)
     }
 }
 
@@ -245,6 +191,6 @@ mod tests {
             ..Default::default()
         });
         assert!(runtime.worker.is_none());
-        assert_eq!(runtime.entries.len(), 1);
+        assert!(runtime.entries.is_empty());
     }
 }

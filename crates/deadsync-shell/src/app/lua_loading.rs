@@ -5,6 +5,7 @@ pub(super) struct SongLuaLoading {
     pub title: Arc<str>,
     pub color_index: i32,
     pub progress: deadsync_song_lua::SongLuaBakeProgress,
+    presented_at: std::sync::OnceLock<Instant>,
 }
 
 #[cfg(test)]
@@ -94,6 +95,18 @@ mod tests {
                     app.gameplay_preload.as_mut().unwrap().enter_requested = true;
                     assert!(!app.accepts_live_input());
                     assert_loading_frame(&mut app);
+                    app.state.screens.stage_presentation =
+                        crate::theme_registry::mount(config::theme::ThemeFlag::OpenItg).stage;
+                    let (actors, _, segments) = app.get_current_actors(0.0, app.frame_policy);
+                    assert!(segments.is_none());
+                    assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite {
+                        source: deadlib_present::actors::SpriteSource::TextureStatic("openitg/gameplay-stage-1.png"),
+                        ..
+                    })));
+                    assert!(actors.iter().any(|actor| matches!(actor,
+                        Actor::Text { content, .. } if content.as_str() == "Loading test")));
+                    assert!(actors.iter().any(|actor| matches!(actor,
+                        Actor::Text { content, .. } if content.as_str().ends_with('%'))));
                     app.gameplay_preload.as_mut().unwrap().enter_requested = false;
                     assert!(
                         app.song_lua_loading().is_none(),
@@ -164,7 +177,7 @@ mod tests {
                         } else {
                             let state = app.state.screens.practice_state.as_mut().unwrap();
                             let now = Instant::now();
-                            crate::gameplay_runtime::handle_practice_input::<ActiveTheme, _, _>(
+                            crate::gameplay_runtime::handle_practice_input(
                                 state,
                                 &InputEvent::new(
                                     VirtualAction::p1_menu_down,
@@ -256,7 +269,7 @@ mod tests {
                     assert!(app.state.pending_stage.is_none());
                     assert!(app.pending_gameplay_init.is_none());
                     let recovered = app.state.screens.player_options_state.as_ref().unwrap();
-                    let recovered = ActiveTheme::player_options_selection(recovered);
+                    let recovered = recovered.selection();
                     assert!(Arc::ptr_eq(recovered.song, &song));
                     assert_eq!(recovered.return_screen, CurrentScreen::Practice);
                     assert_eq!(recovered.color_index, 5);
@@ -282,7 +295,12 @@ impl SongLuaLoading {
             title: song.display_full_title(false).into(),
             color_index,
             progress: Default::default(),
+            presented_at: Default::default(),
         })
+    }
+
+    pub fn presentation_elapsed(&self) -> f32 {
+        self.presented_at.get_or_init(Instant::now).elapsed().as_secs_f32()
     }
 }
 

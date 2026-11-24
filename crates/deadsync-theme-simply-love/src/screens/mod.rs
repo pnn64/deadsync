@@ -38,10 +38,11 @@ pub mod transition_audio;
 pub mod transitions;
 
 pub(crate) use crate::views::{DensityGraphSlot, DensityGraphSource};
-pub(crate) use flow::SimplyLoveScreen as Screen;
+pub(crate) use deadsync_theme::Screen;
+pub(crate) use flow::screen_id;
 pub use flow::{
     LateJoinContext, ProfileSelectionContext, ProfileSelectionPlan, SelectMusicJoinContext,
-    SelectMusicJoinPlan, SimplyLoveNavigationPlan, SimplyLoveNavigationPolicy, SimplyLoveScreen,
+    SelectMusicJoinPlan, SimplyLoveNavigationPlan, SimplyLoveNavigationPolicy,
     evaluation_summary_return_to, late_join_side, profile_selection_plan, profile_selection_target,
     resolve_navigation, select_music_join_plan, uses_actor_fade, uses_actor_only_transition,
 };

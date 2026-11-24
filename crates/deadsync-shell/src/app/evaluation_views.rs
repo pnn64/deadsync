@@ -3,13 +3,15 @@ use super::{
     EvaluationSubmissionView, MAX_PLAYERS, ScoreboxSideView, SimplyLoveGrooveStatsService,
     evaluation_context_view, scorebox_pane_filter,
 };
+use super::screenshot::EvaluationCapture;
 use crate::ActiveTheme;
 use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::results::EvaluationStage;
-use deadsync_theme::evaluation::ThemeEvaluation;
-use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
+use deadsync_theme::evaluation::{EvaluationOverviewPage, ThemeEvaluation};
+use deadsync_theme::views::EvaluationScores;
+use deadsync_theme::Screen as CurrentScreen;
 use std::{sync::Arc, time::Instant};
 
 type PlayerQueries<'a> = [Option<(profile_data::PlayerSide, &'a str)>; MAX_PLAYERS];
@@ -18,10 +20,30 @@ pub(super) fn chart_queries(stage: Option<&EvaluationStage>) -> PlayerQueries<'_
     stage.map_or([None; MAX_PLAYERS], EvaluationStage::player_chart_queries)
 }
 
+pub(super) type ResultOverview =
+    EvaluationOverviewPage<Arc<deadsync_assets::noteskin::Noteskin>, profile_data::PlayerSide>;
+
+pub(super) fn prepare_overview(
+    mounted: bool,
+    scores: &EvaluationScores<Arc<deadsync_assets::noteskin::Noteskin>, profile_data::PlayerSide>,
+    routine_percent: Option<f64>,
+    stage_number: Option<usize>,
+    style: profile_data::PlayStyle,
+) -> Option<ResultOverview> {
+    if !mounted {
+        return None;
+    }
+    EvaluationOverviewPage::new(scores, routine_percent, stage_number, style.is_double(), |side| {
+        *side == profile_data::PlayerSide::P2
+    })
+}
+
 #[derive(Clone)]
 pub(super) struct CourseEvaluationPage {
     pub(super) view: EvaluationState,
+    pub(super) overview: Option<ResultOverview>,
     pub(super) stage: Option<EvaluationStage>,
+    pub(super) capture: EvaluationCapture,
 }
 
 /// Retains Evaluation screens during a course and supports paging through the results.

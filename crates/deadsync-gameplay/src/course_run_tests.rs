@@ -75,7 +75,7 @@ fn second_participant_missing_chart_does_not_commit_first_participants_totals() 
     let mut totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
     let error = add_course_stage_totals_with_loader(
         &mut totals,
-        &stage,
+        &mut stage,
         "dance-routine",
         &mut |_, _, _| {
             Ok(vec![regression_payload_with_segments(

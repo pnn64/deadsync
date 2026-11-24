@@ -3,10 +3,9 @@ use crate::fonts::machine_font_key;
 use crate::i18n;
 use crate::i18n::{tr, tr_fmt};
 use deadsync_theme::FontRole;
-use deadsync_theme::{ThemeInputResult, TransitionState};
-use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
-// Screen navigation is handled in app
-use crate::SimplyLoveEffect as ThemeEffect;
+use deadsync_theme::{ThemeInputResult, TransitionState, UiCue};
+use deadsync_theme::main_menu::{MainMenuFrame, MainMenuItem, MainMenuPhase, ThemeMainMenu, main_menu_items};
+
 use crate::color;
 use crate::screens::Screen;
 use crate::screens::components::menu::logo::{self, LogoParams};
@@ -24,6 +23,8 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
+
+type ThemeEffect<R> = deadsync_theme::ThemeEffect<Screen, R>;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
@@ -51,31 +52,15 @@ const MAX_OPTION_COUNT: usize = OPTION_COUNT + 1;
 
 #[inline]
 const fn option_count(state: &State) -> usize {
-    if !matches!(
-        state.runtime_view.coin_mode,
-        deadsync_config::coin::CoinMode::Home
-    ) {
-        return 1;
-    }
-    if state.runtime_view.allow_shutdown_host {
-        OPTION_COUNT + 1
-    } else {
-        OPTION_COUNT
-    }
+    menu_items(state).len()
 }
 
 #[inline]
-fn shutdown_index(state: &State) -> Option<usize> {
-    if !matches!(
-        state.runtime_view.coin_mode,
-        deadsync_config::coin::CoinMode::Home
-    ) {
-        return None;
-    }
-    state
-        .runtime_view
-        .allow_shutdown_host
-        .then_some(OPTION_COUNT)
+const fn menu_items(state: &State) -> &'static [MainMenuItem] {
+    main_menu_items(
+        matches!(state.runtime_view.coin_mode, deadsync_config::coin::CoinMode::Home),
+        state.runtime_view.allow_shutdown_host,
+    )
 }
 
 // --- CONSTANTS UPDATED FOR NEW ANIMATION-DRIVEN LAYOUT ---
@@ -254,21 +239,21 @@ impl ThemeMainMenu for crate::SimplyLoveTheme {
         sync_runtime_view(state, view);
     }
 
-    fn update_menu(state: &mut State, delta_time: f32, phase: MainMenuPhase) -> ThemeEffect {
+    fn update_menu<R>(state: &mut State, delta_time: f32, phase: MainMenuPhase) -> ThemeEffect<R> {
         match phase {
             MainMenuPhase::Active => update(state, delta_time),
             MainMenuPhase::Entering => update_attract(state, delta_time),
         }
     }
 
-    fn handle_menu_input(state: &mut State, input: &InputEvent) -> ThemeEffect {
+    fn handle_menu_input<R>(state: &mut State, input: &InputEvent) -> ThemeEffect<R> {
         handle_input(state, input)
     }
 
-    fn handle_menu_raw_key(
+    fn handle_menu_raw_key<R>(
         state: &mut State,
         key: &RawKeyboardEvent,
-    ) -> ThemeInputResult<Self::Screen, Self::RuntimeRequest> {
+    ) -> ThemeInputResult<Self::Screen, R> {
         match handle_raw_key_event(state, key) {
             ThemeEffect::None => ThemeInputResult::ignored(),
             effect => ThemeInputResult::consumed(effect),
@@ -444,7 +429,7 @@ fn update_row_anim(row: &mut RowAnim, dt: f32) {
     }
 }
 
-pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
+pub fn update<R>(state: &mut State, dt: f32) -> ThemeEffect<R> {
     if !dt.is_finite() || dt <= 0.0 {
         return ThemeEffect::None;
     }
@@ -454,7 +439,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     update_attract(state, dt)
 }
 
-pub fn update_attract(state: &mut State, dt: f32) -> ThemeEffect {
+pub fn update_attract<R>(state: &mut State, dt: f32) -> ThemeEffect<R> {
     if !dt.is_finite() || dt <= 0.0 || state.idle_elapsed >= ATTRACT_TIMEOUT {
         return ThemeEffect::None;
     }
@@ -473,7 +458,7 @@ const fn reset_idle(state: &mut State) {
 
 // Keyboard input is handled centrally via the virtual dispatcher in app
 // Screen-specific raw keyboard handling for Menu (e.g., F4 to Sandbox)
-pub const fn handle_raw_key_event(state: &mut State, key: &RawKeyboardEvent) -> ThemeEffect {
+pub const fn handle_raw_key_event<R>(state: &mut State, key: &RawKeyboardEvent) -> ThemeEffect<R> {
     reset_idle(state);
     if !key.pressed {
         return ThemeEffect::None;
@@ -1095,20 +1080,17 @@ const fn set_selected(state: &mut State, selected_index: usize) {
 }
 
 #[inline(always)]
-fn start_selected(state: &mut State, started_by_p2: bool) -> ThemeEffect {
+fn start_selected<R>(state: &mut State, started_by_p2: bool) -> ThemeEffect<R> {
     state.started_by_p2 = started_by_p2;
-    let effect = if Some(state.selected_index) == shutdown_index(state) {
-        ThemeEffect::Shutdown
-    } else {
-        match state.selected_index {
-            0 => ThemeEffect::Navigate(Screen::SelectProfile),
-            1 => ThemeEffect::Navigate(Screen::Options),
-            2 => ThemeEffect::Navigate(Screen::ContentBrowser),
-            3 => ThemeEffect::Exit,
-            _ => ThemeEffect::None,
-        }
+    let effect = match menu_items(state).get(state.selected_index) {
+        Some(MainMenuItem::Play) => ThemeEffect::Navigate(Screen::SelectProfile),
+        Some(MainMenuItem::Options) => ThemeEffect::Navigate(Screen::Options),
+        Some(MainMenuItem::Content) => ThemeEffect::Navigate(Screen::ContentBrowser),
+        Some(MainMenuItem::Exit) => ThemeEffect::Exit,
+        Some(MainMenuItem::Shutdown) => ThemeEffect::Shutdown,
+        None => ThemeEffect::None,
     };
-    crate::effects::sfx_then("assets/sounds/start.ogg", effect)
+    ThemeEffect::sequence(ThemeEffect::UiCue(UiCue::Confirm), effect)
 }
 
 #[inline(always)]
@@ -1135,7 +1117,7 @@ const fn menu_nav_delta(action: VirtualAction) -> Option<isize> {
 }
 
 // Event-driven virtual input handler
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+pub fn handle_input<R>(state: &mut State, ev: &InputEvent) -> ThemeEffect<R> {
     reset_idle(state);
     if let Some(side) = screen_input::menu_lr_side(ev.action)
         && !ev.pressed
@@ -1152,12 +1134,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             screen_input::ThreeKeyMenuAction::Prev => {
                 move_selection(state, -1);
                 state.menu_lr_undo[side_ix] = 1;
-                crate::effects::sfx("assets/sounds/change.ogg")
+                ThemeEffect::UiCue(UiCue::Change)
             }
             screen_input::ThreeKeyMenuAction::Next => {
                 move_selection(state, 1);
                 state.menu_lr_undo[side_ix] = -1;
-                crate::effects::sfx("assets/sounds/change.ogg")
+                ThemeEffect::UiCue(UiCue::Change)
             }
             screen_input::ThreeKeyMenuAction::Confirm => {
                 state.menu_lr_undo[side_ix] = 0;
@@ -1168,8 +1150,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 if undo != 0 {
                     move_selection(state, undo as isize);
                     state.menu_lr_undo[side_ix] = 0;
-                    crate::effects::sfx_then(
-                        "assets/sounds/change.ogg",
+                    ThemeEffect::sequence(
+                        ThemeEffect::UiCue(UiCue::Change),
                         ThemeEffect::Navigate(Screen::Init),
                     )
                 } else {
@@ -1183,7 +1165,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     }
     if let Some(delta) = menu_nav_delta(ev.action) {
         move_selection(state, delta);
-        return crate::effects::sfx("assets/sounds/change.ogg");
+        return ThemeEffect::UiCue(UiCue::Change);
     }
     match ev.action {
         VirtualAction::p1_start | VirtualAction::p2_start => {
@@ -1435,27 +1417,27 @@ mod tests {
         let mut state = init();
 
         assert!(matches!(
-            update_attract(&mut state, ATTRACT_TIMEOUT - 1.0),
+            update_attract::<()>(&mut state, ATTRACT_TIMEOUT - 1.0),
             ThemeEffect::None
         ));
         assert!(matches!(
-            update_attract(&mut state, 1.0),
+            update_attract::<()>(&mut state, 1.0),
             ThemeEffect::Navigate(Screen::Init)
         ));
-        assert!(matches!(update_attract(&mut state, 1.0), ThemeEffect::None));
+        assert!(matches!(update_attract::<()>(&mut state, 1.0), ThemeEffect::None));
     }
 
     #[test]
     fn title_menu_input_restarts_attract_timeout() {
         let mut state = init();
         assert!(matches!(
-            update_attract(&mut state, ATTRACT_TIMEOUT - 1.0),
+            update_attract::<()>(&mut state, ATTRACT_TIMEOUT - 1.0),
             ThemeEffect::None
         ));
 
-        let _ = handle_input(&mut state, &input(VirtualAction::p1_right));
+        let _ = handle_input::<()>(&mut state, &input(VirtualAction::p1_right));
 
-        assert!(matches!(update_attract(&mut state, 1.0), ThemeEffect::None));
+        assert!(matches!(update_attract::<()>(&mut state, 1.0), ThemeEffect::None));
         approx(state.idle_elapsed, 1.0);
     }
 
@@ -1464,21 +1446,21 @@ mod tests {
         let mut state = init();
         move_selection(&mut state, 1);
 
-        update(&mut state, FOCUS_GLOW_IN * 0.5);
+        update::<()>(&mut state, FOCUS_GLOW_IN * 0.5);
         approx(state.row_anims[0].focus, 0.75);
         approx(state.row_anims[1].focus, 0.0);
         approx(state.row_anims[1].glow_alpha, 0.125);
 
-        update(&mut state, FOCUS_GLOW_IN * 0.5);
+        update::<()>(&mut state, FOCUS_GLOW_IN * 0.5);
         approx(state.row_anims[0].focus, 0.0);
         approx(state.row_anims[1].focus, 0.0);
         approx(state.row_anims[1].glow_alpha, FOCUS_GLOW_ALPHA);
 
-        update(&mut state, FOCUS_GLOW_OUT * 0.5);
+        update::<()>(&mut state, FOCUS_GLOW_OUT * 0.5);
         approx(state.row_anims[1].focus, 0.75);
         approx(state.row_anims[1].glow_alpha, 0.125);
 
-        update(&mut state, FOCUS_GLOW_OUT * 0.5);
+        update::<()>(&mut state, FOCUS_GLOW_OUT * 0.5);
         approx(state.row_anims[1].focus, 1.0);
         approx(state.row_anims[1].glow_alpha, 0.0);
     }
@@ -1510,21 +1492,19 @@ mod tests {
     #[test]
     fn movement_emits_change_sfx() {
         let mut state = init();
-        let effect = handle_input(&mut state, &input(VirtualAction::p1_right));
+        let effect = handle_input::<()>(&mut state, &input(VirtualAction::p1_right));
 
         assert_eq!(state.selected_index, 1);
         assert!(matches!(
             effect,
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-                deadsync_theme::AudioRequest::PlaySfx(path)
-            )) if path == "assets/sounds/change.ogg"
+            ThemeEffect::UiCue(UiCue::Change)
         ));
     }
 
     #[test]
     fn start_emits_audio_before_navigation() {
         let mut state = init();
-        let effect = handle_input(&mut state, &input(VirtualAction::p2_start));
+        let effect = handle_input::<()>(&mut state, &input(VirtualAction::p2_start));
         let ThemeEffect::Batch(effects) = effect else {
             panic!("expected batched start effect");
         };
@@ -1532,9 +1512,7 @@ mod tests {
         assert!(state.started_by_p2);
         assert!(matches!(
             &effects[0],
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
-                deadsync_theme::AudioRequest::PlaySfx(path)
-            )) if *path == "assets/sounds/start.ogg"
+            ThemeEffect::UiCue(UiCue::Confirm)
         ));
         assert!(matches!(
             effects[1],
@@ -1554,7 +1532,7 @@ mod tests {
         );
         state.selected_index = OPTION_COUNT;
 
-        let ThemeEffect::Batch(effects) = handle_input(&mut state, &input(VirtualAction::p1_start))
+        let ThemeEffect::Batch(effects) = handle_input::<()>(&mut state, &input(VirtualAction::p1_start))
         else {
             panic!("expected batched shutdown effect");
         };
@@ -1707,7 +1685,7 @@ mod tests {
     fn title_menu_back_replays_intro_without_changing_exit_item() {
         let mut state = init();
         assert!(matches!(
-            handle_raw_key_event(
+            handle_raw_key_event::<()>(
                 &mut state,
                 &RawKeyboardEvent {
                     code: KeyCode::Escape,
@@ -1720,21 +1698,21 @@ mod tests {
             ThemeEffect::Navigate(Screen::Init)
         ));
         assert!(matches!(
-            handle_input(&mut state, &input(VirtualAction::p1_back)),
+            handle_input::<()>(&mut state, &input(VirtualAction::p1_back)),
             ThemeEffect::Navigate(Screen::Init)
         ));
 
         state.runtime_view.dedicated_three_key_nav = true;
-        let _ = handle_input(&mut state, &input(VirtualAction::p1_menu_left));
+        let _ = handle_input::<()>(&mut state, &input(VirtualAction::p1_menu_left));
         let ThemeEffect::Batch(effects) =
-            handle_input(&mut state, &input(VirtualAction::p1_menu_right))
+            handle_input::<()>(&mut state, &input(VirtualAction::p1_menu_right))
         else {
             panic!("expected three-key cancel batch");
         };
         assert!(matches!(effects[1], ThemeEffect::Navigate(Screen::Init)));
 
         state.selected_index = 3;
-        let ThemeEffect::Batch(effects) = handle_input(&mut state, &input(VirtualAction::p1_start))
+        let ThemeEffect::Batch(effects) = handle_input::<()>(&mut state, &input(VirtualAction::p1_start))
         else {
             panic!("expected batched exit effect");
         };
@@ -1750,7 +1728,7 @@ mod tests {
         let mut state = init();
 
         state.selected_index = 2;
-        let ThemeEffect::Batch(effects) = handle_input(&mut state, &input(VirtualAction::p1_start))
+        let ThemeEffect::Batch(effects) = handle_input::<()>(&mut state, &input(VirtualAction::p1_start))
         else {
             panic!("expected batched find-content effect");
         };
@@ -1761,7 +1739,7 @@ mod tests {
 
         let mut state = init();
         state.selected_index = 3;
-        let ThemeEffect::Batch(effects) = handle_input(&mut state, &input(VirtualAction::p1_start))
+        let ThemeEffect::Batch(effects) = handle_input::<()>(&mut state, &input(VirtualAction::p1_start))
         else {
             panic!("expected batched exit effect");
         };

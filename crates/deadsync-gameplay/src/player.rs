@@ -15,6 +15,8 @@ pub struct MineJudgmentRenderInfo {
 pub struct HoldJudgmentRenderInfo {
     pub result: HoldResult,
     pub started_at_screen_s: f32,
+    /// Second phase of the alternating visual sequence for this lane.
+    pub alternate: bool,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -57,6 +59,7 @@ pub const fn hold_judgment_render_info(
     HoldJudgmentRenderInfo {
         result,
         started_at_screen_s,
+        alternate: false,
     }
 }
 
@@ -88,6 +91,8 @@ pub struct PlayerRuntime {
     pub combo: u32,
     /// Largest combo recorded by Player::UpdateComboList, not the scorekeeper.
     pub recorded_max_combo: u32,
+    pub combo_runs: Vec<deadsync_rules::combo::ComboRun>,
+    combo_run_open: bool,
     pub miss_combo: u32,
     pub full_combo_grade: Option<JudgeGrade>,
     pub current_combo_grade: Option<JudgeGrade>,
@@ -141,6 +146,7 @@ pub struct PlayerRuntime {
 
     pub life_history: Vec<(f32, f32)>,
     pub stage_life_record: StageLifeRecord,
+    pub life_judgment_times: deadsync_rules::life::LifeJudgmentTimes,
     pub alive_seconds: f32,
     pub life_record_source: LifeRecordSource,
 
@@ -262,6 +268,8 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
     PlayerRuntime {
         combo: 0,
         recorded_max_combo: 0,
+        combo_runs: Vec::new(),
+        combo_run_open: false,
         miss_combo: 0,
         full_combo_grade: None,
         current_combo_grade: None,
@@ -307,6 +315,7 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         course_submit_life: None,
         life_history: Vec::with_capacity(caps.life_history),
         stage_life_record: StageLifeRecord::with_capacity(caps.life_history),
+        life_judgment_times: Default::default(),
         alive_seconds: 0.0,
         life_record_source: LifeRecordSource::Meter,
         error_bar_mono_ticks: [None; 15],
@@ -428,6 +437,8 @@ pub fn init_player_runtime_for_song_with_course_life(
 }
 
 pub fn reset_player_runtime_for_practice(player: &mut PlayerRuntime, judge_start_music_time: f32) {
+    let mut combo_runs = std::mem::take(&mut player.combo_runs);
+    combo_runs.clear();
     let mut combo_milestones = std::mem::take(&mut player.combo_milestones);
     let mut life_history = std::mem::take(&mut player.life_history);
     let mut stage_life_record = std::mem::take(&mut player.stage_life_record);
@@ -444,6 +455,7 @@ pub fn reset_player_runtime_for_practice(player: &mut PlayerRuntime, judge_start
     reset.stage_score = player.stage_score;
     reset.stage_score.reset();
     reset.combo_milestones = combo_milestones;
+    reset.combo_runs = combo_runs;
     reset.life_history = life_history;
     reset.stage_life_record = stage_life_record;
     reset.error_bar_avg_samples = error_bar_avg_samples;
@@ -529,11 +541,33 @@ pub const fn player_combo_state(player: &PlayerRuntime) -> ComboState {
 
 #[inline(always)]
 pub const fn write_player_combo_state(player: &mut PlayerRuntime, state: ComboState) {
+    player.combo_run_open &= state.combo != 0;
     player.combo = state.combo;
     player.miss_combo = state.miss_combo;
     player.full_combo_grade = state.full_combo_grade;
     player.current_combo_grade = state.current_combo_grade;
     player.first_fc_attempt_broken = state.first_fc_attempt_broken;
+}
+
+impl PlayerRuntime {
+    pub(crate) fn record_combo(&mut self, previous: u32, second: f32) {
+        self.recorded_max_combo = self.recorded_max_combo.max(self.combo);
+        if self.combo == 0 || !second.is_finite() {
+            return;
+        }
+        if self.combo_run_open && let Some(run) = self.combo_runs.last_mut() {
+            run.end_second = run.end_second.max(second);
+            run.count = self.combo.saturating_sub(run.carried);
+        } else if self.combo > previous {
+            self.combo_runs.push(deadsync_rules::combo::ComboRun {
+                start_second: second,
+                end_second: second,
+                count: self.combo - previous,
+                carried: previous,
+            });
+            self.combo_run_open = true;
+        }
+    }
 }
 
 #[inline(always)]

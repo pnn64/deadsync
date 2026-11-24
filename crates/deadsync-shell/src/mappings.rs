@@ -1,6 +1,6 @@
 use deadsync_config as config;
 use deadsync_input::{any_player_has_dedicated_menu_buttons_for_mode, get_keymap};
-use deadsync_theme_simply_love::SimplyLoveMappingsConfigRequest;
+use deadsync_theme::app_requests::MappingsConfigRequest;
 use deadsync_theme_simply_love::views::MappingsRuntimeView;
 
 pub(crate) fn runtime_view() -> MappingsRuntimeView {
@@ -14,8 +14,8 @@ pub(crate) fn runtime_view() -> MappingsRuntimeView {
     }
 }
 
-pub(crate) fn execute(request: SimplyLoveMappingsConfigRequest) {
-    use SimplyLoveMappingsConfigRequest as Request;
+pub(crate) fn execute(request: MappingsConfigRequest) {
+    use MappingsConfigRequest as Request;
 
     let check_dedicated = match request {
         Request::BindKeyboard {

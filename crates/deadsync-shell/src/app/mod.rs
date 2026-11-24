@@ -3,12 +3,15 @@ use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
 mod arrowcloud_result_dialog;
+mod attract_demo;
 mod audio_requests;
 mod browser_skin;
 mod commands;
 mod config_requests;
 #[cfg(test)]
 mod course_transition_tests;
+#[cfg(all(test, target_os = "windows"))]
+mod play_route_tests;
 mod evaluation_views;
 mod gameplay_actions;
 mod graphics;
@@ -26,11 +29,17 @@ mod smx_runtime;
 mod stage_start;
 mod updater;
 
+
 use self::evaluation_views::CourseEvaluationPage;
 use self::lua_loading::SongLuaLoading;
-use self::screenshot::auto_screenshot_eval_results;
+use self::screenshot::EvaluationCapture;
 use self::stage_start::{StageSelection, StageStart};
+use crate::content_reload::StartupLoad;
 use crate::{ActiveTheme, ThemeScreen as CurrentScreen, TransitionState};
+use crate::mounted_theme::{
+    GameplayPresentationMount, PlayerOptionsLayoutFactory, ScreenTransitionMount, StartupScreen,
+    SupplementalResources, ThemeMount,
+};
 use crate::command::Command;
 use crate::course::{
     CourseRunState, build_course_graph_stages, build_course_run_from_selection,
@@ -40,10 +49,11 @@ use crate::course::{
 #[cfg(test)]
 use crate::course::score_info_from_stage;
 use deadsync_gameplay::course_run::CourseEntry;
+use deadsync_gameplay::music_wheel::MusicWheelEntry;
 use deadsync_profile_gameplay::results::{EvaluationStage, course_summary_records};
 #[cfg(test)]
 use deadsync_gameplay::course_run::{CourseRun, CourseStageRuntime};
-use crate::diagnostics::timing_health;
+use crate::diagnostics::{TimingHealth, timing_health};
 use crate::dynamic_media::{BgVideoTiming, DynamicMedia};
 use crate::frame_pacing_trace::{GameplayPacingPhases, GameplayStorageSample};
 use crate::frame_stats::{
@@ -87,7 +97,6 @@ use crate::restart::{
 };
 use crate::runtime::ShellState;
 use crate::screen_flow::evaluation_summary_return_to;
-use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 pub use crate::session::SessionState;
 use crate::session_results::{
     fill_stage_indices, post_select_display_stage_count, post_select_display_stages,
@@ -118,6 +127,7 @@ use deadlib_render as renderer_backend;
 use deadlib_render_core as renderer;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_assets::media_cache;
+use deadsync_assets::noteskin::Noteskin;
 use deadsync_config as config;
 use deadsync_config::dirs::AppDirs;
 use deadsync_config::frame_pacing::stutter_severity;
@@ -132,16 +142,15 @@ use deadsync_simfile::{app_runtime as song_loading, sync_offset};
 use deadsync_theme_simply_love::color;
 use deadsync_theme_simply_love::views::{
     BookkeepingView, GameplayInitView, GameplayPolicyView, GameplayRuntimeView, OptionsInitView,
-    OptionsPackSyncView, OptionsSongPackView, SelectMusicInitView, TimingHealth,
+    OptionsPackSyncView, OptionsSongPackView, SelectMusicInitView,
 };
 use deadsync_theme_simply_love::{
     screens::{
-        self, content_browser, credits, evaluation, evaluation_summary, gameover, gameplay, init,
+        self, content_browser, credits, evaluation_summary, gameover, gameplay,
         initials, input as input_screen, manage_local_profiles, mappings, options,
         overscan_adjustment, practice, profile_load, sandbox, select_color,
         select_course, select_mode, select_music, select_style, test_lights,
     },
-    visual_styles,
 };
 use winit::{
     application::ApplicationHandler,
@@ -203,48 +212,60 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing as timing_rules;
 use deadsync_theme::views::{
     AppPathView, AppPathsView, AudioOptionsView, DensityGraphView as DensityGraphSource,
-    GameplayReplayView, GameplayStageIntro, GameplayStageView, NoteskinCatalogView,
-    SmxAssignmentView,
+    EvaluationStageView, GameplayReplayView, GameplayStageIntro, GameplayStageView, NoteskinCatalogView,
+    ScoreboxLocalView, ScoreboxMachineView, ScoreboxSideView, SmxAssignmentView,
 };
 use deadsync_theme::color::ThemeJudgmentPalette;
 use deadsync_theme::evaluation::ThemeEvaluation;
-use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
-use deadsync_theme::player_options::{PlayerOptionsEntry, ThemePlayerOptions};
+use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, MenuBackgroundMovie};
+use deadsync_theme::player_options::PlayerOptionsEntry;
 use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
+use deadsync_theme::select_music::DensityGraphSlot;
 use deadsync_theme::{
-    AudioRequest, PlatformRequest, RevealPathKind, ThemeResources, ThemeScreenFlow,
+    AudioRequest, PlatformRequest, RevealPathKind, ThemeResources,
     TransitionCompletion, UiCue,
 };
-use deadsync_theme_simply_love::screens::transitions::{
-    gameplay_smx_overlay_alpha, screen_fade_view,
-};
 use deadsync_theme_simply_love::views::{
-    EvaluationContextView, EvaluationInitView, EvaluationPlayerView, EvaluationPolicyView,
+    EvaluationContextView, EvaluationPlayerView, EvaluationPolicyView,
     EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource,
     MusicWheelRuntimeRequest, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest,
-    MusicWheelSlotRuntimeView, PostSelectStageView, ScoreboxLocalView, ScoreboxMachineView,
-    ScoreboxSideView, ScreenBarBackgroundView, SelectCourseContextView, SelectCoursePolicyView,
+    MusicWheelSlotRuntimeView, PostSelectStageView, SelectCourseContextView,
+    SelectCoursePolicyView,
     SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
-    SelectMusicSessionView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
-    SimplyLoveGrooveStatsService, SimplyLoveVisualPolicyView, VisualBackgroundView,
+    SelectMusicSessionView,
+    SimplyLoveGrooveStatsService, SimplyLoveVisualPolicyView,
 };
-use deadsync_theme_simply_love::{
-    SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveDebugRequest,
-    SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
-    SimplyLoveInputResult as ThemeInputResult, SimplyLoveLobbyRequest, SimplyLoveMediaRequest,
-    SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent,
-    SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncEvent, SimplyLoveSyncOwner,
-    SimplyLoveSyncRequest, gameplay_action_for_effect,
+use deadsync_theme::app_requests::{
+    ConfigRequest,
+    ContentRequest,
+    DebugRequest,
+    AppEffect as ThemeEffect,
+    HardwareRequest,
+    AppInputResult as ThemeInputResult,
+    LobbyRequest,
+    MediaRequest,
+    OnlineRequest,
+    ProfileImportEvent,
+    QrLoginService,
+    RuntimeRequest,
+    SyncEvent,
+    SyncOwner,
+    SyncRequest,
+    gameplay_action_for_effect,
 };
 
 /// The main Options rows that launch standalone child screens should regain
 /// focus when those children return. Other entries either start at the first
 /// row or reopen a specific nested submenu below.
-const fn options_entry_restores_main_selection(from: CurrentScreen) -> bool {
+const fn options_entry_restores_main_selection(
+    from: CurrentScreen,
+    input_started_from_main: bool,
+) -> bool {
     matches!(
         from,
         CurrentScreen::Credits | CurrentScreen::ManageLocalProfiles
-    )
+    ) || (input_started_from_main
+        && matches!(from, CurrentScreen::Mappings | CurrentScreen::Input))
 }
 
 /// Returning from a played song refreshes wheel data in place so Guest
@@ -302,15 +323,12 @@ struct FramePolicy {
 
 impl FramePolicy {
     fn from_config(config: &config::app_config::Config) -> Self {
-        let visual = simply_love_visual_policy(config);
+        let visual = SimplyLoveVisualPolicyView::from_config(config);
         Self {
             visual,
             smx: SmxFramePolicy::from_config(config),
             lights: LightingFramePolicy::from_config(config),
-            theme_background_video: (config.visual_style.is_srpg()
-                && config.show_video_backgrounds)
-                .then_some(visual.assets.shared_background_video)
-                .flatten(),
+            theme_background_video: visual.background_video(config.show_video_backgrounds),
             game_flag: config.game_flag,
             gameplay_banner_mode: config.gameplay_banner_mode,
             version_overlay_side: config.version_overlay_side,
@@ -367,7 +385,7 @@ impl LightingFramePolicy {
         Self {
             driver: config.lights_driver,
             gameplay_pad_lights: config.lights_gameplay_pad_lights,
-            theme_index: config.simply_love_color,
+            theme_index: config.theme_color,
             simplify_bass: config.lights_simplify_bass,
             smx_input: config.smx_input,
             smx_panel_lights: config.smx_panel_lights,
@@ -566,7 +584,7 @@ fn gameplay_session() -> GameplaySession {
 
 type GameplayState = GameplayHost<GameplayLobbySession, gameplay::GameplayPresentation>;
 type PracticeState = PracticeHost<GameplayState, practice::PracticePresentation>;
-type EvaluationState = <ActiveTheme as ThemeEvaluation>::EvaluationState;
+pub(crate) type EvaluationState = <ActiveTheme as ThemeEvaluation>::EvaluationState;
 type PracticeEditSnapshot = crate::gameplay_runtime::PracticeEditSnapshot<
     <practice::PracticePresentation as PracticeLivePresentation<gameplay::GameplayPresentation>>::EditSnapshot,
 >;
@@ -618,12 +636,16 @@ const fn saturating_u32(value: usize) -> u32 {
 /// Active screen data bundle.
 pub struct ScreensState {
     current_screen: CurrentScreen,
-    menu_state: <ActiveTheme as ThemeMainMenu>::MenuState,
+    menu_state: crate::title_menu::InstalledMenu,
     gameplay_state: Option<GameplayState>,
+    gameplay_outro: Option<Box<dyn deadsync_theme::stage::StageOutroPresentation<Actor>>>,
+    evaluation_departure: Option<deadsync_theme::stage::EvaluationDeparture<Actor>>,
+    stage_presentation: Box<dyn deadsync_theme::stage::StagePresentation<Actor>>,
     practice_state: Option<PracticeState>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor,
     options_state: options::State,
+    system_options_presentation: Option<Box<dyn deadsync_theme::system_options::SystemOptionsPresentation<Actor>>>,
     content_browser_state: content_browser::State,
     credits_state: credits::State,
     manage_local_profiles_state: manage_local_profiles::State,
@@ -640,21 +662,28 @@ pub struct ScreensState {
     smx_options_light_preview: deadsync_smx::OptionsLightPreview,
     smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview,
     player_options_state: Option<crate::player_options::PlayerOptionsState>,
-    init_state: init::State,
+    player_options_layout: Option<PlayerOptionsLayoutFactory>,
+    startup_load: StartupLoad,
+    startup_screen: Box<StartupScreen>,
+    transitions: ScreenTransitionMount,
+    attract: Option<attract_demo::AttractRuntime>,
     select_profile_state: <ActiveTheme as ThemeProfilePicker>::ProfilePickerState,
     select_color_state: select_color::State,
     arrowcloud_login_state: screens::arrowcloud_login::State,
     groovestats_login_state: screens::groovestats_login::State,
     select_style_state: select_style::State,
     select_play_mode_state: select_mode::State,
+    selection_presentation: Option<Box<dyn deadsync_theme::selection::SelectionPresentation<Actor>>>,
     profile_load_state: profile_load::State,
     select_music_state: select_music::State,
     stage_launch: StageLaunch<StageSelection>,
     select_course_state: select_course::State,
     sandbox_state: sandbox::State,
     evaluation_state: EvaluationState,
+    evaluation_overview: Option<evaluation_views::ResultOverview>,
     evaluation_origin: EvaluationOrigin,
     evaluation_stage: Option<EvaluationStage>,
+    evaluation_capture: EvaluationCapture,
     course_evaluation: evaluation_views::CourseEvaluationPages,
     evaluation_summary_state: evaluation_summary::State,
     initials_state: initials::State,
@@ -757,18 +786,6 @@ struct GameplayInitFinish {
     config: config::app_config::Config,
 }
 
-fn apply_course_noteskins(course_page: &mut EvaluationState, song_pages: &[CourseEvaluationPage]) {
-    for summary in course_page.score_info.iter_mut().flatten() {
-        if summary.noteskin.is_none() {
-            summary.noteskin = song_pages
-                .iter()
-                .flat_map(|page| page.view.score_info.iter().flatten())
-                .filter(|song| song.side == summary.side)
-                .find_map(|song| song.noteskin.clone());
-        }
-    }
-}
-
 fn evaluation_context_view(
     policy: EvaluationPolicyView,
     profile: &profile_data::MusicProfileSnapshot,
@@ -822,53 +839,13 @@ pub(crate) const fn scorebox_pane_filter(
     }
 }
 
-fn simply_love_visual_policy(config: &config::app_config::Config) -> SimplyLoveVisualPolicyView {
-    let srpg10 = config.visual_style.is_srpg()
-        && matches!(config.srpg_variant, config::theme::SrpgVariant::Srpg10);
-    let ecs15 = visual_styles::ecs15_active(config.visual_style, config.srpg_variant);
-    let background = match config.visual_style {
-        _ if ecs15 => VisualBackgroundView::Ecs15,
-        config::theme::VisualStyle::Technique => VisualBackgroundView::Technique,
-        config::theme::VisualStyle::Srpg9 => VisualBackgroundView::Srpg,
-        _ => VisualBackgroundView::Tiled,
-    };
-    let screen_bar = match config
-        .machine_bar_color
-        .resolve(config.visual_style.presentation_style(config.srpg_variant))
-    {
-        config::theme::MachineBarColor::Default => ScreenBarBackgroundView::Default,
-        config::theme::MachineBarColor::Colored => ScreenBarBackgroundView::Colored(if srpg10 {
-            color::srpg10_rgba(config.simply_love_color)
-        } else if ecs15 {
-            color::decorative_rgba(config.simply_love_color)
-        } else {
-            color::srpg9_rgba(config.simply_love_color)
-        }),
-        config::theme::MachineBarColor::Transparent => ScreenBarBackgroundView::Transparent,
-    };
-
-    SimplyLoveVisualPolicyView {
-        background,
-        assets: visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant),
-        machine_font: config.machine_font,
-        title_logo_texture_key: if ecs15 {
-            Some(visual_styles::ECS15_TITLE_LOGO)
-        } else {
-            srpg10.then_some(visual_styles::SRPG10_TITLE_LOGO)
-        },
-        srpg10_tint: srpg10,
-        screen_bar,
-    }
-}
-
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
     routine_shared: Option<&stage_stats::PlayerStageSummary>,
-    course_graph_stages: &[Vec<deadsync_theme_simply_love::views::CourseGraphStage>; MAX_PLAYERS],
+    course_graph_stages: &[Vec<deadsync_theme::views::CourseGraphStageView>; MAX_PLAYERS],
     active_color_index: i32,
-    session_elapsed: f32,
-    gameplay_elapsed: f32,
     config: &config::app_config::Config,
+    mounted_overview: bool,
 ) -> CourseEvaluationPage {
     let profile = profile_data::runtime_music_profile_snapshot(
         config.enable_groovestats,
@@ -882,16 +859,21 @@ fn build_course_summary_eval_state(
             profile.as_ref().map(|(side, profile)| (*side, profile.scroll_speed))
         }),
     );
-    let score_info = build_course_summary_score_info(
+    let scores = build_course_summary_score_info(
         stage,
         routine_shared,
         course_graph_stages,
         profile.scorebox.play_style,
         &profiles,
+    ).into();
+    let routine_percent = routine_shared.map(|shared| shared.score_percent);
+    let overview = evaluation_views::prepare_overview(
+        mounted_overview, &scores, routine_percent, None, profile.scorebox.play_style,
     );
-    let mut state = ActiveTheme::init_course_evaluation(
-        score_info,
-        routine_shared.map(|shared| shared.score_percent),
+    let capture = EvaluationCapture::from_scores(&scores);
+    let state = ActiveTheme::init_course_evaluation(
+        scores,
+        routine_percent,
         stage.duration_seconds,
         evaluation_context_view(
             evaluation_views::EvaluationFramePolicy::from_config(config).context(),
@@ -899,8 +881,12 @@ fn build_course_summary_eval_state(
         ),
         active_color_index,
     );
-    ActiveTheme::sync_evaluation_elapsed(&mut state, session_elapsed, gameplay_elapsed);
-    CourseEvaluationPage { view: state, stage: evaluation_stage }
+    CourseEvaluationPage {
+        view: state,
+        overview,
+        stage: evaluation_stage,
+        capture,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1016,6 +1002,8 @@ fn prewarm_gameplay_text_layout_cache(
     compose_scratch.clear_retained_frames();
 
     state.stage.prewarm_song_texture_bindings(assets);
+    let visual_policy = SimplyLoveVisualPolicyView::from_config(config);
+    state.presentation.prewarm_combo_milestones(visual_policy);
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
     // Build the representative opening frame in the App-owned actor buffer.
@@ -1029,7 +1017,7 @@ fn prewarm_gameplay_text_layout_cache(
         assets,
         gameplay::ActorViewOverride::default(),
         arrow_effect_time_seconds(started),
-        simply_love_visual_policy(config),
+        visual_policy,
     );
     let actor_segments = segments.segments(state.song_frame(), actor_scratch);
     let mut render = compose::build_passes(
@@ -1092,18 +1080,18 @@ fn arrow_effect_time_seconds(at: Instant) -> f64 {
 
 fn app_path_view(path: PathBuf) -> AppPathView {
     AppPathView {
-        display: deadlib_platform::dirs::path_shorthand(&path),
+        display: Arc::from(deadlib_platform::dirs::path_shorthand(&path)),
         path,
     }
 }
 
-fn wheel_banner_path(entry: Option<&select_music::MusicWheelEntry>) -> Option<PathBuf> {
+fn wheel_banner_path(entry: Option<&MusicWheelEntry>) -> Option<PathBuf> {
     match entry {
-        Some(select_music::MusicWheelEntry::Song(song)) => song.banner_path.clone(),
-        Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
+        Some(MusicWheelEntry::Song(song)) => song.banner_path.clone(),
+        Some(MusicWheelEntry::PackHeader { banner_path, .. }) => {
             banner_path.as_deref().map(Path::to_path_buf)
         }
-        None => None,
+        Some(MusicWheelEntry::Random(_)) | None => None,
     }
 }
 
@@ -1186,9 +1174,13 @@ fn options_init_view(
     dirs: &AppDirs,
     audio: AudioOptionsView,
     bookkeeping: crate::coin::Bookkeeping,
+    layout: deadsync_theme::system_options::SystemOptionsLayout,
 ) -> OptionsInitView {
     OptionsInitView {
         config: config::runtime::get(),
+        split_graphics: layout.split_graphics,
+        service_order: layout.service_order,
+        page_timing: layout.timing,
         judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog(
             ActiveTheme::JUDGMENT_PRESET,
         ))
@@ -1216,8 +1208,9 @@ impl ScreensState {
         dedicated_three_key_nav: bool,
         audio_options: AudioOptionsView,
         bookkeeping: crate::coin::Bookkeeping,
+        mount: ThemeMount,
     ) -> Self {
-        let menu_state = ActiveTheme::init_menu(color_index);
+        let menu_state = (mount.title)(color_index);
 
         let select_profile_state = ActiveTheme::init_profile_picker(
             crate::local_profiles::picker_view(),
@@ -1259,10 +1252,12 @@ impl ScreensState {
         let mut profile_load_state = profile_load::init();
         profile_load_state.active_color_index = color_index;
 
-        let app_paths = app_paths_view(dirs);
-        let init_songs_root = app_paths.songs.path.clone();
-        let init_courses_root = app_paths.courses.path;
-        let mut options_state = options::init(options_init_view(dirs, audio_options, bookkeeping));
+        let system_options_presentation = mount.system_options;
+        let options_layout = system_options_presentation
+            .as_ref()
+            .map_or_else(Default::default, |presentation| presentation.layout());
+        let mut options_state =
+            options::init(options_init_view(dirs, audio_options, bookkeeping, options_layout));
         options_state.active_color_index = color_index;
 
         let mut content_browser_state = content_browser::init();
@@ -1289,11 +1284,8 @@ impl ScreensState {
         let mut smx_assign_state = screens::smx_assign::init();
         smx_assign_state.active_color_index = color_index;
 
-        let mut init_state = init::init(init_songs_root, init_courses_root);
-        init_state.active_color_index = color_index;
-
         let evaluation_state =
-            ActiveTheme::init_evaluation(EvaluationInitView::default(), color_index);
+            ActiveTheme::init_evaluation(Default::default(), Default::default(), color_index);
 
         let mut evaluation_summary_state = evaluation_summary::init(
             deadsync_theme_simply_love::views::PostSongRuntimeView::default(),
@@ -1316,6 +1308,7 @@ impl ScreensState {
             gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor::default(),
             gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor::default(),
             options_state,
+            system_options_presentation,
             content_browser_state,
             credits_state,
             manage_local_profiles_state,
@@ -1333,21 +1326,31 @@ impl ScreensState {
             smx_options_light_preview: deadsync_smx::OptionsLightPreview::default(),
             smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview::default(),
             player_options_state: None,
-            init_state,
+            player_options_layout: mount.player_options,
+            startup_load: StartupLoad::default(),
+            startup_screen: (mount.startup)(color_index),
+            transitions: mount.transitions,
+            attract: mount.attract.map(attract_demo::AttractRuntime::new),
+            gameplay_outro: None,
+            evaluation_departure: None,
+            stage_presentation: mount.stage,
             select_profile_state,
             select_color_state,
             arrowcloud_login_state,
             groovestats_login_state,
             select_style_state,
             select_play_mode_state,
+            selection_presentation: mount.selection,
             profile_load_state,
             select_music_state,
             stage_launch: StageLaunch::default(),
             select_course_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
+            evaluation_overview: None,
             evaluation_origin: EvaluationOrigin::Song,
             evaluation_stage: None,
+            evaluation_capture: EvaluationCapture::default(),
             course_evaluation: Default::default(),
             evaluation_summary_state,
             initials_state,
@@ -1384,7 +1387,21 @@ impl ScreensState {
                 }
                 (None, false)
             }
-            CurrentScreen::Init => (Some(init::update(&mut self.init_state, delta_time)), false),
+            CurrentScreen::Init => {
+                let effect = if self.startup_load.is_loading() {
+                    self.startup_load.complete_if_finished();
+                    ThemeEffect::None
+                } else if let Some(intro) = self.attract.as_mut() {
+                    if intro.timeline.demonstration().is_none() && intro.timeline.advance(delta_time) {
+                        ThemeEffect::NavigateNoFade(CurrentScreen::Menu)
+                    } else {
+                        ThemeEffect::None
+                    }
+                } else {
+                    self.startup_screen.advance_intro(delta_time)
+                };
+                (Some(effect), false)
+            }
             CurrentScreen::Options => {
                 options::update(
                     &mut self.options_state,
@@ -1442,7 +1459,7 @@ impl ScreensState {
             }
             CurrentScreen::PlayerOptions => {
                 if let Some(state) = self.player_options_state.as_mut() {
-                    ActiveTheme::update_player_options(state, delta_time, asset_manager, effects);
+                    state.update(delta_time, asset_manager, effects);
                 }
                 (None, false)
             }
@@ -1557,7 +1574,7 @@ impl ScreensState {
                 (None, false)
             }
             CurrentScreen::Menu => (
-                Some(ActiveTheme::update_menu(&mut self.menu_state, delta_time, MainMenuPhase::Active)),
+                Some(self.menu_state.update(delta_time, MainMenuPhase::Active)),
                 false,
             ),
         };
@@ -1580,6 +1597,7 @@ impl AppState {
         overlay_mode: u8,
         color_index: i32,
         audio_options: AudioOptionsView,
+        theme: ThemeMount,
     ) -> Self {
         let play_style = profile::get_session_play_style();
         let preferred = deadsync_profile::preferred_difficulty_index(&profile_data, play_style);
@@ -1595,6 +1613,7 @@ impl AppState {
             cfg.three_key_navigation && cfg.only_dedicated_menu_buttons,
             audio_options,
             coin.bookkeeping(),
+            theme,
         );
 
         Self {
@@ -1611,6 +1630,8 @@ impl AppState {
 
 pub struct App {
     dirs: AppDirs,
+    theme_resources: SupplementalResources,
+    gameplay_presentation: GameplayPresentationMount,
     screenshots_dir: PathBuf,
     input: logical_input::keymap::InputState,
     window: Option<Arc<Window>>,
@@ -1853,6 +1874,8 @@ pub struct App {
     apply_replaygain: crate::apply_replaygain::Service,
     heart_rate: crate::heart_rate::Runtime,
     twitch: crate::twitch::Runtime,
+    twitch_chat: Box<crate::mounted_theme::ChatPresentation>,
+    twitch_chat_sides: Option<(CurrentScreen, [bool; MAX_PLAYERS])>,
     qr_login: crate::qr_login::Service,
     score_import: crate::score_import::Service,
     sync_analysis: crate::sync_analysis::Service,
@@ -1949,12 +1972,9 @@ fn prepare_music_profile_selection(
             let side = if selected_versus { slot } else { selected_side };
             let selection = retained[side].or_else(|| {
                 selected.guest[side].then(|| {
-                    let first = match state.entries.get(state.selected_index) {
-                        Some(select_music::MusicWheelEntry::Song(song)) => song
-                            .best_steps_index(selected.play_style.chart_type(), 0)
-                            .unwrap_or(preferred_difficulties[side]),
-                        _ => preferred_difficulties[side],
-                    };
+                    let first = select_music::focused_song(state)
+                        .and_then(|song| song.best_steps_index(selected.play_style.chart_type(), 0))
+                        .unwrap_or(preferred_difficulties[side]);
                     (first, preferred_difficulties[side])
                 })
             });
@@ -2077,7 +2097,7 @@ impl App {
         }
         match screen {
             CurrentScreen::Init => {
-                init::sync_loading_events(&mut self.state.screens.init_state, events);
+                self.state.screens.startup_load.apply(events);
             }
             CurrentScreen::Options => {
                 options::sync_reload_events(&mut self.state.screens.options_state, events);
@@ -2437,7 +2457,7 @@ impl App {
         }
         for request in content_browser::take_audio_requests(state) {
             self.theme_effect_scratch
-                .push(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                .push(ThemeEffect::Runtime(RuntimeRequest::Audio(
                     request,
                 )));
         }
@@ -2466,7 +2486,7 @@ impl App {
         };
         if !dirs.is_empty() {
             self.theme_effect_scratch.push(ThemeEffect::Runtime(
-                SimplyLoveRuntimeRequest::Content(SimplyLoveContentRequest::ReloadSongDirs {
+                RuntimeRequest::Content(ContentRequest::ReloadSongDirs {
                     songs_root: self.dirs.songs_dir(),
                     pack_dirs: dirs,
                 }),
@@ -2512,7 +2532,7 @@ impl App {
         let Some(prepared) = self.profile_load.poll() else {
             return;
         };
-        match prepared {
+        let target = match prepared {
             crate::profile_load::PreparedState::Music(mut state) => {
                 state.active_color_index = self.state.screens.profile_load_state.active_color_index;
                 let preferred = self.state.session.preferred_difficulty_index;
@@ -2526,14 +2546,16 @@ impl App {
                     &self.state.screens.select_music_state,
                 );
                 self.state.screens.select_music_state = *state;
+                CurrentScreen::SelectMusic
             }
             crate::profile_load::PreparedState::Course(mut state) => {
                 state.active_color_index = self.state.screens.profile_load_state.active_color_index;
                 select_course::trigger_immediate_refresh(&mut state);
                 self.state.screens.select_course_state = *state;
+                CurrentScreen::SelectCourse
             }
-        }
-        profile_load::sync_ready(&mut self.state.screens.profile_load_state, true);
+        };
+        profile_load::sync_ready(&mut self.state.screens.profile_load_state, target);
     }
 
     fn poll_profile_import(&mut self) {
@@ -2545,7 +2567,7 @@ impl App {
         }
         if events
             .iter()
-            .any(|event| matches!(event, SimplyLoveProfileImportEvent::Finished(_)))
+            .any(|event| matches!(event, ProfileImportEvent::Finished(_)))
         {
             manage_local_profiles::sync_runtime_view(
                 &mut self.state.screens.manage_local_profiles_state,
@@ -2585,11 +2607,11 @@ impl App {
             return;
         }
         match service {
-            SimplyLoveQrLoginService::ArrowCloud => screens::arrowcloud_login::apply_events(
+            QrLoginService::ArrowCloud => screens::arrowcloud_login::apply_events(
                 &mut self.state.screens.arrowcloud_login_state,
                 events,
             ),
-            SimplyLoveQrLoginService::GrooveStats => screens::groovestats_login::apply_events(
+            QrLoginService::GrooveStats => screens::groovestats_login::apply_events(
                 &mut self.state.screens.groovestats_login_state,
                 events,
             ),
@@ -2619,14 +2641,14 @@ impl App {
         if !song_events.is_empty() {
             select_music::apply_sync_analysis_events(
                 &mut self.state.screens.select_music_state,
-                SimplyLoveSyncOwner::SelectMusicSong,
+                SyncOwner::SelectMusicSong,
                 song_events,
             );
         }
         if !select_pack_events.is_empty() {
             select_music::apply_sync_analysis_events(
                 &mut self.state.screens.select_music_state,
-                SimplyLoveSyncOwner::SelectMusicPack,
+                SyncOwner::SelectMusicPack,
                 select_pack_events,
             );
         }
@@ -2917,13 +2939,14 @@ impl App {
         let cfg = config::runtime::get();
         let profiles = crate::player_options::active_profiles();
         let options = StageOptions::from_profiles(play_style, steps, session.music_rate, &profiles);
-        let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
+        let (player_profiles, scroll_speeds) = deadsync_profile_gameplay::stage_options::gameplay_profiles(
             profiles,
             &song,
             options,
             cfg.tournament,
             play_style,
             false,
+            cfg.enable_golf,
         );
         let mut requested_chart_ixs = plan.chart_indices.to_vec();
         if let Some(light_plan) = cabinet_light_plan(song.as_ref(), plan.chart_indices[0]) {
@@ -3078,6 +3101,9 @@ impl App {
         mut gs: GameplayState,
         finish: &GameplayInitFinish,
     ) -> Vec<Command> {
+        if let Some(hud) = self.state.screens.stage_presentation.gameplay_hud() {
+            gs.presentation.set_hud(hud);
+        }
         self.gameplay_live_textures.reset();
         // ITGmania destroys the previous Player sounds before a restart or
         // the next course stage. Gameplay-to-gameplay skips screen exit.
@@ -3446,24 +3472,32 @@ impl App {
         deadsync_profile_gameplay::results::stage_result(&gameplay.gameplay, online)
     }
 
-    fn evaluation_init_view(
+    fn evaluation_entry(
         gameplay: &ActiveGameplayStage,
         stage: &stage_stats::StageSummary,
+        stage_number: usize,
         config: &config::app_config::Config,
-    ) -> EvaluationInitView {
+    ) -> (
+        EvaluationStageView<Arc<Noteskin>, profile_data::PlayerSide>,
+        EvaluationContextView,
+    ) {
+        let result = crate::session_results::evaluation_view(
+            gameplay,
+            stage,
+            stage_number,
+            config,
+            |player| screens::components::gameplay::notefield::preferred_mods_text(gameplay, player),
+        );
         let profile = profile_data::runtime_music_profile_snapshot(
             config.enable_groovestats,
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
         );
-        crate::session_results::evaluation_view(
-            gameplay,
-            stage,
-            evaluation_context_view(
-                evaluation_views::EvaluationFramePolicy::from_config(config).context(),
-                &profile,
-            ),
-        )
+        let context = evaluation_context_view(
+            evaluation_views::EvaluationFramePolicy::from_config(config).context(),
+            &profile,
+        );
+        (result, context)
     }
 
     fn execute_evaluation_score_runtime(gameplay: &ActiveGameplayStage, pack_group: &str) {
@@ -3524,8 +3558,7 @@ impl App {
             {
                 continue;
             }
-            let _ =
-                evaluation::sync_arrowcloud_result_dialog(state, ready.side, ready.texture_keys);
+            ActiveTheme::sync_evaluation_result_dialog(state, ready.side, ready.texture_keys);
         }
     }
 
@@ -4030,10 +4063,14 @@ impl App {
     fn sync_main_menu_runtime_view(&mut self) {
         let coin = config::runtime::get().coin;
         let view = crate::main_menu::runtime_view(self.state.coin.credits(coin));
-        ActiveTheme::sync_menu_runtime(&mut self.state.screens.menu_state, view);
+        self.state.screens.menu_state.sync_runtime(view);
     }
 
     fn coin_select_music_init_view(&self, mut view: SelectMusicInitView) -> SelectMusicInitView {
+        view.policy.interaction.show_random_entries = self.state.screens
+            .selection_presentation
+            .as_ref()
+            .is_some_and(|selection| selection.show_random_entries());
         let options = config::runtime::get().coin;
         let session = profile::get_session_snapshot();
         let premium_free = matches!(session.play_mode, profile_data::PlayMode::PremiumFree);
@@ -4163,7 +4200,7 @@ impl App {
             enabled,
             smx_input,
             options::is_smx_config_view(&self.state.screens.options_state),
-            &self.state.screens.evaluation_state.score_info,
+            self.state.screens.evaluation_stage.as_ref(),
         );
         let role = frame_plan.role;
 
@@ -4506,6 +4543,95 @@ impl App {
         }
     }
 
+    fn step_idle_screen(&mut self, dt: f32, now: Instant, event_loop: &ActiveEventLoop) {
+        if self.state.screens.current_screen == CurrentScreen::Init {
+            self.state.screens.startup_load.start_if_pending(
+                &mut self.content_reload,
+                &self.dirs,
+                self.audio.is_available(),
+            );
+        }
+        let smx_assignment = matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Options
+                | CurrentScreen::SmxAssignPads
+                | CurrentScreen::SelectMusic
+        )
+        .then(crate::smx_config::smx_assignment_view);
+        let premium_seconds_left = (self.state.screens.current_screen
+            == CurrentScreen::SelectMusic
+            && matches!(
+                profile::get_session_play_mode(),
+                profile_data::PlayMode::PremiumFree
+            ))
+        .then(|| {
+            let coin_options = config::runtime::get().coin;
+            self.state
+                .coin
+                .premium_seconds_left(coin_options, now)
+                .unwrap_or_else(|| coin_options.premium_free_seconds())
+        });
+        debug_assert!(self.theme_effect_scratch.is_empty());
+        self.state.screens.step_idle(
+            dt,
+            now,
+            &self.state.session,
+            premium_seconds_left,
+            &self.asset_manager,
+            &mut self.audio,
+            &self.gameplay_sfx,
+            &mut self.music_clock,
+            smx_assignment.as_ref(),
+            &mut self.theme_effect_scratch,
+        );
+        let _ = self.drain_theme_effects(event_loop);
+        self.sync_attract_media();
+        self.step_attract_demonstration(dt);
+        if let Some(target) = self.advance_stage_launch(dt) {
+            let _ = self.drain_theme_effects(event_loop);
+            self.handle_immediate_navigation(target, event_loop);
+        }
+    }
+
+    fn sync_attract_media(&mut self) {
+        let screens = &mut self.state.screens;
+        if screens.current_screen != CurrentScreen::Init || screens.startup_load.is_loading() {
+            return;
+        }
+        let Some(backend) = self.backend.as_mut() else {
+            return;
+        };
+        let Some(intro) = screens.attract.as_mut() else {
+            return;
+        };
+        let Some(media) = intro.update_media() else {
+            return;
+        };
+        let movie = media.movie.filter(|_| config::runtime::get().show_video_backgrounds);
+        let key = self.dynamic_media.set_background(
+            &mut self.asset_manager,
+            backend,
+            movie.map(deadsync_assets::resolve_asset_path),
+            0.0,
+            true,
+        );
+        intro.video_key = (key != "__black").then(|| Arc::from(key));
+        debug!(
+            "Attract media movie={:?} music={:?} video_active={}",
+            media.movie, media.music, self.dynamic_media.has_gameplay_video()
+        );
+        if let Some(path) = media.music {
+            self.audio.play_music(
+                deadsync_assets::resolve_asset_path(path),
+                deadlib_audio::stream::Cut::default(),
+                media.loop_music,
+                1.0,
+            );
+        } else {
+            self.audio.stop_music();
+        }
+    }
+
     fn log_frame_loop_mode(&mut self, mode: FrameLoopMode) {
         if !self.state.shell.note_frame_loop_mode(mode) {
             return;
@@ -4777,7 +4903,7 @@ impl App {
         } else {
             logic_dt
         };
-        let tick_gameplay = tick_gameplay_during_transition::<ActiveTheme>(
+        let tick_gameplay = tick_gameplay_during_transition(
             self.state.screens.current_screen,
             &self.state.shell.transition,
         );
@@ -4789,11 +4915,20 @@ impl App {
             // Keep gameplay stepping under evaluation fades so late judgments
             // and HUD animations settle while transition input remains blocked.
             self.step_gameplay(delta_time, true, event_loop);
+            if self.state.screens.gameplay_outro.as_ref().is_some_and(|outro| outro.stop_tail_audio_when_frozen())
+                && !tick_gameplay_during_transition(
+                    self.state.screens.current_screen,
+                    &self.state.shell.transition,
+                )
+            {
+                // Stop any tail audio at the same boundary that freezes results.
+                self.audio.stop_music();
+                self.audio.stop_mine_sfx();
+            }
         }
         if tick_menu_attract {
-            ActiveTheme::update_menu(
-                &mut self.state.screens.menu_state, logic_dt, MainMenuPhase::Entering,
-            ).append_to(&mut self.theme_effect_scratch);
+            self.state.screens.menu_state.update(logic_dt, MainMenuPhase::Entering)
+                .append_to(&mut self.theme_effect_scratch);
         }
         if !self.theme_effect_scratch.is_empty() {
             let _ = self.drain_theme_effects(event_loop);
@@ -4805,71 +4940,13 @@ impl App {
         });
         if transition_plan.step_screen && !self.gameplay_preload_holds_frame() {
             if step_plan.step_screen
-                && self.state.screens.current_screen == ActiveTheme::SCREENS.gameplay
+                && self.state.screens.current_screen == CurrentScreen::Gameplay
             {
                 self.step_gameplay(logic_dt, false, event_loop);
             } else if step_plan.step_screen {
-                let smx_assignment = matches!(
-                    self.state.screens.current_screen,
-                    CurrentScreen::Options
-                        | CurrentScreen::SmxAssignPads
-                        | CurrentScreen::SelectMusic
-                )
-                .then(crate::smx_config::smx_assignment_view);
-                let premium_seconds_left = (self.state.screens.current_screen
-                    == CurrentScreen::SelectMusic
-                    && matches!(
-                        profile::get_session_play_mode(),
-                        profile_data::PlayMode::PremiumFree
-                    ))
-                .then(|| {
-                    let coin_options = config::runtime::get().coin;
-                    self.state
-                        .coin
-                        .premium_seconds_left(coin_options, redraw_started)
-                        .unwrap_or_else(|| coin_options.premium_free_seconds())
-                });
-                debug_assert!(self.theme_effect_scratch.is_empty());
-                self.state.screens.step_idle(
-                    logic_dt,
-                    redraw_started,
-                    &self.state.session,
-                    premium_seconds_left,
-                    &self.asset_manager,
-                    &mut self.audio,
-                    &self.gameplay_sfx,
-                    &mut self.music_clock,
-                    smx_assignment.as_ref(),
-                    &mut self.theme_effect_scratch,
-                );
-                let _ = self.drain_theme_effects(event_loop);
-                if let Some(target) = self.advance_stage_launch(logic_dt) {
-                    let _ = self.drain_theme_effects(event_loop);
-                    self.handle_immediate_navigation(target, event_loop);
-                }
+                self.step_idle_screen(logic_dt, redraw_started, event_loop);
             }
-            let current_screen = self.state.screens.current_screen;
-            let auto_screenshot_ready = current_screen == CurrentScreen::Evaluation
-                && evaluation::auto_screenshot_ready(&self.state.screens.evaluation_state);
-            let auto_screenshot_plan = auto_screenshot_frame_plan(
-                AutoScreenshotFrameContext {
-                    screen: current_screen,
-                    already_taken: self.state.screens.evaluation_state.auto_screenshot_taken,
-                    ready: auto_screenshot_ready,
-                    mask: if current_screen == CurrentScreen::Evaluation {
-                        frame_policy.auto_screenshot_eval
-                    } else {
-                        0
-                    },
-                },
-                auto_screenshot_eval_results(&self.state.screens.evaluation_state),
-            );
-            if auto_screenshot_plan.mark_taken {
-                self.state.screens.evaluation_state.auto_screenshot_taken = true;
-            }
-            if auto_screenshot_plan.request_capture {
-                self.state.shell.screenshot.request(None);
-            }
+            self.update_evaluation_capture(frame_policy.auto_screenshot_eval);
         }
         if self.gameplay_preload_holds_frame() && self.song_lua_loading().is_none() {
             // Navigation was requested while stepping this frame. Do not draw
@@ -4935,20 +5012,25 @@ impl App {
             {
                 match current_screen {
                     CurrentScreen::SelectMusic => {
+                        self.dynamic_media.expire_outgoing_banners(
+                            &mut self.asset_manager,
+                            backend,
+                            Some(redraw_started),
+                        );
                         let state = &screens.select_music_state;
                         let desired_path = if show_select_music_video_banners
                             && show_select_music_banners
                             && state.banner_high_quality_requested
                         {
                             match state.entries.get(state.selected_index) {
-                                Some(select_music::MusicWheelEntry::Song(song)) => {
-                                    song.banner_path.as_deref()
-                                }
-                                Some(select_music::MusicWheelEntry::PackHeader {
+                                Some(MusicWheelEntry::Song(song)) => song.banner_path.as_deref(),
+                                Some(MusicWheelEntry::PackHeader {
                                     banner_path,
                                     ..
                                 }) => banner_path.as_deref(),
-                                _ => None,
+                                Some(MusicWheelEntry::Random(_)) => select_music::focused_song(state)
+                                    .and_then(|song| song.banner_path.as_deref()),
+                                None => None,
                             }
                         } else {
                             None
@@ -4961,16 +5043,21 @@ impl App {
                         );
                     }
                     CurrentScreen::SelectCourse => {
+                        self.dynamic_media.expire_outgoing_banners(
+                            &mut self.asset_manager,
+                            backend,
+                            Some(redraw_started),
+                        );
                         let state = &screens.select_course_state;
                         let desired_path = if show_select_music_video_banners
                             && show_select_music_banners
                             && state.banner_high_quality_requested
                         {
                             match state.entries.get(state.selected_index) {
-                                Some(select_music::MusicWheelEntry::Song(song)) => {
+                                Some(MusicWheelEntry::Song(song)) => {
                                     song.banner_path.as_deref()
                                 }
-                                Some(select_music::MusicWheelEntry::PackHeader {
+                                Some(MusicWheelEntry::PackHeader {
                                     banner_path,
                                     ..
                                 }) => banner_path.as_deref(),
@@ -4989,11 +5076,9 @@ impl App {
                     CurrentScreen::Evaluation => {
                         let desired_path = if show_select_music_video_banners {
                             screens
-                                .evaluation_state
-                                .score_info
-                                .iter()
-                                .flatten()
-                                .find_map(|score| score.song.banner_path.as_deref())
+                                .evaluation_stage
+                                .as_ref()
+                                .and_then(|stage| stage.song.banner_path.as_deref())
                         } else {
                             None
                         };
@@ -5087,10 +5172,13 @@ impl App {
                 } else {
                     None
                 };
+                let ui_video_time = self.state.screens.attract.as_ref()
+                    .filter(|_| current_screen == CurrentScreen::Init)
+                    .map_or(total_elapsed, |intro| intro.timeline.playback_time());
                 self.dynamic_media.queue_video_frames(
                     &mut self.asset_manager,
                     gameplay_time,
-                    total_elapsed,
+                    ui_video_time,
                 );
                 let screens = &mut self.state.screens;
                 let song = match current_screen {
@@ -5135,11 +5223,11 @@ impl App {
         }
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();
-        let uses_gameplay_present = matches!(
+        let collect_text_layout_stats = stutter_diag_enabled();
+        let uses_gameplay_present = gameplay_segments.is_some() || matches!(
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
         );
-        let collect_text_layout_stats = stutter_diag_enabled();
         let collect_pacing_stats = uses_gameplay_present
             && (self.state.shell.gameplay_pacing_trace.capture_active()
                 || log::log_enabled!(
@@ -5154,6 +5242,13 @@ impl App {
                 .practice_state
                 .as_ref()
                 .map(|state| &state.gameplay),
+            CurrentScreen::Init => self
+                .state
+                .screens
+                .attract
+                .as_ref()
+                .and_then(|intro| intro.demo.as_ref())
+                .map(|demo| &demo.stage),
             _ => None,
         };
         let actor_resources = gameplay_state.map(|state| state.stage.actor_resources());
@@ -5425,13 +5520,24 @@ impl App {
     }
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
-        let main_selection = options_entry_restores_main_selection(from)
-            .then_some(self.state.screens.options_state.selected);
+        let mut layout = deadsync_theme::system_options::SystemOptionsLayout::default();
+        if let Some(presentation) = &mut self.state.screens.system_options_presentation {
+            presentation.reset();
+            layout = presentation.layout();
+        }
+        if from == CurrentScreen::OverscanAdjustment && layout.return_overscan_to_graphics {
+            options::open_graphics_submenu(&mut self.state.screens.options_state);
+            return;
+        }
+        let old_options = &self.state.screens.options_state;
+        let main_selection = options_entry_restores_main_selection(from, old_options.is_main_view())
+            .then_some(old_options.selected);
         let current_color_index = self.state.screens.options_state.active_color_index;
         self.state.screens.options_state = options::init(options_init_view(
             &self.dirs,
             audio_requests::options_view(&self.audio),
             self.state.coin.bookkeeping(),
+            layout,
         ));
         self.state.screens.options_state.active_color_index = current_color_index;
         if let Some(selected) = main_selection {
@@ -5442,10 +5548,12 @@ impl App {
         }
         self.options_song_pack_generation =
             deadsync_simfile::runtime_cache::song_cache_generation();
-        if matches!(
-            from,
-            CurrentScreen::Mappings | CurrentScreen::Input | CurrentScreen::ConfigurePads
-        ) {
+        if main_selection.is_none()
+            && matches!(
+                from,
+                CurrentScreen::Mappings | CurrentScreen::Input | CurrentScreen::ConfigurePads
+            )
+        {
             options::open_input_submenu(&mut self.state.screens.options_state);
         } else if from == CurrentScreen::TestLights {
             options::open_lights_submenu(&mut self.state.screens.options_state);
@@ -5466,6 +5574,7 @@ impl App {
         mut audio: deadsync_audio_stream::AudioControl,
         music_clock: deadsync_audio_stream::MusicClock,
         live_case: Option<crate::live_case::LiveCase>,
+        mut theme: ThemeMount,
     ) -> Self {
         let backend_type = config.video_renderer;
         let software_renderer_threads = config.software_renderer_threads;
@@ -5478,7 +5587,10 @@ impl App {
         // Share Rips as the machine starts with it; every later change comes
         // with the config snapshot in the frame loop.
         deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
-        let ui_sfx = audio_requests::UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS);
+        let theme_resources = std::mem::take(&mut theme.resources);
+        let gameplay_presentation = theme.gameplay;
+        let twitch_chat = (theme.chat)();
+        let ui_sfx = audio_requests::UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, theme_resources.sounds);
         let audio_options = audio_requests::options_view(&audio);
         let state = AppState::new(
             &dirs,
@@ -5487,8 +5599,11 @@ impl App {
             overlay_mode,
             color_index,
             audio_options,
+            theme,
         );
         Self {
+            theme_resources,
+            gameplay_presentation,
             input: logical_input::with_keymap(|km| {
                 logical_input::keymap::InputState::new(km, config.input_debounce_seconds)
             }),
@@ -5591,6 +5706,8 @@ impl App {
             apply_replaygain: crate::apply_replaygain::Service::default(),
             heart_rate: crate::heart_rate::Runtime::default(),
             twitch: crate::twitch::Runtime::default(),
+            twitch_chat,
+            twitch_chat_sides: None,
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
             sync_analysis: crate::sync_analysis::Service::new(dirs.null_or_die_cache_file()),
@@ -5672,31 +5789,35 @@ impl App {
             }
             ThemeEffect::Exit => self.handle_process_exit(ProcessExitRequest::Exit),
             ThemeEffect::Shutdown => self.handle_process_exit(ProcessExitRequest::Shutdown),
+            ThemeEffect::UiCue(cue) => {
+                audio_requests::execute(&mut self.audio, &self.ui_sfx, AudioRequest::PlayUiCue(cue));
+                Vec::new()
+            }
             ThemeEffect::Runtime(request) => match request {
-                SimplyLoveRuntimeRequest::GameplayAction(_) => {
+                RuntimeRequest::GameplayAction(_) => {
                     unreachable!("gameplay actions must be normalized before runtime execution")
                 }
-                SimplyLoveRuntimeRequest::SongLaunch(request) => {
+                RuntimeRequest::SongLaunch(request) => {
                     self.request_stage_launch(
-                        ActiveTheme::SCREENS.song_selection,
+                        CurrentScreen::SelectMusic,
                         request.map_selection(StageSelection::Song),
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::CourseLaunch(request) => {
+                RuntimeRequest::CourseLaunch(request) => {
                     self.request_stage_launch(
-                        ActiveTheme::SCREENS.course_selection,
+                        CurrentScreen::SelectCourse,
                         request.map_selection(StageSelection::Course),
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::StartReplay(replay) => {
+                RuntimeRequest::StartReplay(replay) => {
                     if self.queue_replay_stage(replay) {
-                        self.handle_navigation_action(ActiveTheme::SCREENS.gameplay);
+                        self.handle_navigation_action(CurrentScreen::Gameplay);
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LinkArrowCloud {
+                RuntimeRequest::Online(OnlineRequest::LinkArrowCloud {
                     profile_id,
                     display_name,
                 }) => {
@@ -5707,7 +5828,7 @@ impl App {
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LinkGrooveStats {
+                RuntimeRequest::Online(OnlineRequest::LinkGrooveStats {
                     profile_id,
                     display_name,
                 }) => {
@@ -5718,40 +5839,40 @@ impl App {
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::Screenshot(side)) => {
+                RuntimeRequest::Media(MediaRequest::Screenshot(side)) => {
                     self.state.shell.screenshot.request(side);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::Banner(path)) => {
+                RuntimeRequest::Media(MediaRequest::Banner(path)) => {
                     self.execute_command(Command::SetBanner(path), event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::CdTitle(path)) => {
+                RuntimeRequest::Media(MediaRequest::CdTitle(path)) => {
                     self.execute_command(Command::SetCdTitle(path), event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::PackBanner(path)) => {
+                RuntimeRequest::Media(MediaRequest::PackBanner(path)) => {
                     self.execute_command(Command::SetPackBanner(path), event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::WheelItemBackgrounds(
+                RuntimeRequest::Media(MediaRequest::WheelItemBackgrounds(
                     paths,
                 )) => {
                     self.execute_command(Command::SetWheelItemBackgrounds(paths), event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::DensityGraph {
+                RuntimeRequest::Media(MediaRequest::DensityGraph {
                     slot,
                     chart_opt,
                 }) => {
                     self.execute_command(Command::SetDensityGraph { slot, chart_opt }, event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::FetchGrade(hash)) => {
+                RuntimeRequest::Online(OnlineRequest::FetchGrade(hash)) => {
                     self.execute_command(Command::FetchOnlineGrade(hash), event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Debug(SimplyLoveDebugRequest::WriteFsrDump) => {
+                RuntimeRequest::Debug(DebugRequest::WriteFsrDump) => {
                     let path = self.dirs.fsr_dump_path();
                     match self.fsr_monitor.write_debug_dump(&path) {
                         Ok(()) => {
@@ -5771,19 +5892,19 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::RestartGameplay => {
+                RuntimeRequest::RestartGameplay => {
                     self.try_gameplay_restart(event_loop, "missed target");
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::ReloadSongLua => {
+                RuntimeRequest::ReloadSongLua => {
                     self.handle_song_lua_reload(event_loop);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Profile(request) => {
+                RuntimeRequest::Profile(request) => {
                     self.handle_profile_request(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffset {
+                RuntimeRequest::Sync(SyncRequest::ApplySongOffset {
                     simfile_path,
                     delta_seconds,
                 }) => {
@@ -5804,7 +5925,7 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::StartAnalysis {
+                RuntimeRequest::Sync(SyncRequest::StartAnalysis {
                     owner,
                     targets,
                     emit_freq_delta,
@@ -5812,11 +5933,11 @@ impl App {
                     self.sync_analysis.start(owner, targets, emit_freq_delta);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::CancelAnalysis(owner)) => {
+                RuntimeRequest::Sync(SyncRequest::CancelAnalysis(owner)) => {
                     self.sync_analysis.cancel(owner);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffsetBatch {
+                RuntimeRequest::Sync(SyncRequest::ApplySongOffsetBatch {
                     owner,
                     changes,
                 }) => {
@@ -5831,27 +5952,27 @@ impl App {
                             Instant::now(),
                         );
                     }
-                    if owner == SimplyLoveSyncOwner::ContentBrowserPack && summary.saved_files > 0 {
+                    if owner == SyncOwner::ContentBrowserPack && summary.saved_files > 0 {
                         self.record_measured_pack(&summary);
                     }
 
-                    let mut events = vec![SimplyLoveSyncEvent::BatchSaveFinished { summary }];
+                    let mut events = vec![SyncEvent::BatchSaveFinished { summary }];
                     match owner {
-                        SimplyLoveSyncOwner::SelectMusicSong
-                        | SimplyLoveSyncOwner::SelectMusicPack => {
+                        SyncOwner::SelectMusicSong
+                        | SyncOwner::SelectMusicPack => {
                             select_music::apply_sync_analysis_events(
                                 &mut self.state.screens.select_music_state,
                                 owner,
                                 &mut events,
                             );
                         }
-                        SimplyLoveSyncOwner::OptionsPack => {
+                        SyncOwner::OptionsPack => {
                             options::apply_sync_analysis_events(
                                 &mut self.state.screens.options_state,
                                 &mut events,
                             );
                         }
-                        SimplyLoveSyncOwner::ContentBrowserPack => {
+                        SyncOwner::ContentBrowserPack => {
                             content_browser::apply_sync_analysis_events(
                                 &mut self.state.screens.content_browser_state,
                                 &mut events,
@@ -5860,25 +5981,17 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Audio(request) => {
+                RuntimeRequest::Audio(request) => {
                     audio_requests::execute(&mut self.audio, &self.ui_sfx, request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::SongSearch(request) => {
+                RuntimeRequest::SongSearch(request) => {
                     self.song_search.submit(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Content(request) => {
+                RuntimeRequest::Content(request) => {
                     match request {
-                        SimplyLoveContentRequest::InitializeLibrary {
-                            songs_root,
-                            courses_root,
-                        } => self.content_reload.start_initialization(
-                            songs_root,
-                            courses_root,
-                            self.audio.is_available(),
-                        ),
-                        SimplyLoveContentRequest::ReloadLibrary {
+                        ContentRequest::ReloadLibrary {
                             songs_root,
                             courses_root,
                         } => self.content_reload.start_library(
@@ -5886,7 +5999,7 @@ impl App {
                             courses_root,
                             self.audio.is_available(),
                         ),
-                        SimplyLoveContentRequest::ReloadSongDirs {
+                        ContentRequest::ReloadSongDirs {
                             songs_root,
                             pack_dirs,
                         } => self.content_reload.start_song_dirs(
@@ -5894,7 +6007,7 @@ impl App {
                             pack_dirs,
                             self.audio.is_available(),
                         ),
-                        SimplyLoveContentRequest::ReloadSong { simfile_path } => {
+                        ContentRequest::ReloadSong { simfile_path } => {
                             match crate::content_reload::reload_song(&simfile_path) {
                                 Ok(song_packs) => {
                                     select_music::refresh_from_song_packs(
@@ -5917,7 +6030,7 @@ impl App {
                                 ),
                             }
                         }
-                        SimplyLoveContentRequest::DeleteSong { simfile_path } => {
+                        ContentRequest::DeleteSong { simfile_path } => {
                             let config = config::runtime::get();
                             let result = if config.allow_song_deletion {
                                 let songs_root = self.dirs.songs_dir();
@@ -5948,7 +6061,7 @@ impl App {
                         // the Installed tab's own Start-then-confirm question, the
                         // way the ITGmania browser removes packs, and delete_pack
                         // keeps its own rules about what it may remove.
-                        SimplyLoveContentRequest::DeletePack { group_name } => {
+                        ContentRequest::DeletePack { group_name } => {
                             let songs_root = self.dirs.songs_dir();
                             let roots =
                                 deadsync_simfile::app_runtime::collect_song_scan_roots(&songs_root);
@@ -5982,7 +6095,7 @@ impl App {
                                     .map_err(Clone::clone),
                             );
                         }
-                        SimplyLoveContentRequest::SetPackSync { group_name, itg } => {
+                        ContentRequest::SetPackSync { group_name, itg } => {
                             let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
                                 &self.dirs.songs_dir(),
                             );
@@ -6023,7 +6136,7 @@ impl App {
                                 told,
                             );
                         }
-                        SimplyLoveContentRequest::MeasurePackSync { group_name } => {
+                        ContentRequest::MeasurePackSync { group_name } => {
                             // Proved again before any simfile is measured for
                             // saving: a pack the review could save into but
                             // not record would end up shifted twice.
@@ -6059,7 +6172,7 @@ impl App {
                                     &view.target_chart_type,
                                     view.preferred_difficulty_index,
                                 );
-                                if let Some(SimplyLoveSyncRequest::StartAnalysis {
+                                if let Some(SyncRequest::StartAnalysis {
                                     owner,
                                     targets,
                                     emit_freq_delta,
@@ -6069,30 +6182,30 @@ impl App {
                                 }
                             }
                         }
-                        SimplyLoveContentRequest::SkipReplayGain => {
+                        ContentRequest::SkipReplayGain => {
                             deadsync_audio_replaygain::request_skip_blocking_analysis();
                         }
-                        SimplyLoveContentRequest::ApplyReplayGain => {
+                        ContentRequest::ApplyReplayGain => {
                             self.apply_replaygain.start();
                         }
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Graphics(request) => {
+                RuntimeRequest::Graphics(request) => {
                     self.handle_graphics_change(request, event_loop)?;
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Updater(request) => {
+                RuntimeRequest::Updater(request) => {
                     updater::execute(request, &self.dirs);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::ShowOverlay(mode)) => {
+                RuntimeRequest::Config(ConfigRequest::ShowOverlay(mode)) => {
                     self.state.shell.set_overlay_mode(mode);
                     config::runtime_update::update_show_stats_mode(mode);
                     options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::MouseCursorHidden(
+                RuntimeRequest::Config(ConfigRequest::MouseCursorHidden(
                     hidden,
                 )) => {
                     if let Some(window) = &self.window {
@@ -6102,11 +6215,11 @@ impl App {
                     options::sync_hide_mouse_cursor(&mut self.state.screens.options_state, hidden);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::PersistColor(index)) => {
+                RuntimeRequest::Config(ConfigRequest::PersistColor(index)) => {
                     crate::smx_config::set_theme_color(index);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Overscan {
+                RuntimeRequest::Config(ConfigRequest::Overscan {
                     translate_x,
                     translate_y,
                     add_width,
@@ -6120,31 +6233,31 @@ impl App {
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Advanced(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Advanced(request)) => {
                     config_requests::execute_advanced(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Coin(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Coin(request)) => {
                     config_requests::execute_coin(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Course(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Course(request)) => {
                     config_requests::execute_course(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Gameplay(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Gameplay(request)) => {
                     config_requests::execute_gameplay(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Lights(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Lights(request)) => {
                     config_requests::execute_lights(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Machine(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Machine(request)) => {
                     config_requests::execute_machine(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Mappings(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Mappings(request)) => {
                     crate::mappings::execute(request);
                     logical_input::with_keymap(|km| self.input.set_keymap(km));
                     // Rebinding a held time-control key can remove its system action,
@@ -6154,27 +6267,27 @@ impl App {
                     controls.set_slow_down(false);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::NullOrDie(request)) => {
+                RuntimeRequest::Config(ConfigRequest::NullOrDie(request)) => {
                     config_requests::execute_null_or_die(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Online(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Online(request)) => {
                     config_requests::execute_online(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Options(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Options(request)) => {
                     config_requests::execute_options(request, &mut self.input);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::SelectMusic(request)) => {
+                RuntimeRequest::Config(ConfigRequest::SelectMusic(request)) => {
                     config_requests::execute_select_music(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Tournament(request)) => {
+                RuntimeRequest::Config(ConfigRequest::Tournament(request)) => {
                     config_requests::execute_tournament(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::JudgmentPalettes(catalog) => {
+                RuntimeRequest::JudgmentPalettes(catalog) => {
                     if let Err(error) = deadsync_config::judgment_palettes::update_runtime_catalog(
                         ActiveTheme::JUDGMENT_PRESET,
                         |current| {
@@ -6186,48 +6299,48 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::TestLightsAuto) => {
+                RuntimeRequest::Hardware(HardwareRequest::TestLightsAuto) => {
                     test_lights::on_enter(&mut self.state.screens.test_lights_state);
                     self.lights.set_test_auto_cycle();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::StepTestCabinet(
+                RuntimeRequest::Hardware(HardwareRequest::StepTestCabinet(
                     delta,
                 )) => {
                     self.lights.step_test_cabinet(delta);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::StepTestButton(
+                RuntimeRequest::Hardware(HardwareRequest::StepTestButton(
                     delta,
                 )) => {
                     self.lights.step_test_button(delta);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::AssignSmxPads {
+                RuntimeRequest::Hardware(HardwareRequest::AssignSmxPads {
                     p1_serial,
                     p2_serial,
                 }) => {
                     crate::smx_config::set_smx_assignment(p1_serial, p2_serial);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::SwapSmxPads) => {
+                RuntimeRequest::Hardware(HardwareRequest::SwapSmxPads) => {
                     let _ = crate::smx_config::swap_smx_assignment();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::SetSmxUnderglowTheme(enabled),
+                RuntimeRequest::Hardware(
+                    HardwareRequest::SetSmxUnderglowTheme(enabled),
                 ) => {
                     crate::smx_config::set_smx_underglow_theme(enabled);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::SetSmxUnderglowGrb(grb),
+                RuntimeRequest::Hardware(
+                    HardwareRequest::SetSmxUnderglowGrb(grb),
                 ) => {
                     crate::smx_config::set_smx_underglow_grb(grb);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::ApplySmxPadPreset { pad, name },
+                RuntimeRequest::Hardware(
+                    HardwareRequest::ApplySmxPadPreset { pad, name },
                 ) => {
                     if crate::smx_config::apply_smx_pad_preset(pad, &name) {
                         self.state
@@ -6242,8 +6355,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::ApplySmxPadConfig { pad, name },
+                RuntimeRequest::Hardware(
+                    HardwareRequest::ApplySmxPadConfig { pad, name },
                 ) => {
                     if crate::smx_config::apply_smx_saved_pad_config(pad, &name) {
                         self.state
@@ -6258,8 +6371,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::CaptureSmxPadConfig {
+                RuntimeRequest::Hardware(
+                    HardwareRequest::CaptureSmxPadConfig {
                         pad,
                         name,
                         set_default,
@@ -6279,8 +6392,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::RenameSmxPadConfig {
+                RuntimeRequest::Hardware(
+                    HardwareRequest::RenameSmxPadConfig {
                         serial,
                         old_name,
                         new_name,
@@ -6293,66 +6406,66 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::SetSmxPadConfigDefault { serial, name },
+                RuntimeRequest::Hardware(
+                    HardwareRequest::SetSmxPadConfigDefault { serial, name },
                 ) => {
                     profile::set_default_pad_config(&serial, &name);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::DeleteSmxPadConfig { name },
+                RuntimeRequest::Hardware(
+                    HardwareRequest::DeleteSmxPadConfig { name },
                 ) => {
                     profile::delete_pad_config(&name);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::SetSmxPlayerLights(colors),
+                RuntimeRequest::Hardware(
+                    HardwareRequest::SetSmxPlayerLights(colors),
                 ) => {
                     deadsync_smx::set_player_lights(colors);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::ReenableSmxAutoLights,
+                RuntimeRequest::Hardware(
+                    HardwareRequest::ReenableSmxAutoLights,
                 ) => {
                     deadsync_smx::reenable_auto_lights();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Platform(request) => {
+                RuntimeRequest::Platform(request) => {
                     execute_platform_request(&self.dirs, request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::Reinitialize) => {
+                RuntimeRequest::Online(OnlineRequest::Reinitialize) => {
                     deadsync_online::runtime::init();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::Lobby(request)) => {
+                RuntimeRequest::Online(OnlineRequest::Lobby(request)) => {
                     match request {
-                        SimplyLoveLobbyRequest::Search => {
+                        LobbyRequest::Search => {
                             deadsync_online::lobbies::runtime_search_lobbies_default();
                         }
-                        SimplyLoveLobbyRequest::Create { password } => {
+                        LobbyRequest::Create { password } => {
                             deadsync_online::lobbies::runtime_create_lobby_with_password_default(
                                 &password,
                             );
                         }
-                        SimplyLoveLobbyRequest::Join { code, password } => {
+                        LobbyRequest::Join { code, password } => {
                             deadsync_online::lobbies::runtime_join_lobby_with_password_default(
                                 &code, &password,
                             );
                         }
-                        SimplyLoveLobbyRequest::Leave => {
+                        LobbyRequest::Leave => {
                             deadsync_online::lobbies::runtime_leave_lobby_default();
                         }
-                        SimplyLoveLobbyRequest::SelectSong(song) => {
+                        LobbyRequest::SelectSong(song) => {
                             deadsync_online::lobbies::runtime_select_song_default(song);
                         }
-                        SimplyLoveLobbyRequest::UpdateMachineState { screen_name, ready } => {
+                        LobbyRequest::UpdateMachineState { screen_name, ready } => {
                             deadsync_online::lobbies::runtime_update_machine_state_default(
                                 screen_name,
                                 ready,
                             );
                         }
-                        SimplyLoveLobbyRequest::UpdateMachineStats {
+                        LobbyRequest::UpdateMachineStats {
                             screen_name,
                             p1_ready,
                             p2_ready,
@@ -6367,36 +6480,36 @@ impl App {
                                 p2_stats,
                             );
                         }
-                        SimplyLoveLobbyRequest::Disconnect => {
+                        LobbyRequest::Disconnect => {
                             deadsync_online::lobbies::runtime_disconnect();
                         }
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::StartQrLogin(
+                RuntimeRequest::Online(OnlineRequest::StartQrLogin(
                     request,
                 )) => {
                     self.qr_login.start(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::CancelQrLogin(
+                RuntimeRequest::Online(OnlineRequest::CancelQrLogin(
                     service,
                 )) => {
                     self.qr_login.cancel(service);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::StartScoreImport(
+                RuntimeRequest::Online(OnlineRequest::StartScoreImport(
                     request,
                 )) => {
                     self.score_import.start(request);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::CancelScoreImport) => {
+                RuntimeRequest::Online(OnlineRequest::CancelScoreImport) => {
                     self.score_import.cancel();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::RefreshPlayerLeaderboard {
+                RuntimeRequest::Online(
+                    OnlineRequest::RefreshPlayerLeaderboard {
                         chart_hash,
                         side,
                         max_entries,
@@ -6409,7 +6522,7 @@ impl App {
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LoadMachineReplays {
+                RuntimeRequest::Online(OnlineRequest::LoadMachineReplays {
                     chart_hash,
                     max_entries,
                 }) => {
@@ -6422,7 +6535,7 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::RefreshSrpgShop {
+                RuntimeRequest::Online(OnlineRequest::RefreshSrpgShop {
                     side,
                 }) => {
                     let profile = deadsync_profile::runtime_profile_for_side(side);
@@ -6433,8 +6546,8 @@ impl App {
                     );
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::DownloadSrpgShopUnlock { shop_id, name, url },
+                RuntimeRequest::Online(
+                    OnlineRequest::DownloadSrpgShopUnlock { shop_id, name, url },
                 ) => {
                     let folder = deadsync_config::runtime::get().srpg_shop_folder;
                     let pack_name = deadsync_online::srpg_shop::download_folder(shop_id, folder);
@@ -6442,26 +6555,26 @@ impl App {
                     deadsync_online::runtime::queue_event_unlock_download(&url, &name, pack_name);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::RetryUnlockDownloads) => {
+                RuntimeRequest::Online(OnlineRequest::RetryUnlockDownloads) => {
                     let _ = deadsync_online::runtime::retry_failed_unlock_downloads();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::EnsureStepManiaOnlineCatalog,
+                RuntimeRequest::Online(
+                    OnlineRequest::EnsureStepManiaOnlineCatalog,
                 ) => {
                     deadsync_online::stepmaniaonline::runtime_ensure_catalog();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::RefreshStepManiaOnlineCatalog,
+                RuntimeRequest::Online(
+                    OnlineRequest::RefreshStepManiaOnlineCatalog,
                 ) => {
                     deadsync_online::stepmaniaonline::runtime_refresh_catalog();
                     deadsync_online::smo_details::runtime_refresh_details();
                     deadsync_online::smo_describe::runtime_refresh();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::LoadMoreStepManiaOnlinePacks,
+                RuntimeRequest::Online(
+                    OnlineRequest::LoadMoreStepManiaOnlinePacks,
                 ) => {
                     // On the beginner tab the next helping is more pack pages
                     // to read, not more catalogue rows to fetch -- and never a
@@ -6482,8 +6595,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::DownloadStepManiaOnlinePack { pack_id },
+                RuntimeRequest::Online(
+                    OnlineRequest::DownloadStepManiaOnlinePack { pack_id },
                 ) => {
                     if let Err(error) = deadsync_online::stepmaniaonline::runtime_queue_download(
                         pack_id,
@@ -6493,8 +6606,8 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::PurchaseSrpgShopItem {
+                RuntimeRequest::Online(
+                    OnlineRequest::PurchaseSrpgShopItem {
                         shop_id,
                         item_id,
                         type_id,
@@ -6518,7 +6631,7 @@ impl App {
         match target {
             CurrentScreen::ArrowCloudLogin => {
                 self.state.screens.arrowcloud_login_state.active_color_index =
-                    ActiveTheme::menu_color_index(&self.state.screens.menu_state);
+                    self.state.screens.menu_state.color_index();
                 self.state.screens.arrowcloud_login_state.target_profile =
                     Some(screens::arrowcloud_login::ProfileTarget {
                         id: profile_id,
@@ -6529,7 +6642,7 @@ impl App {
                 self.state
                     .screens
                     .groovestats_login_state
-                    .active_color_index = ActiveTheme::menu_color_index(&self.state.screens.menu_state);
+                    .active_color_index = self.state.screens.menu_state.color_index();
                 self.state.screens.groovestats_login_state.target_profile =
                     Some(screens::groovestats_login::ProfileTarget {
                         id: profile_id,
@@ -6555,7 +6668,7 @@ impl App {
                     .screens
                     .player_options_state
                     .as_mut()
-                    .map(ActiveTheme::player_options_song_mut);
+                    .map(crate::player_options::PlayerOptionsState::song_mut);
                 let pending_song = self.state.pending_stage.as_mut().map(|stage| &mut stage.song);
                 for song in [screen_song, pending_song].into_iter().flatten() {
                     let _ = deadsync_simfile::runtime_cache::replace_song_arc_if_same_simfile(
@@ -6763,19 +6876,22 @@ impl App {
         );
         if show_player_options {
             self.state.screens.player_options_state =
-                Some(ActiveTheme::init_player_options(PlayerOptionsEntry {
-                    song: Arc::clone(&stage.song),
-                    steps: stage.steps_index,
-                    preferred: stage.preferred_difficulty_index,
-                    color_index,
-                    return_screen: ActiveTheme::SCREENS.course_selection,
-                    fixed_stepchart_label: Some(label),
-                    noteskin_catalog: noteskin_catalog_view(&self.dirs),
-                    smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
-                    heart_rate_devices: crate::heart_rate::devices_view(),
-                    view: crate::player_options::init_view(),
-                    scroll_speeds: None,
-                }));
+                Some(crate::player_options::PlayerOptionsState::new(
+                    PlayerOptionsEntry {
+                        song: Arc::clone(&stage.song),
+                        steps: stage.steps_index,
+                        preferred: stage.preferred_difficulty_index,
+                        color_index,
+                        return_screen: CurrentScreen::SelectCourse,
+                        fixed_stepchart_label: Some(label),
+                        noteskin_catalog: noteskin_catalog_view(&self.dirs),
+                        smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
+                        heart_rate_devices: crate::heart_rate::devices_view(),
+                        view: crate::player_options::init_view(),
+                        scroll_speeds: None,
+                    },
+                    self.state.screens.player_options_layout,
+                ));
         } else {
             let mut start = StageStart::from_current_profiles(
                 stage.song.clone(),
@@ -6829,7 +6945,7 @@ impl App {
     }
 
     fn prepare_gameplay_restart(&mut self) -> bool {
-        match gameplay_restart_prepare_source::<ActiveTheme>(
+        match gameplay_restart_prepare_source(
             self.state.screens.current_screen,
             self.state.screens.gameplay_state.is_some(),
             self.state.screens.evaluation_stage.is_some(),
@@ -6875,7 +6991,7 @@ impl App {
     }
 
     fn prepare_practice_from_eval(&mut self) -> bool {
-        match practice_restart_prepare_source::<ActiveTheme>(
+        match practice_restart_prepare_source(
             self.state.screens.current_screen,
             self.state.screens.evaluation_stage.is_some(),
         ) {
@@ -6900,7 +7016,7 @@ impl App {
 
     fn try_gameplay_restart(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
         let restartable = self.prepare_gameplay_restart();
-        match gameplay_restart_route::<ActiveTheme>(
+        match gameplay_restart_route(
             self.state.screens.current_screen,
             restartable,
             self.state.screens.gameplay_state.is_some(),
@@ -6948,7 +7064,7 @@ impl App {
 
     fn try_gameplay_reload(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
         let eval_payload = self.state.screens.evaluation_stage.as_ref();
-        let simfile_path = match gameplay_reload_source::<ActiveTheme>(
+        let simfile_path = match gameplay_reload_source(
             self.state.screens.current_screen,
             self.state.screens.gameplay_state.is_some(),
             eval_payload.is_some(),
@@ -7004,7 +7120,7 @@ impl App {
     /// `gameplay_restart_count` / `restart_pending` (those are gameplay-only).
     fn try_practice_from_eval(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
         let eval_payload_available = self.state.screens.evaluation_stage.is_some();
-        if !practice_from_eval_allowed::<ActiveTheme>(self.state.screens.current_screen, eval_payload_available) {
+        if !practice_from_eval_allowed(self.state.screens.current_screen, eval_payload_available) {
             return false;
         }
         if !self.prepare_practice_from_eval() {
@@ -7021,7 +7137,7 @@ impl App {
     }
 
     fn try_practice_reload(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
-        if !practice_reload_allowed::<ActiveTheme>(
+        if !practice_reload_allowed(
             self.state.screens.current_screen,
             self.state.screens.practice_state.is_some(),
         ) {
@@ -7179,34 +7295,35 @@ impl App {
                 .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
         }
 
-        let sfx_paths = evaluation::SfxPaths::choose();
-        self.ui_sfx
-            .prepare_screen(&mut self.audio, sfx_paths.iter());
-        self.state.screens.evaluation_state.sfx_paths = sfx_paths.clone();
-        let color_idx = ActiveTheme::evaluation_color_index(&self.state.screens.evaluation_state);
         // The cue follows the completed stage, even when its screen is replaced
         // by the course summary below. Result bookkeeping has already finished.
-        let entry_sfx = evaluation::entry_sfx(failed, config.visual_style, config.srpg_variant)
-            .and_then(|path| {
-                self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
+        use deadsync_theme::stage::EvaluationFallbackSounds;
+        let audio = self.state.screens.stage_presentation.evaluation_audio();
+        if audio.fallback_sounds != EvaluationFallbackSounds::None {
+            let (deferred_sfx, entry_sfx) = ActiveTheme::prepare_evaluation_audio(
+                &mut self.state.screens.evaluation_state,
+                failed,
+                SimplyLoveVisualPolicyView::from_config(config),
+            );
+            self.ui_sfx.prepare_screen(&mut self.audio, deferred_sfx);
+            if audio.fallback_sounds == EvaluationFallbackSounds::All
+                && let Some(path) = entry_sfx
+                && let Some(sound) = self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
                     path.to_string_lossy().as_ref(),
                 ))
-            });
-        if let Some(sound) = entry_sfx {
-            self.audio.play_screen_sfx(&sound);
+            {
+                self.audio.play_screen_sfx(&sound);
+            }
         }
 
+        let gameplay_elapsed =
+            stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
         if let Some((course_run, course_stage)) = completed_course {
-            let per_song_pages = std::mem::take(&mut self.state.screens.course_evaluation.stages);
+            let mut per_song_pages = std::mem::take(&mut self.state.screens.course_evaluation.stages);
             let course_graph_stages = build_course_graph_stages(
                 &course_run,
                 profile::get_session_play_style().chart_type(),
             );
-            let gameplay_elapsed =
-                stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
-            let (session_elapsed, _) =
-                ActiveTheme::evaluation_elapsed_times(&self.state.screens.evaluation_state);
-            let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
             let routine_shared = routine_shared_course_player(
                 &course_run,
                 &course_stage,
@@ -7216,29 +7333,25 @@ impl App {
                 &course_stage,
                 routine_shared.as_ref(),
                 &course_graph_stages,
-                color_idx,
-                session_elapsed,
-                gameplay_elapsed,
+                ActiveTheme::evaluation_color_index(&self.state.screens.evaluation_state),
                 config,
+                self.state.screens.stage_presentation.evaluation_overview().is_some(),
             );
-            apply_course_noteskins(&mut course_page.view, &per_song_pages);
-            course_page.view.screen_elapsed = screen_elapsed;
-            course_page.view.sfx_paths = sfx_paths.clone();
+            ActiveTheme::prepare_course_evaluation(
+                &self.state.screens.evaluation_state,
+                &mut course_page.view,
+                per_song_pages.iter_mut().map(|page| &mut page.view),
+                gameplay_elapsed,
+            );
             self.state.screens.evaluation_state = course_page.view.clone();
+            self.state.screens.evaluation_overview = course_page.overview.clone();
             self.state.screens.evaluation_stage = course_page.stage.clone();
+            self.state.screens.evaluation_capture = course_page.capture;
+            self.prepare_current_evaluation_banner();
 
             let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
             pages.push(course_page);
-            for mut page in per_song_pages {
-                page.view.sfx_paths = sfx_paths.clone();
-                page.view.screen_elapsed = screen_elapsed;
-                ActiveTheme::sync_evaluation_elapsed(
-                    &mut page.view,
-                    session_elapsed,
-                    gameplay_elapsed,
-                );
-                pages.push(page);
-            }
+            pages.extend(per_song_pages);
             self.state.screens.course_evaluation.replace_pages(pages);
         } else {
             self.state.screens.course_evaluation.clear_pages();
@@ -7246,8 +7359,6 @@ impl App {
 
         let (session_elapsed, _) =
             ActiveTheme::evaluation_elapsed_times(&self.state.screens.evaluation_state);
-        let gameplay_elapsed =
-            stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
         ActiveTheme::sync_evaluation_elapsed(
             &mut self.state.screens.evaluation_state,
             session_elapsed,
@@ -7313,18 +7424,29 @@ impl App {
     }
 
     fn step_course_eval_page(&mut self, delta: i32) {
-        let Some(CourseEvaluationPage { view: mut page, stage }) = self.state.screens.course_evaluation.step(delta) else {
+        let Some(CourseEvaluationPage { view: mut page, overview, stage, capture }) =
+            self.state.screens.course_evaluation.step(delta)
+        else {
             return;
         };
-        page.screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
-        let (session_elapsed, gameplay_elapsed) =
-            ActiveTheme::evaluation_elapsed_times(&self.state.screens.evaluation_state);
-        ActiveTheme::sync_evaluation_elapsed(&mut page, session_elapsed, gameplay_elapsed);
+        ActiveTheme::resume_evaluation_page(&self.state.screens.evaluation_state, &mut page);
         self.state.screens.evaluation_state = page;
+        self.state.screens.evaluation_overview = overview;
         self.state.screens.evaluation_stage = stage;
+        self.state.screens.evaluation_capture = capture;
+        self.prepare_current_evaluation_banner();
         self.mark_evaluation_runtime_dirty();
         self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
         self.ui_sfx.play_cue(&mut self.audio, UiCue::Change);
+    }
+
+    fn prepare_current_evaluation_banner(&mut self) {
+        if let Some(backend) = self.backend.as_mut()
+            && let Some(path) = self.state.screens.evaluation_stage.as_ref()
+                .and_then(|stage| stage.song.banner_path.as_deref())
+        {
+            media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+        }
     }
 
     fn apply_select_music_join(&mut self, join_side: profile_data::PlayerSide) {
@@ -7442,7 +7564,7 @@ impl App {
         }
 
         self.theme_effect_scratch
-            .push(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+            .push(ThemeEffect::Runtime(RuntimeRequest::Audio(
                 AudioRequest::PlayUiCue(UiCue::Confirm),
             )));
         true
@@ -7650,28 +7772,34 @@ impl App {
         if matches!(
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
-        ) {
+        ) || (self.state.screens.current_screen == CurrentScreen::Init
+            && self.state.screens.attract.is_some())
+        {
             return;
         }
-
-        let path = path.map(deadsync_assets::resolve_asset_path);
 
         let Some(backend) = self.backend.as_mut() else {
             screens::components::shared::visual_style_bg::set_srpg_background_key(None);
             return;
         };
-
-        let key = self.dynamic_media.set_background(
+        let menu_movie = (self.state.screens.current_screen == CurrentScreen::Menu)
+            .then(|| self.state.screens.menu_state.background_movie())
+            .flatten();
+        let movie = if enabled {
+            menu_movie.or_else(|| path.map(|path| MenuBackgroundMovie { path, rate: 1.0 }))
+        } else {
+            None
+        };
+        self.dynamic_media.sync_ui_background(
             &mut self.asset_manager,
             backend,
-            path,
+            movie,
             ui_time_sec,
-            enabled,
         );
-        let srpg_key = if key == "__black" {
-            None
+        let srpg_key = if menu_movie.is_none() {
+            self.dynamic_media.ui_background_key().cloned()
         } else {
-            Some(key.into_owned())
+            None
         };
         screens::components::shared::visual_style_bg::set_srpg_background_key(srpg_key);
     }
@@ -7773,11 +7901,13 @@ impl App {
         Option<deadsync_song_lua::playback::GameplayActorSegments>,
     ) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
-        let screen_alpha_multiplier = if self.state.screens.current_screen == ActiveTheme::SCREENS.menu {
+        let screen_alpha_multiplier = if self.state.screens.current_screen == CurrentScreen::Menu {
             1.0
         } else {
-            screen_fade_view(self.state.screens.current_screen, &self.state.shell.transition)
-                .screen_alpha
+            (self.state.screens.transitions.screen_alpha)(
+                self.state.screens.current_screen,
+                &self.state.shell.transition,
+            )
         };
 
         let mut actors = std::mem::take(&mut self.actor_scratch);
@@ -7786,11 +7916,17 @@ impl App {
         let visual_policy = policy.visual;
 
         if let Some(loading) = self.song_lua_loading() {
-            screens::components::shared::song_lua_loading::push(
+            let session = &self.state.session;
+            self.state.screens.stage_presentation.push_loading(
                 &mut actors,
-                loading.title.clone(),
-                loading.progress.fraction(),
-                loading.color_index,
+                deadsync_theme::stage::StageLoadingView {
+                    title: &loading.title,
+                    stage_number: session.active_stage_number(),
+                    course: session.course_run.is_some(),
+                    color_index: loading.color_index,
+                    elapsed: loading.presentation_elapsed(),
+                    progress: loading.progress.fraction(),
+                },
             );
             return (actors, CLEAR, None);
         }
@@ -7799,11 +7935,11 @@ impl App {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
                 let update_tag = deadsync_updater::state::available_tag();
-                ActiveTheme::push_menu_actors(
+                self.state.screens.menu_state.push_actors(
                     &mut actors,
-                    &self.state.screens.menu_state,
                     MainMenuFrame {
                         update_banner_tag: update_tag.as_deref(),
+                        background_key: self.dynamic_media.ui_background_key(),
                         alpha_multiplier: screen_alpha_multiplier,
                         transition: &self.state.shell.transition,
                         visual_policy,
@@ -7811,17 +7947,33 @@ impl App {
                 );
             }
             CurrentScreen::Gameplay => {
-                if let Some(gs) = &mut self.state.screens.gameplay_state {
+                let stage_covered = self.state.screens.gameplay_outro.as_ref().is_some_and(|outro| {
+                    matches!(self.state.shell.transition,
+                        TransitionState::FadingOut { elapsed, .. } if outro.covers_stage(elapsed))
+                });
+                if !stage_covered && let Some(gs) = &mut self.state.screens.gameplay_state {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
-                    let smx_overlay_alpha = gameplay_smx_overlay_alpha(
+                    let smx_overlay_alpha = (self.gameplay_presentation.smx_overlay_alpha)(
                         gs.presentation.hide_song_intro,
                         &self.state.shell.transition,
                     );
+                    let hud_motion = if gs.presentation.has_hud() {
+                        self.state.screens.stage_presentation.gameplay_motion(
+                            screen_nav::stage_motion_view(
+                                gs,
+                                &self.state.shell.transition,
+                                self.state.session.gameplay_restart_count > 0,
+                            ),
+                        )
+                    } else {
+                        Default::default()
+                    };
                     gameplay_segments = Some(crate::gameplay_runtime::push_actors(
                         &mut actors,
                         gs,
                         &self.asset_manager,
                         gameplay::ActorViewOverride {
+                            hud_motion,
                             smx_overlay_alpha,
                             ..Default::default()
                         },
@@ -7853,13 +8005,47 @@ impl App {
                     change.ffmpeg,
                     change.workshop,
                 );
-                options::push_actors(
-                    &mut actors,
-                    &self.state.screens.options_state,
-                    &self.asset_manager,
-                    screen_alpha_multiplier,
-                    visual_policy,
-                );
+                let options_state = &self.state.screens.options_state;
+                if let Some(presentation) = &mut self.state.screens.system_options_presentation {
+                    use deadsync_theme::views::SystemOptionsPhase;
+
+                    let (phase, overlay_alpha) = match self.state.shell.transition {
+                        TransitionState::Idle => (SystemOptionsPhase::Steady, 1.0),
+                        TransitionState::ActorsFadeIn { elapsed, duration }
+                        | TransitionState::FadingIn { elapsed, duration } => (
+                            SystemOptionsPhase::Entering(elapsed),
+                            (elapsed / duration).clamp(0.0, 1.0),
+                        ),
+                        TransitionState::ActorsFadeOut { elapsed, duration, .. }
+                        | TransitionState::FadingOut { elapsed, duration, .. } => (
+                            SystemOptionsPhase::Leaving(elapsed),
+                            1.0 - (elapsed / duration).clamp(0.0, 1.0),
+                        ),
+                    };
+                    presentation.with_renderer(
+                        phase,
+                        arrow_effect_time_s,
+                        &self.asset_manager,
+                        &mut |renderer| {
+                            options::push_actors_with_layout(
+                                &mut actors,
+                                options_state,
+                                &self.asset_manager,
+                                overlay_alpha,
+                                visual_policy,
+                                Some(renderer),
+                            );
+                        },
+                    );
+                } else {
+                    options::push_actors(
+                        &mut actors,
+                        options_state,
+                        &self.asset_manager,
+                        screen_alpha_multiplier,
+                        visual_policy,
+                    );
+                }
             }
             CurrentScreen::ContentBrowser => content_browser::push_actors(
                 &mut actors,
@@ -7919,22 +8105,31 @@ impl App {
                 visual_policy,
             ),
             CurrentScreen::PlayerOptions => {
-                if let Some(pos) = &self.state.screens.player_options_state {
-                    ActiveTheme::push_player_options_actors(
+                if let Some(pos) = &mut self.state.screens.player_options_state {
+                    pos.push_actors(
                         &mut actors,
-                        pos,
                         &self.asset_manager,
+                        visual_policy,
+                        arrow_effect_time_s,
+                    );
+                }
+            }
+            CurrentScreen::SelectProfile => {
+                let state = &self.state.screens.select_profile_state;
+                if let Some(selection) = &self.state.screens.selection_presentation {
+                    ActiveTheme::with_profile_picker_view(state, screen_alpha_multiplier, |view| {
+                        selection.profile_picker()(&mut actors, view, false);
+                    });
+                } else {
+                    ActiveTheme::push_profile_picker_actors(
+                        &mut actors,
+                        state,
+                        &self.asset_manager,
+                        screen_alpha_multiplier,
                         visual_policy,
                     );
                 }
             }
-            CurrentScreen::SelectProfile => ActiveTheme::push_profile_picker_actors(
-                &mut actors,
-                &self.state.screens.select_profile_state,
-                &self.asset_manager,
-                screen_alpha_multiplier,
-                visual_policy,
-            ),
             CurrentScreen::SelectColor => select_color::push_actors(
                 &mut actors,
                 &self.state.screens.select_color_state,
@@ -7954,55 +8149,162 @@ impl App {
                 visual_policy,
             ),
             CurrentScreen::SelectStyle => {
-                select_style::push_actors(
-                    &mut actors,
-                    &self.state.screens.select_style_state,
-                    visual_policy,
-                );
+                let screens = &mut self.state.screens;
+                if let Some(selection) = &mut screens.selection_presentation {
+                    select_style::with_play_selection_view(&screens.select_style_state, |view| {
+                        selection.push_play_selection(&mut actors, view, arrow_effect_time_s);
+                    });
+                } else {
+                    select_style::push_actors(&mut actors, &screens.select_style_state, visual_policy);
+                }
             }
-            CurrentScreen::SelectPlayMode => select_mode::push_actors(
-                &mut actors,
-                &self.state.screens.select_play_mode_state,
-                &self.asset_manager,
-                visual_policy,
-            ),
+            CurrentScreen::SelectPlayMode => {
+                let screens = &mut self.state.screens;
+                if let Some(selection) = &mut screens.selection_presentation {
+                    select_mode::with_play_selection_view(&screens.select_play_mode_state, |view| {
+                        selection.push_play_selection(&mut actors, view, arrow_effect_time_s);
+                    });
+                } else {
+                    select_mode::push_actors(
+                        &mut actors,
+                        &screens.select_play_mode_state,
+                        &self.asset_manager,
+                        visual_policy,
+                    );
+                }
+            }
             CurrentScreen::ProfileLoad => {
-                profile_load::push_actors(
-                    &mut actors,
-                    &self.state.screens.profile_load_state,
-                    visual_policy,
-                );
+                let state = &self.state.screens.profile_load_state;
+                if let Some(selection) = &self.state.screens.selection_presentation {
+                    selection.push_profile_load(
+                        &mut actors,
+                        &deadsync_theme_simply_love::i18n::tr("Common", "Loading"),
+                        profile_load::elapsed_seconds(state),
+                    );
+                } else {
+                    profile_load::push_actors(&mut actors, state, visual_policy);
+                }
             }
             CurrentScreen::SelectMusic => {
-                select_music::push_actors(
-                    &mut actors,
-                    &self.state.screens.select_music_state,
-                    &self.asset_manager,
-                    self.state.session.played_stages.len() + 1,
-                    visual_policy,
-                );
+                let state = &self.state.screens.select_music_state;
+                let stage_number = self.state.session.played_stages.len() + 1;
+                if let Some(selection) = &self.state.screens.selection_presentation {
+                    let loaded_banner = self.dynamic_media.loaded_banner_key()
+                        .filter(|_| policy.show_select_music_banners);
+                    let view = select_music::select_music_view(state, stage_number, loaded_banner);
+                    selection.push_music(
+                        &mut actors,
+                        view,
+                        self.wheel_media_frame(policy.show_select_music_banners),
+                    );
+                    select_music::push_select_music_overlays(
+                        &mut actors,
+                        state,
+                        &self.asset_manager,
+                        visual_policy,
+                        false,
+                        Some(selection.profile_picker()),
+                    );
+                } else {
+                    select_music::push_actors(
+                        &mut actors, state, &self.asset_manager, stage_number, visual_policy,
+                    );
+                }
             }
-            CurrentScreen::SelectCourse => select_course::push_actors(
-                &mut actors,
-                &self.state.screens.select_course_state,
-                &self.asset_manager,
-                visual_policy,
-            ),
+            CurrentScreen::SelectCourse => {
+                let state = &self.state.screens.select_course_state;
+                if let Some(selection) = &self.state.screens.selection_presentation {
+                    let loaded_banner = self.dynamic_media.loaded_banner_key()
+                        .filter(|_| policy.show_select_music_banners);
+                    let view = select_course::select_course_view(state, loaded_banner);
+                    selection.push_course(
+                        &mut actors,
+                        view,
+                        self.wheel_media_frame(policy.show_select_music_banners),
+                    );
+                    select_course::push_exit_prompt(&mut actors, state, visual_policy);
+                } else {
+                    select_course::push_actors(
+                        &mut actors,
+                        state,
+                        &self.asset_manager,
+                        visual_policy,
+                    );
+                }
+            }
             CurrentScreen::Sandbox => sandbox::push_actors(
                 &mut actors,
                 &self.state.screens.sandbox_state,
                 visual_policy,
             ),
             CurrentScreen::Init => {
-                init::push_actors(&mut actors, &self.state.screens.init_state, visual_policy);
+                let screens = &mut self.state.screens;
+                if screens.startup_load.is_loading() {
+                    screens.startup_screen.push_loading(
+                        &mut actors,
+                        screens.startup_load.view(),
+                        &self.frame_config,
+                    );
+                } else if let Some(intro) = &mut screens.attract {
+                    if let Some(demo) = intro.demo.as_mut() {
+                        let music_time = demo.stage.current_music_time_display();
+                        intro.timeline.push_demo_underlay(&mut actors, music_time);
+                        gameplay_segments = Some(crate::gameplay_runtime::push_actors(
+                            &mut actors,
+                            &mut demo.stage,
+                            &self.asset_manager,
+                            gameplay::ActorViewOverride {
+                                hide_gameplay_hud: demo.request.hide_gameplay_hud,
+                                ..Default::default()
+                            },
+                            arrow_effect_time_s,
+                            visual_policy,
+                        ));
+                        intro.timeline.push_demo_overlay(&mut actors, music_time);
+                    } else {
+                        intro.timeline.push_actors(&mut actors, intro.video_key.as_ref());
+                    }
+                } else {
+                    screens.startup_screen.push_intro(&mut actors, &self.frame_config);
+                }
             }
             CurrentScreen::Evaluation => {
-                ActiveTheme::push_evaluation_actors(
-                    &mut actors,
-                    &self.state.screens.evaluation_state,
-                    &self.asset_manager,
-                    visual_policy,
-                );
+                let screens = &mut self.state.screens;
+                let departure_elapsed = match self.state.shell.transition {
+                    TransitionState::FadingOut { elapsed, .. }
+                        if screens.evaluation_departure.is_some() => Some(elapsed),
+                    _ => None,
+                };
+                let overview = screens.evaluation_overview.as_ref().and_then(|page| {
+                    let frame = ActiveTheme::evaluation_capture_view(&screens.evaluation_state);
+                    (frame.overview || departure_elapsed.is_some()).then_some((page, frame.elapsed))
+                });
+                if let Some((page, elapsed)) = overview
+                    && let Some(presentation) = screens.stage_presentation.evaluation_overview()
+                {
+                    presentation.push_overview(
+                        &mut actors,
+                        &self.asset_manager,
+                        page.view(
+                            &self.asset_manager,
+                            self.evaluation_policy.context().translated_titles,
+                            elapsed,
+                            departure_elapsed,
+                        ),
+                    );
+                    ActiveTheme::push_evaluation_overlays(
+                        &mut actors,
+                        &screens.evaluation_state,
+                        &self.asset_manager,
+                    );
+                } else {
+                    ActiveTheme::push_evaluation_actors(
+                        &mut actors,
+                        &screens.evaluation_state,
+                        &self.asset_manager,
+                        visual_policy,
+                    );
+                }
             }
             CurrentScreen::EvaluationSummary => {
                 let stages = PostSelectStageView::new(
@@ -8049,16 +8351,30 @@ impl App {
         }
 
         if self.frame_config.twitch.enabled {
-            self.twitch.push(
+            let screen = self.state.screens.current_screen;
+            let sides = match self.twitch_chat_sides {
+                Some((previous, sides)) if previous == screen => sides,
+                _ => {
+                    let session = profile::get_session_snapshot();
+                    let sides = [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2]
+                        .map(|side| session.side_joined(side));
+                    self.twitch_chat_sides = Some((screen, sides));
+                    sides
+                }
+            };
+            let (entries, revision) = self.twitch.snapshot();
+            self.twitch_chat.push_chat(
                 &mut actors,
-                self.state.screens.current_screen,
-                self.state
-                    .screens
-                    .gameplay_state
-                    .as_ref()
-                    .map(gameplay::twitch_chat_layout),
-                self.frame_config.tournament.enabled,
                 &self.asset_manager,
+                deadsync_theme::views::TwitchChatView {
+                    screen,
+                    gameplay: self.state.screens.gameplay_state.as_ref().map(gameplay::twitch_chat_layout),
+                    tournament: self.frame_config.tournament.enabled,
+                    sides,
+                    entries,
+                    revision,
+                    options: self.frame_config.twitch,
+                },
             );
         }
 
@@ -8103,10 +8419,16 @@ impl App {
         self.append_gameplay_offset_prompt_actors(&mut actors);
 
         match &self.state.shell.transition {
-            TransitionState::FadingOut { target, .. } => {
-                let (out_actors, _) =
-                    self.get_out_transition_for_route(self.state.screens.current_screen, *target);
-                actors.extend(out_actors);
+            TransitionState::FadingOut { target, elapsed, .. } => {
+                if let Some(outro) = self.state.screens.gameplay_outro.as_ref() {
+                    outro.push_actors(&mut actors, *elapsed);
+                } else if let Some(exit) = self.state.screens.evaluation_departure.as_ref() {
+                    (exit.push_overlay)(&mut actors, *elapsed);
+                } else {
+                    let (out_actors, _) =
+                        self.get_out_transition_for_route(self.state.screens.current_screen, *target);
+                    actors.extend(out_actors);
+                }
             }
             TransitionState::FadingIn { .. } => {
                 let (in_actors, _) =
@@ -8116,10 +8438,9 @@ impl App {
             _ => {}
         }
 
-        if self.state.screens.current_screen == ActiveTheme::SCREENS.menu {
-            ActiveTheme::push_menu_exit_overlay(
+        if self.state.screens.current_screen == CurrentScreen::Menu {
+            self.state.screens.menu_state.push_exit_overlay(
                 &mut actors,
-                &self.state.screens.menu_state,
                 &self.state.shell.transition,
                 visual_policy,
             );
@@ -8415,8 +8736,7 @@ impl App {
                     return;
                 };
                 debug_assert!(self.theme_effect_scratch.is_empty());
-                ActiveTheme::handle_player_options_raw_key(
-                    po_state,
+                po_state.handle_raw_key(
                     None,
                     Some(text),
                     ctrl_held,
@@ -8477,10 +8797,7 @@ impl App {
             }
             RawKeyScreenRoute::Menu => {
                 self.sync_main_menu_runtime_view();
-                let action = ActiveTheme::handle_menu_raw_key(
-                    &mut self.state.screens.menu_state,
-                    &raw_key,
-                );
+                let action = self.state.screens.menu_state.handle_raw_key(&raw_key);
                 if self.handle_theme_input_result(event_loop, action, "Menu") {
                     return true;
                 }
@@ -8599,8 +8916,7 @@ impl App {
                 // open, then Backspace/Enter/Escape/arrows/Tab while open.
                 if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
                     debug_assert!(self.theme_effect_scratch.is_empty());
-                    let consumed = ActiveTheme::handle_player_options_raw_key(
-                        po_state,
+                    let consumed = po_state.handle_raw_key(
                         Some(&raw_key),
                         None,
                         ctrl_held,
@@ -8620,8 +8936,8 @@ impl App {
                     .player_options_state
                     .as_ref()
                     .is_some_and(|state| {
-                        ActiveTheme::player_options_selection(state).return_screen
-                            == ActiveTheme::SCREENS.song_selection
+                        state.selection().return_screen
+                            == CurrentScreen::SelectMusic
                     });
                 if returns_to_select_music {
                     debug_assert!(self.theme_effect_scratch.is_empty());
@@ -8654,7 +8970,7 @@ impl App {
                 }
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 let consumed = if let Some(state) = self.state.screens.practice_state.as_mut() {
-                    crate::gameplay_runtime::handle_practice_raw_key::<ActiveTheme, _, _>(
+                    crate::gameplay_runtime::handle_practice_raw_key(
                         state,
                         &raw_key,
                         &mut self.audio,
@@ -8673,6 +8989,9 @@ impl App {
                 }
             }
             RawKeyScreenRoute::Evaluation => {
+                if self.state.screens.evaluation_departure.is_some() {
+                    return true;
+                }
                 ActiveTheme::handle_evaluation_raw_key(
                     &mut self.state.screens.evaluation_state,
                     &raw_key,
@@ -8938,7 +9257,7 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let config = config::runtime::get();
-        let from_player_options = prev == ActiveTheme::SCREENS.player_options;
+        let from_player_options = prev == CurrentScreen::PlayerOptions;
         let player_options = if from_player_options {
             let session = profile::get_session_snapshot();
             self.state
@@ -8946,7 +9265,7 @@ impl App {
                 .player_options_state
                 .as_ref()
                 .map(|state| {
-                    let selection = ActiveTheme::player_options_selection(state);
+                    let selection = state.selection();
                     (selection.scroll_speeds, selection.preferred, selection.music_rate)
                 })
                 .or_else(|| {
@@ -8969,15 +9288,32 @@ impl App {
             None
         };
         let submitted_music_rate = player_options.as_ref().map(|options| options.music_rate);
-        let plan = transition_effect_plan::<ActiveTheme>(
+        let entry_music = (target == CurrentScreen::Evaluation).then(|| {
+            use deadsync_theme::TransitionMusic;
+            if prev == target {
+                TransitionMusic::Keep
+            } else {
+                self.state.screens.stage_presentation.evaluation_audio().music_loop.map_or(
+                    TransitionMusic::Stop,
+                    |asset| TransitionMusic::Play {
+                        path: deadsync_assets::resolve_asset_path(asset),
+                        looping: true,
+                    },
+                )
+            }
+        });
+        let transitions = self.state.screens.transitions;
+        let plan = transition_effect_plan(
             TransitionEffectContext {
                 previous: prev,
                 target,
+                entry_music,
                 player_options,
-                select_music_preferred_difficulty: (prev == ActiveTheme::SCREENS.song_selection)
+                select_music_preferred_difficulty: (prev == CurrentScreen::SelectMusic)
                     .then_some(self.state.screens.select_music_state.preferred_difficulty_index),
             },
-            screen_nav::transition_audio_context(&config),
+            |from, to| (transitions.music)(from, to, deadsync_theme::TransitionKind::Global, &config),
+            transitions.stop_screen_sfx_on_exit,
         );
         // Lua Sound actors and their detached overlapping voices belong to the
         // outgoing gameplay screen, including an authored gameplay reload.
@@ -9057,6 +9393,18 @@ impl App {
     }
 
     fn prepare_screen_state(&mut self, prev: CurrentScreen, target: CurrentScreen) {
+        if prev == CurrentScreen::Init && target != CurrentScreen::Init
+            && let Some(intro) = self.state.screens.attract.as_mut()
+        {
+            self.audio.stop_music();
+            if intro.demo.is_some() {
+                self.audio.stop_mine_sfx();
+            }
+            if let Some(backend) = self.backend.as_mut() {
+                self.dynamic_media.set_background(&mut self.asset_manager, backend, None, 0.0, false);
+            }
+            intro.reset();
+        }
         // A preview's audio stops with the screen; its download stops here,
         // and so does a pack sync measure that is still running. So does a
         // rip still looking for songs -- every counted request it would go on
@@ -9065,7 +9413,7 @@ impl App {
             deadsync_online::smo_songs::runtime_preview_stop();
             deadsync_online::rip_packs::runtime_stop_search();
             self.sync_analysis
-                .cancel(SimplyLoveSyncOwner::ContentBrowserPack);
+                .cancel(SyncOwner::ContentBrowserPack);
         }
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
@@ -9078,11 +9426,18 @@ impl App {
         if target == CurrentScreen::Menu {
             self.state.session.reset_for_menu(profile::combo_carry());
             self.state.screens.course_evaluation.reset();
-            ActiveTheme::reset_menu(&mut self.state.screens.menu_state);
+            self.state.screens.menu_state.reset();
         } else if target == CurrentScreen::Init {
-            let active_color_index = ActiveTheme::menu_color_index(&self.state.screens.menu_state);
-            init::replay_intro(&mut self.state.screens.init_state);
-            self.state.screens.init_state.active_color_index = active_color_index;
+            let active_color_index = self.state.screens.menu_state.color_index();
+            self.state.screens.startup_screen.reset_intro(active_color_index);
+            if prev == CurrentScreen::Menu
+                && let Some(intro) = self.state.screens.attract.as_mut()
+            {
+                let (song_limit, course_limit) = intro.timeline.record_limits();
+                intro.timeline.start_idle(
+                    deadsync_profile_gameplay::cabinet_records::recent_records(song_limit, course_limit),
+                );
+            }
         } else if target == CurrentScreen::Options {
             self.reset_options_state_for_entry(prev);
         } else if target == CurrentScreen::ContentBrowser {
@@ -9092,7 +9447,7 @@ impl App {
             self.browser_skin
                 .want(browser_skin::preview_noteskin_name());
             self.state.screens.content_browser_state.active_color_index =
-                ActiveTheme::menu_color_index(&self.state.screens.menu_state);
+                self.state.screens.menu_state.color_index();
         } else if target == CurrentScreen::Credits {
             self.state.screens.credits_state = credits::init();
             self.state.screens.credits_state.active_color_index =
@@ -9150,7 +9505,7 @@ impl App {
             let color_index =
                 ActiveTheme::profile_picker_color_index(&self.state.screens.select_profile_state);
             let view = crate::local_profiles::picker_view();
-            let context = crate::screen_flow::profile_picker_context::<ActiveTheme>(
+            let context = crate::screen_flow::profile_picker_context(
                 prev,
                 color_index,
                 self.state.session.menu_start_side,
@@ -9164,11 +9519,17 @@ impl App {
             );
             self.state.screens.select_profile_state = ActiveTheme::init_profile_picker(view, context);
         } else if target == CurrentScreen::SelectStyle {
+            if let Some(selection) = self.state.screens.selection_presentation.as_mut() {
+                selection.enter_play_selection();
+            }
             let current_color_index = self.state.screens.select_style_state.active_color_index;
             self.state.screens.select_style_state =
                 select_style::init(crate::select_flow::runtime_view());
             self.state.screens.select_style_state.active_color_index = current_color_index;
         } else if target == CurrentScreen::SelectPlayMode {
+            if let Some(selection) = self.state.screens.selection_presentation.as_mut() {
+                selection.enter_play_selection();
+            }
             let current_color_index = match prev {
                 CurrentScreen::SelectStyle => {
                     self.state.screens.select_style_state.active_color_index
@@ -9179,7 +9540,7 @@ impl App {
                 CurrentScreen::SelectProfile => {
                     ActiveTheme::profile_picker_color_index(&self.state.screens.select_profile_state)
                 }
-                CurrentScreen::Menu => ActiveTheme::menu_color_index(&self.state.screens.menu_state),
+                CurrentScreen::Menu => self.state.screens.menu_state.color_index(),
                 _ => self.state.screens.select_play_mode_state.active_color_index,
             };
             self.state.screens.select_play_mode_state =
@@ -9200,7 +9561,7 @@ impl App {
                 CurrentScreen::SelectProfile => {
                     ActiveTheme::profile_picker_color_index(&self.state.screens.select_profile_state)
                 }
-                CurrentScreen::Menu => ActiveTheme::menu_color_index(&self.state.screens.menu_state),
+                CurrentScreen::Menu => self.state.screens.menu_state.color_index(),
                 _ => self.state.screens.profile_load_state.active_color_index,
             };
             self.state.screens.profile_load_state = profile_load::init();
@@ -9208,7 +9569,6 @@ impl App {
             let profiles = profile::load_default_profiles_for_joined_sides();
             self.sync_profile_load_state(&profiles);
             let play_mode = profile::get_session_play_mode();
-            profile_load::on_enter(&mut self.state.screens.profile_load_state, play_mode);
             let select_music =
                 self.coin_select_music_init_view(crate::select_music::init_view(&self.dirs));
             self.profile_load.start(play_mode, select_music);
@@ -9224,7 +9584,7 @@ impl App {
                     warn!("Unable to prepare PlayerOptions for the selected course.");
                 }
             } else {
-                let selection = (prev == ActiveTheme::SCREENS.song_selection)
+                let selection = (prev == CurrentScreen::SelectMusic)
                     .then(|| self.take_ready_song_selection(StageLaunchTarget::PlayerOptions))
                     .flatten()
                     .or_else(|| {
@@ -9236,25 +9596,28 @@ impl App {
                 );
 
                 let color_index = self.state.screens.select_music_state.active_color_index;
-                let return_screen = if prev == ActiveTheme::SCREENS.practice {
-                    ActiveTheme::SCREENS.practice
+                let return_screen = if prev == CurrentScreen::Practice {
+                    CurrentScreen::Practice
                 } else {
-                    ActiveTheme::SCREENS.song_selection
+                    CurrentScreen::SelectMusic
                 };
                 self.state.screens.player_options_state =
-                    Some(ActiveTheme::init_player_options(PlayerOptionsEntry {
-                        song: selection.song,
-                        steps: chart_steps_index,
-                        preferred: preferred_difficulty_index,
-                        color_index,
-                        return_screen,
-                        fixed_stepchart_label: None,
-                        noteskin_catalog: noteskin_catalog_view(&self.dirs),
-                        smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
-                        heart_rate_devices: crate::heart_rate::devices_view(),
-                        view: crate::player_options::init_view(),
-                        scroll_speeds: None,
-                    }));
+                    Some(crate::player_options::PlayerOptionsState::new(
+                        PlayerOptionsEntry {
+                            song: selection.song,
+                            steps: chart_steps_index,
+                            preferred: preferred_difficulty_index,
+                            color_index,
+                            return_screen,
+                            fixed_stepchart_label: None,
+                            noteskin_catalog: noteskin_catalog_view(&self.dirs),
+                            smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
+                            heart_rate_devices: crate::heart_rate::devices_view(),
+                            view: crate::player_options::init_view(),
+                            scroll_speeds: None,
+                        },
+                        self.state.screens.player_options_layout,
+                    ));
             }
         } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {
             if self.state.session.course_run.is_some() && self.pending_song_lua_reload.is_none() {
@@ -9295,12 +9658,12 @@ impl App {
         if target == CurrentScreen::PlayerOptions
             && let Some(state) = self.state.screens.player_options_state.as_mut()
         {
-            ActiveTheme::prepare_player_options(state, &self.asset_manager);
+            state.prepare(&self.asset_manager);
         }
     }
 
     fn sync_screen_color_index(&mut self, idx: i32) {
-        ActiveTheme::set_menu_color_index(&mut self.state.screens.menu_state, idx);
+        self.state.screens.menu_state.set_color_index(idx);
         ActiveTheme::set_profile_picker_color_index(&mut self.state.screens.select_profile_state, idx);
         self.state.screens.select_style_state.active_color_index = idx;
         self.state.screens.select_play_mode_state.active_color_index = idx;
@@ -9333,6 +9696,11 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let mut commands = Vec::new();
+        if target == CurrentScreen::PlayerOptions
+            && self.state.screens.player_options_state.is_some()
+        {
+            self.ui_sfx.play_cue(&mut self.audio, UiCue::OpenPlayerOptions);
+        }
         if matches!(target, CurrentScreen::Gameplay | CurrentScreen::Practice) {
             // The shared SRPG background is hidden for the whole stage. Clear
             // its key once on entry instead of taking its global mutex every
@@ -9477,17 +9845,19 @@ impl App {
 
                 let stage_options = start.options;
                 let music_rate = stage_options.music_rate;
-                let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
+                let (player_profiles, scroll_speeds) = deadsync_profile_gameplay::stage_options::gameplay_profiles(
                     crate::player_options::active_profiles(),
                     &song_arc,
                     stage_options,
                     cfg.tournament,
                     play_style,
                     false,
+                    cfg.enable_golf,
                 );
 
                 let mut gameplay_session = gameplay_session();
                 let presentation_init = gameplay_presentation_init(&cfg, &player_profiles);
+                let presentation = self.gameplay_presentation;
                 let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
                     lobby_views::refresh(),
                     &charts,
@@ -9569,13 +9939,15 @@ impl App {
                         replay: None,
                         course: None,
                     };
-                    let present = ActiveTheme::gameplay_presenter(presentation_init);
+                    (presentation.prepare)(&mut prepared);
                     let gs = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
                         None,
                         gameplay_startup,
-                        |stage, assets, scores| present(stage, assets, &view, scores),
+                        |stage, assets, scores| {
+                            (presentation.build)(stage, assets, &view, presentation_init, scores)
+                        },
                     );
                     Ok(gs)
                 };
@@ -9665,12 +10037,24 @@ impl App {
                     &stage,
                     gameplay_results.setup.session.joined_sides,
                 );
+                let stage_number = self.state.session.active_stage_number();
                 let _ = self.record_stage_result(stage.clone(), failed, &config, false);
-                let init_view = Self::evaluation_init_view(&gameplay_results, &stage, &config);
-                let eval_state = ActiveTheme::init_evaluation(init_view, color_idx);
+                let (init_view, context) =
+                    Self::evaluation_entry(&gameplay_results, &stage, stage_number, &config);
+                let overview = evaluation_views::prepare_overview(
+                    self.state.screens.stage_presentation.evaluation_overview().is_some(),
+                    &init_view.score_info,
+                    init_view.routine_shared_score_percent,
+                    init_view.stage_number,
+                    context.play_style,
+                );
+                let capture = EvaluationCapture::from_scores(&init_view.score_info);
+                let eval_state = ActiveTheme::init_evaluation(init_view, context, color_idx);
                 self.state.screens.course_evaluation.stages.push(CourseEvaluationPage {
                     view: eval_state,
+                    overview,
                     stage: evaluation_stage,
+                    capture,
                 });
             }
 
@@ -9875,21 +10259,26 @@ impl App {
                 } else if cfg.keyboard_features && self.state.session.gameplay_restart_count > 0 {
                     GameplayStageIntro::Restart(self.state.session.gameplay_restart_count)
                 } else {
-                    GameplayStageIntro::Song
+                    GameplayStageIntro::Song {
+                        round: (!cfg.coin.event_mode())
+                            .then(|| self.state.session.active_stage_number()),
+                    }
                 };
                 let combo_carry = self.state.session.combo_carry;
                 let stage_options = start.options;
                 let music_rate = stage_options.music_rate;
-                let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
+                let (player_profiles, scroll_speeds) = deadsync_profile_gameplay::stage_options::gameplay_profiles(
                     crate::player_options::active_profiles(),
                     &song_arc,
                     stage_options,
                     cfg.tournament,
                     play_style,
                     replay_offsets.is_some(),
+                    cfg.enable_golf,
                 );
                 let mut gameplay_session = gameplay_session();
                 let presentation_init = gameplay_presentation_init(&cfg, &player_profiles);
+                let presentation = self.gameplay_presentation;
                 let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
                     self.gameplay_lobby.refresh_now(),
                     &charts,
@@ -9994,13 +10383,15 @@ impl App {
                     prepared.resolve_song_backgrounds(init_config.random_background_mode);
                     let course_title = course.as_ref().map(|course| course.title.as_str());
                     let view = GameplayStageView { intro, replay, course: course.clone() };
-                    let present = ActiveTheme::gameplay_presenter(presentation_init);
+                    (presentation.prepare)(&mut prepared);
                     let mut state = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
                         course_title,
                         gameplay_startup,
-                        |stage, assets, scores| present(stage, assets, &view, scores),
+                        |stage, assets, scores| {
+                            (presentation.build)(stage, assets, &view, presentation_init, scores)
+                        },
                     );
                     state.song_lua.restore_held_inputs(held_inputs);
                     Ok(state)
@@ -10065,15 +10456,16 @@ impl App {
             } else {
                 EvaluationOrigin::Song
             };
-            let (init_view, evaluation_stage, failed, completed_course) = if let Some(gameplay) =
+            let ((init_view, context), evaluation_stage, failed, completed_course) = if let Some(gameplay) =
                 gameplay_results.as_ref()
             {
                 let stage = Self::gameplay_stage_result(&gameplay.stage);
                 let failed =
                     stage_stats::all_players_failed(&stage, gameplay.setup.session.joined_sides);
+                let stage_number = self.state.session.active_stage_number();
                 let completed = self.record_stage_result(stage.clone(), failed, &config, true);
                 (
-                    Self::evaluation_init_view(gameplay, &stage, &config),
+                    Self::evaluation_entry(gameplay, &stage, stage_number, &config),
                     EvaluationStage::from_gameplay_result(&gameplay.stage.gameplay, &stage),
                     failed,
                     completed,
@@ -10083,9 +10475,18 @@ impl App {
                 if completed.is_some() {
                     self.state.coin.record_course_stage();
                 }
-                (EvaluationInitView::default(), None, false, completed)
+                ((Default::default(), Default::default()), None, false, completed)
             };
-            self.state.screens.evaluation_state = ActiveTheme::init_evaluation(init_view, color_idx);
+            self.state.screens.evaluation_overview = evaluation_views::prepare_overview(
+                self.state.screens.stage_presentation.evaluation_overview().is_some(),
+                &init_view.score_info,
+                init_view.routine_shared_score_percent,
+                init_view.stage_number,
+                context.play_style,
+            );
+            self.state.screens.evaluation_capture = EvaluationCapture::from_scores(&init_view.score_info);
+            self.state.screens.evaluation_state =
+                ActiveTheme::init_evaluation(init_view, context, color_idx);
             self.state.screens.evaluation_stage = evaluation_stage;
             let session_elapsed = self.state.session.session_start_time.map_or(0.0, |start| {
                 Instant::now().duration_since(start).as_secs_f32()
@@ -10104,7 +10505,9 @@ impl App {
                     .stages
                     .push(CourseEvaluationPage {
                         view: self.state.screens.evaluation_state.clone(),
+                        overview: self.state.screens.evaluation_overview.clone(),
                         stage: self.state.screens.evaluation_stage.clone(),
+                        capture: self.state.screens.evaluation_capture,
                     });
             }
             self.finalize_entered_evaluation(&config, failed, completed_course);
@@ -10131,7 +10534,7 @@ impl App {
                         .active_color_index
                 }
             };
-            let return_to = evaluation_summary_return_to::<ActiveTheme>(
+            let return_to = evaluation_summary_return_to(
                 prev,
                 std::mem::take(&mut self.state.session.pending_post_select_summary_exit),
             );
@@ -10229,6 +10632,7 @@ impl App {
 
             match prev {
                 CurrentScreen::PlayerOptions => {
+                    select_music::release_chance_lock(&mut self.state.screens.select_music_state);
                     select_music::sync_profile_picker(
                         &mut self.state.screens.select_music_state,
                         crate::local_profiles::picker_view(),
@@ -10240,7 +10644,7 @@ impl App {
                         .preferred_difficulty_index = preferred;
 
                     if let Some(po) = self.state.screens.player_options_state.as_ref() {
-                        let po = ActiveTheme::player_options_selection(po);
+                        let po = po.selection();
                         match profile_session.play_style {
                             profile_data::PlayStyle::Versus
                             | profile_data::PlayStyle::PumpVersus
@@ -10282,12 +10686,8 @@ impl App {
                     let desired_steps_index =
                         self.state.screens.select_music_state.selected_steps_index;
 
-                    if let Some(select_music::MusicWheelEntry::Song(song)) = self
-                        .state
-                        .screens
-                        .select_music_state
-                        .entries
-                        .get(self.state.screens.select_music_state.selected_index)
+                    if let Some(song) =
+                        select_music::focused_song(&self.state.screens.select_music_state)
                     {
                         let chart_type = profile_session.play_style.chart_type();
                         if song
@@ -10400,86 +10800,40 @@ impl App {
             // render immediately on entry (no initial debounce delay).
             select_music::prime_displayed_chart_data(&mut self.state.screens.select_music_state);
 
+            let state = &self.state.screens.select_music_state;
+            let song = select_music::focused_song(state);
             // Load the selected entry's banner during the fade-in so it appears immediately.
-            let banner_path = wheel_banner_path(
-                self.state
-                    .screens
-                    .select_music_state
-                    .entries
-                    .get(self.state.screens.select_music_state.selected_index),
+            let banner_path = song.map_or_else(
+                || wheel_banner_path(state.entries.get(state.selected_index)),
+                |song| song.banner_path.clone(),
             );
             commands.push(Command::SetBanner(banner_path));
-            let cdtitle_path = match self
-                .state
-                .screens
-                .select_music_state
-                .entries
-                .get(self.state.screens.select_music_state.selected_index)
-            {
-                Some(select_music::MusicWheelEntry::Song(song)) => song.cdtitle_path.clone(),
-                _ => None,
-            };
-            commands.push(Command::SetCdTitle(cdtitle_path));
+            commands.push(Command::SetCdTitle(
+                song.and_then(|song| song.cdtitle_path.clone()),
+            ));
 
             // Pre-render the density graph during the fade-in so the panel isn't blank on entry.
-            let chart_to_graph = match self
-                .state
-                .screens
-                .select_music_state
-                .entries
-                .get(self.state.screens.select_music_state.selected_index)
-            {
-                Some(select_music::MusicWheelEntry::Song(song)) => {
-                    let chart_type = profile_session.play_style.chart_type();
-                    song.chart_for_steps_index(
-                        chart_type,
-                        self.state.screens.select_music_state.selected_steps_index,
-                    )
-                    .map(|c| DensityGraphSource {
-                        max_nps: c.max_nps,
-                        measure_nps_vec: c.measure_nps_vec.clone(),
-                        measure_seconds_vec: c.measure_seconds_vec.clone(),
-                        first_second: c.first_second,
-                        last_second: song.precise_last_second(),
-                    })
-                }
-                _ => None,
+            let chart_type = profile_session.play_style.chart_type();
+            let chart_to_graph = |steps_index| {
+                let song = song?;
+                let chart = song.chart_for_steps_index(chart_type, steps_index)?;
+                Some(DensityGraphSource {
+                    max_nps: chart.max_nps,
+                    measure_nps_vec: chart.measure_nps_vec.clone(),
+                    measure_seconds_vec: chart.measure_seconds_vec.clone(),
+                    first_second: chart.first_second,
+                    last_second: song.precise_last_second(),
+                })
             };
             commands.push(Command::SetDensityGraph {
                 slot: DensityGraphSlot::SelectMusicP1,
-                chart_opt: chart_to_graph,
+                chart_opt: chart_to_graph(state.selected_steps_index),
             });
 
             if profile_session.play_style.is_versus() {
-                let chart_to_graph_p2 = match self
-                    .state
-                    .screens
-                    .select_music_state
-                    .entries
-                    .get(self.state.screens.select_music_state.selected_index)
-                {
-                    Some(select_music::MusicWheelEntry::Song(song)) => {
-                        let chart_type = profile_session.play_style.chart_type();
-                        song.chart_for_steps_index(
-                            chart_type,
-                            self.state
-                                .screens
-                                .select_music_state
-                                .p2_selected_steps_index,
-                        )
-                        .map(|c| DensityGraphSource {
-                            max_nps: c.max_nps,
-                            measure_nps_vec: c.measure_nps_vec.clone(),
-                            measure_seconds_vec: c.measure_seconds_vec.clone(),
-                            first_second: c.first_second,
-                            last_second: song.precise_last_second(),
-                        })
-                    }
-                    _ => None,
-                };
                 commands.push(Command::SetDensityGraph {
                     slot: DensityGraphSlot::SelectMusicP2,
-                    chart_opt: chart_to_graph_p2,
+                    chart_opt: chart_to_graph(state.p2_selected_steps_index),
                 });
             }
 
@@ -10907,10 +11261,11 @@ pub fn run(
     audio: deadsync_audio_stream::AudioControl,
     music_clock: deadsync_audio_stream::MusicClock,
     live_case: Option<crate::live_case::LiveCase>,
+    mount: impl FnOnce(&config::app_config::Config) -> ThemeMount,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (config_generation, config) = config::runtime::snapshot();
     let show_stats_mode = config.show_stats_mode.min(2);
-    let color_index = config.simply_love_color;
+    let color_index = config.theme_color;
     let profile_data = profile::get();
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
     let mut app = App::new(
@@ -10923,6 +11278,7 @@ pub fn run(
         audio,
         music_clock,
         live_case,
+        mount(&config),
     );
 
     // Spawn background input backend threads; all input stays decoupled from frame rate.
@@ -10975,6 +11331,7 @@ const fn frame_screen_step_plan(context: FrameScreenStepContext) -> FrameScreenS
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+    use deadsync_theme_simply_love::screens::evaluation;
 
     #[test]
     fn screen_step_follows_transition_gate() {
@@ -11079,22 +11436,24 @@ mod tests {
 
     #[test]
     fn options_restores_main_row_only_from_standalone_main_list_children() {
-        assert!(options_entry_restores_main_selection(
-            CurrentScreen::ManageLocalProfiles
-        ));
-        assert!(options_entry_restores_main_selection(
-            CurrentScreen::Credits
-        ));
-
-        for screen in [
-            CurrentScreen::Menu,
-            CurrentScreen::Mappings,
-            CurrentScreen::Input,
-            CurrentScreen::ConfigurePads,
-            CurrentScreen::TestLights,
-            CurrentScreen::SmxAssignPads,
-        ] {
-            assert!(!options_entry_restores_main_selection(screen));
+        for from_main in [false, true] {
+            for screen in [CurrentScreen::ManageLocalProfiles, CurrentScreen::Credits] {
+                assert!(options_entry_restores_main_selection(screen, from_main));
+            }
+            for screen in [CurrentScreen::Mappings, CurrentScreen::Input] {
+                assert_eq!(
+                    options_entry_restores_main_selection(screen, from_main),
+                    from_main,
+                );
+            }
+            for screen in [
+                CurrentScreen::Menu,
+                CurrentScreen::ConfigurePads,
+                CurrentScreen::TestLights,
+                CurrentScreen::SmxAssignPads,
+            ] {
+                assert!(!options_entry_restores_main_selection(screen, from_main));
+            }
         }
     }
 
@@ -11224,7 +11583,7 @@ mod tests {
         assert!(policy.theme_background_video.is_none());
         assert!(!policy.show_select_music_banners);
         assert!(!policy.show_version_overlay);
-        assert_eq!(policy.visual, simply_love_visual_policy(&config));
+        assert_eq!(policy.visual, SimplyLoveVisualPolicyView::from_config(&config));
     }
 
     #[test]
@@ -11256,7 +11615,7 @@ mod tests {
     #[test]
     fn wheel_banner_path_owns_shared_pack_banner_for_shell_command() {
         let banner: Arc<Path> = Arc::from(PathBuf::from("Packs/Test/banner.png"));
-        let entry = select_music::MusicWheelEntry::PackHeader {
+        let entry = MusicWheelEntry::PackHeader {
             name: Arc::from("Test"),
             original_index: 0,
             banner_path: Some(Arc::clone(&banner)),
@@ -11270,79 +11629,6 @@ mod tests {
             Some(PathBuf::from("Packs/Test/banner.png"))
         );
         assert_eq!(wheel_banner_path(None), None);
-    }
-
-    #[test]
-    fn visual_policy_resolves_runtime_style_and_bar_choices() {
-        let mut config = config::app_config::Config {
-            visual_style: config::theme::VisualStyle::Technique,
-            machine_bar_color: config::theme::MachineBarColor::Transparent,
-            ..Default::default()
-        };
-        let technique = simply_love_visual_policy(&config);
-        assert_eq!(technique.background, VisualBackgroundView::Technique);
-        assert_eq!(technique.screen_bar, ScreenBarBackgroundView::Transparent);
-        assert!(!technique.srpg10_tint);
-
-        config.visual_style = config::theme::VisualStyle::Srpg9;
-        config.srpg_variant = config::theme::SrpgVariant::Srpg10;
-        config.machine_bar_color = config::theme::MachineBarColor::Colored;
-        config.simply_love_color = 4;
-        config.machine_font = config::theme::MachineFont::Mega;
-        let srpg10 = simply_love_visual_policy(&config);
-        assert_eq!(srpg10.background, VisualBackgroundView::Srpg);
-        assert_eq!(
-            srpg10.assets.shared_background,
-            visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant)
-                .shared_background
-        );
-        assert_eq!(
-            srpg10.screen_bar,
-            ScreenBarBackgroundView::Colored(color::srpg10_rgba(4))
-        );
-        assert!(srpg10.srpg10_tint);
-        assert_eq!(srpg10.machine_font, config::theme::MachineFont::Mega);
-        assert_eq!(
-            srpg10.title_logo_texture_key,
-            Some(visual_styles::SRPG10_TITLE_LOGO)
-        );
-    }
-
-    #[test]
-    fn ecs15_visual_policy_uses_curtains_logo_and_technique_defaults() {
-        let mut config = config::app_config::Config {
-            visual_style: config::theme::VisualStyle::Srpg9,
-            srpg_variant: config::theme::SrpgVariant::Ecs15,
-            ..Default::default()
-        };
-        let policy = FramePolicy::from_config(&config);
-        assert_eq!(policy.visual.background, VisualBackgroundView::Ecs15);
-        assert_eq!(policy.visual.assets, &visual_styles::ECS15_ASSETS);
-        assert_eq!(
-            policy.visual.title_logo_texture_key,
-            Some(visual_styles::ECS15_TITLE_LOGO)
-        );
-        assert_eq!(
-            policy.visual.screen_bar,
-            ScreenBarBackgroundView::Transparent
-        );
-        assert!(!policy.visual.srpg10_tint);
-        assert!(policy.theme_background_video.is_none());
-        config.machine_bar_color = config::theme::MachineBarColor::Colored;
-        assert_eq!(
-            simply_love_visual_policy(&config).screen_bar,
-            ScreenBarBackgroundView::Colored(color::decorative_rgba(config.simply_love_color))
-        );
-        config.visual_style = config::theme::VisualStyle::Hearts;
-        assert_eq!(
-            simply_love_visual_policy(&config).background,
-            VisualBackgroundView::Tiled
-        );
-        assert!(
-            simply_love_visual_policy(&config)
-                .title_logo_texture_key
-                .is_none()
-        );
     }
 
     fn test_chart(hash: &str) -> ChartData {
@@ -11431,12 +11717,12 @@ mod tests {
 
     #[test]
     fn music_preferences_snap_missing_medium() {
-        let chart_type = profile::get_session_play_style().chart_type();
+        let chart_type = SelectMusicSessionView::default().play_style.chart_type();
         let mut song = test_song("song.ssc", 0.0, ["hard", "unused"]);
         song.charts = vec![test_chart_with(chart_type, "Hard", "hard")];
 
         let mut state = select_music::init_placeholder();
-        state.entries = vec![select_music::MusicWheelEntry::Song(Arc::new(song))];
+        state.entries = vec![MusicWheelEntry::Song(Arc::new(song))];
         apply_music_preferences(&mut state, 2, 2);
 
         assert_eq!(state.selected_steps_index, 3);
@@ -11483,7 +11769,7 @@ mod tests {
         }
         let mut state = select_music::init_placeholder();
         sync_profile_music_session(&mut state, session);
-        state.entries = vec![select_music::MusicWheelEntry::Song(Arc::new(song))];
+        state.entries = vec![MusicWheelEntry::Song(Arc::new(song))];
         state.selected_steps_index = 4;
         state.preferred_difficulty_index = 4;
         state.p2_selected_steps_index = 1;
@@ -11624,8 +11910,8 @@ mod tests {
         hash: &str,
         speed_mod: ScrollSpeedSetting,
         music_rate: f32,
-    ) -> deadsync_theme_simply_love::views::ScoreInfo {
-        deadsync_theme_simply_love::views::ScoreInfo {
+    ) -> crate::session_results::EvaluationScoreView {
+        deadsync_theme::views::EvaluationView {
             song: song.clone(),
             chart: Arc::new(test_chart(hash)),
             course_graph_stages: Vec::new(),
@@ -11647,10 +11933,14 @@ mod tests {
                 let profile = profile::get_for_side(side);
                 profile_data::evaluation_mods_text(&profile, speed_mod)
             },
+            max_combo: 0,
+            combo_runs: Arc::from([]),
+            jumps: [0, 0],
             hands_achieved: 0,
             hands_total: 0,
             holds_held: 0,
             holds_held_for_score: 0,
+            dropped_hold_or_roll: false,
             holds_total: 0,
             rolls_held: 0,
             rolls_held_for_score: 0,
@@ -11667,6 +11957,7 @@ mod tests {
             graph_last_second: song.precise_last_second(),
             music_rate,
             life_history: Vec::new(),
+            steps_life: Default::default(),
             fail_time: None,
             window_counts: timing_rules::WindowCounts::default(),
             window_counts_10ms: timing_rules::WindowCounts::default(),
@@ -11793,6 +12084,7 @@ mod tests {
         CourseStageRuntime {
             song,
             steps_index: [0; MAX_PLAYERS],
+            jumps: [0; MAX_PLAYERS],
             preferred_difficulty_index: [0; MAX_PLAYERS],
             modifiers: String::new(),
             gain_seconds: 0.0,
@@ -11823,10 +12115,14 @@ mod tests {
             possible_grade_points,
             ex_score_percent: 100.0,
             hard_ex_score_percent: 100.0,
+            max_combo: 20,
+            combo_runs: Arc::from([]),
+            jumps: [0, 0],
             hands_achieved: 1,
             hands_total: 1,
             holds_held: 2,
             holds_held_for_score: 2,
+            dropped_hold_or_roll: false,
             holds_total: 2,
             rolls_held: 1,
             rolls_held_for_score: 1,
@@ -11872,6 +12168,7 @@ mod tests {
             graph_first_second: 0.0,
             graph_last_second: 60.0,
             life_history: vec![(0.0, 1.0), (60.0, 0.0)],
+            steps_life: Default::default(),
             fail_time: Some(60.0),
             show_w0: true,
             show_ex_score: true,
@@ -12162,7 +12459,10 @@ mod tests {
             stage_summaries: Vec::new(),
         };
         let mut session = SessionState::new(0, [0; MAX_PLAYERS]);
+        session.record_stage_result(stages[0].clone());
+        assert_eq!(session.active_stage_number(), 2);
         session.course_run = Some(course.clone());
+        assert_eq!(session.active_stage_number(), 1);
         session.record_stage_result(stages[0].clone());
         assert!(session.take_final_course(false).is_none());
         session
@@ -12172,11 +12472,12 @@ mod tests {
             .run
             .progress
             .finish_entry(false);
+        assert_eq!(session.active_stage_number(), 2);
         session.record_stage_result(stages[1].clone());
         let completed = session.take_final_course(false).expect("completed course");
         assert!(session.course_run.is_none());
-        assert_eq!(session.played_stages.len(), 2);
-        assert_eq!(session.course_individual_stage_indices, [0, 1]);
+        assert_eq!(session.played_stages.len(), 3);
+        assert_eq!(session.course_individual_stage_indices, [1, 2]);
         let summary = build_course_summary_stage(&completed).expect("canonical course result");
         let player = summary.players[1].as_ref().expect("P2 result");
         assert_eq!(player.calories_burned, 25.0);
@@ -12238,7 +12539,7 @@ mod tests {
     #[test]
     fn evaluation_summary_return_to_stays_in_select_music_for_set_summary() {
         assert_eq!(
-            evaluation_summary_return_to::<ActiveTheme>(CurrentScreen::SelectMusic, false),
+            evaluation_summary_return_to(CurrentScreen::SelectMusic, false),
             CurrentScreen::SelectMusic,
         );
     }
@@ -12246,11 +12547,11 @@ mod tests {
     #[test]
     fn evaluation_summary_return_to_keeps_exit_flow_moving() {
         assert_eq!(
-            evaluation_summary_return_to::<ActiveTheme>(CurrentScreen::SelectMusic, true),
+            evaluation_summary_return_to(CurrentScreen::SelectMusic, true),
             CurrentScreen::Initials,
         );
         assert_eq!(
-            evaluation_summary_return_to::<ActiveTheme>(CurrentScreen::SelectCourse, true),
+            evaluation_summary_return_to(CurrentScreen::SelectCourse, true),
             CurrentScreen::Initials,
         );
     }

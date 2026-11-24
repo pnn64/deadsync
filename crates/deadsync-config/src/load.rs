@@ -430,7 +430,7 @@ const fn apply_runtime_opts(
 }
 
 const fn apply_theme_presentation(loaded: ThemePresentationOptions, cfg: &mut Config) {
-    cfg.simply_love_color = loaded.simply_love_color;
+    cfg.theme_color = loaded.theme_color;
     cfg.show_select_music_gameplay_timer = loaded.show_select_music_gameplay_timer;
     cfg.keyboard_features = loaded.keyboard_features;
     cfg.visual_style = loaded.visual_style;

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use deadsync_theme::views::{
     AudioTimingView, CourseGraphStageView, CourseStageView, DensityGraphView, EvaluationView,
-    FrameStatsSample, SelectedCourseView, TimingHealthView,
+    FrameStatsSample, ScoreboxSideView, SelectedCourseView, TimingHealthView,
 };
 
 /// Concrete evaluation view used by the Simply Love screens.
@@ -93,6 +93,53 @@ pub enum VisualBackgroundView {
 }
 
 impl SimplyLoveVisualPolicyView {
+    pub fn from_config(config: &deadsync_config::app_config::Config) -> Self {
+        use crate::{color, visual_styles};
+
+        let srpg10 = config.visual_style.is_srpg()
+            && matches!(config.srpg_variant, deadsync_config::theme::SrpgVariant::Srpg10);
+        let ecs15 = visual_styles::ecs15_active(config.visual_style, config.srpg_variant);
+        let background = match config.visual_style {
+            _ if ecs15 => VisualBackgroundView::Ecs15,
+            deadsync_config::theme::VisualStyle::Technique => VisualBackgroundView::Technique,
+            deadsync_config::theme::VisualStyle::Srpg9 => VisualBackgroundView::Srpg,
+            _ => VisualBackgroundView::Tiled,
+        };
+        let screen_bar = match config
+            .machine_bar_color
+            .resolve(config.visual_style.presentation_style(config.srpg_variant))
+        {
+            deadsync_config::theme::MachineBarColor::Default => ScreenBarBackgroundView::Default,
+            deadsync_config::theme::MachineBarColor::Colored => ScreenBarBackgroundView::Colored(if srpg10 {
+                color::srpg10_rgba(config.theme_color)
+            } else if ecs15 {
+                color::decorative_rgba(config.theme_color)
+            } else {
+                color::srpg9_rgba(config.theme_color)
+            }),
+            deadsync_config::theme::MachineBarColor::Transparent => ScreenBarBackgroundView::Transparent,
+        };
+
+        Self {
+            background,
+            assets: visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant),
+            machine_font: config.machine_font,
+            title_logo_texture_key: if ecs15 {
+                Some(visual_styles::ECS15_TITLE_LOGO)
+            } else {
+                srpg10.then_some(visual_styles::SRPG10_TITLE_LOGO)
+            },
+            srpg10_tint: srpg10,
+            screen_bar,
+        }
+    }
+
+    /// The selected style's shared background movie, if video is enabled.
+    #[must_use]
+    pub fn background_video(self, enabled: bool) -> Option<&'static str> {
+        self.assets.shared_background_video.filter(|_| enabled)
+    }
+
     /// ECS15 replaces menu backdrops but retains Technique on music selection.
     #[must_use]
     pub fn music_selection_background(self) -> Self {
@@ -491,54 +538,6 @@ impl Default for EvaluationContextView {
     }
 }
 
-/// A view of the canonical completed stage; constructing a screen cannot
-/// determine the result later consumed by session or course bookkeeping.
-#[derive(Clone, Default)]
-pub struct EvaluationInitView {
-    pub score_info: [Option<ScoreInfo>; 2],
-    /// ScoreKeeperShared's Routine score, shown beside each participant's own.
-    pub routine_shared_score_percent: Option<f64>,
-    pub stage_duration_seconds: f32,
-    pub fail_stream_progress: [Option<(u32, u32)>; 2],
-    pub context: EvaluationContextView,
-}
-
-/// One normalized local score used by Simply Love's selected-chart scorebox.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct ScoreboxLocalView {
-    pub score_10000: f64,
-    pub failed: bool,
-}
-
-/// One normalized machine record used by Simply Love's selected-chart pane.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct ScoreboxMachineView {
-    pub name: String,
-    pub score_10000: f64,
-    pub failed: bool,
-}
-
-/// Shell-prepared score and leaderboard data for one Select Music side.
-#[derive(Clone, Debug, Default)]
-pub struct ScoreboxSideView {
-    pub joined: bool,
-    pub chart_hash: Option<String>,
-    /// Any online leaderboard service (GrooveStats, BoogieStats, or ArrowCloud)
-    /// can serve this side.
-    pub online_active: bool,
-    pub show_ex_score: bool,
-    pub pane_filter: deadsync_score::SelectMusicScoreboxFilter,
-    pub display_name: Arc<str>,
-    pub groovestats_username: Arc<str>,
-    pub player_initials: Arc<str>,
-    pub local_itg: Option<ScoreboxLocalView>,
-    pub local_ex: Option<ScoreboxLocalView>,
-    pub local_hard_ex: Option<ScoreboxLocalView>,
-    pub local_itl: Option<ScoreboxLocalView>,
-    pub machine_itg: Option<ScoreboxMachineView>,
-    pub leaderboards: Option<deadsync_score::CachedPlayerLeaderboardData>,
-}
-
 /// Selected player-slot charts whose scorebox data shell should prepare.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SelectMusicScoreboxRequest<'a> {
@@ -774,20 +773,7 @@ pub struct SelectCoursePresentationInitView {
     pub context: SelectCourseContextView,
 }
 
-/// Shell-prepared local profile catalog used by Manage Local Profiles.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ManageLocalProfilesView {
-    pub profiles: Vec<LocalProfileView>,
-    pub default_profile_ids: [Option<String>; 2],
-    pub dedicated_three_key_nav: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LocalProfileView {
-    pub id: String,
-    pub display_name: String,
-}
-
+pub use deadsync_theme::profile_picker::{LocalProfileView, ManageLocalProfilesView};
 pub use deadsync_profile::picker::{ProfilePickerEntryView, ProfilePickerView};
 
 /// Live session routing used throughout Select Music without reading the
@@ -940,79 +926,11 @@ impl Default for SelectMusicRuntimeView {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SimplyLoveContentReloadPhase {
-    Songs,
-    Courses,
-    Artwork,
-    Noteskins,
-    ReplayGain,
-}
-
-/// Progress and completion data produced by the shell-owned content reload
-/// worker. The completed cache snapshot lets the theme rebuild without reading
-/// the process-global runtime cache.
-#[derive(Clone, Debug)]
-pub enum SimplyLoveContentReloadEvent {
-    Phase(SimplyLoveContentReloadPhase),
-    Song {
-        done: usize,
-        total: usize,
-        pack: String,
-        song: String,
-    },
-    Course {
-        done: usize,
-        total: usize,
-        group: String,
-        course: String,
-    },
-    Artwork {
-        done: usize,
-        total: usize,
-        line2: String,
-        line3: String,
-    },
-    Noteskins {
-        done: usize,
-        total: usize,
-        skin: String,
-        status: String,
-    },
-    ReplayGain {
-        done: usize,
-        total: usize,
-        line2: String,
-        line3: String,
-    },
-    Finished {
-        song_packs: Vec<deadsync_chart::SongPack>,
-    },
-}
-
-/// Progress and completion data produced by the shell-owned bulk `ReplayGain`
-/// analysis worker triggered from the Sound options "Apply `ReplayGain`" action.
-#[derive(Clone, Debug)]
-pub enum SimplyLoveApplyReplayGainEvent {
-    /// Emitted once when the worker has enumerated the library and is about to
-    /// begin analysis.
-    Started { total: usize },
-    /// Emitted after each song finishes. `line2`/`line3` carry the pack and
-    /// song labels for display.
-    Progress {
-        done: usize,
-        total: usize,
-        line2: String,
-        line3: String,
-    },
-    /// Emitted once when the worker stops, either because it finished the whole
-    /// library or because it was cancelled.
-    Finished {
-        done: usize,
-        total: usize,
-        cancelled: bool,
-    },
-}
+pub use deadsync_assets::progress::{
+    ApplyReplayGainEvent as SimplyLoveApplyReplayGainEvent,
+    ContentReloadEvent as SimplyLoveContentReloadEvent,
+    ContentReloadPhase as SimplyLoveContentReloadPhase,
+};
 
 /// One shell-prepared unlock download row rendered by Select Music.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1127,6 +1045,10 @@ pub struct OptionsPackSyncView {
 #[derive(Clone, Debug)]
 pub struct OptionsInitView {
     pub config: deadsync_config::app_config::Config,
+    /// Mount basic and advanced pages over the same graphics settings.
+    pub split_graphics: bool,
+    pub service_order: &'static [deadsync_theme::views::SystemOptionsServiceRow],
+    pub page_timing: Option<deadsync_theme::views::SystemOptionsTiming>,
     pub judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog,
     pub updater_capabilities: SimplyLoveUpdaterCapabilities,
     pub app_paths: deadsync_theme::views::AppPathsView,
@@ -1215,6 +1137,7 @@ impl Default for SelectMusicWheelPolicyView {
 pub struct SelectMusicInteractionPolicyView {
     pub wheel_switch_speed: u8,
     pub wheel_style: deadsync_config::theme::SelectMusicWheelStyle,
+    pub show_random_entries: bool,
     pub hide_inactive_series: bool,
     pub initial_sort: deadsync_config::theme::SelectMusicSort,
     pub remember_last_sort: bool,
@@ -1233,6 +1156,7 @@ impl Default for SelectMusicInteractionPolicyView {
         Self {
             wheel_switch_speed: deadsync_config::defaults::DEFAULT_MUSIC_WHEEL_SWITCH_SPEED,
             wheel_style: deadsync_config::theme::SelectMusicWheelStyle::Itg,
+            show_random_entries: false,
             hide_inactive_series: false,
             initial_sort: deadsync_config::theme::SelectMusicSort::Series,
             remember_last_sort: false,
@@ -1248,7 +1172,7 @@ impl Default for SelectMusicInteractionPolicyView {
     }
 }
 
-/// Shell-prepared visibility and layout policy for Select Music composition.
+/// Saved display preferences and available services for Select Music.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SelectMusicPresentationPolicyView {
     pub show_golf_pars: bool,
@@ -1257,7 +1181,7 @@ pub struct SelectMusicPresentationPolicyView {
     pub scorebox_in_step_pane: bool,
     pub show_stage_display: bool,
     pub show_gameplay_timer: bool,
-    pub step_artist_expanded: bool,
+    pub step_artist_box_mode: deadsync_config::theme::SelectMusicStepArtistBoxMode,
     pub breakdown_style: deadsync_config::theme::BreakdownStyle,
     pub pattern_info_mode: deadsync_config::theme::SelectMusicPatternInfoMode,
     pub chart_info_peak_nps: bool,
@@ -1293,7 +1217,7 @@ impl Default for SelectMusicPresentationPolicyView {
             show_stage_display: deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_STAGE_DISPLAY,
             show_gameplay_timer:
                 deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_GAMEPLAY_TIMER,
-            step_artist_expanded: false,
+            step_artist_box_mode: deadsync_config::theme::SelectMusicStepArtistBoxMode::Default,
             breakdown_style: deadsync_config::theme::BreakdownStyle::Sl,
             pattern_info_mode: deadsync_config::theme::SelectMusicPatternInfoMode::Tech,
             chart_info_peak_nps:
@@ -1327,15 +1251,8 @@ pub struct SelectMusicPolicyView {
     pub presentation: SelectMusicPresentationPolicyView,
 }
 
-/// Simply Love's two density-graph texture targets.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SimplyLoveDensityGraphSlot {
-    SelectMusicP1,
-    SelectMusicP2,
-}
-
-/// Simply Love compatibility name used inside its concrete screen modules.
-pub(crate) type DensityGraphSlot = SimplyLoveDensityGraphSlot;
+pub use deadsync_theme::select_music::DensityGraphSlot as SimplyLoveDensityGraphSlot;
+pub(crate) use deadsync_theme::select_music::DensityGraphSlot;
 
 /// Runtime capabilities used to decide which concrete Simply Love options
 /// rows are available on the current host.
@@ -1563,5 +1480,84 @@ mod tests {
         frame_histogram(&samples, &mut bins, 1_000);
         assert_eq!(bins[1], 1);
         assert_eq!(bins[HISTOGRAM_BINS - 1], 1);
+    }
+}
+
+#[cfg(test)]
+mod visual_policy_tests {
+    use super::*;
+    use crate::{color, visual_styles};
+
+    #[test]
+    fn visual_policy_resolves_runtime_style_and_bar_choices() {
+        let mut config = deadsync_config::app_config::Config {
+            visual_style: deadsync_config::theme::VisualStyle::Technique,
+            machine_bar_color: deadsync_config::theme::MachineBarColor::Transparent,
+            ..Default::default()
+        };
+        let technique = SimplyLoveVisualPolicyView::from_config(&config);
+        assert_eq!(technique.background, VisualBackgroundView::Technique);
+        assert_eq!(technique.screen_bar, ScreenBarBackgroundView::Transparent);
+        assert!(!technique.srpg10_tint);
+
+        config.visual_style = deadsync_config::theme::VisualStyle::Srpg9;
+        config.srpg_variant = deadsync_config::theme::SrpgVariant::Srpg10;
+        config.machine_bar_color = deadsync_config::theme::MachineBarColor::Colored;
+        config.theme_color = 4;
+        config.machine_font = deadsync_config::theme::MachineFont::Mega;
+        let srpg10 = SimplyLoveVisualPolicyView::from_config(&config);
+        assert_eq!(srpg10.background, VisualBackgroundView::Srpg);
+        assert_eq!(
+            srpg10.assets.shared_background,
+            visual_styles::for_style_and_variant(config.visual_style, config.srpg_variant)
+                .shared_background
+        );
+        assert_eq!(
+            srpg10.screen_bar,
+            ScreenBarBackgroundView::Colored(color::srpg10_rgba(4))
+        );
+        assert!(srpg10.srpg10_tint);
+        assert_eq!(srpg10.machine_font, deadsync_config::theme::MachineFont::Mega);
+        assert_eq!(
+            srpg10.title_logo_texture_key,
+            Some(visual_styles::SRPG10_TITLE_LOGO)
+        );
+    }
+
+    #[test]
+    fn ecs15_visual_policy_uses_curtains_logo_and_technique_defaults() {
+        let mut config = deadsync_config::app_config::Config {
+            visual_style: deadsync_config::theme::VisualStyle::Srpg9,
+            srpg_variant: deadsync_config::theme::SrpgVariant::Ecs15,
+            ..Default::default()
+        };
+        let policy = SimplyLoveVisualPolicyView::from_config(&config);
+        assert_eq!(policy.background, VisualBackgroundView::Ecs15);
+        assert_eq!(policy.assets, &visual_styles::ECS15_ASSETS);
+        assert_eq!(
+            policy.title_logo_texture_key,
+            Some(visual_styles::ECS15_TITLE_LOGO)
+        );
+        assert_eq!(
+            policy.screen_bar,
+            ScreenBarBackgroundView::Transparent
+        );
+        assert!(!policy.srpg10_tint);
+        assert!(policy.background_video(true).is_none());
+        config.machine_bar_color = deadsync_config::theme::MachineBarColor::Colored;
+        assert_eq!(
+            SimplyLoveVisualPolicyView::from_config(&config).screen_bar,
+            ScreenBarBackgroundView::Colored(color::decorative_rgba(config.theme_color))
+        );
+        config.visual_style = deadsync_config::theme::VisualStyle::Hearts;
+        assert_eq!(
+            SimplyLoveVisualPolicyView::from_config(&config).background,
+            VisualBackgroundView::Tiled
+        );
+        assert!(
+            SimplyLoveVisualPolicyView::from_config(&config)
+                .title_logo_texture_key
+                .is_none()
+        );
     }
 }

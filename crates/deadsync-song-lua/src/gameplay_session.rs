@@ -40,6 +40,15 @@ pub struct SongLuaOutView {
 }
 
 impl SongLuaOutView {
+    /// Time spent in the active exit presentation, including its initial hold.
+    pub const fn elapsed_seconds(self) -> f32 {
+        if self.phase == 0 {
+            SONG_LUA_OUT_DELAY - self.left
+        } else {
+            GAMEPLAY_EXIT_TRANSITION_SECONDS - self.left
+        }
+    }
+
     /// Normalized progress through the fade, after the initial hold.
     pub const fn fade_progress(self) -> f32 {
         if self.phase == 0 {

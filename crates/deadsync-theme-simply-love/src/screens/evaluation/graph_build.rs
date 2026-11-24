@@ -1,6 +1,7 @@
 //! Pure evaluation graph preparation from caller-owned chart and life records.
 use crate::views::CourseGraphStage;
 use deadlib_render_core::MeshVertex;
+use deadsync_rules::life::LifeRecordSampler;
 use std::sync::Arc;
 pub(super) const GRAPH_LIFE_SAMPLE_COUNT: usize = 100;
 
@@ -87,54 +88,6 @@ pub(super) fn build_course_density_graph_mesh(
     // The final immutable copy only needs the assembled vertices.
     drop(scratch);
     (!out.is_empty()).then(|| Arc::from(out))
-}
-
-/// A borrowed, batch-local view of the same upper-bound interpolation as the
-/// scalar life lookup. Only the fixed chart-start search and anchor clamp are
-/// prepared; per-sample searches retain their behavior for duplicate,
-/// nonmonotonic and nonfinite records as well as ordinary sorted histories.
-pub(super) struct LifeRecordSampler<'a> {
-    records: &'a [(f32, f32)],
-    record_start: f32,
-    start_life: f32,
-}
-
-impl<'a> LifeRecordSampler<'a> {
-    pub(super) fn new(life_history: &'a [(f32, f32)], record_start: f32) -> Self {
-        let start_life = life_history
-            .first()
-            .map_or(0.0, |&(_, life)| life.clamp(0.0, 1.0));
-        let first = life_history.partition_point(|&(t, _)| t < record_start);
-        Self {
-            records: &life_history[first..],
-            record_start,
-            start_life,
-        }
-    }
-
-    #[inline(always)]
-    pub(super) fn sample(&self, sample_time: f32) -> f32 {
-        if sample_time <= self.record_start {
-            return self.start_life;
-        }
-        let later_ix = self.records.partition_point(|&(t, _)| t <= sample_time);
-        let (earlier_t, earlier_life) = if later_ix == 0 {
-            (self.record_start, self.start_life)
-        } else {
-            self.records[later_ix - 1]
-        };
-        let Some(&(later_t, later_life)) = self.records.get(later_ix) else {
-            return earlier_life.clamp(0.0, 1.0);
-        };
-        let dt = later_t - earlier_t;
-        if dt.abs() <= f32::EPSILON {
-            return earlier_life.clamp(0.0, 1.0);
-        }
-        let alpha = ((sample_time - earlier_t) / dt).clamp(0.0, 1.0);
-        (later_life - earlier_life)
-            .mul_add(alpha, earlier_life)
-            .clamp(0.0, 1.0)
-    }
 }
 
 #[cfg(test)]

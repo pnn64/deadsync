@@ -367,7 +367,9 @@ pub(super) fn apply_submenu_choice_delta(
             }
             SubRowId::Theme => {
                 action = Some(options_config_effect(
-                    crate::SimplyLoveOptionsConfigRequest::ThemeSimplyLove,
+                    crate::SimplyLoveOptionsConfigRequest::Theme(
+                        deadsync_config::theme::ThemeFlag::from_choice(new_index),
+                    ),
                 ));
             }
             SubRowId::Language => {
@@ -436,7 +438,7 @@ pub(super) fn apply_submenu_choice_delta(
             }
             _ => {}
         }
-    } else if matches!(kind, SubmenuKind::Graphics) {
+    } else if kind.is_graphics() {
         let row = &rows[row_index];
         if row.id == SubRowId::DisplayAspectRatio {
             let (cur_w, cur_h) = selected_resolution(state);
@@ -1629,8 +1631,12 @@ pub(super) fn handle_dedicated_three_key_options_input(
 /// return to a parent submenu we must also restore *its* parent link, otherwise
 /// a third-level page (e.g. SMX Config) would strand its parent (Input Options)
 /// with no way back to the Input launcher.
-pub(super) const fn submenu_parent_kind_of(kind: SubmenuKind) -> Option<SubmenuKind> {
+pub(super) const fn submenu_parent_kind_of(
+    state: &State,
+    kind: SubmenuKind,
+) -> Option<SubmenuKind> {
     match kind {
+        SubmenuKind::Graphics if state.split_graphics => Some(SubmenuKind::GraphicsBasic),
         SubmenuKind::InputBackend => Some(SubmenuKind::Input),
         SubmenuKind::SmxConfig => Some(SubmenuKind::InputBackend),
         SubmenuKind::GrooveStats | SubmenuKind::ArrowCloud | SubmenuKind::ScoreImport => {
@@ -1648,7 +1654,7 @@ pub(super) const fn cancel_current_view(state: &mut State) -> ThemeEffect {
             if let Some(parent_kind) = state.submenu_parent_kind {
                 state.pending_submenu_kind = Some(parent_kind);
                 // Restore the parent's own parent so a further Back keeps climbing.
-                state.pending_submenu_parent_kind = submenu_parent_kind_of(parent_kind);
+                state.pending_submenu_parent_kind = submenu_parent_kind_of(state, parent_kind);
                 state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
             } else {
                 state.submenu_transition = SubmenuTransition::FadeOutToMain;
@@ -1739,7 +1745,7 @@ pub(super) fn activate_current_selection(
                 }
                 ItemId::GraphicsOptions => {
                     queue_sfx(state, "assets/sounds/start.ogg");
-                    state.pending_submenu_kind = Some(SubmenuKind::Graphics);
+                    state.pending_submenu_kind = Some(graphics_entry_kind(state));
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
@@ -1748,6 +1754,14 @@ pub(super) fn activate_current_selection(
                     state.pending_submenu_kind = Some(SubmenuKind::Input);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
+                }
+                ItemId::InpConfigureMappings => {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    return ThemeEffect::Navigate(Screen::Mappings);
+                }
+                ItemId::InpTestInput => {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    return ThemeEffect::Navigate(Screen::Input);
                 }
                 ItemId::LightsOptions => {
                     queue_sfx(state, "assets/sounds/start.ogg");
@@ -1938,16 +1952,7 @@ pub(super) fn activate_current_selection(
             }
             if selected_row == total - 1 {
                 queue_sfx(state, "assets/sounds/start.ogg");
-                if let Some(parent_kind) = state.submenu_parent_kind {
-                    state.pending_submenu_kind = Some(parent_kind);
-                    // Restore the parent's own parent so a further Back keeps climbing.
-                    state.pending_submenu_parent_kind = submenu_parent_kind_of(parent_kind);
-                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
-                } else {
-                    state.submenu_transition = SubmenuTransition::FadeOutToMain;
-                }
-                state.submenu_fade_t = 0.0;
-                return ThemeEffect::None;
+                return cancel_current_view(state);
             }
             if kind == SubmenuKind::Streaming
                 && submenu_visible_row_to_actual(state, kind, selected_row)
@@ -2051,6 +2056,16 @@ pub(super) fn activate_current_selection(
                     queue_sfx(state, "assets/sounds/start.ogg");
                     return ThemeEffect::Navigate(Screen::TestLights);
                 }
+            } else if matches!(kind, SubmenuKind::GraphicsBasic)
+                && submenu_visible_row_to_actual(state, kind, selected_row)
+                    .is_some_and(|index| GRAPHICS_OPTIONS_ROWS[index].id == SubRowId::AdvancedGraphics)
+            {
+                queue_sfx(state, "assets/sounds/start.ogg");
+                state.pending_submenu_kind = Some(SubmenuKind::Graphics);
+                state.pending_submenu_parent_kind = Some(SubmenuKind::GraphicsBasic);
+                state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                state.submenu_fade_t = 0.0;
+                return ThemeEffect::None;
             } else if matches!(kind, SubmenuKind::Graphics) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {

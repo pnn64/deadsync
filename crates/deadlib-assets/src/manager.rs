@@ -249,6 +249,16 @@ impl AssetManager {
 
     /// Startup boundary: reserve identities, install primitives, and stream decoded
     /// images from bounded workers to the renderer. A decode failure uses a checker.
+    /// Decodes and uploads a bundled image using the ordinary texture registry.
+    pub fn load_embedded_png(
+        &mut self,
+        backend: &mut Backend,
+        png: crate::EmbeddedPng,
+    ) -> Result<(), AssetError> {
+        let image = image::load_from_memory_with_format(png.bytes, image::ImageFormat::Png)?.into_rgba8();
+        self.update_texture_for_key(backend, png.key, &image)
+    }
+
     pub fn load_textures(
         &mut self,
         backend: &mut Backend,

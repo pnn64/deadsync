@@ -38,6 +38,7 @@ fn playlist_song_sources(
                 song: song.clone(),
                 lobby_path: lobby_song_path(song.as_ref(), song_scan_roots),
             }),
+            MusicWheelEntry::Random(_) => {}
         }
     }
 

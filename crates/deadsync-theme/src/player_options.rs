@@ -1,7 +1,7 @@
 //! Presentation interface for editing a stage's player options.
 
 use crate::views::{NoteskinCatalogView, SmxGifCatalogView};
-use crate::{ThemeEffect, ThemeTransitions};
+use crate::{Screen, ThemeEffect, ThemeTransitions};
 use deadlib_assets::AssetManager;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
@@ -33,6 +33,65 @@ pub struct PlayerOptionsSelection<'a, Screen> {
     pub fixed_stepchart_label: Option<&'a str>,
     pub scroll_speeds: [ScrollSpeedSetting; MAX_PLAYERS],
     pub music_rate: f32,
+}
+
+/// Prepared rows and player focus borrowed for one Player Options frame.
+pub struct PlayerOptionsPage<'a, T, A> {
+    pub title: &'static str,
+    pub active: [bool; MAX_PLAYERS],
+    pub selected_rows: [usize; MAX_PLAYERS],
+    /// Each seat's position in the selectable row order, including Exit.
+    pub scroll_position: [f32; MAX_PLAYERS],
+    pub row_count: usize,
+    pub visible_slots: usize,
+    pub alpha: f32,
+    pub row: &'a dyn Fn(usize) -> Option<PlayerOptionsRow<'a, T>>,
+    pub help: &'a dyn Fn(usize, usize) -> Option<&'a Arc<str>>,
+    /// Draw the row's live samples at the given screen-space player centers and Y.
+    pub draw_preview: &'a dyn Fn(&mut Vec<A>, usize, [f32; MAX_PLAYERS], f32),
+}
+
+/// The mounted layout's scrolling window and row movement.
+#[derive(Clone, Copy)]
+pub struct PlayerOptionsViewport {
+    pub slots: u8,
+    pub separate_exit: bool,
+    pub row_tween_seconds: f32,
+}
+
+/// An alternate layout mounted for one visit to the shared options editor.
+pub trait PlayerOptionsLayout<A, T> {
+    fn viewport(&self) -> PlayerOptionsViewport;
+    fn push_page(
+        &mut self,
+        actors: &mut Vec<A>,
+        page: PlayerOptionsPage<'_, T, A>,
+        assets: &AssetManager,
+        now: f64,
+    );
+    fn entry_transition(&self) -> (Vec<A>, f32);
+    fn exit_transition(&self, target: Screen) -> (Vec<A>, f32);
+}
+
+pub struct PlayerOptionsRow<'a, T> {
+    pub label: &'a T,
+    pub detail: Option<&'a T>,
+    pub slot: f32,
+    pub slots: usize,
+    pub alpha: f32,
+    pub exit: bool,
+    pub values: [Option<&'a T>; MAX_PLAYERS],
+    pub next_row: [bool; MAX_PLAYERS],
+    pub inline: Option<PlayerOptionsInline<'a, T>>,
+    pub has_preview: bool,
+}
+
+pub struct PlayerOptionsInline<'a, T> {
+    pub choices: &'a [T],
+    pub focused: [Option<usize>; MAX_PLAYERS],
+    pub selected: [usize; MAX_PLAYERS],
+    /// Choice-index masks for rows that allow multiple simultaneous selections.
+    pub enabled: [Option<u16>; MAX_PLAYERS],
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -80,6 +139,7 @@ pub trait ThemePlayerOptions: ThemeTransitions {
     type PlayerOptionsRawKey;
     type PlayerOptionsVisualPolicy;
     type PlayerOptionsNoteskin;
+    type PlayerOptionsText;
 
     fn init_player_options(
         entry: PlayerOptionsEntry<Self::Screen, Self::PlayerOptionsView>,
@@ -114,6 +174,18 @@ pub trait ThemePlayerOptions: ThemeTransitions {
         state: &Self::PlayerOptionsState,
         assets: &AssetManager,
         visual_policy: Self::PlayerOptionsVisualPolicy,
+    );
+    fn set_player_options_viewport(
+        state: &mut Self::PlayerOptionsState,
+        viewport: PlayerOptionsViewport,
+    );
+    fn with_player_options_page(
+        actors: &mut Vec<Self::Actor>,
+        state: &Self::PlayerOptionsState,
+        draw: impl FnOnce(
+            &mut Vec<Self::Actor>,
+            PlayerOptionsPage<'_, Self::PlayerOptionsText, Self::Actor>,
+        ),
     );
 
     fn sync_player_options_heart_rate(

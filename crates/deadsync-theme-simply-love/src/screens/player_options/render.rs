@@ -3,6 +3,7 @@ use crate::fonts::machine_font_key;
 use crate::screens::components::shared::noteskin_draw;
 use deadlib_present::actors::TextContent;
 use deadsync_theme::FontRole;
+use deadsync_theme::player_options::{PlayerOptionsInline, PlayerOptionsPage, PlayerOptionsRow};
 
 pub(super) fn top_bar_actor(
     state: &State,
@@ -192,6 +193,135 @@ pub(super) const fn music_rate_text(state: &State) -> &MusicRatePresentation {
         .expect("Player Options Music Rate title must be prepared")
 }
 
+pub fn push_actors_with_layout(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    draw: impl FnOnce(&mut Vec<Actor>, PlayerOptionsPage<'_, TextContent, Actor>),
+) {
+    let pane = state.pane();
+    let active = state.active;
+    let alpha = state.pane_transition.alpha();
+    let labels = &state.row_titles[state.current_pane.index()].titles;
+    let (first_y, row_step) = row_layout_params();
+    let row = |index| {
+        let row = pane.row_map.get_at(index)?;
+        let (y, alpha) = row_display_position(state, index, first_y, row_step, alpha);
+        let exit = row.id == RowId::Exit;
+        if alpha <= 0.001 {
+            return None;
+        }
+        let next_row = std::array::from_fn(|player| {
+            active[player] && arcade_row_focuses_next_row(state, player, index)
+        });
+        let inline = row_shows_all_choices_inline(row.id).then(|| PlayerOptionsInline {
+            choices: &row.choices,
+            focused: std::array::from_fn(|player| {
+                if active[player] && pane.selected_row[player] == index && !next_row[player] {
+                    focused_inline_choice_index(state, player, index)
+                } else {
+                    None
+                }
+            }),
+            selected: row.selected_choice_index,
+            enabled: std::array::from_fn(|player| multi_select_mask(state, row, player)),
+        });
+        let (label, detail) = if row.id == RowId::MusicRate {
+            let rate = music_rate_text(state);
+            (&rate.first, rate.second.as_ref())
+        } else {
+            (&labels[index], None)
+        };
+        Some(PlayerOptionsRow {
+            label,
+            detail,
+            slot: (y - first_y) / row_step,
+            slots: row_layout_slots(row.id),
+            alpha,
+            exit,
+            values: std::array::from_fn(|player| {
+                (active[player] && inline.is_none()).then(|| option_value(state, row, player).0)
+            }),
+            next_row,
+            inline,
+            has_preview: option_preview(row.id).is_some(),
+        })
+    };
+    let help = |player: usize, line| {
+        pane.row_map
+            .get_at(pane.selected_row[player])?
+            .help
+            .get(line)
+            .map(|line: &HelpLine| &line.text)
+    };
+    let draw_preview = |actors: &mut Vec<Actor>, index, preview_x, y| {
+        let row = pane
+            .row_map
+            .get_at(index)
+            .expect("visible Player Options row");
+        let Some(draw) = option_preview(row.id) else {
+            return;
+        };
+        let (_, a) = row_display_position(state, index, first_y, row_step, alpha);
+        let preview = PreviewCtx {
+            state,
+            row,
+            preview_x,
+            current_row_y: y,
+            a,
+        };
+        draw(actors, &preview, if active[P1] { P1 } else { P2 });
+    };
+    draw(
+        actors,
+        PlayerOptionsPage {
+            title: match state.current_pane {
+                OptionsPane::Main => "PLAYER OPTIONS",
+                OptionsPane::Display => "DISPLAY OPTIONS",
+                OptionsPane::Advanced => "ADVANCED OPTIONS",
+                OptionsPane::Uncommon => "UNCOMMON OPTIONS",
+            },
+            active,
+            selected_rows: pane.selected_row,
+            scroll_position: pane.scroll_position,
+            row_count: pane.row_map.len(),
+            visible_slots: usize::from(state.viewport.slots),
+            alpha,
+            row: &row,
+            help: &help,
+            draw_preview: &draw_preview,
+        },
+    );
+    push_search_hint(actors, state);
+    search::push_overlay(actors, state);
+}
+
+fn row_display_position(
+    state: &State,
+    index: usize,
+    first_y: f32,
+    row_step: f32,
+    pane_alpha: f32,
+) -> (f32, f32) {
+    let (y, alpha) = state.pane().row_tweens.get(index).map_or_else(
+        || ((index as f32).mul_add(row_step, first_y), 1.0),
+        |tw| (tw.y(), tw.a()),
+    );
+    (y, (alpha * pane_alpha).clamp(0.0, 1.0))
+}
+
+// The keyboard-only setting search puts its own instructions in the overlay.
+fn push_search_hint(actors: &mut Vec<Actor>, state: &State) {
+    if state.policy.keyboard_features && !state.search.is_open() {
+        let search_hint = tr("PlayerOptions", "SettingSearchHint");
+        actors.push(act!(text:
+            font("miso"): settext(search_hint):
+            align(1.0, 0.5): xy(screen_width() - 10.0, 16.0):
+            zoom(0.72): z(130):
+            diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
+        ));
+    }
+}
+
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
@@ -213,19 +343,7 @@ pub fn push_actors(
     );
     actors.push(top_bar_actor(state, visual_policy));
 
-    // Discoverability hint: the top bar only renders its title, so add a
-    // right-aligned note telling players they can open the fuzzy setting search.
-    // Only shown when keyboard features are enabled (the search is keyboard-only)
-    // and hidden while the search overlay itself is open (it has its own footer).
-    if state.policy.keyboard_features && !state.search.is_open() {
-        let search_hint = tr("PlayerOptions", "SettingSearchHint");
-        actors.push(act!(text:
-            font("miso"): settext(search_hint):
-            align(1.0, 0.5): xy(deadlib_present::space::screen_width() - 10.0, 16.0):
-            zoom(0.72): z(130):
-            diffuse(1.0, 1.0, 1.0, 1.0): horizalign(right)
-        ));
-    }
+    push_search_hint(actors, state);
 
     // zmod ScreenPlayerOptions overlay/default.lua speed helper parity.
     let speed_mod_y = 48.0;
@@ -312,18 +430,8 @@ pub fn push_actors(
     };
 
     for item_idx in 0..total_rows {
-        let (current_row_y, row_alpha) = state
-            .pane()
-            .row_tweens
-            .get(item_idx)
-            .map(|tw| (tw.y(), tw.a()))
-            .unwrap_or_else(|| {
-                (
-                    (item_idx as f32).mul_add(fallback_row_step, fallback_y0),
-                    1.0,
-                )
-            });
-        let row_alpha = (row_alpha * pane_alpha).clamp(0.0, 1.0);
+        let (current_row_y, row_alpha) =
+            row_display_position(state, item_idx, fallback_y0, fallback_row_step, pane_alpha);
         if row_alpha <= row_alpha_cutoff {
             continue;
         }
@@ -988,44 +1096,69 @@ pub(super) fn draw_inline_choices(
 pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCtx) {
     let primary_player_idx = if rc.fc.active[P1] { P1 } else { P2 };
     draw_cached_value_text(actors, rc, primary_player_idx);
-    match rc.row.id {
-        RowId::JudgmentFont => draw_judgment_preview(actors, rc, primary_player_idx),
-        RowId::HoldJudgment => draw_hold_preview(actors, rc, primary_player_idx),
-        RowId::HeldGraphic => draw_held_graphic_preview(actors, rc, primary_player_idx),
+    if let Some(draw) = option_preview(rc.row.id) {
+        let preview = PreviewCtx {
+            state: rc.fc.state,
+            row: rc.row,
+            preview_x: rc.fc.preview_x,
+            current_row_y: rc.current_row_y,
+            a: rc.a,
+        };
+        draw(actors, &preview, primary_player_idx);
+    }
+}
+
+struct PreviewCtx<'a> {
+    state: &'a State,
+    row: &'a Row,
+    preview_x: [f32; PLAYER_SLOTS],
+    current_row_y: f32,
+    a: f32,
+}
+
+impl PreviewCtx<'_> {
+    fn both_sides(&self) -> bool {
+        self.state.active == [true, true]
+    }
+}
+
+type DrawOptionPreview = fn(&mut Vec<Actor>, &PreviewCtx<'_>, usize);
+
+fn option_preview(id: RowId) -> Option<DrawOptionPreview> {
+    Some(match id {
+        RowId::JudgmentFont => draw_judgment_preview,
+        RowId::HoldJudgment => draw_hold_preview,
+        RowId::HeldGraphic => draw_held_graphic_preview,
         RowId::NoteSkin
         | RowId::MineSkin
         | RowId::SkinMineSize
         | RowId::ReceptorSkin
-        | RowId::TapExplosionSkin => {
-            draw_noteskin_family_preview(actors, rc, primary_player_idx);
-        }
-        id if super::pack_options::slot_for_row(id).is_some() => {
-            draw_noteskin_family_preview(actors, rc, primary_player_idx);
-        }
-        RowId::ComboFont => draw_combo_preview(actors, rc, primary_player_idx),
-        RowId::HeartRateMonitor => draw_heart_rate_preview(actors, rc, primary_player_idx),
-        _ => {}
-    }
+        | RowId::TapExplosionSkin => draw_noteskin_family_preview,
+        id if super::pack_options::slot_for_row(id).is_some() => draw_noteskin_family_preview,
+        RowId::ComboFont => draw_combo_preview,
+        RowId::HeartRateMonitor => draw_heart_rate_preview,
+        _ => return None,
+    })
 }
 
-fn draw_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
+fn draw_heart_rate_preview(actors: &mut Vec<Actor>, rc: &PreviewCtx, primary_player_idx: usize) {
     draw_player_heart_rate_preview(actors, rc, primary_player_idx);
-    if rc.fc.show_p2 && primary_player_idx != P2 {
+    if rc.both_sides() && primary_player_idx != P2 {
         draw_player_heart_rate_preview(actors, rc, P2);
     }
 }
 
-fn draw_player_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, player_idx: usize) {
-    if rc.fc.state.heart_rate_device_ids[player_idx].is_none() {
+fn draw_player_heart_rate_preview(actors: &mut Vec<Actor>, rc: &PreviewCtx, player_idx: usize) {
+    if rc.state.heart_rate_device_ids[player_idx].is_none() {
         return;
     }
-    let reading = rc.fc.state.heart_rate_readings[player_idx];
-    let mut rgba = color::decorative_rgba(player_color_index(rc.fc.state, player_idx));
+    let reading = rc.state.heart_rate_readings[player_idx];
+    let mut rgba = color::decorative_rgba(player_color_index(rc.state, player_idx));
     rgba[3] = if reading.connected { rc.a } else { rc.a * 0.45 };
     let bpm = reading.bpm.unwrap_or(0);
     let pulse =
-        crate::screens::components::shared::heart_rate::pulse_scale(rc.fc.state.preview_time, bpm);
-    let center_x = rc.fc.preview_x[player_idx];
+        crate::screens::components::shared::heart_rate::pulse_scale(rc.state.preview_time, bpm);
+    let center_x = rc.preview_x[player_idx];
     let heart_width = 22.0 * pulse;
     let heart_height = 18.7 * pulse;
     actors.push(act!(sprite("heart.png"):
@@ -1043,6 +1176,20 @@ fn draw_player_heart_rate_preview(actors: &mut Vec<Actor>, rc: &RowCtx, player_i
     ));
 }
 
+fn option_value<'a>(state: &'a State, row: &'a Row, player: usize) -> (&'a TextContent, f32) {
+    if row.id == RowId::SpeedMod {
+        let value = speed_value(state, player);
+        return (&value.text, value.value_draw_width);
+    }
+    let index = if row.id == RowId::TypeOfSpeedMod {
+        state.speed_mod[player].mod_type.choice_index()
+    } else {
+        row.selected_choice_index[player]
+    }
+    .min(row.choices.len().saturating_sub(1));
+    (&row.choices[index], row.choice_widths[index])
+}
+
 fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     debug_assert!(rc.fc.state.pane().choice_layout_ready);
     debug_assert_eq!(rc.row.choice_widths.len(), rc.row.choices.len());
@@ -1052,44 +1199,22 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
         let item_col_left = rc.fc.row_left + TITLE_BG_WIDTH;
         choice_center_x = (rc.fc.row_width - TITLE_BG_WIDTH).mul_add(0.5, item_col_left);
     }
-    let choice_idx = rc.row.selected_choice_index[primary_player_idx]
-        .min(rc.row.choices.len().saturating_sub(1));
     let choice_color = if rc.is_active {
         [1.0, 1.0, 1.0, rc.a]
     } else {
         rc.sl_gray
     };
     let value_zoom = INLINE_CHOICE_VALUE_ZOOM;
-    let display = |player_idx: usize, selected_idx: usize| {
+    let display = |player_idx: usize| {
         if arcade_row_focuses_next_row(rc.fc.state, player_idx, rc.item_idx) {
             let [width, _] = arcade_next_row_size(rc.fc.state, rc.fc.asset_manager);
             return (TextContent::Static(ARCADE_NEXT_ROW_TEXT), width);
         }
-        if rc.row.id == RowId::SpeedMod {
-            let value = speed_value(rc.fc.state, player_idx);
-            return (value.text.clone(), value.value_draw_width);
-        }
-        let idx = if rc.row.id == RowId::TypeOfSpeedMod {
-            rc.fc.state.speed_mod[player_idx].mod_type.choice_index()
-        } else {
-            selected_idx
-        }
-        .min(rc.row.choices.len().saturating_sub(1));
-        let text = rc
-            .row
-            .choices
-            .get(idx)
-            .expect("prepared option row must have selected text")
-            .clone();
-        let width = *rc
-            .row
-            .choice_widths
-            .get(idx)
-            .expect("prepared option row must have selected width");
-        (text, width)
+        let (text, width) = option_value(rc.fc.state, rc.row, player_idx);
+        (text.clone(), width)
     };
 
-    let (content, draw_w) = display(primary_player_idx, choice_idx);
+    let (content, draw_w) = display(primary_player_idx);
     let draw_h = rc.row.choice_height;
     actors.push(act!(text: font("miso"): settext(content):
         align(0.5, 0.5): xy(choice_center_x, rc.current_row_y): zoom(value_zoom):
@@ -1110,8 +1235,7 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
     ));
 
     if rc.fc.show_p2 && rc.row.id != RowId::MusicRate {
-        let p2_idx = rc.row.selected_choice_index[P2].min(rc.row.choices.len().saturating_sub(1));
-        let (content, draw_w) = display(P2, p2_idx);
+        let (content, draw_w) = display(P2);
         let center_x = rc.fc.option_column_x[P2];
         actors.push(act!(text: font("miso"): settext(content):
             align(0.5, 0.5): xy(center_x, rc.current_row_y): zoom(value_zoom):
@@ -1131,7 +1255,7 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
     draw_cursor_ring(actors, rc.fc.state, rc.fc.active, rc.item_idx, rc.a);
 }
 
-fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
+fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &PreviewCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::JudgmentFont {
         let texture_for = |player_idx: usize| -> Option<&Arc<str>> {
             select_preview_texture(
@@ -1143,20 +1267,20 @@ fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_id
         if let Some(texture) = texture_for(primary_player_idx) {
             actors.push(act!(sprite(texture):
                 align(0.5, 0.5):
-                xy(rc.fc.preview_x[primary_player_idx], rc.current_row_y):
+                xy(rc.preview_x[primary_player_idx], rc.current_row_y):
                 setstate(0):
                 zoom(JUDGMENT_PREVIEW_ZOOM):
                 diffuse(1.0, 1.0, 1.0, rc.a):
                 z(Z_ROW_PREVIEW)
             ));
         }
-        if rc.fc.show_p2
+        if rc.both_sides()
             && primary_player_idx != P2
             && let Some(texture) = texture_for(P2)
         {
             actors.push(act!(sprite(texture):
                 align(0.5, 0.5):
-                xy(rc.fc.preview_x[P2], rc.current_row_y):
+                xy(rc.preview_x[P2], rc.current_row_y):
                 setstate(0):
                 zoom(JUDGMENT_PREVIEW_ZOOM):
                 diffuse(1.0, 1.0, 1.0, rc.a):
@@ -1166,7 +1290,7 @@ fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_id
     }
 }
 
-fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
+fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &PreviewCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::HoldJudgment {
         let texture_for = |player_idx: usize| -> Option<&Arc<str>> {
             select_preview_texture(
@@ -1199,18 +1323,18 @@ fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: u
             ));
         };
         if let Some(texture) = texture_for(primary_player_idx) {
-            draw_hold_preview(texture, rc.fc.preview_x[primary_player_idx], &mut *actors);
+            draw_hold_preview(texture, rc.preview_x[primary_player_idx], &mut *actors);
         }
-        if rc.fc.show_p2
+        if rc.both_sides()
             && primary_player_idx != P2
             && let Some(texture) = texture_for(P2)
         {
-            draw_hold_preview(texture, rc.fc.preview_x[P2], &mut *actors);
+            draw_hold_preview(texture, rc.preview_x[P2], &mut *actors);
         }
     }
 }
 
-fn draw_held_graphic_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
+fn draw_held_graphic_preview(actors: &mut Vec<Actor>, rc: &PreviewCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::HeldGraphic {
         let texture_for = |player_idx: usize| -> Option<&Arc<str>> {
             select_preview_texture(
@@ -1222,20 +1346,20 @@ fn draw_held_graphic_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_playe
         if let Some(texture) = texture_for(primary_player_idx) {
             actors.push(act!(sprite(texture):
                 align(0.5, 0.5):
-                xy(rc.fc.preview_x[primary_player_idx], rc.current_row_y):
+                xy(rc.preview_x[primary_player_idx], rc.current_row_y):
                 setstate(0):
                 zoom(JUDGMENT_PREVIEW_ZOOM):
                 diffuse(1.0, 1.0, 1.0, rc.a):
                 z(Z_ROW_PREVIEW)
             ));
         }
-        if rc.fc.show_p2
+        if rc.both_sides()
             && primary_player_idx != P2
             && let Some(texture) = texture_for(P2)
         {
             actors.push(act!(sprite(texture):
                 align(0.5, 0.5):
-                xy(rc.fc.preview_x[P2], rc.current_row_y):
+                xy(rc.preview_x[P2], rc.current_row_y):
                 setstate(0):
                 zoom(JUDGMENT_PREVIEW_ZOOM):
                 diffuse(1.0, 1.0, 1.0, rc.a):
@@ -1266,15 +1390,12 @@ pub(super) fn draw_thumb(
     );
 }
 
-fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    for player in [primary_player_idx, P2] {
-        if player == P2 && primary_player_idx != P2 && !rc.fc.show_p2 {
-            continue;
-        }
+fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &PreviewCtx, _: usize) {
+    for player in active_player_indices(rc.state.active) {
         let first = actors.len();
-        let state = rc.fc.state;
+        let state = rc.state;
         let options = &state.player_options[player];
-        let center = rc.fc.preview_x[player];
+        let center = rc.preview_x[player];
         match rc.row.id {
             RowId::NoteSkin => {
                 request_preview(state, options.noteskin.as_str(), 0);
@@ -1357,15 +1478,12 @@ fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_pl
             [width, 32.0],
             !matches!(rc.row.id, RowId::MineSkin | RowId::SkinMineSize),
         );
-        if primary_player_idx == P2 {
-            break;
-        }
     }
 }
 
-fn draw_combo_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
+fn draw_combo_preview(actors: &mut Vec<Actor>, rc: &PreviewCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::ComboFont {
-        let combo_text = TextContent::inline_u32(rc.fc.state.combo_preview_count);
+        let combo_text = TextContent::inline_u32(rc.state.combo_preview_count);
         let combo_zoom = COMBO_PREVIEW_ZOOM;
         // Choice indices are fixed by construction order:
         // 0=Wendy, 1=ArialRounded, 2=Asap, 3=BebasNeue, 4=SourceCode,
@@ -1390,20 +1508,20 @@ fn draw_combo_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: 
             actors.push(act!(text:
                 font(font_name): settext(combo_text.clone()):
                 align(0.5, 0.5):
-                xy(rc.fc.preview_x[primary_player_idx], rc.current_row_y):
+                xy(rc.preview_x[primary_player_idx], rc.current_row_y):
                 zoom(combo_zoom): horizalign(center):
                 diffuse(1.0, 1.0, 1.0, rc.a):
                 z(Z_ROW_PREVIEW)
             ));
         }
-        if rc.fc.show_p2 && primary_player_idx != P2 {
+        if rc.both_sides() && primary_player_idx != P2 {
             let p2_choice_idx =
                 rc.row.selected_choice_index[P2].min(rc.row.choices.len().saturating_sub(1));
             if let Some(font_name) = combo_font_for(p2_choice_idx) {
                 actors.push(act!(text:
                     font(font_name): settext(combo_text):
                     align(0.5, 0.5):
-                    xy(rc.fc.preview_x[P2], rc.current_row_y):
+                    xy(rc.preview_x[P2], rc.current_row_y):
                     zoom(combo_zoom): horizalign(center):
                     diffuse(1.0, 1.0, 1.0, rc.a):
                     z(Z_ROW_PREVIEW)
@@ -1431,9 +1549,9 @@ pub(super) const fn preview_arrows(num_cols: usize) -> &'static [(usize, f32, f3
     }
 }
 
-fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &RowCtx, ns: &Noteskin, center_x: f32) {
+fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &PreviewCtx, ns: &Noteskin, center_x: f32) {
     let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
-    let state = rc.fc.state;
+    let state = rc.state;
     for &(col, quant_idx, x_mult) in preview_arrows(ns.column_xs.len()) {
         let x = x_mult.mul_add(target_height, center_x);
         let note_idx = col * NUM_QUANTIZATIONS + quant_idx as usize;
@@ -1569,9 +1687,9 @@ fn fit_preview(actors: &mut [Actor], center: [f32; 2], limit: [f32; 2], recenter
     }
 }
 
-fn draw_receptor_preview(actors: &mut Vec<Actor>, rc: &RowCtx, skin: &Noteskin, center_x: f32) {
+fn draw_receptor_preview(actors: &mut Vec<Actor>, rc: &PreviewCtx, skin: &Noteskin, center_x: f32) {
     let size = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
-    let state = rc.fc.state;
+    let state = rc.state;
     for &(col, _, x_mult) in preview_arrows(skin.column_xs.len()) {
         noteskin_draw::draw_receptor_note(
             actors,

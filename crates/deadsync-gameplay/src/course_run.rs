@@ -19,6 +19,7 @@ use crate::{
 pub struct CourseStageRuntime {
     pub song: Arc<SongData>,
     pub steps_index: [usize; MAX_PLAYERS],
+    pub jumps: [u32; MAX_PLAYERS],
     pub preferred_difficulty_index: [usize; MAX_PLAYERS],
     pub modifiers: String,
     pub gain_seconds: f32,
@@ -86,12 +87,12 @@ impl CourseRun {
     ) -> Result<bool, String> {
         let previous_len = self.stages.len();
         let mut totals = self.course_display_totals;
-        for stage in stages
+        for mut stage in stages
             .into_iter()
             .filter_map(|plan| course_stage_runtime_from_plan(plan, chart_type))
         {
             if let Err(error) =
-                add_course_stage_totals_with_loader(&mut totals, &stage, chart_type, load)
+                add_course_stage_totals_with_loader(&mut totals, &mut stage, chart_type, load)
             {
                 self.stages.truncate(previous_len);
                 return Err(error);
@@ -200,6 +201,7 @@ fn course_stage_runtime_from_plan(
     Some(CourseStageRuntime {
         song: plan.song,
         steps_index: [steps_idx; MAX_PLAYERS],
+        jumps: [0; MAX_PLAYERS],
         preferred_difficulty_index: [steps_idx; MAX_PLAYERS],
         modifiers: plan.modifiers,
         gain_seconds: plan.gain_seconds,
@@ -212,7 +214,7 @@ fn course_stage_runtime_from_plan(
 /// scan configuration or external song packs.
 fn add_course_stage_totals_with_loader(
     totals: &mut [CourseDisplayTotals; MAX_PLAYERS],
-    stage: &CourseStageRuntime,
+    stage: &mut CourseStageRuntime,
     chart_type: &str,
     load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
 ) -> Result<(), String> {
@@ -239,7 +241,7 @@ fn add_course_stage_totals_with_loader(
             .song
             .chart_for_steps_index(chart_type, steps_index)
             .ok_or_else(|| format!("{} is missing", context()))?;
-        let add = if let Some(style) = partner_style {
+        let (add, jumps) = if let Some(style) = partner_style {
             let index = stage
                 .song
                 .charts
@@ -264,8 +266,9 @@ fn add_course_stage_totals_with_loader(
             let (_, payload) = loaded.as_ref().expect("one validated payload was loaded");
             course_display_totals_for_chart_side(chart, payload, style, player_idx)
         } else {
-            course_display_totals_for_chart(chart)
+            (course_display_totals_for_chart(chart), chart.stats.jumps)
         };
+        stage.jumps[player_idx] = jumps;
         total.possible_grade_points = total
             .possible_grade_points
             .saturating_add(add.possible_grade_points);
