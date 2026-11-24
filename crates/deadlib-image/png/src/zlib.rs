@@ -2,7 +2,7 @@
 use crate::{
     Error,
     checksum::{Adler32, adler32},
-    reserve, zeroed,
+    reserve,
 };
 
 #[path = "zlib/deflate.rs"]
@@ -1083,6 +1083,24 @@ fn decompress_bits<const DISPATCH: bool>(
     let mut output = Vec::new();
     let used = decompress_bits_into::<DISPATCH>(bits, limit, sized, &mut output)?;
     Ok((output, used))
+}
+
+/// `len` zero bytes with exact capacity, from a zeroed allocation. Fresh
+/// pages are already zero, so this skips the pass `resize` would make.
+#[allow(unsafe_code)]
+fn zeroed(len: usize) -> Result<Vec<u8>, Error> {
+    if len == 0 {
+        return Ok(Vec::new());
+    }
+    let layout = std::alloc::Layout::array::<u8>(len).map_err(|_| Error::Allocation)?;
+    // SAFETY: `layout` has a nonzero size.
+    let bytes = unsafe { std::alloc::alloc_zeroed(layout) };
+    if bytes.is_null() {
+        return Err(Error::Allocation);
+    }
+    // SAFETY: the global allocator returned `bytes` for `layout`: `len`
+    // bytes at alignment 1, all initialized to zero.
+    Ok(unsafe { Vec::from_raw_parts(bytes, len, len) })
 }
 
 fn decompress_bits_into<const DISPATCH: bool>(
