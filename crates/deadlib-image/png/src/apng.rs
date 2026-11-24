@@ -207,7 +207,7 @@ impl<'a> Decoder<'a> {
                 h.interlaced,
                 self.limits.max_output_bytes,
             )?;
-            validate_image(&image, self.h, palette, self.palette_policy)?;
+            validate_palette(&image, palette, self.palette_policy)?;
             self.frames.push(Frame {
                 control,
                 image: Some(image),
@@ -320,24 +320,17 @@ impl<'a> Decoder<'a> {
     }
 }
 
-fn validate_image(
+fn validate_palette(
     image: &Image,
-    h: Header,
     palette: usize,
     policy: crate::PalettePolicy,
 ) -> Result<(), Error> {
-    image
-        .validate()
-        .map_err(|_| Error::Invalid("APNG frame samples"))?;
-    if image.color_type != h.color || image.bit_depth != h.depth {
-        return Err(Error::Invalid("APNG frame format"));
-    }
-    if h.color == ColorType::Indexed {
+    if image.color_type == ColorType::Indexed {
         let Samples::U8(values) = &image.samples else {
             return Err(Error::Invalid("indexed APNG storage"));
         };
         if policy == crate::PalettePolicy::Strict
-            && crate::codec::indices_outside_palette(values, palette, h.depth)
+            && crate::codec::indices_outside_palette(values, palette, image.bit_depth)
         {
             return Err(Error::Invalid("APNG palette index"));
         }
@@ -361,7 +354,13 @@ pub(crate) fn validate(png: &Png, h: Header, policy: crate::PalettePolicy) -> Re
                     .image
                     .as_ref()
                     .ok_or(Error::Invalid("missing APNG frame image"))?;
-                validate_image(image, h, png.palette.len(), policy)?;
+                image
+                    .validate()
+                    .map_err(|_| Error::Invalid("APNG frame samples"))?;
+                if image.color_type != h.color || image.bit_depth != h.depth {
+                    return Err(Error::Invalid("APNG frame format"));
+                }
+                validate_palette(image, png.palette.len(), policy)?;
                 if image.width != f.control.width || image.height != f.control.height {
                     return Err(Error::Invalid("APNG image/control dimensions"));
                 }
