@@ -150,9 +150,11 @@ impl Decoder {
                     }
                     length
                 };
-                if let Some((offset, previous_len)) = self.previous
-                    && self.next < 4096
-                {
+                // A full table cannot use the previous phrase until CLEAR.
+                if self.next == 4096 {
+                    continue;
+                }
+                if let Some((offset, previous_len)) = self.previous {
                     if self.dictionary.len() == self.dictionary.capacity() {
                         let bound = limit
                             .saturating_sub(self.origin)
