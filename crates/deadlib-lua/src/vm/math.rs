@@ -34,24 +34,35 @@ fn frexp(n: f64) -> (f64, i32) {
 }
 
 fn ldexp(n: f64, exponent: i32) -> f64 {
-    if n == 0.0 || !n.is_finite() {
+    const FRACTION: u64 = (1 << 52) - 1;
+    let bits = n.to_bits();
+    let sign = bits & (1 << 63);
+    let mut source = ((bits >> 52) & 2047) as i64;
+    let mut fraction = bits & FRACTION;
+    if source == 2047 {
         return n;
     }
-    let (fraction, e) = frexp(n);
-    let bits = fraction.to_bits();
-    let sign = bits & (1u64 << 63);
-    let target = i64::from(e) + i64::from(exponent) + 1022;
+    if source == 0 {
+        if fraction == 0 {
+            return n;
+        }
+        // Move the leading one into the implicit bit of a normal significand.
+        let shift = fraction.leading_zeros() - 11;
+        fraction = (fraction << shift) & FRACTION;
+        source = 1 - i64::from(shift);
+    }
+    let target = source + i64::from(exponent);
     if target >= 2047 {
         return f64::from_bits(sign | (2047u64 << 52));
     }
     if target > 0 {
-        return f64::from_bits(sign | ((target as u64) << 52) | (bits & 0xfffffffffffff));
+        return f64::from_bits(sign | ((target as u64) << 52) | fraction);
     }
     let shift = 1 - target;
     if shift > 53 {
         return f64::from_bits(sign);
     }
-    let mantissa = (bits & 0xfffffffffffff) | (1u64 << 52);
+    let mantissa = fraction | (1 << 52);
     let mut rounded = mantissa >> shift;
     let remainder = mantissa & ((1u64 << shift) - 1);
     let half = 1u64 << (shift - 1);
