@@ -325,10 +325,10 @@ impl Demuxer {
             };
             let mut remaining = complete;
             for fragment in page.fragments() {
-                if fragment.starts_packet {
-                    stream.packet_offset = offset;
-                }
                 if !fragment.starts_packet || !fragment.ends_packet {
+                    if fragment.starts_packet {
+                        stream.packet_offset = offset;
+                    }
                     reserve(partial, fragment.data.len())?;
                     partial.extend_from_slice(fragment.data);
                     stream.continuing = !fragment.ends_packet;
@@ -337,6 +337,11 @@ impl Demuxer {
                     }
                 }
                 remaining -= 1;
+                let (data, start_page_offset) = if fragment.starts_packet {
+                    (fragment.data, offset)
+                } else {
+                    (partial.as_slice(), stream.packet_offset)
+                };
                 let info = PacketInfo {
                     serial: stream.serial,
                     chain: stream.chain,
@@ -348,13 +353,8 @@ impl Demuxer {
                     } else {
                         None
                     },
-                    start_page_offset: stream.packet_offset,
+                    start_page_offset,
                     end_page_offset: offset,
-                };
-                let data = if fragment.starts_packet {
-                    fragment.data
-                } else {
-                    &*partial
                 };
                 emit(Packet { data, info });
                 stream.packets = stream
