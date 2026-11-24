@@ -183,7 +183,7 @@ impl Decoder {
 
 /// Reusable flat hash-table encoder; no production codec dependencies.
 pub struct Encoder {
-    table: [u32; 8192],
+    table: Option<[u32; 8192]>,
 }
 impl Default for Encoder {
     fn default() -> Self {
@@ -192,7 +192,7 @@ impl Default for Encoder {
 }
 impl Encoder {
     pub fn new() -> Self {
-        Self { table: [0; 8192] }
+        Self { table: None }
     }
     pub fn encode(&mut self, input: &[u8], minimum: u8, output: &mut Vec<u8>) -> Result<(), Error> {
         if !(2..=8).contains(&minimum) || input.iter().any(|&v| u16::from(v) >= 1 << minimum) {
@@ -208,7 +208,13 @@ impl Encoder {
         minimum: u8,
         output: &mut Vec<u8>,
     ) -> Result<(), Error> {
-        self.table.fill(0);
+        let table = match &mut self.table {
+            Some(table) => {
+                table.fill(0);
+                table
+            }
+            empty => empty.insert([0; 8192]),
+        };
         let clear = 1u16 << minimum;
         let mut next = clear + 2;
         let mut bits = BitWriter {
@@ -227,7 +233,7 @@ impl Encoder {
                 let key = (u32::from(prefix) << 8) | u32::from(symbol);
                 let mut slot = (key.wrapping_mul(0x9e3779b1) >> 19) as usize;
                 loop {
-                    let entry = self.table[slot];
+                    let entry = table[slot];
                     if entry == 0 {
                         break;
                     }
@@ -241,11 +247,11 @@ impl Encoder {
                 bits.code(prefix, (next - 1).ilog2() as u8 + 1)?;
                 if next < 4096 {
                     // The assigned code is never zero, even when the key is.
-                    self.table[slot] = (key << 12) | u32::from(next);
+                    table[slot] = (key << 12) | u32::from(next);
                     next += 1;
                 } else {
                     bits.code(clear, 12)?;
-                    self.table.fill(0);
+                    table.fill(0);
                     next = clear + 2;
                 }
                 prefix = symbol.into();
