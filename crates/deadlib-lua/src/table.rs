@@ -814,11 +814,10 @@ impl Table {
             .map_or(0, |index| start + index + 1)
     }
     #[inline(never)]
-    fn first_live_array_slot(array: &[Value]) -> Option<(usize, Value)> {
-        let live = |value: &Value| !matches!(value, Value::Nil);
-        let (head, tail) = array.split_at(array.len().min(8));
-        if let Some(index) = head.iter().position(live) {
-            return Some((index, head[index]));
+    fn first_live_slot<T>(slots: &[T], live: impl Fn(&T) -> bool) -> Option<(usize, &T)> {
+        let (head, tail) = slots.split_at(slots.len().min(8));
+        if let Some(index) = head.iter().position(&live) {
+            return Some((index, &head[index]));
         }
         let (blocks, rest) = tail.as_chunks::<16>();
         // Skip empty blocks before finding the first live slot in order.
@@ -827,10 +826,10 @@ impl Table {
             .position(|block| block.iter().fold(false, |found, value| found | live(value)))
         {
             Some(index) => (head.len() + index * 16, blocks[index].as_slice()),
-            None => (array.len() - rest.len(), rest),
+            None => (slots.len() - rest.len(), rest),
         };
         let index = values.iter().position(live)?;
-        Some((start + index, values[index]))
+        Some((start + index, &values[index]))
     }
     pub fn next(&self, key: Value) -> Result<Option<(Value, Value)>, Error> {
         self.next_entry(key)
@@ -873,21 +872,31 @@ impl Table {
             if !matches!(value, Value::Nil) {
                 return Ok(Some((Value::Number((array + 1) as f64), value)));
             }
-            if let Some((index, value)) = Self::first_live_array_slot(rest) {
+            if let Some((index, &value)) =
+                Self::first_live_slot(rest, |value| !matches!(value, Value::Nil))
+            {
                 return Ok(Some((Value::Number((array + index + 2) as f64), value)));
             }
         }
-        for (index, entry) in self.entries.iter().enumerate().skip(hash) {
-            if entry.value != Value::Nil {
-                // Hash entries are indexed by u32 in slots, so index+1 fits.
-                // A sequential next cursor always uses this primary hint;
-                // discarding the secondary avoids a read-modify-write per key.
-                self.next_hash_hint
-                    .store((index + 1) as u64, Ordering::Relaxed);
-                return Ok(Some((entry.key.value(), entry.value)));
-            }
-        }
-        Ok(None)
+        let Some(entry) = self.entries.get(hash) else {
+            return Ok(None);
+        };
+        let (index, entry) = if matches!(entry.value, Value::Nil) {
+            let tail = &self.entries[hash + 1..];
+            let Some((index, entry)) =
+                Self::first_live_slot(tail, |entry| !matches!(entry.value, Value::Nil))
+            else {
+                return Ok(None);
+            };
+            (hash + 1 + index, entry)
+        } else {
+            (hash, entry)
+        };
+        // A sequential cursor uses the primary hint. Discarding the secondary
+        // avoids a read-modify-write on each key.
+        self.next_hash_hint
+            .store((index + 1) as u64, Ordering::Relaxed);
+        Ok(Some((entry.key.value(), entry.value)))
     }
 }
 #[cfg(test)]
