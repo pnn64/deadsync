@@ -289,7 +289,7 @@ impl Inflater {
                 }
             };
         }
-        loop {
+        'states: loop {
             match self.state {
                 State::HeaderCmf => self.state = State::HeaderFlags(read!(8) as u8),
                 State::HeaderFlags(cmf) => {
@@ -376,7 +376,7 @@ impl Inflater {
                         return Err(Error::Invalid("too many literal codes"));
                     }
                     self.code_lengths.fill(0);
-                    self.lengths.fill(0);
+                    // DynamicLengths overwrites the prefix before either tree reads it.
                     self.index = 0;
                     self.state = State::DynamicCodeLengths;
                 }
@@ -393,47 +393,28 @@ impl Inflater {
                     self.state = State::DynamicLengths;
                 }
                 State::DynamicLengths => {
-                    if self.index == self.nl + self.nd {
-                        if self.lengths[256] == 0 {
-                            return Err(Error::Invalid("missing end of block code"));
-                        }
-                        self.literals = Some(Huffman::new(&self.lengths[..self.nl], false, false)?);
-                        self.distances = Some(Huffman::new(
-                            &self.lengths[self.nl..self.nl + self.nd],
-                            false,
-                            true,
-                        )?);
-                        self.state = State::Codes;
-                        continue;
+                    let end = self.nl + self.nd;
+                    while self.index < end {
+                        let (value, base, extra) = match symbol!(self.literals.as_ref().unwrap()) {
+                            value @ 0..=15 => {
+                                self.lengths[self.index] = value as u8;
+                                self.index += 1;
+                                continue;
+                            }
+                            16 if self.index != 0 => (self.lengths[self.index - 1], 3, 2),
+                            17 => (0, 3, 3),
+                            18 => (0, 11, 7),
+                            _ => return Err(Error::Invalid("invalid code length repeat")),
+                        };
+                        self.state = State::DynamicRepeat { value, base, extra };
+                        continue 'states;
                     }
-                    match symbol!(self.literals.as_ref().unwrap()) {
-                        value @ 0..=15 => {
-                            self.lengths[self.index] = value as u8;
-                            self.index += 1;
-                        }
-                        16 if self.index != 0 => {
-                            self.state = State::DynamicRepeat {
-                                value: self.lengths[self.index - 1],
-                                base: 3,
-                                extra: 2,
-                            }
-                        }
-                        17 => {
-                            self.state = State::DynamicRepeat {
-                                value: 0,
-                                base: 3,
-                                extra: 3,
-                            }
-                        }
-                        18 => {
-                            self.state = State::DynamicRepeat {
-                                value: 0,
-                                base: 11,
-                                extra: 7,
-                            }
-                        }
-                        _ => return Err(Error::Invalid("invalid code length repeat")),
+                    if self.lengths[256] == 0 {
+                        return Err(Error::Invalid("missing end of block code"));
                     }
+                    self.literals = Some(Huffman::new(&self.lengths[..self.nl], false, false)?);
+                    self.distances = Some(Huffman::new(&self.lengths[self.nl..end], false, true)?);
+                    self.state = State::Codes;
                 }
                 State::DynamicRepeat { value, base, extra } => {
                     let n = base + read!(extra) as usize;
