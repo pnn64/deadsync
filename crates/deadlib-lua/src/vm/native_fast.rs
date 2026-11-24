@@ -10,11 +10,10 @@ impl Vm {
             self.registers.copy_within(call + 1..call + 1 + count, call);
             return Some(count);
         }
-        if id == 3
-            && count == 1
-            && let Value::Number(number) = self.registers[call + 1]
-        {
-            self.registers[call] = Value::Number(number);
+        if id == 3 && count == 1 {
+            self.registers[call] = self
+                .number(self.registers[call + 1])
+                .map_or(Value::Nil, Value::Number);
             return Some(1);
         }
         if id == 4 && count >= 2 {

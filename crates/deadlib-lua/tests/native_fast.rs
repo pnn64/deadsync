@@ -295,6 +295,9 @@ assert(rawget(other,'missing')==nil and rawget(t,nan)==nil)
 assert(1/tonumber(-0.0)==-math.huge)
 assert(tonumber(nan)~=tonumber(nan))
 assert(tonumber('42')==42 and tonumber('ff',16)==255)
+assert(1/tonumber(' -0\0ignored')==-math.huge and tonumber('0x1p3')==8)
+assert(tonumber('invalid')==nil and tonumber({})==nil and tonumber(nil)==nil)
+assert(tonumber('42',nil)==42 and not pcall(tonumber) and not pcall(tonumber,'42',1))
 assert(not pcall(rawget,42,1) and not pcall(rawget,t))
 assert(not pcall(rawequal,1) and tonumber(false)==nil)
 return 42
@@ -318,7 +321,7 @@ debug.sethook(function(event)
 end,'cr')
 assert(functions[1](4,4))
 assert(functions[2]({42},1)==42)
-assert(functions[3](42)==42)
+assert(functions[3]('42')==42)
 debug.sethook()
 for i=1,3 do assert(calls[i]==1 and returns[i]==1) end
 return 42
