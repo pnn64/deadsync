@@ -629,32 +629,38 @@ fn deinterlace(
     // GIF heights fit u16. Walk each row-permutation cycle once, keeping only
     // its first row aside. Every other row moves directly to its destination.
     let mut visited = [0u64; 1024];
-    let pass1 = height.div_ceil(8);
-    let pass2 = (height + 3) / 8;
-    let pass3 = (height + 1) / 4;
+    let pass2 = height.div_ceil(8);
+    let pass3 = pass2 + (height + 3) / 8;
+    let pass4 = pass3 + (height + 1) / 4;
+    // The row's low three bits select its pass. Pack its pass offset and
+    // log2(row step) together so each lookup needs one load.
+    let second = (pass2 << 2) | 3;
+    let third = (pass3 << 2) | 2;
+    let fourth = (pass4 << 2) | 1;
+    let passes = [3, fourth, third, fourth, second, fourth, third, fourth];
+    let source_row = |dest: usize| {
+        let pass = passes[dest & 7];
+        (pass >> 2) + (dest >> (pass & 3))
+    };
     for start in 0..height {
         if visited[start / 64] & (1 << (start % 64)) != 0 {
+            continue;
+        }
+        let mut source = source_row(start);
+        if source == start {
             continue;
         }
         row.copy_from_slice(&pixels[start * width..(start + 1) * width]);
         let mut dest = start;
         loop {
             visited[dest / 64] |= 1 << (dest % 64);
-            let source = if dest & 7 == 0 {
-                dest / 8
-            } else if dest & 7 == 4 {
-                pass1 + dest / 8
-            } else if dest & 3 == 2 {
-                pass1 + pass2 + dest / 4
-            } else {
-                pass1 + pass2 + pass3 + dest / 2
-            };
             if source == start {
                 pixels[dest * width..(dest + 1) * width].copy_from_slice(row);
                 break;
             }
             pixels.copy_within(source * width..(source + 1) * width, dest * width);
             dest = source;
+            source = source_row(dest);
         }
     }
     Ok(())
