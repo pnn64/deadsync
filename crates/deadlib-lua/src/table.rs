@@ -802,6 +802,25 @@ impl Table {
             .rposition(live)
             .map_or(0, |index| start + index + 1)
     }
+    #[inline(never)]
+    fn first_live_array_slot(array: &[Value]) -> Option<(usize, Value)> {
+        let live = |value: &Value| !matches!(value, Value::Nil);
+        let (head, tail) = array.split_at(array.len().min(8));
+        if let Some(index) = head.iter().position(live) {
+            return Some((index, head[index]));
+        }
+        let (blocks, rest) = tail.as_chunks::<16>();
+        // Skip empty blocks before finding the first live slot in order.
+        let (start, values) = match blocks
+            .iter()
+            .position(|block| block.iter().fold(false, |found, value| found | live(value)))
+        {
+            Some(index) => (head.len() + index * 16, blocks[index].as_slice()),
+            None => (array.len() - rest.len(), rest),
+        };
+        let index = values.iter().position(live)?;
+        Some((start + index, values[index]))
+    }
     pub fn next(&self, key: Value) -> Result<Option<(Value, Value)>, Error> {
         self.next_entry(key)
             .map_err(|_| Error::new(ErrorKind::Runtime, 0, "invalid key to 'next'"))
@@ -839,9 +858,12 @@ impl Table {
             };
             (self.array.len(), index + 1)
         };
-        for (i, &value) in self.array.iter().enumerate().skip(array) {
-            if value != Value::Nil {
-                return Ok(Some((Value::Number((i + 1) as f64), value)));
+        if let Some((&value, rest)) = self.array[array..].split_first() {
+            if !matches!(value, Value::Nil) {
+                return Ok(Some((Value::Number((array + 1) as f64), value)));
+            }
+            if let Some((index, value)) = Self::first_live_array_slot(rest) {
+                return Ok(Some((Value::Number((array + index + 2) as f64), value)));
             }
         }
         for (index, entry) in self.entries.iter().enumerate().skip(hash) {
@@ -875,6 +897,24 @@ mod allocation_tests {
             table.set(key, Value::Nil).unwrap();
             assert_eq!(table.max_numeric_key(), 0.0);
         }
+    }
+    #[test]
+    fn next_keeps_sparse_array_order_before_hash_entries() {
+        let mut table = Table::with_capacity(65, 1).unwrap();
+        let first = Value::Number(10.0);
+        let middle = Value::Number(35.0);
+        let last = Value::Number(65.0);
+        let hash = Value::Boolean(true);
+        let value = Value::Boolean(false);
+        for key in [first, middle, last, hash] {
+            table.set(key, value).unwrap();
+        }
+        assert_eq!(table.next_entry(Value::Nil).unwrap(), Some((first, value)));
+        table.set(first, Value::Nil).unwrap();
+        assert_eq!(table.next_entry(first).unwrap(), Some((middle, value)));
+        assert_eq!(table.next_entry(middle).unwrap(), Some((last, value)));
+        assert_eq!(table.next_entry(last).unwrap(), Some((hash, value)));
+        assert_eq!(table.next_entry(hash).unwrap(), None);
     }
     #[test]
     fn key_equality_preserves_each_variant_and_numeric_signed_zero() {
