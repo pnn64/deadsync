@@ -161,13 +161,11 @@ fn unpack_indices<const N: usize>(row: &[u8], output: &mut [u8]) {
     let (groups, tail) = output.as_chunks_mut::<N>();
     for (indices, &byte) in groups.iter_mut().zip(row) {
         if N == 8 {
-            // Spread the eight bits into the low bit of eight bytes. Big-endian
-            // byte order then emits the original most-significant bit first.
-            let word = u64::from(byte);
-            let word = (word | (word << 28)) & 0x0000_000f_0000_000f;
-            let word = (word | (word << 14)) & 0x0003_0003_0003_0003;
-            let word = (word | (word << 7)) & 0x0101_0101_0101_0101;
-            indices.copy_from_slice(&word.to_be_bytes());
+            // Copy the byte at nine-bit intervals. The high bit of each
+            // output byte then holds the next source bit, from MSB to LSB.
+            let word = u64::from(byte).wrapping_mul(0x8040_2010_0804_0201);
+            let bits = (word >> 7) & 0x0101_0101_0101_0101;
+            indices.copy_from_slice(&bits.to_le_bytes());
         } else {
             *indices = std::array::from_fn(|i| index(byte, i));
         }
