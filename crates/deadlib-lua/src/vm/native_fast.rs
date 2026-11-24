@@ -28,6 +28,19 @@ impl Vm {
                 self.registers[call] = self.tables.get(id.0)?.get(self.registers[call + 2]);
                 Some(1)
             }
+            tables::TAB_GETN | tables::TAB_MAXN
+                if count != 0
+                    && let Value::Table(table) = self.registers[call + 1] =>
+            {
+                let table = self.tables.get(table.0)?;
+                let size = if id == tables::TAB_GETN {
+                    table.len() as f64
+                } else {
+                    table.max_numeric_key()
+                };
+                self.registers[call] = Value::Number(size);
+                Some(1)
+            }
             // Other arities, coercion, and errors use ordinary dispatch.
             strings::STR_LEN | strings::STR_BYTE
                 if count == 1

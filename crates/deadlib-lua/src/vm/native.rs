@@ -90,7 +90,9 @@ impl Vm {
                     | PAIRS_NEXT
                     | IPAIRS_STEP
                     | strings::STR_LEN
-                    | strings::STR_BYTE => self.try_fast_native(id, call, count),
+                    | strings::STR_BYTE
+                    | tables::TAB_GETN
+                    | tables::TAB_MAXN => self.try_fast_native(id, call, count),
                     7 => self.try_fast_select(call, count),
                     32..=41 | 43 | 44 | 46..=51 | 53 | 54 => self.try_fast_math(id, call, count),
                     42 | 45 | 52 => self.try_fast_binary_math(id, call, count),
