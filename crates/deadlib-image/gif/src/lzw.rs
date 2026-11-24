@@ -111,7 +111,9 @@ impl Decoder {
                     if start >= limit {
                         return Err(Error::Invalid("LZW output exceeds frame size"));
                     }
-                    reserve(output, 1)?;
+                    if start == output.capacity() {
+                        reserve(output, 1)?;
+                    }
                     output.push(code as u8);
                     1
                 } else {
