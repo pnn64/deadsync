@@ -768,7 +768,7 @@ mod tests {
         fn new(name: &str) -> Self {
             let id = NEXT_TMP_ID.fetch_add(1, Ordering::Relaxed);
             let path = std::env::temp_dir().join(format!(
-                "deadsync-assets-{name}-{}-{id}",
+                "deadlib-assets-{name}-{}-{id}",
                 std::process::id()
             ));
             let _ = fs::remove_dir_all(&path);

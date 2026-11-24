@@ -14,7 +14,7 @@ impl TempDir {
     pub fn new(label: &str) -> Self {
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "deadsync-assets-perf-{label}-{}-{id}-{}",
+            "deadlib-assets-perf-{label}-{}-{id}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

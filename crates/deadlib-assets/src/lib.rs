@@ -910,7 +910,7 @@ mod tests {
     #[test]
     fn direct_texture_key_path_accepts_absolute_keys() {
         let dir = std::env::temp_dir().join(format!(
-            "deadsync-texture-key-{}-{}",
+            "deadlib-texture-key-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

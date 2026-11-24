@@ -614,7 +614,7 @@ mod tests {
         assert!(modified, "fixture has no target audio page");
         let id = TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "deadsync-missing-ogg-granule-{}-{id}.ogg",
+            "deadlib-missing-ogg-granule-{}-{id}.ogg",
             std::process::id()
         ));
         fs::write(&path, bytes).expect("write malformed OGG fixture");

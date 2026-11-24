@@ -9,16 +9,14 @@
 //!   * Launched from an existing terminal (e.g. a developer running it from a
 //!     shell): we reattach to the parent console so logs print there, without
 //!     spawning a window.
-//!   * The user explicitly opts in (`ShowConsole=1` in `deadsync.ini` or the
-//!     `--console` flag): we allocate a fresh console window.
+//!   * The caller explicitly opts in: we allocate a fresh console window.
 //!
 //! On non-Windows platforms the process is always attached to its controlling
 //! terminal, so this is a no-op.
 
 /// Set up the console according to the user's preference.
 ///
-/// `show` is the resolved `ShowConsole` preference (config value, possibly
-/// overridden by the `--console` CLI flag). Call this once, as early as possible
+/// `show` is the caller-resolved preference. Call this once, as early as possible
 /// during startup and before the logger is initialized, so the very first log
 /// lines land in the right place.
 pub fn init(show: bool) {
@@ -86,7 +84,7 @@ mod imp {
 
     /// (Re)point a single std handle at the console device, opening a dedicated
     /// handle for it. Skips handles the parent shell already redirected to a
-    /// file or pipe (e.g. `deadsync.exe > out.txt`), so attaching the console
+    /// file or pipe (e.g. `application.exe > out.txt`), so attaching the console
     /// doesn't silently clobber the redirection.
     fn bind_console_handle(std_id: STD_HANDLE, device: PCWSTR) {
         if is_redirected(std_id) {

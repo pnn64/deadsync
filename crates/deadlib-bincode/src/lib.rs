@@ -1,10 +1,9 @@
 #![warn(missing_docs, unused_lifetimes)]
 
-//! `DeadSync`'s compact binary persistence codec.
+//! Compact binary persistence codec.
 //!
 //! This is a deliberately reduced fork of bincode 2.0.1. It supports the
-//! standard bincode wire format and the types used by `DeadSync`'s caches,
-//! profiles, scores, noteskins, and analysis data.
+//! standard bincode wire format for structured application data.
 //!
 //! ```rust
 //! use bincode::{Decode, Encode};

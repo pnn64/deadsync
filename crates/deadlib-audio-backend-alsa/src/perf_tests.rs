@@ -64,8 +64,8 @@ fn nul_pcm_ids_preserve_library_panic_payloads() {
 #[test]
 fn missing_pcm_preserves_open_error_text() {
     for name in [
-        "deadsync_missing_pcm_benchmark_fixture",
-        "deadsync_missing_音楽",
+        "deadlib_missing_pcm_benchmark_fixture",
+        "deadlib_missing_音楽",
     ] {
         let expected = PCM::new(name, Direction::Playback, false).unwrap_err();
         let actual = prepare(
@@ -240,7 +240,7 @@ fn pcm_selection_preserves_text_and_errors() {
         selected_pcm_id(None, "device", AlsaAccessMode::Shared),
         Ok("default".into())
     );
-    let alias = "deadsync_missing_pcm_benchmark_fixture";
+    let alias = "deadlib_missing_pcm_benchmark_fixture";
     let expected = format!(
         "ALSA exclusive output for 'device' requires a direct hw/plughw device or a resolvable hardware-backed alias, got '{alias}'"
     );

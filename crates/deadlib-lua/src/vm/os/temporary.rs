@@ -60,7 +60,7 @@ pub(super) fn create() -> Result<Name, Error> {
     // Keep the POSIX name extensionless: require(os.tmpname()) with LUA_PATH=?
     // must not translate an artificial extension into a module separator.
     let mut bytes = fallible::format(format_args!(
-        "/tmp/deadsync-lua-{}-XXXXXX",
+        "/tmp/deadlib-lua-{}-XXXXXX",
         std::process::id()
     ))?
     .into_bytes();
@@ -106,7 +106,7 @@ pub(super) fn create() -> Result<Name, Error> {
             .unwrap_or_default()
             .as_nanos();
         let suffix = fallible::format(format_args!(
-            "deadsync-lua-{}-{stamp}-{nonce}.tmp",
+            "deadlib-lua-{}-{stamp}-{nonce}.tmp",
             std::process::id()
         ))?;
         path.try_extend(suffix.encode_utf16())?;

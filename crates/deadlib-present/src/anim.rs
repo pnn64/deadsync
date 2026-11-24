@@ -1524,7 +1524,7 @@ pub struct TweenQueueEntry {
     pub target: TweenState,
 }
 
-/// Semantic snapshot of one DeadSync tween queue.
+/// Semantic snapshot of one tween queue.
 #[cfg(feature = "conformance")]
 #[derive(Clone, Debug)]
 pub struct TweenSnapshot {
@@ -1536,7 +1536,7 @@ pub struct TweenSnapshot {
 #[cfg(feature = "conformance")]
 impl TweenSeq {
     /// Captures the active segment followed by queued segments. Unlike native
-    /// `Actor::Sleep`, DeadSync does not retain its implementation-only
+    /// `Actor::Sleep`, this queue does not retain its implementation-only
     /// zero-duration separator, so callers compare semantic queue entries.
     #[must_use]
     pub fn conformance_snapshot(&self) -> TweenSnapshot {

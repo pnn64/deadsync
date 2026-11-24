@@ -137,7 +137,7 @@ mod tests {
     fn resolve_target_returns_parent_for_existing_file() {
         let tmp = std::env::temp_dir();
         let file = tmp.join(format!(
-            "deadsync-open-path-test-{}.tmp",
+            "deadlib-open-path-test-{}.tmp",
             std::process::id()
         ));
         fs::write(&file, b"x").expect("write tmp file");
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn resolve_target_returns_path_for_nonexistent() {
-        let tmp = std::env::temp_dir().join("deadsync-this-does-not-exist-xyz");
+        let tmp = std::env::temp_dir().join("deadlib-this-does-not-exist-xyz");
         assert_eq!(resolve_target(&tmp), tmp);
     }
 }

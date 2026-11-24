@@ -197,7 +197,7 @@ fn check_buffer_uploads(state: &State) {
 #[test]
 #[ignore = "requires a wgpu graphics device and a window system"]
 fn pipeline_switches_preserve_camera_pixels() {
-    let api = match std::env::var("DEADSYNC_WGPU_TEST_API").as_deref() {
+    let api = match std::env::var("DEADLIB_WGPU_TEST_API").as_deref() {
         Ok("dx12") => Api::DirectX,
         Ok("opengl") => Api::OpenGL,
         Ok("vulkan") | Err(_) => Api::Vulkan,

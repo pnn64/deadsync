@@ -3312,7 +3312,7 @@ pub struct TextLayoutFrameStats {
 /// Persistent bitmap-text layout storage owned by one presentation caller.
 ///
 /// The cache is single-threaded (`&mut self`) and lives for whatever scope its
-/// owner chooses; `DeadSync` uses separate UI and song-lifetime gameplay instances.
+/// owner chooses, such as separate UI and gameplay lifetimes.
 /// Callers prewarm before a live interval, then either freeze exactly or allow a
 /// bounded late reserve. A retained miss builds once, while overflow builds an
 /// uncached result without eviction, scans, or destructor cascades. `clear()` or

@@ -13,7 +13,7 @@ static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 fn temporary_name() -> Result<String, Error> {
     let nonce = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     fallible::format(format_args!(
-        "deadsync-lua-{}-{nonce}-{}.tmp",
+        "deadlib-lua-{}-{nonce}-{}.tmp",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
