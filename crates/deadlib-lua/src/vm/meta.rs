@@ -291,14 +291,27 @@ impl Vm {
                         })?;
                     start -= 1;
                 }
-                let mut bytes = self.try_take_buffer(size)?;
-                for r in start..=last {
-                    let Value::String(id) = self.registers[r] else {
-                        unreachable!()
-                    };
-                    bytes.extend_from_slice(&self.strings.bytes[slot_index(id.0)]);
-                }
-                self.registers[start] = self.try_finish_buffer(bytes)?;
+                self.registers[start] = if size == right_len
+                    && self.buffers.len() < self.buffers.capacity()
+                    && self
+                        .buffers
+                        .last()
+                        .is_some_and(|bytes| bytes.capacity() >= size)
+                {
+                    // Empty prefixes leave the existing string intact, with no
+                    // scratch allocation required by the ordinary path.
+                    self.strings.bytes.preserve_new_reference(right.0);
+                    Value::String(right)
+                } else {
+                    let mut bytes = self.try_take_buffer(size)?;
+                    for r in start..=last {
+                        let Value::String(id) = self.registers[r] else {
+                            unreachable!()
+                        };
+                        bytes.extend_from_slice(&self.strings.bytes[slot_index(id.0)]);
+                    }
+                    self.try_finish_buffer(bytes)?
+                };
                 last = start;
             } else {
                 let left = self.registers[last - 1];
