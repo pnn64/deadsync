@@ -229,7 +229,7 @@ impl Compositor {
             let two_colors = local.map(<[_]>::len).or(self.palette_len) == Some(2);
             let canvas = (self.pixels.as_mut_slice(), self.width as usize);
             if two_colors {
-                draw_binary_indices(
+                draw_binary_indices::<false>(
                     canvas,
                     r,
                     &frame.indices,
@@ -314,9 +314,7 @@ impl Compositor {
                 for (row, mask) in self.mask.chunks_exact(cw).take(rect.h - y).enumerate() {
                     let start = (y + row) * rect.w + x;
                     let dest = &mut self.text_coverage[start..start + width];
-                    for (index, &covered) in dest.iter_mut().zip(mask) {
-                        *index = u8::from(covered != 0);
-                    }
+                    dest.copy_from_slice(&mask[..width]);
                 }
             }
             x += cw;
@@ -335,7 +333,7 @@ impl Compositor {
                     Some(i) if i == foreground => Some(1),
                     _ => None,
                 };
-                draw_binary_indices(
+                draw_binary_indices::<true>(
                     (&mut self.pixels, self.width as usize),
                     rect,
                     &self.text_coverage,
@@ -413,7 +411,7 @@ fn frequent_transparency_changes(sample: [u8; 8], transparent: u8) -> bool {
 }
 
 #[inline(never)]
-fn draw_binary_indices(
+fn draw_binary_indices<const NORMALIZE: bool>(
     (canvas, stride): (&mut [[u8; 4]], usize),
     r: Rect,
     indices: &[u8],
@@ -421,7 +419,14 @@ fn draw_binary_indices(
     colors: [[u8; 4]; 2],
     transparent: Option<u8>,
 ) {
-    // Validated indices are zero or one. Expand them to full-word masks.
+    // Frame indices are already binary. Glyphs can supply any nonzero byte.
+    let binary = |index| {
+        if NORMALIZE {
+            u8::from(index != 0)
+        } else {
+            index
+        }
+    };
     let [background, foreground] = colors;
     let first = u32::from_ne_bytes(background);
     let difference = first ^ u32::from_ne_bytes(foreground);
@@ -439,6 +444,7 @@ fn draw_binary_indices(
         let src = &src[..r.w];
         let dst = &mut dst[r.x..r.x + r.w];
         if let Some(index) = uniform_index(src) {
+            let index = binary(index);
             if transparent != Some(index) {
                 dst.fill(if index == 0 { background } else { foreground });
             }
@@ -446,13 +452,13 @@ fn draw_binary_indices(
         }
         if let Some((t, paint)) = blend {
             for (pixel, &index) in dst.iter_mut().zip(src) {
-                let keep = u32::from(index == t).wrapping_neg();
+                let keep = u32::from(binary(index) == t).wrapping_neg();
                 let old = u32::from_ne_bytes(*pixel);
                 *pixel = ((old & keep) | (paint & !keep)).to_ne_bytes();
             }
         } else {
             for (pixel, &index) in dst.iter_mut().zip(src) {
-                let select = u32::from(index).wrapping_neg();
+                let select = u32::from(binary(index)).wrapping_neg();
                 *pixel = (first ^ (difference & select)).to_ne_bytes();
             }
         }
