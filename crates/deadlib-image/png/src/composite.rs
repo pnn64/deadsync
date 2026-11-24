@@ -100,12 +100,51 @@ fn rgba(png: &Png, image: &Image, index: usize, factor: u16) -> [u16; 4] {
             let g = scale(raw(base));
             [g, g, g, scale(raw(base + 1))]
         }
-        ColorType::Rgba => [
-            scale(raw(base)),
-            scale(raw(base + 1)),
-            scale(raw(base + 2)),
-            scale(raw(base + 3)),
-        ],
+        ColorType::Rgba => unreachable!("RGBA frames are rendered directly"),
+    }
+}
+
+#[inline]
+fn over(dst: &mut [u16; 4], src: [u16; 4]) {
+    if src[3] == 0 {
+        return;
+    }
+    if src[3] == 65535 || dst[3] == 0 {
+        *dst = src;
+    } else if dst[3] == 65535 {
+        // An opaque destination stays opaque. The exact rounded
+        // numerator is at most 65535^2 + 32767, which fits in u32.
+        let sa = u32::from(src[3]);
+        let inv = 65535 - sa;
+        for n in 0..3 {
+            dst[n] = ((u32::from(src[n]) * sa + u32::from(dst[n]) * inv + 32767) / 65535) as u16;
+        }
+    } else {
+        let sa = u64::from(src[3]);
+        let da = u64::from(dst[3]);
+        let inv = 65535 - sa;
+        let alpha = sa * 65535 + da * inv;
+        for n in 0..3 {
+            dst[n] = ((u64::from(src[n]) * sa * 65535 + u64::from(dst[n]) * da * inv + alpha / 2)
+                / alpha) as u16;
+        }
+        dst[3] = ((alpha + 32767) / 65535) as u16;
+    }
+}
+
+fn over_rgba_rows<T: Copy>(
+    canvas: &mut [u16],
+    stride: usize,
+    width: usize,
+    samples: &[T],
+    convert: impl Fn([T; 4]) -> [u16; 4],
+) {
+    let rows = samples.as_chunks::<4>().0.chunks_exact(width);
+    for (dst, src) in canvas.chunks_mut(stride).zip(rows) {
+        let dst = dst[..width * 4].as_chunks_mut::<4>().0;
+        for (dst, &src) in dst.iter_mut().zip(src) {
+            over(dst, convert(src));
+        }
     }
 }
 
@@ -349,6 +388,18 @@ impl Compositor<'_> {
                     Samples::U16(samples) => row.copy_from_slice(&samples[start..start + width]),
                 }
             }
+        } else if image.color_type == ColorType::Rgba {
+            let offset = c.y_offset as usize * stride + c.x_offset as usize * 4;
+            let canvas = &mut self.canvas[offset..];
+            let width = c.width as usize;
+            match &image.samples {
+                Samples::U8(samples) => over_rgba_rows(canvas, stride, width, samples, |pixel| {
+                    pixel.map(|channel| u16::from(channel) * 257)
+                }),
+                Samples::U16(samples) => {
+                    over_rgba_rows(canvas, stride, width, samples, |pixel| pixel);
+                }
+            }
         } else {
             for y in 0..c.height as usize {
                 for x in 0..c.width as usize {
@@ -356,34 +407,10 @@ impl Compositor<'_> {
                     let offset = (c.y_offset as usize + y) * stride + (c.x_offset as usize + x) * 4;
                     let dst: &mut [u16; 4] =
                         (&mut self.canvas[offset..offset + 4]).try_into().unwrap();
-                    if c.blend == BlendOp::Source || src[3] == 65535 {
+                    if c.blend == BlendOp::Source {
                         *dst = src;
-                    } else if src[3] == 0 {
-                        continue;
-                    } else if dst[3] == 0 {
-                        // OVER on a transparent destination reproduces the source.
-                        *dst = src;
-                    } else if dst[3] == 65535 {
-                        // An opaque destination stays opaque. The exact rounded
-                        // numerator is at most 65535^2 + 32767, which fits in u32.
-                        let sa = u32::from(src[3]);
-                        let inv = 65535 - sa;
-                        for n in 0..3 {
-                            dst[n] = ((u32::from(src[n]) * sa + u32::from(dst[n]) * inv + 32767)
-                                / 65535) as u16;
-                        }
                     } else {
-                        let sa = u64::from(src[3]);
-                        let da = u64::from(dst[3]);
-                        let inv = 65535 - sa;
-                        let alpha = sa * 65535 + da * inv;
-                        for n in 0..3 {
-                            dst[n] = ((u64::from(src[n]) * sa * 65535
-                                + u64::from(dst[n]) * da * inv
-                                + alpha / 2)
-                                / alpha) as u16;
-                        }
-                        dst[3] = ((alpha + 32767) / 65535) as u16;
+                        over(dst, src);
                     }
                 }
             }
