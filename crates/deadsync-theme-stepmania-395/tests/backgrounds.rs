@@ -22,16 +22,24 @@ fn ordered_background_layers_make_drawable_sprites_with_local_timing() {
     write(root.path(), "Graphics/cover.png", "fixture");
     write(
         root.path(),
-        "BGAnimations/ScreenShared backdrop/marker.png",
+        "BGAnimations/shared detail/marker.png",
         "fixture",
+    );
+    write(
+        root.path(),
+        "BGAnimations/shared detail/BGAnimation.ini",
+        concat!(
+            "[BGAnimation]\nLengthSeconds=99\n",
+            "[Layer1]\nFile=marker\nType=sprite\nTexCoordVelocityX=0.5\n",
+            "OnCommand=stretchto,0,0,80,60;texturewrapping,0;linear,0.5;addx,50\n",
+        ),
     );
     write(
         root.path(),
         "BGAnimations/ScreenShared backdrop/BGAnimation.ini",
         concat!(
             "[BGAnimation]\nLengthSeconds=1.25\n",
-            "[Layer10]\nFile=marker\nType=sprite\nTexCoordVelocityX=0.5\n",
-            "OnCommand=stretchto,0,0,80,60;texturewrapping,0;linear,0.5;addx,50\n",
+            "[Layer10]\nImport=..\\shared detail\n",
             "[Layer2]\nFile=..\\..\\Graphics\\cover.png\nType=1 // stretch\n",
             "Command=linear,1;diffusealpha,0\n",
         ),
@@ -109,6 +117,21 @@ fn malformed_or_unsupported_layers_are_reported_before_binding_textures() {
         "BGAnimations/ScreenPanel ambiguous/BGAnimation.ini",
         "[Layer1]\nFile=marker\n",
     );
+    write(
+        root.path(),
+        "BGAnimations/ScreenPanel recursive/BGAnimation.ini",
+        "[Layer1]\nImport=../shared\n",
+    );
+    write(
+        root.path(),
+        "BGAnimations/shared/BGAnimation.ini",
+        "[Layer1]\nImport=../ScreenPanel recursive\n",
+    );
+    write(
+        root.path(),
+        "BGAnimations/ScreenPanel escape/BGAnimation.ini",
+        "[Layer1]\nImport=../../../outside\n",
+    );
     for name in ["marker left.png", "marker right.png"] {
         let file = format!("BGAnimations/ScreenPanel ambiguous/{name}");
         write(root.path(), &file, "fixture");
@@ -137,4 +160,15 @@ fn malformed_or_unsupported_layers_are_reported_before_binding_textures() {
         .unwrap_err();
     assert_eq!(ambiguous.kind(), io::ErrorKind::InvalidData);
     assert!(ambiguous.to_string().contains("ambiguous sprite name"));
+
+    for (resource, message) in [
+        ("recursive", "recursive Import"),
+        ("escape", "Import must be relative"),
+    ] {
+        let error = package
+            .background("ScreenPanel", resource, [640.0, 480.0])
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains(message));
+    }
 }

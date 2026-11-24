@@ -2463,15 +2463,13 @@ pub fn parse_with_texture_context(
 
     let prefix = ini_path.file_stem().unwrap().to_str().unwrap();
     let texture_paths = list_texture_pages(font_dir, prefix)?;
-    if texture_paths.is_empty() {
-        return Err(FontParseError::NoTexturePages(ini_path_buf.clone()));
-    }
 
     // ---- NEW: import merge (before local pages)
     let mut required_textures: Vec<PathBuf> = Vec::new();
     let mut all_glyphs = GlyphMap::default();
     let mut stroke_texture_map: HashMap<String, String> = HashMap::new();
     let mut texture_hints_map: HashMap<String, String> = HashMap::new();
+    let mut explicit_import_metrics = None;
 
     // The implicit default layer (`is_implicit == true`) comes first so local
     // pages and explicit imports can override it.
@@ -2481,6 +2479,10 @@ pub fn parse_with_texture_context(
         if let Some(import_ini) = resolve_import_path(ini_path, spec) {
             match parse_with_texture_context(import_ini.to_string_lossy().as_ref(), texture_ctx) {
                 Ok(imported) => {
+                    if !is_implicit {
+                        explicit_import_metrics
+                            .get_or_insert((imported.font.height, imported.font.line_spacing));
+                    }
                     // Imported entries override prior import layers; local pages
                     // are merged afterward and retain final precedence.
                     merge_imported_font(
@@ -2506,8 +2508,11 @@ pub fn parse_with_texture_context(
         }
     }
 
-    // Keep track of default metrics from our main/first page (not from imports)
-    let mut default_page_metrics = (0, 0);
+    if texture_paths.is_empty() && explicit_import_metrics.is_none() {
+        return Err(FontParseError::NoTexturePages(ini_path_buf));
+    }
+    // A font consisting only of explicit imports uses its first imported page metrics.
+    let mut default_page_metrics = explicit_import_metrics.unwrap_or_default();
 
     let page_sources = texture_paths
         .iter()

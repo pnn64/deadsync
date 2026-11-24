@@ -67,6 +67,21 @@ impl BackgroundDefinition {
             .parent()
             .and_then(Path::parent)
             .ok_or_else(|| invalid(directory, "background directory has no package root"))?;
+        let mut ancestry = vec![directory.canonicalize()?];
+        let (minimum_seconds, layers) = Self::read_layers(directory, root, canvas, &mut ancestry)?;
+        Ok(Self {
+            canvas,
+            minimum_seconds,
+            layers,
+        })
+    }
+
+    fn read_layers(
+        directory: &Path,
+        root: &Path,
+        canvas: [f32; 2],
+        ancestry: &mut Vec<PathBuf>,
+    ) -> io::Result<(f32, Vec<Layer>)> {
         let path = directory.join("BGAnimation.ini");
         let text = fs::read_to_string(&path).map_err(|error| {
             io::Error::new(error.kind(), format!("reading {}: {error}", path.display()))
@@ -119,18 +134,63 @@ impl BackgroundDefinition {
                 ));
             }
         }
-        let layers = numbered
-            .into_iter()
-            .map(|(_, section, fields)| {
-                Layer::read(&path, root, directory, section, fields, canvas)
-            })
-            .collect::<io::Result<_>>()?;
-
-        Ok(Self {
-            canvas,
-            minimum_seconds,
-            layers,
-        })
+        let mut layers = Vec::with_capacity(numbered.len());
+        for (_, section, fields) in numbered {
+            let Some(import) = fields.get("Import") else {
+                layers.push(Layer::read(
+                    &path, root, directory, section, fields, canvas,
+                )?);
+                continue;
+            };
+            check_supported(
+                &path,
+                section,
+                fields,
+                &[
+                    "Condition",
+                    "Cond",
+                    "DrawCond",
+                    "InitCommand",
+                    "File",
+                    "Command",
+                    "OnCommand",
+                ],
+            )?;
+            let import = scalar(import);
+            let imported_directory =
+                package_relative_path(root, directory, import).ok_or_else(|| {
+                    invalid(
+                        &path,
+                        format!("[{section}] Import must be relative to the theme package"),
+                    )
+                })?;
+            let imported_directory = imported_directory.canonicalize().map_err(|error| {
+                io::Error::new(
+                    error.kind(),
+                    format!("{} [{section}] Import {import:?}: {error}", path.display()),
+                )
+            })?;
+            if !imported_directory.starts_with(root) || !imported_directory.is_dir() {
+                return Err(invalid(
+                    &path,
+                    format!(
+                        "[{section}] Import must resolve to a directory within the theme package"
+                    ),
+                ));
+            }
+            if ancestry.contains(&imported_directory) {
+                return Err(invalid(
+                    &path,
+                    format!("[{section}] recursive Import {import:?}"),
+                ));
+            }
+            ancestry.push(imported_directory.clone());
+            let (_, imported_layers) =
+                Self::read_layers(&imported_directory, root, canvas, ancestry)?;
+            ancestry.pop();
+            layers.extend(imported_layers);
+        }
+        Ok((minimum_seconds, layers))
     }
 
     /// Binds layer textures and starts their entry commands. The second
@@ -207,7 +267,7 @@ impl Layer {
             path,
             section,
             fields,
-            &["Import", "Condition", "Cond", "DrawCond", "InitCommand"],
+            &["Condition", "Cond", "DrawCond", "InitCommand"],
         )?;
         let kind = fields.get("Type").map_or("sprite", |value| scalar(value));
         let stretch = match kind.to_ascii_lowercase().as_str() {
@@ -262,32 +322,14 @@ fn sprite_path(
     section: &str,
     file: &str,
 ) -> io::Result<PathBuf> {
-    let file = file.replace('\\', "/");
     let relative_to_package = || {
         invalid(
             path,
             format!("[{section}] File must be relative to the theme package"),
         )
     };
-    if file.contains(':')
-        || !matches!(
-            Path::new(&file).components().next_back(),
-            Some(Component::Normal(_))
-        )
-    {
-        return Err(relative_to_package());
-    }
-    let mut resolved = directory.to_path_buf();
-    for component in Path::new(&file).components() {
-        match component {
-            Component::Normal(name) => resolved.push(name),
-            Component::CurDir => {}
-            Component::ParentDir if resolved != root => {
-                resolved.pop();
-            }
-            _ => return Err(relative_to_package()),
-        }
-    }
+    let mut resolved =
+        package_relative_path(root, directory, file).ok_or_else(relative_to_package)?;
     let file_error = |error: io::Error| {
         io::Error::new(
             error.kind(),
@@ -320,6 +362,27 @@ fn sprite_path(
         ));
     }
     Ok(texture_path)
+}
+
+fn package_relative_path(root: &Path, directory: &Path, value: &str) -> Option<PathBuf> {
+    let value = value.replace('\\', "/");
+    let components = Path::new(&value).components();
+    if value.contains(':') || !matches!(components.clone().next_back(), Some(Component::Normal(_)))
+    {
+        return None;
+    }
+    let mut resolved = directory.to_path_buf();
+    for component in components {
+        match component {
+            Component::Normal(name) => resolved.push(name),
+            Component::CurDir => {}
+            Component::ParentDir if resolved != root => {
+                resolved.pop();
+            }
+            _ => return None,
+        }
+    }
+    Some(resolved)
 }
 
 fn implicit_sprite(parent: &Path, name: &str) -> io::Result<PathBuf> {

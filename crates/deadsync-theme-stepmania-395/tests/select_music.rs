@@ -32,7 +32,19 @@ fn authored_wheel_uses_live_rows_banners_and_selected_chart() {
     )).unwrap();
     let fonts = path.join("Fonts");
     fs::create_dir(&fonts).unwrap();
-    fs::write(fonts.join("MusicWheelItem text.ini"), "[Char Widths]\n").unwrap();
+    fs::write(
+        fonts.join("MusicWheelItem text.ini"),
+        "[main]\nImport=letters\n",
+    )
+    .unwrap();
+    fs::write(
+        fonts.join("letters.ini"),
+        "[main]\nLine 0=A\nLineSpacing=12\n",
+    )
+    .unwrap();
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
+        .save(fonts.join("letters 1x1.png"))
+        .unwrap();
     let graphics = path.join("Graphics");
     fs::create_dir(&graphics).unwrap();
     for (name, [w, h]) in [
@@ -51,6 +63,10 @@ fn authored_wheel_uses_live_rows_banners_and_selected_chart() {
     let prepared = PackageMusic::open(path, None).unwrap();
     assert_eq!(prepared.fonts.len(), 2);
     assert_eq!(prepared.textures.len(), 7);
+    let loaded = deadlib_present::font::parse(prepared.fonts[0].1.to_str().unwrap()).unwrap();
+    assert_eq!(loaded.font.line_spacing, 12);
+    assert!(loaded.font.glyph_map.contains_key(&'A'));
+    assert_eq!(loaded.required_textures.len(), 1);
     let mut wheel = prepared.presentation;
     assert!(wheel.show_random_entries());
     assert_eq!(wheel.banner_crossfade(), Some(Duration::from_millis(250)));
