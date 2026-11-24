@@ -285,8 +285,12 @@ impl Encoder {
                 let tag = key << 12;
                 let hash = key.wrapping_mul(0x9e3779b1);
                 let mut slot = (hash >> shift) as usize;
-                // An odd stride visits every slot in a power-of-two table.
-                let step = (hash as usize & mask) | 1;
+                let step = if SLOTS <= 2048 {
+                    1
+                } else {
+                    // An odd stride visits every slot in a power-of-two table.
+                    (hash as usize & mask) | 1
+                };
                 loop {
                     let entry = table[slot];
                     if entry == 0 {
