@@ -2,7 +2,7 @@ use super::encode_rows::Rows;
 use crate::{
     ChunkPosition, EncodeOptions, Error, Image, Png,
     checksum::Crc32,
-    codec::{SIGNATURE, ancillary_writable, transparency_bytes, validate_encoding},
+    codec::{SIGNATURE, ancillary_writable, validate_encoding, write_transparency},
     reserve,
     zlib::{Deflater, StreamStatus},
 };
@@ -193,9 +193,7 @@ pub fn encode_writer(
     if !png.palette.is_empty() {
         chunk(&mut out, b"PLTE", &[png.palette.as_flattened()])?;
     }
-    if let Some(bytes) = transparency_bytes(png) {
-        chunk(&mut out, b"tRNS", &[&bytes])?;
-    }
+    write_transparency(png, |bytes| chunk(&mut out, b"tRNS", &[bytes]))?;
     ancillary(&mut out, png, ChunkPosition::BeforeData)?;
     if let Some(a) = &png.animation {
         let mut control = [0; 8];

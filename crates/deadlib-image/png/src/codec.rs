@@ -530,13 +530,17 @@ pub(crate) fn validate_encoding(png: &Png, options: &EncodeOptions) -> Result<He
     Ok(header)
 }
 
-pub(crate) fn transparency_bytes(png: &Png) -> Option<Vec<u8>> {
+pub(crate) fn write_transparency(
+    png: &Png,
+    write: impl FnOnce(&[u8]) -> Result<(), Error>,
+) -> Result<(), Error> {
     let mask = ((1u32 << png.image.bit_depth) - 1) as u16;
-    Some(match png.transparency.as_ref()? {
-        Transparency::Grayscale(v) => (v & mask).to_be_bytes().to_vec(),
-        Transparency::Rgb(v) => v.iter().flat_map(|v| (v & mask).to_be_bytes()).collect(),
-        Transparency::Palette(v) => v.clone(),
-    })
+    match &png.transparency {
+        Some(Transparency::Grayscale(v)) => write(&(v & mask).to_be_bytes()),
+        Some(Transparency::Rgb(v)) => write(v.map(|v| (v & mask).to_be_bytes()).as_flattened()),
+        Some(Transparency::Palette(v)) => write(v),
+        None => Ok(()),
+    }
 }
 
 pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
@@ -545,12 +549,9 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     write_chunk(&mut out, b"IHDR", &header.wire())?;
     write_ancillary(&mut out, png, ChunkPosition::BeforePalette)?;
     if !png.palette.is_empty() {
-        let data: Vec<u8> = png.palette.iter().flatten().copied().collect();
-        write_chunk(&mut out, b"PLTE", &data)?;
+        write_chunk(&mut out, b"PLTE", png.palette.as_flattened())?;
     }
-    if let Some(data) = transparency_bytes(png) {
-        write_chunk(&mut out, b"tRNS", &data)?;
-    }
+    write_transparency(png, |data| write_chunk(&mut out, b"tRNS", data))?;
     write_ancillary(&mut out, png, ChunkPosition::BeforeData)?;
     crate::apng::write_control(&mut out, png)?;
     let compressed = crate::stream::compress_image(&png.image, options)?;
