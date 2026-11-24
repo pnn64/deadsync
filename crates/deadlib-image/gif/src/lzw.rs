@@ -195,7 +195,14 @@ impl Encoder {
         Self { table: None }
     }
     pub fn encode(&mut self, input: &[u8], minimum: u8, output: &mut Vec<u8>) -> Result<(), Error> {
-        if !(2..=8).contains(&minimum) || input.iter().any(|&v| u16::from(v) >= 1 << minimum) {
+        if !(2..=8).contains(&minimum)
+            || (minimum < 8
+                && input
+                    .iter()
+                    .copied()
+                    .max()
+                    .is_some_and(|maximum| maximum >= 1 << minimum))
+        {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
         self.encode_rows(std::iter::once(input), minimum, output)

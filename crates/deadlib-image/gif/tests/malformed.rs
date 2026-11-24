@@ -464,6 +464,30 @@ fn longest_dictionary_chain_and_exact_output_limits() {
 }
 
 #[test]
+fn lzw_literal_range_is_checked_before_appending() {
+    let mut encoder = lzw::Encoder::new();
+    let prefix = [0xfa, 0xfb];
+    let mut output = prefix.to_vec();
+    for minimum in 2..8 {
+        for offset in [0, 31, 65] {
+            let mut input = [0; 66];
+            input[offset] = 1 << minimum;
+            assert_eq!(
+                encoder.encode(&input, minimum, &mut output),
+                Err(Error::Invalid("LZW minimum code size or literal range"))
+            );
+            assert_eq!(output, prefix);
+        }
+    }
+    encoder.encode(&[0, 255], 8, &mut output).unwrap();
+    assert_eq!(&output[..prefix.len()], &prefix);
+    assert_eq!(
+        lzw::decode(&output[prefix.len()..], 8, 2).unwrap(),
+        [0, 255]
+    );
+}
+
+#[test]
 fn lzw_existing_and_next_phrases_preserve_output_on_overflow() {
     // Mix existing dictionary entries, KwKwK, a width change and CLEAR.
     let packed = pack(&[4, 0, 1, 6, 8, 6, 4, 2, 6, 5], 2);
