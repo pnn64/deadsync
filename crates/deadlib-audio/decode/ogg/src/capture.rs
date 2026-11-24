@@ -292,13 +292,15 @@ impl PacketCapture {
             if fragment.starts_packet {
                 self.partial_offset = offset;
             }
-            if !self.skipping && (!fragment.starts_packet || !fragment.ends_packet) {
-                reserve(&mut self.partial, fragment.data.len())?;
-                self.partial.extend_from_slice(fragment.data);
-            }
-            self.continuing = !fragment.ends_packet;
-            if !fragment.ends_packet {
-                continue;
+            if !fragment.starts_packet || !fragment.ends_packet {
+                if !self.skipping {
+                    reserve(&mut self.partial, fragment.data.len())?;
+                    self.partial.extend_from_slice(fragment.data);
+                }
+                self.continuing = !fragment.ends_packet;
+                if self.continuing {
+                    break;
+                }
             }
             cursor.remaining -= 1;
             let mut stop = false;
@@ -329,9 +331,10 @@ impl PacketCapture {
                     .ok_or(Error::LimitExceeded("packet count"))?;
             }
             self.skipping = false;
-            self.partial.clear();
             if self.partial.capacity() > MAX_PAGE_SIZE {
                 self.partial = Vec::new();
+            } else {
+                self.partial.clear();
             }
             if stop && cursor.segment != page.lacing().len() {
                 self.page = Some(cursor);
