@@ -250,6 +250,12 @@ fn benchmark_container() {
         let bytes = stream(size, count, target);
         let parsed = pages(&bytes);
         let iterations = if label == "spanning" { 300 } else { 30_000 };
+        let lacing_bytes = parsed.iter().map(|&(_, page)| page.lacing().len()).sum();
+        measure(&format!("count/{label}"), iterations, lacing_bytes, || {
+            for &(_, page) in &parsed {
+                black_box(black_box(page).completed_packets());
+            }
+        });
         measure(
             &format!("fragments/{label}"),
             iterations,

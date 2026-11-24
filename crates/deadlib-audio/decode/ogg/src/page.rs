@@ -86,9 +86,10 @@ impl<'a> Page<'a> {
     pub fn completed_packets(self) -> usize {
         let lacing = self.lacing();
         if lacing.len() < 8 {
-            return lacing.iter().filter(|&&n| n < 255).count();
+            return lacing.iter().filter(|&&lace| lace < 255).count();
         }
-        count_packets(lacing)
+        // Each of the at most 255 laces terminates at most one packet.
+        usize::from(lacing.iter().map(|&lace| u8::from(lace != 255)).sum::<u8>())
     }
     pub fn fragments(self) -> Fragments<'a> {
         self.fragments_from(0, 0)
@@ -105,25 +106,6 @@ impl<'a> Page<'a> {
             },
         }
     }
-}
-
-// Keep the wide loop out of consumers that usually see only a few laces.
-#[inline(never)]
-fn count_packets(lacing: &[u8]) -> usize {
-    let (words, tail) = lacing.as_chunks::<8>();
-    let mut continued = 0u64;
-    for word in words {
-        let word = u64::from_le_bytes(*word);
-        // A byte is 0xff exactly when its low seven bits plus one and
-        // its original high bit both set the high bit. No byte carries.
-        let flags =
-            ((word & 0x7f7f_7f7f_7f7f_7f7f) + 0x0101_0101_0101_0101) & word & 0x8080_8080_8080_8080;
-        continued += flags >> 7;
-    }
-    // At most 31 words: each byte lane and their total fit in one byte.
-    let mut continued = (continued.wrapping_mul(0x0101_0101_0101_0101) >> 56) as usize;
-    continued += tail.iter().filter(|&&n| n == 255).count();
-    lacing.len() - continued
 }
 
 // The exact page length and strict header rules must already be verified.
