@@ -587,7 +587,19 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     write_ancillary(&mut out, png, ChunkPosition::BeforeData)?;
     crate::apng::write_control(&mut out, png)?;
     let compressed = crate::stream::compress_image(&png.image, options)?;
-    for part in compressed.chunks(options.idat_chunk_size) {
+    let chunk_size = options.idat_chunk_size;
+    if compressed.len() > chunk_size {
+        // Reserve the IDAT run together, including the final IEND.
+        let additional = compressed
+            .len()
+            .div_ceil(chunk_size)
+            .checked_mul(12)
+            .and_then(|headers| headers.checked_add(compressed.len()))
+            .and_then(|bytes| bytes.checked_add(12))
+            .ok_or(Error::Allocation)?;
+        reserve(&mut out, additional)?;
+    }
+    for part in compressed.chunks(chunk_size) {
         write_chunk(&mut out, b"IDAT", [part])?;
     }
     crate::apng::write_frames(&mut out, png, options)?;
