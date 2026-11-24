@@ -215,12 +215,8 @@ impl Encoder {
             output,
             bits: 0,
             count: 0,
-            minimum,
-            width: minimum + 1,
-            next: clear + 2,
-            previous: false,
         };
-        bits.code(clear)?;
+        bits.code(clear, minimum + 1)?;
         let mut pending = None;
         for row in rows {
             let mut symbols = row.iter().copied();
@@ -241,13 +237,14 @@ impl Encoder {
                     }
                     slot = (slot + 1) & 8191;
                 }
-                bits.code(prefix)?;
+                // The decoder adds this phrase after reading the next code.
+                bits.code(prefix, (next - 1).ilog2() as u8 + 1)?;
                 if next < 4096 {
                     // The assigned code is never zero, even when the key is.
                     self.table[slot] = (key << 12) | u32::from(next);
                     next += 1;
                 } else {
-                    bits.code(clear)?;
+                    bits.code(clear, 12)?;
                     self.table.fill(0);
                     next = clear + 2;
                 }
@@ -256,9 +253,10 @@ impl Encoder {
             pending = Some(prefix);
         }
         if let Some(prefix) = pending {
-            bits.code(prefix)?;
+            bits.code(prefix, (next - 1).ilog2() as u8 + 1)?;
         }
-        bits.code(clear + 1)?;
+        // The final prefix has caught the decoder up to the encoder's table.
+        bits.code(clear + 1, next.min(4095).ilog2() as u8 + 1)?;
         if bits.count != 0 {
             let count = bits.count.div_ceil(8) as usize;
             reserve(bits.output, count)?;
@@ -273,15 +271,11 @@ struct BitWriter<'a> {
     output: &'a mut Vec<u8>,
     bits: u64,
     count: u8,
-    minimum: u8,
-    width: u8,
-    next: u16,
-    previous: bool,
 }
 impl BitWriter<'_> {
-    fn code(&mut self, code: u16) -> Result<(), Error> {
+    fn code(&mut self, code: u16, width: u8) -> Result<(), Error> {
         self.bits |= u64::from(code) << self.count;
-        self.count += self.width;
+        self.count += width;
         // At most 31 buffered bits plus a 12-bit code fit in u64. Flush a
         // whole word, amortizing fallible growth and writes across codes.
         if self.count >= 32 {
@@ -290,20 +284,6 @@ impl BitWriter<'_> {
                 .extend_from_slice(&(self.bits as u32).to_le_bytes());
             self.bits >>= 32;
             self.count -= 32;
-        }
-        let clear = 1 << self.minimum;
-        if code == clear {
-            self.width = self.minimum + 1;
-            self.next = clear + 2;
-            self.previous = false;
-        } else if code != clear + 1 {
-            if self.previous && self.next < 4096 {
-                self.next += 1;
-                if self.next == 1 << self.width && self.width < 12 {
-                    self.width += 1;
-                }
-            }
-            self.previous = true;
         }
         Ok(())
     }

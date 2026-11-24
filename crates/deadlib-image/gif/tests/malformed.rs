@@ -441,7 +441,7 @@ fn deferred_clear_frozen_dictionary_and_end_width_boundaries() {
             [1]
         );
         for count in [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15, 16, 254, 255, 256, 4095, 4096,
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15, 16, 254, 255, 256, 4095, 4096,
         ] {
             let input: Vec<_> = (0..count).map(|i| (i % clear as usize) as u8).collect();
             let encoded = lzw::encode(&input, min).unwrap();
