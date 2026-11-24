@@ -15,7 +15,8 @@ use deadsync_shell::mounted_theme;
 use deadsync_theme::main_menu::ThemeMainMenu;
 use deadsync_theme_simply_love::{i18n, visual_styles};
 use deadsync_theme_stepmania_395::{
-    PackageIntro, PackageMusic, PackageOptions, PackagePlayerOptions, PackageTitle, TITLE_FONT,
+    PackageIntro, PackageMusic, PackageOptions, PackagePlayerOptions, PackageStageCard,
+    PackageTitle, TITLE_FONT,
 };
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
@@ -283,6 +284,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let package_music = package_arg_path(&cli.remaining, "--theme-select-music")?
         .map(|path| PackageMusic::open(path, Some(&locale)))
         .transpose()?;
+    let package_stage = package_arg_path(&cli.remaining, "--theme-stage")?
+        .map(|path| PackageStageCard::open(path, Some(&locale)))
+        .transpose()?;
 
     #[cfg(windows)]
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
@@ -370,6 +374,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             mount.music_wheel = Some(Box::new(music.presentation));
             mount.resources.font_paths.extend(music.fonts);
             mount.resources.textures.extend(music.textures);
+        }
+        if let Some((stage, textures)) = package_stage {
+            mount.stage_card = Some(Box::new(stage));
+            mount.resources.textures.extend(textures);
         }
         mount
     })

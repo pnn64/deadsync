@@ -41,8 +41,17 @@ impl SceneTextures {
         package: &ThemePackage,
         section: &str,
     ) -> io::Result<Option<BackgroundPlayback>> {
+        self.animation(package, section, "background")
+    }
+
+    pub(crate) fn animation(
+        &mut self,
+        package: &ThemePackage,
+        section: &str,
+        name: &str,
+    ) -> io::Result<Option<BackgroundPlayback>> {
         package
-            .background(section, "background", CANVAS)?
+            .background(section, name, CANVAS)?
             .map(|background| background.try_start(|path, repeat| self.bind(path, repeat)))
             .transpose()
     }

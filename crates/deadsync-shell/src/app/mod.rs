@@ -31,7 +31,7 @@ mod updater;
 
 
 use self::evaluation_views::CourseEvaluationPage;
-use self::lua_loading::SongLuaLoading;
+use self::lua_loading::{SongLuaLoading, StageCardVisit};
 use self::screenshot::EvaluationCapture;
 use self::stage_start::{StageSelection, StageStart};
 use crate::content_reload::StartupLoad;
@@ -641,6 +641,7 @@ pub struct ScreensState {
     gameplay_outro: Option<Box<dyn deadsync_theme::stage::StageOutroPresentation<Actor>>>,
     evaluation_departure: Option<deadsync_theme::stage::EvaluationDeparture<Actor>>,
     stage_presentation: Box<dyn deadsync_theme::stage::StagePresentation<Actor>>,
+    stage_card: Option<Box<dyn deadsync_theme::stage::StageCardPresentation<Actor>>>,
     practice_state: Option<PracticeState>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
     gameplay_telemetry: crate::gameplay_runtime::GameplayTelemetryCursor,
@@ -736,6 +737,35 @@ struct PendingGameplayInit {
     receiver: std::sync::mpsc::Receiver<Result<GameplayState, String>>,
     finish: PendingGameplayFinish,
     loading: Option<SongLuaLoading>,
+    stage_card: Option<StageCardVisit>,
+    ready: Option<Box<GameplayState>>,
+}
+
+impl PendingGameplayInit {
+    fn poll(&mut self, now: Instant) -> Result<Option<GameplayState>, String> {
+        if self.ready.is_some() {
+            return if self.stage_card.as_ref().is_some_and(|card| !card.finished(now)) {
+                Ok(None)
+            } else {
+                Ok(self.ready.take().map(|state| *state))
+            };
+        }
+        let stage = match self.receiver.try_recv() {
+            Ok(result) => result?,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return Ok(None),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                return Err("Gameplay preparation worker stopped without returning a state".into());
+            }
+        };
+        if let Some(card) = &mut self.stage_card {
+            card.mark_ready(now);
+            if !card.finished(now) {
+                self.ready = Some(Box::new(stage));
+                return Ok(None);
+            }
+        }
+        Ok(Some(stage))
+    }
 }
 
 enum PendingGameplayFinish {
@@ -1363,6 +1393,7 @@ impl ScreensState {
             gameplay_outro: None,
             evaluation_departure: None,
             stage_presentation: mount.stage,
+            stage_card: mount.stage_card,
             select_profile_state,
             select_color_state,
             arrowcloud_login_state,
@@ -3259,13 +3290,13 @@ impl App {
     fn poll_pending_gameplay_init(&mut self, event_loop: &ActiveEventLoop) {
         let Some(result) = self
             .pending_gameplay_init
-            .as_ref()
-            .map(|pending| pending.receiver.try_recv())
+            .as_mut()
+            .map(|pending| pending.poll(Instant::now()))
         else {
             return;
         };
         match result {
-            Ok(Ok(gs)) => {
+            Ok(Some(gs)) => {
                 let pending = self
                     .pending_gameplay_init
                     .take()
@@ -3292,11 +3323,8 @@ impl App {
                 // frame from becoming the next frame's simulation delta.
                 self.state.shell.last_frame_time = Instant::now();
             }
-            Ok(Err(error)) => self.fail_gameplay_init(error),
-            Err(std::sync::mpsc::TryRecvError::Empty) => {}
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                self.fail_gameplay_init("Gameplay preparation worker stopped without returning a state".into());
-            }
+            Ok(None) => {}
+            Err(error) => self.fail_gameplay_init(error),
         }
     }
 
@@ -7946,6 +7974,16 @@ impl App {
         let mut gameplay_segments = None;
         let visual_policy = policy.visual;
 
+        if let Some((visit, presenter)) = self
+            .pending_gameplay_init
+            .as_ref()
+            .and_then(|pending| pending.stage_card.as_ref())
+            .zip(self.state.screens.stage_card.as_ref())
+        {
+            presenter.push_actors(&mut actors, visit.view(Instant::now()));
+            return (actors, CLEAR, None);
+        }
+
         if let Some(loading) = self.song_lua_loading() {
             let session = &self.state.session;
             self.state.screens.stage_presentation.push_loading(
@@ -10004,6 +10042,8 @@ impl App {
                         receiver,
                         finish: PendingGameplayFinish::Practice(finish),
                         loading,
+                        stage_card: None,
+                        ready: None,
                     });
                 } else {
                     match init() {
@@ -10346,6 +10386,9 @@ impl App {
                 let (pixel_width, pixel_height) = space::current_window_px();
                 let display_aspect_ratio = finish.config.display_aspect_ratio;
                 let song_lua_mode = finish.config.song_lua_mode;
+                let stage_card = (!lua_reload && !finish.restart)
+                    .then(|| self.begin_stage_card(finish.config.coin, &song_arc, music_rate))
+                    .flatten();
                 let loading = if !lua_reload && !song_lua_prepared {
                     SongLuaLoading::for_song(&song_arc, song_lua_mode, color_index)
                 } else {
@@ -10429,7 +10472,7 @@ impl App {
                     state.song_lua.restore_held_inputs(held_inputs);
                     Ok(state)
                 };
-                if lua_reload || (has_song_lua && !song_lua_prepared) {
+                if stage_card.is_some() || lua_reload || (has_song_lua && !song_lua_prepared) {
                     self.state.screens.gameplay_state = None;
                     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
                     std::thread::Builder::new()
@@ -10442,6 +10485,8 @@ impl App {
                         receiver,
                         finish: PendingGameplayFinish::Gameplay(finish),
                         loading,
+                        stage_card,
+                        ready: None,
                     });
                 } else {
                     match init() {

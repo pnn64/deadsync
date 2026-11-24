@@ -40,7 +40,6 @@ impl State {
         self.coin_balance / options.coins_per_credit as u32
     }
 
-    #[cfg(test)]
     pub const fn stages_left(&self) -> u8 {
         self.stages_left
     }

@@ -3,6 +3,7 @@
 use deadlib_assets::AssetManager;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::UiCue;
 use crate::views::{EvaluationOverview, GameplayHud, GameplayHudMotion};
@@ -14,6 +15,35 @@ pub struct StageLoadingView<'a> {
     pub color_index: i32,
     pub elapsed: f32,
     pub progress: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StageCardMode {
+    Regular,
+    Final,
+    Event,
+    Nonstop,
+    Oni,
+    Endless,
+    Survival,
+}
+
+#[derive(Clone, Copy)]
+pub struct StageCardTiming {
+    pub hold: Duration,
+    pub exit: Duration,
+}
+
+pub struct StageCardView {
+    pub stage_number: usize,
+    pub mode: StageCardMode,
+    pub elapsed: f32,
+    pub exit_elapsed: Option<f32>,
+}
+
+pub trait StageCardPresentation<A> {
+    fn timing(&self) -> StageCardTiming;
+    fn push_actors(&self, actors: &mut Vec<A>, view: StageCardView);
 }
 
 pub struct StageOutroView<'a> {

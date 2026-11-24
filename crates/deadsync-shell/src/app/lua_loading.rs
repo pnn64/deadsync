@@ -1,4 +1,76 @@
 use super::*;
+use deadsync_theme::stage::{StageCardMode, StageCardTiming, StageCardView};
+use std::time::Duration;
+
+pub(super) struct StageCardVisit {
+    timing: StageCardTiming,
+    stage_number: usize,
+    mode: StageCardMode,
+    started: Instant,
+    ready_at: Option<Instant>,
+}
+
+impl StageCardVisit {
+    pub(super) fn mark_ready(&mut self, now: Instant) {
+        self.ready_at = Some(now);
+    }
+
+    fn exit_elapsed(&self, now: Instant) -> Option<Duration> {
+        let ready = self.ready_at?.saturating_duration_since(self.started);
+        now.saturating_duration_since(self.started)
+            .checked_sub(self.timing.hold.max(ready))
+    }
+
+    pub(super) fn finished(&self, now: Instant) -> bool {
+        self.exit_elapsed(now)
+            .is_some_and(|elapsed| elapsed >= self.timing.exit)
+    }
+
+    pub(super) fn view(&self, now: Instant) -> StageCardView {
+        StageCardView {
+            stage_number: self.stage_number,
+            mode: self.mode,
+            elapsed: now.saturating_duration_since(self.started).as_secs_f32(),
+            exit_elapsed: self.exit_elapsed(now).map(|elapsed| elapsed.as_secs_f32()),
+        }
+    }
+}
+
+impl App {
+    pub(super) fn begin_stage_card(
+        &self,
+        coin: config::coin::CoinOptions,
+        song: &SongData,
+        music_rate: f32,
+    ) -> Option<StageCardVisit> {
+        use deadsync_rules::course::CourseType;
+
+        let presenter = self.state.screens.stage_card.as_ref()?;
+        let mode = if let Some(course) = &self.state.session.course_run {
+            match course.run.course_type {
+                CourseType::Nonstop => StageCardMode::Nonstop,
+                CourseType::Oni => StageCardMode::Oni,
+                CourseType::Endless => StageCardMode::Endless,
+                CourseType::Survival => StageCardMode::Survival,
+            }
+        } else if coin.event_mode() || self.state.coin.premium_free_active() {
+            StageCardMode::Event
+        } else if self.state.coin.stages_left()
+            == coin.stage_cost(song.music_length_seconds, music_rate)
+        {
+            StageCardMode::Final
+        } else {
+            StageCardMode::Regular
+        };
+        Some(StageCardVisit {
+            timing: presenter.timing(),
+            stage_number: self.state.session.active_stage_number().max(1),
+            mode,
+            started: Instant::now(),
+            ready_at: None,
+        })
+    }
+}
 
 #[derive(Clone)]
 pub(super) struct SongLuaLoading {
@@ -13,6 +85,27 @@ mod tests {
     use super::*;
     use crate::app::course_transition_tests::{finish_pending_stage, on_app_thread, test_app};
     use crate::gameplay_regression_tests::tests::with_session;
+
+    #[test]
+    fn stage_card_waits_for_both_its_hold_and_preparation() {
+        let now = Instant::now();
+        let milliseconds = Duration::from_millis;
+        for (ready, exit) in [(250, 750), (1400, 1400)] {
+            let mut card = StageCardVisit {
+                timing: StageCardTiming { hold: milliseconds(750), exit: milliseconds(500) },
+                stage_number: 2,
+                mode: StageCardMode::Regular,
+                started: now,
+                ready_at: None,
+            };
+            assert_eq!(card.view(now + milliseconds(2000)).exit_elapsed, None);
+            card.mark_ready(now + milliseconds(ready));
+            assert_eq!(card.view(now + milliseconds(exit - 1)).exit_elapsed, None);
+            assert_eq!(card.view(now + milliseconds(exit)).exit_elapsed, Some(0.0));
+            assert!(!card.finished(now + milliseconds(exit + 499)));
+            assert!(card.finished(now + milliseconds(exit + 500)));
+        }
+    }
 
     fn song(root: &std::path::Path) -> Arc<SongData> {
         let path = root.join("loading.ssc");

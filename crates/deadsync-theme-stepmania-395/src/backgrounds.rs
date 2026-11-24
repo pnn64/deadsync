@@ -1,6 +1,7 @@
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_present::anim::{TweenSeq, TweenState};
@@ -22,6 +23,7 @@ struct Layer {
     path: PathBuf,
     stretch: bool,
     scroll: [f32; 2],
+    stage: Option<Arc<str>>,
     on: ActorAnimation,
 }
 
@@ -43,6 +45,7 @@ pub struct BackgroundPlayback {
 struct PlayingLayer {
     source: SpriteSource,
     scroll: [f32; 2],
+    stage: Option<Arc<str>>,
     tween: TweenSeq,
 }
 
@@ -243,6 +246,7 @@ impl BackgroundDefinition {
             layers.push(PlayingLayer {
                 source: texture.source,
                 scroll: layer.scroll,
+                stage: layer.stage.clone(),
                 tween: layer.on.start(initial),
             });
         }
@@ -263,12 +267,28 @@ impl Layer {
         fields: &IniSection,
         canvas: [f32; 2],
     ) -> io::Result<Self> {
-        check_supported(
-            path,
-            section,
-            fields,
-            &["Condition", "Cond", "DrawCond", "InitCommand"],
-        )?;
+        check_supported(path, section, fields, &["Cond", "DrawCond", "InitCommand"])?;
+        let stage = fields
+            .get("Condition")
+            .and_then(|value| {
+                let value = scalar(value);
+                (!value.is_empty()).then_some(value)
+            })
+            .map(|condition| {
+                let stage = condition
+                    .strip_prefix("GetStageText()")
+                    .and_then(|rest| rest.trim_start().strip_prefix("=="))
+                    .map(str::trim)
+                    .and_then(|name| name.strip_prefix('"')?.strip_suffix('"'))
+                    .filter(|name| {
+                        !name.is_empty() && name.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                    })
+                    .ok_or_else(|| {
+                        unsupported(path, format!("[{section}] Condition {condition:?}"))
+                    })?;
+                Ok::<_, io::Error>(Arc::from(stage))
+            })
+            .transpose()?;
         let kind = fields.get("Type").map_or("sprite", |value| scalar(value));
         let stretch = match kind.to_ascii_lowercase().as_str() {
             "0" | "sprite" => number(path, section, fields, "Stretch")?.unwrap_or(0.0) != 0.0,
@@ -310,6 +330,7 @@ impl Layer {
             path: texture_path,
             stretch,
             scroll,
+            stage,
             on,
         })
     }
@@ -432,6 +453,20 @@ impl BackgroundPlayback {
         self.elapsed_seconds
     }
 
+    pub(crate) fn duration_seconds(&self) -> f32 {
+        self.layers
+            .iter()
+            .fold(self.minimum_seconds, |duration, layer| {
+                duration.max(self.elapsed_seconds + layer.tween.remaining_seconds())
+            })
+    }
+
+    pub(crate) fn has_stage(&self, stage: &str) -> bool {
+        self.layers
+            .iter()
+            .any(|layer| layer.stage.as_deref() == Some(stage))
+    }
+
     pub fn advance(&mut self, delta_seconds: f32) {
         if delta_seconds.is_finite() && delta_seconds > 0.0 {
             self.elapsed_seconds += delta_seconds;
@@ -449,8 +484,15 @@ impl BackgroundPlayback {
     }
 
     pub fn push_actors(&self, actors: &mut Vec<Actor>, first_z: i16) {
+        self.push_layers(actors, first_z, None);
+    }
+
+    pub(crate) fn push_layers(&self, actors: &mut Vec<Actor>, first_z: i16, stage: Option<&str>) {
         actors.reserve(self.layers.len());
         for (index, layer) in self.layers.iter().enumerate() {
+            if layer.stage.is_some() && layer.stage.as_deref() != stage {
+                continue;
+            }
             let state = layer.tween.state();
             let mut sprite = SpriteBuilder::with_source(layer.source.clone());
             sprite.apply_tween_state(state);

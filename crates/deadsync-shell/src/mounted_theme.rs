@@ -14,7 +14,7 @@ use deadsync_profile_gameplay::stage_scores::GameplayScoreSnapshots;
 use deadsync_theme::attract::AttractPresentation;
 use deadsync_theme::player_options::PlayerOptionsLayout;
 use deadsync_theme::selection::{MusicWheelPresentation, SelectionPresentation};
-use deadsync_theme::stage::StagePresentation;
+use deadsync_theme::stage::{StageCardPresentation, StagePresentation};
 use deadsync_theme::startup::StartupPresentation;
 use deadsync_theme::system_options::SystemOptionsPresentation;
 use deadsync_theme::views::GameplayStageView;
@@ -42,6 +42,7 @@ pub struct ThemeMount {
     pub transitions: ScreenTransitionMount,
     pub resources: SupplementalResources,
     pub stage: Box<dyn StagePresentation<Actor>>,
+    pub stage_card: Option<Box<dyn StageCardPresentation<Actor>>>,
     pub gameplay: GameplayPresentationMount,
     pub selection: Option<Box<dyn SelectionPresentation<Actor>>>,
     pub music_wheel: Option<Box<dyn MusicWheelPresentation<Actor>>>,

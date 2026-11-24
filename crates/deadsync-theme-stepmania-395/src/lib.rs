@@ -10,6 +10,7 @@ mod package;
 mod resources;
 mod scene;
 mod select_music;
+mod stage_card;
 mod title;
 
 pub use animation::{ActorAnimation, AnimationError};
@@ -20,4 +21,5 @@ pub use options::{PackageOptions, PackagePlayerOptions, PreparedOptions, Prepare
 pub use package::ThemePackage;
 pub use resources::{ResourceCatalog, ResourceCategory, ResourceLookupError};
 pub use select_music::{PackageMusic, PreparedMusic};
+pub use stage_card::PackageStageCard;
 pub use title::{PackageTitle, PackageTitleState, TITLE_FONT};
