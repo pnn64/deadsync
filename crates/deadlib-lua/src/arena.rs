@@ -89,9 +89,9 @@ impl<T> Arena<T> {
     pub fn insert(&mut self, value: T) -> u64 {
         self.try_insert(value).expect("allocate Lua arena slot")
     }
-    /// Reserve every parallel buffer before publishing a new identity. The free
-    /// list also covers every slot, so removing objects never allocates.
-    fn reserve_slots(&mut self, additional: usize) -> Result<(), Error> {
+    /// Reserve several future insertions without publishing any identities.
+    #[inline]
+    pub(crate) fn try_reserve(&mut self, additional: usize) -> Result<(), Error> {
         let additional = additional.saturating_sub(self.free.len());
         if additional == 0 {
             return Ok(());
@@ -104,20 +104,35 @@ impl<T> Arena<T> {
         if total > u32::MAX as usize {
             return Err(Error::memory());
         }
-        self.values.try_reserve(additional)?;
-        self.generations.try_reserve(additional)?;
-        self.free.try_reserve(total - self.free.len())?;
-        self.marks
-            .try_reserve(total.div_ceil(64) - self.marks.len())?;
-        if let Some(identities) = &mut self.identities {
-            identities.reserve(total)?;
+        let marks = total.div_ceil(64);
+        if total <= self.values.capacity()
+            && total <= self.generations.capacity()
+            && total <= self.free.capacity()
+            && marks <= self.marks.capacity()
+            && self
+                .identities
+                .as_ref()
+                .is_none_or(|identities| total.div_ceil(IDENTITY_PAGE) <= identities.pages.len())
+        {
+            return Ok(());
         }
-        Ok(())
+        self.grow_slots(additional, total, marks)
     }
-    /// Reserve several future insertions without publishing any identities.
-    pub(crate) fn try_reserve(&mut self, additional: usize) -> Result<(), Error> {
+
+    /// The free list covers every slot, so removing objects never allocates.
+    #[cold]
+    fn grow_slots(&mut self, additional: usize, total: usize, marks: usize) -> Result<(), Error> {
         let before = self.storage_bytes();
-        let reserved = self.reserve_slots(additional);
+        let reserved = (|| {
+            self.values.try_reserve(additional)?;
+            self.generations.try_reserve(additional)?;
+            self.free.try_reserve(total - self.free.len())?;
+            self.marks.try_reserve(marks - self.marks.len())?;
+            if let Some(identities) = &mut self.identities {
+                identities.reserve(total)?;
+            }
+            Ok(())
+        })();
         // A failed reservation can still grow an earlier buffer. Account for
         // that real storage while retaining all logical identities and marks.
         self.allocated = self
