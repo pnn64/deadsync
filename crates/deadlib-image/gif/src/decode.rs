@@ -137,8 +137,7 @@ impl Decoder {
     }
     /// Reuse a returned frame's pixel allocation for a later image. Retained
     /// frames must not be recycled. Only one spare allocation is kept.
-    pub fn recycle_frame(&mut self, mut frame: Frame) {
-        frame.indices.clear();
+    pub fn recycle_frame(&mut self, frame: Frame) {
         if frame.indices.capacity() > self.spare.capacity() {
             self.spare = frame.indices;
         }
@@ -407,10 +406,11 @@ impl Decoder {
                         break None;
                     }
                     let s = &self.scratch;
+                    let header = self.header.as_ref().unwrap();
+                    let flags = s[8];
                     if self.options.strict
-                        && (s[8] & 0x18 != 0
-                            || (self.header.as_ref().unwrap().version == Version::Gif87a
-                                && s[8] & 0x20 != 0))
+                        && (flags & 0x18 != 0
+                            || (flags & 0x20 != 0 && header.version == Version::Gif87a))
                     {
                         return Err(Error::Invalid("reserved image descriptor bits"));
                     }
@@ -421,13 +421,12 @@ impl Decoder {
                         top: le(&s[2..]),
                         width: le(&s[4..]),
                         height: le(&s[6..]),
-                        interlaced: s[8] & 0x40 != 0,
-                        sorted: s[8] & 0x20 != 0,
+                        interlaced: flags & 0x40 != 0,
+                        sorted: flags & 0x20 != 0,
                         local_palette: None,
                         control: self.pending.take(),
                         indices,
                     };
-                    let header = self.header.as_ref().unwrap();
                     validate_rect(
                         self.frame.left,
                         self.frame.top,
@@ -449,8 +448,8 @@ impl Decoder {
                         return Err(Error::LimitExceeded);
                     }
                     reserve(&mut self.frame.indices, count)?;
-                    let size = if s[8] & 128 != 0 {
-                        3usize << ((s[8] & 7) + 1)
+                    let size = if flags & 128 != 0 {
+                        3usize << ((flags & 7) + 1)
                     } else {
                         0
                     };
