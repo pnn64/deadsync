@@ -172,28 +172,26 @@ impl SyncBuffer {
         let bytes = &self.data[self.start..self.filled];
         self.returned = 0;
         // Appends preserve an already recognized header and its declared length.
-        if self.length != 0 && bytes.len() < self.length {
-            return Ok(Step::NeedMore);
-        }
-        if bytes.len() < 27 {
-            return Ok(Step::NeedMore);
-        }
-        if bytes.starts_with(b"OggS") {
-            let length = if self.length != 0 {
-                self.length
-            } else {
-                let header = 27 + bytes[26] as usize;
-                if bytes.len() < header {
-                    return Ok(Step::NeedMore);
-                }
-                self.length = header + crate::page::body_size(&bytes[27..header]);
-                self.length
-            };
-            if bytes.len() < length {
+        let mut length = self.length;
+        if length == 0 {
+            let Some(header) = bytes.first_chunk::<27>() else {
                 return Ok(Step::NeedMore);
+            };
+            if header.starts_with(b"OggS") {
+                let end = 27 + header[26] as usize;
+                let Some(lacing) = bytes.get(27..end) else {
+                    return Ok(Step::NeedMore);
+                };
+                length = end + crate::page::body_size(lacing);
+                self.length = length;
             }
-            let expected = u32::from_le_bytes(bytes[22..26].try_into().unwrap());
-            if crc::page_crc(&bytes[..length]) == expected {
+        }
+        if length != 0 {
+            let Some(page) = bytes.get(..length) else {
+                return Ok(Step::NeedMore);
+            };
+            let expected = u32::from_le_bytes(page[22..26].try_into().unwrap());
+            if crc::page_crc(page) == expected {
                 self.advance(length)?;
                 self.returned = length;
                 self.unsynced = false;
