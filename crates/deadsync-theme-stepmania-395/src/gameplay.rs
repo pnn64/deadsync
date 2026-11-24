@@ -310,13 +310,22 @@ fn push_warning(actors: &mut Vec<Actor>, view: GameplayBackgroundWarningView) {
     actors.push(text.build(0));
 }
 fn push_unjoined(_actors: &mut Vec<Actor>, _p2: bool) {}
-fn push_background(actors: &mut Vec<Actor>, _brightness: f32) {
+fn push_background(actors: &mut Vec<Actor>, brightness: f32) {
     actors.push(Layout::current().solid(
         [320.0, 240.0],
         [640.0, 480.0],
         [0.0, 0.0, 0.0, 1.0],
-        -100,
+        -101,
     ));
+    let brightness = brightness.clamp(0.0, 1.0);
+    let mut image = Layout::current().sprite(
+        "stepmania-395/gameplay-fallback",
+        [320.0, 240.0],
+        [600.0, 440.0],
+        -100,
+    );
+    image.diffuse([brightness, brightness, brightness, 1.0]);
+    actors.push(image.build(0));
 }
 fn push_autoplay(actors: &mut Vec<Actor>) {
     let mut label = Layout::current().text(NORMAL_FONT, "AutoPlay".into(), [320.0, 360.0], 1.0);

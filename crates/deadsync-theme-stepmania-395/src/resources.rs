@@ -141,6 +141,9 @@ impl ThemeResources for StepManiaTheme {
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("gameplay-fallback"),
+                png!("gameplay-failed-right"),
+                png!("gameplay-failed-left"),
                 png!("attract-warning"),
                 png!("gameplay-danger-tiles"),
                 png!("gameplay-danger-glow"),

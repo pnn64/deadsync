@@ -515,6 +515,8 @@ fn check_native_gameplay_warning(app: &mut App) {
     ));
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(warning_visible(&actors));
+    assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
+        if source.texture_key() == Some("stepmania-395/gameplay-fallback"))));
     let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
     game.update_profile(0, |profile| profile.hide_danger = true);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);

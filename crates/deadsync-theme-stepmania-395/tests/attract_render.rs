@@ -109,6 +109,28 @@ fn native_attract_captures() {
             options_actors(&assets, Some([false, true])),
         ),
         ("gameplay-hud", gameplay_hud_actors()),
+        (
+            "gameplay-entry-wipe",
+            gameplay_hud_motion_actors(deadsync_theme::views::GameplayHudMotion::Entering {
+                elapsed_seconds: 1.0,
+            }),
+        ),
+        (
+            "gameplay-ready",
+            gameplay_hud_motion_actors(deadsync_theme::views::GameplayHudMotion::Entering {
+                elapsed_seconds: 2.25,
+            }),
+        ),
+        (
+            "gameplay-go",
+            gameplay_hud_motion_actors(deadsync_theme::views::GameplayHudMotion::Entering {
+                elapsed_seconds: 3.75,
+            }),
+        ),
+        ("gameplay-cleared-wipe", gameplay_outro_actors(false, 0.75)),
+        ("gameplay-cleared", gameplay_outro_actors(false, 2.5)),
+        ("gameplay-failed-wipe", gameplay_outro_actors(true, 0.25)),
+        ("gameplay-failed", gameplay_outro_actors(true, 2.5)),
         ("gameplay-danger", gameplay_warning_actors(0.25)),
         ("gameplay-danger-blink-off", gameplay_warning_actors(0.75)),
     ] {
@@ -517,10 +539,14 @@ fn options_actors(assets: &deadlib_assets::AssetManager, players: Option<[bool; 
 }
 
 fn gameplay_hud_actors() -> Vec<Actor> {
+    gameplay_hud_motion_actors(deadsync_theme::views::GameplayHudMotion::Settled)
+}
+
+fn gameplay_hud_motion_actors(motion: deadsync_theme::views::GameplayHudMotion) -> Vec<Actor> {
     use deadsync_theme::stage::StagePresentation;
     use deadsync_theme::views::{
-        GameplayDifficultyView, GameplayHudMotion, GameplayLifeView, GameplayScoreView,
-        GameplaySongMeterView, GameplayStageBadgeView,
+        GameplayDifficultyView, GameplayLifeView, GameplayScoreView, GameplaySongMeterView,
+        GameplayStageBadgeView,
     };
     use deadsync_theme_stepmania_395::StepManiaStagePresentation;
     use std::sync::Arc;
@@ -528,7 +554,6 @@ fn gameplay_hud_actors() -> Vec<Actor> {
     let hud = StepManiaStagePresentation::default()
         .gameplay_hud()
         .unwrap();
-    let motion = GameplayHudMotion::Settled;
     let mut actors = Vec::new();
     (hud.fallback_background)(&mut actors, 1.0);
     let title = Arc::from("Quartz");
@@ -587,6 +612,28 @@ fn gameplay_hud_actors() -> Vec<Actor> {
             },
         );
     }
+    actors
+}
+
+fn gameplay_outro_actors(failed: bool, elapsed: f32) -> Vec<Actor> {
+    use deadsync_theme::stage::{StageOutroView, StagePresentation};
+    use deadsync_theme::views::GameplayHudMotion;
+    use deadsync_theme_stepmania_395::StepManiaStagePresentation;
+    let outro = StepManiaStagePresentation::default()
+        .gameplay_outro(StageOutroView {
+            failed,
+            simfile: std::path::Path::new("fixture.ssc"),
+            authored_transition: false,
+        })
+        .unwrap();
+    let mut actors = if outro.covers_stage(elapsed) {
+        Vec::new()
+    } else {
+        gameplay_hud_motion_actors(GameplayHudMotion::Leaving {
+            elapsed_seconds: elapsed,
+        })
+    };
+    outro.push_actors(&mut actors, elapsed);
     actors
 }
 

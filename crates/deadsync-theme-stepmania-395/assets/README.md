@@ -18,6 +18,8 @@ The bundled bitmap fonts also include the original `Common default` imports for 
 
 Gameplay uses the original `ScreenGameplay` life/score frames and difficulty sheet, `LifeMeterBar` textures, `Judgment` and `HoldJudgment` sheets, `Combo` artwork, and the ready/go, cleared/failed, and entry/exit animation graphics. Rust code reproduces their authored layout and animation. The failed sound is copied from `BGAnimations/ScreenGameplay failed/failed.ogg`.
 
+Songs without background media use the original `Common fallback background.png` in the reference's 20-pixel inset, with the game's selected background brightness. Failed-stage wipes use their separate blue star textures; cleared-stage wipes retain the original yellow stars. The four failed-result ghosts follow the source's decelerating fade-in and zoom sequence.
+
 The full-screen danger background uses the original `ScreenGameplay danger all` tile sheet and centered glow/text graphics. Its 14-frame tile sequence, 20 fps timing, two-second color effects and half-second visibility blink are authored in Rust. The mounted HUD requests an all-player warning scope; the common gameplay composer checks the joined players and warning preferences. This theme's individual-player danger and dead animations are empty in the reference.
 
 Evaluation uses the original stage/summary headers, banner and grade frames, grade and judgment sheets, bonus frames, score label, record badges, and `_moveon.png`. Numeric fonts preserve the original `Numbers/_numbers2`, `_numbers3`, `Combo numbers`, and `ScreenEvaluation percent text` bitmap sheets; their local descriptors map the original 5-by-3 character layout.

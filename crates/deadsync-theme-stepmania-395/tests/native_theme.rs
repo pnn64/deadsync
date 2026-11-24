@@ -483,6 +483,12 @@ fn native_stage_uses_the_captured_numeric_score_and_physical_player_side() {
     for width in [640.0, 854.0] {
         with_current_metrics(Metrics::centered(width, 480.0), || {
             let mut actors = Vec::new();
+            (hud.fallback_background)(&mut actors, 0.4);
+            assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite {
+                source, offset, size: [SizeSpec::Px(600.0), SizeSpec::Px(440.0)], tint, ..
+            } if source.texture_key() == Some("stepmania-395/gameplay-fallback")
+                && *offset == [width * 0.5, 240.0] && *tint == [0.4, 0.4, 0.4, 1.0])));
+            actors.clear();
             (hud.percentage_score)(
                 &mut actors,
                 GameplayScoreView {
@@ -538,6 +544,12 @@ fn native_stage_uses_the_captured_numeric_score_and_physical_player_side() {
         assert!(outro.covers_stage(if failed { 1.2 } else { 2.0 }));
         let mut actors = Vec::new();
         outro.push_actors(&mut actors, 2.5);
+        let wipe = if failed {
+            "stepmania-395/gameplay-failed-right"
+        } else {
+            "stepmania-395/gameplay-out-right"
+        };
+        assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. } if source.texture_key() == Some(wipe))));
         let word = if failed {
             "stepmania-395/gameplay-failed"
         } else {

@@ -32,6 +32,13 @@ const EXIT_LEFT: [[f32; 2]; 8] = [
     [64.0, 464.0],
 ];
 
+#[derive(Clone, Copy)]
+enum WipeKind {
+    Entry,
+    Cleared,
+    Failed,
+}
+
 pub(crate) fn push_entry(actors: &mut Vec<Actor>, elapsed: f32) {
     let layout = Layout::current();
     if elapsed < 1.3 {
@@ -40,7 +47,14 @@ pub(crate) fn push_entry(actors: &mut Vec<Actor>, elapsed: f32) {
     }
     if elapsed < 2.0 {
         let left = ENTRY_ROWS.map(|[x, y]| [x + 1088.0, y + 32.0]);
-        push_wipe(actors, &ENTRY_ROWS, &left, elapsed / 2.0, 1088.0, true);
+        push_wipe(
+            actors,
+            &ENTRY_ROWS,
+            &left,
+            elapsed / 2.0,
+            1088.0,
+            WipeKind::Entry,
+        );
     }
     if (2.0..3.5).contains(&elapsed) {
         focusing(
@@ -108,7 +122,11 @@ impl StageOutroPresentation<Actor> for StageOutro {
             &left,
             (elapsed / duration).clamp(0.0, 1.0),
             distance,
-            false,
+            if self.failed {
+                WipeKind::Failed
+            } else {
+                WipeKind::Cleared
+            },
         );
         let layout = Layout::current();
         if self.failed {
@@ -127,7 +145,7 @@ impl StageOutroPresentation<Actor> for StageOutro {
                     1.0 + 0.1 * (1.0 - ((time - 1.2) / 0.1).clamp(0.0, 1.0))
                 };
                 let alpha = 0.4
-                    * (time / 0.6).clamp(0.0, 1.0)
+                    * (1.0 - (1.0 - time / 0.6).clamp(0.0, 1.0).powi(2))
                     * (1.0 - ((time - 3.3) / 0.5).clamp(0.0, 1.0));
                 let mut word = layout.sprite(
                     "stepmania-395/gameplay-failed",
@@ -160,29 +178,27 @@ fn push_wipe(
     left: &[[f32; 2]],
     progress: f32,
     distance: f32,
-    opening: bool,
+    kind: WipeKind,
 ) {
     let layout = Layout::current();
-    for (rows, direction, key) in [
-        (
-            right,
-            1.0,
-            if opening {
-                "stepmania-395/gameplay-in-right"
-            } else {
-                "stepmania-395/gameplay-out-right"
-            },
+    let (right_key, left_key, opening) = match kind {
+        WipeKind::Entry => (
+            "stepmania-395/gameplay-in-right",
+            "stepmania-395/gameplay-in-left",
+            true,
         ),
-        (
-            left,
-            -1.0,
-            if opening {
-                "stepmania-395/gameplay-in-left"
-            } else {
-                "stepmania-395/gameplay-out-left"
-            },
+        WipeKind::Cleared => (
+            "stepmania-395/gameplay-out-right",
+            "stepmania-395/gameplay-out-left",
+            false,
         ),
-    ] {
+        WipeKind::Failed => (
+            "stepmania-395/gameplay-failed-right",
+            "stepmania-395/gameplay-failed-left",
+            false,
+        ),
+    };
+    for (rows, direction, key) in [(right, 1.0, right_key), (left, -1.0, left_key)] {
         for &[x, y] in rows {
             let x = x + direction * distance * progress;
             actors.push(layout.sprite(key, [x, y], [128.0, 32.0], 1002).build(0));
