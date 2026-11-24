@@ -101,7 +101,7 @@ pub struct Decoder {
     lzw: lzw::Decoder,
     remaining_input_bytes: usize,
     remaining_metadata_bytes: usize,
-    block_count: usize,
+    remaining_blocks: usize,
     frame_count: usize,
     total_pixels: usize,
 }
@@ -128,7 +128,7 @@ impl Decoder {
             lzw: lzw::Decoder::new(),
             remaining_input_bytes: options.limits.max_input_bytes,
             remaining_metadata_bytes: options.limits.max_metadata_bytes,
-            block_count: 0,
+            remaining_blocks: options.limits.max_blocks,
             frame_count: 0,
             total_pixels: 0,
             options,
@@ -166,31 +166,9 @@ impl Decoder {
         self.wanted = wanted;
         self.filled = 0;
     }
-    fn charge_input(&mut self, amount: usize) -> Result<(), Error> {
-        self.remaining_input_bytes = self
-            .remaining_input_bytes
-            .checked_sub(amount)
-            .ok_or(Error::LimitExceeded)?;
-        Ok(())
-    }
-    fn charge_block(&mut self) -> Result<(), Error> {
-        self.block_count += 1;
-        if self.block_count > self.options.limits.max_blocks {
-            Err(Error::LimitExceeded)
-        } else {
-            Ok(())
-        }
-    }
-    fn charge_metadata(&mut self, amount: usize) -> Result<(), Error> {
-        self.remaining_metadata_bytes = self
-            .remaining_metadata_bytes
-            .checked_sub(amount)
-            .ok_or(Error::LimitExceeded)?;
-        Ok(())
-    }
     fn fill(&mut self, input: &[u8], at: &mut usize) -> Result<bool, Error> {
         let count = (self.wanted - self.filled).min(input.len() - *at);
-        self.charge_input(count)?;
+        charge(&mut self.remaining_input_bytes, count)?;
         self.scratch[self.filled..self.filled + count].copy_from_slice(&input[*at..*at + count]);
         self.filled += count;
         *at += count;
@@ -200,7 +178,7 @@ impl Decoder {
         if *at == input.len() {
             return Ok(None);
         }
-        self.charge_input(1)?;
+        charge(&mut self.remaining_input_bytes, 1)?;
         let byte = input[*at];
         *at += 1;
         Ok(Some(byte))
@@ -212,8 +190,8 @@ impl Decoder {
             Ok(())
         }
     }
-    fn data_mut(&mut self) -> &mut SubBlocks {
-        match self.extension.as_mut().unwrap() {
+    fn data_mut(extension: &mut Extension) -> &mut SubBlocks {
+        match extension {
             Extension::Comment(data)
             | Extension::Application { data, .. }
             | Extension::Unknown { data, .. } => data,
@@ -222,7 +200,7 @@ impl Decoder {
     }
     fn process(&mut self, input: &[u8]) -> Result<Progress, Error> {
         let mut at = 0;
-        let event = loop {
+        let event = 'events: loop {
             match self.state {
                 State::Header => {
                     if !self.fill(input, &mut at)? {
@@ -293,11 +271,11 @@ impl Decoder {
                     };
                     match byte {
                         0x2c => {
-                            self.charge_block()?;
+                            charge(&mut self.remaining_blocks, 1)?;
                             self.transition(State::Image, 9);
                         }
                         0x21 => {
-                            self.charge_block()?;
+                            charge(&mut self.remaining_blocks, 1)?;
                             self.transition(State::Extension, 0);
                         }
                         0x3b => {
@@ -372,7 +350,7 @@ impl Decoder {
                     if self.scratch[0] != 11 {
                         return Err(Error::Invalid("application header length"));
                     }
-                    self.charge_metadata(11)?;
+                    charge(&mut self.remaining_metadata_bytes, 11)?;
                     self.extension = Some(Extension::Application {
                         identifier: self.scratch[1..9].try_into().unwrap(),
                         authentication: self.scratch[9..12].try_into().unwrap(),
@@ -387,7 +365,7 @@ impl Decoder {
                     if self.scratch[0] != 12 {
                         return Err(Error::Invalid("plain-text header length"));
                     }
-                    self.charge_metadata(12)?;
+                    charge(&mut self.remaining_metadata_bytes, 12)?;
                     let s = &self.scratch;
                     let text = PlainText {
                         left: le(&s[1..]),
@@ -546,7 +524,7 @@ impl Decoder {
                     if count == 0 {
                         break None;
                     }
-                    self.charge_input(count)?;
+                    charge(&mut self.remaining_input_bytes, count)?;
                     self.lzw.update(
                         &input[at..at + count],
                         &mut self.frame.indices,
@@ -558,41 +536,54 @@ impl Decoder {
                         self.state = State::ImageSize;
                     }
                 }
-                State::MetadataSize => {
-                    let Some(size) = self.byte(input, &mut at)? else {
-                        break None;
-                    };
-                    if size == 0 {
-                        self.state = State::Block;
-                        break Some(Event::Block(Block::Extension(
-                            self.extension.take().unwrap(),
-                        )));
+                State::MetadataSize | State::MetadataData => {
+                    let data = Self::data_mut(self.extension.as_mut().unwrap());
+                    if self.state == State::MetadataData {
+                        let count = self.remaining.min(input.len() - at);
+                        charge(&mut self.remaining_input_bytes, count)?;
+                        data.last_mut()
+                            .unwrap()
+                            .extend_from_slice(&input[at..at + count]);
+                        at += count;
+                        self.remaining -= count;
+                        if self.remaining != 0 {
+                            break None;
+                        }
                     }
-                    self.charge_block()?;
-                    self.charge_metadata(size as usize + std::mem::size_of::<Vec<u8>>())?;
-                    let mut block = Vec::new();
-                    reserve(&mut block, size as usize)?;
-                    let data = self.data_mut();
-                    reserve(data, 1)?;
-                    data.push(block);
-                    self.remaining = size as usize;
-                    self.state = State::MetadataData;
-                }
-                State::MetadataData => {
-                    let count = self.remaining.min(input.len() - at);
-                    if count == 0 {
-                        break None;
+                    loop {
+                        let Some(&size) = input.get(at) else {
+                            self.state = State::MetadataSize;
+                            break 'events None;
+                        };
+                        charge(&mut self.remaining_input_bytes, 1)?;
+                        at += 1;
+                        if size == 0 {
+                            break;
+                        }
+                        let size = usize::from(size);
+                        charge(&mut self.remaining_blocks, 1)?;
+                        charge(
+                            &mut self.remaining_metadata_bytes,
+                            size + std::mem::size_of::<Vec<u8>>(),
+                        )?;
+                        let mut block = Vec::new();
+                        reserve(&mut block, size)?;
+                        reserve(data, 1)?;
+                        let count = size.min(input.len() - at);
+                        charge(&mut self.remaining_input_bytes, count)?;
+                        block.extend_from_slice(&input[at..at + count]);
+                        data.push(block);
+                        at += count;
+                        if count != size {
+                            self.remaining = size - count;
+                            self.state = State::MetadataData;
+                            break 'events None;
+                        }
                     }
-                    self.charge_input(count)?;
-                    self.data_mut()
-                        .last_mut()
-                        .unwrap()
-                        .extend_from_slice(&input[at..at + count]);
-                    at += count;
-                    self.remaining -= count;
-                    if self.remaining == 0 {
-                        self.state = State::MetadataSize;
-                    }
+                    self.state = State::Block;
+                    break Some(Event::Block(Block::Extension(
+                        self.extension.take().unwrap(),
+                    )));
                 }
                 State::Done => {
                     if self.options.strict && !input[at..].is_empty() {
@@ -600,7 +591,7 @@ impl Decoder {
                     }
                     // A caller may stop at Event::End for an embedded stream.
                     // If it submits the suffix, discarded bytes still count.
-                    self.charge_input(input.len() - at)?;
+                    charge(&mut self.remaining_input_bytes, input.len() - at)?;
                     at = input.len();
                     break None;
                 }
@@ -612,6 +603,11 @@ impl Decoder {
             event,
         })
     }
+}
+
+fn charge(remaining: &mut usize, count: usize) -> Result<(), Error> {
+    *remaining = remaining.checked_sub(count).ok_or(Error::LimitExceeded)?;
+    Ok(())
 }
 
 fn le(s: &[u8]) -> u16 {
