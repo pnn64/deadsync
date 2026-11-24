@@ -247,7 +247,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
         (Vec::new(), 0.75)
     };
     let mounted_duration = match theme {
-        ThemeFlag::SimplyLove => 0.75,
+        ThemeFlag::SimplyLove | ThemeFlag::StepMania395 => 0.75,
         ThemeFlag::OpenItg => 0.5,
     };
     assert_eq!(

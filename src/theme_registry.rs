@@ -11,6 +11,7 @@ use deadsync_theme_openitg::{
     OpenItgSystemOptions, OpenItgTheme,
 };
 use deadsync_theme_simply_love::SimplyLoveTheme;
+use deadsync_theme_stepmania_395::{StepManiaIntro, StepManiaStageCard, StepManiaTheme};
 use deadsync_theme_simply_love::screens::{
     gameplay, transition_audio::TransitionAudioContext, transitions,
 };
@@ -55,6 +56,21 @@ const FALLBACK_TRANSITIONS: ScreenTransitionMount = ScreenTransitionMount {
 
 pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
     match theme {
+        ThemeFlag::StepMania395 => ThemeMount {
+            title: Box::new(|index| InstalledMenu::mount::<StepManiaTheme>(index, |_| ())),
+            startup: startup_screen,
+            transitions: FALLBACK_TRANSITIONS,
+            resources: resources::<StepManiaTheme>(),
+            stage: Box::new(SimplyLoveTheme),
+            stage_card: Some(Box::new(StepManiaStageCard)),
+            gameplay: GAMEPLAY_COMPOSER,
+            selection: None,
+            music_wheel: None,
+            player_options: None,
+            system_options: None,
+            attract: Some(Box::new(StepManiaIntro::default())),
+            chat: chat_overlay,
+        },
         ThemeFlag::SimplyLove => ThemeMount {
             title: Box::new(|index| {
                 InstalledMenu::mount::<SimplyLoveTheme>(index, |policy| policy)

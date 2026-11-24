@@ -23,6 +23,7 @@ pub(in crate::screens::options) const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[
             localized_choice("OptionsSystem", "SimplyLoveTheme"),
             literal_choice("OpenITG"),
+            literal_choice("StepMania 3.95"),
         ],
         inline: false,
     },

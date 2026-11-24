@@ -1467,6 +1467,7 @@ dependencies = [
  "deadsync-theme",
  "deadsync-theme-openitg",
  "deadsync-theme-simply-love",
+ "deadsync-theme-stepmania-395",
  "deadsync-updater",
  "deadsync-version",
  "fs_extra",
@@ -1842,6 +1843,7 @@ dependencies = [
  "deadsync-theme",
  "deadsync-theme-openitg",
  "deadsync-theme-simply-love",
+ "deadsync-theme-stepmania-395",
  "deadsync-updater",
  "hashbrown 0.17.1",
  "image",
@@ -2031,15 +2033,11 @@ dependencies = [
  "deadlib-assets",
  "deadlib-platform",
  "deadlib-present",
- "deadsync-chart",
  "deadsync-config",
  "deadsync-core",
  "deadsync-input",
- "deadsync-noteskin",
  "deadsync-theme",
  "image",
- "roxmltree",
- "tempfile",
 ]
 
 [[package]]

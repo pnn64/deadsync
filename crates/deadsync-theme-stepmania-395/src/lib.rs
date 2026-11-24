@@ -1,25 +1,54 @@
-//! Reference readers used to inspect 3.95-format theme packages during development.
+//! Native Rust presentation using the bundled StepMania 3.95 theme assets.
 
-mod animation;
-mod backgrounds;
-mod bitmap_text;
 mod intro;
-mod metrics;
-mod options;
-mod package;
+mod menu;
+mod presentation;
 mod resources;
-mod scene;
-mod select_music;
-mod stage_card;
-mod title;
+mod stage;
 
-pub use animation::{ActorAnimation, AnimationError};
-pub use backgrounds::{BackgroundDefinition, BackgroundPlayback, BackgroundTexture};
-pub use intro::PackageIntro;
-pub use metrics::MetricLookupError;
-pub use options::{PackageOptions, PackagePlayerOptions, PreparedOptions, PreparedPlayerOptions};
-pub use package::ThemePackage;
-pub use resources::{ResourceCatalog, ResourceCategory, ResourceLookupError};
-pub use select_music::{PackageMusic, PreparedMusic};
-pub use stage_card::PackageStageCard;
-pub use title::{PackageTitle, PackageTitleState, TITLE_FONT};
+use deadlib_present::actors::Actor;
+use deadsync_theme::{Screen, Theme, ThemeScreenId, ThemeTransitions, TransitionKind};
+
+pub use intro::StepManiaIntro;
+pub use menu::MenuState;
+pub use stage::StepManiaStageCard;
+
+pub struct StepManiaTheme;
+
+impl Theme for StepManiaTheme {
+    type Screen = Screen;
+    type RuntimeRequest = std::convert::Infallible;
+
+    fn screen_id(screen: Screen) -> ThemeScreenId {
+        ThemeScreenId::new(screen.current_screen_file_name())
+    }
+}
+
+impl ThemeTransitions for StepManiaTheme {
+    type Actor = Actor;
+    type EntryContext<'a> = ();
+
+    fn transition_kind(_from: Screen, _to: Screen) -> TransitionKind {
+        TransitionKind::Direct
+    }
+
+    fn actor_entry_duration(screen: Screen) -> Option<f32> {
+        (screen == Screen::Menu).then_some(0.3)
+    }
+
+    fn actor_exit_duration(screen: Screen) -> f32 {
+        if screen == Screen::Menu { 0.3 } else { 0.0 }
+    }
+
+    fn skip_global_entry_fade(_from: Screen, _to: Screen) -> bool {
+        false
+    }
+
+    fn in_transition(_screen: Screen, (): ()) -> (Vec<Actor>, f32) {
+        (Vec::new(), 0.3)
+    }
+
+    fn out_transition(_from: Screen, _to: Screen) -> (Vec<Actor>, f32) {
+        (Vec::new(), 0.3)
+    }
+}

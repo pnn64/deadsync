@@ -7569,15 +7569,12 @@ fn music_wheels_use_the_game_catalog_and_keep_auxiliary_screens() {
     let selection = read_source(theme.join("select_music.rs")).expect("Select Music source");
     let wheel = production_source(&theme.join("components/select_music/music_wheel.rs"));
     let openitg = production_source(&root.join("crates/deadsync-theme-openitg/src/select_music.rs"));
-    let package = production_source(&root.join("crates/deadsync-theme-stepmania-395/src/select_music.rs"));
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).expect("application source");
     assert!(game.contains("pub use deadsync_chart::music_wheel::{MusicWheelEntry, WheelRandomAction}"));
     assert!(selection.contains("pub use deadsync_gameplay::music_wheel::MusicWheelEntry"));
     assert!(selection.contains("wheel_entry_index(state.selected_index, direction,"));
     assert!(wheel.contains("wheel_entry_index(p.selected_index,"));
     assert!(openitg.contains("SelectMusicView<'_>"));
-    assert!(package.contains("impl MusicWheelPresentation<Actor>"));
-    assert!(package.contains("SelectMusicView<'_>"));
     assert!(app.contains("self.state.screens.wheel(CurrentScreen::SelectMusic)"));
     assert!(app.contains("select_music::select_music_view("));
     assert!(app.contains("selection.push_music("));
@@ -7601,6 +7598,15 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
 
     assert!(main.contains("theme_registry::mount(config.theme_flag)"));
     assert!(!main.contains("\"--theme-"));
+    assert!(registry.contains("ThemeFlag::StepMania395 => ThemeMount"));
+    assert!(registry.contains("InstalledMenu::mount::<StepManiaTheme>"));
+    let native = root.join("crates/deadsync-theme-stepmania-395/src");
+    for path in production_rust_files(&native) {
+        let source = production_source(&path);
+        for reader in ["std::fs", "ThemePackage", "roxmltree", "metrics.ini", "BGAnimation.ini"] {
+            assert!(!source.contains(reader), "native theme reads {reader} in {}", path.display());
+        }
+    }
 
     for (interface, implementation) in [
         ("StagePresentation", "OpenItgStagePresentation"),
