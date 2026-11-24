@@ -82,6 +82,25 @@ fn offsets_transparency_background_and_previous() {
 }
 
 #[test]
+fn offscreen_render_validates_before_applying_pending_disposal() {
+    let mut compositor = Compositor::new(&header()).unwrap();
+    let visible = frame(0, 0, 4, 3, 1, Disposal::Previous);
+    let drawn = rgba(&[1; 12], [0; 4]);
+    assert_eq!(compositor.render(&visible).unwrap().rgba, drawn);
+
+    let mut offscreen = frame(4, 0, 4, 3, 255, Disposal::Previous);
+    assert!(matches!(
+        compositor.render(&offscreen),
+        Err(Error::Invalid("pixel index outside active palette"))
+    ));
+    assert_eq!(compositor.pixels(), drawn);
+    offscreen.indices.fill(1);
+    let rendered = compositor.render(&offscreen).unwrap();
+    assert_eq!(rendered.rgba, rgba(&[0; 12], [0; 4]));
+    assert_eq!(rendered.control, offscreen.control);
+}
+
+#[test]
 fn consecutive_previous_first_previous_local_palette_clipping_and_timing() {
     let mut c = Compositor::new(&header()).unwrap();
     let first = frame(0, 0, 4, 3, 1, Disposal::Previous);

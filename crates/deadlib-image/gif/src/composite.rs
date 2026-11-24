@@ -153,7 +153,7 @@ impl Compositor {
             h: (height as usize).min(self.height as usize - y),
         }
     }
-    fn prepare(&mut self, rect: Rect, control: Option<GraphicControl>) -> Result<(), Error> {
+    fn prepare(&mut self, rect: Rect, control: Option<GraphicControl>) -> Result<bool, Error> {
         let disposal = control.unwrap_or_default().disposal;
         let visible = rect.w != 0 && rect.h != 0;
         let save = visible && disposal == Disposal::Previous;
@@ -203,7 +203,7 @@ impl Compositor {
         }
         self.pending = (visible && matches!(disposal, Disposal::Background | Disposal::Previous))
             .then_some((rect, disposal));
-        Ok(())
+        Ok(visible)
     }
     pub fn render(&mut self, frame: &Frame) -> Result<RenderedFrame<'_>, Error> {
         frame.validate::<false>((self.width, self.height), self.palette_len, false)?;
@@ -211,31 +211,32 @@ impl Compositor {
         if local.is_none() && self.palette_len.is_none() {
             return Err(Error::MissingPalette);
         }
-        let transparent = frame.control.and_then(|c| c.transparent_index);
         let r = self.clip(frame.left, frame.top, frame.width, frame.height);
-        self.prepare(r, frame.control)?;
-        let local_table;
-        let table = if let Some(p) = local {
-            local_table = expand_palette(p);
-            &local_table
-        } else {
-            &self.palette
-        };
-        let two_colors = local.map(<[_]>::len).or(self.palette_len) == Some(2);
-        let opaque = if two_colors {
-            transparent.map(|index| index ^ 1)
-        } else {
-            None
-        };
-        draw_indices(
-            (&mut self.pixels, self.width as usize),
-            r,
-            &frame.indices,
-            frame.width as usize,
-            table,
-            transparent,
-            opaque,
-        );
+        if self.prepare(r, frame.control)? {
+            let transparent = frame.control.and_then(|c| c.transparent_index);
+            let local_table;
+            let table = if let Some(p) = local {
+                local_table = expand_palette(p);
+                &local_table
+            } else {
+                &self.palette
+            };
+            let two_colors = local.map(<[_]>::len).or(self.palette_len) == Some(2);
+            let opaque = if two_colors {
+                transparent.map(|index| index ^ 1)
+            } else {
+                None
+            };
+            draw_indices(
+                (&mut self.pixels, self.width as usize),
+                r,
+                &frame.indices,
+                frame.width as usize,
+                table,
+                transparent,
+                opaque,
+            );
+        }
         Ok(RenderedFrame {
             width: self.width,
             height: self.height,
@@ -313,28 +314,29 @@ impl Compositor {
                 y += ch;
             }
         }
-        self.prepare(rect, text.control)?;
-        // The validated text colors are the only two indices rasterization writes.
-        let transparent = text
-            .control
-            .and_then(|c| c.transparent_index)
-            .filter(|&index| index == text.foreground_index || index == text.background_index);
-        let opaque = transparent.map(|index| {
-            if index == text.foreground_index {
-                text.background_index
-            } else {
-                text.foreground_index
-            }
-        });
-        draw_indices(
-            (&mut self.pixels, self.width as usize),
-            rect,
-            &self.text_indices,
-            rect.w,
-            &self.palette,
-            transparent,
-            opaque,
-        );
+        if self.prepare(rect, text.control)? {
+            // The validated text colors are the only two indices rasterization writes.
+            let transparent = text
+                .control
+                .and_then(|c| c.transparent_index)
+                .filter(|&index| index == text.foreground_index || index == text.background_index);
+            let opaque = transparent.map(|index| {
+                if index == text.foreground_index {
+                    text.background_index
+                } else {
+                    text.foreground_index
+                }
+            });
+            draw_indices(
+                (&mut self.pixels, self.width as usize),
+                rect,
+                &self.text_indices,
+                rect.w,
+                &self.palette,
+                transparent,
+                opaque,
+            );
+        }
         Ok(RenderedFrame {
             width: self.width,
             height: self.height,
