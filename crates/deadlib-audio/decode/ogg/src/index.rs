@@ -303,14 +303,19 @@ impl OggIndex {
         }
         demux.finish()?;
         index.compatibility = demux.compatibility();
-        group_pages(&mut index.pages, &mut index.streams);
+        let single_stream = index.streams.len() == 1;
+        if !single_stream {
+            group_pages(&mut index.pages, &mut index.streams);
+        }
         let mut position = 0;
         for (stream_id, stream) in index.streams.iter_mut().enumerate() {
             let start = position;
             let mut floor = 0;
             let mut landmark = start;
-            while position < index.pages.len() && index.pages[position].stream == stream_id {
-                let page = &mut index.pages[position];
+            for page in &mut index.pages[start..] {
+                if !single_stream && page.stream != stream_id {
+                    break;
+                }
                 if page.header.granule_position != UNKNOWN_GRANULE_POSITION
                     && (page.completed_packets != 0 || page.length == 27)
                     && page.header.granule_position >= floor

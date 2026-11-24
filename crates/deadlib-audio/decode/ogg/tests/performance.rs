@@ -317,6 +317,16 @@ fn benchmark_container() {
                 black_box(page);
             }
         });
+        measure(
+            &format!("index/{label}"),
+            (4_000_000 / bytes.len()).max(1),
+            bytes.len(),
+            || {
+                black_box(
+                    OggIndex::read(black_box(bytes.as_slice()), IndexOptions::default()).unwrap(),
+                );
+            },
+        );
         measure(&format!("writer/{label}"), iterations, size * count, || {
             let data = black_box(&bytes[..size.min(bytes.len())]);
             let mut writer = PacketWriter::new(ObservedWriter::default(), 7);
@@ -343,6 +353,12 @@ fn benchmark_container() {
             writer.write_packet(data, number, number == 4096).unwrap();
         }
         black_box(writer.into_inner().0);
+    });
+    let many_pages = stream(1, 4096, 1);
+    measure("index/many-pages", 200, many_pages.len(), || {
+        black_box(
+            OggIndex::read(black_box(many_pages.as_slice()), IndexOptions::default()).unwrap(),
+        );
     });
     let clean = stream(24, 32, 8192);
     let mut seed = 17u32;
