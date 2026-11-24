@@ -27,7 +27,12 @@ pub(super) struct ImageRows {
     complete: bool,
 }
 impl ImageRows {
-    pub(super) fn new(header: Header, kind: ImageKind, limit: usize) -> Result<Self, Error> {
+    pub(super) fn new(
+        header: Header,
+        kind: ImageKind,
+        limit: usize,
+        history: Vec<u8>,
+    ) -> Result<Self, Error> {
         let expected = scanline::filtered_size(
             header.width,
             header.height,
@@ -41,7 +46,7 @@ impl ImageRows {
         let mut rows = Self {
             header,
             kind,
-            inflater: Inflater::new(expected)?,
+            inflater: Inflater::with_history(expected, history)?,
             row: Vec::new(),
             previous: Vec::new(),
             native8: Vec::new(),
@@ -206,13 +211,13 @@ impl ImageRows {
     pub(super) fn is_done(&self) -> bool {
         self.inflater.is_done()
     }
-    pub(super) fn finish(&mut self) -> Result<ImageKind, Error> {
+    pub(super) fn finish(mut self) -> Result<(ImageKind, Vec<u8>), Error> {
         self.advance()?;
         self.inflater.finish()?;
         if !self.complete {
             return Err(Error::Invalid("image data length"));
         }
-        Ok(self.kind)
+        Ok((self.kind, self.inflater.into_history()))
     }
     pub(super) fn memory_bytes(&self) -> usize {
         self.inflater.working_memory_bytes()

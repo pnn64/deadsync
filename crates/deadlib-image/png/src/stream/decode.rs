@@ -88,6 +88,7 @@ pub struct StreamDecoder {
     pre_control: Option<FrameControl>,
     frames_ended: u32,
     rows: Option<ImageRows>,
+    history: Vec<u8>,
     image_kind: Option<ImageKind>,
     sample_bytes: usize,
     peak_image_buffers: usize,
@@ -146,6 +147,7 @@ impl StreamDecoder {
             pre_control: None,
             frames_ended: 0,
             rows: None,
+            history: Vec::new(),
             image_kind: None,
             sample_bytes: 0,
             peak_image_buffers: 0,
@@ -262,6 +264,7 @@ impl StreamDecoder {
             self.animation_error = Some(error);
         }
         self.animation = None;
+        self.history = Vec::new();
         self.default_control = false;
         self.pre_control = None;
         if matches!(self.image_kind, Some(ImageKind::AnimationFrame(_))) {
@@ -304,19 +307,26 @@ impl StreamDecoder {
             h,
             kind,
             self.options.limits.max_output_bytes,
+            core::mem::take(&mut self.history),
         )?);
         self.image_kind = Some(kind);
         self.update_memory();
         Ok(())
     }
     fn end_image(&mut self) -> Result<ImageKind, Error> {
-        let mut rows = self
+        let rows = self
             .rows
             .take()
             .ok_or(Error::Invalid("missing image data"))?;
-        let kind = rows.finish()?;
+        let (kind, history) = rows.finish()?;
         if kind != ImageKind::Default || self.default_control {
             self.frames_ended += 1;
+        }
+        if self
+            .animation
+            .is_some_and(|(frames, _)| self.frames_ended < frames)
+        {
+            self.history = history;
         }
         self.image_kind = None;
         Ok(kind)

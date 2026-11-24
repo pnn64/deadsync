@@ -73,12 +73,19 @@ pub struct Inflater {
 
 impl Inflater {
     pub fn new(output_limit: usize) -> Result<Self, Error> {
-        let mut history = Vec::new();
+        Self::with_history(output_limit, Vec::new())
+    }
+    pub(crate) fn with_history(output_limit: usize, mut history: Vec<u8>) -> Result<Self, Error> {
         // A distance cannot exceed produced bytes or the output limit. Round
         // the bounded history to a power of two to retain masked ring indices.
         let size = output_limit.clamp(1, 32768).next_power_of_two();
-        reserve(&mut history, size)?;
-        history.resize(size, 0);
+        if history.len() != size {
+            history = Vec::new();
+            reserve(&mut history, size)?;
+            history.resize(size, 0);
+        }
+        // Every match is bounded by this stream's produced bytes, so reused
+        // history entries cannot be read before they are overwritten.
         Ok(Self {
             state: State::HeaderCmf,
             word: 0,
@@ -101,6 +108,9 @@ impl Inflater {
             limit: output_limit,
             failure: None,
         })
+    }
+    pub(crate) fn into_history(self) -> Vec<u8> {
+        self.history
     }
     pub fn total_in(&self) -> usize {
         self.total_in
@@ -517,6 +527,26 @@ impl Inflater {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reused_history_cannot_supply_a_match_before_the_new_stream_prefix() {
+        use super::super::{FIXED_CODES, huffman_fixtures::Wire};
+        let mut first = Inflater::new(3).unwrap();
+        first.remember(b"old");
+        let mut next = Inflater::with_history(3, first.into_history()).unwrap();
+        let mut wire = Wire::default();
+        wire.put(3, 3);
+        let (word, bits) = FIXED_CODES[257];
+        wire.put(u32::from(word), bits); // Length three.
+        wire.put(0, 5); // Distance one.
+        let encoded = wire.finish(b"ddd", false);
+        let mut output = [0; 3];
+        assert_eq!(
+            next.process(&encoded, &mut output),
+            Err(Error::Invalid("distance outside history window"))
+        );
+        assert_eq!(output, [0; 3]);
+    }
 
     #[test]
     fn history_writes_preserve_the_ring_after_oversized_copies() {
