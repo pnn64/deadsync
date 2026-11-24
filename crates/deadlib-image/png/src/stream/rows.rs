@@ -129,12 +129,14 @@ impl ImageRows {
         let progress = self.inflater.process(input, output)?;
         self.have += progress.written;
         if !self.complete && self.have == self.row.len() {
-            let bpp = (self.header.color.channels() * self.header.depth as usize).div_ceil(8);
             let filter = self.row[0];
-            if self.row_index == 0 {
-                scanline::unfilter_first(&mut self.row[1..], bpp, filter)?;
-            } else {
-                scanline::unfilter(&mut self.row[1..], &self.previous[1..], bpp, filter)?;
+            if filter != 0 {
+                let bpp = (self.header.color.channels() * self.header.depth as usize).div_ceil(8);
+                if self.row_index == 0 {
+                    scanline::unfilter_first(&mut self.row[1..], bpp, filter)?;
+                } else {
+                    scanline::unfilter(&mut self.row[1..], &self.previous[1..], bpp, filter)?;
+                }
             }
             let count = self.width * self.header.color.channels();
             if self.header.depth == 16 {
