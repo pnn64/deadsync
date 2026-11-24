@@ -1467,7 +1467,6 @@ dependencies = [
  "deadsync-theme",
  "deadsync-theme-openitg",
  "deadsync-theme-simply-love",
- "deadsync-theme-stepmania-395",
  "deadsync-updater",
  "deadsync-version",
  "fs_extra",

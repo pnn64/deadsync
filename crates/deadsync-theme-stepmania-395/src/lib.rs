@@ -1,4 +1,4 @@
-//! Resource, metric, and animation loading for local 3.95-format theme packages.
+//! Reference readers used to inspect 3.95-format theme packages during development.
 
 mod animation;
 mod backgrounds;

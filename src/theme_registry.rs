@@ -108,6 +108,5 @@ fn resources<T: ThemeResources>() -> SupplementalResources {
         fonts: manifest.fonts,
         embedded_pngs: manifest.embedded_pngs,
         sounds: T::SOUNDS,
-        ..SupplementalResources::default()
     }
 }

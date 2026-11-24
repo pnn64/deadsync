@@ -7593,10 +7593,14 @@ fn music_wheels_use_the_game_catalog_and_keep_auxiliary_screens() {
 fn application_dispatches_mounted_presentations_through_shared_contracts() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let shell = root.join("crates/deadsync-shell/src");
+    let main = production_source(&root.join("src/main.rs"));
     let mounting = production_source(&shell.join("mounted_theme.rs"));
     let registry = production_source(&root.join("src/theme_registry.rs"));
     let app = read_source(shell.join("app/mod.rs")).expect("application source");
     let app = app.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
+
+    assert!(main.contains("theme_registry::mount(config.theme_flag)"));
+    assert!(!main.contains("\"--theme-"));
 
     for (interface, implementation) in [
         ("StagePresentation", "OpenItgStagePresentation"),

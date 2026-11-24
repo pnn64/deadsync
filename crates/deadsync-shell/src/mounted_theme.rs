@@ -1,7 +1,7 @@
 //! Presentation interfaces supplied by the executable at startup.
 
 pub use crate::title_menu::InstalledMenu;
-use deadlib_assets::{AssetManager, TextureDecodeJob};
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadlib_present::actors::TextContent;
 use deadsync_assets::gameplay_stage::{
@@ -26,9 +26,7 @@ use deadsync_theme_simply_love::{
 #[derive(Default)]
 pub struct SupplementalResources {
     pub fonts: &'static [deadlib_assets::FontAssetSpec],
-    pub font_paths: Vec<(&'static str, std::path::PathBuf)>,
     pub embedded_pngs: &'static [deadlib_assets::EmbeddedPng],
-    pub textures: Vec<TextureDecodeJob>,
     pub sounds: ThemeSounds,
 }
 
