@@ -706,6 +706,18 @@ fn gather8<const CHANNELS: usize>(samples: &[u8], step: usize, row: &mut [u8]) {
     }
 }
 
+fn gather_words<const CHANNELS: usize>(samples: &[u16], step: usize, row: &mut [[u8; 2]]) {
+    let pixels = samples.as_chunks::<CHANNELS>().0;
+    for (out, pixel) in row
+        .as_chunks_mut::<CHANNELS>()
+        .0
+        .iter_mut()
+        .zip(pixels.iter().step_by(step))
+    {
+        *out = pixel.map(u16::to_be_bytes);
+    }
+}
+
 pub(crate) fn pack_row(
     image: &Image,
     y: usize,
@@ -756,12 +768,13 @@ pub(crate) fn pack_row(
             return;
         }
         Samples::U16(v) => {
-            for pixel in 0..width {
-                let src = start + pixel * step * channels;
-                for channel in 0..channels {
-                    let dst = (pixel * channels + channel) * 2;
-                    row[dst..dst + 2].copy_from_slice(&v[src + channel].to_be_bytes());
-                }
+            let samples = &v[start..];
+            let out = row.as_chunks_mut::<2>().0;
+            match channels {
+                1 => gather_words::<1>(samples, step, out),
+                2 => gather_words::<2>(samples, step, out),
+                3 => gather_words::<3>(samples, step, out),
+                _ => gather_words::<4>(samples, step, out),
             }
             return;
         }
