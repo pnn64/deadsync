@@ -198,12 +198,13 @@ impl Encoder {
         if !(2..=8).contains(&minimum) || input.iter().any(|&v| u16::from(v) >= 1 << minimum) {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
-        self.encode_validated(input, minimum, output)
+        self.encode_rows(std::iter::once(input), minimum, output)
     }
 
-    pub(crate) fn encode_validated(
+    // Input rows are validated against the minimum. Phrases can span rows.
+    pub(crate) fn encode_rows<'a>(
         &mut self,
-        input: &[u8],
+        rows: impl Iterator<Item = &'a [u8]>,
         minimum: u8,
         output: &mut Vec<u8>,
     ) -> Result<(), Error> {
@@ -220,9 +221,13 @@ impl Encoder {
             previous: false,
         };
         bits.code(clear)?;
-        if let Some((&first, rest)) = input.split_first() {
-            let mut prefix = u16::from(first);
-            'symbols: for &symbol in rest {
+        let mut pending = None;
+        for row in rows {
+            let mut symbols = row.iter().copied();
+            let Some(mut prefix) = pending.or_else(|| symbols.next().map(u16::from)) else {
+                continue;
+            };
+            'symbols: for symbol in symbols {
                 let key = (u32::from(prefix) << 8) | u32::from(symbol);
                 let mut slot = (key.wrapping_mul(0x9e3779b1) >> 19) as usize;
                 loop {
@@ -248,6 +253,9 @@ impl Encoder {
                 }
                 prefix = symbol.into();
             }
+            pending = Some(prefix);
+        }
+        if let Some(prefix) = pending {
             bits.code(prefix)?;
         }
         bits.code(clear + 1)?;

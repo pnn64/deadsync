@@ -3,7 +3,6 @@ use crate::{
     decode::{interlace_rows, validate_text},
     lzw,
     model::*,
-    reserve,
 };
 use std::io::Write;
 
@@ -28,7 +27,6 @@ pub struct Encoder<W: Write> {
     options: EncodeOptions,
     lzw: lzw::Encoder,
     compressed: Vec<u8>,
-    interlace: Vec<u8>,
     failed: bool,
 }
 impl<W: Write> Encoder<W> {
@@ -67,7 +65,6 @@ impl<W: Write> Encoder<W> {
             options,
             lzw: lzw::Encoder::new(),
             compressed: Vec::new(),
-            interlace: Vec::new(),
             failed: false,
         })
     }
@@ -129,18 +126,18 @@ impl<W: Write> Encoder<W> {
         let minimum = (8 - maximum.leading_zeros() as u8).max(2);
         self.compressed.clear();
         if f.interlaced {
-            self.interlace.clear();
-            reserve(&mut self.interlace, f.indices.len())?;
             let w = f.width as usize;
-            for y in interlace_rows(f.height as usize) {
-                self.interlace
-                    .extend_from_slice(&f.indices[y * w..(y + 1) * w]);
-            }
-            self.lzw
-                .encode_validated(&self.interlace, minimum, &mut self.compressed)?;
+            let rows = interlace_rows(f.height as usize).map(|y| {
+                let start = y * w;
+                &f.indices[start..start + w]
+            });
+            self.lzw.encode_rows(rows, minimum, &mut self.compressed)?;
         } else {
-            self.lzw
-                .encode_validated(&f.indices, minimum, &mut self.compressed)?;
+            self.lzw.encode_rows(
+                std::iter::once(f.indices.as_slice()),
+                minimum,
+                &mut self.compressed,
+            )?;
         }
         self.control(f.control)?;
         self.writer.write_all(&[0x2c])?;
