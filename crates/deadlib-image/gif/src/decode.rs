@@ -73,7 +73,6 @@ enum State {
     Image,
     LocalPalette,
     Minimum,
-    ImageSize,
     ImageData,
     MetadataSize,
     MetadataData,
@@ -467,74 +466,77 @@ impl Decoder {
                     } else {
                         self.lzw.reset_compatible(minimum)?;
                     }
-                    self.state = State::ImageSize;
-                }
-                State::ImageSize => {
-                    let Some(size) = self.byte(input, &mut at)? else {
-                        break None;
-                    };
-                    if size == 0 {
-                        let count = self.frame.width as usize * self.frame.height as usize;
-                        // The image-data terminator supplies the framing needed
-                        // to recover a missing EOI. LZW errors stay fatal, and
-                        // neither truncated framing nor missing pixels qualifies.
-                        if (self.options.strict && !self.lzw.ended())
-                            || self.frame.indices.len() != count
-                        {
-                            return Err(Error::Invalid("incomplete LZW image"));
-                        }
-                        if self.frame.interlaced {
-                            deinterlace(
-                                &mut self.frame.indices,
-                                self.frame.width as usize,
-                                self.frame.height as usize,
-                                &mut self.interlace,
-                            )?;
-                        }
-                        let header = self.header.as_ref().unwrap();
-                        if let Some(palette) = self
-                            .frame
-                            .local_palette
-                            .as_ref()
-                            .or(header.global_palette.as_ref())
-                            .or(self.options.external_palette.as_ref())
-                        {
-                            // Every expanded phrase contains only LZW literals.
-                            if self.lzw.literal_count() > palette.len()
-                                && self
-                                    .frame
-                                    .indices
-                                    .iter()
-                                    .copied()
-                                    .max()
-                                    .is_some_and(|index| usize::from(index) >= palette.len())
-                            {
-                                return Err(Error::Invalid("pixel index outside active palette"));
-                            }
-                            validate_control(self.frame.control, palette.len())?;
-                        }
-                        self.state = State::Block;
-                        break Some(Event::Block(Block::Frame(std::mem::take(&mut self.frame))));
-                    }
-                    self.remaining = size as usize;
+                    self.remaining = 0;
                     self.state = State::ImageData;
                 }
                 State::ImageData => {
-                    let count = self.remaining.min(input.len() - at);
-                    if count == 0 {
-                        break None;
+                    let width = usize::from(self.frame.width);
+                    let height = usize::from(self.frame.height);
+                    let pixels = width * height;
+                    let mut remaining = self.remaining;
+                    loop {
+                        if remaining == 0 {
+                            let Some(size) = self.byte(input, &mut at)? else {
+                                self.remaining = 0;
+                                break 'events None;
+                            };
+                            if size == 0 {
+                                break;
+                            }
+                            remaining = usize::from(size);
+                        }
+                        let count = remaining.min(input.len() - at);
+                        if count != 0 {
+                            charge(&mut self.remaining_input_bytes, count)?;
+                            self.lzw.update(
+                                &input[at..at + count],
+                                &mut self.frame.indices,
+                                pixels,
+                            )?;
+                            at += count;
+                        }
+                        remaining -= count;
+                        if remaining != 0 {
+                            self.remaining = remaining;
+                            break 'events None;
+                        }
                     }
-                    charge(&mut self.remaining_input_bytes, count)?;
-                    self.lzw.update(
-                        &input[at..at + count],
-                        &mut self.frame.indices,
-                        self.frame.width as usize * self.frame.height as usize,
-                    )?;
-                    at += count;
-                    self.remaining -= count;
-                    if self.remaining == 0 {
-                        self.state = State::ImageSize;
+                    self.remaining = 0;
+                    // The image-data terminator supplies the framing needed
+                    // to recover a missing EOI. LZW errors stay fatal, and
+                    // neither truncated framing nor missing pixels qualifies.
+                    if (self.options.strict && !self.lzw.ended())
+                        || self.frame.indices.len() != pixels
+                    {
+                        return Err(Error::Invalid("incomplete LZW image"));
                     }
+                    if self.frame.interlaced {
+                        deinterlace(&mut self.frame.indices, width, height, &mut self.interlace)?;
+                    }
+                    let header = self.header.as_ref().unwrap();
+                    if let Some(palette) = self
+                        .frame
+                        .local_palette
+                        .as_ref()
+                        .or(header.global_palette.as_ref())
+                        .or(self.options.external_palette.as_ref())
+                    {
+                        // Every expanded phrase contains only LZW literals.
+                        if self.lzw.literal_count() > palette.len()
+                            && self
+                                .frame
+                                .indices
+                                .iter()
+                                .copied()
+                                .max()
+                                .is_some_and(|index| usize::from(index) >= palette.len())
+                        {
+                            return Err(Error::Invalid("pixel index outside active palette"));
+                        }
+                        validate_control(self.frame.control, palette.len())?;
+                    }
+                    self.state = State::Block;
+                    break Some(Event::Block(Block::Frame(std::mem::take(&mut self.frame))));
                 }
                 State::MetadataSize | State::MetadataData => {
                     let data = Self::data_mut(self.extension.as_mut().unwrap());
