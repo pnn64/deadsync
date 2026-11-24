@@ -44,11 +44,11 @@ pub(crate) fn update(crc: u32, bytes: &[u8]) -> u32 {
     if let Some(crc) = crate::crc_hardware::update(crc, bytes) {
         return crc;
     }
-    update_scalar::<true>(crc, bytes)
+    update_scalar(crc, bytes)
 }
 
 #[inline]
-pub(crate) fn update_scalar<const FOLD_FOUR: bool>(mut crc: u32, bytes: &[u8]) -> u32 {
+pub(crate) fn update_scalar(mut crc: u32, bytes: &[u8]) -> u32 {
     let (words, tail) = bytes.as_chunks::<16>();
     for &[a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p] in words {
         // CRC is linear: merge its four bytes with the first four inputs,
@@ -83,7 +83,7 @@ pub(crate) fn update_scalar<const FOLD_FOUR: bool>(mut crc: u32, bytes: &[u8]) -
             ^ TABLES[1][g as usize]
             ^ TABLES[0][h as usize];
     }
-    let tail = if FOLD_FOUR && let Some((word, rest)) = tail.split_first_chunk::<4>() {
+    let tail = if let Some((word, rest)) = tail.split_first_chunk::<4>() {
         let state = crc ^ u32::from_be_bytes(*word);
         crc = TABLES[3][(state >> 24) as usize]
             ^ TABLES[2][((state >> 16) & 255) as usize]

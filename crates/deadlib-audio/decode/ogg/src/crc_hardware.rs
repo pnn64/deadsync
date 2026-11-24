@@ -107,7 +107,7 @@ fn fold(seed: u32, bytes: &[u8]) -> u32 {
             );
             (state, rest)
         } else {
-            return crate::crc::update_scalar::<false>(seed, tail);
+            return crate::crc::update_scalar(seed, tail);
         };
     for word in words {
         state = _mm_xor_si128(fold!(state, k1), reversed_word(word, reverse));
@@ -130,7 +130,12 @@ fn fold(seed: u32, bytes: &[u8]) -> u32 {
         value,
         _mm_clmulepi64_si128::<0x00>(quotient, _mm_cvtsi64_si128(POLYNOMIAL as i64)),
     );
-    crate::crc::update_scalar::<false>(_mm_cvtsi128_si32(remainder) as u32, tail)
+    let crc = _mm_cvtsi128_si32(remainder) as u32;
+    if tail.is_empty() {
+        crc
+    } else {
+        crate::crc::update_scalar(crc, tail)
+    }
 }
 
 #[cfg(test)]
@@ -179,7 +184,7 @@ mod tests {
                 for length in 0..=1024 {
                     let input = &data[offset..offset + length];
                     let expected = bitwise(seed, input);
-                    assert_eq!(crate::crc::update_scalar::<true>(seed, input), expected);
+                    assert_eq!(crate::crc::update_scalar(seed, input), expected);
                     // SAFETY: both required features were checked above; all alignments and lengths are supported.
                     assert_eq!(
                         unsafe { fold(seed, input) },
@@ -192,7 +197,7 @@ mod tests {
             for length in [4096, 65025, 65307, 1048576] {
                 let input = &data[3..3 + length];
                 let expected = bitwise(seed, input);
-                assert_eq!(crate::crc::update_scalar::<true>(seed, input), expected);
+                assert_eq!(crate::crc::update_scalar(seed, input), expected);
                 // SAFETY: both required features were checked above.
                 assert_eq!(unsafe { fold(seed, input) }, expected);
                 cases += 1;
