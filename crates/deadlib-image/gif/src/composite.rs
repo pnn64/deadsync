@@ -208,6 +208,7 @@ impl Compositor {
         } else {
             &self.palette
         };
+        let two_colors = local.map(<[_]>::len).or(self.palette_len) == Some(2);
         let stride = self.width as usize;
         for row in 0..r.h {
             let indices =
@@ -229,9 +230,20 @@ impl Compositor {
                 }
             }
             if let Some(t) = transparent {
-                for (pixel, &index) in dest.iter_mut().zip(indices) {
-                    if index != t {
-                        *pixel = table[index as usize];
+                if two_colors {
+                    // With two colors there is only one opaque value. Blend
+                    // whole RGBA words so the loop can vectorize.
+                    let paint = u32::from_ne_bytes(table[usize::from(t ^ 1)]);
+                    for (pixel, &index) in dest.iter_mut().zip(indices) {
+                        let keep = u32::from(index == t).wrapping_neg();
+                        let old = u32::from_ne_bytes(*pixel);
+                        *pixel = ((old & keep) | (paint & !keep)).to_ne_bytes();
+                    }
+                } else {
+                    for (pixel, &index) in dest.iter_mut().zip(indices) {
+                        if index != t {
+                            *pixel = table[index as usize];
+                        }
                     }
                 }
             } else {

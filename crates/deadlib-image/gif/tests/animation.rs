@@ -321,16 +321,23 @@ fn global_external_and_mutated_local_palettes_survive_reset() {
 fn uniform_and_mixed_rows_preserve_transparency_and_clipping() {
     for width in [1u16, 15, 16, 17, 31, 32, 33, 255, 256, 257] {
         for different in [None, Some(0), Some(width / 2), Some(width - 1)] {
-            for transparent in [None, Some(1), Some(2)] {
+            for (colors, transparent) in [
+                (4, None),
+                (4, Some(1)),
+                (4, Some(2)),
+                (2, Some(0)),
+                (2, Some(1)),
+            ] {
                 let mut h = header();
+                h.global_palette.as_mut().unwrap().truncate(colors);
                 h.width = width + 2;
                 h.height = 4;
                 let mut f = frame(2, 2, width + 3, 3, 1, Disposal::Keep);
                 f.control.as_mut().unwrap().transparent_index = transparent;
                 let stride = f.width as usize;
-                f.indices[stride..2 * stride].fill(2);
+                f.indices[stride..2 * stride].fill(if colors == 2 { 0 } else { 2 });
                 if let Some(column) = different {
-                    f.indices[column as usize] = 3;
+                    f.indices[column as usize] = if colors == 2 { 0 } else { 3 };
                 }
                 let background = [5, 6, 7, 8];
                 let mut expected = vec![background; h.width as usize * h.height as usize];
