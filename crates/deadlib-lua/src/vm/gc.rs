@@ -416,15 +416,38 @@ fn frames_roots(
                 } else {
                     maps as u16 as usize
                 };
+                let end = registers.len().min(return_top);
+                let shift = frame.base % 64;
                 for (word, &bits) in proto.gc_maps[map].iter().enumerate() {
-                    let mut bits = bits;
-                    while bits != 0 {
-                        let r = word * 64 + bits.trailing_zeros() as usize;
-                        let pos = frame.base + r;
-                        if pos < registers.len().min(return_top) {
-                            register_roots(registers, pos..pos + 1, live, work);
+                    let start = frame.base + word * 64;
+                    if start >= end {
+                        break;
+                    }
+                    if bits == 0 {
+                        continue;
+                    }
+                    if bits.is_power_of_two() {
+                        let position = start + bits.trailing_zeros() as usize;
+                        if position < end {
+                            register_roots(registers, position..position + 1, live, work);
                         }
-                        bits &= bits - 1;
+                        continue;
+                    }
+                    let width = (end - start).min(64);
+                    let marks = &mut live[start / 64..];
+                    let bits = bits & (u64::MAX >> (64 - width));
+                    // A frame-relative word can span two stack bitmap words.
+                    let low = bits << shift;
+                    let mut fresh = (low & !marks[0]) >> shift;
+                    marks[0] |= low;
+                    if width > 64 - shift {
+                        let high = bits >> (64 - shift);
+                        fresh |= (high & !marks[1]) << (64 - shift);
+                        marks[1] |= high;
+                    }
+                    while fresh != 0 {
+                        work.extend(edge(registers[start + fresh.trailing_zeros() as usize]));
+                        fresh &= fresh - 1;
                     }
                 }
                 let instruction = proto.code[pc];
