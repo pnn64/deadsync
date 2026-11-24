@@ -35,6 +35,21 @@ impl Vm {
                 self.registers[call] = self.tables.get(id.0)?.get(self.registers[call + 2]);
                 Some(1)
             }
+            6 if count >= 3
+                && let Value::Table(id) = self.registers[call + 1] =>
+            {
+                let key = self.registers[call + 2];
+                let value = self.registers[call + 3];
+                if !self
+                    .tables
+                    .get_mut(id.0)?
+                    .set_array_scalar_in_place(key, value)
+                {
+                    return None;
+                }
+                self.registers[call] = Value::Table(id);
+                Some(1)
+            }
             tables::TAB_GETN | tables::TAB_MAXN
                 if count != 0
                     && let Value::Table(table) = self.registers[call + 1] =>
