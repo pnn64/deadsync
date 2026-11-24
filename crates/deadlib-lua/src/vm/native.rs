@@ -81,9 +81,22 @@ impl Vm {
             }
             Value::Native(id) => {
                 self.check_calls()?;
-                if matches!(id, 32..=41 | 43 | 44 | 46..=51 | 53 | 54)
-                    && let Some(actual) = self.try_fast_math(id, call, count)
-                {
+                // These fixed IDs have no scheduled bodies. Each fast path
+                // checks for observers before consuming its arguments.
+                let actual = match id {
+                    0
+                    | 3..=5
+                    | NEXT
+                    | PAIRS_NEXT
+                    | IPAIRS_STEP
+                    | strings::STR_LEN
+                    | strings::STR_BYTE => self.try_fast_native(id, call, count),
+                    7 => self.try_fast_select(call, count),
+                    32..=41 | 43 | 44 | 46..=51 | 53 | 54 => self.try_fast_math(id, call, count),
+                    42 | 45 | 52 => self.try_fast_binary_math(id, call, count),
+                    _ => None,
+                };
+                if let Some(actual) = actual {
                     return Ok(Some(actual));
                 }
                 if matches!(
@@ -132,28 +145,6 @@ impl Vm {
                         c_level_bias: 0,
                     });
                     return Ok(None);
-                }
-                if matches!(
-                    id,
-                    0 | 3
-                        ..=5 | NEXT
-                            | PAIRS_NEXT
-                            | IPAIRS_STEP
-                            | strings::STR_LEN
-                            | strings::STR_BYTE
-                ) && let Some(actual) = self.try_fast_native(id, call, count)
-                {
-                    return Ok(Some(actual));
-                }
-                if id == 7
-                    && let Some(actual) = self.try_fast_select(call, count)
-                {
-                    return Ok(Some(actual));
-                }
-                if matches!(id, 42 | 45 | 52)
-                    && let Some(actual) = self.try_fast_binary_math(id, call, count)
-                {
-                    return Ok(Some(actual));
                 }
                 let index = self.frames.len();
                 let base = self.registers.len();
