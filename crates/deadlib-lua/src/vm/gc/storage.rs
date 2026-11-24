@@ -59,7 +59,7 @@ impl Vm {
                 (0, wk, wv)
             }
         };
-        let (next, array, pairs) = table.trace_slice(cursor, 64);
+        let (next, array, pairs) = table.trace_slice(cursor, TABLE_TRACE_SLOTS);
         let mut count = usize::from(next.is_some())
             + usize::from(cursor == 0 && table.metatable().is_some())
             + usize::from(cursor == 0 && table.host_state().is_some())
@@ -138,6 +138,13 @@ impl Vm {
         }
         let mut words = 0;
         let count = match item {
+            // A slice queues at most two edges per slot, a continuation, a
+            // metatable, and host state. The current item frees one slot.
+            Trace::Value(Value::Table(_)) | Trace::TableAgain(_) | Trace::TableSlice(_, _)
+                if work.capacity() - work.len() >= 2 * TABLE_TRACE_SLOTS + 2 =>
+            {
+                return Ok(());
+            }
             Trace::Value(Value::Table(id)) | Trace::TableAgain(id) => {
                 self.table_trace_count(id, 0, true)
             }

@@ -156,6 +156,8 @@ pub(super) enum Trace {
     Cell(usize),
     File(u64),
 }
+const TABLE_TRACE_SLOTS: usize = 64;
+
 fn edge(value: Value) -> Option<Trace> {
     match value {
         Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_) => None,
@@ -1343,10 +1345,11 @@ impl Vm {
         };
         self.tables[slot_index(id.0)].trace = TableTrace::Pending(weak_keys, weak_values);
         if !weak_keys || !weak_values {
-            self.tables[slot_index(id.0)].retire_native_keys_in_trace_slice(cursor, 64);
+            self.tables[slot_index(id.0)]
+                .retire_native_keys_in_trace_slice(cursor, TABLE_TRACE_SLOTS);
         }
         let table = &self.tables[slot_index(id.0)];
-        let (next, array, pairs) = table.trace_slice(cursor, 64);
+        let (next, array, pairs) = table.trace_slice(cursor, TABLE_TRACE_SLOTS);
         // Resume after children: a wide table needs only one pending slice and
         // the current slice's edges rather than a frontier for its entire width.
         if let Some(next) = next {
