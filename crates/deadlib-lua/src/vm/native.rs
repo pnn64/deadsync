@@ -982,9 +982,14 @@ impl Vm {
                 let results = results as usize;
                 self.resize_registers(self.registers.len().max(base + results));
                 let table = &self.tables[slot_index(id.0)];
-                for i in 0..results {
-                    let v = table.get(Value::Number((i64::from(start) + i as i64) as f64));
-                    self.registers[base + i] = v;
+                let destination = &mut self.registers[base..base + results];
+                let start = i64::from(start);
+                if let Some(values) = table.array_slice(start, i64::from(end)) {
+                    destination.copy_from_slice(values);
+                } else {
+                    for (offset, value) in destination.iter_mut().enumerate() {
+                        *value = table.get_integer(start + offset as i64);
+                    }
                 }
                 return Ok(results);
             }
