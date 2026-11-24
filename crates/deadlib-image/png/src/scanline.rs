@@ -636,16 +636,6 @@ pub(crate) fn filter_first<const SCORE: bool>(
 }
 
 fn pack_bits<const DEPTH: u8>(samples: &[u8], row: &mut [u8]) {
-    if DEPTH == 4 {
-        for (out, values) in row.iter_mut().zip(samples.chunks(8 / DEPTH as usize)) {
-            let mut byte = 0;
-            for (n, &value) in values.iter().enumerate() {
-                byte |= value << (8 - DEPTH - n as u8 * DEPTH);
-            }
-            *out = byte;
-        }
-        return;
-    }
     let group = 8 / DEPTH as usize;
     let full = samples.len() / group;
     let (words, tail) = row.split_at_mut(full);
@@ -660,6 +650,11 @@ fn pack_bits<const DEPTH: u8>(samples: &[u8], row: &mut [u8]) {
         2 => {
             for (out, &bytes) in words.iter_mut().zip(samples.as_chunks::<4>().0) {
                 *out = (u32::from_le_bytes(bytes).wrapping_mul(0x4010_0401) >> 24) as u8;
+            }
+        }
+        4 => {
+            for (out, &[high, low]) in words.iter_mut().zip(samples.as_chunks::<2>().0) {
+                *out = (high << 4) | low;
             }
         }
         _ => unreachable!("validated packed PNG depth"),
