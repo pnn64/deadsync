@@ -288,10 +288,10 @@ impl PacketCapture {
         };
         let mut fragments = page.fragments_from(cursor.segment, cursor.body);
         while let Some(fragment) = fragments.next() {
-            if fragment.starts_packet {
-                self.partial_offset = offset;
-            }
             if !fragment.starts_packet || !fragment.ends_packet {
+                if fragment.starts_packet {
+                    self.partial_offset = offset;
+                }
                 if !self.skipping {
                     reserve(&mut self.partial, fragment.data.len())?;
                     self.partial.extend_from_slice(fragment.data);
@@ -304,10 +304,10 @@ impl PacketCapture {
             cursor.remaining -= 1;
             let mut stop = false;
             if !self.skipping {
-                let data = if fragment.starts_packet {
-                    fragment.data
+                let (data, start_page_offset) = if fragment.starts_packet {
+                    (fragment.data, offset)
                 } else {
-                    &self.partial
+                    (self.partial.as_slice(), self.partial_offset)
                 };
                 stop = emit(CapturedPacket {
                     data,
@@ -318,7 +318,7 @@ impl PacketCapture {
                         last_in_stream: cursor.remaining == 0 && cursor.header.is_eos(),
                         granule_position: (cursor.remaining == 0)
                             .then_some(cursor.header.granule_position),
-                        start_page_offset: self.partial_offset,
+                        start_page_offset,
                         end_page_offset: offset,
                     },
                 })
