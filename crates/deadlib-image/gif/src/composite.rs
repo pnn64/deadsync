@@ -67,7 +67,7 @@ pub struct Compositor {
     pixels: Vec<[u8; 4]>,
     saved: Vec<[u8; 4]>,
     pending: Option<(Rect, Disposal)>,
-    text_indices: Vec<u8>,
+    text_coverage: Vec<u8>,
     mask: Vec<u8>,
 }
 impl Compositor {
@@ -120,7 +120,7 @@ impl Compositor {
             pixels,
             saved: Vec::new(),
             pending: None,
-            text_indices: Vec::new(),
+            text_coverage: Vec::new(),
             mask: Vec::new(),
         })
     }
@@ -228,14 +228,16 @@ impl Compositor {
             };
             let two_colors = local.map(<[_]>::len).or(self.palette_len) == Some(2);
             let canvas = (self.pixels.as_mut_slice(), self.width as usize);
-            if two_colors && transparent.is_none() {
-                draw_binary_indices(canvas, r, &frame.indices, frame.width as usize, table);
+            if two_colors {
+                draw_binary_indices(
+                    canvas,
+                    r,
+                    &frame.indices,
+                    frame.width as usize,
+                    [table[0], table[1]],
+                    transparent,
+                );
             } else {
-                let opaque = if two_colors {
-                    transparent.map(|index| index ^ 1)
-                } else {
-                    None
-                };
                 draw_indices(
                     canvas,
                     r,
@@ -243,7 +245,6 @@ impl Compositor {
                     frame.width as usize,
                     table,
                     transparent,
-                    opaque,
                 );
             }
         }
@@ -279,10 +280,10 @@ impl Compositor {
             return Err(Error::LimitExceeded);
         }
         let rect = self.clip(text.left, text.top, text.width, text.height);
-        self.text_indices.clear();
+        self.text_coverage.clear();
         let visible = rect.w * rect.h;
-        reserve(&mut self.text_indices, visible)?;
-        self.text_indices.resize(visible, text.background_index);
+        reserve(&mut self.text_coverage, visible)?;
+        self.text_coverage.resize(visible, 0);
         let cw = text.cell_width as usize;
         let ch = text.cell_height as usize;
         let columns = text.width as usize / cw;
@@ -312,13 +313,9 @@ impl Compositor {
                 let width = cw.min(rect.w - x);
                 for (row, mask) in self.mask.chunks_exact(cw).take(rect.h - y).enumerate() {
                     let start = (y + row) * rect.w + x;
-                    let dest = &mut self.text_indices[start..start + width];
+                    let dest = &mut self.text_coverage[start..start + width];
                     for (index, &covered) in dest.iter_mut().zip(mask) {
-                        *index = if covered == 0 {
-                            text.background_index
-                        } else {
-                            text.foreground_index
-                        };
+                        *index = u8::from(covered != 0);
                     }
                 }
             }
@@ -329,27 +326,27 @@ impl Compositor {
             }
         }
         if self.prepare(rect, text.control)? {
-            // The validated text colors are the only two indices rasterization writes.
-            let transparent = text
-                .control
-                .and_then(|c| c.transparent_index)
-                .filter(|&index| index == text.foreground_index || index == text.background_index);
-            let opaque = transparent.map(|index| {
-                if index == text.foreground_index {
-                    text.background_index
-                } else {
-                    text.foreground_index
-                }
-            });
-            draw_indices(
-                (&mut self.pixels, self.width as usize),
-                rect,
-                &self.text_indices,
-                rect.w,
-                &self.palette,
-                transparent,
-                opaque,
-            );
+            let background = text.background_index;
+            let foreground = text.foreground_index;
+            let transparent = text.control.and_then(|c| c.transparent_index);
+            if transparent != Some(background) || transparent != Some(foreground) {
+                let transparent = match transparent {
+                    Some(i) if i == background => Some(0),
+                    Some(i) if i == foreground => Some(1),
+                    _ => None,
+                };
+                draw_binary_indices(
+                    (&mut self.pixels, self.width as usize),
+                    rect,
+                    &self.text_coverage,
+                    rect.w,
+                    [
+                        self.palette[usize::from(background)],
+                        self.palette[usize::from(foreground)],
+                    ],
+                    transparent,
+                );
+            }
         }
         Ok(RenderedFrame {
             width: self.width,
@@ -368,7 +365,6 @@ fn draw_indices(
     width: usize,
     table: &[[u8; 4]; 256],
     transparent: Option<u8>,
-    opaque: Option<u8>,
 ) {
     let sources = indices.chunks_exact(width);
     let targets = canvas.chunks_exact_mut(stride).skip(r.y);
@@ -382,16 +378,7 @@ fn draw_indices(
             continue;
         }
         if let Some(t) = transparent {
-            if let Some(index) = opaque {
-                // With two colors there is only one opaque value. Blend
-                // whole RGBA words so the loop can vectorize.
-                let paint = u32::from_ne_bytes(table[usize::from(index)]);
-                for (pixel, &index) in dest.iter_mut().zip(indices) {
-                    let keep = u32::from(index == t).wrapping_neg();
-                    let old = u32::from_ne_bytes(*pixel);
-                    *pixel = ((old & keep) | (paint & !keep)).to_ne_bytes();
-                }
-            } else if indices.len() >= 64
+            if indices.len() >= 64
                 && frequent_transparency_changes(*indices.first_chunk::<8>().unwrap(), t)
             {
                 for (pixel, &index) in dest.iter_mut().zip(indices) {
@@ -431,23 +418,41 @@ fn draw_binary_indices(
     r: Rect,
     indices: &[u8],
     width: usize,
-    table: &[[u8; 4]; 256],
+    colors: [[u8; 4]; 2],
+    transparent: Option<u8>,
 ) {
     // Validated indices are zero or one. Expand them to full-word masks.
-    let first = u32::from_ne_bytes(table[0]);
-    let difference = first ^ u32::from_ne_bytes(table[1]);
+    let [background, foreground] = colors;
+    let first = u32::from_ne_bytes(background);
+    let difference = first ^ u32::from_ne_bytes(foreground);
+    let blend = transparent.map(|t| {
+        (
+            t,
+            u32::from_ne_bytes(if t == 0 { foreground } else { background }),
+        )
+    });
     let src = indices.chunks_exact(width);
     let dst = canvas.chunks_exact_mut(stride).skip(r.y);
     for (src, dst) in src.zip(dst).take(r.h) {
         let src = &src[..r.w];
         let dst = &mut dst[r.x..r.x + r.w];
         if let Some(index) = uniform_index(src) {
-            dst.fill(table[usize::from(index)]);
+            if transparent != Some(index) {
+                dst.fill(if index == 0 { background } else { foreground });
+            }
             continue;
         }
-        for (pixel, &index) in dst.iter_mut().zip(src) {
-            let select = u32::from(index).wrapping_neg();
-            *pixel = (first ^ (difference & select)).to_ne_bytes();
+        if let Some((t, paint)) = blend {
+            for (pixel, &index) in dst.iter_mut().zip(src) {
+                let keep = u32::from(index == t).wrapping_neg();
+                let old = u32::from_ne_bytes(*pixel);
+                *pixel = ((old & keep) | (paint & !keep)).to_ne_bytes();
+            }
+        } else {
+            for (pixel, &index) in dst.iter_mut().zip(src) {
+                let select = u32::from(index).wrapping_neg();
+                *pixel = (first ^ (difference & select)).to_ne_bytes();
+            }
         }
     }
 }
