@@ -98,6 +98,10 @@ require every joined player to be low. The common composer applies that scope to
 the live player facts and warning preferences, then invokes the mounted artwork.
 The scope affects presentation only, with no changes to life or failure rules.
 
+HUD presentations also declare whether they use the shared player-identity
+footer. Artwork depths remain theme-owned through the existing actor controls;
+notefield geometry, noteskin selection and scoring remain game-owned.
+
 Session-ending presentations receive a prepared session summary, banner keys,
 record facts and a game-owned timed name editor. The score layer aggregates
 recent passed stages and resolves timed character selections; the shell maps

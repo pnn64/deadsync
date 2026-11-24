@@ -66,6 +66,7 @@ pub(crate) mod tests {
 
     include!("looping_rooms_regression_tests.rs");
     include!("paperclip_regression_tests.rs");
+    include!("native_gameplay_regression_tests.rs");
 
 
     #[test]

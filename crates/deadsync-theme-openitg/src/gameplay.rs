@@ -25,6 +25,7 @@ pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     background_warning: push_background_warning,
     fallback_background: push_fallback_background,
     unjoined_seat: push_unjoined_seat,
+    profile_footer: true,
     autoplay_label: push_autoplay_label,
     field_feedback: &FIELD_FEEDBACK,
     default_tap_atlas: GameplayTapAtlas {

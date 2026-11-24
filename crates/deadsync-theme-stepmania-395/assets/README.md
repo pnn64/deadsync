@@ -24,6 +24,8 @@ Gameplay uses the original `ScreenGameplay` life/score frames and difficulty she
 
 Songs without background media use the original `Common fallback background.png` in the reference's 20-pixel inset, with the game's selected background brightness. Failed-stage wipes use their separate blue star textures; cleared-stage wipes retain the original yellow stars. The four failed-result ghosts follow the source's decelerating fade-in and zoom sequence.
 
+The gameplay HUD disables the shared player-identity footer, which is absent from the reference's blank menu-element base. Its life and score artwork uses depths above player fields and below song foreground artwork. Entry and result transitions cover the complete song foreground. These depths are authored in the native theme using the existing actor controls.
+
 The full-screen danger background uses the original `ScreenGameplay danger all` tile sheet and centered glow/text graphics. Its 14-frame tile sequence, 20 fps timing, two-second color effects and half-second visibility blink are authored in Rust. The mounted HUD requests an all-player warning scope; the common gameplay composer checks the joined players and warning preferences. This theme's individual-player danger and dead animations are empty in the reference.
 
 Evaluation uses the original stage/summary headers, banner and grade frames, grade and judgment sheets, bonus frames, score label, record badges, and `_moveon.png`. Numeric fonts preserve the original `Numbers/_numbers2`, `_numbers3`, `Combo numbers`, and `ScreenEvaluation percent text` bitmap sheets; their local descriptors map the original 5-by-3 character layout.

@@ -1755,6 +1755,9 @@ fn push_system_profile_footer(
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     presentation_skeleton: &mut GameplayPresentationSkeleton,
 ) {
+    if state.presentation().hud.as_ref().is_some_and(|hud| !hud.profile_footer) {
+        return;
+    }
     let hud = &state.presentation().hud_snapshot;
     let p1_footer = system_footer_player(&hud.p1);
     let p2_footer = system_footer_player(&hud.p2);

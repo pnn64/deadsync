@@ -427,6 +427,8 @@ pub struct GameplayHud<A> {
     pub background_warning: fn(&mut Vec<A>, GameplayBackgroundWarningView),
     pub fallback_background: fn(&mut Vec<A>, f32),
     pub unjoined_seat: fn(&mut Vec<A>, bool),
+    /// Whether the shared player-identity footer accompanies this HUD.
+    pub profile_footer: bool,
     pub autoplay_label: fn(&mut Vec<A>),
     pub field_feedback: &'static deadsync_core::hud_style::FieldFeedbackStyle,
     pub default_tap_atlas: GameplayTapAtlas,

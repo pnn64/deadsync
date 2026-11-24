@@ -11,6 +11,10 @@ use deadsync_theme::views::{
 use crate::presentation::Layout;
 use crate::resources::{COMBO_FONT, NORMAL_FONT, PERCENT_FONT, SCORE_FONT};
 
+// Player fields occupy depths through 1050 on scripted songs. Keep the
+// cabinet artwork above them and below song foreground artwork at 1100.
+const HUD_Z: i16 = 1060;
+
 pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     standard_life: push_life,
     percentage_score: push_score,
@@ -22,6 +26,7 @@ pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     background_warning: push_warning,
     fallback_background: push_background,
     unjoined_seat: push_unjoined,
+    profile_footer: false,
     autoplay_label: push_autoplay,
     field_feedback: &FEEDBACK,
     default_tap_atlas: GameplayTapAtlas {
@@ -95,10 +100,10 @@ fn push_life(actors: &mut Vec<Actor>, view: GameplayLifeView) {
 
 pub(crate) fn push_life_at(actors: &mut Vec<Actor>, view: GameplayLifeView, [x, y]: [f32; 2]) {
     let layout = Layout::current();
-    actors.push(layout.solid([x, y], [260.0, 24.0], [0.0, 0.0, 0.0, 1.0], 90));
+    actors.push(layout.solid([x, y], [260.0, 24.0], [0.0, 0.0, 0.0, 1.0], HUD_Z));
     if view.level < 0.2 && !view.failed {
         let alpha = 0.4 - 0.4 * (view.song_beat * std::f32::consts::TAU).cos();
-        actors.push(layout.solid([x, y], [260.0, 24.0], [1.0, 0.0, 0.0, alpha], 91));
+        actors.push(layout.solid([x, y], [260.0, 24.0], [1.0, 0.0, 0.0, alpha], HUD_Z + 1));
     }
     if !view.failed {
         let key = if view.hot {
@@ -115,7 +120,7 @@ pub(crate) fn push_life_at(actors: &mut Vec<Actor>, view: GameplayLifeView, [x, 
                     key,
                     [x - 130.0 + (start + end) * 130.0, y],
                     [(end - start) * 260.0, 24.0],
-                    92,
+                    HUD_Z + 2,
                 );
                 strip.customtexturerect([
                     (start - phase - offset) * 2.0,
@@ -133,7 +138,7 @@ pub(crate) fn push_life_at(actors: &mut Vec<Actor>, view: GameplayLifeView, [x, 
                 "stepmania-395/gameplay-life-border",
                 [x, y],
                 [282.0, 28.0],
-                94,
+                HUD_Z + 4,
             )
             .build(0),
     );
@@ -171,7 +176,7 @@ fn push_score(actors: &mut Vec<Actor>, view: GameplayScoreView) {
     };
     text.diffuse(tint);
     text.maxwidth(200.0 * layout.scale);
-    text.z(96);
+    text.z(HUD_Z + 6);
     actors.push(text.build(0));
 }
 
@@ -184,7 +189,7 @@ fn push_frames(actors: &mut Vec<Actor>, view: GameplaySongMeterView<'_>) {
                 "stepmania-395/gameplay-life-frame",
                 [320.0, 36.0 - shift],
                 [640.0, 76.0],
-                93,
+                HUD_Z + 3,
             )
             .build(0),
     );
@@ -194,7 +199,7 @@ fn push_frames(actors: &mut Vec<Actor>, view: GameplaySongMeterView<'_>) {
                 "stepmania-395/gameplay-score-frame",
                 [320.0, 448.0 + shift],
                 [640.0, 64.0],
-                93,
+                HUD_Z + 3,
             )
             .build(0),
     );
@@ -220,7 +225,7 @@ fn push_difficulty(actors: &mut Vec<Actor>, view: GameplayDifficultyView<'_>) {
         "stepmania-395/gameplay-difficulty",
         [x + shift, y],
         [122.0, 24.0],
-        95,
+        HUD_Z + 5,
     );
     let col = if view.p2 { 0.5 } else { 0.0 };
     icon.customtexturerect([col, row as f32 / 6.0, col + 0.5, (row + 1) as f32 / 6.0]);
@@ -250,7 +255,7 @@ fn push_stage(actors: &mut Vec<Actor>, view: GameplayStageBadgeView<'_>) {
     };
     actors.push(
         Layout::current()
-            .sprite(key, [320.0, 54.0 - slide(view.motion)], [width, 16.0], 95)
+            .sprite(key, [320.0, 54.0 - slide(view.motion)], [width, 16.0], HUD_Z + 5)
             .build(0),
     );
 }
@@ -329,6 +334,6 @@ fn push_background(actors: &mut Vec<Actor>, brightness: f32) {
 }
 fn push_autoplay(actors: &mut Vec<Actor>) {
     let mut label = Layout::current().text(NORMAL_FONT, "AutoPlay".into(), [320.0, 360.0], 1.0);
-    label.z(110);
+    label.z(HUD_Z + 20);
     actors.push(label.build(0));
 }

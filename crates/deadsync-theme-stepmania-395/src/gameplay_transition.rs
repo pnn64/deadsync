@@ -4,6 +4,9 @@ use deadsync_theme::stage::StageOutroPresentation;
 
 use crate::presentation::Layout;
 
+// Screen transitions cover the complete chart foreground, whose last layer is 1199.
+const TRANSITION_Z: i16 = 1200;
+
 const ENTRY_ROWS: [[f32; 2]; 6] = [
     [-64.0, 64.0],
     [-128.0, 128.0],
@@ -43,7 +46,7 @@ pub(crate) fn push_entry(actors: &mut Vec<Actor>, elapsed: f32) {
     let layout = Layout::current();
     if elapsed < 1.3 {
         let alpha = 1.0 - ((elapsed - 0.5) / 0.8).clamp(0.0, 1.0);
-        actors.push(layout.solid([320.0, 240.0], [640.0, 480.0], [0.0, 0.0, 0.0, alpha], 1000));
+        actors.push(layout.solid([320.0, 240.0], [640.0, 480.0], [0.0, 0.0, 0.0, alpha], TRANSITION_Z));
     }
     if elapsed < 2.0 {
         let left = ENTRY_ROWS.map(|[x, y]| [x + 1088.0, y + 32.0]);
@@ -84,7 +87,7 @@ fn focusing(actors: &mut Vec<Actor>, key: &'static str, size: [f32; 2], elapsed:
     };
     for direction in [0.0, -1.0, 1.0] {
         let distance = direction * 100.0 * (1.0 - progress);
-        let mut word = layout.sprite(key, [320.0 + distance, 240.0 + distance], size, 1100);
+        let mut word = layout.sprite(key, [320.0 + distance, 240.0 + distance], size, TRANSITION_Z + 100);
         word.alpha(progress * 0.5);
         actors.push(word.build(0));
     }
@@ -151,7 +154,7 @@ impl StageOutroPresentation<Actor> for StageOutro {
                     "stepmania-395/gameplay-failed",
                     [320.0, 240.0],
                     [306.0, 94.0],
-                    1100,
+                    TRANSITION_Z + 100,
                 );
                 word.zoom(zoom);
                 word.alpha(alpha);
@@ -164,7 +167,7 @@ impl StageOutroPresentation<Actor> for StageOutro {
                 "stepmania-395/gameplay-cleared",
                 [320.0, 240.0],
                 [414.0, 110.0],
-                1100,
+                TRANSITION_Z + 100,
             );
             word.alpha(alpha);
             actors.push(word.build(0));
@@ -201,13 +204,13 @@ fn push_wipe(
     for (rows, direction, key) in [(right, 1.0, right_key), (left, -1.0, left_key)] {
         for &[x, y] in rows {
             let x = x + direction * distance * progress;
-            actors.push(layout.sprite(key, [x, y], [128.0, 32.0], 1002).build(0));
+            actors.push(layout.sprite(key, [x, y], [128.0, 32.0], TRANSITION_Z + 2).build(0));
             let side = if opening { direction } else { -direction };
             actors.push(layout.solid(
                 [x + side * (64.0 + distance * 0.5), y],
                 [distance, 32.0],
                 [0.0, 0.0, 0.0, 1.0],
-                1001,
+                TRANSITION_Z + 1,
             ));
         }
     }

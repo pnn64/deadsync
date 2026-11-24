@@ -43,6 +43,14 @@ P2-only results and Nonstop evaluation. Captures are written to
 `target/native-395-attract-captures`. Focused presentation, navigation and
 architecture tests supplement the visual checks.
 
+The shell's ignored `native_gameplay_composition_captures` test also renders
+five complete gameplay scenes with prepared chart data, resident stock noteskin
+textures and the native HUD: P1, P2, Reverse, Versus, and a Versus song-script
+foreground. These captures are written to `target/native-395-gameplay-captures`.
+They check composition around the fields, including the absence of the default
+profile footer and the score/life frames' position above hold bodies. The
+selected noteskin and game-owned field geometry are retained.
+
 ## Fidelity boundaries
 
 - Challenge, Endless and Magic Dance cards remain disabled because their
