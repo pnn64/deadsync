@@ -400,6 +400,39 @@ fn benchmark_container() {
                 black_box(black_box(&index).packet_start_page(7, number).unwrap());
             }
         });
+        if label != "ordinary" {
+            continue;
+        }
+        let end_offset = index.length();
+        for (label, near_end) in [("mix", false), ("end", true)] {
+            measure(
+                &format!("seek/granule/{label}"),
+                20_000,
+                query_bytes,
+                || {
+                    for &query in &queries {
+                        let query = black_box(query);
+                        let target = if near_end {
+                            count as u64 + query
+                        } else {
+                            query % count as u64
+                        };
+                        black_box(black_box(&index).granule_at_or_before(7, target).unwrap());
+                    }
+                },
+            );
+            measure(&format!("seek/offset/{label}"), 20_000, query_bytes, || {
+                for &query in &queries {
+                    let query = black_box(query);
+                    let target = if near_end {
+                        end_offset + query
+                    } else {
+                        query * 2 % end_offset
+                    };
+                    black_box(black_box(&index).page_at_or_before(7, target).unwrap());
+                }
+            });
+        }
     }
     let clean = stream(24, 32, 8192);
     let mut seed = 17u32;

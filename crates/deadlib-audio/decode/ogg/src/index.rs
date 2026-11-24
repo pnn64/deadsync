@@ -366,16 +366,23 @@ impl OggIndex {
     /// remain available in pages(), including the declared final endpoint.
     pub fn granule_at_or_before(&self, serial: u32, target: u64) -> Option<&IndexedPage> {
         let pages = self.pages(serial)?;
-        let end = pages.partition_point(|page| page.granule_floor <= target);
-        Some(&self.pages[pages.get(end.checked_sub(1)?)?.landmark])
+        let (last, earlier) = pages.split_last()?;
+        let page = if last.granule_floor <= target {
+            last
+        } else {
+            let end = earlier.partition_point(|page| page.granule_floor <= target);
+            &earlier[end.checked_sub(1)?]
+        };
+        Some(&self.pages[page.landmark])
     }
     pub fn page_at_or_before(&self, serial: u32, offset: u64) -> Option<&IndexedPage> {
         let pages = self.pages(serial)?;
-        pages.get(
-            pages
-                .partition_point(|page| page.offset <= offset)
-                .checked_sub(1)?,
-        )
+        let (last, earlier) = pages.split_last()?;
+        if last.offset <= offset {
+            return Some(last);
+        }
+        let end = earlier.partition_point(|page| page.offset <= offset);
+        Some(&earlier[end.checked_sub(1)?])
     }
     /// Page on which the requested packet starts, even for a packet spanning
     /// many pages. The returned page may begin with an earlier continuation;
