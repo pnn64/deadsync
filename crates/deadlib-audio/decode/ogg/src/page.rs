@@ -274,7 +274,14 @@ pub(crate) fn write_page_inner(
     header: &mut [u8],
     body: &[u8],
 ) -> Result<usize, Error> {
-    let checksum = crc::update(crc::page_crc(header), body);
+    // Keep long prefixes contiguous for the hardware fold.
+    let prefix = if header.len() < 64 {
+        crc::page_crc(header)
+    } else {
+        header[22..26].fill(0);
+        crc::update(0, header)
+    };
+    let checksum = crc::update(prefix, body);
     header[22..26].copy_from_slice(&checksum.to_le_bytes());
     writer.write_all(header)?;
     writer.write_all(body)?;
