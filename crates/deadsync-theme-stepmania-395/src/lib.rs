@@ -15,7 +15,7 @@ pub use animation::{ActorAnimation, AnimationError};
 pub use backgrounds::{BackgroundDefinition, BackgroundPlayback, BackgroundTexture};
 pub use intro::PackageIntro;
 pub use metrics::MetricLookupError;
-pub use options::{PackageOptions, PreparedOptions};
+pub use options::{PackageOptions, PackagePlayerOptions, PreparedOptions, PreparedPlayerOptions};
 pub use package::ThemePackage;
 pub use resources::{ResourceCatalog, ResourceCategory, ResourceLookupError};
 pub use title::{PackageTitle, PackageTitleState, TITLE_FONT};

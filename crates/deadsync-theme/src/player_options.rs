@@ -1,7 +1,7 @@
 //! Presentation interface for editing a stage's player options.
 
 use crate::views::{NoteskinCatalogView, SmxGifCatalogView};
-use crate::{Screen, ThemeEffect, ThemeTransitions};
+use crate::{Screen, ThemeEffect, ThemeTransitions, TransitionState};
 use deadlib_assets::AssetManager;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
@@ -68,6 +68,7 @@ pub trait PlayerOptionsLayout<A, T> {
         page: PlayerOptionsPage<'_, T, A>,
         assets: &AssetManager,
         now: f64,
+        transition: &TransitionState<Screen>,
     );
     fn entry_transition(&self) -> (Vec<A>, f32);
     fn exit_transition(&self, target: Screen) -> (Vec<A>, f32);

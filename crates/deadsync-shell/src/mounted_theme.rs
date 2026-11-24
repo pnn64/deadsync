@@ -32,7 +32,8 @@ pub struct SupplementalResources {
     pub sounds: ThemeSounds,
 }
 
-pub type PlayerOptionsLayoutFactory = fn() -> Box<dyn PlayerOptionsLayout<Actor, TextContent>>;
+pub type PlayerOptionsLayoutFactory =
+    Box<dyn Fn() -> Box<dyn PlayerOptionsLayout<Actor, TextContent>>>;
 pub type StartupScreen = dyn StartupPresentation<Actor, LibraryLoadView, Config>;
 
 pub struct ThemeMount {

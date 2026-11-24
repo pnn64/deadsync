@@ -266,7 +266,7 @@ impl App {
                     view,
                     scroll_speeds: Some(scroll_speeds),
                 },
-                self.state.screens.player_options_layout,
+                self.state.screens.player_options_layout.as_ref(),
             )
         });
         screen.prepare(&self.asset_manager);

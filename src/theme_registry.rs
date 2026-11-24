@@ -78,7 +78,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             stage: Box::new(OpenItgStagePresentation::default()),
             gameplay: GAMEPLAY_COMPOSER,
             selection: Some(Box::new(OpenItgSelectionPresentation::default())),
-            player_options: Some(|| Box::new(OpenItgPlayerOptions::default())),
+            player_options: Some(Box::new(|| Box::new(OpenItgPlayerOptions::default()))),
             system_options: Some(Box::new(OpenItgSystemOptions::default())),
             attract: Some(Box::new(OpenItgIntro::default())),
             chat: chat_overlay,

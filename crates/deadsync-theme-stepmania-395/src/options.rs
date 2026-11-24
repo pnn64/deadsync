@@ -21,6 +21,9 @@ use crate::{
     ActorAnimation, BackgroundPlayback, BackgroundTexture, ResourceCategory, ThemePackage,
 };
 
+mod player;
+pub use player::{PackagePlayerOptions, PreparedPlayerOptions};
+
 const MENU: &str = "ScreenOptionsMenu";
 const SUBMENU: &str = "ScreenOptionsSubmenu";
 const OPTIONS: &str = "ScreenOptions";
@@ -28,6 +31,25 @@ const LABEL_FONT: &str = "local-theme-options-label";
 const ITEM_FONT: &str = "local-theme-options-item";
 const HELP_FONT: &str = "local-theme-options-explanation";
 const WHITE: [f32; 4] = [1.0; 4];
+
+fn font_paths(
+    package: &ThemePackage,
+    names: [&'static str; 3],
+    show_help: bool,
+) -> io::Result<Vec<(&'static str, PathBuf)>> {
+    let mut fonts = Vec::new();
+    for (name, resource) in names.into_iter().zip(["title", "item", "explanation"]) {
+        if resource == "explanation" && !show_help {
+            continue;
+        }
+        let font = package
+            .screen_resource(ResourceCategory::Fonts, OPTIONS, resource)
+            .map_err(io::Error::other)?
+            .ok_or_else(|| invalid(OPTIONS, format!("missing {resource} font")))?;
+        fonts.push((name, font.to_owned()));
+    }
+    Ok(fonts)
+}
 
 pub struct PreparedOptions {
     pub presentation: PackageOptions,
@@ -77,21 +99,11 @@ impl PackageOptions {
         let background = textures
             .background(&package, MENU)?
             .map(|current| (current.clone(), current));
-        let mut fonts = Vec::new();
-        for (name, resource) in [
-            (LABEL_FONT, "title"),
-            (ITEM_FONT, "item"),
-            (HELP_FONT, "explanation"),
-        ] {
-            if name == HELP_FONT && menu.help.is_none() && submenu.help.is_none() {
-                continue;
-            }
-            let font = package
-                .screen_resource(ResourceCategory::Fonts, OPTIONS, resource)
-                .map_err(io::Error::other)?
-                .ok_or_else(|| invalid(OPTIONS, format!("missing {resource} font")))?;
-            fonts.push((name, font.to_owned()));
-        }
+        let fonts = font_paths(
+            &package,
+            [LABEL_FONT, ITEM_FONT, HELP_FONT],
+            menu.help.is_some() || submenu.help.is_some(),
+        )?;
         Ok(PreparedOptions {
             presentation: Self {
                 menu,
@@ -189,20 +201,8 @@ impl OptionsPageStyle {
         section: &str,
         textures: &mut SceneTextures,
     ) -> io::Result<Self> {
-        let metric = |key: &str| -> io::Result<Option<&str>> {
-            if let Some(value) = package.metric(section, key).map_err(io::Error::other)? {
-                return Ok(Some(value));
-            }
-            package.metric(OPTIONS, key).map_err(io::Error::other)
-        };
-        let number = |key: &str| -> io::Result<Option<f32>> {
-            metric(key)?
-                .filter(|value| !value.trim().is_empty())
-                .map(|value| {
-                    coordinate(value).map_err(|error| invalid(section, format!("{key}: {error}")))
-                })
-                .transpose()
-        };
+        let metric = |key: &str| option_metric(package, section, key);
+        let number = |key: &str| option_number(package, section, key);
         let required =
             |key: &str| number(key)?.ok_or_else(|| invalid(section, format!("missing {key}")));
         let color = |key: &str| {
@@ -318,34 +318,12 @@ impl OptionsPageStyle {
         elapsed: f32,
         assets: &AssetManager,
     ) {
-        let (motion, transition_time) = match page.phase {
-            SystemOptionsPhase::Entering(time) => (Some(&self.enter), time),
-            SystemOptionsPhase::Leaving(time) => (Some(&self.leave), time),
-            SystemOptionsPhase::Steady => (None, 0.0),
-        };
-        let mut motion = motion.cloned();
-        if let Some(motion) = &mut motion {
-            motion.update(transition_time);
-        }
         let mut children = Vec::new();
-        if let Some(panel) = &self.panel {
-            let mut on = panel.on.clone();
-            on.update(elapsed);
-            children.push(sprite(&panel.texture, on.state(), -10));
-        }
+        self.push_chrome(&mut children, LABEL_FONT, page.title, elapsed, 1.0);
         let mut labels = self.label.clone();
         let mut items = self.item.clone();
         labels.advance(elapsed);
         items.advance(elapsed);
-        if let Some(heading) = self.heading {
-            let font = TextPlayback::new(TweenState::default());
-            children.extend(font.actor(
-                LABEL_FONT,
-                TextContent::Static(page.title),
-                heading,
-                WHITE,
-            ));
-        }
         let total = page.row_count + usize::from(self.done_y.is_none());
         let first = page
             .selected
@@ -353,16 +331,8 @@ impl OptionsPageStyle {
             .min(total.saturating_sub(self.row_y.len()));
         let mut push_row = |index, y| {
             let focused = index == page.selected;
-            if focused && let Some(highlight) = &self.highlight {
-                let [w, h] = highlight.dimensions;
-                let state = TweenState {
-                    x: CANVAS[0] * 0.5,
-                    y,
-                    w,
-                    h,
-                    ..Default::default()
-                };
-                children.push(sprite(highlight, &state, -1));
+            if focused {
+                self.push_highlight(&mut children, y, 1.0);
             }
             let row = if index < page.row_count {
                 (page.row)(index)
@@ -400,16 +370,59 @@ impl OptionsPageStyle {
             };
             children.extend(style.actor(HELP_FONT, description, *at, WHITE));
         }
-        let mut frame = frame(children);
-        if let Some(motion) = motion
-            && let Actor::Frame { offset, .. } = &mut frame
-        {
-            let state = motion.state();
-            offset[0] += state.x;
-            offset[1] += state.y;
-            frame.mul_alpha(state.tint[3]);
+        actors.push(page_frame(children, self.frame_state(page.phase)));
+    }
+
+    fn push_chrome(
+        &self,
+        actors: &mut Vec<Actor>,
+        font: &'static str,
+        title: &'static str,
+        elapsed: f32,
+        alpha: f32,
+    ) {
+        if let Some(panel) = &self.panel {
+            let mut on = panel.on.clone();
+            on.update(elapsed);
+            let mut actor = sprite(&panel.texture, on.state(), -10);
+            actor.mul_alpha(alpha);
+            actors.push(actor);
         }
-        actors.push(frame);
+        if let Some(heading) = self.heading {
+            let style = TextPlayback::new(TweenState::default());
+            actors.extend(style.actor(
+                font,
+                TextContent::Static(title),
+                heading,
+                [1.0, 1.0, 1.0, alpha],
+            ));
+        }
+    }
+
+    fn push_highlight(&self, actors: &mut Vec<Actor>, y: f32, alpha: f32) {
+        if let Some(highlight) = &self.highlight {
+            let [w, h] = highlight.dimensions;
+            let state = TweenState {
+                x: CANVAS[0] * 0.5,
+                y,
+                w,
+                h,
+                tint: [1.0, 1.0, 1.0, alpha],
+                ..Default::default()
+            };
+            actors.push(sprite(highlight, &state, -1));
+        }
+    }
+
+    fn frame_state(&self, phase: SystemOptionsPhase) -> TweenState {
+        let (motion, time) = match phase {
+            SystemOptionsPhase::Entering(time) => (&self.enter, time),
+            SystemOptionsPhase::Leaving(time) => (&self.leave, time),
+            SystemOptionsPhase::Steady => return TweenState::default(),
+        };
+        let mut motion = motion.clone();
+        motion.update(time);
+        *motion.state()
     }
 
     fn push_choices(
@@ -489,6 +502,36 @@ fn sprite(texture: &BackgroundTexture, state: &TweenState, z: i16) -> Actor {
     builder.apply_tween_state(state);
     builder.z(z);
     builder.build(0)
+}
+
+fn page_frame(children: Vec<Actor>, motion: TweenState) -> Actor {
+    let mut frame = frame(children);
+    if let Actor::Frame { offset, .. } = &mut frame {
+        offset[0] += motion.x;
+        offset[1] += motion.y;
+    }
+    if motion.tint[3] != 1.0 {
+        frame.mul_alpha(motion.tint[3]);
+    }
+    frame
+}
+
+fn option_metric<'a>(
+    package: &'a ThemePackage,
+    section: &str,
+    key: &str,
+) -> io::Result<Option<&'a str>> {
+    if let Some(value) = package.metric(section, key).map_err(io::Error::other)? {
+        return Ok(Some(value));
+    }
+    package.metric(OPTIONS, key).map_err(io::Error::other)
+}
+
+fn option_number(package: &ThemePackage, section: &str, key: &str) -> io::Result<Option<f32>> {
+    option_metric(package, section, key)?
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| coordinate(value).map_err(|error| invalid(section, format!("{key}: {error}"))))
+        .transpose()
 }
 
 fn invalid(section: &str, detail: impl std::fmt::Display) -> io::Error {

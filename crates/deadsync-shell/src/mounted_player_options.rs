@@ -1,6 +1,6 @@
 //! Startup-selected Player Options layout and shared editor handoff.
 
-use crate::{ActiveTheme, ThemeScreen as Screen};
+use crate::{ActiveTheme, ThemeScreen as Screen, TransitionState};
 use crate::mounted_theme::PlayerOptionsLayoutFactory;
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::RawKeyboardEvent;
@@ -29,7 +29,7 @@ pub(crate) struct PlayerOptionsState {
 impl PlayerOptionsState {
     pub(crate) fn new(
         entry: PlayerOptionsEntry<Screen, PlayerOptionsView>,
-        layout: Option<PlayerOptionsLayoutFactory>,
+        layout: Option<&PlayerOptionsLayoutFactory>,
     ) -> Self {
         let mut editor = ActiveTheme::init_player_options(entry);
         let layout = layout.map(|mount| mount());
@@ -89,10 +89,11 @@ impl PlayerOptionsState {
         assets: &AssetManager,
         policy: SimplyLoveVisualPolicyView,
         now: f64,
+        transition: &TransitionState,
     ) {
         if let Some(layout) = &mut self.layout {
             ActiveTheme::with_player_options_page(actors, &self.editor, |actors, page| {
-                layout.push_page(actors, page, assets, now);
+                layout.push_page(actors, page, assets, now, transition);
             });
         } else {
             ActiveTheme::push_player_options_actors(actors, &self.editor, assets, policy);

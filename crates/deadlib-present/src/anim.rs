@@ -1441,6 +1441,15 @@ impl TweenSeq {
     }
 
     #[must_use]
+    pub fn remaining_seconds(&self) -> f32 {
+        let running = self
+            .current
+            .as_ref()
+            .map_or(0.0, |segment| (segment.dur - segment.elapsed).max(0.0));
+        running + self.queue.iter().map(|step| step.0.dur).sum::<f32>()
+    }
+
+    #[must_use]
     pub const fn state(&self) -> &TweenState {
         &self.state
     }

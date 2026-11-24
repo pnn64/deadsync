@@ -6890,7 +6890,7 @@ impl App {
                         view: crate::player_options::init_view(),
                         scroll_speeds: None,
                     },
-                    self.state.screens.player_options_layout,
+                    self.state.screens.player_options_layout.as_ref(),
                 ));
         } else {
             let mut start = StageStart::from_current_profiles(
@@ -8111,6 +8111,7 @@ impl App {
                         &self.asset_manager,
                         visual_policy,
                         arrow_effect_time_s,
+                        &self.state.shell.transition,
                     );
                 }
             }
@@ -9616,7 +9617,7 @@ impl App {
                             view: crate::player_options::init_view(),
                             scroll_speeds: None,
                         },
-                        self.state.screens.player_options_layout,
+                        self.state.screens.player_options_layout.as_ref(),
                     ));
             }
         } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {

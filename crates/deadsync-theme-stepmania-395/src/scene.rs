@@ -64,7 +64,7 @@ impl SceneTextures {
             .transpose()
     }
 
-    fn bind(&mut self, path: &Path, repeat: bool) -> io::Result<BackgroundTexture> {
+    pub(crate) fn bind(&mut self, path: &Path, repeat: bool) -> io::Result<BackgroundTexture> {
         let stem = path.file_stem().unwrap_or_default().to_string_lossy();
         let hints = parse_texture_hints(&stem);
         let sampler = texture_key_sampler(&hints, repeat);

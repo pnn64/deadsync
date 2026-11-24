@@ -14,7 +14,9 @@ use deadsync_shell::app;
 use deadsync_shell::mounted_theme;
 use deadsync_theme::main_menu::ThemeMainMenu;
 use deadsync_theme_simply_love::{i18n, visual_styles};
-use deadsync_theme_stepmania_395::{PackageIntro, PackageOptions, PackageTitle, TITLE_FONT};
+use deadsync_theme_stepmania_395::{
+    PackageIntro, PackageOptions, PackagePlayerOptions, PackageTitle, TITLE_FONT,
+};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 use std::path::Path;
@@ -275,6 +277,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let package_options = package_arg_path(&cli.remaining, "--theme-options")?
         .map(|path| PackageOptions::open(path, Some(&locale)))
         .transpose()?;
+    let package_player_options = package_arg_path(&cli.remaining, "--theme-player-options")?
+        .map(|path| PackagePlayerOptions::open(path, Some(&locale)))
+        .transpose()?;
 
     #[cfg(windows)]
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
@@ -349,6 +354,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         if let Some(options) = package_options {
             mount.system_options = Some(Box::new(options.presentation));
+            mount.resources.font_paths.extend(options.fonts);
+            mount.resources.textures.extend(options.textures);
+        }
+        if let Some(options) = package_player_options {
+            let presentation = options.presentation;
+            mount.player_options = Some(Box::new(move || Box::new(presentation.clone())));
             mount.resources.font_paths.extend(options.fonts);
             mount.resources.textures.extend(options.textures);
         }

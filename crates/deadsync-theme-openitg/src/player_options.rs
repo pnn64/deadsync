@@ -17,7 +17,7 @@ use deadsync_theme::player_options::{
     PlayerOptionsInline, PlayerOptionsLayout, PlayerOptionsPage, PlayerOptionsRow,
     PlayerOptionsViewport,
 };
-use deadsync_theme::{Screen, ThemeTransitions};
+use deadsync_theme::{Screen, ThemeTransitions, TransitionState};
 
 pub(super) const TRANSITION_SECONDS: f32 = 0.3;
 pub(super) const ENTRY_SECONDS: f32 = 0.5;
@@ -92,6 +92,7 @@ impl PlayerOptionsLayout<Actor, TextContent> for OpenItgPlayerOptions {
         page: Page<'_>,
         assets: &AssetManager,
         now: f64,
+        _transition: &TransitionState<Screen>,
     ) {
         self.push_actors(actors, page, assets.fonts(), now);
     }
