@@ -228,12 +228,31 @@ fn map_rows<const INPUT: usize, const OUTPUT: usize>(
 fn bgra_alpha_is_zero(source: &[u8], reverse: bool) -> bool {
     const ALPHA_MASK: u128 = 0xff00_0000_ff00_0000_ff00_0000_ff00_0000;
     let (blocks, tail) = source.as_chunks::<16>();
-    let block_is_zero = |&block| u128::from_le_bytes(block) & ALPHA_MASK == 0;
+    let block_is_zero = |&block: &[u8; 16]| u128::from_le_bytes(block) & ALPHA_MASK == 0;
     let tail_is_zero = || tail.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0);
+    let remaining_is_zero = |blocks: &[[u8; 16]], reverse: bool| {
+        let (groups, remaining_blocks) = blocks.as_chunks::<4>();
+        let group_is_zero = |group: &[[u8; 16]; 4]| {
+            let [first, second, third, fourth] = group.map(u128::from_le_bytes);
+            (first | second | third | fourth) & ALPHA_MASK == 0
+        };
+        if reverse {
+            remaining_blocks.iter().rev().all(block_is_zero)
+                && groups.iter().rev().all(group_is_zero)
+        } else {
+            groups.iter().all(group_is_zero) && remaining_blocks.iter().all(block_is_zero)
+        }
+    };
     if reverse {
-        tail_is_zero() && blocks.iter().rev().all(block_is_zero)
+        tail_is_zero()
+            && blocks
+                .split_last()
+                .is_none_or(|(last, blocks)| block_is_zero(last) && remaining_is_zero(blocks, true))
     } else {
-        blocks.iter().all(block_is_zero) && tail_is_zero()
+        blocks
+            .split_first()
+            .is_none_or(|(first, blocks)| block_is_zero(first) && remaining_is_zero(blocks, false))
+            && tail_is_zero()
     }
 }
 
