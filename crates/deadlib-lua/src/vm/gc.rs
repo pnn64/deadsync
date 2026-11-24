@@ -1731,12 +1731,12 @@ impl Vm {
         self.finish_pending_sweep();
         Ok(())
     }
-    pub(super) fn collect_cycle(&mut self) -> Result<HeapStats, Error> {
+    pub(super) fn collect_cycle(&mut self) -> Result<(), Error> {
         self.finish_pending_sweep();
         self.begin_gc_cycle()?;
         self.finish_gc_marking()?;
         self.sweep_gc_some(usize::MAX);
-        Ok(self.heap_stats())
+        Ok(())
     }
     pub(super) fn gc_control(&mut self, operation: GcOperation) -> Result<(i32, bool), Error> {
         let mut dispatch = false;
