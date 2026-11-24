@@ -242,6 +242,7 @@ impl Encoder {
             };
             'symbols: for symbol in symbols {
                 let key = (u32::from(prefix) << 8) | u32::from(symbol);
+                let tag = key << 12;
                 let hash = key.wrapping_mul(0x9e3779b1);
                 let mut slot = (hash >> 19) as usize;
                 // An odd stride visits every slot in a power-of-two table.
@@ -251,8 +252,10 @@ impl Encoder {
                     if entry == 0 {
                         break;
                     }
-                    if entry >> 12 == key {
-                        prefix = (entry as u16) & 4095;
+                    // A matching tag leaves just the 12-bit code.
+                    let code = entry ^ tag;
+                    if code < 4096 {
+                        prefix = code as u16;
                         continue 'symbols;
                     }
                     slot = (slot + step) & 8191;
@@ -261,7 +264,7 @@ impl Encoder {
                 bits.code(prefix, (next - 1).ilog2() as u8 + 1)?;
                 if next < 4096 {
                     // The assigned code is never zero, even when the key is.
-                    table[slot] = (key << 12) | u32::from(next);
+                    table[slot] = tag | u32::from(next);
                     next += 1;
                 } else {
                     bits.code(clear, 12)?;
