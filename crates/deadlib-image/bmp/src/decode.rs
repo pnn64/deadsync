@@ -237,20 +237,23 @@ fn bgra_alpha_is_zero(source: &[u8], reverse: bool) -> bool {
     }
 }
 
+fn rgb16<const GREEN_BITS: u32>(packed: [u8; 2]) -> [u8; 3] {
+    let word = u16::from_le_bytes(packed);
+    let [red, green, blue, _] = expand_rgb16::<GREEN_BITS>(word).to_le_bytes();
+    [red, green, blue]
+}
+
 // RGB555 and RGB565 differ only in the green field's width. Repeat the high
 // bits instead of rounding, exactly as the general Channel sampler does.
-fn rgb16<const GREEN_BITS: u32>(packed: [u8; 2]) -> [u8; 3] {
-    let word = u32::from(u16::from_le_bytes(packed));
+fn expand_rgb16<const GREEN_BITS: u32>(word: u16) -> u32 {
+    let word = u32::from(word);
     let green_mask = ((1 << GREEN_BITS) - 1) << (16 - GREEN_BITS);
     // Place each channel in the high bits of its output byte.
     let channels = ((word >> (2 + GREEN_BITS)) & 0xf8)
         | ((word << (11 - GREEN_BITS)) & green_mask)
         | ((word << 19) & 0xf8_0000);
     let green_tail = ((1 << (8 - GREEN_BITS)) - 1) << 8;
-    let expanded =
-        channels | ((channels >> 5) & 0x07_0007) | ((channels >> GREEN_BITS) & green_tail);
-    let [red, green, blue, _] = expanded.to_le_bytes();
-    [red, green, blue]
+    channels | ((channels >> 5) & 0x07_0007) | ((channels >> GREEN_BITS) & green_tail)
 }
 
 fn masked_samples(
@@ -274,6 +277,11 @@ fn masked_samples(
             }),
         },
         (16, Some(alpha)) => match [red.mask, green.mask, blue.mask, alpha.mask] {
+            [0x7c00, 0x03e0, 0x001f, 0x8000] => map_rows(source, header, |packed| {
+                let word = u16::from_le_bytes(packed);
+                let alpha = u32::from(word >> 15) * 0xff00_0000;
+                (expand_rgb16::<5>(word) | alpha).to_le_bytes()
+            }),
             [0x0f00, 0x00f0, 0x000f, 0xf000] => map_rows(source, header, |[low, high]| {
                 let nibbles = u32::from_le_bytes([high & 15, low >> 4, low & 15, high >> 4]);
                 // Repeat each nibble within its own byte.
