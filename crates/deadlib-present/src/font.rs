@@ -724,14 +724,6 @@ impl<'a> FontPageSettings<'a> {
 /* ======================= SMALL PARSERS (NO REGEX) ======================= */
 
 #[inline(always)]
-fn strip_bom(mut s: String) -> String {
-    if s.starts_with('\u{FEFF}') {
-        s.drain(..1);
-    }
-    s
-}
-
-#[inline(always)]
 fn is_full_line_comment(s: &str) -> bool {
     let t = s.trim_start();
     t.starts_with(';') || t.starts_with('#') || t.starts_with("//")
@@ -2441,10 +2433,8 @@ pub fn parse_with_texture_context(
     let font_dir = ini_path
         .parent()
         .ok_or_else(|| FontParseError::MissingFontDir(ini_path_buf.clone()))?;
-    let mut ini_text = fs::read_to_string(ini_path_str)?;
-    ini_text = strip_bom(ini_text);
-
-    let ini = parse_font_ini(&ini_text);
+    let ini_text = fs::read_to_string(ini_path_str)?;
+    let ini = parse_font_ini(ini_text.strip_prefix('\u{feff}').unwrap_or(&ini_text));
     let default_stroke_color = ini
         .get("common")
         .and_then(|section| section.value("defaultstrokecolor"))

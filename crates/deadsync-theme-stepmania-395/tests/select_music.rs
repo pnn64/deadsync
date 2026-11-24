@@ -39,7 +39,7 @@ fn authored_wheel_uses_live_rows_banners_and_selected_chart() {
     .unwrap();
     fs::write(
         fonts.join("letters.ini"),
-        "[main]\nLine 0=A\nLineSpacing=12\n",
+        "\u{feff}[main]\nLine 0=A\nLineSpacing=12\n",
     )
     .unwrap();
     image::RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
