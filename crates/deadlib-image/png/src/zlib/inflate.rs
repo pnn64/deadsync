@@ -204,15 +204,23 @@ impl Inflater {
     }
     #[inline]
     fn copy_match(&mut self, distance: usize, output: &mut [u8]) {
+        let n = output.len();
+        let size = self.history.len();
         if distance == 1 {
-            let previous = (self.history_pos + self.history.len() - 1) & (self.history.len() - 1);
-            output.fill(self.history[previous]);
-            self.remember(output);
+            let value = self.history[(self.history_pos + size - 1) & (size - 1)];
+            output.fill(value);
+            let end = self.history_pos + n;
+            if end <= size {
+                self.history[self.history_pos..end].fill(value);
+            } else {
+                self.history[self.history_pos..].fill(value);
+                self.history[..end - size].fill(value);
+            }
+            self.history_pos = end & (size - 1);
+            self.total_out += n;
             return;
         }
-        let n = output.len();
         let seed = distance.min(n);
-        let size = self.history.len();
         let start = (self.history_pos + size - distance) & (size - 1);
         let first = seed.min(size - start);
         output[..first].copy_from_slice(&self.history[start..start + first]);
