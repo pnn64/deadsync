@@ -89,15 +89,15 @@ impl<K: Eq + Hash, V> Map<K, V> {
             .len()
             .checked_add(additional)
             .ok_or_else(Error::memory)?;
+        if !self.slots.is_empty() && needed <= self.slots.len() / 2 {
+            return reserve(&mut self.entries, additional);
+        }
         let capacity = needed
             .checked_mul(2)
             .and_then(usize::checked_next_power_of_two)
             .ok_or_else(Error::memory)?
             .max(8);
         reserve(&mut self.entries, additional)?;
-        if capacity <= self.slots.len() {
-            return Ok(());
-        }
         let mut slots = repeat(usize::MAX, capacity)?;
         for (index, (key, _)) in self.entries.iter().enumerate() {
             let mut slot = hash(key) & (capacity - 1);
