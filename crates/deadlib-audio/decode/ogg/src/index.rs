@@ -416,14 +416,22 @@ impl OggIndex {
         if number != page.first_packet || offset == page.offset {
             return Some(page);
         }
-        if let Some(previous) = earlier.last()
-            && previous.offset == offset
-        {
+        let (previous, before) = earlier.split_last()?;
+        if previous.offset == offset {
             return Some(previous);
         }
-        let origin = earlier
-            .binary_search_by_key(&offset, |page| page.offset)
-            .ok()?;
-        Some(&earlier[origin])
+        packet_origin(before, offset)
     }
+}
+
+#[inline(never)]
+fn packet_origin(pages: &[IndexedPage], offset: u64) -> Option<&IndexedPage> {
+    let (older, nearby) = pages.split_at(pages.len().saturating_sub(3));
+    if let Some(page) = nearby.iter().rfind(|page| page.offset == offset) {
+        return Some(page);
+    }
+    let origin = older
+        .binary_search_by_key(&offset, |page| page.offset)
+        .ok()?;
+    Some(&older[origin])
 }
