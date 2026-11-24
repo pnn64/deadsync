@@ -220,11 +220,24 @@ impl Encoder {
     // The rows contain exactly `pixels` validated indices. Phrases can span rows.
     pub(crate) fn encode_rows<'a>(
         &mut self,
-        rows: impl Iterator<Item = &'a [u8]>,
+        mut rows: impl Iterator<Item = &'a [u8]>,
         pixels: usize,
         minimum: u8,
-        emit: impl FnMut(u64, usize) -> Result<(), Error>,
+        mut emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
+        if pixels <= 1 {
+            // CLEAR, at most one literal, and EOI all use the initial width.
+            let clear = 1u64 << minimum;
+            let width = minimum + 1;
+            let mut bits = clear;
+            let mut used = width;
+            if let Some(&pixel) = rows.find_map(|row| row.first()) {
+                bits |= u64::from(pixel) << used;
+                used += width;
+            }
+            bits |= (clear + 1) << used;
+            return emit(bits, usize::from((used + width).div_ceil(8)));
+        }
         // Each insertion needs a new pixel, so the small table stays below half full.
         if pixels <= 1024 {
             return Self::encode_table(rows, minimum, &mut [0; 2048], emit);
