@@ -220,11 +220,11 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             let value = cx.operand(i.c);
             let table = &mut cx.tables[slot_index(id.0)];
             // An existing non-nil string field skips __newindex even with a
-            // metatable. Array writes need an absent metatable because a nil
-            // slot can trigger __newindex. Scalar writes create no GC edge.
+            // metatable. Array writes need an absent metatable because a
+            // missing value can trigger __newindex. Scalars create no GC edge.
             let written = match key {
                 Value::String(name) => table.set_existing_string_scalar(name, value),
-                _ if table.metatable().is_none() => table.set_existing_array_scalar(key, value),
+                _ if table.metatable().is_none() => table.set_array_scalar_in_place(key, value),
                 _ => false,
             };
             if !written {

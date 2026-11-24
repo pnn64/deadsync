@@ -1153,13 +1153,13 @@ impl Vm {
     }
 
     fn raw_set(&mut self, id: TableId, key: Value, value: Value) -> Result<(), Error> {
-        // Scalar overwrites of existing array slots or string-keyed hash
-        // entries cannot allocate or add a GC edge. Metamethods are resolved
-        // by the caller before reaching this raw write.
+        // Scalar array writes and overwrites of live string-keyed entries can
+        // complete without allocating or adding a collector edge. The caller
+        // has already resolved metamethods.
         let table = &mut self.tables[slot_index(id.0)];
         let replaced = match key {
             Value::String(name) => table.set_existing_string_scalar(name, value),
-            _ => table.set_existing_array_scalar(key, value),
+            _ => table.set_array_scalar_in_place(key, value),
         };
         if replaced {
             return Ok(());

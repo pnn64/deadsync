@@ -532,17 +532,25 @@ impl Table {
     pub fn validate_set_key(key: Value) -> Result<(), Error> {
         Self::checked_key(key).map(|_| ())
     }
-    /// Overwrite an existing array slot when neither the key nor value needs
-    /// tracing. This cannot grow storage or change table traversal positions.
+    /// Write a scalar to the array without allocation or new collector edges.
     #[inline]
-    pub(crate) fn set_existing_array_scalar(&mut self, key: Value, value: Value) -> bool {
+    pub(crate) fn set_array_scalar_in_place(&mut self, key: Value, value: Value) -> bool {
         if !array_scalar(value) {
             return false;
         }
-        if let Some(index) = array_index(key)
-            && let Some(slot) = self.array.get_mut(index)
-        {
+        let Some(index) = array_index(key) else {
+            return false;
+        };
+        if let Some(slot) = self.array.get_mut(index) {
             *slot = value;
+            true
+        } else if index == self.array.len()
+            && index < self.array.capacity()
+            && !self.native51
+            && self.slots.is_empty()
+            && value != Value::Nil
+        {
+            self.array.push(value);
             true
         } else {
             false
@@ -610,6 +618,9 @@ impl Table {
                 return Ok(());
             }
             if i == self.array.len() && value != Value::Nil {
+                if self.slots.is_empty() {
+                    return self.array.try_push(value);
+                }
                 // Include every consecutive hash value that this insertion
                 // will migrate. Reserve before changing any value or trace.
                 let mut end = self.array.len() + 1;
