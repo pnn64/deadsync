@@ -18,7 +18,16 @@ static DECIMAL_DOT: AtomicBool = AtomicBool::new(true);
 static COLLATE_C: AtomicBool = AtomicBool::new(true);
 static REVISION: AtomicU64 = AtomicU64::new(0);
 static CTYPE_C: AtomicBool = AtomicBool::new(true);
-static CTYPE: RwLock<[u32; 256]> = RwLock::new([0; 256]);
+static CTYPE: RwLock<CharacterRules> = RwLock::new(CharacterRules {
+    table: [0; 256],
+    ascii_end: [0; 2],
+});
+
+struct CharacterRules {
+    table: [u32; 256],
+    // First byte that maps differently from Rust's ASCII case conversion.
+    ascii_end: [usize; 2],
+}
 
 #[cfg(all(windows, target_env = "msvc"))]
 #[allow(unsafe_code)]
@@ -52,7 +61,30 @@ pub(crate) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Vec<u8>
                 let mut values = CTYPE
                     .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                *values = ctype;
+                let ascii_end = if ctype_c {
+                    [256; 2]
+                } else {
+                    [false, true].map(|upper| {
+                        let shift = if upper { 8 } else { 0 };
+                        ctype
+                            .iter()
+                            .enumerate()
+                            .position(|(index, &value)| {
+                                let byte = index as u8;
+                                let ascii = if upper {
+                                    byte.to_ascii_uppercase()
+                                } else {
+                                    byte.to_ascii_lowercase()
+                                };
+                                (value >> shift) as u8 != ascii
+                            })
+                            .unwrap_or(256)
+                    })
+                };
+                *values = CharacterRules {
+                    table: ctype,
+                    ascii_end,
+                };
                 CTYPE_C.store(ctype_c, AtomicOrdering::Release);
                 drop(values);
                 REVISION.fetch_add(1, AtomicOrdering::Release);
@@ -179,7 +211,7 @@ pub(crate) fn try_localize_owned_from(
     }
     Ok(())
 }
-fn ctype() -> Option<RwLockReadGuard<'static, [u32; 256]>> {
+fn ctype() -> Option<RwLockReadGuard<'static, CharacterRules>> {
     if CTYPE_C.load(AtomicOrdering::Acquire) {
         return None;
     }
@@ -190,7 +222,7 @@ fn ctype() -> Option<RwLockReadGuard<'static, [u32; 256]>> {
     (!CTYPE_C.load(AtomicOrdering::Relaxed)).then_some(values)
 }
 fn mask(byte: u8) -> u32 {
-    ctype().map_or(0, |values| values[usize::from(byte)] >> 16)
+    ctype().map_or(0, |values| values.table[usize::from(byte)] >> 16)
 }
 pub(crate) fn is_alpha(byte: u8) -> bool {
     byte.is_ascii_alphabetic() || (byte >= 128 && mask(byte) & 0x103 != 0)
@@ -257,7 +289,10 @@ pub(crate) fn add_class_bits(set: &mut [u64; 4], code: u8) {
     if flags != 0
         && let Some(ctype) = ctype()
     {
-        for (word, values) in bits[2..].iter_mut().zip(ctype[128..].as_chunks::<64>().0) {
+        for (word, values) in bits[2..]
+            .iter_mut()
+            .zip(ctype.table[128..].as_chunks::<64>().0)
+        {
             for (bit, &value) in values.iter().enumerate() {
                 *word |= u64::from(value & (flags << 16) != 0) << bit;
             }
@@ -272,20 +307,10 @@ pub(crate) fn map_case(bytes: &mut [u8], upper: bool) {
     let table = ctype();
     if let Some(values) = table.as_deref() {
         let shift = if upper { 8 } else { 0 };
-        if bytes.len() < 1024
-            || !bytes.is_ascii()
-            || values[..128].iter().enumerate().any(|(index, &value)| {
-                let byte = index as u8;
-                let ascii = if upper {
-                    byte.to_ascii_uppercase()
-                } else {
-                    byte.to_ascii_lowercase()
-                };
-                (value >> shift) as u8 != ascii
-            })
-        {
+        let ascii_end = values.ascii_end[usize::from(upper)];
+        if bytes.len() < 1024 || ascii_end < 128 || (ascii_end != 256 && !bytes.is_ascii()) {
             for byte in bytes {
-                *byte = (values[usize::from(*byte)] >> shift) as u8;
+                *byte = (values.table[usize::from(*byte)] >> shift) as u8;
             }
             return;
         }
@@ -299,7 +324,7 @@ pub(crate) fn map_case(bytes: &mut [u8], upper: bool) {
 pub(crate) fn lower(byte: u8) -> u8 {
     ctype().map_or_else(
         || byte.to_ascii_lowercase(),
-        |values| values[usize::from(byte)] as u8,
+        |values| values.table[usize::from(byte)] as u8,
     )
 }
 pub(crate) fn compare(left: &[u8], right: &[u8]) -> Result<Ordering, Error> {
