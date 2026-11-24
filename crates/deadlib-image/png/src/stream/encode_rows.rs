@@ -10,8 +10,21 @@ pub(crate) fn compress_image(image: &Image, options: &EncodeOptions) -> Result<V
         image.bit_depth,
         options.interlaced,
     )?;
-    let mut rows = Rows::new(image, options.interlaced, options.filter)?;
     let mut compressor = zlib::Compressor::new(options.compression, size)?;
+    if options.compression == zlib::Compression::Rle
+        && !options.interlaced
+        && options.filter == Filter::None
+        && image.bit_depth == 8
+        && let Samples::U8(pixels) = &image.samples
+    {
+        let stride = image.width as usize * image.color_type.channels();
+        for row in pixels.chunks_exact(stride) {
+            compressor.push_zeros(1);
+            compressor.push(row);
+        }
+        return Ok(compressor.finish());
+    }
+    let mut rows = Rows::new(image, options.interlaced, options.filter)?;
     while let Some(row) = rows.next_row()? {
         if row.zero {
             compressor.push(&row.bytes[..1]);
