@@ -216,6 +216,19 @@ impl Vm {
     }
 
     #[inline(never)]
+    pub(super) fn try_fast_whole_substring(&mut self, call: usize) -> Option<usize> {
+        let Value::String(source) = self.registers[call + 1] else {
+            return None;
+        };
+        if !self.sort_fast_context() || !self.strings.bytes.contains(source.0) {
+            return None;
+        }
+        self.strings.bytes.preserve_new_reference(source.0);
+        self.registers[call] = Value::String(source);
+        Some(1)
+    }
+
+    #[inline(never)]
     pub(super) fn try_fast_select(&mut self, call: usize, count: usize) -> Option<usize> {
         if count == 0 || !self.sort_fast_context() {
             return None;

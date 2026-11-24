@@ -109,6 +109,11 @@ impl Vm {
                         Value::Number(repeat) if repeat < 2.0 => self.try_fast_repeat(call, repeat),
                         _ => None,
                     },
+                    strings::STR_SUB
+                        if count == 2 && matches!(self.registers[call + 2], Value::Number(1.0)) =>
+                    {
+                        self.try_fast_whole_substring(call)
+                    }
                     _ => None,
                 };
                 if let Some(actual) = actual {
