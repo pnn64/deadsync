@@ -190,10 +190,14 @@ impl<W: Write> EncoderOutput<W> {
                 let start = y * w;
                 &f.indices[start..start + w]
             });
-            self.lzw.encode_rows(rows, minimum, emit)?;
+            self.lzw.encode_rows(rows, f.indices.len(), minimum, emit)?;
         } else {
-            self.lzw
-                .encode_rows(std::iter::once(f.indices.as_slice()), minimum, emit)?;
+            self.lzw.encode_rows(
+                std::iter::once(f.indices.as_slice()),
+                f.indices.len(),
+                minimum,
+                emit,
+            )?;
         }
         if filled != 0 {
             writer.write_all(&[filled as u8])?;

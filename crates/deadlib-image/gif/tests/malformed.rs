@@ -528,6 +528,18 @@ fn lzw_literal_range_is_checked_before_appending() {
 }
 
 #[test]
+fn lzw_reuse_across_dictionary_sizes_preserves_pixels() {
+    let input: Vec<_> = (0..1025).map(|i| (31 * i + i / 5) as u8).collect();
+    let mut encoder = lzw::Encoder::new();
+    let mut output = Vec::new();
+    for count in [1025, 0, 1024, 1025] {
+        output.clear();
+        encoder.encode(&input[..count], 8, &mut output).unwrap();
+        assert_eq!(lzw::decode(&output, 8, count).unwrap(), input[..count]);
+    }
+}
+
+#[test]
 fn lzw_existing_and_next_phrases_preserve_output_on_overflow() {
     // Mix existing dictionary entries, KwKwK, a width change and CLEAR.
     let packed = pack(&[4, 0, 1, 6, 8, 6, 4, 2, 6, 5], 2);

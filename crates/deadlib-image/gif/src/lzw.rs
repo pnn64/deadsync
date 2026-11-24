@@ -205,20 +205,30 @@ impl Encoder {
         {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
-        self.encode_rows(std::iter::once(input), minimum, |bits, count| {
-            reserve(output, count)?;
-            output.extend_from_slice(&bits.to_le_bytes()[..count]);
-            Ok(())
-        })
+        self.encode_rows(
+            std::iter::once(input),
+            input.len(),
+            minimum,
+            |bits, count| {
+                reserve(output, count)?;
+                output.extend_from_slice(&bits.to_le_bytes()[..count]);
+                Ok(())
+            },
+        )
     }
 
-    // Input rows are validated against the minimum. Phrases can span rows.
+    // The rows contain exactly `pixels` validated indices. Phrases can span rows.
     pub(crate) fn encode_rows<'a>(
         &mut self,
         rows: impl Iterator<Item = &'a [u8]>,
+        pixels: usize,
         minimum: u8,
         emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
+        // Each insertion needs a new pixel, so the small table stays below half full.
+        if pixels <= 1024 {
+            return Self::encode_table(rows, minimum, &mut [0; 2048], emit);
+        }
         let table = match &mut self.table {
             Some(table) => {
                 table.fill(0);
@@ -226,6 +236,17 @@ impl Encoder {
             }
             empty => empty.insert([0; 8192]),
         };
+        Self::encode_table(rows, minimum, table, emit)
+    }
+
+    fn encode_table<'a, const SLOTS: usize>(
+        rows: impl Iterator<Item = &'a [u8]>,
+        minimum: u8,
+        table: &mut [u32; SLOTS],
+        emit: impl FnMut(u64, usize) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let mask = SLOTS - 1;
+        let shift = u32::BITS - SLOTS.ilog2();
         let clear = 1u16 << minimum;
         let mut next = clear + 2;
         let mut bits = BitWriter {
@@ -244,9 +265,9 @@ impl Encoder {
                 let key = (u32::from(prefix) << 8) | u32::from(symbol);
                 let tag = key << 12;
                 let hash = key.wrapping_mul(0x9e3779b1);
-                let mut slot = (hash >> 19) as usize;
+                let mut slot = (hash >> shift) as usize;
                 // An odd stride visits every slot in a power-of-two table.
-                let step = (hash as usize & 8191) | 1;
+                let step = (hash as usize & mask) | 1;
                 loop {
                     let entry = table[slot];
                     if entry == 0 {
@@ -258,7 +279,7 @@ impl Encoder {
                         prefix = code as u16;
                         continue 'symbols;
                     }
-                    slot = (slot + step) & 8191;
+                    slot = (slot + step) & mask;
                 }
                 // The decoder adds this phrase after reading the next code.
                 bits.code(prefix, (next - 1).ilog2() as u8 + 1)?;
