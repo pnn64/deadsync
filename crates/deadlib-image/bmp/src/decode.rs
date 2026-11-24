@@ -56,8 +56,16 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 .ok_or(Error::Truncated)?;
             let mut palette = Vec::new();
             reserve(&mut palette, palette_len)?;
-            for entry in encoded_palette.chunks_exact(entry_bytes) {
-                palette.push([entry[2], entry[1], entry[0]]);
+            if entry_bytes == 3 {
+                let (entries, _) = encoded_palette.as_chunks::<3>();
+                palette.extend(entries.iter().map(|&[blue, green, red]| [red, green, blue]));
+            } else {
+                let (entries, _) = encoded_palette.as_chunks::<4>();
+                palette.extend(
+                    entries
+                        .iter()
+                        .map(|&[blue, green, red, _]| [red, green, blue]),
+                );
             }
             let mut indices = Vec::new();
             reserve(&mut indices, header.pixel_count)?;
@@ -466,11 +474,16 @@ fn parse_header(input: &[u8], limits: Limits) -> Result<Header, Error> {
     }
     let format = match bit_depth {
         1 | 4 | 8 => {
-            let entry_bytes = if core { 3 } else { 4 };
             // Legacy assets often have unreliable biClrUsed values. Infer the
             // available palette from bfOffBits, bounded by the indexed depth.
             // Entries start at byte 26 for a core header, not STB's byte 38.
-            let palette_len = ((pixel_offset - header_end) / entry_bytes).min(1usize << bit_depth);
+            let palette_bytes = pixel_offset - header_end;
+            let (entry_bytes, entries) = if core {
+                (3, palette_bytes / 3)
+            } else {
+                (4, palette_bytes / 4)
+            };
+            let palette_len = entries.min(1usize << bit_depth);
             if palette_len == 0 {
                 return Err(Error::Invalid("missing indexed palette"));
             }
