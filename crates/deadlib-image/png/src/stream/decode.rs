@@ -78,6 +78,7 @@ pub struct StreamDecoder {
     palette: Vec<[u8; 3]>,
     transparency: Option<Transparency>,
     validator: Validator,
+    collect_metadata: bool,
     ancillary: Option<AncillaryChunk>,
     metadata: Option<Metadata>,
     seen_data: bool,
@@ -117,6 +118,9 @@ fn fill(
 
 impl StreamDecoder {
     pub fn new(options: DecodeOptions) -> Self {
+        Self::with_metadata_values(options, true)
+    }
+    pub(super) fn with_metadata_values(options: DecodeOptions, collect_metadata: bool) -> Self {
         Self {
             options,
             state: State::Signature,
@@ -137,6 +141,7 @@ impl StreamDecoder {
             palette: Vec::new(),
             transparency: None,
             validator: Validator::new(options.limits.max_metadata_bytes, options.metadata_policy),
+            collect_metadata,
             ancillary: None,
             metadata: None,
             seen_data: false,
@@ -568,12 +573,13 @@ impl StreamDecoder {
                     data: core::mem::take(&mut self.data),
                     position,
                 };
-                let Some(value) = self.validator.check(
-                    &chunk,
-                    h.ok_or(Error::Invalid("missing IHDR"))?,
-                    self.palette.len(),
-                )?
-                else {
+                let h = h.ok_or(Error::Invalid("missing IHDR"))?;
+                let value = if self.collect_metadata {
+                    self.validator.check::<true>(&chunk, h, self.palette.len())
+                } else {
+                    self.validator.check::<false>(&chunk, h, self.palette.len())
+                }?;
+                let Some(value) = value else {
                     self.data = chunk.data;
                     return Ok(None);
                 };

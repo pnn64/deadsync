@@ -467,7 +467,7 @@ pub(crate) fn validate(
     let mut validator = Validator::new(limits.max_metadata_bytes, MetadataPolicy::Recover);
     let mut out = Vec::new();
     for c in chunks {
-        if let Some(value) = validator.check(c, h, palette)? {
+        if let Some(value) = validator.check::<true>(c, h, palette)? {
             out.push(value);
         }
     }
@@ -488,7 +488,7 @@ pub(crate) fn retain_valid(
         if result.is_err() {
             return false;
         }
-        match validator.check_impl::<false>(c, h, palette) {
+        match validator.check::<false>(c, h, palette) {
             Ok(value) => value.is_some(),
             Err(error) => {
                 result = Err(error);
@@ -505,7 +505,7 @@ pub(crate) fn validate_encoding(png: &Png, h: Header) -> Result<(), Error> {
     validator.encoding = true;
     let mut histogram = None;
     for c in &png.ancillary {
-        validator.check_impl::<false>(c, h, png.palette.len())?;
+        validator.check::<false>(c, h, png.palette.len())?;
         if &c.kind == b"hIST" {
             histogram = Some(c.data.as_chunks::<2>().0);
         }
@@ -574,15 +574,7 @@ impl Validator {
             Err(Error::Invalid(reason))
         }
     }
-    pub(crate) fn check(
-        &mut self,
-        c: &AncillaryChunk,
-        h: Header,
-        palette: usize,
-    ) -> Result<Option<Metadata>, Error> {
-        self.check_impl::<true>(c, h, palette)
-    }
-    fn check_impl<const COLLECT: bool>(
+    pub(crate) fn check<const COLLECT: bool>(
         &mut self,
         c: &AncillaryChunk,
         h: Header,

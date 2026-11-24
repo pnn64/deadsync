@@ -154,7 +154,7 @@ fn read(reader: &mut impl Read, bytes: &mut [u8]) -> Result<usize, Error> {
 /// Like `decode`, rejects bytes after IEND. Use `StreamDecoder` for prefix parsing
 /// or to consume rows without retaining complete images and animation frames.
 pub fn decode_reader(mut reader: impl Read, options: &DecodeOptions) -> Result<Png, Error> {
-    let mut decoder = StreamDecoder::new(*options);
+    let mut decoder = StreamDecoder::with_metadata_values(*options, false);
     let mut png = None;
     let mut input = [0; 8192];
     let (mut pos, mut end) = (0, 0);
