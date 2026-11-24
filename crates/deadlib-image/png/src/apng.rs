@@ -1,5 +1,6 @@
 use crate::codec::{Header, be16, be32, write_chunk};
 use crate::{ColorType, EncodeOptions, Error, Image, Limits, Png, Samples, scanline, zlib};
+use std::borrow::Cow;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
@@ -116,7 +117,7 @@ pub struct Animation {
     pub frames: Vec<Frame>,
 }
 
-pub(crate) struct Decoder {
+pub(crate) struct Decoder<'a> {
     h: Header,
     limits: Limits,
     palette_policy: crate::PalettePolicy,
@@ -124,13 +125,13 @@ pub(crate) struct Decoder {
     sequence: u32,
     default: bool,
     frames: Vec<Frame>,
-    pending: Option<(FrameControl, Vec<u8>)>,
+    pending: Option<(FrameControl, Cow<'a, [u8]>)>,
     remaining: usize,
 }
 fn image_bytes(h: Header) -> Result<usize, Error> {
     h.sample_bytes()
 }
-impl Decoder {
+impl<'a> Decoder<'a> {
     pub(crate) fn new(h: Header, options: crate::DecodeOptions) -> Result<Self, Error> {
         let limits = options.limits;
         let remaining = limits
@@ -205,7 +206,7 @@ impl Decoder {
     pub(crate) fn chunk(
         &mut self,
         kind: &[u8; 4],
-        data: &[u8],
+        data: &'a [u8],
         seen_data: bool,
         palette: usize,
     ) -> Result<(), Error> {
@@ -253,7 +254,7 @@ impl Decoder {
                         image: None,
                     });
                 } else {
-                    self.pending = Some((control, Vec::new()));
+                    self.pending = Some((control, Cow::Borrowed(&[])));
                 }
             }
             b"fdAT" => {
@@ -265,8 +266,23 @@ impl Decoder {
                     .pending
                     .as_mut()
                     .ok_or(Error::Invalid("fdAT without frame control"))?;
-                crate::reserve(bytes, data.len() - 4)?;
-                bytes.extend_from_slice(&data[4..]);
+                let payload = &data[4..];
+                match bytes {
+                    Cow::Owned(joined) => {
+                        crate::reserve(joined, payload.len())?;
+                        joined.extend_from_slice(payload);
+                    }
+                    Cow::Borrowed([]) => *bytes = Cow::Borrowed(payload),
+                    Cow::Borrowed(first) if !payload.is_empty() => {
+                        // The two payloads are disjoint slices of the input PNG.
+                        let mut joined = Vec::new();
+                        crate::reserve(&mut joined, first.len() + payload.len())?;
+                        joined.extend_from_slice(first);
+                        joined.extend_from_slice(payload);
+                        *bytes = Cow::Owned(joined);
+                    }
+                    Cow::Borrowed(_) => {}
+                }
             }
             _ => unreachable!(),
         }
