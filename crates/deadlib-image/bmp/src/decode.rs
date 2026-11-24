@@ -239,6 +239,16 @@ fn map_rows<const INPUT: usize, const OUTPUT: usize>(
     if header.info.top_down && header.row_pitch == width * INPUT {
         let (pixels, _) = source.as_chunks::<INPUT>();
         samples.extend(pixels.iter().copied().map(pixel));
+    } else if cfg!(target_pointer_width = "64") && width == 1 {
+        // A one-pixel truecolor row always occupies four bytes with padding.
+        // Restrict this specialization to 64-bit builds to keep x86 decodes small.
+        let rows = source.as_chunks::<4>().0.iter();
+        let sample = |row: &[u8; 4]| pixel(*row.first_chunk::<INPUT>().unwrap());
+        if header.info.top_down {
+            samples.extend(rows.map(sample));
+        } else {
+            samples.extend(rows.rev().map(sample));
+        }
     } else {
         for row in display_rows(source, header.row_pitch, header.info.top_down) {
             let (pixels, _) = row.as_chunks::<INPUT>();
