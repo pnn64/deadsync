@@ -119,8 +119,18 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
             let mut samples = map_rows(source, &header, |[blue, green, red, alpha]| {
                 [red, green, blue, alpha]
             })?;
-            if samples.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0) {
-                for pixel in samples.as_chunks_mut::<4>().0 {
+            const ALPHA_MASK: u128 = 0xff00_0000_ff00_0000_ff00_0000_ff00_0000;
+            let (blocks, tail) = samples.as_chunks_mut::<16>();
+            let (remaining_pixels, _) = tail.as_chunks_mut::<4>();
+            if blocks
+                .iter()
+                .all(|&block| u128::from_le_bytes(block) & ALPHA_MASK == 0)
+                && remaining_pixels.iter().all(|pixel| pixel[3] == 0)
+            {
+                for block in blocks {
+                    *block = (u128::from_le_bytes(*block) | ALPHA_MASK).to_le_bytes();
+                }
+                for pixel in remaining_pixels {
                     pixel[3] = 255;
                 }
             }
