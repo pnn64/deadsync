@@ -1,5 +1,8 @@
 //! Native Rust presentation using the bundled StepMania 3.95 theme assets.
 
+mod evaluation;
+mod gameplay;
+mod gameplay_transition;
 mod intro;
 mod menu;
 mod options;
@@ -7,6 +10,7 @@ mod presentation;
 mod resources;
 mod select_music;
 mod stage;
+mod stage_presentation;
 
 use deadlib_present::actors::Actor;
 use deadsync_theme::{
@@ -19,6 +23,7 @@ pub use menu::MenuState;
 pub use options::{StepManiaPlayerOptions, StepManiaSystemOptions};
 pub use select_music::StepManiaMusicWheel;
 pub use stage::StepManiaStageCard;
+pub use stage_presentation::StepManiaStagePresentation;
 
 pub struct StepManiaTheme;
 

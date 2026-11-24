@@ -127,6 +127,11 @@ pub trait StagePresentation<A> {
         None
     }
 
+    /// Override the presentation clock for the stage entry animation.
+    fn gameplay_entry_seconds(&self, _restarting: bool) -> Option<f32> {
+        None
+    }
+
     fn gameplay_outro(
         &self,
         _view: StageOutroView<'_>,

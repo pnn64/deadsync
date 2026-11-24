@@ -7610,6 +7610,7 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
 
     for (interface, implementation) in [
         ("StagePresentation", "OpenItgStagePresentation"),
+        ("StagePresentation", "StepManiaStagePresentation"),
         ("SelectionPresentation", "OpenItgSelectionPresentation"),
         ("SystemOptionsPresentation", "OpenItgSystemOptions"),
         ("AttractPresentation", "OpenItgIntro"),

@@ -680,7 +680,14 @@ impl App {
                 play.is_some_and(|(gameplay, _)| gameplay.is_some()),
             )
         {
-            return (actors, duration.expect("gameplay entry uses the stage clock"));
+            let duration = self
+                .state
+                .screens
+                .stage_presentation
+                .gameplay_entry_seconds(restarting)
+                .or(duration)
+                .expect("gameplay entry uses the stage clock");
+            return (actors, duration);
         }
         let (actors, visual_duration) = if let Some((gameplay, restart)) = play {
             (self.gameplay_presentation.entry)(

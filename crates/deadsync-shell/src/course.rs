@@ -141,6 +141,7 @@ fn score_info_from_stage_with_record(
         itl: player.itl.clone(),
         judgment_counts: player.judgment_counts,
         score_percent: player.score_percent,
+        numeric_score: player.numeric_score,
         earned_grade_points: player.earned_grade_points,
         possible_grade_points: player.possible_grade_points,
         grade: player.grade,

@@ -7,6 +7,10 @@ pub(crate) const TITLE_FONT: &str = "stepmania-395/title";
 pub(crate) const NORMAL_FONT: &str = "stepmania-395/normal";
 pub(crate) const WHEEL_FONT: &str = "stepmania-395/wheel";
 pub(crate) const ITEM_FONT: &str = "stepmania-395/options";
+pub(crate) const SCORE_FONT: &str = "stepmania-395/score";
+pub(crate) const JUDGE_FONT: &str = "stepmania-395/judge";
+pub(crate) const COMBO_FONT: &str = "stepmania-395/combo";
+pub(crate) const PERCENT_FONT: &str = "stepmania-395/percent";
 
 macro_rules! png {
     ($name:literal) => {
@@ -57,12 +61,36 @@ impl ThemeResources for StepManiaTheme {
                 UiCue::OpenPlayerOptions,
                 UiSound::File("assets/media/stepmania-395/options.ogg"),
             ),
+            (
+                UiCue::StageFailed,
+                UiSound::File("assets/media/stepmania-395/failed.ogg"),
+            ),
         ],
     };
 
     fn asset_manifest() -> ThemeAssetManifest<impl Iterator<Item = TextureAssetSpec>> {
         ThemeAssetManifest {
             fonts: &[
+                FontAssetSpec {
+                    name: SCORE_FONT,
+                    ini_path: "assets/fonts/stepmania-395/score.ini",
+                    fallback_font_name: Some(NORMAL_FONT),
+                },
+                FontAssetSpec {
+                    name: JUDGE_FONT,
+                    ini_path: "assets/fonts/stepmania-395/judge.ini",
+                    fallback_font_name: Some(NORMAL_FONT),
+                },
+                FontAssetSpec {
+                    name: COMBO_FONT,
+                    ini_path: "assets/fonts/stepmania-395/combo.ini",
+                    fallback_font_name: Some(NORMAL_FONT),
+                },
+                FontAssetSpec {
+                    name: PERCENT_FONT,
+                    ini_path: "assets/fonts/stepmania-395/percent.ini",
+                    fallback_font_name: Some(NORMAL_FONT),
+                },
                 FontAssetSpec {
                     name: ITEM_FONT,
                     ini_path: "assets/fonts/stepmania-395/_Arial 14 shadow.ini",
@@ -86,6 +114,54 @@ impl ThemeResources for StepManiaTheme {
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("gameplay-life-frame"),
+                png!("gameplay-score-frame"),
+                png!("gameplay-life-border"),
+                png!("gameplay-life-normal"),
+                png!("gameplay-life-hot"),
+                png!("gameplay-difficulty"),
+                png!("gameplay-judgments"),
+                png!("gameplay-holds"),
+                png!("gameplay-combo"),
+                png!("gameplay-ready"),
+                png!("gameplay-go"),
+                png!("gameplay-in-right"),
+                png!("gameplay-in-left"),
+                png!("gameplay-out-right"),
+                png!("gameplay-out-left"),
+                png!("gameplay-cleared"),
+                png!("gameplay-failed"),
+                png!("evaluation-move-on"),
+                png!("evaluation-header"),
+                png!("evaluation-summary-header"),
+                png!("evaluation-banner-frame"),
+                png!("evaluation-grades"),
+                png!("evaluation-grade-p1"),
+                png!("evaluation-grade-p2"),
+                png!("evaluation-judgments"),
+                png!("evaluation-bonus-p1"),
+                png!("evaluation-bonus-p2"),
+                png!("evaluation-score"),
+                png!("evaluation-machinerecord-1"),
+                png!("evaluation-machinerecord-2"),
+                png!("evaluation-machinerecord-3"),
+                png!("evaluation-machinerecord-4"),
+                png!("evaluation-machinerecord-5"),
+                png!("evaluation-machinerecord-6"),
+                png!("evaluation-machinerecord-7"),
+                png!("evaluation-machinerecord-8"),
+                png!("evaluation-machinerecord-9"),
+                png!("evaluation-machinerecord-10"),
+                png!("evaluation-personalrecord-1"),
+                png!("evaluation-personalrecord-2"),
+                png!("evaluation-personalrecord-3"),
+                png!("evaluation-personalrecord-4"),
+                png!("evaluation-personalrecord-5"),
+                png!("evaluation-personalrecord-6"),
+                png!("evaluation-personalrecord-7"),
+                png!("evaluation-personalrecord-8"),
+                png!("evaluation-personalrecord-9"),
+                png!("evaluation-personalrecord-10"),
                 png!("options-page"),
                 png!("options-cursor"),
                 png!("options-underline"),

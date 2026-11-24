@@ -17,7 +17,7 @@ use deadsync_theme_simply_love::screens::{
 use deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView;
 use deadsync_theme_stepmania_395::{
     StepManiaIntro, StepManiaMusicWheel, StepManiaPlayerOptions, StepManiaStageCard,
-    StepManiaSystemOptions, StepManiaTheme,
+    StepManiaStagePresentation, StepManiaSystemOptions, StepManiaTheme,
 };
 
 const GAMEPLAY_COMPOSER: GameplayPresentationMount = GameplayPresentationMount {
@@ -69,7 +69,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
                 ..FALLBACK_TRANSITIONS
             },
             resources: resources::<StepManiaTheme>(),
-            stage: Box::new(SimplyLoveTheme),
+            stage: Box::new(StepManiaStagePresentation::default()),
             stage_card: Some(Box::new(StepManiaStageCard)),
             gameplay: GAMEPLAY_COMPOSER,
             selection: None,

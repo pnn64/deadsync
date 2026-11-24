@@ -9,9 +9,9 @@ deadlib-assets = { path = "../deadlib-assets" }
 deadlib-platform = { path = "../deadlib-platform" }
 deadlib-present = { path = "../deadlib-present" }
 deadsync-config = { path = "../deadsync-config" }
+deadsync-core = { path = "../deadsync-core" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-theme = { path = "../deadsync-theme" }
 
 [dev-dependencies]
-deadsync-core = { path = "../deadsync-core" }
 image = { version = "0.25.10", default-features = false, features = ["png"] }

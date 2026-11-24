@@ -51,6 +51,7 @@ pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
 };
 
 static FIELD_FEEDBACK: FieldFeedbackStyle = FieldFeedbackStyle {
+    combo_artwork: None,
     judgment_y: [-30.0, 30.0],
     judgment_centered_add: [-20.0, 20.0],
     combo_y: [50.0, 0.0],
@@ -663,6 +664,7 @@ mod tests {
                 let score = GameplayScoreView {
                     p2,
                     doubles,
+                    numeric_score: 0,
                     percent: 98.7899,
                     rgba: [0.2, 0.5, 1.0, 0.65],
                     ex: true,
@@ -740,6 +742,7 @@ mod tests {
                         GameplayScoreView {
                             p2,
                             doubles: false,
+                            numeric_score: 0,
                             percent: 50.0,
                             rgba: [1.0; 4],
                             ex: false,

@@ -227,10 +227,27 @@ pub struct HoldFeedbackStyle {
     pub show_missed_head: bool,
 }
 
+/// Bitmap artwork and placement for a theme's combo counter.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ComboArtworkStyle {
+    pub number_font: &'static str,
+    pub number_offset: [f32; 2],
+    pub number_align: [f32; 2],
+    pub label_texture: &'static str,
+    pub label_size: [f32; 2],
+    pub label_offset: [f32; 2],
+    pub label_align: [f32; 2],
+    pub tint: [f32; 4],
+    pub show_miss_combo: bool,
+    pub show_milestones: bool,
+    pub shadow_len: f32,
+}
+
 /// Optional feedback-only layout, independent of receptors and auxiliary HUD.
 /// Pairs are ordered normal, reverse. Centered offsets are additive.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FieldFeedbackStyle {
+    pub combo_artwork: Option<&'static ComboArtworkStyle>,
     pub judgment_y: [f32; 2],
     pub judgment_centered_add: [f32; 2],
     pub combo_y: [f32; 2],

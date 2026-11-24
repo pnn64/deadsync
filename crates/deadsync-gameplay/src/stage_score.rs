@@ -1,5 +1,5 @@
 /// ScoreKeeperNormal's integer counter, separate from percentage dance points.
-/// Simply Love enables internal scoring, W1, no combo bonus, and unit rounding.
+/// The default rules enable internal scoring, W1, no combo bonus, and unit rounding.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StageScore {
     pub score: u32,

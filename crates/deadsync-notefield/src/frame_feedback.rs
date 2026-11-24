@@ -1304,6 +1304,7 @@ mod tests {
             combo_centered_add: [40.0, -30.0],
             combo_label: "Combo",
             combo_label_font: "label",
+            combo_artwork: None,
             combo_label_y: 2.0,
             combo_number_zoom: 0.9,
             combo_number_zoom_step: 0.001,

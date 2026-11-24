@@ -98,6 +98,7 @@ impl<N, S> EvaluationOverviewPage<N, S> {
                     p2: self.sides_p2[slot],
                     grade: self.routine_grade.unwrap_or(score.grade),
                     percent: self.routine_percent.unwrap_or(score.score_percent) * 100.0,
+                    numeric_score: score.numeric_score,
                     individual_percent: self.routine_percent.map(|_| score.score_percent * 100.0),
                     ex_percent: score.show_ex_score.then_some(score.ex_score_percent.max(0.0)),
                     hard_ex_percent: score
@@ -121,6 +122,7 @@ impl<N, S> EvaluationOverviewPage<N, S> {
                     course_graph_stages: &score.course_graph_stages,
                     steps_life: &score.steps_life,
                     machine_rank: score.machine_record_highlight_rank,
+                    personal_rank: score.personal_record_highlight_rank,
                     disqualified: score.disqualified,
                 })
             }),

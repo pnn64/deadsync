@@ -64,6 +64,7 @@ pub struct PlayerStageSummary {
     pub itl: ItlEvalState,
     pub grade: Grade,
     pub score_percent: f64,
+    pub numeric_score: u32,
     pub earned_grade_points: i32,
     pub possible_grade_points: i32,
     pub ex_score_percent: f64,
@@ -241,6 +242,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
     for idx in 0..MAX_PLAYERS {
         let course_totals = input.totals[idx];
         let mut earned_grade_points = 0i32;
+        let mut numeric_score = 0u32;
         let mut possible_grade_points = course_totals.possible_grade_points;
         let mut notes_hit: u32 = 0;
         let mut played_total_steps: u32 = 0;
@@ -307,6 +309,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
                 continue;
             };
             first_player.get_or_insert(player);
+            numeric_score = numeric_score.saturating_add(player.numeric_score);
             earned_grade_points = earned_grade_points.saturating_add(player.earned_grade_points);
             played_possible_grade_points =
                 played_possible_grade_points.saturating_add(player.possible_grade_points);
@@ -466,6 +469,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             itl: ItlEvalState::default(),
             grade,
             score_percent,
+            numeric_score,
             earned_grade_points,
             possible_grade_points,
             ex_score_percent,
@@ -561,6 +565,7 @@ pub fn routine_shared_course_player(
     totals: [CourseSummaryTotals; MAX_PLAYERS],
 ) -> PlayerStageSummary {
     let mut shared = first.clone();
+    shared.numeric_score = first.numeric_score.saturating_add(second.numeric_score);
     shared.judgment_counts = std::array::from_fn(|ix| {
         first.judgment_counts[ix].saturating_add(second.judgment_counts[ix])
     });
@@ -793,6 +798,7 @@ mod tests {
             itl: ItlEvalState::default(),
             grade,
             score_percent: 1.0,
+            numeric_score: 0,
             earned_grade_points,
             possible_grade_points,
             ex_score_percent: 100.0,
@@ -894,6 +900,7 @@ mod tests {
             500,
             500,
         ));
+        players[0].as_mut().unwrap().numeric_score = 12_345_678;
         let stages = vec![StageSummary {
             song: song_a.clone(),
             music_rate: 1.0,
@@ -945,6 +952,7 @@ mod tests {
         assert!(player.chart.step_artist.is_empty());
         assert!(player.chart.description.is_empty());
         assert!(player.chart.chart_name.is_empty());
+        assert_eq!(player.numeric_score, 12_345_678);
         assert_eq!(player.scatter.len(), 1);
         assert!(!player.histogram.bins.is_empty());
         assert!((player.timing.mean_ms - 10.0).abs() <= f32::EPSILON);

@@ -158,8 +158,9 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
     let openitg = theme == ThemeFlag::OpenItg;
+    let native_stage = theme == ThemeFlag::StepMania395;
     assert_eq!(actor_tree_has_text(&actors, "CHANCE"), openitg);
-    assert_eq!(actor_tree_has_text(&actors, "RANDOM"), openitg);
+    assert_eq!(actor_tree_has_text(&actors, "RANDOM"), openitg || native_stage);
     if openitg {
         let width = deadlib_present::space::screen_width();
         let height = deadlib_present::space::screen_height();
@@ -269,9 +270,9 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
 
     complete_stage(app, event_loop);
     let outro = app.state.screens.gameplay_outro.as_ref();
-    assert_eq!(outro.is_some(), openitg);
+    assert_eq!(outro.is_some(), openitg || native_stage);
     assert!(outro.is_none_or(|outro| {
-        outro.cue().is_none() && outro.duration() == 0.8
+        outro.cue().is_none() && outro.duration() == if native_stage { 5.0 } else { 0.8 }
     }));
     let outgoing_track = deadlib_audio_core::active_music_track_id();
     settle(app, event_loop, CurrentScreen::Evaluation);
@@ -289,6 +290,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     assert_eq!(player.jumps, [0, 0]);
     assert_eq!(player.combo_runs.len(), 1);
     assert_eq!(player.combo_runs[0].count, 6);
+    let numeric_score = format!("{:09}", player.numeric_score);
     assert!(app.state.screens.evaluation_stage.is_some());
     if openitg {
         press(app, event_loop, VirtualAction::p2_start);
@@ -297,12 +299,20 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
         assert!(app.state.screens.evaluation_departure.is_none());
     }
     // Allow the results intro to settle before accepting a normal Start.
-    for _ in 0..32 {
+    for _ in 0..48 {
         menu_frame(app, event_loop);
     }
     assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
-    assert!(actor_tree_has_text(&actors, SONG_TITLE));
+    if native_stage {
+        assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
+            if source.texture_key() == Some("stepmania-395/evaluation-grade-p2"))));
+        assert!(!actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
+            if source.texture_key() == Some("stepmania-395/evaluation-grade-p1"))));
+        assert!(actor_tree_has_text(&actors, &numeric_score));
+    } else {
+        assert!(actor_tree_has_text(&actors, SONG_TITLE));
+    }
     assert_eq!(
         actors.iter().any(|actor| matches!(actor,
             Actor::Sprite {
@@ -328,6 +338,10 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
         assert!(actor_tree_has_text(&actors, "Loading..."));
         assert_eq!(app.state.screens.current_screen, CurrentScreen::Evaluation);
         assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
+    } else if native_stage {
+        let exit = app.state.screens.evaluation_departure.as_ref().unwrap();
+        assert_eq!(exit.cue, None);
+        assert_eq!(exit.duration, 1.3);
     } else {
         assert!(app.state.screens.evaluation_departure.is_none());
     }

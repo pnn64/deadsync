@@ -461,6 +461,13 @@ mod tests {
                     assert!(!restart.is_empty());
                     assert_eq!(duration, GAMEPLAY_RESTART_TRANSITION_SECONDS);
                     app.state.session.gameplay_restart_count = 0;
+                    app.state.screens.stage_presentation = crate::theme_registry::mount(ThemeFlag::StepMania395).stage;
+                    let (entry, duration) = app.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    assert!(entry.is_empty());
+                    assert_eq!(duration, 5.0);
+                    app.state.session.gameplay_restart_count = 1;
+                    assert_eq!(app.get_in_transition_for_screen(CurrentScreen::Gameplay).1, GAMEPLAY_RESTART_TRANSITION_SECONDS);
+                    app.state.session.gameplay_restart_count = 0;
                     app.state.screens.stage_presentation = crate::theme_registry::mount(ThemeFlag::SimplyLove).stage;
                     let (entry, duration) =
                         app.get_in_transition_for_screen(CurrentScreen::Gameplay);

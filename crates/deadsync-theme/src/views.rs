@@ -470,6 +470,7 @@ pub struct GameplaySongMeterView<'a> {
 
 pub struct GameplayDifficultyView<'a> {
     pub p2: bool,
+    pub reverse: bool,
     pub difficulty: &'a str,
     pub description: &'a str,
     pub meter: u32,
@@ -496,6 +497,7 @@ pub struct GameplayBackgroundWarningView {
 pub struct GameplayScoreView {
     pub p2: bool,
     pub doubles: bool,
+    pub numeric_score: u32,
     pub percent: f64,
     /// Profile-selected EX tint and multiplayer emphasis alpha.
     pub rgba: [f32; 4],
@@ -636,6 +638,7 @@ pub struct EvaluationView<N, S> {
     pub itl: ItlEvalState,
     pub judgment_counts: judgment::JudgeCounts,
     pub score_percent: f64,
+    pub numeric_score: u32,
     pub earned_grade_points: i32,
     pub possible_grade_points: i32,
     pub grade: Grade,
@@ -746,6 +749,7 @@ pub struct EvaluationPlayerOverview<'a> {
     pub p2: bool,
     pub grade: Grade,
     pub percent: f64,
+    pub numeric_score: u32,
     pub individual_percent: Option<f64>,
     pub ex_percent: Option<f64>,
     pub hard_ex_percent: Option<f64>,
@@ -767,6 +771,7 @@ pub struct EvaluationPlayerOverview<'a> {
     pub course_graph_stages: &'a [CourseGraphStageView],
     pub steps_life: &'a StageLifeTimeline,
     pub machine_rank: Option<u32>,
+    pub personal_rank: Option<u32>,
     pub disqualified: bool,
 }
 

@@ -51,6 +51,13 @@ pub(crate) fn compose_combo_milestones(
     draws: &mut Vec<FlatDraw>,
     request: &ComboFeedbackRequest<'_>,
 ) {
+    if request
+        .field_feedback
+        .and_then(|style| style.combo_artwork)
+        .is_some_and(|artwork| !artwork.show_milestones)
+    {
+        return;
+    }
     if !request.show {
         return;
     }
@@ -79,8 +86,16 @@ pub(crate) fn compose_combo_number(draws: &mut Vec<FlatDraw>, request: &ComboFee
     if !request.show {
         return;
     }
-    let Some(font) = request.font else { return };
-    let (value, color) = if request.miss_combo >= request.style.threshold {
+    let Some(mut font) = request.font else { return };
+    if request
+        .field_feedback
+        .and_then(|style| style.combo_artwork)
+        .is_some_and(|artwork| !artwork.show_miss_combo)
+        && request.miss_combo >= request.style.threshold
+    {
+        return;
+    }
+    let (value, mut color) = if request.miss_combo >= request.style.threshold {
         (request.miss_combo, request.style.miss_color)
     } else if request.combo >= request.style.threshold {
         (request.combo, request.combo_color)
@@ -91,6 +106,8 @@ pub(crate) fn compose_combo_number(draws: &mut Vec<FlatDraw>, request: &ComboFee
     let mini = combo_actor_zoom(request.mini);
     let mut scale = request.style.number_zoom * mini;
     let mut align = [0.5, 0.5];
+    let mut number_xy = request.number_xy;
+    let mut number_shadow = request.style.shadow_len;
     if let Some(style) = request.field_feedback {
         let pulse = request.recent_tap_age.map_or(1.0, |age| {
             let progress = (age / style.combo_pulse_duration).clamp(0.0, 1.0);
@@ -101,7 +118,49 @@ pub(crate) fn compose_combo_number(draws: &mut Vec<FlatDraw>, request: &ComboFee
             * mini
             * pulse;
         align[1] = 1.0;
-        if let Some(text) = InlineText::copy_from(style.combo_label) {
+        if let Some(artwork) = style.combo_artwork {
+            number_shadow = artwork.shadow_len;
+            font = artwork.number_font;
+            color = artwork.tint;
+            align = artwork.number_align;
+            for (axis, offset) in number_xy.iter_mut().zip(artwork.number_offset) {
+                *axis += offset * mini;
+            }
+            let zoom = mini * pulse;
+            let size = artwork.label_size.map(|axis| axis * zoom);
+            let center = std::array::from_fn(|axis| {
+                request.number_xy[axis]
+                    + artwork.label_offset[axis] * mini
+                    + (0.5 - artwork.label_align[axis]) * size[axis]
+            });
+            let label = FlatSprite {
+                center,
+                world_z: 0.0,
+                size,
+                source: SpriteSource::TextureStatic(artwork.label_texture),
+                tint: artwork.tint,
+                vertex_color_encoding: Default::default(),
+                glow: [0.0; 4],
+                uv_rect: [0.0, 0.0, 1.0, 1.0],
+                flip_x: false,
+                flip_y: false,
+                fade: [0.0; 4],
+                blend: BlendMode::Alpha,
+                rot_x_deg: 0.0,
+                rot_y_deg: 0.0,
+                rot_z_deg: 0.0,
+                z: request.style.number_z,
+            };
+            if artwork.shadow_len > 0.0 {
+                let mut shadow = label.clone();
+                shadow.center[0] += artwork.shadow_len;
+                shadow.center[1] += artwork.shadow_len;
+                shadow.tint = [0.0, 0.0, 0.0, 0.5];
+                shadow.z -= 1;
+                draws.push(FlatDraw::Sprite(shadow));
+            }
+            draws.push(FlatDraw::Sprite(label));
+        } else if let Some(text) = InlineText::copy_from(style.combo_label) {
             draws.push(FlatDraw::PreparedInline(FlatPreparedInline {
                 align: [0.5, 0.0],
                 offset: [
@@ -123,7 +182,7 @@ pub(crate) fn compose_combo_number(draws: &mut Vec<FlatDraw>, request: &ComboFee
     }
     draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {
         align,
-        offset: request.number_xy,
+        offset: number_xy,
         color,
         font,
         text: InlineU32Text::new(value),
@@ -132,7 +191,7 @@ pub(crate) fn compose_combo_number(draws: &mut Vec<FlatDraw>, request: &ComboFee
         z: request.style.number_z,
         scale: [scale, scale],
         blend: BlendMode::Alpha,
-        shadow_len: [request.style.shadow_len, -request.style.shadow_len],
+        shadow_len: [number_shadow, -number_shadow],
         shadow_color: [0.0, 0.0, 0.0, 0.5],
     }));
 }
@@ -363,6 +422,62 @@ mod tests {
     fn compose_feedback(draws: &mut Vec<FlatDraw>, request: ComboFeedbackRequest<'_>) {
         compose_combo_milestones(draws, &request);
         compose_combo_number(draws, &request);
+    }
+
+    #[test]
+    fn bitmap_combo_style_replaces_text_font_and_optional_milestones() {
+        use deadsync_core::hud_style::ComboArtworkStyle;
+        static FEEDBACK: FieldFeedbackStyle = FieldFeedbackStyle {
+            combo_artwork: Some(&ComboArtworkStyle {
+                number_font: "fixture-number-font",
+                number_offset: [0.0, 20.0],
+                number_align: [1.0, 1.0],
+                label_texture: "fixture-combo-label",
+                label_size: [96.0, 32.0],
+                label_offset: [6.0, 20.0],
+                label_align: [0.0, 1.0],
+                tint: [1.0; 4],
+                show_miss_combo: false,
+                show_milestones: false,
+                shadow_len: 4.0,
+            }),
+            judgment_y: [0.0; 2],
+            judgment_centered_add: [0.0; 2],
+            combo_y: [0.0; 2],
+            combo_centered_add: [0.0; 2],
+            combo_label: "old label",
+            combo_label_font: "old font",
+            combo_label_y: 0.0,
+            combo_number_zoom: 0.5,
+            combo_number_zoom_step: 0.0,
+            combo_number_zoom_limit: 0,
+            combo_label_zoom: 1.0,
+            combo_pulse_duration: 0.05,
+            combo_pulse_scale: 1.2,
+        };
+        let assets = assets();
+        let milestones = [ActiveComboMilestone {
+            kind: ComboMilestoneKind::Hundred,
+            elapsed: 0.1,
+        }];
+        let mut req = request(&milestones, Some(&assets));
+        req.field_feedback = Some(&FEEDBACK);
+        req.combo = 100;
+        let mut draws = Vec::new();
+        compose_feedback(&mut draws, req);
+        assert_eq!(draws.len(), 3);
+        assert!(
+            matches!(&draws[1], FlatDraw::Sprite(sprite) if sprite.source.texture_key() == Some("fixture-combo-label") && sprite.blend == BlendMode::Alpha)
+        );
+        assert!(
+            matches!(&draws[2], FlatDraw::PreparedU32(number) if number.font == "fixture-number-font" && number.align == [1.0, 1.0] && number.offset == [310.0, 285.0] && number.color == [1.0; 4])
+        );
+        let mut missed = request(&milestones, Some(&assets));
+        missed.field_feedback = Some(&FEEDBACK);
+        missed.miss_combo = 5;
+        draws.clear();
+        compose_feedback(&mut draws, missed);
+        assert!(draws.is_empty());
     }
 
     #[test]

@@ -4002,6 +4002,7 @@ pub fn frame_layers<'a>(
                         actors,
                         GameplayDifficultyView {
                             p2: player_side == profile_data::PlayerSide::P2,
+                            reverse: profile.reverse_scroll,
                             difficulty: &chart.difficulty,
                             description: &chart.description,
                             meter: chart.meter,
@@ -4132,6 +4133,7 @@ pub fn frame_layers<'a>(
                             GameplayScoreView {
                                 p2: is_p2_side,
                                 doubles: play_style.is_double(),
+                                numeric_score: state.players()[player_idx].stage_score.score,
                                 percent: score_value,
                                 rgba: score_color,
                                 ex: show_ex_score,
@@ -4713,6 +4715,7 @@ pub fn frame_layers<'a>(
                     GameplayScoreView {
                         p2,
                         doubles: play_style.is_double(),
+                        numeric_score: state.players()[player].stage_score.score,
                         percent: value,
                         rgba: color,
                         ex: profile.show_ex_score,

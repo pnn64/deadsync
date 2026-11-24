@@ -936,6 +936,7 @@ mod tests {
             p2: false,
             grade: Grade::Tier08,
             percent: 97.65,
+            numeric_score: 0,
             individual_percent: None,
             ex_percent: None,
             hard_ex_percent: None,
@@ -957,6 +958,7 @@ mod tests {
             course_graph_stages: &[],
             steps_life: &TEST_LIFE,
             machine_rank: Some(3),
+            personal_rank: None,
             disqualified: false,
         }
     }

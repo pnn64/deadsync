@@ -58,6 +58,16 @@ impl Layout {
         sprite
     }
 
+    pub fn solid(self, at: [f32; 2], size: [f32; 2], rgba: [f32; 4], z: i16) -> Actor {
+        let [x, y] = self.position(at);
+        let mut sprite = SpriteBuilder::solid();
+        sprite.xy(x, y);
+        sprite.size(size[0] * self.scale, size[1] * self.scale);
+        sprite.diffuse(rgba);
+        sprite.z(z);
+        sprite.build(0)
+    }
+
     pub fn text(
         self,
         font: &'static str,

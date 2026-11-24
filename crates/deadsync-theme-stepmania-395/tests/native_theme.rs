@@ -27,7 +27,7 @@ fn installed_native_title_uses_bundled_resources_and_shared_navigation() {
     for spec in manifest.fonts {
         let font =
             deadlib_present::font::parse(root.join(spec.ini_path).to_str().unwrap()).unwrap();
-        assert!(font.font.glyph_map.contains_key(&'A'));
+        assert!(font.font.glyph_map.contains_key(&'0'));
         assert!(font.font.line_spacing > 0);
         let up = deadlib_present::font::replace_markers("&UP;")
             .chars()
@@ -158,6 +158,187 @@ fn stage_card_uses_the_session_mode_and_native_exit_clock() {
             .any(|actor| matches!(actor, Actor::Sprite { source, .. }
         if source.texture_key() == Some("stepmania-395/stage-2")))
     );
+}
+
+#[test]
+fn native_stage_uses_the_captured_numeric_score_and_physical_player_side() {
+    use deadlib_present::space::{Metrics, with_current_metrics};
+    use deadsync_theme::stage::{StageOutroView, StagePresentation};
+    use deadsync_theme::views::{GameplayDifficultyView, GameplayHudMotion, GameplayScoreView};
+    use deadsync_theme_stepmania_395::StepManiaStagePresentation;
+
+    let presentation = StepManiaStagePresentation::default();
+    assert_eq!(presentation.gameplay_entry_seconds(false), Some(5.0));
+    assert_eq!(presentation.gameplay_entry_seconds(true), None);
+    let hud = presentation.gameplay_hud().unwrap();
+    let mut entry = Vec::new();
+    let empty = std::sync::Arc::from("");
+    (hud.song_meter)(
+        &mut entry,
+        deadsync_theme::views::GameplaySongMeterView {
+            title: &empty,
+            rate: &empty,
+            progress: 0.0,
+            motion: GameplayHudMotion::Entering {
+                elapsed_seconds: 4.0,
+            },
+        },
+    );
+    assert!(
+        entry
+            .iter()
+            .any(|actor| matches!(actor, Actor::Sprite { source, tint, .. }
+        if source.texture_key() == Some("stepmania-395/gameplay-go") && tint[3] > 0.0))
+    );
+    for width in [640.0, 854.0] {
+        with_current_metrics(Metrics::centered(width, 480.0), || {
+            let mut actors = Vec::new();
+            (hud.percentage_score)(
+                &mut actors,
+                GameplayScoreView {
+                    p2: true,
+                    doubles: false,
+                    numeric_score: 7_654_321,
+                    percent: 23.45,
+                    rgba: [1.0, 1.0, 1.0, 0.65],
+                    ex: false,
+                    motion: GameplayHudMotion::Settled,
+                },
+            );
+            assert!(
+                matches!(&actors[0], Actor::Text { content, font, color, offset, .. }
+                if content.as_str() == "007654321" && *font == "stepmania-395/score"
+                    && *color == [1.0, 0.5, 0.2, 0.65] && *offset == [534.0 + (width - 640.0) * 0.5, 444.0])
+            );
+            (hud.difficulty)(
+                &mut actors,
+                GameplayDifficultyView {
+                    p2: true,
+                    reverse: true,
+                    difficulty: "Hard",
+                    description: "",
+                    meter: 8,
+                    motion: GameplayHudMotion::Settled,
+                },
+            );
+            assert!(
+                matches!(&actors[1], Actor::Sprite { offset, uv_rect: Some([0.5, top, 1.0, bottom]), .. }
+                if *offset == [580.0 + (width - 640.0) * 0.5, 58.0] && (*top - 0.5).abs() < 1e-6 && (*bottom - 4.0 / 6.0).abs() < 1e-6)
+            );
+        });
+    }
+    assert!(
+        presentation
+            .gameplay_outro(StageOutroView {
+                failed: false,
+                simfile: Path::new("fixture.ssc"),
+                authored_transition: true
+            })
+            .is_none()
+    );
+    for failed in [false, true] {
+        let outro = presentation
+            .gameplay_outro(StageOutroView {
+                failed,
+                simfile: Path::new("fixture.ssc"),
+                authored_transition: false,
+            })
+            .unwrap();
+        assert_eq!(outro.duration(), 5.0);
+        assert!(outro.covers_stage(if failed { 1.2 } else { 2.0 }));
+        let mut actors = Vec::new();
+        outro.push_actors(&mut actors, 2.5);
+        let word = if failed {
+            "stepmania-395/gameplay-failed"
+        } else {
+            "stepmania-395/gameplay-cleared"
+        };
+        assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, tint, .. } if source.texture_key() == Some(word) && tint[3] > 0.0)));
+    }
+}
+
+#[test]
+fn native_evaluation_keeps_real_scores_records_and_one_banner_for_solo_p2() {
+    use deadlib_assets::AssetManager;
+    use deadlib_present::space::{Metrics, with_current_metrics};
+    use deadsync_theme::stage::StagePresentation;
+    use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, Grade};
+    use deadsync_theme_stepmania_395::StepManiaStagePresentation;
+    use std::sync::Arc;
+
+    let mut presentation = StepManiaStagePresentation::default();
+    let title = Arc::from("Native result fixture");
+    let artist = Arc::from("Fixture artist");
+    let mods = Arc::from("1.5x");
+    let life = Default::default();
+    with_current_metrics(Metrics::centered(640.0, 480.0), || {
+        let mut actors = Vec::new();
+        presentation.evaluation_overview().unwrap().push_overview(
+            &mut actors,
+            &AssetManager::new(),
+            EvaluationOverview {
+                title: &title,
+                artist: &artist,
+                banner_key: None,
+                course_summary: false,
+                stage_number: Some(2),
+                double_side_style: false,
+                elapsed: 5.0,
+                departure_elapsed: None,
+                players: [
+                    Some(EvaluationPlayerOverview {
+                        p2: true,
+                        grade: Grade::Tier08,
+                        percent: 97.65,
+                        numeric_score: 12_345_678,
+                        individual_percent: None,
+                        ex_percent: None,
+                        hard_ex_percent: None,
+                        difficulty: "Hard",
+                        meter: 8,
+                        mods: &mods,
+                        judgments: [321, 123, 17, 4, 2, 1],
+                        row_window_counts: Default::default(),
+                        score_valid: true,
+                        dropped_hold_or_roll: false,
+                        jumps: [0; 2],
+                        holds: [7, 7],
+                        mines: [0; 2],
+                        hands: [0; 2],
+                        rolls: [2, 2],
+                        max_combo: 315,
+                        combo_runs: &[],
+                        graph_seconds: [0.0, 90.0],
+                        course_graph_stages: &[],
+                        steps_life: &life,
+                        machine_rank: Some(1),
+                        personal_rank: Some(2),
+                        disqualified: false,
+                    }),
+                    None,
+                ],
+            },
+        );
+        let texture_count = |key| {
+            actors.iter().filter(|actor| matches!(actor, Actor::Sprite { source, .. } if source.texture_key() == Some(key))).count()
+        };
+        assert_eq!(texture_count("stepmania-395/evaluation-banner-frame"), 1);
+        assert_eq!(texture_count("stepmania-395/evaluation-grade-p1"), 0);
+        assert_eq!(texture_count("stepmania-395/evaluation-grade-p2"), 1);
+        assert_eq!(texture_count("stepmania-395/evaluation-machinerecord-1"), 1);
+        assert_eq!(
+            texture_count("stepmania-395/evaluation-personalrecord-2"),
+            1
+        );
+        assert!(actors.iter().any(
+            |actor| matches!(actor, Actor::Text { content, .. } if content.as_str() == "012345678")
+        ));
+        assert!(actors.iter().any(
+            |actor| matches!(actor, Actor::Text { content, .. } if content.as_str() == "0009")
+        ));
+        assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, uv_rect: Some([_, top, _, bottom]), .. }
+            if source.texture_key() == Some("stepmania-395/evaluation-grades") && (*top - 0.25).abs() < 1e-5 && (*bottom - 0.375).abs() < 1e-5)));
+    });
 }
 
 #[test]

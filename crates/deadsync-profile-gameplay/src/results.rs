@@ -363,6 +363,7 @@ pub fn stage_result<A, C, D>(
             itl,
             grade,
             score_percent,
+            numeric_score: p.stage_score.score,
             earned_grade_points: p.earned_grade_points,
             possible_grade_points: totals.possible_grade_points,
             ex_score_percent,

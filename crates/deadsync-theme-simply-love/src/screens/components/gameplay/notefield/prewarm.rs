@@ -84,6 +84,14 @@ pub fn prewarm_frame_text_scratch(
     for player in 0..state.num_players() {
         let profile = &state.profiles()[player];
         if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
+            let feedback = state
+                .presentation
+                .notefield_plan(player)
+                .hud_style
+                .field_feedback;
+            let font_name = feedback
+                .and_then(|style| style.combo_artwork)
+                .map_or(font_name, |artwork| artwork.number_font);
             prewarm_u32_text_slot(
                 cache,
                 fonts,
@@ -96,6 +104,7 @@ pub fn prewarm_frame_text_scratch(
                 .notefield_plan(player)
                 .hud_style
                 .field_feedback
+                && style.combo_artwork.is_none()
                 && let Some(label) = InlineText::copy_from(style.combo_label)
             {
                 deadlib_present::compose::prewarm_prepared_inline_text_slot(
