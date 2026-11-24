@@ -89,6 +89,8 @@ impl Vm {
                 let actual = match id {
                     0
                     | 2..=5
+                    | GET_META
+                    | DEBUG_GET_META
                     | NEXT
                     | PAIRS_NEXT
                     | IPAIRS_STEP
@@ -1178,13 +1180,7 @@ impl Vm {
                 if count == 0 {
                     return Err(self.argument_error(0, b"value expected"));
                 }
-                let target = arg(self, 0);
-                let protected = self.metafield(target, Meta::Protected);
-                if id == GET_META && protected != Value::Nil {
-                    protected
-                } else {
-                    self.metatable(target).map_or(Value::Nil, Value::Table)
-                }
+                self.metatable_result(arg(self, 0), id == GET_META)
             }
             SET_META | DEBUG_SET_META => {
                 if id == SET_META {

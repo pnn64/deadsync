@@ -54,6 +54,11 @@ impl Vm {
                 self.registers[call] = Value::Table(id);
                 Some(1)
             }
+            GET_META | DEBUG_GET_META if count != 0 => {
+                self.registers[call] =
+                    self.metatable_result(self.registers[call + 1], id == GET_META);
+                Some(1)
+            }
             tables::TAB_GETN | tables::TAB_MAXN
                 if count != 0
                     && let Value::Table(table) = self.registers[call + 1] =>

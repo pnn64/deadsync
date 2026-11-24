@@ -69,6 +69,19 @@ impl Vm {
             self.tables[slot_index(mt.0)].get_string(self.meta_names[event as usize])
         })
     }
+    pub(super) fn metatable_result(&self, target: Value, protect: bool) -> Value {
+        let Some(table) = self.metatable(target) else {
+            return Value::Nil;
+        };
+        if protect {
+            let value = self.tables[slot_index(table.0)]
+                .get_string(self.meta_names[Meta::Protected as usize]);
+            if value != Value::Nil {
+                return value;
+            }
+        }
+        Value::Table(table)
+    }
     fn binary_handler(&self, left: Value, right: Value, event: Meta) -> Value {
         let first = self.metafield(left, event);
         if first == Value::Nil {
