@@ -30,8 +30,9 @@ impl Matcher {
         })
     }
     pub(super) fn reset(&mut self) {
+        // Only links reachable from a current head are read. Inserting a
+        // position writes its link, including in the strided match path.
         self.heads.fill(u32::MAX);
-        self.previous.fill(0);
     }
     pub(super) fn memory(&self) -> usize {
         HASHES * 4 + WINDOW * 2
