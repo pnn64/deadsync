@@ -1,6 +1,6 @@
 use super::encode_rows::Rows;
 use crate::{
-    ChunkPosition, EncodeOptions, Error, Image, Png,
+    ChunkPosition, EncodeOptions, Error, Png,
     checksum::Crc32,
     codec::{SIGNATURE, ancillary_writable, validate_encoding, write_transparency},
     reserve,
@@ -166,13 +166,12 @@ impl<'a, W: Write> Compressed<'a, W> {
 }
 fn image<W: Write>(
     writer: &mut Count<W>,
-    image: &Image,
+    rows: &mut Rows<'_>,
     options: &EncodeOptions,
     sequence: Option<&mut u32>,
     output: &mut Vec<u8>,
     encoder: &mut Option<Deflater>,
 ) -> Result<usize, Error> {
-    let mut rows = Rows::new(image, options.interlaced, options.filter)?;
     let mut compressed = Compressed::new(writer, sequence, options, output, encoder)?;
     while let Some(row) = rows.next_row()? {
         if row.zero {
@@ -222,9 +221,10 @@ pub fn encode_writer(
     }
     let mut output = Vec::new();
     let mut encoder = None;
+    let mut rows = Rows::new(&png.image, options.interlaced, options.filter)?;
     let mut peak = image(
         &mut out,
-        &png.image,
+        &mut rows,
         options,
         None,
         &mut output,
@@ -242,9 +242,10 @@ pub fn encode_writer(
                 .image
                 .as_ref()
                 .ok_or(Error::Invalid("missing APNG frame"))?;
+            rows.reuse_for_writer(pixels)?;
             peak = peak.max(image(
                 &mut out,
-                pixels,
+                &mut rows,
                 options,
                 Some(&mut sequence),
                 &mut output,

@@ -108,6 +108,29 @@ impl<'a> Rows<'a> {
         rows.reset(image);
         Ok(rows)
     }
+    pub(super) fn reuse_for_writer(&mut self, image: &'a Image) -> Result<(), Error> {
+        let previous = self.pixels.is_none() && !matches!(self.filter, Filter::None | Filter::Sub);
+        if self.interlaced
+            || self.image.width != image.width
+            || self.image.color_type != image.color_type
+            || self.image.bit_depth != image.bit_depth
+            || (previous && (self.image.height > 1) != (image.height > 1))
+        {
+            *self = Self::new(image, self.interlaced, self.filter)?;
+        } else {
+            // A single pass with the same row layout uses the same capacities
+            // as a fresh writer, including its reported peak storage.
+            scanline::filtered_size(
+                image.width,
+                image.height,
+                image.color_type,
+                image.bit_depth,
+                false,
+            )?;
+            self.reset(image);
+        }
+        Ok(())
+    }
     fn reset(&mut self, image: &'a Image) {
         self.image = image;
         self.pixels = match &image.samples {
@@ -321,6 +344,57 @@ mod tests {
                 assert_eq!(row.zero, expected.zero);
             }
             assert!(reused.next_row().unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn writer_row_reuse_matches_fresh_rows_and_peak_capacity() {
+        for (color_type, bit_depth) in [
+            (ColorType::Grayscale, 4),
+            (ColorType::Rgba, 8),
+            (ColorType::GrayscaleAlpha, 16),
+        ] {
+            let images: Vec<_> = [(19, 4), (19, 7), (19, 1), (19, 5), (5, 3), (19, 5)]
+                .into_iter()
+                .zip(0..)
+                .map(|((width, height), seed)| {
+                    let count = (width * height) as usize * color_type.channels();
+                    let samples = if bit_depth == 16 {
+                        Samples::U16((0..count).map(|n| (n * 919 + seed) as u16).collect())
+                    } else {
+                        Samples::U8(
+                            (0..count)
+                                .map(|n| ((n * 19 + seed) % (1 << bit_depth)) as u8)
+                                .collect(),
+                        )
+                    };
+                    Image {
+                        width,
+                        height,
+                        color_type,
+                        bit_depth,
+                        samples,
+                    }
+                })
+                .collect();
+            for interlaced in [false, true] {
+                for filter in [Filter::None, Filter::Sub, Filter::Up, Filter::Adaptive] {
+                    let mut reused = Rows::new(&images[0], interlaced, filter).unwrap();
+                    for image in &images {
+                        reused.reuse_for_writer(image).unwrap();
+                        let mut fresh = Rows::new(image, interlaced, filter).unwrap();
+                        while let Some(expected) = fresh.next_row().unwrap() {
+                            let actual = reused.next_row().unwrap().unwrap();
+                            assert_eq!(
+                                (actual.bytes, actual.zero),
+                                (expected.bytes, expected.zero)
+                            );
+                        }
+                        assert!(reused.next_row().unwrap().is_none());
+                        assert_eq!(reused.memory_bytes(), fresh.memory_bytes());
+                    }
+                }
+            }
         }
     }
 
