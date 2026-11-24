@@ -162,6 +162,12 @@ fn edge(value: Value) -> Option<Trace> {
         _ => Some(Trace::Value(value)),
     }
 }
+fn table_edge(value: Value, weak: bool) -> Option<Trace> {
+    if weak && !matches!(value, Value::String(_)) {
+        return None;
+    }
+    edge(value)
+}
 #[derive(Debug)]
 pub(super) struct Collector {
     phase: Phase,
@@ -1291,7 +1297,7 @@ impl Vm {
             self.tables[slot_index(id.0)].retire_native_keys_in_trace_slice(cursor, 64);
         }
         let table = &self.tables[slot_index(id.0)];
-        let (next, pairs) = table.trace_slice(cursor, 64);
+        let (next, array, pairs) = table.trace_slice(cursor, 64);
         // Resume after children: a wide table needs only one pending slice and
         // the current slice's edges rather than a frontier for its entire width.
         if let Some(next) = next {
@@ -1307,13 +1313,14 @@ impl Vm {
         {
             work.push(Trace::Value(Value::Table(state)));
         }
+        work.extend(
+            array
+                .iter()
+                .filter_map(|&value| table_edge(value, weak_values)),
+        );
         for (key, value) in pairs {
-            if !weak_keys || matches!(key, Value::String(_)) {
-                work.extend(edge(key));
-            }
-            if !weak_values || matches!(value, Value::String(_)) {
-                work.extend(edge(value));
-            }
+            work.extend(table_edge(key, weak_keys));
+            work.extend(table_edge(value, weak_values));
         }
         if next.is_none() {
             self.tables[slot_index(id.0)].trace = TableTrace::Idle;
@@ -1520,7 +1527,16 @@ impl Vm {
             loop {
                 let mut erase = [Value::Nil; 64];
                 let mut count = 0;
-                let (next, pairs) = self.tables[index].trace_slice(cursor, erase.len());
+                let (next, array, pairs) = self.tables[index].trace_slice(cursor, erase.len());
+                // Implicit array keys are numbers and cannot be collected.
+                if weak_values {
+                    for (offset, &value) in array.iter().enumerate() {
+                        if !self.marked_weak_value(value, false) {
+                            erase[count] = Value::Number(((cursor >> 1) + offset + 1) as f64);
+                            count += 1;
+                        }
+                    }
+                }
                 for (key, value) in pairs {
                     if (weak_keys && !self.marked_weak_value(key, true))
                         || (weak_values && !self.marked_weak_value(value, false))

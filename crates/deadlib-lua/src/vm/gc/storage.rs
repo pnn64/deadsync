@@ -59,16 +59,17 @@ impl Vm {
                 (0, wk, wv)
             }
         };
-        let (next, pairs) = table.trace_slice(cursor, 64);
+        let (next, array, pairs) = table.trace_slice(cursor, 64);
         let mut count = usize::from(next.is_some())
             + usize::from(cursor == 0 && table.metatable().is_some())
-            + usize::from(cursor == 0 && table.host_state().is_some());
+            + usize::from(cursor == 0 && table.host_state().is_some())
+            + array
+                .iter()
+                .filter_map(|&value| table_edge(value, weak_values))
+                .count();
         for (key, value) in pairs {
-            count +=
-                usize::from((!weak_keys || matches!(key, Value::String(_))) && edge(key).is_some());
-            count += usize::from(
-                (!weak_values || matches!(value, Value::String(_))) && edge(value).is_some(),
-            );
+            count += usize::from(table_edge(key, weak_keys).is_some());
+            count += usize::from(table_edge(value, weak_values).is_some());
         }
         count
     }

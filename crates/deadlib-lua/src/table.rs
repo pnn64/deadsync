@@ -296,13 +296,14 @@ impl Table {
                     .map(|e| (e.key.value(), e.value)),
             )
     }
-    /// Visit at most `budget` physical slots, including holes and tombstones.
+    /// Return array values and live hash pairs from at most `budget` physical slots.
+    /// Holes and tombstones still count toward the budget.
     /// The low cursor bit selects array/hash storage; the other bits are an index.
     pub fn trace_slice(
         &self,
         cursor: usize,
         budget: usize,
-    ) -> (Option<usize>, impl Iterator<Item = (Value, Value)> + '_) {
+    ) -> (Option<usize>, &[Value], impl Iterator<Item = (Value, Value)> + '_) {
         let start = cursor >> 1;
         let (array, entries, next) = if cursor & 1 == 0 {
             let end = start.saturating_add(budget).min(self.array.len());
@@ -327,17 +328,11 @@ impl Table {
         };
         (
             next,
-            array
+            array,
+            entries
                 .iter()
-                .enumerate()
-                .filter(|(_, v)| **v != Value::Nil)
-                .map(move |(i, v)| (Value::Number((start + i + 1) as f64), *v))
-                .chain(
-                    entries
-                        .iter()
-                        .filter(|e| e.value != Value::Nil)
-                        .map(|e| (e.key.value(), e.value)),
-                ),
+                .filter(|e| e.value != Value::Nil)
+                .map(|e| (e.key.value(), e.value)),
         )
     }
     fn invalidate_trace(&mut self) {
