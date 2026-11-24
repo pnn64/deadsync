@@ -5,7 +5,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::actors::TextContent;
 use deadsync_assets::gameplay_presentation::{
     GameplayPresentationInit, GameplayRenderView, GameplayScreen, PracticeGameplayHud,
-    PracticeTimingLabels,
+    PracticeTimingLabels, standard::StandardGameplay,
 };
 use deadsync_assets::gameplay_stage::{
     ActiveGameplayStage, GameplayStageAssets, PreparedGameplayStage,
@@ -114,25 +114,40 @@ impl<T> GameplayPresenter for T where
 }
 
 /// One mounted presenter per stage. Dispatch happens at the screen boundary.
-pub struct MountedGameplay(Box<dyn GameplayPresenter>);
+pub struct MountedGameplay(GameplayMount);
+
+enum GameplayMount {
+    Custom(Box<dyn GameplayPresenter>),
+    Standard(Box<StandardGameplay<GameplayLobbySession>>),
+}
 
 impl MountedGameplay {
     pub fn new(presentation: impl GameplayPresenter + 'static) -> Self {
-        Self(Box::new(presentation))
+        Self(GameplayMount::Custom(Box::new(presentation)))
+    }
+
+    pub fn standard(presentation: StandardGameplay<GameplayLobbySession>) -> Self {
+        Self(GameplayMount::Standard(Box::new(presentation)))
     }
 }
 
 impl Deref for MountedGameplay {
-    type Target = dyn GameplayPresenter;
+    type Target = dyn GameplayScreen<GameplayLobbySession, GameplayHud<Actor>>;
 
     fn deref(&self) -> &Self::Target {
-        &*self.0
+        match &self.0 {
+            GameplayMount::Custom(presenter) => presenter.as_ref(),
+            GameplayMount::Standard(presenter) => presenter.as_ref(),
+        }
     }
 }
 
 impl DerefMut for MountedGameplay {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.0
+        match &mut self.0 {
+            GameplayMount::Custom(presenter) => presenter.as_mut(),
+            GameplayMount::Standard(presenter) => presenter.as_mut(),
+        }
     }
 }
 
@@ -149,51 +164,66 @@ impl GameplayStagePresenter<GameplayLobbySession> for MountedGameplay {
         context: FramePresentationContext<'_, Self::View, Self::Policy>,
         content: SongFrameContent,
     ) -> GameplayActorSegments {
-        self.0
+        self.deref_mut()
             .compose_stage_frame(stage, lobby, song, actors, context, content)
     }
 
     fn append_song_lua_exit(&self, actors: &mut Vec<Actor>, fade_progress: f32) {
-        self.0.append_song_lua_exit(actors, fade_progress);
+        self.deref().append_song_lua_exit(actors, fade_progress);
     }
 }
 
 impl GameplayLivePresentation<GameplayCoreState> for MountedGameplay {
     fn update_gameplay_visuals(&mut self, game: &GameplayCoreState, delta_time: f32) {
-        self.0.update_gameplay_visuals(game, delta_time);
+        match &mut self.0 {
+            GameplayMount::Custom(presenter) => presenter.update_gameplay_visuals(game, delta_time),
+            GameplayMount::Standard(presenter) => presenter.update_visuals(game, delta_time),
+        }
     }
 
     fn sync_leaderboards(&mut self, updates: [Option<CachedPlayerLeaderboardData>; MAX_PLAYERS]) {
-        self.0.sync_leaderboards(updates);
+        if let GameplayMount::Custom(presenter) = &mut self.0 {
+            presenter.sync_leaderboards(updates);
+        }
     }
 
     fn sync_itl_cmod_warning(&mut self, warnings: [bool; MAX_PLAYERS]) {
-        self.0.sync_itl_cmod_warning(warnings);
+        match &mut self.0 {
+            GameplayMount::Custom(presenter) => presenter.sync_itl_cmod_warning(warnings),
+            GameplayMount::Standard(presenter) => presenter.set_cmod_warning(warnings),
+        }
     }
 
     fn toggle_lobby_hud(&mut self) {
-        self.0.toggle_lobby_hud();
+        match &mut self.0 {
+            GameplayMount::Custom(presenter) => presenter.toggle_lobby_hud(),
+            GameplayMount::Standard(presenter) => presenter.toggle_lobby(),
+        }
     }
 
     fn sync_smx_sensors(&mut self, views: [Option<SmxSensorPadView>; MAX_PLAYERS]) {
-        self.0.sync_smx_sensors(views);
+        if let GameplayMount::Custom(presenter) = &mut self.0 {
+            presenter.sync_smx_sensors(views);
+        }
     }
 
     fn sync_heart_rate(&mut self, generation: (u64, u64), view: HeartRateView) {
-        self.0.sync_heart_rate(generation, view);
+        if let GameplayMount::Custom(presenter) = &mut self.0 {
+            presenter.sync_heart_rate(generation, view);
+        }
     }
 }
 
 impl PracticeGameplayHud for MountedGameplay {
     fn machine_font(&self) -> MachineFont {
-        self.0.machine_font()
+        self.deref().machine_font()
     }
 
     fn set_practice_timing_labels(&mut self, labels: PracticeTimingLabels) {
-        self.0.set_practice_timing_labels(labels);
+        self.deref_mut().set_practice_timing_labels(labels);
     }
 
     fn music_rate_changed(&mut self, stage: &ActiveGameplayStage) {
-        self.0.music_rate_changed(stage);
+        self.deref_mut().music_rate_changed(stage);
     }
 }

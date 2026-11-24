@@ -5,6 +5,7 @@ use deadsync_config::theme::ThemeFlag;
 use deadsync_core::input::InputSource;
 use deadsync_gameplay::{GameplayAudioSnapshot, GameplayStreamClockSnapshot};
 use deadsync_input::VirtualAction;
+use deadsync_theme::views::GameplayLivePresentation;
 use std::process::Command as ProcessCommand;
 use winit::platform::windows::EventLoopBuilderExtWindows;
 use winit::window::WindowId;
@@ -632,6 +633,8 @@ fn check_native_gameplay_warning(app: &mut App) {
     assert!(warning_visible(&actors));
     assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
         if source.texture_key() == Some("stepmania-395/gameplay-fallback"))));
+    assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
+        if source.texture_key() == Some("stepmania-395/gameplay-life-frame"))));
     let game = &mut app.state.screens.gameplay_state.as_mut().unwrap().stage.gameplay;
     game.update_profile(0, |profile| profile.hide_danger = true);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);

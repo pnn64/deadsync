@@ -26,6 +26,7 @@ pub mod display_mods;
 pub mod field;
 pub mod field_style;
 pub mod life;
+pub mod standard;
 pub mod text_slots;
 
 /// Full-screen cover shown while the shell is preparing the gameplay stage.

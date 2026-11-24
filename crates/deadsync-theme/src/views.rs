@@ -407,96 +407,11 @@ pub struct GameplayReplayView {
     pub score_10000: f64,
 }
 
-/// Whether warnings follow each playfield or require every joined player to be low.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GameplayWarningScope {
-    PerPlayer,
-    AllPlayers,
-}
-
-/// Visible profile labels resolved by the game, indexed by physical player side.
-pub struct GameplayProfileFooterView<'a> {
-    pub player_names: [Option<&'a str>; 2],
-}
-
-/// Draw the standard gameplay HUD from values already resolved by the stage.
-pub struct GameplayHud<A> {
-    pub standard_life: fn(&mut Vec<A>, GameplayLifeView),
-    pub percentage_score: fn(&mut Vec<A>, GameplayScoreView),
-    pub song_meter: fn(&mut Vec<A>, GameplaySongMeterView<'_>),
-    pub difficulty: fn(&mut Vec<A>, GameplayDifficultyView<'_>),
-    pub stage_badge: fn(&mut Vec<A>, GameplayStageBadgeView<'_>),
-    /// Display threshold for the theme's warning. It has no effect on stage life or failure.
-    pub danger_threshold: f32,
-    pub warning_scope: GameplayWarningScope,
-    pub background_warning: fn(&mut Vec<A>, GameplayBackgroundWarningView),
-    pub fallback_background: fn(&mut Vec<A>, f32),
-    pub unjoined_seat: fn(&mut Vec<A>, bool),
-    /// Optional replacement for the shared player-identity footer.
-    pub profile_footer: Option<fn(&mut Vec<A>, GameplayProfileFooterView<'_>)>,
-    pub autoplay_label: fn(&mut Vec<A>),
-    pub field_feedback: &'static deadsync_core::hud_style::FieldFeedbackStyle,
-    pub default_tap_atlas: GameplayTapAtlas,
-    pub default_hold_atlas: GameplayHoldAtlas,
-}
-
-pub use deadsync_core::hud_style::{GameplayHoldAtlas, GameplayHudMotion, GameplayTapAtlas};
-
-#[derive(Clone, Copy, Debug)]
-pub struct GameplayLifeView {
-    /// The physical side even when a single player occupies runtime slot zero.
-    pub p2: bool,
-    pub level: f32,
-    pub failed: bool,
-    pub hot: bool,
-    pub song_beat: f32,
-    pub percent_label: Option<f32>,
-    pub motion: GameplayHudMotion,
-}
-
-pub struct GameplaySongMeterView<'a> {
-    pub title: &'a Arc<str>,
-    pub rate: &'a Arc<str>,
-    pub progress: f32,
-    pub motion: GameplayHudMotion,
-}
-
-pub struct GameplayDifficultyView<'a> {
-    pub p2: bool,
-    pub reverse: bool,
-    pub difficulty: &'a str,
-    pub description: &'a str,
-    pub meter: u32,
-    pub motion: GameplayHudMotion,
-}
-
-pub struct GameplayStageBadgeView<'a> {
-    pub text: &'a Arc<str>,
-    pub round: Option<usize>,
-    pub motion: GameplayHudMotion,
-}
-
-/// Facts for the warning artwork behind the playfield.
-#[derive(Clone, Copy, Debug)]
-pub struct GameplayBackgroundWarningView {
-    pub p2: bool,
-    pub both_sides: bool,
-    pub failed: bool,
-    pub danger_seconds: f32,
-    pub brightness: f32,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct GameplayScoreView {
-    pub p2: bool,
-    pub doubles: bool,
-    pub numeric_score: u32,
-    pub percent: f64,
-    /// Profile-selected EX tint and multiplayer emphasis alpha.
-    pub rgba: [f32; 4],
-    pub ex: bool,
-    pub motion: GameplayHudMotion,
-}
+pub use deadsync_core::hud_style::{
+    GameplayBackgroundWarningView, GameplayDifficultyView, GameplayHoldAtlas, GameplayHud,
+    GameplayHudMotion, GameplayLifeView, GameplayProfileFooterView, GameplayScoreView,
+    GameplaySongMeterView, GameplayStageBadgeView, GameplayTapAtlas, GameplayWarningScope,
+};
 
 /// Optional HUD updates from the live stage. None of these hooks control play.
 pub trait GameplayLivePresentation<G> {

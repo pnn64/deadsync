@@ -133,8 +133,8 @@ The shell still depends on the default theme for the Player Options editor,
 parts of Select Music, System Options, and Evaluation. The executable mounts
 gameplay presenters through the shell. `deadsync-assets` shares the asset-backed
 background drawing, profile-selected field feedback, and text prewarming.
-OpenITG owns its Gameplay and demonstration presenters. StepMania 3.95
-supplies HUD widgets to the Simply Love gameplay adapter. Practice uses that
+OpenITG and StepMania 3.95 each mount the shared gameplay presenter with their
+own HUD artwork, labels, and layouts. Practice uses the Simply Love gameplay
 adapter with the existing editor. All presenters use the same prepared stage.
 
 ## Shared contracts

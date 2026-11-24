@@ -13,12 +13,8 @@ deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-input = { path = "../deadsync-input" }
-deadsync-notefield = { path = "../deadsync-notefield" }
 deadsync-online = { path = "../deadsync-online" }
-deadsync-profile = { path = "../deadsync-profile" }
-deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }
 deadsync-rules = { path = "../deadsync-rules" }
-deadsync-song-lua = { path = "../deadsync-song-lua" }
 deadsync-theme = { path = "../deadsync-theme" }
 glam = "0.34.3"
 

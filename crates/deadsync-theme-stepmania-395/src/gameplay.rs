@@ -1,15 +1,99 @@
+use std::sync::Arc;
+
 use deadlib_present::actors::{Actor, TextContent};
+use deadsync_assets::gameplay_presentation::{
+    GameplayPresentationInit,
+    standard::{GameplayHudLabel, StandardGameplay, StandardGameplayStyle},
+};
+use deadsync_assets::gameplay_stage::{ActiveGameplayStage, GameplayStageAssets};
+use deadsync_config::app_config::Config;
 use deadsync_core::hud_style::{
     ComboArtworkStyle, FieldFeedbackStyle, HoldFeedbackStyle, TapFeedbackTween,
 };
+use deadsync_gameplay::HoldToExitKey;
+use deadsync_online::gameplay_lobby::GameplayLobbySession;
 use deadsync_theme::views::{
     GameplayBackgroundWarningView, GameplayDifficultyView, GameplayHoldAtlas, GameplayHud,
     GameplayHudMotion, GameplayLifeView, GameplayScoreView, GameplaySongMeterView,
-    GameplayStageBadgeView, GameplayTapAtlas,
+    GameplayStageBadgeView, GameplayStageIntro, GameplayStageView, GameplayTapAtlas,
 };
 
 use crate::presentation::Layout;
 use crate::resources::{COMBO_FONT, NORMAL_FONT, PERCENT_FONT, SCORE_FONT};
+
+impl crate::StepManiaTheme {
+    pub fn mount_gameplay(
+        stage: &ActiveGameplayStage,
+        mut assets: GameplayStageAssets,
+        view: &GameplayStageView,
+        config: &Config,
+        init: Option<GameplayPresentationInit>,
+    ) -> StandardGameplay<GameplayLobbySession> {
+        let (round, badge) = match view.intro {
+            GameplayStageIntro::Song { round } => (
+                round,
+                deadsync_simfile::event_intro::gameplay_event_intro_text(stage.song()),
+            ),
+            _ => (None, Arc::from("")),
+        };
+        let replay_status = view.replay.as_ref().map(|replay| {
+            Arc::from(format!(
+                "Autoplay - {} {:.2}%",
+                replay.name,
+                replay.score_10000 / 100.0
+            ))
+        });
+        if let Some(course) = &view.course {
+            assets.pack_banner_path.clone_from(&course.banner_path);
+        }
+        StandardGameplay::new(
+            stage,
+            assets,
+            config,
+            init,
+            StandardGameplayStyle {
+                hud: GAMEPLAY_HUD,
+                badge,
+                round,
+                replay_status,
+                push_label,
+                lobby_code: |lobby| {
+                    lobby
+                        .runtime_view()
+                        .snapshot
+                        .joined_lobby
+                        .as_ref()
+                        .map(|lobby| lobby.code.as_str())
+                },
+            },
+        )
+    }
+}
+
+fn push_label(actors: &mut Vec<Actor>, label: GameplayHudLabel<'_>) {
+    let (at, text) = match label {
+        GameplayHudLabel::ExitPrompt(key) => (
+            [320.0, 364.0],
+            TextContent::Static(match key {
+                HoldToExitKey::Start => "Continue holding START to give up",
+                HoldToExitKey::Back => "Continue holding BACK to give up",
+            }),
+        ),
+        GameplayHudLabel::Replay(status) => {
+            ([320.0, 360.0], TextContent::Shared(Arc::clone(status)))
+        }
+        GameplayHudLabel::Profile { .. } => return,
+        GameplayHudLabel::LobbyCode(code) => {
+            let Some(text) = TextContent::inline_str(code) else {
+                return;
+            };
+            ([320.0, 28.0], text)
+        }
+    };
+    let mut label = Layout::current().text(NORMAL_FONT, text, at, 0.7);
+    label.z(1000);
+    actors.push(label.build(0));
+}
 
 // Player fields occupy depths through 1050 on scripted songs. Keep the
 // cabinet artwork above them and below song foreground artwork at 1100.

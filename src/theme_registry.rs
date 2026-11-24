@@ -28,8 +28,16 @@ const SIMPLY_LOVE_GAMEPLAY: GameplayPresentationMount = GameplayPresentationMoun
 
 const OPENITG_GAMEPLAY: GameplayPresentationMount = GameplayPresentationMount {
     prepare: |_| {},
-    build: |stage, assets, view, config, init, scores| {
-        MountedGameplay::new(OpenItgTheme::mount_gameplay(stage, assets, view, config, init, scores))
+    build: |stage, assets, view, config, init, _| {
+        MountedGameplay::standard(OpenItgTheme::mount_gameplay(stage, assets, view, config, init))
+    },
+    smx_overlay_alpha: |_, _| 1.0,
+};
+
+const STEPMANIA_GAMEPLAY: GameplayPresentationMount = GameplayPresentationMount {
+    prepare: |_| {},
+    build: |stage, assets, view, config, init, _| {
+        MountedGameplay::standard(StepManiaTheme::mount_gameplay(stage, assets, view, config, init))
     },
     smx_overlay_alpha: |_, _| 1.0,
 };
@@ -84,7 +92,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             stage: Box::new(StepManiaStagePresentation::default()),
             stage_card: Some(Box::new(StepManiaStageCard)),
             session_end: Some(Box::new(StepManiaSessionEnd)),
-            gameplay: SIMPLY_LOVE_GAMEPLAY,
+            gameplay: STEPMANIA_GAMEPLAY,
             practice_gameplay: SIMPLY_LOVE_GAMEPLAY,
             selection: Some(Box::new(StepManiaMusicWheel::default())),
             music_wheel: None,

@@ -428,16 +428,18 @@ pub(crate) mod tests {
             &deadlib_render_core::BackendType::Software.to_string(), Some(32.0))
     }
 
+    pub(crate) type MountedStageFixture = GameplayHost<
+        deadsync_online::gameplay_lobby::GameplayLobbySession,
+        crate::mounted_theme::MountedGameplay,
+    >;
+
     pub(crate) fn build_mounted_test_state(
         simfile: &Path,
         viewport: GameplayViewport,
         session: GameplaySession,
         profiles: [profile_data::Profile; MAX_PLAYERS],
         presentation: crate::mounted_theme::GameplayPresentationMount,
-    ) -> deadsync_assets::gameplay_stage::GameplayHost<
-        deadsync_online::gameplay_lobby::GameplayLobbySession,
-        crate::mounted_theme::MountedGameplay,
-    > {
+    ) -> MountedStageFixture {
         use deadsync_theme::views::{GameplayStageIntro, GameplayStageView};
 
         let (mut prepared, scene, init) = prepare_stage_fixture(
@@ -848,7 +850,7 @@ pub(crate) mod tests {
     }
 
     fn add_sprite_core_feedback(
-        state: &mut screen_gameplay::State,
+        state: &mut ActiveGameplayStage,
         player_idx: usize,
         column: usize,
         combo: u32,
@@ -2264,7 +2266,7 @@ end
 
     #[cfg(target_os = "windows")]
     fn prewarm_gpu_noteskins(
-        state: &screen_gameplay::State,
+        state: &ActiveGameplayStage,
         assets: &mut deadlib_assets::AssetManager,
         backend: &mut deadlib_render::Backend,
     ) -> Result<(), String> {
@@ -5186,6 +5188,30 @@ return Def.ActorFrame{
         );
     }
 
+    fn set_mounted_fixture_time(stage: &mut ActiveGameplayStage, seconds: f32) {
+        let time = deadsync_core::song_time::song_time_ns_from_seconds(seconds);
+        stage.boundary.total_elapsed_in_screen = 10.0;
+        stage.set_current_music_time_ns(time);
+        stage.update(
+            0.0,
+            deadsync_gameplay::GameplayAudioSnapshot {
+                stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                    music_nanos: time,
+                    has_music_mapping: true,
+                    valid_at_host_nanos: 1_000_000,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            || 1_000_000,
+            crate::navigation::song_lua_presentation_screen,
+            |_| {},
+            |_, _| {},
+        );
+        let output = stage.take_output();
+        assert!(output.errors.is_empty(), "fixture Lua frame failed: {:?}", output.errors);
+    }
+
     #[test]
     fn openitg_hud_uses_live_score_in_lua_proxy() {
         use deadsync_theme::views::GameplayHudMotion;
@@ -5212,24 +5238,7 @@ return Def.ActorFrame{
                     profiles,
                     crate::theme_registry::mount(deadsync_config::theme::ThemeFlag::OpenItg).gameplay,
                 );
-                let time = deadsync_core::song_time::song_time_ns_from_seconds(0.75);
-                state.boundary.total_elapsed_in_screen = 10.0;
-                state.set_current_music_time_ns(time);
-                state.stage.update(
-                    0.0,
-                    deadsync_gameplay::GameplayAudioSnapshot {
-                        stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
-                            music_nanos: time, has_music_mapping: true, valid_at_host_nanos: 1_000_000,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    },
-                    || 1_000_000,
-                    crate::navigation::song_lua_presentation_screen,
-                    |_| {},
-                    |_, _| {},
-                );
-                assert!(state.stage.take_output().errors.is_empty());
+                set_mounted_fixture_time(&mut state.stage, 0.75);
                 let score = state.gameplay.display_gameplay_itg_score_percent(0, mode);
                 let expected = format!("{:.2}%", (score * 100.0).trunc() / 100.0);
                 let mut actors = Vec::new();
@@ -5248,6 +5257,56 @@ return Def.ActorFrame{
                 assert!(actor_tree_has_text(&actors, &expected));
                 assert!(!actor_tree_has_text(&actors, &state.song().title));
                 assert_eq!(state.gameplay.display_gameplay_itg_score_percent(0, mode), score);
+            },
+        );
+    }
+
+    #[test]
+    fn stepmania_hud_uses_live_numeric_score_in_lua_proxy() {
+        let simfile = write_hidden_score_proxy_fixture("stepmania-score-proxy");
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                space::set_current_metrics(space::Metrics::centered(640.0, 480.0));
+                space::set_current_window_px(640, 480);
+                let profiles = std::array::from_fn(|_| profile_data::Profile {
+                    noteskin: profile_data::NoteSkin::new("lambda"),
+                    show_ex_score: false,
+                    ..Default::default()
+                });
+                let mut state = build_mounted_test_state(
+                    &simfile,
+                    GameplayViewport::new(640.0, 480.0),
+                    GameplaySession::default(),
+                    profiles,
+                    crate::theme_registry::mount(deadsync_config::theme::ThemeFlag::StepMania395)
+                        .gameplay,
+                );
+                set_mounted_fixture_time(&mut state.stage, 0.75);
+                let assets = fixture_assets();
+                let mut actors = Vec::new();
+                for (score, earlier) in [(123_450, 0), (678_900, 123_450)] {
+                    state.gameplay.update_player(0, |player| player.stage_score.score = score);
+                    actors.clear();
+                    let segments = crate::gameplay_runtime::push_actors(
+                        &mut actors,
+                        &mut state,
+                        &assets,
+                        Default::default(),
+                        123.0,
+                        (),
+                    );
+                    assert_eq!(segments.direct_field_proxy_count(state.song_frame()), 1);
+                    assert!(actor_tree_has_text(&actors, &format!("{score:09}")));
+                    assert!(!actor_tree_has_text(&actors, &format!("{earlier:09}")));
+                    assert!(!actors.iter().any(|actor| matches!(actor,
+                        Actor::Sprite { source, .. }
+                            if source.texture_key() == Some("stepmania-395/gameplay-score-frame")
+                    )));
+                }
             },
         );
     }

@@ -8,7 +8,7 @@ const NATIVE_GAMEPLAY_SIMFILE: &str = "\
 3000\n0100\n0010\n0001\n,\n\
 1000\n0100\n0010\n0001\n;\n";
 
-fn gameplay_identity_fixture(reverse: bool, scripted: bool) -> screen_gameplay::State {
+fn gameplay_identity_fixture(reverse: bool, scripted: bool) -> MountedStageFixture {
     let source = if scripted {
         format!("#FGCHANGES:0=default.lua=1=0=0=1;\n{NATIVE_GAMEPLAY_SIMFILE}")
     } else {
@@ -32,7 +32,7 @@ fn gameplay_identity_fixture(reverse: bool, scripted: bool) -> screen_gameplay::
         profile
     });
     let session = profile::get_session_snapshot();
-    let mut state = build_compiled_test_state(
+    let mut state = build_mounted_test_state(
         &path,
         GameplayViewport::new(640.0, 480.0),
         GameplaySession {
@@ -53,6 +53,7 @@ fn gameplay_identity_fixture(reverse: bool, scripted: bool) -> screen_gameplay::
             ..Default::default()
         },
         profiles,
+        crate::theme_registry::mount(deadsync_config::theme::ThemeFlag::StepMania395).gameplay,
     );
     assert_eq!(state.song_frame().uses_song_lua_compositor(), scripted);
     if scripted {
@@ -72,23 +73,47 @@ fn gameplay_identity_fixture(reverse: bool, scripted: bool) -> screen_gameplay::
             "the fixture must contain its compiled song-foreground marker"
         );
     }
-    screen_gameplay::sync_runtime_view(
-        &mut state,
-        deadsync_theme_simply_love::views::GameplayRuntimeView {
-            play_style: session.play_style,
-            player_side: session.player_side,
-            joined: [
-                session.side_joined(profile_data::PlayerSide::P1),
-                session.side_joined(profile_data::PlayerSide::P2),
-            ],
-            ..Default::default()
-        },
-    );
-    set_fixture_time(&mut state, 2.5);
+    set_mounted_fixture_time(&mut state.stage, 2.5);
     for player in 0..state.num_players() {
         add_sprite_core_feedback(&mut state, player, 0, 42);
     }
     state
+}
+
+fn compose_native_fixture_frame<T: TextureContext + ?Sized>(
+    state: &mut MountedStageFixture,
+    assets: &deadlib_assets::AssetManager,
+    metrics: &space::Metrics,
+    actors: &mut Vec<Actor>,
+    text: &mut compose::TextLayoutCache,
+    scratch: &mut compose::ComposeScratch,
+    hud_motion: deadsync_theme::views::GameplayHudMotion,
+    textures: &T,
+) -> deadlib_render_core::RenderFrame {
+    actors.clear();
+    let segments = crate::gameplay_runtime::push_actors(
+        actors,
+        state,
+        assets,
+        deadsync_assets::gameplay_presentation::GameplayRenderView {
+            hud_motion,
+            ..Default::default()
+        },
+        123.0,
+        (),
+    );
+    compose::build_passes(
+        segments.segments(state.song_frame(), actors),
+        state.render_targets(),
+        [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        assets.fonts(),
+        10.0,
+        text,
+        scratch,
+        textures,
+        Some(state.actor_resources()),
+    )
 }
 
 #[test]
@@ -112,29 +137,15 @@ fn native_gameplay_hud_controls_footer_and_layering() {
                         let mut actors = Vec::new();
                         let mut text = compose::TextLayoutCache::default();
                         let mut scratch = compose::ComposeScratch::default();
-                        let mut frame = compose_fixture_frame(
+                        let mut native_frame = compose_native_fixture_frame(
                             &mut state,
                             &assets,
                             &metrics,
                             &mut actors,
                             &mut text,
                             &mut scratch,
-                        );
-                        assert!(actor_tree_has_text(&actors, "NAMED PLAYER 1"));
-                        scratch.recycle_frame(&mut frame);
-                        use deadsync_theme::stage::StagePresentation;
-                        state.presentation.set_hud(
-                            deadsync_theme_stepmania_395::StepManiaStagePresentation::default()
-                                .gameplay_hud()
-                                .unwrap(),
-                        );
-                        let native_frame = compose_fixture_frame(
-                            &mut state,
-                            &assets,
-                            &metrics,
-                            &mut actors,
-                            &mut text,
-                            &mut scratch,
+                            Default::default(),
+                            &FIXTURE_TEXTURES,
                         );
                         assert!(
                             has_native_profile_label(&actors, "NAMED PLAYER 1", 0),
@@ -157,13 +168,11 @@ fn native_gameplay_hud_controls_footer_and_layering() {
                         if scripted {
                             let marker_draw = foreground_marker_draw(&native_frame);
                             assert!(marker_draw > score_draw, "song foreground must follow the HUD");
-                            let entry_frame = compose_fixture_frame_with_view(
+                            scratch.recycle_frame(&mut native_frame);
+                            let entry_frame = compose_native_fixture_frame(
                                 &mut state, &assets, &metrics, &mut actors, &mut text, &mut scratch,
-                                screen_gameplay::ActorViewOverride {
-                                    hud_motion: deadsync_theme::views::GameplayHudMotion::Entering {
-                                        elapsed_seconds: 0.1,
-                                    },
-                                    ..Default::default()
+                                deadsync_theme::views::GameplayHudMotion::Entering {
+                                    elapsed_seconds: 0.1,
                                 },
                                 &FIXTURE_TEXTURES,
                             );
@@ -235,7 +244,7 @@ fn native_gameplay_composition_captures() {
         .name("native-gameplay-capture".into())
         .stack_size(32 * 1024 * 1024)
         .spawn(|| {
-            use deadsync_theme::{ThemeResources, stage::StagePresentation};
+            use deadsync_theme::ThemeResources;
             use winit::platform::windows::EventLoopBuilderExtWindows;
             crate::tests::init_paths();
             let events = winit::event_loop::EventLoop::builder()
@@ -321,22 +330,18 @@ fn native_gameplay_composition_captures() {
                     space::set_current_window_px(640, 480);
                     space::set_overscan(0, 0, 0, 0);
                     let mut state = gameplay_identity_fixture(reverse, scripted);
-                    state.presentation.set_hud(
-                        deadsync_theme_stepmania_395::StepManiaStagePresentation::default()
-                            .gameplay_hud()
-                            .unwrap(),
-                    );
                     prewarm_gpu_noteskins(&state, &mut assets, &mut backend).unwrap();
                     let mut actors = Vec::new();
                     let mut text = compose::TextLayoutCache::default();
                     let mut scratch = compose::ComposeScratch::default();
-                    let mut frame = compose_fixture_frame_with_textures(
+                    let mut frame = compose_native_fixture_frame(
                         &mut state,
                         &assets,
                         &metrics,
                         &mut actors,
                         &mut text,
                         &mut scratch,
+                        Default::default(),
                         assets.texture_context(),
                     );
                     for (side, joined) in joined.into_iter().enumerate() {

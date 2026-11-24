@@ -545,7 +545,12 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(!app.contains("SimplyLoveTheme::build_gameplay_presentation"));
     let registry = production_source(&root.join("src/theme_registry.rs"));
     assert!(registry.contains("MountedGameplay::new(SimplyLoveTheme::mount_gameplay"));
-    assert!(registry.contains("MountedGameplay::new(OpenItgTheme::mount_gameplay"));
+    for theme in ["OpenItgTheme", "StepManiaTheme"] {
+        assert!(contains_rust(
+            &registry,
+            &format!("MountedGameplay::standard({theme}::mount_gameplay("),
+        ));
+    }
     assert!(registry.contains("gameplay: OPENITG_GAMEPLAY"));
     let mount = production_source(&root.join("crates/deadsync-shell/src/mounted_theme.rs"));
     assert!(!mount.contains("deadsync_theme_simply_love"));
@@ -7613,6 +7618,7 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
     let native_mount = registry.split("ThemeFlag::StepMania395 => ThemeMount").nth(1).unwrap()
         .split("ThemeFlag::SimplyLove => ThemeMount").next().unwrap();
     assert!(!native_mount.contains("FALLBACK_TRANSITIONS"));
+    assert!(contains_rust(native_mount, "gameplay: STEPMANIA_GAMEPLAY"));
     for hook in [
         "kind: StepManiaTheme::transition_kind",
         "exit: StepManiaTheme::out_transition",
@@ -7623,6 +7629,8 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
         assert!(contains_rust(native_mount, hook), "unmounted native transition: {hook}");
     }
     let native = root.join("crates/deadsync-theme-stepmania-395/src");
+    let native_manifest = read_source(native.parent().unwrap().join("Cargo.toml")).unwrap();
+    assert!(!native_manifest.contains("deadsync-theme-simply-love"));
     for path in production_rust_files(&native) {
         let source = production_source(&path);
         for reader in ["std::fs", "ThemePackage", "roxmltree", "metrics.ini", "BGAnimation.ini"] {
