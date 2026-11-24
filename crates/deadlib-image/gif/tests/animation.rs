@@ -131,6 +131,7 @@ fn consecutive_previous_first_previous_local_palette_clipping_and_timing() {
 struct Font;
 impl TextRasterizer for Font {
     fn rasterize(&mut self, ch: u8, _w: u8, _h: u8, mask: &mut [u8]) -> Result<(), Error> {
+        assert!(mask.iter().all(|&pixel| pixel == 0));
         if ch != b' ' {
             mask[0] = 1;
         }

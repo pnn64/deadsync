@@ -285,14 +285,18 @@ impl Compositor {
         self.text_indices.resize(visible, text.background_index);
         let cw = text.cell_width as usize;
         let ch = text.cell_height as usize;
-        self.mask.clear();
-        reserve(&mut self.mask, cw * ch)?;
-        self.mask.resize(cw * ch, 0);
         let columns = text.width as usize / cw;
         let rows = text.height as usize / ch;
+        let glyph_count = columns * rows;
+        if glyph_count != 0 && text.data.iter().any(|block| !block.is_empty()) {
+            let mask_size = cw * ch;
+            let extra = mask_size.saturating_sub(self.mask.len());
+            reserve(&mut self.mask, extra)?;
+            self.mask.resize(mask_size, 0);
+        }
         let right = columns * cw;
         let (mut x, mut y) = (0, 0);
-        for &character in text.data.iter().flatten().take(columns * rows) {
+        for &character in text.data.iter().flatten().take(glyph_count) {
             self.mask.fill(0);
             rasterizer.rasterize(
                 if !(0x20..=0xf7).contains(&character) {
