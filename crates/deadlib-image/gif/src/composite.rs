@@ -149,9 +149,11 @@ impl Compositor {
     }
     fn prepare(&mut self, rect: Rect, control: Option<GraphicControl>) -> Result<(), Error> {
         let disposal = control.unwrap_or_default().disposal;
+        let visible = rect.w != 0 && rect.h != 0;
+        let save = visible && disposal == Disposal::Previous;
         // Reserve before changing state; old saved pixels must remain intact
         // until the preceding Previous disposal has been applied.
-        if disposal == Disposal::Previous {
+        if save {
             let required = rect.w * rect.h;
             let extra = required.saturating_sub(self.saved.len());
             reserve(&mut self.saved, extra)?;
@@ -173,14 +175,15 @@ impl Compositor {
             }
         }
         self.saved.clear();
-        if disposal == Disposal::Previous {
+        if save {
             for y in rect.y..rect.y + rect.h {
                 self.saved.extend_from_slice(
                     &self.pixels[y * stride + rect.x..y * stride + rect.x + rect.w],
                 );
             }
         }
-        self.pending = Some((rect, disposal));
+        self.pending = (visible && matches!(disposal, Disposal::Background | Disposal::Previous))
+            .then_some((rect, disposal));
         Ok(())
     }
     pub fn render(&mut self, frame: &Frame) -> Result<RenderedFrame<'_>, Error> {
