@@ -191,6 +191,15 @@ fn indices_are_zero(source: &[u8], pitch: usize, width: usize, bit_depth: u16) -
     let bytes_are_zero = |bytes: &[u8]| bytes.iter().copied().max().unwrap_or(0) == 0;
     if complete_bytes == pitch {
         bytes_are_zero(source)
+    } else if pitch == 4 {
+        // Check every used bit in the padded row with one masked load.
+        let shift = complete_bytes * 8;
+        let mask = ((1u32 << shift) - 1) | (u32::from(tail_mask) << shift);
+        source
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|&row| u32::from_le_bytes(row) & mask == 0)
     } else {
         // Check only used bits and bytes. Every valid pixel has index zero.
         source.chunks_exact(pitch).all(|row| {
