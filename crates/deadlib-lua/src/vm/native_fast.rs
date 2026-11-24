@@ -6,88 +6,79 @@ impl Vm {
         if !self.sort_fast_context() {
             return None;
         }
-        if id == 0 && count != 0 && self.registers[call + 1].is_truthy() {
-            self.registers.copy_within(call + 1..call + 1 + count, call);
-            return Some(count);
-        }
-        if id == 3 && count == 1 {
-            self.registers[call] = self
-                .number(self.registers[call + 1])
-                .map_or(Value::Nil, Value::Number);
-            return Some(1);
-        }
-        if id == 4 && count >= 2 {
-            self.registers[call] =
-                Value::Boolean(self.registers[call + 1] == self.registers[call + 2]);
-            return Some(1);
-        }
-        if id == 5
-            && count >= 2
-            && let Value::Table(id) = self.registers[call + 1]
-            && let Some(table) = self.tables.get(id.0)
-        {
-            self.registers[call] = table.get(self.registers[call + 2]);
-            return Some(1);
-        }
-        // Additional arguments, number-to-string coercion, and errors use
-        // ordinary dispatch. An empty string.byte result has zero values.
-        if count == 1
-            && matches!(id, strings::STR_LEN | strings::STR_BYTE)
-            && let Value::String(source) = self.registers[call + 1]
-            && let Some(bytes) = self.strings.bytes.get(source.0)
-        {
-            if id == strings::STR_LEN {
-                self.registers[call] = Value::Number(bytes.len() as f64);
-                return Some(1);
+        match id {
+            0 if count != 0 && self.registers[call + 1].is_truthy() => {
+                self.registers.copy_within(call + 1..call + 1 + count, call);
+                Some(count)
             }
-            return match bytes.first() {
-                Some(&byte) => {
-                    self.registers[call] = Value::Number(f64::from(byte));
-                    Some(1)
-                }
-                None => Some(0),
-            };
-        }
-        if matches!(id, NEXT | PAIRS_NEXT | IPAIRS_STEP) && count != 0 {
-            let Value::Table(table) = self.registers[call + 1] else {
-                return None;
-            };
-            let table = self.tables.get(table.0)?;
-            if id == IPAIRS_STEP {
-                if count < 2 {
-                    return None;
-                }
-                let Value::Number(previous) = self.registers[call + 2] else {
+            3 if count == 1 => {
+                self.registers[call] = self
+                    .number(self.registers[call + 1])
+                    .map_or(Value::Nil, Value::Number);
+                Some(1)
+            }
+            4 if count >= 2 => {
+                self.registers[call] =
+                    Value::Boolean(self.registers[call + 1] == self.registers[call + 2]);
+                Some(1)
+            }
+            5 if count >= 2
+                && let Value::Table(id) = self.registers[call + 1] =>
+            {
+                self.registers[call] = self.tables.get(id.0)?.get(self.registers[call + 2]);
+                Some(1)
+            }
+            // Other arities, coercion, and errors use ordinary dispatch.
+            strings::STR_LEN | strings::STR_BYTE
+                if count == 1
+                    && let Value::String(source) = self.registers[call + 1] =>
+            {
+                let bytes = self.strings.bytes.get(source.0)?;
+                let number = if id == strings::STR_LEN {
+                    bytes.len() as f64
+                } else if let Some(&byte) = bytes.first() {
+                    f64::from(byte)
+                } else {
+                    return Some(0);
+                };
+                self.registers[call] = Value::Number(number);
+                Some(1)
+            }
+            IPAIRS_STEP if count >= 2 => {
+                let (Value::Table(table), Value::Number(previous)) =
+                    (self.registers[call + 1], self.registers[call + 2])
+                else {
                     return None;
                 };
                 let next = (previous as i32).wrapping_add(1);
-                let value = table.get_integer(i64::from(next));
+                let value = self.tables.get(table.0)?.get_integer(i64::from(next));
                 if value == Value::Nil {
                     return Some(0);
                 }
                 self.registers[call] = Value::Number(f64::from(next));
                 self.registers[call + 1] = value;
-                return Some(2);
+                Some(2)
             }
-            let key = if count > 1 {
-                self.registers[call + 2]
-            } else {
-                Value::Nil
-            };
-            let next = table.next_entry(key).ok()?;
-            return match next {
-                Some((key, value)) => {
+            NEXT | PAIRS_NEXT
+                if count != 0
+                    && let Value::Table(table) = self.registers[call + 1] =>
+            {
+                let key = if count > 1 {
+                    self.registers[call + 2]
+                } else {
+                    Value::Nil
+                };
+                if let Some((key, value)) = self.tables.get(table.0)?.next_entry(key).ok()? {
                     self.registers[call] = key;
                     self.registers[call + 1] = value;
                     Some(2)
-                }
-                None => {
+                } else {
                     self.registers[call] = Value::Nil;
                     Some(1)
                 }
-            };
+            }
+            _ => None,
         }
-        None
     }
 
     #[inline(never)]
