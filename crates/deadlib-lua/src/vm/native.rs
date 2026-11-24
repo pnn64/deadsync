@@ -104,6 +104,7 @@ impl Vm {
                     32..=41 | 43 | 44 | 46..=51 | 53 | 54 => self.try_fast_math(id, call, count),
                     42 | 45 | 52 => self.try_fast_binary_math(id, call, count),
                     strings::STR_LEN | strings::STR_BYTE => self.try_fast_string(id, call, count),
+                    strings::STR_FIND => self.try_fast_find_byte(call, count),
                     _ => None,
                 };
                 if let Some(actual) = actual {

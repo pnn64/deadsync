@@ -160,6 +160,43 @@ impl Vm {
     }
 
     #[inline(never)]
+    pub(super) fn try_fast_find_byte(&mut self, call: usize, count: usize) -> Option<usize> {
+        // Let ordinary dispatch reserve the native argument window if it needs growth.
+        if !(2..=4).contains(&count) || self.registers.capacity() - self.registers.len() <= count {
+            return None;
+        }
+        let (Value::String(source), Value::String(pattern)) =
+            (self.registers[call + 1], self.registers[call + 2])
+        else {
+            return None;
+        };
+        let [byte] = self.string_bytes(pattern)? else {
+            return None;
+        };
+        if (!self.argument(call, count, 3).is_truthy() && crate::pattern::has_magic(&[*byte]))
+            || !self.sort_fast_context()
+        {
+            return None;
+        }
+        let raw_start = match self.argument(call, count, 2) {
+            Value::Nil => 1,
+            Value::Number(index) => lua_integer(index),
+            _ => return None,
+        };
+        let source = self.string_bytes(source)?;
+        let start = strings::find_start(raw_start, source.len());
+        if let Some(offset) = crate::pattern::find_byte(&source[start..], *byte) {
+            let position = Value::Number((start + offset + 1) as f64);
+            self.registers[call] = position;
+            self.registers[call + 1] = position;
+            Some(2)
+        } else {
+            self.registers[call] = Value::Nil;
+            Some(1)
+        }
+    }
+
+    #[inline(never)]
     pub(super) fn try_fast_select(&mut self, call: usize, count: usize) -> Option<usize> {
         if count == 0 || !self.sort_fast_context() {
             return None;

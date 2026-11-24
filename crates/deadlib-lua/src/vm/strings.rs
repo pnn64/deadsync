@@ -87,6 +87,9 @@ pub(super) fn relative(index: i64, len: usize) -> i64 {
         index
     }
 }
+pub(super) fn find_start(index: i64, len: usize) -> usize {
+    relative(index, len).saturating_sub(1).clamp(0, len as i64) as usize
+}
 impl Vm {
     pub(super) fn open_strings(&mut self) -> Result<(), Error> {
         let table = self.try_new_table()?;
@@ -418,9 +421,7 @@ impl Vm {
             }
             STR_FIND | STR_MATCH => {
                 let pattern = self.string_argument(base, count, 1)?;
-                let start = relative(self.integer_argument(base, count, 2, Some(1))?, len)
-                    .saturating_sub(1)
-                    .clamp(0, len as i64) as usize;
+                let start = find_start(self.integer_argument(base, count, 2, Some(1))?, len);
                 let raw = self.strings.bytes[slot_index(pattern.0)].as_ref();
                 let plain = id == STR_FIND
                     && (self.argument(base, count, 3).is_truthy() || !has_magic(raw));
