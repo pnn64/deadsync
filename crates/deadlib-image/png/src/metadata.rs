@@ -619,7 +619,7 @@ impl Validator {
         if &c.kind == b"iCCP" {
             self.unique |= bit;
         }
-        let value = match parse::<COLLECT>(c, h, palette, &mut self.remaining, self.encoding) {
+        let mut value = match parse::<COLLECT>(c, h, palette, &mut self.remaining, self.encoding) {
             Ok(value) => value,
             Err(Error::Invalid(_) | Error::Checksum | Error::Truncated) if recover => {
                 return Ok(None);
@@ -638,10 +638,15 @@ impl Validator {
             }
             _ => (),
         }
-        if let Metadata::SuggestedPalette { name, .. } = &value
-            && !self.names.insert(name.clone())
-        {
-            return self.rejected("duplicate suggested palette name");
+        if let Metadata::SuggestedPalette { name, .. } = &mut value {
+            let key = if COLLECT {
+                name.clone()
+            } else {
+                core::mem::take(name)
+            };
+            if !self.names.insert(key) {
+                return self.rejected("duplicate suggested palette name");
+            }
         }
         Ok(Some(value))
     }
