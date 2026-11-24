@@ -119,7 +119,7 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 palette,
             }
         }
-        Format::Rgb24 | Format::Masked { .. } => {
+        Format::Rgb24 | Format::Rgb555 | Format::Bgra32 | Format::Masked { .. } => {
             let channels = header.format.channels();
             let mut samples = Vec::new();
             reserve(&mut samples, header.decoded_bytes)?;
@@ -134,6 +134,10 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 match header.format {
                     Format::Rgb24 => {
                         map_row::<3, 3>(row, output, |bgr| [bgr[2], bgr[1], bgr[0]]);
+                    }
+                    Format::Rgb555 => map_row(row, output, rgb16::<5>),
+                    Format::Bgra32 => {
+                        map_row::<4, 4>(row, output, |bgra| [bgra[2], bgra[1], bgra[0], bgra[3]]);
                     }
                     Format::Masked {
                         red,
@@ -153,13 +157,8 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     Format::Indexed { .. } => unreachable!("truecolor format"),
                 }
             }
-            if matches!(
-                header.format,
-                Format::Masked {
-                    opaque_if_zero: true,
-                    ..
-                }
-            ) && samples.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0)
+            if matches!(header.format, Format::Bgra32)
+                && samples.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0)
             {
                 for pixel in samples.as_chunks_mut::<4>().0 {
                     pixel[3] = 255;
@@ -311,12 +310,13 @@ enum Format {
         entry_bytes: usize,
     },
     Rgb24,
+    Rgb555,
+    Bgra32,
     Masked {
         red: Channel,
         green: Channel,
         blue: Channel,
         alpha: Option<Channel>,
-        opaque_if_zero: bool,
     },
 }
 
@@ -324,7 +324,7 @@ impl Format {
     fn channels(self) -> usize {
         match self {
             Self::Indexed { .. } => 1,
-            Self::Masked { alpha: Some(_), .. } => 4,
+            Self::Bgra32 | Self::Masked { alpha: Some(_), .. } => 4,
             _ => 3,
         }
     }
@@ -381,7 +381,7 @@ impl Channel {
     }
 }
 
-fn masks_format(masks: [u32; 4], bit_depth: u16, opaque_if_zero: bool) -> Result<Format, Error> {
+fn masks_format(masks: [u32; 4], bit_depth: u16) -> Result<Format, Error> {
     let mut used = 0;
     for &mask in &masks {
         if used & mask != 0 {
@@ -398,7 +398,6 @@ fn masks_format(masks: [u32; 4], bit_depth: u16, opaque_if_zero: bool) -> Result
         } else {
             Some(Channel::new(masks[3], bit_depth)?)
         },
-        opaque_if_zero,
     })
 }
 
@@ -494,10 +493,10 @@ fn parse_header(input: &[u8], limits: Limits) -> Result<Header, Error> {
             }
         }
         24 => Format::Rgb24,
-        16 | 32 => {
-            let masks = if compression == 3 {
-                // A 40-byte DIB has three external masks. Larger DIBs store
-                // them inside the header; 56/108/124-byte headers include alpha.
+        16 | 32 if compression == 3 => {
+            // A 40-byte DIB has three external masks. Larger DIBs store
+            // them inside the header; 56/108/124-byte headers include alpha.
+            masks_format(
                 [
                     read_u32(input, 54)?,
                     read_u32(input, 58)?,
@@ -507,24 +506,24 @@ fn parse_header(input: &[u8], limits: Limits) -> Result<Header, Error> {
                     } else {
                         0
                     },
-                ]
-            } else if bit_depth == 16 {
-                // Match ITGmania's legacy V4/V5 BI_RGB16 alpha interpretation.
-                [
-                    0x7c00,
-                    0x03e0,
-                    0x001f,
-                    if dib_size >= 108 {
-                        read_u32(input, 66)?
-                    } else {
-                        0
-                    },
-                ]
-            } else {
-                [0x00ff_0000, 0x0000_ff00, 0x0000_00ff, 0xff00_0000]
-            };
-            masks_format(masks, bit_depth, compression == 0 && bit_depth == 32)?
+                ],
+                bit_depth,
+            )?
         }
+        16 => {
+            // Match ITGmania's legacy V4/V5 BI_RGB16 alpha interpretation.
+            let alpha = if dib_size >= 108 {
+                read_u32(input, 66)?
+            } else {
+                0
+            };
+            if alpha == 0 {
+                Format::Rgb555
+            } else {
+                masks_format([0x7c00, 0x03e0, 0x001f, alpha], bit_depth)?
+            }
+        }
+        32 => Format::Bgra32,
         _ => unreachable!("validated BMP bit depth"),
     };
     let palette_bytes = match format {
