@@ -136,21 +136,26 @@ impl<'a, W: Write> Compressed<'a, W> {
                 Some(bytes) => self.encoder.process(bytes, output, finish)?,
                 None => self.encoder.process_zeros(len, output)?,
             };
-            if let Some(bytes) = &mut input {
-                *bytes = &bytes[p.consumed..];
-            }
-            len -= p.consumed;
             self.have += p.written;
             if self.have == self.output.len() {
                 self.flush()?;
             }
             match p.status {
-                StreamStatus::NeedInput if !finish && len == 0 => return Ok(()),
-                StreamStatus::Done if finish && len == 0 => {
+                StreamStatus::NeedInput if !finish => {
+                    debug_assert_eq!(p.consumed, len);
+                    return Ok(());
+                }
+                StreamStatus::Done if finish => {
+                    debug_assert_eq!(p.consumed, len);
                     self.flush()?;
                     return Ok(());
                 }
-                StreamStatus::NeedOutput => (),
+                StreamStatus::NeedOutput => {
+                    if let Some(bytes) = &mut input {
+                        *bytes = &bytes[p.consumed..];
+                    }
+                    len -= p.consumed;
+                }
                 _ => return Err(Error::Invalid("deflater progress")),
             }
         }
