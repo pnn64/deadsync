@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn zero_runs_encode_like_zero_bytes() {
         let bytes: Vec<u8> = (0..70_000u32).map(|n| (n * 37 % 251) as u8 | 1).collect();
-        let zeros = vec![0; 70_000];
+        let zeros = vec![0; 70_001];
         for mode in [Compression::Fast, Compression::Rle, Compression::Stored] {
             for runs in [
                 [0, 1, 5],
@@ -294,19 +294,30 @@ mod tests {
                 [1, 40_000, 65_000],
             ] {
                 let mut with_runs = Vec::new();
+                let mut split_runs = Vec::new();
                 let mut materialized = Vec::new();
                 for (n, &run) in runs.iter().enumerate() {
                     let text = &bytes[n * 9_000..n * 9_000 + 1 + n * 4_000];
                     with_runs.push((Some(text), text.len()));
+                    split_runs.push((Some(text), text.len()));
                     materialized.push((Some(text), text.len()));
-                    with_runs.push((None, run));
-                    materialized.push((Some(&zeros[..run]), run));
+                    with_runs.push((None, run + 1));
+                    split_runs.push((Some(&zeros[..1]), 1));
+                    split_runs.push((None, run));
+                    materialized.push((Some(&zeros[..run + 1]), run + 1));
                 }
                 with_runs.push((Some(&bytes[..3]), 3));
+                split_runs.push((Some(&bytes[..3]), 3));
                 materialized.push((Some(&bytes[..3]), 3));
                 for capacity in [1, 7, 65_536] {
+                    let merged = stream(&mut Deflater::new(mode).unwrap(), &with_runs, capacity);
                     assert_eq!(
-                        stream(&mut Deflater::new(mode).unwrap(), &with_runs, capacity),
+                        merged,
+                        stream(&mut Deflater::new(mode).unwrap(), &split_runs, capacity),
+                        "split {mode:?} {runs:?} {capacity}"
+                    );
+                    assert_eq!(
+                        merged,
                         stream(&mut Deflater::new(mode).unwrap(), &materialized, capacity),
                         "{mode:?} {runs:?} {capacity}"
                     );

@@ -175,8 +175,11 @@ fn image<W: Write>(
     let mut compressed = Compressed::new(writer, sequence, options, output, encoder)?;
     while let Some(row) = rows.next_row()? {
         if row.zero {
-            compressed.pump(&row.bytes[..1], false)?;
-            compressed.pump_zeros(row.bytes.len() - 1)?;
+            let prefix = usize::from(row.bytes[0] != 0);
+            if prefix != 0 {
+                compressed.pump(&row.bytes[..prefix], false)?;
+            }
+            compressed.pump_zeros(row.bytes.len() - prefix)?;
         } else {
             compressed.pump(row.bytes, false)?;
         }

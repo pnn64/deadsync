@@ -32,8 +32,11 @@ pub(crate) fn compress_image<'a, 'image>(
     rows.reset(image);
     while let Some(row) = rows.next_row()? {
         if row.zero {
-            compressor.push(&row.bytes[..1]);
-            compressor.push_zeros(row.bytes.len() - 1);
+            let prefix = usize::from(row.bytes[0] != 0);
+            if prefix != 0 {
+                compressor.push(&row.bytes[..prefix]);
+            }
+            compressor.push_zeros(row.bytes.len() - prefix);
         } else {
             compressor.push(row.bytes);
         }
