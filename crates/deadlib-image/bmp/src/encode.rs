@@ -82,6 +82,24 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
                     output.extend_from_slice(&[0; 3][..pitch - row_bytes]);
                 }
                 repeat_bytes(&mut output, offset, file_size);
+            } else if let [first, second] = *palette.as_slice() {
+                let packed =
+                    |[red, green, blue]: [u8; 3]| u32::from_le_bytes([blue, green, red, 0]);
+                let first = packed(first);
+                let difference = first ^ packed(second);
+                append_mapped_rows::<1, 3>(
+                    &mut output,
+                    indices,
+                    width,
+                    &[0; 3][..pitch - row_bytes],
+                    options.top_down,
+                    |&[index]| {
+                        // Validated indices are zero or one.
+                        let mask = u32::from(index).wrapping_neg();
+                        let [blue, green, red, _] = (first ^ (difference & mask)).to_le_bytes();
+                        [blue, green, red]
+                    },
+                );
             } else if indices.len() >= 1024 {
                 let padding = &[0; 3][..pitch - row_bytes];
                 let chunk_pixels = if options.top_down && padding.is_empty() {
@@ -116,7 +134,7 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
                 }
             }
         }
-        Pixels::Rgb(samples) => append_truecolor_rows(
+        Pixels::Rgb(samples) => append_mapped_rows(
             &mut output,
             samples,
             row_bytes,
@@ -124,7 +142,7 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
             options.top_down,
             |&[red, green, blue]| [blue, green, red],
         ),
-        Pixels::Rgba(samples) => append_truecolor_rows(
+        Pixels::Rgba(samples) => append_mapped_rows(
             &mut output,
             samples,
             row_bytes,
@@ -143,24 +161,24 @@ fn repeat_bytes(output: &mut Vec<u8>, start: usize, end: usize) {
     }
 }
 
-fn append_truecolor_rows<const N: usize>(
+fn append_mapped_rows<const INPUT: usize, const OUTPUT: usize>(
     output: &mut Vec<u8>,
     samples: &[u8],
-    row_bytes: usize,
+    source_row_bytes: usize,
     padding: &[u8],
     top_down: bool,
-    mut reorder: impl FnMut(&[u8; N]) -> [u8; N],
+    mut reorder: impl FnMut(&[u8; INPUT]) -> [u8; OUTPUT],
 ) {
     if top_down && padding.is_empty() {
-        output.extend(samples.as_chunks::<N>().0.iter().flat_map(reorder));
+        output.extend(samples.as_chunks::<INPUT>().0.iter().flat_map(reorder));
     } else {
-        let mut rows = samples.chunks_exact(row_bytes);
+        let mut rows = samples.chunks_exact(source_row_bytes);
         while let Some(row) = if top_down {
             rows.next()
         } else {
             rows.next_back()
         } {
-            output.extend(row.as_chunks::<N>().0.iter().flat_map(&mut reorder));
+            output.extend(row.as_chunks::<INPUT>().0.iter().flat_map(&mut reorder));
             output.extend_from_slice(padding);
         }
     }
