@@ -116,24 +116,21 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
         })?),
         Format::Rgb555 => Pixels::Rgb(map_rows(source, &header, rgb16::<5>)?),
         Format::Bgra32 => {
-            let mut samples = map_rows(source, &header, |[blue, green, red, alpha]| {
-                [red, green, blue, alpha]
-            })?;
-            const ALPHA_MASK: u128 = 0xff00_0000_ff00_0000_ff00_0000_ff00_0000;
-            let (blocks, tail) = samples.as_chunks_mut::<16>();
-            let (remaining_pixels, _) = tail.as_chunks_mut::<4>();
-            if blocks
-                .iter()
-                .all(|&block| u128::from_le_bytes(block) & ALPHA_MASK == 0)
-                && remaining_pixels.iter().all(|pixel| pixel[3] == 0)
-            {
-                for block in blocks {
-                    *block = (u128::from_le_bytes(*block) | ALPHA_MASK).to_le_bytes();
-                }
-                for pixel in remaining_pixels {
-                    pixel[3] = 255;
-                }
-            }
+            let all_zero = if header.info.top_down {
+                bgra_alpha_is_zero(source, false)
+            } else {
+                let (rest, first_row) = source.split_at(source.len() - header.row_pitch);
+                bgra_alpha_is_zero(first_row, false) && bgra_alpha_is_zero(rest, true)
+            };
+            let samples = if all_zero {
+                map_rows(source, &header, |[blue, green, red, _]| {
+                    [red, green, blue, 255]
+                })?
+            } else {
+                map_rows(source, &header, |[blue, green, red, alpha]| {
+                    [red, green, blue, alpha]
+                })?
+            };
             Pixels::Rgba(samples)
         }
         Format::Masked {
@@ -211,6 +208,18 @@ fn map_rows<const INPUT: usize, const OUTPUT: usize>(
         }
     }
     Ok(samples.into_flattened())
+}
+
+fn bgra_alpha_is_zero(source: &[u8], reverse: bool) -> bool {
+    const ALPHA_MASK: u128 = 0xff00_0000_ff00_0000_ff00_0000_ff00_0000;
+    let (blocks, tail) = source.as_chunks::<16>();
+    let block_is_zero = |&block| u128::from_le_bytes(block) & ALPHA_MASK == 0;
+    let tail_is_zero = || tail.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0);
+    if reverse {
+        tail_is_zero() && blocks.iter().rev().all(block_is_zero)
+    } else {
+        blocks.iter().all(block_is_zero) && tail_is_zero()
+    }
 }
 
 // RGB555 and RGB565 differ only in the green field's width. Repeat the high
