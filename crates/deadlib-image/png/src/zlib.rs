@@ -1715,20 +1715,22 @@ fn fast_block(
 const STORED_BLOCK_SIZE: usize = u16::MAX as usize;
 
 /// A zlib header with room for the worst-case encoding of `len` bytes.
-fn zlib_output(len: usize, mode: Compression) -> Result<Vec<u8>, Error> {
+fn zlib_output(mut bytes: Vec<u8>, len: usize, mode: Compression) -> Result<Vec<u8>, Error> {
     let bound = len
         .checked_add(len.div_ceil(if mode == Compression::Rle { 4 } else { 8 }))
         .and_then(|n| n.checked_add(64))
         .ok_or(Error::LimitExceeded)?;
-    let mut bytes = Vec::new();
-    reserve(&mut bytes, bound)?;
+    bytes.clear();
+    bytes
+        .try_reserve_exact(bound)
+        .map_err(|_| Error::Allocation)?;
     bytes.extend_from_slice(&[0x78, 0x01]);
     Ok(bytes)
 }
 
 /// Encode zlib with stored blocks, fixed LZ77 codes, or an analytic zero-run tree.
 pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
-    let mut bytes = zlib_output(input.len(), mode)?;
+    let mut bytes = zlib_output(Vec::new(), input.len(), mode)?;
     if mode == Compression::Stored {
         if input.is_empty() {
             bytes.extend_from_slice(&[1, 0, 0, 255, 255]);
@@ -1804,7 +1806,7 @@ impl Compressor {
     const LOOKAHEAD: usize = 3;
 
     /// `len` is the complete filtered input length.
-    pub(crate) fn new(mode: Compression, len: usize) -> Result<Self, Error> {
+    pub(crate) fn new(mode: Compression, len: usize, output: Vec<u8>) -> Result<Self, Error> {
         let mut window = Vec::new();
         let fast = mode == Compression::Fast;
         let history = if fast { matcher::WINDOW } else { 0 };
@@ -1816,7 +1818,7 @@ impl Compressor {
         Ok(Self {
             mode,
             w: Writer {
-                bytes: zlib_output(len, mode)?,
+                bytes: zlib_output(output, len, mode)?,
                 word: 0,
                 count: 0,
             },
@@ -1961,7 +1963,7 @@ mod tests {
             }
             let expected = compress(&input, Compression::Stored).unwrap();
             for chunk in [127, 4096, STORED_BLOCK_SIZE + 5] {
-                let mut compressor = Compressor::new(Compression::Stored, len).unwrap();
+                let mut compressor = Compressor::new(Compression::Stored, len, Vec::new()).unwrap();
                 for part in input.chunks(chunk) {
                     let zeros = part.iter().take_while(|&&byte| byte == 0).count();
                     compressor.push_zeros(zeros);
