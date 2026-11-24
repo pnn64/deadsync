@@ -225,6 +225,16 @@ impl Encoder {
         minimum: u8,
         mut emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
+        if pixels > 1024 {
+            let table = match &mut self.table {
+                Some(table) => {
+                    table.fill(0);
+                    table
+                }
+                empty => empty.insert([0; 8192]),
+            };
+            return Self::encode_table(rows, minimum, table, emit);
+        }
         if pixels <= 1 {
             // CLEAR, at most one literal, and EOI all use the initial width.
             let clear = 1u64 << minimum;
@@ -238,18 +248,11 @@ impl Encoder {
             bits |= (clear + 1) << used;
             return emit(bits, usize::from((used + width).div_ceil(8)));
         }
-        // Each insertion needs a new pixel, so the small table stays below half full.
-        if pixels <= 1024 {
-            return Self::encode_table(rows, minimum, &mut [0; 2048], emit);
+        // Each insertion needs a new pixel, so both tables stay below half full.
+        if pixels <= 256 {
+            return Self::encode_table(rows, minimum, &mut [0; 512], emit);
         }
-        let table = match &mut self.table {
-            Some(table) => {
-                table.fill(0);
-                table
-            }
-            empty => empty.insert([0; 8192]),
-        };
-        Self::encode_table(rows, minimum, table, emit)
+        Self::encode_table(rows, minimum, &mut [0; 2048], emit)
     }
 
     fn encode_table<'a, const SLOTS: usize>(
