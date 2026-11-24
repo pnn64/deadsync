@@ -1,6 +1,5 @@
 use crate::codec::{Header, be16, be32, reserve_chunk_run, write_chunk};
 use crate::{ColorType, EncodeOptions, Error, Image, Limits, Png, Samples, scanline, zlib};
-use std::borrow::Cow;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
@@ -125,8 +124,14 @@ pub(crate) struct Decoder<'a> {
     sequence: u32,
     default: bool,
     frames: Vec<Frame>,
-    pending: Option<(FrameControl, Cow<'a, [u8]>)>,
+    pending: Option<PendingFrame<'a>>,
     remaining: usize,
+}
+struct PendingFrame<'a> {
+    control: FrameControl,
+    start: &'a [u8],
+    wire_len: usize,
+    payload_len: usize,
 }
 fn image_bytes(h: Header) -> Result<usize, Error> {
     h.sample_bytes()
@@ -159,7 +164,8 @@ impl<'a> Decoder<'a> {
         Ok(())
     }
     fn flush(&mut self, palette: usize) -> Result<(), Error> {
-        if let Some((control, compressed)) = self.pending.take() {
+        if let Some(frame) = self.pending.take() {
+            let control = frame.control;
             let h = Header {
                 width: control.width,
                 height: control.height,
@@ -175,14 +181,20 @@ impl<'a> Decoder<'a> {
             if expected > self.limits.max_output_bytes {
                 return Err(Error::LimitExceeded);
             }
-            let (raw, _) =
-                zlib::decompress_prefix_sized(&compressed, expected).map_err(|error| {
-                    if error == Error::LimitExceeded {
-                        Error::Invalid("APNG frame data length")
-                    } else {
-                        error
-                    }
-                })?;
+            let wire = &frame.start[..frame.wire_len];
+            let raw = if wire.len() == frame.payload_len + 16 {
+                zlib::decompress_prefix_sized(&wire[12..wire.len() - 4], expected)
+                    .map(|(raw, _)| raw)
+            } else {
+                zlib::decompress_png_chunks(wire, frame.payload_len, expected)
+            }
+            .map_err(|error| {
+                if error == Error::LimitExceeded {
+                    Error::Invalid("APNG frame data length")
+                } else {
+                    error
+                }
+            })?;
             if raw.len() != expected {
                 return Err(Error::Invalid("APNG frame data length"));
             }
@@ -207,6 +219,7 @@ impl<'a> Decoder<'a> {
         &mut self,
         kind: &[u8; 4],
         data: &'a [u8],
+        wire: &'a [u8],
         seen_data: bool,
         palette: usize,
     ) -> Result<(), Error> {
@@ -254,7 +267,12 @@ impl<'a> Decoder<'a> {
                         image: None,
                     });
                 } else {
-                    self.pending = Some((control, Cow::Borrowed(&[])));
+                    self.pending = Some(PendingFrame {
+                        control,
+                        start: &[],
+                        wire_len: 0,
+                        payload_len: 0,
+                    });
                 }
             }
             b"fdAT" => {
@@ -262,26 +280,16 @@ impl<'a> Decoder<'a> {
                     return Err(Error::Invalid("fdAT length or order"));
                 }
                 self.sequence(data)?;
-                let (_, bytes) = self
+                let frame = self
                     .pending
                     .as_mut()
                     .ok_or(Error::Invalid("fdAT without frame control"))?;
-                let payload = &data[4..];
-                match bytes {
-                    Cow::Owned(joined) => {
-                        crate::reserve(joined, payload.len())?;
-                        joined.extend_from_slice(payload);
+                if data.len() > 4 {
+                    if frame.payload_len == 0 {
+                        frame.start = wire;
                     }
-                    Cow::Borrowed([]) => *bytes = Cow::Borrowed(payload),
-                    Cow::Borrowed(first) if !payload.is_empty() => {
-                        // The two payloads are disjoint slices of the input PNG.
-                        let mut joined = Vec::new();
-                        crate::reserve(&mut joined, first.len() + payload.len())?;
-                        joined.extend_from_slice(first);
-                        joined.extend_from_slice(payload);
-                        *bytes = Cow::Owned(joined);
-                    }
-                    Cow::Borrowed(_) => {}
+                    frame.wire_len = frame.start.len() - wire.len() + data.len() + 12;
+                    frame.payload_len += data.len() - 4;
                 }
             }
             _ => unreachable!(),

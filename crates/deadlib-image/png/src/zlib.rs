@@ -54,14 +54,14 @@ impl<'a> Bits<'a> {
             prior: 0,
         }
     }
-    fn idat(chunks: &'a [u8]) -> Self {
+    fn png_chunks(chunks: &'a [u8]) -> Self {
         Self {
             chunks,
             ..Self::new(&[])
         }
     }
-    // Only the buffered PNG parser supplies this wire span. Its consecutive
-    // IDAT framing and every CRC have already been verified.
+    // The buffered PNG parser has already checked the image-data framing
+    // and CRCs. Ancillary chunks can appear between fdAT payloads.
     #[cold]
     #[inline(never)]
     fn advance(&mut self) -> bool {
@@ -70,11 +70,17 @@ impl<'a> Bits<'a> {
             if len > self.chunks.len() - 12 {
                 return false;
             }
+            let (chunk, rest) = self.chunks.split_at(12 + len);
+            self.chunks = rest;
+            let offset = match &chunk[4..8] {
+                b"IDAT" => 8,
+                b"fdAT" => 12,
+                _ => continue,
+            };
             self.prior += self.input.len();
-            self.input = &self.chunks[8..8 + len];
-            self.chunks = &self.chunks[12 + len..];
+            self.input = &chunk[offset..8 + len];
             self.pos = 0;
-            if len != 0 {
+            if !self.input.is_empty() {
                 return true;
             }
         }
@@ -1057,7 +1063,7 @@ pub(crate) fn decompress_prefix_sized(
     decompress_impl(input, size, true)
 }
 
-pub(crate) fn decompress_idat(
+pub(crate) fn decompress_png_chunks(
     input: &[u8],
     payload_len: usize,
     size: usize,
@@ -1065,7 +1071,7 @@ pub(crate) fn decompress_idat(
     if payload_len < 6 {
         return Err(Error::Truncated);
     }
-    decompress_bits::<true>(Bits::idat(input), size, true).map(|(output, _)| output)
+    decompress_bits::<true>(Bits::png_chunks(input), size, true).map(|(output, _)| output)
 }
 
 fn decompress_impl(input: &[u8], limit: usize, sized: bool) -> Result<(Vec<u8>, usize), Error> {
@@ -2090,12 +2096,13 @@ mod tests {
                         framed.extend_from_slice(&[0; 4]);
                     }
                     assert_eq!(
-                        decompress_idat(&framed, bytes.len(), raw.len()).unwrap(),
+                        decompress_png_chunks(&framed, bytes.len(), raw.len()).unwrap(),
                         raw,
                         "depth={depth} offset={offset} fragment={fragment}"
                     );
                     assert_eq!(
-                        decompress_bits::<false>(Bits::idat(&framed), raw.len(), true).unwrap(),
+                        decompress_bits::<false>(Bits::png_chunks(&framed), raw.len(), true)
+                            .unwrap(),
                         (raw.clone(), bytes.len()),
                         "portable depth={depth} offset={offset} fragment={fragment}"
                     );
@@ -2282,13 +2289,13 @@ mod tests {
                     wire.extend_from_slice(&[0; 4]);
                 }
                 assert_eq!(
-                    decompress_idat(&wire, case.bytes.len(), raw.len()).unwrap(),
+                    decompress_png_chunks(&wire, case.bytes.len(), raw.len()).unwrap(),
                     raw,
                     "{} fragment={fragment}",
                     case.name
                 );
                 assert_eq!(
-                    decompress_bits::<false>(Bits::idat(&wire), raw.len(), true).unwrap(),
+                    decompress_bits::<false>(Bits::png_chunks(&wire), raw.len(), true).unwrap(),
                     (raw.clone(), case.bytes.len()),
                     "portable {} fragment={fragment}",
                     case.name
@@ -2382,12 +2389,12 @@ mod tests {
                     framed.extend_from_slice(&[0; 4]);
                 }
                 assert_eq!(
-                    decompress_idat(&framed, bytes.len(), raw.len()).unwrap(),
+                    decompress_png_chunks(&framed, bytes.len(), raw.len()).unwrap(),
                     raw,
                     "padding={ones} fragment={fragment}"
                 );
                 assert_eq!(
-                    decompress_bits::<false>(Bits::idat(&framed), raw.len(), true).unwrap(),
+                    decompress_bits::<false>(Bits::png_chunks(&framed), raw.len(), true).unwrap(),
                     (raw.clone(), bytes.len()),
                     "portable padding={ones} fragment={fragment}"
                 );
@@ -2545,12 +2552,13 @@ mod tests {
                     for slack in [0, 258] {
                         let limit = raw.len() + slack;
                         assert_eq!(
-                            decompress_idat(&framed, bytes.len(), limit).unwrap(),
+                            decompress_png_chunks(&framed, bytes.len(), limit).unwrap(),
                             raw,
                             "stored={stored_len} mixed={mixed} fragment={fragment} slack={slack}"
                         );
                         assert_eq!(
-                            decompress_bits::<false>(Bits::idat(&framed), limit, true).unwrap(),
+                            decompress_bits::<false>(Bits::png_chunks(&framed), limit, true)
+                                .unwrap(),
                             (raw.clone(), bytes.len())
                         );
                     }

@@ -82,7 +82,7 @@ fn main() {
     });
     measure("inflate IDAT", || {
         black_box(
-            zlib::decompress_idat(black_box(&bytes[start..end]), compressed.len(), raw.len())
+            zlib::decompress_png_chunks(black_box(&bytes[start..end]), compressed.len(), raw.len())
                 .unwrap(),
         );
     });

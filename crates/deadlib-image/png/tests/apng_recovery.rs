@@ -649,6 +649,13 @@ fn all_truncations_io_errors_and_multiple_fdat_boundaries() {
             chunks.insert(last + 1, Chunk::new(*b"fdAT", second));
             if let Some(part) = bad {
                 chunks[last + part].bad_crc = true;
+            } else {
+                chunks[last + 1].data[..4].copy_from_slice(&(sequence + 2).to_be_bytes());
+                chunks.insert(
+                    last + 1,
+                    Chunk::new(*b"fdAT", (sequence + 1).to_be_bytes().to_vec()),
+                );
+                chunks.insert(last + 1, Chunk::new(*b"vpAg", vec![3, 1, 4]));
             }
             let wire = fixtures::file(&chunks);
             let png = decode_with_options(&wire, &recovery()).unwrap();
@@ -656,6 +663,8 @@ fn all_truncations_io_errors_and_multiple_fdat_boundaries() {
                 assert_static(&png, &fixture);
             } else {
                 assert_eq!(png, decode(&wire).unwrap());
+                let metadata = png.ancillary.iter().find(|c| &c.kind == b"vpAg").unwrap();
+                assert_eq!(metadata.data, [3, 1, 4]);
             }
             for fragment in [1, 2, 7, wire.len()] {
                 assert_eq!(

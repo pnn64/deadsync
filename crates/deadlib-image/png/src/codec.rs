@@ -311,7 +311,7 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
         }
         match &kind {
             b"acTL" | b"fcTL" | b"fdAT" => {
-                animation_decoder.chunk(&kind, data, seen_data, palette.len())?
+                animation_decoder.chunk(&kind, data, chunk_start, seen_data, palette.len())?
             }
             b"IHDR" => return Err(Error::Invalid("duplicate IHDR")),
             b"PLTE" => {
@@ -404,7 +404,7 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
         options.metadata_policy,
     )?;
     // PNG Third Edition 11.2.3 recommends ignoring unused bytes in final IDAT.
-    let raw = zlib::decompress_idat(
+    let raw = zlib::decompress_png_chunks(
         &compressed_start[..compressed_wire_len],
         compressed_bytes,
         expected,
