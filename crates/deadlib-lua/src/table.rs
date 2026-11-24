@@ -462,6 +462,18 @@ impl Table {
     pub(crate) fn array_slice(&self, first: i64, last: i64) -> Option<&[Value]> {
         self.array.get(array_range(first, last)?)
     }
+
+    pub(crate) fn clear_array_slots(&mut self, start: usize, mut mask: u64) {
+        if mask == u64::MAX {
+            self.array[start..start + 64].fill(Value::Nil);
+            return;
+        }
+        while mask != 0 {
+            let index = start + mask.trailing_zeros() as usize;
+            self.array[index] = Value::Nil;
+            mask &= mask - 1;
+        }
+    }
     /// Insert at the start of a scalar array range or remove its first value.
     /// Existing scalar slots can be overwritten without allocation or GC work.
     pub(crate) fn shift_scalar_array(

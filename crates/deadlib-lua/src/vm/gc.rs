@@ -1553,16 +1553,16 @@ impl Vm {
                 continue;
             }
             let mut cursor = 0;
+            let mut erase = [Value::Nil; 64];
             loop {
-                let mut erase = [Value::Nil; 64];
+                let mut dead_array = 0u64;
                 let mut count = 0;
                 let (next, array, pairs) = self.tables[index].trace_slice(cursor, erase.len());
                 // Implicit array keys are numbers and cannot be collected.
                 if weak_values {
                     for (offset, &value) in array.iter().enumerate() {
                         if !self.marked_weak_value(value, false) {
-                            erase[count] = Value::Number(((cursor >> 1) + offset + 1) as f64);
-                            count += 1;
+                            dead_array |= 1u64 << offset;
                         }
                     }
                 }
@@ -1577,11 +1577,11 @@ impl Vm {
                 // Deleting an existing key neither allocates nor compacts its
                 // physical slot. The next cursor therefore remains valid across
                 // array holes, hash tombstones and the array/hash boundary.
+                let table = &mut self.tables[index];
+                table.clear_array_slots(cursor >> 1, dead_array);
                 for key in &erase[..count] {
-                    self.tables[index]
-                        .set(*key, Value::Nil)
-                        .expect("existing key");
-                    self.tables[index].retire_native_key(*key);
+                    table.set(*key, Value::Nil).expect("existing key");
+                    table.retire_native_key(*key);
                 }
                 let Some(next) = next else { break };
                 cursor = next;
