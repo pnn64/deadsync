@@ -213,47 +213,30 @@ impl<'a> Iterator for Fragments<'a> {
     type Item = Fragment<'a>;
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        let &first = self.lacing.first()?;
-        let (count, len, ends_packet) = if first < 255 {
-            (1, first as usize, true)
-        } else if let Some(&second) = self.lacing.get(1)
-            && second < 255
-        {
-            (2, 255 + second as usize, true)
-        } else if let Some(&third) = self.lacing.get(2)
-            && third < 255
-        {
-            (3, 2 * 255 + third as usize, true)
-        } else if let Some(&fourth) = self.lacing.get(3)
-            && fourth < 255
-        {
-            (4, 3 * 255 + fourth as usize, true)
-        } else if self.lacing.len() <= 4 {
-            (self.lacing.len(), self.lacing.len() * 255, false)
-        } else {
-            let count = if self.lacing.len() < 8 {
-                // The four inline probes already established this prefix is all 255.
-                let tail = &self.lacing[4..];
-                4 + tail
-                    .iter()
-                    .position(|&n| n < 255)
-                    .map_or(tail.len(), |n| n + 1)
-            } else {
-                fragment_segment_count(self.lacing)
-            };
-            let last = self.lacing[count - 1];
-            // Every segment before the terminator is exactly 255 bytes.
-            (count, (count - 1) * 255 + last as usize, last < 255)
+        let (rest, len, ends_packet) = match self.lacing {
+            [] => return None,
+            [len @ 0..=254, rest @ ..] => (rest, *len as usize, true),
+            [255, len @ 0..=254, rest @ ..] => (rest, 255 + *len as usize, true),
+            lacing => {
+                let count = fragment_segment_count(lacing);
+                let last = lacing[count - 1];
+                // Every segment before the terminator is exactly 255 bytes.
+                (
+                    &lacing[count..],
+                    (count - 1) * 255 + last as usize,
+                    last < 255,
+                )
+            }
         };
-        let fragment = Fragment {
-            data: &self.body[..len],
-            starts_packet: !self.continued,
+        let (data, body) = self.body.split_at(len);
+        self.body = body;
+        self.lacing = rest;
+        // Only the first fragment can continue a packet from the previous page.
+        Some(Fragment {
+            data,
+            starts_packet: !core::mem::take(&mut self.continued),
             ends_packet,
-        };
-        self.lacing = &self.lacing[count..];
-        self.body = &self.body[len..];
-        self.continued = !ends_packet;
-        Some(fragment)
+        })
     }
 }
 
