@@ -14,6 +14,7 @@ mod select_music;
 mod selection;
 mod stage;
 mod stage_presentation;
+mod startup;
 mod training_pad;
 mod tutorial;
 
@@ -29,6 +30,7 @@ pub use options::{StepManiaPlayerOptions, StepManiaSystemOptions};
 pub use select_music::StepManiaMusicWheel;
 pub use stage::StepManiaStageCard;
 pub use stage_presentation::StepManiaStagePresentation;
+pub use startup::StepManiaStartup;
 
 pub struct StepManiaTheme;
 

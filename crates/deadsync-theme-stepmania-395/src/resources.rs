@@ -121,6 +121,7 @@ impl ThemeResources for StepManiaTheme {
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("loading-splash"),
                 png!("attract-bullets"),
                 png!("attract-demo"),
                 png!("attract-ranking"),

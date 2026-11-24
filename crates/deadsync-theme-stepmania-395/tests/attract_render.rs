@@ -14,11 +14,13 @@ use deadlib_present::{
     space::{self, Metrics},
 };
 use deadlib_render::{BackendType, PresentModePolicy, create_backend};
+use deadsync_theme::startup::StartupPresentation;
 use deadsync_theme::{
     ThemeResources,
     attract::AttractPresentation,
     views::{AttractRecord, AttractRecords},
 };
+use deadsync_theme_stepmania_395::StepManiaStartup;
 use deadsync_theme_stepmania_395::{StepManiaIntro, StepManiaTheme};
 use winit::{
     dpi::PhysicalSize, event_loop::EventLoop, platform::windows::EventLoopBuilderExtWindows,
@@ -87,6 +89,28 @@ fn native_attract_captures() {
     }
     let output = root.join("target/native-395-attract-captures");
     std::fs::create_dir_all(&output).unwrap();
+    let progress = deadsync_assets::progress::LibraryLoadView {
+        phase: deadsync_assets::progress::ContentReloadPhase::Songs,
+        done: 47,
+        total: 128,
+        line2: "Dance Pack".into(),
+        line3: "Quartz".into(),
+        finished: false,
+        can_skip_replaygain: false,
+        started_at: std::time::Instant::now(),
+        phase_started_at: std::time::Instant::now(),
+    };
+    let mut loading = Vec::new();
+    StepManiaStartup::default().push_loading(&mut loading, Some(&progress), &Default::default());
+    capture_actors(
+        "loading",
+        &loading,
+        0.0,
+        &output,
+        &metrics,
+        &mut backend,
+        &assets,
+    );
     let mut intro = StepManiaIntro::default();
     for (name, delta) in [("company", 3.0), ("logo", 9.0)] {
         intro.advance(delta);
@@ -156,12 +180,32 @@ fn capture(
 ) {
     let mut actors: Vec<Actor> = Vec::new();
     intro.push_actors(&mut actors, None);
-    let frame = compose::build_screen_with_texture_context(
+    capture_actors(
+        name,
         &actors,
+        intro.playback_time(),
+        output,
+        metrics,
+        backend,
+        assets,
+    );
+}
+
+fn capture_actors(
+    name: &str,
+    actors: &[Actor],
+    elapsed: f32,
+    output: &std::path::Path,
+    metrics: &Metrics,
+    backend: &mut deadlib_render::Backend,
+    assets: &AssetManager,
+) {
+    let frame = compose::build_screen_with_texture_context(
+        actors,
         [0.0, 0.0, 0.0, 1.0],
         metrics,
         assets.fonts(),
-        intro.playback_time(),
+        elapsed,
         assets.texture_context(),
     );
     assert!(!frame.ops.is_empty(), "{name} has no rendered actors");

@@ -7615,6 +7615,7 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
         ("SelectionPresentation", "StepManiaMusicWheel"),
         ("SystemOptionsPresentation", "OpenItgSystemOptions"),
         ("AttractPresentation", "OpenItgIntro"),
+        ("StartupPresentation", "StepManiaStartup"),
         ("MusicWheelPresentation", "StepManiaMusicWheel"),
         ("PlayerOptionsLayout", "StepManiaPlayerOptions"),
         ("SystemOptionsPresentation", "StepManiaSystemOptions"),

@@ -137,6 +137,70 @@ fn native_intro_advances_from_company_to_logo_then_title() {
 }
 
 #[test]
+fn native_startup_presents_real_library_progress_and_keeps_the_original_intro() {
+    use deadsync_assets::progress::{ContentReloadPhase, LibraryLoadView};
+    use deadsync_theme::startup::StartupPresentation;
+    use deadsync_theme_stepmania_395::StepManiaStartup;
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        640.0, 480.0,
+    ));
+    let now = Instant::now();
+    let mut progress = LibraryLoadView {
+        phase: ContentReloadPhase::Songs,
+        done: 47,
+        total: 128,
+        line2: "Dance Pack".into(),
+        line3: "Quartz".into(),
+        finished: false,
+        can_skip_replaygain: false,
+        started_at: now,
+        phase_started_at: now,
+    };
+    let mut startup = StepManiaStartup::default();
+    let mut actors = Vec::new();
+    startup.push_loading(&mut actors, Some(&progress), &Default::default());
+    assert!(
+        actors
+            .iter()
+            .any(|actor| matches!(actor, Actor::Sprite { source, .. }
+        if source.texture_key() == Some("stepmania-395/loading-splash")))
+    );
+    for expected in ["Loading songs (47 of 128)...", "Dance Pack", "Quartz"] {
+        assert!(
+            actors
+                .iter()
+                .any(|actor| matches!(actor, Actor::Text { content, .. }
+            if content.as_str() == expected)),
+            "missing progress: {expected}"
+        );
+    }
+    progress.phase = ContentReloadPhase::ReplayGain;
+    progress.can_skip_replaygain = true;
+    actors.clear();
+    startup.push_loading(&mut actors, Some(&progress), &Default::default());
+    assert!(
+        actors
+            .iter()
+            .any(|actor| matches!(actor, Actor::Text { content, .. }
+        if content.as_str() == "Press Start or Back to skip"))
+    );
+    assert!(matches!(startup.advance_intro(8.0), ThemeEffect::None));
+    assert!(matches!(
+        startup.advance_intro(10.0),
+        ThemeEffect::NavigateNoFade(Screen::Menu)
+    ));
+    startup.reset_intro(0);
+    actors.clear();
+    startup.push_intro(&mut actors, &Default::default());
+    assert!(
+        actors
+            .iter()
+            .any(|actor| matches!(actor, Actor::Sprite { source, .. }
+        if source.texture_key() == Some("stepmania-395/company")))
+    );
+}
+
+#[test]
 fn idle_attract_runs_the_tutorial_silent_versus_demo_and_real_chart_rankings() {
     use deadsync_theme::views::{AttractRecord, AttractRecords};
     deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(

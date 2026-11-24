@@ -2034,6 +2034,7 @@ dependencies = [
  "deadlib-platform",
  "deadlib-present",
  "deadlib-render",
+ "deadsync-assets",
  "deadsync-config",
  "deadsync-core",
  "deadsync-input",
