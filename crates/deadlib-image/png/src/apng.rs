@@ -350,9 +350,9 @@ pub(crate) fn write_control(out: &mut Vec<u8>, png: &Png) -> Result<(), Error> {
         let mut data = [0; 8];
         data[..4].copy_from_slice(&(a.frames.len() as u32).to_be_bytes());
         data[4..].copy_from_slice(&a.plays.to_be_bytes());
-        write_chunk(out, b"acTL", &data)?;
+        write_chunk(out, b"acTL", [&data])?;
         if a.default_is_frame {
-            write_chunk(out, b"fcTL", &a.frames[0].control.wire(0))?;
+            write_chunk(out, b"fcTL", [&a.frames[0].control.wire(0)])?;
         }
     }
     Ok(())
@@ -368,7 +368,7 @@ pub(crate) fn write_frames(
             if sequence > 0x7fff_ffff {
                 return Err(Error::LimitExceeded);
             }
-            write_chunk(out, b"fcTL", &f.control.wire(sequence))?;
+            write_chunk(out, b"fcTL", [&f.control.wire(sequence)])?;
             sequence += 1;
             let image = f
                 .image
@@ -376,16 +376,11 @@ pub(crate) fn write_frames(
                 .ok_or(Error::Invalid("missing APNG frame"))?;
             let compressed = crate::stream::compress_image(image, options)?;
             let chunk_size = options.idat_chunk_size.min(0x7fff_fffb);
-            let mut payload = Vec::new();
             for part in compressed.chunks(chunk_size) {
                 if sequence > 0x7fff_ffff {
                     return Err(Error::LimitExceeded);
                 }
-                payload.clear();
-                crate::reserve(&mut payload, part.len() + 4)?;
-                payload.extend_from_slice(&sequence.to_be_bytes());
-                payload.extend_from_slice(part);
-                write_chunk(out, b"fdAT", &payload)?;
+                write_chunk(out, b"fdAT", [&sequence.to_be_bytes(), part])?;
                 sequence += 1;
             }
         }

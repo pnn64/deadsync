@@ -450,25 +450,37 @@ pub(crate) fn validate_pixels(png: &Png, policy: PalettePolicy) -> Result<(), Er
     Ok(())
 }
 
-pub(crate) fn write_chunk(output: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) -> Result<(), Error> {
-    if data.len() > 0x7fff_ffff {
+pub(crate) fn write_chunk<const N: usize>(
+    output: &mut Vec<u8>,
+    kind: &[u8; 4],
+    parts: [&[u8]; N],
+) -> Result<(), Error> {
+    let len = parts
+        .iter()
+        .try_fold(0usize, |len, data| len.checked_add(data.len()))
+        .ok_or(Error::LimitExceeded)?;
+    if len > 0x7fff_ffff {
         return Err(Error::LimitExceeded);
     }
-    reserve(
-        output,
-        data.len().checked_add(12).ok_or(Error::LimitExceeded)?,
-    )?;
-    output.extend_from_slice(&(data.len() as u32).to_be_bytes());
+    reserve(output, len + 12)?;
+    output.extend_from_slice(&(len as u32).to_be_bytes());
+    let start = output.len();
     output.extend_from_slice(kind);
-    output.extend_from_slice(data);
-    output.extend_from_slice(&crc32(&[kind, data]).to_be_bytes());
+    for part in parts {
+        output.extend_from_slice(part);
+    }
+    output.extend_from_slice(&crc32(&[&output[start..]]).to_be_bytes());
     Ok(())
 }
 
 fn write_ancillary(out: &mut Vec<u8>, png: &Png, position: ChunkPosition) -> Result<(), Error> {
     for c in png.ancillary.iter().filter(|c| c.position == position) {
         if ancillary_writable(c)? {
-            write_chunk(out, &c.kind, &crate::metadata::encoding_data(c, &png.image))?;
+            write_chunk(
+                out,
+                &c.kind,
+                [&crate::metadata::encoding_data(c, &png.image)],
+            )?;
         }
     }
     Ok(())
@@ -546,20 +558,20 @@ pub(crate) fn write_transparency(
 pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     let header = validate_encoding(png, options)?;
     let mut out = SIGNATURE.to_vec();
-    write_chunk(&mut out, b"IHDR", &header.wire())?;
+    write_chunk(&mut out, b"IHDR", [&header.wire()])?;
     write_ancillary(&mut out, png, ChunkPosition::BeforePalette)?;
     if !png.palette.is_empty() {
-        write_chunk(&mut out, b"PLTE", png.palette.as_flattened())?;
+        write_chunk(&mut out, b"PLTE", [png.palette.as_flattened()])?;
     }
-    write_transparency(png, |data| write_chunk(&mut out, b"tRNS", data))?;
+    write_transparency(png, |data| write_chunk(&mut out, b"tRNS", [data]))?;
     write_ancillary(&mut out, png, ChunkPosition::BeforeData)?;
     crate::apng::write_control(&mut out, png)?;
     let compressed = crate::stream::compress_image(&png.image, options)?;
     for part in compressed.chunks(options.idat_chunk_size) {
-        write_chunk(&mut out, b"IDAT", part)?;
+        write_chunk(&mut out, b"IDAT", [part])?;
     }
     crate::apng::write_frames(&mut out, png, options)?;
     write_ancillary(&mut out, png, ChunkPosition::AfterData)?;
-    write_chunk(&mut out, b"IEND", &[])?;
+    write_chunk(&mut out, b"IEND", [])?;
     Ok(out)
 }
