@@ -81,37 +81,6 @@ impl Vm {
                 self.registers[call] = Value::Number(size);
                 Some(1)
             }
-            // Ranges with an explicit end, coercion, and errors use ordinary dispatch.
-            strings::STR_BYTE
-                if count == 2
-                    && let (Value::String(source), Value::Number(index)) =
-                        (self.registers[call + 1], self.registers[call + 2]) =>
-            {
-                let bytes = self.strings.bytes.get(source.0)?;
-                let offset =
-                    (strings::relative(lua_integer(index), bytes.len()) as usize).wrapping_sub(1);
-                if let Some(&byte) = bytes.get(offset) {
-                    self.registers[call] = Value::Number(f64::from(byte));
-                    Some(1)
-                } else {
-                    Some(0)
-                }
-            }
-            strings::STR_LEN | strings::STR_BYTE
-                if count == 1
-                    && let Value::String(source) = self.registers[call + 1] =>
-            {
-                let bytes = self.strings.bytes.get(source.0)?;
-                let number = if id == strings::STR_LEN {
-                    bytes.len() as f64
-                } else if let Some(&byte) = bytes.first() {
-                    f64::from(byte)
-                } else {
-                    return Some(0);
-                };
-                self.registers[call] = Value::Number(number);
-                Some(1)
-            }
             IPAIRS_STEP if count >= 2 => {
                 let (Value::Table(table), Value::Number(previous)) =
                     (self.registers[call + 1], self.registers[call + 2])
@@ -147,6 +116,39 @@ impl Vm {
             }
             _ => None,
         }
+    }
+
+    #[inline(never)]
+    pub(super) fn try_fast_string(&mut self, id: u64, call: usize, count: usize) -> Option<usize> {
+        if !matches!(
+            (id, count),
+            (strings::STR_LEN, 1) | (strings::STR_BYTE, 1 | 2)
+        ) || !self.sort_fast_context()
+        {
+            return None;
+        }
+        let Value::String(source) = self.registers[call + 1] else {
+            return None;
+        };
+        let bytes = self.strings.bytes.get(source.0)?;
+        let number = if id == strings::STR_LEN {
+            bytes.len() as f64
+        } else {
+            let offset = if count == 1 {
+                0
+            } else {
+                let Value::Number(index) = self.registers[call + 2] else {
+                    return None;
+                };
+                (strings::relative(lua_integer(index), bytes.len()) as usize).wrapping_sub(1)
+            };
+            let Some(&byte) = bytes.get(offset) else {
+                return Some(0);
+            };
+            f64::from(byte)
+        };
+        self.registers[call] = Value::Number(number);
+        Some(1)
     }
 
     #[inline(never)]
