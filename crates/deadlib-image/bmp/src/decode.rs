@@ -94,14 +94,21 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                         indices.extend_from_slice(row);
                     }
                 }
+            } else if header.info.bit_depth == 4 {
+                let pairs = width / 2;
+                let has_tail = !width.is_multiple_of(2);
+                for row in rows {
+                    let start = indices.len();
+                    indices.extend(row[..pairs].iter().flat_map(|&byte| [byte >> 4, byte & 15]));
+                    if has_tail {
+                        indices.push(row[pairs] >> 4);
+                    }
+                    validate_row(&indices[start..])?;
+                }
             } else {
                 indices.resize(header.pixel_count, 0);
                 for (row, output) in rows.zip(indices.chunks_exact_mut(width)) {
-                    if header.info.bit_depth == 1 {
-                        unpack_indices::<8>(row, output);
-                    } else {
-                        unpack_indices::<2>(row, output);
-                    }
+                    unpack_one_bit_indices(row, output);
                     validate_row(output)?;
                 }
             }
@@ -154,26 +161,19 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
     })
 }
 
-// A byte contains N indices, most-significant first. Expand whole groups at a
-// time, and handle the partial final byte without decoding its unused low bits.
-fn unpack_indices<const N: usize>(row: &[u8], output: &mut [u8]) {
-    let index = |byte: u8, i| (byte >> (8 - (i + 1) * (8 / N))) & (u8::MAX >> (8 - 8 / N));
-    let (groups, tail) = output.as_chunks_mut::<N>();
+fn unpack_one_bit_indices(row: &[u8], output: &mut [u8]) {
+    let (groups, tail) = output.as_chunks_mut::<8>();
     for (indices, &byte) in groups.iter_mut().zip(row) {
-        if N == 8 {
-            // Copy the byte at nine-bit intervals. The high bit of each
-            // output byte then holds the next source bit, from MSB to LSB.
-            let word = u64::from(byte).wrapping_mul(0x8040_2010_0804_0201);
-            let bits = (word >> 7) & 0x0101_0101_0101_0101;
-            indices.copy_from_slice(&bits.to_le_bytes());
-        } else {
-            *indices = std::array::from_fn(|i| index(byte, i));
-        }
+        // Copy the byte at nine-bit intervals. The high bit of each output
+        // byte then holds the next source bit, from MSB to LSB.
+        let word = u64::from(byte).wrapping_mul(0x8040_2010_0804_0201);
+        let bits = (word >> 7) & 0x0101_0101_0101_0101;
+        *indices = bits.to_le_bytes();
     }
     if !tail.is_empty() {
         let byte = row[groups.len()];
         for (i, output) in tail.iter_mut().enumerate() {
-            *output = index(byte, i);
+            *output = (byte >> (7 - i)) & 1;
         }
     }
 }
