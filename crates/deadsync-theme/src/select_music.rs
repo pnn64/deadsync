@@ -20,6 +20,8 @@ pub struct WheelBannerFade<'a> {
 #[derive(Clone, Copy)]
 pub struct SelectMusicWheelRow<'a> {
     pub title: &'a str,
+    pub subtitle: &'a str,
+    pub artist: &'a str,
     /// Sections carry a song count. A song has no count.
     pub song_count: Option<usize>,
     pub expanded: bool,

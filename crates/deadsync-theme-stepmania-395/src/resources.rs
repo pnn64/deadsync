@@ -5,6 +5,8 @@ use crate::StepManiaTheme;
 
 pub(crate) const TITLE_FONT: &str = "stepmania-395/title";
 pub(crate) const NORMAL_FONT: &str = "stepmania-395/normal";
+pub(crate) const WHEEL_FONT: &str = "stepmania-395/wheel";
+pub(crate) const ITEM_FONT: &str = "stepmania-395/options";
 
 macro_rules! png {
     ($name:literal) => {
@@ -27,12 +29,50 @@ impl ThemeResources for StepManiaTheme {
                 UiCue::Confirm,
                 UiSound::File("assets/media/stepmania-395/start.ogg"),
             ),
+            (
+                UiCue::Wheel,
+                UiSound::File("assets/media/stepmania-395/wheel.ogg"),
+            ),
+            (
+                UiCue::NextRow,
+                UiSound::File("assets/media/stepmania-395/next-row.ogg"),
+            ),
+            (
+                UiCue::PreviousRow,
+                UiSound::File("assets/media/stepmania-395/previous-row.ogg"),
+            ),
+            (
+                UiCue::Value,
+                UiSound::File("assets/media/stepmania-395/value.ogg"),
+            ),
+            (
+                UiCue::Easier,
+                UiSound::File("assets/media/stepmania-395/difficulty.ogg"),
+            ),
+            (
+                UiCue::Harder,
+                UiSound::File("assets/media/stepmania-395/difficulty.ogg"),
+            ),
+            (
+                UiCue::OpenPlayerOptions,
+                UiSound::File("assets/media/stepmania-395/options.ogg"),
+            ),
         ],
     };
 
     fn asset_manifest() -> ThemeAssetManifest<impl Iterator<Item = TextureAssetSpec>> {
         ThemeAssetManifest {
             fonts: &[
+                FontAssetSpec {
+                    name: ITEM_FONT,
+                    ini_path: "assets/fonts/stepmania-395/_Arial 14 shadow.ini",
+                    fallback_font_name: Some(NORMAL_FONT),
+                },
+                FontAssetSpec {
+                    name: WHEEL_FONT,
+                    ini_path: "assets/fonts/stepmania-395/_shared2.ini",
+                    fallback_font_name: Some(TITLE_FONT),
+                },
                 FontAssetSpec {
                     name: TITLE_FONT,
                     ini_path: "assets/fonts/stepmania-395/_shared1.ini",
@@ -46,6 +86,38 @@ impl ThemeResources for StepManiaTheme {
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("options-page"),
+                png!("options-cursor"),
+                png!("options-underline"),
+                png!("options-header"),
+                png!("options-icon"),
+                png!("footer"),
+                png!("music-background"),
+                png!("music-song"),
+                png!("music-section"),
+                png!("music-highlight"),
+                png!("music-banner-frame"),
+                png!("music-banner-mask"),
+                png!("music-fallback"),
+                png!("music-difficulty"),
+                png!("music-difficulty-p1"),
+                png!("music-difficulty-p2"),
+                png!("music-meter-p1"),
+                png!("music-meter-p2"),
+                png!("music-feet"),
+                png!("music-options"),
+                png!("music-header"),
+                png!("music-radar"),
+                png!("music-radar-labels"),
+                png!("music-difficulties"),
+                png!("music-stage-1"),
+                png!("music-stage-2"),
+                png!("music-stage-3"),
+                png!("music-stage-4"),
+                png!("music-stage-5"),
+                png!("music-stage-6"),
+                png!("music-stage-event"),
+                png!("music-stage-final"),
                 png!("stage-1"),
                 png!("stage-2"),
                 png!("stage-3"),

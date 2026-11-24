@@ -7613,6 +7613,9 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
         ("SelectionPresentation", "OpenItgSelectionPresentation"),
         ("SystemOptionsPresentation", "OpenItgSystemOptions"),
         ("AttractPresentation", "OpenItgIntro"),
+        ("MusicWheelPresentation", "StepManiaMusicWheel"),
+        ("PlayerOptionsLayout", "StepManiaPlayerOptions"),
+        ("SystemOptionsPresentation", "StepManiaSystemOptions"),
     ] {
         assert!(mounting.contains(interface));
         assert!(registry.contains(implementation));
@@ -7624,6 +7627,8 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
         for concrete in [
             "deadsync_theme_openitg",
             "ThemeFlag::OpenItg",
+            "deadsync_theme_stepmania_395",
+            "ThemeFlag::StepMania395",
         ] {
             assert!(
                 !source.contains(concrete),

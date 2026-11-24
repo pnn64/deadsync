@@ -949,6 +949,8 @@ mod tests {
     fn view(banner: &Arc<str>, prompt: SelectMusicPrompt) -> SelectMusicView<'_> {
         let mut rows = [None; SELECT_MUSIC_WHEEL_ROWS];
         rows[SELECT_MUSIC_WHEEL_ROWS / 2] = Some(SelectMusicWheelRow {
+            subtitle: "",
+            artist: "",
             title: "Track",
             song_count: None,
             expanded: false,

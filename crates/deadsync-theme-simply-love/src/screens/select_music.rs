@@ -2595,18 +2595,28 @@ pub(super) fn select_wheel_rows<'a>(
         Some(match entry {
             MusicWheelEntry::Song(song) => SelectMusicWheelRow {
                 title: song.display_title(translated),
+                subtitle: song.display_subtitle(translated),
+                artist: if translated && !song.translit_artist.trim().is_empty() {
+                    &song.translit_artist
+                } else {
+                    &song.artist
+                },
                 song_count: None,
                 expanded: false,
                 action: None,
             },
             MusicWheelEntry::PackHeader { name, song_count, .. } => SelectMusicWheelRow {
                 title: name,
+                subtitle: "",
+                artist: "",
                 song_count: Some(*song_count),
                 expanded: is_expanded(entry),
                 action: None,
             },
             MusicWheelEntry::Random(action) => SelectMusicWheelRow {
                 title: "",
+                subtitle: "",
+                artist: "",
                 song_count: None,
                 expanded: false,
                 action: Some(match action {

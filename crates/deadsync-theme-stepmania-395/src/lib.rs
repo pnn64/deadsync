@@ -2,18 +2,53 @@
 
 mod intro;
 mod menu;
+mod options;
 mod presentation;
 mod resources;
+mod select_music;
 mod stage;
 
 use deadlib_present::actors::Actor;
-use deadsync_theme::{Screen, Theme, ThemeScreenId, ThemeTransitions, TransitionKind};
+use deadsync_theme::{
+    Screen, Theme, ThemeScreenId, ThemeTransitionAudio, ThemeTransitions, TransitionKind,
+    TransitionMusic,
+};
 
 pub use intro::StepManiaIntro;
 pub use menu::MenuState;
+pub use options::{StepManiaPlayerOptions, StepManiaSystemOptions};
+pub use select_music::StepManiaMusicWheel;
 pub use stage::StepManiaStageCard;
 
 pub struct StepManiaTheme;
+
+impl ThemeTransitionAudio for StepManiaTheme {
+    type AudioContext = bool;
+
+    fn transition_audio(
+        _from: Screen,
+        to: Screen,
+        _kind: TransitionKind,
+        music_enabled: bool,
+    ) -> TransitionMusic {
+        match to {
+            Screen::Menu | Screen::Options | Screen::Init => TransitionMusic::Stop,
+            Screen::SelectProfile | Screen::SelectStyle | Screen::SelectPlayMode
+                if music_enabled =>
+            {
+                TransitionMusic::Play {
+                    path: "assets/media/stepmania-395/menu.ogg".into(),
+                    looping: true,
+                }
+            }
+            _ => TransitionMusic::Keep,
+        }
+    }
+
+    fn stop_screen_sfx_on_exit(_from: Screen, _to: Screen) -> bool {
+        true
+    }
+}
 
 impl Theme for StepManiaTheme {
     type Screen = Screen;
