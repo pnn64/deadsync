@@ -234,6 +234,7 @@ fn native_rgba_source_rows_preserve_offsets_transparent_rgb_and_disposal() {
                         Frame {
                             control: FrameControl {
                                 y_offset: 4,
+                                dispose: DisposeOp::Background,
                                 ..control(width + 4, 2)
                             },
                             image: Some(make(width + 4, 2, 173)),

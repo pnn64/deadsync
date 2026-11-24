@@ -394,6 +394,22 @@ pub struct Compositor<'a> {
     index: usize,
     limits: Limits,
 }
+
+#[inline(never)]
+fn clear_region(canvas: &mut [u16], control: FrameControl, stride: usize) {
+    let width = control.width as usize * 4;
+    let height = control.height as usize;
+    let start = control.y_offset as usize * stride + control.x_offset as usize * 4;
+    if width == stride {
+        canvas[start..start + height * width].fill(0);
+    } else {
+        let end = start + (height - 1) * stride + width;
+        for row in canvas[start..end].chunks_mut(stride) {
+            row[..width].fill(0);
+        }
+    }
+}
+
 impl Compositor<'_> {
     pub fn reset(&mut self) {
         self.index = 0;
@@ -430,18 +446,18 @@ impl Compositor<'_> {
         }
         if self.index != 0 {
             let control = animation.frames[self.index - 1].control;
-            if control.dispose != DisposeOp::None {
-                let width = control.width as usize * 4;
-                for y in 0..control.height as usize {
-                    let start =
-                        (control.y_offset as usize + y) * stride + control.x_offset as usize * 4;
-                    if control.dispose == DisposeOp::Previous && self.index > 1 {
+            match control.dispose {
+                DisposeOp::None => (),
+                DisposeOp::Previous if self.index > 1 => {
+                    let width = control.width as usize * 4;
+                    for y in 0..control.height as usize {
+                        let start = (control.y_offset as usize + y) * stride
+                            + control.x_offset as usize * 4;
                         self.canvas[start..start + width]
                             .copy_from_slice(&self.previous[y * width..(y + 1) * width]);
-                    } else {
-                        self.canvas[start..start + width].fill(0);
                     }
                 }
+                _ => clear_region(&mut self.canvas, control, stride),
             }
         }
         self.previous.clear();
