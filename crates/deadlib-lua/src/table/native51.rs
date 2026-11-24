@@ -49,31 +49,45 @@ impl Table {
     /// Lua 5.1's removeentry keeps a deleted collectable key only as a next()
     /// cursor. Even an otherwise-live string must no longer match a new write.
     pub(crate) fn retire_native_key(&mut self, key: Value) {
-        if !self.native51 { return; }
-        let Some(key) = Key::from_value(key) else { return; };
-        let Some(dead) = key.dead() else { return; };
-        let Some((_, Some(index))) = self.slot(key) else { return; };
-        if self.entries[index].value != Value::Nil { return; }
-        self.native_index_remove(key);
-        self.entries[index].key = dead;
-        self.touch_fields();
+        if self.native51
+            && let Some(key) = Key::from_value(key)
+        {
+            self.retire_indexed_native_key(key);
+        }
+    }
+
+    fn retire_indexed_native_key(&mut self, key: Key) {
+        if let Some(dead) = key.dead()
+            && let Some((slot, Some(index))) = self.slot(key)
+            && self.entries[index].value == Value::Nil
+        {
+            self.native_index_remove_at(slot);
+            self.entries[index].key = dead;
+            self.touch_fields();
+        }
     }
 
     pub(crate) fn retire_native_keys_in_trace_slice(&mut self, cursor: usize, budget: usize) {
-        if !self.native51 { return; }
+        if !self.native51 {
+            return;
+        }
         let start = cursor >> 1;
         let (start, end) = if cursor & 1 == 0 {
             let array_end = start.saturating_add(budget).min(self.array.len());
             let hash_end = if array_end == self.array.len() {
-                budget.saturating_sub(array_end - start).min(self.entries.len())
-            } else { 0 };
+                budget
+                    .saturating_sub(array_end - start)
+                    .min(self.entries.len())
+            } else {
+                0
+            };
             (0, hash_end)
         } else {
             (start, start.saturating_add(budget).min(self.entries.len()))
         };
         for index in start..end {
             if self.entries[index].value == Value::Nil {
-                self.retire_native_key(self.entries[index].key.value());
+                self.retire_indexed_native_key(self.entries[index].key);
             }
         }
     }
@@ -98,10 +112,7 @@ impl Table {
         self.slots[slot] = (index as u32 + 1) | Self::slot_tag(self.slots.len(), key.hash()).0;
     }
 
-    fn native_index_remove(&mut self, key: Key) {
-        let Some((mut hole, Some(_))) = self.slot(key) else {
-            return;
-        };
+    fn native_index_remove_at(&mut self, mut hole: usize) {
         let mask = self.slots.len() - 1;
         let index_mask = Self::slot_tag(self.slots.len(), 0).1;
         let mut next = (hole + 1) & mask;
@@ -169,9 +180,11 @@ impl Table {
                 self.entries[position].next = free as u32 + 1;
                 position = free;
             }
-        } else if self.entries[position].key != Key::Vacant {
+        } else if self.entries[position].key != Key::Vacant
+            && let Some((slot, Some(_))) = self.slot(self.entries[position].key)
+        {
             // A deleted main node is reusable, but its collision chain remains.
-            self.native_index_remove(self.entries[position].key);
+            self.native_index_remove_at(slot);
         }
         self.entries[position].key = key;
         self.entries[position].value = value;
