@@ -222,20 +222,25 @@ impl Compositor {
                 &self.palette
             };
             let two_colors = local.map(<[_]>::len).or(self.palette_len) == Some(2);
-            let opaque = if two_colors {
-                transparent.map(|index| index ^ 1)
+            let canvas = (self.pixels.as_mut_slice(), self.width as usize);
+            if two_colors && transparent.is_none() {
+                draw_binary_indices(canvas, r, &frame.indices, frame.width as usize, table);
             } else {
-                None
-            };
-            draw_indices(
-                (&mut self.pixels, self.width as usize),
-                r,
-                &frame.indices,
-                frame.width as usize,
-                table,
-                transparent,
-                opaque,
-            );
+                let opaque = if two_colors {
+                    transparent.map(|index| index ^ 1)
+                } else {
+                    None
+                };
+                draw_indices(
+                    canvas,
+                    r,
+                    &frame.indices,
+                    frame.width as usize,
+                    table,
+                    transparent,
+                    opaque,
+                );
+            }
         }
         Ok(RenderedFrame {
             width: self.width,
@@ -361,19 +366,11 @@ fn draw_indices(
         let target = (r.y + row) * stride + r.x;
         let indices = &indices[source..source + r.w];
         let dest = &mut canvas[target..target + r.w];
-        // Short rows are cheaper to expand directly.
-        if indices.len() >= 32 {
-            let index = indices[0];
-            // Fixed-size equality lets the compiler compare whole vectors.
-            let (chunks, tail) = indices.as_chunks::<16>();
-            if chunks.iter().all(|chunk| *chunk == [index; 16])
-                && tail.iter().all(|&value| value == index)
-            {
-                if transparent != Some(index) {
-                    dest.fill(table[index as usize]);
-                }
-                continue;
+        if let Some(index) = uniform_index(indices) {
+            if transparent != Some(index) {
+                dest.fill(table[index as usize]);
             }
+            continue;
         }
         if let Some(t) = transparent {
             if let Some(index) = opaque {
@@ -398,6 +395,46 @@ fn draw_indices(
             }
         }
     }
+}
+
+#[inline(never)]
+fn draw_binary_indices(
+    (canvas, stride): (&mut [[u8; 4]], usize),
+    r: Rect,
+    indices: &[u8],
+    width: usize,
+    table: &[[u8; 4]; 256],
+) {
+    // Validated indices are zero or one. Expand them to full-word masks.
+    let first = u32::from_ne_bytes(table[0]);
+    let difference = first ^ u32::from_ne_bytes(table[1]);
+    let src = indices.chunks_exact(width);
+    let dst = canvas.chunks_exact_mut(stride).skip(r.y);
+    for (src, dst) in src.zip(dst).take(r.h) {
+        let src = &src[..r.w];
+        let dst = &mut dst[r.x..r.x + r.w];
+        if let Some(index) = uniform_index(src) {
+            dst.fill(table[usize::from(index)]);
+            continue;
+        }
+        for (pixel, &index) in dst.iter_mut().zip(src) {
+            let select = u32::from(index).wrapping_neg();
+            *pixel = (first ^ (difference & select)).to_ne_bytes();
+        }
+    }
+}
+
+#[inline]
+fn uniform_index(indices: &[u8]) -> Option<u8> {
+    // Short rows are cheaper to expand directly.
+    if indices.len() < 32 {
+        return None;
+    }
+    let index = indices[0];
+    // Fixed-size equality lets the compiler compare whole vectors.
+    let (chunks, tail) = indices.as_chunks::<16>();
+    (chunks.iter().all(|chunk| *chunk == [index; 16]) && tail.iter().all(|&value| value == index))
+        .then_some(index)
 }
 
 fn expand_palette(colors: &[[u8; 3]]) -> [[u8; 4]; 256] {

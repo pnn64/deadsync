@@ -388,6 +388,7 @@ fn uniform_and_mixed_rows_preserve_transparency_and_clipping() {
                 (4, None),
                 (4, Some(1)),
                 (4, Some(2)),
+                (2, None),
                 (2, Some(0)),
                 (2, Some(1)),
             ] {
