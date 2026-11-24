@@ -346,6 +346,24 @@ fn benchmark_container() {
                 );
             },
         );
+        measure(
+            &format!("index-events/{label}"),
+            (4_000_000 / bytes.len()).max(1),
+            bytes.len(),
+            || {
+                black_box(
+                    OggIndex::read_with_events(
+                        black_box(bytes.as_slice()),
+                        IndexOptions::default(),
+                        |event| {
+                            black_box(event);
+                            Ok::<(), Error>(())
+                        },
+                    )
+                    .unwrap(),
+                );
+            },
+        );
         measure(&format!("writer/{label}"), iterations, size * count, || {
             let data = black_box(&bytes[..size.min(bytes.len())]);
             let mut writer = PacketWriter::new(ObservedWriter::default(), 7);
@@ -377,6 +395,18 @@ fn benchmark_container() {
     measure("index/many-pages", 200, many_pages.len(), || {
         black_box(
             OggIndex::read(black_box(many_pages.as_slice()), IndexOptions::default()).unwrap(),
+        );
+    });
+    let mut interleaved = Vec::with_capacity(2 * many_pages.len());
+    for (_, page) in pages(&many_pages) {
+        interleaved.extend_from_slice(page.bytes());
+        let mut header = page.header();
+        header.serial = 8;
+        interleaved.extend_from_slice(&encode_page(header, page.lacing(), page.body()).unwrap());
+    }
+    measure("index/interleaved", 150, interleaved.len(), || {
+        black_box(
+            OggIndex::read(black_box(interleaved.as_slice()), IndexOptions::default()).unwrap(),
         );
     });
     let mut state = 7u32;

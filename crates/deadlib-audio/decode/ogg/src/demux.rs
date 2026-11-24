@@ -138,9 +138,10 @@ impl Demuxer {
         offset: u64,
         emit: impl FnMut(Packet<'_>),
     ) -> Result<(), Error> {
-        self.push_indexed_page(page, offset, emit).map(|_| ())
+        self.push_indexed_page::<true>(page, offset, emit)
+            .map(|_| ())
     }
-    pub(crate) fn push_indexed_page(
+    pub(crate) fn push_indexed_page<const OBSERVE: bool>(
         &mut self,
         page: Page<'_>,
         offset: u64,
@@ -149,13 +150,13 @@ impl Demuxer {
         if self.failed {
             return Err(Error::Failed);
         }
-        let result = self.push_inner(page, offset, emit);
+        let result = self.push_inner::<OBSERVE>(page, offset, emit);
         if result.is_err() {
             self.failed = true;
         }
         result
     }
-    fn push_inner(
+    fn push_inner<const OBSERVE: bool>(
         &mut self,
         page: Page<'_>,
         offset: u64,
@@ -299,48 +300,58 @@ impl Demuxer {
         {
             return Err(Error::Invalid("unfinished packet at EOS"));
         }
-        let mut remaining = complete;
-        for fragment in page.fragments() {
-            if fragment.starts_packet {
-                stream.packet_offset = offset;
-            }
-            if !fragment.starts_packet || !fragment.ends_packet {
-                reserve(&mut stream.partial, fragment.data.len())?;
-                stream.partial.extend_from_slice(fragment.data);
-                stream.continuing = !fragment.ends_packet;
-                if stream.continuing {
-                    break;
-                }
-            }
-            remaining -= 1;
-            let info = PacketInfo {
-                serial: stream.serial,
-                chain: stream.chain,
-                number: stream.packets,
-                first_in_stream: stream.packets == 0,
-                last_in_stream: remaining == 0 && header.is_eos(),
-                granule_position: if remaining == 0 {
-                    Some(header.granule_position)
-                } else {
-                    None
-                },
-                start_page_offset: stream.packet_offset,
-                end_page_offset: offset,
-            };
-            let data = if fragment.starts_packet {
-                fragment.data
-            } else {
-                &stream.partial
-            };
-            emit(Packet { data, info });
+        if !OBSERVE && complete > 1 && !stream.continuing && page.lacing().last() != Some(&255) {
             stream.packets = stream
                 .packets
-                .checked_add(1)
+                .checked_add(complete as u64)
                 .ok_or(Error::LimitExceeded("packet count"))?;
-            if !stream.partial.is_empty() {
-                stream.partial.clear();
-                if stream.partial.capacity() > MAX_PAGE_SIZE {
-                    stream.partial = Vec::new();
+            if complete != 0 {
+                stream.packet_offset = offset;
+            }
+        } else {
+            let mut remaining = complete;
+            for fragment in page.fragments() {
+                if fragment.starts_packet {
+                    stream.packet_offset = offset;
+                }
+                if !fragment.starts_packet || !fragment.ends_packet {
+                    reserve(&mut stream.partial, fragment.data.len())?;
+                    stream.partial.extend_from_slice(fragment.data);
+                    stream.continuing = !fragment.ends_packet;
+                    if stream.continuing {
+                        break;
+                    }
+                }
+                remaining -= 1;
+                let info = PacketInfo {
+                    serial: stream.serial,
+                    chain: stream.chain,
+                    number: stream.packets,
+                    first_in_stream: stream.packets == 0,
+                    last_in_stream: remaining == 0 && header.is_eos(),
+                    granule_position: if remaining == 0 {
+                        Some(header.granule_position)
+                    } else {
+                        None
+                    },
+                    start_page_offset: stream.packet_offset,
+                    end_page_offset: offset,
+                };
+                let data = if fragment.starts_packet {
+                    fragment.data
+                } else {
+                    &stream.partial
+                };
+                emit(Packet { data, info });
+                stream.packets = stream
+                    .packets
+                    .checked_add(1)
+                    .ok_or(Error::LimitExceeded("packet count"))?;
+                if !stream.partial.is_empty() {
+                    stream.partial.clear();
+                    if stream.partial.capacity() > MAX_PAGE_SIZE {
+                        stream.partial = Vec::new();
+                    }
                 }
             }
         }

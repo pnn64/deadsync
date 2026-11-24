@@ -228,13 +228,20 @@ pub enum IndexEvent<'a> {
 
 impl OggIndex {
     pub fn read(reader: impl Read, options: IndexOptions) -> Result<Self, Error> {
-        Self::read_with_events(reader, options, |_| Ok::<(), Error>(()))
+        Self::read_inner::<false, Error>(reader, options, |_| Ok(()))
     }
     /// Build the same validated index while observing its existing packet
     /// assembly and pages in physical order. This allows a codec to build its
     /// timing/header index in one forward source pass without a second demux.
     /// Callback errors stop construction; no partial index is returned.
     pub fn read_with_events<E: From<Error>>(
+        reader: impl Read,
+        options: IndexOptions,
+        observe: impl FnMut(IndexEvent<'_>) -> Result<(), E>,
+    ) -> Result<Self, E> {
+        Self::read_inner::<true, E>(reader, options, observe)
+    }
+    fn read_inner<const OBSERVE: bool, E: From<Error>>(
         reader: impl Read,
         options: IndexOptions,
         mut observe: impl FnMut(IndexEvent<'_>) -> Result<(), E>,
@@ -251,7 +258,7 @@ impl OggIndex {
             let page = located.page;
             let header = page.header();
             let mut failure = None;
-            let state = demux.push_indexed_page(page, located.offset, |packet| {
+            let state = demux.push_indexed_page::<OBSERVE>(page, located.offset, |packet| {
                 if failure.is_none() {
                     failure = observe(IndexEvent::Packet { page, packet }).err();
                 }
