@@ -165,16 +165,31 @@ impl Compositor {
             reserve(&mut self.saved, extra)?;
         }
         let stride = self.width as usize;
+        // A full-width rectangle is one contiguous span of the canvas.
+        let spans = |rect: Rect| {
+            let start = rect.y * stride + rect.x;
+            let (width, rows) = if rect.w == stride {
+                (rect.w * rect.h, 1)
+            } else {
+                (rect.w, rect.h)
+            };
+            (0..rows).map(move |row| {
+                let offset = start + row * stride;
+                offset..offset + width
+            })
+        };
         if let Some((r, method)) = self.pending {
-            for row in 0..r.h {
-                let dest =
-                    &mut self.pixels[(r.y + row) * stride + r.x..(r.y + row) * stride + r.x + r.w];
+            let mut saved = self.saved.as_slice();
+            for span in spans(r) {
+                let dest = &mut self.pixels[span];
                 match method {
                     Disposal::Background => {
                         dest.fill(self.background);
                     }
                     Disposal::Previous => {
-                        dest.copy_from_slice(&self.saved[row * r.w..(row + 1) * r.w])
+                        let (source, remaining) = saved.split_at(dest.len());
+                        dest.copy_from_slice(source);
+                        saved = remaining;
                     }
                     _ => {}
                 }
@@ -182,10 +197,8 @@ impl Compositor {
         }
         self.saved.clear();
         if save {
-            for y in rect.y..rect.y + rect.h {
-                self.saved.extend_from_slice(
-                    &self.pixels[y * stride + rect.x..y * stride + rect.x + rect.w],
-                );
+            for span in spans(rect) {
+                self.saved.extend_from_slice(&self.pixels[span]);
             }
         }
         self.pending = (visible && matches!(disposal, Disposal::Background | Disposal::Previous))
