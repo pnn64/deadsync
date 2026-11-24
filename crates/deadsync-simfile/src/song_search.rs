@@ -681,6 +681,7 @@ mod tests {
 
     fn test_chart(chart_type: &str) -> ChartData {
         ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: chart_type.to_string(),
             difficulty: "Challenge".to_string(),
             description: String::new(),

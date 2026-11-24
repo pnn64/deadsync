@@ -40,6 +40,7 @@ pub struct SelectMusicSongView<'a> {
     pub subtitle: &'a str,
     pub artist: &'a str,
     pub display_bpm: &'a str,
+    pub music_length_seconds: f32,
 }
 
 #[derive(Clone, Copy)]

@@ -507,6 +507,7 @@ mod tests {
 
     fn test_chart(meter: u32) -> ChartData {
         ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: "dance-single".to_string(),
             difficulty: "hard".to_string(),
             description: String::new(),

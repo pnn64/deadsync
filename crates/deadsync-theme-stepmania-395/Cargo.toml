@@ -16,6 +16,8 @@ deadsync-theme = { path = "../deadsync-theme" }
 glam = "0.34.3"
 
 [dev-dependencies]
+deadsync-chart = { path = "../deadsync-chart" }
+deadsync-simfile = { path = "../deadsync-simfile" }
 deadlib-render = { path = "../deadlib-render" }
 deadsync-score = { path = "../deadsync-score" }
 image = { version = "0.25.10", default-features = false, features = ["png"] }

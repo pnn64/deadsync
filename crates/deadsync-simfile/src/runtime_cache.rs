@@ -372,6 +372,7 @@ mod tests {
 
     fn chart(chart_type: &str, difficulty: &str, hash: &str) -> ChartData {
         ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: chart_type.to_string(),
             difficulty: difficulty.to_string(),
             description: String::new(),

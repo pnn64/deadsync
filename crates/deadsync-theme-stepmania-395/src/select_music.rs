@@ -160,6 +160,11 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
         } else {
             0.5 + 0.5 * (elapsed / 0.6).clamp(0.0, 1.0)
         };
+        let radar_rotation = if media.exit_elapsed > 0.0 {
+            (1.0 - radar_zoom) * 720.0
+        } else {
+            720.0 * (1.0 - (elapsed / 0.6).clamp(0.0, 1.0))
+        };
         let mut radar = layout.sprite(
             "stepmania-395/music-radar",
             [160.0, 334.0],
@@ -167,12 +172,22 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
             4,
         );
         radar.zoom(radar_zoom);
-        radar.rotationz(if media.exit_elapsed > 0.0 {
-            (1.0 - radar_zoom) * 720.0
-        } else {
-            720.0 * (1.0 - (elapsed / 0.6).clamp(0.0, 1.0))
-        });
+        radar.rotationz(radar_rotation);
         actors.push(radar.build(0));
+        if let Some(song) = view.song {
+            crate::radar::push_values(
+                actors,
+                layout,
+                view.players.map(|player| {
+                    player
+                        .chart
+                        .filter(|_| player.joined)
+                        .map(|chart| chart.radar_values(song.music_length_seconds))
+                }),
+                radar_zoom,
+                radar_rotation,
+            );
+        }
         for (index, at) in [
             [160.0, 242.0],
             [40.0, 314.0],

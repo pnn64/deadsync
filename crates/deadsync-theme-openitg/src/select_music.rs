@@ -962,6 +962,7 @@ mod tests {
             wheel_locked: false,
             selection_beat: 0.0,
             song: Some(SelectMusicSongView {
+                music_length_seconds: 90.0,
                 title: "Track",
                 subtitle: "",
                 artist: "Artist",

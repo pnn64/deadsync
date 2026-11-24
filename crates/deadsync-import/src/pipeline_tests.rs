@@ -54,6 +54,7 @@ const STATS_XML: &str = r#"<Stats>
 
 fn chart(difficulty: &str, hash: &str) -> ChartData {
     ChartData {
+        radar_numerators: [0.0; 5],
         chart_type: "dance-single".into(),
         difficulty: difficulty.into(),
         description: String::new(),

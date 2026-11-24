@@ -10,6 +10,8 @@ The song selection assets come from the default theme's `MusicWheel`, `MusicWhee
 
 Options use the original `ScreenOptions` page, cursor, and underline artwork, with the `_Arial 14 shadow` bitmap font. The radar artwork comes from `GrooveRadar`. Row, value, difficulty, and options sounds and the selection menu loop are also copied from the supplied theme.
 
+The song-selection radar draws the original half-transparent player polygons and two-pixel outlines using the source colors, radius, and rotations. Values come from the shared chart catalog's computed Stream, Voltage, Air, Freeze, and Chaos data, normalized by music length. Chart analysis and persistence remain in the game layer.
+
 The bundled bitmap fonts also include the original `Common default` imports for button symbols, Japanese, Korean, and miscellaneous glyphs.
 
 Gameplay uses the original `ScreenGameplay` life/score frames and difficulty sheet, `LifeMeterBar` textures, `Judgment` and `HoldJudgment` sheets, `Combo` artwork, and the ready/go, cleared/failed, and entry/exit animation graphics. Rust code reproduces their authored layout and animation. The failed sound is copied from `BGAnimations/ScreenGameplay failed/failed.ogg`.

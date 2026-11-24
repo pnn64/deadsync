@@ -474,6 +474,7 @@ mod tests {
 
     fn chart(diff: &str, desc: &str, name: &str, hash: &str) -> deadsync_chart::ChartData {
         deadsync_chart::ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: "dance-single".into(),
             difficulty: diff.into(),
             description: desc.into(),

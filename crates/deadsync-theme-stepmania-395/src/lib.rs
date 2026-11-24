@@ -9,6 +9,7 @@ mod options;
 mod play_selection;
 mod presentation;
 mod ranking;
+mod radar;
 mod resources;
 mod select_music;
 mod selection;

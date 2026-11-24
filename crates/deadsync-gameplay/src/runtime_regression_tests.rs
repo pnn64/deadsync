@@ -759,6 +759,7 @@ mod runtime_regression_tests {
 
     fn regression_chart() -> ChartData {
         ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: "dance-single".to_string(),
             difficulty: "Challenge".to_string(),
             description: String::new(),
@@ -815,6 +816,7 @@ mod runtime_regression_tests {
         let min_bpm = bpms.iter().copied().reduce(f32::min).unwrap_or(120.0);
         let max_bpm = bpms.iter().copied().reduce(f32::max).unwrap_or(min_bpm);
         ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: "dance-single".to_string(),
             difficulty: "Challenge".to_string(),
             description: String::new(),

@@ -1391,6 +1391,7 @@ mod tests {
     fn test_course_graph_stage(song_last_second: f32) -> CourseGraphStage {
         CourseGraphStage {
             chart: Arc::new(ChartData {
+                radar_numerators: [0.0; 5],
                 chart_type: "dance-single".to_string(),
                 difficulty: "Hard".to_string(),
                 description: String::new(),

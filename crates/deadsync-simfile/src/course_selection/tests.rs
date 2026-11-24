@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 fn chart(hash: &str) -> ChartData {
     ChartData {
+        radar_numerators: [0.0; 5],
         chart_type: "dance-single".to_owned(),
         difficulty: "Hard".to_owned(),
         description: String::new(),

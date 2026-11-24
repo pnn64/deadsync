@@ -699,6 +699,7 @@ mod tests {
 
     fn test_chart(hash: &str) -> Arc<ChartData> {
         Arc::new(ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: "dance-single".to_string(),
             difficulty: "Hard".to_string(),
             description: "Stage Description".to_string(),

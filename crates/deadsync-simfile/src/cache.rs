@@ -26,8 +26,8 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-// Preserve nonempty short note rows and their native measure subdivisions.
-pub const SONG_CACHE_VERSION: u8 = 76;
+// Retain the five chart radar numerators in the catalog metadata.
+pub const SONG_CACHE_VERSION: u8 = 77;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -1053,6 +1053,7 @@ pub struct CachedChartMeta {
     pub music_path: Option<String>,
     pub short_hash: String,
     pub stats: CachedArrowStats,
+    pub radar_numerators: [f32; 5],
     pub tech_counts: CachedTechCounts,
     pub mines_nonfake: u32,
     pub stamina_counts: CachedStaminaCounts,
@@ -1141,6 +1142,7 @@ struct BorrowedCachedChartMeta<'a> {
     music_path: Option<&'a str>,
     short_hash: &'a str,
     stats: &'a CachedArrowStats,
+    radar_numerators: [f32; 5],
     tech_counts: CachedTechCounts,
     mines_nonfake: u32,
     stamina_counts: CachedStaminaCounts,
@@ -1409,7 +1411,83 @@ pub fn build_gameplay_chart_from_payload(
     }
 }
 
+/// Chart radar terms before division by the music length. Heads count toward
+/// Stream and fixed eight-beat Voltage windows; holds add one extra head there.
+/// Chaos counts occupied rows finer than an eighth note, including mine rows.
+pub fn build_chart_radar_numerators(notes: &[CachedParsedNote], row_to_beat: &[f32]) -> [f32; 5] {
+    let notes = if notes
+        .windows(2)
+        .all(|pair| pair[0].row_index <= pair[1].row_index)
+    {
+        std::borrow::Cow::Borrowed(notes)
+    } else {
+        let mut ordered = notes.to_vec();
+        ordered.sort_by_key(|note| note.row_index);
+        std::borrow::Cow::Owned(ordered)
+    };
+    let mut stream = 0u32;
+    let mut holds = 0u32;
+    let mut jumps = 0u32;
+    let mut chaos = 0u32;
+    let mut last_row = 0u64;
+    let mut window = None;
+    let mut window_notes = 0u32;
+    let mut peak_notes = 0u32;
+    let mut previous_row = None;
+    for group in notes.chunk_by(|a, b| a.row_index == b.row_index) {
+        let Some(&beat) = row_to_beat.get(group[0].row_index as usize) else {
+            continue;
+        };
+        if !beat.is_finite() || beat < 0.0 {
+            continue;
+        }
+        let row = (beat * 48.0).round() as u64;
+        last_row = last_row.max(row);
+        if window != Some(row / 384) {
+            peak_notes = peak_notes.max(window_notes);
+            window_notes = 0;
+            window = Some(row / 384);
+        }
+        let mut taps = 0u32;
+        for note in group {
+            if note.note_type != CachedNoteType::Mine {
+                taps = taps.saturating_add(1);
+                stream = stream.saturating_add(1);
+                window_notes = window_notes.saturating_add(1);
+            }
+            if note.note_type == CachedNoteType::Hold {
+                holds = holds.saturating_add(1);
+                stream = stream.saturating_add(1);
+                window_notes = window_notes.saturating_add(1);
+            }
+            if matches!(note.note_type, CachedNoteType::Hold | CachedNoteType::Roll)
+                && let Some(tail) = note
+                    .tail_row_index
+                    .and_then(|tail| row_to_beat.get(tail as usize))
+                && tail.is_finite()
+                && *tail >= 0.0
+            {
+                last_row = last_row.max((tail * 48.0).round() as u64);
+            }
+        }
+        jumps = jumps.saturating_add(u32::from(taps >= 2));
+        if previous_row != Some(row) && !row.is_multiple_of(24) {
+            chaos = chaos.saturating_add(1);
+        }
+        previous_row = Some(row);
+    }
+    peak_notes = peak_notes.max(window_notes);
+    [
+        stream as f32 / 7.0,
+        (peak_notes as f32 / 8.0) * (last_row as f32 / 48.0) / 10.0,
+        jumps as f32,
+        holds as f32,
+        chaos as f32 * 0.5,
+    ]
+}
+
 pub fn build_chart_meta(chart: SerializableChartData, global_offset_seconds: f32) -> ChartData {
+    let radar_numerators = build_chart_radar_numerators(&chart.parsed_notes, &chart.row_to_beat);
     // Metadata never queries visual modifiers; discard them before conversion.
     let timing_segments: TimingSegments = CachedTimingSegments {
         speeds: Vec::new(),
@@ -1439,6 +1517,7 @@ pub fn build_chart_meta(chart: SerializableChartData, global_offset_seconds: f32
         music_path: chart.music_path.map(PathBuf::from),
         short_hash: chart.short_hash,
         stats: chart.stats.into(),
+        radar_numerators,
         tech_counts: chart.tech_counts.into(),
         mines_nonfake: chart.mines_nonfake,
         stamina_counts: chart.stamina_counts.into(),
@@ -1485,6 +1564,7 @@ pub fn build_cached_chart_meta(
         music_path: chart.music_path.clone(),
         short_hash: chart.short_hash.clone(),
         stats: chart.stats.clone(),
+        radar_numerators: build_chart_radar_numerators(&chart.parsed_notes, &chart.row_to_beat),
         tech_counts: chart.tech_counts,
         mines_nonfake: chart.mines_nonfake,
         stamina_counts: chart.stamina_counts,
@@ -1573,6 +1653,7 @@ impl<'a> BorrowedCachedChartMeta<'a> {
             music_path: chart.music_path.as_deref(),
             short_hash: &chart.short_hash,
             stats: &chart.stats,
+            radar_numerators: build_chart_radar_numerators(&chart.parsed_notes, &chart.row_to_beat),
             tech_counts: chart.tech_counts,
             mines_nonfake: chart.mines_nonfake,
             stamina_counts: chart.stamina_counts,
@@ -1615,6 +1696,7 @@ pub fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
         music_path: chart.music_path.map(PathBuf::from),
         short_hash: chart.short_hash,
         stats: chart.stats.into(),
+        radar_numerators: chart.radar_numerators,
         tech_counts: chart.tech_counts.into(),
         mines_nonfake: chart.mines_nonfake,
         stamina_counts: chart.stamina_counts.into(),
@@ -2933,6 +3015,28 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
+    fn radar_terms_use_chords_hold_heads_subdivisions_and_fixed_eight_beat_windows() {
+        let beats = [0.0, 0.25, 0.5, 1.0, 8.0, 9.0, 12.0];
+        let make = |row_index, column, note_type, tail_row_index| CachedParsedNote {
+            player: 0, row_index, column, note_type, tail_row_index,
+        };
+        let mut notes = vec![
+            make(0, 0, CachedNoteType::Tap, None),
+            make(0, 1, CachedNoteType::Hold, Some(3)),
+            make(1, 0, CachedNoteType::Mine, None),
+            make(2, 2, CachedNoteType::Tap, None),
+            make(3, 3, CachedNoteType::Roll, Some(4)),
+            make(4, 0, CachedNoteType::Tap, None),
+            make(5, 1, CachedNoteType::Fake, None),
+            make(6, 2, CachedNoteType::Mine, None),
+        ];
+        assert_eq!(build_chart_radar_numerators(&notes, &beats), [1.0, 0.75, 1.0, 1.0, 0.5]);
+        notes.reverse();
+        assert_eq!(build_chart_radar_numerators(&notes, &beats), [1.0, 0.75, 1.0, 1.0, 0.5]);
+        assert_eq!(build_chart_radar_numerators(&[], &beats), [0.0; 5]);
+    }
+
+    #[test]
     fn cached_metadata_matches_full_timing_with_visual_segments_and_fakes() {
         for visual_count in [0, 1, 32, 256] {
             for reversed in [false, true] {
@@ -3000,6 +3104,7 @@ mod tests {
                         });
                     let cached = build_cached_chart_meta(&chart, offset);
                     let original = build_chart_meta(chart.clone(), offset);
+                    assert_eq!(original.radar_numerators, cached.radar_numerators);
                     assert_eq!(
                         original.measure_seconds_vec,
                         build_measure_seconds(&full_timing, chart.measure_nps_vec.len())

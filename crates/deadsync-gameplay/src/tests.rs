@@ -10884,6 +10884,7 @@ mod tests {
 
     fn test_chart(stats: ArrowStats, mines_nonfake: u32, has_chart_attacks: bool) -> ChartData {
         ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: String::new(),
             difficulty: String::new(),
             description: String::new(),

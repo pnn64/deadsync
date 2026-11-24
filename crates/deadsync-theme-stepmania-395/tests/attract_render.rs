@@ -6,6 +6,7 @@
 ))]
 
 use std::{path::PathBuf, sync::Arc};
+mod support;
 
 use deadlib_assets::AssetManager;
 use deadlib_present::{
@@ -112,6 +113,15 @@ fn native_attract_captures() {
         &assets,
     );
     let mut intro = StepManiaIntro::default();
+    capture_actors(
+        "select-music",
+        &support::music_actors(),
+        3.0,
+        &output,
+        &metrics,
+        &mut backend,
+        &assets,
+    );
     for (name, delta) in [("company", 3.0), ("logo", 9.0)] {
         intro.advance(delta);
         capture(name, &intro, &output, &metrics, &mut backend, &assets);

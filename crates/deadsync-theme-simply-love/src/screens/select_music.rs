@@ -2664,6 +2664,7 @@ pub fn select_music_view<'a>(
         wheel_locked: state.chance_lock_velocity.is_some(),
         selection_beat: selection_anim_beat(state),
         song: song.map(|song| SelectMusicSongView {
+            music_length_seconds: song.music_length_seconds,
             title: song.display_title(translated),
             subtitle: song.display_subtitle(translated),
             artist: if translated && !song.translit_artist.is_empty() {
@@ -12459,6 +12460,7 @@ fn test_folder_stats_song(index: usize) -> Arc<SongData> {
         .iter()
         .enumerate()
         .map(|(difficulty_index, difficulty)| ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: "dance-single".to_string(),
             difficulty: (*difficulty).to_string(),
             description: String::new(),

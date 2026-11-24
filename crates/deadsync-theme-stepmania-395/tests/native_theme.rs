@@ -1,4 +1,5 @@
 use std::{path::Path, time::Instant};
+mod support;
 
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadsync_config::{
@@ -12,6 +13,25 @@ use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, MainMenuRuntimeVie
 use deadsync_theme::stage::{StageCardMode, StageCardPresentation, StageCardView};
 use deadsync_theme::{Screen, ThemeEffect, ThemeResources, TransitionState};
 use deadsync_theme_stepmania_395::{StepManiaIntro, StepManiaStageCard, StepManiaTheme};
+
+#[test]
+fn wheel_radar_displays_both_players_from_parsed_chart_data() {
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        640.0, 480.0,
+    ));
+    let actors = support::music_actors();
+    let fills: Vec<_> = actors
+        .iter()
+        .filter_map(|actor| match actor {
+            Actor::Mesh { vertices, .. } if vertices.len() == 15 => Some(vertices),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(fills.len(), 2);
+    assert_eq!(fills[0][0].color, [0.4, 1.0, 0.8, 0.5]);
+    assert_eq!(fills[1][0].color, [1.0, 0.5, 0.2, 0.5]);
+    assert!(fills[0].iter().any(|vertex| vertex.pos[1] < 310.0));
+}
 
 #[test]
 fn installed_native_title_uses_bundled_resources_and_shared_navigation() {

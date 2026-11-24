@@ -82,6 +82,9 @@ pub struct ChartData {
     pub music_path: Option<PathBuf>,
     pub short_hash: String,
     pub stats: ArrowStats,
+    /// Duration-independent numerators for Stream, Voltage, Air, Freeze, Chaos.
+    /// Divide by the song's music length to obtain its five radar values.
+    pub radar_numerators: [f32; 5],
     pub tech_counts: TechCounts,
     /// Count of mines that are actually judgable in gameplay, excluding
     /// any mines that fall within fake or warp segments.
@@ -110,6 +113,17 @@ pub struct ChartData {
     pub display_bpm: Option<ChartDisplayBpm>,
     pub min_bpm: f64,
     pub max_bpm: f64,
+}
+
+impl ChartData {
+    #[must_use]
+    pub fn radar_values(&self, music_seconds: f32) -> [f32; 5] {
+        if !music_seconds.is_finite() || music_seconds <= 0.0 {
+            return [0.0; 5];
+        }
+        self.radar_numerators
+            .map(|value| (value / music_seconds).clamp(0.0, 1.0))
+    }
 }
 
 #[derive(Clone, Debug)]

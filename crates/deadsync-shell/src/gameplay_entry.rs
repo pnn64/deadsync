@@ -214,6 +214,7 @@ mod tests {
 
     fn chart(difficulty: &str, hash: &str) -> ChartData {
         ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: "dance-single".to_string(),
             difficulty: difficulty.to_string(),
             description: String::new(),

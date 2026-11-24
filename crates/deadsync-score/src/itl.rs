@@ -2225,6 +2225,7 @@ mod tests {
 
     fn sample_chart(chart_type: &str) -> deadsync_chart::ChartData {
         deadsync_chart::ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: chart_type.to_string(),
             difficulty: String::new(),
             description: String::new(),

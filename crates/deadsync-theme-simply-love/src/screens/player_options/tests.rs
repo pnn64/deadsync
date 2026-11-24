@@ -140,10 +140,12 @@ pub(super) mod tests {
         let charts = &mut Arc::make_mut(&mut song).charts;
         charts[0].music_path = Some(PathBuf::from("main.ogg"));
         charts.push(ChartData {
+            radar_numerators: [0.0; 5],
             difficulty: "Challenge".into(),
             ..charts[0].clone()
         });
         charts.push(ChartData {
+            radar_numerators: [0.0; 5],
             difficulty: "Edit".into(),
             music_path: Some(PathBuf::from("edit.ogg")),
             ..charts[0].clone()
@@ -404,6 +406,7 @@ pub(super) mod tests {
 
     fn test_chart() -> ChartData {
         ChartData {
+            radar_numerators: [0.0; 5],
             chart_type: "dance-single".to_string(),
             difficulty: "Hard".to_string(),
             description: String::new(),

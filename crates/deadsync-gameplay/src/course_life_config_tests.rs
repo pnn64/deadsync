@@ -15,6 +15,7 @@ fn selection_song() -> SongData {
     ]
     .into_iter()
     .map(|(chart_type, difficulty, meter)| ChartData {
+        radar_numerators: [0.0; 5],
         chart_type: chart_type.to_string(),
         difficulty: difficulty.to_string(),
         meter,
@@ -121,6 +122,7 @@ fn oni_automatic_rewards_use_each_players_standard_and_edit_slots() {
     let template = song.charts[1].clone();
     // Edit slots are sorted by meter, independently of their source positions.
     song.charts.extend([8, 7].map(|meter| ChartData {
+        radar_numerators: [0.0; 5],
         difficulty: "Edit".to_string(),
         meter,
         ..template.clone()
