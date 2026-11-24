@@ -450,14 +450,18 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     let shell_entry = production_source(&root.join("crates/deadsync-shell/src/gameplay_entry.rs"));
     assert!(chart_policy.contains("pub fn gameplay_chart_entry_plan("));
     assert!(chart_policy.contains("pub fn lua_reload_chart_indices("));
-    assert!(chart_adapter.contains("pub fn apply_song_lua_reload<S>("));
+    let lua_adapter = production_source(&root.join("crates/deadsync-assets/src/song_lua.rs"));
+    assert!(lua_adapter.contains("pub fn apply_song_lua_reload<S>("));
+    assert!(lua_adapter.contains("apply_stage_chart_reload("));
+    assert!(chart_adapter.contains("pub fn apply_stage_chart_reload("));
+    assert!(!chart_adapter.contains("PreparedGameplaySongLua"));
     assert!(contains_rust(
         &chart_adapter,
-        "lua_reload_chart_indices(song, steps, selected_session.play_style)?"
+        "lua_reload_chart_indices(song, reload.steps, selected_session.play_style)?"
     ));
     assert!(contains_rust(
         &app,
-        "use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};"
+        "use deadsync_assets::song_lua::apply_song_lua_reload;"
     ));
     assert!(app.contains("stage_launch.preload_selection()"));
     assert!(app.contains(".take_ready_song_selection(StageLaunchTarget::Gameplay)"));
@@ -588,6 +592,12 @@ fn gameplay_stage_bootstrap_is_game_owned() {
 #[test]
 fn chart_lua_playback_has_no_theme_dependency() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let profiles = read_source(root.join("crates/deadsync-profile-gameplay/Cargo.toml"))
+        .expect("profile gameplay manifest");
+    assert!(!profiles.contains("deadsync-song-lua"));
+    let context = production_source(&root.join("crates/deadsync-assets/src/song_lua/context.rs"));
+    assert!(context.contains("pub fn song_lua_compile_context("));
+    assert!(context.contains("pub fn prepare_song_lua("));
     let manifest = read_source(root.join("crates/deadsync-song-lua/Cargo.toml"))
         .expect("shared playback manifest");
     let manifest = manifest.split("[dev-dependencies]").next().unwrap();
@@ -12882,8 +12892,8 @@ fn field_metrics_are_shared() {
         .expect("canonical field placement should be readable");
     let gameplay_metrics = read_source(root.join("crates/deadsync-gameplay/src/song_lua_windows.rs"))
         .expect("shared gameplay field placement should be readable");
-    let profile_gameplay = read_source(root.join("crates/deadsync-profile-gameplay/src/lib.rs"))
-        .expect("profile gameplay adapter should be readable");
+    let lua_context = read_source(root.join("crates/deadsync-assets/src/song_lua/context.rs"))
+        .expect("song Lua context should be readable");
     let compose = read_source(root.join("crates/deadsync-notefield/src/compose.rs"))
         .expect("canonical composition contract should be readable");
     let playback = read_source(root.join("crates/deadsync-song-lua/src/playback.rs"))
@@ -12998,7 +13008,7 @@ fn field_metrics_are_shared() {
         assert!(placement.contains(&format!("crate::style::{metric}")));
     }
     assert!(gameplay_metrics.contains("pub fn gameplay_side_field_center_x("));
-    for (owner, source) in [("notefield", &placement), ("profile", &profile_gameplay)] {
+    for (owner, source) in [("notefield", &placement), ("Lua context", &lua_context)] {
         assert!(
             source.contains("deadsync_gameplay::gameplay_side_field_center_x("),
             "{owner} placement must use the shared native margin calculation"

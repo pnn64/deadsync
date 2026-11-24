@@ -10,12 +10,12 @@ template starts Reverse at zero, then schedules restoration at beat zero only
 when that initial query was nonzero. Missing saved options therefore turn a
 Reverse player's scroll upwards as soon as the template runs.
 
-The regression runs these original scripts through the production profile
-context, Lua compiler and gameplay modifier evaluator. It checks normal and
+The regression runs these original scripts through the song Lua context adapter,
+Lua compiler and gameplay modifier evaluator. It checks normal and
 Reverse profiles on either single-player side, plus both mixed versus pairings.
 
 ```powershell
-cargo test -p deadsync-profile-gameplay ultra_synergy_matrix_preserves_saved_reverse_through_song_lua
+cargo test -p deadsync-assets --lib ultra_synergy_matrix_preserves_saved_reverse_through_song_lua
 ```
 
 ITGmania's `ModsGroup::Assign(ModsLevel_Preferred, ...)` seeds all four option
@@ -34,7 +34,7 @@ against compiled ITGmania. `native-result.json` is the unmodified successful
 oracle response, captured with:
 
 ```powershell
-../itgmania-harness/target/debug/itgmania-harness-rs.exe actor-conformance crates/deadsync-profile-gameplay/tests/fixtures/ultra-synergy-matrix/native-options.json --out crates/deadsync-profile-gameplay/tests/fixtures/ultra-synergy-matrix/native-result.json
+../itgmania-harness/target/debug/itgmania-harness-rs.exe actor-conformance crates/deadsync-assets/tests/fixtures/ultra-synergy-matrix/native-options.json --out crates/deadsync-assets/tests/fixtures/ultra-synergy-matrix/native-result.json
 ```
 
 SHA-256 of the original Lua bytes:

@@ -354,8 +354,10 @@ the stage for receptor feedback, cues, flashes, and explosions in draw order.
 
 `deadsync-gameplay::stage_charts` resolves chart fallback and assigns charts to
 solo, Versus, and partner players. Preload, Player Options entry, and direct
-stage entry read the wheel through one adapter. The game validates Lua's
-replacement indices against the requested style and commits chart metadata,
+stage entry read the wheel through one adapter. `deadsync-assets::song_lua`
+builds the Lua context and translates the prepared scene's selections into
+chart indices, cabinet-side joins, and a gameplay style. The chart adapter in
+`deadsync-profile-gameplay` validates the selection and commits chart metadata,
 payloads, and session changes together after loading succeeds.
 
 The game synchronizes the selected charts when both players share one chart or

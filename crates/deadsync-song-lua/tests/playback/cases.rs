@@ -13712,7 +13712,10 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
     let scroll = [ScrollSpeedSetting::XMod(1.0); MAX_PLAYERS];
     let viewport = GameplayViewport::design();
     let session = GameplaySession::default();
-    let config = GameplayConfig::default();
+    let config = GameplayConfig {
+        global_offset_seconds: 0.0,
+        ..Default::default()
+    };
     let prepared = prepare_fixture(
         &song,
         &charts,
@@ -13759,6 +13762,8 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         [0; MAX_PLAYERS],
     );
     let visuals = &mut state.mods.song_lua_visuals;
+    // Keep the fixture's AFTs active across the forward and backward seeks.
+    visuals.foreground_beats = Some(0.0..=4.0);
     visuals.note_hides[0] = deadsync_gameplay::SongLuaNoteHideWindows::new(vec![
         deadsync_gameplay::SongLuaNoteHideWindowRuntime {
             column: 0,
@@ -13874,7 +13879,8 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
             assert_eq!(
                 scratch.render_targets().len(),
                 3,
-                "all authored AFT passes survive"
+                "all authored AFT passes survive at {now}s (beat {})",
+                state.current_beat(),
             );
         }
         assert_eq!(field_requests[0], field_requests[1]);
@@ -14193,7 +14199,7 @@ fn prepare_fixture(
     config: &GameplayConfig,
     video_renderer: BackendType,
 ) -> super::PreparedGameplaySongLua<SpriteSlot> {
-    let context = deadsync_profile_gameplay::song_lua_play_context(
+    let context = deadsync_assets::song_lua::song_lua_play_context(
         song,
         charts,
         timing,

@@ -5769,7 +5769,7 @@ fn replay_mode(
             deadsync_chart::song::sync_pref_offset(deadsync_profile_gameplay::gameplay_pack_data(&song, None, None).sync_pref,
                 config.machine_default_sync_pref)
         } else { 0.0 };
-        context.song_note_bounds = Some(deadsync_profile_gameplay::song_lua_catalog_note_bounds(
+        context.song_note_bounds = Some(deadsync_assets::song_lua::song_lua_catalog_note_bounds(
             &song, number(catalog, "global_offset_seconds")? as f32, number(catalog, "music_rate")? as f32, sync_offset));
     }
     for (player, windows) in context.players.iter_mut().zip(native_theme_timing_windows(trace)?) {

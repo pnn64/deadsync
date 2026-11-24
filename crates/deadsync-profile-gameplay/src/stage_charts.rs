@@ -6,9 +6,8 @@ use deadsync_chart::{
 };
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::stage_charts::{self, GameplayChartEntryPlan, lua_reload_chart_indices};
-use deadsync_gameplay::{GameplayInputPlayStyle as Style, GameplaySession};
+use deadsync_gameplay::{GameplayInputPlayStyle, GameplaySession};
 use deadsync_profile::{PlayStyle, PlayerSide};
-use deadsync_song_lua::playback::PreparedGameplaySongLua;
 use std::sync::Arc;
 
 /// Resolve primary backgrounds using the final stage's master chart.
@@ -111,43 +110,29 @@ pub fn gameplay_chart_entry_plan(
     )
 }
 
-/// Commit Lua's chart and session changes together once the replacement
-/// payloads have loaded successfully.
-pub fn apply_song_lua_reload<S>(
+pub struct StageChartReload {
+    /// Catalog indices in runtime player order.
+    pub steps: [Option<usize>; MAX_PLAYERS],
+    /// Joined players in physical cabinet side order.
+    pub joined_sides: Option<[bool; MAX_PLAYERS]>,
+    pub play_style: Option<GameplayInputPlayStyle>,
+}
+
+/// Commit the chart and session changes together once the replacement payloads load.
+pub fn apply_stage_chart_reload(
     song: &SongData,
     charts: &mut [Arc<ChartData>; MAX_PLAYERS],
     payloads: &mut [Arc<GameplayChartData>; MAX_PLAYERS],
-    prepared: &PreparedGameplaySongLua<S>,
+    reload: StageChartReload,
     session: &mut GameplaySession,
     global_offset_seconds: f32,
-) -> Result<bool, String> {
-    let Some(steps) = prepared.loaded_steps() else {
-        return Ok(false);
-    };
+) -> Result<(), String> {
     let mut selected_session = session.clone();
-    if let Some(players) = prepared.loaded_players() {
-        selected_session.joined_sides = if session.p2_runtime_player() {
-            [players[1], players[0]]
-        } else {
-            players
-        };
+    if let Some(joined_sides) = reload.joined_sides {
+        selected_session.joined_sides = joined_sides;
     }
-    if let Some(style) = prepared.loaded_style() {
-        selected_session.play_style = match (session.play_style.is_pump(), style) {
-            (false, "single") => Style::Single,
-            (false, "double") => Style::Double,
-            (false, "versus") => Style::Versus,
-            (false, "couple") => Style::Couple,
-            (false, "routine") => Style::Routine,
-            // Compiled Pump scenes retain the game-qualified style key.
-            (true, "single" | "pump-single") => Style::PumpSingle,
-            (true, "double" | "pump-double") => Style::PumpDouble,
-            (true, "versus" | "pump-versus") => Style::PumpVersus,
-            (true, "couple" | "pump-couple") => Style::PumpCouple,
-            (true, "routine" | "pump-routine") => Style::PumpRoutine,
-            _ => return Err(format!("Lua reload selected unsupported style {style}")),
-        };
-        if selected_session.play_style.player_count()
+    if let Some(play_style) = reload.play_style {
+        if play_style.player_count()
             != selected_session
                 .joined_sides
                 .iter()
@@ -155,17 +140,21 @@ pub fn apply_song_lua_reload<S>(
                 .count()
         {
             return Err(format!(
-                "Lua reload style {style} is incompatible with joined sides"
+                "Stage reload style {play_style:?} is incompatible with joined sides"
             ));
         }
+        selected_session.play_style = play_style;
     }
-    let indices = lua_reload_chart_indices(song, steps, selected_session.play_style)?;
+    let indices = lua_reload_chart_indices(song, reload.steps, selected_session.play_style)?;
     let loaded =
         deadsync_simfile::app_runtime::load_gameplay_charts(song, &indices, global_offset_seconds)?;
-    *payloads = stage_charts::take_player_charts(loaded);
-    *charts = std::array::from_fn(|player| Arc::new(song.charts[indices[player]].clone()));
+    let selected_payloads = stage_charts::take_player_charts(loaded);
+    let selected_charts =
+        std::array::from_fn(|player| Arc::new(song.charts[indices[player]].clone()));
+    *payloads = selected_payloads;
+    *charts = selected_charts;
     *session = selected_session;
-    Ok(true)
+    Ok(())
 }
 
 #[cfg(test)]

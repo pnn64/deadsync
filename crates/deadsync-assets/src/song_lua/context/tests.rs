@@ -567,7 +567,7 @@ fn ultra_synergy_matrix_preserves_saved_reverse_through_song_lua() {
             } else {
                 player
             };
-            let base = super::scroll_effects_from_option(profiles[source].scroll_option);
+            let base = deadsync_profile_gameplay::scroll_effects_from_option(profiles[source].scroll_option);
             for tick in 0..=60 {
                 runtime.refresh_player(
                     player,
@@ -610,7 +610,7 @@ fn saved_mini_reaches_song_lua_constructor_and_reverse_path() {
     });
     let speeds = profiles.each_ref().map(|profile| profile.scroll_speed);
     let native: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../tests/fixtures/itgmania-song-lua-micro/profile-mini/splines-native.json"
+        "../../../../../tests/fixtures/itgmania-song-lua-micro/profile-mini/splines-native.json"
     ))
     .expect("native CubicSpline reference");
     for ((side, mini), native) in [(Side::P1, 0.6_f32), (Side::P2, -0.4)]

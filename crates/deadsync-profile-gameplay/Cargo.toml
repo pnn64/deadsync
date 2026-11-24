@@ -14,11 +14,7 @@ deadsync-profile = { path = "../deadsync-profile" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
 deadsync-simfile = { path = "../deadsync-simfile" }
-deadsync-song-lua = { path = "../deadsync-song-lua" }
 log = "0.4.35"
-
-[dev-dependencies]
-serde_json.workspace = true
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

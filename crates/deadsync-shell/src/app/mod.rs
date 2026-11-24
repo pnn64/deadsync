@@ -203,7 +203,8 @@ use deadsync_lights::cabinet_chart::{
 use deadsync_lights::{self as lights, HideFlags};
 use deadsync_online::gameplay_lobby::GameplayLobbySession;
 use deadsync_gameplay::stage_launch::{StageLaunch, StageLaunchPrompt, StageLaunchTarget};
-use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};
+use deadsync_assets::song_lua::apply_song_lua_reload;
+use deadsync_profile_gameplay::stage_charts::gameplay_chart_entry_plan;
 use deadsync_profile_gameplay::stage_options::StageOptions;
 #[cfg(test)]
 use deadsync_rules::judgment as judgment_rules;

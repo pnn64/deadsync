@@ -8677,7 +8677,7 @@ return Def.ActorFrame{}
                             session.play_style.player_count(),
                             &runtime_profiles,
                         );
-                        let context = deadsync_profile_gameplay::song_lua_compile_context(
+                        let context = deadsync_assets::song_lua::song_lua_compile_context(
                             song.as_ref(),
                             &charts,
                             session.play_style.player_count(),

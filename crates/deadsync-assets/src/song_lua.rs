@@ -1,10 +1,23 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use deadlib_present::actors::TextAttribute;
 use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap, TexturedMeshVertex};
+use deadsync_chart::{ChartData, GameplayChartData, SongData};
+use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::{GameplayInputPlayStyle as GameplayStyle, GameplaySession};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
+use deadsync_profile_gameplay::stage_charts::{StageChartReload, apply_stage_chart_reload};
+use deadsync_song_lua::playback::PreparedGameplaySongLua;
 use deadsync_song_lua::{
     overlay_model_layers_from_slots, song_lua_human_player_count, song_lua_style_info,
+};
+
+mod context;
+
+pub use context::{
+    prepare_song_lua, song_lua_catalog_note_bounds, song_lua_compile_context, song_lua_context,
+    song_lua_play_context,
 };
 
 pub use deadsync_song_lua::{
@@ -88,6 +101,64 @@ fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
         exists: crate::noteskin::song_lua_noteskin_exists,
         names: crate::noteskin::song_lua_noteskin_names,
     }
+}
+
+/// Apply the stage selection produced by the prepared Lua scene, when present.
+pub fn apply_song_lua_reload<S>(
+    song: &SongData,
+    charts: &mut [Arc<ChartData>; MAX_PLAYERS],
+    payloads: &mut [Arc<GameplayChartData>; MAX_PLAYERS],
+    prepared: &PreparedGameplaySongLua<S>,
+    session: &mut GameplaySession,
+    global_offset_seconds: f32,
+) -> Result<bool, String> {
+    let Some(steps) = prepared.loaded_steps() else {
+        return Ok(false);
+    };
+    let joined_sides = prepared.loaded_players().map(|players| {
+        if session.p2_runtime_player() {
+            [players[1], players[0]]
+        } else {
+            players
+        }
+    });
+    let play_style = prepared
+        .loaded_style()
+        .map(|style| lua_reload_style(session.play_style.is_pump(), style))
+        .transpose()?;
+    apply_stage_chart_reload(
+        song,
+        charts,
+        payloads,
+        StageChartReload {
+            steps,
+            joined_sides,
+            play_style,
+        },
+        session,
+        global_offset_seconds,
+    )?;
+    Ok(true)
+}
+
+fn lua_reload_style(pump: bool, style: &str) -> Result<GameplayStyle, String> {
+    use GameplayStyle as Style;
+
+    let selected = match (pump, style) {
+        (false, "single") => Style::Single,
+        (false, "double") => Style::Double,
+        (false, "versus") => Style::Versus,
+        (false, "couple") => Style::Couple,
+        (false, "routine") => Style::Routine,
+        // Prepared Pump scenes retain the game-qualified style key.
+        (true, "single" | "pump-single") => Style::PumpSingle,
+        (true, "double" | "pump-double") => Style::PumpDouble,
+        (true, "versus" | "pump-versus") => Style::PumpVersus,
+        (true, "couple" | "pump-couple") => Style::PumpCouple,
+        (true, "routine" | "pump-routine") => Style::PumpRoutine,
+        _ => return Err(format!("Lua reload selected unsupported style {style}")),
+    };
+    Ok(selected)
 }
 
 pub fn reload_song_lua(

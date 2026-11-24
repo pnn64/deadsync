@@ -1503,6 +1503,7 @@ dependencies = [
  "deadsync-profile-gameplay",
  "deadsync-rules",
  "deadsync-score",
+ "deadsync-simfile",
  "deadsync-song-lua",
  "image",
  "log",
@@ -1760,9 +1761,7 @@ dependencies = [
  "deadsync-rules",
  "deadsync-score",
  "deadsync-simfile",
- "deadsync-song-lua",
  "log",
- "serde_json",
 ]
 
 [[package]]
