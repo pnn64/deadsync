@@ -46,7 +46,7 @@ impl Cache {
         hash ^= hash >> 31;
         hash as usize & (capacity - 1)
     }
-    fn find(&self, key: Key) -> Option<usize> {
+    pub(crate) fn find(&self, key: Key) -> Option<usize> {
         if self.slots.is_empty() {
             return None;
         }
@@ -59,8 +59,15 @@ impl Cache {
             }
         }
     }
+    #[cfg(test)]
     pub(crate) fn contains_key(&self, key: &Key) -> bool {
         self.find(*key).is_some()
+    }
+    pub(crate) fn get_at(&self, index: usize) -> &Pattern {
+        let Slot::Occupied(_, value) = &self.slots[index] else {
+            unreachable!("prepared pattern")
+        };
+        value
     }
     pub(crate) fn clear(&mut self) {
         for slot in &mut self.slots {
@@ -111,10 +118,10 @@ impl Cache {
     }
     /// Caller reserved space before preparing the pattern. No allocation can
     /// occur between its successful compilation and publication here.
-    pub(crate) fn insert(&mut self, key: Key, value: Pattern) {
+    pub(crate) fn insert(&mut self, key: Key, value: Pattern) -> usize {
         if let Some(index) = self.find(key) {
             self.slots[index] = Slot::Occupied(key, value);
-            return;
+            return index;
         }
         assert!(self.len + self.removed < self.slots.len());
         let mut index = Self::bucket(key, self.slots.len());
@@ -130,17 +137,14 @@ impl Cache {
         }
         self.slots[index] = Slot::Occupied(key, value);
         self.len += 1;
+        index
     }
 }
 
 impl Index<&Key> for Cache {
     type Output = Pattern;
     fn index(&self, key: &Key) -> &Pattern {
-        let index = self.find(*key).expect("prepared pattern");
-        let Slot::Occupied(_, value) = &self.slots[index] else {
-            unreachable!()
-        };
-        value
+        self.get_at(self.find(*key).expect("prepared pattern"))
     }
 }
 

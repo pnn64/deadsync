@@ -172,27 +172,28 @@ impl Vm {
             .map(lua_integer)
             .ok_or_else(|| self.argument_type_error(base, count, index, "number"))
     }
-    fn prepare_pattern(&mut self, id: StringId, anchor: bool) -> Result<(), Error> {
+    fn prepare_pattern(&mut self, id: StringId, anchor: bool) -> Result<usize, Error> {
         let revision = crate::locale::revision();
         if revision != self.pattern_locale {
             self.patterns.clear();
             self.pattern_locale = revision;
         }
-        if !self.patterns.contains_key(&(id, anchor)) {
-            let before = self.patterns.storage_bytes();
-            let reserved = self.patterns.try_reserve(1);
-            self.gc_note_control(self.patterns.storage_bytes().saturating_sub(before));
-            reserved.map_err(|_| self.memory_failure())?;
-            let pattern = Pattern::compile(
-                &self.strings.bytes[slot_index(id.0)],
-                anchor,
-                self.functions.memory().clone(),
-            )
-            .map_err(|_| self.memory_failure())?;
-            self.gc_note_control(pattern.heap_bytes());
-            self.patterns.insert((id, anchor), pattern);
+        let key = (id, anchor);
+        if let Some(index) = self.patterns.find(key) {
+            return Ok(index);
         }
-        Ok(())
+        let before = self.patterns.storage_bytes();
+        let reserved = self.patterns.try_reserve(1);
+        self.gc_note_control(self.patterns.storage_bytes().saturating_sub(before));
+        reserved.map_err(|_| self.memory_failure())?;
+        let pattern = Pattern::compile(
+            &self.strings.bytes[slot_index(id.0)],
+            anchor,
+            self.functions.memory().clone(),
+        )
+        .map_err(|_| self.memory_failure())?;
+        self.gc_note_control(pattern.heap_bytes());
+        Ok(self.patterns.insert(key, pattern))
     }
     fn with_pattern(
         &mut self,
@@ -201,10 +202,10 @@ impl Vm {
         source: StringId,
         action: impl FnOnce(&Pattern, &[u8], &mut Work) -> Result<Option<Matched>, Error>,
     ) -> Result<Option<Matched>, Error> {
-        self.prepare_pattern(pattern, anchor)?;
+        let pattern_index = self.prepare_pattern(pattern, anchor)?;
         let before = self.pattern_work.heap_bytes();
         let result = action(
-            &self.patterns[&(pattern, anchor)],
+            self.patterns.get_at(pattern_index),
             &self.strings.bytes[slot_index(source.0)],
             &mut self.pattern_work,
         );
@@ -1125,8 +1126,8 @@ impl Vm {
         cursor: usize,
         room: usize,
     ) -> Result<Scan, Error> {
-        self.prepare_pattern(pattern, true)?;
-        let compiled = &self.patterns[&(pattern, true)];
+        let pattern_index = self.prepare_pattern(pattern, true)?;
+        let compiled = self.patterns.get_at(pattern_index);
         if compiled.anchored {
             return Ok(Scan::Single);
         }
