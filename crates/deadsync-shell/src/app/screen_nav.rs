@@ -263,11 +263,9 @@ impl App {
         }
         self.commit_screen_change(target_screen);
         if target_screen == CurrentScreen::SelectColor {
-            select_color::sync_runtime_view(
-                &mut self.state.screens.select_color_state,
-                crate::select_flow::runtime_view(),
-            );
-            select_color::on_enter(&mut self.state.screens.select_color_state);
+            let state = self.state.screens.select_color_mut();
+            select_color::sync_runtime_view(state, crate::select_flow::runtime_view());
+            select_color::on_enter(state);
         }
         if target_screen == CurrentScreen::ArrowCloudLogin {
             self.enter_arrowcloud_login();
@@ -344,6 +342,10 @@ impl App {
         target: CurrentScreen,
         event_loop: &ActiveEventLoop,
     ) {
+        if target == CurrentScreen::SelectColor && self.state.screens.select_color_state.is_none() {
+            self.handle_navigation_action(target);
+            return;
+        }
         let current = self.state.screens.current_screen;
         if target == CurrentScreen::Gameplay
             && current == CurrentScreen::SelectMusic
@@ -592,11 +594,9 @@ impl App {
             self.state.gameplay_offset_save_prompt = None;
         }
         if target == CurrentScreen::SelectColor {
-            select_color::sync_runtime_view(
-                &mut self.state.screens.select_color_state,
-                crate::select_flow::runtime_view(),
-            );
-            select_color::on_enter(&mut self.state.screens.select_color_state);
+            let state = self.state.screens.select_color_mut();
+            select_color::sync_runtime_view(state, crate::select_flow::runtime_view());
+            select_color::on_enter(state);
         }
         if target == CurrentScreen::ArrowCloudLogin {
             self.enter_arrowcloud_login();

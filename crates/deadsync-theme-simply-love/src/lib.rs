@@ -63,6 +63,13 @@ impl deadsync_theme::Theme for SimplyLoveTheme {
     type Screen = screens::Screen;
     type RuntimeRequest = SimplyLoveRuntimeRequest;
 
+    fn session_screen_support() -> deadsync_core::session_flow::SessionNavigationPolicy {
+        deadsync_core::session_flow::SessionNavigationPolicy {
+            show_select_color: true,
+            ..Default::default()
+        }
+    }
+
     #[inline(always)]
     fn screen_id(screen: Self::Screen) -> deadsync_theme::ThemeScreenId {
         screens::screen_id(screen)

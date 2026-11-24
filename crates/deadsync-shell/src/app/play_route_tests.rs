@@ -43,7 +43,6 @@ fn configured_themes_complete_song_route() {
 
 fn run_child(theme: &str) {
     let expected_theme: ThemeFlag = theme.parse().unwrap();
-    let color_step = u8::from(expected_theme == ThemeFlag::StepMania395);
     let root = tempfile::tempdir().unwrap();
     let dirs = AppDirs {
         data_dir: root.path().join("data"),
@@ -58,7 +57,7 @@ fn run_child(theme: &str) {
         format!(
             "[Options]\nTheme={theme}\nVideoRenderer=Software\nLogToFile=0\nCoinMode=Home\n\
              EnableArrowCloud=0\nEnableGrooveStats=0\n\
-             [Theme]\nMachineShowSelectProfile=1\nMachineShowSelectColor={color_step}\n\
+             [Theme]\nMachineShowSelectProfile=1\nMachineShowSelectColor=1\n\
              MachineShowSelectStyle=1\nMachineShowSelectPlayMode=1\n\
              MachineShowEvalSummary=1\nMachineShowNameEntry=1\nMachineShowGameover=1\n",
         ),
@@ -174,8 +173,15 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
 
     app.on_fade_complete(CurrentScreen::Menu, event_loop);
     settle(app, event_loop, CurrentScreen::Menu);
+    press(app, event_loop, VirtualAction::p2_start);
+    settle(app, event_loop, CurrentScreen::SelectProfile);
+    let has_select_color = theme == ThemeFlag::SimplyLove;
+    assert_eq!(app.state.screens.select_color_state.is_some(), has_select_color);
+    if has_select_color {
+        press(app, event_loop, VirtualAction::p2_start);
+        settle(app, event_loop, CurrentScreen::SelectColor);
+    }
     for next in [
-        CurrentScreen::SelectProfile,
         CurrentScreen::SelectStyle,
         CurrentScreen::SelectPlayMode,
         CurrentScreen::SelectMusic,
@@ -196,8 +202,8 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     }
     if theme == ThemeFlag::StepMania395 {
         assert_eq!(app.state.screens.select_music_state.p2_preferred_difficulty_index, 3);
-        assert!(config::runtime::get().machine_show_select_color, "screen availability must not rewrite the saved preference");
     }
+    assert!(config::runtime::get().machine_show_select_color, "screen availability must not rewrite the saved preference");
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actor_tree_has_text(&actors, SONG_TITLE));
     if theme == ThemeFlag::StepMania395 {

@@ -167,7 +167,10 @@ pub trait Theme {
 
     /// Optional session pages supported by this presentation.
     fn session_screen_support() -> deadsync_core::session_flow::SessionNavigationPolicy {
-        Default::default()
+        deadsync_core::session_flow::SessionNavigationPolicy {
+            show_select_color: false,
+            ..Default::default()
+        }
     }
 
     fn screen_id(screen: Self::Screen) -> ThemeScreenId;

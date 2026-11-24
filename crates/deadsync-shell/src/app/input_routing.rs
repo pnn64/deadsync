@@ -443,7 +443,7 @@ impl App {
             }
             CurrentScreen::SelectProfile => unreachable!("Select Profile uses the flat buffer"),
             CurrentScreen::SelectColor => {
-                screens::select_color::handle_input(&mut self.state.screens.select_color_state, &ev)
+                screens::select_color::handle_input(self.state.screens.select_color_mut(), &ev)
             }
             CurrentScreen::ArrowCloudLogin | CurrentScreen::GrooveStatsLogin => {
                 unreachable!("QR login input uses the flat buffer")

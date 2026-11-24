@@ -671,7 +671,7 @@ pub struct ScreensState {
     transitions: ScreenTransitionMount,
     attract: Option<attract_demo::AttractRuntime>,
     select_profile_state: <ActiveTheme as ThemeProfilePicker>::ProfilePickerState,
-    select_color_state: select_color::State,
+    select_color_state: Option<select_color::State>,
     arrowcloud_login_state: screens::arrowcloud_login::State,
     groovestats_login_state: screens::groovestats_login::State,
     select_style_state: select_style::State,
@@ -1235,6 +1235,14 @@ fn options_init_view(
 }
 
 impl ScreensState {
+    fn select_color(&self) -> &select_color::State {
+        self.select_color_state.as_ref().expect("Select Color is mounted")
+    }
+
+    fn select_color_mut(&mut self) -> &mut select_color::State {
+        self.select_color_state.as_mut().expect("Select Color is mounted")
+    }
+
     fn advance_session_end_entry(&mut self, delta: f32) {
         if matches!(
             self.current_screen,
@@ -1295,11 +1303,11 @@ impl ScreensState {
         );
 
         let select_flow_view = crate::select_flow::runtime_view();
-        let mut select_color_state = select_color::init(select_flow_view.clone());
-        select_color_state.active_color_index = color_index;
-        select_color::snap_scroll_to_active(&mut select_color_state);
-        select_color_state.bg_from_index = color_index;
-        select_color_state.bg_to_index = color_index;
+        let select_color_state = mount.session_screen_support.show_select_color.then(|| {
+            let mut view = select_flow_view.clone();
+            view.color_index = color_index;
+            select_color::init(view)
+        });
 
         let arrowcloud_login_state =
             screens::arrowcloud_login::init(color_index, dedicated_three_key_nav);
@@ -1560,7 +1568,7 @@ impl ScreensState {
                 (None, false)
             }
             CurrentScreen::SelectColor => {
-                select_color::update(&mut self.select_color_state, delta_time);
+                select_color::update(self.select_color_mut(), delta_time);
                 (None, false)
             }
             CurrentScreen::ArrowCloudLogin => {
@@ -7631,7 +7639,7 @@ impl App {
             );
         } else if screen == CurrentScreen::SelectColor {
             select_color::sync_runtime_view(
-                &mut self.state.screens.select_color_state,
+                self.state.screens.select_color_mut(),
                 crate::select_flow::runtime_view(),
             );
         } else if screen == CurrentScreen::SelectPlayMode {
@@ -8234,7 +8242,7 @@ impl App {
             }
             CurrentScreen::SelectColor => select_color::push_actors(
                 &mut actors,
-                &self.state.screens.select_color_state,
+                self.state.screens.select_color(),
                 screen_alpha_multiplier,
                 visual_policy,
             ),
@@ -9531,7 +9539,7 @@ impl App {
                 .cancel(SyncOwner::ContentBrowserPack);
         }
         if prev == CurrentScreen::SelectColor {
-            let idx = self.state.screens.select_color_state.active_color_index;
+            let idx = self.state.screens.select_color().active_color_index;
             self.sync_screen_color_index(idx);
         } else if prev == CurrentScreen::Options {
             let idx = self.state.screens.options_state.active_color_index;
@@ -9649,9 +9657,6 @@ impl App {
                 CurrentScreen::SelectStyle => {
                     self.state.screens.select_style_state.active_color_index
                 }
-                CurrentScreen::SelectColor => {
-                    self.state.screens.select_color_state.active_color_index
-                }
                 CurrentScreen::SelectProfile => {
                     ActiveTheme::profile_picker_color_index(&self.state.screens.select_profile_state)
                 }
@@ -9678,9 +9683,6 @@ impl App {
                 }
                 CurrentScreen::SelectStyle => {
                     self.state.screens.select_style_state.active_color_index
-                }
-                CurrentScreen::SelectColor => {
-                    self.state.screens.select_color_state.active_color_index
                 }
                 CurrentScreen::SelectProfile => {
                     ActiveTheme::profile_picker_color_index(&self.state.screens.select_profile_state)
