@@ -50,19 +50,7 @@ impl Key<'_> {
             // Numeric equality merges both zero signs; the stored first value
             // and the compiler's existing zero-sign selection are unchanged.
             Self::Number(v) => 0x165667b19e3779f9 ^ if v == 0.0 { 0 } else { v.to_bits() },
-            Self::String(bytes) => {
-                let mut hash = 0x85ebca77c2b2ae63 ^ bytes.len() as u64;
-                let (words, tail) = bytes.as_chunks::<8>();
-                for word in words {
-                    hash = (hash ^ u64::from_le_bytes(*word))
-                        .rotate_left(27)
-                        .wrapping_mul(0x9e3779b185ebca87);
-                }
-                for &byte in tail {
-                    hash = (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3);
-                }
-                hash
-            }
+            Self::String(bytes) => return Some(crate::hash::hash_bytes(bytes) as usize),
         };
         hash = (hash ^ (hash >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
         hash = (hash ^ (hash >> 27)).wrapping_mul(0x94d049bb133111eb);

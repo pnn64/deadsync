@@ -27,6 +27,7 @@ mod chunk51;
 mod compiler;
 mod error;
 mod format;
+mod hash;
 mod lexer;
 mod locale;
 #[allow(unsafe_code)]
