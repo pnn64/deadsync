@@ -706,10 +706,12 @@ impl StreamDecoder {
                                 }
                                 error
                             })?;
-                            self.crc.update(&input[pos..pos + used]);
-                            self.left -= used;
-                            self.input_left -= used;
-                            pos += used;
+                            if used != 0 {
+                                self.crc.update(&input[pos..pos + used]);
+                                self.left -= used;
+                                self.input_left -= used;
+                                pos += used;
+                            }
                             if buffers_can_grow {
                                 self.update_memory();
                             }

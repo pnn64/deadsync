@@ -168,6 +168,41 @@ fn stream_options(
 }
 
 #[test]
+fn image_data_tail_counts_toward_stream_progress_and_crc() {
+    let fixture = Fixture::new(deadlib_image_png::ColorType::Rgba, 8, false, false);
+    let expected = decode(&fixtures::file(&fixture.chunks)).unwrap();
+    let options = DecodeOptions::default();
+    for kind in [b"IDAT", b"fdAT"] {
+        let mut chunks = fixture.chunks.clone();
+        let last = chunks
+            .iter()
+            .rposition(|chunk| &chunk.kind == kind)
+            .unwrap();
+        chunks[last].data.extend((0..257).map(|n| (n * 17) as u8));
+        let wire = fixtures::file(&chunks);
+        for fragment in [1, 7, wire.len()] {
+            assert_eq!(
+                decode_reader(Fragments(&wire, fragment), &options).unwrap(),
+                expected
+            );
+            assert_eq!(
+                stream_options(&wire, fragment, &fixture, options).unwrap(),
+                (wire.len(), 0)
+            );
+        }
+
+        chunks[last].bad_crc = true;
+        let wire = fixtures::file(&chunks);
+        for fragment in [1, wire.len()] {
+            assert_eq!(
+                decode_reader(Fragments(&wire, fragment), &options),
+                Err(Error::Checksum)
+            );
+        }
+    }
+}
+
+#[test]
 fn independent_valid_animation_and_recovered_static_samples_all_formats() {
     let mut count = 0;
     for (color, depth) in fixtures::formats() {
