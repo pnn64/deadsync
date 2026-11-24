@@ -606,6 +606,20 @@ fn malformed_bit_masks_are_rejected_before_decoding_pixels() {
 }
 
 #[test]
+fn full_width_bitfield_keeps_the_noncontiguous_mask_error() {
+    let header = Header {
+        size: 56,
+        compression: 3,
+        masks: [u32::MAX, 0, 0, 0],
+        ..Header::new(1, 1, 32)
+    };
+    let bytes = bmp(header, &[], &[0; 4]);
+    let error = Error::Invalid("noncontiguous bitfield mask");
+    assert_eq!(probe(&bytes), Err(error.clone()));
+    assert_eq!(decode(&bytes), Err(error));
+}
+
+#[test]
 fn input_pixel_and_decoded_limits_apply_to_decode_and_header_only_probe() {
     for (bytes, decoded_bytes, header_end) in [
         (

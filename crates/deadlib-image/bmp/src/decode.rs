@@ -334,11 +334,13 @@ impl Channel {
             return Err(Error::Invalid("mask exceeds the pixel bit depth"));
         }
         let shift = mask.trailing_zeros();
-        let bits = mask.count_ones();
         let value = mask >> shift;
-        if value.checked_add(1).is_none_or(|next| value & next != 0) {
+        let next = value.wrapping_add(1);
+        if next == 0 || value & next != 0 {
             return Err(Error::Invalid("noncontiguous bitfield mask"));
         }
+        // A contiguous field is one less than a power of two.
+        let bits = next.trailing_zeros();
         if bits > 8 {
             return Err(Error::Unsupported("bitfield channel wider than 8 bits"));
         }
