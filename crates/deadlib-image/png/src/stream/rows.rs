@@ -145,7 +145,7 @@ impl ImageRows {
         palette: usize,
         policy: crate::PalettePolicy,
     ) -> Result<(usize, bool), Error> {
-        self.advance()?;
+        debug_assert!(!self.ready);
         let output = if self.complete {
             &mut [][..]
         } else {
@@ -231,8 +231,8 @@ impl ImageRows {
     pub(super) fn is_done(&self) -> bool {
         self.inflater.is_done()
     }
-    pub(super) fn finish(mut self) -> Result<(ImageKind, RowBuffers), Error> {
-        self.advance()?;
+    pub(super) fn finish(self) -> Result<(ImageKind, RowBuffers), Error> {
+        debug_assert!(!self.ready);
         self.inflater.finish()?;
         if !self.complete {
             return Err(Error::Invalid("image data length"));
