@@ -233,15 +233,17 @@ fn bgra_alpha_is_zero(source: &[u8], reverse: bool) -> bool {
 // RGB555 and RGB565 differ only in the green field's width. Repeat the high
 // bits instead of rounding, exactly as the general Channel sampler does.
 fn rgb16<const GREEN_BITS: u32>(packed: [u8; 2]) -> [u8; 3] {
-    let word = u16::from_le_bytes(packed);
-    let red = ((word >> (5 + GREEN_BITS)) & 31) as u8;
-    let green = ((word >> 5) & ((1 << GREEN_BITS) - 1)) as u8;
-    let blue = (word & 31) as u8;
-    [
-        (red << 3) | (red >> 2),
-        (green << (8 - GREEN_BITS)) | (green >> (2 * GREEN_BITS - 8)),
-        (blue << 3) | (blue >> 2),
-    ]
+    let word = u32::from(u16::from_le_bytes(packed));
+    let green_mask = ((1 << GREEN_BITS) - 1) << (16 - GREEN_BITS);
+    // Place each channel in the high bits of its output byte.
+    let channels = ((word >> (2 + GREEN_BITS)) & 0xf8)
+        | ((word << (11 - GREEN_BITS)) & green_mask)
+        | ((word << 19) & 0xf8_0000);
+    let green_tail = ((1 << (8 - GREEN_BITS)) - 1) << 8;
+    let expanded =
+        channels | ((channels >> 5) & 0x07_0007) | ((channels >> GREEN_BITS) & green_tail);
+    let [red, green, blue, _] = expanded.to_le_bytes();
+    [red, green, blue]
 }
 
 fn masked_samples(
