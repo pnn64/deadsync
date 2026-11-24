@@ -647,7 +647,7 @@ fn sorted_timing_table<T: Clone>(values: &[T], beat: impl Fn(&T) -> f32) -> Arc<
     output
 }
 
-fn bpm_points(bpms: &[(f32, f32)], song_offset_ns: TimingNs) -> (Arc<[BpmPoint]>, f32, TimingNs) {
+fn bpm_points(bpms: &[(f32, f32)]) -> (Arc<[BpmPoint]>, f32) {
     let bpms = if bpms.is_empty() {
         &[(0.0, 60.0)]
     } else {
@@ -668,14 +668,7 @@ fn bpm_points(bpms: &[(f32, f32)], song_offset_ns: TimingNs) -> (Arc<[BpmPoint]>
             .expect("new BPM table must be uniquely owned")
             .sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
     }
-    let first = points[0];
-    let first_time = if first.beat > 0.0 && first.bpm > 0.0 {
-        (first.beat - 0.0).mul_add(60.0 / first.bpm, 0.0)
-    } else {
-        0.0
-    };
-    let beat0_offset_ns = timing_ns_add_seconds(song_offset_ns, first_time);
-    (points, max_bpm, beat0_offset_ns)
+    (points, max_bpm)
 }
 
 // Stop/delay tables are private and immutable. Validate row order at load,
@@ -723,7 +716,10 @@ impl TimingData {
         let song_offset_ns = timing_ns_from_seconds(song_offset_sec);
         let global_offset_ns = timing_ns_from_seconds(global_offset_sec);
 
-        let (bpms, max_bpm, beat0_offset_ns) = bpm_points(&segments.bpms, song_offset_ns);
+        let (bpms, max_bpm) = bpm_points(&segments.bpms);
+        // Seed conversions at beat zero before timing events. A row-zero
+        // delay advances the clock before the beat-zero note and any warp.
+        let beat0_offset_ns = song_offset_ns.saturating_neg().saturating_sub(global_offset_ns);
 
         // sorted_timing_table orders non-NaN beats. Row rounding and the
         // saturating float-to-int cast are monotonic, including infinities.
@@ -761,11 +757,6 @@ impl TimingData {
             native_group_offset_sec: 0.0,
             max_bpm,
         };
-
-        // Only the first BPM's canonical time anchors conversions. Later
-        // event timestamps are never read by the timing state machine.
-        timing_with_stops.beat0_offset_ns =
-            timing_with_stops.get_time_for_beat_internal_ns(timing_with_stops.bpms[0].beat);
 
         timing_with_stops.rebuild_speed_runtime();
 
@@ -4725,6 +4716,50 @@ mod tests {
         assert!(!timing.is_warp_at_beat(60.0));
         assert!(timing.is_warp_at_beat(60.125));
         assert!(!timing.is_judgable_at_beat(60.125));
+    }
+
+    #[test]
+    fn beat_zero_delay_precedes_a_chain_of_warps() {
+        let segments = TimingSegments {
+            bpms: vec![(0.0, 110.0)],
+            delays: [(0.0, 0.545455), (8.0, 0.272727), (16.0, 0.136364)]
+                .into_iter()
+                .map(|(beat, duration)| DelaySegment { beat, duration })
+                .collect(),
+            warps: [0.0, 8.0, 16.0]
+                .into_iter()
+                .map(|beat| WarpSegment { beat, length: 8.0 })
+                .collect(),
+            ..TimingSegments::default()
+        };
+        let timing = TimingData::from_segments(0.0, 0.0, &segments, &[]);
+        let mut info_cache = BeatInfoCache::new(&timing);
+        for (seconds, beat) in [(0.0, 0.0), (0.54, 0.0), (0.55, 8.0), (0.82, 16.0), (0.1, 0.0)] {
+            let info = timing.get_beat_info_from_time(seconds);
+            assert_eq!(info.beat, beat, "music time {seconds}s");
+            assert!(info.is_in_delay, "music time {seconds}s");
+            let cached = timing.get_beat_info_from_time_cached(seconds, &mut info_cache);
+            assert_eq!(cached.beat, beat, "cached music time {seconds}s");
+            assert!(cached.is_in_delay, "cached music time {seconds}s");
+        }
+
+        let mut beat_cache = BeatTimeCache::new(&timing);
+        for (beat, seconds) in [
+            (0.0, 0.545455),
+            (8.0, 0.818182),
+            (8.375, 0.818182),
+            (24.0, 0.954546),
+        ] {
+            let time = timing.get_time_for_beat_ns(beat);
+            assert!(
+                (timing_ns_to_seconds(time) - seconds).abs() < 0.000001,
+                "beat {beat}"
+            );
+            assert_eq!(
+                timing.get_time_for_beat_ns_cached(beat, &mut beat_cache),
+                time
+            );
+        }
     }
 
     #[test]
