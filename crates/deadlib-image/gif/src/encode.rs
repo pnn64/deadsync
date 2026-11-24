@@ -22,15 +22,33 @@ impl Default for EncodeOptions {
 /// Incremental writer. Input frames are already indexed; no quantization,
 /// palette remapping or RGBA conversion ever happens. `finish` writes a trailer.
 pub struct Encoder<W: Write> {
-    writer: W,
+    output: EncoderOutput<W>,
     header: Header,
+}
+impl<W: Write> Encoder<W> {
+    pub fn new(writer: W, header: Header, options: EncodeOptions) -> Result<Self, Error> {
+        Ok(Self {
+            output: EncoderOutput::new(writer, &header, options)?,
+            header,
+        })
+    }
+    pub fn write_block(&mut self, block: &Block) -> Result<(), Error> {
+        self.output.write_block(&self.header, block)
+    }
+    pub fn finish(self) -> Result<W, Error> {
+        self.output.finish()
+    }
+}
+
+struct EncoderOutput<W: Write> {
+    writer: W,
     options: EncodeOptions,
     lzw: lzw::Encoder,
     compressed: Vec<u8>,
     failed: bool,
 }
-impl<W: Write> Encoder<W> {
-    pub fn new(mut writer: W, header: Header, options: EncodeOptions) -> Result<Self, Error> {
+impl<W: Write> EncoderOutput<W> {
+    fn new(mut writer: W, header: &Header, options: EncodeOptions) -> Result<Self, Error> {
         header.validate()?;
         if options.image_sub_block_size == 0 {
             return Err(Error::Invalid("zero image sub-block size"));
@@ -57,47 +75,46 @@ impl<W: Write> Encoder<W> {
             header.pixel_aspect_ratio,
         ])?;
         if let Some(p) = &header.global_palette {
-            write_palette(&mut writer, p)?;
+            writer.write_all(p.as_flattened())?;
         }
         Ok(Self {
             writer,
-            header,
             options,
             lzw: lzw::Encoder::new(),
             compressed: Vec::new(),
             failed: false,
         })
     }
-    pub fn write_block(&mut self, block: &Block) -> Result<(), Error> {
+    fn write_block(&mut self, header: &Header, block: &Block) -> Result<(), Error> {
         if self.failed {
             return Err(Error::Invalid("encoder is failed"));
         }
         let result = match block {
-            Block::Frame(f) => self.frame(f),
-            Block::Extension(e) => self.extension(e),
+            Block::Frame(f) => self.frame(header, f),
+            Block::Extension(e) => self.extension(header, e),
         };
         if result.is_err() {
             self.failed = true;
         }
         result
     }
-    pub fn finish(mut self) -> Result<W, Error> {
+    fn finish(mut self) -> Result<W, Error> {
         if self.failed {
             return Err(Error::Invalid("encoder is failed"));
         }
         self.writer.write_all(&[0x3b])?;
         Ok(self.writer)
     }
-    fn require89(&self) -> Result<(), Error> {
-        if self.header.version == Version::Gif87a {
+    fn require89(version: Version) -> Result<(), Error> {
+        if version == Version::Gif87a {
             Err(Error::Invalid("GIF89a block in GIF87a stream"))
         } else {
             Ok(())
         }
     }
-    fn control(&mut self, control: Option<GraphicControl>) -> Result<(), Error> {
+    fn control(&mut self, version: Version, control: Option<GraphicControl>) -> Result<(), Error> {
         if let Some(c) = control {
-            self.require89()?;
+            Self::require89(version)?;
             self.writer.write_all(&[
                 0x21,
                 0xf9,
@@ -113,13 +130,10 @@ impl<W: Write> Encoder<W> {
         }
         Ok(())
     }
-    fn frame(&mut self, f: &Frame) -> Result<(), Error> {
-        let maximum = f.validate::<true>(&self.header, None, true)?;
-        if f.sorted {
-            self.require89()?;
-        }
-        if f.control.is_some() {
-            self.require89()?;
+    fn frame(&mut self, header: &Header, f: &Frame) -> Result<(), Error> {
+        let maximum = f.validate::<true>(header, None, true)?;
+        if f.sorted || f.control.is_some() {
+            Self::require89(header.version)?;
         }
         // Derive the minimum from actual indices; unused palette colors need
         // not increase the code width. No indices or palette entries change.
@@ -139,7 +153,7 @@ impl<W: Write> Encoder<W> {
                 &mut self.compressed,
             )?;
         }
-        self.control(f.control)?;
+        self.control(header.version, f.control)?;
         self.writer.write_all(&[0x2c])?;
         for n in [f.left, f.top, f.width, f.height] {
             self.writer.write_all(&n.to_le_bytes())?;
@@ -154,7 +168,7 @@ impl<W: Write> Encoder<W> {
                 | u8::from(f.sorted) << 5
                 | size])?;
         if let Some(p) = &f.local_palette {
-            write_palette(&mut self.writer, p)?;
+            self.writer.write_all(p.as_flattened())?;
         }
         self.writer.write_all(&[minimum])?;
         for part in self
@@ -167,7 +181,7 @@ impl<W: Write> Encoder<W> {
         self.writer.write_all(&[0])?;
         Ok(())
     }
-    fn extension(&mut self, extension: &Extension) -> Result<(), Error> {
+    fn extension(&mut self, header: &Header, extension: &Extension) -> Result<(), Error> {
         // Validate all data before writing any part of this extension.
         let data = match extension {
             Extension::Comment(data)
@@ -180,7 +194,7 @@ impl<W: Write> Encoder<W> {
         }
         match extension {
             Extension::Comment(_) => {
-                self.require89()?;
+                Self::require89(header.version)?;
                 self.writer.write_all(&[0x21, 0xfe])?;
             }
             Extension::Application {
@@ -188,15 +202,15 @@ impl<W: Write> Encoder<W> {
                 authentication,
                 ..
             } => {
-                self.require89()?;
+                Self::require89(header.version)?;
                 self.writer.write_all(&[0x21, 0xff, 11])?;
                 self.writer.write_all(identifier)?;
                 self.writer.write_all(authentication)?;
             }
             Extension::PlainText(text) => {
-                self.require89()?;
-                validate_text(text, &self.header, None, true)?;
-                self.control(text.control)?;
+                Self::require89(header.version)?;
+                validate_text(text, header, None, true)?;
+                self.control(header.version, text.control)?;
                 self.writer.write_all(&[0x21, 1, 12])?;
                 for n in [text.left, text.top, text.width, text.height] {
                     self.writer.write_all(&n.to_le_bytes())?;
@@ -215,7 +229,7 @@ impl<W: Write> Encoder<W> {
                 if control.is_some() && !is_graphic_label(*label) {
                     return Err(Error::Invalid("graphic control on non-graphic extension"));
                 }
-                self.control(*control)?;
+                self.control(header.version, *control)?;
                 self.writer.write_all(&[0x21, *label])?;
             }
         }
@@ -227,21 +241,13 @@ impl<W: Write> Encoder<W> {
         Ok(())
     }
 }
-fn write_palette<W: Write>(writer: &mut W, p: &[[u8; 3]]) -> Result<(), Error> {
-    let mut data = [0; 768];
-    for (dest, src) in data.as_chunks_mut::<3>().0.iter_mut().zip(p) {
-        dest.copy_from_slice(src);
-    }
-    writer.write_all(&data[..p.len() * 3])?;
-    Ok(())
-}
 pub fn encode(gif: &Gif, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     encode_into(gif, options, Vec::new())
 }
 pub fn encode_into<W: Write>(gif: &Gif, options: &EncodeOptions, writer: W) -> Result<W, Error> {
-    let mut encoder = Encoder::new(writer, gif.header.clone(), options.clone())?;
+    let mut encoder = EncoderOutput::new(writer, &gif.header, options.clone())?;
     for block in &gif.blocks {
-        encoder.write_block(block)?;
+        encoder.write_block(&gif.header, block)?;
     }
     encoder.finish()
 }

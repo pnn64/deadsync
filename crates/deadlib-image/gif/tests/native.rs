@@ -84,13 +84,14 @@ fn native_encoder_reference_decoder_all_palette_sizes_and_interlace() {
                 });
                 gif.blocks.push(Block::Frame(frame));
                 for size in [1, 7, 255] {
-                    let encoded = encode(
-                        &gif,
-                        &EncodeOptions {
-                            image_sub_block_size: size,
-                        },
-                    )
-                    .unwrap();
+                    let options = EncodeOptions {
+                        image_sub_block_size: size,
+                    };
+                    let encoded = encode(&gif, &options).unwrap();
+                    let mut incremental =
+                        Encoder::new(Vec::new(), gif.header.clone(), options).unwrap();
+                    incremental.write_block(&gif.blocks[0]).unwrap();
+                    assert_eq!(incremental.finish().unwrap(), encoded);
                     assert_eq!(decode(&encoded).unwrap(), gif);
                     verify_reference(&encoded, &gif);
                 }
