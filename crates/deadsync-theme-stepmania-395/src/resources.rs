@@ -6,6 +6,7 @@ use crate::StepManiaTheme;
 pub(crate) const RANKING_FONT: &str = "stepmania-395/ranking";
 
 pub(crate) const TITLE_FONT: &str = "stepmania-395/title";
+pub(crate) const CREDITS_FONT: &str = "stepmania-395/credits";
 pub(crate) const NORMAL_FONT: &str = "stepmania-395/normal";
 pub(crate) const BPM_FONT: &str = "stepmania-395/bpm";
 pub(crate) const WHEEL_FONT: &str = "stepmania-395/wheel";
@@ -80,6 +81,11 @@ impl ThemeResources for StepManiaTheme {
         ThemeAssetManifest {
             fonts: &[
                 FontAssetSpec {
+                    name: CREDITS_FONT,
+                    ini_path: "assets/fonts/stepmania-395/ScreenManager credits.ini",
+                    fallback_font_name: Some(NORMAL_FONT),
+                },
+                FontAssetSpec {
                     name: BPM_FONT,
                     ini_path: "assets/fonts/stepmania-395/bpm.ini",
                     fallback_font_name: Some(NORMAL_FONT),
@@ -147,6 +153,8 @@ impl ThemeResources for StepManiaTheme {
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("title-pay"),
+                png!("title-free"),
                 png!("music-bpm-label"),
                 png!("menu-style-single"),
                 png!("menu-style-versus"),

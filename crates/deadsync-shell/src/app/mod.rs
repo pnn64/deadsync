@@ -4146,8 +4146,7 @@ impl App {
     }
 
     fn sync_main_menu_runtime_view(&mut self) {
-        let coin = config::runtime::get().coin;
-        let view = crate::main_menu::runtime_view(self.state.coin.credits(coin));
+        let view = crate::main_menu::runtime_view(self.state.coin.coin_balance());
         self.state.screens.menu_state.sync_runtime(view);
     }
 

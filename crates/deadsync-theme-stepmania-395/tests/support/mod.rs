@@ -213,10 +213,21 @@ pub fn transition_actors(arriving: bool, elapsed: f32) -> (Vec<Actor>, f32) {
 }
 
 pub fn title_actors(elapsed: f32) -> Vec<Actor> {
+    title_actors_with_runtime(elapsed, Default::default())
+}
+
+pub fn title_actors_with_runtime(
+    elapsed: f32,
+    runtime: deadsync_theme::main_menu::MainMenuRuntimeView<
+        deadsync_config::theme::GameFlag,
+        deadsync_config::coin::CoinMode,
+    >,
+) -> Vec<Actor> {
     use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
     use deadsync_theme::{ThemeEffect, TransitionState};
     use deadsync_theme_stepmania_395::StepManiaTheme;
     let mut state = StepManiaTheme::init_menu(0);
+    StepManiaTheme::sync_menu_runtime(&mut state, runtime);
     let _: ThemeEffect<_, ()> =
         StepManiaTheme::update_menu(&mut state, elapsed, MainMenuPhase::Active);
     let mut actors = Vec::new();

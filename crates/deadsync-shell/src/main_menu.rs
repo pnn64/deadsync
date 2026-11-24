@@ -49,7 +49,7 @@ const fn groove_status(boogie: bool, status: GrooveStatus) -> MainMenuGrooveStat
     }
 }
 
-pub(crate) fn runtime_view(credits: u32) -> MainMenuRuntimeView {
+pub(crate) fn runtime_view(coin_balance: u32) -> MainMenuRuntimeView {
     let (game, coin, allow_shutdown_host, dedicated_three_key_nav, smx_input, show_local_ip) = {
         let config = deadsync_config::runtime::get();
         (
@@ -74,12 +74,15 @@ pub(crate) fn runtime_view(credits: u32) -> MainMenuRuntimeView {
         (smx_input && deadsync_smx::conflict_warning_active()).then_some(MainMenuSmxConflictView {
             color_rgb: deadsync_smx::CONFLICT_WARNING_RGB,
         });
+    let credits = coin_balance / u32::from(coin.coins_per_credit);
 
     MainMenuRuntimeView {
         game,
         coin_mode: coin.mode,
         event_mode: coin.event_mode(),
         credits,
+        credit_remainder: (coin_balance % u32::from(coin.coins_per_credit)) as u8,
+        coins_per_credit: coin.coins_per_credit,
         can_start: !matches!(coin.mode, deadsync_config::coin::CoinMode::Pay) || credits > 0,
         allow_shutdown_host,
         dedicated_three_key_nav,

@@ -1201,6 +1201,10 @@ impl GameplayPresentation {
             plan.install_feedback(&hud);
         }
         self.hud = Some(hud);
+        if let Some(scratch) = &mut self.frame_scratch {
+            // A replacement HUD also replaces fragments retained during prewarm.
+            scratch.presentation_skeleton.initialized = false;
+        }
     }
 
     pub const fn has_hud(&self) -> bool {
@@ -1755,9 +1759,6 @@ fn push_system_profile_footer(
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     presentation_skeleton: &mut GameplayPresentationSkeleton,
 ) {
-    if state.presentation().hud.as_ref().is_some_and(|hud| !hud.profile_footer) {
-        return;
-    }
     let hud = &state.presentation().hud_snapshot;
     let p1_footer = system_footer_player(&hud.p1);
     let p2_footer = system_footer_player(&hud.p2);
@@ -1785,6 +1786,12 @@ fn push_system_profile_footer(
         }
     };
     presentation_skeleton.push(STATIC_FOOTER, actors, |actors| {
+        if let Some(draw) = state.presentation().hud.as_ref().and_then(|hud| hud.profile_footer) {
+            draw(actors, deadsync_theme::views::GameplayProfileFooterView {
+                player_names: [left_text, right_text],
+            });
+            return;
+        }
         let mut footer = screen_bar::build_no_background(ScreenBarParams {
             visual_policy,
             title: "",

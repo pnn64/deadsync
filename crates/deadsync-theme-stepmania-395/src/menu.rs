@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::StepManiaTheme;
 use crate::presentation::Layout;
-use crate::resources::{NORMAL_FONT, TITLE_FONT};
+use crate::resources::{CREDITS_FONT, NORMAL_FONT, TITLE_FONT};
 
 type RuntimeView = MainMenuRuntimeView<GameFlag, CoinMode>;
 const ACTIONS: &[MainMenuItem] = &[
@@ -35,6 +35,7 @@ pub struct MenuState {
     color_index: i32,
     runtime: RuntimeView,
     library_text: Arc<str>,
+    credit_text: Arc<str>,
     elapsed: f32,
     idle: f32,
     focus_age: f32,
@@ -68,6 +69,7 @@ impl ThemeMainMenu for StepManiaTheme {
             color_index,
             runtime: RuntimeView::default(),
             library_text: "0 songs in 0 groups, 0 courses".into(),
+            credit_text: "PRESS START".into(),
             elapsed: 0.0,
             idle: 0.0,
             focus_age: 0.0,
@@ -92,6 +94,37 @@ impl ThemeMainMenu for StepManiaTheme {
     }
 
     fn sync_menu_runtime(state: &mut MenuState, view: RuntimeView) {
+        if (
+            state.runtime.coin_mode,
+            state.runtime.credits,
+            state.runtime.credit_remainder,
+            state.runtime.coins_per_credit,
+        ) != (
+            view.coin_mode,
+            view.credits,
+            view.credit_remainder,
+            view.coins_per_credit,
+        ) {
+            state.credit_text = match view.coin_mode {
+                CoinMode::Home => "PRESS START".into(),
+                CoinMode::Free => "FREE PLAY".into(),
+                CoinMode::Pay => {
+                    let mut text = String::from("CREDIT(S)");
+                    use std::fmt::Write;
+                    if view.credits > 0 || view.coins_per_credit == 1 {
+                        let _ = write!(text, "  {}", view.credits);
+                    }
+                    if view.coins_per_credit > 1 {
+                        let _ = write!(
+                            text,
+                            "  {}/{}",
+                            view.credit_remainder, view.coins_per_credit
+                        );
+                    }
+                    text.into()
+                }
+            };
+        }
         if (
             state.runtime.song_count,
             state.runtime.pack_count,
@@ -174,7 +207,8 @@ impl ThemeMainMenu for StepManiaTheme {
         let home = state.runtime.coin_mode == CoinMode::Home;
         let selected = state.selected_row();
         for (index, &(label, action)) in ROWS.iter().enumerate() {
-            if !home && index != 0 {
+            // ScreenTitleJoin redirects its sole scroller choice to _blank.
+            if !home {
                 continue;
             }
             let y = 90.0 + (index as f32 - selected as f32) * 50.0;
@@ -196,12 +230,49 @@ impl ThemeMainMenu for StepManiaTheme {
             text.shadowlength(5.0 * layout.scale);
             actors.push(text.build(0));
         }
+        if !home {
+            let (key, width) = match state.runtime.coin_mode {
+                CoinMode::Pay => ("stepmania-395/title-pay", 434.0),
+                CoinMode::Free => ("stepmania-395/title-free", 330.0),
+                CoinMode::Home => unreachable!(),
+            };
+            let mut prompt = layout.sprite(key, [320.0, 180.0], [width, 36.0], 2);
+            let shade = 0.75 - 0.25 * (state.elapsed * std::f32::consts::TAU).cos();
+            prompt.diffuse([shade, shade, shade, alpha]);
+            actors.push(prompt.build(0));
+        }
         let mut text = layout.text(NORMAL_FONT, (&state.library_text).into(), [20.0, 20.0], 0.5);
         text.align(0.0, 0.5);
         text.horizalign(TextAlign::Left);
         text.diffuse([0.6, 0.6, 0.6, alpha]);
         text.shadowlength(2.0 * layout.scale);
         actors.push(text.build(0));
+        let mut version = layout.text(
+            NORMAL_FONT,
+            TextContent::Static(concat!("deadsync ", env!("CARGO_PKG_VERSION"))),
+            [620.0, 20.0],
+            0.5,
+        );
+        version.align(1.0, 0.5);
+        version.horizalign(TextAlign::Right);
+        version.diffuse([0.6, 0.6, 0.6, alpha]);
+        version.shadowlength(2.0 * layout.scale);
+        actors.push(version.build(0));
+        let help = if home {
+            "Use &UP; &DOWN; to select, then press START"
+        } else {
+            "Press START to begin"
+        };
+        let mut help = layout.text(NORMAL_FONT, TextContent::Static(help), [320.0, 440.0], 0.5);
+        help.diffuse([1.0, 1.0, 1.0, alpha]);
+        actors.push(help.build(0));
+        for x in [120.0, 520.0] {
+            let mut credits =
+                layout.text(CREDITS_FONT, (&state.credit_text).into(), [x, 474.0], 1.0);
+            credits.shadowlength(0.0);
+            credits.diffuse([1.0, 1.0, 1.0, alpha]);
+            actors.push(credits.build(0));
+        }
     }
 }
 

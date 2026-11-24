@@ -28,6 +28,11 @@ step through the shared theme contract. Cabinet preferences are retained for
 other themes. Song/course preparation, judged results, profile updates and
 navigation remain shared game behavior.
 
+Home mode uses the title scroller. Free/Pay modes use the separate original
+arcade title prompts, help line and paired credit labels, including the live
+fraction toward the next paid credit. The native menu draws these from prepared
+coin facts and bundled original artwork.
+
 ## Verification
 
 The configured-theme route test launches each installed theme in an isolated
@@ -37,7 +42,7 @@ Game Over. It then selects Nonstop through the normal menu, plays a parsed
 two-stage course, checks its real song/artist metadata and accumulated P2
 results, and returns to the course wheel. No reference scripts participate.
 
-The hidden-window GPU capture fixture in `tests/attract_render.rs` renders 51
+The hidden-window GPU capture fixture in `tests/attract_render.rs` renders 54
 native scenes at 640 by 480, including transition frames, gameplay sequences,
 P2-only results and Nonstop evaluation. Captures are written to
 `target/native-395-attract-captures`. Focused presentation, navigation and
@@ -47,8 +52,8 @@ The shell's ignored `native_gameplay_composition_captures` test also renders
 five complete gameplay scenes with prepared chart data, resident stock noteskin
 textures and the native HUD: P1, P2, Reverse, Versus, and a Versus song-script
 foreground. These captures are written to `target/native-395-gameplay-captures`.
-They check composition around the fields, including the absence of the default
-profile footer and the score/life frames' position above hold bodies. The
+They check composition around the fields, including the native system-credit
+profile labels and the score/life frames' position above hold bodies. The
 selected noteskin and game-owned field geometry are retained.
 
 ## Fidelity boundaries

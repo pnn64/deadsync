@@ -79,6 +79,54 @@ fn title_logo_stays_hidden_until_its_original_reveal_delay() {
 }
 
 #[test]
+fn arcade_title_uses_original_prompts_and_live_credit_progress() {
+    use deadlib_present::space::{Metrics, with_current_metrics};
+    with_current_metrics(Metrics::centered(640.0, 480.0), || {
+        for (mode, credits, remainder, price, artwork, expected) in [
+            (CoinMode::Home, 0, 0, 1, None, "PRESS START"),
+            (CoinMode::Free, 0, 0, 1, Some("stepmania-395/title-free"), "FREE PLAY"),
+            (CoinMode::Pay, 0, 1, 3, Some("stepmania-395/title-pay"), "CREDIT(S)  1/3"),
+            (CoinMode::Pay, 2, 1, 3, Some("stepmania-395/title-pay"), "CREDIT(S)  2  1/3"),
+            (CoinMode::Pay, 2, 0, 1, Some("stepmania-395/title-pay"), "CREDIT(S)  2"),
+        ] {
+            let actors = support::title_actors_with_runtime(1.0, MainMenuRuntimeView {
+                coin_mode: mode,
+                credits,
+                credit_remainder: remainder,
+                coins_per_credit: price,
+                ..Default::default()
+            });
+            let rows = actors.iter().filter(|actor| matches!(actor,
+                Actor::Text { font: "stepmania-395/title", .. })).count();
+            assert_eq!(rows, if mode == CoinMode::Home { 7 } else { 0 });
+            let status: Vec<_> = actors.iter().filter_map(|actor| match actor {
+                Actor::Text { font: "stepmania-395/credits", content, offset, .. } => {
+                    assert_eq!(content.as_str(), expected);
+                    Some(*offset)
+                }
+                _ => None,
+            }).collect();
+            assert_eq!(status, [[120.0, 474.0], [520.0, 474.0]]);
+            let prompts: Vec<_> = actors.iter().filter_map(|actor| match actor {
+                Actor::Sprite { source, offset, .. } if matches!(source.texture_key(),
+                    Some("stepmania-395/title-free" | "stepmania-395/title-pay")) => {
+                    assert_eq!(*offset, [320.0, 180.0]);
+                    source.texture_key()
+                }
+                _ => None,
+            }).collect();
+            assert_eq!(prompts.first().copied(), artwork);
+            assert_eq!(prompts.len(), usize::from(artwork.is_some()));
+            assert!(actors.iter().any(|actor| matches!(actor,
+                Actor::Text { content, offset, .. }
+                if *offset == [320.0, 440.0] && content.as_str().contains(
+                    if mode == CoinMode::Home { "to select, then press START" } else { "Press START to begin" }
+                ))));
+        }
+    });
+}
+
+#[test]
 fn native_menu_transition_collapses_and_song_exit_holds_the_original_black_fade() {
     use deadlib_present::space::{Metrics, with_current_metrics};
     use deadsync_theme::{ThemeTransitionAudio, ThemeTransitions, TransitionKind};

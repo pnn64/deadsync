@@ -7271,6 +7271,8 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
         "pub song_count: usize",
         "pub pack_count: usize",
         "pub course_count: usize",
+        "pub credit_remainder: u8",
+        "pub coins_per_credit: u8",
         "pub groovestats: MainMenuGrooveStatus",
         "pub arrowcloud: MainMenuArrowCloudStatus",
         "pub smx_conflict: Option<MainMenuSmxConflictView>",
@@ -7304,7 +7306,7 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
         .expect("shell main-menu bridge should be readable");
     assert!(!shell.contains("deadsync_theme_simply_love"));
     for runtime_read in [
-        "runtime_view(credits: u32) -> MainMenuRuntimeView",
+        "runtime_view(coin_balance: u32) -> MainMenuRuntimeView",
         "deadsync_config::runtime::get()",
         "deadsync_simfile::runtime_cache::get_song_cache()",
         "deadsync_simfile::runtime_cache::get_course_cache()",
@@ -7320,7 +7322,7 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
 
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    assert!(app.contains("crate::main_menu::runtime_view(self.state.coin.credits(coin))"));
+    assert!(app.contains("crate::main_menu::runtime_view(self.state.coin.coin_balance())"));
     for hook in [
         "menu_state: crate::title_menu::InstalledMenu",
         "(mount.title)(color_index)",

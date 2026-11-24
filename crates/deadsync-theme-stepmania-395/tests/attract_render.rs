@@ -229,6 +229,25 @@ fn native_attract_captures() {
             &assets,
         );
     }
+    for (name, mode, credits, remainder, price) in [
+        ("title-free", deadsync_config::coin::CoinMode::Free, 0, 0, 1),
+        ("title-pay-partial", deadsync_config::coin::CoinMode::Pay, 0, 1, 3),
+        ("title-pay-credit", deadsync_config::coin::CoinMode::Pay, 2, 1, 3),
+    ] {
+        let actors = support::title_actors_with_runtime(1.5,
+            deadsync_theme::main_menu::MainMenuRuntimeView {
+                coin_mode: mode,
+                credits,
+                credit_remainder: remainder,
+                coins_per_credit: price,
+                can_start: mode != deadsync_config::coin::CoinMode::Pay || credits > 0,
+                song_count: 37,
+                pack_count: 4,
+                course_count: 3,
+                ..Default::default()
+            });
+        capture_actors(name, &actors, 1.5, &output, &metrics, &mut backend, &assets);
+    }
     capture_actors(
         "select-music",
         &support::music_actors(),

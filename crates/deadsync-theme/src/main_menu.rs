@@ -150,6 +150,10 @@ pub struct MainMenuRuntimeView<Game, CoinMode> {
     pub coin_mode: CoinMode,
     pub event_mode: bool,
     pub credits: u32,
+    /// Coins already inserted toward the next whole credit.
+    pub credit_remainder: u8,
+    /// Cabinet price of a whole credit, always at least one.
+    pub coins_per_credit: u8,
     pub can_start: bool,
     pub allow_shutdown_host: bool,
     pub dedicated_three_key_nav: bool,
@@ -169,6 +173,8 @@ impl<Game: Default, CoinMode: Default> Default for MainMenuRuntimeView<Game, Coi
             coin_mode: CoinMode::default(),
             event_mode: true,
             credits: 0,
+            credit_remainder: 0,
+            coins_per_credit: 1,
             can_start: true,
             allow_shutdown_host: false,
             dedicated_three_key_nav: false,

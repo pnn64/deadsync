@@ -26,7 +26,7 @@ pub const GAMEPLAY_HUD: GameplayHud<Actor> = GameplayHud {
     background_warning: push_warning,
     fallback_background: push_background,
     unjoined_seat: push_unjoined,
-    profile_footer: false,
+    profile_footer: Some(push_profile_footer),
     autoplay_label: push_autoplay,
     field_feedback: &FEEDBACK,
     default_tap_atlas: GameplayTapAtlas {
@@ -255,7 +255,12 @@ fn push_stage(actors: &mut Vec<Actor>, view: GameplayStageBadgeView<'_>) {
     };
     actors.push(
         Layout::current()
-            .sprite(key, [320.0, 54.0 - slide(view.motion)], [width, 16.0], HUD_Z + 5)
+            .sprite(
+                key,
+                [320.0, 54.0 - slide(view.motion)],
+                [width, 16.0],
+                HUD_Z + 5,
+            )
             .build(0),
     );
 }
@@ -315,6 +320,28 @@ fn push_warning(actors: &mut Vec<Actor>, view: GameplayBackgroundWarningView) {
     actors.push(text.build(0));
 }
 fn push_unjoined(_actors: &mut Vec<Actor>, _p2: bool) {}
+fn push_profile_footer(
+    actors: &mut Vec<Actor>,
+    view: deadsync_theme::views::GameplayProfileFooterView<'_>,
+) {
+    let layout = Layout::current();
+    for (index, name) in view.player_names.into_iter().enumerate() {
+        let Some(name) = name.filter(|name| !name.is_empty()) else {
+            continue;
+        };
+        let content =
+            TextContent::inline_str(name).unwrap_or_else(|| TextContent::Owned(name.to_owned()));
+        let mut label = layout.text(
+            crate::resources::CREDITS_FONT,
+            content,
+            [if index == 0 { 120.0 } else { 520.0 }, 474.0],
+            1.0,
+        );
+        label.shadowlength(0.0);
+        label.z(2101);
+        actors.push(label.build(0));
+    }
+}
 fn push_background(actors: &mut Vec<Actor>, brightness: f32) {
     actors.push(Layout::current().solid(
         [320.0, 240.0],

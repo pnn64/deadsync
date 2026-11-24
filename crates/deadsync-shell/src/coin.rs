@@ -31,7 +31,6 @@ impl State {
         }
     }
 
-    #[cfg(test)]
     pub const fn coin_balance(&self) -> u32 {
         self.coin_balance
     }

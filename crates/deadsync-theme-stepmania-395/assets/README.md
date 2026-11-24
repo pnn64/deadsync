@@ -18,13 +18,15 @@ The speed display uses the original `Numbers/BPMDisplay bpm 5x3.png` and `Graphi
 
 The title's live library count is retained as shared text when the catalog totals change. It uses the original normal font and placement; the sentence is longer than the renderer's short-text payload and must not be silently omitted.
 
+Home title retains the seven-row scroller. Arcade title follows `ScreenTitleJoin`, whose sole choice redirects to `_blank`; it uses the original `ScreenTitleJoin overlay/pay.png` and `free.png` prompts with the one-second diffuse pulse. Both title variants use the source help placement and paired credit labels with `ScreenManager credits` bitmap artwork. The game prepares whole credits, remaining coins and coins per credit; the theme formats those facts. The original version label placement shows the running deadsync package version. Legacy Joint/Double Premium scrolling banners have no corresponding cabinet policy in the host and are omitted.
+
 The bundled bitmap fonts also include the original `Common default` imports for button symbols, Japanese, Korean, and miscellaneous glyphs.
 
 Gameplay uses the original `ScreenGameplay` life/score frames and difficulty sheet, `LifeMeterBar` textures, `Judgment` and `HoldJudgment` sheets, `Combo` artwork, and the ready/go, cleared/failed, and entry/exit animation graphics. Rust code reproduces their authored layout and animation. The failed sound is copied from `BGAnimations/ScreenGameplay failed/failed.ogg`.
 
 Songs without background media use the original `Common fallback background.png` in the reference's 20-pixel inset, with the game's selected background brightness. Failed-stage wipes use their separate blue star textures; cleared-stage wipes retain the original yellow stars. The four failed-result ghosts follow the source's decelerating fade-in and zoom sequence.
 
-The gameplay HUD disables the shared player-identity footer, which is absent from the reference's blank menu-element base. Its life and score artwork uses depths above player fields and below song foreground artwork. Entry and result transitions cover the complete song foreground. These depths are authored in the native theme using the existing actor controls.
+Gameplay replaces the shared profile widget with the original `ScreenSystemLayer` player-label layout and `ScreenManager credits` bitmap font. The game resolves physical sides, guest status and hidden names before calling the theme's footer presentation. Its life and score artwork uses depths above player fields and below song foreground artwork. Entry and result transitions cover the complete song foreground. These depths are authored in the native theme using the existing actor controls.
 
 The full-screen danger background uses the original `ScreenGameplay danger all` tile sheet and centered glow/text graphics. Its 14-frame tile sequence, 20 fps timing, two-second color effects and half-second visibility blink are authored in Rust. The mounted HUD requests an all-player warning scope; the common gameplay composer checks the joined players and warning preferences. This theme's individual-player danger and dead animations are empty in the reference.
 

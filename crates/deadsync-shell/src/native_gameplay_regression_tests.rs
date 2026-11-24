@@ -137,8 +137,8 @@ fn native_gameplay_hud_controls_footer_and_layering() {
                             &mut scratch,
                         );
                         assert!(
-                            !actor_tree_has_text(&actors, "NAMED PLAYER 1"),
-                            "the native gameplay has no profile-name footer in the reference"
+                            has_native_profile_label(&actors, "NAMED PLAYER 1", 0),
+                            "the mounted gameplay must use its native system-credit profile label"
                         );
                         let score_texture = FIXTURE_TEXTURES.texture_handle("stepmania-395/gameplay-score-frame");
                         let score_draw = native_frame.ops.iter().position(|op| matches!(op,
@@ -181,6 +181,17 @@ fn native_gameplay_hud_controls_footer_and_layering() {
         .unwrap()
         .join()
         .unwrap();
+}
+
+fn has_native_profile_label(actors: &[Actor], expected: &str, side: usize) -> bool {
+    actors.iter().any(|actor| match actor {
+        Actor::Text { content, font: "stepmania-395/credits", offset, .. } => {
+            content.as_str() == expected
+                && *offset == [if side == 0 { 120.0 } else { 520.0 }, 474.0]
+        }
+        Actor::RetainedFrame { frame, .. } => has_native_profile_label(frame.children(), expected, side),
+        _ => false,
+    })
 }
 
 fn foreground_marker_draw(frame: &deadlib_render_core::RenderFrame) -> usize {
@@ -328,6 +339,12 @@ fn native_gameplay_composition_captures() {
                         &mut scratch,
                         assets.texture_context(),
                     );
+                    for (side, joined) in joined.into_iter().enumerate() {
+                        if joined {
+                            assert!(has_native_profile_label(&actors, &format!("NAMED PLAYER {}", side + 1), side),
+                                "{name} must use its physical player's native credit label");
+                        }
+                    }
                     backend.request_screenshot();
                     backend.draw(&frame, assets.textures(), false).unwrap();
                     let mut image = backend.capture_frame().unwrap();
