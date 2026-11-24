@@ -105,7 +105,11 @@ pub struct SelectMusicView<'a> {
 #[derive(Clone, Copy)]
 pub struct SelectCourseTrack<'a> {
     pub number: usize,
+    /// Combined title retained for compact single-line layouts.
     pub title: &'a Arc<str>,
+    pub banner_title: &'a Arc<str>,
+    pub subtitle: &'a Arc<str>,
+    pub artist: &'a Arc<str>,
     pub meter: &'a Arc<str>,
     pub difficulty: &'a str,
 }

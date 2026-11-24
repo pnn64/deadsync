@@ -399,7 +399,7 @@ fn push_exit(actors: &mut Vec<Actor>, layout: Layout, y: f32, focused: [bool; 2]
     );
 }
 
-fn push_cursor(
+pub(crate) fn push_cursor(
     actors: &mut Vec<Actor>,
     layout: Layout,
     [x, y]: [f32; 2],

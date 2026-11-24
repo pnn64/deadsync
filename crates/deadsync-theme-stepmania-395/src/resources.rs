@@ -141,6 +141,7 @@ impl ThemeResources for StepManiaTheme {
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("attract-warning"),
                 png!("gameplay-danger-tiles"),
                 png!("gameplay-danger-glow"),
                 png!("gameplay-danger-text"),

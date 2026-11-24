@@ -18,6 +18,7 @@ enum Phase {
     Tutorial,
     Demonstration,
     Ranking,
+    Warning,
 }
 
 #[derive(Default)]
@@ -36,6 +37,7 @@ impl StepManiaIntro {
             Phase::Tutorial => 25.0,
             Phase::Demonstration => 30.0,
             Phase::Ranking => crate::ranking::PAGE_SECONDS * self.records.songs.len().max(1) as f32,
+            Phase::Warning => 10.0,
         }
     }
 }
@@ -70,7 +72,8 @@ impl AttractPresentation<Actor> for StepManiaIntro {
                 Phase::Logo => Phase::Tutorial,
                 Phase::Tutorial => Phase::Demonstration,
                 Phase::Demonstration => Phase::Ranking,
-                Phase::Ranking => Phase::Company,
+                Phase::Ranking => Phase::Warning,
+                Phase::Warning => Phase::Company,
             };
         }
         false
@@ -81,7 +84,7 @@ impl AttractPresentation<Actor> for StepManiaIntro {
             Phase::Company => (Some("assets/media/stepmania-395/company.ogg"), false),
             Phase::Tutorial => (Some("assets/media/stepmania-395/training.ogg"), true),
             Phase::Ranking => (Some("assets/media/stepmania-395/ranking.ogg"), true),
-            Phase::Logo | Phase::Demonstration => (None, false),
+            Phase::Logo | Phase::Demonstration | Phase::Warning => (None, false),
         };
         AttractMedia {
             movie: None,
@@ -153,6 +156,16 @@ impl AttractPresentation<Actor> for StepManiaIntro {
             Phase::Tutorial => crate::tutorial::push_tutorial(actors, self.elapsed),
             Phase::Demonstration => self.push_demo_overlay(actors, self.elapsed),
             Phase::Ranking => crate::ranking::push_ranking(actors, &self.records, self.elapsed),
+            Phase::Warning => actors.push(
+                layout
+                    .sprite(
+                        "stepmania-395/attract-warning",
+                        [320.0, 240.0],
+                        [640.0, 480.0],
+                        -100,
+                    )
+                    .build(0),
+            ),
         }
     }
 

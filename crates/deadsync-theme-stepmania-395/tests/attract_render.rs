@@ -94,6 +94,11 @@ fn native_attract_captures() {
         ("select-style", selection_actors(false, 0)),
         ("select-difficulty", selection_actors(true, 2)),
         ("select-nonstop", selection_actors(true, 4)),
+        ("select-course", course_actors()),
+        ("select-profile", profile_actors(false)),
+        ("select-profile-overlay", profile_actors(true)),
+        ("stage-intro", stage_actors(false, 0.35)),
+        ("stage-nonstop", stage_actors(true, 1.0)),
         ("system-options", options_actors(&assets, None)),
         (
             "player-options",
@@ -240,6 +245,8 @@ fn native_attract_captures() {
     intro.finish_demonstration();
     intro.advance(2.0);
     capture("ranking", &intro, &output, &metrics, &mut backend, &assets);
+    intro.advance(3.0);
+    capture("warning", &intro, &output, &metrics, &mut backend, &assets);
 }
 
 fn records() -> AttractRecords {
@@ -598,6 +605,139 @@ fn gameplay_warning_actors(elapsed: f32) -> Vec<Actor> {
             failed: false,
             danger_seconds: elapsed,
             brightness: 1.0,
+        },
+    );
+    actors
+}
+
+fn course_actors() -> Vec<Actor> {
+    use deadsync_theme::select_music::{
+        SELECT_MUSIC_WHEEL_ROWS, SelectCourseItem, SelectCourseTrack, SelectCourseView,
+        SelectMusicPrompt, SelectMusicWheelRow,
+    };
+    use deadsync_theme::selection::{
+        MusicWheelPresentation, SelectionPresentation, WheelMediaFrame,
+    };
+    use deadsync_theme_stepmania_395::StepManiaMusicWheel;
+    use std::time::{Duration, Instant};
+    let now = Instant::now();
+    let mut selection = StepManiaMusicWheel::default();
+    selection.enter_wheel(now - Duration::from_secs(3));
+    let titles: [Arc<str>; 5] = [
+        "BRILLIANT 2U",
+        "B4U",
+        "BURNIN' THE FLOOR",
+        "DYNAMITE RAVE",
+        "CELEBRATE NITE",
+    ]
+    .map(Arc::from);
+    let meters = ["6", "7", "7", "8", "8"].map(Arc::from);
+    let subtitles: [Arc<str>; 5] = ["ORCHESTRA GROOVE", "", "", "", ""].map(Arc::from);
+    let artist = Arc::from("NAOKI");
+    let description = Arc::from("Five song Nonstop course");
+    let mut actors = Vec::new();
+    selection.push_course(
+        &mut actors,
+        SelectCourseView {
+            rows: std::array::from_fn::<_, SELECT_MUSIC_WHEEL_ROWS, _>(|index| {
+                Some(SelectMusicWheelRow {
+                    title: ["NAOKI STANDARD", "PARANOIA BROTHERS", "PLAYER'S BEST"][index % 3],
+                    subtitle: "",
+                    artist: "",
+                    song_count: None,
+                    expanded: false,
+                    action: None,
+                })
+            }),
+            wheel_offset: 0.0,
+            selection_beat: 1.0,
+            banner_texture: None,
+            player_names: [None, Some("P2")],
+            music_rate: 1.0,
+            prompt: SelectMusicPrompt::Hidden,
+            item: Some(SelectCourseItem {
+                title: "NAOKI STANDARD",
+                author: "",
+                description: &description,
+                songs: "5",
+                bpm: "125–160",
+                length: "7:30",
+                rating: None,
+                can_change_rating: false,
+                rating_focused: false,
+                tracks: std::array::from_fn(|index| {
+                    (index < 5).then(|| SelectCourseTrack {
+                        number: index + 1,
+                        title: &titles[index],
+                        banner_title: &titles[index],
+                        subtitle: &subtitles[index],
+                        artist: &artist,
+                        meter: &meters[index],
+                        difficulty: "Hard",
+                    })
+                }),
+                machine_record: None,
+                player_record: None,
+            }),
+        },
+        WheelMediaFrame {
+            now,
+            outgoing: [None; 4],
+            exit_elapsed: 0.0,
+        },
+    );
+    actors
+}
+
+fn profile_actors(overlay: bool) -> Vec<Actor> {
+    use deadsync_theme::profile_picker::{ProfilePickerPanel, ProfilePickerScreenView};
+    use deadsync_theme::selection::SelectionPresentation;
+    use deadsync_theme_stepmania_395::StepManiaMusicWheel;
+    let name = Arc::from("Ready Player");
+    let title = Arc::from("Select Profile");
+    let join = Arc::from("Press Start");
+    let waiting = Arc::from("Waiting");
+    let mut actors = if overlay {
+        support::music_actors()
+    } else {
+        Vec::new()
+    };
+    StepManiaMusicWheel::default().profile_picker()(
+        &mut actors,
+        ProfilePickerScreenView {
+            title: &title,
+            join_text: &join,
+            waiting_text: &waiting,
+            alpha: 1.0,
+            panels: std::array::from_fn(|side| ProfilePickerPanel {
+                joined: side == 1,
+                ready: side == 1,
+                names: [None, None, Some(&name), None, None],
+                avatar: None,
+                songs_played: None,
+                invalid_choice: false,
+            }),
+        },
+        overlay,
+    );
+    actors
+}
+
+fn stage_actors(course: bool, elapsed: f32) -> Vec<Actor> {
+    use deadsync_theme::stage::{StageCardMode, StageCardPresentation, StageCardView};
+    use deadsync_theme_stepmania_395::StepManiaStageCard;
+    let mut actors = Vec::new();
+    StepManiaStageCard.push_actors(
+        &mut actors,
+        StageCardView {
+            stage_number: 1,
+            mode: if course {
+                StageCardMode::Nonstop
+            } else {
+                StageCardMode::Regular
+            },
+            elapsed,
+            exit_elapsed: None,
         },
     );
     actors

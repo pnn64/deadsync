@@ -399,6 +399,16 @@ fn idle_attract_runs_the_tutorial_silent_versus_demo_and_real_chart_rankings() {
         );
     }
     assert!(!intro.advance(3.0));
+    assert_eq!(intro.media().music, None);
+    actors.clear();
+    intro.push_actors(&mut actors, None);
+    assert!(
+        actors
+            .iter()
+            .any(|actor| matches!(actor, Actor::Sprite { source, .. }
+          if source.texture_key() == Some("stepmania-395/attract-warning")))
+    );
+    assert!(!intro.advance(10.0));
     assert_eq!(
         intro.media().music,
         Some("assets/media/stepmania-395/company.ogg")
@@ -946,11 +956,21 @@ fn native_profile_overlay_and_course_use_shared_live_data() {
                 Actor::Sprite { z, .. } | Actor::Text { z, .. } => *z >= 1450,
                 _ => true,
             }));
+            assert_eq!(
+                actors
+                    .iter()
+                    .filter(|actor| matches!(actor, Actor::Sprite { source, .. }
+                if source.texture_key() == Some("stepmania-395/options-cursor")))
+                    .count(),
+                3
+            );
 
             let now = Instant::now();
             selection.enter_wheel(now);
             let meter = Arc::from("8");
             let description = Arc::from("Course fixture");
+            let subtitle = Arc::from("Extended Mix");
+            let artist = Arc::from("Fixture Artist");
             actors.clear();
             selection.push_course(
                 &mut actors,
@@ -976,6 +996,9 @@ fn native_profile_overlay_and_course_use_shared_live_data() {
                             Some(SelectCourseTrack {
                                 number: 7,
                                 title: &description,
+                                banner_title: &description,
+                                subtitle: &subtitle,
+                                artist: &artist,
                                 meter: &meter,
                                 difficulty: "Hard",
                             }),
@@ -1007,6 +1030,20 @@ fn native_profile_overlay_and_course_use_shared_live_data() {
                     .any(|actor| matches!(actor, Actor::Sprite { source, .. }
         if source.texture_key() == Some("stepmania-395/music-radar")))
             );
+            for expected in [
+                "7",
+                "8",
+                "Course fixture",
+                "Extended Mix",
+                "/Fixture Artist",
+            ] {
+                assert!(
+                    actors.iter().any(|actor| matches!(actor,
+                        Actor::Text { content, z, .. } if content.as_str() == expected && *z > 2
+                    )),
+                    "course row must draw {expected} above its bar"
+                );
+            }
         },
     );
 }

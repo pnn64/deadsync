@@ -172,6 +172,9 @@ fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
 #[derive(Clone, Debug)]
 struct CourseSongEntry {
     title: Arc<str>,
+    banner_title: Arc<str>,
+    subtitle: Arc<str>,
+    artist: Arc<str>,
     difficulty: String,
     meter_text: Arc<str>,
     index_text: Arc<str>,
@@ -186,13 +189,24 @@ impl CourseSongEntry {
         index: usize,
         step_artist: String,
     ) -> Self {
+        let title: Arc<str> = title.into();
         Self {
-            title: title.into(),
+            banner_title: Arc::clone(&title),
+            title,
+            subtitle: Arc::from(""),
+            artist: Arc::from(""),
             difficulty,
             meter_text: meter.to_string().into(),
             index_text: format!("#{}", index + 1).into(),
             step_artist: step_artist.into(),
         }
+    }
+
+    fn with_banner(mut self, song: &SongData, translated_titles: bool) -> Self {
+        self.banner_title = song.display_title(translated_titles).into();
+        self.subtitle = song.display_subtitle(translated_titles).into();
+        self.artist = song.artist.as_str().into();
+        self
     }
 }
 
@@ -577,7 +591,7 @@ fn build_init_data(
                     chart.meter,
                     index,
                     chart_step_artist(chart),
-                )
+                ).with_banner(song, translated_titles)
             }).collect();
             let course_difficulty_name = course::difficulty_label(difficulty).to_owned();
             let course_meter = rating.course_meter;
@@ -1886,6 +1900,9 @@ pub fn select_course_view<'a>(
                 entries.get(start + slot).map(|entry| SelectCourseTrack {
                     number: start + slot + 1,
                     title: &entry.title,
+                    banner_title: &entry.banner_title,
+                    subtitle: &entry.subtitle,
+                    artist: &entry.artist,
                     meter: &entry.meter_text,
                     difficulty: &entry.difficulty,
                 })

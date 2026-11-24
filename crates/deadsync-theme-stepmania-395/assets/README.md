@@ -26,7 +26,7 @@ Stage evaluation also uses the original possible/actual radar bars, their opposi
 
 Style selection uses the original five `ScreenSelectStyle` icons, illustrations, information panels, header, explanation, and warning. Difficulty/mode selection uses the eight `ScreenSelectDifficulty` cards, explanation, paging arrows, player cursors, shadows, and OK graphics. The shared game controller accepts the four regular difficulties and Nonstop; unsupported Challenge, Endless, and Magic Dance outcomes are visibly disabled. No unsupported game mode is substituted for those labels.
 
-Course selection uses `ScreenSelectCourse` artwork and the original `CourseEntryDisplay` bar, sharing this theme's wheel drawing with song selection. The source has no local-profile catalog browser; the host's existing profile picker is adapted with the original options page/cursors and blank `ScreenSelectPlayer` header.
+Course selection uses `ScreenSelectCourse` artwork and the original `CourseEntryDisplay` bar, sharing this theme's wheel drawing with song selection. Its row numbers, titles, subtitles, artists and meters draw above the bars, following the original two/three-line text-banner layout. The shared course view retains both the compact full title and separate song metadata. The source has no local-profile catalog browser; the host's existing profile picker is adapted with the original options page body, three-piece cursors, footer and blank `ScreenSelectPlayer` header.
 
 Select this installed native theme through System Options or `[Options] Theme=StepMania 3.95` in `deadsync.ini`. The reference theme folder is used during development to inspect and copy assets. The game uses the bundled assets and Rust presentation modules.
 
@@ -36,7 +36,7 @@ Idle attract scenes use the original tutorial background, hand/message graphics,
 
 `training-pad.bin` contains the original static `Characters/DancePad-DDR.txt` geometry and material colors, converted by `tools/convert_training_pad.py`. Its three textures are copied from `Characters/MetalPanel.png`, `Arrow-Blue.png`, and `Arrow-Red.png`; the white texture comes from the company background. The conversion tool is for asset authoring only. The supplied default character has no model, so the tutorial does not invent a replacement dancer.
 
-The ranking table displays real, recent per-chart cabinet leaderboards and percentages. The host does not store the original category-wide numeric score histories, so this adaptation uses song titles rather than invented category totals. Unlock-point and warning pages are not part of the current native attract sequence.
+The ranking table displays real, recent per-chart cabinet leaderboards and percentages. The host does not store the original category-wide numeric score histories, so this adaptation uses song titles rather than invented category totals. The original warning artwork follows rankings for ten seconds before returning to Company. The unlock-points page is omitted because the host does not store that cabinet unlock system.
 
 The ignored `attract_render` integration test renders the native scenes into a hidden window and writes PNG captures under `target/native-395-attract-captures` for visual inspection. It uses only the bundled native assets.
 

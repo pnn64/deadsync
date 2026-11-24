@@ -140,13 +140,40 @@ impl SelectionPresentation<Actor> for StepManiaMusicWheel {
                     1.0,
                 );
                 number.alpha(alpha);
+                number.z(3);
                 actors.push(number.build(0));
-                let mut title = layout.text(WHEEL_FONT, track.title.into(), [70.0, y - 8.0], 1.0);
-                title.align(0.0, 0.5);
-                title.horizalign(TextAlign::Left);
-                title.maxwidth(180.0 * layout.scale);
-                title.alpha(alpha);
-                actors.push(title.build(0));
+                let three_lines = !track.subtitle.is_empty();
+                let artist = if track.artist.is_empty() {
+                    String::new()
+                } else {
+                    format!("/{}", track.artist)
+                };
+                for (text, dy, zoom, width) in [
+                    (
+                        track.banner_title.as_ref(),
+                        if three_lines { -10.0 } else { -8.0 },
+                        1.0,
+                        180.0,
+                    ),
+                    (track.subtitle.as_ref(), 0.0, 0.5, 360.0),
+                    (
+                        artist.as_str(),
+                        if three_lines { 10.0 } else { 8.0 },
+                        0.6,
+                        266.0,
+                    ),
+                ] {
+                    if text.is_empty() {
+                        continue;
+                    }
+                    let mut label = layout.text(WHEEL_FONT, content(text), [70.0, y + dy], zoom);
+                    label.align(0.0, 0.5);
+                    label.horizalign(TextAlign::Left);
+                    label.maxwidth(width * layout.scale);
+                    label.alpha(alpha);
+                    label.z(3);
+                    actors.push(label.build(0));
+                }
                 let mut color = difficulty_color(track.difficulty);
                 color[3] = alpha;
                 let mut foot = layout.sprite(
@@ -160,6 +187,7 @@ impl SelectionPresentation<Actor> for StepManiaMusicWheel {
                 actors.push(foot.build(0));
                 let mut meter = layout.text(NORMAL_FONT, track.meter.into(), [280.0, y - 8.0], 0.7);
                 meter.diffuse(color);
+                meter.z(5);
                 actors.push(meter.build(0));
             }
         }
@@ -181,20 +209,21 @@ fn content(value: &str) -> TextContent {
 fn push_profiles(actors: &mut Vec<Actor>, view: ProfilePickerScreenView<'_>, overlay: bool) {
     let layout = Layout::current();
     let start = actors.len();
+    if !overlay {
+        push_background(actors);
+    }
     if overlay {
         actors.push(layout.solid([320.0, 240.0], [640.0, 480.0], [0.0, 0.0, 0.0, 0.8], 1450));
     }
     let z = if overlay { 1451 } else { -100 };
-    actors.push(
-        layout
-            .sprite(
-                "stepmania-395/options-page",
-                [320.0, 240.0],
-                [640.0, 480.0],
-                z,
-            )
-            .build(0),
+    let mut page = layout.sprite(
+        "stepmania-395/options-page",
+        [320.0, 240.0],
+        [640.0, 480.0],
+        z,
     );
+    page.croptop(80.0 / 480.0);
+    actors.push(page.build(0));
     actors.push(
         layout
             .sprite(
@@ -205,7 +234,9 @@ fn push_profiles(actors: &mut Vec<Actor>, view: ProfilePickerScreenView<'_>, ove
             )
             .build(0),
     );
-    let mut title = layout.text(TITLE_FONT, view.title.into(), [270.0, 20.0], 0.8);
+    let mut title = layout.text(TITLE_FONT, view.title.into(), [170.0, 20.0], 0.8);
+    title.align(0.0, 0.5);
+    title.horizalign(TextAlign::Left);
     title.diffuse([0.0, 0.0, 0.0, 1.0]);
     title.z(z + 2);
     actors.push(title.build(0));
@@ -232,15 +263,13 @@ fn push_profiles(actors: &mut Vec<Actor>, view: ProfilePickerScreenView<'_>, ove
                 let Some(name) = name else { continue };
                 let y = 166.0 + index as f32 * 34.0;
                 if index == PROFILE_PICKER_VISIBLE_ROWS / 2 {
-                    let mut cursor =
-                        layout.sprite("stepmania-395/options-cursor", [x, y], [260.0, 30.0], z + 2);
-                    cursor.customtexturerect([
-                        0.0,
-                        side as f32 * 0.5,
-                        1.0,
-                        (side + 1) as f32 * 0.5,
-                    ]);
-                    actors.push(cursor.build(0));
+                    let cursor_start = actors.len();
+                    crate::options::push_cursor(actors, layout, [x, y], 232.0, side, false);
+                    for actor in &mut actors[cursor_start..] {
+                        if let Actor::Sprite { z: depth, .. } = actor {
+                            *depth = z + 2;
+                        }
+                    }
                 }
                 let mut label = layout.text(NORMAL_FONT, (*name).into(), [x, y], 0.75);
                 label.maxwidth(245.0 * layout.scale);
@@ -283,6 +312,16 @@ fn push_profiles(actors: &mut Vec<Actor>, view: ProfilePickerScreenView<'_>, ove
             status.diffuse(color);
             status.z(z + 3);
             actors.push(status.build(0));
+        }
+    }
+    let footer_start = actors.len();
+    push_footer(actors, "Press &START; to select a profile", 1.0);
+    if overlay {
+        for actor in &mut actors[footer_start..] {
+            match actor {
+                Actor::Sprite { z, .. } | Actor::Text { z, .. } => *z += 1450,
+                _ => {}
+            }
         }
     }
     for actor in &mut actors[start..] {
