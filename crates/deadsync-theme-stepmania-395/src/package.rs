@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use crate::metrics::MetricCatalog;
 use crate::{
-    ActorAnimation, AnimationError, MetricLookupError, ResourceCatalog, ResourceCategory,
-    ResourceLookupError,
+    ActorAnimation, AnimationError, BackgroundDefinition, MetricLookupError, ResourceCatalog,
+    ResourceCategory, ResourceLookupError,
 };
 
 /// Presentation data and resource paths for the same ordered theme folders.
@@ -55,5 +55,18 @@ impl ThemePackage {
     ) -> Result<Option<&Path>, ResourceLookupError> {
         self.resources
             .resolve_scoped(category, section, name, &self.metrics)
+    }
+
+    /// Loads a numbered sprite-layer background resolved through the screen's fallback chain.
+    pub fn background(
+        &self,
+        section: &str,
+        name: &str,
+        canvas: [f32; 2],
+    ) -> io::Result<Option<BackgroundDefinition>> {
+        self.screen_resource(ResourceCategory::Backgrounds, section, name)
+            .map_err(io::Error::other)?
+            .map(|path| BackgroundDefinition::read(path, canvas))
+            .transpose()
     }
 }

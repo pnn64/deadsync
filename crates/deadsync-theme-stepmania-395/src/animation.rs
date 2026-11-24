@@ -12,6 +12,7 @@ pub struct ActorAnimation {
     steps: Vec<Step>,
     anchors: [Option<f32>; 2],
     visible: Option<bool>,
+    repeat_texture: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -66,6 +67,7 @@ impl ActorAnimation {
         let mut current = anim::linear(0.0);
         let mut anchors = [None, None];
         let mut visible = None;
+        let mut repeat_texture = None;
         for (index, raw) in commands.split(';').enumerate() {
             let Some(token) = split_script_token(raw) else {
                 continue;
@@ -79,10 +81,14 @@ impl ActorAnimation {
                 let axis = usize::from(name == "vertalign");
                 let value = anchor(axis, token.args()).ok_or_else(invalid)?;
                 anchors[axis] = Some(value);
-            } else if matches!(name.as_str(), "hidden" | "visible") {
+            } else if matches!(name.as_str(), "hidden" | "visible" | "texturewrapping") {
                 let [value] = numbers(token.args()).ok_or_else(invalid)?;
                 let enabled = value.trunc() != 0.0;
-                visible = Some(if name == "hidden" { !enabled } else { enabled });
+                match name.as_str() {
+                    "hidden" => visible = Some(!enabled),
+                    "visible" => visible = Some(enabled),
+                    _ => repeat_texture = Some(enabled),
+                }
             } else if let Some(tween) = timing_command(&name) {
                 let [duration] = numbers(token.args()).ok_or_else(invalid)?;
                 if duration < 0.0 {
@@ -118,6 +124,15 @@ impl ActorAnimation {
                         let [width, height] = numbers(token.args()).ok_or_else(invalid)?;
                         current.zoomto(width, height)
                     }
+                    "stretchto" => {
+                        let [left, top, right, bottom] =
+                            numbers(token.args()).ok_or_else(invalid)?;
+                        let width = right - left;
+                        let height = bottom - top;
+                        current
+                            .xy(left + width * 0.5, top + height * 0.5)
+                            .zoomto(width, height)
+                    }
                     "xy" => {
                         let [x, y] = numbers(token.args()).ok_or_else(invalid)?;
                         current.xy(x, y)
@@ -142,7 +157,12 @@ impl ActorAnimation {
             steps: segments.collect(),
             anchors,
             visible,
+            repeat_texture,
         })
+    }
+
+    pub(crate) const fn repeat_texture(&self) -> Option<bool> {
+        self.repeat_texture
     }
 
     /// Applies the initial setters and queues the timed part of the animation.
