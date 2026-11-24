@@ -27,6 +27,7 @@ pub struct Encoder<W: Write> {
 }
 impl<W: Write> Encoder<W> {
     pub fn new(writer: W, header: Header, options: EncodeOptions) -> Result<Self, Error> {
+        validate_header(&header, &options)?;
         let mut output = EncoderOutput::new(writer, options);
         output.write_header(&header)?;
         Ok(Self { output, header })
@@ -56,13 +57,6 @@ impl<W: Write> EncoderOutput<W> {
         }
     }
     fn write_header(&mut self, header: &Header) -> Result<(), Error> {
-        header.validate()?;
-        if self.options.image_sub_block_size == 0 {
-            return Err(Error::Invalid("zero image sub-block size"));
-        }
-        if header.version == Version::Gif87a && (header.sorted || header.pixel_aspect_ratio != 0) {
-            return Err(Error::Invalid("GIF89a fields in GIF87a header"));
-        }
         let writer = &mut self.writer;
         writer.write_all(match header.version {
             Version::Gif87a => b"GIF87a",
@@ -275,10 +269,39 @@ impl<W: Write> EncoderOutput<W> {
         Ok(())
     }
 }
+fn validate_header(header: &Header, options: &EncodeOptions) -> Result<(), Error> {
+    header.validate()?;
+    if options.image_sub_block_size == 0 {
+        return Err(Error::Invalid("zero image sub-block size"));
+    }
+    if header.version == Version::Gif87a && (header.sorted || header.pixel_aspect_ratio != 0) {
+        return Err(Error::Invalid("GIF89a fields in GIF87a header"));
+    }
+    Ok(())
+}
+
 pub fn encode(gif: &Gif, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
-    encode_into(gif, options, Vec::new())
+    validate_header(&gif.header, options)?;
+    let palette_bytes = gif
+        .header
+        .global_palette
+        .as_ref()
+        .map_or(0, |p| p.len() * 3);
+    let header_bytes = 13 + palette_bytes;
+    let capacity = if gif.blocks.is_empty() {
+        header_bytes + 1
+    } else {
+        // Match the capacity reached by the header's separate Vec writes so
+        // that later payloads keep their existing growth pattern.
+        header_bytes.max(if palette_bytes == 0 { 16 } else { 32 })
+    };
+    encode_validated(gif, options, Vec::with_capacity(capacity))
 }
 pub fn encode_into<W: Write>(gif: &Gif, options: &EncodeOptions, writer: W) -> Result<W, Error> {
+    validate_header(&gif.header, options)?;
+    encode_validated(gif, options, writer)
+}
+fn encode_validated<W: Write>(gif: &Gif, options: &EncodeOptions, writer: W) -> Result<W, Error> {
     let mut encoder = EncoderOutput::new(writer, options.clone());
     encoder.write_header(&gif.header)?;
     for block in &gif.blocks {
