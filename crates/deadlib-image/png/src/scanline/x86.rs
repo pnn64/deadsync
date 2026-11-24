@@ -82,15 +82,16 @@ unsafe fn sub_run<const N: usize>(row: &mut [u8]) -> usize {
 #[inline]
 #[target_feature(enable = "sse4.1")]
 fn load(bytes: &[u8; 16]) -> __m128i {
-    // SAFETY: the array holds the 16 bytes read; the load is unaligned.
-    unsafe { _mm_loadu_si128(bytes.as_ptr().cast()) }
+    let bits = u128::from_le_bytes(*bytes);
+    _mm_set_epi64x((bits >> 64) as i64, bits as i64)
 }
 
 #[inline]
 #[target_feature(enable = "sse4.1")]
 fn store(bytes: &mut [u8; 16], value: __m128i) {
-    // SAFETY: the array holds the 16 bytes written; the store is unaligned.
-    unsafe { _mm_storeu_si128(bytes.as_mut_ptr().cast(), value) }
+    let low = _mm_cvtsi128_si64(value) as u64;
+    let high = _mm_extract_epi64::<1>(value) as u64;
+    *bytes = (u128::from(low) | (u128::from(high) << 64)).to_le_bytes();
 }
 
 #[inline]
