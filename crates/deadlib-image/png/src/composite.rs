@@ -50,6 +50,25 @@ fn palette_rgba(png: &Png, index: usize) -> [u16; 4] {
 }
 
 #[inline(always)]
+fn expanded_palette(png: &Png) -> [[u16; 4]; 256] {
+    let mut palette = [[0, 0, 0, 65535]; 256];
+    for (out, &[r, g, b]) in palette.iter_mut().zip(&png.palette) {
+        *out = [
+            u16::from(r) * 257,
+            u16::from(g) * 257,
+            u16::from(b) * 257,
+            65535,
+        ];
+    }
+    if let Some(Transparency::Palette(alpha)) = &png.transparency {
+        for (out, &alpha) in palette.iter_mut().zip(alpha) {
+            out[3] = u16::from(alpha) * 257;
+        }
+    }
+    palette
+}
+
+#[inline(always)]
 fn rgba(png: &Png, image: &Image, index: usize, factor: u16) -> [u16; 4] {
     let raw = |n| match &image.samples {
         Samples::U8(v) => u16::from(v[n]),
@@ -80,22 +99,7 @@ fn rgba(png: &Png, image: &Image, index: usize, factor: u16) -> [u16; 4] {
             };
             [scale(values[0]), scale(values[1]), scale(values[2]), a]
         }
-        ColorType::Indexed => {
-            let index = raw(base) as usize;
-            let Some(&[r, g, b]) = png.palette.get(index) else {
-                return [0, 0, 0, 65535];
-            };
-            let a = match &png.transparency {
-                Some(Transparency::Palette(v)) => v.get(index).copied().unwrap_or(255),
-                _ => 255,
-            };
-            [
-                u16::from(r) * 257,
-                u16::from(g) * 257,
-                u16::from(b) * 257,
-                u16::from(a) * 257,
-            ]
-        }
+        ColorType::Indexed => palette_rgba(png, usize::from(raw(base))),
         ColorType::GrayscaleAlpha => {
             let g = scale(raw(base));
             [g, g, g, scale(raw(base + 1))]
@@ -160,6 +164,35 @@ fn over_rgba_rows<T: Copy>(
         let dst = dst[..width * 4].as_chunks_mut::<4>().0;
         for (dst, &src) in dst.iter_mut().zip(src) {
             over(dst, convert(src));
+        }
+    }
+}
+
+#[inline(never)]
+fn render_indexed_rows(
+    png: &Png,
+    canvas: &mut [u16],
+    stride: usize,
+    control: FrameControl,
+    samples: &[u8],
+) {
+    let palette = expanded_palette(png);
+    let offset = control.y_offset as usize * stride + control.x_offset as usize * 4;
+    let canvas = canvas[offset..].as_chunks_mut::<4>().0;
+    let width = control.width as usize;
+    for (dst, indices) in canvas
+        .chunks_mut(stride / 4)
+        .zip(samples.chunks_exact(width))
+    {
+        let pixels = dst[..width].iter_mut().zip(indices);
+        if control.blend == BlendOp::Source {
+            for (dst, &index) in pixels {
+                *dst = palette[usize::from(index)];
+            }
+        } else {
+            for (dst, &index) in pixels {
+                over(dst, palette[usize::from(index)]);
+            }
         }
     }
 }
@@ -244,20 +277,7 @@ impl Png {
                 out.extend_from_slice(samples.as_chunks::<4>().0)
             }
             (Samples::U8(samples), ColorType::Indexed) if samples.len() >= 256 => {
-                let mut palette = [[0, 0, 0, 65535]; 256];
-                for (out, &[r, g, b]) in palette.iter_mut().zip(&self.palette) {
-                    *out = [
-                        u16::from(r) * 257,
-                        u16::from(g) * 257,
-                        u16::from(b) * 257,
-                        65535,
-                    ];
-                }
-                if let Some(Transparency::Palette(alpha)) = &self.transparency {
-                    for (out, &alpha) in palette.iter_mut().zip(alpha) {
-                        out[3] = u16::from(alpha) * 257;
-                    }
-                }
+                let palette = expanded_palette(self);
                 out.extend(samples.iter().map(|&index| palette[usize::from(index)]));
             }
             (Samples::U8(samples), ColorType::Indexed) => {
@@ -416,6 +436,11 @@ impl Compositor<'_> {
                     over_rgba_rows(canvas, stride, width, samples, |pixel| pixel);
                 }
             }
+        } else if let (ColorType::Indexed, Samples::U8(samples)) =
+            (image.color_type, &image.samples)
+            && samples.len() >= 256
+        {
+            render_indexed_rows(self.png, &mut self.canvas, stride, c, samples);
         } else {
             for y in 0..c.height as usize {
                 for x in 0..c.width as usize {

@@ -87,6 +87,58 @@ fn every_palette_size_transparency_length_and_expansion_boundary_matches_model()
 }
 
 #[test]
+fn indexed_frame_lookup_at_the_size_boundary_matches_the_model() {
+    for width in [255, 256, 257] {
+        let image = |width, height, seed| Image {
+            width,
+            height,
+            color_type: ColorType::Indexed,
+            bit_depth: 4,
+            samples: Samples::U8(
+                (0..width * height)
+                    .map(|n| ((n + seed) % 16) as u8)
+                    .collect(),
+            ),
+        };
+        let mut png = Png::new(image(width + 1, 2, 0));
+        png.palette = (0..11).map(|n| [n * 19, n * 13, n * 5]).collect();
+        png.transparency = Some(deadlib_image_png::Transparency::Palette(vec![0, 127, 254]));
+        png.animation = Some(Animation {
+            plays: 0,
+            default_is_frame: true,
+            frames: vec![
+                Frame {
+                    control: control(width + 1, 2),
+                    image: None,
+                },
+                Frame {
+                    control: FrameControl {
+                        x_offset: 1,
+                        y_offset: 1,
+                        blend: BlendOp::Over,
+                        dispose: DisposeOp::Previous,
+                        ..control(width, 1)
+                    },
+                    image: Some(image(width, 1, 3)),
+                },
+                Frame {
+                    control: FrameControl {
+                        x_offset: 1,
+                        ..control(width, 1)
+                    },
+                    image: Some(image(width, 1, 7)),
+                },
+            ],
+        });
+        let mut compositor = png.compositor(Limits::default()).unwrap();
+        for frame in oracle::render(&png) {
+            assert_eq!(compositor.next_frame().unwrap().unwrap().samples, frame);
+        }
+        assert!(compositor.next_frame().unwrap().is_none());
+    }
+}
+
+#[test]
 fn opaque_white_blends_stay_white_at_every_source_alpha() {
     let mut png = Png::new(image(vec![65535; 65536 * 4]));
     png.animation = Some(Animation {
