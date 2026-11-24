@@ -1,4 +1,5 @@
-use crate::{BOS, CONTINUED, EOS, Error, PageHeader, UNKNOWN_GRANULE_POSITION, reserve};
+use crate::page::{FIXED_HEADER_SIZE, MAX_HEADER_SIZE, write_page_inner};
+use crate::{BOS, CONTINUED, EOS, Error, UNKNOWN_GRANULE_POSITION, reserve};
 use std::io::Write;
 
 #[derive(Clone, Copy, Debug)]
@@ -20,10 +21,9 @@ impl Default for WriteOptions {
 /// The first packet is always isolated on a BOS page, as mapping rules require.
 pub struct PacketWriter<W> {
     inner: W,
-    serial: u32,
     sequence: u32,
-    lacing: [u8; 255],
-    segments: usize,
+    header: [u8; MAX_HEADER_SIZE],
+    header_len: usize,
     body: Vec<u8>,
     granule: u64,
     last_granule: u64,
@@ -38,12 +38,14 @@ impl<W: Write> PacketWriter<W> {
         Self::with_options(inner, serial, WriteOptions::default())
     }
     pub fn with_options(inner: W, serial: u32, options: WriteOptions) -> Self {
+        let mut header = [0; MAX_HEADER_SIZE];
+        header[..4].copy_from_slice(b"OggS");
+        header[14..18].copy_from_slice(&serial.to_le_bytes());
         Self {
             inner,
-            serial,
             sequence: 0,
-            lacing: [0; 255],
-            segments: 0,
+            header,
+            header_len: FIXED_HEADER_SIZE,
             body: Vec::new(),
             granule: UNKNOWN_GRANULE_POSITION,
             last_granule: 0,
@@ -85,23 +87,23 @@ impl<W: Write> PacketWriter<W> {
         let first_packet = !self.started;
         let mut position = 0;
         loop {
-            if self.segments == 255 {
+            if self.header_len == MAX_HEADER_SIZE {
                 self.emit(false, &[])?;
             }
-            let len = (data.len() - position).min((255 - self.segments) * 255);
+            let len = (data.len() - position).min((MAX_HEADER_SIZE - self.header_len) * 255);
             let payload = &data[position..position + len];
             let mut tail = len;
             if len >= 255 {
                 let full = len / 255;
-                self.lacing[self.segments..self.segments + full].fill(255);
-                self.segments += full;
+                self.header[self.header_len..self.header_len + full].fill(255);
+                self.header_len += full;
                 tail -= full * 255;
             }
             position += len;
-            let packet_open = self.segments == 255;
+            let packet_open = self.header_len == MAX_HEADER_SIZE;
             if !packet_open {
-                self.lacing[self.segments] = tail as u8;
-                self.segments += 1;
+                self.header[self.header_len] = tail as u8;
+                self.header_len += 1;
                 self.granule = granule;
                 self.last_granule = granule;
             }
@@ -139,21 +141,20 @@ impl<W: Write> PacketWriter<W> {
         let flags = if !self.started { BOS } else { 0 }
             | if self.continued { CONTINUED } else { 0 }
             | if eos { EOS } else { 0 };
-        let granule = if self.segments == 0 && eos {
+        let granule = if self.header_len == FIXED_HEADER_SIZE && eos {
             self.last_granule
         } else {
             self.granule
         };
-        let lacing = &self.lacing[..self.segments];
-        crate::page::write_page_inner(
+        let header = &mut self.header[..self.header_len];
+        header[5] = flags;
+        header[6..14].copy_from_slice(&granule.to_le_bytes());
+        header[18..22].copy_from_slice(&self.sequence.to_le_bytes());
+        header[22..26].fill(0);
+        header[26] = (self.header_len - FIXED_HEADER_SIZE) as u8;
+        write_page_inner(
             &mut self.inner,
-            PageHeader {
-                flags,
-                granule_position: granule,
-                serial: self.serial,
-                sequence: self.sequence,
-            },
-            lacing,
+            header,
             if self.body.is_empty() {
                 direct
             } else {
@@ -163,8 +164,8 @@ impl<W: Write> PacketWriter<W> {
         self.sequence = self.sequence.wrapping_add(1);
         self.started = true;
         self.ended = eos;
-        self.continued = lacing.last() == Some(&255);
-        self.segments = 0;
+        self.continued = header[FIXED_HEADER_SIZE..].last() == Some(&255);
+        self.header_len = FIXED_HEADER_SIZE;
         self.body.clear();
         self.granule = UNKNOWN_GRANULE_POSITION;
         Ok(())
@@ -174,7 +175,7 @@ impl<W: Write> PacketWriter<W> {
         if self.failed {
             return Err(Error::Failed);
         }
-        if self.segments == 0 {
+        if self.header_len == FIXED_HEADER_SIZE {
             return Ok(());
         }
         let result = self.emit(false, &[]);

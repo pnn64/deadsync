@@ -1,6 +1,9 @@
 use crate::{BOS, CONTINUED, EOS, Error, crc, reserve};
 use std::io::Write;
 
+pub(crate) const FIXED_HEADER_SIZE: usize = 27;
+pub(crate) const MAX_HEADER_SIZE: usize = FIXED_HEADER_SIZE + 255;
+
 /// Fields with codec-independent meaning. The granule is kept bit-for-bit.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PageHeader {
@@ -275,25 +278,24 @@ pub fn write_page(
     body: &[u8],
 ) -> Result<usize, Error> {
     validate_page(fields, lacing, body.len())?;
-    write_page_inner(writer, fields, lacing, body)
+    let mut header = [0; MAX_HEADER_SIZE];
+    let len = FIXED_HEADER_SIZE + lacing.len();
+    header[..FIXED_HEADER_SIZE].copy_from_slice(&encoded_header(fields, lacing.len() as u8));
+    header[FIXED_HEADER_SIZE..len].copy_from_slice(lacing);
+    write_page_inner(writer, &mut header[..len], body)
 }
 
-// The caller has already checked flags, segment count and lacing/body length.
+// The prefix contains the header and laces with a zeroed checksum field.
 pub(crate) fn write_page_inner(
     mut writer: impl Write,
-    fields: PageHeader,
-    lacing: &[u8],
+    header: &mut [u8],
     body: &[u8],
 ) -> Result<usize, Error> {
-    let mut header = [0; 282];
-    let len = 27 + lacing.len();
-    header[..27].copy_from_slice(&encoded_header(fields, lacing.len() as u8));
-    header[27..len].copy_from_slice(lacing);
-    let checksum = crc::update(crc::update(0, &header[..len]), body);
+    let checksum = crc::update(crc::update(0, header), body);
     header[22..26].copy_from_slice(&checksum.to_le_bytes());
-    writer.write_all(&header[..len])?;
+    writer.write_all(header)?;
     writer.write_all(body)?;
-    Ok(len + body.len())
+    Ok(header.len() + body.len())
 }
 
 pub fn encode_page(fields: PageHeader, lacing: &[u8], body: &[u8]) -> Result<Vec<u8>, Error> {

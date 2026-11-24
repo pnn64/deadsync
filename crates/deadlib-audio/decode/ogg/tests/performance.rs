@@ -323,6 +323,21 @@ fn benchmark_container() {
             black_box(writer.into_inner().0);
         });
     }
+    measure("writer/tiny-pages", 500, 4096, || {
+        let mut writer = PacketWriter::with_options(
+            ObservedWriter::default(),
+            7,
+            WriteOptions {
+                target_page_body: 1,
+            },
+        );
+        writer.write_packet(b"header", 0, false).unwrap();
+        let data = black_box(&[37]);
+        for number in 1..=4096 {
+            writer.write_packet(data, number, number == 4096).unwrap();
+        }
+        black_box(writer.into_inner().0);
+    });
     let clean = stream(24, 32, 8192);
     let mut seed = 17u32;
     let random = (0..32_768)
