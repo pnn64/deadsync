@@ -224,6 +224,9 @@ impl Scanner {
             !((byte == b' ') | (byte == b'\t') | (byte.wrapping_sub(11) <= 1))
         });
     }
+    fn skip_line_comment(&mut self, input: &[u8]) {
+        self.pos += scan_boundary(&input[self.pos..], |byte| (byte == b'\n') | (byte == b'\r'));
+    }
     fn skip_bracket_equals(&mut self, input: &[u8]) -> usize {
         if input.get(self.pos) != Some(&b'=') {
             return 0;
@@ -314,6 +317,13 @@ impl Scanner {
                 }
                 Some(b'\n' | b'\r') => {
                     self.newline(input, true)?;
+                }
+                Some(b'-')
+                    if input[self.pos..].starts_with(b"--")
+                        && input.get(self.pos + 2) != Some(&b'[') =>
+                {
+                    self.pos += 2;
+                    self.skip_line_comment(input);
                 }
                 _ => break,
             }
@@ -604,8 +614,7 @@ impl Scanner {
                     }
                 }
                 State::LineComment => {
-                    self.pos +=
-                        scan_boundary(&input[self.pos..], |byte| (byte == b'\n') | (byte == b'\r'));
+                    self.skip_line_comment(input);
                     if self.pos < input.len() || closed {
                         self.state = State::Skip;
                     }
