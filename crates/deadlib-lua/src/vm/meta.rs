@@ -66,7 +66,7 @@ impl Vm {
     }
     pub(super) fn metafield(&self, value: Value, event: Meta) -> Value {
         self.metatable(value).map_or(Value::Nil, |mt| {
-            self.tables[slot_index(mt.0)].get(Value::String(self.meta_names[event as usize]))
+            self.tables[slot_index(mt.0)].get_string(self.meta_names[event as usize])
         })
     }
     fn binary_handler(&self, left: Value, right: Value, event: Meta) -> Value {
