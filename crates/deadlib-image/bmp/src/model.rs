@@ -111,19 +111,32 @@ impl Bitmap {
             Pixels::Indexed {
                 indices, palette, ..
             } => {
-                if indices.len() >= 1024 {
-                    // Amortize the table setup over enough pixels to use a
-                    // single RGBA load per index in the conversion loop.
-                    let mut colors = [[0; 4]; 256];
-                    for (&[red, green, blue], rgba) in palette.iter().zip(&mut colors) {
-                        *rgba = [red, green, blue, 255];
+                let rgba = |[red, green, blue]: [u8; 3]| [red, green, blue, 255];
+                match *palette.as_slice() {
+                    [only] => output.resize(count, rgba(only)),
+                    [first, second] => {
+                        let first = u32::from_le_bytes(rgba(first));
+                        let difference = first ^ u32::from_le_bytes(rgba(second));
+                        output.extend(indices.iter().map(|&index| {
+                            // Validated indices are zero or one.
+                            let mask = u32::from(index).wrapping_neg();
+                            (first ^ (difference & mask)).to_le_bytes()
+                        }));
                     }
-                    output.extend(indices.iter().map(|&index| colors[usize::from(index)]));
-                } else {
-                    output.extend(indices.iter().map(|&index| {
-                        let [red, green, blue] = palette[usize::from(index)];
-                        [red, green, blue, 255]
-                    }));
+                    _ if indices.len() >= 1024 => {
+                        // Amortize the table setup over enough pixels to use a
+                        // single RGBA load per index in the conversion loop.
+                        let mut colors = [[0; 4]; 256];
+                        for (&rgb, color) in palette.iter().zip(&mut colors) {
+                            *color = rgba(rgb);
+                        }
+                        output.extend(indices.iter().map(|&index| colors[usize::from(index)]));
+                    }
+                    _ => output.extend(
+                        indices
+                            .iter()
+                            .map(|&index| rgba(palette[usize::from(index)])),
+                    ),
                 }
             }
             Pixels::Rgb(samples) => {
