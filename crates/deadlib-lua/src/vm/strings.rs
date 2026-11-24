@@ -90,6 +90,15 @@ pub(super) fn relative(index: i64, len: usize) -> i64 {
 pub(super) fn find_start(index: i64, len: usize) -> usize {
     relative(index, len).saturating_sub(1).clamp(0, len as i64) as usize
 }
+
+pub(super) fn char_byte(number: f64) -> Option<u8> {
+    if number > -1.0 && number < 256.0 {
+        Some(number as i32 as u8)
+    } else {
+        u8::try_from(lua_integer(number) as i32).ok()
+    }
+}
+
 impl Vm {
     pub(super) fn open_strings(&mut self) -> Result<(), Error> {
         let table = self.try_new_table()?;
@@ -314,11 +323,14 @@ impl Vm {
                 bytes.resize(count, 0);
                 let args = &self.registers[base + 1..base + 1 + count];
                 for (index, (&value, destination)) in args.iter().zip(&mut bytes).enumerate() {
-                    let number = self
-                        .number(value)
-                        .ok_or_else(|| self.argument_type_error(base, count, index, "number"))?;
-                    *destination = u8::try_from(lua_integer(number) as i32)
-                        .map_err(|_| self.argument_error(index, b"invalid value"))?;
+                    let number = match value {
+                        Value::Number(number) => number,
+                        _ => self.number(value).ok_or_else(|| {
+                            self.argument_type_error(base, count, index, "number")
+                        })?,
+                    };
+                    *destination = char_byte(number)
+                        .ok_or_else(|| self.argument_error(index, b"invalid value"))?;
                 }
             }
             self.registers[base] = self.try_finish_buffer(bytes)?;
