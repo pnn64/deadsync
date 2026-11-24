@@ -68,11 +68,11 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
             }
             let mut indices = Vec::new();
             reserve(&mut indices, header.pixel_count)?;
-            // Full palettes cover the entire encoded index domain.
+            // Full palettes cover the whole index domain.
             let check_indices = palette_len < 1usize << header.info.bit_depth;
-            let validate_row = |row: &[u8]| {
+            let validate_indices = |indices: &[u8]| {
                 if check_indices
-                    && row
+                    && indices
                         .iter()
                         .copied()
                         .max()
@@ -85,12 +85,12 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
             let rows = display_rows(source, header.row_pitch, header.info.top_down);
             if header.info.bit_depth == 8 {
                 if header.info.top_down && width == header.row_pitch {
-                    validate_row(source)?;
+                    validate_indices(source)?;
                     indices.extend_from_slice(source);
                 } else {
                     for row in rows {
                         let row = &row[..width];
-                        validate_row(row)?;
+                        validate_indices(row)?;
                         indices.extend_from_slice(row);
                     }
                 }
@@ -105,13 +105,12 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 let has_tail = !unpacked_chunk_pixels.is_multiple_of(2);
                 let rows = display_rows(source, packed_chunk_bytes, header.info.top_down);
                 for row in rows {
-                    let start = indices.len();
                     indices.extend(row[..pairs].iter().flat_map(|&byte| [byte >> 4, byte & 15]));
                     if has_tail {
                         indices.push(row[pairs] >> 4);
                     }
-                    validate_row(&indices[start..])?;
                 }
+                validate_indices(&indices)?;
             } else {
                 indices.resize(header.pixel_count, 0);
                 // A 32-bit row boundary leaves no padding or partial byte.
@@ -125,8 +124,8 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 for (packed, output) in chunks.zip(indices.chunks_exact_mut(unpacked_chunk_pixels))
                 {
                     unpack_one_bit_indices(packed, output);
-                    validate_row(output)?;
                 }
+                validate_indices(&indices)?;
             }
             Pixels::Indexed {
                 bit_depth: header.info.bit_depth as u8,
