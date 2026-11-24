@@ -137,7 +137,9 @@ impl Inflater {
             chunks: &[],
             prior: 0,
         };
-        let result = self.run(&mut bits, output);
+        // Bound output once so each literal needs only a slot check.
+        let available = output.len().min(self.limit - self.total_out);
+        let result = self.run(&mut bits, &mut output[..available]);
         self.word = bits.word;
         self.bit_count = bits.count;
         self.total_in = match self.total_in.checked_add(bits.pos) {
@@ -399,16 +401,16 @@ impl Inflater {
                 State::Codes => loop {
                     match symbol!(self.literals.as_ref().unwrap_or(&FIXED.0)) {
                         value @ 0..=255 => {
-                            if self.total_out == self.limit {
-                                return Err(Error::LimitExceeded);
-                            }
-                            if written == output.len() {
+                            let Some(slot) = output.get_mut(written) else {
+                                if self.total_out == self.limit {
+                                    return Err(Error::LimitExceeded);
+                                }
                                 self.state = State::Literal(value as u8);
                                 stop!(StreamStatus::NeedOutput);
-                            }
+                            };
                             // Keep literal runs in this state, without another
                             // dispatch or a one-byte ring-copy operation.
-                            output[written] = value as u8;
+                            *slot = value as u8;
                             self.history[self.history_pos] = value as u8;
                             self.history_pos = (self.history_pos + 1) & (self.history.len() - 1);
                             self.total_out += 1;
@@ -444,14 +446,16 @@ impl Inflater {
                     }
                 },
                 State::Literal(value) => {
-                    if self.total_out == self.limit {
-                        return Err(Error::LimitExceeded);
-                    }
-                    if written == output.len() {
+                    let Some(slot) = output.get_mut(written) else {
+                        if self.total_out == self.limit {
+                            return Err(Error::LimitExceeded);
+                        }
                         stop!(StreamStatus::NeedOutput);
-                    }
-                    output[written] = value;
-                    self.remember(&output[written..written + 1]);
+                    };
+                    *slot = value;
+                    self.history[self.history_pos] = value;
+                    self.history_pos = (self.history_pos + 1) & (self.history.len() - 1);
+                    self.total_out += 1;
                     written += 1;
                     self.state = State::Codes;
                 }
