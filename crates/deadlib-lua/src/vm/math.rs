@@ -143,6 +143,21 @@ impl Vm {
             _ => unreachable!("binary math IDs are fixed"),
         }
     }
+    #[inline]
+    pub(super) fn math_split(id: u64, x: f64) -> (f64, f64) {
+        if id == 55 {
+            let integral = x.trunc();
+            let fraction = if x.is_infinite() {
+                0.0f64.copysign(x)
+            } else {
+                (x - integral).copysign(x)
+            };
+            (integral, fraction)
+        } else {
+            let (fraction, exponent) = frexp(x);
+            (fraction, f64::from(exponent))
+        }
+    }
     fn math_number(&self, base: usize, count: usize, index: usize) -> Result<f64, Error> {
         self.number(self.argument(base, count, index))
             .ok_or_else(|| self.argument_type_error(base, count, index, "number"))
@@ -225,23 +240,11 @@ impl Vm {
                 }
                 best
             }
-            55 => {
-                let integral = x.trunc();
-                let fraction = if x.is_infinite() {
-                    0.0f64.copysign(x)
-                } else {
-                    (x - integral).copysign(x)
-                };
+            55 | 56 => {
+                let (first, second) = Self::math_split(id, x);
                 self.resize_registers(self.registers.len().max(base + 2));
-                self.registers[base] = Value::Number(integral);
-                self.registers[base + 1] = Value::Number(fraction);
-                return Ok(2);
-            }
-            56 => {
-                let (fraction, exponent) = frexp(x);
-                self.resize_registers(self.registers.len().max(base + 2));
-                self.registers[base] = Value::Number(fraction);
-                self.registers[base + 1] = Value::Number(f64::from(exponent));
+                self.registers[base] = Value::Number(first);
+                self.registers[base + 1] = Value::Number(second);
                 return Ok(2);
             }
             _ => Self::math_unary(id, x).expect("math ID range is fixed"),

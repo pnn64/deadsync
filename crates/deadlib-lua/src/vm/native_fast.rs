@@ -59,6 +59,15 @@ impl Vm {
                     self.metatable_result(self.registers[call + 1], id == GET_META);
                 Some(1)
             }
+            55 | 56
+                if count != 0
+                    && let Value::Number(value) = self.registers[call + 1] =>
+            {
+                let (first, second) = Self::math_split(id, value);
+                self.registers[call] = Value::Number(first);
+                self.registers[call + 1] = Value::Number(second);
+                Some(2)
+            }
             tables::TAB_GETN | tables::TAB_MAXN
                 if count != 0
                     && let Value::Table(table) = self.registers[call + 1] =>
