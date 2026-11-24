@@ -70,7 +70,7 @@ fn fold(seed: u32, bytes: &[u8]) -> u32 {
     let (words, tail) = bytes.as_chunks::<16>();
     let (groups, words) = words.as_chunks::<4>();
     let Some(([first_a, first_b, first_c, first_d], groups)) = groups.split_first() else {
-        return crate::crc::update_scalar(seed, bytes);
+        return crate::crc::update_scalar::<false>(seed, bytes);
     };
     let reverse = _mm_setr_epi8(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
     let k = _mm_set_epi64x(K576 as i64, K512 as i64);
@@ -121,7 +121,7 @@ fn fold(seed: u32, bytes: &[u8]) -> u32 {
         value,
         _mm_clmulepi64_si128::<0x00>(quotient, _mm_cvtsi64_si128(POLYNOMIAL as i64)),
     );
-    crate::crc::update_scalar(_mm_cvtsi128_si32(remainder) as u32, tail)
+    crate::crc::update_scalar::<false>(_mm_cvtsi128_si32(remainder) as u32, tail)
 }
 
 #[cfg(test)]
@@ -170,7 +170,7 @@ mod tests {
                 for length in 0..=1024 {
                     let input = &data[offset..offset + length];
                     let expected = bitwise(seed, input);
-                    assert_eq!(crate::crc::update_scalar(seed, input), expected);
+                    assert_eq!(crate::crc::update_scalar::<true>(seed, input), expected);
                     // SAFETY: both required features were checked above; all alignments and lengths are supported.
                     assert_eq!(
                         unsafe { fold(seed, input) },
@@ -183,7 +183,7 @@ mod tests {
             for length in [4096, 65025, 65307, 1048576] {
                 let input = &data[3..3 + length];
                 let expected = bitwise(seed, input);
-                assert_eq!(crate::crc::update_scalar(seed, input), expected);
+                assert_eq!(crate::crc::update_scalar::<true>(seed, input), expected);
                 // SAFETY: both required features were checked above.
                 assert_eq!(unsafe { fold(seed, input) }, expected);
                 cases += 1;
