@@ -432,7 +432,7 @@ impl Table {
             let (Value::Number(a), Value::Number(b)) = (*left, *right) else {
                 unreachable!("validated numeric array")
             };
-            a.total_cmp(&b)
+            a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal)
         });
         true
     }
