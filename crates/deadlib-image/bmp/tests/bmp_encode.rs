@@ -159,36 +159,48 @@ fn indexed_input_expands_into_bgr24_rows() {
 
 #[test]
 fn indexed_and_rgb_encoders_match_across_the_palette_lookup_cutoff() {
-    for (width, height) in [(5, 204), (5, 205), (4, 255), (4, 256)] {
-        let palette = vec![[11, 23, 37], [47, 59, 71], [83, 97, 101]];
-        let indices: Vec<_> = (0..width * height).map(|i| (i % 3) as u8).collect();
-        let samples = indices
-            .iter()
-            .flat_map(|&index| palette[usize::from(index)])
-            .collect();
-        let indexed = Bitmap {
-            width,
-            height,
-            pixels: Pixels::Indexed {
-                bit_depth: 8,
-                indices,
-                palette,
-            },
-        };
-        let rgb = Bitmap {
-            width,
-            height,
-            pixels: Pixels::Rgb(samples),
-        };
-        for top_down in [false, true] {
-            let options = EncodeOptions {
-                top_down,
-                ..EncodeOptions::default()
+    let colors = [[11, 23, 37], [47, 59, 71], [83, 97, 101]];
+    for (width, height) in [
+        (1, 1),
+        (2, 5),
+        (3, 7),
+        (5, 204),
+        (5, 205),
+        (4, 255),
+        (4, 256),
+    ] {
+        for palette_len in 1..=colors.len() {
+            let indices: Vec<_> = (0..(width * height) as usize)
+                .map(|i| (i % palette_len) as u8)
+                .collect();
+            let samples = indices
+                .iter()
+                .flat_map(|&index| colors[usize::from(index)])
+                .collect();
+            let indexed = Bitmap {
+                width,
+                height,
+                pixels: Pixels::Indexed {
+                    bit_depth: 8,
+                    indices,
+                    palette: colors[..palette_len].to_vec(),
+                },
             };
-            assert_eq!(
-                encode_with_options(&indexed, options).unwrap(),
-                encode_with_options(&rgb, options).unwrap()
-            );
+            let rgb = Bitmap {
+                width,
+                height,
+                pixels: Pixels::Rgb(samples),
+            };
+            for top_down in [false, true] {
+                let options = EncodeOptions {
+                    top_down,
+                    ..EncodeOptions::default()
+                };
+                assert_eq!(
+                    encode_with_options(&indexed, options).unwrap(),
+                    encode_with_options(&rgb, options).unwrap()
+                );
+            }
         }
     }
 }

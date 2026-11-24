@@ -75,7 +75,14 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
         Pixels::Indexed {
             indices, palette, ..
         } => {
-            if indices.len() >= 1024 {
+            if let [[red, green, blue]] = *palette.as_slice() {
+                output.extend_from_slice(&[blue, green, red]);
+                if pitch != row_bytes {
+                    repeat_bytes(&mut output, offset, offset + row_bytes);
+                    output.extend_from_slice(&[0; 3][..pitch - row_bytes]);
+                }
+                repeat_bytes(&mut output, offset, file_size);
+            } else if indices.len() >= 1024 {
                 let padding = &[0; 3][..pitch - row_bytes];
                 let chunk_pixels = if options.top_down && padding.is_empty() {
                     indices.len()
@@ -127,6 +134,13 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
         ),
     }
     Ok(output)
+}
+
+fn repeat_bytes(output: &mut Vec<u8>, start: usize, end: usize) {
+    while output.len() < end {
+        let count = (end - output.len()).min(output.len() - start);
+        output.extend_from_within(start..start + count);
+    }
 }
 
 fn append_truecolor_rows<const N: usize>(
