@@ -109,6 +109,49 @@ fn rgba(png: &Png, image: &Image, index: usize, factor: u16) -> [u16; 4] {
     }
 }
 
+fn expand_direct<T: Copy + Into<u16>>(
+    out: &mut Vec<[u16; 4]>,
+    samples: &[T],
+    color: ColorType,
+    transparency: Option<&Transparency>,
+    mask: u16,
+    factor: u16,
+) {
+    match color {
+        ColorType::Grayscale => {
+            let key = match transparency {
+                Some(Transparency::Grayscale(value)) => Some(value & mask),
+                _ => None,
+            };
+            out.extend(samples.iter().map(|&sample| {
+                let value = sample.into();
+                let gray = value * factor;
+                let alpha = if key == Some(value) { 0 } else { u16::MAX };
+                [gray, gray, gray, alpha]
+            }));
+        }
+        ColorType::Rgb => {
+            let key = match transparency {
+                Some(Transparency::Rgb(rgb)) => Some(rgb.map(|value| value & mask)),
+                _ => None,
+            };
+            out.extend(samples.as_chunks::<3>().0.iter().map(|&pixel| {
+                let rgb = pixel.map(Into::into);
+                let [r, g, b] = rgb.map(|value| value * factor);
+                let alpha = if key == Some(rgb) { 0 } else { u16::MAX };
+                [r, g, b, alpha]
+            }));
+        }
+        ColorType::GrayscaleAlpha => {
+            out.extend(samples.as_chunks::<2>().0.iter().map(|&[gray, alpha]| {
+                let gray = gray.into() * factor;
+                [gray, gray, gray, alpha.into() * factor]
+            }));
+        }
+        _ => unreachable!("other colors are expanded separately"),
+    }
+}
+
 fn canvas_len(png: &Png, limits: Limits) -> Result<usize, Error> {
     let count = (png.image.width as usize)
         .checked_mul(png.image.height as usize)
@@ -130,7 +173,8 @@ impl Png {
         out.try_reserve_exact(pixels)
             .map_err(|_| Error::Allocation)?;
         // Every valid sample mask (1, 3, 15, 255, 65535) divides 65535 exactly.
-        let factor = (65535 / ((1u32 << self.image.bit_depth) - 1)) as u16;
+        let mask = ((1u32 << self.image.bit_depth) - 1) as u16;
+        let factor = u16::MAX / mask;
         match (&self.image.samples, self.image.color_type) {
             (Samples::U8(samples), ColorType::Rgba) => {
                 out.extend(
@@ -168,8 +212,23 @@ impl Png {
                         .map(|&index| palette_rgba(self, usize::from(index))),
                 );
             }
-            _ => {
-                out.extend((0..pixels).map(|n| rgba(self, &self.image, n, factor)));
+            (Samples::U8(samples), color) => expand_direct(
+                &mut out,
+                samples,
+                color,
+                self.transparency.as_ref(),
+                mask,
+                factor,
+            ),
+            (Samples::U16(samples), color) => {
+                expand_direct(
+                    &mut out,
+                    samples,
+                    color,
+                    self.transparency.as_ref(),
+                    mask,
+                    1,
+                );
             }
         }
         Ok(Image {
