@@ -209,6 +209,14 @@ impl StreamDecoder {
             Event::ImageEnd(kind) => DecodeEvent::ImageEnd(kind),
         })
     }
+    pub(super) fn owned_ancillary(&mut self) -> Option<AncillaryChunk> {
+        let chunk = self.ancillary.as_ref()?;
+        if chunk.data.capacity() == chunk.data.len() {
+            self.ancillary.take()
+        } else {
+            Some(chunk.clone())
+        }
+    }
     pub fn process(&mut self, input: &[u8]) -> Result<DecodeProgress, Error> {
         if let Some(error) = &self.failure {
             return Err(error.clone());

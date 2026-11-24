@@ -60,7 +60,10 @@ fn scatter(image: &mut Image, row: Row<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-pub(super) fn collect(png: &mut Option<Png>, event: DecodeEvent<'_>) -> Result<(), Error> {
+fn collect(png: &mut Option<Png>, decoder: &mut StreamDecoder) -> Result<(), Error> {
+    let event = decoder
+        .event()
+        .ok_or(Error::Invalid("missing decode event"))?;
     if let DecodeEvent::Header(info) = event {
         let mut out = Png::new(allocate(info)?);
         out.interlaced = info.interlaced;
@@ -72,9 +75,13 @@ pub(super) fn collect(png: &mut Option<Png>, event: DecodeEvent<'_>) -> Result<(
         DecodeEvent::Header(_) => unreachable!(),
         DecodeEvent::Palette(values) => png.palette.extend_from_slice(values),
         DecodeEvent::Transparency(value) => png.transparency = Some(value.clone()),
-        DecodeEvent::Metadata { chunk, .. } => {
+        DecodeEvent::Metadata { .. } => {
             reserve(&mut png.ancillary, 1)?;
-            png.ancillary.push(chunk.clone());
+            png.ancillary.push(
+                decoder
+                    .owned_ancillary()
+                    .ok_or(Error::Invalid("missing decode event"))?,
+            );
         }
         DecodeEvent::Animation { plays, .. } => {
             png.animation = Some(Animation {
@@ -157,12 +164,7 @@ pub fn decode_reader(mut reader: impl Read, options: &DecodeOptions) -> Result<P
         let progress = decoder.process(&input[pos..end])?;
         pos += progress.consumed;
         match progress.status {
-            DecodeStatus::Event => collect(
-                &mut png,
-                decoder
-                    .event()
-                    .ok_or(Error::Invalid("missing decode event"))?,
-            )?,
+            DecodeStatus::Event => collect(&mut png, &mut decoder)?,
             DecodeStatus::NeedInput => {
                 if pos != end {
                     return Err(Error::Invalid("decoder input progress"));
