@@ -184,7 +184,7 @@ impl Compositor {
         Ok(())
     }
     pub fn render(&mut self, frame: &Frame) -> Result<RenderedFrame<'_>, Error> {
-        frame.validate(
+        frame.validate::<false>(
             &self.header,
             self.options.external_palette.as_deref(),
             false,

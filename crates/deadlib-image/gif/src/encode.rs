@@ -117,7 +117,7 @@ impl<W: Write> Encoder<W> {
         Ok(())
     }
     fn frame(&mut self, f: &Frame) -> Result<(), Error> {
-        f.validate(&self.header, None, true)?;
+        let maximum = f.validate::<true>(&self.header, None, true)?;
         if f.sorted {
             self.require89()?;
         }
@@ -126,7 +126,6 @@ impl<W: Write> Encoder<W> {
         }
         // Derive the minimum from actual indices; unused palette colors need
         // not increase the code width. No indices or palette entries change.
-        let maximum = f.indices.iter().copied().max().unwrap_or(0);
         let minimum = (8 - maximum.leading_zeros() as u8).max(2);
         self.compressed.clear();
         if f.interlaced {
@@ -138,9 +137,10 @@ impl<W: Write> Encoder<W> {
                     .extend_from_slice(&f.indices[y * w..(y + 1) * w]);
             }
             self.lzw
-                .encode(&self.interlace, minimum, &mut self.compressed)?;
+                .encode_validated(&self.interlace, minimum, &mut self.compressed)?;
         } else {
-            self.lzw.encode(&f.indices, minimum, &mut self.compressed)?;
+            self.lzw
+                .encode_validated(&f.indices, minimum, &mut self.compressed)?;
         }
         self.control(f.control)?;
         self.writer.write_all(&[0x2c])?;

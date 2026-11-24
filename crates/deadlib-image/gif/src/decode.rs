@@ -515,7 +515,7 @@ impl Decoder {
                                 &mut self.interlace,
                             )?;
                         }
-                        self.frame.validate(
+                        self.frame.validate::<false>(
                             self.header.as_ref().unwrap(),
                             self.options.external_palette.as_deref(),
                             self.options.check_bounds,

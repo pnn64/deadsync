@@ -198,6 +198,15 @@ impl Encoder {
         if !(2..=8).contains(&minimum) || input.iter().any(|&v| u16::from(v) >= 1 << minimum) {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
+        self.encode_validated(input, minimum, output)
+    }
+
+    pub(crate) fn encode_validated(
+        &mut self,
+        input: &[u8],
+        minimum: u8,
+        output: &mut Vec<u8>,
+    ) -> Result<(), Error> {
         self.table.fill(0);
         let clear = 1u16 << minimum;
         let mut next = clear + 2;
