@@ -201,9 +201,14 @@ fn map_rows<const INPUT: usize, const OUTPUT: usize>(
     let mut samples = Vec::new();
     reserve(&mut samples, header.pixel_count)?;
     let width = header.info.width as usize;
-    for row in display_rows(source, header) {
-        let (pixels, _) = row.as_chunks::<INPUT>();
-        samples.extend(pixels[..width].iter().copied().map(&mut pixel));
+    if header.info.top_down && header.row_pitch == width * INPUT {
+        let (pixels, _) = source.as_chunks::<INPUT>();
+        samples.extend(pixels.iter().copied().map(pixel));
+    } else {
+        for row in display_rows(source, header) {
+            let (pixels, _) = row.as_chunks::<INPUT>();
+            samples.extend(pixels[..width].iter().copied().map(&mut pixel));
+        }
     }
     Ok(samples.into_flattened())
 }
