@@ -106,12 +106,11 @@ impl Bitmap {
         }
         self.validate()?;
         let mut output = Vec::new();
-        reserve(&mut output, bytes)?;
+        reserve(&mut output, count)?;
         match &self.pixels {
             Pixels::Indexed {
                 indices, palette, ..
             } => {
-                output.resize(bytes, 0);
                 if indices.len() >= 1024 {
                     // Amortize the table setup over enough pixels to use a
                     // single RGBA load per index in the conversion loop.
@@ -119,30 +118,26 @@ impl Bitmap {
                     for (&[red, green, blue], rgba) in palette.iter().zip(&mut colors) {
                         *rgba = [red, green, blue, 255];
                     }
-                    for (&index, rgba) in indices.iter().zip(output.as_chunks_mut::<4>().0) {
-                        *rgba = colors[usize::from(index)];
-                    }
+                    output.extend(indices.iter().map(|&index| colors[usize::from(index)]));
                 } else {
-                    for (&index, rgba) in indices.iter().zip(output.as_chunks_mut::<4>().0) {
+                    output.extend(indices.iter().map(|&index| {
                         let [red, green, blue] = palette[usize::from(index)];
-                        *rgba = [red, green, blue, 255];
-                    }
+                        [red, green, blue, 255]
+                    }));
                 }
             }
             Pixels::Rgb(samples) => {
-                output.resize(bytes, 0);
-                for (rgb, rgba) in samples
-                    .as_chunks::<3>()
-                    .0
-                    .iter()
-                    .zip(output.as_chunks_mut::<4>().0)
-                {
-                    *rgba = [rgb[0], rgb[1], rgb[2], 255];
-                }
+                output.extend(
+                    samples
+                        .as_chunks::<3>()
+                        .0
+                        .iter()
+                        .map(|&[red, green, blue]| [red, green, blue, 255]),
+                );
             }
-            Pixels::Rgba(samples) => output.extend_from_slice(samples),
+            Pixels::Rgba(samples) => output.extend_from_slice(samples.as_chunks::<4>().0),
         }
-        Ok(output)
+        Ok(output.into_flattened())
     }
 
     /// Consume the bitmap, reusing existing RGBA storage with the default limits.
