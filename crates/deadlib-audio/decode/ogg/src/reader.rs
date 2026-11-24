@@ -22,6 +22,8 @@ pub struct PageReader<R> {
     inner: R,
     buffer: Vec<u8>,
     start: usize,
+    // The initialized suffix is reusable read scratch; only bytes before filled are input.
+    filled: usize,
     offset: u64,
     returned: usize,
     mode: SyncMode,
@@ -38,6 +40,7 @@ impl<R: Read> PageReader<R> {
             inner,
             buffer: Vec::new(),
             start: 0,
+            filled: 0,
             offset: 0,
             returned: 0,
             mode,
@@ -74,38 +77,39 @@ impl<R: Read> PageReader<R> {
     }
     fn fill(&mut self, required: usize) -> Result<bool, Error> {
         debug_assert!(required <= MAX_PAGE_SIZE);
-        if self.buffer.len() - self.start < required && !self.eof {
+        if self.filled - self.start < required && !self.eof {
             self.read_more(required, true)?;
         }
-        Ok(self.buffer.len() - self.start >= required)
+        Ok(self.filled - self.start >= required)
     }
     fn read_more(&mut self, target: usize, complete: bool) -> Result<(), Error> {
-        debug_assert!(target <= MAX_PAGE_SIZE && self.buffer.len() - self.start < target);
+        debug_assert!(target <= MAX_PAGE_SIZE && self.filled - self.start < target);
         if self.start != 0 {
-            self.buffer.copy_within(self.start.., 0);
-            self.buffer.truncate(self.buffer.len() - self.start);
+            if self.start != self.filled {
+                self.buffer.copy_within(self.start..self.filled, 0);
+            }
+            self.filled -= self.start;
             self.start = 0;
         }
-        let mut filled = self.buffer.len();
-        reserve(&mut self.buffer, target - filled)?;
-        self.buffer.resize(target, 0);
-        // Initialize the unread suffix once, retaining it across short reads.
-        loop {
-            match self.inner.read(&mut self.buffer[filled..]) {
+        let mut filled = self.filled;
+        if target > self.buffer.len() {
+            let additional = target - self.buffer.len();
+            reserve(&mut self.buffer, additional)?;
+            self.buffer.resize(target, 0);
+        }
+        let result = loop {
+            match self.inner.read(&mut self.buffer[filled..target]) {
                 Ok(0) => self.eof = true,
                 Ok(n) => filled += n,
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => (),
-                Err(e) => {
-                    self.buffer.truncate(filled);
-                    return Err(e.into());
-                }
+                Err(e) => break Err(e),
             }
             if !complete || filled >= target || self.eof {
-                break;
+                break Ok(());
             }
-        }
-        self.buffer.truncate(filled);
-        Ok(())
+        };
+        self.filled = filled.min(target);
+        result.map_err(Error::from)
     }
 
     // Return only lengths here, so the recovery loop can mutate the buffer
@@ -146,7 +150,7 @@ impl<R: Read> PageReader<R> {
     // the body of a failed CRC candidate before reading past that candidate.
     fn scan_capture(&mut self) -> Result<(), Error> {
         loop {
-            let available = &self.buffer[self.start..];
+            let available = &self.buffer[self.start..self.filled];
             if let Some(skip) = capture_pattern(available) {
                 self.discard(skip);
                 self.discarded += skip as u64;
@@ -167,12 +171,12 @@ impl<R: Read> PageReader<R> {
     }
     fn candidate(&mut self) -> Result<Option<usize>, Error> {
         if !self.fill(27)? {
-            if self.buffer.len() == self.start {
+            if self.filled == self.start {
                 return Ok(None);
             }
             return Err(Error::Truncated);
         }
-        let header = page::header_size(&self.buffer[self.start..])?;
+        let header = page::header_size(&self.buffer[self.start..self.filled])?;
         if !self.fill(header)? {
             return Err(Error::Truncated);
         }
@@ -236,7 +240,7 @@ impl<R: Read + Seek> PageReader<R> {
     /// the offset is not a known page boundary. Codec overlap is caller-owned.
     pub fn seek(&mut self, offset: u64) -> Result<(), Error> {
         self.inner.seek(SeekFrom::Start(offset))?;
-        self.buffer.clear();
+        self.filled = 0;
         self.start = 0;
         self.offset = offset;
         self.returned = 0;

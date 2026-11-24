@@ -506,6 +506,27 @@ fn incremental_every_header_split_and_small_body_chunks() {
 }
 
 #[test]
+fn page_reader_keeps_reused_storage_out_of_truncated_pages() {
+    let full = page(BOS | EOS, 0, 8, 0, &[255, 17], &[37; 272]);
+    let mut bytes = full.clone();
+    bytes.extend_from_slice(&full[..full.len() - 1]);
+    let offset = full.len() as u64;
+
+    let mut reader = PageReader::new(Cursor::new(&bytes));
+    assert_eq!(reader.next_page().unwrap().unwrap().page.bytes(), full);
+    assert!(matches!(reader.next_page(), Err(Error::Truncated)));
+    assert_eq!(reader.position(), offset);
+    assert!(reader.current_page().is_none());
+    reader.seek(offset).unwrap();
+    assert!(matches!(reader.next_page(), Err(Error::Truncated)));
+
+    let mut reader = PageReader::with_mode(bytes.as_slice(), SyncMode::Recover);
+    assert_eq!(reader.next_page().unwrap().unwrap().page.bytes(), full);
+    assert!(reader.next_page().unwrap().is_none());
+    assert_eq!(reader.discarded_bytes(), offset - 1);
+}
+
+#[test]
 fn recovery_finds_capture_inside_false_page_and_after_crc_error() {
     let valid = page(BOS | EOS, 0, 8, 0, &[5], b"hello");
     let mut false_page = page(BOS | EOS, 0, 7, 0, &[100], &[99; 100]);
