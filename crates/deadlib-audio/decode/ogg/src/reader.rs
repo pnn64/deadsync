@@ -333,16 +333,27 @@ impl PageDecoder {
             self.buffer.extend_from_slice(input);
             return Ok((input.len(), false));
         }
-        // A complete page can be copied once into its final-sized buffer.
+        // With a complete header, copy the available page prefix in one step.
         if self.buffer.is_empty()
             && let Ok(length) = page::page_size(input)
-            && input.len() >= length
         {
-            reserve(&mut self.buffer, length)?;
-            self.buffer.extend_from_slice(&input[..length]);
-            self.length = length;
-            page::check_crc(&self.buffer)?;
-            return Ok((length, true));
+            let take = input.len().min(length);
+            let complete = take == length;
+            if complete || length <= 32 * 1024 {
+                match reserve(&mut self.buffer, take) {
+                    Ok(()) => {
+                        self.buffer.extend_from_slice(&input[..take]);
+                        self.length = length;
+                        if complete {
+                            page::check_crc(&self.buffer)?;
+                        }
+                        return Ok((take, complete));
+                    }
+                    Err(error) if complete => return Err(error),
+                    // Smaller incremental allocations may still succeed.
+                    Err(_) => {}
+                }
+            }
         }
         let mut consumed = 0;
         loop {
