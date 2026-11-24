@@ -11,6 +11,13 @@ impl Vm {
                 self.registers.copy_within(call + 1..call + 1 + count, call);
                 Some(count)
             }
+            2 if count != 0 => {
+                let name = self.registers[call + 1].type_name();
+                let id = self.strings.find(name.as_bytes())?;
+                self.strings.bytes.preserve_new_reference(id.0);
+                self.registers[call] = Value::String(id);
+                Some(1)
+            }
             3 if count == 1 => {
                 self.registers[call] = self
                     .number(self.registers[call + 1])

@@ -88,7 +88,7 @@ impl Vm {
                 // checks for observers before consuming its arguments.
                 let actual = match id {
                     0
-                    | 3..=5
+                    | 2..=5
                     | NEXT
                     | PAIRS_NEXT
                     | IPAIRS_STEP
