@@ -307,10 +307,10 @@ impl Demuxer {
             if !fragment.starts_packet || !fragment.ends_packet {
                 reserve(&mut stream.partial, fragment.data.len())?;
                 stream.partial.extend_from_slice(fragment.data);
-            }
-            stream.continuing = !fragment.ends_packet;
-            if !fragment.ends_packet {
-                continue;
+                stream.continuing = !fragment.ends_packet;
+                if stream.continuing {
+                    break;
+                }
             }
             remaining -= 1;
             let info = PacketInfo {
@@ -337,9 +337,11 @@ impl Demuxer {
                 .packets
                 .checked_add(1)
                 .ok_or(Error::LimitExceeded("packet count"))?;
-            stream.partial.clear();
-            if stream.partial.capacity() > MAX_PAGE_SIZE {
-                stream.partial = Vec::new();
+            if !stream.partial.is_empty() {
+                stream.partial.clear();
+                if stream.partial.capacity() > MAX_PAGE_SIZE {
+                    stream.partial = Vec::new();
+                }
             }
         }
         pending += stream.partial.len();
