@@ -110,30 +110,25 @@ impl<T> VecExt<T> for Vec<T> {
         if length == 0 {
             return Ok(Box::default());
         }
-        let pointer = if self.capacity() == length || size_of::<T>() == 0 {
-            let pointer = self.as_mut_ptr();
-            std::mem::forget(self);
-            pointer
-        } else {
-            let layout = Layout::array::<T>(length).map_err(|_| Error::memory())?;
-            super::compilation::charge(layout.size())?;
-            // SAFETY: nonempty non-ZST layout, matching the eventual Box's
-            // deallocation layout and alignment. A null result leaves self owned.
-            let pointer = unsafe { alloc(layout) }.cast::<T>();
-            if pointer.is_null() {
-                return Err(Error::memory());
-            }
-            // SAFETY: copy initialized values to disjoint, sufficiently large
-            // storage, then remove them from the old owner without dropping them.
-            unsafe {
-                ptr::copy_nonoverlapping(self.as_ptr(), pointer, length);
-                self.set_len(0);
-            }
-            pointer
-        };
-        // SAFETY: one exact-size allocation (or an aligned dangling ZST pointer)
-        // owns length initialized T values; ownership has left the source Vec.
-        Ok(unsafe { Box::from_raw(ptr::slice_from_raw_parts_mut(pointer, length)) })
+        if self.capacity() == length || size_of::<T>() == 0 {
+            return Ok(self.into_boxed_slice());
+        }
+        let layout = Layout::array::<T>(length).map_err(|_| Error::memory())?;
+        super::compilation::charge(layout.size())?;
+        // SAFETY: the nonempty non-ZST layout matches the Box's layout and alignment.
+        let pointer = unsafe { alloc(layout) }.cast::<T>();
+        if pointer.is_null() {
+            return Err(Error::memory());
+        }
+        // SAFETY: transfer the initialized elements to a disjoint allocation
+        // of the exact Box layout and remove them from the Vec without dropping them.
+        unsafe {
+            ptr::copy_nonoverlapping(self.as_ptr(), pointer, length);
+            self.set_len(0);
+            Ok(Box::from_raw(ptr::slice_from_raw_parts_mut(
+                pointer, length,
+            )))
+        }
     }
 }
 pub(crate) trait SliceExt<T: Copy> {
