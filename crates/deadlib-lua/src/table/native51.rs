@@ -26,9 +26,9 @@ pub(crate) fn string_hash(bytes: &[u8]) -> u32 {
     hash
 }
 
-fn hash(key: Key, string_hash: Option<u32>) -> u32 {
+fn hash(key: Key, string_hash: impl FnOnce(StringId) -> u32) -> u32 {
     match key {
-        Key::String(_) => string_hash.expect("new Lua 5.1 string key needs its byte hash"),
+        Key::String(id) => string_hash(id),
         Key::Number(bits) if bits << 1 == 0 => 0,
         Key::Number(bits) => (bits as u32).wrapping_add((bits >> 32) as u32),
         Key::Boolean(value) => u32::from(value),
@@ -121,7 +121,7 @@ impl Table {
         &mut self,
         key: Key,
         value: Value,
-        string_hash: Option<u32>,
+        string_hash: impl FnOnce(StringId) -> u32,
     ) -> Result<(), Error> {
         if let Some(index) = array_index(key.value()).filter(|&i| i < self.array.len()) {
             self.array[index] = value;
@@ -135,10 +135,13 @@ impl Table {
             }
             return Ok(());
         }
-        let hash = hash(key, string_hash);
+        self.native_insert(key, value, hash(key, string_hash))
+    }
+
+    fn native_insert(&mut self, key: Key, value: Value, hash: u32) -> Result<(), Error> {
         if self.entries.is_empty() {
             self.native_rehash(key)?;
-            return self.native_set(key, value, string_hash);
+            return self.native_set(key, value, |_| hash);
         }
         let mut position = main_position(key, hash, self.entries.len());
         if self.entries[position].value != Value::Nil {
@@ -147,7 +150,7 @@ impl Table {
                 .find(|&i| self.entries[i].key == Key::Vacant);
             let Some(free) = free else {
                 self.native_rehash(key)?;
-                return self.native_set(key, value, string_hash);
+                return self.native_set(key, value, |_| hash);
             };
             self.last_free = free;
             let old = self.entries[position];
@@ -263,12 +266,12 @@ impl Table {
                 replacement.native_set(
                     Key::Number(((index + 1) as f64).to_bits()),
                     self.array[index],
-                    None,
+                    |_| unreachable!("numeric keys do not use a string hash"),
                 )?;
             }
         }
         for entry in self.entries.iter().rev().filter(|e| e.value != Value::Nil) {
-            replacement.native_set(entry.key, entry.value, Some(entry.native_hash))?;
+            replacement.native_set(entry.key, entry.value, |_| entry.native_hash)?;
         }
         self.array = replacement.array;
         self.entries = replacement.entries;

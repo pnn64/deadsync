@@ -590,13 +590,15 @@ impl Table {
         );
     }
     pub fn set(&mut self, key: Value, value: Value) -> Result<(), Error> {
-        self.set_hashed(key, value, None)
+        self.set_with_native_hash(key, value, |_| {
+            panic!("new Lua 5.1 string key needs its byte hash")
+        })
     }
-    pub(crate) fn set_hashed(
+    pub(crate) fn set_with_native_hash(
         &mut self,
         key: Value,
         value: Value,
-        string_hash: Option<u32>,
+        string_hash: impl FnOnce(StringId) -> u32,
     ) -> Result<(), Error> {
         let k = Self::checked_key(key)?;
         if self.native51 {

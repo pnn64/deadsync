@@ -1139,19 +1139,11 @@ impl Vm {
         }
         Table::validate_set_key(key).map_err(|error| self.operand_error(error))?;
         self.reserve_gc_table_write(id, key, value)?;
-        let string_hash = if self.lua51_table_order {
-            match key {
-                Value::String(id) => Some(Table::native_string_hash(
-                    &self.strings.bytes[slot_index(id.0)],
-                )),
-                _ => None,
-            }
-        } else {
-            None
-        };
         let table = &mut self.tables[slot_index(id.0)];
         let before = table.heap_bytes();
-        let result = table.set_hashed(key, value, string_hash);
+        let result = table.set_with_native_hash(key, value, |id| {
+            Table::native_string_hash(&self.strings.bytes[slot_index(id.0)])
+        });
         let growth = table.heap_bytes().saturating_sub(before);
         if growth != 0 {
             self.tables.note_alloc(growth);
