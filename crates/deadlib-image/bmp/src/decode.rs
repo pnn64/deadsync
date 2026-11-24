@@ -395,6 +395,7 @@ fn masks_format(masks: [u32; 4], bit_depth: u16) -> Result<Format, Error> {
     })
 }
 
+#[inline(always)]
 fn parse_header(input: &[u8], limits: Limits) -> Result<Header, Error> {
     if input.len() > limits.max_input_bytes {
         return Err(Error::LimitExceeded);
