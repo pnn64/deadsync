@@ -28,7 +28,6 @@ pub struct PacketWriter<W> {
     granule: u64,
     last_granule: u64,
     continued: bool,
-    packet_open: bool,
     started: bool,
     ended: bool,
     failed: bool,
@@ -49,7 +48,6 @@ impl<W: Write> PacketWriter<W> {
             granule: UNKNOWN_GRANULE_POSITION,
             last_granule: 0,
             continued: false,
-            packet_open: false,
             started: false,
             ended: false,
             failed: false,
@@ -90,9 +88,6 @@ impl<W: Write> PacketWriter<W> {
             if self.segments == 255 {
                 self.emit(false, &[])?;
             }
-            if self.segments == 0 {
-                self.continued = self.packet_open;
-            }
             let len = (data.len() - position).min((255 - self.segments) * 255);
             let payload = &data[position..position + len];
             let mut tail = len;
@@ -103,18 +98,18 @@ impl<W: Write> PacketWriter<W> {
                 tail -= full * 255;
             }
             position += len;
-            self.packet_open = self.segments == 255;
-            if !self.packet_open {
+            let packet_open = self.segments == 255;
+            if !packet_open {
                 self.lacing[self.segments] = tail as u8;
                 self.segments += 1;
                 self.granule = granule;
                 self.last_granule = granule;
             }
-            let flush = self.packet_open
+            let flush = packet_open
                 || first_packet
                 || eos
                 || self.body.len() + len >= self.options.target_page_body;
-            let page_eos = eos && !self.packet_open;
+            let page_eos = eos && !packet_open;
             if self.body.is_empty() && flush {
                 self.emit(page_eos, payload)?;
             } else {
@@ -135,7 +130,7 @@ impl<W: Write> PacketWriter<W> {
                     self.emit(page_eos, &[])?;
                 }
             }
-            if !self.packet_open {
+            if !packet_open {
                 return Ok(());
             }
         }
@@ -149,6 +144,7 @@ impl<W: Write> PacketWriter<W> {
         } else {
             self.granule
         };
+        let lacing = &self.lacing[..self.segments];
         crate::page::write_page_inner(
             &mut self.inner,
             PageHeader {
@@ -157,7 +153,7 @@ impl<W: Write> PacketWriter<W> {
                 serial: self.serial,
                 sequence: self.sequence,
             },
-            &self.lacing[..self.segments],
+            lacing,
             if self.body.is_empty() {
                 direct
             } else {
@@ -167,10 +163,10 @@ impl<W: Write> PacketWriter<W> {
         self.sequence = self.sequence.wrapping_add(1);
         self.started = true;
         self.ended = eos;
+        self.continued = lacing.last() == Some(&255);
         self.segments = 0;
         self.body.clear();
         self.granule = UNKNOWN_GRANULE_POSITION;
-        self.continued = self.packet_open;
         Ok(())
     }
     /// Force a page boundary without ending the logical stream.
