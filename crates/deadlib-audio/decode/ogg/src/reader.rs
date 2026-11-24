@@ -77,10 +77,14 @@ impl<R: Read> PageReader<R> {
     }
     fn fill(&mut self, required: usize) -> Result<bool, Error> {
         debug_assert!(required <= MAX_PAGE_SIZE);
-        if self.filled - self.start < required && !self.eof {
-            self.read_more(required, true)?;
+        if self.filled - self.start >= required {
+            return Ok(true);
         }
-        Ok(self.filled - self.start >= required)
+        if self.eof {
+            return Ok(false);
+        }
+        self.read_more(required, true)?;
+        Ok(self.filled >= required)
     }
     fn read_more(&mut self, target: usize, complete: bool) -> Result<(), Error> {
         debug_assert!(target <= MAX_PAGE_SIZE && self.filled - self.start < target);
@@ -123,8 +127,7 @@ impl<R: Read> PageReader<R> {
         loop {
             let result = self.candidate();
             match result {
-                Ok(None) => return Ok(None),
-                Ok(Some(len)) => return Ok(Some(len)),
+                Ok(length) => return Ok(length),
                 Err(error) => {
                     if self.mode == SyncMode::Strict
                         || matches!(error, Error::Io(_) | Error::Allocation)
