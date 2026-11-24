@@ -2,6 +2,15 @@
 use super::*;
 use crate::memory::fallible::{self, VecExt};
 
+pub(super) fn select_start(n: i32, available: usize) -> Option<usize> {
+    let start = if n < 0 {
+        available as i64 + i64::from(n)
+    } else {
+        i64::from(n) - 1
+    };
+    (start >= 0).then_some((start as usize).min(available))
+}
+
 impl Vm {
     pub(super) fn finish_call(&mut self, call: usize, actual: usize, wanted: u32) {
         let wanted = if wanted == OPEN {
@@ -133,6 +142,11 @@ impl Vm {
                             | strings::STR_LEN
                             | strings::STR_BYTE
                 ) && let Some(actual) = self.try_fast_native(id, call, count)
+                {
+                    return Ok(Some(actual));
+                }
+                if id == 7
+                    && let Some(actual) = self.try_fast_select(call, count)
                 {
                     return Ok(Some(actual));
                 }
@@ -952,15 +966,8 @@ impl Vm {
                 }
                 let n = self.integer_argument(base, count, 0, None)? as i32;
                 let available = count.saturating_sub(1);
-                let start = if n < 0 {
-                    available as i64 + i64::from(n)
-                } else {
-                    i64::from(n) - 1
-                };
-                if start < 0 {
-                    return Err(self.argument_error(0, b"index out of range"));
-                }
-                let start = (start as usize).min(available);
+                let start = select_start(n, available)
+                    .ok_or_else(|| self.argument_error(0, b"index out of range"))?;
                 self.registers
                     .copy_within(base + 2 + start..base + 2 + available, base);
                 return Ok(available - start);

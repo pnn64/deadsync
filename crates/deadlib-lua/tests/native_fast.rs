@@ -118,6 +118,37 @@ return 42
 }
 
 #[test]
+fn select_preserves_count_markers_ranges_errors_and_call_hooks() {
+    check_both(
+        br#"
+local f,object=select,{}
+local a,b,c=f(-3,99,object,nil,false)
+assert(a==object and b==nil and c==false)
+assert(f('#\0args',object,nil,false)==3 and f('#')==0)
+assert(f('#',f(100,object))==0 and f('#',f(1))==0)
+assert(f('2',0,object)==object and f(1.9,object)==object)
+for _,invalid in ipairs{0,-5,'x',false,0/0,1/0} do
+  assert(not pcall(f,invalid,1))
+end
+assert(not pcall(f))
+local function tail(...) return f(2,...) end
+assert(f('#',tail(0,nil,object))==2 and f(2,tail(0,nil,object))==object)
+local calls,returns=0,0
+debug.sethook(function(event)
+  if debug.getinfo(2,'f').func==f then
+    if event=='call' then calls=calls+1 elseif event=='return' then returns=returns+1 end
+  end
+end,'cr')
+local first,second,third=f(-3,99,object,nil,false)
+local count=f('#args',object,nil,false)
+debug.sethook()
+assert(first==object and second==nil and third==false and count==3 and calls==2 and returns==2)
+return 42
+"#,
+    );
+}
+
+#[test]
 fn invalid_native_calls_keep_diagnostics_error_objects_and_vm_reuse() {
     for source in [
         b"\nassert()".as_slice(),

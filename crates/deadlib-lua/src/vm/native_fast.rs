@@ -90,6 +90,31 @@ impl Vm {
         None
     }
 
+    #[inline(never)]
+    pub(super) fn try_fast_select(&mut self, call: usize, count: usize) -> Option<usize> {
+        if count == 0 || !self.sort_fast_context() {
+            return None;
+        }
+        let available = count - 1;
+        match self.registers[call + 1] {
+            Value::String(id)
+                if self
+                    .string_bytes(id)
+                    .is_some_and(|bytes| bytes.first() == Some(&b'#')) =>
+            {
+                self.registers[call] = Value::Number(available as f64);
+                Some(1)
+            }
+            Value::Number(index) => {
+                let start = native::select_start(lua_integer(index) as i32, available)?;
+                self.registers
+                    .copy_within(call + 2 + start..call + 2 + available, call);
+                Some(available - start)
+            }
+            _ => None,
+        }
+    }
+
     pub(super) fn try_fast_math(&mut self, id: u64, call: usize, count: usize) -> Option<usize> {
         if count == 0 || !self.sort_fast_context() {
             return None;
