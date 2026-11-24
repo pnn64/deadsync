@@ -81,6 +81,43 @@ return 42
 }
 
 #[test]
+fn ipairs_step_preserves_raw_lookup_zero_results_and_hooks() {
+    check_both(
+        br#"
+local t=setmetatable({false,'two',[4]='later',[0]='zero',[-2147483648]='lowest'}, {
+  __index=function() error('unexpected metamethod') end,
+})
+local step,state,initial=ipairs(t)
+assert(state==t and initial==0)
+local k,v=step(t,'0')
+assert(k==1 and v==false)
+k,v=step(t,-1)
+assert(k==0 and v=='zero')
+k,v=step(t,2147483647,'ignored')
+assert(k==-2147483648 and v=='lowest')
+assert(select('#',step(t,2))==0 and not pcall(step,t) and not pcall(step,{},false))
+local seen=0
+for index,value in ipairs(t) do
+  assert(index==seen+1 and value==rawget(t,index))
+  seen=index
+end
+assert(seen==2)
+local calls,returns=0,0
+debug.sethook(function(event)
+  if debug.getinfo(2,'f').func==step then
+    if event=='call' then calls=calls+1 elseif event=='return' then returns=returns+1 end
+  end
+end,'cr')
+local first,value=step(t,0)
+local exhausted=select('#',step(t,2))
+debug.sethook()
+assert(first==1 and value==false and exhausted==0 and calls==2 and returns==2)
+return 42
+"#,
+    );
+}
+
+#[test]
 fn invalid_native_calls_keep_diagnostics_error_objects_and_vm_reuse() {
     for source in [
         b"\nassert()".as_slice(),

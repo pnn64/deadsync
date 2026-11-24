@@ -126,7 +126,12 @@ impl Vm {
                 }
                 if matches!(
                     id,
-                    0 | 3..=5 | NEXT | PAIRS_NEXT | strings::STR_LEN | strings::STR_BYTE
+                    0 | 3
+                        ..=5 | NEXT
+                            | PAIRS_NEXT
+                            | IPAIRS_STEP
+                            | strings::STR_LEN
+                            | strings::STR_BYTE
                 ) && let Some(actual) = self.try_fast_native(id, call, count)
                 {
                     return Ok(Some(actual));

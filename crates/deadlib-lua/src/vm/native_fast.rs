@@ -48,16 +48,33 @@ impl Vm {
                 None => Some(0),
             };
         }
-        if matches!(id, NEXT | PAIRS_NEXT) && count != 0 {
+        if matches!(id, NEXT | PAIRS_NEXT | IPAIRS_STEP) && count != 0 {
             let Value::Table(table) = self.registers[call + 1] else {
                 return None;
             };
+            let table = self.tables.get(table.0)?;
+            if id == IPAIRS_STEP {
+                if count < 2 {
+                    return None;
+                }
+                let Value::Number(previous) = self.registers[call + 2] else {
+                    return None;
+                };
+                let next = (previous as i32).wrapping_add(1);
+                let value = table.get_integer(i64::from(next));
+                if value == Value::Nil {
+                    return Some(0);
+                }
+                self.registers[call] = Value::Number(f64::from(next));
+                self.registers[call + 1] = value;
+                return Some(2);
+            }
             let key = if count > 1 {
                 self.registers[call + 2]
             } else {
                 Value::Nil
             };
-            let next = self.tables.get(table.0)?.next_entry(key).ok()?;
+            let next = table.next_entry(key).ok()?;
             return match next {
                 Some((key, value)) => {
                     self.registers[call] = key;
