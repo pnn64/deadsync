@@ -74,6 +74,7 @@ members = [
     "crates/deadsync-theme",
     "crates/deadsync-theme-openitg",
     "crates/deadsync-theme-simply-love",
+    "crates/deadsync-theme-stepmania-395",
     "crates/deadsync-updater",
     "crates/deadsync-version",
     "crates/deadlib-video",

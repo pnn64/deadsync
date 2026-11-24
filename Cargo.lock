@@ -2025,6 +2025,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadsync-theme-stepmania-395"
+version = "0.6.177"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
 name = "deadsync-updater"
 version = "0.1.0"
 dependencies = [
