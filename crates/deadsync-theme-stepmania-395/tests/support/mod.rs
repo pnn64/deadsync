@@ -110,6 +110,24 @@ pub fn music_actors_for(
 }
 
 pub fn evaluation_actors(course: bool, p2_only: bool, elapsed: f32) -> Vec<Actor> {
+    evaluation_actors_with_style(
+        course,
+        p2_only,
+        elapsed,
+        deadsync_theme::select_music::SessionStyleView {
+            double: false,
+            versus: !p2_only,
+            primary_side: usize::from(p2_only),
+        },
+    )
+}
+
+pub fn evaluation_actors_with_style(
+    course: bool,
+    p2_only: bool,
+    elapsed: f32,
+    session_style: deadsync_theme::select_music::SessionStyleView,
+) -> Vec<Actor> {
     use deadlib_assets::AssetManager;
     use deadsync_theme::stage::StagePresentation;
     use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, Grade};
@@ -128,12 +146,12 @@ pub fn evaluation_actors(course: bool, p2_only: bool, elapsed: f32) -> Vec<Actor
             &mut actors,
             &AssetManager::new(),
             EvaluationOverview {
+                session_style,
                 title: &title,
                 artist: &artist,
                 banner_key: None,
                 course_summary: course,
                 stage_number: (!course).then_some(2),
-                double_side_style: false,
                 elapsed,
                 departure_elapsed: None,
                 players: std::array::from_fn(|side| {
@@ -277,6 +295,11 @@ pub fn session_actors(screen: deadsync_theme::Screen, elapsed: f32, p2_only: boo
                 &mut actors,
                 &AssetManager::new(),
                 SessionSummaryPage {
+                    session_style: deadsync_theme::select_music::SessionStyleView {
+                        double: false,
+                        versus: !p2_only,
+                        primary_side: usize::from(p2_only),
+                    },
                     results: &results,
                     banners: &banners,
                     elapsed,

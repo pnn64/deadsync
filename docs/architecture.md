@@ -84,6 +84,10 @@ session layout facts, including the primary side, without exposing runtime
 profile objects. Presentations choose their own numeric font, BPM animation,
 and style artwork even when no chart is focused.
 
+Setup, retained evaluation pages and session summaries carry those same plain
+style facts. The shared result view uses its layout flag for double-width
+presentation; each theme owns any style badge and header animation.
+
 The score layer computes chart achievement ratios from judged notes and recorded
 combo runs. Song results retain these optional ratios; course results retain the
 number of passed stages. Evaluation views forward these game facts, while each

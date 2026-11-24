@@ -2979,7 +2979,11 @@ M000
                     &view.score_info,
                     view.routine_shared_score_percent,
                     view.stage_number,
-                    style.is_double(),
+                    deadsync_theme::select_music::SessionStyleView {
+                        double: style.is_double(),
+                        versus: style.is_versus(),
+                        primary_side: profile_data::player_side_index(context.player_side),
+                    },
                     |side| *side == profile_data::PlayerSide::P2,
                 ).expect("prepared overview");
                 let scores = Arc::clone(&view.score_info);

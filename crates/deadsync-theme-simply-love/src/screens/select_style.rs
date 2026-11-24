@@ -86,6 +86,11 @@ pub fn with_play_selection_view(state: &State, draw: impl FnOnce(PlaySelectionVi
     });
     let join_prompt = tr("Common", "PressStart");
     draw(PlaySelectionView {
+        session_style: deadsync_theme::select_music::SessionStyleView {
+            double: state.runtime.play_style.is_double(),
+            versus: state.runtime.play_style.is_versus(),
+            primary_side: state.runtime.primary_side,
+        },
         kind: PlaySelectionKind::Style {
             pump: state.runtime.game == GameFlag::Pump,
         },

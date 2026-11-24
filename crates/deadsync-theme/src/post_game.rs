@@ -15,6 +15,7 @@ pub struct SessionEndPolicy {
 }
 
 pub struct SessionSummaryPage<'a> {
+    pub session_style: crate::select_music::SessionStyleView,
     pub results: &'a SessionSummary,
     pub banners: &'a [Arc<str>],
     pub elapsed: f32,

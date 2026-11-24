@@ -159,6 +159,38 @@ fn native_attract_captures() {
         &assets,
     );
     let mut intro = StepManiaIntro::default();
+    let p2_double = deadsync_theme::select_music::SessionStyleView {
+        double: true,
+        versus: false,
+        primary_side: 1,
+    };
+    for (name, actors, elapsed) in [
+        (
+            "select-difficulty-p2-double",
+            selection_actors_with_style(true, 3, p2_double),
+            2.0,
+        ),
+        (
+            "evaluation-double-p2",
+            support::evaluation_actors_with_style(false, true, 5.0, p2_double),
+            5.0,
+        ),
+        (
+            "evaluation-header-entering",
+            support::evaluation_actors(false, false, 0.25),
+            0.25,
+        ),
+    ] {
+        capture_actors(
+            name,
+            &actors,
+            elapsed,
+            &output,
+            &metrics,
+            &mut backend,
+            &assets,
+        );
+    }
     for (name, screen, elapsed, p2) in [
         (
             "session-summary",
@@ -364,6 +396,22 @@ fn capture_actors(
 }
 
 fn selection_actors(mode: bool, selected: usize) -> Vec<Actor> {
+    selection_actors_with_style(
+        mode,
+        selected,
+        deadsync_theme::select_music::SessionStyleView {
+            double: false,
+            versus: true,
+            primary_side: 0,
+        },
+    )
+}
+
+fn selection_actors_with_style(
+    mode: bool,
+    selected: usize,
+    session_style: deadsync_theme::select_music::SessionStyleView,
+) -> Vec<Actor> {
     use deadsync_theme::selection::SelectionPresentation;
     use deadsync_theme::views::{PlaySelectionChoice, PlaySelectionKind, PlaySelectionView};
     use deadsync_theme_stepmania_395::StepManiaMusicWheel;
@@ -402,6 +450,7 @@ fn selection_actors(mode: bool, selected: usize) -> Vec<Actor> {
         selection.push_play_selection(
             &mut actors,
             PlaySelectionView {
+                session_style,
                 kind: if mode {
                     PlaySelectionKind::Mode
                 } else {
@@ -410,7 +459,10 @@ fn selection_actors(mode: bool, selected: usize) -> Vec<Actor> {
                 title: &title,
                 choices: &choices,
                 selected,
-                player_names: [Some("P1"), Some("P2")],
+                player_names: std::array::from_fn(|side| {
+                    (session_style.versus || side == session_style.primary_side)
+                        .then_some(if side == 0 { "P1" } else { "P2" })
+                }),
                 join_prompt: &prompt,
                 exit_progress: 0.0,
             },

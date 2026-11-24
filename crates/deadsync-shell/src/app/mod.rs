@@ -902,6 +902,7 @@ fn build_course_summary_eval_state(
     let routine_percent = routine_shared.map(|shared| shared.score_percent);
     let overview = evaluation_views::prepare_overview(
         mounted_overview, &scores, routine_percent, None, profile.scorebox.play_style,
+        profile.scorebox.player_side,
     );
     let capture = EvaluationCapture::from_scores(&scores);
     let state = ActiveTheme::init_course_evaluation(
@@ -10184,6 +10185,7 @@ impl App {
                     init_view.routine_shared_score_percent,
                     init_view.stage_number,
                     context.play_style,
+                    context.player_side,
                 );
                 let capture = EvaluationCapture::from_scores(&init_view.score_info);
                 let eval_state = ActiveTheme::init_evaluation(init_view, context, color_idx);
@@ -10625,6 +10627,7 @@ impl App {
                 init_view.routine_shared_score_percent,
                 init_view.stage_number,
                 context.play_style,
+                context.player_side,
             );
             self.state.screens.evaluation_capture = EvaluationCapture::from_scores(&init_view.score_info);
             self.state.screens.evaluation_state =
@@ -10691,7 +10694,12 @@ impl App {
                 .post_select_display_stages(config::runtime::get().show_course_individual_scores)
                 .into_owned();
             if let Some(ending) = self.state.screens.session_end.as_mut() {
-                ending.enter_summary(&display_stages, return_to);
+                let session = profile::get_session_snapshot();
+                ending.enter_summary(&display_stages, return_to, deadsync_theme::select_music::SessionStyleView {
+                    double: session.play_style.is_double(),
+                    versus: session.play_style.is_versus(),
+                    primary_side: profile_data::player_side_index(session.player_side),
+                });
             }
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {

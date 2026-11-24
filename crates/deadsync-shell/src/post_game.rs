@@ -15,6 +15,7 @@ use deadsync_theme::{Screen, ThemeEffect, TransitionState, UiCue};
 use std::sync::Arc;
 
 pub(crate) struct SessionEndRuntime {
+    session_style: deadsync_theme::select_music::SessionStyleView,
     presentation: Box<dyn SessionEndPresentation<Actor>>,
     elapsed: f32,
     summary: SessionSummary,
@@ -30,6 +31,7 @@ pub(crate) struct SessionEndRuntime {
 impl SessionEndRuntime {
     pub fn new(presentation: Box<dyn SessionEndPresentation<Actor>>) -> Self {
         Self {
+            session_style: Default::default(),
             presentation,
             elapsed: 0.0,
             summary: SessionSummary::default(),
@@ -43,7 +45,13 @@ impl SessionEndRuntime {
         }
     }
 
-    pub fn enter_summary(&mut self, stages: &[StageSummary], return_to: Screen) {
+    pub fn enter_summary(
+        &mut self,
+        stages: &[StageSummary],
+        return_to: Screen,
+        session_style: deadsync_theme::select_music::SessionStyleView,
+    ) {
+        self.session_style = session_style;
         self.elapsed = 0.0;
         self.summary_return = return_to;
         self.summary =
@@ -206,6 +214,7 @@ impl SessionEndRuntime {
                 actors,
                 assets,
                 SessionSummaryPage {
+                    session_style: self.session_style,
                     results: &self.summary,
                     banners: &self.banners,
                     elapsed: self.elapsed,

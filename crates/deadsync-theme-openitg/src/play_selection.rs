@@ -519,6 +519,7 @@ mod tests {
                 carousel.push_actors(
                     &mut actors,
                     PlaySelectionView {
+                        session_style: Default::default(),
                         kind: PlaySelectionKind::Style { pump: false },
                         title: &title,
                         choices: &choices,
@@ -582,6 +583,7 @@ mod tests {
                 carousel.push_actors(
                     &mut actors,
                     PlaySelectionView {
+                        session_style: Default::default(),
                         kind: PlaySelectionKind::Mode,
                         title: &title,
                         choices: &choices[..count],

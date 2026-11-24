@@ -40,6 +40,7 @@ pub struct PlaySelectionChoice<'a> {
 
 /// The visible choices and selection for the current play flow screen.
 pub struct PlaySelectionView<'a> {
+    pub session_style: crate::select_music::SessionStyleView,
     pub kind: PlaySelectionKind,
     pub title: &'a Arc<str>,
     pub choices: &'a [PlaySelectionChoice<'a>],
@@ -749,7 +750,7 @@ pub struct EvaluationOverview<'a> {
     pub banner_key: Option<&'a Arc<str>>,
     pub course_summary: bool,
     pub stage_number: Option<usize>,
-    pub double_side_style: bool,
+    pub session_style: crate::select_music::SessionStyleView,
     pub elapsed: f32,
     /// Time since the player elected to leave. The visit clock stops at that point.
     pub departure_elapsed: Option<f32>,

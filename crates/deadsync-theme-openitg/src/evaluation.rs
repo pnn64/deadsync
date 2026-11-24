@@ -153,7 +153,7 @@ impl OpenItgEvaluation {
         let departure = page.departure_elapsed.unwrap_or_default();
         let elapsed = page.elapsed.max(0.0) + departure;
         let stats_progress = decelerate(elapsed - STATS_START_SECONDS, STATS_ENTER_SECONDS);
-        let solo_double = page.double_side_style && page.players.iter().flatten().count() == 1;
+        let solo_double = page.session_style.double && page.players.iter().flatten().count() == 1;
         let double_distance = if solo_double { 2.0 } else { 1.0 };
         let half_width_pixels = viewport[0] * 0.5;
         let (grade_departure, stats_departure, half_width) =
@@ -997,7 +997,7 @@ mod tests {
                         banner_key: None,
                         course_summary: false,
                         stage_number: Some(1),
-                        double_side_style: false,
+                        session_style: Default::default(),
                         elapsed: EVALUATION_OVERVIEW_SETTLED_SECONDS,
                         departure_elapsed: Some(elapsed),
                         players: [Some(player(&mods)), Some(EvaluationPlayerOverview {
@@ -1079,7 +1079,7 @@ mod tests {
                         banner_key: Some(&banner),
                         course_summary: false,
                         stage_number: Some(1),
-                        double_side_style: false,
+                        session_style: Default::default(),
                         elapsed: EVALUATION_OVERVIEW_SETTLED_SECONDS,
                         departure_elapsed: None,
                         players: [
@@ -1185,7 +1185,7 @@ mod tests {
                         banner_key: None,
                         course_summary: false,
                         stage_number: Some(1),
-                        double_side_style: false,
+                        session_style: Default::default(),
                         elapsed,
                         departure_elapsed: None,
                         players: [Some(player(&empty)), None],
@@ -1222,7 +1222,7 @@ mod tests {
                     banner_key: None,
                     course_summary: false,
                     stage_number: Some(1),
-                    double_side_style: false,
+                    session_style: Default::default(),
                     elapsed: 3.15,
                     departure_elapsed: None,
                     players: [Some(player(&empty)), None],
@@ -1256,7 +1256,7 @@ mod tests {
                     banner_key: None,
                     course_summary: true,
                     stage_number: None,
-                    double_side_style: true,
+                    session_style: deadsync_theme::select_music::SessionStyleView { double: true, ..Default::default() },
                     elapsed: 5.0,
                     departure_elapsed: None,
                     players: [

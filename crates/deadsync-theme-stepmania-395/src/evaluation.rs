@@ -4,7 +4,7 @@ use deadsync_theme::stage::EvaluationOverviewPresentation;
 use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, Grade};
 
 use crate::gameplay::{difficulty_index, stage_artwork};
-use crate::presentation::{Layout, push_footer};
+use crate::presentation::{Layout, push_footer, push_style_icon};
 use crate::resources::{JUDGE_FONT, NORMAL_FONT, SCORE_FONT, STAGE_FONT};
 
 #[derive(Default)]
@@ -47,21 +47,18 @@ fn push_page(
             )
             .build(0),
     );
-    let mut header = layout.sprite(
+    let header_exit = (departure.unwrap_or_default() / 0.5).clamp(0.0, 1.0);
+    crate::play_selection::push_header(
+        actors,
         if summary.is_some() {
             "stepmania-395/evaluation-summary-header"
         } else {
             "stepmania-395/evaluation-header"
         },
-        [
-            320.0 + 640.0 * (1.0 - arrive(elapsed, 0.0) + leave(departure, 0.0)),
-            22.0,
-        ],
-        [640.0, 44.0],
-        95,
+        elapsed,
+        header_exit,
     );
-    header.z(95);
-    actors.push(header.build(0));
+    push_style_icon(actors, page.session_style, elapsed, header_exit);
     if let Some((assets, banners)) = summary {
         for (index, key) in banners.iter().take(5).enumerate() {
             let x = 260.0 + index as f32 * 30.0;
@@ -522,7 +519,7 @@ pub(crate) fn push_session_summary(
             banner_key: None,
             course_summary: false,
             stage_number: None,
-            double_side_style: false,
+            session_style: summary.session_style,
             elapsed: summary.elapsed,
             departure_elapsed: summary.departure_elapsed,
             players,

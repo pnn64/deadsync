@@ -1,6 +1,7 @@
 //! Presentation interface for a completed stage or course.
 
 use crate::{ThemeEffect, ThemeTransitions, UiCue};
+use crate::select_music::SessionStyleView;
 use crate::views::{
     EvaluationOverview, EvaluationPlayerOverview, EvaluationScores, EvaluationStageView,
     HeartRateView,
@@ -27,7 +28,7 @@ pub struct EvaluationOverviewPage<N, S> {
     routine_grade: Option<deadsync_score::Grade>,
     stage_number: Option<usize>,
     course_summary: bool,
-    double_side_style: bool,
+    session_style: SessionStyleView,
 }
 
 impl<N, S> EvaluationOverviewPage<N, S> {
@@ -35,7 +36,7 @@ impl<N, S> EvaluationOverviewPage<N, S> {
         scores: &EvaluationScores<N, S>,
         routine_percent: Option<f64>,
         stage_number: Option<usize>,
-        double_side_style: bool,
+        session_style: SessionStyleView,
         is_p2: impl Fn(&S) -> bool,
     ) -> Option<Self> {
         let score = scores.iter().flatten().next()?;
@@ -72,7 +73,7 @@ impl<N, S> EvaluationOverviewPage<N, S> {
             routine_grade,
             stage_number,
             course_summary,
-            double_side_style,
+            session_style,
         })
     }
 
@@ -90,7 +91,7 @@ impl<N, S> EvaluationOverviewPage<N, S> {
             banner_key: self.banner_key.as_ref().filter(|key| assets.has_texture_key(key)),
             course_summary: self.course_summary,
             stage_number: self.stage_number,
-            double_side_style: self.double_side_style,
+            session_style: self.session_style,
             elapsed,
             departure_elapsed,
             players: std::array::from_fn(|slot| {

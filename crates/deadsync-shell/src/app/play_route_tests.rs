@@ -181,6 +181,8 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
         CurrentScreen::SelectMusic,
     ] {
         if theme == ThemeFlag::StepMania395 && next == CurrentScreen::SelectMusic {
+            let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
+            assert_native_p2_badge(&actors);
             select_mode::with_play_selection_view(&app.state.screens.select_play_mode_state, |view| {
                 assert_eq!(view.choices.len(), 8);
                 assert_eq!(view.selected, 2);
@@ -361,6 +363,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
     assert_eq!(deadlib_audio_core::active_music_track_id(), evaluation_track);
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     if native_stage {
+        assert_native_p2_badge(&actors);
         assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
             if source.texture_key() == Some("stepmania-395/evaluation-grade-p2"))));
         assert!(!actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
@@ -409,6 +412,7 @@ fn play_route(app: &mut App, event_loop: &ActiveEventLoop, theme: ThemeFlag) {
         let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
         assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
             if source.texture_key() == Some("stepmania-395/evaluation-summary-header"))));
+        assert_native_p2_badge(&actors);
         assert!(actor_tree_has_text(&actors, &numeric_score));
         press(app, event_loop, VirtualAction::p2_start);
         settle(app, event_loop, CurrentScreen::Initials);
@@ -512,12 +516,20 @@ fn play_native_course_route(app: &mut App, event_loop: &ActiveEventLoop) {
     let (actors, _, _) = app.get_current_actors(0.0, app.frame_policy);
     assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
         if source.texture_key() == Some("stepmania-395/evaluation-survived-p2"))));
+    assert_native_p2_badge(&actors);
     assert!(!actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
         if source.texture_key() == Some("stepmania-395/evaluation-survived-p1"))));
     assert!(actor_tree_has_text(&actors, "02"));
     assert!(actor_tree_has_text(&actors, &numeric_score));
     press(app, event_loop, VirtualAction::p2_start);
     settle(app, event_loop, CurrentScreen::SelectCourse);
+}
+
+fn assert_native_p2_badge(actors: &[Actor]) {
+    assert!(actors.iter().any(|actor| matches!(actor,
+        Actor::Sprite { source, uv_rect: Some([0.5, 0.0, 1.0, 1.0]), .. }
+        if source.texture_key() == Some("stepmania-395/menu-style-single")
+    )), "the mounted header retains the session's P2 Single badge");
 }
 
 fn check_failed_stage_outro(app: &mut App, event_loop: &ActiveEventLoop) {

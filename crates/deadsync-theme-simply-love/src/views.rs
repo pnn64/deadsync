@@ -375,6 +375,7 @@ pub struct SelectFlowPlayerView {
 /// Shell-prepared config and session state for Select Color, Style, and Mode.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SelectFlowRuntimeView {
+    pub primary_side: usize,
     pub players: [SelectFlowPlayerView; 2],
     pub game: deadsync_config::theme::GameFlag,
     pub play_style: PlayStyle,

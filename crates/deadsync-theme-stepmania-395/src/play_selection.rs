@@ -3,7 +3,7 @@ use deadsync_theme::selection::{PlayModeMenu, PlayModeMenuChoice, PlaySelectionM
 use deadsync_theme::views::{PlaySelectionKind, PlaySelectionView};
 
 use crate::{
-    presentation::{Layout, push_footer},
+    presentation::{Layout, push_footer, push_style_icon},
     select_music::StepManiaMusicWheel,
 };
 
@@ -201,6 +201,7 @@ fn push_mode(actors: &mut Vec<Actor>, view: &PlaySelectionView<'_>, elapsed: f32
     let exit = view.exit_progress.clamp(0.0, 1.0);
     let page = view.selected / 4;
     push_header(actors, "stepmania-395/mode-header", elapsed, exit);
+    push_style_icon(actors, view.session_style, elapsed, exit);
     let mut explanation = layout.sprite(
         "stepmania-395/mode-explanation",
         [if page == 0 { 170.0 } else { 460.0 }, 70.0],

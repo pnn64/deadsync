@@ -18,7 +18,9 @@ pub(crate) fn players_view() -> [SelectFlowPlayerView; 2] {
 
 pub(crate) fn runtime_view() -> SelectFlowRuntimeView {
     let cfg = config::runtime::get();
+    let session = profile::get_session_snapshot();
     SelectFlowRuntimeView {
+        primary_side: deadsync_profile::player_side_index(session.player_side),
         players: players_view(),
         game: cfg.game_flag,
         play_style: profile::get_session_play_style(),

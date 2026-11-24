@@ -29,11 +29,17 @@ pub(super) fn prepare_overview(
     routine_percent: Option<f64>,
     stage_number: Option<usize>,
     style: profile_data::PlayStyle,
+    primary_side: profile_data::PlayerSide,
 ) -> Option<ResultOverview> {
     if !mounted {
         return None;
     }
-    EvaluationOverviewPage::new(scores, routine_percent, stage_number, style.is_double(), |side| {
+    let session_style = deadsync_theme::select_music::SessionStyleView {
+        double: style.is_double(),
+        versus: style.is_versus(),
+        primary_side: profile_data::player_side_index(primary_side),
+    };
+    EvaluationOverviewPage::new(scores, routine_percent, stage_number, session_style, |side| {
         *side == profile_data::PlayerSide::P2
     })
 }

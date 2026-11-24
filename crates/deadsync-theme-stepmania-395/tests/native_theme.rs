@@ -873,6 +873,7 @@ fn native_selection_uses_the_original_style_and_difficulty_cards() {
                 selection.push_play_selection(
                     &mut actors,
                     PlaySelectionView {
+                        session_style: Default::default(),
                         kind: PlaySelectionKind::Style { pump: false },
                         title: &title,
                         choices: &choices,
@@ -922,6 +923,7 @@ fn native_selection_uses_the_original_style_and_difficulty_cards() {
         selection.push_play_selection(
             &mut actors,
             PlaySelectionView {
+                session_style: Default::default(),
                 kind: PlaySelectionKind::Mode,
                 title: &title,
                 choices: &choices,

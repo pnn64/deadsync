@@ -10,6 +10,7 @@ use std::sync::Arc;
 pub struct SessionStyleView {
     pub double: bool,
     pub versus: bool,
+    /// Physical primary player: P1 is zero and P2 is one.
     pub primary_side: usize,
 }
 
