@@ -68,6 +68,26 @@ impl Deflater {
             failure: None,
         })
     }
+    /// Begin an independent zlib stream after the previous one has drained.
+    pub(crate) fn reset(&mut self) {
+        debug_assert!(self.is_done());
+        self.writer.bytes.clear();
+        self.writer.bytes.extend_from_slice(&[0x78, 0x01]);
+        self.writer.word = 0;
+        self.writer.count = 0;
+        self.pending = 0;
+        self.window.clear();
+        self.history = 0;
+        if let Some(matcher) = &mut self.matcher {
+            matcher.reset();
+        }
+        self.encoded = 0;
+        self.total_in = 0;
+        self.total_out = 0;
+        self.checksum = Adler32::new();
+        self.finishing = false;
+        self.done = false;
+    }
     pub fn total_in(&self) -> usize {
         self.total_in
     }
@@ -229,8 +249,11 @@ mod tests {
 
     /// Drive one stream. `None` parts are zero runs fed through
     /// `process_zeros`; the last part must carry bytes to finish the stream.
-    fn stream(mode: Compression, parts: &[(Option<&[u8]>, usize)], capacity: usize) -> Vec<u8> {
-        let mut deflater = Deflater::new(mode).unwrap();
+    fn stream(
+        deflater: &mut Deflater,
+        parts: &[(Option<&[u8]>, usize)],
+        capacity: usize,
+    ) -> Vec<u8> {
         let mut buffer = vec![0; capacity];
         let mut encoded = Vec::new();
         for (n, &(mut input, mut len)) in parts.iter().enumerate() {
@@ -281,11 +304,31 @@ mod tests {
                 materialized.push((Some(&bytes[..3]), 3));
                 for capacity in [1, 7, 65_536] {
                     assert_eq!(
-                        stream(mode, &with_runs, capacity),
-                        stream(mode, &materialized, capacity),
+                        stream(&mut Deflater::new(mode).unwrap(), &with_runs, capacity),
+                        stream(&mut Deflater::new(mode).unwrap(), &materialized, capacity),
                         "{mode:?} {runs:?} {capacity}"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn reset_matches_fresh_deflation_across_frames() {
+        let data: Vec<_> = (0..BLOCK * 3)
+            .map(|n| if n % 257 < 17 { 0 } else { (n * 37) as u8 })
+            .collect();
+        for mode in [Compression::Fast, Compression::Rle, Compression::Stored] {
+            let mut reused = Deflater::new(mode).unwrap();
+            for len in [31, BLOCK * 2 + 7, 0, BLOCK + 19, 137] {
+                let mut fresh = Deflater::new(mode).unwrap();
+                let parts = [(Some(&data[..len]), len)];
+                let encoded = stream(&mut reused, &parts, 19);
+                assert_eq!(encoded, stream(&mut fresh, &parts, 19));
+                assert_eq!(reused.total_in(), len);
+                assert_eq!(reused.total_out(), encoded.len());
+                assert_eq!(reused.working_memory_bytes(), fresh.working_memory_bytes());
+                reused.reset();
             }
         }
     }

@@ -69,7 +69,7 @@ fn ancillary(out: &mut impl Write, png: &Png, position: ChunkPosition) -> Result
 struct Compressed<'a, W> {
     writer: &'a mut Count<W>,
     sequence: Option<&'a mut u32>,
-    encoder: Deflater,
+    encoder: &'a mut Deflater,
     output: &'a mut Vec<u8>,
     have: usize,
 }
@@ -79,16 +79,24 @@ impl<'a, W: Write> Compressed<'a, W> {
         sequence: Option<&'a mut u32>,
         options: &EncodeOptions,
         output: &'a mut Vec<u8>,
+        encoder: &'a mut Option<Deflater>,
     ) -> Result<Self, Error> {
         if output.is_empty() {
             let capacity = options.idat_chunk_size.min(65536);
             reserve(output, capacity)?;
             output.resize(capacity, 0);
         }
+        let encoder = match encoder {
+            Some(encoder) => {
+                encoder.reset();
+                encoder
+            }
+            None => encoder.insert(Deflater::new(options.compression)?),
+        };
         Ok(Self {
             writer,
             sequence,
-            encoder: Deflater::new(options.compression)?,
+            encoder,
             output,
             have: 0,
         })
@@ -157,9 +165,10 @@ fn image<W: Write>(
     options: &EncodeOptions,
     sequence: Option<&mut u32>,
     output: &mut Vec<u8>,
+    encoder: &mut Option<Deflater>,
 ) -> Result<usize, Error> {
     let mut rows = Rows::new(image, options.interlaced, options.filter)?;
-    let mut compressed = Compressed::new(writer, sequence, options, output)?;
+    let mut compressed = Compressed::new(writer, sequence, options, output, encoder)?;
     let mut peak = compressed.memory_bytes();
     while let Some(row) = rows.next_row()? {
         if row.zero {
@@ -208,7 +217,15 @@ pub fn encode_writer(
         }
     }
     let mut output = Vec::new();
-    let mut peak = image(&mut out, &png.image, options, None, &mut output)?;
+    let mut encoder = None;
+    let mut peak = image(
+        &mut out,
+        &png.image,
+        options,
+        None,
+        &mut output,
+        &mut encoder,
+    )?;
     if let Some(a) = &png.animation {
         let mut sequence = u32::from(a.default_is_frame);
         for frame in &a.frames[usize::from(a.default_is_frame)..] {
@@ -227,6 +244,7 @@ pub fn encode_writer(
                 options,
                 Some(&mut sequence),
                 &mut output,
+                &mut encoder,
             )?);
         }
     }
