@@ -431,9 +431,11 @@ fn draw_binary_indices(
             u32::from_ne_bytes(if t == 0 { foreground } else { background }),
         )
     });
-    let src = indices.chunks_exact(width);
-    let dst = canvas.chunks_exact_mut(stride).skip(r.y);
-    for (src, dst) in src.zip(dst).take(r.h) {
+    let rows = &mut canvas[r.y * stride..(r.y + r.h) * stride];
+    for (src, dst) in indices
+        .chunks_exact(width)
+        .zip(rows.chunks_exact_mut(stride))
+    {
         let src = &src[..r.w];
         let dst = &mut dst[r.x..r.x + r.w];
         if let Some(index) = uniform_index(src) {
