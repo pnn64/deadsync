@@ -211,7 +211,8 @@ impl ThemeMainMenu for StepManiaTheme {
             if !home {
                 continue;
             }
-            let y = 90.0 + (index as f32 - selected as f32) * 50.0;
+            // ScrollerSecondsPerItem=0 keeps the reference title choices in place.
+            let y = 90.0 + index as f32 * 50.0;
             let mut text = layout.text(
                 TITLE_FONT,
                 TextContent::Static(label),

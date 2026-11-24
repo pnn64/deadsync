@@ -79,6 +79,68 @@ fn title_logo_stays_hidden_until_its_original_reveal_delay() {
 }
 
 #[test]
+fn title_menu_keeps_choice_positions_when_focus_moves() {
+    use deadlib_present::space::{Metrics, with_current_metrics};
+    use deadsync_theme_stepmania_395::MenuState;
+
+    with_current_metrics(Metrics::centered(640.0, 480.0), || {
+        let mut state = StepManiaTheme::init_menu(0);
+        let check_rows = |state: &MenuState, selected: usize, settled: bool| {
+            let mut actors = Vec::new();
+            StepManiaTheme::push_menu_actors(
+                &mut actors,
+                state,
+                MainMenuFrame {
+                    update_banner_tag: None,
+                    background_key: None,
+                    alpha_multiplier: 1.0,
+                    transition: &TransitionState::Idle,
+                    visual_policy: (),
+                },
+            );
+            let rows: Vec<_> = actors
+                .iter()
+                .filter_map(|actor| match actor {
+                    Actor::Text {
+                        font: "stepmania-395/title",
+                        offset,
+                        color,
+                        scale,
+                        ..
+                    } => Some((*offset, *color, *scale)),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(rows.len(), 7);
+            for (index, (offset, color, scale)) in rows.into_iter().enumerate() {
+                assert_eq!(offset, [320.0, 90.0 + 50.0 * index as f32], "row {index}");
+                assert_eq!(color[1] > color[0], index == selected, "row {index} focus");
+                if settled {
+                    let zoom = if index == selected { 1.3 } else { 1.0 };
+                    assert_eq!(scale, [zoom; 2], "row {index} zoom");
+                }
+            }
+        };
+        StepManiaTheme::update_menu::<()>(&mut state, 0.3, MainMenuPhase::Active);
+        check_rows(&state, 0, true);
+        for (action, selected) in [
+            (VirtualAction::p1_menu_down, 2),
+            (VirtualAction::p1_menu_down, 6),
+            (VirtualAction::p1_menu_down, 0),
+            (VirtualAction::p1_menu_up, 6),
+        ] {
+            let now = Instant::now();
+            let input = InputEvent::new(action, 0, true, InputSource::Keyboard, now, 0, now, now);
+            StepManiaTheme::handle_menu_input::<()>(&mut state, &input);
+            StepManiaTheme::update_menu::<()>(&mut state, 0.15, MainMenuPhase::Active);
+            check_rows(&state, selected, false);
+            StepManiaTheme::update_menu::<()>(&mut state, 0.15, MainMenuPhase::Active);
+            check_rows(&state, selected, true);
+        }
+    });
+}
+
+#[test]
 fn arcade_title_uses_original_prompts_and_live_credit_progress() {
     use deadlib_present::space::{Metrics, with_current_metrics};
     with_current_metrics(Metrics::centered(640.0, 480.0), || {
