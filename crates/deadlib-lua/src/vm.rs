@@ -1209,7 +1209,13 @@ impl Vm {
     }
     #[inline]
     fn resize_registers(&mut self, len: usize) {
-        self.hooks.preserve_popped(&self.registers, len);
+        let current = self.registers.len();
+        if len <= current {
+            if len < current {
+                self.truncate_registers(len);
+            }
+            return;
+        }
         let before = self.registers.capacity();
         self.registers.resize(len, Value::Nil);
         if self.registers.capacity() != before {
