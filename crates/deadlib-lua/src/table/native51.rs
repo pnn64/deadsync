@@ -188,25 +188,26 @@ impl Table {
     fn native_rehash(&mut self, extra: Key) -> Result<(), Error> {
         let mut counts = [0usize; 27];
         let mut total = 1;
+        // Each bucket covers the array slots added by the corresponding power of two.
+        let mut start = 0;
+        for (power, count) in counts.iter_mut().enumerate() {
+            if start == self.array.len() {
+                break;
+            }
+            let end = self.array.len().min(1 << power);
+            *count = self.array[start..end]
+                .iter()
+                .filter(|&&value| value != Value::Nil)
+                .count();
+            total += *count;
+            start = end;
+        }
         let mut count = |key: Key| {
-            if let Some(index) = array_index(key.value())
-                .map(|i| i + 1)
-                .filter(|&i| i <= MAX_ARRAY)
-            {
-                let bucket = if index == 1 {
-                    0
-                } else {
-                    usize::BITS - (index - 1).leading_zeros()
-                };
+            if let Some(index) = array_index(key.value()).filter(|&i| i < MAX_ARRAY) {
+                let bucket = usize::BITS - index.leading_zeros();
                 counts[bucket as usize] += 1;
             }
         };
-        for (index, value) in self.array.iter().enumerate() {
-            if *value != Value::Nil {
-                total += 1;
-                count(Key::Number(((index + 1) as f64).to_bits()));
-            }
-        }
         for entry in &*self.entries {
             if entry.value != Value::Nil {
                 total += 1;
