@@ -82,7 +82,7 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 }
                 Ok(())
             };
-            let rows = display_rows(source, &header);
+            let rows = display_rows(source, header.row_pitch, header.info.top_down);
             if header.info.bit_depth == 8 {
                 if header.info.top_down && width == header.row_pitch {
                     validate_row(source)?;
@@ -107,8 +107,17 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 }
             } else {
                 indices.resize(header.pixel_count, 0);
-                for (row, output) in rows.zip(indices.chunks_exact_mut(width)) {
-                    unpack_one_bit_indices(row, output);
+                // A 32-bit row boundary leaves no padding or partial byte.
+                let (packed_chunk_bytes, unpacked_chunk_pixels) =
+                    if header.info.top_down && width.is_multiple_of(32) {
+                        (source.len(), header.pixel_count)
+                    } else {
+                        (header.row_pitch, width)
+                    };
+                let chunks = display_rows(source, packed_chunk_bytes, header.info.top_down);
+                for (packed, output) in chunks.zip(indices.chunks_exact_mut(unpacked_chunk_pixels))
+                {
+                    unpack_one_bit_indices(packed, output);
                     validate_row(output)?;
                 }
             }
@@ -178,9 +187,8 @@ fn unpack_one_bit_indices(row: &[u8], output: &mut [u8]) {
     }
 }
 
-fn display_rows<'a>(source: &'a [u8], header: &Header) -> impl Iterator<Item = &'a [u8]> {
-    let mut rows = source.chunks_exact(header.row_pitch);
-    let top_down = header.info.top_down;
+fn display_rows(source: &[u8], pitch: usize, top_down: bool) -> impl Iterator<Item = &[u8]> {
+    let mut rows = source.chunks_exact(pitch);
     std::iter::from_fn(move || {
         if top_down {
             rows.next()
@@ -202,7 +210,7 @@ fn map_rows<const INPUT: usize, const OUTPUT: usize>(
         let (pixels, _) = source.as_chunks::<INPUT>();
         samples.extend(pixels.iter().copied().map(pixel));
     } else {
-        for row in display_rows(source, header) {
+        for row in display_rows(source, header.row_pitch, header.info.top_down) {
             let (pixels, _) = row.as_chunks::<INPUT>();
             samples.extend(pixels[..width].iter().copied().map(&mut pixel));
         }
