@@ -230,7 +230,7 @@ impl Encoder {
         mut emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
         let pixels = indices.len();
-        if pixels > 1024 {
+        if pixels >= 32 {
             let pixel = indices[0];
             if indices[1] == pixel {
                 let (chunks, tail) = indices.as_chunks::<16>();
@@ -240,6 +240,8 @@ impl Encoder {
                     return Self::encode_repeated(pixel, pixels, minimum, emit);
                 }
             }
+        }
+        if pixels > 1024 {
             let table = match &mut self.table {
                 Some(table) => {
                     table.fill(0);
