@@ -1,9 +1,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
-//! Direct Ogg polynomial folds using PCLMUL, with a table reduction of the last word.
+//! Direct Ogg polynomial folds using PCLMUL.
 //!
 //! A state D denotes a raw 128-bit polynomial. Multiplying its low/high halves
 //! by x^128/x^192 modulo P gives D*x^128 modulo P; XOR appends the next word.
-//! The final scalar CRC computes D*x^32 modulo P. A seed is merged at bit 96.
+//! Reduction computes D*x^32 modulo P. A seed is merged at bit 96.
 
 use std::arch::x86_64::*;
 /// The only safe entry to the feature-specific implementation.
@@ -13,18 +13,24 @@ pub(crate) fn update(seed: u32, bytes: &[u8]) -> Option<u32> {
         return None;
     }
     if is_x86_feature_detected!("pclmulqdq") && is_x86_feature_detected!("ssse3") {
-        // SAFETY: both features used by fold are present. Its array-based loads
-        // accept every slice alignment and never access the trailing partial word.
+        // SAFETY: both target features used by fold are present.
         return Some(unsafe { fold(seed, bytes) });
     }
     None
 }
 
+const POLYNOMIAL: u64 = 0x1_04c1_1db7;
+
 const fn power(bits: usize) -> u32 {
     let mut v = 1u32;
     let mut i = 0;
     while i < bits {
-        v = (v << 1) ^ if v & 0x80000000 != 0 { 0x04c11db7 } else { 0 };
+        v = (v << 1)
+            ^ if v & 0x80000000 != 0 {
+                POLYNOMIAL as u32
+            } else {
+                0
+            };
         i += 1;
     }
     v
@@ -33,59 +39,84 @@ const K128: u32 = power(128);
 const K192: u32 = power(192);
 const K512: u32 = power(512);
 const K576: u32 = power(576);
+const K32: i64 = power(32) as i64;
+const K64: i64 = power(64) as i64;
+const K96: i64 = power(96) as i64;
+
+const RECIPROCAL: i64 = {
+    let mut dividend = 1u128 << 64;
+    let mut quotient = 0;
+    while dividend >= 1 << 32 {
+        let shift = dividend.ilog2() - 32;
+        dividend ^= (POLYNOMIAL as u128) << shift;
+        quotient |= 1i64 << shift;
+    }
+    quotient
+};
+
+#[inline]
+#[target_feature(enable = "ssse3")]
+fn reversed_word(bytes: &[u8; 16], reverse: __m128i) -> __m128i {
+    // SAFETY: an unaligned load reads exactly the sixteen bytes of the array.
+    _mm_shuffle_epi8(unsafe { _mm_loadu_si128(bytes.as_ptr().cast()) }, reverse)
+}
+
 #[target_feature(enable = "pclmulqdq,ssse3")]
-unsafe fn fold(seed: u32, bytes: &[u8]) -> u32 {
-    let (groups, tail) = bytes.as_chunks::<64>();
-    let Some((first, groups)) = groups.split_first() else {
+fn fold(seed: u32, bytes: &[u8]) -> u32 {
+    let (words, tail) = bytes.as_chunks::<16>();
+    let (groups, words) = words.as_chunks::<4>();
+    let Some(([first_a, first_b, first_c, first_d], groups)) = groups.split_first() else {
         return crate::crc::update_scalar(seed, bytes);
     };
-    // SAFETY: feature support is checked by the caller. Each source is a full
-    // 64-byte array, every indexed load is exactly sixteen valid bytes, and the
-    // destination is a fresh sixteen-byte array. All memory operations are unaligned.
-    unsafe {
-        let reverse = _mm_setr_epi8(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
-        let k = _mm_set_epi64x(K576 as i64, K512 as i64);
-        let k1 = _mm_set_epi64x(K192 as i64, K128 as i64);
-        macro_rules! load {
-            ($block:expr,$offset:expr) => {
-                _mm_shuffle_epi8(
-                    _mm_loadu_si128($block[$offset..$offset + 16].as_ptr().cast()),
-                    reverse,
-                )
-            };
-        }
-        macro_rules! fold {
-            ($value:expr,$factor:expr) => {
-                _mm_xor_si128(
-                    _mm_clmulepi64_si128::<0x00>($value, $factor),
-                    _mm_clmulepi64_si128::<0x11>($value, $factor),
-                )
-            };
-        }
-        let mut a = _mm_xor_si128(load!(first, 0), _mm_set_epi32(seed as i32, 0, 0, 0));
-        let mut b = load!(first, 16);
-        let mut c = load!(first, 32);
-        let mut d = load!(first, 48);
-        for group in groups {
-            a = _mm_xor_si128(fold!(a, k), load!(group, 0));
-            b = _mm_xor_si128(fold!(b, k), load!(group, 16));
-            c = _mm_xor_si128(fold!(c, k), load!(group, 32));
-            d = _mm_xor_si128(fold!(d, k), load!(group, 48));
-        }
-        let mut state = _mm_xor_si128(fold!(a, k1), b);
-        state = _mm_xor_si128(fold!(state, k1), c);
-        state = _mm_xor_si128(fold!(state, k1), d);
-        let (words, tail) = tail.as_chunks::<16>();
-        for word in words {
-            state = _mm_xor_si128(
-                fold!(state, k1),
-                _mm_shuffle_epi8(_mm_loadu_si128(word.as_ptr().cast()), reverse),
-            );
-        }
-        let mut folded = [0u8; 16];
-        _mm_storeu_si128(folded.as_mut_ptr().cast(), _mm_shuffle_epi8(state, reverse));
-        crate::crc::update_scalar(crate::crc::update_scalar(0, &folded), tail)
+    let reverse = _mm_setr_epi8(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
+    let k = _mm_set_epi64x(K576 as i64, K512 as i64);
+    let k1 = _mm_set_epi64x(K192 as i64, K128 as i64);
+    macro_rules! fold {
+        ($value:expr,$factor:expr) => {
+            _mm_xor_si128(
+                _mm_clmulepi64_si128::<0x00>($value, $factor),
+                _mm_clmulepi64_si128::<0x11>($value, $factor),
+            )
+        };
     }
+    let mut a = _mm_xor_si128(
+        reversed_word(first_a, reverse),
+        _mm_set_epi32(seed as i32, 0, 0, 0),
+    );
+    let mut b = reversed_word(first_b, reverse);
+    let mut c = reversed_word(first_c, reverse);
+    let mut d = reversed_word(first_d, reverse);
+    for [word_a, word_b, word_c, word_d] in groups {
+        a = _mm_xor_si128(fold!(a, k), reversed_word(word_a, reverse));
+        b = _mm_xor_si128(fold!(b, k), reversed_word(word_b, reverse));
+        c = _mm_xor_si128(fold!(c, k), reversed_word(word_c, reverse));
+        d = _mm_xor_si128(fold!(d, k), reversed_word(word_d, reverse));
+    }
+    let mut state = _mm_xor_si128(fold!(a, k1), b);
+    state = _mm_xor_si128(fold!(state, k1), c);
+    state = _mm_xor_si128(fold!(state, k1), d);
+    for word in words {
+        state = _mm_xor_si128(fold!(state, k1), reversed_word(word, reverse));
+    }
+    // Multiply by x^32 and fold the high coefficients into the low 64 bits.
+    let folded = fold!(state, _mm_set_epi64x(K96, K32));
+    let high = _mm_srli_si128::<8>(folded);
+    let value = _mm_xor_si128(
+        folded,
+        _mm_clmulepi64_si128::<0x00>(high, _mm_cvtsi64_si128(K64)),
+    );
+    // For a 64-bit polynomial, the quotient is the high 32 bits times
+    // floor(x^64 / P), shifted down by 32. XOR the quotient times P into the
+    // value and take the low 32 bits for the remainder.
+    let quotient = _mm_srli_epi64::<32>(_mm_clmulepi64_si128::<0x00>(
+        _mm_srli_epi64::<32>(value),
+        _mm_cvtsi64_si128(RECIPROCAL),
+    ));
+    let remainder = _mm_xor_si128(
+        value,
+        _mm_clmulepi64_si128::<0x00>(quotient, _mm_cvtsi64_si128(POLYNOMIAL as i64)),
+    );
+    crate::crc::update_scalar(_mm_cvtsi128_si32(remainder) as u32, tail)
 }
 
 #[cfg(test)]
