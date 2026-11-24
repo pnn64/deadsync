@@ -7607,8 +7607,6 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
         for concrete in [
             "deadsync_theme_openitg",
             "ThemeFlag::OpenItg",
-            "deadsync_theme_ddr_extreme",
-            "ThemeFlag::DdrExtreme",
         ] {
             assert!(
                 !source.contains(concrete),

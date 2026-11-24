@@ -189,14 +189,13 @@ fn optional_themes_are_registered_by_the_executable() {
         .iter()
         .find(|package| package.name == "deadsync")
         .expect("executable workspace package");
-    for theme in ["deadsync-theme-ddr-extreme", "deadsync-theme-openitg"] {
-        assert!(executable.dependencies.iter().any(|dependency| {
-            dependency.name == theme && dependency.kind.is_none()
-        }));
-        assert!(shell.dependencies.iter().all(|dependency| {
-            dependency.name != theme || dependency.kind.as_deref() == Some("dev")
-        }));
-    }
+    let theme = "deadsync-theme-openitg";
+    assert!(executable.dependencies.iter().any(|dependency| {
+        dependency.name == theme && dependency.kind.is_none()
+    }));
+    assert!(shell.dependencies.iter().all(|dependency| {
+        dependency.name != theme || dependency.kind.as_deref() == Some("dev")
+    }));
 }
 
 #[test]

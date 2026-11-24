@@ -314,7 +314,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
             for (failure, theme) in [
                 ("payload", ThemeFlag::SimplyLove),
                 ("plan", ThemeFlag::OpenItg),
-                ("cursor", ThemeFlag::DdrExtreme),
+                ("cursor", ThemeFlag::SimplyLove),
             ] {
                 let style = if pump {
                     profile_data::PlayStyle::PumpRoutine

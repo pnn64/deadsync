@@ -23,7 +23,6 @@ pub(in crate::screens::options) const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[
             localized_choice("OptionsSystem", "SimplyLoveTheme"),
             literal_choice("OpenITG"),
-            literal_choice(deadsync_config::theme::ThemeFlag::DdrExtreme.as_str()),
         ],
         inline: false,
     },

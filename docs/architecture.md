@@ -19,12 +19,12 @@ The mount supplies title, stage, selection, System Options, Player Options,
 attract, and chat presentations and their supplemental assets. The shell
 passes game state, elapsed time, input intent, and ready media through
 contracts in `deadsync-theme`. Themes own the layout, animation, resource
-choices, and presentation state. OpenITG and DDR Extreme are production
-dependencies of the executable. Shell integration tests exercise the same
+choices, and presentation state. OpenITG is a production dependency of
+the executable. Shell integration tests exercise the same
 registry as the executable.
 
-The title mount adapts each theme once at startup. OpenITG and
-DDR Extreme share the focus and input handling for the list of menu actions.
+The title mount adapts each theme once at startup. OpenITG uses the shared
+focus and input handling for the list of menu actions.
 Each theme owns its presentation clock and receives the same prepared
 credit and session facts. The shell admits Start and records the physical
 side before the title requests profile selection.
@@ -81,34 +81,6 @@ composer's types. The executable mounts the composer and Twitch overlay.
 Gameplay, Practice and the attract demonstration use the supplied construction
 hooks on the shared stage. The installed stage presentation supplies each
 theme's HUD where available.
-
-### DDR Extreme
-
-`deadsync-theme-ddr-extreme` is the crate for DDR Extreme, an original
-arcade theme. Select it in System Options or set `Theme=DDR Extreme`
-under `[Options]` in `deadsync.ini` and restart.
-
-The theme mounts an intro and idle records screen, title menu, profile
-picker, style and mode selection, song and course wheels, System Options,
-Player Options, profile and stage loading views, and results overview. Its font
-is packaged under `assets/fonts/ddr-extreme`. The theme embeds its UI feedback
-samples and gameplay feedback atlases. The shell supplies the chart catalog, preview clock,
-profile rows, and completed score records through the same interfaces
-used by OpenITG.
-
-The configured Windows play-route test launches each of the three themes
-in its own process and records six timestamped hits for solo P2. DDR
-Extreme displays that completed result on P2's panel and returns to the
-wheel. The intro, title, profile picker, song wheel, loading view, and
-results were rendered at 640×480 and 854×480 with Vulkan through wgpu.
-
-DDR Extreme's gameplay HUD draws the life gauges, score, difficulty, progress,
-tap and hold feedback, and stage badge from the live stage. Its clear and fail
-outros use the shared transition clock and defer to authored song transitions.
-The results overview displays the recorded judgments, combo, holds, rolls, mines,
-and life history for each side. The attract sequence and results visit use
-original loops bundled under `assets/media/ddr-extreme`.
-The auxiliary gameplay and results panels still use the fallback presentation.
 
 ## Shared contracts
 

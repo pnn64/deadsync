@@ -1465,7 +1465,6 @@ dependencies = [
  "deadsync-simfile",
  "deadsync-song-lua",
  "deadsync-theme",
- "deadsync-theme-ddr-extreme",
  "deadsync-theme-openitg",
  "deadsync-theme-simply-love",
  "deadsync-updater",
@@ -1841,7 +1840,6 @@ dependencies = [
  "deadsync-smx",
  "deadsync-song-lua",
  "deadsync-theme",
- "deadsync-theme-ddr-extreme",
  "deadsync-theme-openitg",
  "deadsync-theme-simply-love",
  "deadsync-updater",
@@ -1961,18 +1959,6 @@ dependencies = [
  "deadsync-score",
  "deadsync-simfile",
  "deadsync-smx",
-]
-
-[[package]]
-name = "deadsync-theme-ddr-extreme"
-version = "0.6.177"
-dependencies = [
- "deadlib-assets",
- "deadlib-platform",
- "deadlib-present",
- "deadsync-config",
- "deadsync-input",
- "deadsync-theme",
 ]
 
 [[package]]
