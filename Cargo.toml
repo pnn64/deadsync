@@ -115,6 +115,7 @@ deadsync-shell = { path = "crates/deadsync-shell" }
 deadsync-theme = { path = "crates/deadsync-theme" }
 deadsync-theme-openitg = { path = "crates/deadsync-theme-openitg" }
 deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love" }
+deadsync-theme-stepmania-395 = { path = "crates/deadsync-theme-stepmania-395" }
 deadsync-updater = { path = "crates/deadsync-updater" }
 deadsync-version = { path = "crates/deadsync-version" }
 log = "0.4.35"

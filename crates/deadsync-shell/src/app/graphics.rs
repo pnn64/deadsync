@@ -286,7 +286,7 @@ impl App {
             },
         );
         let mut manifest = ActiveTheme::asset_manifest();
-        let supplemental = self.theme_resources;
+        let supplemental = &self.theme_resources;
         if !supplemental.embedded_pngs.is_empty() {
             manifest.embedded_pngs = supplemental.embedded_pngs;
         }
@@ -305,6 +305,9 @@ impl App {
                 &mut startup.backend,
                 supplemental.fonts,
             )?;
+        }
+        for texture in &supplemental.textures {
+            self.asset_manager.load_texture(&mut startup.backend, texture)?;
         }
         self.apply_graphics_display_sync(startup_display_sync(
             &self.state.shell,

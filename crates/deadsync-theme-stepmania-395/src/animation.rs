@@ -65,6 +65,7 @@ impl ActorAnimation {
         let commands = bind_screen_args(commands, canvas[0], canvas[1]);
         let mut segments = Vec::new();
         let mut current = anim::linear(0.0);
+        let mut pending = true;
         let mut anchors = [None, None];
         let mut visible = None;
         let mut repeat_texture = None;
@@ -94,11 +95,17 @@ impl ActorAnimation {
                 if duration < 0.0 {
                     return Err(invalid());
                 }
-                segments.push(current.build());
+                if pending {
+                    segments.push(current.build());
+                }
                 current = match tween {
-                    TimingCommand::Tween(build) => build(duration),
+                    TimingCommand::Tween(build) => {
+                        pending = true;
+                        build(duration)
+                    }
                     TimingCommand::Sleep => {
                         segments.push(anim::sleep(duration));
+                        pending = false;
                         // Setters after a sleep take effect at its end.
                         anim::linear(0.0)
                     }
@@ -106,6 +113,7 @@ impl ActorAnimation {
             } else if let Some(set) = scalar_command(&name) {
                 let [value] = numbers(token.args()).ok_or_else(invalid)?;
                 current = set(current, value);
+                pending = true;
             } else {
                 current = match name.as_str() {
                     "diffuse" => {
@@ -144,9 +152,12 @@ impl ActorAnimation {
                         });
                     }
                 };
+                pending = true;
             }
         }
-        segments.push(current.build());
+        if pending {
+            segments.push(current.build());
+        }
         let mut segments = segments.into_iter();
         // The leading segment contains setters before the first timed command.
         let initial = segments

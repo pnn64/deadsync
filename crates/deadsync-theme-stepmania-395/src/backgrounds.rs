@@ -26,17 +26,20 @@ struct Layer {
 }
 
 /// The host's texture binding and the source dimensions used by layer tweens.
+#[derive(Clone)]
 pub struct BackgroundTexture {
     pub source: SpriteSource,
     pub dimensions: [f32; 2],
 }
 
+#[derive(Clone)]
 pub struct BackgroundPlayback {
     minimum_seconds: f32,
     elapsed_seconds: f32,
     layers: Vec<PlayingLayer>,
 }
 
+#[derive(Clone)]
 struct PlayingLayer {
     source: SpriteSource,
     scroll: [f32; 2],
@@ -136,15 +139,24 @@ impl BackgroundDefinition {
         &self,
         mut bind_texture: impl FnMut(&Path, bool) -> Option<BackgroundTexture>,
     ) -> io::Result<BackgroundPlayback> {
+        self.try_start(|path, repeat| {
+            bind_texture(path, repeat).ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("background texture {} is unavailable", path.display()),
+                )
+            })
+        })
+    }
+
+    pub(crate) fn try_start(
+        &self,
+        mut bind_texture: impl FnMut(&Path, bool) -> io::Result<BackgroundTexture>,
+    ) -> io::Result<BackgroundPlayback> {
         let mut layers = Vec::with_capacity(self.layers.len());
         for layer in &self.layers {
             let repeat = layer.scroll != [0.0, 0.0] || layer.on.repeat_texture().unwrap_or(false);
-            let texture = bind_texture(&layer.path, repeat).ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!("background texture {} is unavailable", layer.path.display()),
-                )
-            })?;
+            let texture = bind_texture(&layer.path, repeat)?;
             let [width, height] = texture.dimensions;
             if texture
                 .dimensions
@@ -353,6 +365,10 @@ fn sprite_extension(path: &Path) -> bool {
 }
 
 impl BackgroundPlayback {
+    pub(crate) fn elapsed_seconds(&self) -> f32 {
+        self.elapsed_seconds
+    }
+
     pub fn advance(&mut self, delta_seconds: f32) {
         if delta_seconds.is_finite() && delta_seconds > 0.0 {
             self.elapsed_seconds += delta_seconds;

@@ -13,8 +13,10 @@ use deadsync_profile::compat as profile;
 use deadsync_shell::app;
 use deadsync_shell::mounted_theme;
 use deadsync_theme_simply_love::{i18n, visual_styles};
+use deadsync_theme_stepmania_395::PackageIntro;
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
+use std::path::Path;
 
 fn startup_lines(
     cfg: &config::app_config::Config,
@@ -263,6 +265,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // and before profile/audio/screens which may use tr() for display strings.
     let locale = deadsync_assets::language::resolve_locale(cfg.language_flag);
     i18n::init(deadsync_assets::language::load(&locale));
+    let package_intro = intro_package_path(&cli.remaining)?
+        .map(|path| PackageIntro::open(path, Some(&locale)))
+        .transpose()?;
 
     #[cfg(windows)]
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
@@ -321,7 +326,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    app::run(dirs, audio, music_clock, live_case, |config| {
-        theme_registry::mount(config.theme_flag)
+    app::run(dirs, audio, music_clock, live_case, move |config| {
+        let mut mount = theme_registry::mount(config.theme_flag);
+        if let Some((intro, textures)) = package_intro {
+            mount.attract = Some(Box::new(intro));
+            mount.resources.textures.extend(textures);
+        }
+        mount
     })
+}
+
+fn intro_package_path(args: &[String]) -> std::io::Result<Option<&Path>> {
+    let mut path = None;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        if arg != "--theme-intro" {
+            continue;
+        }
+        if path.is_some() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "--theme-intro may be supplied only once",
+            ));
+        }
+        path = Some(Path::new(
+            args.next()
+                .filter(|value| !value.is_empty() && !value.starts_with("--"))
+                .ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "--theme-intro requires a theme folder",
+                    )
+                })?,
+        ));
+    }
+    Ok(path)
 }

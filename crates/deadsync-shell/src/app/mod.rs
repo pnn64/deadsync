@@ -5574,7 +5574,7 @@ impl App {
         mut audio: deadsync_audio_stream::AudioControl,
         music_clock: deadsync_audio_stream::MusicClock,
         live_case: Option<crate::live_case::LiveCase>,
-        theme: ThemeMount,
+        mut theme: ThemeMount,
     ) -> Self {
         let backend_type = config.video_renderer;
         let software_renderer_threads = config.software_renderer_threads;
@@ -5587,7 +5587,7 @@ impl App {
         // Share Rips as the machine starts with it; every later change comes
         // with the config snapshot in the frame loop.
         deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
-        let theme_resources = theme.resources;
+        let theme_resources = std::mem::take(&mut theme.resources);
         let gameplay_presentation = theme.gameplay;
         let twitch_chat = (theme.chat)();
         let ui_sfx = audio_requests::UiSfx::prepare(&mut audio, ActiveTheme::SOUNDS, theme_resources.sounds);
@@ -11261,7 +11261,7 @@ pub fn run(
     audio: deadsync_audio_stream::AudioControl,
     music_clock: deadsync_audio_stream::MusicClock,
     live_case: Option<crate::live_case::LiveCase>,
-    mount: fn(&config::app_config::Config) -> ThemeMount,
+    mount: impl FnOnce(&config::app_config::Config) -> ThemeMount,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (config_generation, config) = config::runtime::snapshot();
     let show_stats_mode = config.show_stats_mode.min(2);

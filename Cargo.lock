@@ -1467,6 +1467,7 @@ dependencies = [
  "deadsync-theme",
  "deadsync-theme-openitg",
  "deadsync-theme-simply-love",
+ "deadsync-theme-stepmania-395",
  "deadsync-updater",
  "deadsync-version",
  "fs_extra",
@@ -2028,9 +2029,11 @@ dependencies = [
 name = "deadsync-theme-stepmania-395"
 version = "0.6.177"
 dependencies = [
+ "deadlib-assets",
  "deadlib-present",
  "deadsync-config",
  "deadsync-noteskin",
+ "deadsync-theme",
  "tempfile",
 ]
 
