@@ -33,7 +33,7 @@ fn frexp(n: f64) -> (f64, i32) {
     )
 }
 
-fn ldexp(n: f64, exponent: i32) -> f64 {
+pub(super) fn ldexp(n: f64, exponent: i32) -> f64 {
     const FRACTION: u64 = (1 << 52) - 1;
     let bits = n.to_bits();
     let sign = bits & (1 << 63);

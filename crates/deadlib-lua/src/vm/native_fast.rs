@@ -68,6 +68,14 @@ impl Vm {
                 self.registers[call + 1] = Value::Number(second);
                 Some(2)
             }
+            57 if count >= 2
+                && let (Value::Number(value), Value::Number(exponent)) =
+                    (self.registers[call + 1], self.registers[call + 2]) =>
+            {
+                self.registers[call] =
+                    Value::Number(math::ldexp(value, lua_integer(exponent) as i32));
+                Some(1)
+            }
             tables::TAB_GETN | tables::TAB_MAXN
                 if count != 0
                     && let Value::Table(table) = self.registers[call + 1] =>

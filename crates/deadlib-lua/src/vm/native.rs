@@ -89,8 +89,7 @@ impl Vm {
                 let actual = match id {
                     0
                     | 2..=5
-                    | 55
-                    | 56
+                    | 55..=57
                     | GET_META
                     | DEBUG_GET_META
                     | NEXT
