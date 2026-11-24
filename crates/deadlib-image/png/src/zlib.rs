@@ -1797,16 +1797,14 @@ pub(crate) struct Compressor {
 impl Compressor {
     const LOOKAHEAD: usize = 3;
 
-    /// `len` sizes the output reservation as `compress` does.
+    /// `len` is the complete filtered input length.
     pub(crate) fn new(mode: Compression, len: usize) -> Result<Self, Error> {
         let mut window = Vec::new();
-        let mut matcher = None;
-        if mode == Compression::Fast {
-            reserve(&mut window, 2 * matcher::WINDOW + Self::LOOKAHEAD)?;
-            matcher = Some(matcher::Matcher::new()?);
-        } else {
-            reserve(&mut window, Self::block(mode) + Self::LOOKAHEAD)?;
-        }
+        let fast = mode == Compression::Fast;
+        let history = if fast { matcher::WINDOW } else { 0 };
+        let maximum = history + Self::block(mode) + Self::LOOKAHEAD;
+        reserve(&mut window, len.min(maximum))?;
+        let matcher = fast.then(matcher::Matcher::new).transpose()?;
         Ok(Self {
             mode,
             w: Writer {
