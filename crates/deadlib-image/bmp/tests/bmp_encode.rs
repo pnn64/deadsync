@@ -159,8 +159,7 @@ fn indexed_input_expands_into_bgr24_rows() {
 
 #[test]
 fn indexed_and_rgb_encoders_match_across_the_palette_lookup_cutoff() {
-    for height in [204, 205] {
-        let width = 5;
+    for (width, height) in [(5, 204), (5, 205), (4, 255), (4, 256)] {
         let palette = vec![[11, 23, 37], [47, 59, 71], [83, 97, 101]];
         let indices: Vec<_> = (0..width * height).map(|i| (i % 3) as u8).collect();
         let samples = indices

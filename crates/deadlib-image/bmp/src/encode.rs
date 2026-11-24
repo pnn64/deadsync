@@ -84,13 +84,19 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
             indices, palette, ..
         } => {
             if indices.len() >= 1024 {
+                let padding = &[0; 3][..pitch - row_bytes];
+                let chunk_pixels = if options.top_down && padding.is_empty() {
+                    indices.len()
+                } else {
+                    width
+                };
                 append_indexed_rows(
                     &mut output,
                     indices,
                     palette,
-                    width,
+                    chunk_pixels,
                     options.top_down,
-                    &[0; 3][..pitch - row_bytes],
+                    padding,
                 );
             } else {
                 output.resize(file_size, 0);
@@ -153,7 +159,7 @@ fn append_indexed_rows(
     output: &mut Vec<u8>,
     indices: &[u8],
     palette: &[[u8; 3]],
-    width: usize,
+    chunk_pixels: usize,
     top_down: bool,
     padding: &[u8],
 ) {
@@ -161,7 +167,7 @@ fn append_indexed_rows(
     for (&[red, green, blue], color) in palette.iter().zip(&mut bgr) {
         *color = [blue, green, red];
     }
-    let mut rows = indices.chunks_exact(width);
+    let mut rows = indices.chunks_exact(chunk_pixels);
     while let Some(row) = if top_down {
         rows.next()
     } else {
