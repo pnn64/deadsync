@@ -23,6 +23,11 @@ choices, and presentation state. OpenITG is a production dependency of
 the executable. Shell integration tests exercise the same
 registry as the executable.
 
+The transition mount also supplies screen opacity and optional fixed entry/exit
+effects. Effects are prepared with the theme's resource manifest and played once
+at the transition boundary. Theme actors own their fades and overlays; the shell
+does not choose transition artwork or timing for an installed native theme.
+
 The title mount adapts each theme once at startup. OpenITG uses the shared
 focus and input handling for the list of menu actions.
 Each theme owns its presentation clock and receives the same prepared

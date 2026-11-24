@@ -159,3 +159,19 @@ pub fn evaluation_actors(course: bool, p2_only: bool, elapsed: f32) -> Vec<Actor
         );
     actors
 }
+
+pub fn transition_actors(arriving: bool, elapsed: f32) -> (Vec<Actor>, f32) {
+    use deadsync_theme::{Screen, ThemeTransitions};
+    use deadsync_theme_stepmania_395::StepManiaTheme;
+    let actors = || {
+        if arriving {
+            StepManiaTheme::in_transition(Screen::SelectMusic, ())
+        } else {
+            StepManiaTheme::out_transition(Screen::SelectMusic, Screen::Gameplay)
+        }
+    };
+    deadlib_present::runtime::clear_all();
+    let _ = actors();
+    deadlib_present::runtime::tick(elapsed);
+    actors()
+}

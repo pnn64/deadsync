@@ -14,6 +14,8 @@ pub(crate) const JUDGE_FONT: &str = "stepmania-395/judge";
 pub(crate) const COMBO_FONT: &str = "stepmania-395/combo";
 pub(crate) const PERCENT_FONT: &str = "stepmania-395/percent";
 pub(crate) const STAGE_FONT: &str = "stepmania-395/stages";
+pub(crate) const SWOOSH: &str = "assets/media/stepmania-395/swoosh.ogg";
+pub(crate) const RESULT_SWOOSH: &str = "assets/media/stepmania-395/result-swoosh.ogg";
 
 macro_rules! png {
     ($name:literal) => {
@@ -26,7 +28,7 @@ macro_rules! png {
 
 impl ThemeResources for StepManiaTheme {
     const SOUNDS: ThemeSounds = ThemeSounds {
-        effects: &[],
+        effects: &[SWOOSH, RESULT_SWOOSH],
         cues: &[
             (
                 UiCue::Change,

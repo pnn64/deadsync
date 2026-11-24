@@ -8,8 +8,8 @@ mod menu;
 mod options;
 mod play_selection;
 mod presentation;
-mod ranking;
 mod radar;
+mod ranking;
 mod resources;
 mod select_music;
 mod selection;
@@ -17,12 +17,11 @@ mod stage;
 mod stage_presentation;
 mod startup;
 mod training_pad;
+mod transitions;
 mod tutorial;
 
-use deadlib_present::actors::Actor;
 use deadsync_theme::{
-    Screen, Theme, ThemeScreenId, ThemeTransitionAudio, ThemeTransitions, TransitionKind,
-    TransitionMusic,
+    Screen, Theme, ThemeScreenId, ThemeTransitionAudio, TransitionKind, TransitionMusic,
 };
 
 pub use intro::StepManiaIntro;
@@ -39,7 +38,7 @@ impl ThemeTransitionAudio for StepManiaTheme {
     type AudioContext = bool;
 
     fn transition_audio(
-        _from: Screen,
+        from: Screen,
         to: Screen,
         _kind: TransitionKind,
         music_enabled: bool,
@@ -49,6 +48,15 @@ impl ThemeTransitionAudio for StepManiaTheme {
             Screen::SelectProfile | Screen::SelectStyle | Screen::SelectPlayMode
                 if music_enabled =>
             {
+                if matches!(
+                    from,
+                    Screen::SelectProfile
+                        | Screen::ProfileLoad
+                        | Screen::SelectStyle
+                        | Screen::SelectPlayMode
+                ) {
+                    return TransitionMusic::Keep;
+                }
                 TransitionMusic::Play {
                     path: "assets/media/stepmania-395/menu.ogg".into(),
                     looping: true,
@@ -61,6 +69,32 @@ impl ThemeTransitionAudio for StepManiaTheme {
     fn stop_screen_sfx_on_exit(_from: Screen, _to: Screen) -> bool {
         true
     }
+
+    fn entry_sound(screen: Screen) -> Option<&'static str> {
+        match screen {
+            Screen::SelectProfile
+            | Screen::SelectStyle
+            | Screen::SelectPlayMode
+            | Screen::SelectMusic
+            | Screen::SelectCourse
+            | Screen::Options
+            | Screen::PlayerOptions => Some(resources::SWOOSH),
+            Screen::Evaluation => Some(resources::RESULT_SWOOSH),
+            _ => None,
+        }
+    }
+
+    fn exit_sound(from: Screen, _to: Screen) -> Option<&'static str> {
+        match from {
+            Screen::SelectProfile
+            | Screen::SelectStyle
+            | Screen::SelectPlayMode
+            | Screen::Options
+            | Screen::PlayerOptions => Some(resources::SWOOSH),
+            Screen::Evaluation => Some(resources::RESULT_SWOOSH),
+            _ => None,
+        }
+    }
 }
 
 impl Theme for StepManiaTheme {
@@ -69,34 +103,5 @@ impl Theme for StepManiaTheme {
 
     fn screen_id(screen: Screen) -> ThemeScreenId {
         ThemeScreenId::new(screen.current_screen_file_name())
-    }
-}
-
-impl ThemeTransitions for StepManiaTheme {
-    type Actor = Actor;
-    type EntryContext<'a> = ();
-
-    fn transition_kind(_from: Screen, _to: Screen) -> TransitionKind {
-        TransitionKind::Direct
-    }
-
-    fn actor_entry_duration(screen: Screen) -> Option<f32> {
-        (screen == Screen::Menu).then_some(0.3)
-    }
-
-    fn actor_exit_duration(screen: Screen) -> f32 {
-        if screen == Screen::Menu { 0.3 } else { 0.0 }
-    }
-
-    fn skip_global_entry_fade(_from: Screen, _to: Screen) -> bool {
-        false
-    }
-
-    fn in_transition(_screen: Screen, (): ()) -> (Vec<Actor>, f32) {
-        (Vec::new(), 0.3)
-    }
-
-    fn out_transition(_from: Screen, _to: Screen) -> (Vec<Actor>, f32) {
-        (Vec::new(), 0.3)
     }
 }

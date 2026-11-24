@@ -349,6 +349,20 @@ mod tests {
     }
 
     #[test]
+    fn installed_transition_effects_decode_from_the_bundled_manifest() {
+        use deadlib_audio::stream::{OutputFormat, load_and_resample_sfx};
+        use deadsync_theme_stepmania_395::StepManiaTheme;
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for asset in StepManiaTheme::SOUNDS.effects {
+            let samples = load_and_resample_sfx(&root.join(asset), OutputFormat {
+                sample_rate_hz: 48_000,
+                channels: 2,
+            }, Default::default()).unwrap();
+            assert!(samples.iter().any(|&sample| sample != 0), "silent transition: {asset}");
+        }
+    }
+
+    #[test]
     fn audio_output_modes_round_trip_through_shell_mapping() {
         for choice in [
             AudioOutputModeChoice::Auto,

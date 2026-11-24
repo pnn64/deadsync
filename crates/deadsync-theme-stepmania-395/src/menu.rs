@@ -7,7 +7,7 @@ use deadsync_theme::main_menu::{
     MainMenuFrame, MainMenuItem, MainMenuPhase, MainMenuRuntimeView, MainMenuSelection,
     ThemeMainMenu,
 };
-use deadsync_theme::{Screen, ThemeEffect};
+use deadsync_theme::{Screen, ThemeEffect, TransitionState};
 
 use crate::StepManiaTheme;
 use crate::presentation::Layout;
@@ -139,7 +139,13 @@ impl ThemeMainMenu for StepManiaTheme {
         frame: MainMenuFrame<'_, Screen, ()>,
     ) {
         let layout = Layout::current();
-        let alpha = frame.alpha_multiplier;
+        let alpha = frame.alpha_multiplier
+            * match frame.transition {
+                TransitionState::ActorsFadeIn { elapsed, duration } => {
+                    (elapsed / duration).clamp(0.0, 1.0)
+                }
+                _ => 1.0,
+            };
         let mut background = layout.sprite(
             "stepmania-395/title-background",
             [320.0, 240.0],

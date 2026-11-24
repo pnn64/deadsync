@@ -55,6 +55,8 @@ const FALLBACK_TRANSITIONS: ScreenTransitionMount = ScreenTransitionMount {
         )
     },
     stop_screen_sfx_on_exit: SimplyLoveTheme::stop_screen_sfx_on_exit,
+    entry_sound: SimplyLoveTheme::entry_sound,
+    exit_sound: SimplyLoveTheme::exit_sound,
 };
 
 pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
@@ -63,10 +65,19 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             title: Box::new(|index| InstalledMenu::mount::<StepManiaTheme>(index, |_| ())),
             startup: |_| Box::new(StepManiaStartup::default()),
             transitions: ScreenTransitionMount {
+                kind: StepManiaTheme::transition_kind,
+                actor_entry_seconds: StepManiaTheme::actor_entry_duration,
+                actor_exit_seconds: StepManiaTheme::actor_exit_duration,
+                skip_entry_fade: StepManiaTheme::skip_global_entry_fade,
+                entry: |screen| StepManiaTheme::in_transition(screen, ()),
+                exit: StepManiaTheme::out_transition,
+                screen_alpha: StepManiaTheme::screen_alpha,
                 music: |from, to, kind, config| {
                     StepManiaTheme::transition_audio(from, to, kind, config.menu_music)
                 },
-                ..FALLBACK_TRANSITIONS
+                stop_screen_sfx_on_exit: StepManiaTheme::stop_screen_sfx_on_exit,
+                entry_sound: StepManiaTheme::entry_sound,
+                exit_sound: StepManiaTheme::exit_sound,
             },
             resources: resources::<StepManiaTheme>(),
             stage: Box::new(StepManiaStagePresentation::default()),

@@ -126,6 +126,22 @@ fn native_attract_captures() {
         intro.advance(delta);
         capture(name, &intro, &output, &metrics, &mut backend, &assets);
     }
+    for (name, arriving, elapsed) in [
+        ("music-transition-in", true, 0.25),
+        ("music-transition-out", false, 0.15),
+    ] {
+        let mut actors = support::music_actors();
+        actors.extend(support::transition_actors(arriving, elapsed).0);
+        capture_actors(
+            name,
+            &actors,
+            elapsed,
+            &output,
+            &metrics,
+            &mut backend,
+            &assets,
+        );
+    }
     for (name, course, p2_only, elapsed) in [
         ("evaluation-stage", false, false, 5.0),
         ("evaluation-stage-entering", false, false, 0.9),

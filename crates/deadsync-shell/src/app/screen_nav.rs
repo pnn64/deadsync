@@ -452,6 +452,9 @@ impl App {
             let duration = (self.state.screens.transitions.actor_exit_seconds)(from);
             apply_actor_fade_out_transition(&mut self.state.shell, target, duration);
         }
+        if let Some(sound) = (self.state.screens.transitions.exit_sound)(from, target) {
+            self.ui_sfx.play(&mut self.audio, sound);
+        }
         self.sync_gameplay_input_capture();
     }
 
@@ -466,6 +469,9 @@ impl App {
         } else {
             let duration = (self.state.screens.transitions.actor_entry_seconds)(target);
             apply_actor_entry_transition(&mut self.state.shell, duration);
+        }
+        if let Some(sound) = (self.state.screens.transitions.entry_sound)(target) {
+            self.ui_sfx.play(&mut self.audio, sound);
         }
     }
 
@@ -499,6 +505,9 @@ impl App {
             duration
         });
         self.state.screens.gameplay_outro = outro;
+        if let Some(sound) = (self.state.screens.transitions.exit_sound)(current, target) {
+            self.ui_sfx.play(&mut self.audio, sound);
+        }
         apply_global_fade_out_transition(&mut self.state.shell, target, out_duration);
         self.sync_gameplay_input_capture();
     }
@@ -560,6 +569,9 @@ impl App {
         self.sync_gameplay_input_capture();
         deadlib_present::runtime::clear_all();
         self.run_commands(commands, event_loop);
+        if let Some(sound) = (self.state.screens.transitions.entry_sound)(target) {
+            self.ui_sfx.play(&mut self.audio, sound);
+        }
     }
 
     /// Application state changes for a completed global fade. The event-loop

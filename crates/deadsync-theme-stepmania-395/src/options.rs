@@ -333,8 +333,12 @@ impl PlayerOptionsLayout<Actor, TextContent> for StepManiaPlayerOptions {
     fn entry_transition(&self) -> (Vec<Actor>, f32) {
         (Vec::new(), 0.5)
     }
-    fn exit_transition(&self, _target: Screen) -> (Vec<Actor>, f32) {
-        (Vec::new(), 0.5)
+    fn exit_transition(&self, target: Screen) -> (Vec<Actor>, f32) {
+        if target.is_play() {
+            (vec![crate::transitions::black_fade(false)], 0.3)
+        } else {
+            (Vec::new(), 0.5)
+        }
     }
 }
 

@@ -7600,6 +7600,18 @@ fn application_dispatches_mounted_presentations_through_shared_contracts() {
     assert!(!main.contains("\"--theme-"));
     assert!(registry.contains("ThemeFlag::StepMania395 => ThemeMount"));
     assert!(registry.contains("InstalledMenu::mount::<StepManiaTheme>"));
+    let native_mount = registry.split("ThemeFlag::StepMania395 => ThemeMount").nth(1).unwrap()
+        .split("ThemeFlag::SimplyLove => ThemeMount").next().unwrap();
+    assert!(!native_mount.contains("FALLBACK_TRANSITIONS"));
+    for hook in [
+        "kind: StepManiaTheme::transition_kind",
+        "exit: StepManiaTheme::out_transition",
+        "screen_alpha: StepManiaTheme::screen_alpha",
+        "entry_sound: StepManiaTheme::entry_sound",
+        "exit_sound: StepManiaTheme::exit_sound",
+    ] {
+        assert!(contains_rust(native_mount, hook), "unmounted native transition: {hook}");
+    }
     let native = root.join("crates/deadsync-theme-stepmania-395/src");
     for path in production_rust_files(&native) {
         let source = production_source(&path);

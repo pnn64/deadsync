@@ -10,6 +10,10 @@ pub trait ThemeTransitions: Theme {
     fn actor_entry_duration(screen: Self::Screen) -> Option<f32>;
     fn actor_exit_duration(screen: Self::Screen) -> f32;
     fn skip_global_entry_fade(from: Self::Screen, to: Self::Screen) -> bool;
+    /// Opacity of the screen's own actors, independently of transition overlays.
+    fn screen_alpha(_screen: Self::Screen, _state: &TransitionState<Self::Screen>) -> f32 {
+        1.0
+    }
     fn out_transition(from: Self::Screen, to: Self::Screen) -> (Vec<Self::Actor>, f32);
     fn in_transition(
         screen: Self::Screen,
@@ -29,6 +33,14 @@ pub trait ThemeTransitionAudio: Theme {
     ) -> TransitionMusic;
 
     fn stop_screen_sfx_on_exit(from: Self::Screen, to: Self::Screen) -> bool;
+
+    /// Optional fixed effects, prepared through the theme's resource manifest.
+    fn entry_sound(_screen: Self::Screen) -> Option<&'static str> {
+        None
+    }
+    fn exit_sound(_from: Self::Screen, _to: Self::Screen) -> Option<&'static str> {
+        None
+    }
 }
 
 /// Music on the shared preview and presentation channel.

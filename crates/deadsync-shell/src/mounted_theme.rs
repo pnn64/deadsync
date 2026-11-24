@@ -62,6 +62,8 @@ pub struct ScreenTransitionMount {
     pub screen_alpha: fn(Screen, &TransitionState<Screen>) -> f32,
     pub music: fn(Screen, Screen, TransitionKind, &Config) -> TransitionMusic,
     pub stop_screen_sfx_on_exit: fn(Screen, Screen) -> bool,
+    pub entry_sound: fn(Screen) -> Option<&'static str>,
+    pub exit_sound: fn(Screen, Screen) -> Option<&'static str>,
 }
 
 pub type ChatPresentation = dyn deadsync_theme::views::TwitchChatPresentation<

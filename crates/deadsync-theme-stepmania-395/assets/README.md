@@ -28,6 +28,8 @@ Course selection uses `ScreenSelectCourse` artwork and the original `CourseEntry
 
 Select this installed native theme through System Options or `[Options] Theme=StepMania 3.95` in `deadsync.ini`. The reference theme folder is used during development to inspect and copy assets. The game uses the bundled assets and Rust presentation modules.
 
+Screen transitions use the source `_fade in normal`, `_fade out normal`, `_menu in`, `_menu out`, and `_options to options` sequences expressed as Rust tweens. The original `_moveon.png` supplies the menu transition graphic, while `_swoosh.ogg` and `_swoosh and more.ogg` supply menu and evaluation effects. The executable mounts these transition handlers directly. The shared shell forwards optional fixed entry/exit effects and keeps screen opacity separate from overlays.
+
 Idle attract scenes use the original tutorial background, hand/message graphics, default dance note/receptor sheets, demonstration overlay, ranking background, ranking bullets, `_ScreenRanking common` font and imports, and tutorial/ranking music. Tutorial chart beats, stops, prompts, and scene transitions are expressed as native Rust data and actors.
 
 `training-pad.bin` contains the original static `Characters/DancePad-DDR.txt` geometry and material colors, converted by `tools/convert_training_pad.py`. Its three textures are copied from `Characters/MetalPanel.png`, `Arrow-Blue.png`, and `Arrow-Red.png`; the white texture comes from the company background. The conversion tool is for asset authoring only. The supplied default character has no model, so the tutorial does not invent a replacement dancer.

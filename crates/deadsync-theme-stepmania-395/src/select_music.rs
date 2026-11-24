@@ -30,7 +30,7 @@ impl MusicWheelPresentation<Actor> for StepManiaMusicWheel {
         Some(Duration::from_millis(250))
     }
     fn player_options_exit_seconds(&self) -> Option<f32> {
-        Some(0.5)
+        None
     }
     fn enter_wheel(&mut self, now: Instant) {
         self.entered = Some(now);

@@ -89,6 +89,17 @@ fn run_child(theme: &str) {
     app.asset_manager
         .register_fonts(fonts.into_iter().map(|asset| (asset.name, asset.font)));
 
+    if expected_theme == ThemeFlag::StepMania395 {
+        let transitions = app.state.screens.transitions;
+        assert_eq!((transitions.kind)(CurrentScreen::SelectStyle, CurrentScreen::SelectPlayMode), deadsync_theme::TransitionKind::Global);
+        assert_eq!((transitions.entry_sound)(CurrentScreen::Evaluation), Some("assets/media/stepmania-395/result-swoosh.ogg"));
+        let (actors, duration) = (transitions.entry)(CurrentScreen::SelectMusic);
+        assert_eq!(duration, 0.5);
+        assert!(actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. }
+            if source.texture_key() == Some("stepmania-395/evaluation-move-on"))));
+        deadlib_present::runtime::clear_all();
+    }
+
     let mut route = RouteTest { app: Some(app), theme: expected_theme };
     let event_loop = EventLoop::builder().with_any_thread(true).build().unwrap();
     event_loop.run_app(&mut route).unwrap();

@@ -15,6 +15,47 @@ use deadsync_theme::{Screen, ThemeEffect, ThemeResources, TransitionState};
 use deadsync_theme_stepmania_395::{StepManiaIntro, StepManiaStageCard, StepManiaTheme};
 
 #[test]
+fn native_menu_transition_collapses_and_song_exit_holds_the_original_black_fade() {
+    use deadlib_present::space::{Metrics, with_current_metrics};
+    use deadsync_theme::{ThemeTransitionAudio, ThemeTransitions, TransitionKind};
+    with_current_metrics(Metrics::centered(640.0, 480.0), || {
+        assert_eq!(
+            StepManiaTheme::transition_kind(Screen::SelectStyle, Screen::SelectPlayMode),
+            TransitionKind::Global
+        );
+        let (entry, duration) = support::transition_actors(true, 0.25);
+        assert_eq!(duration, 0.5);
+        assert!(
+            matches!(&entry[0], Actor::Sprite { source, size: [SizeSpec::Px(368.0), SizeSpec::Px(88.0)], tint, .. }
+            if source.texture_key() == Some("stepmania-395/evaluation-move-on") && *tint == [0.5; 4])
+        );
+        let (exit, duration) = support::transition_actors(false, 0.15);
+        assert_eq!(duration, 1.5);
+        assert!(matches!(&exit[0], Actor::Sprite { tint, .. } if *tint == [0.0, 0.0, 0.0, 0.5]));
+        let (exit, _) = support::transition_actors(false, 1.0);
+        assert!(matches!(&exit[0], Actor::Sprite { tint, .. } if *tint == [0.0, 0.0, 0.0, 1.0]));
+        assert_eq!(
+            StepManiaTheme::screen_alpha(
+                Screen::SelectMusic,
+                &TransitionState::FadingIn {
+                    elapsed: 0.25,
+                    duration: 0.5
+                }
+            ),
+            1.0
+        );
+        for sound in [
+            StepManiaTheme::entry_sound(Screen::SelectMusic),
+            StepManiaTheme::exit_sound(Screen::Evaluation, Screen::SelectMusic),
+        ] {
+            let sound = sound.unwrap();
+            assert!(StepManiaTheme::SOUNDS.effects.contains(&sound));
+        }
+        deadlib_present::runtime::clear_all();
+    });
+}
+
+#[test]
 fn wheel_radar_displays_both_players_from_parsed_chart_data() {
     deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
         640.0, 480.0,
