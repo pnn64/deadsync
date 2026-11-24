@@ -26,6 +26,7 @@ use deadsync_theme_simply_love::{
 #[derive(Default)]
 pub struct SupplementalResources {
     pub fonts: &'static [deadlib_assets::FontAssetSpec],
+    pub font_paths: Vec<(&'static str, std::path::PathBuf)>,
     pub embedded_pngs: &'static [deadlib_assets::EmbeddedPng],
     pub textures: Vec<TextureDecodeJob>,
     pub sounds: ThemeSounds,
@@ -35,7 +36,7 @@ pub type PlayerOptionsLayoutFactory = fn() -> Box<dyn PlayerOptionsLayout<Actor,
 pub type StartupScreen = dyn StartupPresentation<Actor, LibraryLoadView, Config>;
 
 pub struct ThemeMount {
-    pub title: fn(i32) -> InstalledMenu,
+    pub title: Box<dyn FnOnce(i32) -> InstalledMenu>,
     pub startup: fn(i32) -> Box<StartupScreen>,
     pub transitions: ScreenTransitionMount,
     pub resources: SupplementalResources,

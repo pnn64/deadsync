@@ -34,6 +34,16 @@ pub fn load_font_from_ini_path(
     if assets.has_font(name) {
         return Ok(());
     }
+    load_font_at_renderer_startup(assets, backend, name, ini_path)
+}
+
+/// Registers a font and uploads its pages on startup or renderer replacement.
+pub fn load_font_at_renderer_startup(
+    assets: &mut AssetManager,
+    backend: &mut Backend,
+    name: &'static str,
+    ini_path: &Path,
+) -> Result<(), deadlib_assets::AssetError> {
     let dirs = crate::paths();
     let deadlib_present::font::FontLoadData {
         font,

@@ -179,15 +179,31 @@ impl ActorAnimation {
     /// Applies the initial setters and queues the timed part of the animation.
     #[must_use]
     pub fn start(&self, mut initial_state: TweenState) -> TweenSeq {
-        // These properties apply when the command runs, regardless of tween position.
-        initial_state.hx = self.anchors[0].unwrap_or(initial_state.hx);
-        initial_state.vy = self.anchors[1].unwrap_or(initial_state.vy);
-        initial_state.visible = self.visible.unwrap_or(initial_state.visible);
+        self.apply_immediate(&mut initial_state);
         let mut timeline = TweenSeq::new(self.initial.end_state(initial_state));
         for step in &self.steps {
             timeline.push_step(step.clone());
         }
         timeline
+    }
+
+    pub(crate) fn queue_on(&self, timeline: &mut TweenSeq) {
+        if timeline.is_empty() {
+            *timeline = self.start(*timeline.state());
+        } else {
+            self.apply_immediate(timeline.state_mut());
+            timeline.push_step(self.initial.clone());
+            for step in &self.steps {
+                timeline.push_step(step.clone());
+            }
+        }
+    }
+
+    fn apply_immediate(&self, state: &mut TweenState) {
+        // These properties apply when the command runs, regardless of tween position.
+        state.hx = self.anchors[0].unwrap_or(state.hx);
+        state.vy = self.anchors[1].unwrap_or(state.vy);
+        state.visible = self.visible.unwrap_or(state.visible);
     }
 }
 
@@ -241,7 +257,7 @@ fn scalar_command(name: &str) -> Option<fn(SegmentBuilder, f32) -> SegmentBuilde
     Some(set)
 }
 
-fn numbers<const N: usize>(args: &[&str]) -> Option<[f32; N]> {
+pub(crate) fn numbers<const N: usize>(args: &[&str]) -> Option<[f32; N]> {
     if args.len() != N {
         return None;
     }

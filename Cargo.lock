@@ -2030,10 +2030,15 @@ name = "deadsync-theme-stepmania-395"
 version = "0.6.177"
 dependencies = [
  "deadlib-assets",
+ "deadlib-platform",
  "deadlib-present",
  "deadsync-config",
+ "deadsync-core",
+ "deadsync-input",
  "deadsync-noteskin",
  "deadsync-theme",
+ "image",
+ "roxmltree",
  "tempfile",
 ]
 

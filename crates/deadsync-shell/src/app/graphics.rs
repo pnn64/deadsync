@@ -306,6 +306,14 @@ impl App {
                 supplemental.fonts,
             )?;
         }
+        for (name, path) in &supplemental.font_paths {
+            deadsync_assets::fonts::load_font_at_renderer_startup(
+                &mut self.asset_manager,
+                &mut startup.backend,
+                name,
+                path,
+            )?;
+        }
         for texture in &supplemental.textures {
             self.asset_manager.load_texture(&mut startup.backend, texture)?;
         }

@@ -28,11 +28,23 @@ impl InstalledMenu {
         T::MenuState: 'static,
         for<'a> T::EntryContext<'a>: Default,
     {
+        Self::mount_state::<T>(T::init_menu(color_index), policy)
+    }
+
+    pub fn mount_state<T>(state: T::MenuState, policy: fn(Policy) -> T::MenuVisualPolicy) -> Self
+    where
+        T: ThemeMainMenu<
+                Screen = Screen,
+                Actor = Actor,
+                MenuRuntimeView = Runtime,
+                MenuInput = InputEvent,
+                MenuRawKey = RawKeyboardEvent,
+            > + 'static,
+        T::MenuState: 'static,
+        for<'a> T::EntryContext<'a>: Default,
+    {
         Self {
-            title: Box::new(MountedTitle::<T> {
-                state: T::init_menu(color_index),
-                policy,
-            }),
+            title: Box::new(MountedTitle::<T> { state, policy }),
         }
     }
 

@@ -2,19 +2,15 @@ use std::io;
 use std::path::Path;
 use std::sync::Arc;
 
-use deadlib_assets::{
-    TextureDecodeJob, parse_texture_hints, texture_key_sampler, texture_source_size,
-};
-use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
-use deadlib_present::space::{screen_center_x, screen_center_y};
+use deadlib_assets::TextureDecodeJob;
+use deadlib_present::actors::Actor;
 use deadsync_theme::attract::{
     AttractDemoChart, AttractDemoRequest, AttractMedia, AttractPresentation,
 };
 use deadsync_theme::views::AttractRecords;
 
-use crate::{BackgroundPlayback, BackgroundTexture, ThemePackage};
-
-const CANVAS: [f32; 2] = [640.0, 480.0];
+use crate::scene::{SceneTextures, frame};
+use crate::{BackgroundPlayback, ThemePackage};
 
 /// The authored company and logo backgrounds played after library loading.
 pub struct PackageIntro {
@@ -23,58 +19,16 @@ pub struct PackageIntro {
     current: BackgroundPlayback,
 }
 
-struct IntroTexture {
-    job: TextureDecodeJob,
-    binding: BackgroundTexture,
-}
-
 impl PackageIntro {
     /// Prepares playback and the texture uploads needed by the renderer.
     pub fn open(root: &Path, language: Option<&str>) -> io::Result<(Self, Vec<TextureDecodeJob>)> {
         let package = ThemePackage::open([root], language)?;
         let mut scenes = Vec::new();
-        let mut textures: Vec<IntroTexture> = Vec::new();
+        let mut textures = SceneTextures::new("intro");
         for section in ["ScreenCompany", "ScreenLogo"] {
-            let Some(background) = package.background(section, "background", CANVAS)? else {
-                continue;
-            };
-            let scene = background.try_start(|path, repeat| {
-                let hints = parse_texture_hints(
-                    path.file_stem()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .as_ref(),
-                );
-                let sampler = texture_key_sampler(&hints, repeat);
-                if let Some(texture) = textures
-                    .iter()
-                    .find(|texture| texture.job.path == path && texture.job.sampler == sampler)
-                {
-                    return Ok(texture.binding.clone());
-                }
-                let (width, height) = texture_source_size(path).map_err(|error| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("reading dimensions of {}: {error}", path.display()),
-                    )
-                })?;
-                let key = format!("local-theme/intro/{}", textures.len());
-                let binding = BackgroundTexture {
-                    source: SpriteSource::Texture(Arc::from(key.as_str())),
-                    dimensions: [width as f32, height as f32],
-                };
-                textures.push(IntroTexture {
-                    job: TextureDecodeJob {
-                        key,
-                        path: path.to_owned(),
-                        sampler,
-                        hints,
-                    },
-                    binding: binding.clone(),
-                });
-                Ok(binding)
-            })?;
-            scenes.push(scene);
+            if let Some(scene) = textures.background(&package, section)? {
+                scenes.push(scene);
+            }
         }
         let current = scenes.first().cloned().ok_or_else(|| {
             io::Error::new(
@@ -88,7 +42,7 @@ impl PackageIntro {
                 index: 0,
                 current,
             },
-            textures.into_iter().map(|texture| texture.job).collect(),
+            textures.into_jobs(),
         ))
     }
 }
@@ -143,14 +97,7 @@ impl AttractPresentation<Actor> for PackageIntro {
     fn push_actors(&self, actors: &mut Vec<Actor>, _video_key: Option<&Arc<str>>) {
         let mut children = Vec::new();
         self.current.push_actors(&mut children, 0);
-        actors.push(Actor::Frame {
-            align: [0.5, 0.5],
-            offset: [screen_center_x(), screen_center_y()],
-            size: CANVAS.map(SizeSpec::Px),
-            children,
-            background: None,
-            z: 0,
-        });
+        actors.push(frame(children));
     }
 
     fn push_demo_underlay(&self, _actors: &mut Vec<Actor>, _music_time: f32) {}

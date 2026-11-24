@@ -56,7 +56,9 @@ const FALLBACK_TRANSITIONS: ScreenTransitionMount = ScreenTransitionMount {
 pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
     match theme {
         ThemeFlag::SimplyLove => ThemeMount {
-            title: |index| InstalledMenu::mount::<SimplyLoveTheme>(index, |policy| policy),
+            title: Box::new(|index| {
+                InstalledMenu::mount::<SimplyLoveTheme>(index, |policy| policy)
+            }),
             startup: startup_screen,
             transitions: FALLBACK_TRANSITIONS,
             resources: SupplementalResources::default(),
@@ -69,7 +71,7 @@ pub(crate) fn mount(theme: ThemeFlag) -> ThemeMount {
             chat: chat_overlay,
         },
         ThemeFlag::OpenItg => ThemeMount {
-            title: |index| InstalledMenu::mount::<OpenItgTheme>(index, |_| ()),
+            title: Box::new(|index| InstalledMenu::mount::<OpenItgTheme>(index, |_| ())),
             startup: startup_screen,
             transitions: FALLBACK_TRANSITIONS,
             resources: resources::<OpenItgTheme>(),

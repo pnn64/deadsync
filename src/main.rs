@@ -12,8 +12,9 @@ use deadsync_config as config;
 use deadsync_profile::compat as profile;
 use deadsync_shell::app;
 use deadsync_shell::mounted_theme;
+use deadsync_theme::main_menu::ThemeMainMenu;
 use deadsync_theme_simply_love::{i18n, visual_styles};
-use deadsync_theme_stepmania_395::PackageIntro;
+use deadsync_theme_stepmania_395::{PackageIntro, PackageTitle, TITLE_FONT};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 use std::path::Path;
@@ -265,8 +266,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // and before profile/audio/screens which may use tr() for display strings.
     let locale = deadsync_assets::language::resolve_locale(cfg.language_flag);
     i18n::init(deadsync_assets::language::load(&locale));
-    let package_intro = intro_package_path(&cli.remaining)?
+    let package_intro = package_arg_path(&cli.remaining, "--theme-intro")?
         .map(|path| PackageIntro::open(path, Some(&locale)))
+        .transpose()?;
+    let package_title = package_arg_path(&cli.remaining, "--theme-title")?
+        .map(|path| PackageTitle::open(path, Some(&locale)))
         .transpose()?;
 
     #[cfg(windows)]
@@ -332,21 +336,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             mount.attract = Some(Box::new(intro));
             mount.resources.textures.extend(textures);
         }
+        if let Some((mut title, font, textures)) = package_title {
+            mount.title = Box::new(|color_index| {
+                PackageTitle::set_menu_color_index(&mut title, color_index);
+                mounted_theme::InstalledMenu::mount_state::<PackageTitle>(title, |_| ())
+            });
+            mount.resources.font_paths.push((TITLE_FONT, font));
+            mount.resources.textures.extend(textures);
+        }
         mount
     })
 }
 
-fn intro_package_path(args: &[String]) -> std::io::Result<Option<&Path>> {
+fn package_arg_path<'a>(args: &'a [String], flag: &str) -> std::io::Result<Option<&'a Path>> {
     let mut path = None;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
-        if arg != "--theme-intro" {
+        if arg != flag {
             continue;
         }
         if path.is_some() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "--theme-intro may be supplied only once",
+                format!("{flag} may be supplied only once"),
             ));
         }
         path = Some(Path::new(
@@ -355,7 +367,7 @@ fn intro_package_path(args: &[String]) -> std::io::Result<Option<&Path>> {
                 .ok_or_else(|| {
                     std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
-                        "--theme-intro requires a theme folder",
+                        format!("{flag} requires a theme folder"),
                     )
                 })?,
         ));

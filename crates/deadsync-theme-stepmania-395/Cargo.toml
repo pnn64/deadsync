@@ -6,10 +6,15 @@ license = "GPL-3.0"
 
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
+deadlib-platform = { path = "../deadlib-platform" }
 deadlib-present = { path = "../deadlib-present" }
 deadsync-config = { path = "../deadsync-config" }
+deadsync-input = { path = "../deadsync-input" }
 deadsync-noteskin = { path = "../deadsync-noteskin" }
 deadsync-theme = { path = "../deadsync-theme" }
+roxmltree = "0.20.0"
 
 [dev-dependencies]
+deadsync-core = { path = "../deadsync-core" }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 tempfile = "3.27.0"
