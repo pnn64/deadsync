@@ -230,8 +230,9 @@ fn chunk<'a>(input: &mut &'a [u8]) -> Result<([u8; 4], &'a [u8], bool), Error> {
     if !kind.iter().all(u8::is_ascii_alphabetic) {
         return Err(Error::Invalid("chunk type"));
     }
-    let data = &input[8..8 + len];
-    let checksum_valid = crc32(&[&kind, data]) == be32(&input[8 + len..end]);
+    let trailer = end - 4;
+    let data = &input[8..trailer];
+    let checksum_valid = crc32(&[&input[4..trailer]]) == be32(&input[trailer..end]);
     *input = &input[end..];
     Ok((kind, data, checksum_valid))
 }

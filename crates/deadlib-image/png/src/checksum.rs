@@ -89,6 +89,16 @@ fn update_scalar(mut crc: u32, bytes: &[u8]) -> u32 {
     } else {
         tail
     };
+    let tail = if let Some((bytes, tail)) = tail.split_first_chunk::<4>() {
+        let word = (u32::from_le_bytes(*bytes) ^ crc).to_le_bytes();
+        crc = CRC_SLICES[3][usize::from(word[0])]
+            ^ CRC_SLICES[2][usize::from(word[1])]
+            ^ CRC_SLICES[1][usize::from(word[2])]
+            ^ CRC_SLICES[0][usize::from(word[3])];
+        tail
+    } else {
+        tail
+    };
     for &byte in tail {
         crc = (crc >> 8) ^ CRC_TABLE[((crc as u8) ^ byte) as usize];
     }
