@@ -3,6 +3,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::metrics::MetricCatalog;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResourceCategory {
     Backgrounds,
@@ -80,6 +82,7 @@ pub enum ResourceLookupError {
     InvalidRedirect { path: PathBuf, target: String },
     MissingRedirectTarget { path: PathBuf, target: String },
     CircularRedirect(PathBuf),
+    CircularSectionFallback(String),
 }
 
 impl fmt::Display for ResourceLookupError {
@@ -110,6 +113,9 @@ impl fmt::Display for ResourceLookupError {
                 )
             }
             Self::CircularRedirect(path) => write!(f, "circular redirect at {}", path.display()),
+            Self::CircularSectionFallback(section) => {
+                write!(f, "circular resource fallback at [{section}]")
+            }
         }
     }
 }
@@ -144,7 +150,42 @@ impl ResourceCatalog {
         if !valid_name(name) {
             return Err(ResourceLookupError::InvalidName(name.to_owned()));
         }
-        let Some(mut resource) = self.find(category, name)? else {
+        let name_lower = name.to_ascii_lowercase();
+        let explicit = Path::new(name).extension().is_some();
+        let resource = self.find(category, &name_lower, explicit)?;
+        Self::follow_redirects(resource, |target| {
+            let explicit = Path::new(target).extension().is_some();
+            self.find(category, &target.to_ascii_lowercase(), explicit)
+        })
+    }
+
+    pub(crate) fn resolve_scoped(
+        &self,
+        category: ResourceCategory,
+        section: &str,
+        name: &str,
+        metrics: &MetricCatalog,
+    ) -> Result<Option<&Path>, ResourceLookupError> {
+        let section = section.trim();
+        let name = name.trim();
+        if !section.is_empty() && !valid_name(section) {
+            return Err(ResourceLookupError::InvalidName(section.to_owned()));
+        }
+        if !valid_name(name) {
+            return Err(ResourceLookupError::InvalidName(name.to_owned()));
+        }
+        let resource = self.find_scoped(category, section, name, metrics)?;
+        Self::follow_redirects(resource, |target| {
+            let (section, name) = target.split_once(' ').unwrap_or(("", target));
+            self.find_scoped(category, section, name, metrics)
+        })
+    }
+
+    fn follow_redirects<'a>(
+        resource: Option<&'a Resource>,
+        lookup: impl Fn(&str) -> Result<Option<&'a Resource>, ResourceLookupError>,
+    ) -> Result<Option<&'a Path>, ResourceLookupError> {
+        let Some(mut resource) = resource else {
             return Ok(None);
         };
         let mut redirects = Vec::new();
@@ -171,12 +212,11 @@ impl ResourceCatalog {
                     target: target.to_owned(),
                 });
             }
-            resource = self.find(category, target)?.ok_or_else(|| {
-                ResourceLookupError::MissingRedirectTarget {
+            resource =
+                lookup(target)?.ok_or_else(|| ResourceLookupError::MissingRedirectTarget {
                     path: path.clone(),
                     target: target.to_owned(),
-                }
-            })?;
+                })?;
         }
         Ok(Some(&resource.path))
     }
@@ -185,17 +225,53 @@ impl ResourceCatalog {
         &self,
         category: ResourceCategory,
         name: &str,
+        explicit: bool,
     ) -> Result<Option<&Resource>, ResourceLookupError> {
-        let name = name.to_ascii_lowercase();
-        let explicit = Path::new(&name).extension().is_some();
         for package in &self.packages {
-            if let Some(resource) = package.find(category, &name, explicit)? {
+            if let Some(resource) = package.find(category, name, explicit)? {
                 return Ok(Some(resource));
             }
-            if category == ResourceCategory::Fonts
-                && let Some(resource) = package.find(ResourceCategory::Numbers, &name, explicit)?
-            {
-                return Ok(Some(resource));
+        }
+        Ok(None)
+    }
+
+    fn find_scoped(
+        &self,
+        category: ResourceCategory,
+        section: &str,
+        name: &str,
+        metrics: &MetricCatalog,
+    ) -> Result<Option<&Resource>, ResourceLookupError> {
+        let explicit = Path::new(name).extension().is_some();
+        let mut resource_name = String::new();
+        let mut visited = Vec::new();
+        for package in &self.packages {
+            let mut current = section;
+            visited.clear();
+            loop {
+                resource_name.clear();
+                if !current.is_empty() {
+                    resource_name.push_str(current);
+                    resource_name.push(' ');
+                }
+                resource_name.push_str(name);
+                resource_name.make_ascii_lowercase();
+                if let Some(resource) = package.find(category, &resource_name, explicit)? {
+                    return Ok(Some(resource));
+                }
+                let Some(parent) = metrics.fallback(current) else {
+                    break;
+                };
+                if !valid_name(parent) {
+                    return Err(ResourceLookupError::InvalidName(parent.to_owned()));
+                }
+                visited.push(current);
+                if visited.contains(&parent) {
+                    return Err(ResourceLookupError::CircularSectionFallback(
+                        parent.to_owned(),
+                    ));
+                }
+                current = parent;
             }
         }
         Ok(None)
@@ -269,10 +345,13 @@ impl Package {
                 second: second.path.clone(),
             });
         }
+        if first.is_none() && category == ResourceCategory::Fonts {
+            return self.find(ResourceCategory::Numbers, name, explicit);
+        }
         Ok(first)
     }
 }
 
-fn valid_name(name: &str) -> bool {
+pub(crate) fn valid_name(name: &str) -> bool {
     !name.is_empty() && !matches!(name, "." | "..") && !name.contains(['/', '\\', ':', '\0'])
 }
