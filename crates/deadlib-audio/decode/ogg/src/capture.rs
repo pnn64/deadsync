@@ -286,9 +286,8 @@ impl PacketCapture {
         } else {
             self.begin_page(page, offset)?
         };
-        for fragment in page.fragments_from(cursor.segment, cursor.body) {
-            cursor.segment += fragment.data.len() / 255 + usize::from(fragment.ends_packet);
-            cursor.body += fragment.data.len();
+        let mut fragments = page.fragments_from(cursor.segment, cursor.body);
+        while let Some(fragment) = fragments.next() {
             if fragment.starts_packet {
                 self.partial_offset = offset;
             }
@@ -336,9 +335,14 @@ impl PacketCapture {
             } else {
                 self.partial.clear();
             }
-            if stop && cursor.segment != page.lacing().len() {
-                self.page = Some(cursor);
-                return Ok(false);
+            if stop {
+                let (lacing, body) = fragments.remaining();
+                if lacing != 0 {
+                    cursor.segment = page.lacing().len() - lacing;
+                    cursor.body = page.body().len() - body;
+                    self.page = Some(cursor);
+                    return Ok(false);
+                }
             }
         }
         self.started = true;

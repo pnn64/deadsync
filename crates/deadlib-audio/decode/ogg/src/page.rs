@@ -194,6 +194,12 @@ fn fragment_segment_count(lacing: &[u8]) -> usize {
             .map_or(tail.len(), |n| n + 1)
 }
 
+impl Fragments<'_> {
+    pub(crate) fn remaining(&self) -> (usize, usize) {
+        (self.lacing.len(), self.body.len())
+    }
+}
+
 impl<'a> Iterator for Fragments<'a> {
     type Item = Fragment<'a>;
     #[inline(always)]
