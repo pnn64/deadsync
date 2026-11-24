@@ -12,6 +12,10 @@ deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-theme = { path = "../deadsync-theme" }
+glam = "0.34.3"
 
 [dev-dependencies]
+deadlib-render = { path = "../deadlib-render" }
+deadsync-score = { path = "../deadsync-score" }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
+winit = "0.30.13"

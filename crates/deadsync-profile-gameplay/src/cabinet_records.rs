@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use deadsync_chart::SongPack;
-use deadsync_profile::app_runtime::{machine_record_local, recent_played_chart_hashes_for_machine};
+use deadsync_profile::app_runtime::{
+    machine_leaderboard_local_without_names, machine_record_local,
+    recent_played_chart_hashes_for_machine,
+};
 use deadsync_score::leaderboard::{CabinetCourseRecord, CabinetRecords, CabinetSongRecord};
 use deadsync_simfile::course::{CourseType, course_type, is_autogen_course_path};
 use deadsync_simfile::course_selection::course_score_hash;
@@ -43,13 +46,15 @@ pub fn recent_records(song_limit: usize, course_limit: usize) -> CabinetRecords 
     CabinetRecords {
         songs: song_labels
             .into_iter()
-            .filter_map(|(rank, title, difficulty)| {
+            .filter_map(|(rank, title, chart_type, difficulty)| {
                 let (initials, percent) = best(&history[rank])?;
                 Some(CabinetSongRecord {
                     title,
+                    chart_type,
                     difficulty,
                     initials,
                     percent,
+                    leaderboard: machine_leaderboard_local_without_names(&history[rank], 5),
                 })
             })
             .collect(),
@@ -62,23 +67,35 @@ fn recent_song_labels(
     library: &[SongPack],
     ranks: &HashMap<&str, usize>,
     limit: usize,
-) -> Vec<(usize, Arc<str>, Arc<str>)> {
+) -> Vec<(usize, Arc<str>, Arc<str>, Arc<str>)> {
     let mut labels: Vec<_> = library
         .iter()
         .flat_map(|pack| &pack.songs)
         .flat_map(|song| {
             song.charts.iter().filter_map(move |chart| {
                 let rank = *ranks.get(chart.short_hash.as_str())?;
-                Some((rank, song.title.as_str(), chart.difficulty.as_str()))
+                Some((
+                    rank,
+                    song.title.as_str(),
+                    chart.chart_type.as_str(),
+                    chart.difficulty.as_str(),
+                ))
             })
         })
         .collect();
-    labels.sort_by_key(|(rank, _, _)| *rank);
-    labels.dedup_by_key(|(rank, _, _)| *rank);
+    labels.sort_by_key(|(rank, _, _, _)| *rank);
+    labels.dedup_by_key(|(rank, _, _, _)| *rank);
     labels
         .into_iter()
         .take(limit)
-        .map(|(rank, title, difficulty)| (rank, Arc::from(title), Arc::from(difficulty)))
+        .map(|(rank, title, chart_type, difficulty)| {
+            (
+                rank,
+                Arc::from(title),
+                Arc::from(chart_type),
+                Arc::from(difficulty),
+            )
+        })
         .collect()
 }
 

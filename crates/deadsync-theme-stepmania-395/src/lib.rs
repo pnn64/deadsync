@@ -8,11 +8,14 @@ mod menu;
 mod options;
 mod play_selection;
 mod presentation;
+mod ranking;
 mod resources;
 mod select_music;
 mod selection;
 mod stage;
 mod stage_presentation;
+mod training_pad;
+mod tutorial;
 
 use deadlib_present::actors::Actor;
 use deadsync_theme::{

@@ -87,9 +87,13 @@ fn slide(motion: GameplayHudMotion) -> f32 {
 }
 
 fn push_life(actors: &mut Vec<Actor>, view: GameplayLifeView) {
-    let layout = Layout::current();
     let x = if view.p2 { 500.0 } else { 140.0 };
     let y = 28.0 - slide(view.motion);
+    push_life_at(actors, view, [x, y]);
+}
+
+pub(crate) fn push_life_at(actors: &mut Vec<Actor>, view: GameplayLifeView, [x, y]: [f32; 2]) {
+    let layout = Layout::current();
     actors.push(layout.solid([x, y], [260.0, 24.0], [0.0, 0.0, 0.0, 1.0], 90));
     if view.level < 0.2 && !view.failed {
         let alpha = 0.4 - 0.4 * (view.song_beat * std::f32::consts::TAU).cos();

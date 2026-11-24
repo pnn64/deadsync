@@ -19,3 +19,11 @@ Style selection uses the original five `ScreenSelectStyle` icons, illustrations,
 Course selection uses `ScreenSelectCourse` artwork and the original `CourseEntryDisplay` bar, sharing this theme's wheel drawing with song selection. The source has no local-profile catalog browser; the host's existing profile picker is adapted with the original options page/cursors and blank `ScreenSelectPlayer` header.
 
 Select this installed native theme through System Options or `[Options] Theme=StepMania 3.95` in `deadsync.ini`. The reference theme folder is used during development to inspect and copy assets. The game uses the bundled assets and Rust presentation modules.
+
+Idle attract scenes use the original tutorial background, hand/message graphics, default dance note/receptor sheets, demonstration overlay, ranking background, ranking bullets, `_ScreenRanking common` font and imports, and tutorial/ranking music. Tutorial chart beats, stops, prompts, and scene transitions are expressed as native Rust data and actors.
+
+`training-pad.bin` contains the original static `Characters/DancePad-DDR.txt` geometry and material colors, converted by `tools/convert_training_pad.py`. Its three textures are copied from `Characters/MetalPanel.png`, `Arrow-Blue.png`, and `Arrow-Red.png`; the white texture comes from the company background. The conversion tool is for asset authoring only. The supplied default character has no model, so the tutorial does not invent a replacement dancer.
+
+The ranking table displays real, recent per-chart cabinet leaderboards and percentages. The host does not store the original category-wide numeric score histories, so this adaptation uses song titles rather than invented category totals. Unlock-point and warning pages are not part of the current native attract sequence.
+
+The ignored `attract_render` integration test renders the native scenes into a hidden window and writes PNG captures under `target/native-395-attract-captures` for visual inspection. It uses only the bundled native assets.

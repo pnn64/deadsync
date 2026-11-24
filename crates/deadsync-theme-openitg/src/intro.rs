@@ -268,6 +268,8 @@ impl AttractPresentation<Actor> for OpenItgIntro {
             max_difficulty: if training { 0 } else { 2 },
             force_uncentered_notefield: training,
             hide_gameplay_hud: training,
+            two_players: false,
+            play_music: true,
         })
     }
 
@@ -775,9 +777,11 @@ mod tests {
         intro.start_idle(AttractRecords {
             songs: vec![AttractRecord {
                 title: Arc::from("Quartz"),
+                chart_type: Arc::from("dance-single"),
                 difficulty: Arc::from("Hard"),
                 initials: String::from("ABC"),
                 percent: 98.76,
+                leaderboard: Vec::new(),
             }],
             ..AttractRecords::default()
         });

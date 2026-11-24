@@ -137,6 +137,88 @@ fn native_intro_advances_from_company_to_logo_then_title() {
 }
 
 #[test]
+fn idle_attract_runs_the_tutorial_silent_versus_demo_and_real_chart_rankings() {
+    use deadsync_theme::views::{AttractRecord, AttractRecords};
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        640.0, 480.0,
+    ));
+    let mut intro = StepManiaIntro::default();
+    intro.start_idle(AttractRecords {
+        songs: vec![AttractRecord {
+            title: "Quartz".into(),
+            chart_type: "dance-double".into(),
+            difficulty: "Hard".into(),
+            initials: "ZAP".into(),
+            percent: 98.76,
+            leaderboard: vec![deadsync_score::LeaderboardEntry {
+                rank: 1,
+                name: "ZAP".into(),
+                machine_tag: None,
+                score: 9876.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: false,
+                is_fail: false,
+            }],
+        }],
+        ..Default::default()
+    });
+    assert!(!intro.advance(18.0));
+    assert_eq!(
+        intro.media().music,
+        Some("assets/media/stepmania-395/training.ogg")
+    );
+    let mut actors = Vec::new();
+    intro.push_actors(&mut actors, None);
+    assert_eq!(
+        actors
+            .iter()
+            .filter_map(|actor| match actor {
+                Actor::TexturedMesh { vertices, .. } => Some(vertices.len()),
+                _ => None,
+            })
+            .sum::<usize>(),
+        600,
+        "the original pad mesh must be present"
+    );
+    assert!(!intro.advance(25.0));
+    let demo = intro.demonstration().unwrap();
+    assert!(demo.two_players);
+    assert!(!demo.play_music);
+    assert!(!demo.hide_gameplay_hud);
+    assert_eq!(demo.chart_type, "dance-single");
+    intro.finish_demonstration();
+    assert_eq!(
+        intro.media().music,
+        Some("assets/media/stepmania-395/ranking.ogg")
+    );
+    assert!(!intro.advance(2.0));
+    actors.clear();
+    intro.push_actors(&mut actors, None);
+    for expected in ["Quartz", "Double", "ZAP", "098.76%", "STEP", "000000000"] {
+        assert!(
+            actors
+                .iter()
+                .any(|actor| matches!(actor, Actor::Text { content, .. }
+            if content.as_str() == expected)),
+            "rankings are missing {expected}"
+        );
+    }
+    assert!(!intro.advance(3.0));
+    assert_eq!(
+        intro.media().music,
+        Some("assets/media/stepmania-395/company.ogg")
+    );
+    assert!(!intro.advance(73.0));
+    assert_eq!(
+        intro.media().music,
+        Some("assets/media/stepmania-395/ranking.ogg")
+    );
+    intro.reset();
+    assert!(intro.advance(18.0));
+}
+
+#[test]
 fn stage_card_uses_the_session_mode_and_native_exit_clock() {
     let card = StepManiaStageCard;
     assert_eq!(card.timing().hold.as_secs_f32(), 3.0);

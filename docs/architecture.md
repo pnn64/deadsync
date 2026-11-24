@@ -29,6 +29,13 @@ Each theme owns its presentation clock and receives the same prepared
 credit and session facts. The shell admits Start and records the physical
 side before the title requests profile selection.
 
+Attract presentations own their scene sequence and media choices. A demo
+request specifies its chart filter, player count, HUD visibility, and whether
+to play music. The shell prepares an isolated gameplay session; silent demos
+use a frame-driven clock and discard audio commands. Cabinet ranking views
+carry real chart identities and leaderboard rows prepared by the profile/game
+adapter. No theme scripts or external theme directories are loaded by this flow.
+
 The shell uses shared `Screen` roles for stage launch, restart, Practice,
 profile selection, and Evaluation return. `deadsync-core::session_flow`
 resolves optional session steps using machine settings and those roles.

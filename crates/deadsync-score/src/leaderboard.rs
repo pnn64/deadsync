@@ -15,9 +15,11 @@ pub const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_sec
 
 pub struct CabinetSongRecord {
     pub title: Arc<str>,
+    pub chart_type: Arc<str>,
     pub difficulty: Arc<str>,
     pub initials: String,
     pub percent: f64,
+    pub leaderboard: Vec<LeaderboardEntry>,
 }
 
 pub struct CabinetCourseRecord {

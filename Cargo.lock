@@ -2033,11 +2033,15 @@ dependencies = [
  "deadlib-assets",
  "deadlib-platform",
  "deadlib-present",
+ "deadlib-render",
  "deadsync-config",
  "deadsync-core",
  "deadsync-input",
+ "deadsync-score",
  "deadsync-theme",
+ "glam",
  "image",
+ "winit",
 ]
 
 [[package]]

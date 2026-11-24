@@ -19,6 +19,8 @@ pub struct AttractDemoRequest {
     pub max_difficulty: usize,
     pub force_uncentered_notefield: bool,
     pub hide_gameplay_hud: bool,
+    pub two_players: bool,
+    pub play_music: bool,
 }
 
 pub struct AttractDemoChart<'a> {

@@ -3,6 +3,8 @@ use deadsync_theme::{ThemeAssetManifest, ThemeResources, ThemeSounds, UiCue, UiS
 
 use crate::StepManiaTheme;
 
+pub(crate) const RANKING_FONT: &str = "stepmania-395/ranking";
+
 pub(crate) const TITLE_FONT: &str = "stepmania-395/title";
 pub(crate) const NORMAL_FONT: &str = "stepmania-395/normal";
 pub(crate) const WHEEL_FONT: &str = "stepmania-395/wheel";
@@ -72,6 +74,11 @@ impl ThemeResources for StepManiaTheme {
         ThemeAssetManifest {
             fonts: &[
                 FontAssetSpec {
+                    name: RANKING_FONT,
+                    ini_path: "assets/fonts/stepmania-395/_ScreenRanking common.ini",
+                    fallback_font_name: Some(NORMAL_FONT),
+                },
+                FontAssetSpec {
                     name: SCORE_FONT,
                     ini_path: "assets/fonts/stepmania-395/score.ini",
                     fallback_font_name: Some(NORMAL_FONT),
@@ -114,6 +121,23 @@ impl ThemeResources for StepManiaTheme {
             ],
             textures: std::iter::empty(),
             embedded_pngs: &[
+                png!("attract-bullets"),
+                png!("attract-demo"),
+                png!("attract-ranking"),
+                png!("training-background"),
+                png!("training-feet"),
+                png!("training-howtoplay"),
+                png!("training-jumphands"),
+                png!("training-jumpmessage"),
+                png!("training-missmessage"),
+                png!("training-note"),
+                png!("training-pad-blue"),
+                png!("training-pad-metal"),
+                png!("training-pad-red"),
+                png!("training-pad-white"),
+                png!("training-receptor"),
+                png!("training-taphand"),
+                png!("training-tapmessage"),
                 png!("course-banner-frame"),
                 png!("course-explanation"),
                 png!("course-header"),

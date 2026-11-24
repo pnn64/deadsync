@@ -12,11 +12,10 @@ use deadsync_theme::attract::{
 use deadsync_theme::views::GameplayLivePresentation;
 
 use super::{
-    App, CurrentScreen, GameplayInitView, GameplayLobbySession, GameplaySession,
-    GameplaySfx, GameplayStageInput, GameplayStageIntro, GameplayStageView, GameplayState,
-    LeadInTiming, config, gameplay_config_from_config, gameplay_viewport,
-    prepare_gameplay_stage, prewarm_gameplay_assets, prewarm_gameplay_sfx, profile_data,
-    song_loading,
+    App, CurrentScreen, GameplayInitView, GameplayLobbySession, GameplaySession, GameplaySfx,
+    GameplayStageInput, GameplayStageIntro, GameplayStageView, GameplayState, LeadInTiming, config,
+    gameplay_config_from_config, gameplay_viewport, prepare_gameplay_stage,
+    prewarm_gameplay_assets, prewarm_gameplay_sfx, profile_data, song_loading,
 };
 use crate::gameplay_runtime;
 
@@ -58,6 +57,7 @@ pub(crate) struct AttractDemo {
     pub(super) stage: GameplayState,
     pub(super) request: AttractDemoRequest,
     sounds: GameplaySfx,
+    elapsed: f64,
 }
 
 impl App {
@@ -75,9 +75,25 @@ impl App {
         if let Some(demo) = intro.demo.as_mut() {
             let mut complete = false;
             let stage = &mut demo.stage;
+            demo.elapsed += f64::from(delta_time.max(0.0));
+            let audio = if demo.request.play_music {
+                gameplay_runtime::snapshot(&mut self.music_clock)
+            } else {
+                deadsync_gameplay::GameplayAudioSnapshot {
+                    stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                        music_nanos: (demo.elapsed * 1_000_000_000.0) as i64,
+                        music_seconds_per_second: 1.0,
+                        valid_at: std::time::Instant::now(),
+                        valid_at_host_nanos: deadlib_platform::host_time::now_nanos(),
+                        has_music_mapping: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }
+            };
             stage.stage.update(
                 delta_time,
-                gameplay_runtime::snapshot(&mut self.music_clock),
+                audio,
                 deadlib_platform::host_time::now_nanos,
                 crate::navigation::song_lua_presentation_screen,
                 |effect| {
@@ -90,12 +106,16 @@ impl App {
                 },
                 |game, delta| stage.presentation.update_gameplay_visuals(game, delta),
             );
-            gameplay_runtime::drain_audio(
-                &mut stage.stage.gameplay,
-                &mut self.audio,
-                &demo.sounds,
-                &mut self.music_clock,
-            );
+            if demo.request.play_music {
+                gameplay_runtime::drain_audio(
+                    &mut stage.stage.gameplay,
+                    &mut self.audio,
+                    &demo.sounds,
+                    &mut self.music_clock,
+                );
+            } else {
+                stage.stage.gameplay.drain_audio_commands().for_each(drop);
+            }
             if complete {
                 intro.timeline.finish_demonstration();
             } else {
@@ -174,12 +194,22 @@ impl App {
         if request.force_uncentered_notefield {
             gameplay_config.center_1player_notefield = false;
         }
+        let joined = [true, request.two_players];
+        let session = GameplaySession {
+            play_style: if request.two_players {
+                deadsync_gameplay::GameplayInputPlayStyle::Versus
+            } else {
+                deadsync_gameplay::GameplayInputPlayStyle::Single
+            },
+            joined_sides: joined,
+            ..Default::default()
+        };
         let (mut prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
             song,
             charts: [Arc::clone(&metadata), metadata],
             gameplay_charts: [Arc::clone(&chart), chart],
             viewport: gameplay_viewport(self.state.shell.metrics),
-            session: GameplaySession::default(),
+            session,
             config: gameplay_config,
             active_color_index: self.state.screens.menu_state.color_index(),
             music_rate: 1.0,
@@ -212,13 +242,19 @@ impl App {
             scene,
             GameplayLobbySession::new(
                 LobbyRuntimeView::default(),
-                [true, false],
+                joined,
                 profile_data::PlayerSide::P1,
             ),
             GameplayScoreRefresh::default(),
             None,
             |stage, assets| {
-                (presentation.build)(stage, assets, &view, GameplayInitView::default(), Default::default())
+                (presentation.build)(
+                    stage,
+                    assets,
+                    &view,
+                    GameplayInitView::default(),
+                    Default::default(),
+                )
             },
         );
         if let Some(hud) = self.state.screens.stage_presentation.gameplay_hud() {
@@ -255,12 +291,17 @@ impl App {
         }
         stage.gameplay.set_live_autoplay_enabled(true);
         stage.gameplay.start_stage_music();
-        gameplay_runtime::drain_audio(
-            &mut stage.stage.gameplay,
-            &mut self.audio,
-            &sounds,
-            &mut self.music_clock,
-        );
+        if request.play_music {
+            gameplay_runtime::drain_audio(
+                &mut stage.stage.gameplay,
+                &mut self.audio,
+                &sounds,
+                &mut self.music_clock,
+            );
+        } else {
+            stage.gameplay.drain_audio_commands().for_each(drop);
+            self.audio.stop_music();
+        }
         log::debug!(
             "Attract {request:?} demonstration started for '{}' ({:.1} ms preparation)",
             stage.song().title,
@@ -270,6 +311,147 @@ impl App {
             stage,
             request,
             sounds,
+            elapsed: 0.0,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::course_transition_tests::{on_app_thread, test_app_with_theme};
+    use super::*;
+    use crate::gameplay_regression_tests::tests::with_session;
+    use deadsync_chart::{SongPack, SyncPref};
+    use deadsync_config::theme::ThemeFlag;
+    use deadsync_rules::judgment::JudgeGrade;
+    use deadsync_simfile::runtime_cache::{get_song_cache, set_song_cache};
+    use deadsync_theme::views::AttractRecords;
+
+    #[test]
+    fn silent_two_player_demo_advances_and_returns_to_rankings_without_changing_session() {
+        on_app_thread(|| {
+            with_session(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P1,
+                true,
+                false,
+                || {
+                    let root = tempfile::tempdir().unwrap();
+                    let path = root.path().join("demo.sm");
+                    let source = format!(
+                        "#TITLE:Demonstration;\n#MUSIC:unused.ogg;\n#BPMS:0=120;\n\
+                #NOTES:dance-single::Easy:2:0,0,0,0,0:\n{};\n",
+                        std::iter::repeat_n("1000\n0100\n0010\n0001\n", 20)
+                            .collect::<Vec<_>>()
+                            .join(",\n")
+                    );
+                    std::fs::write(&path, &source).unwrap();
+                    let parsed = deadsync_simfile::song::parse_song_bytes(
+                        source.as_bytes(),
+                        "sm",
+                        &path,
+                        &deadsync_simfile::song::ParseSongOptions::new(
+                            Vec::new(),
+                            Vec::new(),
+                            Vec::new(),
+                        ),
+                        |_| 40.0,
+                    )
+                    .unwrap();
+                    let mut song = deadsync_simfile::cache::build_song_meta(parsed, 0.0);
+                    // No audio file is required by the silent demonstration's clock.
+                    song.music_path = Some(root.path().join("unused.ogg"));
+                    let previous = get_song_cache().clone();
+                    struct Restore(Vec<SongPack>);
+                    impl Drop for Restore {
+                        fn drop(&mut self) {
+                            set_song_cache(std::mem::take(&mut self.0));
+                        }
+                    }
+                    let _restore = Restore(previous);
+                    set_song_cache(vec![SongPack {
+                        group_name: "Attract".into(),
+                        name: "Attract".into(),
+                        sort_title: "Attract".into(),
+                        translit_title: String::new(),
+                        series: String::new(),
+                        folder_series: String::new(),
+                        year: 0,
+                        sync_pref: SyncPref::Default,
+                        directory: root.path().into(),
+                        banner_path: None,
+                        songs: vec![Arc::new(song)],
+                    }]);
+                    let mut app = test_app_with_theme(root.path(), ThemeFlag::StepMania395);
+                    app.state.screens.startup_load = crate::content_reload::StartupLoad::Ready;
+                    let intro = app.state.screens.attract.as_mut().unwrap();
+                    intro.timeline.start_idle(AttractRecords::default());
+                    intro.timeline.advance(43.0);
+                    app.step_attract_demonstration(0.0);
+                    assert_eq!(
+                        app.state
+                            .screens
+                            .attract
+                            .as_ref()
+                            .unwrap()
+                            .demo
+                            .as_ref()
+                            .unwrap()
+                            .stage
+                            .gameplay
+                            .num_players(),
+                        2
+                    );
+                    for _ in 0..120 {
+                        app.step_attract_demonstration(1.0 / 60.0);
+                    }
+                    let demo = app
+                        .state
+                        .screens
+                        .attract
+                        .as_mut()
+                        .unwrap()
+                        .demo
+                        .as_mut()
+                        .unwrap();
+                    assert!((demo.stage.gameplay.current_music_time_seconds() - 2.0).abs() < 0.01);
+                    for side in 0..2 {
+                        let player = demo.stage.gameplay.player(side).unwrap();
+                        assert!(player.autoplay_judged);
+                        assert!(player.last_judgment.is_some());
+                        // Autoplay shows feedback while leaving cabinet scores untouched.
+                        assert_eq!(
+                            demo.stage
+                                .gameplay
+                                .display_judgment_count(side, JudgeGrade::Fantastic),
+                            0
+                        );
+                        assert_eq!(
+                            demo.stage
+                                .gameplay
+                                .display_judgment_count(side, JudgeGrade::Miss),
+                            0
+                        );
+                    }
+                    assert_eq!(demo.stage.gameplay.drain_audio_commands().count(), 0);
+                    for _ in 0..(29 * 60) {
+                        app.step_attract_demonstration(1.0 / 60.0);
+                    }
+                    let intro = app.state.screens.attract.as_ref().unwrap();
+                    assert!(intro.demo.is_none());
+                    assert_eq!(
+                        intro.timeline.media().music,
+                        Some("assets/media/stepmania-395/ranking.ogg")
+                    );
+                    assert_eq!(
+                        deadsync_profile::compat::get_session_play_style(),
+                        profile_data::PlayStyle::Single
+                    );
+                    assert!(!deadsync_profile::compat::is_session_side_joined(
+                        profile_data::PlayerSide::P2
+                    ));
+                },
+            )
+        });
     }
 }
