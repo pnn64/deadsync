@@ -431,22 +431,42 @@ pub(crate) fn find_dense_literal(bytes: &[u8], needle: &[u8], anchor: usize) -> 
     let (right, right_tail) = bytes[middle..middle + count].as_chunks::<32>();
     let (first, second) = (needle[anchor], needle[middle]);
     let matches = |(&a, &b): (&u8, &u8)| (a == first) & (b == second);
-    let verify = |start, a: &[u8], b: &[u8]| {
-        a.iter()
-            .zip(b)
-            .zip(bytes[start..].windows(needle.len()))
-            .position(|(pair, window)| matches(pair) && window == needle)
-            .map(|offset| start + offset)
-    };
+    let first_word = u64::from_le_bytes([first; 8]);
+    let second_word = u64::from_le_bytes([second; 8]);
+    const LOW_BITS: u64 = 0x7f7f_7f7f_7f7f_7f7f;
+    const HIGH_BITS: u64 = !LOW_BITS;
     for (index, (a, b)) in left.iter().zip(right).enumerate() {
         // Check both bytes in parallel before comparing any full windows.
-        if a.iter().zip(b).fold(false, |hit, pair| hit | matches(pair))
-            && let Some(found) = verify(index * 32, a, b)
+        if !a.iter().zip(b).fold(false, |hit, pair| hit | matches(pair)) {
+            continue;
+        }
+        for (word, (&a, &b)) in a
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .zip(b.as_chunks::<8>().0)
+            .enumerate()
         {
-            return Some(found);
+            let different =
+                (u64::from_le_bytes(a) ^ first_word) | (u64::from_le_bytes(b) ^ second_word);
+            // Set the high bit of each lane where both probe bytes matched.
+            let mut hits = !(different | ((different & LOW_BITS) + LOW_BITS)) & HIGH_BITS;
+            while hits != 0 {
+                let start = index * 32 + word * 8 + (hits.trailing_zeros() / 8) as usize;
+                if bytes[start..].starts_with(needle) {
+                    return Some(start);
+                }
+                hits &= hits - 1;
+            }
         }
     }
-    verify(left.len() * 32, left_tail, right_tail)
+    let start = left.len() * 32;
+    left_tail
+        .iter()
+        .zip(right_tail)
+        .zip(bytes[start..].windows(needle.len()))
+        .position(|(pair, window)| matches(pair) && window == needle)
+        .map(|offset| start + offset)
 }
 
 pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
