@@ -306,15 +306,19 @@ fn masked_samples(
                 // Repeat each nibble within its own byte.
                 (nibbles * 17).to_le_bytes()
             }),
-            _ => map_rows::<2, 4>(source, header, |packed| {
-                let word = u16::from_le_bytes(packed);
-                [
-                    red.sample16(word),
-                    green.sample16(word),
-                    blue.sample16(word),
-                    alpha.sample16(word),
-                ]
-            }),
+            _ => {
+                let [red, green, blue, alpha] =
+                    [red, green, blue, alpha].map(Channel::with_high_byte_16);
+                map_rows::<2, 4>(source, header, |packed| {
+                    let word = u16::from_le_bytes(packed);
+                    [
+                        red.sample16(word),
+                        green.sample16(word),
+                        blue.sample16(word),
+                        alpha.sample16(word),
+                    ]
+                })
+            }
         },
         (32, None) => match rgb.map(|channel| channel.mask) {
             [0xff0000, 0xff00, 0xff] => {
@@ -442,6 +446,16 @@ impl Channel {
         // Widen before multiplying so the field can stay at its original offset.
         let field = u64::from(word & self.mask);
         ((field * u64::from(self.multiplier)) >> (self.shift + self.downshift)) as u8
+    }
+
+    fn with_high_byte_16(self) -> Self {
+        // Place the repeated bits in the high byte of the 32-bit product.
+        Self {
+            multiplier: self.multiplier << (24 - self.shift - self.downshift),
+            shift: 24,
+            downshift: 0,
+            ..self
+        }
     }
 
     fn sample16(self, word: u16) -> u8 {
