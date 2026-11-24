@@ -239,6 +239,19 @@ enum Phase {
 
 impl Strings {
     fn sweep_some(&mut self, cursor: &mut usize, budget: usize) -> u64 {
+        let live = self.bytes.live_len();
+        if live >= 1024
+            && *cursor == self.bytes.len()
+            && budget >= *cursor
+            && self.bytes.at_most_marked(live / 4)
+        {
+            // A single batch can rebuild from survivors without hashing each
+            // dead string and its neighbors. Keep the bucket length until the
+            // normal end-of-cycle compaction.
+            let reclaimed = self.bytes.sweep_some(cursor, budget);
+            self.reindex();
+            return reclaimed;
+        }
         let index_mask = self.bucket_index_mask();
         let buckets = &mut self.buckets;
         self.bytes.sweep_with(cursor, budget, |bytes, index| {
@@ -279,6 +292,9 @@ impl Strings {
             return;
         }
         self.buckets.resize(size, 0);
+        self.reindex();
+    }
+    fn reindex(&mut self) {
         self.buckets.fill(0);
         let index_mask = self.bucket_index_mask();
         for (i, bytes) in self.bytes.entries() {
@@ -2748,6 +2764,10 @@ mod tests {
         pool.bytes.mark(last.0);
         let mut cursor = pool.bytes.len();
         pool.sweep_some(&mut cursor, usize::MAX);
+        assert_eq!(pool.buckets.len(), capacity);
+        assert_eq!(pool.find(b"first"), Some(first));
+        assert_eq!(pool.find(b"last"), Some(last));
+        assert_eq!(pool.find(&1u32.to_le_bytes()), None);
         pool.rebuild();
         assert!(pool.buckets.len() < capacity);
         assert_eq!(pool.intern(b"first"), first);

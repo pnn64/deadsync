@@ -227,6 +227,15 @@ impl<T> Arena<T> {
         let (offset, bits) = rest.iter().enumerate().find(|(_, bits)| **bits != 0)?;
         Some((word + 1 + offset) * 64 + bits.trailing_zeros() as usize)
     }
+    pub(crate) fn at_most_marked(&self, mut limit: usize) -> bool {
+        for &bits in &*self.marks {
+            let Some(remaining) = limit.checked_sub(bits.count_ones() as usize) else {
+                return false;
+            };
+            limit = remaining;
+        }
+        true
+    }
     pub fn clear_marks(&mut self) {
         self.marks.fill(0);
     }
