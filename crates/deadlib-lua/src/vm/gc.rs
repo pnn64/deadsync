@@ -1048,6 +1048,9 @@ impl Vm {
         let Some(mt) = table.metatable() else {
             return (false, false);
         };
+        self.metatable_mode(mt)
+    }
+    fn metatable_mode(&self, mt: TableId) -> (bool, bool) {
         let Value::String(mode) =
             self.tables[slot_index(mt.0)].get_string(self.meta_names[Meta::Mode as usize])
         else {
@@ -1544,12 +1547,21 @@ impl Vm {
         Ok(())
     }
     fn clear_weak_tables(&mut self) {
+        // A string __mode survives weak cleanup. Clearing a non-string mode
+        // leaves the same strong-table flags.
+        let mut cached = (None, (false, false));
         for word in 0..self.tables.len().div_ceil(64) {
             let mut marked = self.tables.marked_word(word);
             while marked != 0 {
                 let index = word * 64 + marked.trailing_zeros() as usize;
                 marked &= marked - 1;
-                let (weak_keys, weak_values) = self.table_mode(&self.tables[index]);
+                let Some(mt) = self.tables[index].metatable() else {
+                    continue;
+                };
+                if cached.0 != Some(mt) {
+                    cached = (Some(mt), self.metatable_mode(mt));
+                }
+                let (weak_keys, weak_values) = cached.1;
                 if !weak_keys && !weak_values {
                     continue;
                 }
