@@ -311,41 +311,21 @@ fn one_color_indices_require_zero_only_in_used_bits() {
 
 #[test]
 fn byte_indices_validate_short_palettes_without_including_padding() {
-    let (width, height) = (257usize, 3usize);
-    let pitch = width.div_ceil(4) * 4;
-    for size in 1..=256 {
-        let colors = palette(size);
-        let mut rows = vec![0xff; pitch * height];
-        let mut expected = Vec::new();
-        for y in 0..height {
-            for x in 0..width {
-                let index = ((x + y * 31) % size) as u8;
-                rows[y * pitch + x] = index;
-                expected.push(index);
-            }
-        }
-        for top_down in [false, true] {
-            assert_eq!(
-                decode(&wire(
-                    Format::rgb(8),
-                    width,
-                    height,
-                    top_down,
-                    &colors,
-                    &rows
-                ))
-                .unwrap()
-                .pixels,
-                Pixels::Indexed {
-                    bit_depth: 8,
-                    indices: expected.clone(),
-                    palette: colors.clone(),
+    for width in [1usize, 257] {
+        let height = 3;
+        let pitch = width.div_ceil(4) * 4;
+        for size in 1..=256 {
+            let colors = palette(size);
+            let mut rows = vec![0xff; pitch * height];
+            let mut expected = Vec::new();
+            for y in 0..height {
+                for x in 0..width {
+                    let index = ((x + y * 31) % size) as u8;
+                    rows[y * pitch + x] = index;
+                    expected.push(index);
                 }
-            );
-            if size < 256 {
-                let last = (height - 1) * pitch + width - 1;
-                let original = rows[last];
-                rows[last] = size as u8;
+            }
+            for top_down in [false, true] {
                 assert_eq!(
                     decode(&wire(
                         Format::rgb(8),
@@ -354,10 +334,32 @@ fn byte_indices_validate_short_palettes_without_including_padding() {
                         top_down,
                         &colors,
                         &rows
-                    )),
-                    Err(Error::Invalid("pixel index exceeds the palette"))
+                    ))
+                    .unwrap()
+                    .pixels,
+                    Pixels::Indexed {
+                        bit_depth: 8,
+                        indices: expected.clone(),
+                        palette: colors.clone(),
+                    }
                 );
-                rows[last] = original;
+                if size < 256 {
+                    let last = (height - 1) * pitch + width - 1;
+                    let original = rows[last];
+                    rows[last] = size as u8;
+                    assert_eq!(
+                        decode(&wire(
+                            Format::rgb(8),
+                            width,
+                            height,
+                            top_down,
+                            &colors,
+                            &rows
+                        )),
+                        Err(Error::Invalid("pixel index exceeds the palette"))
+                    );
+                    rows[last] = original;
+                }
             }
         }
     }

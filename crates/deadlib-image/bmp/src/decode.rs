@@ -99,7 +99,9 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 }
                 indices.resize(header.pixel_count, 0);
             } else if header.info.bit_depth == 8 {
-                if header.info.top_down && width == header.row_pitch {
+                if width == 1 && source.len() > 4 {
+                    append_indexed_column(source, &mut indices, header.info.top_down, palette_len)?;
+                } else if header.info.top_down && width == header.row_pitch {
                     validate_indices(source)?;
                     indices.extend_from_slice(source);
                 } else {
@@ -179,6 +181,31 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
         height: header.info.height,
         pixels,
     })
+}
+
+#[inline(never)]
+fn append_indexed_column(
+    source: &[u8],
+    indices: &mut Vec<u8>,
+    top_down: bool,
+    palette_len: usize,
+) -> Result<(), Error> {
+    let rows = source.as_chunks::<4>().0;
+    let index = |row: &[u8; 4]| row[0];
+    if palette_len < 256
+        && rows
+            .iter()
+            .map(index)
+            .any(|i| usize::from(i) >= palette_len)
+    {
+        return Err(Error::Invalid("pixel index exceeds the palette"));
+    }
+    if top_down {
+        indices.extend(rows.iter().map(index));
+    } else {
+        indices.extend(rows.iter().rev().map(index));
+    }
+    Ok(())
 }
 
 #[inline(never)]
