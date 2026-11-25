@@ -293,8 +293,7 @@ impl PacketCapture {
                     self.partial_offset = offset;
                 }
                 if !self.skipping {
-                    reserve(&mut self.partial, fragment.data.len())?;
-                    self.partial.extend_from_slice(fragment.data);
+                    append_partial(&mut self.partial, fragment.data, fragment.ends_packet)?;
                 }
                 self.continuing = !fragment.ends_packet;
                 if self.continuing {
@@ -353,4 +352,18 @@ impl PacketCapture {
         self.compatibility.add(cursor.compatibility)?;
         Ok(true)
     }
+}
+
+/// Keep the last allocation exact when the completed packet will be released.
+#[inline(never)]
+fn append_partial(partial: &mut Vec<u8>, data: &[u8], ends_packet: bool) -> Result<(), Error> {
+    debug_assert!(data.len() <= MAX_PAGE_SIZE);
+    if !ends_packet
+        || partial.len() <= MAX_PAGE_SIZE - data.len()
+        || partial.try_reserve_exact(data.len()).is_err()
+    {
+        reserve(partial, data.len())?;
+    }
+    partial.extend_from_slice(data);
+    Ok(())
 }
