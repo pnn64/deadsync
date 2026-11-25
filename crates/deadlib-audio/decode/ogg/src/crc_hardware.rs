@@ -80,7 +80,7 @@ fn fold(seed: u32, bytes: &[u8]) -> u32 {
             )
         };
     }
-    let (mut state, words) =
+    let (state, words) =
         if let Some(([first_a, first_b, first_c, first_d], groups)) = groups.split_first() {
             let mut a = _mm_xor_si128(
                 reversed_word(first_a, reverse),
@@ -109,9 +109,29 @@ fn fold(seed: u32, bytes: &[u8]) -> u32 {
         } else {
             return crate::crc::update_scalar(seed, tail);
         };
-    for word in words {
-        state = _mm_xor_si128(fold!(state, k1), reversed_word(word, reverse));
-    }
+    // Finish up to three leftover words with independent multiplications.
+    let state = match words {
+        [] => state,
+        [a] => _mm_xor_si128(fold!(state, k1), reversed_word(a, reverse)),
+        [a, b] => {
+            let state = fold!(state, _mm_set_epi64x(K320 as i64, K256 as i64));
+            let a = fold!(reversed_word(a, reverse), k1);
+            _mm_xor_si128(_mm_xor_si128(state, a), reversed_word(b, reverse))
+        }
+        [a, b, c] => {
+            let state = fold!(state, _mm_set_epi64x(K448 as i64, K384 as i64));
+            let a = fold!(
+                reversed_word(a, reverse),
+                _mm_set_epi64x(K320 as i64, K256 as i64)
+            );
+            let b = fold!(reversed_word(b, reverse), k1);
+            _mm_xor_si128(
+                _mm_xor_si128(state, a),
+                _mm_xor_si128(b, reversed_word(c, reverse)),
+            )
+        }
+        _ => unreachable!("CRC fold leaves at most three words"),
+    };
     // Multiply by x^32 and fold the high coefficients into the low 64 bits.
     let folded = fold!(state, _mm_set_epi64x(K96, K32));
     let high = _mm_srli_si128::<8>(folded);
