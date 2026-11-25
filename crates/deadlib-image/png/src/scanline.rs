@@ -344,14 +344,51 @@ fn compact_one_pixel<const N: usize>(raw: &mut [u8], count: usize) -> Result<(),
         let write = index * N;
         let row = raw.get(read..read + N + 1).ok_or(Error::Truncated)?;
         let residual = row[1..].first_chunk::<N>().unwrap();
-        let predictor = match row[0] {
-            0 | 1 => [0; N],
-            2 | 4 => above,
-            3 => above.map(|value| value >> 1),
-            _ => return Err(Error::Invalid("scanline filter")),
-        };
-        above = core::array::from_fn(|i| residual[i].wrapping_add(predictor[i]));
+        above = one_pixel(row[0], residual, above)?;
         raw[write..write + N].copy_from_slice(&above);
+    }
+    if rows * (N + 1) != raw.len() {
+        return Err(Error::Invalid("extra image data"));
+    }
+    Ok(())
+}
+
+#[inline(always)]
+fn one_pixel<const N: usize>(
+    filter: u8,
+    residual: &[u8; N],
+    above: [u8; N],
+) -> Result<[u8; N], Error> {
+    let predictor = match filter {
+        0 | 1 => [0; N],
+        2 | 4 => above,
+        3 => above.map(|value| value >> 1),
+        _ => return Err(Error::Invalid("scanline filter")),
+    };
+    Ok(core::array::from_fn(|i| {
+        residual[i].wrapping_add(predictor[i])
+    }))
+}
+
+#[inline(never)]
+fn decode_one_pixel_words<const N: usize>(
+    raw: &[u8],
+    rows: usize,
+    out: &mut Vec<u16>,
+) -> Result<(), Error> {
+    let mut above = [0u8; N];
+    for index in 0..rows {
+        let read = index * (N + 1);
+        let row = raw.get(read..read + N + 1).ok_or(Error::Truncated)?;
+        above = one_pixel(row[0], row[1..].first_chunk::<N>().unwrap(), above)?;
+        out.extend(
+            above
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .copied()
+                .map(u16::from_be_bytes),
+        );
     }
     if rows * (N + 1) != raw.len() {
         return Err(Error::Invalid("extra image data"));
@@ -455,6 +492,23 @@ pub(crate) fn decode(
     let mut samples = if depth == 16 {
         let mut v = Vec::new();
         reserve(&mut v, count)?;
+        if width == 1 && !interlaced {
+            let rows = height as usize;
+            match channels {
+                1 => decode_one_pixel_words::<2>(&raw, rows, &mut v),
+                2 => decode_one_pixel_words::<4>(&raw, rows, &mut v),
+                3 => decode_one_pixel_words::<6>(&raw, rows, &mut v),
+                4 => decode_one_pixel_words::<8>(&raw, rows, &mut v),
+                _ => unreachable!("validated 16-bit PNG pixel stride"),
+            }?;
+            return Ok(Image {
+                width,
+                height,
+                color_type: color,
+                bit_depth: depth,
+                samples: Samples::U16(v),
+            });
+        }
         if interlaced {
             v.resize(count, 0u16);
         }
@@ -900,6 +954,13 @@ mod tests {
             4 => unpack::<4>(row, out, 1),
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    fn one_pixel_words_reconstruct_bytes_before_endian_conversion() {
+        let raw = vec![0, 0x12, 0xff, 2, 0xff, 2, 3, 0, 0xff, 4, 0xf8, 1];
+        let image = decode(raw, 1, 4, ColorType::Grayscale, 16, false, 8).unwrap();
+        assert_eq!(image.samples, Samples::U16(vec![0x12ff, 0x1101, 0x08ff, 0]));
     }
 
     #[test]
