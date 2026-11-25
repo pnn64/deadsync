@@ -237,7 +237,8 @@ fn packed_indices_cover_every_byte_with_short_palettes_and_partial_tails() {
     for bits in [1u16, 4] {
         let sizes: &[usize] = if bits == 1 { &[1, 2] } else { &[1, 7, 15, 16] };
         for width in [
-            1usize, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 24, 31, 32, 33,
+            1usize, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 24, 31, 32, 33, 512,
+            520,
         ] {
             let pitch = (width * usize::from(bits)).div_ceil(32) * 4;
             for byte in 0..=255u8 {

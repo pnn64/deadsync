@@ -74,8 +74,12 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     4 => width.is_multiple_of(8),
                     _ => false,
                 };
+            let byte_aligned_mono = header.info.bit_depth == 1
+                && palette_len == 2
+                && (512..1024).contains(&width)
+                && width.is_multiple_of(8);
             let mut indices = Vec::new();
-            if !tight_packed {
+            if !tight_packed && !byte_aligned_mono {
                 reserve(&mut indices, header.pixel_count)?;
             }
             // Full palettes cover the whole index domain.
@@ -161,6 +165,8 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 validate_indices(&indices)?;
             } else if tight_packed {
                 indices = unpack_contiguous(source, expand_one_bit_byte)?;
+            } else if byte_aligned_mono {
+                indices = unpack_byte_aligned_mono(source, &header)?;
             } else {
                 append_one_bit_rows(source, &header, &mut indices);
             }
@@ -456,6 +462,17 @@ fn unpack_contiguous<const N: usize>(
     let mut indices = Vec::new();
     reserve(&mut indices, source.len())?;
     indices.extend(source.iter().copied().map(unpack));
+    Ok(indices.into_flattened())
+}
+
+#[inline(never)]
+fn unpack_byte_aligned_mono(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> {
+    let mut indices = Vec::new();
+    reserve(&mut indices, header.pixel_count / 8)?;
+    let packed_width = header.info.width as usize / 8;
+    for row in display_rows(source, header.row_pitch, header.info.top_down) {
+        indices.extend(row[..packed_width].iter().copied().map(expand_one_bit_byte));
+    }
     Ok(indices.into_flattened())
 }
 
