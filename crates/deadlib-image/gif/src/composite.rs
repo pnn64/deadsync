@@ -289,6 +289,22 @@ impl Compositor {
                         colors,
                         transparent,
                     );
+                } else if visible <= 256
+                    && r.w == stride
+                    && width == stride
+                    && let Some(palette) = local.and_then(|p| p.first_chunk::<256>())
+                {
+                    let start = r.y * stride;
+                    let transparent = transparent.map_or(256, u16::from);
+                    for (pixel, &index) in canvas.0[start..start + visible]
+                        .iter_mut()
+                        .zip(&frame.indices)
+                    {
+                        if u16::from(index) != transparent {
+                            let [red, green, blue] = palette[usize::from(index)];
+                            *pixel = [red, green, blue, 255];
+                        }
+                    }
                 } else {
                     let local_table;
                     let table = if let Some(p) = local {
