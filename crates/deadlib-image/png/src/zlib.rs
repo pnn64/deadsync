@@ -1625,10 +1625,23 @@ impl Writer {
             // data before this block and no retained dictionary is needed.
             self.write(RLE_CODES[0].0 as u32, RLE_CODES[0].1);
             let mut remaining = pos - start - 1;
+            const MAX_LENGTH: usize = LENGTH_BASE[28];
+            const TOKEN: u32 = RLE_CODES[285].0 as u32;
+            const BITS: u8 = RLE_CODES[285].1 + 1;
+            const PAIR: u32 = TOKEN | (TOKEN << BITS);
+            const FOUR: u32 = {
+                // Each token ends in the single zero distance bit.
+                assert!(4 * BITS <= 32);
+                PAIR | (PAIR << (2 * BITS))
+            };
+            while remaining >= 4 * MAX_LENGTH {
+                self.write(FOUR, 4 * BITS);
+                remaining -= 4 * MAX_LENGTH;
+            }
             // A short match costs at least nine bits; up to four two-bit zeros
             // are cheaper as literals, including after a 258-byte match.
             while remaining >= 5 {
-                let length = remaining.min(258);
+                let length = remaining.min(MAX_LENGTH);
                 let index = length_code(length);
                 let (code, bits) = RLE_CODES[257 + index];
                 let value = u32::from(code) | (((length - LENGTH_BASE[index]) as u32) << bits);
