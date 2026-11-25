@@ -1,8 +1,8 @@
 //! Controller providers used by DeadSync.
 
 use deadlib_platform::input::{GpSystemEvent, PadBackend};
+pub use deadsync_core::input::SmxPadPreset;
 use std::fmt;
-use std::str::FromStr;
 
 pub type GamepadSystemEvent = GpSystemEvent<GamepadBackend>;
 
@@ -44,57 +44,6 @@ impl fmt::Debug for GamepadBackend {
             Self::Native(backend) => backend.fmt(f),
             Self::Smx => f.write_str("Smx"),
             Self::Reflex => f.write_str("Reflex"),
-        }
-    }
-}
-
-/// Saved StepManiaX pad sensitivity preset.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SmxPadPreset {
-    Low,
-    Medium,
-    High,
-}
-
-impl SmxPadPreset {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Low => "Low",
-            Self::Medium => "Medium",
-            Self::High => "High",
-        }
-    }
-
-    /// 0/1/2 index used by the options choice list.
-    #[must_use]
-    pub const fn index(self) -> usize {
-        match self {
-            Self::Low => 0,
-            Self::Medium => 1,
-            Self::High => 2,
-        }
-    }
-
-    #[must_use]
-    pub const fn from_index(i: usize) -> Self {
-        match i {
-            1 => Self::Medium,
-            2 => Self::High,
-            _ => Self::Low,
-        }
-    }
-}
-
-impl FromStr for SmxPadPreset {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "low" => Ok(Self::Low),
-            "medium" => Ok(Self::Medium),
-            "high" => Ok(Self::High),
-            _ => Err(()),
         }
     }
 }

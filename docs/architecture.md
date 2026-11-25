@@ -175,7 +175,7 @@ theme to describe an input or store a setting:
   game's provider type. Native backends ask the host whether another provider
   claimed a device. DeadSync supplies its existing live StepManiaX ownership
   predicate, with no change to device slots or hot-plug ordering.
-- `deadsync-input::devices` also owns the saved StepManiaX sensitivity preset
+- `deadsync-core::input` owns the saved StepManiaX sensitivity preset
   used by config, profiles, and presentation. The shell passes the selected
   preset and enabled underglow colors to `deadsync-smx`, which owns threshold
   values, LED color conversion, wire order, and device commands.

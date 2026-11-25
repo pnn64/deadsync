@@ -1732,7 +1732,6 @@ dependencies = [
  "deadlib-platform",
  "deadsync-chart",
  "deadsync-core",
- "deadsync-input",
  "deadsync-rules",
  "deadsync-score",
  "log",

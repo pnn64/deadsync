@@ -8999,7 +8999,7 @@ fn application_config_is_independent_of_presentation() {
 }
 
 #[test]
-fn profiles_do_not_depend_on_application_config() {
+fn profiles_do_not_depend_on_application_config_or_input() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let profile = root.join("crates/deadsync-profile");
     let manifest = read_source(profile.join("Cargo.toml")).expect("profile manifest");
@@ -9007,10 +9007,16 @@ fn profiles_do_not_depend_on_application_config() {
         !manifest.contains("deadsync-config"),
         "the profile crate must receive machine settings from its caller"
     );
+    assert!(!manifest.contains("deadsync-input"));
     for file in production_rust_files(&profile.join("src")) {
         assert!(
             !production_source(&file).contains("deadsync_config"),
             "{} imports application config",
+            file.display(),
+        );
+        assert!(
+            !production_source(&file).contains("deadsync_input"),
+            "{} imports the input runtime",
             file.display(),
         );
     }
