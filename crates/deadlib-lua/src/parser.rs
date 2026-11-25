@@ -6,6 +6,8 @@ use crate::{
     lexer::{Kind, Lexeme, Token},
 };
 
+pub(crate) const MAX_SYNTAX_DEPTH: u16 = 200;
+
 pub(crate) type ExprId = usize;
 pub(crate) type StmtId = usize;
 /// Statement identifiers stored in [`Ast::ids`].

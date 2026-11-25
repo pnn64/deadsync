@@ -156,7 +156,8 @@ impl Parser {
         self.bump(input)
     }
     fn renter(&mut self) -> Result<(), Error> {
-        if self.depth >= MAX_DEPTH || self.base_depth.wrapping_add(self.depth).wrapping_add(1) > 200
+        if self.depth >= MAX_DEPTH
+            || self.base_depth.wrapping_add(self.depth).wrapping_add(1) > MAX_SYNTAX_DEPTH
         {
             return Err(abandon());
         }
@@ -474,7 +475,8 @@ impl Parser {
             let conflict = self.raccount(input, |r, _| r.conflict(&open[mark..], target));
             self.scratch.ids = open;
             conflict?;
-            let limit = 200 - i32::from(self.base_depth.wrapping_add(self.depth));
+            let limit =
+                i32::from(MAX_SYNTAX_DEPTH) - i32::from(self.base_depth.wrapping_add(self.depth));
             if (self.scratch.ids.len() - mark) as i32 > limit {
                 return Err(abandon());
             }

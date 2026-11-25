@@ -58,51 +58,8 @@ impl NativeStack<'_, '_> {
         file: Option<loads::FileReader>,
         mut reader: impl FnMut(&mut Self) -> Result<Option<Vec<u8>>, Error>,
     ) -> Result<NativeLoadStatus, Error> {
-        self.check_error()?;
-        if !self.check_stack(1) {
-            return Err(self.error(b"native stack overflow"));
-        }
-        // The protected frame delivers status and error in two internal slots,
-        // even though the public loader leaves only one value on this stack.
-        self.call.vm.reserve_registers(self.end() + 2)?;
-        let scope = Scope {
-            owner: self.call.vm.thread,
-            depth: self.call.vm.frames.len(),
-            top: self.call.vm.top,
-            active: self.call.vm.active_native,
-            base: self.base + self.top(),
-            call_base: self.native_call_base(),
-            native_bias: self.call.vm.threads[slot_index(self.call.vm.thread.0)].native_bias,
-        };
-        let depth = if matches!(
-            self.call.vm.frames[self.frame].function,
-            FrameKind::Native(CONT_NATIVE_WINDOW)
-        ) {
-            // There is no current host callback to subtract in an idle or
-            // selected stack window. The parser starts at its actual nCcalls.
-            usize::from(self.call.vm.thread_call_level(scope.owner))
-        } else {
-            self.call.vm.native_depth(scope.depth)
-        };
-        self.call.vm.reserve_frames(1)?;
-        self.call.vm.push_record(Frame {
-            function: FrameKind::Native(CONT_HOST_LOAD),
-            pc: 1,
-            base: scope.base,
-            stack_start: scope.base,
-            result: scope.base,
-            wanted: 2,
-            barriers: self.call.vm.frames.last().unwrap().barriers,
-            vararg_start: 0,
-            vararg_count: 0,
-            tail_calls: 0,
-            c_level_bias: 0,
-        });
-        let name = name.unwrap_or(b"?");
-        let name = &name[..name
-            .iter()
-            .position(|&byte| byte == 0)
-            .unwrap_or(name.len())];
+        let (scope, depth) = self.begin_load()?;
+        let name = io::c_bytes(name.unwrap_or(b"?"));
         // The first reader runs before parser state or roots exist. In
         // particular, returning an existing memory error must not require a
         // new parser allocation merely to deliver that protected error.
@@ -126,23 +83,7 @@ impl NativeStack<'_, '_> {
                             Ok(function) => function,
                             Err(error) => return self.catch_load_error(scope, error),
                         };
-                        // A reader's Lua/C frames can remain suspended after
-                        // lua_load itself has finished. Keep their stack and
-                        // expire the parser's protection without unwinding them.
-                        let pending = self.call.vm.frames.len() > scope.depth + 1;
-                        self.finish_load_scope(scope, end, pending);
-                        let top = end + 1;
-                        self.call.vm.resize_registers(top);
-                        self.call.vm.registers[end] = Value::Function(function);
-                        self.call.vm.gc_new_value(Value::Function(function));
-                        self.call.results = top
-                            .checked_sub(self.base)
-                            .ok_or_else(|| self.error(b"native parser stack underflow"))?;
-                        if pending {
-                            self.call.vm.top = top;
-                        }
-                        self.sync();
-                        return Ok(NativeLoadStatus::Ok);
+                        return self.finish_loaded_program(scope, end, function);
                     }
                     Err(error) => {
                         let value = self
@@ -150,18 +91,7 @@ impl NativeStack<'_, '_> {
                             .vm
                             .native_load_message(index, &error)
                             .and_then(|message| self.call.vm.try_intern(&message));
-                        let value = match value {
-                            Ok(value) => value,
-                            Err(error) => return self.catch_load_error(scope, error),
-                        };
-                        self.call
-                            .vm
-                            .set_thread_native_bias(scope.owner, scope.native_bias);
-                        self.restore_load_base(scope);
-                        self.finish_load_scope(scope, scope.base, false);
-                        self.set_top(scope.base - self.base)?;
-                        self.push(value)?;
-                        return Ok(NativeLoadStatus::SyntaxError);
+                        return self.finish_load_syntax(scope, value);
                     }
                     Ok(None) => {}
                 }
@@ -206,6 +136,94 @@ impl NativeStack<'_, '_> {
             }
         }
     }
+    fn begin_load(&mut self) -> Result<(Scope, usize), Error> {
+        self.check_error()?;
+        if !self.check_stack(1) {
+            return Err(self.error(b"native stack overflow"));
+        }
+        // The protected frame delivers status and error in two internal slots,
+        // even though the public loader leaves only one value on this stack.
+        self.call.vm.reserve_registers(self.end() + 2)?;
+        let scope = Scope {
+            owner: self.call.vm.thread,
+            depth: self.call.vm.frames.len(),
+            top: self.call.vm.top,
+            active: self.call.vm.active_native,
+            base: self.base + self.top(),
+            call_base: self.native_call_base(),
+            native_bias: self.call.vm.threads[slot_index(self.call.vm.thread.0)].native_bias,
+        };
+        let depth = if matches!(
+            self.call.vm.frames[self.frame].function,
+            FrameKind::Native(CONT_NATIVE_WINDOW)
+        ) {
+            // There is no current host callback to subtract in an idle or
+            // selected stack window. The parser starts at its actual nCcalls.
+            usize::from(self.call.vm.thread_call_level(scope.owner))
+        } else {
+            self.call.vm.native_depth(scope.depth)
+        };
+        self.call.vm.reserve_frames(1)?;
+        self.call.vm.push_record(Frame {
+            function: FrameKind::Native(CONT_HOST_LOAD),
+            pc: 1,
+            base: scope.base,
+            stack_start: scope.base,
+            result: scope.base,
+            wanted: 2,
+            barriers: self.call.vm.frames.last().unwrap().barriers,
+            vararg_start: 0,
+            vararg_count: 0,
+            tail_calls: 0,
+            c_level_bias: 0,
+        });
+        Ok((scope, depth))
+    }
+
+    fn finish_loaded_program(
+        &mut self,
+        scope: Scope,
+        end: usize,
+        function: FunctionId,
+    ) -> Result<NativeLoadStatus, Error> {
+        // A reader's Lua/C frames can remain suspended after
+        // lua_load itself has finished. Keep their stack and
+        // expire the parser's protection without unwinding them.
+        let pending = self.call.vm.frames.len() > scope.depth + 1;
+        self.finish_load_scope(scope, end, pending);
+        let top = end + 1;
+        self.call.vm.resize_registers(top);
+        self.call.vm.registers[end] = Value::Function(function);
+        self.call.vm.gc_new_value(Value::Function(function));
+        self.call.results = top
+            .checked_sub(self.base)
+            .ok_or_else(|| self.error(b"native parser stack underflow"))?;
+        if pending {
+            self.call.vm.top = top;
+        }
+        self.sync();
+        Ok(NativeLoadStatus::Ok)
+    }
+
+    fn finish_load_syntax(
+        &mut self,
+        scope: Scope,
+        value: Result<Value, Error>,
+    ) -> Result<NativeLoadStatus, Error> {
+        let value = match value {
+            Ok(value) => value,
+            Err(error) => return self.catch_load_error(scope, error),
+        };
+        self.call
+            .vm
+            .set_thread_native_bias(scope.owner, scope.native_bias);
+        self.restore_load_base(scope);
+        self.finish_load_scope(scope, scope.base, false);
+        self.set_top(scope.base - self.base)?;
+        self.push(value)?;
+        Ok(NativeLoadStatus::SyntaxError)
+    }
+
     /// Compile a fixed text/native buffer, preserving native loader statuses.
     ///
     /// # Errors
@@ -215,10 +233,52 @@ impl NativeStack<'_, '_> {
         bytes: &[u8],
         name: Option<&[u8]>,
     ) -> Result<NativeLoadStatus, Error> {
-        let mut bytes = Some(bytes);
-        self.load_reader(name, move |_| {
-            bytes.take().map(SliceExt::try_to_vec).transpose()
-        })
+        // A text reader can push a constants table and prototype for each
+        // open function. Near the stack limit preserve that overflow check.
+        let parser_slots = 2 * (crate::parser::MAX_SYNTAX_DEPTH as usize + 2);
+        if bytes.first() == Some(&27)
+            || self.top() > limits::MAX_CSTACK - parser_slots
+            || self.call.vm.hooks.mask != 0
+            || self.call.vm.budget.is_some()
+            || !self.call.vm.registers.memory().uses_global_allocator()
+        {
+            let mut bytes = Some(bytes);
+            return self.load_reader(name, move |_| {
+                bytes.take().map(SliceExt::try_to_vec).transpose()
+            });
+        }
+
+        // A fixed buffer has no reader callbacks between parser steps.
+        // Keep the protected frame and its initial collector checkpoint.
+        let (scope, depth) = self.begin_load()?;
+        if let Err(error) = self.check_gc() {
+            self.call.abort = None;
+            return self.catch_load_error(scope, error);
+        }
+        let name = io::c_bytes(name.unwrap_or(b"?"));
+        let compiled = crate::memory::compilation::Workspace::new(self.call.vm.registers.memory())
+            .and_then(|workspace| {
+                workspace
+                    .run(|| loads::compile(bytes, name, depth, &mut self.call.vm.compile_spare))
+            });
+        match compiled {
+            Ok(program) => {
+                let function = match self.call.vm.load_fresh(&program) {
+                    Ok(function) => function,
+                    Err(error) => return self.catch_load_error(scope, error),
+                };
+                let end = self.end();
+                if let Err(error) = self.call.vm.reserve_registers(end + 1) {
+                    return self.catch_load_error(scope, error);
+                }
+                self.finish_loaded_program(scope, end, function)
+            }
+            Err(error) => {
+                let value = loads::message(name, &error, false)
+                    .and_then(|message| self.call.vm.try_intern(&message));
+                self.finish_load_syntax(scope, value)
+            }
+        }
     }
     fn restore_load_base(&mut self, scope: Scope) {
         if matches!(

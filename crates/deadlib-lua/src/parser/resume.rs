@@ -451,7 +451,7 @@ impl Parser {
         })
     }
     fn enter(&mut self) -> Result<(), Error> {
-        if self.base_depth.wrapping_add(self.depth).wrapping_add(1) > 200 {
+        if self.base_depth.wrapping_add(self.depth).wrapping_add(1) > MAX_SYNTAX_DEPTH {
             return Err(Error::new_static(
                 ErrorKind::Limit,
                 self.scanner.line(),
@@ -1222,7 +1222,8 @@ impl Parser {
                     let conflict = self.account(input, |r, _| r.conflict(&open[targets..], target));
                     self.scratch.ids = open;
                     conflict?;
-                    let limit = 200 - i32::from(self.base_depth.wrapping_add(self.depth));
+                    let limit = i32::from(MAX_SYNTAX_DEPTH)
+                        - i32::from(self.base_depth.wrapping_add(self.depth));
                     if (self.scratch.ids.len() - targets) as i32 > limit {
                         return Err(self.limit_error(
                             limit,
