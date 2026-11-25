@@ -393,9 +393,12 @@ pub struct GameplayStageView {
     pub course: Option<Arc<SongData>>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum GameplayStageIntro {
-    Song { round: Option<usize> },
+    Song {
+        round: Option<usize>,
+        event_name: Option<Arc<str>>,
+    },
     Course { number: usize, total: Option<usize> },
     Restart(u32),
     Practice,

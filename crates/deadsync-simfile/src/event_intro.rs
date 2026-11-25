@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use deadsync_chart::SongData;
 
 #[must_use]
@@ -88,12 +86,6 @@ fn event_intro_name(pack_group: &str) -> Option<&str> {
 #[must_use]
 pub fn song_event_name(song: &SongData) -> Option<&str> {
     song_pack_group(song).and_then(event_intro_name)
-}
-
-pub fn gameplay_event_intro_text(song: &SongData) -> Arc<str> {
-    song_event_name(song)
-        .map(Arc::from)
-        .unwrap_or_else(|| Arc::from("EVENT"))
 }
 
 #[cfg(test)]
@@ -186,7 +178,7 @@ mod tests {
     #[test]
     fn gameplay_event_intro_uses_itl_pack_name() {
         let song = test_song("Songs/ITL Online 2026/Example/song.ssc", ["hard", "medium"]);
-        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "ITL Online 2026");
+        assert_eq!(song_event_name(&song), Some("ITL Online 2026"));
     }
 
     #[test]
@@ -195,7 +187,7 @@ mod tests {
             "Songs/ITL Online 2026 Unlocks/Example/song.ssc",
             ["hard", "medium"],
         );
-        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "ITL Online 2026");
+        assert_eq!(song_event_name(&song), Some("ITL Online 2026"));
     }
 
     #[test]
@@ -204,13 +196,13 @@ mod tests {
             "Songs/ITL Online 2026 Unlocks - iamchris4life/Example/song.ssc",
             ["hard", "medium"],
         );
-        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "ITL Online 2026");
+        assert_eq!(song_event_name(&song), Some("ITL Online 2026"));
     }
 
     #[test]
     fn gameplay_event_intro_uses_srpg_name() {
         let song = test_song("Songs/Stamina RPG 9/Example/song.ssc", ["hard", "medium"]);
-        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "Stamina RPG 9");
+        assert_eq!(song_event_name(&song), Some("Stamina RPG 9"));
     }
 
     #[test]
@@ -270,9 +262,9 @@ mod tests {
     }
 
     #[test]
-    fn gameplay_event_intro_keeps_default_for_normal_pack() {
+    fn regular_packs_have_no_event_name() {
         let song = test_song("Songs/Test/Example/song.ssc", ["hard", "medium"]);
-        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "EVENT");
+        assert_eq!(song_event_name(&song), None);
     }
 
 

@@ -461,7 +461,15 @@ pub(crate) mod tests {
                 (presentation.build)(
                     stage,
                     assets,
-                    &GameplayStageView { intro: GameplayStageIntro::Song { round: Some(1) }, replay: None, course: None },
+                    &GameplayStageView {
+                        intro: GameplayStageIntro::Song {
+                            round: Some(1),
+                            event_name: deadsync_simfile::event_intro::song_event_name(stage.song())
+                                .map(Arc::from),
+                        },
+                        replay: None,
+                        course: None,
+                    },
                     &Default::default(),
                     Some(deadsync_assets::gameplay_presentation::GameplayPresentationInit {
                         hud: init.hud,

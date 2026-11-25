@@ -10396,6 +10396,8 @@ impl App {
                     GameplayStageIntro::Song {
                         round: (!cfg.coin.event_mode())
                             .then(|| self.state.session.active_stage_number()),
+                        event_name: deadsync_simfile::event_intro::song_event_name(&song_arc)
+                            .map(Arc::from),
                     }
                 };
                 let combo_carry = self.state.session.combo_carry;

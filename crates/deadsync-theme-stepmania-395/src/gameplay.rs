@@ -30,9 +30,9 @@ impl crate::StepManiaTheme {
         init: Option<GameplayPresentationInit>,
     ) -> StandardGameplay<GameplayLobbySession> {
         let (round, badge) = match view.intro {
-            GameplayStageIntro::Song { round } => (
+            GameplayStageIntro::Song { round, ref event_name } => (
                 round,
-                deadsync_simfile::event_intro::gameplay_event_intro_text(stage.song()),
+                event_name.clone().unwrap_or_else(|| Arc::from("EVENT")),
             ),
             _ => (None, Arc::from("")),
         };

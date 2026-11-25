@@ -585,7 +585,7 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         gameplay_entry,
         "crate::gameplay_runtime::present_stage(prepared, scene, course_title, gameplay_startup,",
     ));
-    for label in ["STAGE {number}", "RESTART {count}", "PRACTICE MODE", "song_event_name(stage.song())"] {
+    for label in ["STAGE {number}", "RESTART {count}", "PRACTICE MODE"] {
         assert!(theme.contains(label), "the selected theme formats {label}");
         assert!(!app.contains(label));
     }
@@ -9503,6 +9503,30 @@ fn smx_driver_uses_platform_events_and_prepared_light_effects() {
         assert!(
             !source.contains("deadsync_input::"),
             "{} imports logical input",
+            file.display(),
+        );
+    }
+}
+
+#[test]
+fn gameplay_presenters_receive_resolved_song_event_names() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let stepmania = root.join("crates/deadsync-theme-stepmania-395");
+    let manifest = read_source(stepmania.join("Cargo.toml")).expect("StepMania 3.95 manifest");
+    assert!(!manifest.contains("deadsync-simfile"));
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell gameplay entry source");
+    assert!(contains_rust(
+        &shell,
+        "event_name: deadsync_simfile::event_intro::song_event_name(",
+    ));
+    for file in [
+        stepmania.join("src/gameplay.rs"),
+        root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"),
+    ] {
+        assert!(
+            !production_source(&file).contains("deadsync_simfile::event_intro"),
+            "{} resolves the song event name",
             file.display(),
         );
     }

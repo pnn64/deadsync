@@ -27,7 +27,7 @@ impl crate::OpenItgTheme {
         init: Option<GameplayPresentationInit>,
     ) -> StandardGameplay<GameplayLobbySession> {
         let (round, badge) = match view.intro {
-            GameplayStageIntro::Song { round } => (round, Arc::from("EVENT")),
+            GameplayStageIntro::Song { round, .. } => (round, Arc::from("EVENT")),
             GameplayStageIntro::Course { number, .. } => {
                 (Some(number), Arc::from(format!("STAGE {number}")))
             }

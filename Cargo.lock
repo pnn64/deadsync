@@ -2022,7 +2022,6 @@ dependencies = [
  "deadsync-input",
  "deadsync-online",
  "deadsync-score",
- "deadsync-simfile",
  "deadsync-theme",
  "glam",
  "image",

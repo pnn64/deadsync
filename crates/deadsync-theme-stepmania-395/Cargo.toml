@@ -14,7 +14,6 @@ deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-online = { path = "../deadsync-online" }
-deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-theme = { path = "../deadsync-theme" }
 glam = "0.34.3"
 

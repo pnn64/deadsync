@@ -136,6 +136,9 @@ background drawing, profile-selected field feedback, and text prewarming.
 OpenITG and StepMania 3.95 each mount the shared gameplay presenter with their
 own HUD artwork, labels, and layouts. Practice uses the Simply Love gameplay
 adapter with the existing editor. All presenters use the same prepared stage.
+For song intros, the shell resolves the optional pack event name with the
+simfile catalog. StepMania 3.95 and Simply Love choose their labels from that
+stage fact. OpenITG supplies its own label.
 
 ## Shared contracts
 

@@ -103,10 +103,8 @@ impl crate::SimplyLoveTheme {
 
         init.scores = scores;
         let intro = match view.intro {
-            GameplayStageIntro::Song { .. } => {
-                deadsync_simfile::event_intro::song_event_name(stage.song())
-                    .map(Arc::from)
-                    .unwrap_or_else(|| Arc::from("EVENT"))
+            GameplayStageIntro::Song { ref event_name, .. } => {
+                event_name.clone().unwrap_or_else(|| Arc::from("EVENT"))
             }
             GameplayStageIntro::Course { number, total: Some(total) } => {
                 let total = total.max(1);
@@ -136,7 +134,7 @@ impl crate::SimplyLoveTheme {
         let banner = view.course.as_ref().and_then(|course| course.banner_path.clone());
         let mut presentation =
             GameplayPresentation::from_stage(stage, assets, intro, status, course, banner, init);
-        if let GameplayStageIntro::Song { round } = view.intro {
+        if let GameplayStageIntro::Song { round, .. } = view.intro {
             presentation.stage_round = round;
         }
         presentation
