@@ -22,7 +22,7 @@ impl Default for WriteOptions {
 pub struct PacketWriter<W> {
     inner: W,
     sequence: u32,
-    serial_crc: u32,
+    serial_crc: (u32, u32),
     header: [u8; MAX_HEADER_SIZE],
     header_len: usize,
     body: Vec<u8>,

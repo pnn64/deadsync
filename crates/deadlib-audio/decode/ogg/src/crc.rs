@@ -146,19 +146,30 @@ pub(crate) fn page_crc(bytes: &[u8]) -> u32 {
     update(crc, tail)
 }
 
-pub(crate) fn serial_crc(serial: u32) -> u32 {
+pub(crate) fn serial_crc(serial: u32) -> (u32, u32) {
     let [a, b, c, d] = serial.to_le_bytes();
-    CAPTURE_CRC
+    let crc = CAPTURE_CRC
         ^ TABLES[11][a as usize]
         ^ TABLES[10][b as usize]
         ^ TABLES[9][c as usize]
-        ^ TABLES[8][d as usize]
+        ^ TABLES[8][d as usize];
+    // The second remainder also advances past the one-byte packet's suffix.
+    (crc, advance_zeros(crc, 3))
 }
 
 fn header_crc(crc: &mut u32, bytes: &[u8], tables: &[[u32; 256]]) {
     for (&byte, table) in bytes.iter().zip(tables.iter().rev()) {
         *crc ^= table[usize::from(byte)];
     }
+}
+
+// A 28-byte prefix and one payload byte share one CRC fold.
+pub(crate) fn packet_byte_crc(mut crc: u32, header: &[u8; 28], payload: u8) -> u32 {
+    header_crc(&mut crc, &header[5..14], &TABLES[15..24]);
+    header_crc(&mut crc, &header[18..22], &TABLES[7..11]);
+    crc ^ TABLES[2][header[26] as usize]
+        ^ TABLES[1][header[27] as usize]
+        ^ TABLES[0][payload as usize]
 }
 
 pub(crate) fn packet_page_crc(mut crc: u32, bytes: &[u8]) -> u32 {
