@@ -262,6 +262,9 @@ impl Encoder {
             if minimum == 3 && pixels <= 2048 {
                 return Self::encode_direct::<3, { direct_table_slots(2048, 8) }>(rows, emit);
             }
+            if pixels <= 1152 {
+                return Self::encode_hashed::<4096>(rows, minimum, emit);
+            }
             return Self::encode_hashed::<8192>(rows, minimum, emit);
         }
         if pixels <= 2 {
@@ -420,7 +423,7 @@ impl Encoder {
                     let tag = key << 12;
                     let hash = key.wrapping_mul(0x9e3779b1);
                     let mut slot = (hash >> shift) as usize;
-                    let step = if SLOTS <= 2048 {
+                    let step = if SLOTS <= 4096 {
                         1
                     } else {
                         // An odd stride visits every slot in a power-of-two table.
