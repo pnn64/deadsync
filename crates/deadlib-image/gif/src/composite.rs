@@ -219,8 +219,21 @@ impl Compositor {
             return Err(Error::MissingPalette);
         }
         let r = self.clip(frame.left, frame.top, frame.width, frame.height);
+        let transparent = frame.control.and_then(|c| c.transparent_index);
+        // A covering opaque frame replaces the pending rectangle before it can be seen.
+        if let Some((pending, _)) = self.pending
+            && transparent.is_none()
+            && frame
+                .control
+                .is_none_or(|control| control.disposal != Disposal::Previous)
+            && r.x <= pending.x
+            && r.y <= pending.y
+            && pending.x + pending.w <= r.x + r.w
+            && pending.y + pending.h <= r.y + r.h
+        {
+            self.pending = None;
+        }
         if self.prepare(r, frame.control)? {
-            let transparent = frame.control.and_then(|c| c.transparent_index);
             let binary_colors = match local {
                 Some(&[a, b]) => Some([a, b].map(|[r, g, b]| [r, g, b, 255])),
                 None if self.palette_len == Some(2) => Some([self.palette[0], self.palette[1]]),
