@@ -288,7 +288,15 @@ impl<T> Arena<T> {
     }
 
     pub(crate) fn at_most_marked(&self, mut limit: usize) -> bool {
-        for &bits in &*self.marks {
+        let (groups, tail) = self.marks.as_chunks::<4>();
+        for &[a, b, c, d] in groups {
+            let count = a.count_ones() + b.count_ones() + c.count_ones() + d.count_ones();
+            let Some(remaining) = limit.checked_sub(count as usize) else {
+                return false;
+            };
+            limit = remaining;
+        }
+        for &bits in tail {
             let Some(remaining) = limit.checked_sub(bits.count_ones() as usize) else {
                 return false;
             };
