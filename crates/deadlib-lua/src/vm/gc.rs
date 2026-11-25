@@ -1381,7 +1381,7 @@ impl Vm {
                 .iter()
                 .filter_map(|&value| table_edge(value, weak_values)),
         );
-        for (key, value) in pairs {
+        for (_, key, value) in pairs {
             work.extend(table_edge(key, weak_keys));
             work.extend(table_edge(value, weak_values));
         }
@@ -1558,11 +1558,11 @@ impl Vm {
                 continue;
             }
             let mut cursor = 0;
-            let mut erase = [Value::Nil; 64];
             loop {
                 let mut dead_array = 0u64;
-                let mut count = 0;
-                let (next, array, pairs) = self.tables[index].trace_slice(cursor, erase.len());
+                let mut dead_hash = 0u64;
+                let (next, array, pairs) =
+                    self.tables[index].trace_slice(cursor, TABLE_TRACE_SLOTS);
                 // Implicit array keys are numbers and cannot be collected.
                 if weak_values {
                     for (offset, &value) in array.iter().enumerate() {
@@ -1571,12 +1571,11 @@ impl Vm {
                         }
                     }
                 }
-                for (key, value) in pairs {
+                for (offset, key, value) in pairs {
                     if (weak_keys && !self.marked_weak_value(key, true))
                         || (weak_values && !self.marked_weak_value(value, false))
                     {
-                        erase[count] = key;
-                        count += 1;
+                        dead_hash |= 1u64 << offset;
                     }
                 }
                 // Deleting an existing key neither allocates nor compacts its
@@ -1584,10 +1583,7 @@ impl Vm {
                 // array holes, hash tombstones and the array/hash boundary.
                 let table = &mut self.tables[index];
                 table.clear_array_slots(cursor >> 1, dead_array);
-                for key in &erase[..count] {
-                    table.set(*key, Value::Nil).expect("existing key");
-                    table.retire_native_key(*key);
-                }
+                table.clear_weak_hash_slots(cursor, dead_hash);
                 let Some(next) = next else { break };
                 cursor = next;
             }

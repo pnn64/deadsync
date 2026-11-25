@@ -67,7 +67,7 @@ impl Vm {
                 .iter()
                 .filter_map(|&value| table_edge(value, weak_values))
                 .count();
-        for (key, value) in pairs {
+        for (_, key, value) in pairs {
             count += usize::from(table_edge(key, weak_keys).is_some());
             count += usize::from(table_edge(value, weak_values).is_some());
         }

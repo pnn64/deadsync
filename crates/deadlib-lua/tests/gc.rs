@@ -91,6 +91,45 @@ return n,keys,values,next(w)=='strings remain strong'
 }
 
 #[test]
+fn weak_hash_cleanup_preserves_field_versions_and_deleted_cursors() {
+    let prepare = compile(
+        br#"
+collectgarbage('stop')
+weak = setmetatable({false}, {__mode='v'})
+weak[1] = {}
+for i = 1, 100 do weak['field'..i] = {} end
+weak[true] = {}
+weak.live = 42
+return weak
+"#,
+    )
+    .unwrap();
+    let collect = compile(
+        br#"
+collectgarbage('collect')
+local k,v = next(weak)
+assert(k == 'live' and v == 42 and next(weak,k) == nil)
+assert(pcall(next, weak, 'field100'))
+"#,
+    )
+    .unwrap();
+    for native in [false, true] {
+        let mut vm = if native {
+            Vm::try_new_with_lua51_table_order().unwrap()
+        } else {
+            Vm::new()
+        };
+        let [Value::Table(table)] = *vm.execute(&prepare).unwrap() else {
+            panic!("expected a weak table");
+        };
+        let before = vm.raw_fields_version(table).unwrap();
+        vm.execute(&collect).unwrap();
+        let expected = before.wrapping_add(if native { 201 } else { 101 });
+        assert_eq!(vm.raw_fields_version(table).unwrap(), expected);
+    }
+}
+
+#[test]
 fn collection_inside_callbacks_preserves_arguments_and_continuations() {
     for source in [
         "local t={};return string.gsub('ab','.',function(s)collectgarbage();return s..s end)",

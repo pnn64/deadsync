@@ -46,23 +46,32 @@ fn main_position(key: Key, hash: u32, count: usize) -> usize {
 }
 
 impl Table {
-    /// Lua 5.1's removeentry keeps a deleted collectable key only as a next()
-    /// cursor. Even an otherwise-live string must no longer match a new write.
-    pub(crate) fn retire_native_key(&mut self, key: Value) {
-        if self.native51
-            && let Some(key) = Key::from_value(key)
-            && let Some(dead) = key.dead()
-            && let Some((slot, Some(index))) = self.slot(key)
-            && self.entries[index].value == Value::Nil
-        {
-            self.retire_native_entry(slot, index, dead);
+    pub(crate) fn clear_weak_hash_slots(&mut self, cursor: usize, mut mask: u64) {
+        let start = if cursor & 1 == 0 { 0 } else { cursor >> 1 };
+        while mask != 0 {
+            let index = start + mask.trailing_zeros() as usize;
+            let entry = &mut self.entries[index];
+            debug_assert_ne!(entry.value, Value::Nil);
+            let key = entry.key;
+            entry.value = Value::Nil;
+            self.touch_fields();
+            if matches!(key, Key::String(_)) {
+                self.remember_hash_entry(index as u32 + 1);
+            }
+            if self.native51
+                && let Some(dead) = key.dead()
+            {
+                let slot = self.native_identity_slot(index);
+                self.retire_native_entry(slot, index, dead);
+            }
+            mask &= mask - 1;
         }
     }
 
+    // Lua 5.1 keeps a deleted collectable key only as a next() cursor.
     fn retire_native_entry(&mut self, slot: usize, index: usize, dead: Key) {
         self.native_index_remove_at(slot);
         self.entries[index].key = dead;
-        self.native_dead_keys -= 1;
         self.touch_fields();
     }
 
@@ -91,6 +100,7 @@ impl Table {
             {
                 let slot = self.native_identity_slot(index);
                 self.retire_native_entry(slot, index, dead);
+                self.native_dead_keys -= 1;
                 if self.native_dead_keys == 0 {
                     break;
                 }
