@@ -1590,7 +1590,8 @@ impl Writer {
             // runs and unaligned prefixes remain literals. The lookahead leaves
             // at least eight bytes for the run/tail handling below.
             while let Some(bytes) = input[pos..].first_chunk::<16>() {
-                if bytes[..6] == [0; 6] || bytes[4..10] == [0; 6] {
+                // Both possible runs include the middle two bytes.
+                if bytes[4..6] == [0; 2] && (bytes[..4] == [0; 4] || bytes[6..10] == [0; 4]) {
                     break;
                 }
                 self.rle_literals(&bytes[..4]);
