@@ -393,8 +393,12 @@ fn draw_indices(
             *pixel = table[usize::from(index)];
         }
     };
-    if transparent.is_none() && width < 32 && r.w == stride && width == stride {
-        paint_opaque(rows, indices);
+    if width < 32 && r.w == stride && width == stride {
+        if let Some(t) = transparent {
+            draw_narrow_transparent(rows, indices, table, t);
+        } else {
+            paint_opaque(rows, indices);
+        }
         return;
     }
     for (source, target) in indices
@@ -430,6 +434,20 @@ fn draw_indices(
             }
         } else {
             paint_opaque(dest, indices);
+        }
+    }
+}
+
+#[inline(never)]
+fn draw_narrow_transparent(
+    dest: &mut [[u8; 4]],
+    indices: &[u8],
+    table: &[[u8; 4]; 256],
+    transparent: u8,
+) {
+    for (pixel, &index) in dest.iter_mut().zip(indices) {
+        if index != transparent {
+            *pixel = table[usize::from(index)];
         }
     }
 }
