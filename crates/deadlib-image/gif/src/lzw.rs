@@ -133,7 +133,8 @@ impl Decoder {
                 *bits >>= self.width;
                 *bit_count -= self.width;
                 let start = output.len();
-                let length = if code < self.clear {
+                let (relative, literal) = code.overflowing_sub(self.clear);
+                let length = if literal {
                     // Literals need neither control-code checks nor phrase lookup.
                     if start >= limit {
                         return Err(Error::Invalid("LZW output exceeds frame size"));
@@ -144,22 +145,23 @@ impl Decoder {
                     output.push(code as u8);
                     1
                 } else {
-                    if code == self.clear {
+                    if relative == 0 {
                         self.clear_table();
                         *previous = 0;
                         continue;
                     }
-                    if code == self.clear + 1 {
+                    if relative == 1 {
                         self.width = 0;
                         return Ok(());
                     }
-                    let index = usize::from(code - self.clear - 2);
+                    let index = usize::from(relative - 2);
                     let (offset, length) = if let Some(&entry) = self.dictionary.get(index) {
                         (
                             self.origin + (entry >> 12) as usize,
                             (entry & 4095) as usize,
                         )
-                    } else if code == self.next && self.next < 4096 {
+                    } else if code == self.next {
+                        // The mask caps codes at 4095, below the full-table sentinel.
                         if *previous == 0 {
                             return Err(Error::Invalid("LZW first code is not a literal"));
                         }
