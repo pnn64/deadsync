@@ -493,7 +493,7 @@ pub struct Vm {
     registers: Buffer<Value>,
     programs: Arena<LoadedProgram>,
     functions: Arena<Closure>,
-    // Heap payload of tables, userdata, loaded programs, and closure captures.
+    // Heap payload of tables, userdata, closures, and program objects.
     object_payload_bytes: usize,
     upvalues: Arena<Cell>,
     open_upvalues: Buffer<u32>,

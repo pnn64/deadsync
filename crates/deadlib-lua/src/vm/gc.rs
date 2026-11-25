@@ -635,11 +635,6 @@ impl Vm {
     pub fn heap_stats(&mut self) -> HeapStats {
         let mut payload = self.strings.payload_bytes + self.strings.buckets.capacity() * 4;
         payload += self.object_payload_bytes;
-        payload += self
-            .parser_prototypes
-            .iter()
-            .map(loads::ParserPrototype::heap_bytes)
-            .sum::<usize>();
         payload += self.io.heap_bytes();
         let mut control = self.registers.capacity() * std::mem::size_of::<Value>()
             + self.frames.capacity() * std::mem::size_of::<Frame>()
@@ -1645,7 +1640,13 @@ impl Vm {
                         })
                 }
                 8 => self.io.files.sweep_some(&mut cursor, budget),
-                9 => self.parser_prototypes.sweep_some(&mut cursor, budget),
+                9 => {
+                    let bytes = &mut self.object_payload_bytes;
+                    self.parser_prototypes
+                        .sweep_with(&mut cursor, budget, |prototypes, index| {
+                            *bytes -= prototypes[index].heap_bytes();
+                        })
+                }
                 _ => unreachable!(),
             };
             self.gc.reclaimed += count;

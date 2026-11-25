@@ -130,6 +130,7 @@ impl Vm {
                                 let before = p.heap_bytes();
                                 p.children.try_push(Value::ParserPrototype(id))?;
                                 let growth = p.heap_bytes() - before;
+                                self.object_payload_bytes += growth;
                                 self.parser_prototypes.note_alloc(growth);
                                 self.gc_barrier(
                                     Value::ParserPrototype(parent),
@@ -186,6 +187,7 @@ impl Vm {
                 let growth = self.parser_prototypes[slot_index(id.0)]
                     .heap_bytes()
                     .saturating_sub(before);
+                self.object_payload_bytes += growth;
                 self.parser_prototypes.note_alloc(growth);
                 result?;
             }
