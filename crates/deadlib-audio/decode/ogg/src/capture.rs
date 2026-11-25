@@ -169,8 +169,11 @@ impl PacketCapture {
         }
         result
     }
-    fn begin_page(&mut self, page: Page<'_>, offset: u64) -> Result<PendingPage, Error> {
-        let header = page.header();
+    fn begin_page(
+        &mut self,
+        page: Page<'_>,
+        header: PageHeader,
+    ) -> Result<(usize, validation::GranuleException), Error> {
         if self.ended {
             return Err(Error::Invalid("page after captured EOS"));
         }
@@ -252,16 +255,7 @@ impl PacketCapture {
         if header.is_eos() && continuing {
             return Err(Error::Invalid("unfinished captured packet at EOS"));
         }
-        Ok(PendingPage {
-            offset,
-            header,
-            checksum: page.checksum(),
-            length: page.bytes().len(),
-            segment: 0,
-            body: 0,
-            remaining: complete,
-            exception,
-        })
+        Ok((complete, exception))
     }
     fn push_inner(
         &mut self,
@@ -269,12 +263,13 @@ impl PacketCapture {
         offset: u64,
         mut emit: impl FnMut(CapturedPacket<'_>) -> ControlFlow<()>,
     ) -> Result<bool, Error> {
-        if page.header().serial != self.serial {
+        let header = page.header();
+        if header.serial != self.serial {
             return Ok(true);
         }
-        let mut cursor = if let Some(cursor) = self.page.take() {
+        let (segment, body, mut remaining, exception) = if let Some(cursor) = self.page.take() {
             if cursor.offset != offset
-                || cursor.header != page.header()
+                || cursor.header != header
                 || cursor.checksum != page.checksum()
                 || cursor.length != page.bytes().len()
             {
@@ -282,11 +277,17 @@ impl PacketCapture {
                     "different page during paused packet capture",
                 ));
             }
-            cursor
+            (
+                cursor.segment,
+                cursor.body,
+                cursor.remaining,
+                cursor.exception,
+            )
         } else {
-            self.begin_page(page, offset)?
+            let (remaining, exception) = self.begin_page(page, header)?;
+            (0, 0, remaining, exception)
         };
-        let mut fragments = page.fragments_from(cursor.segment, cursor.body);
+        let mut fragments = page.fragments_from(segment, body);
         while let Some(fragment) = fragments.next() {
             if !fragment.starts_packet || !fragment.ends_packet {
                 if fragment.starts_packet {
@@ -300,7 +301,7 @@ impl PacketCapture {
                     break;
                 }
             }
-            cursor.remaining -= 1;
+            remaining -= 1;
             let mut stop = false;
             if !self.skipping {
                 let (data, start_page_offset) = if fragment.starts_packet {
@@ -314,9 +315,8 @@ impl PacketCapture {
                         serial: self.serial,
                         number: self.next_number,
                         first_in_stream: self.next_number == Some(0),
-                        last_in_stream: cursor.remaining == 0 && cursor.header.is_eos(),
-                        granule_position: (cursor.remaining == 0)
-                            .then_some(cursor.header.granule_position),
+                        last_in_stream: remaining == 0 && header.is_eos(),
+                        granule_position: (remaining == 0).then_some(header.granule_position),
                         start_page_offset,
                         end_page_offset: offset,
                     },
@@ -337,19 +337,26 @@ impl PacketCapture {
             if stop {
                 let (lacing, body) = fragments.remaining();
                 if lacing != 0 {
-                    cursor.segment = page.lacing().len() - lacing;
-                    cursor.body = page.body().len() - body;
-                    self.page = Some(cursor);
+                    self.page = Some(PendingPage {
+                        offset,
+                        header,
+                        checksum: page.checksum(),
+                        length: page.bytes().len(),
+                        segment: page.lacing().len() - lacing,
+                        body: page.body().len() - body,
+                        remaining,
+                        exception,
+                    });
                     return Ok(false);
                 }
             }
         }
         self.started = true;
-        self.next_sequence = Some(cursor.header.sequence.wrapping_add(1));
-        if cursor.header.is_eos() {
+        self.next_sequence = Some(header.sequence.wrapping_add(1));
+        if header.is_eos() {
             self.ended = true;
         }
-        self.compatibility.record(cursor.exception)?;
+        self.compatibility.record(exception)?;
         Ok(true)
     }
 }
