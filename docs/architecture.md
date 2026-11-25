@@ -189,6 +189,9 @@ theme to describe an input or store a setting:
   preferred play mode shared by both crates. The shell supplies machine defaults
   and the callback for saving default profile IDs. Profiles resolve session
   styles and modes, manage profile files, and apply confirmed selections.
+- Config and chart metadata share `deadsync-core::timing::SyncPref`. Config
+  owns the saved machine default. Charts resolve inherited preferences and
+  the corresponding timing offset.
 - The shell installs and migrates the Cel and Metal Workshop. It uses
   `deadsync-updater` for checksum-verified downloads and `deadsync-noteskin`
   for pack compilation and validation.

@@ -1566,7 +1566,6 @@ dependencies = [
  "deadlib-audio-core",
  "deadlib-platform",
  "deadlib-render-core",
- "deadsync-chart",
  "deadsync-core",
  "deadsync-input",
  "log",

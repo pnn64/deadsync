@@ -14,6 +14,7 @@ use crate::defaults::{
 use crate::ini::SimpleIni;
 use crate::writer::{push_bool, push_line};
 use deadsync_core::preference_key::NormalizedAsciiKey;
+use deadsync_core::timing::SyncPref;
 pub use deadsync_core::session_flow::{
     GameFlag, MachinePreferredPlayMode, MachinePreferredPlayStyle,
 };
@@ -253,18 +254,18 @@ impl DefaultSyncOffset {
     }
 
     #[must_use]
-    pub const fn sync_pref(self) -> deadsync_chart::SyncPref {
+    pub const fn sync_pref(self) -> SyncPref {
         match self {
-            Self::Null => deadsync_chart::SyncPref::Null,
-            Self::Itg => deadsync_chart::SyncPref::Itg,
+            Self::Null => SyncPref::Null,
+            Self::Itg => SyncPref::Itg,
         }
     }
 
     #[must_use]
-    pub const fn from_sync_pref(pref: deadsync_chart::SyncPref) -> Self {
+    pub const fn from_sync_pref(pref: SyncPref) -> Self {
         match pref {
-            deadsync_chart::SyncPref::Itg => Self::Itg,
-            deadsync_chart::SyncPref::Default | deadsync_chart::SyncPref::Null => Self::Null,
+            SyncPref::Itg => Self::Itg,
+            SyncPref::Default | SyncPref::Null => Self::Null,
         }
     }
 }
@@ -2925,20 +2926,14 @@ MachineEvaluationStyle=Default\n\
 
     #[test]
     fn default_sync_offset_maps_chart_sync_pref() {
+        assert_eq!(DefaultSyncOffset::Null.sync_pref(), SyncPref::Null);
+        assert_eq!(DefaultSyncOffset::Itg.sync_pref(), SyncPref::Itg);
         assert_eq!(
-            DefaultSyncOffset::Null.sync_pref(),
-            deadsync_chart::SyncPref::Null
-        );
-        assert_eq!(
-            DefaultSyncOffset::Itg.sync_pref(),
-            deadsync_chart::SyncPref::Itg
-        );
-        assert_eq!(
-            DefaultSyncOffset::from_sync_pref(deadsync_chart::SyncPref::Default),
+            DefaultSyncOffset::from_sync_pref(SyncPref::Default),
             DefaultSyncOffset::Null
         );
         assert_eq!(
-            DefaultSyncOffset::from_sync_pref(deadsync_chart::SyncPref::Itg),
+            DefaultSyncOffset::from_sync_pref(SyncPref::Itg),
             DefaultSyncOffset::Itg
         );
     }

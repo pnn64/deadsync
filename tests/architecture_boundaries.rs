@@ -8603,6 +8603,21 @@ fn audio_core_lives_in_audio_crate() {
 }
 
 #[test]
+fn config_shares_sync_preferences_without_chart_loading() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config = root.join("crates/deadsync-config");
+    let manifest = read_source(config.join("Cargo.toml")).expect("config manifest");
+    assert!(!manifest.contains("deadsync-chart"));
+    for file in production_rust_files(&config.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadsync_chart"),
+            "{} depends on chart data",
+            file.display(),
+        );
+    }
+}
+
+#[test]
 fn config_can_read_audio_preferences_without_output_backends() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let config = root.join("crates/deadsync-config");

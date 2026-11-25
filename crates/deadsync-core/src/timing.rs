@@ -1,5 +1,13 @@
 pub const ROWS_PER_BEAT: i32 = 48;
 
+/// Timing preference shared by song metadata and machine configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncPref {
+    Default,
+    Null,
+    Itg,
+}
+
 #[inline(always)]
 #[must_use]
 pub fn note_row_to_beat(row: i32) -> f32 {

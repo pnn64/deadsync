@@ -1,15 +1,9 @@
 use crate::chart::{ChartData, ChartDisplayBpm};
+pub use deadsync_core::timing::SyncPref;
 use std::cmp::Ordering;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SyncPref {
-    Default,
-    Null,
-    Itg,
-}
 
 pub const ITG_SYNC_OFFSET_SECONDS: f32 = -0.009;
 
