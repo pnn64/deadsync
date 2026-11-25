@@ -51,21 +51,19 @@ impl Table {
     pub(crate) fn retire_native_key(&mut self, key: Value) {
         if self.native51
             && let Some(key) = Key::from_value(key)
-        {
-            self.retire_indexed_native_key(key);
-        }
-    }
-
-    fn retire_indexed_native_key(&mut self, key: Key) {
-        if let Some(dead) = key.dead()
+            && let Some(dead) = key.dead()
             && let Some((slot, Some(index))) = self.slot(key)
             && self.entries[index].value == Value::Nil
         {
-            self.native_index_remove_at(slot);
-            self.entries[index].key = dead;
-            self.native_dead_keys -= 1;
-            self.touch_fields();
+            self.retire_native_entry(slot, index, dead);
         }
+    }
+
+    fn retire_native_entry(&mut self, slot: usize, index: usize, dead: Key) {
+        self.native_index_remove_at(slot);
+        self.entries[index].key = dead;
+        self.native_dead_keys -= 1;
+        self.touch_fields();
     }
 
     pub(crate) fn retire_native_keys_in_trace_slice(&mut self, cursor: usize, budget: usize) {
@@ -87,8 +85,12 @@ impl Table {
             (start, start.saturating_add(budget).min(self.entries.len()))
         };
         for index in start..end {
-            if self.entries[index].value == Value::Nil {
-                self.retire_indexed_native_key(self.entries[index].key);
+            let entry = &self.entries[index];
+            if entry.value == Value::Nil
+                && let Some(dead) = entry.key.dead()
+            {
+                let slot = self.native_identity_slot(index);
+                self.retire_native_entry(slot, index, dead);
                 if self.native_dead_keys == 0 {
                     break;
                 }
@@ -111,13 +113,18 @@ impl Table {
         string_hash(bytes)
     }
 
-    fn native_index_set(&mut self, key: Key, index: usize) {
-        let hash = key.hash();
-        let slot = self
-            .slot_hashed(key, hash)
-            .expect("allocated identity index")
-            .0;
-        self.slots[slot] = (index as u32 + 1) | Self::slot_tag(self.slots.len(), hash).0;
+    // An indexed entry is uniquely identified by its encoded slot word.
+    fn native_identity_slot(&self, index: usize) -> usize {
+        let len = self.slots.len();
+        let mask = len - 1;
+        let hash = self.entries[index].key.hash();
+        let word = (index as u32 + 1) | Self::slot_tag(len, hash).0;
+        let mut slot = hash & mask;
+        while self.slots[slot] != word {
+            debug_assert_ne!(self.slots[slot], 0, "native entry must be indexed");
+            slot = (slot + 1) & mask;
+        }
+        slot
     }
 
     fn native_index_remove_at(&mut self, mut hole: usize) {
@@ -201,9 +208,10 @@ impl Table {
                 while self.entries[previous].next != position as u32 + 1 {
                     previous = self.entries[previous].next as usize - 1;
                 }
+                let slot = self.native_identity_slot(position);
                 self.entries[previous].next = free as u32 + 1;
                 self.entries[free] = old;
-                self.native_index_set(old.key, free);
+                self.slots[slot] = self.slots[slot] - position as u32 + free as u32;
                 self.entries[position] = EMPTY;
             } else {
                 self.entries[free].next = old.next;
