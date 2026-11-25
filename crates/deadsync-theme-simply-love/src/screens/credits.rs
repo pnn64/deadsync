@@ -119,7 +119,7 @@ const CREDITS: &[CreditLine] = &[
     name("Tom Jackson (ddrcoder)"),
     name("SamuelDev"),
     name("Sereni"),
-    name("Romain RoffÃ© (rofferom)"),
+    name("Romain Roffé (rofferom)"),
     name("Scott Brenner"),
     name("G. Rosewood"),
     spacer(),
