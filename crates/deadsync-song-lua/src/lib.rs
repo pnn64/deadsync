@@ -42,7 +42,8 @@ mod bitmap_font;
 mod blank_texture;
 mod draw_commands;
 pub use draw_commands::{
-    DrawFrame as SongLuaDrawFrame, DrawOp as SongLuaDrawOp, DrawSource as SongLuaDrawSource,
+    DrawFrame as SongLuaDrawFrame, DrawOp as SongLuaDrawOp, DrawOps as SongLuaDrawOps,
+    DrawSource as SongLuaDrawSource,
 };
 #[cfg(feature = "test-support")]
 mod clock_inputs;

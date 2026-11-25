@@ -12154,9 +12154,9 @@ return Def.ActorFrame {
         assert!((frame.second - index as f32 / 60.0).abs() < 1e-5);
         assert_eq!(frame.ops.len(), 9);
         assert!(
-            matches!(frame.ops[0], SongLuaDrawOp::Begin{preserve, ..} if preserve == (index >= 60))
+            matches!(frame.ops.get(0).unwrap(), SongLuaDrawOp::Begin{preserve, ..} if preserve == (index >= 60))
         );
-        assert!(matches!(frame.ops[4], SongLuaDrawOp::Finish { .. }));
+        assert!(matches!(frame.ops.get(4).unwrap(), SongLuaDrawOp::Finish { .. }));
         for pass in 0..3 {
             let SongLuaDrawOp::Draw {
                 state,
@@ -12164,7 +12164,7 @@ return Def.ActorFrame {
                 camera,
                 vertices,
                 ..
-            } = &frame.ops[pass + 1]
+            } = &frame.ops.get(pass + 1).unwrap()
             else {
                 panic!("missing mesh pass")
             };
@@ -12181,7 +12181,7 @@ return Def.ActorFrame {
             parents,
             camera,
             ..
-        } = &frame.ops[5]
+        } = &frame.ops.get(5).unwrap()
         else {
             panic!("missing player draw")
         };
@@ -12194,12 +12194,12 @@ return Def.ActorFrame {
         );
         assert_eq!(camera.expect("restored caller camera").fov, Some(45.0));
         for layer in 0..3 {
-            assert!(matches!(frame.ops[layer + 6], SongLuaDrawOp::Draw {
+            assert!(matches!(frame.ops.get(layer + 6).unwrap(), SongLuaDrawOp::Draw {
                     source: SongLuaDrawSource::ScreenLayer(index), ..
                 } if index == layer));
         }
     }
-    let SongLuaDrawOp::Draw { vertices, .. } = &compiled.draw_frames[0].ops[1] else {
+    let SongLuaDrawOp::Draw { vertices, .. } = &compiled.draw_frames[0].ops.get(1).unwrap() else {
         unreachable!()
     };
     assert_eq!(vertices.as_ref().unwrap()[0].pos[1], 0.0);
@@ -15713,7 +15713,7 @@ return Def.ActorFrame{
             .iter()
             .filter_map(|op| {
                 if let SongLuaDrawOp::Begin { capture, .. } = op {
-                    Some(*capture)
+                    Some(capture)
                 } else {
                     None
                 }
@@ -15727,14 +15727,14 @@ return Def.ActorFrame{
                 vec![late]
             }
         );
-        assert!(matches!(frame.ops.last(), Some(SongLuaDrawOp::Draw {
+        assert!(matches!(frame.ops.iter().last(), Some(SongLuaDrawOp::Draw {
                 source: SongLuaDrawSource::Overlay(child), ..
-            }) if *child == index("DirectChild")));
+            }) if child == index("DirectChild")));
         if frame.second >= 1.0 {
-            assert!(matches!(frame.ops[1], SongLuaDrawOp::Draw {
+            assert!(matches!(frame.ops.get(1).unwrap(), SongLuaDrawOp::Draw {
                     source: SongLuaDrawSource::Overlay(child), ..
                 } if child == index("CapturedChild")));
-            assert!(matches!(frame.ops[2], SongLuaDrawOp::Finish {capture} if capture == late));
+            assert!(matches!(frame.ops.get(2).unwrap(), SongLuaDrawOp::Finish {capture} if capture == late));
         }
     }
 }
@@ -16092,7 +16092,7 @@ return Def.ActorFrame{
     let draws: Vec<_> = compiled
         .draw_frames
         .iter()
-        .flat_map(|frame| &frame.ops)
+        .flat_map(|frame| frame.ops.iter())
         .filter_map(|op| match op {
             SongLuaDrawOp::Draw {
                 source: SongLuaDrawSource::Player(0),
@@ -16115,7 +16115,7 @@ return Def.ActorFrame{
             .ops
             .iter()
             .filter_map(|op| match op {
-                SongLuaDrawOp::Draw { source, .. } => Some(*source),
+                SongLuaDrawOp::Draw { source, .. } => Some(source),
                 _ => None,
             })
             .collect::<Vec<_>>();

@@ -249,6 +249,9 @@ pub(crate) fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         outputs[layer].screen_overlay_index = Some(local);
     }
 
+    let mut draw_programs = (0..outputs.len())
+        .map(|_| crate::draw_commands::RemappedDrawPrograms::default())
+        .collect::<Vec<_>>();
     for mut frame in compiled.draw_frames.drain(..) {
         let owner = *frame
             .owners
@@ -268,17 +271,7 @@ pub(crate) fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         for owner in &mut frame.owners {
             remap(owner)?;
         }
-        for op in &mut frame.ops {
-            match op {
-                crate::SongLuaDrawOp::Begin { capture, .. }
-                | crate::SongLuaDrawOp::Finish { capture } => remap(capture)?,
-                crate::SongLuaDrawOp::Draw {
-                    source: crate::SongLuaDrawSource::Overlay(index),
-                    ..
-                } => remap(index)?,
-                _ => {}
-            }
-        }
+        draw_programs[layer].remap(&mut frame.ops, remap)?;
         let frames = &mut outputs[layer].draw_frames;
         // Repeated immediate Draw calls may have the same owner and clock;
         // keep each submission independent rather than merging owner batches.
@@ -289,7 +282,7 @@ pub(crate) fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
             last.owner_ends
                 .extend(frame.owner_ends.iter().map(|end| last.ops.len() + end));
             last.owners.extend(frame.owners);
-            last.ops.extend(frame.ops);
+            last.ops.append(frame.ops);
         } else {
             frames.push(frame);
         }

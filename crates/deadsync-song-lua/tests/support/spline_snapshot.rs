@@ -3,7 +3,6 @@
 
 use deadsync_gameplay::{SongLuaColumnSplineTrack, SongLuaSplineData};
 use deadsync_song_lua::{SongLuaUpdateModState, SongStaticUpdateOutput};
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Spline {
@@ -77,7 +76,7 @@ pub fn tracks(tracks: &[SongLuaColumnSplineTrack]) -> impl std::fmt::Debug {
         .map(|left| {
             coefficients
                 .iter()
-                .map(|right| Arc::ptr_eq(left, right))
+                .map(|right| left.ptr_eq(right))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();

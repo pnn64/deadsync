@@ -111,7 +111,7 @@ return Def.ActorFrame {
                 panic!("expected recorded mesh")
             };
             assert_eq!(
-                *inherited_diffuse,
+                inherited_diffuse,
                 if index % 2 == 0 {
                     [0.875, 0.875, 0.75, 0.875]
                 } else {
@@ -122,7 +122,7 @@ return Def.ActorFrame {
             // groups forward that local color; custom callbacks reset the
             // outgoing scope. Neither may inherit the custom root's glow.
             assert_eq!(
-                *inherited_glow,
+                inherited_glow,
                 if index % 2 == 0 {
                     [1.0, 1.0, 1.0, 0.0]
                 } else {
@@ -241,12 +241,8 @@ fn take(runtime: &mut SongRuntime, names: &[&str]) -> Vec<SongLuaDrawOp> {
             )
         })
         .collect::<Vec<_>>();
-    runtime
-        .take_actor_draw_frames(&sources)
-        .unwrap()
-        .into_iter()
-        .flat_map(|(_, frame)| frame.ops)
-        .collect()
+    let frames = runtime.take_actor_draw_frames(&sources).unwrap();
+    frames.iter().flat_map(|(_, frame)| frame.ops.iter()).collect()
 }
 
 fn incoming(op: &SongLuaDrawOp) -> ([f32; 4], [f32; 4]) {
@@ -597,16 +593,16 @@ fn manual_external_sources_use_recorded_glow_for_entry_only() {
             assert_eq!(frames.len(), 1);
             let program = frames.into_iter().next().unwrap().1;
             assert_eq!(program.ops.len(), 2, "live={live}, effect={effect}");
-            for op in &program.ops {
-                let SongLuaDrawOp::Draw { state, parents, .. } = op else {
+            for op in program.ops.iter() {
+                let SongLuaDrawOp::Draw { state, parents, .. } = &op else {
                     unreachable!()
                 };
                 assert_eq!(state.diffuse[3], 0.0);
                 assert_eq!(state.glow[3], 0.0);
                 assert_eq!(parents.last().unwrap().diffuse[3], 0.0);
                 assert_eq!(parents.last().unwrap().glow[3], 0.0);
-                assert_eq!(incoming(op).0[3], 0.0);
-                close_color(incoming(op).1, [0.4375, 0.25, 0.125, 0.5]);
+                assert_eq!(incoming(&op).0[3], 0.0);
+                close_color(incoming(&op).1, [0.4375, 0.25, 0.125, 0.5]);
                 if effect {
                     assert_eq!(
                         parents[1].glow[3], 0.0,
@@ -619,7 +615,8 @@ fn manual_external_sources_use_recorded_glow_for_entry_only() {
                 }
             }
             let mut opaque = program.clone();
-            for op in &mut opaque.ops {
+            let mut opaque_ops = opaque.ops.iter().collect::<Vec<_>>();
+            for op in &mut opaque_ops {
                 let SongLuaDrawOp::Draw {
                     state,
                     parents,
@@ -639,6 +636,7 @@ fn manual_external_sources_use_recorded_glow_for_entry_only() {
                     parent.effect_mode = deadlib_present::anim::EffectMode::None;
                 }
             }
+            opaque.ops = opaque_ops.into();
             let expected = external_source_frame(opaque);
             let actual = external_source_frame(program);
             assert_eq!(

@@ -550,7 +550,7 @@ impl WholeSongComposer {
                     return None;
                 };
                 if !simple && !matches!(
-                    overlays[*overlay].kind,
+                    overlays[overlay].kind,
                     SongLuaOverlayKind::ActorMultiVertex { .. }
                         | SongLuaOverlayKind::Model { .. }
                         | SongLuaOverlayKind::NoteskinActor { .. }
@@ -559,12 +559,12 @@ impl WholeSongComposer {
                 }
                 let slot = &self.manual.banks[self.manual.bank][op];
                 let viewport = slot.viewport;
-                let camera = SongLuaDrawCamera::from(*camera).resolve_for(screen);
+                let camera = SongLuaDrawCamera::from(camera).resolve_for(screen);
                 let metrics = deadlib_present::space::Metrics::centered(viewport[0], viewport[1]);
                 Some(deadlib_present::space::with_current_metrics(metrics, || {
                     let [_, view, space] = song_lua_model_camera(camera, 1.0, 1.0);
                     (
-                        *overlay,
+                        overlay,
                         deadlib_present::compose::build_screen_with_texture_context(
                             &slot.actors,
                             [0.0; 4],

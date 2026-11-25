@@ -245,7 +245,7 @@ fn captured_screen_and_draw_clocks_rebase_only_the_calibration_difference() {
             immediate: true,
             owners: vec![0],
             owner_ends: vec![0],
-            ops: Vec::new(),
+            ops: Default::default(),
         }],
         ..Default::default()
     };

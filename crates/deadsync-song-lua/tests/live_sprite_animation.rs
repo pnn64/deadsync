@@ -241,7 +241,7 @@ fn animation_finished_can_reset_state_and_explicit_draw_freezes_the_result() {
     assert_eq!(frames.len(), 1);
     assert!(frames[0].1.immediate);
     assert_eq!(frames[0].1.ops.len(), 1);
-    let SongLuaDrawOp::Draw { state, .. } = &frames[0].1.ops[0] else {
+    let SongLuaDrawOp::Draw { state, .. } = &frames[0].1.ops.get(0).unwrap() else {
         panic!("explicit Draw must retain the selected Sprite state");
     };
     assert_eq!(state.sprite_state_index, expected.sprite_state_index);

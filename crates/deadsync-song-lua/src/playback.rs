@@ -3403,7 +3403,7 @@ struct SongLuaManualScratch {
     immediate_frames: Box<[usize]>,
     immediate_cursor: usize,
     immediate_second: f32,
-    meshes: Vec<Box<[Option<Arc<[TexturedMeshVertex]>>]>>,
+    meshes: rustc_hash::FxHashMap<(usize, usize), Arc<[TexturedMeshVertex]>>,
     owners: Box<[Option<usize>]>,
     banks: [Vec<SongLuaManualSlot>; SONG_LUA_AFT_FRAME_BANKS],
     bank: usize,
@@ -3459,11 +3459,25 @@ impl SongLuaManualScratch {
             .max(5)
             + 2;
         let mut sources = vec![Vec::new(); peak];
-        let mut target_ops = vec![false; peak];
+        let mut target_draws = vec![0; peak];
+        let mut target_stack = Vec::<(usize, usize)>::new();
         let mut source_layout_ops = vec![false; peak];
         for frame in frames.iter() {
+            target_stack.clear();
             for (op, draw) in frame.ops.iter().enumerate() {
-                target_ops[op] |= matches!(draw, SongLuaDrawOp::Begin { .. });
+                match draw {
+                    SongLuaDrawOp::Begin { .. } => target_stack.push((op, 0)),
+                    SongLuaDrawOp::Finish { .. } => {
+                        if let Some((begin, draws)) = target_stack.pop() {
+                            target_draws[begin] = target_draws[begin].max(draws);
+                        }
+                    }
+                    SongLuaDrawOp::Draw { .. } => {
+                        if let Some((_, draws)) = target_stack.last_mut() {
+                            *draws += 1;
+                        }
+                    }
+                }
                 source_layout_ops[op] |= matches!(draw, SongLuaDrawOp::Draw {
                     source: SongLuaDrawSource::Player(_) | SongLuaDrawSource::ScreenLayer(_),
                     ..
@@ -3472,25 +3486,22 @@ impl SongLuaManualScratch {
                     source: SongLuaDrawSource::Overlay(index),
                     ..
                 } = draw
-                    && !sources[op].contains(index)
+                    && !sources[op].contains(&index)
                 {
-                    sources[op].push(*index);
+                    sources[op].push(index);
                 }
             }
         }
-        let meshes = frames
-            .iter()
-            .map(|frame| {
-                frame
-                    .ops
-                    .iter()
-                    .map(|op| match op {
+        let mut meshes = rustc_hash::FxHashMap::default();
+        for frame in frames.iter() {
+            for op in frame.ops.iter() {
+                match op {
                         SongLuaDrawOp::Draw {
                             source: SongLuaDrawSource::Overlay(index),
                             vertices,
                             ..
                         } if matches!(
-                            overlays[*index].kind,
+                            overlays[index].kind,
                             SongLuaOverlayKind::ActorMultiVertex {
                                 texture_key: Some(_),
                                 ..
@@ -3502,15 +3513,15 @@ impl SongLuaManualScratch {
                         {
                             let SongLuaOverlayKind::ActorMultiVertex {
                                 vertices: initial, ..
-                            } = &overlays[*index].kind
+                            } = &overlays[index].kind
                             else {
                                 unreachable!()
                             };
-                            Some(
-                                vertices
-                                    .as_ref()
-                                    .unwrap_or(initial)
-                                    .iter()
+                            // Key by the owned snapshot. Repeated custom draws
+                            // of the same mesh share their converted vertices.
+                            let key = (index, vertices.as_ref().map_or(0, |v| v.as_ptr() as usize));
+                            meshes.entry(key).or_insert_with(|| {
+                                vertices.as_ref().unwrap_or(initial).iter()
                                     .map(|vertex| TexturedMeshVertex {
                                         normal: [0.0; 4],
                                         pos: [vertex.pos[0], vertex.pos[1], vertex.z],
@@ -3518,14 +3529,13 @@ impl SongLuaManualScratch {
                                         tex_matrix_scale: [1.0; 2],
                                         color: vertex.color,
                                     })
-                                    .collect(),
-                            )
+                                    .collect()
+                            });
                         }
-                        _ => None,
-                    })
-                    .collect()
-            })
-            .collect();
+                        _ => {}
+                }
+            }
+        }
         let normal_frames = frames
             .iter()
             .enumerate()
@@ -3547,16 +3557,8 @@ impl SongLuaManualScratch {
             banks: std::array::from_fn(|_| {
                 (0..peak)
                     .map(|op| SongLuaManualSlot {
-                        actors: Vec::with_capacity(if target_ops[op] {
-                            peak * capacity
-                        } else {
-                            capacity
-                        }),
-                        capture: SharedActorFrameScratch::with_capacity(if target_ops[op] {
-                            peak * capacity
-                        } else {
-                            capacity
-                        }),
+                        actors: Vec::with_capacity(target_draws[op].max(1) * capacity),
+                        capture: SharedActorFrameScratch::with_capacity(target_draws[op] * capacity + 2),
                         viewport: [0.0; 2],
                         source_layout: source_layout_ops[op]
                             .then(|| SharedActorFrameScratch::with_capacity(capacity)),
@@ -3631,14 +3633,14 @@ impl SongLuaManualScratch {
             .iter()
             .copied();
         for index in normal.chain(immediate) {
-            for op in &self.frames[index].ops {
+            for op in self.frames[index].ops.iter() {
                 let SongLuaDrawOp::Draw { source, .. } = op else {
                     continue;
                 };
                 match source {
-                    SongLuaDrawSource::Player(index) => requests.players[*index].player = true,
-                    SongLuaDrawSource::Judgment(index) => requests.players[*index].judgment = true,
-                    SongLuaDrawSource::Combo(index) => requests.players[*index].combo = true,
+                    SongLuaDrawSource::Player(index) => requests.players[index].player = true,
+                    SongLuaDrawSource::Judgment(index) => requests.players[index].judgment = true,
+                    SongLuaDrawSource::Combo(index) => requests.players[index].combo = true,
                     SongLuaDrawSource::ScreenLayer(0) => requests.underlay = true,
                     SongLuaDrawSource::ScreenLayer(1) => requests.overlay = true,
                     SongLuaDrawSource::ScreenLayer(2) => requests.background = true,
@@ -4106,7 +4108,7 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
     let slots = &mut scratch.banks[scratch.bank];
     let stack = &mut scratch.targets;
     for op_index in start..end {
-        match &frame.ops[op_index] {
+        match &frame.ops.get(op_index).expect("draw operation in owner range") {
             SongLuaDrawOp::Begin { capture, .. } => {
                 slots[op_index].actors.clear();
                 slots[op_index].viewport = song_lua_aft_size(&overlays[*capture], states[*capture])
@@ -4118,7 +4120,7 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
                 let begin = stack
                     .pop()
                     .expect("compiled capture program has balanced targets");
-                let SongLuaDrawOp::Begin { preserve, .. } = frame.ops[begin] else {
+                let Some(SongLuaDrawOp::Begin { preserve, .. }) = frame.ops.get(begin) else {
                     unreachable!()
                 };
                 let SongLuaOverlayKind::ActorFrameTexture {
@@ -4168,7 +4170,7 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
                 inherited_diffuse,
                 inherited_glow,
                 camera,
-                ..
+                vertices,
             } => {
                 let captured = stack.last().copied();
                 let viewport = captured.map_or(source_size, |begin| slots[begin].viewport);
@@ -4186,7 +4188,13 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
                     let slot = &mut slots[op_index];
                     slot.actors.clear();
                     slot.viewport = viewport;
-                    if let Some(vertices) = &scratch.meshes[frame_index][op_index] {
+                    let mesh = match source {
+                        SongLuaDrawSource::Overlay(index) => scratch.meshes.get(&(
+                            *index, vertices.as_ref().map_or(0, |v| v.as_ptr() as usize),
+                        )),
+                        _ => None,
+                    };
+                    if let Some(vertices) = mesh {
                         if let Some(actor) = song_lua_manual_mesh(
                             overlays, topology, op, vertices, camera, assets, draw_screen, clock, z,
                         ) {

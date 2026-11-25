@@ -42,7 +42,7 @@ fn live_vibration_uses_destination_x_zoom_including_one() {
         .unwrap();
     assert_eq!(frames.len(), 1);
     assert!(frames[0].1.immediate);
-    let SongLuaDrawOp::Draw { state, .. } = frames[0].1.ops[0] else {
+    let SongLuaDrawOp::Draw { state, .. } = frames[0].1.ops.get(0).unwrap() else {
         panic!("explicit Draw must retain its live actor state");
     };
     assert!(state.vibrate);
@@ -104,7 +104,7 @@ fn live_scale_exports_preserve_unit_axes_and_explicit_draw_parents() {
     assert_eq!(frames.len(), 1);
     assert!(frames[0].1.immediate);
     assert_eq!(frames[0].1.ops.len(), 1);
-    let SongLuaDrawOp::Draw { state, parents, .. } = &frames[0].1.ops[0] else {
+    let SongLuaDrawOp::Draw { state, parents, .. } = &frames[0].1.ops.get(0).unwrap() else {
         panic!("explicit Draw must retain the child and parent states");
     };
     assert_eq!(parents.len(), 1);

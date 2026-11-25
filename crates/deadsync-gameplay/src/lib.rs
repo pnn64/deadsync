@@ -53,6 +53,8 @@ pub mod song_backgrounds;
 pub mod song_launch;
 pub mod stage_launch;
 pub mod stage_charts;
+mod spline_coefficients;
+pub use spline_coefficients::*;
 
 // ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.
 const MIN_SECONDS_TO_STEP: f32 = 6.0;

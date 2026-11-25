@@ -270,13 +270,7 @@ impl Actors {
         vm.store_ref()
             .draw_capture
             .as_ref()
-            .map_or((0, 0, 0), |capture| {
-                (
-                    capture.frames.len(),
-                    capture.frames.iter().map(|frame| frame.calls.len()).sum(),
-                    capture.bytes,
-                )
-            })
+            .map_or((0, 0, 0), crate::draw_commands::Capture::fixture_storage)
     }
     pub(crate) fn fixture_command_depth(&self, vm: &Vm) -> usize {
         vm.store_ref().song_callback_depth

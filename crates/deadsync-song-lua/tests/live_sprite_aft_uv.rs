@@ -99,7 +99,7 @@ fn live_aft_sprite_keeps_backing_coordinates_and_retained_viewport() {
         let frames = runtime
             .take_actor_draw_frames(&[(sprite, SongLuaDrawSource::Overlay(0))])
             .unwrap();
-        let SongLuaDrawOp::Draw { state, .. } = frames[0].1.ops[0] else {
+        let SongLuaDrawOp::Draw { state, .. } = frames[0].1.ops.get(0).unwrap() else {
             panic!("expected explicit AFT sprite draw");
         };
         rect(state, translated);

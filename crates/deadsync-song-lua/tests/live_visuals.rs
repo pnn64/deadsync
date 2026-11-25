@@ -143,11 +143,12 @@ fn column_splines_match_between_baked_and_runtime_and_clear_on_reset() {
             assert_eq!(position.coefficients.len(), 3);
             if let Some(initial) = position_at_start.take() {
                 let initial: [[[f32; 4]; 3]; 3] = initial;
-                assert_eq!(position.coefficients[0][0][0], 11.0);
-                assert_eq!(&position.coefficients[0][0][1..], &initial[0][0][1..]);
-                assert_ne!(position.coefficients[0][0][1], 0.0);
+                let point = position.coefficients.view().get(0).unwrap();
+                assert_eq!(point[0][0], 11.0);
+                assert_eq!(&point[0][1..], &initial[0][0][1..]);
+                assert_ne!(point[0][1], 0.0);
             } else {
-                position_at_start = Some(position.coefficients.as_ref().try_into().unwrap());
+                position_at_start = Some(position.coefficients.iter().collect::<Vec<_>>().try_into().unwrap());
             }
         } else {
             assert!(out.column_splines.iter().all(Vec::is_empty));
@@ -158,13 +159,276 @@ fn column_splines_match_between_baked_and_runtime_and_clear_on_reset() {
 
 #[test]
 #[ignore = "requires the retained Peach Summer Splash native fixture"]
-fn peach_sandbox_column_splines_follow_native_wrap_and_reset() {
-    let fixture = std::env::var_os("DEADSYNC_PEACH_FIXTURE_ROOT")
+fn peach_original_bake_fits_the_storage_budgets() {
+    use deadsync_gameplay::{SongLuaSplineCoefficients as Coefficients, SongLuaSplinePointCoefficients};
+    let dir = peach_fixture().join("inputs/original");
+    let context = peach_original_context(&dir);
+    let bake = bake_peach_original(&context);
+    let mut shapes = std::collections::HashSet::new();
+    let mut pages = std::collections::HashSet::new();
+    let header = 2 * size_of::<usize>();
+    let (mut shared, mut dense, mut unshared, mut frames, mut frame_storage) = (0, 0, 0, 0, 0);
+    for track in &bake.column_splines {
+        frames += track.frames.len();
+        frame_storage += size_of_val(track) + size_of_val(track.frames.as_ref()) + header;
+        for frame in track.frames.iter() {
+            for curve in [&frame.position, &frame.rotation, &frame.zoom]
+                .into_iter()
+                .flatten()
+            {
+                let bytes = size_of::<SongLuaSplinePointCoefficients>() * curve.coefficients.len();
+                unshared += bytes;
+                match &curve.coefficients {
+                    Coefficients::Dense(data) if shapes.insert(data.as_ptr() as usize) => {
+                        dense += bytes + header;
+                        shared += bytes + header;
+                    }
+                    Coefficients::Paged(curve) if shapes.insert(Arc::as_ptr(curve) as usize) => {
+                        dense += bytes + header;
+                        shared += size_of_val(curve.as_ref()) + header + size_of_val(curve.pages());
+                        for page in curve.pages().iter().flatten() {
+                            if pages.insert(page.as_ptr()) {
+                                shared += size_of_val(page.as_ref()) + header;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    println!(
+        "Peach original: {frames} spline frames, {} retained bytes ({shared} coefficient bytes), {dense} whole-curve-only bytes, {unshared} unshared coefficient bytes",
+        shared + frame_storage,
+    );
+    assert_eq!(bake.column_splines.len(), 4);
+    assert!(frames > 1_000 && unshared > dense && dense > shared);
+    assert!(shared + frame_storage < 128 * 1024 * 1024);
+}
+
+fn peach_original_context(dir: &Path) -> song::SongLuaCompileContext {
+    let simfile = dir.join("Peach Summer Splash.ssc");
+    let music_length = deadlib_audio_decode::file_length_seconds(
+        &dir.join("Peach Summer Splash.ogg"),
+        Default::default(),
+    )
+    .unwrap();
+    let metadata = deadsync_simfile::song::parse_song_meta_file(
+        &simfile,
+        &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+        -0.008,
+        |_| music_length,
+    )
+    .unwrap();
+    let mut context = song::SongLuaCompileContext::new(dir, "Peach Summer Splash");
+    context.players[1].enabled = false;
+    context.players[0].speedmod = song::SongLuaSpeedMod::X(2.0);
+    context.players[0].noteskin_name = "cel".into();
+    context.screen_width = 854.0;
+    context.display_width = 854.0;
+    context.song_timing_bpms = vec![(0.0, 125.0)];
+    context.song_display_bpms = [125.0; 2];
+    context.song_timing = metadata.song_timing.clone();
+    context.global_offset_seconds = -0.008;
+    context.music_length_seconds = music_length;
+    context.random_seed = 1;
+    context.video_renderers = "opengl".into();
+    context.song_steps = metadata
+        .charts
+        .iter()
+        .map(song::SongLuaStep::from)
+        .collect();
+    context.player_step_indices[0] = context
+        .song_steps
+        .iter()
+        .position(|step| step.difficulty == song::SongLuaDifficulty::Challenge);
+    assert!(context.player_step_indices[0].is_some());
+    context
+}
+
+fn bake_peach_original(context: &song::SongLuaCompileContext) -> song::CompiledSongLua<Actor> {
+    song::compile_song_lua_layers(
+        &[&context.song_dir.join("lua/default.lua")],
+        0,
+        context,
+        Default::default(),
+        slots,
+        layer,
+        |_, _| None,
+    )
+    .unwrap()
+    .remove(0)
+}
+
+#[test]
+#[ignore = "requires the retained Peach Summer Splash native fixture"]
+fn peach_original_startup_passes_follow_native_boundaries_and_sources() {
+    use song::{SongLuaDrawOp as Op, SongLuaDrawSource as Source, SongLuaOverlayKind as Kind};
+    let fixture = peach_fixture();
+    let native: serde_json::Value = serde_json::from_slice(
+        &zstd::stream::decode_all(
+            std::fs::read(fixture.join("original-aft-native.json.zst"))
+                .unwrap()
+                .as_slice(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut context = peach_original_context(&fixture.join("inputs/original"));
+    context.music_length_seconds = native["end_position"]["seconds"].as_f64().unwrap() as f32;
+    let origin = context
+        .song_timing
+        .as_ref()
+        .map_or(0.0, |t| f64::from(t.get_time_for_beat_exact(0.0)));
+    context.compile_clock_inputs.push([origin, 0.0, 0.0]);
+    for f in native["update_frames"].as_array().unwrap() {
+        let clock = ["seconds", "song_beat", "delta"].map(|key| f[key].as_f64().unwrap());
+        if clock[0] > origin && clock[1] > 0.0 {
+            context.compile_clock_inputs.push(clock);
+        }
+    }
+    let bake = bake_peach_original(&context);
+    let defined = |index: usize| match &bake.overlays[index].kind {
+        Kind::ActorFrameTexture { capture_name, .. } => capture_name.as_str(),
+        _ => panic!("operation must refer to a declared render target"),
+    };
+    let native_passes = native["render_target_passes"].as_array().unwrap();
+    let mut boundaries = Vec::new();
+    let mut sources = Vec::new();
+    let mut capture = None;
+    for op in bake
+        .draw_frames
+        .iter()
+        .filter(|frame| frame.immediate)
+        .flat_map(|frame| frame.ops.iter())
+    {
+        match op {
+            Op::Begin {
+                capture: index,
+                preserve,
+            } => {
+                let name = defined(index);
+                assert!(capture.replace(name).is_none());
+                boundaries.push((name, "begin", Some(preserve)));
+            }
+            Op::Finish { capture: index } => {
+                let name = defined(index);
+                assert_eq!(capture.take(), Some(name));
+                boundaries.push((name, "end", None));
+            }
+            Op::Draw {
+                source: Source::Overlay(index),
+                ..
+            } => {
+                let actor = &bake.overlays[index];
+                if let Some(name) = actor
+                    .name
+                    .as_deref()
+                    .filter(|name| name.starts_with("Static") || name.starts_with("Blur"))
+                {
+                    let texture = match &actor.kind {
+                        Kind::AftSprite { capture_name } => capture_name.as_str(),
+                        _ => "",
+                    };
+                    sources.push((capture.unwrap(), name, texture));
+                }
+            }
+            Op::Draw { .. } => {}
+        }
+    }
+    let startup = &native_passes[..4];
+    assert!(
+        startup
+            .iter()
+            .all(|event| event["draw_phase"] == "during_update")
+    );
+    let expected: Vec<_> = startup
+        .iter()
+        .map(|event| {
+            (
+                event["name"].as_str().unwrap(),
+                event["kind"].as_str().unwrap(),
+                event["preserve"].as_bool(),
+            )
+        })
+        .collect();
+    assert_eq!(boundaries, expected);
+
+    let definitions: std::collections::HashMap<_, _> = native["actor_definitions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|actor| Some((actor["id"].as_str()?, actor["name"].as_str()?)))
+        .collect();
+    let submissions = native["drawable_samples"].as_array().unwrap();
+    let mut expected = Vec::new();
+    for pass in startup.chunks_exact(2) {
+        let bounds = [0, 1].map(|i| pass[i]["after_native_draw_sequence"].as_u64().unwrap());
+        for sample in submissions {
+            let state = &sample["state"];
+            let seq = state["native_draw_sequence"].as_u64().unwrap();
+            if seq <= bounds[0] || seq > bounds[1] || state["render_target"] != pass[0]["target"] {
+                continue;
+            }
+            if let Some(&name) = sample["definition_id"]
+                .as_str()
+                .and_then(|id| definitions.get(id))
+                && (name.starts_with("Static") || name.starts_with("Blur"))
+            {
+                expected.push((
+                    pass[0]["name"].as_str().unwrap(),
+                    name,
+                    state["texture"].as_str().unwrap(),
+                ));
+            }
+        }
+    }
+    assert_eq!(sources, expected);
+    assert!(sources.len() > 256);
+    let regular_passes: Vec<_> = native_passes[4..8].iter().step_by(2).map(|event| (
+        event["name"].as_str().unwrap(), event["preserve"].as_bool().unwrap(),
+    )).collect();
+    let declared: Vec<_> = bake.overlays.iter().enumerate().filter_map(|(index, actor)| {
+        let Kind::ActorFrameTexture { capture_name, .. } = &actor.kind else { return None };
+        Some((index, (capture_name.as_str(), actor.initial_state.aft_preserve)))
+    }).collect();
+    assert_eq!(declared.iter().map(|(_, target)| *target).collect::<Vec<_>>(), regular_passes);
+    let last_pass_end = native_passes[7]["after_native_draw_sequence"]
+        .as_u64()
+        .unwrap();
+    let native_consumer = submissions
+        .iter()
+        .find(|sample| {
+            let state = &sample["state"];
+            state["native_draw_sequence"].as_u64().unwrap() > last_pass_end
+                && state["render_target"] == 0
+                && state["texture"] == "BlurTex"
+        })
+        .unwrap();
+    let consumer_name = definitions[native_consumer["definition_id"].as_str().unwrap()];
+    let consumer = bake.overlays.iter().position(|actor| actor.name.as_deref() == Some(consumer_name)
+        && matches!(&actor.kind, Kind::AftSprite { capture_name } if capture_name == "BlurTex")).unwrap();
+    assert!(declared.iter().all(|(target, _)| *target < consumer));
+    let mut parent = bake.overlays[consumer].parent_index;
+    while let Some(index) = parent {
+        assert!(!matches!(&bake.overlays[index].kind, Kind::ActorFrameTexture { .. }));
+        parent = bake.overlays[index].parent_index;
+    }
+}
+
+fn peach_fixture() -> std::path::PathBuf {
+    std::env::var_os("DEADSYNC_PEACH_FIXTURE_ROOT")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../tests/fixtures/itgmania-song-lua-micro/peach-summer-splash")
-        });
+        })
+}
+
+#[test]
+#[ignore = "requires the retained Peach Summer Splash native fixture"]
+fn peach_sandbox_column_splines_follow_native_wrap_and_reset() {
+    let fixture = peach_fixture();
     let read = |file| std::fs::read(fixture.join(file)).unwrap();
     let manifest: serde_json::Value = serde_json::from_slice(&read("manifest.json")).unwrap();
     let native: serde_json::Value = serde_json::from_slice(

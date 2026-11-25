@@ -5,7 +5,10 @@ use super::song_columns::{
 };
 use super::*;
 use crate::SongLuaNoteHideWindow;
-use deadsync_gameplay::{SongLuaColumnSplineFrame as Frame, SongLuaSplineData as Spline};
+use deadsync_gameplay::{
+    SongLuaColumnSplineFrame as Frame, SongLuaSplineCoefficients as Coefficients,
+    SongLuaSplineData as Spline,
+};
 
 impl Actors {
     pub(crate) fn capture_column_splines(
@@ -156,7 +159,7 @@ fn read_splines(call: &mut HostCall<'_>, state: &mut State) -> Result<(), Error>
                             let last = state
                                 .lanes
                                 .get(&(player, local))
-                                .and_then(|l| l.frames.last());
+                                .and_then(|l| l.last_raw.as_ref().or_else(|| l.frames.last()));
                             let [pos_scratch, rot_scratch, zoom_scratch] = &mut state.scratch;
                             let position = read_spline(
                                 call,
@@ -298,7 +301,10 @@ fn read_spline(
                     })
                 });
                 let coefficients = previous
-                    .map(|s| &s.coefficients)
+                    .and_then(|s| match &s.coefficients {
+                        Coefficients::Dense(points) => Some(points),
+                        Coefficients::Paged(_) => None,
+                    })
                     .into_iter()
                     .chain(&scratch.recent)
                     .find(|data| same_coefficients(data, &scratch.coefficients))
@@ -306,7 +312,7 @@ fn read_spline(
                     .unwrap_or_else(|| Arc::from(scratch.coefficients.as_slice()));
                 let result = Spline {
                     absolute,
-                    coefficients,
+                    coefficients: Coefficients::Dense(coefficients.clone()),
                     constant,
                     looping,
                     beats_per_t,
@@ -314,7 +320,7 @@ fn read_spline(
                     subtract_song_beat: field(call, handler, "__songlua_subtract_song_beat")?
                         .is_truthy(),
                 };
-                scratch.recent = Some(Arc::clone(&result.coefficients));
+                scratch.recent = Some(coefficients);
                 Ok(Some(result))
             })
         })

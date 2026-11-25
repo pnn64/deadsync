@@ -103,7 +103,7 @@ fn explicit_draw_preserves_parent_and_child_effect_clocks() {
     assert_eq!(frames.len(), 1);
     assert!(frames[0].1.immediate);
     assert_eq!(frames[0].1.ops.len(), 1);
-    let SongLuaDrawOp::Draw { state, parents, .. } = &frames[0].1.ops[0] else {
+    let SongLuaDrawOp::Draw { state, parents, .. } = &frames[0].1.ops.get(0).unwrap() else {
         panic!("the child Quad must retain its draw state");
     };
     assert_eq!(state.effect_time, glow.effect_time);

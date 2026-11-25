@@ -69,7 +69,7 @@ fn custom_texture_coordinates_enable_wrapping_immediately_and_capture_it() {
                 let frames = runtime
                     .take_actor_draw_frames(&[(root, SongLuaDrawSource::Overlay(0))])
                     .unwrap();
-                let SongLuaDrawOp::Draw { state, .. } = frames[0].1.ops[0] else {
+                let SongLuaDrawOp::Draw { state, .. } = frames[0].1.ops.get(0).unwrap() else {
                     panic!("expected explicit sprite draw");
                 };
                 assert!(state.texture_wrapping, "{command}");

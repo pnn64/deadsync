@@ -1004,7 +1004,7 @@ pub enum SongLuaColumnTransformTarget {
 pub struct SongLuaSplineData {
     /// Position mode replaces ArrowEffects. Offset mode adds to it.
     pub absolute: bool,
-    pub coefficients: std::sync::Arc<[[[f32; 4]; 3]]>,
+    pub coefficients: SongLuaSplineCoefficients,
     pub constant: bool,
     pub looping: bool,
     pub beats_per_t: f32,
@@ -1260,12 +1260,12 @@ impl SongLuaSplineData {
         SongLuaPositionSpline {
             enabled: true,
             absolute: self.absolute,
-            coefficients: &self.coefficients,
+            coefficients: self.coefficients.view(),
             constant: self.constant,
             looping: self.looping,
             points: std::array::from_fn(|point| {
                 std::array::from_fn(|axis| {
-                    self.coefficients
+                    self.coefficients.view()
                         .get(point)
                         .map_or(0.0, |value| value[axis][0])
                 })
@@ -1282,7 +1282,7 @@ impl SongLuaSplineData {
 pub struct SongLuaPositionSpline<'a> {
     pub enabled: bool,
     pub absolute: bool,
-    pub coefficients: &'a [[[f32; 4]; 3]],
+    pub coefficients: SongLuaSplineCoefficientView<'a>,
     pub constant: bool,
     pub looping: bool,
     pub points: [[f32; 3]; 2],
@@ -1296,7 +1296,7 @@ impl Default for SongLuaPositionSpline<'_> {
         Self {
             enabled: false,
             absolute: false,
-            coefficients: &[],
+            coefficients: SongLuaSplineCoefficientView::Dense(&[]),
             constant: true,
             looping: false,
             points: [[0.0; 3]; 2],
@@ -1366,7 +1366,7 @@ impl SongLuaPositionSpline<'_> {
             };
             let square = fraction * fraction;
             let cube = square * fraction;
-            let coefficients = self.coefficients[index];
+            let coefficients = self.coefficients.get(index).expect("validated spline point");
             return (
                 coefficients.map(|[a, b, c, d]| a + b * fraction + c * square + d * cube),
                 coefficients.map(|[_, b, c, d]| b + 2.0 * c * fraction + 3.0 * d * square),

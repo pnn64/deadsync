@@ -63,6 +63,11 @@ impl Pair {
         );
     }
     fn take(&mut self) -> Vec<(usize, SongLuaDrawFrame)> {
+        let actual = self.take_result().unwrap();
+        reference_test::assert_debug("song/tests/rust_draw.rs::frames", &actual);
+        actual
+    }
+    fn take_result(&mut self) -> Result<Vec<(usize, SongLuaDrawFrame)>, String> {
         let names: Vec<_> = NAMES
             .iter()
             .enumerate()
@@ -77,9 +82,7 @@ impl Pair {
                 )
             })
             .collect();
-        let actual = self.rust.take_actor_draw_frames(&sources).unwrap();
-        reference_test::assert_debug("song/tests/rust_draw.rs::frames", &actual);
-        actual
+        self.rust.take_actor_draw_frames(&sources)
     }
 }
 
@@ -104,7 +107,7 @@ fn nested_targets_restore_caller_stacks_and_freeze_each_submission() {
             parents,
             camera,
             ..
-        } = &frames[0].1.ops[0]
+        } = &frames[0].1.ops.get(0).unwrap()
         else {
             panic!()
         };
@@ -116,7 +119,7 @@ fn nested_targets_restore_caller_stacks_and_freeze_each_submission() {
             parents,
             camera,
             ..
-        } = &frames[0].1.ops[2]
+        } = &frames[0].1.ops.get(2).unwrap()
         else {
             panic!()
         };
@@ -164,7 +167,7 @@ fn immediate_draws_preserve_call_time_pose_and_live_frames_replace_only_ordinary
         let frames = pair.take();
         assert_eq!(frames.len(), if live { 2 } else { 3 });
         assert!(frames[0].1.immediate);
-        let SongLuaDrawOp::Draw { state, .. } = frames[0].1.ops[0] else {
+        let SongLuaDrawOp::Draw { state, .. } = frames[0].1.ops.get(0).unwrap() else {
             panic!()
         };
         assert_eq!(state.x, 7.0);
@@ -236,17 +239,23 @@ fn traced_callbacks_and_textures_survive_reentry_then_collect() {
 }
 
 #[test]
-fn preparation_operation_limit_and_live_high_draw_count_match() {
+fn preparation_keeps_wide_passes_and_reports_its_work_limit() {
     for live in [false, true] {
         let mut pair = Pair::new(live);
-        pair.script("root:SetDrawFunction(function() for i=1,300 do q:x(i):Draw() end end)");
-        pair.draw(if live {
-            None
+        pair.script("root:SetDrawFunction(function() for i=1,750 do q:x(i):Draw() end end)");
+        assert!(pair.rust.draw_actor_scene(pair.scene).unwrap());
+        assert_eq!(pair.take_result().unwrap()[0].1.ops.len(), 750);
+        pair.script("root:SetDrawFunction(function() for i=1,8193 do q:x(i):Draw() end end)");
+        let drawn = pair.rust.draw_actor_scene(pair.scene);
+        if live {
+            assert!(drawn.unwrap());
+            let frames = pair.take_result().unwrap();
+            assert_eq!(frames[0].1.ops.len(), 8193);
         } else {
-            Some("exceeds its song budget")
-        });
-        let frames = pair.take();
-        assert_eq!(frames[0].1.ops.len(), if live { 300 } else { 256 });
+            let message = "8192 recorded operations per frame";
+            assert!(drawn.unwrap_err().to_string().contains(message));
+            assert!(pair.take_result().unwrap_err().contains(message));
+        }
     }
 }
 
@@ -262,7 +271,7 @@ fn draw_function_binding_validation_and_mesh_payloads_match() {
     "#);
     pair.draw(None);
     let frames = pair.take();
-    let SongLuaDrawOp::Draw { vertices, .. } = &frames[0].1.ops[0] else {
+    let SongLuaDrawOp::Draw { vertices, .. } = &frames[0].1.ops.get(0).unwrap() else {
         panic!()
     };
     assert_eq!(vertices.as_ref().unwrap().len(), 3);

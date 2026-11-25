@@ -3,7 +3,6 @@ use deadsync_gameplay::SongLuaColumnSplineTrack as Track;
 use deadsync_song_lua::{
     SongLuaCompileContext, {SongColumnSplineCapture, SongLayerPlan, SongRuntime},
 };
-use std::sync::Arc;
 
 struct Fixture {
     _dir: tempfile::TempDir,
@@ -132,10 +131,9 @@ fn spline_tracks_capture_real_handlers_mutations_metadata_and_reenabled_geometry
     drop(f);
     assert_eq!(tracks.len(), 1);
     assert_eq!(tracks[0].frames.len(), 6);
-    assert!(Arc::ptr_eq(
-        &tracks[0].frames[1].position.as_ref().unwrap().coefficients,
-        &tracks[0].frames[2].position.as_ref().unwrap().coefficients
-    ));
+    let a = &tracks[0].frames[1].position.as_ref().unwrap().coefficients;
+    let b = &tracks[0].frames[2].position.as_ref().unwrap().coefficients;
+    assert!(a.ptr_eq(b));
 }
 
 #[test]
@@ -255,29 +253,21 @@ fn spline_tracks_keep_nonreflexive_coefficients_and_the_logical_byte_limit() {
     f.sample(1., None);
     f.sample(2., None);
     assert_eq!(f.finish()[0].frames.len(), 3);
-    f.script("h=handler({});h.__songlua_spline.__songlua_spline_size=65536;install({column(0,0,h,nil)},nil)");
+    f.script("h=handler({});h.__songlua_spline.__songlua_spline_size=65536;install({column(0,0,h,nil),column(0,1,h,nil)},nil)");
     for i in 0..43 {
         f.script(&format!("h.__songlua_beats_per_t={}", i + 1));
-        f.sample(
-            i as f32,
-            if i == 42 {
-                Some("128 MiB per layer")
-            } else {
-                None
-            },
-        );
+        f.sample(i as f32, None);
     }
-    let tracks = f.finish();
-    assert_eq!(tracks[0].frames.len(), 42);
-    assert_eq!(
-        tracks[0].frames[0]
-            .position
-            .as_ref()
-            .unwrap()
-            .coefficients
-            .len(),
-        65536
-    );
+    let tracks = f.rust_capture.finish().unwrap();
+    assert_eq!(tracks.len(), 2);
+    let shared = &tracks[0].frames[0].position.as_ref().unwrap().coefficients;
+    assert_eq!(shared.len(), 65536);
+    for track in &tracks {
+        assert_eq!(track.frames.len(), 43);
+        for frame in track.frames.iter() {
+            assert!(shared.ptr_eq(&frame.position.as_ref().unwrap().coefficients));
+        }
+    }
 }
 
 #[test]

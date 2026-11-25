@@ -1,8 +1,6 @@
 //! Custom draw traversal and render-target scopes over the Rust host API.
 use super::*;
-use crate::draw_commands::{
-    Capture, Color, Context, DRAW_INSTALLED_KEY, MAX_BYTES, MAX_OPS, RawCall, RawFrame, RawOp,
-};
+use crate::draw_commands::{Capture, Color, Context, DRAW_INSTALLED_KEY, Pose};
 use sprites::{field, set};
 
 const ACTIVE: &str = "__songlua_draw_callback_active";
@@ -46,40 +44,16 @@ fn function(call: &mut HostCall<'_>, actor: TableId) -> Result<Value, Error> {
         Err(call.error(b"actor draw function must be a function"))
     }
 }
-fn budget(call: &HostCall<'_>) -> Error {
-    call.error(b"custom draw capture exceeds its song budget")
-}
-fn push(call: &mut HostCall<'_>, op: RawOp) -> Result<(), Error> {
+fn target_command(call: &mut HostCall<'_>, target: usize, preserve: Option<bool>) -> Result<(), Error> {
     let live = live(call.store());
-    let store = call.store();
-    let Some(capture) = &mut store.draw_capture else {
-        return Ok(());
-    };
-    let Some(context) = &capture.context else {
-        return Ok(());
-    };
-    let owner = context.owner;
-    let extra = match &op {
-        RawOp::Draw(_, _, context, vertices) => {
-            context.parents.len() * size_of::<crate::SongLuaOverlayState>()
-                + vertices.as_ref().map_or(0, |vertices| {
-                    vertices.len() * size_of::<crate::SongLuaOverlayMeshVertex>()
-                })
-        }
-        _ => 0,
-    };
-    let bytes = size_of::<RawCall>() + extra;
-    if (!live && capture.frame_ops >= MAX_OPS) || capture.bytes.saturating_add(bytes) > MAX_BYTES {
-        return Err(budget(call));
+    if let Some(capture) = &mut call.store().draw_capture && capture.context.is_some() {
+        capture.target(target, preserve, live).map_err(|error| call.error(error.as_bytes()))?;
     }
-    capture.bytes += bytes;
-    capture.frame_ops += 1;
-    capture.calls.push(RawCall { owner, op });
     Ok(())
 }
 pub(super) fn begin(call: &mut HostCall<'_>, actor: TableId, preserve: bool) -> Result<(), Error> {
     let pointer = pointer(call, actor);
-    push(call, RawOp::Begin(pointer, preserve))?;
+    target_command(call, pointer, Some(preserve))?;
     if let Some(capture) = &mut call.store().draw_capture
         && let Some(prior) = capture.context.take()
     {
@@ -108,7 +82,7 @@ pub(super) fn finish(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Erro
     {
         return Err(call.error(b"FinishRenderingTo does not match the active target"));
     }
-    push(call, RawOp::Finish(pointer))?;
+    target_command(call, pointer, None)?;
     if let Some(capture) = &mut call.store().draw_capture
         && let Some((_, prior)) = capture.targets.pop()
     {
@@ -464,21 +438,27 @@ fn draw(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
                     "{kind} '{name}' (screen child '{}')",
                     screen.unwrap_or_default()
                 );
-                let bytes = label.len() + size_of::<(usize, String)>();
+                let bytes = label.capacity() + size_of::<(usize, String)>();
                 let store = call.store();
                 let capture = store.draw_capture.as_mut().unwrap();
-                if capture.bytes.saturating_add(bytes) > MAX_BYTES {
-                    return Err(budget(call));
+                match capture.reserve_bytes(bytes) {
+                    Ok(()) => { capture.labels.insert(pointer, label); }
+                    Err(error) => return Err(call.error(error.as_bytes())),
                 }
-                capture.bytes += bytes;
-                capture.labels.insert(pointer, label);
             }
             let vertices = meshes::read(call, actor)?.map(|mesh| mesh.vertices);
             let parents = Arc::from(&context.parents[..context.parents.len() - 1]);
-            push(
-                call,
-                RawOp::Draw(pointer, local, Context { parents, ..context }, vertices),
-            )
+            let pose = Pose {
+                state: local,
+                parents,
+                inherited_diffuse: context.inherited_color.diffuse,
+                inherited_glow: context.inherited_color.glow,
+                camera: context.camera.map(Arc::new),
+                vertices,
+            };
+            let live = live(call.store());
+            call.store().draw_capture.as_mut().unwrap().draw(pointer, pose, live)
+                .map_err(|error| call.error(error.as_bytes()))
         })();
         if target {
             finish(call, actor)?;
@@ -509,34 +489,25 @@ fn second(call: &mut HostCall<'_>) -> Result<f32, Error> {
 fn immediate(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let second = second(call)?;
     let owner = pointer(call, actor);
-    let start = {
+    let pending = {
         let store = call.store();
         let capture = store.draw_capture.get_or_insert_with(Capture::default);
         capture.context = Some(Context {
             owner,
             ..Context::default()
         });
-        capture.calls.len()
+        std::mem::take(&mut capture.pending)
     };
     let result = draw(call, actor);
     let store = call.store();
     let capture = store.draw_capture.as_mut().unwrap();
     capture.context = None;
-    let calls = capture.calls.split_off(start);
-    if !calls.is_empty() {
-        let bytes = size_of::<RawFrame>() + size_of::<usize>();
-        if capture.bytes.saturating_add(bytes) > MAX_BYTES {
-            return Err(budget(call));
-        }
-        capture.bytes += bytes;
-        capture.frames.push(RawFrame {
-            second,
-            immediate: true,
-            owners: vec![owner],
-            calls,
-        });
+    if result.is_err() {
+        capture.targets.clear();
     }
-    result
+    let recorded = capture.record(second, Some(owner));
+    capture.pending = pending;
+    result.and_then(|()| recorded.map_err(|error| call.error(error.as_bytes())))
 }
 fn visit(call: &mut HostCall<'_>, actor: TableId, prior: &Context) -> Result<(), Error> {
     if live(call.store()) && truthy(get_static(call, actor, b"__songlua_live_inactive")?) {
@@ -559,7 +530,9 @@ fn visit(call: &mut HostCall<'_>, actor: TableId, prior: &Context) -> Result<(),
         capture.context = None;
         if !capture.targets.is_empty() {
             capture.targets.clear();
-            return Err(call.error(b"draw callback left a render target active"));
+            if result.is_ok() {
+                return Err(call.error(b"draw callback left a render target active"));
+            }
         }
         return result;
     }
@@ -621,12 +594,11 @@ fn run(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
     {
         capture.context = None;
         capture.targets.clear();
-        capture.calls.clear();
+        capture.clear_calls();
         capture.owners.clear();
         capture.frames.retain(|frame| frame.immediate);
         if capture.frames.is_empty() {
-            capture.labels.clear();
-            capture.bytes = 0;
+            capture.reset_storage();
         }
         capture.frame_ops = 0;
     }
@@ -681,22 +653,9 @@ fn run(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
     }
     let second = second(call)?;
     if let Some(capture) = &mut call.store().draw_capture {
-        let bytes = size_of::<RawFrame>() + capture.owners.len() * size_of::<usize>();
-        if capture.bytes.saturating_add(bytes) > MAX_BYTES {
-            capture.calls.clear();
-            capture.owners.clear();
-            return Err(budget(call));
-        }
-        capture.bytes += bytes;
-        let calls = std::mem::take(&mut capture.calls);
-        let owners = std::mem::take(&mut capture.owners);
-        capture.frames.push(RawFrame {
-            second,
-            immediate: false,
-            owners,
-            calls,
-        });
+        let recorded = capture.record(second, None);
         capture.frame_ops = 0;
+        return result.and_then(|()| recorded.map_err(|error| call.error(error.as_bytes())));
     }
     result
 }

@@ -83,7 +83,7 @@ fn program(ops: Vec<SongLuaDrawOp>) -> SongLuaDrawFrame {
         immediate: false,
         owners: vec![0],
         owner_ends: vec![ops.len()],
-        ops,
+        ops: ops.into(),
     }
 }
 

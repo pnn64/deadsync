@@ -82,6 +82,7 @@ fn manual_player_frame(screen_offset: [f32; 2], ordered: bool) -> deadlib_render
                 inherited_glow: [0.0; 4],
                 vertices: None,
             })
+            .to_vec()
             .into(),
     }]);
     let mut scratch = SongLuaManualScratch::with_frames(&overlays, frames);
@@ -714,8 +715,8 @@ return Def.ActorFrame {
     assert!(!compiled.draw_frames.is_empty());
     for frame in &compiled.draw_frames {
         assert_eq!(frame.ops.len(), 2, "only glow and player draw: {frame:?}");
-        assert!(matches!(&frame.ops[0], SongLuaDrawOp::Draw { source: SongLuaDrawSource::Overlay(index), .. } if *index == glowing));
-        assert!(matches!(&frame.ops[1], SongLuaDrawOp::Draw { source: SongLuaDrawSource::Player(0), .. }));
+        assert!(matches!(&frame.ops.get(0).unwrap(), SongLuaDrawOp::Draw { source: SongLuaDrawSource::Overlay(index), .. } if *index == glowing));
+        assert!(matches!(&frame.ops.get(1).unwrap(), SongLuaDrawOp::Draw { source: SongLuaDrawSource::Player(0), .. }));
     }
 }
 
@@ -796,7 +797,7 @@ return Def.ActorFrame {
             let SongLuaDrawOp::Draw {
                 source: SongLuaDrawSource::Overlay(index), state, vertices, ..
             } = op else { panic!("expected recorded AMV draw: {op:?}") };
-            assert_eq!(*index, meshes[ordinal / 4]);
+            assert_eq!(index, meshes[ordinal / 4]);
             assert_eq!((state.texture_filtering, state.texture_wrapping), expected[ordinal % 4]);
             assert_eq!(vertices.as_ref().expect("frozen AMV vertices").len(), 3);
         }
@@ -913,7 +914,11 @@ fn manual_rgb_passes_keep_geometry_and_preserve_flags() {
         assert_eq!((target.width, target.height), (1024, 512));
         assert_eq!(target.viewport, [640, 480]);
         assert_eq!(target.tmesh_instances.len(), 3);
-        assert_eq!(target.tmesh_geometries.len(), 3);
+        assert_eq!(
+            target.tmesh_geometries.len(),
+            if seconds == 0.0 { 1 } else { 2 },
+            "RGB submissions share unchanged vertices and keep the blue pass mutation"
+        );
         for pass in 0..3 {
             let instance = &target.tmesh_instances[pass];
             let color =
@@ -935,7 +940,7 @@ fn manual_rgb_passes_keep_geometry_and_preserve_flags() {
     }
     let retained = retained.expect("retained earlier frame");
     assert_eq!(
-        retained.render_targets[0].tmesh_geometries[2].vertices[0].pos[1],
+        retained.render_targets[0].tmesh_geometries.last().unwrap().vertices[0].pos[1],
         1.0
     );
 }
@@ -2893,7 +2898,7 @@ fn song_lua_late_wrappers_preserve_composition_order_and_capture_handles() {
     })).unwrap();
     let bank_stats = banks[0].stats();
     let history: Arc<[SongLuaDrawFrame]> = Arc::from([SongLuaDrawFrame {
-        second: 0., immediate: true, owners: vec![1], owner_ends: vec![0], ops: Vec::new(),
+        second: 0., immediate: true, owners: vec![1], owner_ends: vec![0], ops: Default::default(),
     }]);
     scratch.song_lua_aft_capture_scratch.manual =
         SongLuaManualScratch::with_frames(&overlays, history.clone());
@@ -14531,7 +14536,7 @@ fn song_lua_live_aft_bindings_refresh_same_count_root_background_and_foreground(
         scratch.song_lua_background_overlay_topology_indices[0].aft_texture_handles.clone(),
         scratch.song_lua_foreground_proxy_request_indices[0].topology.aft_texture_handles.clone()];
     let history: Arc<[SongLuaDrawFrame]> = Arc::from([SongLuaDrawFrame {
-        second: 0., immediate: true, owners: vec![2], owner_ends: vec![0], ops: Vec::new(),
+        second: 0., immediate: true, owners: vec![2], owner_ends: vec![0], ops: Default::default(),
     }]);
     scratch.song_lua_aft_capture_scratch.manual = SongLuaManualScratch::with_frames(&overlays, history.clone());
     scratch.song_lua_aft_capture_scratch.manual.immediate_cursor = 1;
