@@ -2421,6 +2421,8 @@ impl Vm {
                                 Value::Native(0) if i.b == 1 && i.c <= 1 => {
                                     self.try_inline_assert(a, i.c == 1, checkpoint_ready)
                                 }
+                                Value::Native(id @ (43 | 44)) if i.b == 2 && i.c <= 1 => self
+                                    .try_inline_extremum(a, i.c == 1, id == 43, checkpoint_ready),
                                 Value::Native(threads::CO_RESUME) if i.b == 1 && i.c != OPEN => {
                                     self.try_inline_coroutine_resume(a, c, checkpoint_ready)
                                 }

@@ -89,6 +89,7 @@ struct Body<'a> {
     read_initial: [bool; 256],
     invariant: [bool; 256],
     call_registers: Option<usize>,
+    segment_limit: Option<i128>,
     parked: Option<(ParkedIndex, f64)>,
     wait_for_yield: bool,
     assertion: bool,
@@ -225,6 +226,40 @@ impl Body<'_> {
         Some(Operand::Constant(Value::Boolean(true)))
     }
 
+    fn extremum(&mut self, call: usize, count: usize, minimum: bool) -> Option<Operand> {
+        if count == 0 {
+            return None;
+        }
+        let first = self.read(call + 1)?;
+        let mut selected = self.series(first)?;
+        for index in call + 2..=call + count {
+            let operand = self.read(index)?;
+            let other = self.series(operand)?;
+            let (first, last) = if minimum {
+                (selected.first - other.first, selected.last - other.last)
+            } else {
+                (other.first - selected.first, other.last - selected.last)
+            };
+            if (first <= 0) != (last <= 0) {
+                // Both inputs are affine in the iteration number. Split just
+                // before their ordering changes so each segment is affine too.
+                let slope = (last - first) / (self.iterations - 1);
+                let boundary = if first <= 0 {
+                    -first / slope + 1
+                } else {
+                    (first - 1) / -slope + 1
+                };
+                self.segment_limit = Some(boundary);
+                return None;
+            }
+            if first > 0 {
+                selected = other;
+            }
+        }
+        self.call_registers.get_or_insert(0);
+        Some(Operand::Series(selected))
+    }
+
     fn call(&mut self, call: usize, count: usize, wanted: u32) -> Option<Operand> {
         if self.vm.budget.is_some() {
             return None;
@@ -232,6 +267,9 @@ impl Body<'_> {
         let operand = self.read(call)?;
         let function = match self.literal(operand)? {
             Value::Function(function) if wanted == 1 => function,
+            Value::Native(id @ (43 | 44)) if wanted == 1 => {
+                return self.extremum(call, count, id == 43);
+            }
             Value::Native(CO_RESUME) if count == 1 && wanted == 2 => return self.resume(call),
             Value::Native(0) if count == 1 && wanted <= 1 => {
                 let value = self.read(call + 1)?;
@@ -453,72 +491,116 @@ impl Vm {
             return None;
         }
 
-        let mut analysis = Body {
-            vm: self,
-            registers: &self.registers[base..],
-            constants: &self.programs[program].constants[prototype_index],
-            control,
-            env: self.frames.last().and_then(|frame| match frame.function {
-                super::FrameKind::Lua(function) => Some(self.functions[slot_index(function.0)].env),
-                _ => None,
-            }),
-            iterations: count,
-            bindings: [0; 256],
-            values: [Operand::Initial(0); BODY_LIMIT + 3],
-            written: 0,
-            read_initial: [false; 256],
-            invariant: [false; 256],
-            call_registers: None,
-            parked: None,
-            wait_for_yield: false,
-            assertion: false,
-            field_writes: [TableId(0); BODY_LIMIT],
-            write_count: 0,
-        };
-        analysis.write(control + 3, Operand::Series(indices));
-        let Some(accumulator) = analysis.accumulator(body, writes) else {
-            return analysis.wait_for_yield.then_some(Reduction::Retry);
-        };
         let close_from = body
             .iter()
             .filter(|i| i.op == Op::Close)
             .map(|i| usize::from(i.a))
             .min();
-        // A skipped instruction cannot change a captured register or close
-        // an open upvalue. Unrelated captures remain live across the loop.
-        if self.open_upvalues.iter().any(|&id| {
-            let super::Cell::Open(_, register) = self.upvalues[id as usize] else {
-                return false;
+        let env = self.frames.last().and_then(|frame| match frame.function {
+            super::FrameKind::Lua(function) => Some(self.functions[slot_index(function.0)].env),
+            _ => None,
+        });
+        let mut remaining = count;
+        let mut segment_count = count;
+        let mut segment_first = indices.first;
+        let mut running_sum = None;
+        let mut segmented = false;
+        let mut attempts = BODY_LIMIT * 2;
+        let mut call_registers = None;
+        let (sum_update, parked, assertion, field_writes, write_count) = loop {
+            attempts = attempts.checked_sub(1)?;
+            let segment_last = segment_first + (segment_count - 1) * step;
+            let mut analysis = Body {
+                vm: self,
+                registers: &self.registers[base..],
+                constants: &self.programs[program].constants[prototype_index],
+                control,
+                env,
+                iterations: segment_count,
+                bindings: [0; 256],
+                values: [Operand::Initial(0); BODY_LIMIT + 3],
+                written: 0,
+                read_initial: [false; 256],
+                invariant: [false; 256],
+                call_registers: None,
+                segment_limit: None,
+                parked: None,
+                wait_for_yield: false,
+                assertion: false,
+                field_writes: [TableId(0); BODY_LIMIT],
+                write_count: 0,
             };
-            let Some(register) = register.checked_sub(base) else {
-                return false;
+            analysis.write(
+                control + 3,
+                Operand::Series(Series {
+                    first: segment_first,
+                    last: segment_last,
+                }),
+            );
+            let Some(accumulator) = analysis.accumulator(body, writes) else {
+                if let Some(boundary) = analysis.segment_limit {
+                    if !(1..segment_count).contains(&boundary) {
+                        return None;
+                    }
+                    segment_count = boundary;
+                    segmented = true;
+                    continue;
+                }
+                return (!segmented && analysis.wait_for_yield).then_some(Reduction::Retry);
             };
-            (control..control + 4).contains(&register)
-                || analysis
-                    .bindings
-                    .get(register)
-                    .is_some_and(|&binding| binding != 0)
-                || close_from.is_some_and(|first| register >= first)
-        }) {
-            return None;
-        }
-        let call_registers = analysis.call_registers;
-        let parked = analysis.parked;
-        let assertion = analysis.assertion;
-        let field_writes = analysis.field_writes;
-        let write_count = analysis.write_count;
-        let sum_update = if let Some((register, terms)) = accumulator {
-            let total = integer(self.registers[base + register])?;
-            // Same-signed terms and accumulator make every partial sum monotone.
-            let sum = count * (terms.first + terms.last) / 2;
-            if (total != 0 && total.signum() != terms.first.signum())
-                || (total + sum).abs() > EXACT_INTEGER
-            {
+            if segmented && (writes || analysis.parked.is_some() || analysis.assertion) {
                 return None;
             }
-            Some((register, (total + sum - terms.last) as f64))
-        } else {
-            None
+            // A skipped instruction cannot change a captured register or close
+            // an open upvalue. Unrelated captures remain live across the loop.
+            if self.open_upvalues.iter().any(|&id| {
+                let super::Cell::Open(_, register) = self.upvalues[id as usize] else {
+                    return false;
+                };
+                let Some(register) = register.checked_sub(base) else {
+                    return false;
+                };
+                (control..control + 4).contains(&register)
+                    || analysis
+                        .bindings
+                        .get(register)
+                        .is_some_and(|&binding| binding != 0)
+                    || close_from.is_some_and(|first| register >= first)
+            }) {
+                return None;
+            }
+            call_registers = call_registers.max(analysis.call_registers);
+            let partial = if let Some((register, terms)) = accumulator {
+                let total: i128 = match running_sum {
+                    Some((previous, total)) if previous == register => total,
+                    Some(_) => return None,
+                    None => integer(self.registers[base + register])?,
+                };
+                // Same-signed terms and accumulator make every partial sum monotone.
+                let sum = segment_count * (terms.first + terms.last) / 2;
+                if (total != 0 && total.signum() != terms.first.signum())
+                    || (total + sum).abs() > EXACT_INTEGER
+                {
+                    return None;
+                }
+                Some((register, total + sum, terms.last))
+            } else {
+                None
+            };
+            if segment_count == remaining {
+                break (
+                    partial
+                        .map(|(register, total, last_term)| (register, (total - last_term) as f64)),
+                    analysis.parked,
+                    analysis.assertion,
+                    analysis.field_writes,
+                    analysis.write_count,
+                );
+            }
+            running_sum = partial.map(|(register, total, _)| (register, total));
+            remaining -= segment_count;
+            segment_first = segment_last + step;
+            segment_count = remaining;
         };
         let iteration_cost = body.len() as u64 + 1;
         let count = u64::try_from(count).ok()?;

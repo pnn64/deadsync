@@ -756,6 +756,28 @@ fn extended_math_preserves_bits_and_multiple_result_arity() {
 }
 
 #[test]
+fn numeric_extrema_keep_argument_order_and_sum_across_crossings() {
+    let program = compile(
+        br#"
+        local min,max = math.min,math.max
+        local up,down = 0,0
+        for i=1,100 do up=up+min(i,21,34)+max(i,58,39) end
+        for i=100,1,-1 do down=down+max(21,i,17)+min(58,i,67) end
+        local pos,neg = 0,0
+        neg = -neg
+        local min_zero,max_zero = min(neg,pos),max(pos,neg)
+        local nan = 0/0
+        local first_nan,second_nan = min(nan,2),max(2,nan)
+        assert(up == 8593 and down == 9407)
+        assert(1/min_zero == -math.huge and 1/max_zero == math.huge)
+        assert(first_nan ~= first_nan and second_nan == 2)
+    "#,
+    )
+    .unwrap();
+    Vm::new().execute(&program).unwrap();
+}
+
+#[test]
 fn radix_conversions_follow_platform_unsigned_long_width() {
     for source in [
         "return tonumber(' 1010 ',2),tonumber('10',36),tonumber('ffffFFFF',16),tonumber(string.rep('1',42),2)",

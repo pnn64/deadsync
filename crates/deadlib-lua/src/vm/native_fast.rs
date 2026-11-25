@@ -1,6 +1,34 @@
 //! Non-allocating builtin results when no frame observer is active.
 use super::*;
 impl Vm {
+    pub(super) fn try_inline_extremum(
+        &mut self,
+        call: usize,
+        keep: bool,
+        minimum: bool,
+        checkpoint_ready: bool,
+    ) -> bool {
+        let (Value::Number(first), Value::Number(second)) =
+            (self.registers[call + 1], self.registers[call + 2])
+        else {
+            return false;
+        };
+        if self.frames.len() == self.frames.capacity()
+            || self.frames.len() + 1 >= usize::from(self.call_slots)
+            || (!checkpoint_ready && !(self.sort_fast_context() && self.sort_gc_ready()))
+        {
+            return false;
+        }
+        let replace = if minimum {
+            second < first
+        } else {
+            second > first
+        };
+        self.registers[call] = Value::Number(if replace { second } else { first });
+        self.top = call + usize::from(keep);
+        true
+    }
+
     pub(super) fn try_inline_assert(
         &mut self,
         call: usize,
