@@ -66,8 +66,15 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                         .map(|&[blue, green, red, _]| [red, green, blue]),
                 );
             }
+            // A 32-bit row boundary leaves no padding or partial byte.
+            let tight_one_bit = header.info.bit_depth == 1
+                && palette_len == 2
+                && header.info.top_down
+                && width.is_multiple_of(32);
             let mut indices = Vec::new();
-            reserve(&mut indices, header.pixel_count)?;
+            if !tight_one_bit {
+                reserve(&mut indices, header.pixel_count)?;
+            }
             // Full palettes cover the whole index domain.
             let check_indices = palette_len < 1usize << header.info.bit_depth;
             let validate_indices = |indices: &[u8]| {
@@ -116,21 +123,16 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     }
                 }
                 validate_indices(&indices)?;
+            } else if tight_one_bit {
+                let mut unpacked = Vec::new();
+                reserve(&mut unpacked, header.pixel_count / 8)?;
+                unpacked.extend(source.iter().copied().map(expand_one_bit_byte));
+                indices = unpacked.into_flattened();
             } else {
                 indices.resize(header.pixel_count, 0);
-                // A 32-bit row boundary leaves no padding or partial byte.
-                let (packed_chunk_bytes, unpacked_chunk_pixels) =
-                    if header.info.top_down && width.is_multiple_of(32) {
-                        (source.len(), header.pixel_count)
-                    } else {
-                        (header.row_pitch, width)
-                    };
-                let chunks = display_rows(source, packed_chunk_bytes, header.info.top_down);
-                for (packed, output) in chunks.zip(indices.chunks_exact_mut(unpacked_chunk_pixels))
-                {
+                for (packed, output) in rows.zip(indices.chunks_exact_mut(width)) {
                     unpack_one_bit_indices(packed, output);
                 }
-                validate_indices(&indices)?;
             }
             Pixels::Indexed {
                 bit_depth: header.info.bit_depth as u8,
@@ -217,11 +219,7 @@ fn indices_are_zero(source: &[u8], pitch: usize, width: usize, bit_depth: u16) -
 fn unpack_one_bit_indices(row: &[u8], output: &mut [u8]) {
     let (groups, tail) = output.as_chunks_mut::<8>();
     for (indices, &byte) in groups.iter_mut().zip(row) {
-        // Copy the byte at nine-bit intervals. The high bit of each output
-        // byte then holds the next source bit, from MSB to LSB.
-        let word = u64::from(byte).wrapping_mul(0x8040_2010_0804_0201);
-        let bits = (word >> 7) & 0x0101_0101_0101_0101;
-        *indices = bits.to_le_bytes();
+        *indices = expand_one_bit_byte(byte);
     }
     if !tail.is_empty() {
         let byte = row[groups.len()];
@@ -229,6 +227,13 @@ fn unpack_one_bit_indices(row: &[u8], output: &mut [u8]) {
             *output = (byte >> (7 - i)) & 1;
         }
     }
+}
+
+fn expand_one_bit_byte(byte: u8) -> [u8; 8] {
+    // Copy the byte at nine-bit intervals. The high bit of each output
+    // byte then holds the next source bit, from MSB to LSB.
+    let word = u64::from(byte).wrapping_mul(0x8040_2010_0804_0201);
+    ((word >> 7) & 0x0101_0101_0101_0101).to_le_bytes()
 }
 
 fn display_rows(source: &[u8], pitch: usize, top_down: bool) -> impl Iterator<Item = &[u8]> {
