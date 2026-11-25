@@ -127,6 +127,10 @@ impl<R: Read> PageReader<R> {
         if self.returned != 0 {
             self.discard(self.returned);
             self.returned = 0;
+            if self.start == self.filled {
+                self.start = 0;
+                self.filled = 0;
+            }
         } else if self.buffer.capacity() == 0 {
             // Leave room for lacing and the first small packet.
             let _ = self.buffer.try_reserve(64);
