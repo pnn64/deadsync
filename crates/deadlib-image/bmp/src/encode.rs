@@ -153,6 +153,11 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
             options.top_down,
             |&[red, green, blue]| [blue, green, red],
         ),
+        #[cfg(target_pointer_width = "64")]
+        Pixels::Rgba(samples) if !options.top_down && width == 4 => {
+            output.resize(file_size, 0);
+            write_bgra_quads(samples, &mut output[offset..]);
+        }
         Pixels::Rgba(samples) => append_mapped_rows(
             &mut output,
             samples,
@@ -163,6 +168,19 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
         ),
     }
     Ok(output)
+}
+
+#[cfg(target_pointer_width = "64")]
+#[inline(never)]
+fn write_bgra_quads(samples: &[u8], output: &mut [u8]) {
+    const RED: u128 = 0x0000_00ff_0000_00ff_0000_00ff_0000_00ff;
+    const BLUE: u128 = RED << 16;
+    let rows = samples.as_chunks::<16>().0.iter().rev();
+    for (&row, target) in rows.zip(output.as_chunks_mut::<16>().0) {
+        let word = u128::from_le_bytes(row);
+        *target =
+            ((word & !(RED | BLUE)) | ((word & BLUE) >> 16) | ((word & RED) << 16)).to_le_bytes();
+    }
 }
 
 fn repeat_bytes(output: &mut Vec<u8>, start: usize, end: usize) {
