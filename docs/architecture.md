@@ -172,10 +172,9 @@ theme to describe an input or store a setting:
   writes the pad-order INI keys, and the shell provides slot lookup to native
   drivers through their host callback.
 - `deadsync-input::devices` owns the StepManiaX and RE:Flex provider identities.
-  The shell adapts OS connection events by moving their existing payload into the
-  game's provider type. Native backends ask the host whether another provider
-  claimed a device. DeadSync supplies its existing live StepManiaX ownership
-  predicate, with no change to device slots or hot-plug ordering.
+  The shell tags OS and StepManiaX connection events with the game's provider
+  type and moves their existing payload. Native backends use the shell's live
+  StepManiaX ownership check when selecting devices.
 - `deadsync-core::input` owns the saved StepManiaX sensitivity preset
   used by config, profiles, and presentation. The shell passes the selected
   preset and enabled underglow colors to `deadsync-smx`, which owns threshold

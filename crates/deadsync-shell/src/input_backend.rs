@@ -152,7 +152,9 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
             let _ = proxy_pad.send_event(UserEvent::Pad(event));
         }));
         deadsync_smx::add_sys_listener(Box::new(move |event| {
-            let _ = proxy.send_event(UserEvent::GamepadSystem(event));
+            let _ = proxy.send_event(UserEvent::GamepadSystem(
+                event.map_backend(|()| GamepadBackend::Smx),
+            ));
         }));
     }
 }

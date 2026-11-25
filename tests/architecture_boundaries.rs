@@ -9070,17 +9070,16 @@ fn dedicated_controller_providers_stay_in_the_game() {
     let providers = read_source(root.join("crates/deadsync-input/src/devices.rs"))
         .expect("game controller providers");
     assert!(providers.contains("GpSystemEvent<GamepadBackend>"));
-    for (path, provider) in [
-        ("crates/deadsync-smx/src/lib.rs", "Smx"),
-        ("crates/deadsync-reflex/src/io.rs", "Reflex"),
-    ] {
-        let source = read_source(root.join(path)).expect("game input driver");
-        assert!(source.contains(&format!("GamepadBackend::{provider}")));
-    }
+    let reflex = read_source(root.join("crates/deadsync-reflex/src/io.rs"))
+        .expect("RE:Flex driver");
+    assert!(reflex.contains("GamepadBackend::Reflex"));
+    let smx = read_source(root.join("crates/deadsync-smx/src/lib.rs")).expect("StepManiaX driver");
+    assert!(smx.contains("GpSystemEvent<()>"));
     let launch = read_source(root.join("crates/deadsync-shell/src/input_backend.rs"))
         .expect("shell input composition");
     assert!(launch.contains("deadsync_smx::native_smx_owns_device("));
     assert!(launch.contains("map_backend(GamepadBackend::Native)"));
+    assert!(launch.contains("map_backend(|()| GamepadBackend::Smx)"));
 }
 
 #[test]
@@ -9489,14 +9488,21 @@ fn smx_imports_do_not_use_engine_facade() {
 }
 
 #[test]
-fn smx_driver_receives_prepared_judgment_effects() {
+fn smx_driver_uses_platform_events_and_prepared_light_effects() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/deadsync-smx");
     let manifest = read_source(root.join("Cargo.toml")).expect("SMX manifest");
     assert!(!manifest.contains("deadsync-rules"));
+    assert!(!manifest.contains("deadsync-input"));
     for file in production_rust_files(&root.join("src")) {
+        let source = production_source(&file);
         assert!(
-            !production_source(&file).contains("deadsync_rules::"),
+            !source.contains("deadsync_rules::"),
             "{} imports gameplay judgments",
+            file.display(),
+        );
+        assert!(
+            !source.contains("deadsync_input::"),
+            "{} imports logical input",
             file.display(),
         );
     }
