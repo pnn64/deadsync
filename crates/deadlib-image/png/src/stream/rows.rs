@@ -3,7 +3,7 @@ use crate::{
     Error, Image, Samples,
     codec::Header,
     reserve, scanline,
-    zlib::{Inflater, StreamStatus},
+    zlib::{InflateWindow, Inflater, StreamStatus},
 };
 
 fn unpack_row(depth: u8, row: &[u8], out: &mut [u8], step: usize) {
@@ -26,6 +26,7 @@ pub(super) struct ImageRows {
     header: Header,
     kind: ImageKind,
     inflater: Inflater,
+    window: Option<InflateWindow>,
     row: Vec<u8>,
     previous: Vec<u8>,
     native8: Vec<u8>,
@@ -42,6 +43,7 @@ pub(super) struct ImageRows {
     bpp: u8,
     strict_palette: Option<u8>,
     materialize_samples: bool,
+    allow_window: bool,
     ready: bool,
     complete: bool,
 }
@@ -81,6 +83,7 @@ impl ImageRows {
             header,
             kind,
             inflater: Inflater::with_history(expected, history)?,
+            window: None,
             row,
             previous,
             native8: Vec::new(),
@@ -97,6 +100,7 @@ impl ImageRows {
             bpp: (header.color.channels() * header.depth as usize).div_ceil(8) as u8,
             strict_palette,
             materialize_samples: header.depth != 8 && (full_events || strict_palette.is_some()),
+            allow_window: !full_events && !header.interlaced && expected >= 32 * 1024,
             ready: false,
             complete: false,
         };
@@ -158,12 +162,25 @@ impl ImageRows {
     /// Consume compressed bytes until one complete row is ready or input ends.
     pub(super) fn feed(&mut self, input: &[u8]) -> Result<(usize, bool), Error> {
         debug_assert!(!self.ready);
+        let row_bytes = self.row.len();
         let output = if self.complete {
             &mut [][..]
         } else {
             &mut self.row[self.have..]
         };
-        let progress = self.inflater.process(input, output)?;
+        if self.allow_window
+            && input.len() >= 1024
+            && output.len() >= 512
+            && self.inflater.prefer_contiguous_output()
+        {
+            self.allow_window = false;
+            self.window = Some(InflateWindow::new(&mut self.inflater, row_bytes)?);
+        }
+        let progress = if let Some(window) = &mut self.window {
+            window.process(&mut self.inflater, input, output)?
+        } else {
+            self.inflater.process(input, output)?
+        };
         self.have += progress.written;
         if !self.complete && self.have == self.row.len() {
             let filter = self.row[0];
@@ -330,7 +347,11 @@ impl ImageRows {
             return Err(Error::Invalid("image data length"));
         }
         let mut buffers = RowBuffers {
-            history: self.inflater.into_history(),
+            history: if let Some(window) = self.window {
+                window.into_history(self.inflater.total_out())
+            } else {
+                self.inflater.into_history()
+            },
             ..RowBuffers::default()
         };
         if !self.header.interlaced {
@@ -346,6 +367,7 @@ impl ImageRows {
     }
     pub(super) fn memory_bytes(&self) -> usize {
         self.inflater.working_memory_bytes()
+            + self.window.as_ref().map_or(0, InflateWindow::memory_bytes)
             + self.row.capacity()
             + self.previous.capacity()
             + self.native8.capacity()

@@ -16,6 +16,7 @@ mod matcher;
 #[path = "zlib/x86.rs"]
 mod x86;
 pub use deflate::{DeflateProgress, Deflater};
+pub(crate) use inflate::InflateWindow;
 pub use inflate::{InflateProgress, Inflater, StreamStatus};
 
 const LENGTH_BASE: [usize; 29] = [
@@ -684,7 +685,7 @@ fn sized_length(bits: &mut Bits<'_>, index: usize, buffered: bool) -> Result<usi
 // A full refill holds the maximum 45-bit match token. Keep the accumulator
 // local while input and output have enough room for every legal token.
 #[inline(always)]
-fn inflate_sized_fast<E: Entry>(
+fn inflate_sized_fast<E: Entry, const PARTIAL_OUTPUT: bool>(
     bits: &mut Bits<'_>,
     output: &mut [u8],
     pos: &mut usize,
@@ -693,13 +694,14 @@ fn inflate_sized_fast<E: Entry>(
     distance_fast: &[u32; 512],
     window: usize,
 ) -> Result<bool, Error> {
-    if bits.input.len() < 8 || output.len() < 258 {
+    let headroom = if PARTIAL_OUTPUT { 16 } else { 258 };
+    if bits.input.len() < 8 || output.len() < headroom {
         return Ok(false);
     }
     // A local copy stays in registers; byte stores could alias `bits`.
     let input = bits.input;
     let input_end = input.len() - 8;
-    let output_end = output.len() - 258;
+    let output_end = output.len() - headroom;
     let mut cursor = bits.pos;
     let mut word = bits.word;
     let mut count = bits.count;
@@ -720,6 +722,8 @@ fn inflate_sized_fast<E: Entry>(
             if n == 0 {
                 break 'decode;
             }
+            let token_word = word;
+            let token_count = count;
             word >>= n;
             count -= n;
             if entry.literal() {
@@ -746,6 +750,13 @@ fn inflate_sized_fast<E: Entry>(
                     LENGTH_BASE[index] + extra
                 }
             };
+            if PARTIAL_OUTPUT && len > output.len() - produced {
+                // Resume a match that crosses the caller's output boundary
+                // in the streaming state machine.
+                word = token_word;
+                count = token_count;
+                break 'decode;
+            }
             let entry = distance_fast[(word & 511) as usize];
             let n = (entry & 15) as u8;
             let distance = if n != 0 {
@@ -883,7 +894,17 @@ fn inflate_symbols<O: Output, E: Entry, const FAST: bool>(
     let mut pos = *written;
     loop {
         let output = buffer.slice();
-        if FAST && inflate_sized_fast(bits, output, &mut pos, dist, fast, distance_fast, window)? {
+        if FAST
+            && inflate_sized_fast::<E, false>(
+                bits,
+                output,
+                &mut pos,
+                dist,
+                fast,
+                distance_fast,
+                window,
+            )?
+        {
             break;
         }
         // Unsized output grows toward its limit, leaving the fast loop room

@@ -1,5 +1,85 @@
-use super::{Bits, DIST_BASE, DIST_EXTRA, FIXED, Huffman, LENGTH_BASE, LENGTH_EXTRA};
+use super::{
+    Bits, DIST_BASE, DIST_EXTRA, FIXED, FIXED_PRIMARY, Huffman, LENGTH_BASE, LENGTH_EXTRA,
+    inflate_sized_fast,
+};
 use crate::{Error, checksum::Adler32, reserve};
+
+const WINDOW_SIZE: usize = 32 * 1024;
+
+struct WideTables {
+    valid: bool,
+    literals: [[u32; 512]; 8],
+    distances: [u32; 512],
+}
+
+/// Contiguous filtered output for the collecting PNG reader. Only the most
+/// recent DEFLATE window and space to inflate the next row are needed.
+pub(crate) struct InflateWindow {
+    bytes: Vec<u8>,
+    pos: usize,
+    tables: Vec<WideTables>,
+}
+
+impl InflateWindow {
+    pub(crate) fn new(inflater: &mut Inflater, row_bytes: usize) -> Result<Self, Error> {
+        let len = inflater
+            .limit
+            .min(WINDOW_SIZE.saturating_add(row_bytes.max(16 * 1024)));
+        let mut bytes = core::mem::take(&mut inflater.history);
+        let pos = inflater.total_out.min(bytes.len());
+        if pos == bytes.len() {
+            bytes.rotate_left(inflater.history_pos);
+        }
+        if len > bytes.len() {
+            bytes
+                .try_reserve_exact(len - bytes.len())
+                .map_err(|_| Error::Allocation)?;
+        }
+        bytes.resize(len, 0);
+        Ok(Self {
+            bytes,
+            pos,
+            tables: Vec::new(),
+        })
+    }
+
+    #[inline(never)]
+    pub(crate) fn process(
+        &mut self,
+        inflater: &mut Inflater,
+        input: &[u8],
+        row: &mut [u8],
+    ) -> Result<InflateProgress, Error> {
+        if row.len() > self.bytes.len() - self.pos {
+            let slide = self.pos - WINDOW_SIZE;
+            self.bytes.copy_within(slide..self.pos, 0);
+            self.pos = WINDOW_SIZE;
+        }
+        let start = self.pos;
+        let progress = inflater.process_output::<true>(
+            input,
+            &mut self.bytes[..start + row.len()],
+            start,
+            &mut self.tables,
+        )?;
+        self.pos += progress.written;
+        row[..progress.written].copy_from_slice(&self.bytes[start..self.pos]);
+        Ok(progress)
+    }
+
+    pub(crate) fn into_history(mut self, output_limit: usize) -> Vec<u8> {
+        self.bytes.truncate(history_size(output_limit));
+        self.bytes
+    }
+
+    pub(crate) fn memory_bytes(&self) -> usize {
+        self.bytes.capacity() + self.tables.capacity() * core::mem::size_of::<WideTables>()
+    }
+}
+
+fn history_size(output_limit: usize) -> usize {
+    output_limit.clamp(1, WINDOW_SIZE).next_power_of_two()
+}
 
 /// Why a streaming codec stopped. Only `Done` proves checksum-verified completion.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -78,7 +158,7 @@ impl Inflater {
     pub(crate) fn with_history(output_limit: usize, mut history: Vec<u8>) -> Result<Self, Error> {
         // A distance cannot exceed produced bytes or the output limit. Round
         // the bounded history to a power of two to retain masked ring indices.
-        let size = output_limit.clamp(1, 32768).next_power_of_two();
+        let size = history_size(output_limit);
         if history.len() != size {
             history = Vec::new();
             reserve(&mut history, size)?;
@@ -125,6 +205,17 @@ impl Inflater {
     pub fn is_done(&self) -> bool {
         matches!(self.state, State::Done) && self.failure.is_none()
     }
+    pub(crate) fn prefer_contiguous_output(&self) -> bool {
+        // The direct row path already handles stored bytes and long repeated
+        // matches efficiently. Use wider tables once enough coded input has
+        // gone through this stream to amortize the setup and staging copy.
+        self.total_in >= 256
+            && self.total_in >= self.total_out.div_ceil(64)
+            && matches!(
+                self.state,
+                State::Codes | State::Literal(_) | State::Copy { .. }
+            )
+    }
     /// Confirm end-of-input after all pending output has been drained.
     pub fn finish(&self) -> Result<(), Error> {
         if let Some(error) = &self.failure {
@@ -136,6 +227,15 @@ impl Inflater {
         }
     }
     pub fn process(&mut self, input: &[u8], output: &mut [u8]) -> Result<InflateProgress, Error> {
+        self.process_output::<false>(input, output, 0, &mut Vec::new())
+    }
+    fn process_output<const CONTIGUOUS: bool>(
+        &mut self,
+        input: &[u8],
+        output: &mut [u8],
+        start: usize,
+        tables: &mut Vec<WideTables>,
+    ) -> Result<InflateProgress, Error> {
         if let Some(error) = &self.failure {
             return Err(error.clone());
         }
@@ -148,8 +248,9 @@ impl Inflater {
             prior: 0,
         };
         // Bound output once so each literal needs only a slot check.
-        let available = output.len().min(self.limit - self.total_out);
-        let result = self.run(&mut bits, &mut output[..available]);
+        let available = (output.len() - start).min(self.limit - self.total_out);
+        let result =
+            self.run::<CONTIGUOUS>(&mut bits, &mut output[..start + available], start, tables);
         self.word = bits.word;
         self.bit_count = bits.count;
         self.total_in = match self.total_in.checked_add(bits.pos) {
@@ -162,7 +263,7 @@ impl Inflater {
         match result {
             Ok((written, status)) => Ok(InflateProgress {
                 consumed: bits.pos,
-                written,
+                written: written - start,
                 status,
             }),
             Err(error) => {
@@ -257,6 +358,92 @@ impl Inflater {
         tail.copy_from_slice(&pattern[..tail.len()]);
         self.remember(output);
     }
+
+    #[inline]
+    fn copy_output<const CONTIGUOUS: bool>(
+        &mut self,
+        output: &mut [u8],
+        distance: usize,
+        mut pos: usize,
+        length: usize,
+    ) {
+        if CONTIGUOUS {
+            let source = pos - distance;
+            let end = pos + length;
+            if distance == 1 {
+                let value = output[source];
+                output[pos..end].fill(value);
+            } else {
+                while pos < end {
+                    let n = (pos - source).min(end - pos);
+                    output.copy_within(source..source + n, pos);
+                    pos += n;
+                }
+            }
+            self.total_out += length;
+        } else {
+            self.copy_match(distance, &mut output[pos..pos + length]);
+        }
+    }
+
+    #[inline(never)]
+    fn wide_codes(
+        &mut self,
+        bits: &mut Bits<'_>,
+        output: &mut [u8],
+        written: &mut usize,
+        tables: &mut Vec<WideTables>,
+    ) -> Result<bool, Error> {
+        let distances = self.distances.as_ref().unwrap_or(&FIXED.1);
+        let start = *written;
+        let ended = if let Some(literals) = &self.literals {
+            if tables.is_empty() {
+                tables.try_reserve_exact(1).map_err(|_| Error::Allocation)?;
+                tables.push(WideTables {
+                    valid: false,
+                    literals: [[0; 512]; 8],
+                    distances: [0; 512],
+                });
+            }
+            let tables = &mut tables[0];
+            if !tables.valid {
+                let pairing = literals.pairing();
+                tables.literals.fill(literals.pair_prefix(&pairing));
+                literals.pair_primary(&pairing, &mut tables.literals);
+                tables.distances = distances.distance_primary();
+                tables.valid = true;
+            }
+            inflate_sized_fast::<_, true>(
+                bits,
+                output,
+                written,
+                distances,
+                tables.literals.as_flattened().try_into().unwrap(),
+                &tables.distances,
+                self.window,
+            )?
+        } else {
+            let (literals, distance_fast) = &*FIXED_PRIMARY;
+            inflate_sized_fast::<_, true>(
+                bits,
+                output,
+                written,
+                distances,
+                literals,
+                distance_fast,
+                self.window,
+            )?
+        };
+        self.total_out += *written - start;
+        // Keep at most four whole bytes beyond the current bit position.
+        // Even if this was the last symbol, the aligned 32-bit Adler trailer
+        // consumes those bytes without advancing into any trailing data.
+        let unused = usize::from(bits.count.saturating_sub(32) / 8).min(bits.pos);
+        bits.pos -= unused;
+        bits.count -= 8 * unused as u8;
+        bits.word &= (1u64 << bits.count) - 1;
+        Ok(ended)
+    }
     fn end_block(&mut self) {
         self.state = if self.final_block {
             State::Adler
@@ -264,13 +451,14 @@ impl Inflater {
             State::BlockFinal
         };
     }
-    fn run(
+    fn run<const CONTIGUOUS: bool>(
         &mut self,
         bits: &mut Bits<'_>,
         output: &mut [u8],
+        mut written: usize,
+        tables: &mut Vec<WideTables>,
     ) -> Result<(usize, StreamStatus), Error> {
-        let mut written = 0usize;
-        let mut checksummed = 0usize;
+        let mut checksummed = written;
         macro_rules! stop {
             ($status:expr) => {{
                 self.checksum.update(&output[checksummed..written]);
@@ -355,7 +543,7 @@ impl Inflater {
                         let bytes = &mut output[written..written + n];
                         bytes.copy_from_slice(&bits.input[bits.pos..bits.pos + n]);
                         bits.pos += n;
-                        if self.final_block {
+                        if CONTIGUOUS || self.final_block {
                             self.total_out += n;
                         } else {
                             self.remember(bytes);
@@ -420,6 +608,9 @@ impl Inflater {
                     }
                     self.literals = Some(Huffman::new(&self.lengths[..self.nl], false, false)?);
                     self.distances = Some(Huffman::new(&self.lengths[self.nl..end], false, true)?);
+                    if CONTIGUOUS && let Some(tables) = tables.first_mut() {
+                        tables.valid = false;
+                    }
                     self.state = State::Codes;
                 }
                 State::DynamicRepeat { value, base, extra } => {
@@ -432,6 +623,14 @@ impl Inflater {
                     self.state = State::DynamicLengths;
                 }
                 State::Codes => loop {
+                    if CONTIGUOUS
+                        && output.len() - written >= 16
+                        && bits.input.len() - bits.pos >= 8
+                        && self.wide_codes(bits, output, &mut written, tables)?
+                    {
+                        self.end_block();
+                        break;
+                    }
                     match symbol!(self.literals.as_ref().unwrap_or(&FIXED.0)) {
                         value @ 0..=255 => {
                             let Some(slot) = output.get_mut(written) else {
@@ -444,8 +643,11 @@ impl Inflater {
                             // Keep literal runs in this state, without another
                             // dispatch or a one-byte ring-copy operation.
                             *slot = value as u8;
-                            self.history[self.history_pos] = value as u8;
-                            self.history_pos = (self.history_pos + 1) & (self.history.len() - 1);
+                            if !CONTIGUOUS {
+                                self.history[self.history_pos] = value as u8;
+                                self.history_pos =
+                                    (self.history_pos + 1) & (self.history.len() - 1);
+                            }
                             self.total_out += 1;
                             written += 1;
                         }
@@ -471,7 +673,7 @@ impl Inflater {
                             if length > output.len() - written {
                                 break;
                             }
-                            self.copy_match(distance, &mut output[written..written + length]);
+                            self.copy_output::<CONTIGUOUS>(output, distance, written, length);
                             written += length;
                             self.state = State::Codes;
                         }
@@ -486,8 +688,10 @@ impl Inflater {
                         stop!(StreamStatus::NeedOutput);
                     };
                     *slot = value;
-                    self.history[self.history_pos] = value;
-                    self.history_pos = (self.history_pos + 1) & (self.history.len() - 1);
+                    if !CONTIGUOUS {
+                        self.history[self.history_pos] = value;
+                        self.history_pos = (self.history_pos + 1) & (self.history.len() - 1);
+                    }
                     self.total_out += 1;
                     written += 1;
                     self.state = State::Codes;
@@ -513,7 +717,7 @@ impl Inflater {
                         stop!(StreamStatus::NeedOutput);
                     }
                     let n = left.min(output.len() - written);
-                    self.copy_match(distance, &mut output[written..written + n]);
+                    self.copy_output::<CONTIGUOUS>(output, distance, written, n);
                     written += n;
                     self.state = if n == left {
                         State::Codes
@@ -543,6 +747,69 @@ impl Inflater {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn contiguous_output_keeps_history_and_exact_zlib_end() {
+        use std::io::Write;
+
+        const ROW: usize = 1153;
+        let mut random = 0x452f_75a3u32;
+        let prefix: Vec<_> = (0..24 * 1024)
+            .map(|_| {
+                random ^= random << 13;
+                random ^= random >> 17;
+                random ^= random << 5;
+                random as u8
+            })
+            .collect();
+        let filtered: Vec<_> = (0..ROW * 121)
+            .map(|i| {
+                if i / prefix.len() == 2 {
+                    ((i / 3) & 63) as u8
+                } else {
+                    prefix[i % prefix.len()]
+                }
+            })
+            .collect();
+        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(6));
+        encoder.write_all(&filtered).unwrap();
+        let mut wire = encoder.finish().unwrap();
+        let zlib_bytes = wire.len();
+        wire.extend([0x97; 64]);
+
+        for fragment in [1, 17, 1024, 8192, wire.len()] {
+            for switch_at in [0, ROW * 41] {
+                let mut inflater = Inflater::new(filtered.len()).unwrap();
+                let mut window = None;
+                let mut result = Vec::with_capacity(filtered.len());
+                let mut row = [0; ROW];
+                let mut read = 0;
+                while !inflater.is_done() {
+                    let end = wire.len().min(read + fragment);
+                    let wanted = (ROW - result.len() % ROW).min(filtered.len() - result.len());
+                    if result.len() == switch_at && window.is_none() {
+                        window = Some(InflateWindow::new(&mut inflater, ROW).unwrap());
+                    }
+                    let input = &wire[read..end];
+                    let output = &mut row[..wanted];
+                    let progress = match window.as_mut() {
+                        Some(window) => window.process(&mut inflater, input, output),
+                        None => inflater.process(input, output),
+                    }
+                    .unwrap();
+                    assert!(progress.consumed != 0 || progress.written != 0 || inflater.is_done());
+                    read += progress.consumed;
+                    result.extend_from_slice(&row[..progress.written]);
+                }
+                assert_eq!(read, zlib_bytes, "fragment={fragment} switch={switch_at}");
+                assert_eq!(result, filtered, "fragment={fragment} switch={switch_at}");
+                assert!(
+                    window.unwrap().pos < result.len(),
+                    "the window must have moved"
+                );
+            }
+        }
+    }
 
     #[test]
     fn reused_history_cannot_supply_a_match_before_the_new_stream_prefix() {
