@@ -161,17 +161,17 @@ impl<W: Write> EncoderOutput<W> {
         let writer = &mut self.writer;
         let mut filled = 0;
         let emit = |bits: u64, count: usize| {
-            buffer[filled..filled + size_of::<u64>()].copy_from_slice(&bits.to_le_bytes());
+            let bytes = bits.to_le_bytes();
+            if capacity == 1 {
+                for byte in bytes[..count].as_chunks::<1>().0 {
+                    writer.write_all(&[1])?;
+                    writer.write_all(byte)?;
+                }
+                return Ok(());
+            }
+            buffer[filled..filled + size_of::<u64>()].copy_from_slice(&bytes);
             filled += count;
             if filled >= capacity {
-                if capacity == 1 {
-                    for byte in buffer[..filled].as_chunks::<1>().0 {
-                        writer.write_all(&[1])?;
-                        writer.write_all(byte)?;
-                    }
-                    filled = 0;
-                    return Ok(());
-                }
                 let mut written = 0;
                 loop {
                     let end = written + capacity;
