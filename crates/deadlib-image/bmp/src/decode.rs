@@ -431,7 +431,16 @@ fn display_rows(source: &[u8], pitch: usize, top_down: bool) -> impl Iterator<It
     })
 }
 
+#[inline]
 fn map_rows<const INPUT: usize, const OUTPUT: usize>(
+    source: &[u8],
+    header: &Header,
+    pixel: impl FnMut([u8; INPUT]) -> [u8; OUTPUT],
+) -> Result<Vec<u8>, Error> {
+    map_rows_inner::<INPUT, OUTPUT, true>(source, header, pixel)
+}
+
+fn map_rows_inner<const INPUT: usize, const OUTPUT: usize, const WIDE_QUADS: bool>(
     source: &[u8],
     header: &Header,
     mut pixel: impl FnMut([u8; INPUT]) -> [u8; OUTPUT],
@@ -466,6 +475,8 @@ fn map_rows<const INPUT: usize, const OUTPUT: usize>(
                 pixel,
             );
         }
+    } else if WIDE_QUADS && INPUT == 4 && width == 4 {
+        append_wide_pixel_quads(source, &mut samples, pixel);
     } else if cfg!(target_pointer_width = "64") && width == 1 {
         // A one-pixel truecolor row always occupies four bytes with padding.
         // Restrict this specialization to 64-bit builds to keep x86 decodes small.
@@ -521,6 +532,19 @@ fn append_pixel_triples<const INPUT: usize, const OUTPUT: usize, const ROW: usiz
     } else {
         samples.extend(rows.rev().flat_map(unpack));
     }
+}
+
+#[inline(never)]
+fn append_wide_pixel_quads<const INPUT: usize, const OUTPUT: usize>(
+    source: &[u8],
+    samples: &mut Vec<[u8; OUTPUT]>,
+    mut pixel: impl FnMut([u8; INPUT]) -> [u8; OUTPUT],
+) {
+    // Top-down four-pixel rows already use contiguous decoding.
+    samples.extend(source.as_chunks::<16>().0.iter().rev().flat_map(|row| {
+        let &[first, second, third, fourth] = row.as_chunks::<INPUT>().0.first_chunk().unwrap();
+        [pixel(first), pixel(second), pixel(third), pixel(fourth)]
+    }));
 }
 
 #[inline(never)]
@@ -646,9 +670,9 @@ fn masked_samples(
             }
             #[cfg(target_pointer_width = "64")]
             _ => masked_rgb32_samples(source, header, rgb),
-            // A wide product needs extra instructions on 32-bit targets.
+            // Wide products and four-pixel batches cost more for these masks on x86.
             #[cfg(not(target_pointer_width = "64"))]
-            _ => map_rows::<4, 3>(source, header, |packed| {
+            _ => map_rows_inner::<4, 3, false>(source, header, |packed| {
                 let word = u32::from_le_bytes(packed);
                 [red.sample(word), green.sample(word), blue.sample(word)]
             }),
