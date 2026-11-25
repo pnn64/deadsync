@@ -9,9 +9,8 @@ use crate::{
 };
 use deadlib_present::texture::{TextureContext, TextureMeta};
 use deadlib_render_core::{
-    FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, TextureHandle, TextureHandleMap,
+    FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, TextureHandle, TextureHandleMap, Yuv420Image,
 };
-use deadlib_video::Yuv420Image;
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::cell::Cell;

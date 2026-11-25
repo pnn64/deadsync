@@ -1055,7 +1055,6 @@ dependencies = [
  "deadlib-present",
  "deadlib-render",
  "deadlib-render-core",
- "deadlib-video",
  "gif",
  "image",
  "log",
@@ -1434,6 +1433,7 @@ dependencies = [
 name = "deadlib-video"
 version = "0.1.0"
 dependencies = [
+ "deadlib-render-core",
  "image",
  "log",
  "serde",

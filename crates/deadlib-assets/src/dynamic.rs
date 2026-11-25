@@ -1,5 +1,3 @@
-use crate::open_image_fallback_quiet;
-use deadlib_video as video;
 use image::RgbaImage;
 use log::{debug, warn};
 use rustc_hash::FxHashSet;
@@ -281,16 +279,17 @@ pub fn load_or_build_cached_dynamic_image(
     path: &Path,
     opts: BannerCacheOptions,
     cache_dir: &Path,
+    decode: fn(&Path) -> image::ImageResult<RgbaImage>,
 ) -> image::ImageResult<RgbaImage> {
     let Some((cache_path, path_hex)) = dynamic_image_cache_path_for(path, opts, cache_dir) else {
-        return build_cached_banner_rgba(path, opts);
+        return decode(path);
     };
 
     if let Some(rgba) = load_cached_banner_image(&cache_path, path) {
         return Ok(rgba);
     }
 
-    let rgba = build_cached_banner_rgba(path, opts)?;
+    let rgba = decode(path)?;
     save_cached_banner_image(&cache_path, &path_hex, &rgba);
     Ok(rgba)
 }
@@ -333,36 +332,26 @@ pub fn ensure_cached_dynamic_image_on_disk(
     path: &Path,
     opts: BannerCacheOptions,
     cache_dir: &Path,
+    decode: fn(&Path) -> image::ImageResult<RgbaImage>,
 ) -> image::ImageResult<bool> {
     let Some((cache_path, path_hex)) = dynamic_image_cache_path_for(path, opts, cache_dir) else {
         return Ok(false);
     };
-    ensure_cached_dynamic_image_at(path, opts, &cache_path, &path_hex)
+    ensure_cached_dynamic_image_at(path, &cache_path, &path_hex, decode)
 }
 
 fn ensure_cached_dynamic_image_at(
     path: &Path,
-    opts: BannerCacheOptions,
     cache_path: &Path,
     path_hex: &str,
+    decode: fn(&Path) -> image::ImageResult<RgbaImage>,
 ) -> image::ImageResult<bool> {
     if with_cached_banner(cache_path, path, validate_raw_banner).is_some() {
         return Ok(false);
     }
-    let rgba = build_cached_banner_rgba(path, opts)?;
+    let rgba = decode(path)?;
     save_cached_banner_image(cache_path, path_hex, &rgba);
     Ok(true)
-}
-
-fn build_cached_banner_rgba(
-    path: &Path,
-    _opts: BannerCacheOptions,
-) -> image::ImageResult<RgbaImage> {
-    if is_dynamic_video_path(path) {
-        return video::load_poster(path)
-            .map_err(|e| image::ImageError::IoError(std::io::Error::other(e)));
-    }
-    Ok(open_image_fallback_quiet(path)?.into_rgba8())
 }
 
 pub enum DynamicImagePrewarmOutcome {
@@ -454,7 +443,10 @@ pub fn dynamic_image_prewarm_workers(job_count: usize) -> usize {
 }
 
 #[inline(always)]
-fn prewarm_one_dynamic_image(job: DynamicImagePrewarmJob) -> DynamicImagePrewarmOutcome {
+fn prewarm_one_dynamic_image(
+    job: DynamicImagePrewarmJob,
+    decode: fn(&Path) -> image::ImageResult<RgbaImage>,
+) -> DynamicImagePrewarmOutcome {
     let DynamicImagePrewarmJob {
         path,
         opts,
@@ -471,8 +463,10 @@ fn prewarm_one_dynamic_image(job: DynamicImagePrewarmJob) -> DynamicImagePrewarm
 
     let started = Instant::now();
     let cached = cache_location.map_or_else(
-        || ensure_cached_dynamic_image_on_disk(&path, opts, &cache_dir),
-        |location| ensure_cached_dynamic_image_at(&path, opts, &location.path, &location.path_hex),
+        || ensure_cached_dynamic_image_on_disk(&path, opts, &cache_dir, decode),
+        |location| {
+            ensure_cached_dynamic_image_at(&path, &location.path, &location.path_hex, decode)
+        },
     );
     match cached {
         Ok(true) => DynamicImagePrewarmOutcome::Built {
@@ -572,6 +566,7 @@ pub fn prewarm_dynamic_image_jobs_with_progress<F>(
     jobs: Vec<DynamicImagePrewarmJob>,
     duplicate: usize,
     label: &'static str,
+    decode: fn(&Path) -> image::ImageResult<RgbaImage>,
     progress: &mut F,
 ) where
     F: FnMut(usize, usize, Option<&Path>),
@@ -598,7 +593,7 @@ pub fn prewarm_dynamic_image_jobs_with_progress<F>(
         worker_count,
         |job| {
             let label = job.label;
-            let outcome = prewarm_one_dynamic_image(job);
+            let outcome = prewarm_one_dynamic_image(job, decode);
             DynamicImagePrewarmResult { label, outcome }
         },
         |results| {
@@ -896,9 +891,9 @@ mod tests {
     fn prepared_dynamic_image_cache_location_builds_the_expected_entry() {
         let dir = TempDir::new("prepared-prewarm-location");
         let cache_dir = dir.path().join("cache");
-        let source = dir.path().join("banner.png");
+        let source = dir.path().join("banner.mp4");
         let opts = BannerCacheOptions { enabled: true };
-        write_test_png(&source, [4, 3, 2, 1]);
+        fs::write(&source, b"poster source").unwrap();
         let expected_cache = dynamic_image_cache_path_for(&source, opts, &cache_dir)
             .expect("test source canonicalizes")
             .0;
@@ -922,12 +917,19 @@ mod tests {
             jobs,
             0,
             "Artwork",
+            |path| {
+                assert_eq!(path.file_name().unwrap(), "banner.mp4");
+                Ok(test_rgba([4, 3, 2, 1]))
+            },
             &mut |completed, total, path| {
                 progress.push((completed, total, path.map(Path::to_path_buf)));
             },
         );
 
-        assert!(expected_cache.is_file());
+        assert_eq!(
+            load_raw_cached_banner_image(&expected_cache),
+            Some(test_rgba([4, 3, 2, 1]))
+        );
         assert_eq!(progress, [(0, 1, None), (1, 1, Some(source))]);
     }
 
@@ -955,6 +957,7 @@ mod tests {
             jobs,
             duplicate,
             "Artwork",
+            |_| panic!("missing artwork must never reach the decoder"),
             &mut |completed, total, path| {
                 progress.push((completed, total, path.map(Path::to_path_buf)));
             },
@@ -1071,8 +1074,10 @@ mod tests {
             &test_rgba([9, 8, 7, 6])
         ));
 
-        let rgba = load_or_build_cached_dynamic_image(&src, opts, &cache_dir)
-            .expect("cache hit should load cached image");
+        let rgba = load_or_build_cached_dynamic_image(&src, opts, &cache_dir, |_| {
+            panic!("cache hit must not decode the source")
+        })
+        .expect("cache hit should load cached image");
 
         assert_eq!(rgba, expected);
         assert!(stale_path.is_file());

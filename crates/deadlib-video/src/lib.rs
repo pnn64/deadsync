@@ -1,3 +1,4 @@
+pub use deadlib_render_core::{Yuv420Image, YuvConversion};
 use image::RgbaImage;
 use log::warn;
 use serde::Deserialize;
@@ -26,30 +27,6 @@ pub struct Info {
     pub duration_sec: Option<f32>,
     pub looped: bool,
     pub conversion: YuvConversion,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct YuvConversion {
-    pub levels: [f32; 4],
-    pub coeffs: [f32; 4],
-}
-
-impl YuvConversion {
-    pub const BT709_LIMITED: Self = Self::limited([1.5748, -0.187_324, -0.468_124, 1.8556]);
-
-    const fn limited(coeffs: [f32; 4]) -> Self {
-        Self {
-            levels: [255.0 / 219.0, -16.0 / 219.0, 255.0 / 224.0, -128.0 / 224.0],
-            coeffs,
-        }
-    }
-
-    const fn full(coeffs: [f32; 4]) -> Self {
-        Self {
-            levels: [1.0, 0.0, 1.0, -128.0 / 255.0],
-            coeffs,
-        }
-    }
 }
 
 pub struct LoadedVideo {
@@ -83,84 +60,6 @@ impl VideoFrame {
             .take()
             .expect("video frame recycler must be present");
         (image, recycle_tx)
-    }
-}
-
-/// One opaque planar YUV420 frame backed by one reusable buffer.
-///
-/// Planes are tightly packed in Y, U, V order. Dimensions are always non-zero
-/// and even, allowing every graphics backend to upload the planes directly to
-/// ordinary 8-bit textures without repacking rows. The source color-space and
-/// range conversion travels with the pixels for the renderer shader.
-pub struct Yuv420Image {
-    width: u32,
-    height: u32,
-    raw: Vec<u8>,
-    conversion: YuvConversion,
-}
-
-impl Yuv420Image {
-    #[must_use]
-    pub fn from_raw(width: u32, height: u32, raw: Vec<u8>) -> Option<Self> {
-        Self::from_raw_with_conversion(width, height, raw, YuvConversion::BT709_LIMITED)
-    }
-
-    fn from_raw_with_conversion(
-        width: u32,
-        height: u32,
-        raw: Vec<u8>,
-        conversion: YuvConversion,
-    ) -> Option<Self> {
-        (width > 0
-            && height > 0
-            && width.is_multiple_of(2)
-            && height.is_multiple_of(2)
-            && raw.len() == yuv420_bytes(width, height))
-        .then_some(Self {
-            width,
-            height,
-            raw,
-            conversion,
-        })
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn width(&self) -> u32 {
-        self.width
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn height(&self) -> u32 {
-        self.height
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub fn as_raw(&self) -> &[u8] {
-        &self.raw
-    }
-
-    #[must_use]
-    pub fn planes(&self) -> (&[u8], &[u8], &[u8]) {
-        let y_len = self.width as usize * self.height as usize;
-        let chroma_len = y_len / 4;
-        let (y, chroma) = self.raw.split_at(y_len);
-        let (u, v) = chroma.split_at(chroma_len);
-        (y, u, v)
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn conversion(&self) -> YuvConversion {
-        self.conversion
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub fn into_raw(self) -> Vec<u8> {
-        self.raw
     }
 }
 
@@ -727,16 +626,7 @@ fn rgba_frame_bytes(info: Info) -> usize {
 
 #[inline(always)]
 fn yuv420_frame_bytes(info: Info) -> usize {
-    yuv420_bytes(info.width, info.height)
-}
-
-#[inline(always)]
-fn yuv420_bytes(width: u32, height: u32) -> usize {
-    usize::try_from(width)
-        .ok()
-        .and_then(|w| usize::try_from(height).ok().and_then(|h| w.checked_mul(h)))
-        .and_then(|luma| luma.checked_add(luma / 2))
-        .unwrap_or(0)
+    Yuv420Image::packed_byte_len(info.width, info.height).unwrap_or(0)
 }
 
 #[inline(always)]
@@ -1084,15 +974,6 @@ mod tests {
         assert!(args.iter().any(|arg| arg.contains("format=yuv420p")));
         assert!(!args.iter().any(|arg| arg.contains("out_color_matrix")));
         assert!(args.windows(2).any(|args| args == ["-pix_fmt", "yuv420p"]));
-    }
-
-    #[test]
-    fn yuv420_image_exposes_tightly_packed_planes() {
-        let image = Yuv420Image::from_raw(4, 2, (0..12).collect()).unwrap();
-        let (y, u, v) = image.planes();
-        assert_eq!(y, &[0, 1, 2, 3, 4, 5, 6, 7]);
-        assert_eq!(u, &[8, 9]);
-        assert_eq!(v, &[10, 11]);
     }
 
     #[test]

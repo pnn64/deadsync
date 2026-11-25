@@ -8,7 +8,6 @@ license = "GPL-3.0"
 deadlib-render = { path = "../deadlib-render" }
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render-core = { path = "../deadlib-render-core" }
-deadlib-video = { path = "../deadlib-video" }
 image = "0.25.10"
 gif = "0.14.2"
 png = "0.18.1"

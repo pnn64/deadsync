@@ -7,9 +7,10 @@ use crate::{
 };
 use deadlib_present::font::{Font, FontMap};
 use deadlib_render::{Backend, Texture as RendererTexture};
-use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap, Yuv420Upload};
+use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap, Yuv420Image};
 use image::RgbaImage;
 use log::{debug, warn};
+use std::sync::mpsc::SyncSender;
 
 /// Render-thread asset owner. Workers only supply decoded images; renderer calls
 /// and retirement stay on the owner thread. Identities and upload queues retain
@@ -180,12 +181,12 @@ impl AssetManager {
         self.texture_store.queue_texture_upload(key, image);
     }
 
-    pub fn queue_video_frame_upload(
+    pub fn queue_recyclable_yuv420_upload(
         &mut self,
         handle: TextureHandle,
-        frame: deadlib_video::VideoFrame,
+        image: Yuv420Image,
+        recycle_tx: SyncSender<Vec<u8>>,
     ) {
-        let (image, recycle_tx) = frame.into_upload_parts();
         self.texture_store
             .queue_recyclable_yuv420_upload(handle, image, recycle_tx);
     }
@@ -352,20 +353,7 @@ fn create_upload_texture(
     match image {
         TextureUploadImage::Rgba(image) => Ok(backend.create_texture(image, sampler)?),
         TextureUploadImage::Yuv420(image) => {
-            let (y, u, v) = image.planes();
-            let conversion = image.conversion();
-            Ok(backend.create_yuv420_texture(
-                Yuv420Upload {
-                    width: image.width(),
-                    height: image.height(),
-                    y,
-                    u,
-                    v,
-                    levels: conversion.levels,
-                    coeffs: conversion.coeffs,
-                },
-                sampler,
-            )?)
+            Ok(backend.create_yuv420_texture(image.as_upload(), sampler)?)
         }
     }
 }
@@ -378,20 +366,7 @@ fn update_upload_texture(
     match image {
         TextureUploadImage::Rgba(image) => Ok(backend.update_texture(texture, image)?),
         TextureUploadImage::Yuv420(image) => {
-            let (y, u, v) = image.planes();
-            let conversion = image.conversion();
-            Ok(backend.update_yuv420_texture(
-                texture,
-                Yuv420Upload {
-                    width: image.width(),
-                    height: image.height(),
-                    y,
-                    u,
-                    v,
-                    levels: conversion.levels,
-                    coeffs: conversion.coeffs,
-                },
-            )?)
+            Ok(backend.update_yuv420_texture(texture, image.as_upload())?)
         }
     }
 }
@@ -430,7 +405,6 @@ mod tests {
     #[allow(deprecated)] // EventLoop::create_window avoids a running UI loop in this test.
     fn renderer_uploads_preserve_budgets_recycling_and_formats() {
         use deadlib_render_core::{BackendType, PresentModePolicy};
-        use deadlib_video::Yuv420Image;
         use std::sync::{Arc, mpsc::sync_channel};
         use winit::platform::windows::EventLoopBuilderExtWindows;
 
@@ -557,9 +531,7 @@ mod tests {
 
         let yuv = Yuv420Image::from_raw(2, 2, vec![16, 16, 16, 16, 128, 128]).expect("YUV frame");
         let yuv_ptr = yuv.planes().0.as_ptr();
-        assets
-            .texture_store
-            .queue_recyclable_yuv420_upload(handle, yuv, tx.clone());
+        assets.queue_recyclable_yuv420_upload(handle, yuv, tx.clone());
         assets.drain_texture_uploads(&mut backend, budget);
         assert!(Backend::texture_is_yuv420(
             assets.textures().get(&handle).expect("YUV texture")

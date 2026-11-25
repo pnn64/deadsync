@@ -2,6 +2,7 @@ pub mod color;
 mod frame;
 #[cfg(any(test, feature = "test-util"))]
 pub mod frame_compare;
+mod yuv;
 
 pub use frame::{
     CameraUploadCache, DRAW_STORAGE_NAMES, DRAW_STORAGE_SLOTS, DrawOp, DrawStorageStats, MeshRun,
@@ -11,6 +12,7 @@ pub use frame::{
     resolve_render_target_textured_mesh_geometries, resolve_textured_mesh_geometries,
     resolve_textured_meshes,
 };
+pub use yuv::{Yuv420Image, Yuv420Upload, YuvConversion};
 
 use glam::Mat4 as Matrix4;
 use std::ffi::CStr;
@@ -778,35 +780,6 @@ impl SamplerDesc {
             SamplerWrap::Repeat => 2,
         };
         filter | wrap | ((self.mipmaps as usize) << 2)
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Yuv420Upload<'a> {
-    pub width: u32,
-    pub height: u32,
-    pub y: &'a [u8],
-    pub u: &'a [u8],
-    pub v: &'a [u8],
-    pub levels: [f32; 4],
-    pub coeffs: [f32; 4],
-}
-
-impl Yuv420Upload<'_> {
-    #[inline]
-    #[must_use]
-    pub const fn is_valid(self) -> bool {
-        let Some(luma_len) = (self.width as usize).checked_mul(self.height as usize) else {
-            return false;
-        };
-        let chroma_len = luma_len / 4;
-        self.width != 0
-            && self.height != 0
-            && self.width.is_multiple_of(2)
-            && self.height.is_multiple_of(2)
-            && self.y.len() == luma_len
-            && self.u.len() == chroma_len
-            && self.v.len() == chroma_len
     }
 }
 

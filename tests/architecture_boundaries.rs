@@ -9421,6 +9421,24 @@ fn smx_imports_do_not_use_engine_facade() {
 }
 
 #[test]
+fn asset_loading_is_independent_of_video_playback() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let assets = root.join("crates/deadlib-assets");
+    let manifest = read_source(assets.join("Cargo.toml")).expect("asset manifest");
+    assert!(
+        !manifest.contains("deadlib-video"),
+        "the asset crate must receive decoded images from its caller"
+    );
+    for file in production_rust_files(&assets.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadlib_video"),
+            "{} imports the video runtime",
+            file.display(),
+        );
+    }
+}
+
+#[test]
 fn video_imports_do_not_use_engine_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let facade_path = root.join("src/engine/video");

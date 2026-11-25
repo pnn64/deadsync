@@ -24,6 +24,14 @@ pub fn cdtitle_cache_options() -> dynamic::BannerCacheOptions {
     }
 }
 
+fn decode_artwork_source(path: &Path) -> image::ImageResult<RgbaImage> {
+    if dynamic::is_dynamic_video_path(path) {
+        return video::load_poster(path)
+            .map_err(|e| image::ImageError::IoError(std::io::Error::other(e)));
+    }
+    Ok(deadlib_assets::open_image_fallback_quiet(path)?.into_rgba8())
+}
+
 pub fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
     let opts = banner_cache_options();
     if opts.enabled {
@@ -31,6 +39,7 @@ pub fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
             path,
             opts,
             &crate::paths().banner_cache,
+            decode_artwork_source,
         )
         .map_err(|e| e.to_string());
     }
@@ -49,6 +58,7 @@ pub fn load_cdtitle_source_rgba(path: &Path) -> Result<RgbaImage, String> {
             path,
             opts,
             &crate::paths().cdtitle_cache,
+            decode_artwork_source,
         )
         .map_err(|e| e.to_string());
     }
@@ -155,6 +165,7 @@ where
         plan.jobs,
         plan.duplicate,
         "Artwork",
+        decode_artwork_source,
         progress,
     );
 }

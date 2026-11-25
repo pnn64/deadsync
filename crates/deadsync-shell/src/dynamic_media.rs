@@ -1388,7 +1388,7 @@ impl DynamicMedia {
                 .map_or(0.0, |start| start.elapsed().as_secs_f32());
             if let Some(frame) = video.player.take_due_frame(play_time) {
                 video.started_at.get_or_insert_with(Instant::now);
-                assets.queue_video_frame_upload(video.upload_handle, frame);
+                queue_video_frame_upload(assets, video.upload_handle, frame);
             }
         }
 
@@ -1400,7 +1400,7 @@ impl DynamicMedia {
             if let Some(video) = state.video.as_mut()
                 && let Some(frame) = video.take_due_frame(play_time)
             {
-                assets.queue_video_frame_upload(state.upload_handle, frame);
+                queue_video_frame_upload(assets, state.upload_handle, frame);
             }
         }
     }
@@ -1437,7 +1437,7 @@ impl DynamicMedia {
         if !assets.has_pending_texture_upload_handle(state.upload_handle)
             && let Some(frame) = state.player.take_due_frame(position_seconds)
         {
-            assets.queue_video_frame_upload(state.upload_handle, frame);
+            queue_video_frame_upload(assets, state.upload_handle, frame);
         }
     }
 
@@ -1772,6 +1772,15 @@ impl Default for DynamicMedia {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn queue_video_frame_upload(
+    assets: &mut AssetManager,
+    handle: TextureHandle,
+    frame: video::VideoFrame,
+) {
+    let (image, recycle_tx) = frame.into_upload_parts();
+    assets.queue_recyclable_yuv420_upload(handle, image, recycle_tx);
 }
 
 #[cfg(test)]

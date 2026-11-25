@@ -153,6 +153,10 @@ theme to describe an input or store a setting:
   `deadlib-present` on startup and after a confirmed adjustment.
 - `deadlib-assets::AssetManifest` describes fonts, textures, and texture sampling
   requirements. The game resolves its catalog and paths before engine loading.
+- Video decoding and texture uploads share the packed YUV420 image and color
+  conversion defined by `deadlib-render-core`. The shell hands each image and
+  its buffer recycler to the asset queue. The game supplies artwork and video
+  poster decoding to the image cache.
 - `deadsync-theme` reexports the original public style/color names and
   `ThemeAssetManifest` alias for caller compatibility. These are the same types,
   with no wrapper allocation or conversion.
