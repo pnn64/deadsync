@@ -80,6 +80,35 @@ enum State {
     Failed,
 }
 
+struct FixedField {
+    bytes: [u8; 768],
+    filled: usize,
+}
+
+impl FixedField {
+    #[inline(always)]
+    fn read<'a>(
+        &'a mut self,
+        input: &'a [u8],
+        at: &mut usize,
+        size: usize,
+        remaining: &mut usize,
+    ) -> Result<Option<&'a [u8]>, Error> {
+        let count = (size - self.filled).min(input.len() - *at);
+        charge(remaining, count)?;
+        let bytes = &input[*at..*at + count];
+        *at += count;
+        // Only fields that cross input chunks need the scratch buffer.
+        if count == size {
+            return Ok(Some(bytes));
+        }
+        let end = self.filled + count;
+        self.bytes[self.filled..end].copy_from_slice(bytes);
+        self.filled = end;
+        Ok((end == size).then(|| &self.bytes[..size]))
+    }
+}
+
 /// Push decoder. Each call consumes a prefix and returns at most one event.
 /// Keep submitting the unconsumed suffix, even after an event. `finish` checks
 /// that the trailer was received. No compressed image copy or input buffering
@@ -88,9 +117,8 @@ pub struct Decoder {
     options: DecodeOptions,
     state: State,
     header: Option<Header>,
-    scratch: [u8; 768],
-    filled: usize,
-    // Fixed field size or bytes still needed in a sub-block.
+    field: FixedField,
+    // Palette size or bytes still needed in a sub-block.
     wanted: usize,
     pending: Option<GraphicControl>,
     frame: Frame,
@@ -115,9 +143,11 @@ impl Decoder {
         Self {
             state: State::Header,
             header: None,
-            scratch: [0; 768],
-            filled: 0,
-            wanted: 13,
+            field: FixedField {
+                bytes: [0; 768],
+                filled: 0,
+            },
+            wanted: 0,
             pending: None,
             frame: Frame::default(),
             spare: Vec::new(),
@@ -165,18 +195,9 @@ impl Decoder {
         }
         result
     }
-    fn transition(&mut self, state: State, wanted: usize) {
+    fn transition(&mut self, state: State) {
         self.state = state;
-        self.wanted = wanted;
-        self.filled = 0;
-    }
-    fn fill(&mut self, input: &[u8], at: &mut usize) -> Result<bool, Error> {
-        let count = (self.wanted - self.filled).min(input.len() - *at);
-        charge(&mut self.remaining_input_bytes, count)?;
-        self.scratch[self.filled..self.filled + count].copy_from_slice(&input[*at..*at + count]);
-        self.filled += count;
-        *at += count;
-        Ok(self.filled == self.wanted)
+        self.field.filled = 0;
     }
     fn byte(&mut self, input: &[u8], at: &mut usize) -> Result<Option<u8>, Error> {
         let Some(&byte) = input.get(*at) else {
@@ -210,10 +231,12 @@ impl Decoder {
         let event = 'events: loop {
             match self.state {
                 State::Header => {
-                    if !self.fill(input, &mut at)? {
+                    let Some(s) =
+                        self.field
+                            .read(input, &mut at, 13, &mut self.remaining_input_bytes)?
+                    else {
                         break None;
-                    }
-                    let s = &self.scratch;
+                    };
                     let version = match &s[..6] {
                         b"GIF87a" => Version::Gif87a,
                         b"GIF89a" => Version::Gif89a,
@@ -251,17 +274,24 @@ impl Decoder {
                     };
                     self.header = Some(header);
                     if size != 0 {
-                        self.transition(State::GlobalPalette, size);
+                        self.transition(State::GlobalPalette);
+                        self.wanted = size;
                     } else {
                         self.state = State::Block;
                         break Some(Event::Header);
                     }
                 }
                 State::GlobalPalette => {
-                    if !self.fill(input, &mut at)? {
+                    let Some(s) = self.field.read(
+                        input,
+                        &mut at,
+                        self.wanted,
+                        &mut self.remaining_input_bytes,
+                    )?
+                    else {
                         break None;
-                    }
-                    let colors = palette(&self.scratch[..self.wanted])?;
+                    };
+                    let colors = palette(s)?;
                     let count = colors.len();
                     let header = self.header.as_mut().unwrap();
                     header.global_palette = Some(colors);
@@ -279,7 +309,7 @@ impl Decoder {
                     match byte {
                         0x2c => {
                             charge(&mut self.remaining_blocks, 1)?;
-                            self.transition(State::Image, 9);
+                            self.transition(State::Image);
                         }
                         0x21 => {
                             charge(&mut self.remaining_blocks, 1)?;
@@ -302,15 +332,15 @@ impl Decoder {
                     match label {
                         0xf9 => {
                             self.version89()?;
-                            self.transition(State::Control, 6);
+                            self.transition(State::Control);
                         }
                         0xff => {
                             self.version89()?;
-                            self.transition(State::Application, 12);
+                            self.transition(State::Application);
                         }
                         0x01 => {
                             self.version89()?;
-                            self.transition(State::PlainText, 13);
+                            self.transition(State::PlainText);
                         }
                         0xfe => {
                             self.version89()?;
@@ -332,10 +362,12 @@ impl Decoder {
                     }
                 }
                 State::Control => {
-                    if !self.fill(input, &mut at)? {
+                    let Some(s) =
+                        self.field
+                            .read(input, &mut at, 6, &mut self.remaining_input_bytes)?
+                    else {
                         break None;
-                    }
-                    let s = &self.scratch;
+                    };
                     if s[0] != 4
                         || s[5] != 0
                         || (self.options.strict && (s[1] & 0xe0 != 0 || self.pending.is_some()))
@@ -351,29 +383,34 @@ impl Decoder {
                     self.state = State::Block;
                 }
                 State::Application => {
-                    if !self.fill(input, &mut at)? {
+                    let Some(s) =
+                        self.field
+                            .read(input, &mut at, 12, &mut self.remaining_input_bytes)?
+                    else {
                         break None;
-                    }
-                    if self.scratch[0] != 11 {
+                    };
+                    if s[0] != 11 {
                         return Err(Error::Invalid("application header length"));
                     }
                     charge(&mut self.remaining_metadata_bytes, 11)?;
                     self.extension = Some(Extension::Application {
-                        identifier: self.scratch[1..9].try_into().unwrap(),
-                        authentication: self.scratch[9..12].try_into().unwrap(),
+                        identifier: s[1..9].try_into().unwrap(),
+                        authentication: s[9..12].try_into().unwrap(),
                         data: Vec::new(),
                     });
                     self.state = State::MetadataSize;
                 }
                 State::PlainText => {
-                    if !self.fill(input, &mut at)? {
+                    let Some(s) =
+                        self.field
+                            .read(input, &mut at, 13, &mut self.remaining_input_bytes)?
+                    else {
                         break None;
-                    }
-                    if self.scratch[0] != 12 {
+                    };
+                    if s[0] != 12 {
                         return Err(Error::Invalid("plain-text header length"));
                     }
                     charge(&mut self.remaining_metadata_bytes, 12)?;
-                    let s = &self.scratch;
                     let text = PlainText {
                         left: le(&s[1..]),
                         top: le(&s[3..]),
@@ -402,10 +439,12 @@ impl Decoder {
                     self.state = State::MetadataSize;
                 }
                 State::Image => {
-                    if !self.fill(input, &mut at)? {
+                    let Some(s) =
+                        self.field
+                            .read(input, &mut at, 9, &mut self.remaining_input_bytes)?
+                    else {
                         break None;
-                    }
-                    let s = &self.scratch;
+                    };
                     let header = self.header.as_ref().unwrap();
                     let flags = s[8];
                     if self.options.strict
@@ -448,16 +487,23 @@ impl Decoder {
                         0
                     };
                     if size != 0 {
-                        self.transition(State::LocalPalette, size);
+                        self.transition(State::LocalPalette);
+                        self.wanted = size;
                     } else {
                         self.state = State::Minimum;
                     }
                 }
                 State::LocalPalette => {
-                    if !self.fill(input, &mut at)? {
+                    let Some(s) = self.field.read(
+                        input,
+                        &mut at,
+                        self.wanted,
+                        &mut self.remaining_input_bytes,
+                    )?
+                    else {
                         break None;
-                    }
-                    self.frame.local_palette = Some(palette(&self.scratch[..self.wanted])?);
+                    };
+                    self.frame.local_palette = Some(palette(s)?);
                     self.state = State::Minimum;
                 }
                 State::Minimum => {
