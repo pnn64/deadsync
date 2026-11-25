@@ -277,6 +277,17 @@ impl<T> Arena<T> {
         mut before_remove: impl FnMut(&Self, usize),
     ) -> u64 {
         let end = cursor.saturating_sub(budget);
+        // In a sparse arena, counting mark bits is cheaper than checking holes.
+        // Only count for a whole sweep to avoid rescanning on every small step.
+        if self.live == 0
+            || (end == 0
+                && *cursor == self.values.len()
+                && self.live <= self.values.len() / 2
+                && !self.at_most_marked(self.live - 1))
+        {
+            *cursor = end;
+            return 0;
+        }
         let mut reclaimed = 0;
         let mut upper = *cursor;
         while upper > end {
