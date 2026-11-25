@@ -76,8 +76,9 @@ use crate::input_backend::{InputBackendConfig, launch_input_backends};
 use crate::interaction::ProcessExitRequest;
 use crate::lighting::{
     GameplayLightSyncTarget, LightInputRoute, OperatorMenuButtonRoute, SmxAnimationSyncKey,
-    SmxPanelDriver, hide_flags_for_profiles, light_input_route, lighting_frame_active,
-    lighting_frame_plan, lights_test_view, load_cabinet_light_chart, operator_menu_button_route,
+    SmxPanelDriver, gameplay_pad_light_column, hide_flags_for_profiles, light_input_route,
+    lighting_frame_active, lighting_frame_plan, lights_test_view, load_cabinet_light_chart,
+    operator_menu_button_route,
     smx_pad_blackout, smx_pad_gif_frame_plan,
 };
 use crate::navigation::tick_gameplay_during_transition;
@@ -4240,15 +4241,18 @@ impl App {
             GameplayLightSyncTarget::Clear => None,
         };
         if let Some(gameplay) = gameplay {
+            let notes = gameplay.notes();
             self.gameplay_lights.queue_blinks(
                 &mut self.lights,
                 lights::gameplay::GameplayLightFrame {
                     music_time_ns: gameplay.current_music_time_ns(),
-                    notes: gameplay.notes(),
+                    chart_id: notes.as_ptr() as usize,
+                    note_count: notes.len(),
                     note_times_ns: gameplay.note_time_cache_ns(),
                     cols_per_player: gameplay.cols_per_player(),
                 },
                 simplify_bass,
+                |index| gameplay_pad_light_column(&notes[index]),
             );
             if smx_enabled {
                 self.smx_panels.update(gameplay, play_style, player_side);

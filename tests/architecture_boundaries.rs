@@ -4989,6 +4989,7 @@ fn lighting_consumes_prepared_inputs_without_gameplay_or_chart_catalog_dependenc
         ("deadsync-lights", "deadsync-gameplay", "deadsync_gameplay"),
         ("deadsync-lights", "deadsync-input", "deadsync_input"),
         ("deadsync-lights", "deadsync-chart", "deadsync_chart"),
+        ("deadsync-lights", "deadsync-rules", "deadsync_rules"),
         ("deadsync-smx", "deadsync-gameplay", "deadsync_gameplay"),
         ("deadsync-smx", "deadsync-score", "deadsync_score"),
     ] {

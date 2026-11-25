@@ -8,6 +8,7 @@ use self::cabinet_chart::{CabinetLightPlan, cabinet_light_chart_from_loaded};
 use crate::smx_config::smx_options_light_preview_active;
 use crate::song_loading;
 use deadsync_config::options::SmxPackName;
+use deadsync_core::note::NoteType;
 use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState, active_hold_is_engaged};
 use deadsync_input::VirtualAction;
 use deadsync_lights::cabinet_chart::{CabinetLightEvent, GameplayLightChartKey};
@@ -19,6 +20,7 @@ use deadsync_profile::{
     HideLightType, PlayStyle, PlayerSide, physical_player_slot_for_chart_pad, player_side_index,
 };
 use deadsync_profile_gameplay::results::EvaluationStage;
+use deadsync_rules::note::Note;
 use deadsync_score::Grade;
 use deadsync_smx::gameplay_driver as smx_driver;
 use deadsync_smx::gifs::{FullPadAnim, difficulty_tag};
@@ -71,6 +73,13 @@ pub fn load_cabinet_light_chart(
         global_offset_seconds,
         pack_sync_offset_seconds,
     ))
+}
+
+pub(crate) fn gameplay_pad_light_column(note: &Note) -> Option<usize> {
+    (note.can_be_judged
+        && !note.is_fake
+        && matches!(note.note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll))
+    .then_some(note.column)
 }
 
 /// Translate screen identity into the lighting mode understood by the hardware layer.
@@ -516,6 +525,34 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pad_lights_use_judged_visible_step_notes() {
+        for (note_type, can_be_judged, is_fake, expected) in [
+            (NoteType::Tap, true, false, Some(5)),
+            (NoteType::Hold, true, false, Some(5)),
+            (NoteType::Roll, true, false, Some(5)),
+            (NoteType::Mine, true, false, None),
+            (NoteType::Tap, false, false, None),
+            (NoteType::Tap, true, true, None),
+        ] {
+            let note = Note {
+                participant: None,
+                beat: 0.0,
+                quantization_idx: 0,
+                column: 5,
+                note_type,
+                row_index: 0,
+                result: None,
+                early_result: None,
+                hold: None,
+                mine_result: None,
+                is_fake,
+                can_be_judged,
+            };
+            assert_eq!(gameplay_pad_light_column(&note), expected);
+        }
+    }
 
     #[test]
     fn screen_policy_covers_gameplay_results_and_operator_modes() {

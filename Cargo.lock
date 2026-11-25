@@ -1648,7 +1648,6 @@ name = "deadsync-lights"
 version = "0.1.0"
 dependencies = [
  "deadsync-core",
- "deadsync-rules",
  "hidapi",
  "libc",
  "log",

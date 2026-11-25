@@ -1,24 +1,24 @@
 use crate::cabinet_chart::{CabinetLightEvent, GameplayLightChartKey, cabinet_light_event_enabled};
 use crate::{ButtonLight, Manager, Player};
-use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
-use deadsync_rules::note::Note;
 
 const LIGHTS_AHEAD_NS: SongTimeNs = 50_000_000;
 const LIGHTS_MAX_CATCHUP_NS: SongTimeNs = 500_000_000;
 
-/// Borrowed chart data and clock for one lighting update.
+/// Timing and note-buffer identity for one lighting update.
 #[derive(Clone, Copy)]
 pub struct GameplayLightFrame<'a> {
     pub music_time_ns: SongTimeNs,
-    pub notes: &'a [Note],
+    /// Identifies the note buffer so a restart can reset the cursor.
+    pub chart_id: usize,
+    pub note_count: usize,
     pub note_times_ns: &'a [SongTimeNs],
     pub cols_per_player: usize,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct GameplayLightTracker {
-    pad_notes_ptr: usize,
+    pad_chart_id: usize,
     pad_notes_len: usize,
     pad_cursor: usize,
     pad_last_time_ns: SongTimeNs,
@@ -58,10 +58,11 @@ impl GameplayLightTracker {
         lights: &mut Manager,
         frame: GameplayLightFrame<'_>,
         simplify_bass: bool,
+        eligible_column: impl FnMut(usize) -> Option<usize>,
     ) {
         let now_ns = frame.music_time_ns.saturating_add(LIGHTS_AHEAD_NS);
         self.queue_cabinet_blinks(lights, now_ns, simplify_bass);
-        self.queue_pad_blinks(lights, frame, now_ns);
+        self.queue_pad_blinks(lights, frame, now_ns, eligible_column);
     }
 
     fn queue_cabinet_blinks(
@@ -97,15 +98,15 @@ impl GameplayLightTracker {
         lights: &mut Manager,
         frame: GameplayLightFrame<'_>,
         now_ns: SongTimeNs,
+        mut eligible_column: impl FnMut(usize) -> Option<usize>,
     ) {
-        let note_count = frame.notes.len().min(frame.note_times_ns.len());
-        let notes_ptr = frame.notes.as_ptr() as usize;
-        let reset = self.pad_notes_ptr != notes_ptr
+        let note_count = frame.note_count.min(frame.note_times_ns.len());
+        let reset = self.pad_chart_id != frame.chart_id
             || self.pad_notes_len != note_count
             || now_ns < self.pad_last_time_ns
             || now_ns.saturating_sub(self.pad_last_time_ns) > LIGHTS_MAX_CATCHUP_NS;
         if reset {
-            self.pad_notes_ptr = notes_ptr;
+            self.pad_chart_id = frame.chart_id;
             self.pad_notes_len = note_count;
             self.pad_cursor = frame.note_times_ns[..note_count].partition_point(|&t| t <= now_ns);
             self.pad_last_time_ns = now_ns;
@@ -113,10 +114,8 @@ impl GameplayLightTracker {
         }
 
         while self.pad_cursor < note_count && frame.note_times_ns[self.pad_cursor] <= now_ns {
-            let note = &frame.notes[self.pad_cursor];
-            if gameplay_note_lights(note)
-                && let Some((player, button)) =
-                    pad_light_for_col(frame.cols_per_player, note.column)
+            if let Some(column) = eligible_column(self.pad_cursor)
+                && let Some((player, button)) = pad_light_for_col(frame.cols_per_player, column)
             {
                 lights.blink_button(player, button);
             }
@@ -124,15 +123,6 @@ impl GameplayLightTracker {
         }
         self.pad_last_time_ns = now_ns;
     }
-}
-
-const fn gameplay_note_lights(note: &Note) -> bool {
-    note.can_be_judged
-        && !note.is_fake
-        && matches!(
-            note.note_type,
-            NoteType::Tap | NoteType::Hold | NoteType::Roll
-        )
 }
 
 fn pad_light_for_col(cols_per_player: usize, column: usize) -> Option<(Player, ButtonLight)> {
@@ -196,25 +186,23 @@ mod tests {
             PacDriveLightOrdering::default(),
         );
         let mut tracker = GameplayLightTracker::default();
-        let mut notes = [
-            test_note(NoteType::Tap, true, false),
-            test_note(NoteType::Tap, true, false),
-        ];
-        notes[0].column = 5;
-        let note_times_ns = [100_000_000];
+        let columns = [None, Some(5), Some(0)];
+        let note_times_ns = [90_000_000, 100_000_000];
         let mut frame = GameplayLightFrame {
             music_time_ns: 0,
-            notes: &notes,
+            chart_id: 1,
+            note_count: columns.len(),
             note_times_ns: &note_times_ns,
             cols_per_player: 8,
         };
-        tracker.queue_blinks(&mut lights, frame, false);
+        let eligible_column = |index| columns[index];
+        tracker.queue_blinks(&mut lights, frame, false, eligible_column);
         frame.music_time_ns = 49_999_999;
-        tracker.queue_blinks(&mut lights, frame, false);
+        tracker.queue_blinks(&mut lights, frame, false, eligible_column);
         assert_eq!(lights.chart_directions(), [[false; 4]; 2]);
 
         frame.music_time_ns = 50_000_000;
-        tracker.queue_blinks(&mut lights, frame, false);
+        tracker.queue_blinks(&mut lights, frame, false, eligible_column);
         assert_eq!(
             lights.chart_directions(),
             [[false; 4], [false, true, false, false]]
@@ -222,57 +210,14 @@ mod tests {
 
         lights.clear_blinks();
         frame.music_time_ns = 0;
-        tracker.queue_blinks(&mut lights, frame, false);
+        tracker.queue_blinks(&mut lights, frame, false, eligible_column);
         assert_eq!(lights.chart_directions(), [[false; 4]; 2]);
         frame.music_time_ns = 50_000_000;
-        tracker.queue_blinks(&mut lights, frame, false);
+        tracker.queue_blinks(&mut lights, frame, false, eligible_column);
         assert_eq!(
             lights.chart_directions(),
             [[false; 4], [false, true, false, false]]
         );
-    }
-
-    #[test]
-    fn gameplay_note_lights_only_judged_visible_step_notes() {
-        assert!(gameplay_note_lights(&test_note(NoteType::Tap, true, false)));
-        assert!(gameplay_note_lights(&test_note(
-            NoteType::Hold,
-            true,
-            false
-        )));
-        assert!(gameplay_note_lights(&test_note(
-            NoteType::Roll,
-            true,
-            false
-        )));
-        assert!(!gameplay_note_lights(&test_note(
-            NoteType::Mine,
-            true,
-            false
-        )));
-        assert!(!gameplay_note_lights(&test_note(
-            NoteType::Tap,
-            false,
-            false
-        )));
-        assert!(!gameplay_note_lights(&test_note(NoteType::Tap, true, true)));
-    }
-
-    fn test_note(note_type: NoteType, can_be_judged: bool, is_fake: bool) -> Note {
-        Note {
-            participant: None,
-            beat: 0.0,
-            quantization_idx: 0,
-            column: 0,
-            note_type,
-            row_index: 0,
-            result: None,
-            early_result: None,
-            hold: None,
-            mine_result: None,
-            is_fake,
-            can_be_judged,
-        }
     }
 
     #[test]
