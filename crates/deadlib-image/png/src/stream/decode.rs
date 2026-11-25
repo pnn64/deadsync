@@ -742,6 +742,15 @@ impl StreamDecoder {
             .rows
             .as_mut()
             .ok_or(Error::Invalid("missing image decoder"))?;
+        if !frame_data
+            && let Some(png) = png.as_deref_mut()
+            && rows.collect_in_image(input, pos, &mut png.image)?
+        {
+            if rows.is_done() {
+                *pos = input.len();
+            }
+            return Ok(false);
+        }
         while !rows.is_done() {
             let result = rows.feed(&input[*pos..]);
             let buffers_can_grow = rows.buffers_can_grow();

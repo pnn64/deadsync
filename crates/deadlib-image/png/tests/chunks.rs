@@ -300,6 +300,79 @@ fn stored_idat_batches_keep_row_errors_and_chunk_limits_in_order() {
 }
 
 #[test]
+fn reader_collects_coded_rows_and_preserves_filter_errors() {
+    use flate2::{Compression, write::ZlibEncoder};
+    use std::io::Write;
+
+    const WIDTH: u32 = 256;
+    const HEIGHT: u32 = 96;
+    for depth in [8, 16] {
+        let stride = WIDTH as usize * 3 * usize::from(depth / 8) + 1;
+        let mut raw = vec![0; stride * HEIGHT as usize];
+        let mut random = 1u32;
+        for (y, row) in raw.chunks_exact_mut(stride).enumerate() {
+            let filter = (y % 5) as u8;
+            row[0] = filter;
+            for (x, value) in row[1..].iter_mut().enumerate() {
+                random ^= random << 13;
+                random ^= random >> 17;
+                random ^= random << 5;
+                *value = if x % 4 == 0 {
+                    random as u8
+                } else {
+                    x as u8 ^ filter
+                };
+            }
+        }
+        let data = |raw: &[u8], bad_adler: bool| {
+            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+            encoder.write_all(raw).unwrap();
+            let mut zlib = encoder.finish().unwrap();
+            assert!(zlib.len() > 8192 && matches!((zlib[2] >> 1) & 3, 1 | 2));
+            if bad_adler {
+                *zlib.last_mut().unwrap() ^= 1;
+            }
+            let mut ihdr = [0; 13];
+            ihdr[..4].copy_from_slice(&WIDTH.to_be_bytes());
+            ihdr[4..8].copy_from_slice(&HEIGHT.to_be_bytes());
+            ihdr[8] = depth;
+            ihdr[9] = 2;
+            let mut chunks = vec![chunk(*b"IHDR", &ihdr)];
+            chunks.extend(zlib.chunks(5093).map(|part| chunk(*b"IDAT", part)));
+            chunks.push(chunk(*b"IEND", &[]));
+            file(&chunks)
+        };
+
+        let good = data(&raw, false);
+        let expected = decode(&good).unwrap();
+        let mut options = DecodeOptions::default();
+        options.limits.max_output_bytes = raw.len();
+        let bad_adler = data(&raw, true);
+        raw[HEIGHT as usize / 2 * stride] = 5;
+        let bad_filter_and_adler = data(&raw, true);
+        for fragment in [73, 3121, 8192] {
+            assert_eq!(
+                decode_reader(Fragmented(&good, fragment), &options),
+                Ok(expected.clone())
+            );
+            assert_eq!(
+                decode_reader(Fragmented(&bad_adler, fragment), &options),
+                Err(Error::Checksum)
+            );
+            assert_eq!(
+                decode_reader(Fragmented(&bad_filter_and_adler, fragment), &options),
+                Err(Error::Invalid("scanline filter"))
+            );
+        }
+        options.limits.max_output_bytes -= 1;
+        assert_eq!(
+            decode_reader(good.as_slice(), &options),
+            Err(Error::LimitExceeded)
+        );
+    }
+}
+
+#[test]
 fn standard_names_are_literal_not_case_folded() {
     let mut count = 0;
     for canonical in STANDARD_NAMES {

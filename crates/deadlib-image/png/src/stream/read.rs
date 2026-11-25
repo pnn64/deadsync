@@ -2,7 +2,7 @@ use super::{DecodeEvent, DecodeStatus, ImageInfo, ImageKind, StreamDecoder};
 use crate::{Animation, DecodeOptions, Error, Frame, Image, Png, Samples, reserve};
 use std::io::Read;
 
-fn allocate(info: ImageInfo) -> Result<Image, Error> {
+fn allocate(info: ImageInfo, filtered_limit: usize) -> Result<Image, Error> {
     let count = (info.width as usize)
         .checked_mul(info.height as usize)
         .and_then(|n| n.checked_mul(info.color_type.channels()))
@@ -16,7 +16,18 @@ fn allocate(info: ImageInfo) -> Result<Image, Error> {
         Samples::U16(v)
     } else {
         let mut v = Vec::new();
-        reserve(&mut v, count)?;
+        let capacity = if !info.interlaced
+            && info.bit_depth == 8
+            && info.width as usize * info.color_type.channels() >= 511
+        {
+            count
+                .checked_add(info.height as usize)
+                .filter(|size| (32 * 1024..=filtered_limit).contains(size))
+                .unwrap_or(count)
+        } else {
+            count
+        };
+        reserve(&mut v, capacity)?;
         if info.interlaced {
             v.resize(count, 0);
         }
@@ -43,12 +54,16 @@ pub(super) fn row_image(png: &mut Png, kind: ImageKind) -> Result<&mut Image, Er
     }
 }
 
-fn collect(png: &mut Option<Png>, decoder: &mut StreamDecoder) -> Result<(), Error> {
+fn collect(
+    png: &mut Option<Png>,
+    decoder: &mut StreamDecoder,
+    filtered_limit: usize,
+) -> Result<(), Error> {
     let event = decoder
         .event()
         .ok_or(Error::Invalid("missing decode event"))?;
     if let DecodeEvent::Header(info) = event {
-        let mut out = Png::new(allocate(info)?);
+        let mut out = Png::new(allocate(info, filtered_limit)?);
         out.interlaced = info.interlaced;
         *png = Some(out);
         return Ok(());
@@ -90,7 +105,7 @@ fn collect(png: &mut Option<Png>, decoder: &mut StreamDecoder) -> Result<(), Err
             let image = if uses_default_image {
                 None
             } else {
-                Some(allocate(info)?)
+                Some(allocate(info, 0)?)
             };
             let animation = png
                 .animation
@@ -123,6 +138,8 @@ fn read(reader: &mut impl Read, bytes: &mut [u8]) -> Result<usize, Error> {
 
 /// Decode a complete PNG from a possibly short-reading source. Retains only
 /// final native samples/metadata, a small input buffer, and the row pipeline.
+/// Plain 8-bit images can also hold a filter byte per row in their sample
+/// allocation until reconstruction.
 /// Like `decode`, rejects bytes after IEND. Use `StreamDecoder` for prefix parsing
 /// or to consume rows without retaining complete images and animation frames.
 pub fn decode_reader(mut reader: impl Read, options: &DecodeOptions) -> Result<Png, Error> {
@@ -134,7 +151,9 @@ pub fn decode_reader(mut reader: impl Read, options: &DecodeOptions) -> Result<P
         let progress = decoder.process_into(&input[pos..end], png.as_mut())?;
         pos += progress.consumed;
         match progress.status {
-            DecodeStatus::Event => collect(&mut png, &mut decoder)?,
+            DecodeStatus::Event => {
+                collect(&mut png, &mut decoder, options.limits.max_output_bytes)?
+            }
             DecodeStatus::NeedInput => {
                 if pos != end {
                     return Err(Error::Invalid("decoder input progress"));

@@ -44,6 +44,7 @@ pub(super) struct ImageRows {
     strict_palette: Option<u8>,
     materialize_samples: bool,
     allow_window: bool,
+    uses_image_buffer: bool,
     ready: bool,
     complete: bool,
 }
@@ -101,6 +102,7 @@ impl ImageRows {
             strict_palette,
             materialize_samples: header.depth != 8 && (full_events || strict_palette.is_some()),
             allow_window: !full_events && expected >= 32 * 1024,
+            uses_image_buffer: false,
             ready: false,
             complete: false,
         };
@@ -159,6 +161,94 @@ impl ImageRows {
         }
         Ok(())
     }
+
+    /// Keep filtered rows in the final image allocation until the zlib
+    /// stream is verified, then reconstruct and compact them in place.
+    pub(super) fn collect_in_image(
+        &mut self,
+        input: &[u8],
+        pos: &mut usize,
+        image: &mut Image,
+    ) -> Result<bool, Error> {
+        let stride = self.row.len();
+        if !self.uses_image_buffer {
+            let input = &input[*pos..];
+            if !self.allow_window
+                || self.inflater.total_in() != 0
+                || self.header.interlaced
+                || self.header.depth != 8
+                || self.strict_palette.is_some()
+                || stride < 512
+                || input.len() < 1024
+                || !matches!((input[2] >> 1) & 3, 1 | 2)
+            {
+                return Ok(false);
+            }
+            let Samples::U8(samples) = &mut image.samples else {
+                return Ok(false);
+            };
+            let Some(window) = InflateWindow::from_image(&mut self.inflater, samples) else {
+                return Ok(false);
+            };
+            self.window = Some(window);
+            self.uses_image_buffer = true;
+            self.allow_window = false;
+        }
+
+        let window = self.window.as_mut().unwrap();
+        while !self.inflater.is_done() {
+            window.grow_image(&self.inflater, stride);
+            let input = &input[*pos..];
+            if self.have == 0
+                && !self.complete
+                && input.len() >= 1024
+                && let Some((used, filtered)) =
+                    window.process_rows(&mut self.inflater, input, stride)?
+            {
+                self.row_index += filtered.len() / stride;
+                self.have = filtered.len() % stride;
+                *pos += used;
+                continue;
+            }
+            let len = if self.complete { 0 } else { stride - self.have };
+            let (_, progress) = window.process_span(&mut self.inflater, input, len)?;
+            self.have += progress.written;
+            if !self.complete && self.have == stride {
+                if window.filter_at(self.row_index * stride) > 4 {
+                    return Err(Error::Invalid("scanline filter"));
+                }
+                self.have = 0;
+                self.row_index += 1;
+                self.complete = self.row_index == self.height;
+                *pos += progress.consumed;
+                continue;
+            }
+            if !self.complete && progress.status == StreamStatus::Done {
+                return Err(Error::Invalid("image data length"));
+            }
+            if progress.status == StreamStatus::NeedOutput {
+                return Err(Error::Invalid("extra image data"));
+            }
+            *pos += progress.consumed;
+            break;
+        }
+        if self.complete && self.inflater.is_done() {
+            let raw = self.window.take().unwrap().into_image();
+            let limit = raw.len();
+            *image = scanline::decode(
+                raw,
+                self.header.width,
+                self.header.height,
+                self.header.color,
+                self.header.depth,
+                false,
+                limit,
+            )?;
+            self.uses_image_buffer = false;
+        }
+        Ok(true)
+    }
+
     /// Consume compressed bytes until one complete row is ready or input ends.
     pub(super) fn feed(&mut self, input: &[u8]) -> Result<(usize, bool), Error> {
         debug_assert!(!self.ready);

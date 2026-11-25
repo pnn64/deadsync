@@ -12,12 +12,13 @@ pub(super) struct WideTables {
     distances: [u32; 512],
 }
 
-/// Contiguous filtered output for the collecting PNG reader. Only the most
-/// recent DEFLATE window and space to inflate the next row are needed.
+/// Contiguous filtered output for the collecting PNG reader. The storage
+/// holds either a sliding history window or the image's own byte buffer.
 pub(crate) struct InflateWindow {
     bytes: Vec<u8>,
     pos: usize,
     tables: Vec<WideTables>,
+    try_spans: bool,
 }
 
 impl InflateWindow {
@@ -41,7 +42,44 @@ impl InflateWindow {
             bytes,
             pos,
             tables: Vec::new(),
+            try_spans: false,
         })
+    }
+
+    pub(crate) fn from_image(inflater: &mut Inflater, samples: &mut Vec<u8>) -> Option<Self> {
+        debug_assert_eq!(inflater.total_out, 0);
+        debug_assert!(samples.is_empty());
+        if samples.capacity() < inflater.limit {
+            return None;
+        }
+        inflater.history = Vec::new();
+        inflater.history_pos = 0;
+        Some(Self {
+            bytes: core::mem::take(samples),
+            pos: 0,
+            tables: Vec::new(),
+            try_spans: true,
+        })
+    }
+
+    /// Initialize only the portion of the reserved image that inflate can
+    /// reach next. A short or invalid stream should not touch the full image.
+    pub(crate) fn grow_image(&mut self, inflater: &Inflater, stride: usize) {
+        let limit = inflater.limit;
+        let room = stride.max(16 * 1024);
+        let end = self.pos.saturating_add(room).min(limit);
+        if self.bytes.len() < end {
+            let size = self.bytes.len().saturating_mul(2).max(end).min(limit);
+            self.bytes.resize(size, 0);
+        }
+    }
+
+    pub(crate) fn filter_at(&self, position: usize) -> u8 {
+        self.bytes[position]
+    }
+
+    pub(crate) fn into_image(self) -> Vec<u8> {
+        self.bytes
     }
 
     #[inline(never)]
@@ -51,7 +89,18 @@ impl InflateWindow {
         input: &[u8],
         row: &mut [u8],
     ) -> Result<InflateProgress, Error> {
-        if row.len() > self.bytes.len() - self.pos {
+        let (start, progress) = self.process_span(inflater, input, row.len())?;
+        row[..progress.written].copy_from_slice(&self.bytes[start..self.pos]);
+        Ok(progress)
+    }
+
+    pub(crate) fn process_span(
+        &mut self,
+        inflater: &mut Inflater,
+        input: &[u8],
+        len: usize,
+    ) -> Result<(usize, InflateProgress), Error> {
+        if len > self.bytes.len() - self.pos {
             if let Some(error) = &inflater.failure {
                 return Err(error.clone());
             }
@@ -68,13 +117,81 @@ impl InflateWindow {
         let start = self.pos;
         let progress = inflater.process_output::<true>(
             input,
-            &mut self.bytes[..start + row.len()],
+            &mut self.bytes[..start + len],
             start,
             &mut self.tables,
         )?;
         self.pos += progress.written;
-        row[..progress.written].copy_from_slice(&self.bytes[start..self.pos]);
-        Ok(progress)
+        Ok((start, progress))
+    }
+
+    /// Inflate a span of rows into the existing history buffer. An invalid
+    /// token or filter is retried a row at a time to preserve error order.
+    pub(crate) fn process_rows(
+        &mut self,
+        inflater: &mut Inflater,
+        input: &[u8],
+        stride: usize,
+    ) -> Result<Option<(usize, &[u8])>, Error> {
+        debug_assert!(stride >= 512);
+        let start = self.pos;
+        let old_total = inflater.total_out;
+        // Leave the last row and the zlib trailer to the ordinary pipeline.
+        let available = (self.bytes.len() - start).min(
+            inflater
+                .limit
+                .saturating_sub(old_total)
+                .saturating_sub(stride),
+        );
+        if !self.try_spans || available / 2 < stride || inflater.failure.is_some() {
+            return Ok(None);
+        }
+        let output = &mut self.bytes[..start + available];
+        let mut written = start;
+        match inflater.state {
+            State::Codes => {}
+            State::Literal(value) => {
+                output[written] = value;
+                inflater.total_out += 1;
+                written += 1;
+            }
+            State::Copy { distance, left } => {
+                inflater.copy_output::<true>(output, distance, written, left);
+                written += left;
+            }
+            _ => return Ok(None),
+        }
+        let mut bits = Bits::new(input);
+        bits.word = inflater.word;
+        bits.count = inflater.bit_count;
+        let result = inflater.wide_codes(&mut bits, output, &mut written, &mut self.tables);
+        let filtered = &self.bytes[start..written];
+        let valid_filters = filtered.chunks(stride).all(|row| row[0] <= 4);
+        if let Ok(ended) = result
+            && !filtered.is_empty()
+            && valid_filters
+            && let Some(total_in) = inflater.total_in.checked_add(bits.pos)
+        {
+            inflater.word = bits.word;
+            inflater.bit_count = bits.count;
+            inflater.total_in = total_in;
+            inflater.state = State::Codes;
+            if ended {
+                inflater.end_block();
+            }
+            self.pos = written;
+            return Ok(Some((bits.pos, filtered)));
+        }
+        inflater.total_out = old_total;
+        if result.is_err() || !valid_filters {
+            // Replay a corrupt span once. Repeated speculation across the
+            // same rows would revisit more input each time a row completes.
+            self.try_spans = false;
+        }
+        if matches!(result, Err(Error::Allocation)) {
+            return Err(Error::Allocation);
+        }
+        Ok(None)
     }
 
     pub(crate) fn into_history(mut self, output_limit: usize) -> Vec<u8> {
