@@ -472,7 +472,12 @@ fn draw_indices(
 ) {
     let rows = &mut canvas[r.y * stride..(r.y + r.h) * stride];
     let paint_opaque = |dest: &mut [[u8; 4]], indices: &[u8]| {
-        for (pixel, &index) in dest.iter_mut().zip(indices) {
+        let (source, source_tail) = indices[..dest.len()].as_chunks::<4>();
+        let (target, target_tail) = dest.as_chunks_mut::<4>();
+        for (pixels, indices) in target.iter_mut().zip(source) {
+            *pixels = indices.map(|index| table[usize::from(index)]);
+        }
+        for (pixel, &index) in target_tail.iter_mut().zip(source_tail) {
             *pixel = table[usize::from(index)];
         }
     };
