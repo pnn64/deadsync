@@ -1137,46 +1137,56 @@ impl Vm {
         } else {
             registers.len()
         };
-        let mut live = std::mem::take(&mut self.gc.live);
-        assert!(registers.len().div_ceil(64) <= live.capacity());
-        live.resize(registers.len().div_ceil(64), 0);
-        live.fill(0);
         let prefix = frames
             .first()
             .map_or(top, |frame| frame.result)
             .min(registers.len())
             .min(cutoff);
-        register_roots(registers, 0..prefix, &mut live, work);
-        if !frames.is_empty() {
-            frames_roots(self, registers, frames, top, cutoff, &mut live, work);
-        }
-        // A Lua activation resumed from an instruction hook retains its
-        // additional resume arguments until a stack-normalizing instruction.
-        let hook_top = hooks.resumed_top.or_else(|| {
-            hooks
-                .yield_owner
-                .filter(|_| t.resumed_values.is_some())
-                .map(|owner| (owner, top))
-        });
-        if let Some((owner, end)) = hook_top
-            && let Some(frame) = frames.get(owner)
-        {
-            let end = end.min(registers.len()).min(cutoff);
-            register_roots(registers, frame.base.min(end)..end, &mut live, work);
-        }
-        if id != self.thread && t.status != threads::Status::Normal {
+        let api = if id != self.thread && t.status != threads::Status::Normal {
             let end = t.api_stack.end.min(registers.len());
-            let start = t.api_stack.start.max(prefix).min(end);
-            register_roots(registers, start..end, &mut live, work);
-        }
-        for &cell in open {
-            if let Cell::Open(owner, position) = self.upvalues[cell as usize]
-                && owner == id
-                && position < registers.len().min(cutoff)
-            {
-                live[position / 64] |= 1u64 << (position % 64);
+            t.api_stack.start.max(prefix).min(end)..end
+        } else {
+            0..0
+        };
+        let live = if frames.is_empty() && open.is_empty() && hooks.popped.is_empty() {
+            // These two ranges do not overlap and there are no slots to clear.
+            work.extend(registers[..prefix].iter().copied().filter_map(edge));
+            work.extend(registers[api].iter().copied().filter_map(edge));
+            None
+        } else {
+            let mut live = std::mem::take(&mut self.gc.live);
+            assert!(registers.len().div_ceil(64) <= live.capacity());
+            live.resize(registers.len().div_ceil(64), 0);
+            live.fill(0);
+            register_roots(registers, 0..prefix, &mut live, work);
+            if !frames.is_empty() {
+                frames_roots(self, registers, frames, top, cutoff, &mut live, work);
             }
-        }
+            // A Lua activation resumed from an instruction hook retains its
+            // additional resume arguments until a stack-normalizing instruction.
+            let hook_top = hooks.resumed_top.or_else(|| {
+                hooks
+                    .yield_owner
+                    .filter(|_| t.resumed_values.is_some())
+                    .map(|owner| (owner, top))
+            });
+            if let Some((owner, end)) = hook_top
+                && let Some(frame) = frames.get(owner)
+            {
+                let end = end.min(registers.len()).min(cutoff);
+                register_roots(registers, frame.base.min(end)..end, &mut live, work);
+            }
+            register_roots(registers, api, &mut live, work);
+            for &cell in open {
+                if let Cell::Open(owner, position) = self.upvalues[cell as usize]
+                    && owner == id
+                    && position < registers.len().min(cutoff)
+                {
+                    live[position / 64] |= 1u64 << (position % 64);
+                }
+            }
+            Some(live)
+        };
         for job in subs {
             work.extend(job.roots().filter_map(edge));
         }
@@ -1204,15 +1214,17 @@ impl Vm {
         // Native scratch windows and aliased argument/upvalue slots below the
         // physical top stay live. An API returned from a yield can lower that
         // top even past an open local; Lua then clears that slot as well.
-        if id == self.thread {
-            clear_unused_registers(&mut self.registers, &self.frames, &live);
-            clear_popped_hook_slots(&mut self.hooks, &live);
-        } else {
-            let thread = &mut self.threads[slot_index(id.0)];
-            clear_unused_registers(&mut thread.registers, &thread.frames, &live);
-            clear_popped_hook_slots(&mut thread.hooks, &live);
+        if let Some(live) = live {
+            if id == self.thread {
+                clear_unused_registers(&mut self.registers, &self.frames, &live);
+                clear_popped_hook_slots(&mut self.hooks, &live);
+            } else {
+                let thread = &mut self.threads[slot_index(id.0)];
+                clear_unused_registers(&mut thread.registers, &thread.frames, &live);
+                clear_popped_hook_slots(&mut thread.hooks, &live);
+            }
+            self.gc.live = live;
         }
-        self.gc.live = live;
         self.shrink_thread_calls(id);
     }
     fn marked_weak_value(&self, value: Value, key: bool) -> bool {
