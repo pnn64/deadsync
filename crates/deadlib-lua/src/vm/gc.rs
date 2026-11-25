@@ -641,11 +641,6 @@ impl Vm {
             .map(loads::ParserPrototype::heap_bytes)
             .sum::<usize>();
         payload += self
-            .userdata
-            .iter()
-            .map(|u| u.bytes.storage_bytes())
-            .sum::<usize>();
-        payload += self
             .native_closures
             .iter()
             .map(|f| {
@@ -1647,7 +1642,13 @@ impl Vm {
                         })
                 }
                 6 => self.strings.sweep_some(&mut cursor, budget),
-                7 => self.userdata.sweep_some(&mut cursor, budget),
+                7 => {
+                    let bytes = &mut self.object_payload_bytes;
+                    self.userdata
+                        .sweep_with(&mut cursor, budget, |userdata, index| {
+                            *bytes -= userdata[index].bytes.storage_bytes();
+                        })
+                }
                 8 => self.io.files.sweep_some(&mut cursor, budget),
                 9 => self.parser_prototypes.sweep_some(&mut cursor, budget),
                 _ => unreachable!(),

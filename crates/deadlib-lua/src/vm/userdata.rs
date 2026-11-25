@@ -318,6 +318,7 @@ impl Vm {
                 .map_err(|_| self.memory_failure())?,
         );
         self.userdata_order = order;
+        self.object_payload_bytes += storage;
         self.userdata.note_alloc(storage);
         // PUC luaC_link creates a white object during marking. Keep a fresh
         // userdata eligible for this cycle if it becomes unreachable before
