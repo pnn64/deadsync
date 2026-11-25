@@ -50,6 +50,16 @@ impl NativeRoots {
 pub(super) struct Spare {
     parser: crate::parser::Spare,
     compiler: crate::compiler::Spare,
+    recent_sources: [Option<(SourceKey, u64)>; 8],
+    next_source: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct SourceKey {
+    source: StringId,
+    name: StringId,
+    depth: usize,
+    locale: u64,
 }
 impl std::fmt::Debug for Spare {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -58,6 +68,78 @@ impl std::fmt::Debug for Spare {
 }
 /// Sources above this size release their storage instead of retaining it.
 const SPARE_SOURCE_LIMIT: usize = 64 * 1024;
+
+impl Vm {
+    pub(super) fn load_string_program(
+        &mut self,
+        source: StringId,
+        name: StringId,
+        depth: usize,
+        binary: bool,
+    ) -> Result<FunctionId, Error> {
+        let bytes = &self.strings.bytes[slot_index(source.0)];
+        let memory = self.registers.memory();
+        let key = (!binary && bytes.len() <= SPARE_SOURCE_LIMIT && memory.budget_usage().is_none())
+            .then(|| SourceKey {
+                source,
+                name,
+                depth,
+                locale: crate::locale::revision(),
+            });
+        if self.can_reuse_loaded_program()
+            && let Some(key) = key
+            && let Some(program) =
+                self.compile_spare
+                    .recent_sources
+                    .iter()
+                    .flatten()
+                    .find_map(|&(cached, program)| {
+                        (cached == key && self.programs.contains(program)).then_some(program)
+                    })
+        {
+            // A hint owns neither the source nor the program. Only reuse a
+            // binding between collections, when its constant strings are live.
+            // A new entry closure still gets this thread's environment.
+            let program = slot_index(program);
+            let prototype = self.programs[program].data.entry as usize;
+            self.functions
+                .try_reserve(1)
+                .map_err(|_| self.memory_failure())?;
+            self.reserve_gc_new_value()?;
+            let function = self.insert_closure(Closure {
+                program,
+                prototype,
+                upvalues: Buffer::new_in(self.functions.memory().clone()),
+                env: self.globals,
+            });
+            self.gc_new_value(Value::Function(function));
+            return Ok(function);
+        }
+
+        let program = Workspace::new(memory)?.run(|| {
+            compile(
+                bytes,
+                &self.strings.bytes[slot_index(name.0)],
+                depth,
+                &mut self.compile_spare,
+            )
+        })?;
+        let function = self.load_fresh(&program)?;
+        if let Some(key) = key
+            && key.locale == crate::locale::revision()
+        {
+            let index = self.functions[slot_index(function.0)].program;
+            let owner = self
+                .programs
+                .key(index)
+                .expect("loaded program has an identity");
+            let spare = &mut self.compile_spare;
+            spare.recent_sources[spare.next_source] = Some((key, owner));
+            spare.next_source = (spare.next_source + 1) % spare.recent_sources.len();
+        }
+        Ok(function)
+    }
+}
 
 pub(super) fn compile(
     source: &[u8],

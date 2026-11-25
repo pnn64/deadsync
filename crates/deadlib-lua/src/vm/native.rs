@@ -1152,21 +1152,7 @@ impl Vm {
                 };
                 let binary = self.strings.bytes[slot_index(source.0)].first() == Some(&27);
                 let depth = usize::from(self.native_calls_for(self.thread, self.frames.len()));
-                // Compilation is synchronous and cannot reenter Lua. Borrowing
-                // these rooted strings avoids unbudgeted copies of the source.
-                let compiled = crate::memory::compilation::Workspace::new(self.registers.memory())
-                    .and_then(|workspace| {
-                        workspace.run(|| {
-                            loads::compile(
-                                &self.strings.bytes[slot_index(source.0)],
-                                &self.strings.bytes[slot_index(name.0)],
-                                depth,
-                                &mut self.compile_spare,
-                            )
-                        })
-                    });
-                let compiled = compiled.and_then(|program| self.load_fresh(&program));
-                match compiled {
+                match self.load_string_program(source, name, depth, binary) {
                     Ok(function) => Value::Function(function),
                     Err(error) => {
                         let value = if error.kind() == ErrorKind::Memory {

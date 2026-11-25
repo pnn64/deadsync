@@ -33,3 +33,30 @@ fn reloading_the_same_host_program_preserves_entry_identity() {
         [Value::Number(93.0)]
     );
 }
+
+#[test]
+fn reused_source_keeps_distinct_environments_names_and_weak_lifetimes() {
+    let program = compile(
+        br#"
+        local text = 'return answer'
+        local first = assert(loadstring(text, '=first'))
+        local second = assert(loadstring(text, '=first'))
+        local third = assert(loadstring(text, '=other'))
+        setfenv(first, { answer = 17 })
+        setfenv(second, { answer = 25 })
+        assert(first ~= second and first() + second() == 42)
+        assert(debug.getinfo(second, 'S').source == '=first')
+        assert(debug.getinfo(third, 'S').source == '=other')
+        local weak = setmetatable({ first, second, third }, { __mode = 'v' })
+        first, second, third = nil, nil, nil
+        collectgarbage('collect')
+        assert(weak[1] == nil and weak[2] == nil and weak[3] == nil)
+        local again = assert(loadstring(text, '=first'))
+        setfenv(again, { answer = 42 })
+        return again()
+    "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+}
