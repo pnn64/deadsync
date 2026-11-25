@@ -216,6 +216,31 @@ fn group_pages(pages: &mut [IndexedPage], streams: &mut [StreamIndex]) {
     }
 }
 
+// Keep the extra arithmetic off the small-index search path.
+#[inline(never)]
+fn offset_hint(pages: &[IndexedPage], end: u64, offset: u64) -> Option<&IndexedPage> {
+    let start = pages.first()?.offset;
+    let distance = offset.checked_sub(start)?;
+    // The surrounding search already excludes offsets at or beyond end.
+    let slot = (distance.checked_mul(pages.len() as u64)? / (end - start)) as usize;
+    let page = pages.get(slot)?;
+    // A verified page containing the offset is necessarily the last start before it.
+    let covers = |page: &IndexedPage| {
+        offset
+            .checked_sub(page.offset)
+            .is_some_and(|n| n < u64::from(page.length))
+    };
+    if covers(page) {
+        return Some(page);
+    }
+    let neighbor = if offset < page.offset {
+        pages.get(slot.checked_sub(1)?)?
+    } else {
+        pages.get(slot + 1)?
+    };
+    covers(neighbor).then_some(neighbor)
+}
+
 /// Borrowed observations during index construction. Packets precede their
 /// completing page's Page event; nil pages still produce a Page event. Packet
 /// data may borrow either the page or the demultiplexer's span assembly buffer.
@@ -387,6 +412,11 @@ impl OggIndex {
         let (last, earlier) = pages.split_last()?;
         if last.offset <= offset {
             return Some(last);
+        }
+        if earlier.len() >= 32
+            && let Some(page) = offset_hint(&earlier[1..], last.offset, offset)
+        {
+            return Some(page);
         }
         let end = earlier.partition_point(|page| page.offset <= offset);
         Some(&earlier[end.checked_sub(1)?])
