@@ -253,12 +253,13 @@ impl StreamDecoder {
         if let Some(error) = &self.failure {
             return Err(error.clone());
         }
-        self.event = None;
-        if let Some(chunk) = self.ancillary.take() {
-            self.data = chunk.data;
-            self.data.clear();
+        if matches!(self.event.take(), Some(Event::Metadata)) {
+            if let Some(chunk) = self.ancillary.take() {
+                self.data = chunk.data;
+                self.data.clear();
+            }
+            self.metadata = None;
         }
-        self.metadata = None;
         let initial = self.total_in();
         loop {
             self.animation_fault = None;
