@@ -125,7 +125,7 @@ impl<W: Write> EncoderOutput<W> {
         Ok(())
     }
     fn frame(&mut self, header: &Header, f: &Frame) -> Result<(), Error> {
-        let maximum = f.validate::<true>(
+        let (maximum, repeated) = f.validate::<true>(
             (header.width, header.height),
             header.global_palette.as_ref().map(Vec::len),
             true,
@@ -194,12 +194,13 @@ impl<W: Write> EncoderOutput<W> {
                 let start = y * w;
                 &f.indices[start..start + w]
             });
-            lzw::Encoder::encode_rows(rows, &f.indices, minimum, emit)?;
+            lzw::Encoder::encode_rows(rows, &f.indices, minimum, repeated, emit)?;
         } else {
             lzw::Encoder::encode_rows(
                 std::iter::once(f.indices.as_slice()),
                 &f.indices,
                 minimum,
+                repeated,
                 emit,
             )?;
         }

@@ -154,12 +154,12 @@ impl Frame {
         };
         Ok(Self::new(image.width as u16, image.height as u16, indices))
     }
-    pub(crate) fn validate<const MAX_INDEX: bool>(
+    pub(crate) fn validate<const ENCODE: bool>(
         &self,
         screen: (u16, u16),
         fallback_colors: Option<usize>,
         bounds: bool,
-    ) -> Result<u8, Error> {
+    ) -> Result<(u8, Option<u8>), Error> {
         validate_rect(self.left, self.top, self.width, self.height, screen, bounds)?;
         if self.indices.len() != self.width as usize * self.height as usize {
             return Err(Error::Invalid("frame sample count"));
@@ -171,8 +171,15 @@ impl Frame {
             }
             None => fallback_colors,
         };
+        let repeated = if ENCODE {
+            crate::lzw::repeated_index(&self.indices)
+        } else {
+            None
+        };
         // A byte maximum vectorizes. Encoders also use it to choose the LZW width.
-        let maximum = if MAX_INDEX || colors.is_some_and(|len| len < 256) {
+        let maximum = if let Some(index) = repeated {
+            index
+        } else if ENCODE || colors.is_some_and(|len| len < 256) {
             self.indices.iter().copied().max().unwrap_or(0)
         } else {
             0
@@ -183,7 +190,7 @@ impl Frame {
             }
             validate_control(self.control, len)?;
         }
-        Ok(maximum)
+        Ok((maximum, repeated))
     }
 }
 

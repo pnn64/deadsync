@@ -221,11 +221,17 @@ impl Encoder {
         {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
-        Self::encode_rows(std::iter::once(input), input, minimum, |bits, count| {
-            reserve(output, count)?;
-            output.extend_from_slice(&bits.to_le_bytes()[..count]);
-            Ok(())
-        })
+        Self::encode_rows(
+            std::iter::once(input),
+            input,
+            minimum,
+            repeated_index(input),
+            |bits, count| {
+                reserve(output, count)?;
+                output.extend_from_slice(&bits.to_le_bytes()[..count]);
+                Ok(())
+            },
+        )
     }
 
     // The rows contain the validated indices in wire order. Phrases can span rows.
@@ -233,19 +239,12 @@ impl Encoder {
         rows: impl Iterator<Item = &'a [u8]>,
         indices: &[u8],
         minimum: u8,
+        repeated: Option<u8>,
         mut emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
         let pixels = indices.len();
-        if pixels >= 32 {
-            let pixel = indices[0];
-            if indices[1] == pixel {
-                let (chunks, tail) = indices.as_chunks::<16>();
-                if chunks.iter().all(|chunk| *chunk == [pixel; 16])
-                    && tail.iter().all(|&index| index == pixel)
-                {
-                    return Self::encode_repeated(pixel, pixels, minimum, emit);
-                }
-            }
+        if let Some(pixel) = repeated {
+            return Self::encode_repeated(pixel, pixels, minimum, emit);
         }
         if pixels > 1024 {
             if minimum == 2 {
@@ -452,6 +451,16 @@ impl Encoder {
         bits.code(clear + 1, next.min(4095).ilog2() as u8 + 1)?;
         bits.finish()
     }
+}
+
+pub(crate) fn repeated_index(indices: &[u8]) -> Option<u8> {
+    if indices.len() < 32 || indices[0] != indices[1] {
+        return None;
+    }
+    let pixel = indices[0];
+    let (chunks, tail) = indices.as_chunks::<16>();
+    (chunks.iter().all(|chunk| *chunk == [pixel; 16]) && tail.iter().all(|&index| index == pixel))
+        .then_some(pixel)
 }
 
 struct BitWriter<F> {
