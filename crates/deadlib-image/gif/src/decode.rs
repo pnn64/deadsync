@@ -574,7 +574,11 @@ impl Decoder {
                         )?;
                         let mut block = Vec::new();
                         reserve(&mut block, size)?;
-                        reserve(data, 1)?;
+                        if data.is_empty() && input.get(at + size) == Some(&0) {
+                            data.try_reserve_exact(1).map_err(|_| Error::Allocation)?;
+                        } else {
+                            reserve(data, 1)?;
+                        }
                         let count = size.min(input.len() - at);
                         charge(&mut self.remaining_input_bytes, count)?;
                         block.extend_from_slice(&input[at..at + count]);
