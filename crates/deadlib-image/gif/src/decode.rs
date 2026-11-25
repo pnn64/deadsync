@@ -619,7 +619,9 @@ impl Decoder {
                             size + std::mem::size_of::<Vec<u8>>(),
                         )?;
                         let mut block = Vec::new();
-                        reserve(&mut block, size)?;
+                        block
+                            .try_reserve_exact(size)
+                            .map_err(|_| Error::Allocation)?;
                         if data.is_empty() && input.get(at + size) == Some(&0) {
                             data.try_reserve_exact(1).map_err(|_| Error::Allocation)?;
                         } else {
