@@ -8,11 +8,13 @@ impl Vm {
             .live_len()
             .checked_add(1)
             .ok_or_else(|| self.memory_failure())?;
-        let mut closed = std::mem::take(&mut self.gc.closed);
-        let additional = total.saturating_sub(closed.len());
-        let result = self.reserve_trace_work(&mut closed, additional);
-        self.gc.closed = closed;
-        result
+        let additional = total.saturating_sub(self.gc.closed.len());
+        try_reserve_work(
+            &mut self.gc.closed,
+            additional,
+            &mut self.gc.control_allocated,
+        )
+        .map_err(|_| self.memory_failure())
     }
     pub(super) fn transfer_closed_work(&mut self, work: &mut Work) -> Result<(), Error> {
         self.reserve_trace_work(work, self.gc.closed.len())?;
@@ -25,19 +27,16 @@ impl Vm {
         work: &mut Work,
         additional: usize,
     ) -> Result<(), Error> {
-        let before = work.capacity();
-        if additional <= before - work.len() {
-            return Ok(());
-        }
-        let result = work.try_reserve(additional);
-        self.gc_note_control((work.capacity() - before) * size_of::<Trace>());
-        result.map_err(|_| self.memory_failure())
+        try_reserve_work(work, additional, &mut self.gc.control_allocated)
+            .map_err(|_| self.memory_failure())
     }
     pub(super) fn reserve_gc_work(&mut self, additional: usize) -> Result<(), Error> {
-        let mut work = std::mem::take(&mut self.gc.work);
-        let result = self.reserve_trace_work(&mut work, additional);
-        self.gc.work = work;
-        result
+        try_reserve_work(
+            &mut self.gc.work,
+            additional,
+            &mut self.gc.control_allocated,
+        )
+        .map_err(|_| self.memory_failure())
     }
     pub(super) fn seed_gc_root_count(&self) -> usize {
         4usize
@@ -225,4 +224,14 @@ impl Vm {
         // succeed. Popping it makes one slot available for its children.
         self.reserve_trace_work(work, count.saturating_sub(1))
     }
+}
+
+fn try_reserve_work(work: &mut Work, additional: usize, debt: &mut usize) -> Result<(), Error> {
+    let before = work.capacity();
+    if additional <= before - work.len() {
+        return Ok(());
+    }
+    let result = work.try_reserve(additional);
+    *debt = debt.saturating_add((work.capacity() - before) * size_of::<Trace>());
+    result
 }
