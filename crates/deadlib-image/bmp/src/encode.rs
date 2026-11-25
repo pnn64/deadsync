@@ -190,8 +190,8 @@ fn append_mapped_rows<const INPUT: usize, const OUTPUT: usize>(
         } else {
             rows.next_back()
         } {
-            output.extend(row.as_chunks::<INPUT>().0.iter().flat_map(&mut reorder));
-            output.extend_from_slice(padding);
+            let pixels = row.as_chunks::<INPUT>().0.iter().flat_map(&mut reorder);
+            output.extend(pixels.chain(padding.iter().copied()));
         }
     }
 }
