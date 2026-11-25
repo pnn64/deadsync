@@ -365,6 +365,15 @@ fn draw_indices(
     transparent: Option<u8>,
 ) {
     let rows = &mut canvas[r.y * stride..(r.y + r.h) * stride];
+    let paint_opaque = |dest: &mut [[u8; 4]], indices: &[u8]| {
+        for (pixel, &index) in dest.iter_mut().zip(indices) {
+            *pixel = table[usize::from(index)];
+        }
+    };
+    if transparent.is_none() && width < 32 && r.w == stride && width == stride {
+        paint_opaque(rows, indices);
+        return;
+    }
     for (source, target) in indices
         .chunks_exact(width)
         .zip(rows.chunks_exact_mut(stride))
@@ -397,9 +406,7 @@ fn draw_indices(
                 }
             }
         } else {
-            for (pixel, &index) in dest.iter_mut().zip(indices) {
-                *pixel = table[index as usize];
-            }
+            paint_opaque(dest, indices);
         }
     }
 }
