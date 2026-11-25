@@ -208,10 +208,17 @@ fn group_pages(pages: &mut [IndexedPage], streams: &mut [StreamIndex]) {
         page.landmark = *next;
         *next += 1;
     }
+    // Carry the displaced record so each destination is written once.
     for position in 0..pages.len() {
-        while pages[position].landmark != position {
-            let destination = pages[position].landmark;
-            pages.swap(position, destination);
+        let destination = pages[position].landmark;
+        if destination != position {
+            let first = pages[position];
+            let mut page = core::mem::replace(&mut pages[destination], first);
+            while page.landmark != position {
+                let next = page.landmark;
+                page = core::mem::replace(&mut pages[next], page);
+            }
+            pages[position] = page;
         }
     }
 }
