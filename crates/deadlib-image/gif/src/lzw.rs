@@ -145,14 +145,14 @@ impl Decoder {
                     output.push(code as u8);
                     1
                 } else {
-                    if relative == 0 {
+                    if relative < 2 {
+                        if relative == 1 {
+                            self.width = 0;
+                            return Ok(());
+                        }
                         self.clear_table();
                         *previous = 0;
                         continue;
-                    }
-                    if relative == 1 {
-                        self.width = 0;
-                        return Ok(());
                     }
                     let index = usize::from(relative - 2);
                     let (offset, length) = if let Some(&entry) = self.dictionary.get(index) {
