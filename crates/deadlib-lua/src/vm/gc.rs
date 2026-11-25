@@ -1217,6 +1217,12 @@ impl Vm {
             let Some(item) = work.last().copied() else {
                 break;
             };
+            if let Trace::Value(Value::String(id)) = item {
+                work.pop();
+                visited += 1;
+                self.strings.bytes.mark(id.0);
+                continue;
+            }
             self.reserve_trace_item(item, work)?;
             work.pop();
             visited += 1;
