@@ -88,21 +88,12 @@ impl<W: Write> PacketWriter<W> {
         if self.header_len == MAX_HEADER_SIZE {
             self.emit(false, &[])?;
         }
-        let mut remaining = data;
-        let mut available = (MAX_HEADER_SIZE - self.header_len) * 255;
-        while remaining.len() >= available {
-            let (payload, rest) = remaining.split_at(available);
-            self.header[self.header_len..].fill(255);
-            self.header_len = MAX_HEADER_SIZE;
-            if self.body.is_empty() {
-                self.emit(false, payload)?;
-            } else {
-                self.append_body(payload, data.len())?;
-                self.emit(false, &[])?;
-            }
-            remaining = rest;
-            available = 255 * 255;
-        }
+        let available = (MAX_HEADER_SIZE - self.header_len) * 255;
+        let remaining = if data.len() >= available {
+            self.write_span_pages(data, available)?
+        } else {
+            data
+        };
         let len = remaining.len();
         let mut tail = len;
         if len >= 255 {
@@ -125,6 +116,28 @@ impl<W: Write> PacketWriter<W> {
             self.emit(eos, &[])?;
         }
         Ok(())
+    }
+    #[inline(never)]
+    fn write_span_pages<'a>(
+        &mut self,
+        data: &'a [u8],
+        mut available: usize,
+    ) -> Result<&'a [u8], Error> {
+        let mut remaining = data;
+        while remaining.len() >= available {
+            let (payload, rest) = remaining.split_at(available);
+            self.header[self.header_len..].fill(255);
+            self.header_len = MAX_HEADER_SIZE;
+            if self.body.is_empty() {
+                self.emit(false, payload)?;
+            } else {
+                self.append_body(payload, data.len())?;
+                self.emit(false, &[])?;
+            }
+            remaining = rest;
+            available = 255 * 255;
+        }
+        Ok(remaining)
     }
     fn append_body(&mut self, data: &[u8], packet_len: usize) -> Result<(), Error> {
         let len = data.len();
