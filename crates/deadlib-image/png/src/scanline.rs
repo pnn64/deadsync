@@ -335,6 +335,56 @@ pub(crate) fn unfilter_first(row: &mut [u8], bpp: usize, filter: u8) -> Result<(
     Ok(())
 }
 
+fn compact_plain_bytes(
+    raw: &mut [u8],
+    stride: usize,
+    count: usize,
+    bpp: usize,
+) -> Result<(), Error> {
+    let wire_stride = stride + 1;
+    let mut read = 0;
+    let mut write = 0;
+    while write < count {
+        let (before, after) = raw.split_at_mut(read);
+        let filter = *after.first().ok_or(Error::Truncated)?;
+        if filter == 4
+            && write != 0
+            && count - write > stride
+            && after.get(wire_stride) == Some(&4)
+            && after.len() >= 2 * wire_stride
+        {
+            let (row, next) = after.split_at_mut(wire_stride);
+            let prev = &before[write - stride..write];
+            if unfilter_paeth_pair(&mut row[1..], &mut next[1..wire_stride], prev, bpp) {
+                raw.copy_within(read + 1..read + wire_stride, write);
+                raw.copy_within(
+                    read + wire_stride + 1..read + 2 * wire_stride,
+                    write + stride,
+                );
+                read += 2 * wire_stride;
+                write += 2 * stride;
+                continue;
+            }
+        }
+        let row = after.get_mut(1..wire_stride).ok_or(Error::Truncated)?;
+        if filter != 0 {
+            if write == 0 {
+                unfilter_first(row, bpp, filter)?;
+            } else {
+                unfilter(row, &before[write - stride..write], bpp, filter)?;
+            }
+        }
+        // Compact this row without touching the next row's filter byte.
+        raw.copy_within(read + 1..read + wire_stride, write);
+        read += wire_stride;
+        write += stride;
+    }
+    if read != raw.len() {
+        return Err(Error::Invalid("extra image data"));
+    }
+    Ok(())
+}
+
 pub(crate) fn decode(
     mut raw: Vec<u8>,
     width: u32,
@@ -354,10 +404,21 @@ pub(crate) fn decode(
     if bytes > limit {
         return Err(Error::LimitExceeded);
     }
-    let reuse = depth == 8 && !interlaced;
-    let mut samples = if reuse {
-        Samples::U8(Vec::new())
-    } else if depth == 16 {
+    let channels = color.channels();
+    let bpp = (channels * depth as usize).div_ceil(8);
+    if depth == 8 && !interlaced {
+        let stride = row_bytes(width as usize, channels, depth)?;
+        compact_plain_bytes(&mut raw, stride, count, bpp)?;
+        raw.truncate(count);
+        return Ok(Image {
+            width,
+            height,
+            color_type: color,
+            bit_depth: depth,
+            samples: Samples::U8(raw),
+        });
+    }
+    let mut samples = if depth == 16 {
         let mut v = Vec::new();
         reserve(&mut v, count)?;
         if interlaced {
@@ -370,8 +431,6 @@ pub(crate) fn decode(
         v.resize(count, 0u8);
         Samples::U8(v)
     };
-    let channels = color.channels();
-    let bpp = (channels * depth as usize).div_ceil(8);
     let mut position = 0;
     for &(x, y, dx, dy) in passes(interlaced) {
         let w = extent(width, x, dx);
@@ -380,53 +439,16 @@ pub(crate) fn decode(
             continue;
         }
         let stride = row_bytes(w, channels, depth)?;
-        let mut paired = false;
         for row_index in 0..h {
-            if paired {
-                // Unfiltered and compacted together with the previous row.
-                paired = false;
-                continue;
-            }
             let (before, after) = raw.split_at_mut(position);
             let filter = *after.first().ok_or(Error::Truncated)?;
-            if filter == 4
-                && reuse
-                && row_index != 0
-                && row_index + 1 < h
-                && after.get(stride + 1) == Some(&4)
-                && after.len() >= 2 * (stride + 1)
-            {
-                let (row, next) = after.split_at_mut(stride + 1);
-                let previous = &before[(row_index - 1) * stride..row_index * stride];
-                if unfilter_paeth_pair(&mut row[1..], &mut next[1..1 + stride], previous, bpp) {
-                    for n in 0..2 {
-                        let start = position + 1;
-                        raw.copy_within(start..start + stride, (row_index + n) * stride);
-                        position += stride + 1;
-                    }
-                    paired = true;
-                    continue;
-                }
-            }
             let row = after.get_mut(1..1 + stride).ok_or(Error::Truncated)?;
             if filter != 0 {
                 if row_index == 0 {
                     unfilter_first(row, bpp, filter)?;
                 } else {
-                    let previous = if reuse {
-                        &before[(row_index - 1) * stride..row_index * stride]
-                    } else {
-                        &before[position - stride..position]
-                    };
-                    unfilter(row, previous, bpp, filter)?;
+                    unfilter(row, &before[position - stride..position], bpp, filter)?;
                 }
-            }
-            if reuse {
-                // Read the next row's predictor from the compacted output.
-                // Moving this row left cannot overwrite any unread row.
-                raw.copy_within(position + 1..position + 1 + stride, row_index * stride);
-                position += stride + 1;
-                continue;
             }
             let dst_y = y as usize + row_index * dy as usize;
             let dst = (dst_y * width as usize + x as usize) * channels;
@@ -478,12 +500,7 @@ pub(crate) fn decode(
         height,
         color_type: color,
         bit_depth: depth,
-        samples: if reuse {
-            raw.truncate(count);
-            Samples::U8(raw)
-        } else {
-            samples
-        },
+        samples,
     })
 }
 
