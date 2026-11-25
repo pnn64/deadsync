@@ -226,7 +226,8 @@ theme to describe an input or store a setting:
   Config and playback share the mixer volume percentages defined in
   `deadsync-core`.
 - `deadlib-audio-core` defines the saved Linux backend and output mode choices.
-  `deadlib-audio` owns backend discovery, startup, and fallback.
+  `deadlib-audio` owns backend discovery, startup, fallback, and sampling the
+  callback's host clock. `deadsync-audio-stream` maps that timing to song position.
 - Song and course scans receive additional song roots from the shell. Scan,
   reload, and stage callers supply the cache preferences, pack exclusions,
   and timing offsets needed for each operation. The shell supplies the music

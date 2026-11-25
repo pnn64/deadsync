@@ -8785,7 +8785,13 @@ fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
                 .expect("decoder must stop")
     );
 
-    let game = root.join("crates/deadsync-audio-stream/src");
+    let stream = root.join("crates/deadsync-audio-stream");
+    let manifest = read_source(stream.join("Cargo.toml")).expect("audio stream manifest");
+    assert!(!manifest.contains("deadlib-platform"));
+    let game = stream.join("src");
+    let clock = production_source(&game.join("clock.rs"));
+    assert!(clock.contains("use deadlib_audio::callback_clock_snapshot_now;"));
+    assert!(!clock.contains("deadlib_platform::"));
     for file in production_rust_files(&game) {
         let source = production_source(&file);
         for token in AUDIO_STREAM_FORBIDDEN_TOKENS.iter().copied().chain([

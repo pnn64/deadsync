@@ -1540,7 +1540,6 @@ dependencies = [
  "deadlib-audio",
  "deadlib-audio-core",
  "deadlib-audio-decode",
- "deadlib-platform",
  "deadsync-core",
  "log",
 ]

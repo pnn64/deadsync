@@ -1,13 +1,11 @@
 use crate::MusicClock;
+use deadlib_audio::callback_clock_snapshot_now;
 use deadlib_audio_core::{
     CallbackClockSource, CallbackClockWindow, MusicStreamClockSnapshot,
     fallback_stream_position_frames, music_nanos_from_seconds, music_track_has_started,
     music_track_start_frame, seeded_music_position,
     stream_position_frames_from_window as audio_stream_position_frames_from_window,
 };
-use deadlib_platform::host_time::instant_nanos;
-#[cfg(windows)]
-use deadlib_platform::windows_rt::current_qpc_nanos;
 use log::debug;
 use std::time::Instant;
 
@@ -15,19 +13,6 @@ use std::time::Instant;
 #[must_use]
 pub fn timing_diag_enabled() -> bool {
     log::log_enabled!(log::Level::Debug)
-}
-
-#[inline(always)]
-fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) -> Option<u64> {
-    match source {
-        CallbackClockSource::Instant => Some(instant_nanos(valid_at)),
-        #[cfg(windows)]
-        CallbackClockSource::Qpc => current_qpc_nanos(),
-    }
-}
-
-fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockSource, CallbackClockWindow) {
-    deadlib_audio_core::load_callback_clock_snapshot_now(current_callback_clock_nanos)
 }
 
 #[inline(always)]
@@ -122,7 +107,7 @@ impl MusicClock {
             };
         }
         let start = music_track_start_frame();
-        let (valid_at, at_nanos, source, window) = load_callback_clock_snapshot_now();
+        let (valid_at, at_nanos, source, window) = callback_clock_snapshot_now();
         music_stream_clock_snapshot_at_nanos(
             self,
             sample_rate,
