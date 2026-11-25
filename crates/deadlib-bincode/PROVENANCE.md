@@ -81,3 +81,10 @@ produced by the retained surface under `config::standard()`.
   contiguous input region for owned, borrowed, and caller-reused decoding.
 - Copy allocating byte vectors directly from slice readers without zero-filling
   their destination first; retain initialized buffers for other readers.
+
+## Restored upstream surface
+
+- Restore the upstream codecs for `Box<T>`, `Arc<T>`, `Arc<[T]>`, `Arc<str>`,
+  `Path` and `PathBuf`, which the song-Lua bake cache persists. They keep the
+  upstream wire form: a pointer encodes as its value, and a path as its UTF-8
+  text. A path that is not valid Unicode fails to encode.

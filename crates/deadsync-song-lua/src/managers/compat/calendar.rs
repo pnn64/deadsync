@@ -5,7 +5,6 @@ use chrono::Datelike;
 
 #[derive(Clone)]
 struct Calendar {
-    #[cfg(feature = "test-support")]
     name: &'static str,
     value: Option<i32>,
     #[cfg(feature = "test-support")]
@@ -42,7 +41,6 @@ pub(super) fn install_for_date(
             calendar,
             &[],
             Calendar {
-                #[cfg(feature = "test-support")]
                 name,
                 value,
                 #[cfg(feature = "test-support")]
@@ -66,5 +64,10 @@ fn calendar(call: &mut HostCall<'_>) -> Result<(), Error> {
     let value = calendar
         .value
         .ok_or_else(|| call.error(b"invalid calendar date for DayOfYear"))?;
+    match calendar.name {
+        // No later session starts within the same minute or second.
+        "Minute" | "Second" => crate::bake_inputs::volatile("a script read the time of day"),
+        name => crate::bake_inputs::answer(name, value as i64 as u64),
+    }
     call.push(Value::Number(value as f64))
 }

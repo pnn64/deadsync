@@ -18,7 +18,8 @@ use deadsync_song_lua::{
 mod context;
 
 pub use context::{
-    resolve_song_lua_judgment_textures, song_lua_catalog_note_bounds, song_lua_compile_context,
+    init_song_lua_bake_cache, resolve_song_lua_judgment_textures, song_lua_bake_cache,
+    song_lua_catalog_note_bounds, song_lua_compile_context,
     song_lua_play_context,
 };
 
@@ -61,6 +62,11 @@ fn context_with_movie_probe(context: &SongLuaCompileContext) -> Cow<'_, SongLuaC
     context.media_probes.movie_dimensions = MEDIA_PROBES.movie_dimensions;
     Cow::Owned(context)
 }
+
+/// Identifies this build to the song-Lua bake cache. The compile functions
+/// below resolve noteskins, models and multitap arrows for the baker, so a
+/// change to them or to anything they link must not reuse older bakes.
+pub const SONG_LUA_BAKE_HOST_BUILD: &str = env!("DEADSYNC_ASSETS_BAKE_BUILD");
 
 #[must_use]
 pub fn overlay_sampler(overlay: &SongLuaOverlayActor) -> SamplerDesc {

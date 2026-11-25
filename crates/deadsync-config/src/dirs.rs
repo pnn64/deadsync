@@ -85,6 +85,12 @@ impl AppDirs {
         self.cache_dir.join("banner")
     }
 
+    /// Completed song-Lua bakes, one folder per song.
+    #[must_use]
+    pub fn song_lua_bake_cache_dir(&self) -> PathBuf {
+        self.cache_dir.join("song-lua-bake")
+    }
+
     #[must_use]
     pub fn cdtitle_cache_dir(&self) -> PathBuf {
         self.cache_dir.join("cdtitle")

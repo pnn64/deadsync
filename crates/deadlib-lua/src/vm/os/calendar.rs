@@ -31,6 +31,11 @@ impl Vm {
         let owner = self.frames.len() - 1;
         let mut ready = frame.pc() != 0;
         if frame.pc() == 0 {
+            // os.time runs as a resumable step, not through the library
+            // dispatcher that reports every other os function.
+            if let Some(observe) = self.process_library_observer {
+                observe();
+            }
             let value = self.argument(frame.vararg_start - 1, frame.argc(), 0);
             if value == Value::Nil {
                 self.registers[base] =

@@ -8,6 +8,7 @@ license = "GPL-3.0"
 conformance = []
 
 [dependencies]
+bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 deadlib-image-io = { path = "../deadlib-image-io" }
 deadlib-render-core = { path = "../deadlib-render-core" }
 glam = "0.34.3"

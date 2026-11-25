@@ -93,6 +93,9 @@ use crate::{
 };
 use deadlib_lua::{Error, HostCall, Root, TableId, Value, Vm};
 mod actors;
+pub mod bake_cache;
+mod bake_codec;
+pub mod bake_inputs;
 mod bake_progress;
 pub use bake_progress::SongLuaBakeProgress;
 #[path = "input/program/mod.rs"]
@@ -282,6 +285,11 @@ impl SongRuntime {
         #[cfg(feature = "test-support")]
         let observations = observations::Observations::default();
         let mut vm = Vm::try_new_with_lua51_table_order()?;
+        // Files, the environment and the clock are invisible to the bake
+        // cache, so a bake that touches them through Lua is never reused.
+        vm.set_process_library_observer(Some(|| {
+            crate::bake_inputs::volatile("a script used the io, os or native file-loading library");
+        }));
         #[cfg(feature = "test-support")]
         if context.initial_lua_gc_stopped {
             vm.with_native_stack(|stack| stack.gc(deadlib_lua::GcOperation::Stop).map(|_| ()))?;
@@ -2871,7 +2879,7 @@ pub fn overlay_ease_cmp(
         .then_with(|| left.overlay_index.cmp(&right.overlay_index))
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub enum SongLuaTimeUnit {
     Beat,
     Second,
@@ -2879,13 +2887,13 @@ pub enum SongLuaTimeUnit {
     BeatClock,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub enum SongLuaSpanMode {
     Len,
     End,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, bincode::Encode, bincode::Decode)]
 pub enum SongLuaEaseTarget {
     Mod(String),
     PlayerX,
@@ -2903,7 +2911,7 @@ pub enum SongLuaEaseTarget {
     Function,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaModWindow {
     pub unit: SongLuaTimeUnit,
     pub start: f32,
@@ -2913,7 +2921,7 @@ pub struct SongLuaModWindow {
     pub player: Option<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaEaseWindow {
     /// Native option units per second for sampled Song-level targets.
     /// None applies the authored ease directly to Current.
@@ -2932,14 +2940,14 @@ pub struct SongLuaEaseWindow {
     pub opt2: Option<f32>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaMessageEvent {
     pub beat: f32,
     pub message: String,
     pub persists: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaCompileInfo {
     pub unsupported_perframes: usize,
     pub unsupported_function_eases: usize,
@@ -3011,7 +3019,7 @@ pub fn merge_compile_info(out: &mut SongLuaCompileInfo, info: SongLuaCompileInfo
 
 /// Requests captured after script initialization, before timeline sampling.
 /// They apply only to this play and never modify persisted player preferences.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaStartup {
     pub noteskins: [Option<String>; LUA_PLAYERS],
     pub min_seconds_to_music: Option<f32>,
@@ -3275,7 +3283,7 @@ pub fn runtime_static_overlay_index_by_path<'a>(
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub enum SongLuaOverlayBlendMode {
     Alpha,
     Add,
@@ -3284,14 +3292,14 @@ pub enum SongLuaOverlayBlendMode {
     NoEffect,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub enum SongLuaTextGlowMode {
     Inner,
     Stroke,
     Both,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub enum SongLuaProxyTarget {
     Player { player_index: usize },
     NoteField { player_index: usize },
@@ -3303,7 +3311,7 @@ pub enum SongLuaProxyTarget {
     Actor { overlay_index: usize },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayMeshVertex {
     pub pos: [f32; 2],
     pub z: f32,
@@ -3311,7 +3319,7 @@ pub struct SongLuaOverlayMeshVertex {
     pub uv: [f32; 2],
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayModelDraw {
     pub pos: [f32; 3],
     pub rot: [f32; 3],
@@ -3345,7 +3353,12 @@ impl SongLuaOverlayModelDraw {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, bincode::Encode, bincode::Decode)]
+#[bincode(
+    encode_bounds = "Vertex: bincode::Encode",
+    decode_bounds = "Vertex: bincode::Decode<__Context> + 'static",
+    borrow_decode_bounds = "Vertex: bincode::BorrowDecode<'__de, __Context> + '__de"
+)]
 pub struct SongLuaOverlayModelLayer<Vertex> {
     pub material: Option<deadsync_noteskin::ModelMaterial>,
     pub texture_key: Arc<str>,
@@ -3502,7 +3515,7 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
     Quad,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaSpriteState {
     pub frame: u32,
     pub delay: f32,
@@ -3513,7 +3526,7 @@ pub struct SongLuaSpriteState {
 /// I/O, allocation, growth or eviction. All images are prewarmed at the gameplay
 /// transition. Bindings are shared read-only and freed with the song at the
 /// next transition; the semantic audit checks recorded loads against native Lua.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, bincode::Encode, bincode::Decode)]
 pub struct SongLuaSpriteTexture {
     pub second: f32,
     pub path: PathBuf,
@@ -4040,7 +4053,7 @@ pub fn format_rolling_number(format: &str, number: f32) -> String {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayState {
     pub aux: f32,
     pub x: f32,
@@ -4322,7 +4335,7 @@ pub fn overlay_state_z_scale(state: SongLuaOverlayState) -> f32 {
     basezoom_z * zoom_z
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayStateDelta {
     pub aux: Option<f32>,
     pub x: Option<f32>,
@@ -4536,7 +4549,7 @@ pub fn overlay_delta_uses_nearest_sampler(delta: &SongLuaOverlayStateDelta) -> b
     delta.texture_filtering == Some(false)
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayCommandBlock {
     /// Immutable song-load samples [seconds, native time left]. Shared with
     /// cloned commands for the song lifetime; lookup is bounded by the song's
@@ -6023,7 +6036,7 @@ pub fn overlay_eases_from_captures(
     out
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayMessageCommand {
     /// Frame delta consumed by a receiver updated after the broadcaster.
     pub frame_advance: f32,
@@ -6040,7 +6053,7 @@ pub fn message_command_lists_have_listener<'a>(
         .any(|commands| commands.iter().any(|command| command.message == message))
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayActor<Kind> {
     pub kind: Kind,
     pub name: Option<String>,
@@ -6178,7 +6191,7 @@ pub fn overlay_descendants_by_parent(
     out
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayEase {
     pub overlay_index: usize,
     pub unit: SongLuaTimeUnit,
@@ -6193,7 +6206,7 @@ pub struct SongLuaOverlayEase {
     pub opt2: Option<f32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bincode::Encode, bincode::Decode)]
 pub enum SongLuaOverlayUpdateTarget {
     Aux,
     X,
@@ -6289,7 +6302,7 @@ pub enum SongLuaOverlayUpdateTarget {
     MoviePositionSeconds,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub enum SongLuaOverlayUpdateValue {
     None,
     F32(f32),
@@ -6348,21 +6361,21 @@ impl SongLuaOverlayUpdateValue {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayUpdateSample {
     /// Render tracks use `overlay_update_unit`; raw audit writes use beats.
     pub time: f32,
     pub value: SongLuaOverlayUpdateValue,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayUpdateTrack {
     pub overlay_index: usize,
     pub target: SongLuaOverlayUpdateTarget,
     pub samples: Vec<SongLuaOverlayUpdateSample>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaStatefulMessageWrite {
     pub overlay_index: usize,
     pub beat: f32,
@@ -6374,27 +6387,27 @@ pub struct SongLuaStatefulMessageWrite {
     pub opt1: Option<f32>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaStatefulMessageCapture {
     pub message: String,
     pub overlay_targets: Vec<(usize, Vec<SongLuaOverlayUpdateTarget>)>,
     pub writes: Vec<SongLuaStatefulMessageWrite>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayRuntimeUpdateSample {
     pub second: f32,
     pub value: SongLuaOverlayUpdateValue,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaOverlayRuntimeUpdateTrack {
     pub overlay_index: usize,
     pub target: SongLuaOverlayUpdateTarget,
     pub samples: Vec<SongLuaOverlayRuntimeUpdateSample>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaCapturedChildActor {
     pub initial_state: SongLuaOverlayState,
     pub message_commands: Vec<SongLuaOverlayMessageCommand>,
@@ -6405,7 +6418,7 @@ pub struct SongLuaCapturedChildActor {
     pub textures: Vec<SongLuaJudgmentTexture>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaJudgmentTexture {
     pub second: f32,
     pub path: PathBuf,
@@ -6425,7 +6438,7 @@ pub fn judgment_texture_at(
     end.checked_sub(1).map(|index| &actor.textures[index])
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaCapturedActor {
     pub initial_state: SongLuaOverlayState,
     pub message_commands: Vec<SongLuaOverlayMessageCommand>,
@@ -6441,7 +6454,7 @@ pub struct SongLuaCapturedActor {
     pub player_wrapper_frames: Vec<SongLuaNoteFieldFrame>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaNoteFieldFrame {
     pub second: f32,
     /// Native draw order: outermost wrapper first.
@@ -6457,7 +6470,7 @@ pub enum SongLuaTrackedActorTarget {
     ScreenLayer(usize),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaNoteHideWindow {
     pub spline_beats_per_t: f32,
     pub spline_size: usize,
@@ -6554,7 +6567,7 @@ pub fn sort_note_hide_windows(windows: &mut [SongLuaNoteHideWindow]) {
     });
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaColumnOffsetWindow {
     pub unit: SongLuaTimeUnit,
     pub start: f32,
@@ -6571,7 +6584,7 @@ pub struct SongLuaColumnOffsetWindow {
     pub opt2: Option<f32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, bincode::Encode, bincode::Decode)]
 pub enum SongLuaColumnTransformTarget {
     OffsetX,
     OffsetY,

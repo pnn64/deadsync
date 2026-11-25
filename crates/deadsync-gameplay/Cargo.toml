@@ -8,6 +8,7 @@ license = "GPL-3.0"
 test-support = []
 
 [dependencies]
+bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-input = { path = "../deadsync-input" }

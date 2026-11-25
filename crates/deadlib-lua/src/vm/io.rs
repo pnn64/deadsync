@@ -64,6 +64,15 @@ const NO_CLOSE: u64 = 149;
 const PIPE_CLOSE: u64 = 150;
 pub(super) const LAST: u64 = PIPE_CLOSE;
 pub(super) const STACK_READY: u32 = 2;
+/// Whether a library function reads or changes state outside the VM. Closing
+/// a handle, collecting one and naming one do not: the VM itself closes its
+/// standard streams this way when it is dropped, with no script involved.
+pub(super) const fn reaches_outside_vm(id: u64) -> bool {
+    !matches!(
+        id,
+        CLOSE | FCLOSE | TYPE | GC | TO_STRING | REAL_CLOSE | NO_CLOSE | PIPE_CLOSE
+    )
+}
 pub(super) fn callback(id: u64) -> Option<HostFunction> {
     match id {
         CLOSE | FCLOSE => Some(host::stack::io_callbacks::close),

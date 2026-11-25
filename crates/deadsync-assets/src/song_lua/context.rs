@@ -412,5 +412,29 @@ pub fn resolve_song_lua_judgment_textures(
     }
 }
 
+/// Unset in tools and tests, which then bake every time.
+static SONG_LUA_BAKE_CACHE: std::sync::OnceLock<deadsync_song_lua::bake_cache::BakeCache> =
+    std::sync::OnceLock::new();
+
+/// Keep completed song-Lua bakes under `directory` for later sessions.
+/// `DEADSYNC_SONG_LUA_BAKE_CACHE=0` leaves the cache off, to compare a cached
+/// load against a fresh bake without changing the Song Lua mode.
+pub fn init_song_lua_bake_cache(directory: std::path::PathBuf) {
+    if std::env::var_os("DEADSYNC_SONG_LUA_BAKE_CACHE").is_some_and(|value| value == "0") {
+        log::info!("Song Lua bake cache disabled by DEADSYNC_SONG_LUA_BAKE_CACHE=0");
+        return;
+    }
+    let _ = SONG_LUA_BAKE_CACHE.set(deadsync_song_lua::bake_cache::BakeCache::new(
+        directory,
+        super::SONG_LUA_BAKE_HOST_BUILD,
+    ));
+}
+
+/// The bake cache, once [`init_song_lua_bake_cache`] has installed one.
+#[must_use]
+pub fn song_lua_bake_cache() -> Option<&'static deadsync_song_lua::bake_cache::BakeCache> {
+    SONG_LUA_BAKE_CACHE.get()
+}
+
 #[cfg(test)]
 mod tests;

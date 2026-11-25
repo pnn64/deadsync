@@ -24,6 +24,11 @@ pub(super) const TIME: u64 = FIRST + 8;
 const DATE: u64 = FIRST + 9;
 const SETLOCALE: u64 = FIRST + 10;
 pub(super) const LAST: u64 = SETLOCALE;
+/// Whether a library function reads or changes state outside the VM. Only
+/// `difftime` is arithmetic on its arguments.
+pub(super) const fn reaches_outside_vm(id: u64) -> bool {
+    id != DIFFTIME
+}
 impl Vm {
     pub(super) fn open_os(&mut self) -> Result<(), Error> {
         let table = self.try_new_table()?;

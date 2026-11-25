@@ -8,13 +8,23 @@ playback_fixture_tests! {
 pub(crate) type SongLuaOverlayEaseWindowRuntime =
     deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaRuntimeOverlayStateDelta>;
 
-#[derive(Debug)]
+#[derive(Debug, bincode::Encode, bincode::Decode)]
+#[bincode(
+    encode_bounds = "S: bincode::Encode",
+    decode_bounds = "S: bincode::Decode<__Context> + 'static",
+    borrow_decode_bounds = "S: bincode::BorrowDecode<'__de, __Context> + '__de"
+)]
 pub(crate) struct GameplayCompiledSongLua<S> {
     pub(crate) compiled: CompiledSongLua<S>,
     pub(crate) compile_ms: f64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, bincode::Encode, bincode::Decode)]
+#[bincode(
+    encode_bounds = "S: bincode::Encode",
+    decode_bounds = "S: bincode::Decode<__Context> + 'static",
+    borrow_decode_bounds = "S: bincode::BorrowDecode<'__de, __Context> + '__de"
+)]
 pub(crate) struct GameplaySongLuaLayer<S> {
     pub(crate) start_beat: f32,
     pub(crate) compiled: CompiledSongLua<S>,
@@ -24,7 +34,12 @@ pub(crate) struct GameplaySongLuaLayer<S> {
 ///
 /// The shell may build this on a worker during Select Music's options prompt,
 /// then hand it to the shared gameplay runtime builder.
-#[derive(Debug)]
+#[derive(Debug, bincode::Encode, bincode::Decode)]
+#[bincode(
+    encode_bounds = "S: bincode::Encode",
+    decode_bounds = "S: bincode::Decode<__Context> + 'static",
+    borrow_decode_bounds = "S: bincode::BorrowDecode<'__de, __Context> + '__de"
+)]
 pub struct PreparedGameplaySongLua<S> {
     pub(crate) compile_succeeded: bool,
     pub(crate) primary: Option<GameplayCompiledSongLua<S>>,

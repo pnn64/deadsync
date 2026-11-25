@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-image-io = { path = "../deadlib-image-io" }
 deadlib-present = { path = "../deadlib-present" }

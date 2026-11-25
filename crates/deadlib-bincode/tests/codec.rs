@@ -138,3 +138,64 @@ fn malformed_values_are_rejected() {
         Err(bincode::error::DecodeError::Utf8 { .. })
     ));
 }
+
+#[test]
+fn owning_pointers_and_paths_use_the_wire_form_of_their_contents() {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    #[derive(Debug, PartialEq, Encode, Decode)]
+    struct Owners {
+        boxed: Box<u32>,
+        shared: Arc<(u8, String)>,
+        slice: Arc<[u16]>,
+        text: Arc<str>,
+        nested: Arc<[Arc<[f32]>]>,
+        path: PathBuf,
+        missing: Option<Arc<str>>,
+    }
+
+    #[derive(Debug, PartialEq, Encode, Decode)]
+    struct Plain {
+        boxed: u32,
+        shared: (u8, String),
+        slice: Vec<u16>,
+        text: String,
+        nested: Vec<Vec<f32>>,
+        path: String,
+        missing: Option<String>,
+    }
+
+    let owners = Owners {
+        boxed: Box::new(70_000),
+        shared: Arc::new((7, "shared".to_owned())),
+        slice: Arc::from([1, 300, 65_535]),
+        text: Arc::from("text"),
+        nested: Arc::from([Arc::from([1.5, -0.0]), Arc::from([])]),
+        path: PathBuf::from("Songs/Pack/Song/default.lua"),
+        missing: None,
+    };
+    let plain = Plain {
+        boxed: 70_000,
+        shared: (7, "shared".to_owned()),
+        slice: vec![1, 300, 65_535],
+        text: "text".to_owned(),
+        nested: vec![vec![1.5, -0.0], vec![]],
+        path: "Songs/Pack/Song/default.lua".to_owned(),
+        missing: None,
+    };
+    let config = bincode::config::standard();
+    let bytes = bincode::encode_to_vec(&owners, config).unwrap();
+    // A pointer adds nothing to the wire: the bytes are those of the value.
+    assert_eq!(bytes, bincode::encode_to_vec(&plain, config).unwrap());
+    let (decoded, used) = bincode::decode_from_slice::<Owners, _>(&bytes, config).unwrap();
+    assert_eq!((decoded, used), (owners, bytes.len()));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_path_that_is_not_unicode_fails_to_encode() {
+    use std::os::unix::ffi::OsStrExt;
+    let path = std::path::PathBuf::from(std::ffi::OsStr::from_bytes(b"song-\xff.lua"));
+    assert!(bincode::encode_to_vec(&path, bincode::config::standard()).is_err());
+}

@@ -27,6 +27,7 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
     };
     let directory = call.function_data::<std::path::PathBuf>().unwrap();
     let path = crate::resolve_compat_path(directory, &path);
+    crate::bake_inputs::file(&path);
     let value = match std::fs::read_to_string(path) {
         Ok(text) => call.try_intern(text.as_bytes())?,
         Err(_) => Value::Nil,

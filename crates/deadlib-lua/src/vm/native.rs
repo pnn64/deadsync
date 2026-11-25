@@ -865,9 +865,19 @@ impl Vm {
             return Ok(1);
         }
         if (io::FIRST..=io::LAST).contains(&id) {
+            if io::reaches_outside_vm(id)
+                && let Some(observe) = self.process_library_observer
+            {
+                observe();
+            }
             return self.io_native(id, base, count);
         }
         if (os::FIRST..=os::LAST).contains(&id) {
+            if os::reaches_outside_vm(id)
+                && let Some(observe) = self.process_library_observer
+            {
+                observe();
+            }
             return self.os_native(id, base, count);
         }
         if matches!(id, hooks::GET_HOOK | hooks::SET_HOOK) {

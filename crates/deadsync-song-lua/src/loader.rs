@@ -259,6 +259,7 @@ fn load_file(
         globals
     };
     call.with_roots(&[env], |call| {
+        crate::bake_inputs::file(&path);
         let source = if matches!(kind, Kind::Entry) && crate::legacy_xml::is_xml(&path) {
             crate::legacy_xml::load(&path).map_err(|error| call.error(error.as_bytes()))?
         } else {

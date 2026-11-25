@@ -5,7 +5,7 @@ use crate::{
     error::{DecodeError, EncodeError},
     impl_borrow_decode, Config,
 };
-use std::{boxed::Box, string::String, vec::Vec};
+use std::{boxed::Box, string::String, sync::Arc, vec::Vec};
 
 
 /// Return the number of bytes required to encode a value.
@@ -760,6 +760,83 @@ impl<'de, T: BorrowDecode<'de, Context> + 'de, Context> BorrowDecode<'de, Contex
 }
 
 impl<T: Encode> Encode for Box<[T]> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
+        self.as_ref().encode(encoder)
+    }
+}
+
+impl<Context, T: Decode<Context>> Decode<Context> for Box<T> {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
+        Ok(Self::new(T::decode(decoder)?))
+    }
+}
+
+impl<'de, T: BorrowDecode<'de, Context>, Context> BorrowDecode<'de, Context> for Box<T> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = Context>>(
+        decoder: &mut D,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self::new(T::borrow_decode(decoder)?))
+    }
+}
+
+impl<T: Encode> Encode for Box<T> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
+        T::encode(self, encoder)
+    }
+}
+
+// Shared values are written once per owner, exactly like upstream bincode.
+// Decoding therefore yields independent allocations: pointer identity between
+// owners is not part of the wire format.
+impl<Context, T: Decode<Context>> Decode<Context> for Arc<T> {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
+        Ok(Self::new(T::decode(decoder)?))
+    }
+}
+
+impl<'de, T: BorrowDecode<'de, Context>, Context> BorrowDecode<'de, Context> for Arc<T> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = Context>>(
+        decoder: &mut D,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self::new(T::borrow_decode(decoder)?))
+    }
+}
+
+impl<T: Encode> Encode for Arc<T> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
+        T::encode(self, encoder)
+    }
+}
+
+impl<Context, T: Decode<Context> + 'static> Decode<Context> for Arc<[T]> {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
+        Ok(Vec::decode(decoder)?.into())
+    }
+}
+
+impl<'de, T: BorrowDecode<'de, Context> + 'de, Context> BorrowDecode<'de, Context> for Arc<[T]> {
+    fn borrow_decode<D: BorrowDecoder<'de, Context = Context>>(
+        decoder: &mut D,
+    ) -> Result<Self, DecodeError> {
+        Ok(Vec::borrow_decode(decoder)?.into())
+    }
+}
+
+impl<T: Encode> Encode for Arc<[T]> {
+    fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
+        self.as_ref().encode(encoder)
+    }
+}
+
+impl<Context> Decode<Context> for Arc<str> {
+    fn decode<D: Decoder<Context = Context>>(decoder: &mut D) -> Result<Self, DecodeError> {
+        Ok(String::decode(decoder)?.into())
+    }
+}
+
+impl_borrow_decode!(Arc<str>);
+
+impl Encode for Arc<str> {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
         self.as_ref().encode(encoder)
     }

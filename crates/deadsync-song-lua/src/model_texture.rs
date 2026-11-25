@@ -10,14 +10,14 @@ use crate::SongLuaOverlayModelLayer;
 
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct SongLuaModelTextureUv {
     pub scale: [f32; 2],
     pub offset: [f32; 2],
     pub shift: [f32; 2],
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, bincode::Encode, bincode::Decode)]
 pub struct SongLuaModelTextureFrame {
     /// Prewarmed image for this state; None retains the layer's static source.
     pub texture_key: Option<Arc<str>>,
@@ -26,7 +26,7 @@ pub struct SongLuaModelTextureFrame {
     pub glow: SongLuaModelTextureUv,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, bincode::Encode, bincode::Decode)]
 pub struct SongLuaTextureSample {
     pub second: f32,
     /// Native material state indices; image identities live once in the layer.
