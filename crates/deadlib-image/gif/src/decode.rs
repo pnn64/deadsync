@@ -567,6 +567,16 @@ impl Decoder {
                                 at += consumed;
                                 continue;
                             }
+                            if size == 2
+                                && let Some(&[a, b, 2, c, d]) = input[at..].first_chunk::<5>()
+                                && self.remaining_input_bytes >= 5
+                            {
+                                self.remaining_input_bytes -= 5;
+                                self.lzw
+                                    .update(&[a, b, c, d], &mut self.frame.indices, pixels)?;
+                                at += 5;
+                                continue;
+                            }
                             remaining = usize::from(size);
                         }
                         let count = remaining.min(input.len() - at);
