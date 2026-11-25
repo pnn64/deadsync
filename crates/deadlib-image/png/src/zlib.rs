@@ -1609,6 +1609,8 @@ impl Writer {
                 continue;
             }
             let start = pos;
+            let groups = input[pos..].as_chunks::<32>().0;
+            pos += 32 * groups.iter().take_while(|group| **group == [0; 32]).count();
             let words = input[pos..].as_chunks::<8>().0;
             pos += 8 * words.iter().take_while(|word| **word == [0; 8]).count();
             while pos < input.len() && input[pos] == 0 {
