@@ -84,6 +84,7 @@ pub(crate) struct ReceptorDrawRequest<'a, S> {
     pub reverse: bool,
     pub bop_zoom: f32,
     pub effect_zoom: f32,
+    pub spline_zoom: [f32; 3],
     pub confusion_rotation_deg: f32,
     pub elapsed: f32,
     pub beat: f32,
@@ -182,6 +183,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                 request.center,
                 draw.pos,
                 request.field_zoom * request.effect_zoom,
+                request.spline_zoom,
             );
             append_receptor_sprite(
                 draws,
@@ -194,6 +196,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     zoom: mirrored_zoom(
                         slot,
                         request.bop_zoom * idle_press_zoom * request.effect_zoom.signum(),
+                        request.spline_zoom,
                     ),
                     tint: [
                         color[0] * draw.tint[0],
@@ -259,9 +262,13 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
         } else {
             BlendMode::Alpha
         };
+        let mut model_draw = draw;
+        for (zoom, spline) in model_draw.zoom.iter_mut().zip(request.spline_zoom) {
+            *zoom *= spline;
+        }
         if let Some(mut mesh) = noteskin_model_flat_draw_cached(
             slot,
-            draw,
+            model_draw,
             request.center,
             size,
             uv,
@@ -285,7 +292,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     align: [0.5, 0.5],
                     center: request.center,
                     size,
-                    zoom: [1.0, 1.0],
+                    zoom: [request.spline_zoom[0], request.spline_zoom[1]],
                     tint: color,
                     rotation_x_deg: request.rotation_x_deg,
                     rotation_y_deg: request.rotation_y_deg,
@@ -333,6 +340,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     request.center,
                     draw.pos,
                     request.field_zoom * request.effect_zoom,
+                    request.spline_zoom,
                 );
                 append_receptor_sprite(
                     draws,
@@ -342,7 +350,8 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                         align: [0.5, reverse.vert_align.unwrap_or(draw.vert_align)],
                         center,
                         size,
-                        zoom: mirrored_zoom(slot, request.bop_zoom * request.effect_zoom.signum()),
+                        zoom: mirrored_zoom(slot, request.bop_zoom * request.effect_zoom.signum(),
+                            request.spline_zoom),
                         tint: [
                             draw.tint[0],
                             draw.tint[1],
@@ -423,6 +432,7 @@ fn compose_receptor_overlay<S, F>(
             request.center,
             draw.pos,
             request.field_zoom * request.effect_zoom,
+            request.spline_zoom,
         );
         append_receptor_sprite(
             draws,
@@ -435,6 +445,7 @@ fn compose_receptor_overlay<S, F>(
                 zoom: mirrored_zoom(
                     slot,
                     request.bop_zoom * press_zoom * request.effect_zoom.signum(),
+                    request.spline_zoom,
                 ),
                 tint: [draw.tint[0], draw.tint[1], draw.tint[2], alpha],
                 rotation_x_deg: request.rotation_x_deg,
@@ -467,27 +478,22 @@ fn draw_center<S: NoteskinSlot>(
     center: [f32; 2],
     position: [f32; 3],
     scale: f32,
+    spline_zoom: [f32; 3],
 ) -> [f32; 2] {
     let [sin_r, cos_r] = slot.base_rot_sin_cos();
+    let x = position[0] * scale * spline_zoom[0];
+    let y = position[1] * scale * spline_zoom[1];
     let offset = [
-        (position[1] * scale).mul_add(-sin_r, position[0] * scale * cos_r),
-        (position[1] * scale).mul_add(cos_r, position[0] * scale * sin_r),
+        y.mul_add(-sin_r, x * cos_r),
+        y.mul_add(cos_r, x * sin_r),
     ];
     [center[0] + offset[0], center[1] + offset[1]]
 }
 
-fn mirrored_zoom<S: NoteskinSlot>(slot: &S, zoom: f32) -> [f32; 2] {
+fn mirrored_zoom<S: NoteskinSlot>(slot: &S, zoom: f32, spline_zoom: [f32; 3]) -> [f32; 2] {
     [
-        if slot.sprite_def().mirror_h {
-            -zoom
-        } else {
-            zoom
-        },
-        if slot.sprite_def().mirror_v {
-            -zoom
-        } else {
-            zoom
-        },
+        spline_zoom[0] * if slot.sprite_def().mirror_h { -zoom } else { zoom },
+        spline_zoom[1] * if slot.sprite_def().mirror_v { -zoom } else { zoom },
     ]
 }
 
@@ -679,6 +685,7 @@ mod tests {
             reverse: false,
             bop_zoom: 1.0,
             effect_zoom: 1.0,
+            spline_zoom: [1.0; 3],
             confusion_rotation_deg: 0.0,
             elapsed: 2.0,
             beat: 3.0,

@@ -157,19 +157,27 @@ fn read_splines(call: &mut HostCall<'_>, state: &mut State) -> Result<(), Error>
                                 .lanes
                                 .get(&(player, local))
                                 .and_then(|l| l.frames.last());
-                            let position = read_position(
+                            let [pos_scratch, rot_scratch, zoom_scratch] = &mut state.scratch;
+                            let position = read_spline(
                                 call,
                                 column,
                                 "__songlua_pos_handler",
                                 last.and_then(|f| f.position.as_ref()),
-                                &mut state.scratch,
+                                pos_scratch,
                             )?;
-                            let zoom = read_position(
+                            let rotation = read_spline(
+                                call,
+                                column,
+                                "__songlua_rot_handler",
+                                last.and_then(|f| f.rotation.as_ref()),
+                                rot_scratch,
+                            )?;
+                            let zoom = read_spline(
                                 call,
                                 column,
                                 "__songlua_zoom_handler",
                                 last.and_then(|f| f.zoom.as_ref()),
-                                &mut state.scratch,
+                                zoom_scratch,
                             )?;
                             state.sampled.push((
                                 player,
@@ -177,6 +185,7 @@ fn read_splines(call: &mut HostCall<'_>, state: &mut State) -> Result<(), Error>
                                 Frame {
                                     second: 0.,
                                     position,
+                                    rotation,
                                     zoom,
                                 },
                             ));
@@ -190,19 +199,16 @@ fn read_splines(call: &mut HostCall<'_>, state: &mut State) -> Result<(), Error>
         Ok(())
     })
 }
-fn points_match(points: &[[f32; 3]], coefficients: &[[[f32; 4]; 3]]) -> bool {
-    points.len() == coefficients.len()
-        && points
-            .iter()
-            .zip(coefficients)
-            .all(|(point, coefficients)| {
-                point
-                    .iter()
-                    .zip(coefficients)
-                    .all(|(value, axis)| value.to_bits() == axis[0].to_bits())
-            })
+fn same_coefficients(a: &[[[f32; 4]; 3]], b: &[[[f32; 4]; 3]]) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .flatten()
+            .flatten()
+            .zip(b.iter().flatten().flatten())
+            .all(|(a, b)| a.to_bits() == b.to_bits())
 }
-fn read_position(
+
+fn read_spline(
     call: &mut HostCall<'_>,
     column: TableId,
     key: &'static str,
@@ -216,22 +222,23 @@ fn read_position(
         };
         let value = field(call, handler, "__songlua_spline_mode")?;
         let mode = text(call, value, false)?;
-        if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Position") {
+        let absolute = mode.eq_ignore_ascii_case("NoteColumnSplineMode_Position");
+        if !absolute && !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Offset") {
             return Ok(None);
         }
         let spline = field(call, handler, "__songlua_spline")?;
         let spline = table(call, spline)?;
         call.with_roots(&[Value::Table(spline)], |call| {
             let size = unsigned_field(call, spline, "__songlua_spline_size")?;
-            if size == 0 {
-                return Ok(None);
-            }
             if size > 65536 {
                 return Err(call.error(b"Position spline exceeds 65536 points"));
             }
             let beats_per_t = float_field(call, handler, "__songlua_beats_per_t", None)?;
             let receptor_t = float_field(call, handler, "__songlua_receptor_t", None)?;
             if !beats_per_t.is_finite() || beats_per_t == 0. || !receptor_t.is_finite() {
+                if !absolute {
+                    return Ok(None);
+                }
                 return Err(call.error(b"Position spline has an invalid beat conversion"));
             }
             let points = field(call, spline, "__songlua_spline_points")?;
@@ -240,36 +247,65 @@ fn read_position(
                 scratch.points.clear();
                 scratch.points.reserve_exact(size);
                 let looping = field(call, spline, "__songlua_spline_loop")?.is_truthy();
-                let mut unchanged =
-                    previous.is_some_and(|p| p.coefficients.len() == size && p.looping == looping);
                 for index in 1..=size {
                     let values = point(call, points, index)?;
                     if values.iter().any(|v| !v.is_finite()) {
+                        // Legacy Offset zoom uses -infinity as a binary note hide.
+                        if !absolute {
+                            return Ok(None);
+                        }
                         return Err(call.error(b"Position spline contains a nonfinite point"));
                     }
-                    unchanged = unchanged
-                        && previous
-                            .and_then(|p| p.coefficients.get(index - 1))
-                            .is_some_and(|c| {
-                                values
-                                    .iter()
-                                    .zip(c)
-                                    .all(|(v, axis)| v.to_bits() == axis[0].to_bits())
-                            });
                     scratch.points.push(values);
                 }
-                let constant = scratch.points.iter().all(|p| *p == scratch.points[0]);
-                let coefficients = if unchanged {
-                    Arc::clone(&previous.unwrap().coefficients)
-                } else if let Some(recent) = &scratch.recent
-                    && scratch.recent_looping == looping
-                    && points_match(&scratch.points, recent)
-                {
-                    Arc::clone(recent)
-                } else {
-                    Arc::from(scratch.solver.solve_with_loop(&scratch.points, looping))
-                };
+                let encoded = get_static(call, spline, b"__songlua_spline_coefficients")?;
+                scratch.coefficients.clear();
+                with_table(call, encoded, |call, encoded| {
+                    if let Some(encoded) = encoded
+                        && call.raw_table_get(encoded, Value::Number(1.0))? != Value::Nil
+                    {
+                        for (index, values) in scratch.points.iter().enumerate() {
+                            let entry =
+                                call.raw_table_get(encoded, Value::Number((index + 1) as f64))?;
+                            let coefficients = with_table(call, entry, |call, entry| {
+                                let mut row = values.map(|a| [a, 0., 0., 0.]);
+                                if let Some(entry) = entry {
+                                    for (axis, coefficients) in row.iter_mut().enumerate() {
+                                        coefficients[1..].copy_from_slice(&point(
+                                            call,
+                                            entry,
+                                            axis + 1,
+                                        )?);
+                                    }
+                                }
+                                Ok(row)
+                            })?;
+                            scratch.coefficients.push(coefficients);
+                        }
+                    } else {
+                        // Keep the implicit fit for legacy curves that never called Solve.
+                        scratch.coefficients.extend_from_slice(
+                            scratch.solver.solve_with_loop(&scratch.points, looping),
+                        );
+                    }
+                    Ok(())
+                })?;
+                let constant = scratch.coefficients.first().is_none_or(|first| {
+                    scratch.coefficients.iter().all(|row| {
+                        row.iter()
+                            .zip(first)
+                            .all(|(axis, initial)| axis[0] == initial[0] && axis[1..] == [0.; 3])
+                    })
+                });
+                let coefficients = previous
+                    .map(|s| &s.coefficients)
+                    .into_iter()
+                    .chain(&scratch.recent)
+                    .find(|data| same_coefficients(data, &scratch.coefficients))
+                    .cloned()
+                    .unwrap_or_else(|| Arc::from(scratch.coefficients.as_slice()));
                 let result = Spline {
+                    absolute,
                     coefficients,
                     constant,
                     looping,
@@ -278,15 +314,7 @@ fn read_position(
                     subtract_song_beat: field(call, handler, "__songlua_subtract_song_beat")?
                         .is_truthy(),
                 };
-                if !unchanged
-                    && !scratch
-                        .recent
-                        .as_ref()
-                        .is_some_and(|r| Arc::ptr_eq(r, &result.coefficients))
-                {
-                    scratch.recent = Some(Arc::clone(&result.coefficients));
-                    scratch.recent_looping = looping;
-                }
+                scratch.recent = Some(Arc::clone(&result.coefficients));
                 Ok(Some(result))
             })
         })

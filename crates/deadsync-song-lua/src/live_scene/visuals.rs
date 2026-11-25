@@ -279,6 +279,8 @@ impl SongLiveScene {
         }
         visuals.hidden_players =
             std::array::from_fn(|p| !visuals.player_actors[p].initial_state.visible);
+        runtime.capture_song_column_splines(&mut self.column_splines, 0.0)?;
+        visuals.column_splines = self.column_splines.current();
         Ok(())
     }
 

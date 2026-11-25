@@ -286,6 +286,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     let tornado_bounds = notes.tornado_bounds;
     let beat_factor = notes.beat_factor;
     let mut lane_base_zooms = [0.0; MAX_COLS];
+    let mut lane_spline_zooms = [[1.0; 3]; MAX_COLS];
     let mut lane_rotations = [0.0; MAX_COLS];
     let mut lane_rotations_x = [0.0; MAX_COLS];
     let mut lane_rotations_y = [0.0; MAX_COLS];
@@ -350,7 +351,11 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         };
         let base_zoom = crate::visual_arrow_effect_zoom_cached(0.0, transform_cache, 1.0);
         let zoom_spline = prepared.column_zoom_splines[local_col];
-        lane_base_zooms[local_col] = prepared.spline_receptor_zoom(local_col, base_zoom);
+        let (base_zoom_with_spline, spline_zoom) = crate::compose::split_spline_zoom(
+            prepared.spline_receptor_zoom_xyz(local_col, base_zoom),
+        );
+        lane_spline_zooms[local_col] = spline_zoom;
+        lane_base_zooms[local_col] = base_zoom_with_spline;
         let effect_zoom = if zoom_spline.enabled {
             lane_base_zooms[local_col]
         } else {
@@ -363,8 +368,13 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         };
         lane_zooms[local_col] = effect_zoom;
         let hidden = effect_zoom.abs() <= f32::EPSILON;
-        let confusion_rotation_deg = visual_confusion_rotation_deg(current_beat, effect)
-            + prepared.column_rotations_deg[local_col];
+        let [rx, ry, confusion_rotation_deg] = prepared.spline_rotation(local_col, None, [
+            lane_rotations_x[local_col],
+            lane_rotations_y[local_col],
+            visual_confusion_rotation_deg(current_beat, effect) + prepared.column_rotations_deg[local_col],
+        ]);
+        lane_rotations_x[local_col] = rx;
+        lane_rotations_y[local_col] = ry;
         lane_rotations[local_col] = confusion_rotation_deg;
         let mut center = receptor_row_center(
             0.0,
@@ -518,6 +528,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     reverse: field.column_reverse_percent[local_col] > 0.5,
                     bop_zoom: lane.receptor_bop_zoom,
                     effect_zoom,
+                    spline_zoom,
                     confusion_rotation_deg,
                     elapsed: elapsed_screen,
                     beat: current_beat,
@@ -558,6 +569,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                         center,
                         field_zoom,
                         effect_zoom,
+                        spline_zoom,
                         rotation_x_deg: lane_rotations_x[local_col],
                         rotation_y_deg: lane_rotations_y[local_col],
                         rotation: ExplosionRotation::Tap {
@@ -612,6 +624,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     center,
                     field_zoom,
                     effect_zoom: lane_zooms[local_col],
+                    spline_zoom: lane_spline_zooms[local_col],
                     rotation_x_deg: lane_rotations_x[local_col],
                     rotation_y_deg: lane_rotations_y[local_col],
                     rotation: ExplosionRotation::Tap {
@@ -654,6 +667,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     center: lane_centers[local_col],
                     field_zoom,
                     effect_zoom: lane_base_zooms[local_col],
+                    spline_zoom: lane_spline_zooms[local_col],
                     rotation_x_deg: lane_rotations_x[local_col],
                     rotation_y_deg: lane_rotations_y[local_col],
                     rotation: ExplosionRotation::Mine,
@@ -1662,6 +1676,95 @@ mod tests {
     }
 
     #[test]
+    fn typed_offset_splines_own_lane_pose_and_use_separate_receptor_samples() {
+        use deadsync_gameplay::{
+            SongLuaColumnOffsetWindowRuntime, SongLuaColumnSplineFrame, SongLuaColumnSplineTrack,
+            SongLuaColumnTransformTarget, SongLuaEase, SongLuaSplineData,
+        };
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let data = |points: &[[f32; 3]]| SongLuaSplineData {
+            absolute: false,
+            coefficients: deadsync_gameplay::solve_song_lua_spline(points).into(),
+            constant: false,
+            looping: false,
+            beats_per_t: 0.5,
+            receptor_t: 0.5,
+            subtract_song_beat: true,
+        };
+        let position = data(&[[4., 6., 1.], [12., 24., 2.], [32., 64., 3.]]);
+        let rotation = data(&[[0., 0., 0.], [0., 0.1, 0.2], [0.1, 0.3, 0.4]]);
+        let zoom = data(&[[0.; 3], [0.1, -0.1, 0.2], [0.2, -0.3, 0.4]]);
+        let tracks = [SongLuaColumnSplineTrack {
+            player: 0,
+            column: 0,
+            time_offset: 0.0,
+            frames: vec![SongLuaColumnSplineFrame {
+                second: 0.0,
+                position: Some(position.clone()),
+                rotation: Some(rotation.clone()),
+                zoom: Some(zoom.clone()),
+            }]
+            .into(),
+        }];
+        let scalar = [
+            SongLuaColumnTransformTarget::OffsetX,
+            SongLuaColumnTransformTarget::OffsetY,
+            SongLuaColumnTransformTarget::RotationZ,
+            SongLuaColumnTransformTarget::Zoom,
+        ]
+        .map(|target| SongLuaColumnOffsetWindowRuntime {
+            target,
+            column: 0,
+            start_second: 0.0,
+            end_second: 1.0,
+            sustain_end_second: 3.0,
+            from_y: 50.0,
+            to_y: 50.0,
+            easing: SongLuaEase::Linear,
+            opt1: None,
+            opt2: None,
+        });
+        let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+        request.chart.visible_beat = 4.0;
+        request.chart.visible_music_time_ns = 1_000_000_000;
+        request.geometry.field_zoom = 0.75;
+        request.song_lua.column_offsets = &scalar;
+        request.song_lua.column_splines = &tracks;
+        let prepared = prepare_notefield(&request).unwrap();
+        let receptor = position.view().receptor(4.0);
+        assert_eq!(prepared.column_spline_receptors[0], receptor);
+        assert_eq!(prepared.column_x_offsets[0], receptor[0] * 0.75);
+        assert_eq!(prepared.column_rotations_deg[0], 0.0);
+        assert_eq!(prepared.column_zooms[0], 1.0);
+
+        let (offset, tangent) = prepared.spline_offsets(0, 5.25);
+        assert_eq!(
+            offset,
+            [
+                (32.0 - receptor[0]) * 0.75,
+                (64.0 - receptor[1]) * 0.75,
+                2.25
+            ]
+        );
+        assert_eq!(tangent, position.view().sample(4.0, 5.25).1);
+        assert_ne!(tangent, [0.0; 3]);
+        assert_eq!(
+            prepared.spline_rotation(0, Some(5.25), [5.0; 3]),
+            [0.1_f32, 0.3, 0.4].map(|rad| rad.to_degrees() + 5.0)
+        );
+        assert_eq!(
+            prepared.spline_zoom_xyz(0, 5.25, 0.9),
+            [0.2, -0.3, 0.4].map(|v| v + 0.9)
+        );
+        assert_eq!(
+            prepared.spline_receptor_zoom_xyz(0, 0.9),
+            zoom.view().receptor(4.0).map(|v| v + 0.9)
+        );
+    }
+
+    #[test]
     fn prepared_spline_receptors_follow_clock_track_changes_and_rewinds() {
         use deadsync_gameplay::{
             SongLuaColumnSplineFrame, SongLuaColumnSplineTrack, SongLuaSplineData,
@@ -1670,6 +1773,7 @@ mod tests {
         let timing = TimingData::default();
         let hides = SongLuaNoteHideWindows::default();
         let data = |points: &[[f32; 3]]| SongLuaSplineData {
+            absolute: true,
             coefficients: deadsync_gameplay::solve_song_lua_spline(points).into(),
             constant: false,
             looping: false,
@@ -1685,16 +1789,19 @@ mod tests {
                 SongLuaColumnSplineFrame {
                     second: 0.0,
                     position: Some(data(&[[0.0; 3], [32.0, 64.0, 16.0], [0.0, 128.0, 0.0]])),
+                    rotation: None,
                     zoom: None,
                 },
                 SongLuaColumnSplineFrame {
                     second: 2.0,
                     position: None,
+                    rotation: None,
                     zoom: None,
                 },
                 SongLuaColumnSplineFrame {
                     second: 4.0,
                     position: Some(data(&[[12.0, 24.0, 6.0], [-12.0, -24.0, -6.0]])),
+                    rotation: None,
                     zoom: None,
                 },
             ]
@@ -3581,6 +3688,7 @@ mod tests {
             let spline = |key: &str| {
                 let points: Vec<[f32; 3]> = serde_json::from_value(frame[key].clone()).unwrap();
                 SongLuaSplineData {
+                    absolute: true,
                     coefficients: deadsync_gameplay::solve_song_lua_spline(&points).into(),
                     constant: false,
                     looping: false,
@@ -3599,6 +3707,7 @@ mod tests {
                 frames: vec![SongLuaColumnSplineFrame {
                     second,
                     position: Some(spline("position_points")),
+                    rotation: None,
                     zoom: Some(spline("zoom_points")),
                 }]
                 .into(),
@@ -3656,6 +3765,7 @@ mod tests {
                         SongLuaColumnSplineFrame {
                             second,
                             position: Some(SongLuaSplineData {
+                                absolute: true,
                                 coefficients: deadsync_gameplay::solve_song_lua_spline(&[
                                     [16.0 * beat, -32.0 * beat, 8.0 * beat],
                                     [
@@ -3671,7 +3781,9 @@ mod tests {
                                 receptor_t: 0.0,
                                 subtract_song_beat: true,
                             }),
+                            rotation: None,
                             zoom: Some(SongLuaSplineData {
+                                absolute: true,
                                 coefficients: deadsync_gameplay::solve_song_lua_spline(&[
                                     [1.0 + beat; 3],
                                     [2.0 + beat; 3],
@@ -3726,7 +3838,7 @@ mod tests {
                     "tick {tick}: scale oscillated to {zoom}"
                 );
                 let pinned = prepared.spline_zoom(0, request.chart.visible_beat, 0.7);
-                let receptor = prepared.spline_receptor_zoom(0, 0.7);
+                let receptor = prepared.spline_receptor_zoom_xyz(0, 0.7)[0];
                 let expected = 1.0 + request.chart.visible_beat;
                 assert!(
                     (pinned - expected).abs() < 0.00001,
@@ -3781,6 +3893,7 @@ mod tests {
         // write keeps the track sampled at 60 Hz. A lerp of already-evaluated
         // poses replaces that quadratic with a different chord every frame.
         let curve = |beat: f32, zoom: bool| SongLuaSplineData {
+            absolute: true,
             coefficients: vec![
                 [[if zoom { 1.0 + beat } else { 0.0 }, 0.0, 1.0, 0.0]; 3],
                 [[if zoom { 2.0 + beat } else { 1.0 }, 2.0, 0.0, 0.0]; 3],
@@ -3794,7 +3907,7 @@ mod tests {
                 let second = frame as f32 / 60.0;
                 let beat = timing.get_beat_for_time(second);
                 SongLuaColumnSplineFrame {
-                    second, position: Some(curve(beat, false)), zoom: Some(curve(beat, true)),
+                    second, position: Some(curve(beat, false)), rotation: None, zoom: Some(curve(beat, true)),
                 }
             }).collect::<Vec<_>>().into(),
         }];
@@ -3828,12 +3941,14 @@ mod tests {
                 let beat = timing.get_beat_for_time(second);
                 let sign = if frame < 2 { -1.0 } else { 1.0 };
                 let spline = |points: &[[f32; 3]]| SongLuaSplineData {
+                    absolute: true,
                     coefficients: deadsync_gameplay::solve_song_lua_spline(points).into(),
                     constant: false, looping: false, beats_per_t: 1.0,
                     receptor_t: 0.0, subtract_song_beat: true,
                 };
                 SongLuaColumnSplineFrame { second,
                     position: Some(spline(&[[beat, sign * 200.0, 0.0], [16.0 + beat, sign * 100.0, 0.0]])),
+                    rotation: None,
                     zoom: Some(spline(&[[1.0 + beat; 3], [2.0 + beat; 3]])),
                 }
             }).collect::<Vec<_>>().into(),
@@ -3898,6 +4013,7 @@ mod tests {
                 .map(|(index, sign)| SongLuaColumnSplineFrame {
                     second: index as f32 / 60.0,
                     position: Some(SongLuaSplineData {
+                        absolute: true,
                         coefficients: deadsync_gameplay::solve_song_lua_spline(&[
                             [0.0, sign * 200.0, 0.0],
                             [0.0, sign * 100.0, 0.0],
@@ -3909,6 +4025,7 @@ mod tests {
                         receptor_t: 0.0,
                         subtract_song_beat: true,
                     }),
+                    rotation: None,
                     zoom: None,
                 })
                 .collect::<Vec<_>>()
@@ -3960,6 +4077,7 @@ mod tests {
             frames: vec![deadsync_gameplay::SongLuaColumnSplineFrame {
                 second: 0.0,
                 position: Some(deadsync_gameplay::SongLuaSplineData {
+                    absolute: true,
                     coefficients: deadsync_gameplay::solve_song_lua_spline(&points).into(),
                     constant: false,
                     looping: false,
@@ -3967,7 +4085,9 @@ mod tests {
                     receptor_t: 0.0,
                     subtract_song_beat: true,
                 }),
+                rotation: None,
                 zoom: Some(deadsync_gameplay::SongLuaSplineData {
+                    absolute: true,
                     coefficients: deadsync_gameplay::solve_song_lua_spline(&[[0.75; 3], [1.25; 3]])
                         .into(),
                     constant: false,

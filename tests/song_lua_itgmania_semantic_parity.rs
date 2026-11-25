@@ -1744,6 +1744,7 @@ fn position_spline_curves_match_native_cpp() {
             .map(|point| std::array::from_fn(|axis| point[axis].as_f64().expect("axis") as f32))
             .collect();
         let data = deadsync_gameplay::SongLuaSplineData {
+            absolute: true,
             coefficients: deadsync_gameplay::solve_song_lua_spline(&points).into(),
             constant: points.iter().all(|point| *point == points[0]),
             looping: false,
@@ -1787,6 +1788,7 @@ fn looping_position_spline_curves_match_native_cpp() {
         let points: Vec<[f32; 3]> = case["points"].as_array().expect("points").iter()
             .map(|point| std::array::from_fn(|axis| point[axis].as_f64().unwrap() as f32)).collect();
         let data = deadsync_gameplay::SongLuaSplineData {
+            absolute: true,
             coefficients: deadsync_gameplay::SongLuaSplineSolver::default()
                 .solve_with_loop(&points, true).into(),
             constant: points.iter().all(|point| *point == points[0]),

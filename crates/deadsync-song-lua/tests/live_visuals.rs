@@ -38,6 +38,7 @@ return Def.ActorFrame {
 fn visuals<A>(out: song::CompiledSongLua<A>) -> Visuals<A> {
     Visuals {
         overlays: out.overlays,
+        foreground_beats: out.foreground_beats,
         screen_overlay_index: out.screen_overlay_index,
         overlay_eases: Vec::new(),
         overlay_ease_ranges: Vec::new(),
@@ -58,6 +59,252 @@ fn visuals<A>(out: song::CompiledSongLua<A>) -> Visuals<A> {
         column_splines: Default::default(),
         screen_width: out.screen_width,
         screen_height: out.screen_height,
+    }
+}
+
+#[test]
+fn column_splines_match_between_baked_and_runtime_and_clear_on_reset() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("default.lua");
+    std::fs::write(&path, r#"
+        local function update()
+            local column=SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField'):GetColumnActors()[1]
+            local beat=GAMESTATE:GetSongBeat()
+            for index,handler in ipairs{column:GetPosHandler(),column:GetRotHandler(),column:GetZoomHandler()} do
+                if beat>=2 then
+                    handler:SetSplineMode('NoteColumnSplineMode_Disabled')
+                else
+                    handler:SetSplineMode(index==3 and 'NoteColumnSplineMode_Position' or 'NoteColumnSplineMode_Offset')
+                    handler:SetBeatsPerT(.5):SetReceptorT(.25)
+                    local spline=handler:GetSpline()
+                    spline:SetSize(3):SetPoint(1,{1,2,3}):SetPoint(2,{3,4,5}):SetPoint(3,{7,8,9}):Solve()
+                    -- SetPoint changes the constant terms without refitting the solved slopes.
+                    if beat>=1 then spline:SetPoint(1,{11,12,13}) end
+                end
+            end
+        end
+        return Def.ActorFrame{InitCommand=function(self) self:SetUpdateFunction(update) end,
+            OnCommand=function(self) self:sleep(1000) end}
+    "#).unwrap();
+    let mut context = song::SongLuaCompileContext::new(dir.path(), "column spline publication");
+    context.players[1].enabled = false;
+    context.music_length_seconds = 3.0;
+    context.compile_clock_inputs = vec![[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 1.0]];
+    let bake = song::compile_song_lua_layers(
+        &[&path],
+        0,
+        &context,
+        Default::default(),
+        slots,
+        layer,
+        |_, _| None,
+    )
+    .unwrap()
+    .remove(0);
+    let track = &bake.column_splines[0];
+    assert_eq!(track.player, 0);
+    assert_eq!(track.column, 0);
+
+    context.live = true;
+    let mut compiled = song::compile_song_lua_layers(
+        &[&path],
+        0,
+        &context,
+        Default::default(),
+        slots,
+        layer,
+        |_, _| None,
+    )
+    .unwrap()
+    .remove(0);
+    let mut scene = compiled.live_scene.take().unwrap();
+    let mut out = visuals(compiled);
+    let mut position_at_start = None;
+    for beat in [0.0, 1.0, 2.0] {
+        let frame = song::SongLuaLiveFrame {
+            beat,
+            music_seconds: beat,
+            screen_seconds: beat,
+            delta_seconds: if beat == 0.0 { 0.0 } else { 1.0 },
+            ..Default::default()
+        };
+        assert!(scene.update(frame).unwrap().errors.is_empty());
+        scene.write_visuals(&mut out).unwrap();
+        let baked = track.at_second(beat as f32).unwrap();
+        if beat < 2.0 {
+            let live = out.column_splines[0][0].at_second(-1.0).unwrap();
+            assert_eq!(baked.position, live.position);
+            assert_eq!(baked.rotation, live.rotation);
+            assert_eq!(baked.zoom, live.zoom);
+            let position = live.position.as_ref().unwrap();
+            assert!(!position.absolute);
+            assert!(!live.rotation.as_ref().unwrap().absolute);
+            assert!(live.zoom.as_ref().unwrap().absolute);
+            assert_eq!(position.coefficients.len(), 3);
+            if let Some(initial) = position_at_start.take() {
+                let initial: [[[f32; 4]; 3]; 3] = initial;
+                assert_eq!(position.coefficients[0][0][0], 11.0);
+                assert_eq!(&position.coefficients[0][0][1..], &initial[0][0][1..]);
+                assert_ne!(position.coefficients[0][0][1], 0.0);
+            } else {
+                position_at_start = Some(position.coefficients.as_ref().try_into().unwrap());
+            }
+        } else {
+            assert!(out.column_splines.iter().all(Vec::is_empty));
+            assert!(baked.position.is_none() && baked.rotation.is_none() && baked.zoom.is_none());
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires the retained Peach Summer Splash native fixture"]
+fn peach_sandbox_column_splines_follow_native_wrap_and_reset() {
+    let fixture = std::env::var_os("DEADSYNC_PEACH_FIXTURE_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../tests/fixtures/itgmania-song-lua-micro/peach-summer-splash")
+        });
+    let read = |file| std::fs::read(fixture.join(file)).unwrap();
+    let manifest: serde_json::Value = serde_json::from_slice(&read("manifest.json")).unwrap();
+    let native: serde_json::Value = serde_json::from_slice(
+        &zstd::stream::decode_all(read("sandbox-offset-native.json.zst").as_slice()).unwrap(),
+    )
+    .unwrap();
+    let coverage = &manifest["fixtures"]["sandbox_offset"]["coverage"];
+    let dir = fixture.join("inputs/sandbox");
+    let path = dir.join("lua/default.lua");
+    let updates = native["update_frames"].as_array().unwrap();
+    let clocks: Vec<[f64; 3]> = updates
+        .iter()
+        .map(|f| ["seconds", "song_beat", "delta"].map(|key| f[key].as_f64().unwrap()))
+        .collect();
+    let option_deltas = |index: usize| {
+        let options = &updates[index]["option_deltas"];
+        [&options["song"], &options["players"][0], &options["players"][1]]
+            .map(|value| value.as_f64().unwrap() as f32)
+    };
+    let wrap = coverage["offset_wrap"]["samples"].as_array().unwrap();
+    let reset = coverage["first_tap_after_reset"]["samples"]
+        .as_array()
+        .unwrap();
+    let hold = coverage["hold_crossing_bend"]["body_samples"]
+        .as_array()
+        .unwrap();
+    let samples = [wrap, reset, hold].map(|rows| {
+        std::array::from_fn::<_, 2, _>(|i| {
+            rows[i]["update_sequence"].as_u64().unwrap() as usize - 1
+        })
+    });
+    let mut context = song::SongLuaCompileContext::new(dir, "Peach Summer Splash sandbox2");
+    context.players[1].enabled = false;
+    context.players[0].speedmod = song::SongLuaSpeedMod::X(2.0);
+    context.players[0].noteskin_name = "cel".into();
+    context.screen_width = 854.0;
+    context.display_width = 854.0;
+    context.song_timing_bpms = vec![(0.0, 125.0)];
+    context.song_display_bpms = [125.0; 2];
+    context.music_length_seconds = clocks.last().unwrap()[0] as f32;
+    // The foreground is activated at beat zero. The capture's earlier
+    // ScreenGameplay updates belong to the audio pre-roll.
+    context.compile_clock_inputs.push([0.0; 3]);
+    context.compile_screen_actor_deltas.push(0.0);
+    context.compile_option_clock_deltas.push([0.0; 3]);
+    for (index, &clock) in clocks.iter().enumerate().filter(|(_, frame)| frame[1] > 0.0) {
+        context.compile_clock_inputs.push(clock);
+        context.compile_screen_actor_deltas.push(clock[2] as f32);
+        context.compile_option_clock_deltas.push(option_deltas(index));
+    }
+    let bake = song::compile_song_lua_layers(
+        &[&path],
+        0,
+        &context,
+        Default::default(),
+        slots,
+        layer,
+        |_, _| None,
+    )
+    .unwrap()
+    .remove(0);
+    context.live = true;
+    let mut live = song::compile_song_lua_layers(
+        &[&path],
+        0,
+        &context,
+        Default::default(),
+        slots,
+        layer,
+        |_, _| None,
+    )
+    .unwrap()
+    .remove(0);
+    let mut scene = live.live_scene.take().unwrap();
+    let mut out = visuals(live);
+    let mut tap_y = [[0.0; 2]; 2];
+    for (index, &[seconds, beat, delta]) in clocks.iter().enumerate() {
+        if beat <= 0.0 {
+            continue;
+        }
+        scene.set_option_clock_deltas(option_deltas(index));
+        let frame = song::SongLuaLiveFrame {
+            beat,
+            music_seconds: seconds,
+            delta_seconds: delta,
+            screen_seconds: seconds + 2.0,
+            ..Default::default()
+        };
+        assert!(
+            scene.update(frame).unwrap().errors.is_empty(),
+            "frame {index}"
+        );
+        for (probe, frames) in samples.iter().enumerate() {
+            let Some(side) = frames.iter().position(|&i| i == index) else {
+                continue;
+            };
+            scene.write_visuals(&mut out).unwrap();
+            let column = usize::from(probe == 2);
+            let baked = bake
+                .column_splines
+                .iter()
+                .find(|t| t.column == column)
+                .unwrap()
+                .at_second(seconds as f32)
+                .unwrap();
+            let live = out.column_splines[0]
+                .iter()
+                .find(|t| t.column == column)
+                .unwrap()
+                .at_second(seconds as f32)
+                .unwrap();
+            assert_eq!(baked.position, live.position, "position at frame {index}");
+            assert_eq!(baked.zoom, live.zoom, "zoom at frame {index}");
+            let position = live.position.as_ref().unwrap();
+            assert!(!position.absolute);
+            assert_eq!(position.coefficients.len(), 75);
+            let beat = beat as f32;
+            match probe {
+                0 | 1 => {
+                    let note = if probe == 0 { 34.0 } else { 36.0 };
+                    let [_, y, _] = position.view().sample(beat, note).0;
+                    tap_y[probe][side] = (note - beat) * 128.0 + y;
+                }
+                _ => {
+                    let tangent = position.view().sample(beat, 32.0).1;
+                    assert!(
+                        tangent[2].abs() > 0.0,
+                        "the hold carries the spline tangent"
+                    );
+                }
+            }
+        }
+    }
+    for (ys, native) in tap_y.into_iter().zip([wrap, reset]) {
+        let y = |i: usize| native[i]["first_anchor_y_ndc"].as_f64().unwrap() as f32;
+        let native_travel = (y(0) - y(1)) * 240.0;
+        assert!(
+            (ys[1] - ys[0] - native_travel).abs() < 0.25,
+            "{ys:?}, native {native_travel}"
+        );
     }
 }
 

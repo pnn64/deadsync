@@ -1,4 +1,4 @@
-//! Existing column spline tracks, retained as owned compiler output.
+//! Shared column handler snapshots for Baked and Runtime.
 use super::*;
 use deadsync_gameplay::{
     SongLuaColumnSplineFrame as Frame, SongLuaColumnSplineTrack as Track,
@@ -10,20 +10,21 @@ use std::collections::BTreeMap;
 pub(super) struct Scratch {
     pub points: Vec<[f32; 3]>,
     pub solver: SongLuaSplineSolver,
+    pub coefficients: Vec<[[f32; 4]; 3]>,
     pub recent: Option<Arc<[[[f32; 4]; 3]]>>,
-    pub recent_looping: bool,
 }
 #[derive(Default)]
 pub(super) struct Lane {
     pub frames: Vec<Frame>,
-    reflexive: [Option<bool>; 2],
+    reflexive: [Option<bool>; 3],
 }
 #[derive(Default)]
 pub(super) struct State {
-    pub scratch: Scratch,
+    pub scratch: [Scratch; 3],
     pub sampled: Vec<(usize, usize, Frame)>,
     pub lanes: BTreeMap<(usize, usize), Lane>,
     bytes: usize,
+    live: bool,
 }
 /// Load-lifetime reader/solver buffers and owned tracks. Every coordinate is
 /// validated on each sample; geometry reuse never relies on Lua table identity.
@@ -38,6 +39,34 @@ impl Default for SongColumnSplineCapture {
     }
 }
 impl SongColumnSplineCapture {
+    pub(super) fn live() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(Some(State {
+                live: true,
+                ..State::default()
+            }))),
+        }
+    }
+
+    pub(super) fn current(&self) -> [Vec<Track>; LUA_PLAYERS] {
+        let state = self.state.lock().unwrap();
+        let state = state.as_ref().expect("active column capture");
+        let mut tracks = std::array::from_fn(|_| Vec::new());
+        for (&(player, column), lane) in &state.lanes {
+            if let Some(frame) = lane.frames.last().filter(|frame| has_spline(frame))
+                && let Some(tracks) = tracks.get_mut(player)
+            {
+                tracks.push(Track {
+                    player,
+                    column,
+                    time_offset: 0.0,
+                    frames: Arc::from([frame.clone()]),
+                });
+            }
+        }
+        tracks
+    }
+
     pub fn finish(self) -> Result<Vec<Track>, String> {
         let state = self
             .state
@@ -74,6 +103,8 @@ fn captured_spline_matches(
     match (previous, next) {
         (Some(previous), Some(next)) => {
             if previous.constant != next.constant
+                || previous.absolute != next.absolute
+                || previous.looping != next.looping
                 || previous.beats_per_t != next.beats_per_t
                 || previous.receptor_t != next.receptor_t
                 || previous.subtract_song_beat != next.subtract_song_beat
@@ -114,36 +145,47 @@ fn captured_spline_reflexive(
 }
 impl State {
     pub fn ingest(&mut self, second: f32) -> Result<(), String> {
+        if self.live {
+            self.lanes.retain(|&(player, column), _| {
+                self.sampled
+                    .iter()
+                    .any(|&(p, c, _)| p == player && c == column)
+            });
+        }
         for (player, column, mut frame) in self.sampled.drain(..) {
             let lane = self.lanes.entry((player, column)).or_default();
             let last = lane.frames.last();
+            let next = [&frame.position, &frame.rotation, &frame.zoom];
             if last.is_some_and(|last| {
-                captured_spline_matches(&last.position, &frame.position, &mut lane.reflexive[0])
-                    && captured_spline_matches(&last.zoom, &frame.zoom, &mut lane.reflexive[1])
+                [&last.position, &last.rotation, &last.zoom]
+                    .into_iter()
+                    .zip(next)
+                    .zip(&mut lane.reflexive)
+                    .all(|((last, next), reflexive)| captured_spline_matches(last, next, reflexive))
             }) {
                 continue;
             }
-            self.bytes += [&frame.position, &frame.zoom]
-                .into_iter()
-                .flatten()
-                .map(|s| std::mem::size_of_val(s.coefficients.as_ref()))
-                .sum::<usize>();
-            if self.bytes > 128 * 1024 * 1024 {
-                return Err("Position spline tracks exceed 128 MiB per layer".into());
+            if !self.live {
+                self.bytes += next
+                    .into_iter()
+                    .flatten()
+                    .map(|s| std::mem::size_of_val(s.coefficients.as_ref()))
+                    .sum::<usize>();
+                if self.bytes > 128 * 1024 * 1024 {
+                    return Err("Position spline tracks exceed 128 MiB per layer".into());
+                }
             }
-            lane.reflexive = [
+            lane.reflexive = std::array::from_fn(|i| {
                 captured_spline_reflexive(
-                    &frame.position,
-                    last.map(|last| &last.position),
-                    lane.reflexive[0],
-                ),
-                captured_spline_reflexive(
-                    &frame.zoom,
-                    last.map(|last| &last.zoom),
-                    lane.reflexive[1],
-                ),
-            ];
-            frame.second = second;
+                    next[i],
+                    last.map(|last| [&last.position, &last.rotation, &last.zoom][i]),
+                    lane.reflexive[i],
+                )
+            });
+            if self.live {
+                lane.frames.clear();
+            }
+            frame.second = if self.live { f32::NEG_INFINITY } else { second };
             lane.frames.push(frame);
         }
         Ok(())
@@ -162,16 +204,17 @@ impl State {
             .into_iter()
             .filter_map(|((player, column), lane)| {
                 let frames = lane.frames;
-                frames
-                    .iter()
-                    .any(|f| f.position.is_some() || f.zoom.is_some())
-                    .then(|| Track {
-                        player,
-                        column,
-                        time_offset: 0.,
-                        frames: frames.into(),
-                    })
+                frames.iter().any(has_spline).then(|| Track {
+                    player,
+                    column,
+                    time_offset: 0.,
+                    frames: frames.into(),
+                })
             })
             .collect()
     }
+}
+
+fn has_spline(frame: &Frame) -> bool {
+    frame.position.is_some() || frame.rotation.is_some() || frame.zoom.is_some()
 }

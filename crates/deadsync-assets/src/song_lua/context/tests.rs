@@ -1973,6 +1973,7 @@ fn column_spline_origin_applies_global_offset_once() {
                 frames: vec![SongLuaColumnSplineFrame {
                     second: 1.0,
                     position: None,
+                    rotation: None,
                     zoom: None,
                 }]
                 .into(),

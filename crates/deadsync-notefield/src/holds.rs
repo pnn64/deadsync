@@ -84,6 +84,7 @@ pub(crate) struct HoldPathSample {
     pub arrow_px: f32,
     pub position_offset: [f32; 3],
     pub spline_derivative: [f32; 3],
+    pub rotation_y_deg: Option<f32>,
     pub spline_absolute: bool,
     pub spline_step: f32,
     pub cap_step: f32,
@@ -134,6 +135,14 @@ pub(crate) struct HoldBodyCapRequest<'a, S> {
 }
 
 impl<S> Copy for HoldBodyCapRequest<'_, S> {}
+
+impl<S> HoldBodyCapRequest<'_, S> {
+    fn path_rotation(&self, sample: HoldPathSample) -> f32 {
+        sample.rotation_y_deg.unwrap_or_else(|| {
+            self.rotation_y_deg + visual_note_rotation_y(sample.adjusted_travel, self.twirl)
+        })
+    }
+}
 
 impl<S> Clone for HoldBodyCapRequest<'_, S> {
     fn clone(&self) -> Self {
@@ -839,8 +848,7 @@ where
                         segment_size,
                     ],
                     uv: [u0, v0, u1, v1],
-                    rotation_y_deg: request.rotation_y_deg
-                        + visual_note_rotation_y(sample.adjusted_travel, request.twirl),
+                    rotation_y_deg: request.path_rotation(sample),
                     rotation_z_deg: 0.0,
                     diffuse: request.diffuse,
                     alpha,
@@ -1135,8 +1143,7 @@ where
                             slice_height,
                         ],
                         uv: [u0, slice_v0, u1, slice_v1],
-                        rotation_y_deg: request.rotation_y_deg
-                            + visual_note_rotation_y(center.adjusted_travel, request.twirl),
+                        rotation_y_deg: request.path_rotation(center),
                         rotation_z_deg: 0.0,
                         diffuse: request.diffuse,
                         alpha,
@@ -1213,7 +1220,7 @@ fn append_hold_body_mesh_slice<S: NoteskinSlot>(
             top,
             top_y,
             top.arrow_px * width_ratio * 0.5,
-            request.rotation_y_deg + visual_note_rotation_y(top.adjusted_travel, request.twirl),
+            request.path_rotation(top),
             u0,
             u1,
             v0,
@@ -1246,7 +1253,7 @@ fn append_hold_body_mesh_slice<S: NoteskinSlot>(
         bottom,
         bottom_y,
         bottom.arrow_px * width_ratio * 0.5,
-        request.rotation_y_deg + visual_note_rotation_y(bottom.adjusted_travel, request.twirl),
+        request.path_rotation(bottom),
         u0,
         u1,
         v1,
@@ -1371,7 +1378,7 @@ fn compose_top_cap<S, F, P>(
             top,
             cap_top,
             scale_hold_part(slot.source_size(), top.arrow_px)[0] * 0.5,
-            request.rotation_y_deg + visual_note_rotation_y(top.adjusted_travel, request.twirl),
+            request.path_rotation(top),
             u0,
             u1,
             v0,
@@ -1409,8 +1416,7 @@ fn compose_top_cap<S, F, P>(
                 bottom,
                 cap_bottom,
                 scale_hold_part(slot.source_size(), bottom.arrow_px)[0] * 0.5,
-                request.rotation_y_deg
-                    + visual_note_rotation_y(bottom.adjusted_travel, request.twirl),
+                request.path_rotation(bottom),
                 u0,
                 u1,
                 v1,
@@ -1451,8 +1457,7 @@ fn compose_top_cap<S, F, P>(
                 center: center_xy,
                 size: [cap_width, draw_height],
                 uv: [u0, v0, u1, v1],
-                rotation_y_deg: request.rotation_y_deg
-                    + visual_note_rotation_y(center.adjusted_travel, request.twirl),
+                rotation_y_deg: request.path_rotation(center),
                 rotation_z_deg: 0.0,
                 diffuse: request.diffuse,
                 alpha,
@@ -1530,8 +1535,7 @@ fn compose_cap_mesh<S, P>(
                     sample,
                     next_y,
                     scale_hold_part(slot.source_size(), sample.arrow_px)[0] * 0.5,
-                    request.rotation_y_deg
-                        + visual_note_rotation_y(sample.adjusted_travel, request.twirl),
+                    request.path_rotation(sample),
                     u0,
                     u1,
                     v,
@@ -1719,7 +1723,7 @@ fn compose_bottom_cap<S, F, P>(
                 top,
                 draw_top,
                 scale_hold_part(slot.source_size(), top.arrow_px)[0] * 0.5,
-                request.rotation_y_deg + visual_note_rotation_y(top.adjusted_travel, request.twirl),
+                request.path_rotation(top),
                 u0,
                 u1,
                 v0,
@@ -1735,7 +1739,7 @@ fn compose_bottom_cap<S, F, P>(
             bottom,
             draw_bottom,
             scale_hold_part(slot.source_size(), bottom.arrow_px)[0] * 0.5,
-            request.rotation_y_deg + visual_note_rotation_y(bottom.adjusted_travel, request.twirl),
+            request.path_rotation(bottom),
             u0,
             u1,
             v1,
@@ -1775,8 +1779,7 @@ fn compose_bottom_cap<S, F, P>(
                 center: center_xy,
                 size: [cap_width, cap_draw_height],
                 uv: [u0, v0, u1, v1],
-                rotation_y_deg: request.rotation_y_deg
-                    + visual_note_rotation_y(center.adjusted_travel, request.twirl),
+                rotation_y_deg: request.path_rotation(center),
                 rotation_z_deg: 0.0,
                 diffuse: request.diffuse,
                 alpha,
@@ -2550,6 +2553,7 @@ mod tests {
                 arrow_px: 64.0,
                 position_offset: [12.0, 54.0, 0.05],
                 spline_derivative: derivative,
+                rotation_y_deg: None,
                 ..Default::default()
             };
             let row = hold_path_row(sample, 200.0, 32.0, angle, 0.0, 1.0, 0.5, [1.0; 4]);
@@ -2583,6 +2587,7 @@ mod tests {
         HoldPathSample {
             position_offset: [0.0; 3],
             spline_derivative: [0.0; 3],
+            rotation_y_deg: None,
             spline_absolute: false,
             spline_step: 0.0,
             cap_step: 0.0,
@@ -2616,6 +2621,7 @@ mod tests {
                                 12.0 - base.world_z,
                             ],
                             spline_derivative: [0.0, direction * 200.0, 0.0],
+                            rotation_y_deg: None,
                             spline_absolute: true,
                             spline_step: zoom,
                             arrow_px: 32.0 + spline_y * 0.2,
@@ -2675,6 +2681,7 @@ mod tests {
                             world_z: center[2],
                             position_offset: [0.0, center[1], 0.0],
                             spline_derivative: forward,
+                            rotation_y_deg: None,
                             spline_absolute: true,
                             cap_step: if index == 0 { 0.0 } else { 1.0 },
                             ..straight_path(0.0)
@@ -2716,6 +2723,7 @@ mod tests {
             for zoom in [0.4, 0.7, 1.0] {
                 let sample = HoldPathSample {
                     spline_derivative: derivative,
+                    rotation_y_deg: None,
                     spline_absolute: true,
                     ..straight_path(100.0)
                 };
@@ -2830,6 +2838,7 @@ mod tests {
                             &|y, _| HoldPathSample {
                                 position_offset: [0.0; 3],
                                 spline_derivative: [0.0; 3],
+                                rotation_y_deg: None,
                                 spline_step: 0.0,
                                 cap_step: 0.0,
                                 arrow_px: 64.0 * zoom,
@@ -2936,6 +2945,7 @@ mod tests {
                     let sample = |y: f32| HoldPathSample {
                         position_offset: [0.0; 3],
                         spline_derivative: [0.0; 3],
+                        rotation_y_deg: None,
                         spline_step: 0.0,
                         cap_step: 0.0,
                         adjusted_travel: (y - 256.0) * zoom,
@@ -3037,6 +3047,7 @@ mod tests {
                 let sample = |y: f32| HoldPathSample {
                     position_offset: [0.0; 3],
                     spline_derivative: [0.0; 3],
+                    rotation_y_deg: None,
                     spline_step: 0.0,
                     cap_step: 0.0,
                     spline_absolute: false,
@@ -3164,6 +3175,7 @@ mod tests {
         let sample = |y: f32| HoldPathSample {
             position_offset: [0.0; 3],
             spline_derivative: [0.0; 3],
+            rotation_y_deg: None,
             spline_step: 0.0,
             cap_step: 0.0,
             spline_absolute: false,
@@ -3200,6 +3212,7 @@ mod tests {
         let sample = HoldPathSample {
             position_offset: [0.0; 3],
             spline_derivative: [0.0; 3],
+            rotation_y_deg: None,
             spline_step: 0.0,
             cap_step: 0.0,
             spline_absolute: false,
@@ -3278,6 +3291,7 @@ mod tests {
         let curved_path = |y: f32| HoldPathSample {
             position_offset: [0.0; 3],
             spline_derivative: [0.0; 3],
+            rotation_y_deg: None,
             spline_step: 0.0,
             cap_step: 0.0,
             spline_absolute: false,
@@ -3340,6 +3354,7 @@ mod tests {
                     HoldPathSample {
                         position_offset: [0.0; 3],
                         spline_derivative: [0.0; 3],
+                        rotation_y_deg: None,
                         spline_step: 0.0,
                         cap_step: 0.0,
                         spline_absolute: false,
@@ -3417,6 +3432,7 @@ mod tests {
         let sample = |y: f32| HoldPathSample {
             position_offset: [0.0; 3],
             spline_derivative: [0.0; 3],
+            rotation_y_deg: None,
             spline_step: 0.0,
             cap_step: 0.0,
             spline_absolute: false,
@@ -4187,6 +4203,7 @@ mod tests {
                 &|y, _| HoldPathSample {
                     position_offset: [0.0; 3],
                     spline_derivative: [0.0; 3],
+                    rotation_y_deg: None,
                     spline_step: 0.0,
                     cap_step: 0.0,
                     adjusted_travel: if reason == "hidden" { 0.0 } else { y },
@@ -4450,6 +4467,7 @@ mod tests {
                             &|y, _| HoldPathSample {
                                 position_offset: [0.0; 3],
                                 spline_derivative: [0.0; 3],
+                                rotation_y_deg: None,
                                 spline_step: 0.0,
                                 cap_step: 0.0,
                                 arrow_px: 64.0 * zoom,

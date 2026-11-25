@@ -596,6 +596,16 @@ impl CompiledSplineBlend<'_> {
     }
 }
 
+/// Keep the existing uniform sizing path and apply independent axes at the
+/// actor when a handler is anisotropic.
+pub(crate) fn split_spline_zoom(zoom: [f32; 3]) -> (f32, [f32; 3]) {
+    if zoom[0] == zoom[1] && zoom[1] == zoom[2] {
+        (zoom[0], [1.0; 3])
+    } else {
+        (1.0, zoom)
+    }
+}
+
 /// Purely prepared composition state consumed by actor emission.
 pub struct PreparedNotefield<'a, S> {
     pub frame_plan: NotefieldFramePlan,
@@ -613,6 +623,7 @@ pub struct PreparedNotefield<'a, S> {
     pub blind_active: bool,
     pub column_x_offsets: [f32; MAX_COLS],
     pub column_position_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
+    pub(crate) column_rotation_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
     pub column_zoom_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
     pub(crate) column_position_blends: [Option<CompiledSplineBlend<'a>>; MAX_COLS],
     pub(crate) column_zoom_blends: [Option<CompiledSplineBlend<'a>>; MAX_COLS],
@@ -688,30 +699,48 @@ impl<S> PreparedNotefield<'_, S> {
     }
 
     pub(crate) fn spline_zoom(&self, col: usize, beat: f32, base: f32) -> f32 {
+        self.spline_zoom_xyz(col, beat, base)[0]
+    }
+
+    pub(crate) fn spline_zoom_xyz(&self, col: usize, beat: f32, base: f32) -> [f32; 3] {
         let spline = self.column_zoom_splines[col];
         if spline.enabled {
             let zoom = if let Some(blend) = self.column_zoom_blends[col] {
-                blend.sample(spline, self.current_beat, beat).0[0]
+                blend.sample(spline, self.current_beat, beat).0
             } else {
-                spline.sample(self.current_beat, beat).0[0]
+                spline.sample(self.current_beat, beat).0
             };
-            zoom + if spline.absolute { 0.0 } else { base }
+            zoom.map(|axis| axis + if spline.absolute { 0.0 } else { base })
         } else {
-            base
+            [base; 3]
         }
     }
 
-    pub(crate) fn spline_receptor_zoom(&self, col: usize, base: f32) -> f32 {
+    pub(crate) fn spline_receptor_zoom_xyz(&self, col: usize, base: f32) -> [f32; 3] {
         let spline = self.column_zoom_splines[col];
+        if !spline.enabled {
+            return [base; 3];
+        }
+        let zoom = if let Some(blend) = self.column_zoom_blends[col] {
+            blend.receptor(spline, self.current_beat)
+        } else {
+            spline.receptor(self.current_beat)
+        };
+        zoom.map(|axis| axis + if spline.absolute { 0.0 } else { base })
+    }
+
+    pub(crate) fn spline_rotation(&self, col: usize, beat: Option<f32>, base: [f32; 3]) -> [f32; 3] {
+        let spline = self.column_rotation_splines[col];
         if !spline.enabled {
             return base;
         }
-        let zoom = if let Some(blend) = self.column_zoom_blends[col] {
-            blend.receptor(spline, self.current_beat)[0]
-        } else {
-            spline.receptor(self.current_beat)[0]
+        let rotation = match beat {
+            Some(beat) => spline.sample(self.current_beat, beat).0,
+            None => spline.receptor(self.current_beat),
         };
-        zoom + if spline.absolute { 0.0 } else { base }
+        std::array::from_fn(|axis| {
+            rotation[axis].to_degrees() + if spline.absolute { 0.0 } else { base[axis] }
+        })
     }
 
     pub(crate) fn spline_offsets(&self, col: usize, beat: f32) -> ([f32; 3], [f32; 3]) {
@@ -759,8 +788,8 @@ pub fn prepare_notefield<'a, S>(
         [
             mut column_x_offsets,
             mut column_y_offsets,
-            column_zooms,
-            column_rotations_deg,
+            mut column_zooms,
+            mut column_rotations_deg,
         ],
         mut column_position_splines,
     ) = song_lua_column_transforms(
@@ -769,6 +798,7 @@ pub fn prepare_notefield<'a, S>(
         current_time_s,
     );
     let mut column_zoom_splines = [deadsync_gameplay::SongLuaPositionSpline::default(); MAX_COLS];
+    let mut column_rotation_splines = [deadsync_gameplay::SongLuaPositionSpline::default(); MAX_COLS];
     let mut column_position_blends = [None; MAX_COLS];
     let mut column_zoom_blends = [None; MAX_COLS];
     for track in request.song_lua.column_splines {
@@ -781,6 +811,15 @@ pub fn prepare_notefield<'a, S>(
         if let Some(frame) = index.checked_sub(1).map(|index| &track.frames[index]) {
             if let Some(position) = &frame.position {
                 column_position_splines[track.column] = position.view();
+                column_x_offsets[track.column] = 0.0;
+                column_y_offsets[track.column] = 0.0;
+            }
+            if let Some(rotation) = &frame.rotation {
+                column_rotation_splines[track.column] = rotation.view();
+                column_rotations_deg[track.column] = 0.0;
+            }
+            if frame.zoom.is_some() {
+                column_zooms[track.column] = 1.0;
             }
             column_zoom_splines[track.column] = frame
                 .zoom
@@ -791,7 +830,11 @@ pub fn prepare_notefield<'a, S>(
                 // Only adjacent reference samples describe continuous motion.
                 // Sparse constant intervals and enable/disable boundaries keep
                 // their authored step instead of anticipating a later change.
-                if span > 0.0 && span <= request.chart.music_rate / 60.0 + 0.0001 {
+                // Offset paths can wrap abruptly while remaining enabled.
+                if span > 0.0 && span <= request.chart.music_rate / 60.0 + 0.0001
+                    && frame.position.as_ref().is_none_or(|spline| spline.absolute)
+                    && next.position.as_ref().is_none_or(|spline| spline.absolute)
+                {
                     let elapsed = (current_time_s - track.time_offset - frame.second).clamp(0.0, span);
                     let adjacent = |span: f32| {
                         span > 0.0 && span <= request.chart.music_rate / 60.0 + 0.0001
@@ -817,7 +860,8 @@ pub fn prepare_notefield<'a, S>(
                             return false;
                         };
                         let compatible = |other: &deadsync_gameplay::SongLuaSplineData| {
-                            b.beats_per_t == other.beats_per_t
+                            b.absolute == other.absolute
+                                && b.beats_per_t == other.beats_per_t
                                 && b.receptor_t == other.receptor_t
                                 && b.subtract_song_beat == other.subtract_song_beat
                                 && b.looping == other.looping
@@ -852,6 +896,7 @@ pub fn prepare_notefield<'a, S>(
                         ),
                     ] {
                         if let (Some(spline), Some(other_spline)) = (spline, other_spline)
+                            && spline.absolute && other_spline.absolute
                             && spline.beats_per_t == other_spline.beats_per_t
                             && spline.receptor_t == other_spline.receptor_t
                             && spline.subtract_song_beat == other_spline.subtract_song_beat
@@ -950,6 +995,7 @@ pub fn prepare_notefield<'a, S>(
         blind_active: request.visual.visibility.blind > f32::EPSILON,
         column_x_offsets,
         column_position_splines,
+        column_rotation_splines,
         column_zoom_splines,
         column_position_blends,
         column_zoom_blends,

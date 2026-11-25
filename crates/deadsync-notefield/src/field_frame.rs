@@ -744,9 +744,18 @@ fn compose_field_contents<S, F>(
         );
         let hold_parts = hold_plan.parts;
         let transform_cache = lane_transform_caches[local_col];
-        let note_rotation_x = transform_cache.confusion_rotation_x_deg;
-        let note_rotation_y = transform_cache.confusion_rotation_y_deg
-            + visual_note_rotation_y(head_anchor_adjusted_travel, visual.twirl);
+        let spline_head_beat = if engaged { current_beat } else { note.beat };
+        let [note_rotation_x, note_rotation_y, hold_head_rot] = prepared.spline_rotation(
+            local_col,
+            Some(spline_head_beat),
+            [
+                transform_cache.confusion_rotation_x_deg,
+                transform_cache.confusion_rotation_y_deg
+                    + visual_note_rotation_y(head_anchor_adjusted_travel, visual.twirl),
+                column_rotations_deg[local_col]
+                    + visual_hold_head_rotation_z_cached(note.beat, transform_cache),
+            ],
+        );
         let flat_tap_face_rotation_y = note_rotation_y;
         let head_layers = hold_plan.head_layers;
         let head_slot = hold_plan.head_slot;
@@ -754,7 +763,8 @@ fn compose_field_contents<S, F>(
         let note_hides = request
             .song_lua
             .note_hides
-            .filter(|hides| hides.has_column_hides(local_col));
+            .filter(|hides| !prepared.column_zoom_splines[local_col].enabled
+                && hides.has_column_hides(local_col));
         let has_zoom_spline = note_hides.is_some();
         // NoteDisplay interpolates the beat along the body's original endpoints,
         // then samples only the spline's X scale for each strip vertex.
@@ -772,7 +782,7 @@ fn compose_field_contents<S, F>(
             note_hides.zoom_offset(local_col, beat)
         };
         let hold_target_arrow_px = lane_frame.target_arrow_px;
-        let hold_head_zoom = prepared.spline_zoom(
+        let (hold_head_zoom, spline_zoom) = crate::compose::split_spline_zoom(prepared.spline_zoom_xyz(
             local_col,
             if engaged { current_beat } else { note.beat },
             column_zoom
@@ -781,11 +791,13 @@ fn compose_field_contents<S, F>(
                     transform_cache,
                     1.0,
                 ) + note_hides.map_or(0.0, |hides| hides.zoom_offset(local_col, note.beat))),
-        );
+        ));
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
         let use_legacy_hold_sprites = lane_frame.use_legacy_sprites
             && !has_zoom_spline
+            && !prepared.column_zoom_splines[local_col].enabled
+            && !prepared.column_rotation_splines[local_col].enabled
             && !position_splines[local_col].enabled;
         let sample_hold_path = |screen_y: f32, spline_y: f32| {
             // Native GetYOffsetFromYPos inverts Reverse/Tipsy, not AttenuateY/BeatY.
@@ -813,6 +825,14 @@ fn compose_field_contents<S, F>(
                 world_z,
                 position_offset: offset,
                 spline_derivative: derivative,
+                rotation_y_deg: prepared.column_rotation_splines[local_col].enabled.then(|| {
+                    // Native strips twist by the sampled Y rotation about the path tangent.
+                    let spline = prepared.column_rotation_splines[local_col];
+                    let angle = spline.sample(current_beat, beat).0[1].to_degrees();
+                    let arrow = transform_cache.confusion_rotation_y_deg
+                        + visual_note_rotation_y(adjusted_travel, visual.twirl);
+                    if spline.absolute { -angle } else { arrow - angle }
+                }),
                 spline_absolute: position_splines[local_col].absolute,
                 spline_step: if position_splines[local_col].enabled {
                     field_zoom
@@ -910,10 +930,6 @@ fn compose_field_contents<S, F>(
         if head_alpha <= f32::EPSILON && head_glow <= f32::EPSILON {
             return;
         }
-        // DrawHold passes the original note beat to GetRotationZ even while
-        // engaged or letting go; the advancing head beat controls travel only.
-        let hold_head_rot = column_rotations_deg[local_col]
-            + visual_hold_head_rotation_z_cached(note.beat, transform_cache);
         let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
         let head_center_x =
             lane_center_x_from_adjusted_travel(local_col, head_anchor_adjusted_travel);
@@ -1024,6 +1040,7 @@ fn compose_field_contents<S, F>(
                     blend,
                     z: crate::style::NOTE_Z,
                     world_z: head_world_z,
+                    spline_zoom,
                     prefer_sprite: prefer_sprite_note_path,
                 },
                 sprite_source,
@@ -1040,6 +1057,7 @@ fn compose_field_contents<S, F>(
                     model_cache,
                     note_slot,
                     head_center,
+                    spline_zoom,
                     note_scale,
                     hold_part_phase,
                     hold_head_translation,
@@ -1106,6 +1124,7 @@ fn compose_field_contents<S, F>(
                     blend: BlendMode::Alpha,
                     z: crate::style::NOTE_Z,
                     world_z: head_world_z,
+                    spline_zoom,
                     prefer_sprite: prefer_sprite_note_path,
                 },
                 sprite_source,
@@ -1227,7 +1246,8 @@ fn compose_visible_notes<S, F>(
         let lane_hides = request
             .song_lua
             .note_hides
-            .filter(|hides| hides.has_column_hides(local_col));
+            .filter(|hides| !prepared.column_zoom_splines[local_col].enabled
+                && hides.has_column_hides(local_col));
         for_each_lane_index(
             request.chart.lane_note_rows(col),
             visible_note_bounds[local_col],
@@ -1326,7 +1346,7 @@ fn compose_visible_notes<S, F>(
                         [column_center_x, y_pos, world_z],
                     );
                 }
-                let effect_zoom = prepared.spline_zoom(
+                let (effect_zoom, spline_zoom) = crate::compose::split_spline_zoom(prepared.spline_zoom_xyz(
                     local_col,
                     note.beat,
                     prepared.column_zooms[local_col]
@@ -1335,7 +1355,7 @@ fn compose_visible_notes<S, F>(
                             transform_cache,
                             1.0,
                         ),
-                );
+                ));
                 let note_scale = field_zoom * effect_zoom;
                 let target_arrow_px = notes.target_arrow_px * effect_zoom;
                 let scale_mine_for_note = |slot: &S| -> [f32; 2] {
@@ -1343,13 +1363,19 @@ fn compose_visible_notes<S, F>(
                     let scale = field_zoom * effect_zoom * request.settings.mine_size_scale;
                     [size[0] * scale, size[1] * scale]
                 };
-                let note_rotation_x = transform_cache.confusion_rotation_x_deg
-                    + visual_note_rotation_x(adjusted_travel, visual.roll);
-                let note_rotation_y = transform_cache.confusion_rotation_y_deg
-                    + visual_note_rotation_y(adjusted_travel, visual.twirl);
+                let [note_rotation_x, note_rotation_y, note_rotation_z] = prepared.spline_rotation(
+                    local_col,
+                    Some(note.beat),
+                    [
+                        transform_cache.confusion_rotation_x_deg
+                            + visual_note_rotation_x(adjusted_travel, visual.roll),
+                        transform_cache.confusion_rotation_y_deg
+                            + visual_note_rotation_y(adjusted_travel, visual.twirl),
+                        prepared.column_rotations_deg[local_col]
+                            + calc_note_rotation_z(note.beat, transform_cache),
+                    ],
+                );
                 let flat_tap_face_rotation_y = note_rotation_y;
-                let note_rotation_z = prepared.column_rotations_deg[local_col]
-                    + calc_note_rotation_z(note.beat, transform_cache);
 
                 if matches!(note.note_type, NoteType::Mine) {
                     if mine_layers.is_empty() {
@@ -1384,6 +1410,7 @@ fn compose_visible_notes<S, F>(
                             glow_alpha,
                             note_z: crate::style::NOTE_Z,
                             world_z,
+                            spline_zoom,
                             prefer_sprite: prefer_sprite_note_path,
                         },
                         &scale_mine_for_note,
@@ -1424,6 +1451,7 @@ fn compose_visible_notes<S, F>(
                                 model_cache,
                                 head_slot,
                                 center,
+                                spline_zoom,
                                 note_scale,
                                 phase,
                                 translation,
@@ -1456,6 +1484,7 @@ fn compose_visible_notes<S, F>(
                             model_cache,
                             head_slot,
                             center,
+                            spline_zoom,
                             note_scale,
                             phase,
                             translation,
@@ -1501,6 +1530,7 @@ fn compose_visible_notes<S, F>(
                             model_cache,
                             note_slot,
                             center,
+                            spline_zoom,
                             note_scale,
                             phase,
                             translation,
@@ -1569,6 +1599,7 @@ fn compose_visible_notes<S, F>(
                             blend: BlendMode::Alpha,
                             z: crate::style::NOTE_Z,
                             world_z,
+                            spline_zoom,
                             prefer_sprite: prefer_sprite_note_path,
                         },
                         sprite_source,
@@ -1585,6 +1616,7 @@ fn compose_flat_noteskin_layer<S, F>(
     model_cache: &mut ModelMeshCache,
     slot: &S,
     center: [f32; 2],
+    spline_zoom: [f32; 3],
     scale: f32,
     phase: f32,
     translation: [f32; 2],
@@ -1666,6 +1698,7 @@ fn compose_flat_noteskin_layer<S, F>(
             blend,
             z,
             world_z,
+            spline_zoom,
             prefer_sprite,
         },
         sprite_source,
@@ -1678,6 +1711,7 @@ fn compose_flat_single_slot<S, F>(
     model_cache: &mut ModelMeshCache,
     slot: &S,
     center: [f32; 2],
+    spline_zoom: [f32; 3],
     scale: f32,
     phase: f32,
     translation: [f32; 2],
@@ -1732,6 +1766,7 @@ fn compose_flat_single_slot<S, F>(
             blend: BlendMode::Alpha,
             z,
             world_z,
+            spline_zoom,
             prefer_sprite,
         },
         sprite_source,
@@ -2362,6 +2397,7 @@ mod note_layer_tests {
                 &mut ModelMeshCache::default(),
                 &slot,
                 [120.0, 180.0],
+                [1.0; 3],
                 scale,
                 0.25,
                 [-0.125, 0.125],
@@ -2464,6 +2500,7 @@ mod note_layer_tests {
             &mut cache,
             &slot,
             [120.0, 180.0],
+            [1.0; 3],
             1.0,
             0.25,
             [0.5, 0.0],

@@ -28,6 +28,7 @@ pub(crate) struct NoteLayerRequest<'a, S> {
     pub model_center: [f32; 2],
     pub sprite_center: [f32; 2],
     pub size: [f32; 2],
+    pub spline_zoom: [f32; 3],
     pub uv: [f32; 4],
     pub rotation_y_deg: f32,
     pub model_rotation_z_deg: f32,
@@ -60,6 +61,7 @@ pub(crate) struct MineLayerRequest<'a, S> {
     pub glow_alpha: f32,
     pub note_z: i16,
     pub world_z: f32,
+    pub spline_zoom: [f32; 3],
     pub prefer_sprite: bool,
 }
 
@@ -326,17 +328,19 @@ where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
+    let [scale_x, scale_y, _] = request.spline_zoom;
+    let size = [request.size[0] * scale_x, request.size[1] * scale_y];
     FlatDraw::Sprite(FlatSprite {
         vertex_color_encoding: Default::default(),
         center: request.sprite_center,
         world_z: request.world_z,
-        size: request.size.map(f32::abs),
+        size: size.map(f32::abs),
         source: sprite_source(slot),
         tint: request.tint,
         glow: [1.0, 1.0, 1.0, 0.0],
         uv_rect: request.uv,
-        flip_x: slot.sprite_def().mirror_h ^ (request.size[0] < 0.0),
-        flip_y: slot.sprite_def().mirror_v ^ (request.size[1] < 0.0),
+        flip_x: slot.sprite_def().mirror_h ^ (size[0] < 0.0),
+        flip_y: slot.sprite_def().mirror_v ^ (size[1] < 0.0),
         fade: request.draw.fade,
         blend: request.blend,
         rot_x_deg: request.draw.rot[0],
@@ -357,10 +361,14 @@ pub(crate) fn compose_flat_note_layer<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
+    let mut draw = request.draw;
+    for (zoom, spline) in draw.zoom.iter_mut().zip(request.spline_zoom) {
+        *zoom *= spline;
+    }
     if !request.prefer_sprite
         && let Some(mut mesh) = noteskin_model_flat_draw_cached(
             request.slot,
-            request.draw,
+            draw,
             request.model_center,
             request.size,
             request.uv,
@@ -567,6 +575,7 @@ fn compose_flat_mine_gradient<S, F>(
             blend: BlendMode::Alpha,
             z: request.note_z.saturating_sub(2),
             world_z: request.world_z,
+            spline_zoom: request.spline_zoom,
             prefer_sprite: true,
         },
         sprite_source,
@@ -639,6 +648,7 @@ fn compose_flat_mine_slot<S, F, Z>(
             blend: BlendMode::Alpha,
             z: request.note_z,
             world_z: request.world_z,
+            spline_zoom: request.spline_zoom,
             prefer_sprite: request.prefer_sprite,
         },
         sprite_source,
@@ -1511,6 +1521,7 @@ mod tests {
             blend: BlendMode::Alpha,
             z: 140,
             world_z: 9.0,
+            spline_zoom: [1.0; 3],
             prefer_sprite: false,
         }
     }
@@ -1878,6 +1889,7 @@ mod tests {
             glow_alpha: 0.6,
             note_z: 140,
             world_z: 9.0,
+            spline_zoom: [1.0; 3],
             prefer_sprite: false,
         }
     }

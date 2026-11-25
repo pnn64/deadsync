@@ -999,9 +999,11 @@ pub enum SongLuaColumnTransformTarget {
     PositionSubtractBeat,
 }
 
-/// Immutable solved spline, produced at song load, never solved during play.
+/// Immutable snapshot of an enabled column handler.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SongLuaSplineData {
+    /// Position mode replaces ArrowEffects. Offset mode adds to it.
+    pub absolute: bool,
     pub coefficients: std::sync::Arc<[[[f32; 4]; 3]]>,
     pub constant: bool,
     pub looping: bool,
@@ -1224,16 +1226,15 @@ fn solve_song_lua_spline_into(
 #[derive(Clone, Debug, PartialEq)]
 pub struct SongLuaColumnSplineFrame {
     pub second: f32,
+    /// Disabled handlers have no curve.
     pub position: Option<SongLuaSplineData>,
+    pub rotation: Option<SongLuaSplineData>,
     pub zoom: Option<SongLuaSplineData>,
 }
 
-/// Song-owned immutable tracks, built by the Lua loader and shared by render
-/// readers. Capacity is the authored lane count and changed reference frames,
-/// with at most 65536 points per spline and 128 MiB of coefficients per layer.
-/// No insertion, eviction, misses, allocation, or destruction during play.
+/// Immutable curves shared with the notefield. Baked tracks retain changed
+/// reference frames; Runtime publishes its latest frame per lane.
 /// A query does one binary search per lane, then constant-time note sampling.
-/// Tracks are freed at the gameplay transition; compile logs expose track sizes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SongLuaColumnSplineTrack {
     pub player: usize,
@@ -1258,7 +1259,7 @@ impl SongLuaSplineData {
     pub fn view(&self) -> SongLuaPositionSpline<'_> {
         SongLuaPositionSpline {
             enabled: true,
-            absolute: true,
+            absolute: self.absolute,
             coefficients: &self.coefficients,
             constant: self.constant,
             looping: self.looping,
@@ -1276,7 +1277,7 @@ impl SongLuaSplineData {
     }
 }
 
-/// Frame-local spline view; two-point Offset windows retain their scalar form.
+/// Frame-local spline view, including legacy two-point Offset windows.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SongLuaPositionSpline<'a> {
     pub enabled: bool,
