@@ -134,8 +134,17 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                         _ => append_reversed_index_blocks::<0>,
                     };
                     append(source, &mut indices, width, block_bytes, validate_indices)?;
-                } else if check_indices && width < 512 && header.info.height > 1 {
-                    append_padded_index_blocks(source, &header, &mut indices, validate_indices)?;
+                } else if width < 512 && header.info.height > 1 {
+                    if check_indices {
+                        append_padded_index_blocks(
+                            source,
+                            &header,
+                            &mut indices,
+                            validate_indices,
+                        )?;
+                    } else {
+                        append_full_palette_rows(source, &header, &mut indices);
+                    }
                 } else {
                     for row in rows {
                         let row = &row[..width];
@@ -229,6 +238,18 @@ fn append_reversed_index_blocks<const WIDTH: usize>(
         }
     }
     Ok(())
+}
+
+#[inline(never)]
+fn append_full_palette_rows(source: &[u8], header: &Header, indices: &mut Vec<u8>) {
+    let width = header.info.width as usize;
+    let rows = source.chunks_exact(header.row_pitch);
+    let copy = |row: &[u8]| indices.extend_from_slice(&row[..width]);
+    if header.info.top_down {
+        rows.for_each(copy);
+    } else {
+        rows.rev().for_each(copy);
+    }
 }
 
 #[inline(never)]
