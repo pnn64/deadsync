@@ -895,9 +895,12 @@ impl Vm {
         );
         let root = prototypes[entry];
         self.reserve_gc_value(Value::ParserPrototype(root))?;
-        self.programs
-            .note_alloc(prototypes.capacity() * size_of::<ParserPrototypeId>());
+        let before =
+            self.programs[loaded].parser_prototypes.capacity() * size_of::<ParserPrototypeId>();
+        let bytes = prototypes.capacity() * size_of::<ParserPrototypeId>();
+        self.programs.note_alloc(bytes);
         self.programs[loaded].parser_prototypes = prototypes;
+        self.code_payload_bytes = self.code_payload_bytes - before + bytes;
         self.loads[index]
             .native
             .as_mut()

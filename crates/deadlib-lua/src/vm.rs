@@ -493,7 +493,8 @@ pub struct Vm {
     registers: Buffer<Value>,
     programs: Arena<LoadedProgram>,
     functions: Arena<Closure>,
-    closure_upvalue_bytes: usize,
+    // Heap payload of loaded programs and closure upvalues.
+    code_payload_bytes: usize,
     upvalues: Arena<Cell>,
     open_upvalues: Buffer<u32>,
     frames: Buffer<Frame>,
@@ -632,7 +633,7 @@ impl Vm {
             registers: Buffer::new_in(memory.clone()),
             programs: Arena::new_in(memory.clone()),
             functions: Arena::identified_in(memory.clone()),
-            closure_upvalue_bytes: 0,
+            code_payload_bytes: 0,
             upvalues: Arena::new_in(memory.clone()),
             open_upvalues: Buffer::new_in(memory.clone()),
             frames: Buffer::new_in(memory.clone()),
@@ -1343,6 +1344,7 @@ impl Vm {
         let bytes = gc::program_bytes(&loaded);
         let index = slot_index(self.programs.insert(loaded));
         self.programs.note_alloc(bytes);
+        self.code_payload_bytes += bytes;
         let entry = self.insert_closure(Closure {
             program: index,
             prototype: program.data.entry as usize,
@@ -1359,7 +1361,7 @@ impl Vm {
         self.functions
             .note_alloc(closure.upvalues.capacity() * size_of::<u32>());
         let id = FunctionId(self.functions.insert(closure));
-        self.closure_upvalue_bytes += bytes;
+        self.code_payload_bytes += bytes;
         id
     }
 
