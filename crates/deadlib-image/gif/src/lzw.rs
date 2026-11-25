@@ -85,26 +85,43 @@ impl Decoder {
         if self.ended() {
             return Ok(());
         }
-        let mut input = input;
+        let mut bits = self.bits;
+        let mut bit_count = self.bit_count;
+        let result = self.decode_pending(input, output, limit, &mut bits, &mut bit_count);
+        // Keep the consumed-bit state even when decoding returns an error.
+        self.bits = bits;
+        self.bit_count = bit_count;
+        result
+    }
+
+    #[inline(always)]
+    fn decode_pending(
+        &mut self,
+        mut input: &[u8],
+        output: &mut Vec<u8>,
+        limit: usize,
+        bits: &mut u64,
+        bit_count: &mut u8,
+    ) -> Result<(), Error> {
         while !input.is_empty() {
             if input.len() >= 4 {
                 // A safe unaligned word refill amortizes the byte/width
                 // loop. At most 11 bits remain, so 32 more fit in u64.
-                self.bits |=
-                    u64::from(u32::from_le_bytes(input[..4].try_into().unwrap())) << self.bit_count;
-                self.bit_count += 32;
+                *bits |=
+                    u64::from(u32::from_le_bytes(input[..4].try_into().unwrap())) << *bit_count;
+                *bit_count += 32;
                 input = &input[4..];
             } else if let Some((&byte, rest)) = input.split_first() {
-                self.bits |= u64::from(byte) << self.bit_count;
-                self.bit_count += 8;
+                *bits |= u64::from(byte) << *bit_count;
+                *bit_count += 8;
                 input = rest;
             } else {
                 break;
             }
-            while self.bit_count >= self.width {
-                let code = self.bits as u16 & self.mask;
-                self.bits >>= self.width;
-                self.bit_count -= self.width;
+            while *bit_count >= self.width {
+                let code = *bits as u16 & self.mask;
+                *bits >>= self.width;
+                *bit_count -= self.width;
                 let start = output.len();
                 let length = if code < self.clear {
                     // Literals need neither control-code checks nor phrase lookup.
