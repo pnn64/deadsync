@@ -261,30 +261,45 @@ fn offset_hint(pages: &[IndexedPage], end: u64, offset: u64, scale: u64) -> Opti
     covers(neighbor).then_some(neighbor)
 }
 
-fn regular_granule_reciprocal(pages: &[IndexedPage]) -> u64 {
+fn granule_scale(pages: &[IndexedPage]) -> u64 {
     if pages.len() < 33 {
         return 0;
     }
+    // The stream header and final (possibly shortened) page are outside the sample.
+    let pages = &pages[1..];
     let first = pages[0].granule_floor;
-    let step = pages[1].granule_floor - first;
-    let span = pages[pages.len() - 1].granule_floor - first;
-    if step != 0 && step.checked_mul((pages.len() - 1) as u64) == Some(span) {
-        u64::MAX / step
-    } else {
-        0
+    let steps = pages.len() - 2;
+    let span = pages[steps].granule_floor - first;
+    if span < steps as u64 {
+        return 0;
     }
+    let scale = ((((steps as u128) << 64) - 1) / u128::from(span)) as u64;
+    let quarter = steps / 4;
+    for page in [quarter, 2 * quarter, 3 * quarter] {
+        if granule_hint(pages, pages[page].granule_floor, scale).is_none() {
+            return 0;
+        }
+    }
+    scale
 }
 
 // Confirm both sides of the estimate, including ties between landmarks.
 #[inline(never)]
 fn granule_hint(pages: &[IndexedPage], target: u64, reciprocal: u64) -> Option<&IndexedPage> {
     let distance = target.checked_sub(pages[0].granule_floor)?;
-    // Bias upward by one input unit to compensate for rounding the reciprocal down.
     let estimate = ((u128::from(distance) + 1) * u128::from(reciprocal)) >> 64;
     let slot = usize::try_from(estimate).ok()?;
     let page = pages.get(slot)?;
     let next = pages.get(slot + 1)?;
-    (page.granule_floor <= target && target < next.granule_floor).then_some(page)
+    if page.granule_floor > target {
+        let previous = pages.get(slot.checked_sub(1)?)?;
+        (previous.granule_floor <= target).then_some(previous)
+    } else if target >= next.granule_floor {
+        let after = pages.get(slot + 2)?;
+        (target < after.granule_floor).then_some(next)
+    } else {
+        Some(page)
+    }
 }
 
 /// Borrowed observations during index construction. Packets precede their
@@ -412,7 +427,7 @@ impl OggIndex {
         let strict_granules = index.compatibility == CompatibilityStats::default();
         if grouped && strict_granules {
             if index.streams.len() == 1 {
-                index.granule_reciprocal = regular_granule_reciprocal(&index.pages);
+                index.granule_reciprocal = granule_scale(&index.pages);
             }
             return Ok(index);
         }
@@ -484,7 +499,7 @@ impl OggIndex {
         let page = if last.granule_floor <= target {
             last
         } else if self.granule_reciprocal != 0
-            && let Some(page) = granule_hint(pages, target, self.granule_reciprocal)
+            && let Some(page) = granule_hint(&pages[1..], target, self.granule_reciprocal)
         {
             page
         } else {
