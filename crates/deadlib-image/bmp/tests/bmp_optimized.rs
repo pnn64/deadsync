@@ -663,8 +663,8 @@ fn full_packed_palettes_still_validate_caller_created_unpacked_indices() {
 
 #[test]
 fn indexed_rgba_lookup_preserves_pixels_and_errors_across_the_table_threshold() {
-    for count in [127usize, 128, 1023, 1024, 1025, 4097] {
-        for size in [1usize, 2, 16, 17, 255, 256] {
+    for count in [127usize, 128, 255, 256, 511, 512, 1023, 1024, 1025, 4097] {
+        for size in [1usize, 2, 16, 17, 64, 128, 255, 256] {
             let colors = palette(size);
             let mut indices: Vec<u8> = (0..count).map(|i| ((i * 71) % size) as u8).collect();
             indices[count - 1] = (size - 1) as u8;
