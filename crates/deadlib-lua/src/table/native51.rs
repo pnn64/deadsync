@@ -304,6 +304,8 @@ impl Table {
             .array
             .try_reserve_exact(array)
             .map_err(|_| Error::memory())?;
+        let shared = array.min(self.array.len());
+        replacement.array.extend_from_slice(&self.array[..shared]);
         replacement.array.resize(array, Value::Nil);
         replacement
             .entries
@@ -321,8 +323,6 @@ impl Table {
             .map_err(|_| Error::memory())?;
         replacement.slots.resize(slots, 0);
         replacement.last_free = records;
-        let shared = array.min(self.array.len());
-        replacement.array[..shared].copy_from_slice(&self.array[..shared]);
         for index in array..self.array.len() {
             if self.array[index] != Value::Nil {
                 replacement.native_set(
