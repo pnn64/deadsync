@@ -705,6 +705,10 @@ fn palette_strictness_keeps_static_and_animation_errors_distinct() {
         };
         let png = decode_with_options(&wire, &strict_pixels).unwrap();
         assert_static(&png, &fixture);
+        assert_eq!(
+            decode_reader(Fragments(&wire, 7), &strict_pixels).unwrap(),
+            png
+        );
         for fragment in [1, 2, 7, wire.len()] {
             assert_eq!(
                 stream_options(&wire, fragment, &fixture, strict_pixels).unwrap(),

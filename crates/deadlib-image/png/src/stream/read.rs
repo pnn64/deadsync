@@ -69,9 +69,9 @@ fn row_image(png: &mut Png, kind: ImageKind) -> Result<&mut Image, Error> {
 }
 
 fn collect(png: &mut Option<Png>, decoder: &mut StreamDecoder) -> Result<(), Error> {
-    if let Some((kind, row)) = decoder.ready_word_row() {
+    if let Some((kind, row)) = decoder.ready_raw_row() {
         let png = png.as_mut().ok_or(Error::Invalid("missing IHDR"))?;
-        return row.copy_words_into(row_image(png, kind)?);
+        return row.copy_raw_into(row_image(png, kind)?);
     }
     let event = decoder
         .event()

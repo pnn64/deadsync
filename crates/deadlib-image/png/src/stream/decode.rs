@@ -241,9 +241,10 @@ impl StreamDecoder {
             Event::ImageEnd(kind) => DecodeEvent::ImageEnd(kind),
         })
     }
-    pub(super) fn ready_word_row(&self) -> Option<(ImageKind, &ImageRows)> {
-        if matches!(self.event, Some(Event::Row)) && self.header?.depth == 16 {
-            Some((self.image_kind?, self.rows.as_ref()?))
+    pub(super) fn ready_raw_row(&self) -> Option<(ImageKind, &ImageRows)> {
+        if matches!(self.event, Some(Event::Row)) {
+            let rows = self.rows.as_ref()?;
+            rows.reader_copies_raw().then_some((self.image_kind?, rows))
         } else {
             None
         }

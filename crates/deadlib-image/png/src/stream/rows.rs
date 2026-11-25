@@ -1,10 +1,19 @@
 use super::{ImageKind, Row, RowSamples};
 use crate::{
-    ColorType, Error, Image, Samples,
+    ColorType, Error, Image, PalettePolicy, Samples,
     codec::Header,
     reserve, scanline,
     zlib::{Inflater, StreamStatus},
 };
+
+fn unpack_row(depth: u8, row: &[u8], out: &mut [u8], step: usize) {
+    match depth {
+        1 => scanline::unpack::<1>(row, out, step),
+        2 => scanline::unpack::<2>(row, out, step),
+        4 => scanline::unpack::<4>(row, out, step),
+        _ => unreachable!("validated packed PNG depth"),
+    }
+}
 
 #[derive(Default)]
 pub(super) struct RowBuffers {
@@ -143,8 +152,8 @@ impl ImageRows {
         &mut self,
         input: &[u8],
         palette: usize,
-        policy: crate::PalettePolicy,
-        materialize_words: bool,
+        policy: PalettePolicy,
+        materialize_samples: bool,
     ) -> Result<(usize, bool), Error> {
         debug_assert!(!self.ready);
         let output = if self.complete {
@@ -164,8 +173,12 @@ impl ImageRows {
                     scanline::unfilter(&mut self.row[1..], &self.previous[1..], bpp, filter)?;
                 }
             }
-            let count = self.width * self.header.color.channels();
-            if self.header.depth == 16 && materialize_words {
+            let depth = self.header.depth;
+            let check_indices = self.header.color == ColorType::Indexed
+                && policy == PalettePolicy::Strict
+                && palette < 1usize << depth;
+            if depth == 16 && materialize_samples {
+                let count = self.width * self.header.color.channels();
                 self.native16.clear();
                 reserve(&mut self.native16, count)?;
                 self.native16.extend(
@@ -176,24 +189,19 @@ impl ImageRows {
                         .copied()
                         .map(u16::from_be_bytes),
                 );
-            } else if self.header.depth < 8 {
-                let additional = count.saturating_sub(self.native8.len());
+            } else if depth < 8 && (materialize_samples || check_indices) {
+                let additional = self.width.saturating_sub(self.native8.len());
                 reserve(&mut self.native8, additional)?;
-                self.native8.resize(count, 0);
-                match self.header.depth {
-                    1 => scanline::unpack::<1>(&self.row[1..], &mut self.native8, 1),
-                    2 => scanline::unpack::<2>(&self.row[1..], &mut self.native8, 1),
-                    4 => scanline::unpack::<4>(&self.row[1..], &mut self.native8, 1),
-                    _ => unreachable!("validated packed PNG depth"),
-                }
+                self.native8.resize(self.width, 0);
+                unpack_row(depth, &self.row[1..], &mut self.native8, 1);
             }
-            if self.header.color == ColorType::Indexed && policy == crate::PalettePolicy::Strict {
-                let values = if self.header.depth == 8 {
+            if check_indices {
+                let values = if depth == 8 {
                     &self.row[1..]
                 } else {
                     &self.native8
                 };
-                if crate::codec::indices_outside_palette(values, palette, self.header.depth) {
+                if crate::codec::indices_outside_palette(values, palette, depth) {
                     return Err(Error::Invalid("palette index outside PLTE"));
                 }
             }
@@ -208,7 +216,27 @@ impl ImageRows {
         }
         Ok((progress.consumed, false))
     }
-    pub(super) fn copy_words_into(&self, image: &mut Image) -> Result<(), Error> {
+    pub(super) fn reader_copies_raw(&self) -> bool {
+        self.header.depth == 16 || (self.header.depth < 8 && self.native8.is_empty())
+    }
+    pub(super) fn copy_raw_into(&self, image: &mut Image) -> Result<(), Error> {
+        if let Samples::U8(out) = &mut image.samples {
+            debug_assert!(self.header.depth < 8 && self.native8.is_empty());
+            let width = self.header.width as usize;
+            let y = self.y as usize + self.row_index * self.dy as usize;
+            let start = y * width + self.x as usize;
+            let end = (y + 1) * width;
+            if !self.header.interlaced {
+                out.resize(end, 0);
+            }
+            unpack_row(
+                self.header.depth,
+                &self.row[1..],
+                &mut out[start..end],
+                self.dx as usize,
+            );
+            return Ok(());
+        }
         let Samples::U16(out) = &mut image.samples else {
             return Err(Error::Invalid("row sample representation"));
         };
