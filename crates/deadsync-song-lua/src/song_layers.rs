@@ -96,7 +96,7 @@ impl SongLayerPlan {
                     .as_ref()
                     .map(|name| {
                         let suffix = if context.song_dir.join(name).is_dir() {
-                            "/default.lua"
+                            if crate::legacy_xml::is_xml(&path) { "/default.xml" } else { "/default.lua" }
                         } else {
                             ""
                         };

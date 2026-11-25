@@ -754,6 +754,7 @@ pub fn push_update_mod_targets(
         &mut (0, String::new()),
         SongLuaTimeUnit::Beat,
         [false; LUA_PLAYERS],
+        [false; LUA_PLAYERS],
     );
 }
 
@@ -770,6 +771,7 @@ pub(crate) fn push_update_mod_targets_with_key<S: ModState>(
     lookup_key: &mut (usize, String),
     unit: SongLuaTimeUnit,
     sampled_speed_players: [bool; LUA_PLAYERS],
+    resolved_options: [bool; LUA_PLAYERS],
 ) {
     if from_players.iter().all(ModState::is_empty) {
         return;
@@ -783,16 +785,25 @@ pub(crate) fn push_update_mod_targets_with_key<S: ModState>(
             let Some(mut target) = runtime_player_option_ease_target(key, "") else {
                 continue;
             };
-            let speed = speeds[player].get(key).copied();
+            let resolved = resolved_options[player];
+            let speed = if resolved {
+                None
+            } else {
+                speeds[player].get(key).copied()
+            };
             // The first native setter supplies its approach speed at the next
             // sample. Until then this is still the baseline, not a ramp toward
             // a future write (which would move Mini before the paired XMod).
-            if speed.is_none() && next_speeds.is_some_and(|next| next[player].get(key).is_some()) {
+            if !resolved
+                && speed.is_none()
+                && next_speeds.is_some_and(|next| next[player].get(key).is_some())
+            {
                 continue;
             }
             // These switches have no native approach speed, but initial values and
             // later writes are still step targets, never interpolated samples.
-            if speed.is_some()
+            if resolved
+                || speed.is_some()
                 || matches!(
                     key,
                     "cosecant"

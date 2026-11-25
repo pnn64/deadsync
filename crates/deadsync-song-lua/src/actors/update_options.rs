@@ -3,6 +3,8 @@ use super::*;
 use crate::perframe::ModState;
 use rustc_hash::FxHashSet;
 
+pub(crate) const IMMEDIATE_OPTIONS_KEY: &str = "__songlua_options_written_immediately";
+
 #[derive(Clone, Default)]
 pub(crate) struct Snapshot(Box<[(Arc<str>, f32)]>);
 impl ModState for Snapshot {
@@ -62,9 +64,14 @@ impl Entries {
 type SharedEntries = Arc<Mutex<Option<Entries>>>;
 struct Scratch {
     entries: SharedEntries,
-    output: Option<[Snapshot; crate::LUA_PLAYERS]>,
+    output: Option<OptionFrame>,
 }
 type SharedScratch = Arc<Mutex<Option<Scratch>>>;
+
+pub(crate) struct OptionFrame {
+    pub values: [Snapshot; crate::LUA_PLAYERS],
+    pub resolved: [bool; crate::LUA_PLAYERS],
+}
 
 /// Both original option tables are retained even if authored getters replace
 /// their globals. Only the enclosing compiler owns this load-lifetime root.
@@ -73,7 +80,7 @@ pub(crate) struct Options {
     scratch: SharedScratch,
 }
 impl Actors {
-    pub(crate) fn update_options(&self, vm: &mut Vm) -> Result<Options, Error> {
+    pub(crate) fn update_options(&self, vm: &mut Vm, catalog: Root) -> Result<Options, Error> {
         let owner = vm.try_new_table()?;
         let root = vm.pin(Value::Table(owner))?;
         let entries = Arc::new(Mutex::new(Some(Entries::default())));
@@ -82,14 +89,21 @@ impl Actors {
             output: None,
         })));
         let result = (|| {
+            let catalog = vm.rooted(catalog)?;
             let read = vm.new_host_function(
                 |call| {
                     let owner = table(call, call.captures()[2])?;
                     let globals = helper(call, 5)?;
+                    let catalog = table(call, call.captures()[3])?;
+                    let players = raw(call, catalog, "player_options")?;
+                    let players = table(call, players)?;
                     for (index, key) in crate::SONG_LUA_PLAYER_OPTIONS_KEYS.iter().enumerate() {
                         let value = super::super::field(call, globals, key)?;
                         table(call, value)?;
                         call.raw_table_set(owner, Value::Number((index + 1) as f64), value)?;
+                        let levels = call.raw_table_get(players, Value::Number((index + 1) as f64))?;
+                        let current = call.raw_table_get(table(call, levels)?, Value::Number(4.0))?;
+                        call.raw_table_set(owner, Value::Number((index + 7) as f64), current)?;
                     }
                     Ok(())
                 },
@@ -97,6 +111,7 @@ impl Actors {
                     Value::Table(self.registry),
                     Value::Table(self.helpers),
                     Value::Table(owner),
+                    catalog,
                 ],
             )?;
             vm.call(read, &[])?;
@@ -133,11 +148,24 @@ impl Options {
         vm: &mut Vm,
         speeds: bool,
     ) -> Result<[Snapshot; crate::LUA_PLAYERS], Error> {
+        Ok(self.sample_frame(vm, speeds, false)?.values)
+    }
+
+    pub fn sample_resolved(&mut self, vm: &mut Vm) -> Result<OptionFrame, Error> {
+        self.sample_frame(vm, false, true)
+    }
+
+    fn sample_frame(
+        &mut self,
+        vm: &mut Vm,
+        speeds: bool,
+        resolve_immediate: bool,
+    ) -> Result<OptionFrame, Error> {
         let Value::Table(owner) = vm.rooted(self.owner.expect("active option capture"))? else {
             unreachable!()
         };
         let callback = vm.raw_table_get(owner, Value::Number(if speeds { 4. } else { 3. }))?;
-        vm.call(callback, &[])?;
+        vm.call(callback, &[Value::Boolean(resolve_immediate)])?;
         Ok(self
             .scratch
             .lock()
@@ -168,10 +196,23 @@ fn sample(call: &mut HostCall<'_>) -> Result<(), Error> {
     let result = (|| {
         let owner = table(call, call.captures()[2])?;
         let pairs = call.raw_table_get(owner, Value::Number(if speeds { 6. } else { 5. }))?;
-        let mut output = [Snapshot::default(), Snapshot::default()];
-        for (index, output) in output.iter_mut().enumerate() {
-            let value = call.raw_table_get(owner, Value::Number((index + 1) as f64))?;
-            *output = read(call, table(call, value)?, speeds, &mut scratch, pairs)?;
+        let mut output = OptionFrame {
+            values: std::array::from_fn(|_| Snapshot::default()),
+            resolved: [false; crate::LUA_PLAYERS],
+        };
+        let resolve_immediate = call.arguments().first() == Some(&Value::Boolean(true));
+        for (index, output_value) in output.values.iter_mut().enumerate() {
+            let target = call.raw_table_get(owner, Value::Number((index + 1) as f64))?;
+            let mut source = table(call, target)?;
+            if resolve_immediate {
+                let current = call.raw_table_get(owner, Value::Number((index + 7) as f64))?;
+                let current = table(call, current)?;
+                if raw(call, current, IMMEDIATE_OPTIONS_KEY)? == Value::Boolean(true) {
+                    source = current;
+                    output.resolved[index] = true;
+                }
+            }
+            *output_value = read(call, source, speeds, &mut scratch, pairs)?;
         }
         scratch.output = Some(output);
         Ok(())

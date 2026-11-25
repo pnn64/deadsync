@@ -169,6 +169,7 @@ mod live_runtime;
 pub use live_runtime::SongLiveRuntime;
 mod live_frames;
 pub use live_frames::SongLiveFrames;
+mod legacy_xml;
 mod loader;
 mod managers;
 mod options;

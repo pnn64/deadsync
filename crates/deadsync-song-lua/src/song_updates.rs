@@ -312,7 +312,7 @@ impl SongRuntime {
         let access = self.actors.perframe_access();
         let mut options = self
             .actors
-            .update_options(&mut self.vm)
+            .update_options(&mut self.vm, self.catalog)
             .map_err(|e| e.to_string())?;
         let result = (|| {
             for &value in values.iter().chain(tracked_values) {
@@ -404,9 +404,10 @@ impl SongRuntime {
             }
             let mut update_states = replay_states.clone();
             let baseline_players = self.update_players(&access, &players)?;
-            let baseline_mods = options
-                .sample(&mut self.vm, false)
+            let baseline_options = options
+                .sample_resolved(&mut self.vm)
                 .map_err(|e| e.to_string())?;
+            let baseline_mods = baseline_options.values;
             let baseline_columns = self.read_song_note_column_transform_samples()?;
             let frames = crate::perframe::update_function_replay_beats(context, start, end);
             let actor_frames = crate::perframe::reference_actor_frames(context);
@@ -432,6 +433,7 @@ impl SongRuntime {
                 sample_count,
             );
             let mut mod_samples = buffer(baseline_mods.clone(), sample_count);
+            let mut resolved_mod_samples = buffer(baseline_options.resolved, sample_count);
             let mut mod_speed_samples = buffer(
                 options
                     .sample(&mut self.vm, true)
@@ -770,11 +772,11 @@ impl SongRuntime {
                 player_samples.push(next_players);
                 player_step_samples.push(player_steps);
                 current_speed_samples.push(self.current_speedmods().map_err(|e| e.to_string())?);
-                mod_samples.push(
-                    options
-                        .sample(&mut self.vm, false)
-                        .map_err(|e| e.to_string())?,
-                );
+                let frame_options = options
+                    .sample_resolved(&mut self.vm)
+                    .map_err(|e| e.to_string())?;
+                mod_samples.push(frame_options.values);
+                resolved_mod_samples.push(frame_options.resolved);
                 mod_speed_samples.push(
                     options
                         .sample(&mut self.vm, true)
@@ -867,6 +869,7 @@ impl SongRuntime {
                 &current_speed_samples,
                 &mod_samples,
                 &mod_speed_samples,
+                &resolved_mod_samples,
                 &column_samples,
                 &baseline_players,
                 &baseline_mods,
@@ -1388,6 +1391,7 @@ fn finish_samples<M: crate::perframe::ModState>(
     current_speed_samples: &[[ScrollSpeedSetting; LUA_PLAYERS]],
     mod_samples: &[[M; LUA_PLAYERS]],
     mod_speed_samples: &[[M; LUA_PLAYERS]],
+    resolved_mod_samples: &[[bool; LUA_PLAYERS]],
     column_samples: &[Vec<crate::SongLuaColumnTransformSample>],
     baseline_players: &[Player; LUA_PLAYERS],
     baseline_mods: &[M; LUA_PLAYERS],
@@ -1489,6 +1493,7 @@ fn finish_samples<M: crate::perframe::ModState>(
             // can move a step target past its own frame's timestamp.
             mod_unit,
             sampled_speed_players,
+            resolved_mod_samples[index],
         );
         let speeds = current_speed_samples[index];
         let next_speeds = current_speed_samples
@@ -1499,6 +1504,13 @@ fn finish_samples<M: crate::perframe::ModState>(
             if !sampled_speed_players[player] {
                 continue;
             }
+            let following = if resolved_mod_samples[index][player]
+                || resolved_mod_samples.get(index + 1).is_some_and(|resolved| resolved[player])
+            {
+                speeds[player]
+            } else {
+                next_speeds[player]
+            };
             push_current_speed_window(
                 &mut eases,
                 &mut last_speed_windows[player],
@@ -1506,7 +1518,7 @@ fn finish_samples<M: crate::perframe::ModState>(
                 [mod_start, mod_end],
                 mod_unit,
                 speeds[player],
-                next_speeds[player],
+                following,
             );
         }
         let (frame_start, frame_end, frame_unit) = if origin.is_some() {

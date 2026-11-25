@@ -531,7 +531,7 @@ pub fn compile_perframes_for_tables(
 pub struct RustUpdateOptionsProbe(super::actors::update_options::Options);
 impl RustUpdateOptionsProbe {
     pub fn new(runtime: &mut super::SongRuntime) -> Result<Self, deadlib_lua::Error> {
-        runtime.actors.update_options(&mut runtime.vm).map(Self)
+        runtime.actors.update_options(&mut runtime.vm, runtime.catalog).map(Self)
     }
     pub fn sample(
         &mut self,

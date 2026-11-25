@@ -259,8 +259,11 @@ fn load_file(
         globals
     };
     call.with_roots(&[env], |call| {
-        let source =
-            fs::read_to_string(&path).map_err(|error| call.error(error.to_string().as_bytes()))?;
+        let source = if matches!(kind, Kind::Entry) && crate::legacy_xml::is_xml(&path) {
+            crate::legacy_xml::load(&path).map_err(|error| call.error(error.as_bytes()))?
+        } else {
+            fs::read_to_string(&path).map_err(|error| call.error(error.to_string().as_bytes()))?
+        };
         let source = crate::cmd::preprocess_lua_cmd_syntax_cow(&source)
             .map_err(|error| call.error(error.as_bytes()))?;
         let source = call.try_intern(source.as_bytes())?;

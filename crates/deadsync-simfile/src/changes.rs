@@ -191,8 +191,9 @@ pub fn extract_background_lua_change_set(
     let mut layer_1 = Vec::new();
     let mut uses_lua = false;
     let mut push_change = |start_beat: f32, path: PathBuf| {
-        let source = if path.is_dir() { path.join("default.lua") } else { path.clone() };
-        let path = song_lua_entry_path_like_itg(path);
+        let resolved = song_lua_entry_path_like_itg(path.clone());
+        let source = actor_entry_source(&path, resolved.as_path(), path.is_dir());
+        let path = resolved;
         layer_1.push(([String::new(), "-songbackground-".to_owned(), String::new(), String::new(), String::new()], SerializableSongBackgroundLuaChange {
             start_beat,
             path: path.to_string_lossy().into_owned(),
@@ -257,8 +258,9 @@ fn append_background_lua_changes<'a>(
             let Some(start_beat) = parse_start_beat(&fields) else {
                 continue;
             };
-            let source = if path.is_dir() { song_dir.join(target.as_ref()).join("default.lua") } else { song_dir.join(target.as_ref()) };
+            let directory = path.is_dir();
             let path = song_lua_entry_path_like_itg(path);
+            let source = actor_entry_source(&song_dir.join(target.as_ref()), &path, directory);
             let key = [
                 parse_bgchange_effect(fields.get(4).map(AsRef::as_ref), fields.get(5).map(AsRef::as_ref), fields.get(6).map(AsRef::as_ref)),
                 target.to_string(), fields.get(7).map_or_else(String::new, ToString::to_string),
@@ -282,6 +284,19 @@ fn append_background_lua_changes<'a>(
         }
     }
     uses_lua
+}
+
+fn actor_entry_source(path: &Path, resolved: &Path, directory: bool) -> PathBuf {
+    if directory {
+        let filename = if resolved.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("xml")) {
+            "default.xml"
+        } else {
+            "default.lua"
+        };
+        path.join(filename)
+    } else {
+        path.to_path_buf()
+    }
 }
 
 fn parse_background_lua_color(field: &str) -> Option<[f32; 4]> {

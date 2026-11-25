@@ -21,11 +21,11 @@ impl SongRuntime {
     ) -> Result<SongStaticUpdateOutput, String> {
         let mut options = self
             .actors
-            .update_options(&mut self.vm)
+            .update_options(&mut self.vm, self.catalog)
             .map_err(|e| e.to_string())?;
         let result = (|| {
-            let states = options
-                .sample(&mut self.vm, false)
+            let frame = options
+                .sample_resolved(&mut self.vm)
                 .map_err(|e| e.to_string())?;
             let speeds = options
                 .sample(&mut self.vm, true)
@@ -46,15 +46,16 @@ impl SongRuntime {
                 &mut output.eases,
                 origin,
                 limit.max(origin.next_up()),
-                &states,
-                &states,
-                &states,
+                &frame.values,
+                &frame.values,
+                &frame.values,
                 &speeds,
                 None,
                 &mut BTreeMap::new(),
                 &mut (0, String::new()),
                 unit,
                 [false; LUA_PLAYERS],
+                frame.resolved,
             );
             let columns = self.read_song_note_column_transform_samples()?;
             crate::append_column_transform_windows_from_samples(

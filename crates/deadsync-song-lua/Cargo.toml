@@ -25,6 +25,7 @@ image = "0.25.10"
 itoa = "1.0.19"
 log = "0.4.35"
 memchr = "2.8.3"
+quick-xml = "0.41.0"
 rustc-hash = "2.1.3"
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 smallvec = "1.16.5"

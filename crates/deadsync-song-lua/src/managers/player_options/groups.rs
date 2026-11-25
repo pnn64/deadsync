@@ -113,6 +113,16 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
                 for owner in &songs[level..] {
                     song_options::apply(call, *owner, &text)?;
                 }
+                // Preferred and Stage string commands also write Current.
+                // Baked playback must carry those values on the same frame.
+                if level != 2 {
+                    set(
+                        players[player][3],
+                        crate::actors::update_options::IMMEDIATE_OPTIONS_KEY,
+                        true,
+                        call,
+                    )?;
+                }
                 Ok(())
             } else {
                 let master = truthy(arg(call, 1));

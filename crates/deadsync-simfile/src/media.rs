@@ -212,17 +212,23 @@ pub fn path_uses_lua_like_itg(path: &Path) -> bool {
     if path
         .extension()
         .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua") || ext.eq_ignore_ascii_case("xml"))
     {
         return true;
     }
-    path.is_dir() && resolve_dir_default_lua_like_itg(path).is_some()
+    path.is_dir() && (resolve_dir_default_lua_like_itg(path).is_some() || resolve_dir_default_xml(path).is_some())
+}
+
+fn resolve_dir_default_xml(dir: &Path) -> Option<PathBuf> {
+    resolve_song_path_like_itg(dir, "default.xml").filter(|path| path.is_file())
 }
 
 #[must_use]
 pub fn song_lua_entry_path_like_itg(path: PathBuf) -> PathBuf {
     if path.is_dir() {
-        resolve_dir_default_lua_like_itg(&path).unwrap_or_else(|| path.join("default.lua"))
+        resolve_dir_default_lua_like_itg(&path)
+            .or_else(|| resolve_dir_default_xml(&path))
+            .unwrap_or_else(|| path.join("default.lua"))
     } else {
         path
     }
