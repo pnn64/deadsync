@@ -372,6 +372,50 @@ fn register_roots(
         }
     }
 }
+#[inline]
+fn register_roots_span(
+    registers: &[Value],
+    range: std::ops::Range<usize>,
+    live: &mut [u64],
+    work: &mut Work,
+) {
+    if range.len() < 16 {
+        register_roots(registers, range, live, work);
+    } else {
+        register_roots_wide(registers, range, live, work);
+    }
+}
+#[inline(never)]
+fn register_roots_wide(
+    registers: &[Value],
+    range: std::ops::Range<usize>,
+    live: &mut [u64],
+    work: &mut Work,
+) {
+    let mut start = range.start;
+    while start < range.end {
+        let offset = start % 64;
+        let count = (64 - offset).min(range.end - start);
+        let mask = u64::MAX >> (64 - count);
+        let marks = &mut live[start / 64];
+        let mut fresh = (!*marks >> offset) & mask;
+        *marks |= mask << offset;
+        if fresh == mask {
+            work.extend(
+                registers[start..start + count]
+                    .iter()
+                    .copied()
+                    .filter_map(edge),
+            );
+        } else {
+            while fresh != 0 {
+                work.extend(edge(registers[start + fresh.trailing_zeros() as usize]));
+                fresh &= fresh - 1;
+            }
+        }
+        start += count;
+    }
+}
 fn frames_roots(
     vm: &Vm,
     registers: &[Value],
@@ -381,23 +425,6 @@ fn frames_roots(
     live: &mut [u64],
     work: &mut Work,
 ) {
-    if frames.is_empty() {
-        register_roots(
-            registers,
-            0..top.min(registers.len()).min(cutoff),
-            live,
-            work,
-        );
-        return;
-    }
-    if let Some(frame) = frames.first() {
-        register_roots(
-            registers,
-            0..frame.result.min(registers.len()).min(cutoff),
-            live,
-            work,
-        );
-    }
     for (i, frame) in frames.iter().enumerate() {
         match frame.function {
             FrameKind::Lua(function) => {
@@ -424,7 +451,7 @@ fn frames_roots(
                     });
                 if let Some(visible_top) = visible_top {
                     let end = visible_top.min(registers.len()).min(return_top);
-                    register_roots(registers, frame.base.min(end)..end, live, work);
+                    register_roots_span(registers, frame.base.min(end)..end, live, work);
                 }
                 let pc = frame.pc().saturating_sub(1).min(proto.code.len() - 1);
                 let maps = proto.gc_live[pc];
@@ -509,7 +536,7 @@ fn frames_roots(
         {
             let start = frame.vararg_start;
             let end = (start + frame.argc()).min(registers.len()).min(cutoff);
-            register_roots(registers, start.min(end)..end, live, work);
+            register_roots_span(registers, start.min(end)..end, live, work);
         }
     }
 }
@@ -1117,7 +1144,15 @@ impl Vm {
         assert!(registers.len().div_ceil(64) <= live.capacity());
         live.resize(registers.len().div_ceil(64), 0);
         live.fill(0);
-        frames_roots(self, registers, frames, top, cutoff, &mut live, work);
+        let prefix = frames
+            .first()
+            .map_or(top, |frame| frame.result)
+            .min(registers.len())
+            .min(cutoff);
+        register_roots(registers, 0..prefix, &mut live, work);
+        if !frames.is_empty() {
+            frames_roots(self, registers, frames, top, cutoff, &mut live, work);
+        }
         // A Lua activation resumed from an instruction hook retains its
         // additional resume arguments until a stack-normalizing instruction.
         let hook_top = hooks.resumed_top.or_else(|| {
@@ -1134,7 +1169,8 @@ impl Vm {
         }
         if id != self.thread && t.status != threads::Status::Normal {
             let end = t.api_stack.end.min(registers.len());
-            register_roots(registers, t.api_stack.start.min(end)..end, &mut live, work);
+            let start = t.api_stack.start.max(prefix).min(end);
+            register_roots(registers, start..end, &mut live, work);
         }
         for &cell in open {
             if let Cell::Open(owner, position) = self.upvalues[cell as usize]
