@@ -52,6 +52,7 @@ impl Decoder {
         }
         self.clear = 1 << minimum;
         self.clear_table();
+        self.previous = 0;
         self.bits = 0;
         self.bit_count = 0;
         Ok(())
@@ -61,7 +62,6 @@ impl Decoder {
         self.next = self.clear + 2;
         self.width = self.clear.trailing_zeros() as u8 + 1;
         self.mask = (self.clear << 1) - 1;
-        self.previous = 0;
     }
     pub fn ended(&self) -> bool {
         self.width == 0
@@ -87,10 +87,19 @@ impl Decoder {
         }
         let mut bits = self.bits;
         let mut bit_count = self.bit_count;
-        let result = self.decode_pending(input, output, limit, &mut bits, &mut bit_count);
-        // Keep the consumed-bit state even when decoding returns an error.
+        let mut previous = self.previous;
+        let result = self.decode_pending(
+            input,
+            output,
+            limit,
+            &mut bits,
+            &mut bit_count,
+            &mut previous,
+        );
+        // Preserve the state through the last consumed code, including on error.
         self.bits = bits;
         self.bit_count = bit_count;
+        self.previous = previous;
         result
     }
 
@@ -102,6 +111,7 @@ impl Decoder {
         limit: usize,
         bits: &mut u64,
         bit_count: &mut u8,
+        previous: &mut u64,
     ) -> Result<(), Error> {
         while !input.is_empty() {
             if input.len() >= 4 {
@@ -136,6 +146,7 @@ impl Decoder {
                 } else {
                     if code == self.clear {
                         self.clear_table();
+                        *previous = 0;
                         continue;
                     }
                     if code == self.clear + 1 {
@@ -149,12 +160,12 @@ impl Decoder {
                             (entry & 4095) as usize,
                         )
                     } else if code == self.next && self.next < 4096 {
-                        if self.previous == 0 {
+                        if *previous == 0 {
                             return Err(Error::Invalid("LZW first code is not a literal"));
                         }
                         (
-                            self.origin + (self.previous >> 12) as usize,
-                            (self.previous & 4095) as usize + 1,
+                            self.origin + (*previous >> 12) as usize,
+                            (*previous & 4095) as usize + 1,
                         )
                     } else {
                         return Err(Error::Invalid("undefined LZW code"));
@@ -185,7 +196,7 @@ impl Decoder {
                 if self.next == 4096 {
                     continue;
                 }
-                if self.previous != 0 {
+                if *previous != 0 {
                     if self.dictionary.len() == self.dictionary.capacity() {
                         let bound = limit
                             .saturating_sub(self.origin)
@@ -194,7 +205,7 @@ impl Decoder {
                             .try_reserve_exact(bound - self.dictionary.len())
                             .map_err(|_| Error::Allocation)?;
                     }
-                    self.dictionary.push(self.previous + 1);
+                    self.dictionary.push(*previous + 1);
                     self.next += 1;
                     // A one-bit minimum starts with next == 1 << width, so
                     // its first insertion crosses (rather than reaches) it.
@@ -208,7 +219,7 @@ impl Decoder {
                 // Before the table freezes, even a one-bit minimum keeps
                 // phrase lengths at most 4093. Relative offsets fit 24 bits
                 // even when a caller's output prefix exceeds 4 GiB.
-                self.previous = ((start - self.origin) as u64) << 12 | length as u64;
+                *previous = ((start - self.origin) as u64) << 12 | length as u64;
             }
         }
         Ok(())
