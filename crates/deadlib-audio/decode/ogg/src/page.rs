@@ -58,7 +58,7 @@ impl<'a> Page<'a> {
     }
     #[inline]
     pub fn header(self) -> PageHeader {
-        let bytes = self.bytes;
+        let bytes = self.bytes.first_chunk::<FIXED_HEADER_SIZE>().unwrap();
         PageHeader {
             flags: bytes[5],
             granule_position: u64::from_le_bytes(bytes[6..14].try_into().unwrap()),
