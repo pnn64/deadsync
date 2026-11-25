@@ -162,12 +162,15 @@ fn indexed_and_rgb_encoders_match_across_the_palette_lookup_cutoff() {
     let colors = [[11, 23, 37], [47, 59, 71], [83, 97, 101]];
     for (width, height) in [
         (1, 1),
+        (1, 127),
+        (1, 128),
         (1, 1023),
         (1, 1024),
         (2, 5),
         (2, 511),
         (2, 512),
         (3, 7),
+        (17, 8),
         (5, 204),
         (5, 205),
         (4, 255),

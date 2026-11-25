@@ -99,7 +99,7 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
                         [blue, green, red]
                     },
                 );
-            } else if indices.len() >= 1024 {
+            } else if indices.len() >= 1024 || (palette.len() <= 16 && indices.len() >= 128) {
                 let padding = &[0; 3][..pitch - row_bytes];
                 let chunk_pixels = if options.top_down && padding.is_empty() {
                     indices.len()
