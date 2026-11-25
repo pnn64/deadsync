@@ -67,6 +67,26 @@ pub struct MachineReplayEntry {
     pub replay: Vec<ReplayEdge>,
 }
 
+/// The recorded score and input needed to request replay playback.
+#[derive(Clone, Debug)]
+pub struct StageReplayRequest {
+    pub replay: Vec<ReplayEdge>,
+    pub name: String,
+    pub score: f64,
+    pub replay_beat0_time_ns: SongTimeNs,
+}
+
+impl From<MachineReplayEntry> for StageReplayRequest {
+    fn from(entry: MachineReplayEntry) -> Self {
+        Self {
+            replay: entry.replay,
+            name: entry.name,
+            score: entry.score,
+            replay_beat0_time_ns: entry.replay_beat0_time_ns,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct MachineLeaderboardPlay {
     pub name: String,

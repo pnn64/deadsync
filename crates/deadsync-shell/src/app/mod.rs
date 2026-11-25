@@ -10184,7 +10184,8 @@ impl App {
                             name: std::mem::take(&mut replay.name),
                             score_10000: replay.score,
                         };
-                        let (edges, offsets) = replay.into_playback();
+                        let (edges, offsets) =
+                            deadsync_profile_gameplay::stage_replay::prepare_stage_replay(replay);
                         (Some(edges), Some(offsets), Some(view))
                     } else {
                         (None, None, None)

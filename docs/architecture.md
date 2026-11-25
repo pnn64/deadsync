@@ -66,6 +66,8 @@ from the combined percentage and the participants' failure states.
 `deadsync-profile-gameplay` resolves the shared scorebox pane settings for
 Select Music, Evaluation, and Simply Love gameplay. Simply Love applies them
 when mounting its gameplay HUD.
+`deadsync-score` supplies the replay request payload. The profile gameplay
+adapter prepares the recorded edges and beat-zero offset for stage playback.
 The shell prepares the visible song or course banner through the same cache
 when a result page opens. The mounted stage chooses its results music and
 which cues the fallback panes may play during the visit.

@@ -7,7 +7,7 @@ use crate::player_options::PlayerOptionsState;
 use deadsync_gameplay::song_launch::{SongSelection, resolve_song_chart_slots};
 use deadsync_gameplay::stage_launch::{StageLaunchPrompt, StageLaunchRequest, StageLaunchTarget};
 use deadsync_profile_gameplay::stage_charts::stage_difficulty_indices;
-use deadsync_profile_gameplay::stage_replay::StageReplayRequest;
+use deadsync_score::StageReplayRequest;
 use deadsync_simfile::course_selection::ConfirmedCourse;
 use deadsync_theme::player_options::PlayerOptionsEntry;
 

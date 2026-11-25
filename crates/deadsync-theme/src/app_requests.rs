@@ -900,7 +900,7 @@ pub enum RuntimeRequest {
             deadsync_simfile::course_selection::ConfirmedCourse,
         >,
     ),
-    StartReplay(deadsync_profile_gameplay::stage_replay::StageReplayRequest),
+    StartReplay(deadsync_score::StageReplayRequest),
     RestartGameplay,
     /// Replace the gameplay screen without committing its stage or Lua VM.
     ReloadSongLua,

@@ -14,7 +14,6 @@ deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-online = { path = "../deadsync-online" }
 deadsync-profile = { path = "../deadsync-profile" }
-deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
 deadsync-simfile = { path = "../deadsync-simfile" }

@@ -4287,12 +4287,18 @@ fn recorded_replay_playback_is_prepared_by_the_game() {
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let stage = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
-    assert!(contains_rust(&replay, "pub struct StageReplayRequest"));
-    assert!(contains_rust(&replay, "pub fn into_playback("));
+    let recorded = production_source(&root.join("crates/deadsync-score/src/leaderboard.rs"));
+    let theme = root.join("crates/deadsync-theme");
+    let manifest = read_source(theme.join("Cargo.toml")).expect("shared theme manifest");
+    let requests = production_source(&theme.join("src/app_requests.rs"));
+    assert!(!manifest.contains("deadsync-profile-gameplay"));
+    assert!(contains_rust(&recorded, "pub struct StageReplayRequest"));
+    assert!(contains_rust(&requests, "StartReplay(deadsync_score::StageReplayRequest)"));
+    assert!(contains_rust(&replay, "pub fn prepare_stage_replay("));
     assert!(contains_rust(&wheel, "SimplyLoveRuntimeRequest::StartReplay(payload)"));
     assert!(!wheel.contains("pending_replay"));
     assert!(contains_rust(&app, "self.queue_replay_stage(replay)"));
-    assert!(contains_rust(&app, "replay.into_playback()"));
+    assert!(contains_rust(&app, "prepare_stage_replay(replay)"));
     assert!(!app.contains("take_pending_replay"));
     assert!(contains_rust(&stage, "start.replay = Some(replay)"));
 }
