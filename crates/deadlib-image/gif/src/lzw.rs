@@ -288,10 +288,14 @@ impl Encoder {
             return emit(bits, usize::from(count.div_ceil(8)));
         }
         // Each insertion needs a new pixel, so the small tables stay below half full.
+        if pixels <= 32 {
+            return if pixels <= 8 {
+                Self::encode_tiny::<16>(rows, minimum, emit)
+            } else {
+                Self::encode_tiny::<64>(rows, minimum, emit)
+            };
+        }
         if pixels <= 256 {
-            if pixels <= 32 {
-                return Self::encode_tiny(rows, minimum, emit);
-            }
             return Self::encode_table(rows, minimum, &mut [0; 512], emit);
         }
         Self::encode_table(rows, minimum, &mut [0; 2048], emit)
@@ -307,12 +311,12 @@ impl Encoder {
     }
 
     #[inline(never)]
-    fn encode_tiny<'a>(
+    fn encode_tiny<'a, const SLOTS: usize>(
         rows: impl Iterator<Item = &'a [u8]>,
         minimum: u8,
         emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
-        Self::encode_table(rows, minimum, &mut [0; 64], emit)
+        Self::encode_table(rows, minimum, &mut [0; SLOTS], emit)
     }
 
     fn encode_repeated(
