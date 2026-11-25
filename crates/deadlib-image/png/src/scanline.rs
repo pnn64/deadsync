@@ -800,6 +800,7 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
             }
         }
     }
+    let mut tail_score = 0u16;
     for ((((&value, &left), &upper), &corner), out) in values_tail
         .iter()
         .zip(left_tail)
@@ -815,13 +816,13 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
             4 => paeth(left, upper, corner),
             _ => left / 2,
         };
-        *out = value.wrapping_sub(predictor);
+        let value = value.wrapping_sub(predictor);
+        *out = value;
+        if SCORE {
+            tail_score += u16::from((value as i8).unsigned_abs());
+        }
     }
-    if SCORE {
-        score + score_bytes(output_tail)
-    } else {
-        0
-    }
+    score + u64::from(tail_score)
 }
 
 pub(crate) fn filter_first<const SCORE: bool>(
