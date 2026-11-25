@@ -166,18 +166,30 @@ impl Vm {
             Trace::Value(Value::Userdata(id)) => {
                 1 + usize::from(self.userdata[slot_index(id.0)].metatable.is_some())
             }
-            Trace::Value(Value::ParserPrototype(id)) => self.parser_prototypes[slot_index(id.0)]
-                .roots()
-                .filter_map(edge)
-                .count(),
-            Trace::Value(Value::Native(id)) if id >= strings::ITERATOR_FIRST => self
-                .native_closures[slot_index(id)]
-            .captures
-            .iter()
-            .copied()
-            .filter_map(edge)
-            .count()
-            .saturating_add(1),
+            Trace::Value(Value::ParserPrototype(id)) => {
+                let prototype = &self.parser_prototypes[slot_index(id.0)];
+                // The current work item supplies space for the source edge.
+                let additional = prototype.constants.len()
+                    + prototype.children.len()
+                    + prototype.debug_strings.len();
+                if additional <= work.capacity() - work.len() {
+                    return Ok(());
+                }
+                prototype.roots().filter_map(edge).count()
+            }
+            Trace::Value(Value::Native(id)) if id >= strings::ITERATOR_FIRST => {
+                let captures = &self.native_closures[slot_index(id)].captures;
+                // The current work item supplies space for the environment edge.
+                if captures.len() <= work.capacity() - work.len() {
+                    return Ok(());
+                }
+                captures
+                    .iter()
+                    .copied()
+                    .filter_map(edge)
+                    .count()
+                    .saturating_add(1)
+            }
             Trace::Value(Value::Native(id)) if id < 256 => 1,
             Trace::CellAgain(i) => usize::from(edge(self.cell_value(i)).is_some()),
             Trace::Cell(i) if self.upvalues.contains_slot(i) => {
