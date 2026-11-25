@@ -133,6 +133,12 @@ pub(crate) fn page_crc(bytes: &[u8]) -> u32 {
         header_crc(&mut crc, &header[4..22], &TABLES[7..25]);
         return crc ^ TABLES[2][a as usize] ^ TABLES[1][b as usize] ^ TABLES[0][c as usize];
     }
+    if let [a, b] = *tail {
+        // A zero-byte packet can also finish with the header's table fold.
+        let mut crc = const { advance_zeros(CAPTURE_CRC, 2) };
+        header_crc(&mut crc, &header[4..22], &TABLES[6..24]);
+        return crc ^ TABLES[1][a as usize] ^ TABLES[0][b as usize];
+    }
     // The fixed capture contributes a constant. The four zero checksum
     // bytes advance the table powers without contributing a remainder.
     let mut crc = CAPTURE_CRC;
