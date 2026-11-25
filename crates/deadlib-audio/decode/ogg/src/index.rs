@@ -192,12 +192,19 @@ pub struct OggIndex {
 
 #[inline(never)]
 fn group_pages(pages: &mut [IndexedPage], streams: &mut [StreamIndex]) {
-    // Reuse the physical ranges as counts, then stable destinations.
-    for stream in streams.iter_mut() {
-        stream.pages.end = 0;
-    }
-    for page in pages.iter() {
-        streams[page.stream].pages.end += 1;
+    // EOS records the physical end of each stream. Its sequence also gives the
+    // page count unless the index could contain a wrapped sequence number.
+    if pages.len() <= u32::MAX as usize {
+        for stream in streams.iter_mut() {
+            stream.pages.end = pages[stream.pages.end - 1].header.sequence as usize + 1;
+        }
+    } else {
+        for stream in streams.iter_mut() {
+            stream.pages.end = 0;
+        }
+        for page in pages.iter() {
+            streams[page.stream].pages.end += 1;
+        }
     }
     let mut position = 0;
     for stream in streams.iter_mut() {
