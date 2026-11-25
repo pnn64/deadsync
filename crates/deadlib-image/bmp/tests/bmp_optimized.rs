@@ -339,8 +339,16 @@ fn one_color_indices_require_zero_only_in_used_bits() {
 
 #[test]
 fn byte_indices_validate_short_palettes_without_including_padding() {
-    for width in [1usize, 2, 3, 5, 6, 7, 257] {
-        let height = 3;
+    // The 257-pixel rows span a full validation block and a final partial block.
+    for (width, height) in [
+        (1usize, 3),
+        (2, 3),
+        (3, 3),
+        (5, 3),
+        (6, 3),
+        (7, 3),
+        (257, 34),
+    ] {
         let pitch = width.div_ceil(4) * 4;
         for size in 1..=256 {
             let colors = palette(size);
