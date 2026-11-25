@@ -767,8 +767,9 @@ fn permute_interlace<const WORDS: usize, const FIXED_WIDTH: usize>(
                     pixels[dest * width..(dest + 1) * width].copy_from_slice(row);
                     break;
                 }
-                if FIXED_WIDTH == 1 {
-                    pixels[dest] = pixels[source];
+                if FIXED_WIDTH != 0 {
+                    let rows = pixels.as_chunks_mut::<FIXED_WIDTH>().0;
+                    rows[dest] = rows[source];
                 } else {
                     pixels.copy_within(source * width..(source + 1) * width, dest * width);
                 }
