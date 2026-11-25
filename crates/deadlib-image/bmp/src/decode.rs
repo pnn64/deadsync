@@ -151,15 +151,7 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 if tight_packed {
                     indices = unpack_contiguous(source, |byte| [byte >> 4, byte & 15])?;
                 } else {
-                    let pairs = width / 2;
-                    let has_tail = !width.is_multiple_of(2);
-                    for row in rows {
-                        indices
-                            .extend(row[..pairs].iter().flat_map(|&byte| [byte >> 4, byte & 15]));
-                        if has_tail {
-                            indices.push(row[pairs] >> 4);
-                        }
-                    }
+                    append_four_bit_rows(source, &header, &mut indices);
                 }
                 validate_indices(&indices)?;
             } else if tight_packed {
@@ -242,6 +234,43 @@ fn append_narrow_indexed<const WIDTH: usize>(
         indices.extend(rows.iter().rev().flat_map(pixels));
     }
     Ok(())
+}
+
+#[inline(never)]
+fn append_four_bit_rows(source: &[u8], header: &Header, indices: &mut Vec<u8>) {
+    let width = header.info.width as usize;
+    let top_down = header.info.top_down;
+    if width <= 4 {
+        let append = match width {
+            1 => append_narrow_nibbles::<1>,
+            2 => append_narrow_nibbles::<2>,
+            3 => append_narrow_nibbles::<3>,
+            _ => append_narrow_nibbles::<4>,
+        };
+        append(source, indices, top_down);
+        return;
+    }
+    let pairs = width / 2;
+    let has_tail = !width.is_multiple_of(2);
+    for row in display_rows(source, header.row_pitch, top_down) {
+        indices.extend(row[..pairs].iter().flat_map(|&byte| [byte >> 4, byte & 15]));
+        if has_tail {
+            indices.push(row[pairs] >> 4);
+        }
+    }
+}
+
+#[inline(never)]
+fn append_narrow_nibbles<const WIDTH: usize>(source: &[u8], indices: &mut Vec<u8>, top_down: bool) {
+    let rows = source.as_chunks::<4>().0.iter();
+    let unpack = |row: &[u8; 4]| {
+        std::array::from_fn::<_, WIDTH, _>(|i| (row[i / 2] >> (4 * (1 - i % 2))) & 15)
+    };
+    if top_down {
+        indices.extend(rows.flat_map(unpack));
+    } else {
+        indices.extend(rows.rev().flat_map(unpack));
+    }
 }
 
 #[inline(never)]
