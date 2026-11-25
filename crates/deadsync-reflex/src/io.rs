@@ -1,10 +1,10 @@
 use super::*;
 use config::{DeviceConfig, LightMode};
-use deadsync_input::devices::GamepadBackend;
 use deadlib_platform::{
     host_time,
-    input::{PadCode, PadId},
+    input::{PadCode, PadId, uuid_from_bytes},
 };
+use deadsync_input::devices::GamepadBackend;
 use hidapi::{DeviceInfo, HidApi, HidDevice};
 use protocol::{PID, VID, decode, light_packet};
 use std::{

@@ -1763,7 +1763,6 @@ dependencies = [
 name = "deadsync-reflex"
 version = "0.1.0"
 dependencies = [
- "deadlib-input-native",
  "deadlib-platform",
  "deadsync-input",
  "hidapi",
@@ -1888,7 +1887,6 @@ dependencies = [
 name = "deadsync-smx"
 version = "0.1.0"
 dependencies = [
- "deadlib-input-native",
  "deadlib-platform",
  "deadsync-core",
  "deadsync-gameplay",

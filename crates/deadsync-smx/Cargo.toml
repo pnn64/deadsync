@@ -8,7 +8,6 @@ license = "GPL-3.0"
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-input = { path = "../deadsync-input" }
-deadlib-input-native = { path = "../deadlib-input-native" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
 deadlib-platform = { path = "../deadlib-platform" }

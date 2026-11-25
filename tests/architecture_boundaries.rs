@@ -9016,6 +9016,26 @@ fn dedicated_controller_providers_stay_in_the_game() {
 }
 
 #[test]
+fn dedicated_controller_providers_are_independent_of_os_input_drivers() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for name in ["deadsync-smx", "deadsync-reflex", "deadsync-input-fsr"] {
+        let crate_dir = root.join("crates").join(name);
+        let manifest = read_source(crate_dir.join("Cargo.toml")).expect("crate manifest");
+        assert!(
+            !manifest.contains("deadlib-input-native"),
+            "{name} depends on the OS input backend crate"
+        );
+        for file in production_rust_files(&crate_dir.join("src")) {
+            assert!(
+                !production_source(&file).contains("deadlib_input_native"),
+                "{} imports the OS input backend crate",
+                file.display()
+            );
+        }
+    }
+}
+
+#[test]
 fn logical_input_imports_do_not_use_engine_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();

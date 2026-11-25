@@ -13,8 +13,7 @@ use rustmaniax_sdk::{
 };
 pub use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig, SmxInfo, SmxManager};
 
-use deadlib_input_native::uuid_from_bytes;
-use deadlib_platform::input::{PadCode, PadEvent, PadId};
+use deadlib_platform::input::{PadCode, PadEvent, PadId, uuid_from_bytes};
 pub use deadsync_input::devices::SmxPadPreset;
 use deadsync_input::devices::{GamepadBackend, GamepadSystemEvent};
 

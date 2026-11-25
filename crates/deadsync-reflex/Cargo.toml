@@ -6,7 +6,6 @@ license = "GPL-3.0"
 
 [dependencies]
 deadlib-platform = { path = "../deadlib-platform" }
-deadlib-input-native = { path = "../deadlib-input-native" }
 deadsync-input = { path = "../deadsync-input" }
 log = "0.4.35"
 serde = { version = "1.0.229", features = ["derive"] }

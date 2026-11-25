@@ -34,6 +34,27 @@ impl From<PadId> for usize {
     }
 }
 
+/// Derive the stable 16-byte device identity used by saved controller settings.
+#[inline(always)]
+#[must_use]
+pub fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
+    // Two independent FNV-1a hashes share one traversal of the identity bytes.
+    const OFF0: u64 = 0xcbf2_9ce4_8422_2325;
+    const OFF1: u64 = 0xaf63_dc4c_8601_ec8c;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+
+    let (mut a, mut b) = (OFF0, OFF1);
+    for &byte in bytes {
+        let byte = u64::from(byte);
+        a = (a ^ byte).wrapping_mul(PRIME);
+        b = (b ^ byte).wrapping_mul(PRIME);
+    }
+    let mut out = [0u8; 16];
+    out[..8].copy_from_slice(&a.to_le_bytes());
+    out[8..].copy_from_slice(&b.to_le_bytes());
+    out
+}
+
 /// Operating-system providers for native controller input.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadBackend {
