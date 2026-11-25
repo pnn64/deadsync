@@ -752,52 +752,58 @@ impl StreamDecoder {
                             self.animation_result(result, AnimationFault::Body)?;
                         }
                         let end = pos + self.left.min(input.len() - pos).min(self.input_left);
-                        let rows = self
-                            .rows
-                            .as_mut()
-                            .ok_or(Error::Invalid("missing image decoder"))?;
-                        while !rows.is_done() {
-                            let result = rows.feed(&input[pos..end]);
-                            let buffers_can_grow = rows.buffers_can_grow();
-                            let (used, event) = result.map_err(|error| {
-                                if frame_data {
-                                    self.animation_fault = Some(AnimationFault::Body);
-                                    // This limit is the frame's exact filtered size.
-                                    if error == Error::LimitExceeded {
-                                        return Error::Invalid("APNG frame data length");
+                        let start = pos;
+                        let result = (|| -> Result<bool, Error> {
+                            let rows = self
+                                .rows
+                                .as_mut()
+                                .ok_or(Error::Invalid("missing image decoder"))?;
+                            while !rows.is_done() {
+                                let result = rows.feed(&input[pos..end]);
+                                let buffers_can_grow = rows.buffers_can_grow();
+                                let (used, event) = result.map_err(|error| {
+                                    if frame_data {
+                                        self.animation_fault = Some(AnimationFault::Body);
+                                        // This limit is the frame's exact filtered size.
+                                        if error == Error::LimitExceeded {
+                                            return Error::Invalid("APNG frame data length");
+                                        }
                                     }
-                                }
-                                error
-                            })?;
-                            if used != 0 {
-                                self.crc.update(&input[pos..pos + used]);
-                                self.left -= used;
-                                self.input_left -= used;
+                                    error
+                                })?;
                                 pos += used;
-                            }
-                            if buffers_can_grow {
-                                self.peak_image_buffers =
-                                    self.peak_image_buffers.max(rows.memory_bytes());
-                            }
-                            if event {
+                                if buffers_can_grow {
+                                    self.peak_image_buffers =
+                                        self.peak_image_buffers.max(rows.memory_bytes());
+                                }
+                                if !event {
+                                    break;
+                                }
                                 if let Some(png) = png.as_deref_mut() {
                                     let kind = self
                                         .image_kind
                                         .ok_or(Error::Invalid("missing image decoder"))?;
                                     rows.copy_into(row_image(png, kind)?)?;
                                     rows.advance()?;
-                                    continue;
+                                } else {
+                                    return Ok(true);
                                 }
-                                return Ok(self.emit(Event::Row, pos));
                             }
-                            break;
-                        }
-                        if rows.is_done() {
-                            let n = end - pos;
-                            self.crc.update(&input[pos..end]);
+                            if rows.is_done() {
+                                pos = end;
+                            }
+                            Ok(false)
+                        })();
+                        // Commit the whole accepted span together, including
+                        // on error so APNG recovery replays only unread bytes.
+                        let n = pos - start;
+                        if n != 0 {
+                            self.crc.update(&input[start..pos]);
                             self.left -= n;
                             self.input_left -= n;
-                            pos = end;
+                        }
+                        if result? {
+                            return Ok(self.emit(Event::Row, pos));
                         }
                     } else {
                         let n = self.left.min(input.len() - pos).min(self.input_left);
