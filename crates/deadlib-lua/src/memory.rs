@@ -161,6 +161,10 @@ impl Memory {
             .map(|limit| (state.usage.bytes, state.peak, limit))
     }
 
+    pub(crate) fn uses_global_allocator(&self) -> bool {
+        self.owner().is_none()
+    }
+
     pub(crate) fn reserve_external(
         &self,
         bytes: impl FnOnce() -> usize,

@@ -889,6 +889,55 @@ impl Vm {
         }
         Ok(true)
     }
+
+    /// Copy a text replacement directly when it fits in the current buffer.
+    /// Hooks and native buffer observers still use the capture stack path.
+    fn append_replacement(&mut self, index: usize, replacement: StringId) -> bool {
+        let state = &mut self.substitutions[index];
+        let found = state.matched.as_ref().expect("substitution has a match");
+        let source = &self.strings.bytes[slot_index(state.source.0)];
+        let mut text: &[u8] = &self.strings.bytes[slot_index(replacement.0)];
+        let start = state.output.len();
+        let appended = (|| {
+            while let Some((&byte, rest)) = text.split_first() {
+                text = rest;
+                let bytes = if byte == b'%' {
+                    let (&escaped, rest) = text.split_first()?;
+                    text = rest;
+                    match escaped {
+                        b'0' => &source[found.start..found.end],
+                        b'1'..=b'9' => {
+                            let capture = found.capture(usize::from(escaped - b'1')).ok()?;
+                            &source[capture.range().ok()?]
+                        }
+                        0x80..=0xff => return None,
+                        _ => {
+                            if state.output.len() == io::LINE_BUFFER {
+                                return None;
+                            }
+                            state.output.push(escaped);
+                            continue;
+                        }
+                    }
+                } else {
+                    if state.output.len() == io::LINE_BUFFER {
+                        return None;
+                    }
+                    state.output.push(byte);
+                    continue;
+                };
+                if bytes.len() > io::LINE_BUFFER - state.output.len() {
+                    return None;
+                }
+                state.output.extend_from_slice(bytes);
+            }
+            Some(())
+        })();
+        if appended.is_none() {
+            state.output.truncate(start);
+        }
+        appended.is_some()
+    }
     fn substitution_complete(&mut self, index: usize, phase: u8) -> Result<Option<usize>, Error> {
         let queued = self.substitutions[index].actions.len();
         if phase == 0 {
@@ -1030,6 +1079,8 @@ impl Vm {
         // or hooks, consecutive matches run in this step until the first
         // buffer flush, keeping each call's work bounded by one buffer.
         let batch = self.budget.is_none() && self.hooks.mask == 0;
+        let direct_replacement =
+            self.registers.memory().uses_global_allocator() && self.sort_fast_context();
         loop {
             if self.substitutions[index].done
                 || self.substitutions[index].count >= self.substitutions[index].maximum
@@ -1061,6 +1112,13 @@ impl Vm {
                 let replacement =
                     self.argument(frame.vararg_start - 1, self.substitutions[index].top, 2);
                 match replacement {
+                    Value::String(text)
+                        if direct_replacement && self.append_replacement(index, text) =>
+                    {
+                        if !self.substitution_advance(index)? {
+                            return Ok(None);
+                        }
+                    }
                     Value::String(_) | Value::Number(_) => {
                         let text = self.string_argument(frame.vararg_start - 1, frame.argc(), 2)?;
                         if !self.replacement_string(index, text, 0)? {
