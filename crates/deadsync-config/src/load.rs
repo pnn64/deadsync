@@ -20,6 +20,7 @@ use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;
 use deadlib_render_core::{BackendType, PresentModePolicy};
+use deadsync_input::devices::SmxPadPreset;
 use deadsync_input::parse_keycode_to_key;
 use deadsync_lights::{
     SerialPortName, parse_driver_or_default, parse_gameplay_pad_lights_or_default,
@@ -190,7 +191,7 @@ pub fn load_app_config(conf: &SimpleIni, default: Config) -> Config {
             legacy_unhinged_policy: PresentModePolicy::Immediate,
             parse_video_renderer: |value| BackendType::from_str(value).ok(),
             parse_gamepad_backend: |value| WindowsPadBackend::from_str(value).ok(),
-            parse_smx_pad_config: |value| deadsync_smx::SmxPadPreset::from_str(value).ok(),
+            parse_smx_pad_config: |value| SmxPadPreset::from_str(value).ok(),
             parse_linux_backend: |value| LinuxAudioBackend::from_str(value).ok(),
             parse_audio_output_mode: |value| AudioOutputMode::from_str(value).ok(),
             parse_input_debounce_seconds: deadsync_input::parse_input_debounce_seconds,
@@ -308,7 +309,7 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
 }
 
 const fn apply_system_hardware_opts(
-    hardware: SystemInputHardwareLoadOptions<WindowsPadBackend, deadsync_smx::SmxPadPreset>,
+    hardware: SystemInputHardwareLoadOptions<WindowsPadBackend, SmxPadPreset>,
     cfg: &mut Config,
 ) {
     cfg.windows_gamepad_backend = hardware.gamepad_backend;

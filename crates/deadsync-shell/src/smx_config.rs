@@ -1,9 +1,9 @@
+use deadsync_input::devices::SmxPadPreset;
 use deadsync_profile::pad_config;
 use deadsync_profile::pad_config_sync::AppliedPadConfig;
 use deadsync_smx::SmxInfo;
-use deadsync_smx::SmxPadPreset;
+use deadsync_theme::Screen;
 use deadsync_theme::views::{SmxAssignmentPadView, SmxAssignmentView, SmxGifCatalogView};
-use deadsync_theme::Screen as Screen;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SmxAssignmentSource {
@@ -69,15 +69,15 @@ pub fn smx_gif_catalog_view() -> SmxGifCatalogView {
 }
 
 pub fn apply_smx_underglow() {
-    let lone_pad = deadsync_smx::get_info(0).connected ^ deadsync_smx::get_info(1).connected;
     let cfg = deadsync_config::runtime::get();
-    let colors = deadsync_theme_simply_love::color::underglow_rgba(cfg.theme_color, lone_pad);
-    if let Some(plan) =
-        deadsync_config::runtime_state::smx_underglow_colors_from_config(&cfg, colors)
-    {
-        deadsync_smx::set_platform_lights_grb(plan.grb);
-        deadsync_smx::set_platform_lights_solid(plan.colors);
+    if !cfg.smx_input || !cfg.smx_underglow_theme {
+        return;
     }
+
+    let lone_pad = deadsync_smx::get_info(0).connected ^ deadsync_smx::get_info(1).connected;
+    let colors = deadsync_theme_simply_love::color::underglow_rgba(cfg.theme_color, lone_pad);
+    deadsync_smx::set_platform_lights_grb(cfg.smx_underglow_grb);
+    deadsync_smx::set_platform_lights_solid(deadsync_smx::platform_light_colors_from_srgb(colors));
 }
 
 pub fn set_smx_underglow_theme(enabled: bool) {

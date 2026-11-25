@@ -3,7 +3,6 @@
 //! Provides a process-wide `SmxManager` instance that both the input backend
 //! and the FSR monitor can use. Events are routed to registered listeners.
 
-use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
@@ -15,8 +14,9 @@ use rustmaniax_sdk::{
 pub use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig, SmxInfo, SmxManager};
 
 use deadlib_input_native::uuid_from_bytes;
-use deadsync_input::devices::{GamepadBackend, GamepadSystemEvent};
 use deadlib_platform::input::{PadCode, PadEvent, PadId};
+pub use deadsync_input::devices::SmxPadPreset;
+use deadsync_input::devices::{GamepadBackend, GamepadSystemEvent};
 
 pub mod gameplay_driver;
 pub mod gifs;
@@ -405,58 +405,6 @@ pub fn is_smx_usb_device(vendor: Option<u16>, product: Option<u16>) -> bool {
 #[must_use]
 pub fn native_smx_owns_device(vendor: Option<u16>, product: Option<u16>, smx_input: bool) -> bool {
     smx_input && is_smx_usb_device(vendor, product)
-}
-
-/// Built-in `StepManiaX` threshold preset (sensitivity), mirroring the official
-/// SMX config tool's Low / Normal / High.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SmxPadPreset {
-    Low,
-    Medium,
-    High,
-}
-
-impl SmxPadPreset {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Low => "Low",
-            Self::Medium => "Medium",
-            Self::High => "High",
-        }
-    }
-
-    /// 0/1/2 index used by the options choice list.
-    #[must_use]
-    pub const fn index(self) -> usize {
-        match self {
-            Self::Low => 0,
-            Self::Medium => 1,
-            Self::High => 2,
-        }
-    }
-
-    #[must_use]
-    pub const fn from_index(i: usize) -> Self {
-        match i {
-            1 => Self::Medium,
-            2 => Self::High,
-            _ => Self::Low,
-        }
-    }
-}
-
-impl FromStr for SmxPadPreset {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "low" => Ok(Self::Low),
-            "medium" => Ok(Self::Medium),
-            "high" => Ok(Self::High),
-            _ => Err(()),
-        }
-    }
 }
 
 /// The sensor type of a connected pad (`None` if its config isn't available yet).
@@ -1131,6 +1079,15 @@ pub fn set_platform_lights_grb(grb: bool) {
     PLATFORM_LIGHTS_GRB.store(grb, Ordering::Relaxed);
 }
 
+/// Convert screen colors for both pad slots to platform LED colors.
+#[must_use]
+pub fn platform_light_colors_from_srgb(colors: [[f32; 4]; 2]) -> [Option<[u8; 3]>; 2] {
+    colors.map(|[r, g, b, _]| {
+        let rgb = [r, g, b].map(|channel| (channel * 255.0).round() as u8);
+        Some(gifs::saturate_for_leds(rgb))
+    })
+}
+
 /// Fill each pad's edge LED strip with a solid colour by slot (`colors[0]` = P1
 /// slot, `colors[1]` = P2 slot; `None` leaves that pad's strip unchanged).
 /// One-shot; re-send to hold the colour. Takes RGB; the wire bytes follow the
@@ -1380,6 +1337,20 @@ mod tests {
         player_light_frame, preset_thresholds,
     };
     use rustmaniax_sdk::SmxInfo;
+
+    #[test]
+    fn platform_colors_convert_screen_channels_for_each_pad() {
+        let pink = [1.0, 87.0 / 255.0, 125.0 / 255.0, 0.5];
+        let blue = [0.0, 0.0, 1.0, 1.0];
+        assert_eq!(
+            super::platform_light_colors_from_srgb([pink, blue]),
+            [Some([255, 24, 53]), Some([0, 0, 255])]
+        );
+        assert_eq!(
+            super::platform_light_colors_from_srgb([pink; 2]),
+            [Some([255, 24, 53]); 2]
+        );
+    }
 
     #[test]
     fn brightness_floor_keeps_low_percents_visible() {

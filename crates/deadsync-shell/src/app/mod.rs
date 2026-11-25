@@ -351,7 +351,7 @@ impl FramePolicy {
 
 #[derive(Clone, Copy)]
 struct SmxFramePolicy {
-    default_pad_config: deadsync_smx::SmxPadPreset,
+    default_pad_config: logical_input::devices::SmxPadPreset,
     default_light_brightness: u8,
     input: bool,
     manages_pad_config: bool,

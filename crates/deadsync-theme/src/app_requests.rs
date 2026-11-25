@@ -25,11 +25,11 @@ use deadsync_gameplay::GameplayAction;
 use deadsync_gameplay::exit_route::{
     GameplayExitRoute, GameplayExitRouteContext, resolve_gameplay_exit_route,
 };
+use deadsync_input::devices::SmxPadPreset;
 use deadsync_input::{InputBinding, VirtualAction};
 use deadsync_profile::PlayerSide;
 pub use deadsync_profile::requests::ProfileRequest;
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
-use deadsync_smx::SmxPadPreset;
 use std::path::PathBuf;
 use std::sync::Arc;
 

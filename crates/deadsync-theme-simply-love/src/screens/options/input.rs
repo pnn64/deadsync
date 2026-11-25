@@ -557,7 +557,7 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::SmxDefaultPadConfig {
             action = Some(options_config_effect(
                 crate::SimplyLoveOptionsConfigRequest::SmxDefaultPadConfig(
-                    deadsync_smx::SmxPadPreset::from_index(new_index),
+                    deadsync_input::devices::SmxPadPreset::from_index(new_index),
                 ),
             ));
         }

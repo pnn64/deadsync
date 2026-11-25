@@ -872,14 +872,18 @@ mod tests {
     }
 
     #[test]
-    fn saved_content_round_trips_smx_underglow_options() {
+    fn saved_content_round_trips_smx_preset_and_lighting_options() {
+        use deadsync_input::devices::SmxPadPreset;
+
         let mut cfg = Config::default();
+        cfg.smx_default_pad_config = SmxPadPreset::Medium;
         cfg.smx_underglow_theme = true;
         cfg.smx_underglow_grb = true;
         cfg.smx_pad_gifs_pack = crate::options::SmxPackName::parse("senpi-basic");
         cfg.smx_judge_gifs_pack = crate::options::SmxPackName::parse("none");
         let content =
             build_saved_app_config_file(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
+        assert!(content.contains("SmxDefaultPadConfig=Medium\n"));
         assert!(content.contains("SmxUnderglowTheme=1"));
         assert!(content.contains("SmxUnderglowGrb=1"));
         assert!(content.contains("SmxPadGifsPack=senpi-basic"));
@@ -889,7 +893,8 @@ mod tests {
         conf.load_str(&content);
         let defaults = system_options(&Config::default());
         assert!(!defaults.smx_underglow_theme && !defaults.smx_underglow_grb);
-        let loaded = crate::options::load_system_options(&conf, defaults);
+        let loaded = crate::load::load_app_config(&conf, Config::default());
+        assert_eq!(loaded.smx_default_pad_config, SmxPadPreset::Medium);
         assert!(loaded.smx_underglow_theme);
         assert!(loaded.smx_underglow_grb);
         assert_eq!(loaded.smx_pad_gifs_pack.as_str(), "senpi-basic");

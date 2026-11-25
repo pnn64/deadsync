@@ -2615,7 +2615,7 @@ fn generic_theme_contract_stays_runtime_independent() {
                 "deadsync-config" | "deadsync_config" | "deadsync-gameplay" | "deadsync_gameplay"
                 | "deadsync-online" | "deadsync_online" | "deadsync-profile" | "deadsync_profile"
                 | "deadsync-simfile" | "deadsync_simfile" | "deadlib-input-native" | "deadlib_input_native"
-                | "deadlib-platform" | "deadlib_platform" | "deadsync-smx" | "deadsync_smx")
+                | "deadlib-platform" | "deadlib_platform")
             {
                 // The request protocol names the owning crates' data types.
                 continue;
@@ -4469,11 +4469,35 @@ fn select_music_smx_pad_profile_hardware_is_shell_owned() {
 }
 
 #[test]
-fn simply_love_smx_imports_are_preset_types_only() {
+fn smx_sdk_stays_out_of_settings_and_presentation() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let theme = root.join("crates/deadsync-theme-simply-love");
-    let manifest = read_source(theme.join("Cargo.toml"))
-        .expect("Simply Love manifest should be readable");
+    for name in [
+        "deadsync-input",
+        "deadsync-config",
+        "deadsync-profile",
+        "deadsync-theme",
+        "deadsync-theme-simply-love",
+    ] {
+        let crate_dir = root.join("crates").join(name);
+        let manifest = read_source(crate_dir.join("Cargo.toml")).expect("crate manifest");
+        assert!(
+            !manifest.contains("deadsync-smx") && !manifest.contains("rustmaniax-sdk"),
+            "{name} depends on the StepManiaX runtime"
+        );
+        for file in production_rust_files(&crate_dir.join("src")) {
+            let source = production_source(&file);
+            assert!(
+                !source.contains("deadsync_smx") && !source.contains("rustmaniax_sdk"),
+                "{} imports the StepManiaX runtime",
+                file.display()
+            );
+        }
+    }
+}
+
+#[test]
+fn shell_supplies_smx_catalog_and_input_labels() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let generic_views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
     let input_contract = read_source(root.join("crates/deadsync-input/src/lib.rs"))
@@ -4483,25 +4507,6 @@ fn simply_love_smx_imports_are_preset_types_only() {
     let shell_smx = read_source(root.join("crates/deadsync-shell/src/smx_config.rs"))
         .expect("shell SMX service should be readable");
 
-    assert!(
-        manifest.contains("deadsync-smx"),
-        "Simply Love must import SMX preset types from their owner"
-    );
-    let mut failures = Vec::new();
-    for file in rust_files(&theme.join("src")) {
-        let source = read_source(&file).expect("theme source should be readable");
-        if source
-            .replace("deadsync_smx::SmxPadPreset", "")
-            .contains("deadsync_smx")
-        {
-            failures.push(rel_path(&root, &file));
-        }
-    }
-    assert!(
-        failures.is_empty(),
-        "Simply Love still imports the SMX backend:\n{}",
-        failures.join("\n")
-    );
     assert!(
         generic_views.contains("pub struct SmxGifCatalogView")
             && generic_views.contains("pub background_packs: Vec<String>")
@@ -4542,6 +4547,7 @@ fn smx_hardware_side_effects_are_shell_owned_not_config_owned() {
     for forbidden in [
         "deadsync_smx::set_platform_lights_grb",
         "deadsync_smx::set_platform_lights_solid",
+        "deadsync_smx::platform_light_colors_from_srgb",
         "deadsync_smx::set_player_assignment",
         "deadsync_smx::connected_serials",
         "deadsync_smx::get_info",

@@ -21,6 +21,7 @@ use crate::{
 use deadlib_platform::lock_wait::{LockWaitStats, lock_mutex};
 use deadsync_core::audio::AudioMixLevels;
 use deadsync_input::Keymap;
+use deadsync_input::devices::SmxPadPreset;
 use null_or_die::BiasCfg;
 use std::path::Path;
 use std::sync::{
@@ -130,12 +131,6 @@ pub struct DedicatedMenuButtonsUpdate {
     pub changed: bool,
     pub dedicated: DedicatedMenuNavigation,
     pub three_key_navigation: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SmxUnderglowColors {
-    pub grb: bool,
-    pub colors: [Option<[u8; 3]>; 2],
 }
 
 pub struct RuntimeConfigStore {
@@ -381,7 +376,7 @@ impl RuntimeConfigStore {
         self.update_config(|cfg| config_update::set_smx_idle_lights_black(cfg, black))
     }
 
-    pub fn update_smx_default_pad_config(&self, preset: deadsync_smx::SmxPadPreset) -> bool {
+    pub fn update_smx_default_pad_config(&self, preset: SmxPadPreset) -> bool {
         self.update_config(|cfg| config_update::set_smx_default_pad_config(cfg, preset))
     }
 
@@ -630,32 +625,6 @@ pub const fn audio_mix_levels_from_config(cfg: &Config) -> AudioMixLevels {
         sfx_volume: cfg.sfx_volume,
         assist_tick_volume: cfg.assist_tick_volume,
     }
-}
-
-#[must_use]
-pub fn smx_underglow_colors_from_config(
-    cfg: &Config,
-    theme_colors: [[f32; 4]; 2],
-) -> Option<SmxUnderglowColors> {
-    if !cfg.smx_input || !cfg.smx_underglow_theme {
-        return None;
-    }
-
-    Some(SmxUnderglowColors {
-        grb: cfg.smx_underglow_grb,
-        colors: theme_colors.map(|rgba| {
-            // Screen colors are sRGB; expand gamma for the linear LED strips.
-            Some(deadsync_smx::gifs::saturate_for_leds([
-                color_component_to_u8(rgba[0]),
-                color_component_to_u8(rgba[1]),
-                color_component_to_u8(rgba[2]),
-            ]))
-        }),
-    })
-}
-
-fn color_component_to_u8(c: f32) -> u8 {
-    (c * 255.0).round() as u8
 }
 
 impl Default for RuntimeConfigStore {
@@ -1157,33 +1126,10 @@ SmxP1Serial= pad-1\n"),
     }
 
     #[test]
-    fn runtime_config_store_plans_smx_underglow_colors() {
+    fn runtime_config_store_updates_theme_color() {
         let store = RuntimeConfigStore::new();
-        let colors = [[1.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 1.0]];
-        assert_eq!(
-            smx_underglow_colors_from_config(&store.config(), colors),
-            None
-        );
-
-        store.update_config(|cfg| {
-            cfg.smx_input = true;
-            cfg.smx_underglow_theme = true;
-            cfg.smx_underglow_grb = true;
-            cfg.theme_color = 4;
-            true
-        });
-
-        let plan = smx_underglow_colors_from_config(&store.config(), colors)
-            .expect("enabled underglow should produce colors");
-        assert!(plan.grb);
-        assert_eq!(plan.colors[0], Some([255, 0, 0]));
-        assert_eq!(plan.colors[1], Some([0, 0, 255]));
-
-        let lone_plan = smx_underglow_colors_from_config(&store.config(), [colors[0]; 2])
-            .expect("enabled underglow should produce colors");
-        assert_eq!(lone_plan.colors[0], lone_plan.colors[1]);
-
         assert!(store.update_theme_color(5));
+        assert_eq!(store.config().theme_color, 5);
         assert!(!store.update_theme_color(5));
     }
 
@@ -1222,12 +1168,9 @@ SmxP1Serial= pad-1\n"),
     fn runtime_config_store_updates_smx_defaults() {
         let store = RuntimeConfigStore::new();
 
-        assert!(store.update_smx_default_pad_config(deadsync_smx::SmxPadPreset::High));
-        assert_eq!(
-            store.config().smx_default_pad_config,
-            deadsync_smx::SmxPadPreset::High
-        );
-        assert!(!store.update_smx_default_pad_config(deadsync_smx::SmxPadPreset::High));
+        assert!(store.update_smx_default_pad_config(SmxPadPreset::High));
+        assert_eq!(store.config().smx_default_pad_config, SmxPadPreset::High);
+        assert!(!store.update_smx_default_pad_config(SmxPadPreset::High));
 
         assert!(store.update_smx_default_light_brightness(42));
         assert_eq!(store.config().smx_default_light_brightness, 42);

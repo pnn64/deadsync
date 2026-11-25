@@ -20,11 +20,11 @@ use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;
 use deadlib_render_core::{BackendType, PresentModePolicy};
+use deadsync_core::color::DifficultyColorScheme;
+use deadsync_input::devices::SmxPadPreset;
 use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering, SerialPortName,
 };
-use deadsync_smx::SmxPadPreset;
-use deadsync_core::color::DifficultyColorScheme;
 use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 use winit::keyboard::KeyCode;
 

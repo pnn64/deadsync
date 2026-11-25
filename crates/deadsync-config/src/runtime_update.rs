@@ -25,6 +25,7 @@ use deadlib_platform::logging;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_core::audio::AudioMixLevels;
 use deadsync_core::color::DifficultyColorScheme;
+use deadsync_input::devices::SmxPadPreset;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use log::warn;
 use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
@@ -141,7 +142,7 @@ runtime_config_fn!(pub fn update_smx_panel_lights(enabled: bool) => update_smx_p
 runtime_config_fn!(pub fn update_smx_idle_lights_black(black: bool) => update_smx_idle_lights_black);
 runtime_config_fn!(pub fn update_smx_pad_gifs_pack(pack: crate::options::SmxPackName) => update_smx_pad_gifs_pack);
 runtime_config_fn!(pub fn update_smx_judge_gifs_pack(pack: crate::options::SmxPackName) => update_smx_judge_gifs_pack);
-runtime_config_fn!(pub fn update_smx_default_pad_config(preset: deadsync_smx::SmxPadPreset) => update_smx_default_pad_config);
+runtime_config_fn!(pub fn update_smx_default_pad_config(preset: SmxPadPreset) => update_smx_default_pad_config);
 runtime_config_fn!(pub fn update_smx_default_light_brightness(percent: u8) => update_smx_default_light_brightness);
 runtime_config_fn2!(pub fn update_default_profiles(p1: Option<String>, p2: Option<String>) => set_default_profiles);
 update_config_fn!(pub fn update_keyboard_features(enabled: bool) => set_keyboard_features);

@@ -18,7 +18,6 @@ deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
 deadsync-simfile = { path = "../deadsync-simfile" }
-deadsync-smx = { path = "../deadsync-smx" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 deadlib-input-native = { path = "../deadlib-input-native" }
