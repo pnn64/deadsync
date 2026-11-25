@@ -1483,32 +1483,18 @@ impl Vm {
         let threads = self
             .threads
             .entries()
-            .filter(|(index, _)| {
-                self.threads
-                    .key(*index)
-                    .is_some_and(|key| self.threads.marked(key))
-            })
+            .filter(|(index, _)| self.threads.slot_marked(*index))
             .count();
         let tables = self
             .tables
             .entries()
-            .filter(|(index, table)| {
-                table.metatable().is_some()
-                    && self
-                        .tables
-                        .key(*index)
-                        .is_some_and(|key| self.tables.marked(key))
-            })
+            .filter(|(index, table)| table.metatable().is_some() && self.tables.slot_marked(*index))
             .count();
         let cells = self
             .upvalues
             .entries()
             .filter(|(index, cell)| {
-                matches!(cell, Cell::Open(..))
-                    && self
-                        .upvalues
-                        .key(*index)
-                        .is_some_and(|key| self.upvalues.marked(key))
+                matches!(cell, Cell::Open(..)) && self.upvalues.slot_marked(*index)
             })
             .count();
         self.reserve_trace_work(
@@ -1519,29 +1505,19 @@ impl Vm {
                 .saturating_add(self.seed_gc_root_count()),
         )?;
         for index in 0..self.threads.len() {
-            if let Some(key) = self.threads.key(index)
-                && self.threads.marked(key)
-            {
-                work.push(Trace::ThreadAgain(ThreadId(key)));
+            if self.threads.slot_marked(index) {
+                work.push(Trace::ThreadAgain(ThreadId(
+                    self.threads.key(index).unwrap(),
+                )));
             }
         }
         for (index, table) in self.tables.entries() {
-            if table.metatable().is_some()
-                && self
-                    .tables
-                    .key(index)
-                    .is_some_and(|key| self.tables.marked(key))
-            {
+            if table.metatable().is_some() && self.tables.slot_marked(index) {
                 work.push(Trace::TableAgain(TableId(self.tables.key(index).unwrap())));
             }
         }
         for (index, cell) in self.upvalues.entries() {
-            if matches!(cell, Cell::Open(..))
-                && self
-                    .upvalues
-                    .key(index)
-                    .is_some_and(|key| self.upvalues.marked(key))
-            {
+            if matches!(cell, Cell::Open(..)) && self.upvalues.slot_marked(index) {
                 work.push(Trace::CellAgain(index));
             }
         }
@@ -1561,7 +1537,7 @@ impl Vm {
         self.trace_graph(work)?;
         self.clear_weak_tables();
         for (i, t) in self.threads.entries() {
-            if self.threads.key(i).is_some_and(|k| !self.threads.marked(k)) {
+            if !self.threads.slot_marked(i) {
                 for &cell in &t.open_upvalues {
                     if let Cell::Open(_, r) = self.upvalues[cell as usize] {
                         self.upvalues[cell as usize] = Cell::Closed(t.registers[r]);

@@ -214,8 +214,12 @@ impl<T> Arena<T> {
         true
     }
     pub fn marked(&self, key: u64) -> bool {
-        let slot = index(key);
-        self.contains(key) && self.marks[slot / 64] & (1u64 << (slot % 64)) != 0
+        self.slot_marked(index(key)) && self.contains(key)
+    }
+    pub(crate) fn slot_marked(&self, slot: usize) -> bool {
+        self.marks
+            .get(slot / 64)
+            .is_some_and(|bits| bits & (1u64 << (slot % 64)) != 0)
     }
     pub(crate) fn next_marked_slot(&self, start: usize) -> Option<usize> {
         let word = start / 64;
@@ -364,6 +368,8 @@ mod tests {
         assert!(!arena.marked(c));
         assert_eq!(arena.get(c), Some(&11));
         assert_eq!(arena.live_len(), 2);
+        assert!(arena.mark(c));
+        assert!(!arena.marked(a));
         arena.clear_marks();
         assert!(!arena.marked(b));
     }
