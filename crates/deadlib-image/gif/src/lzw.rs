@@ -317,8 +317,13 @@ impl Encoder {
             if pixels <= 1152 {
                 return Self::encode_hashed::<4096>(rows, minimum, emit);
             }
-            if minimum == 4 && pixels <= 2048 {
-                return Self::encode_direct::<4, { direct_table_slots(2048, 16) }>(rows, emit);
+            if minimum == 4 {
+                if pixels <= 1536 {
+                    return Self::encode_direct::<4, { direct_table_slots(1536, 16) }>(rows, emit);
+                }
+                if pixels <= 2048 {
+                    return Self::encode_direct::<4, { direct_table_slots(2048, 16) }>(rows, emit);
+                }
             }
             return Self::encode_hashed::<8192>(rows, minimum, emit);
         }
