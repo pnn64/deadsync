@@ -685,6 +685,7 @@ pub(crate) fn interlace_rows(height: usize) -> impl Iterator<Item = usize> {
         .flat_map(move |(start, step)| (start..height).step_by(step))
 }
 
+#[inline(never)]
 fn deinterlace(
     pixels: &mut [u8],
     width: usize,
@@ -696,6 +697,12 @@ fn deinterlace(
     }
     if height <= 64 {
         permute_interlace::<1, false>(pixels, width, height, row)
+    } else if height <= 1024 {
+        if width == 1 {
+            permute_interlace::<16, true>(pixels, width, height, row)
+        } else {
+            permute_interlace::<16, false>(pixels, width, height, row)
+        }
     } else if width == 1 {
         permute_interlace::<1024, true>(pixels, width, height, row)
     } else {
@@ -845,7 +852,9 @@ mod tests {
     #[test]
     fn interlace_permutation_all_pass_tails_and_long_cycles() {
         let mut row = Vec::new();
-        for height in (1..=257).chain([511, 512, 513, 8193, 65535, 17, 17, 3, 65, 2, 1]) {
+        for height in (1..=257).chain([
+            511, 512, 513, 1023, 1024, 1025, 8193, 65535, 17, 17, 3, 65, 2, 1,
+        ]) {
             for width in [1, 3, 17, 64, 65] {
                 let expected: Vec<_> = (0..height)
                     .flat_map(|y| (0..width).map(move |x| ((y * 137 + x * 71) % 251) as u8))
