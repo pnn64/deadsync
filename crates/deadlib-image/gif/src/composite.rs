@@ -359,7 +359,13 @@ impl Compositor {
         let has_glyphs = glyph_count != 0 && text.data.iter().any(|block| !block.is_empty());
         let background = text.background_index;
         let foreground = text.foreground_index;
-        let single_color = !has_glyphs || background == foreground;
+        let single_color = !has_glyphs
+            || background == foreground
+            || (self.palette[usize::from(background)] == self.palette[usize::from(foreground)]
+                && text
+                    .control
+                    .and_then(|c| c.transparent_index)
+                    .is_none_or(|index| index != background && index != foreground));
         let coverage_height = if single_color { 0 } else { rect.h };
         if !single_color {
             let visible = rect.w * rect.h;
