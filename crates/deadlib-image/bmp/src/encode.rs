@@ -248,6 +248,15 @@ fn append_indexed_rows(
         }
         return;
     }
+    if chunk_pixels == 3 || chunk_pixels == 4 {
+        let append = if chunk_pixels == 3 {
+            append_indexed_twelve_byte_rows::<3>
+        } else {
+            append_indexed_twelve_byte_rows::<4>
+        };
+        append(output, indices, &bgr, top_down);
+        return;
+    }
     let mut rows = indices.chunks_exact(chunk_pixels);
     while let Some(row) = if top_down {
         rows.next()
@@ -259,6 +268,29 @@ fn append_indexed_rows(
             [blue, green, red]
         }));
         output.extend_from_slice(padding);
+    }
+}
+
+#[inline(never)]
+fn append_indexed_twelve_byte_rows<const WIDTH: usize>(
+    output: &mut Vec<u8>,
+    indices: &[u8],
+    bgr: &[u32; 256],
+    top_down: bool,
+) {
+    let rows = indices.as_chunks::<WIDTH>().0.iter();
+    let pack = |row: &[u8; WIDTH]| {
+        let mut bytes = [0; 12];
+        for (&index, pixel) in row.iter().zip(bytes.as_chunks_mut::<3>().0) {
+            let [blue, green, red, _] = bgr[usize::from(index)].to_le_bytes();
+            *pixel = [blue, green, red];
+        }
+        bytes
+    };
+    if top_down {
+        output.extend(rows.flat_map(pack));
+    } else {
+        output.extend(rows.rev().flat_map(pack));
     }
 }
 
