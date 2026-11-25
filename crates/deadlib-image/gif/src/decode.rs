@@ -227,6 +227,18 @@ impl Decoder {
         input: &[u8],
         external_palette: Option<&Palette>,
     ) -> Result<Progress, Error> {
+        // An input fragment entirely inside the current image sub-block
+        // cannot complete a GIF event.
+        if self.state == State::ImageData && !input.is_empty() && input.len() < self.wanted {
+            charge(&mut self.remaining_input_bytes, input.len())?;
+            let pixels = usize::from(self.frame.width) * usize::from(self.frame.height);
+            self.lzw.update(input, &mut self.frame.indices, pixels)?;
+            self.wanted -= input.len();
+            return Ok(Progress {
+                consumed: input.len(),
+                event: None,
+            });
+        }
         let mut at = 0;
         let event = 'events: loop {
             match self.state {
