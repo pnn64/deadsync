@@ -734,29 +734,37 @@ fn permute_interlace<const WORDS: usize, const SINGLE_PIXEL: bool>(
         let pass = passes[dest & 7];
         (pass >> 2) + (dest >> (pass & 3))
     };
-    for start in 0..height {
-        if visited[word(start)] & (1 << (start % 64)) != 0 {
-            continue;
-        }
-        let mut source = source_row(start);
-        if source == start {
-            continue;
-        }
-        row.copy_from_slice(&pixels[start * width..(start + 1) * width]);
-        let mut dest = start;
+    let word_count = if WORDS == 1 { 1 } else { height.div_ceil(64) };
+    for word_index in 0..word_count {
+        let base = word_index * 64;
+        let end = (base + 64).min(height);
         loop {
-            visited[word(dest)] |= 1 << (dest % 64);
-            if source == start {
-                pixels[dest * width..(dest + 1) * width].copy_from_slice(row);
+            let bit = (!visited[word_index]).trailing_zeros();
+            let start = base + bit as usize;
+            if start >= end {
                 break;
             }
-            if SINGLE_PIXEL {
-                pixels[dest] = pixels[source];
-            } else {
-                pixels.copy_within(source * width..(source + 1) * width, dest * width);
+            let mut source = source_row(start);
+            if source == start {
+                visited[word_index] |= 1 << bit;
+                continue;
             }
-            dest = source;
-            source = source_row(dest);
+            row.copy_from_slice(&pixels[start * width..(start + 1) * width]);
+            let mut dest = start;
+            loop {
+                visited[word(dest)] |= 1 << (dest % 64);
+                if source == start {
+                    pixels[dest * width..(dest + 1) * width].copy_from_slice(row);
+                    break;
+                }
+                if SINGLE_PIXEL {
+                    pixels[dest] = pixels[source];
+                } else {
+                    pixels.copy_within(source * width..(source + 1) * width, dest * width);
+                }
+                dest = source;
+                source = source_row(dest);
+            }
         }
     }
     Ok(())
