@@ -11,7 +11,6 @@ use deadsync_assets::gameplay_presentation::{
 use deadsync_assets::gameplay_stage::{ActiveGameplayStage, GameplayStageAssets};
 use deadsync_config::app_config::Config;
 use deadsync_gameplay::HoldToExitKey;
-use deadsync_online::gameplay_lobby::GameplayLobbySession;
 use deadsync_theme::views::{GameplayStageIntro, GameplayStageView};
 
 use crate::gameplay::GAMEPLAY_HUD;
@@ -19,13 +18,14 @@ use crate::presentation::Layout;
 use crate::resources::MENU_NORMAL_FONT;
 
 impl crate::OpenItgTheme {
-    pub fn mount_gameplay(
+    pub fn mount_gameplay<L>(
         stage: &ActiveGameplayStage,
         mut assets: GameplayStageAssets,
         view: &GameplayStageView,
         config: &Config,
         init: Option<GameplayPresentationInit>,
-    ) -> StandardGameplay<GameplayLobbySession> {
+        lobby_code: fn(&L) -> Option<&str>,
+    ) -> StandardGameplay<L> {
         let (round, badge) = match view.intro {
             GameplayStageIntro::Song { round, .. } => (round, Arc::from("EVENT")),
             GameplayStageIntro::Course { number, .. } => {
@@ -57,14 +57,7 @@ impl crate::OpenItgTheme {
                 round,
                 replay_status,
                 push_label,
-                lobby_code: |lobby| {
-                    lobby
-                        .runtime_view()
-                        .snapshot
-                        .joined_lobby
-                        .as_ref()
-                        .map(|lobby| lobby.code.as_str())
-                },
+                lobby_code,
             },
         )
     }

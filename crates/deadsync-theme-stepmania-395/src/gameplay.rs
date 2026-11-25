@@ -11,7 +11,6 @@ use deadsync_core::hud_style::{
     ComboArtworkStyle, FieldFeedbackStyle, HoldFeedbackStyle, TapFeedbackTween,
 };
 use deadsync_gameplay::HoldToExitKey;
-use deadsync_online::gameplay_lobby::GameplayLobbySession;
 use deadsync_theme::views::{
     GameplayBackgroundWarningView, GameplayDifficultyView, GameplayHoldAtlas, GameplayHud,
     GameplayHudMotion, GameplayLifeView, GameplayScoreView, GameplaySongMeterView,
@@ -22,13 +21,14 @@ use crate::presentation::Layout;
 use crate::resources::{COMBO_FONT, NORMAL_FONT, PERCENT_FONT, SCORE_FONT};
 
 impl crate::StepManiaTheme {
-    pub fn mount_gameplay(
+    pub fn mount_gameplay<L>(
         stage: &ActiveGameplayStage,
         mut assets: GameplayStageAssets,
         view: &GameplayStageView,
         config: &Config,
         init: Option<GameplayPresentationInit>,
-    ) -> StandardGameplay<GameplayLobbySession> {
+        lobby_code: fn(&L) -> Option<&str>,
+    ) -> StandardGameplay<L> {
         let (round, badge) = match view.intro {
             GameplayStageIntro::Song { round, ref event_name } => (
                 round,
@@ -57,14 +57,7 @@ impl crate::StepManiaTheme {
                 round,
                 replay_status,
                 push_label,
-                lobby_code: |lobby| {
-                    lobby
-                        .runtime_view()
-                        .snapshot
-                        .joined_lobby
-                        .as_ref()
-                        .map(|lobby| lobby.code.as_str())
-                },
+                lobby_code,
             },
         )
     }

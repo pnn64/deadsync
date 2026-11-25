@@ -2,7 +2,7 @@
 
 use super::mounted_theme::{
     ChatPresentation, GameplayPresentationMount, InstalledMenu, MountedGameplay, ScreenTransitionMount,
-    StartupScreen, SupplementalResources, ThemeMount,
+    StartupScreen, SupplementalResources, ThemeMount, gameplay_lobby_code,
 };
 use deadsync_config::theme::ThemeFlag;
 use deadsync_theme::{Theme, ThemeResources, ThemeTransitionAudio, ThemeTransitions};
@@ -29,7 +29,9 @@ const SIMPLY_LOVE_GAMEPLAY: GameplayPresentationMount = GameplayPresentationMoun
 const OPENITG_GAMEPLAY: GameplayPresentationMount = GameplayPresentationMount {
     prepare: |_| {},
     build: |stage, assets, view, config, init, _| {
-        MountedGameplay::standard(OpenItgTheme::mount_gameplay(stage, assets, view, config, init))
+        MountedGameplay::standard(OpenItgTheme::mount_gameplay(
+            stage, assets, view, config, init, gameplay_lobby_code,
+        ))
     },
     smx_overlay_alpha: |_, _| 1.0,
 };
@@ -37,7 +39,9 @@ const OPENITG_GAMEPLAY: GameplayPresentationMount = GameplayPresentationMount {
 const STEPMANIA_GAMEPLAY: GameplayPresentationMount = GameplayPresentationMount {
     prepare: |_| {},
     build: |stage, assets, view, config, init, _| {
-        MountedGameplay::standard(StepManiaTheme::mount_gameplay(stage, assets, view, config, init))
+        MountedGameplay::standard(StepManiaTheme::mount_gameplay(
+            stage, assets, view, config, init, gameplay_lobby_code,
+        ))
     },
     smx_overlay_alpha: |_, _| 1.0,
 };

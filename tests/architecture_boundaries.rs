@@ -562,6 +562,17 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     assert!(registry.contains("gameplay: OPENITG_GAMEPLAY"));
     let mount = production_source(&root.join("crates/deadsync-shell/src/mounted_theme.rs"));
     assert!(!mount.contains("deadsync_theme_simply_love"));
+    assert!(contains_rust(&mount, "pub fn gameplay_lobby_code(lobby: &GameplayLobbySession)"));
+    for (name, file) in [
+        ("deadsync-theme-openitg", "gameplay_screen.rs"),
+        ("deadsync-theme-stepmania-395", "gameplay.rs"),
+    ] {
+        let theme = root.join("crates").join(name);
+        let manifest = read_source(theme.join("Cargo.toml")).expect("theme manifest");
+        let presenter = production_source(&theme.join("src").join(file));
+        assert!(!manifest.contains("deadsync-online"));
+        assert!(contains_rust(&presenter, "lobby_code: fn(&L) -> Option<&str>"));
+    }
     assert!(!app.contains("gameplay_stats::refresh_density_graph_meshes("));
     assert!(!app.contains("notefield::prewarm_frame_text_scratch("));
     assert!(app.contains(".presentation.prewarm_text("));

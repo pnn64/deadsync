@@ -116,6 +116,16 @@ impl<T> GameplayPresenter for T where
 /// One mounted presenter per stage. Dispatch happens at the screen boundary.
 pub struct MountedGameplay(GameplayMount);
 
+/// Read the joined lobby code when the standard gameplay HUD draws it.
+pub fn gameplay_lobby_code(lobby: &GameplayLobbySession) -> Option<&str> {
+    lobby
+        .runtime_view()
+        .snapshot
+        .joined_lobby
+        .as_ref()
+        .map(|lobby| lobby.code.as_str())
+}
+
 enum GameplayMount {
     Custom(Box<dyn GameplayPresenter>),
     Standard(Box<StandardGameplay<GameplayLobbySession>>),
