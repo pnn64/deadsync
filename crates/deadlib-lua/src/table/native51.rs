@@ -115,7 +115,11 @@ impl Table {
     ) -> Result<Self, Error> {
         let mut table = Self::new_in(memory);
         table.native51 = true;
-        table.native_resize(array, records)?;
+        if array == 0 && records == 0 {
+            table.touch_fields();
+        } else {
+            table.native_resize(array, records)?;
+        }
         Ok(table)
     }
 
