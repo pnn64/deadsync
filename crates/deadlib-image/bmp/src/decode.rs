@@ -116,30 +116,17 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     } else {
                         source.len()
                     };
-                    for block in source.rchunks(block_bytes) {
-                        validate_indices(block)?;
-                        match width {
-                            4 => indices
-                                .extend(block.as_chunks::<4>().0.iter().rev().copied().flatten()),
-                            8 => indices
-                                .extend(block.as_chunks::<8>().0.iter().rev().copied().flatten()),
-                            16 => indices
-                                .extend(block.as_chunks::<16>().0.iter().rev().copied().flatten()),
-                            32 => indices
-                                .extend(block.as_chunks::<32>().0.iter().rev().copied().flatten()),
-                            64 => indices
-                                .extend(block.as_chunks::<64>().0.iter().rev().copied().flatten()),
-                            128 => indices
-                                .extend(block.as_chunks::<128>().0.iter().rev().copied().flatten()),
-                            256 => indices
-                                .extend(block.as_chunks::<256>().0.iter().rev().copied().flatten()),
-                            _ => {
-                                for row in block.rchunks_exact(width) {
-                                    indices.extend_from_slice(row);
-                                }
-                            }
-                        }
-                    }
+                    let append = match width {
+                        4 => append_reversed_index_blocks::<4>,
+                        8 => append_reversed_index_blocks::<8>,
+                        16 => append_reversed_index_blocks::<16>,
+                        32 => append_reversed_index_blocks::<32>,
+                        64 => append_reversed_index_blocks::<64>,
+                        128 => append_reversed_index_blocks::<128>,
+                        256 => append_reversed_index_blocks::<256>,
+                        _ => append_reversed_index_blocks::<0>,
+                    };
+                    append(source, &mut indices, width, block_bytes, validate_indices)?;
                 } else {
                     for row in rows {
                         let row = &row[..width];
@@ -212,6 +199,27 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
         height: header.info.height,
         pixels,
     })
+}
+
+#[inline(never)]
+fn append_reversed_index_blocks<const WIDTH: usize>(
+    source: &[u8],
+    indices: &mut Vec<u8>,
+    width: usize,
+    block_bytes: usize,
+    validate: impl Fn(&[u8]) -> Result<(), Error>,
+) -> Result<(), Error> {
+    for block in source.rchunks(block_bytes) {
+        validate(block)?;
+        if WIDTH == 0 {
+            for row in block.rchunks_exact(width) {
+                indices.extend_from_slice(row);
+            }
+        } else {
+            indices.extend(block.as_chunks::<WIDTH>().0.iter().rev().copied().flatten());
+        }
+    }
+    Ok(())
 }
 
 #[inline(never)]
