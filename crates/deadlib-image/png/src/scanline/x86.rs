@@ -200,7 +200,9 @@ fn paeth(
         candidate,
         _mm_andnot_si128(_mm_cmpgt_epi16(threshold, low), high),
     );
-    _mm_and_si128(_mm_add_epi16(predictor, residual), _mm_set1_epi16(255))
+    // Both operands hold bytes in the low half of each 16-bit lane.
+    // Adding in byte lanes wraps the result and keeps the high halves zero.
+    _mm_add_epi8(predictor, residual)
 }
 
 /// The paired rows' up pixels, and their threshold for `paeth`. The second
