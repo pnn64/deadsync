@@ -715,3 +715,32 @@ fn retained_sync_state_golden() {
     }
     assert!(b.is_empty());
 }
+
+#[test]
+fn batched_page_out_preserves_partial_captures_and_offset_errors() {
+    let frame = page(2);
+    let mut bytes = vec![b'O'; 91];
+    bytes.extend_from_slice(&frame[..7]);
+    let mut sync = SyncBuffer::new();
+    sync.push(&bytes).unwrap();
+    assert!(matches!(sync.page_out(), Ok(PageOut::Hole)));
+    assert!(matches!(sync.page_out(), Ok(PageOut::NeedMore)));
+    assert_eq!(sync.position(), 72);
+    assert_eq!(sync.buffered_bytes(), 26);
+    sync.push(&frame[7..]).unwrap();
+    let PageOut::Page(found) = sync.page_out().unwrap() else {
+        panic!("missing page after appending the rest of the capture");
+    };
+    assert_eq!(found.offset, 91);
+    assert_eq!(found.page.bytes(), frame);
+
+    sync.reset_at(u64::MAX - 3);
+    sync.push(&[b'O'; 64]).unwrap();
+    assert!(matches!(sync.page_out(), Ok(PageOut::Hole)));
+    assert!(matches!(
+        sync.page_out(),
+        Err(Error::LimitExceeded("sync byte position"))
+    ));
+    assert_eq!(sync.position(), u64::MAX);
+    assert_eq!(sync.buffered_bytes(), 61);
+}

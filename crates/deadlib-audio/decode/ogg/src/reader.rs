@@ -230,7 +230,7 @@ fn reserve_read_buffer(buffer: &mut Vec<u8>, additional: usize) -> Result<(), Er
 
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[allow(unsafe_code)]
-fn capture_pattern(bytes: &[u8]) -> Option<usize> {
+pub(crate) fn capture_pattern(bytes: &[u8]) -> Option<usize> {
     // SAFETY: SSE2 is enabled for this build target.
     unsafe { capture_pattern_sse2(bytes) }
 }
@@ -262,7 +262,7 @@ fn capture_pattern_sse2(bytes: &[u8]) -> Option<usize> {
 }
 
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
-fn capture_pattern(bytes: &[u8]) -> Option<usize> {
+pub(crate) fn capture_pattern(bytes: &[u8]) -> Option<usize> {
     let zero_bytes =
         |word: u64| word.wrapping_sub(0x0101_0101_0101_0101) & !word & 0x8080_8080_8080_8080;
     let mut rest = bytes;

@@ -230,9 +230,25 @@ impl SyncBuffer {
                     self.unsynced = true;
                     return Ok(PageOut::Hole);
                 }
-                Step::Skipped(_) => {}
+                Step::Skipped(_) => self.scan_unsynced()?,
             }
         }
+    }
+    #[cold]
+    #[inline(never)]
+    fn scan_unsynced(&mut self) -> Result<(), Error> {
+        let bytes = &self.data[self.start..self.filled];
+        // A sequence of small skips can report an overflow after advancing partway.
+        if bytes.len() < 27 || self.position.checked_add(bytes.len() as u64).is_none() {
+            return Ok(());
+        }
+        // Only search positions where step could inspect a full fixed header.
+        let searchable = bytes.len() - 26;
+        let skip = crate::reader::capture_pattern(&bytes[..searchable + 3]).unwrap_or_else(|| {
+            let tail = &bytes[searchable..];
+            capture_byte(tail).map_or(bytes.len(), |skip| searchable + skip)
+        });
+        self.advance(skip)
     }
 }
 
