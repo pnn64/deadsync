@@ -1849,6 +1849,9 @@ impl Compressor {
     }
     /// Start an independent stream with `len` bytes of filtered input.
     pub(crate) fn reset(&mut self, len: usize) -> Result<(), Error> {
+        if let Some(matcher) = &mut self.matcher {
+            matcher.reset(&self.window, self.position);
+        }
         self.window.clear();
         if self.mode != Compression::Stored {
             let history = if self.mode == Compression::Fast {
@@ -1859,12 +1862,8 @@ impl Compressor {
             let maximum = history + matcher::WINDOW + Self::LOOKAHEAD;
             reserve(&mut self.window, len.min(maximum))?;
         }
-        if self.mode == Compression::Fast {
-            if let Some(matcher) = &mut self.matcher {
-                matcher.reset();
-            } else {
-                self.matcher = Some(matcher::Matcher::new()?);
-            }
+        if self.mode == Compression::Fast && self.matcher.is_none() {
+            self.matcher = Some(matcher::Matcher::new()?);
         }
         self.history = 0;
         self.position = 0;
@@ -2023,7 +2022,10 @@ mod tests {
     fn coded_stream_resets_match_independent_streams() {
         for mode in [Compression::Fast, Compression::Rle] {
             let mut compressor = Compressor::new(mode);
-            for (frame, len) in [137, 98325, 4117, 0, 65537].into_iter().enumerate() {
+            for (frame, len) in [137, 1024, 1025, 4, 98325, 4117, 0, 65537]
+                .into_iter()
+                .enumerate()
+            {
                 let input: Vec<u8> = (0..len)
                     .map(|i| {
                         if i % 19 < 5 {

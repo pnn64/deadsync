@@ -76,11 +76,11 @@ impl Deflater {
         self.writer.word = 0;
         self.writer.count = 0;
         self.pending = 0;
+        if let Some(matcher) = &mut self.matcher {
+            matcher.reset(&self.window, self.encoded);
+        }
         self.window.clear();
         self.history = 0;
-        if let Some(matcher) = &mut self.matcher {
-            matcher.reset();
-        }
         self.encoded = 0;
         self.total_in = 0;
         self.total_out = 0;
@@ -333,7 +333,7 @@ mod tests {
             .collect();
         for mode in [Compression::Fast, Compression::Rle, Compression::Stored] {
             let mut reused = Deflater::new(mode).unwrap();
-            for len in [31, BLOCK * 2 + 7, 0, BLOCK + 19, 137] {
+            for len in [31, 1024, 1025, 4, BLOCK * 2 + 7, 0, BLOCK + 19, 137] {
                 let mut fresh = Deflater::new(mode).unwrap();
                 let parts = [(Some(&data[..len]), len)];
                 let encoded = stream(&mut reused, &parts, 19);

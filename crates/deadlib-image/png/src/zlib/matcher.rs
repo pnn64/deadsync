@@ -29,10 +29,19 @@ impl Matcher {
             previous: table(0)?,
         })
     }
-    pub(super) fn reset(&mut self) {
+    pub(super) fn reset(&mut self, data: &[u8], processed: usize) {
         // Only links reachable from a current head are read. Inserting a
         // position writes its link, including in the strided match path.
-        self.heads.fill(u32::MAX);
+        // Bound the rehashing cost and clear the table contiguously for longer streams.
+        if processed == data.len() && processed <= 1024 {
+            // The entire short stream is still in the window. Every head
+            // written by the matcher came from one of these four-byte words.
+            for &word in data.array_windows::<4>() {
+                self.heads[hash(u32::from_le_bytes(word))] = u32::MAX;
+            }
+        } else {
+            self.heads.fill(u32::MAX);
+        }
     }
     pub(super) fn memory(&self) -> usize {
         HASHES * 4 + WINDOW * 2
