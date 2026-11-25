@@ -184,7 +184,7 @@ pub struct OggIndex {
     streams: Vec<StreamIndex>,
     pages: Vec<IndexedPage>,
     length: u64,
-    granule_step: u64,
+    granule_reciprocal: u64,
     compatibility: CompatibilityStats,
 }
 
@@ -250,15 +250,15 @@ fn offset_hint(pages: &[IndexedPage], end: u64, offset: u64) -> Option<&IndexedP
     covers(neighbor).then_some(neighbor)
 }
 
-fn regular_granule_step(pages: &[IndexedPage]) -> u64 {
+fn regular_granule_reciprocal(pages: &[IndexedPage]) -> u64 {
     if pages.len() < 33 {
         return 0;
     }
     let first = pages[0].granule_floor;
     let step = pages[1].granule_floor - first;
     let span = pages[pages.len() - 1].granule_floor - first;
-    if step.checked_mul((pages.len() - 1) as u64) == Some(span) {
-        step
+    if step != 0 && step.checked_mul((pages.len() - 1) as u64) == Some(span) {
+        u64::MAX / step
     } else {
         0
     }
@@ -266,8 +266,11 @@ fn regular_granule_step(pages: &[IndexedPage]) -> u64 {
 
 // Confirm both sides of the estimate, including ties between landmarks.
 #[inline(never)]
-fn granule_hint(pages: &[IndexedPage], target: u64, step: u64) -> Option<&IndexedPage> {
-    let slot = usize::try_from(target.checked_sub(pages[0].granule_floor)? / step).ok()?;
+fn granule_hint(pages: &[IndexedPage], target: u64, reciprocal: u64) -> Option<&IndexedPage> {
+    let distance = target.checked_sub(pages[0].granule_floor)?;
+    // Bias upward by one input unit to compensate for rounding the reciprocal down.
+    let estimate = ((u128::from(distance) + 1) * u128::from(reciprocal)) >> 64;
+    let slot = usize::try_from(estimate).ok()?;
     let page = pages.get(slot)?;
     let next = pages.get(slot + 1)?;
     (page.granule_floor <= target && target < next.granule_floor).then_some(page)
@@ -309,7 +312,7 @@ impl OggIndex {
             streams: Vec::new(),
             pages: Vec::new(),
             length: 0,
-            granule_step: 0,
+            granule_reciprocal: 0,
             compatibility: CompatibilityStats::default(),
         };
         while let Some(located) = reader.next_page()? {
@@ -385,7 +388,7 @@ impl OggIndex {
             .all(|pair| pair[0].pages.end == pair[1].pages.start);
         if grouped && index.compatibility == CompatibilityStats::default() {
             if index.streams.len() == 1 {
-                index.granule_step = regular_granule_step(&index.pages);
+                index.granule_reciprocal = regular_granule_reciprocal(&index.pages);
             }
             return Ok(index);
         }
@@ -456,8 +459,8 @@ impl OggIndex {
         let (last, earlier) = pages.split_last()?;
         let page = if last.granule_floor <= target {
             last
-        } else if self.granule_step != 0
-            && let Some(page) = granule_hint(pages, target, self.granule_step)
+        } else if self.granule_reciprocal != 0
+            && let Some(page) = granule_hint(pages, target, self.granule_reciprocal)
         {
             page
         } else {
