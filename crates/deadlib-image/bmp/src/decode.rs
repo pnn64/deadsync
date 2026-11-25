@@ -323,6 +323,20 @@ fn append_four_bit_rows(source: &[u8], header: &Header, indices: &mut Vec<u8>) {
         );
         return;
     }
+    let max_padded_width = if cfg!(target_arch = "x86") { 15 } else { 12 };
+    if (9..=max_padded_width).contains(&width) {
+        let append = match width {
+            9 => append_packed_rows::<4, 9, 8>,
+            10 => append_packed_rows::<4, 10, 8>,
+            11 => append_packed_rows::<4, 11, 8>,
+            12 => append_packed_rows::<4, 12, 8>,
+            13 => append_packed_rows::<4, 13, 8>,
+            14 => append_packed_rows::<4, 14, 8>,
+            _ => append_packed_rows::<4, 15, 8>,
+        };
+        append(source, indices, top_down);
+        return;
+    }
     match width {
         16 => append_nibble_word_rows::<8, 16>(source, indices),
         24 => append_nibble_word_rows::<12, 24>(source, indices),
@@ -372,24 +386,24 @@ fn append_narrow_packed<const BITS: usize>(
     top_down: bool,
 ) {
     let append = match width {
-        1 => append_packed_rows::<BITS, 1>,
-        2 => append_packed_rows::<BITS, 2>,
-        3 => append_packed_rows::<BITS, 3>,
-        4 => append_packed_rows::<BITS, 4>,
-        5 => append_packed_rows::<BITS, 5>,
-        6 => append_packed_rows::<BITS, 6>,
-        _ => append_packed_rows::<BITS, 7>,
+        1 => append_packed_rows::<BITS, 1, 4>,
+        2 => append_packed_rows::<BITS, 2, 4>,
+        3 => append_packed_rows::<BITS, 3, 4>,
+        4 => append_packed_rows::<BITS, 4, 4>,
+        5 => append_packed_rows::<BITS, 5, 4>,
+        6 => append_packed_rows::<BITS, 6, 4>,
+        _ => append_packed_rows::<BITS, 7, 4>,
     };
     append(source, indices, top_down);
 }
 
-fn append_packed_rows<const BITS: usize, const WIDTH: usize>(
+fn append_packed_rows<const BITS: usize, const WIDTH: usize, const PITCH: usize>(
     source: &[u8],
     indices: &mut Vec<u8>,
     top_down: bool,
 ) {
-    let rows = source.as_chunks::<4>().0.iter();
-    let unpack = |row: &[u8; 4]| {
+    let rows = source.as_chunks::<PITCH>().0.iter();
+    let unpack = |row: &[u8; PITCH]| {
         std::array::from_fn::<_, WIDTH, _>(|i| {
             let bit = i * BITS;
             (row[bit / 8] >> (8 - BITS - bit % 8)) & ((1 << BITS) - 1)
