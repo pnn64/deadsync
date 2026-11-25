@@ -67,12 +67,15 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 );
             }
             // A 32-bit row boundary leaves no padding or partial byte.
-            let tight_one_bit = header.info.bit_depth == 1
-                && palette_len == 2
-                && header.info.top_down
-                && width.is_multiple_of(32);
+            let tight_packed = header.info.top_down
+                && palette_len > 1
+                && match header.info.bit_depth {
+                    1 => width.is_multiple_of(32),
+                    4 => width.is_multiple_of(8),
+                    _ => false,
+                };
             let mut indices = Vec::new();
-            if !tight_one_bit {
+            if !tight_packed {
                 reserve(&mut indices, header.pixel_count)?;
             }
             // Full palettes cover the whole index domain.
@@ -107,27 +110,22 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     }
                 }
             } else if header.info.bit_depth == 4 {
-                let (packed_chunk_bytes, unpacked_chunk_pixels) =
-                    if header.info.top_down && width.is_multiple_of(8) {
-                        (source.len(), header.pixel_count)
-                    } else {
-                        (header.row_pitch, width)
-                    };
-                let pairs = unpacked_chunk_pixels / 2;
-                let has_tail = !unpacked_chunk_pixels.is_multiple_of(2);
-                let rows = display_rows(source, packed_chunk_bytes, header.info.top_down);
-                for row in rows {
-                    indices.extend(row[..pairs].iter().flat_map(|&byte| [byte >> 4, byte & 15]));
-                    if has_tail {
-                        indices.push(row[pairs] >> 4);
+                if tight_packed {
+                    indices = unpack_contiguous(source, |byte| [byte >> 4, byte & 15])?;
+                } else {
+                    let pairs = width / 2;
+                    let has_tail = !width.is_multiple_of(2);
+                    for row in rows {
+                        indices
+                            .extend(row[..pairs].iter().flat_map(|&byte| [byte >> 4, byte & 15]));
+                        if has_tail {
+                            indices.push(row[pairs] >> 4);
+                        }
                     }
                 }
                 validate_indices(&indices)?;
-            } else if tight_one_bit {
-                let mut unpacked = Vec::new();
-                reserve(&mut unpacked, header.pixel_count / 8)?;
-                unpacked.extend(source.iter().copied().map(expand_one_bit_byte));
-                indices = unpacked.into_flattened();
+            } else if tight_packed {
+                indices = unpack_contiguous(source, expand_one_bit_byte)?;
             } else {
                 indices.resize(header.pixel_count, 0);
                 for (packed, output) in rows.zip(indices.chunks_exact_mut(width)) {
@@ -214,6 +212,16 @@ fn indices_are_zero(source: &[u8], pitch: usize, width: usize, bit_depth: u16) -
                 && (tail_mask == 0 || row[complete_bytes] & tail_mask == 0)
         })
     }
+}
+
+fn unpack_contiguous<const N: usize>(
+    source: &[u8],
+    unpack: impl FnMut(u8) -> [u8; N],
+) -> Result<Vec<u8>, Error> {
+    let mut indices = Vec::new();
+    reserve(&mut indices, source.len())?;
+    indices.extend(source.iter().copied().map(unpack));
+    Ok(indices.into_flattened())
 }
 
 fn unpack_one_bit_indices(row: &[u8], output: &mut [u8]) {
