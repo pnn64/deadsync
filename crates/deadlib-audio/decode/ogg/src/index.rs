@@ -265,9 +265,13 @@ fn granule_scale(pages: &[IndexedPage]) -> u64 {
     if pages.len() < 33 {
         return 0;
     }
-    // The stream header and final (possibly shortened) page are outside the sample.
-    let pages = &pages[1..];
     let first = pages[0].granule_floor;
+    let span = pages[pages.len() - 1].granule_floor - first;
+    let step = pages[1].granule_floor - first;
+    if step != 0 && step.checked_mul((pages.len() - 1) as u64) == Some(span) {
+        return u64::MAX / step;
+    }
+    // Ignore the possibly shortened final page when estimating the scale.
     let steps = pages.len() - 2;
     let span = pages[steps].granule_floor - first;
     if span < steps as u64 {
@@ -499,7 +503,7 @@ impl OggIndex {
         let page = if last.granule_floor <= target {
             last
         } else if self.granule_reciprocal != 0
-            && let Some(page) = granule_hint(&pages[1..], target, self.granule_reciprocal)
+            && let Some(page) = granule_hint(pages, target, self.granule_reciprocal)
         {
             page
         } else {
