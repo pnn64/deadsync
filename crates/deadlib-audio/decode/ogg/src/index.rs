@@ -279,6 +279,7 @@ impl OggIndex {
             length: 0,
             compatibility: CompatibilityStats::default(),
         };
+        let mut all_known = true;
         while let Some(located) = reader.next_page()? {
             let page = located.page;
             let header = page.header();
@@ -308,6 +309,8 @@ impl OggIndex {
             }
             let stream = &mut index.streams[state.stream];
             reserve(&mut index.pages, 1)?;
+            let granule = header.granule_position;
+            all_known &= granule != UNKNOWN_GRANULE_POSITION;
             index.pages.push(IndexedPage {
                 offset: located.offset,
                 length: page.bytes().len() as u32,
@@ -316,8 +319,8 @@ impl OggIndex {
                 first_packet: stream.packets,
                 completed_packets: state.completed_packets,
                 first_packet_offset: state.first_packet_offset,
-                granule_floor: 0,
-                landmark: 0,
+                granule_floor: granule,
+                landmark: index.pages.len(),
             });
             stream.packets = state.packets;
             index.length = located
@@ -336,6 +339,10 @@ impl OggIndex {
         demux.finish()?;
         index.compatibility = demux.compatibility();
         let single_stream = index.streams.len() == 1;
+        if single_stream && all_known && index.compatibility == CompatibilityStats::default() {
+            index.streams[0].pages = 0..index.pages.len();
+            return Ok(index);
+        }
         if !single_stream {
             group_pages(&mut index.pages, &mut index.streams);
         }
