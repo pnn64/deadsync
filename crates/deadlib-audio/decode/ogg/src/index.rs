@@ -186,6 +186,7 @@ pub struct OggIndex {
     length: u64,
     granule_reciprocal: u64,
     offset_scale: u64,
+    packet_scale: u64,
     compatibility: CompatibilityStats,
 }
 
@@ -324,6 +325,7 @@ impl OggIndex {
             length: 0,
             granule_reciprocal: 0,
             offset_scale: 0,
+            packet_scale: 0,
             compatibility: CompatibilityStats::default(),
         };
         let mut has_unknown = false;
@@ -405,6 +407,7 @@ impl OggIndex {
             let span = pages[pages.len() - 1].offset - pages[1].offset;
             index.offset_scale =
                 (((pages.len() - 2) as u128) << 64).div_ceil(u128::from(span)) as u64;
+            index.packet_scale = packet_scale(pages, index.streams[0].packets);
         }
         let strict_granules = index.compatibility == CompatibilityStats::default();
         if grouped && strict_granules {
@@ -528,7 +531,13 @@ impl OggIndex {
         let (page, earlier) = if last.first_packet <= number {
             (last, earlier)
         } else {
-            let end = earlier.partition_point(|page| page.first_packet <= number);
+            let end = if self.packet_scale != 0
+                && let Some(end) = packet_hint(pages, number, self.packet_scale)
+            {
+                end
+            } else {
+                earlier.partition_point(|page| page.first_packet <= number)
+            };
             earlier[..end].split_last()?
         };
         let offset = page.first_packet_offset;
@@ -540,6 +549,50 @@ impl OggIndex {
             return Some(previous);
         }
         packet_origin(before, offset)
+    }
+}
+
+#[inline(never)]
+fn packet_scale(pages: &[IndexedPage], packets: u64) -> u64 {
+    if packets <= 1 || packets == pages.len() as u64 {
+        return 0;
+    }
+    let ratio = (((pages.len() - 1) as u128) << 32) / u128::from(packets - 1);
+    let Ok(scale) = u64::try_from(ratio) else {
+        return 0;
+    };
+    if scale == 0 {
+        return 0;
+    }
+    let quarter = pages.len() / 4;
+    // Keep interpolation out of searches on files with uneven packet density.
+    for page in [quarter, 2 * quarter, 3 * quarter] {
+        let number = pages[page].first_packet;
+        if number >= packets || packet_hint(pages, number, scale).is_none() {
+            return 0;
+        }
+    }
+    scale
+}
+
+#[inline(never)]
+fn packet_hint(pages: &[IndexedPage], number: u64, scale: u64) -> Option<usize> {
+    // Exclude the isolated initial packet and estimate the last page for this packet.
+    if number == 0 {
+        return None;
+    }
+    // Probe the page immediately below the estimated end of the packet.
+    let scaled = u128::from(number) * u128::from(scale) - 1;
+    let slot = 1 + usize::try_from(scaled >> 32).ok()?;
+    let page = pages.get(slot)?;
+    if page.first_packet <= number
+        && pages
+            .get(slot + 1)
+            .is_none_or(|next| next.first_packet > number)
+    {
+        Some(slot + 1)
+    } else {
+        None
     }
 }
 
