@@ -297,6 +297,7 @@ impl<T> Arena<T> {
         // In a sparse arena, counting mark bits is cheaper than checking holes.
         // Only count for a whole sweep to avoid rescanning on every small step.
         if self.live == 0
+            || end == *cursor
             || (end == 0
                 && *cursor == self.values.len()
                 && self.live <= self.values.len() / 2
@@ -306,13 +307,17 @@ impl<T> Arena<T> {
             return 0;
         }
         let mut reclaimed = 0;
-        let mut upper = *cursor;
-        while upper > end {
-            let last = upper - 1;
-            let word_start = last & !63;
-            let lower = end.max(word_start);
-            let range = (u64::MAX << (lower - word_start)) & (u64::MAX >> (63 - last % 64));
-            let mut unmarked = !self.marks[last / 64] & range;
+        let first_word = end / 64;
+        let last_word = (*cursor - 1) / 64;
+        // Only the first and last bitmap words can be partial.
+        let mut range = u64::MAX >> (63 - (*cursor - 1) % 64);
+        for word in (first_word..=last_word).rev() {
+            if word == first_word {
+                range &= u64::MAX << (end % 64);
+            }
+            let mut unmarked = !self.marks[word] & range;
+            range = u64::MAX;
+            let word_start = word * 64;
             // Keep descending slot order so slot reuse stays the same.
             while unmarked != 0 {
                 let bit = 63 - unmarked.leading_zeros();
@@ -324,7 +329,6 @@ impl<T> Arena<T> {
                     reclaimed += 1;
                 }
             }
-            upper = lower;
         }
         *cursor = end;
         reclaimed
