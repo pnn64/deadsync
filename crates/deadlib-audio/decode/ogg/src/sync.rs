@@ -151,12 +151,15 @@ impl SyncBuffer {
         Ok(())
     }
     pub fn current_page(&self) -> Option<LocatedSyncedPage<'_>> {
-        (self.returned != 0).then(|| LocatedSyncedPage {
+        (self.returned != 0).then(|| self.page())
+    }
+    fn page(&self) -> LocatedSyncedPage<'_> {
+        LocatedSyncedPage {
             offset: self.position - self.returned as u64,
             page: SyncedPage {
                 bytes: &self.data[self.start - self.returned..self.start],
             },
-        })
+        }
     }
     fn advance(&mut self, bytes: usize) -> Result<(), Error> {
         let next = self
@@ -216,14 +219,14 @@ impl SyncBuffer {
         Ok(match self.step()? {
             Step::NeedMore => PageSeek::NeedMore,
             Step::Skipped(n) => PageSeek::Skipped(n),
-            Step::Page => PageSeek::Page(self.current_page().unwrap()),
+            Step::Page => PageSeek::Page(self.page()),
         })
     }
     pub fn page_out(&mut self) -> Result<PageOut<'_>, Error> {
         loop {
             match self.step()? {
                 Step::NeedMore => return Ok(PageOut::NeedMore),
-                Step::Page => return Ok(PageOut::Page(self.current_page().unwrap())),
+                Step::Page => return Ok(PageOut::Page(self.page())),
                 Step::Skipped(_) if !self.unsynced => {
                     self.unsynced = true;
                     return Ok(PageOut::Hole);
@@ -317,7 +320,7 @@ impl<R: Read> SyncReader<R> {
                 return Ok(SyncRead::Boundary);
             }
             match self.sync.step()? {
-                Step::Page => return Ok(SyncRead::Page(self.sync.current_page().unwrap())),
+                Step::Page => return Ok(SyncRead::Page(self.sync.page())),
                 Step::Skipped(_) => continue,
                 Step::NeedMore => {}
             }
