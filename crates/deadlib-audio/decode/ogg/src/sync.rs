@@ -28,7 +28,7 @@ impl<'a> SyncedPage<'a> {
     /// Apply the published version/flag rules. Length and CRC have already
     /// been verified by synchronization, so conversion requires no new CRC pass.
     pub fn validated(self) -> Result<Page<'a>, Error> {
-        crate::page::header_size(self.bytes)?;
+        crate::page::check_version_flags(self.bytes[4], self.bytes[5])?;
         Ok(Page::verified(self.bytes))
     }
 }

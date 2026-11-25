@@ -125,13 +125,19 @@ pub(crate) fn header_size(input: &[u8]) -> Result<usize, Error> {
     if &input[..4] != b"OggS" {
         return Err(Error::Invalid("capture pattern"));
     }
-    if input[4] != 0 {
+    check_version_flags(input[4], input[5])?;
+    Ok(27 + input[26] as usize)
+}
+
+#[inline]
+pub(crate) fn check_version_flags(version: u8, flags: u8) -> Result<(), Error> {
+    if version != 0 {
         return Err(Error::Invalid("unsupported stream structure version"));
     }
-    if input[5] & !7 != 0 {
+    if flags & !7 != 0 {
         return Err(Error::Invalid("reserved page flags"));
     }
-    Ok(27 + input[26] as usize)
+    Ok(())
 }
 pub(crate) fn page_size(input: &[u8]) -> Result<usize, Error> {
     let header = header_size(input)?;
