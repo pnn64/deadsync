@@ -142,7 +142,7 @@ impl Streams {
 pub(crate) struct PageState {
     pub stream: usize,
     pub first_packet_offset: u64,
-    pub packets: u64,
+    pub first_packet: u64,
     pub completed_packets: u16,
 }
 
@@ -387,6 +387,7 @@ impl Demuxer {
         {
             return Err(Error::Invalid("unfinished packet at EOS"));
         }
+        let first_packet = stream.packets;
         if OBSERVE {
             let PartialPacket::Bytes(partial) = &mut stream.partial else {
                 unreachable!("observers require packet bytes");
@@ -481,7 +482,7 @@ impl Demuxer {
         Ok(PageState {
             stream: index,
             first_packet_offset,
-            packets: stream.packets,
+            first_packet,
             completed_packets: complete as u16,
         })
     }

@@ -313,7 +313,6 @@ impl OggIndex {
                     pages: index.pages.len()..0,
                 });
             }
-            let stream = &mut index.streams[state.stream];
             reserve(&mut index.pages, 1)?;
             let granule = header.granule_position;
             let (granule_floor, landmark) = if granule == UNKNOWN_GRANULE_POSITION {
@@ -330,18 +329,19 @@ impl OggIndex {
                 length: page.bytes().len() as u32,
                 header,
                 stream: state.stream,
-                first_packet: stream.packets,
+                first_packet: state.first_packet,
                 completed_packets: state.completed_packets,
                 first_packet_offset: state.first_packet_offset,
                 granule_floor,
                 landmark,
             });
-            stream.packets = state.packets;
             index.length = located
                 .offset
                 .checked_add(page.bytes().len() as u64)
                 .ok_or(Error::LimitExceeded("indexed file length"))?;
             if header.is_eos() {
+                let stream = &mut index.streams[state.stream];
+                stream.packets = state.first_packet + u64::from(state.completed_packets);
                 stream.eos_offset = located.offset;
                 stream.end_offset = index.length;
                 stream.pages.end = index.pages.len();
