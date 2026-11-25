@@ -1395,9 +1395,8 @@ impl Vm {
         }
     }
     fn begin_gc_cycle(&mut self) -> Result<(), Error> {
-        if let Err(error) =
-            self.reserve_gc_work(self.seed_gc_root_count().saturating_sub(self.gc.work.len()))
-        {
+        let roots = self.seed_gc_root_count(self.gc.work.capacity());
+        if let Err(error) = self.reserve_gc_work(roots.saturating_sub(self.gc.work.len())) {
             self.defer_gc_until_allocation();
             return Err(error);
         }
@@ -1494,13 +1493,10 @@ impl Vm {
             .marked_slots()
             .filter(|&index| matches!(self.upvalues[index], Cell::Open(..)))
             .count();
-        self.reserve_trace_work(
-            work,
-            threads
-                .saturating_add(tables)
-                .saturating_add(cells)
-                .saturating_add(self.seed_gc_root_count()),
-        )?;
+        let refresh = threads.saturating_add(tables).saturating_add(cells);
+        let available = (work.capacity() - work.len()).saturating_sub(refresh);
+        let roots = self.seed_gc_root_count(available);
+        self.reserve_trace_work(work, refresh.saturating_add(roots))?;
         for key in self.threads.marked_keys() {
             work.push(Trace::ThreadAgain(ThreadId(key)));
         }

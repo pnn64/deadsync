@@ -38,13 +38,22 @@ impl Vm {
         )
         .map_err(|_| self.memory_failure())
     }
-    pub(super) fn seed_gc_root_count(&self) -> usize {
-        4usize
-            .saturating_add(usize::from(self.io.file_tag.is_some()))
-            .saturating_add(self.meta_names.len())
-            .saturating_add(self.type_metatables.iter().flatten().count())
+    fn fixed_gc_root_count(&self) -> usize {
+        4 + usize::from(self.io.file_tag.is_some())
+            + self.meta_names.len()
+            + self.type_metatables.iter().flatten().count()
+            + usize::from(self.standalone != 0)
+    }
+    pub(super) fn seed_gc_root_count(&self, available: usize) -> usize {
+        let fixed = self.fixed_gc_root_count();
+        let upper = fixed
+            .saturating_add(self.roots.live_len())
+            .saturating_add(self.programs.live_len());
+        if upper <= available {
+            return upper;
+        }
+        fixed
             .saturating_add(self.roots.iter().copied().filter_map(edge).count())
-            .saturating_add(usize::from(self.standalone != 0))
             .saturating_add(
                 self.programs
                     .iter()
