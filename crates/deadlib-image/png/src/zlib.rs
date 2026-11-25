@@ -1529,11 +1529,16 @@ impl Writer {
         self.count = 0;
     }
     fn stored_header(&mut self, len: usize, final_block: bool) {
-        self.write(u32::from(final_block), 3);
-        self.align();
-        let len = len as u16;
-        self.bytes.extend_from_slice(&len.to_le_bytes());
-        self.bytes.extend_from_slice(&(!len).to_le_bytes());
+        let first = self.word as u8 | (u8::from(final_block) << self.count);
+        let [lo, hi] = (len as u16).to_le_bytes();
+        if self.count > 5 {
+            // The two zero block-type bits extend into the next byte.
+            self.bytes.extend_from_slice(&[first, 0, lo, hi, !lo, !hi]);
+        } else {
+            self.bytes.extend_from_slice(&[first, lo, hi, !lo, !hi]);
+        }
+        self.word = 0;
+        self.count = 0;
     }
     fn stored(&mut self, input: &[u8], final_block: bool) {
         self.stored_header(input.len(), final_block);
@@ -2157,6 +2162,32 @@ mod tests {
                     compressor.push(&part[zeros..]);
                 }
                 assert_eq!(compressor.finish(), expected, "length {len}, chunk {chunk}");
+            }
+        }
+    }
+
+    #[test]
+    fn stored_header_matches_bit_writer_for_each_alignment() {
+        for count in 0..8 {
+            let word = 0x55 & ((1 << count) - 1);
+            for final_block in [false, true] {
+                for len in [0u16, 1, 0x01a5, u16::MAX] {
+                    let mut writer = Writer {
+                        bytes: vec![0xab],
+                        word,
+                        count,
+                    };
+                    writer.write(u32::from(final_block), 3);
+                    writer.align();
+                    writer.bytes.extend_from_slice(&len.to_le_bytes());
+                    writer.bytes.extend_from_slice(&(!len).to_le_bytes());
+                    let expected = core::mem::replace(&mut writer.bytes, vec![0xab]);
+                    writer.word = word;
+                    writer.count = count;
+                    writer.stored_header(usize::from(len), final_block);
+                    assert_eq!(writer.bytes, expected, "count {count}, length {len}");
+                    assert_eq!((writer.word, writer.count), (0, 0));
+                }
             }
         }
     }
