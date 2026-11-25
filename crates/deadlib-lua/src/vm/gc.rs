@@ -1487,11 +1487,10 @@ impl Vm {
         // Snapshot the already reached containers before refreshing roots;
         // newly reached threads/cells still receive their ordinary first scan.
         let threads = self.threads.marked_count();
-        let metatable_end = self.gc.metatable_table_end as usize;
+        let metatable_words = (self.gc.metatable_table_end as usize).div_ceil(64);
         let tables = self
             .tables
-            .marked_slots()
-            .take_while(|&index| index < metatable_end)
+            .marked_slots_in_words(metatable_words)
             .filter(|&index| self.tables[index].metatable().is_some())
             .count();
         // The active stack owns all open cells when it is the only live thread.
@@ -1512,11 +1511,7 @@ impl Vm {
         for key in self.threads.marked_keys() {
             work.push(Trace::ThreadAgain(ThreadId(key)));
         }
-        for index in self
-            .tables
-            .marked_slots()
-            .take_while(|&index| index < metatable_end)
-        {
+        for index in self.tables.marked_slots_in_words(metatable_words) {
             if self.tables[index].metatable().is_some() {
                 work.push(Trace::TableAgain(TableId(self.tables.key(index).unwrap())));
             }
