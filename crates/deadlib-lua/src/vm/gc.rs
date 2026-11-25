@@ -1607,7 +1607,8 @@ impl Vm {
                 if !weak_keys && !weak_values {
                     continue;
                 }
-                let mut cursor = 0;
+                // Weak keys cannot remove array entries with integer keys.
+                let mut cursor = if weak_values { 0 } else { 1 };
                 loop {
                     let mut dead_array = 0u64;
                     let mut dead_hash = 0u64;
