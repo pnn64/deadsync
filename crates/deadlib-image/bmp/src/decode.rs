@@ -157,10 +157,7 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
             } else if tight_packed {
                 indices = unpack_contiguous(source, expand_one_bit_byte)?;
             } else {
-                indices.resize(header.pixel_count, 0);
-                for (packed, output) in rows.zip(indices.chunks_exact_mut(width)) {
-                    unpack_one_bit_indices(packed, output);
-                }
+                append_one_bit_rows(source, &header, &mut indices);
             }
             Pixels::Indexed {
                 bit_depth: header.info.bit_depth as u8,
@@ -247,16 +244,7 @@ fn append_four_bit_rows(source: &[u8], header: &Header, indices: &mut Vec<u8>) {
     let width = header.info.width as usize;
     let top_down = header.info.top_down;
     if width <= 7 {
-        let append = match width {
-            1 => append_narrow_nibbles::<1>,
-            2 => append_narrow_nibbles::<2>,
-            3 => append_narrow_nibbles::<3>,
-            4 => append_narrow_nibbles::<4>,
-            5 => append_narrow_nibbles::<5>,
-            6 => append_narrow_nibbles::<6>,
-            _ => append_narrow_nibbles::<7>,
-        };
-        append(source, indices, top_down);
+        append_narrow_packed::<4>(source, indices, width, top_down);
         return;
     }
     let pairs = width / 2;
@@ -270,10 +258,35 @@ fn append_four_bit_rows(source: &[u8], header: &Header, indices: &mut Vec<u8>) {
 }
 
 #[inline(never)]
-fn append_narrow_nibbles<const WIDTH: usize>(source: &[u8], indices: &mut Vec<u8>, top_down: bool) {
+fn append_narrow_packed<const BITS: usize>(
+    source: &[u8],
+    indices: &mut Vec<u8>,
+    width: usize,
+    top_down: bool,
+) {
+    let append = match width {
+        1 => append_packed_rows::<BITS, 1>,
+        2 => append_packed_rows::<BITS, 2>,
+        3 => append_packed_rows::<BITS, 3>,
+        4 => append_packed_rows::<BITS, 4>,
+        5 => append_packed_rows::<BITS, 5>,
+        6 => append_packed_rows::<BITS, 6>,
+        _ => append_packed_rows::<BITS, 7>,
+    };
+    append(source, indices, top_down);
+}
+
+fn append_packed_rows<const BITS: usize, const WIDTH: usize>(
+    source: &[u8],
+    indices: &mut Vec<u8>,
+    top_down: bool,
+) {
     let rows = source.as_chunks::<4>().0.iter();
     let unpack = |row: &[u8; 4]| {
-        std::array::from_fn::<_, WIDTH, _>(|i| (row[i / 2] >> (4 * (1 - i % 2))) & 15)
+        std::array::from_fn::<_, WIDTH, _>(|i| {
+            let bit = i * BITS;
+            (row[bit / 8] >> (8 - BITS - bit % 8)) & ((1 << BITS) - 1)
+        })
     };
     if top_down {
         indices.extend(rows.flat_map(unpack));
@@ -323,6 +336,21 @@ fn unpack_contiguous<const N: usize>(
     reserve(&mut indices, source.len())?;
     indices.extend(source.iter().copied().map(unpack));
     Ok(indices.into_flattened())
+}
+
+#[inline(never)]
+fn append_one_bit_rows(source: &[u8], header: &Header, indices: &mut Vec<u8>) {
+    let width = header.info.width as usize;
+    let top_down = header.info.top_down;
+    if width <= 7 {
+        append_narrow_packed::<1>(source, indices, width, top_down);
+        return;
+    }
+    indices.resize(header.pixel_count, 0);
+    let rows = display_rows(source, header.row_pitch, top_down);
+    for (packed, output) in rows.zip(indices.chunks_exact_mut(width)) {
+        unpack_one_bit_indices(packed, output);
+    }
 }
 
 fn unpack_one_bit_indices(row: &[u8], output: &mut [u8]) {
