@@ -690,7 +690,11 @@ fn deinterlace(
         return Ok(());
     }
     if height <= 64 {
-        permute_interlace::<1, false>(pixels, width, height, row)
+        if width == 1 {
+            permute_interlace::<1, true>(pixels, width, height, row)
+        } else {
+            permute_interlace::<1, false>(pixels, width, height, row)
+        }
     } else if height <= 1024 {
         if width == 1 {
             permute_interlace::<16, true>(pixels, width, height, row)
@@ -711,6 +715,7 @@ fn permute_interlace<const WORDS: usize, const SINGLE_PIXEL: bool>(
     height: usize,
     row: &mut Vec<u8>,
 ) -> Result<(), Error> {
+    let width = if SINGLE_PIXEL { 1 } else { width };
     let mut narrow = [0; 64];
     let row = if width <= narrow.len() {
         &mut narrow[..width]
