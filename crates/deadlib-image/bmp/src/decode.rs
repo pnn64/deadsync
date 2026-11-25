@@ -180,7 +180,14 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
             } else if byte_aligned_mono {
                 indices = unpack_byte_aligned_mono(source, &header)?;
             } else {
-                append_one_bit_rows(source, &header, &mut indices);
+                let top_down = header.info.top_down;
+                match width {
+                    8 => append_mono_word_rows::<8>(source, &mut indices, top_down),
+                    16 => append_mono_word_rows::<16>(source, &mut indices, top_down),
+                    24 => append_mono_word_rows::<24>(source, &mut indices, top_down),
+                    32 => append_mono_word_rows::<32>(source, &mut indices, top_down),
+                    _ => append_one_bit_rows(source, &header, &mut indices),
+                }
             }
             Pixels::Indexed {
                 bit_depth: header.info.bit_depth as u8,
@@ -500,6 +507,23 @@ fn append_one_bit_rows(source: &[u8], header: &Header, indices: &mut Vec<u8>) {
     let rows = display_rows(source, header.row_pitch, top_down);
     for (packed, output) in rows.zip(indices.chunks_exact_mut(width)) {
         unpack_one_bit_indices(packed, output);
+    }
+}
+
+#[inline(never)]
+fn append_mono_word_rows<const WIDTH: usize>(source: &[u8], indices: &mut Vec<u8>, top_down: bool) {
+    let rows = source.as_chunks::<4>().0.iter();
+    let unpack = |row: &[u8; 4]| {
+        let mut output = [0; WIDTH];
+        for (pixels, &byte) in output.as_chunks_mut::<8>().0.iter_mut().zip(row) {
+            *pixels = expand_one_bit_byte(byte);
+        }
+        output
+    };
+    if top_down {
+        indices.extend(rows.flat_map(unpack));
+    } else {
+        indices.extend(rows.rev().flat_map(unpack));
     }
 }
 
