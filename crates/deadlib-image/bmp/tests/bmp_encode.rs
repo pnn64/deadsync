@@ -99,6 +99,22 @@ fn two_pixel_rgb_rows_preserve_order_and_padding() {
 }
 
 #[test]
+fn three_pixel_rgba_rows_reverse_without_reordering_pixels() {
+    let bitmap = Bitmap {
+        width: 3,
+        height: 2,
+        pixels: Pixels::Rgba((1..=24).collect()),
+    };
+    let bytes = encode(&bitmap).unwrap();
+    assert_eq!(
+        &bytes[122..],
+        &[
+            15, 14, 13, 16, 19, 18, 17, 20, 23, 22, 21, 24, 3, 2, 1, 4, 7, 6, 5, 8, 11, 10, 9, 12
+        ]
+    );
+}
+
+#[test]
 fn rgba_v4_masks_preserve_explicit_alpha() {
     let bitmap = rgba_image();
     let bytes = encode(&bitmap).unwrap();

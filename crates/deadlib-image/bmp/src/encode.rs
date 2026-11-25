@@ -197,6 +197,8 @@ fn append_mapped_rows<const INPUT: usize, const OUTPUT: usize>(
         }
     } else if source_row_bytes == INPUT * 2 {
         append_mapped_pairs(output, samples, top_down, reorder);
+    } else if source_row_bytes == INPUT * 3 {
+        append_mapped_triples(output, samples, top_down, reorder);
     } else {
         let mut rows = samples.chunks_exact(source_row_bytes);
         while let Some(row) = if top_down {
@@ -228,6 +230,28 @@ fn append_mapped_pairs<const INPUT: usize, const OUTPUT: usize>(
         output.extend(pairs.flat_map(pack));
     } else {
         output.extend(pairs.rev().flat_map(pack));
+    }
+}
+
+#[inline(never)]
+fn append_mapped_triples<const INPUT: usize, const OUTPUT: usize>(
+    output: &mut Vec<u8>,
+    samples: &[u8],
+    top_down: bool,
+    mut reorder: impl FnMut(&[u8; INPUT]) -> [u8; OUTPUT],
+) {
+    let triples = samples.as_chunks::<INPUT>().0.as_chunks::<3>().0.iter();
+    let pack = |[first, second, third]: &[[u8; INPUT]; 3]| {
+        let mut row = [0; 12];
+        row[..OUTPUT].copy_from_slice(&reorder(first));
+        row[OUTPUT..2 * OUTPUT].copy_from_slice(&reorder(second));
+        row[2 * OUTPUT..3 * OUTPUT].copy_from_slice(&reorder(third));
+        row
+    };
+    if top_down {
+        output.extend(triples.flat_map(pack));
+    } else {
+        output.extend(triples.rev().flat_map(pack));
     }
 }
 
