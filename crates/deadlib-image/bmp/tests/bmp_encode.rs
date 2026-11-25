@@ -165,6 +165,8 @@ fn indexed_and_rgb_encoders_match_across_the_palette_lookup_cutoff() {
         (1, 1023),
         (1, 1024),
         (2, 5),
+        (2, 511),
+        (2, 512),
         (3, 7),
         (5, 204),
         (5, 205),

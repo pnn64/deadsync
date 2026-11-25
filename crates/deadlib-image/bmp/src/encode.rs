@@ -221,6 +221,21 @@ fn append_indexed_rows(
         }
         return;
     }
+    if chunk_pixels == 2 {
+        let rows = indices.as_chunks::<2>().0.iter();
+        let row = |&[first, second]: &[u8; 2]| {
+            let first = u64::from(bgr[usize::from(first)]);
+            let second = u64::from(bgr[usize::from(second)]);
+            // Pack two BGR pixels and leave the upper two padding bytes zero.
+            (first | (second << 24)).to_le_bytes()
+        };
+        if top_down {
+            output.extend(rows.flat_map(row));
+        } else {
+            output.extend(rows.rev().flat_map(row));
+        }
+        return;
+    }
     let mut rows = indices.chunks_exact(chunk_pixels);
     while let Some(row) = if top_down {
         rows.next()
