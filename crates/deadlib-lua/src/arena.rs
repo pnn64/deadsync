@@ -180,7 +180,9 @@ impl<T> Arena<T> {
         if self.generations.get(slot).copied() != Some((key >> 32) as u32) {
             return None;
         }
-        self.remove_at(slot)
+        let value = self.remove_at(slot)?;
+        self.marks[slot / 64] &= !(1u64 << (slot % 64));
+        Some(value)
     }
     fn remove_at(&mut self, slot: usize) -> Option<T> {
         let value = self.values[slot].take()?;
@@ -190,7 +192,6 @@ impl<T> Arena<T> {
             self.generations[slot] = next;
             self.free.push(slot as u32);
         }
-        self.marks[slot / 64] &= !(1u64 << (slot % 64));
         Some(value)
     }
     pub fn get_mut(&mut self, key: u64) -> Option<&mut T> {
@@ -329,6 +330,7 @@ impl<T> Arena<T> {
                 let slot = word_start + bit as usize;
                 if self.values[slot].is_some() {
                     before_remove(self, slot);
+                    // Sweeping only visits slots whose mark is already clear.
                     self.remove_at(slot);
                     reclaimed += 1;
                 }
