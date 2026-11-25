@@ -180,10 +180,10 @@ impl Vm {
             .saturating_add(1),
             Trace::Value(Value::Native(id)) if id < 256 => 1,
             Trace::CellAgain(i) => usize::from(edge(self.cell_value(i)).is_some()),
-            Trace::Cell(i) if self.upvalues.key(i).is_some() => {
+            Trace::Cell(i) if self.upvalues.contains_slot(i) => {
                 usize::from(edge(self.cell_value(i)).is_some())
             }
-            Trace::Program(i) if self.programs.key(i).is_some() => {
+            Trace::Program(i) if self.programs.contains_slot(i) => {
                 let program = &self.programs[i];
                 let names = program
                     .upvalue_names

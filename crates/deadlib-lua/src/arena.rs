@@ -201,13 +201,21 @@ impl<T> Arena<T> {
         self.values.get_mut(slot)?.as_mut()
     }
     pub fn mark(&mut self, key: u64) -> bool {
-        let slot = index(key);
+        self.mark_if(index(key), |arena| arena.contains(key))
+    }
+    pub(crate) fn mark_slot(&mut self, slot: usize) -> bool {
+        self.mark_if(slot, |arena| arena.contains_slot(slot))
+    }
+    pub(crate) fn contains_slot(&self, slot: usize) -> bool {
+        self.values.get(slot).is_some_and(Option::is_some)
+    }
+    fn mark_if(&mut self, slot: usize, live: impl FnOnce(&Self) -> bool) -> bool {
         let word = slot / 64;
         let bit = 1u64 << (slot % 64);
         let Some(&old) = self.marks.get(word) else {
             return false;
         };
-        if old & bit != 0 || !self.contains(key) {
+        if old & bit != 0 || !live(self) {
             return false;
         }
         self.marks[word] = old | bit;

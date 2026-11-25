@@ -1304,9 +1304,7 @@ impl Vm {
                 Trace::TableSlice(id, cursor) => self.trace_table_slice(id, cursor, work),
                 Trace::CellAgain(i) => work.extend(edge(self.cell_value(i))),
                 Trace::Program(i) => {
-                    if let Some(key) = self.programs.key(i)
-                        && self.programs.mark(key)
-                    {
+                    if self.programs.mark_slot(i) {
                         for k in &self.programs[i].constants {
                             work.extend(k.iter().copied().filter_map(edge));
                         }
@@ -1324,9 +1322,7 @@ impl Vm {
                     }
                 }
                 Trace::Cell(i) => {
-                    if let Some(key) = self.upvalues.key(i)
-                        && self.upvalues.mark(key)
-                    {
+                    if self.upvalues.mark_slot(i) {
                         work.extend(edge(self.cell_value(i)));
                     }
                 }
