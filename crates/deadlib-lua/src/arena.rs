@@ -224,16 +224,6 @@ impl<T> Arena<T> {
     pub(crate) fn marked_word(&self, word: usize) -> u64 {
         self.marks[word]
     }
-    pub(crate) fn next_marked_slot(&self, start: usize) -> Option<usize> {
-        let word = start / 64;
-        let (first, rest) = self.marks.get(word..)?.split_first()?;
-        let bits = first & (u64::MAX << (start % 64));
-        if bits != 0 {
-            return Some(word * 64 + bits.trailing_zeros() as usize);
-        }
-        let (offset, bits) = rest.iter().enumerate().find(|(_, bits)| **bits != 0)?;
-        Some((word + 1 + offset) * 64 + bits.trailing_zeros() as usize)
-    }
     // Removing a value clears its mark, so every returned slot is live.
     pub(crate) fn marked_slots(&self) -> impl Iterator<Item = usize> + '_ {
         let mut words = self.marks.iter().copied().enumerate();

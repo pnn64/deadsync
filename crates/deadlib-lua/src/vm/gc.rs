@@ -1544,42 +1544,45 @@ impl Vm {
         Ok(())
     }
     fn clear_weak_tables(&mut self) {
-        let mut start = 0;
-        while let Some(index) = self.tables.next_marked_slot(start) {
-            start = index + 1;
-            let (weak_keys, weak_values) = self.table_mode(&self.tables[index]);
-            if !weak_keys && !weak_values {
-                continue;
-            }
-            let mut cursor = 0;
-            loop {
-                let mut dead_array = 0u64;
-                let mut dead_hash = 0u64;
-                let (next, array, pairs) =
-                    self.tables[index].trace_slice(cursor, TABLE_TRACE_SLOTS);
-                // Implicit array keys are numbers and cannot be collected.
-                if weak_values {
-                    for (offset, &value) in array.iter().enumerate() {
-                        if !self.marked_weak_value(value, false) {
-                            dead_array |= 1u64 << offset;
+        for word in 0..self.tables.len().div_ceil(64) {
+            let mut marked = self.tables.marked_word(word);
+            while marked != 0 {
+                let index = word * 64 + marked.trailing_zeros() as usize;
+                marked &= marked - 1;
+                let (weak_keys, weak_values) = self.table_mode(&self.tables[index]);
+                if !weak_keys && !weak_values {
+                    continue;
+                }
+                let mut cursor = 0;
+                loop {
+                    let mut dead_array = 0u64;
+                    let mut dead_hash = 0u64;
+                    let (next, array, pairs) =
+                        self.tables[index].trace_slice(cursor, TABLE_TRACE_SLOTS);
+                    // Implicit array keys are numbers and cannot be collected.
+                    if weak_values {
+                        for (offset, &value) in array.iter().enumerate() {
+                            if !self.marked_weak_value(value, false) {
+                                dead_array |= 1u64 << offset;
+                            }
                         }
                     }
-                }
-                for (offset, key, value) in pairs {
-                    if (weak_keys && !self.marked_weak_value(key, true))
-                        || (weak_values && !self.marked_weak_value(value, false))
-                    {
-                        dead_hash |= 1u64 << offset;
+                    for (offset, key, value) in pairs {
+                        if (weak_keys && !self.marked_weak_value(key, true))
+                            || (weak_values && !self.marked_weak_value(value, false))
+                        {
+                            dead_hash |= 1u64 << offset;
+                        }
                     }
+                    // Deleting an existing key neither allocates nor compacts its
+                    // physical slot. The next cursor therefore remains valid across
+                    // array holes, hash tombstones and the array/hash boundary.
+                    let table = &mut self.tables[index];
+                    table.clear_array_slots(cursor >> 1, dead_array);
+                    table.clear_weak_hash_slots(cursor, dead_hash);
+                    let Some(next) = next else { break };
+                    cursor = next;
                 }
-                // Deleting an existing key neither allocates nor compacts its
-                // physical slot. The next cursor therefore remains valid across
-                // array holes, hash tombstones and the array/hash boundary.
-                let table = &mut self.tables[index];
-                table.clear_array_slots(cursor >> 1, dead_array);
-                table.clear_weak_hash_slots(cursor, dead_hash);
-                let Some(next) = next else { break };
-                cursor = next;
             }
         }
     }
