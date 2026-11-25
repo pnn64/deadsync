@@ -174,6 +174,58 @@ fn chunk_lengths_crc_alignment_and_encoder_name_validation() {
 }
 
 #[test]
+fn consecutive_idat_checks_preserve_error_order_and_input_progress() {
+    let zlib = stored(&[0, 17, 34, 51]);
+    let ihdr = header(2, 8);
+    let first = chunk(*b"IDAT", &zlib[..2]);
+    let next = 8 + ihdr.len() + first.len();
+    let valid = file(&[
+        ihdr,
+        first,
+        chunk(*b"IDAT", &zlib[2..]),
+        chunk(*b"IEND", &[]),
+    ]);
+    assert_rgb(&decode_reader(valid.as_slice(), &Default::default()).unwrap());
+
+    let mut invalid_length = valid.clone();
+    invalid_length[next..next + 4].copy_from_slice(&0x8000_0000u32.to_be_bytes());
+    let mut invalid_crc = invalid_length.clone();
+    invalid_crc[next - 1] ^= 1;
+    let mut count_limited = DecodeOptions::default();
+    count_limited.limits.max_chunks = 2; // IHDR and the first IDAT.
+    let mut input_limited = DecodeOptions::default();
+    input_limited.limits.max_input_bytes = next + 7;
+    for (wire, options, error, total_in) in [
+        (
+            &invalid_crc,
+            DecodeOptions::default(),
+            Error::Checksum,
+            next,
+        ),
+        (
+            &invalid_length,
+            DecodeOptions::default(),
+            Error::Invalid("chunk length exceeds 31 bits"),
+            next + 8,
+        ),
+        (&valid, count_limited, Error::LimitExceeded, next + 8),
+        (&valid, input_limited, Error::LimitExceeded, next + 7),
+    ] {
+        for fragment in [1, 7, wire.len()] {
+            assert_eq!(
+                decode_reader(Fragmented(wire, fragment), &options),
+                Err(error.clone()),
+            );
+        }
+        let mut decoder = StreamDecoder::new(options);
+        let header = decoder.process(wire).unwrap();
+        assert!(matches!(decoder.event(), Some(DecodeEvent::Header(_))));
+        assert_eq!(decoder.process(&wire[header.consumed..]), Err(error),);
+        assert_eq!(decoder.total_in(), total_in);
+    }
+}
+
+#[test]
 fn standard_names_are_literal_not_case_folded() {
     let mut count = 0;
     for canonical in STANDARD_NAMES {

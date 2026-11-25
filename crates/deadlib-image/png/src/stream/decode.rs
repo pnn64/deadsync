@@ -639,6 +639,32 @@ impl StreamDecoder {
         };
         Ok(event)
     }
+    #[inline]
+    fn read_chunk_header(&mut self, header: [u8; 8], continuing_idat: bool) -> Result<(), Error> {
+        self.length = be32(&header) as usize;
+        if self.length > 0x7fff_ffff {
+            return Err(Error::Invalid("chunk length exceeds 31 bits"));
+        }
+        if !continuing_idat {
+            self.kind = header[4..].try_into().unwrap();
+            if !chunk_type_valid(self.kind) {
+                return Err(Error::Invalid("chunk type"));
+            }
+        }
+        self.chunks = self.chunks.checked_add(1).ok_or(Error::LimitExceeded)?;
+        if self.chunks > self.options.limits.max_chunks {
+            return Err(Error::LimitExceeded);
+        }
+        Ok(())
+    }
+
+    fn continue_idat(&mut self) {
+        self.left = self.length;
+        self.have = 0;
+        self.crc = const { Crc32::with_type(*b"IDAT") };
+        self.state = State::ChunkBody;
+    }
+
     fn run(&mut self, input: &[u8], mut png: Option<&mut Png>) -> Result<DecodeProgress, Error> {
         let mut pos = 0;
         if self.animation.is_some()
@@ -686,26 +712,13 @@ impl StreamDecoder {
                     else {
                         break;
                     };
-                    self.length = be32(header) as usize;
-                    if self.length > 0x7fff_ffff {
-                        return Err(Error::Invalid("chunk length exceeds 31 bits"));
-                    }
-                    self.kind = header[4..8].try_into().unwrap();
-                    if !chunk_type_valid(self.kind) {
-                        return Err(Error::Invalid("chunk type"));
-                    }
-                    self.chunks = self.chunks.checked_add(1).ok_or(Error::LimitExceeded)?;
-                    if self.chunks > self.options.limits.max_chunks {
-                        return Err(Error::LimitExceeded);
-                    }
+                    let header = *header;
+                    self.read_chunk_header(header, false)?;
                     let close_default = self.seen_data && !self.idat_closed;
                     if close_default {
                         if &self.kind == b"IDAT" {
                             // The open IDAT stream already has a validated image.
-                            self.left = self.length;
-                            self.have = 0;
-                            self.crc = const { Crc32::with_type(*b"IDAT") };
-                            self.state = State::ChunkBody;
+                            self.continue_idat();
                             continue;
                         }
                         self.idat_closed = true;
@@ -858,6 +871,19 @@ impl StreamDecoder {
                     if matches!(&self.kind, b"IDAT" | b"fdAT") {
                         self.have = 0;
                         self.state = State::ChunkHeader;
+                        // The common IDAT continuation needs neither general
+                        // chunk dispatch nor a second read of the kind.
+                        if &self.kind == b"IDAT"
+                            && self.input_left >= 8
+                            && let Some(header) = input[pos..].first_chunk::<8>()
+                            && &header[4..] == b"IDAT"
+                        {
+                            pos += 8;
+                            self.input_left -= 8;
+                            self.have = 8;
+                            self.read_chunk_header(*header, true)?;
+                            self.continue_idat();
+                        }
                         continue;
                     }
                     let result = self.complete_chunk();
