@@ -178,6 +178,8 @@ pub(super) struct Collector {
     stopped: bool,
     pause: i32,
     stepmul: i32,
+    // One past every table slot that has held a metatable.
+    pub(super) metatable_table_end: u32,
     last_live: usize,
     threshold: usize,
     pub(super) collections: u64,
@@ -210,6 +212,7 @@ impl Collector {
             stopped: false,
             pause: 200,
             stepmul: 200,
+            metatable_table_end: 0,
             last_live: 0,
             threshold: 64 * 1024,
             collections: 0,
@@ -1483,9 +1486,11 @@ impl Vm {
         // Snapshot the already reached containers before refreshing roots;
         // newly reached threads/cells still receive their ordinary first scan.
         let threads = self.threads.marked_count();
+        let metatable_end = self.gc.metatable_table_end as usize;
         let tables = self
             .tables
             .marked_slots()
+            .take_while(|&index| index < metatable_end)
             .filter(|&index| self.tables[index].metatable().is_some())
             .count();
         let cells = self
@@ -1500,7 +1505,11 @@ impl Vm {
         for key in self.threads.marked_keys() {
             work.push(Trace::ThreadAgain(ThreadId(key)));
         }
-        for index in self.tables.marked_slots() {
+        for index in self
+            .tables
+            .marked_slots()
+            .take_while(|&index| index < metatable_end)
+        {
             if self.tables[index].metatable().is_some() {
                 work.push(Trace::TableAgain(TableId(self.tables.key(index).unwrap())));
             }
@@ -1546,7 +1555,7 @@ impl Vm {
         // A string __mode survives weak cleanup. Clearing a non-string mode
         // leaves the same strong-table flags.
         let mut cached = (None, (false, false));
-        for word in 0..self.tables.len().div_ceil(64) {
+        for word in 0..(self.gc.metatable_table_end as usize).div_ceil(64) {
             let mut marked = self.tables.marked_word(word);
             while marked != 0 {
                 let index = word * 64 + marked.trailing_zeros() as usize;

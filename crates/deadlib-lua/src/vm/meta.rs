@@ -57,7 +57,13 @@ impl Vm {
         self.reserve_gc_metatable(value, table)?;
         match value {
             Value::ParserPrototype(_) => return Ok(()),
-            Value::Table(id) => self.tables[slot_index(id.0)].set_metatable(table),
+            Value::Table(id) => {
+                let index = slot_index(id.0);
+                self.tables[index].set_metatable(table);
+                if table.is_some() {
+                    self.gc.metatable_table_end = self.gc.metatable_table_end.max(index as u32 + 1);
+                }
+            }
             Value::Userdata(id) => self.userdata[slot_index(id.0)].metatable = table,
             _ => self.type_metatables[Self::type_slot(value)] = table,
         }
