@@ -16,7 +16,7 @@
 //!
 //! Everything here blocks on the network. Worker threads only.
 
-use deadsync_net as network;
+use crate::network;
 
 const SONG_URL_BASE: &str = "https://stepmaniaonline.net/song/";
 const CHART_URL_BASE: &str = "https://stepmaniaonline.net/api/chart/";

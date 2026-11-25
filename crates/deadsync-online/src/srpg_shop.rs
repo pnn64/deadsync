@@ -1,5 +1,5 @@
+use crate::network::{self, AgentConfig, HttpAgent};
 use deadsync_config::theme::SrpgShopFolder;
-use deadsync_net::{self as network, AgentConfig, HttpAgent};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::borrow::Cow;

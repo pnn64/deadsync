@@ -17,7 +17,7 @@
 //!   happen once on this machine rather than once per launch.
 
 use crate::pack_page;
-use deadsync_net as network;
+use crate::network;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};

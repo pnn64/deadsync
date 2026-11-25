@@ -44,7 +44,7 @@
 //! Everything here blocks on the network or the disk. Worker threads only.
 
 use crate::stepmaniaonline as smo;
-use deadsync_net as network;
+use crate::network;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Write as _};

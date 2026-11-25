@@ -24,7 +24,7 @@
 
 use crate::smo_details;
 use crate::stepmaniaonline;
-use deadsync_net as network;
+use crate::network;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::thread;
 

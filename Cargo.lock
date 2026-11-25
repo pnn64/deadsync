@@ -1661,7 +1661,6 @@ dependencies = [
 name = "deadsync-net"
 version = "0.1.0"
 dependencies = [
- "deadsync-version",
  "memchr",
  "serde",
  "ureq",

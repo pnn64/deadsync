@@ -39,7 +39,7 @@
 //!   is due a thread spawn. [`current`] is a lock and two `Arc` clones.
 
 use super::dates::{YEAR_DAYS, day_number};
-use deadsync_net as network;
+use crate::network;
 use serde::de::{self, IgnoredAny, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};

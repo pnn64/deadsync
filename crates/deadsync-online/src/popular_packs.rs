@@ -29,7 +29,7 @@
 //! out of twenty-four, the variants fail on every entry that has them and no
 //! live small field. So the variants are not read at all.
 
-use deadsync_net as network;
+use crate::network;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::thread;
 

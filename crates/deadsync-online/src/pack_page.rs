@@ -11,7 +11,7 @@
 //! returning is free, and the cache is bounded so a long browse cannot grow
 //! without limit.
 
-use deadsync_net as network;
+use crate::network;
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};

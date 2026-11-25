@@ -1,3 +1,4 @@
+use crate::network::{self, NetworkError};
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
@@ -11,7 +12,6 @@ use std::time::Instant;
 use crate::OnlineRequestError;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::GameplayProfileData;
-use deadsync_net::{self as network, NetworkError};
 use deadsync_profile as profile_data;
 use deadsync_profile::{Profile, RemoveMask, TimingWindowsOption};
 use deadsync_profile_gameplay::{

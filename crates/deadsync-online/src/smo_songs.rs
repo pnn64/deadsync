@@ -50,11 +50,11 @@
 //! - Worst frame cost: one mutex acquisition plus an `Arc` clone. Nothing here
 //!   touches the network or the disk on the caller's thread.
 
+use crate::network;
 use crate::pack_archive::{self, ArchiveError, PackIndex, SimfileTags, SongMatch};
 use crate::song_preview;
 use crate::stepmaniaonline::{self, StepManiaOnlineError};
 use deadsync_chart::song::ITG_SYNC_OFFSET_SECONDS;
-use deadsync_net as network;
 use deadsync_simfile::sync_offset;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::OsStr;

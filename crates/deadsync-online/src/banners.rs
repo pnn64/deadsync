@@ -10,7 +10,7 @@
 //! to the shell and the shell turns them into a texture -- which also keeps
 //! `image` out of this crate.
 
-use deadsync_net as network;
+use crate::network;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};

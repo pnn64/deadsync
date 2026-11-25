@@ -1,4 +1,4 @@
-use deadsync_net as network;
+use crate::network;
 use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter, Write as _};
 use std::fs::{self, File, OpenOptions};

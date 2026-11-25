@@ -56,7 +56,7 @@ use crate::pack_page::{self, PackPage, SongRow};
 use crate::smo_search::{self, CreditPack};
 use crate::smo_songs::{self, Failure, PackCache};
 use crate::stepmaniaonline::{self, PackInfo};
-use deadsync_net as network;
+use crate::network;
 use rand::seq::SliceRandom;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;

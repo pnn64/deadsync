@@ -21,7 +21,7 @@
 
 use crate::smo_details::{self, PackDetails};
 use crate::smo_search::percent_encode;
-use deadsync_net as network;
+use crate::network;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::thread;

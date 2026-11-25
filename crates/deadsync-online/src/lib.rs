@@ -8,6 +8,7 @@ pub mod itgdb;
 pub mod lobbies;
 pub mod lobby_selection;
 pub mod lobby_wait;
+mod network;
 pub mod pack_archive;
 pub mod pack_page;
 pub mod player_leaderboards;

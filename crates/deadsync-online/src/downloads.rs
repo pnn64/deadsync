@@ -1,5 +1,5 @@
 use crate::groovestats::ConnectionStatus;
-use deadsync_net as network;
+use crate::network;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::cmp::Ordering as CmpOrdering;

@@ -210,6 +210,9 @@ theme to describe an input or store a setting:
   and timing offsets needed for each operation. The shell supplies the music
   duration probe using the same audio timeline as playback. `deadsync-simfile`
   owns the catalog, parsing, cache refresh, and sync analysis load policy.
+- `deadsync-online` owns DeadSync's HTTP User-Agent and shared connection
+  pools. `deadsync-net` builds clients with caller-supplied settings and
+  handles HTTP errors, body size limits, and response decoding.
 
 ## Gameplay policy and presentation
 

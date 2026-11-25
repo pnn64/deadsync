@@ -15,7 +15,7 @@
 //! lists, still downloads, and simply shows no banner or date -- the browser is
 //! never blocked on this.
 
-use deadsync_net as network;
+use crate::network;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::thread;

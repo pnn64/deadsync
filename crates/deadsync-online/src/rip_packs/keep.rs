@@ -40,12 +40,12 @@
 
 use super::share::era_key;
 use super::{DeclaredSync, HeldSong, RipOptions, RipSong, SongState};
+use crate::network;
 use crate::pack_archive::{self, ArchiveError, PackIndex};
 use crate::smo_songs::{self, PackCache};
 use crate::stepmaniaonline::{self, PackInfo, StepManiaOnlineError};
 use chrono::{Local, NaiveDate};
 use deadsync_chart::song::ITG_SYNC_OFFSET_SECONDS;
-use deadsync_net as network;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::fs::{self, File};

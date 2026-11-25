@@ -47,7 +47,7 @@
 use super::{DeclaredSync, Era, HeldSong, RipOptions, RipSong};
 use crate::pack_archive::PackIndex;
 use crate::stepmaniaonline::PackInfo;
-use deadsync_net as network;
+use crate::network;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};

@@ -10654,6 +10654,21 @@ fn download_protocol_imports_do_not_use_game_facade() {
 }
 
 #[test]
+fn net_takes_application_identity_from_its_callers() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let net = root.join("crates/deadsync-net");
+    let manifest = read_source(net.join("Cargo.toml")).expect("net manifest");
+    assert!(!manifest.contains("deadsync-version"));
+    for file in production_rust_files(&net.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadsync_version"),
+            "{} uses application versioning",
+            file.display(),
+        );
+    }
+}
+
+#[test]
 fn transport_error_mapping_stays_in_net_crate() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();

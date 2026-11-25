@@ -13,7 +13,7 @@
 //! -- the pack names -- and matches them against SMO's catalog by name, because
 //! itgdb's ids are its own and mean nothing to the download host.
 
-use deadsync_net as network;
+use crate::network;
 use std::collections::HashSet;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::thread;

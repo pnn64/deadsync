@@ -1,8 +1,8 @@
+use crate::network::{self, NetworkError};
 use crate::OnlineRequestError;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::GameplayProfileData;
-use deadsync_net::{self as network, NetworkError};
 use deadsync_profile as profile_data;
 use deadsync_profile::Profile;
 use deadsync_rules::{
@@ -2937,14 +2937,22 @@ pub enum DeviceLoginEvent {
 pub fn device_login_start(
     body: &DeviceLoginStartReq,
 ) -> Result<DeviceLoginStartResp, NetworkError> {
-    network::post_json(&format!("{DEVICE_LOGIN_BASE}/start"), body)
+    network::post_json_with(
+        &network::get_agent(),
+        &format!("{DEVICE_LOGIN_BASE}/start"),
+        body,
+    )
 }
 
 /// `POST /device-login/poll`. Asks `ArrowCloud` for the current status of
 /// a device-login session. When `status == "consumed"`, the response
 /// carries the new API key.
 pub fn device_login_poll(body: &DeviceLoginPollReq) -> Result<DeviceLoginPollResp, NetworkError> {
-    network::post_json(&format!("{DEVICE_LOGIN_BASE}/poll"), body)
+    network::post_json_with(
+        &network::get_agent(),
+        &format!("{DEVICE_LOGIN_BASE}/poll"),
+        body,
+    )
 }
 
 pub fn run_device_login_session<F>(cancel: Arc<AtomicBool>, dispatch: F)
