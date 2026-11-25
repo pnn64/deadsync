@@ -101,6 +101,12 @@ fn every_16_bit_word_preserves_555_565_and_explicit_alpha() {
         .into_iter()
         .flat_map(u16::to_le_bytes)
         .collect();
+    let padded_triples: Vec<_> = narrow_rows
+        .as_chunks::<6>()
+        .0
+        .iter()
+        .flat_map(|row| row.iter().copied().chain([0xad, 0xcf]))
+        .collect();
     for (format, green_bits, has_alpha) in [
         (Format::rgb(16), 5, false),
         (
@@ -174,6 +180,7 @@ fn every_16_bit_word_preserves_555_565_and_explicit_alpha() {
         for (width, height, rows, expected) in [
             (width, height, rows.as_slice(), expected.as_slice()),
             (2, 3, narrow_rows.as_slice(), narrow_expected.as_slice()),
+            (3, 2, padded_triples.as_slice(), narrow_expected.as_slice()),
         ] {
             for top_down in [false, true] {
                 let bitmap = decode(&wire(format, width, height, top_down, &[], rows)).unwrap();
