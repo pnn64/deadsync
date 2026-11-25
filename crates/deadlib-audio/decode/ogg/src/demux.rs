@@ -84,14 +84,14 @@ impl Streams {
         }
     }
 
-    fn find(&self, serial: u32) -> Option<(usize, &Stream)> {
+    fn find_mut(&mut self, serial: u32) -> Option<(usize, &mut Stream)> {
         match self {
             Self::Single(stream) => stream
-                .as_ref()
+                .as_mut()
                 .filter(|s| s.serial == serial)
                 .map(|s| (0, s)),
             Self::Many(streams) => streams
-                .iter()
+                .iter_mut()
                 .enumerate()
                 .rev()
                 .find(|(_, s)| s.serial == serial),
@@ -247,7 +247,7 @@ impl Demuxer {
     ) -> Result<PageState, Error> {
         let header = page.header();
         let complete = page.completed_packets();
-        let index = match self.streams.find(header.serial) {
+        let (index, stream) = match self.streams.find_mut(header.serial) {
             Some((index, stream)) => {
                 if header.is_bos() {
                     return Err(Error::Invalid("duplicate serial/BOS"));
@@ -265,7 +265,7 @@ impl Demuxer {
                 if header.is_continued() != stream.continuing {
                     return Err(Error::Invalid("packet continuation flag"));
                 }
-                index
+                (index, stream)
             }
             None => {
                 if !header.is_bos() {
@@ -313,10 +313,9 @@ impl Demuxer {
                     granule: UNKNOWN_GRANULE_POSITION,
                 })?;
                 self.active += 1;
-                index
+                (index, self.streams.get_mut(index))
             }
         };
-        let stream = self.streams.get_mut(index);
         let previous = (stream.granule != UNKNOWN_GRANULE_POSITION).then_some(stream.granule);
         let (granule, compatibility) =
             validation::granule(page, header, complete, previous, self.validation)?;
