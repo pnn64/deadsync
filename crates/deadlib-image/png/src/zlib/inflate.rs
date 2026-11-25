@@ -221,7 +221,7 @@ impl Inflater {
             return;
         }
         let start = (self.history_pos + size - distance) & (size - 1);
-        if matches!(distance, 2 | 4) && n >= 16 {
+        if n >= 16 && matches!(distance, 2 | 4 | 8) {
             self.copy_short_period(distance, start, output);
             return;
         }
@@ -245,8 +245,14 @@ impl Inflater {
     #[inline(never)]
     fn copy_short_period(&mut self, distance: usize, start: usize, output: &mut [u8]) {
         let mask = self.history.len() - 1;
-        let pattern = core::array::from_fn(|i| self.history[(start + (i & (distance - 1))) & mask]);
-        let (words, tail) = output.as_chunks_mut::<4>();
+        let pattern = if distance == 8
+            && let Some(bytes) = self.history[start..].first_chunk::<8>()
+        {
+            *bytes
+        } else {
+            core::array::from_fn(|i| self.history[(start + (i & (distance - 1))) & mask])
+        };
+        let (words, tail) = output.as_chunks_mut::<8>();
         words.fill(pattern);
         tail.copy_from_slice(&pattern[..tail.len()]);
         self.remember(output);

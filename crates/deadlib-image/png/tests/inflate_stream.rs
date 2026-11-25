@@ -79,7 +79,11 @@ fn short_period_matches_wrap_history_and_resume_at_any_phase() {
     lengths[256..280].fill(7);
     let literals = wire::Codes::new(&lengths);
     let distances = wire::Codes::new(&[5; 32]);
-    for pattern in [&[17, 99][..], &[1, 7, 251, 184][..]] {
+    for (pattern, symbol) in [
+        (&[17, 99][..], 1),
+        (&[1, 7, 251, 184][..], 3),
+        (&[3, 11, 87, 201, 29, 63, 171, 219][..], 5),
+    ] {
         let distance = pattern.len();
         let mut raw = vec![0; 32769 - distance];
         raw.extend_from_slice(pattern);
@@ -88,12 +92,15 @@ fn short_period_matches_wrap_history_and_resume_at_any_phase() {
         stream.put(3, 3); // Final fixed-Huffman block.
         for _ in 0..2 {
             literals.symbol(&mut stream, 285); // Length 258.
-            distances.symbol(&mut stream, distance - 1);
+            distances.symbol(&mut stream, symbol);
+            if distance == 8 {
+                stream.put(1, 1); // Distance code 5 starts at seven.
+            }
         }
         literals.symbol(&mut stream, 256);
         raw.extend((0..516).map(|n| pattern[n % distance]));
         let compressed = stream.finish(&raw, false);
-        for output in [15, 16, 17, 31, 258, 4096] {
+        for output in [15, 16, 17, 31, 32, 33, 258, 4096] {
             let (actual, used) = support::inflate(&compressed, 7, output, raw.len()).unwrap();
             assert_eq!(actual, raw, "distance={distance} output={output}");
             assert_eq!(used, compressed.len());
