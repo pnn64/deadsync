@@ -293,17 +293,26 @@ impl Compositor {
                 if let Some(colors) = binary_colors {
                     draw_binary_indices::<false>(canvas, r, indices, width, colors, transparent);
                 } else if visible <= 256
-                    && r.w == stride
-                    && width == stride
                     && let Some(palette) = local.and_then(|p| p.first_chunk::<256>())
                 {
-                    let start = r.y * stride;
+                    let rows = &mut canvas.0[r.y * stride..(r.y + r.h) * stride];
                     let transparent = transparent.map_or(256, u16::from);
-                    for (pixel, &index) in canvas.0[start..start + visible].iter_mut().zip(indices)
-                    {
-                        if u16::from(index) != transparent {
-                            let [red, green, blue] = palette[usize::from(index)];
-                            *pixel = [red, green, blue, 255];
+                    let paint = |dest: &mut [[u8; 4]], source: &[u8]| {
+                        for (pixel, &index) in dest.iter_mut().zip(source) {
+                            if u16::from(index) != transparent {
+                                let [red, green, blue] = palette[usize::from(index)];
+                                *pixel = [red, green, blue, 255];
+                            }
+                        }
+                    };
+                    if r.w == stride && width == stride {
+                        paint(rows, indices);
+                    } else {
+                        for (source, dest) in indices
+                            .chunks_exact(width)
+                            .zip(rows.chunks_exact_mut(stride))
+                        {
+                            paint(&mut dest[r.x..r.x + r.w], source);
                         }
                     }
                 } else {
