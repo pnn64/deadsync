@@ -242,24 +242,39 @@ fn unpack_strided<const N: usize, const STEP: usize>(
 }
 
 pub(crate) fn scatter<T: Copy, const CHANNELS: usize>(row: &[T], out: &mut [T], step: usize) {
-    for (pixel, dst) in row
-        .as_chunks::<CHANNELS>()
-        .0
-        .iter()
-        .zip(out.chunks_mut(step * CHANNELS))
-    {
-        dst[..CHANNELS].copy_from_slice(pixel);
-    }
+    scatter_map::<_, _, CHANNELS>(row, out, step, |pixel| pixel);
 }
 
 pub(crate) fn scatter_words<const CHANNELS: usize>(row: &[[u8; 2]], out: &mut [u16], step: usize) {
-    for (pixel, dst) in row
-        .as_chunks::<CHANNELS>()
-        .0
-        .iter()
-        .zip(out.chunks_mut(step * CHANNELS))
-    {
-        dst[..CHANNELS].copy_from_slice(&pixel.map(u16::from_be_bytes));
+    scatter_map::<_, _, CHANNELS>(row, out, step, |pixel| pixel.map(u16::from_be_bytes));
+}
+
+fn scatter_map<T: Copy, U, const CHANNELS: usize>(
+    row: &[T],
+    out: &mut [U],
+    step: usize,
+    map: impl Fn([T; CHANNELS]) -> [U; CHANNELS],
+) {
+    match step {
+        2 => scatter_step::<_, _, CHANNELS, 2>(row, out, map),
+        4 => scatter_step::<_, _, CHANNELS, 4>(row, out, map),
+        8 => scatter_step::<_, _, CHANNELS, 8>(row, out, map),
+        _ => unreachable!("validated Adam7 scatter step"),
+    }
+}
+
+fn scatter_step<T: Copy, U, const CHANNELS: usize, const STEP: usize>(
+    row: &[T],
+    out: &mut [U],
+    map: impl Fn([T; CHANNELS]) -> [U; CHANNELS],
+) {
+    let mut source = row.as_chunks::<CHANNELS>().0.iter();
+    let (groups, tail) = out.as_chunks_mut::<CHANNELS>().0.as_chunks_mut::<STEP>();
+    for (group, &pixel) in groups.iter_mut().zip(&mut source) {
+        group[0] = map(pixel);
+    }
+    if let Some((dst, &pixel)) = tail.first_mut().zip(source.next()) {
+        *dst = map(pixel);
     }
 }
 
