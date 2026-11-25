@@ -1490,20 +1490,30 @@ impl Vm {
         let metatable_words = (self.gc.metatable_table_end as usize).div_ceil(64);
         let tables = self
             .tables
-            .marked_slots_in_words(metatable_words)
+            .marked_slots_in_words(0..metatable_words)
             .filter(|&index| self.tables[index].metatable().is_some())
             .count();
-        // The active stack owns all open cells when it is the only live thread.
-        let refresh_open_cells = self.upvalues.live_len() != 0
-            && (!self.open_upvalues.is_empty() || self.threads.live_len() != 1);
-        let cells = if refresh_open_cells {
-            self.upvalues
-                .marked_slots()
-                .filter(|&index| matches!(self.upvalues[index], Cell::Open(..)))
-                .count()
+        let open_words = if self.upvalues.live_len() == 0 {
+            0..0
+        } else if self.threads.live_len() == 1 {
+            // The active stack owns all open cells. Slot order still comes
+            // from the bitmap, since closing a cell can swap list entries.
+            if let Some((&first, rest)) = self.open_upvalues.split_first() {
+                let (lowest, highest) = rest.iter().fold((first, first), |(lo, hi), &index| {
+                    (lo.min(index), hi.max(index))
+                });
+                lowest as usize / 64..highest as usize / 64 + 1
+            } else {
+                0..0
+            }
         } else {
-            0
+            0..self.upvalues.len().div_ceil(64)
         };
+        let cells = self
+            .upvalues
+            .marked_slots_in_words(open_words.clone())
+            .filter(|&index| matches!(self.upvalues[index], Cell::Open(..)))
+            .count();
         let refresh = threads.saturating_add(tables).saturating_add(cells);
         let available = (work.capacity() - work.len()).saturating_sub(refresh);
         let roots = self.seed_gc_root_count(available);
@@ -1511,16 +1521,14 @@ impl Vm {
         for key in self.threads.marked_keys() {
             work.push(Trace::ThreadAgain(ThreadId(key)));
         }
-        for index in self.tables.marked_slots_in_words(metatable_words) {
+        for index in self.tables.marked_slots_in_words(0..metatable_words) {
             if self.tables[index].metatable().is_some() {
                 work.push(Trace::TableAgain(TableId(self.tables.key(index).unwrap())));
             }
         }
-        if refresh_open_cells {
-            for index in self.upvalues.marked_slots() {
-                if matches!(self.upvalues[index], Cell::Open(..)) {
-                    work.push(Trace::CellAgain(index));
-                }
+        for index in self.upvalues.marked_slots_in_words(open_words) {
+            if matches!(self.upvalues[index], Cell::Open(..)) {
+                work.push(Trace::CellAgain(index));
             }
         }
         self.seed_gc_roots(work);

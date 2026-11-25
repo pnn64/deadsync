@@ -244,16 +244,20 @@ impl<T> Arena<T> {
     }
     // Removing a value clears its mark, so every returned slot is live.
     pub(crate) fn marked_slots(&self) -> impl Iterator<Item = usize> + '_ {
-        self.marked_slots_in_words(self.marks.len())
+        self.marked_slots_in_words(0..self.marks.len())
     }
-    pub(crate) fn marked_slots_in_words(&self, words: usize) -> impl Iterator<Item = usize> + '_ {
-        let mut words = self.marks[..words].iter().copied().enumerate();
+    pub(crate) fn marked_slots_in_words(
+        &self,
+        words: std::ops::Range<usize>,
+    ) -> impl Iterator<Item = usize> + '_ {
+        let start = words.start;
+        let mut words = self.marks[words].iter().copied().enumerate();
         let mut base = 0;
         let mut bits: u64 = 0;
         std::iter::from_fn(move || {
             if bits == 0 {
                 let (word, nonzero) = words.find(|&(_, bits)| bits != 0)?;
-                base = word * 64;
+                base = (start + word) * 64;
                 bits = nonzero;
             }
             let slot = base + bits.trailing_zeros() as usize;
