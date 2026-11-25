@@ -179,6 +179,8 @@ theme to describe an input or store a setting:
   with no wrapper allocation or conversion.
 - `deadsync-input` owns the logical device namespace, including persisted RE:Flex
   IDs. `deadlib-platform::input` owns physical events and native transport limits.
+  Input assigns the first-use RE:Flex action bindings and preserves custom
+  mappings. The shell applies and saves them outside Gameplay and Practice.
 - `deadlib-platform::input` also owns the Windows backend preference, stable
   device UUID generation, and the bounded UUID-to-slot table. Config reads and
   writes the pad-order INI keys, and the shell provides slot lookup to native

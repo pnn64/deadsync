@@ -2,12 +2,9 @@
 //! service's snapshots; closing the editor never stops gameplay sensor reads.
 mod config;
 mod detection;
-mod mapping;
 mod protocol;
 mod view;
-pub use mapping::install_default_bindings;
-/// Vendor-specific codes avoid matching generic joystick button bindings.
-pub const BUTTON_CODE_BASE: u32 = 0x5246_0000;
+pub use deadsync_input::devices::REFLEX_BUTTON_CODE_BASE as BUTTON_CODE_BASE;
 #[cfg(any(
     windows,
     target_os = "linux",

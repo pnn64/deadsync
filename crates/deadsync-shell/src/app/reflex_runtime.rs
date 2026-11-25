@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_input::bindings::install_reflex_default_bindings;
 use deadsync_lights::{ButtonLight, Player};
 use deadsync_reflex::LightFrame;
 
@@ -16,7 +17,7 @@ impl App {
         for player in 0..2 {
             if deadsync_reflex::needs_default_mapping(player) {
                 let mut keymap = deadsync_input::get_keymap();
-                if deadsync_reflex::install_default_bindings(player, &mut keymap) {
+                if install_reflex_default_bindings(player, &mut keymap) {
                     self.input.set_keymap(&keymap);
                     deadsync_input::set_keymap(keymap);
                     config::runtime::save_without_keymaps();

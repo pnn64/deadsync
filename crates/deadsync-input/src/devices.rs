@@ -6,6 +6,9 @@ use std::fmt;
 
 pub type GamepadSystemEvent = GpSystemEvent<GamepadBackend>;
 
+/// Reserved RE:Flex panel codes. Saved bindings use these values.
+pub const REFLEX_BUTTON_CODE_BASE: u32 = 0x5246_0000;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GamepadBackend {
     Native(PadBackend),

@@ -7,6 +7,10 @@ use crate::{
     parse_gamepad_code_binding, parse_pad_dir,
 };
 
+mod reflex;
+
+pub use reflex::install_reflex_default_bindings;
+
 #[must_use]
 pub fn default_keymap() -> Keymap {
     let mut km = Keymap::default();

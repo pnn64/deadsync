@@ -9121,6 +9121,14 @@ fn dedicated_controller_providers_stay_in_the_game() {
     let reflex = read_source(root.join("crates/deadsync-reflex/src/io.rs"))
         .expect("RE:Flex driver");
     assert!(reflex.contains("GamepadBackend::Reflex"));
+    let reflex = root.join("crates/deadsync-reflex/src");
+    for file in production_rust_files(&reflex) {
+        assert!(!production_source(&file).contains("install_default_bindings"));
+    }
+    let defaults = production_source(&root.join("crates/deadsync-input/src/bindings/reflex.rs"));
+    assert!(defaults.contains("pub fn install_reflex_default_bindings("));
+    let reflex_runtime = production_source(&root.join("crates/deadsync-shell/src/app/reflex_runtime.rs"));
+    assert!(reflex_runtime.contains("install_reflex_default_bindings(player, &mut keymap)"));
     let smx = read_source(root.join("crates/deadsync-smx/src/lib.rs")).expect("StepManiaX driver");
     assert!(smx.contains("GpSystemEvent<()>"));
     let launch = read_source(root.join("crates/deadsync-shell/src/input_backend.rs"))
