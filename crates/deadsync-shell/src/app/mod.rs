@@ -11384,7 +11384,7 @@ pub fn init_paths(dirs: &AppDirs) -> Result<(), &'static str> {
     use deadsync_simfile::media::{BG_ANIMATIONS_DIR, RANDOM_MOVIES_DIR, SONG_MOVIES_DIR};
     let cwd = std::env::current_dir().ok();
     let media_roots = |name| dirs.media_roots(name, cwd.as_deref());
-    if let Err(error) = deadsync_updater::workshop::migrate(
+    if let Err(error) = crate::workshop::migrate(
         &dirs.workshop_dir(cwd.as_deref()),
         &media_roots("noteskin-packs"),
     ) {

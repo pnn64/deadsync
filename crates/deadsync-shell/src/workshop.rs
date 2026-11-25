@@ -1,10 +1,10 @@
 //! Download and transactionally install HURG-IIDX's Cel and Metal Workshop.
 
-use crate::{ReleaseAsset, UpdaterError, download};
 use deadsync_noteskin::{
     pack::InstalledPack,
     workshop::{self, PACK_ID},
 };
+use deadsync_updater::{ReleaseAsset, UpdaterError, download};
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -162,7 +162,7 @@ fn install_from(target: &Path, asset: &ReleaseAsset, expected: &[u8; 32]) -> Res
     let mut last = Instant::now();
     let oversized = AtomicBool::new(false);
     let agent: ureq::Agent = ureq::Agent::config_builder()
-        .user_agent(crate::user_agent())
+        .user_agent(deadsync_updater::user_agent())
         .timeout_connect(Some(Duration::from_secs(15)))
         // This is a deadline for the entire 426 MiB body, not an idle-read timeout.
         // One hour accommodates roughly 1 Mbps connections; cancellation is polled per chunk.

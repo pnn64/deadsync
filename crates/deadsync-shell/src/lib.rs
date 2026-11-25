@@ -61,6 +61,7 @@ mod sync_analysis_cache;
 mod transition_effects;
 mod window;
 mod window_state;
+mod workshop;
 
 pub(crate) use command::Command;
 pub(crate) use course::CourseRunState;

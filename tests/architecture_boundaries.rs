@@ -9872,6 +9872,24 @@ fn version_utils_live_in_version_crate() {
 }
 
 #[test]
+fn application_updater_is_independent_of_noteskins() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let updater = root.join("crates/deadsync-updater");
+    let manifest = read_source(updater.join("Cargo.toml")).expect("updater manifest");
+    assert!(
+        !manifest.contains("deadsync-noteskin"),
+        "the application updater must remain independent of noteskin compilation"
+    );
+    for file in production_rust_files(&updater.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadsync_noteskin"),
+            "{} imports the noteskin runtime",
+            file.display()
+        );
+    }
+}
+
+#[test]
 fn updater_core_lives_in_updater_crate() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();

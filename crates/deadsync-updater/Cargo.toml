@@ -5,7 +5,6 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
-deadsync-noteskin = { path = "../deadsync-noteskin" }
 deadsync-version = { path = "../deadsync-version" }
 flate2 = "1.1.11"
 log = "0.4.35"

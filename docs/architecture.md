@@ -176,6 +176,9 @@ theme to describe an input or store a setting:
   preferred play mode shared by both crates. The shell supplies machine defaults
   and the callback for saving default profile IDs. Profiles resolve session
   styles and modes, manage profile files, and apply confirmed selections.
+- The shell installs and migrates the Cel and Metal Workshop. It uses
+  `deadsync-updater` for checksum-verified downloads and `deadsync-noteskin`
+  for pack compilation and validation.
 - The shell supplies DeadSync's Vulkan instance names through
   `deadlib-render::BackendOptions` at startup and renderer recreation.
   The engine provides generic defaults and labels its own GPU resources.

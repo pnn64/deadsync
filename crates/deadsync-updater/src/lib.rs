@@ -34,7 +34,6 @@ pub mod cli;
 pub mod download;
 pub mod ffmpeg;
 pub mod state;
-pub mod workshop;
 
 #[cfg(windows)]
 pub mod apply_windows;

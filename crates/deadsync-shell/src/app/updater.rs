@@ -1,3 +1,4 @@
+use crate::workshop;
 use deadsync_theme::app_requests::UpdaterRequest;
 use deadsync_theme_simply_love::views::{
     SimplyLoveFfmpegPhase, SimplyLoveReleaseAssetView, SimplyLoveReleaseView,
@@ -56,8 +57,8 @@ impl RuntimeCursor {
         let workshop = replace_on_revision(
             &mut self.workshop_revision,
             &mut self.view.workshop,
-            deadsync_updater::workshop::phase_revision(),
-            || workshop_phase(deadsync_updater::workshop::current()),
+            workshop::phase_revision(),
+            || workshop_phase(workshop::current()),
         );
         RuntimeChange {
             update,
@@ -88,11 +89,11 @@ fn replace_on_revision<T>(
 
 pub(super) fn execute(request: UpdaterRequest, dirs: &deadsync_config::dirs::AppDirs) {
     match request {
-        UpdaterRequest::InstallWorkshop => deadsync_updater::workshop::request_install(
+        UpdaterRequest::InstallWorkshop => workshop::request_install(
             dirs.workshop_dir(std::env::current_dir().ok().as_deref()),
             deadsync_assets::noteskin::refresh_packs,
         ),
-        UpdaterRequest::DismissWorkshop => deadsync_updater::workshop::dismiss(),
+        UpdaterRequest::DismissWorkshop => workshop::dismiss(),
         UpdaterRequest::CheckForUpdates => action::request_check_now(),
         UpdaterRequest::CheckForRollback => action::request_rollback_check(),
         UpdaterRequest::DownloadUpdate => action::request_download(),
@@ -273,10 +274,10 @@ mod tests {
 }
 
 fn workshop_phase(
-    phase: deadsync_updater::workshop::Phase,
+    phase: workshop::Phase,
 ) -> deadsync_theme_simply_love::views::SimplyLoveWorkshopPhase {
+    use crate::workshop::Phase;
     use deadsync_theme_simply_love::views::SimplyLoveWorkshopPhase as View;
-    use deadsync_updater::workshop::Phase;
     match phase {
         Phase::Idle => View::Idle,
         Phase::Downloading { written, total } => View::Downloading { written, total },
