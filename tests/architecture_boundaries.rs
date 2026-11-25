@@ -612,7 +612,19 @@ fn chart_lua_playback_has_no_theme_dependency() {
     assert!(!profiles.contains("deadsync-song-lua"));
     let context = production_source(&root.join("crates/deadsync-assets/src/song_lua/context.rs"));
     assert!(context.contains("pub fn song_lua_compile_context("));
-    assert!(context.contains("pub fn prepare_song_lua("));
+    assert!(!context.contains("deadsync_simfile::"));
+    let assets = read_source(root.join("crates/deadsync-assets/Cargo.toml"))
+        .expect("game asset manifest");
+    let normal_assets = assets.split("[dev-dependencies]").next().unwrap();
+    assert!(!normal_assets.contains("deadsync-simfile"));
+    let entry = production_source(&root.join("crates/deadsync-shell/src/gameplay_entry/song_lua.rs"));
+    for loader in [
+        "pub fn prepare_song_lua(",
+        "deadsync_simfile::app_runtime::load_chart_timing_and_notes(",
+        "deadsync_simfile::song::load_native_step_metadata(",
+    ] {
+        assert!(entry.contains(loader), "the shell should contain {loader}");
+    }
     let manifest = read_source(root.join("crates/deadsync-song-lua/Cargo.toml"))
         .expect("shared playback manifest");
     let manifest = manifest.split("[dev-dependencies]").next().unwrap();
@@ -9595,10 +9607,9 @@ fn song_lua_takes_media_probes_from_its_host() {
     let assets = read_source(root.join("crates/deadsync-assets/Cargo.toml"))
         .expect("game asset manifest");
     assert!(!assets.contains("deadlib-audio-decode"));
-    let host = production_source(&root.join("crates/deadsync-shell/src/gameplay_entry.rs"));
+    let host = production_source(&root.join("crates/deadsync-shell/src/gameplay_entry/song_lua.rs"));
     assert!(host.contains("sound_length_seconds: Some(song_lua_sound_length_seconds)"));
-    let context = production_source(&root.join("crates/deadsync-assets/src/song_lua/context.rs"));
-    assert!(context.contains("..media_probes"));
+    assert!(host.contains("..media_probes"));
 }
 
 #[test]

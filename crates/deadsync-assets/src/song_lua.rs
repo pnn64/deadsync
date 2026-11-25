@@ -18,7 +18,7 @@ use deadsync_song_lua::{
 mod context;
 
 pub use context::{
-    prepare_song_lua, song_lua_catalog_note_bounds, song_lua_compile_context, song_lua_context,
+    resolve_song_lua_judgment_textures, song_lua_catalog_note_bounds, song_lua_compile_context,
     song_lua_play_context,
 };
 

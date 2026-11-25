@@ -241,6 +241,8 @@ theme to describe an input or store a setting:
 - Song Lua owns media path lookup and actor metadata caching. The shell supplies
   the sound duration probe to stage preparation. Asset-backed compilation
   supplies movie dimensions, and headless callers can supply a sound probe.
+  The shell loads chart timing, note rows, and authored Steps in native order
+  for the Lua context. The asset host resolves the initial judgment textures.
   `deadsync-input` translates physical events into legacy device and button
   names for accepted Song Lua callbacks.
 

@@ -1,21 +1,14 @@
 use crate::Command;
 pub use deadsync_assets::gameplay_stage::PreparedGameplaySongLua;
-pub use deadsync_assets::song_lua::{apply_song_lua_reload, prepare_song_lua, song_lua_context};
+pub use deadsync_assets::song_lua::apply_song_lua_reload;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::stage_charts::GameplayChartEntryPlan;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
-use deadsync_song_lua::SongLuaMediaProbes;
 
-/// Media metadata available to the stage and headless callers using the same assets.
-pub const SONG_LUA_MEDIA_PROBES: SongLuaMediaProbes = SongLuaMediaProbes {
-    sound_length_seconds: Some(song_lua_sound_length_seconds),
-    ..deadsync_assets::song_lua::MEDIA_PROBES
-};
+mod song_lua;
 
-fn song_lua_sound_length_seconds(path: &std::path::Path) -> Result<f32, String> {
-    deadlib_audio_decode::file_length_seconds(path, Default::default())
-}
+pub use song_lua::{SONG_LUA_MEDIA_PROBES, prepare_song_lua, song_lua_context};
 
 pub(crate) fn gameplay_last_played_commands(
     song: &SongData,
