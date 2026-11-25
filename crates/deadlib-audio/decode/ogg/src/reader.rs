@@ -315,10 +315,14 @@ pub struct PageProgress<'a> {
 #[derive(Default)]
 pub struct PageDecoder {
     buffer: Vec<u8>,
-    length: usize,
-    ready: bool,
-    failed: bool,
+    // Zero before sizing, with two reserved values below for terminal states.
+    length: u16,
 }
+// Page lengths fit below either terminal state.
+const PAGE_READY: u16 = u16::MAX;
+const PAGE_FAILED: u16 = PAGE_READY - 1;
+const _: () = assert!(MAX_PAGE_SIZE < PAGE_FAILED as usize);
+
 impl PageDecoder {
     pub fn new() -> Self {
         Self::default()
@@ -326,27 +330,24 @@ impl PageDecoder {
     pub fn reset(&mut self) {
         self.buffer.clear();
         self.length = 0;
-        self.ready = false;
-        self.failed = false;
     }
     pub fn finish(&mut self) -> Result<(), Error> {
-        if self.failed {
+        if self.length == PAGE_FAILED {
             return Err(Error::Failed);
         }
-        if !self.buffer.is_empty() && !self.ready {
-            self.failed = true;
+        if !self.buffer.is_empty() && self.length != PAGE_READY {
+            self.length = PAGE_FAILED;
             return Err(Error::Truncated);
         }
         Ok(())
     }
     pub fn push(&mut self, input: &[u8]) -> Result<PageProgress<'_>, Error> {
-        if self.failed | self.ready {
-            if self.failed {
+        if self.length >= PAGE_FAILED {
+            if self.length == PAGE_FAILED {
                 return Err(Error::Failed);
             }
             self.buffer.clear();
             self.length = 0;
-            self.ready = false;
         }
         // Every available prefix was validated by the preceding push.
         if input.is_empty() {
@@ -358,7 +359,7 @@ impl PageDecoder {
         let result = self.fill_page(input);
         match result {
             Ok((consumed, true)) => {
-                self.ready = true;
+                self.length = PAGE_READY;
                 Ok(PageProgress {
                     consumed,
                     page: Some(Page::verified(&self.buffer)),
@@ -369,20 +370,20 @@ impl PageDecoder {
                 page: None,
             }),
             Err(error) => {
-                self.failed = true;
+                self.length = PAGE_FAILED;
                 Err(error)
             }
         }
     }
     fn fill_page(&mut self, input: &[u8]) -> Result<(usize, bool), Error> {
         // A partial body chunk needs no header planning or input split.
-        if self.length != 0 && input.len() < self.length - self.buffer.len() {
+        if self.length != 0 && input.len() < usize::from(self.length) - self.buffer.len() {
             // Skip intermediate growth on shorter pages. Large pages grow with input.
             if input.len() > self.buffer.capacity() - self.buffer.len()
                 && (self.length > 32 * 1024
                     || self
                         .buffer
-                        .try_reserve(self.length - self.buffer.len())
+                        .try_reserve(usize::from(self.length) - self.buffer.len())
                         .is_err())
             {
                 reserve(&mut self.buffer, input.len())?;
@@ -400,7 +401,7 @@ impl PageDecoder {
                 match reserve(&mut self.buffer, take) {
                     Ok(()) => {
                         self.buffer.extend_from_slice(&input[..take]);
-                        self.length = length;
+                        self.length = length as u16;
                         if complete {
                             page::check_crc(&self.buffer)?;
                         }
@@ -415,7 +416,7 @@ impl PageDecoder {
         let mut consumed = 0;
         loop {
             let target = if self.length != 0 {
-                self.length
+                usize::from(self.length)
             } else if self.buffer.len() < 27 {
                 27
             } else {
@@ -423,8 +424,9 @@ impl PageDecoder {
                 if self.buffer.len() < header {
                     header
                 } else {
-                    self.length = header + page::body_size(&self.buffer[27..header]);
-                    self.length
+                    let length = header + page::body_size(&self.buffer[27..header]);
+                    self.length = length as u16;
+                    length
                 }
             };
             let take = (target - self.buffer.len()).min(input.len() - consumed);
