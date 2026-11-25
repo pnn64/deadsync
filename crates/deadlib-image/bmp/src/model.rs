@@ -126,7 +126,7 @@ impl Bitmap {
                             (first ^ (difference & mask)).to_le_bytes()
                         }));
                     }
-                    _ if indices.len() >= 1024 => {
+                    _ if indices.len() >= 1024 || (palette.len() <= 16 && indices.len() >= 128) => {
                         // Amortize the table setup over enough pixels to use a
                         // single RGBA load per index in the conversion loop.
                         let mut colors = [[0; 4]; 256];
