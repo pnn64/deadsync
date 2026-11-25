@@ -118,8 +118,12 @@ impl Table {
     }
 
     fn native_index_set(&mut self, key: Key, index: usize) {
-        let slot = self.slot(key).expect("allocated identity index").0;
-        self.slots[slot] = (index as u32 + 1) | Self::slot_tag(self.slots.len(), key.hash()).0;
+        let hash = key.hash();
+        let slot = self
+            .slot_hashed(key, hash)
+            .expect("allocated identity index")
+            .0;
+        self.slots[slot] = (index as u32 + 1) | Self::slot_tag(self.slots.len(), hash).0;
     }
 
     fn native_index_remove_at(&mut self, mut hole: usize) {
@@ -148,7 +152,8 @@ impl Table {
             self.array[index] = value;
             return Ok(());
         }
-        let vacant = match self.slot(key) {
+        let identity_hash = key.hash();
+        let vacant = match self.slot_hashed(key, identity_hash) {
             Some((_, Some(index))) => {
                 if value == Value::Nil {
                     if self.entries[index].value != Value::Nil && key.dead().is_some() {
@@ -170,7 +175,7 @@ impl Table {
             Some((slot, None)) => Some(slot),
             None => None,
         };
-        self.native_insert(key, value, hash(key, string_hash), vacant)
+        self.native_insert(key, value, hash(key, string_hash), identity_hash, vacant)
     }
 
     fn native_insert(
@@ -178,6 +183,7 @@ impl Table {
         key: Key,
         value: Value,
         hash: u32,
+        identity_hash: usize,
         vacant: Option<usize>,
     ) -> Result<(), Error> {
         let Some(mut vacant) = vacant else {
@@ -219,7 +225,10 @@ impl Table {
             }
             self.native_index_remove_at(slot);
             // Deletion can shift the identity probe chain before insertion.
-            vacant = self.slot(key).expect("allocated identity index").0;
+            vacant = self
+                .slot_hashed(key, identity_hash)
+                .expect("allocated identity index")
+                .0;
         }
         self.entries[position].key = key;
         self.entries[position].value = value;
@@ -227,7 +236,8 @@ impl Table {
             self.native_dead_keys = self.native_dead_keys.saturating_add(1);
         }
         self.entries[position].native_hash = hash;
-        self.slots[vacant] = (position as u32 + 1) | Self::slot_tag(self.slots.len(), key.hash()).0;
+        self.slots[vacant] =
+            (position as u32 + 1) | Self::slot_tag(self.slots.len(), identity_hash).0;
         self.touch_fields();
         self.invalidate_trace();
         if matches!(key, Key::String(_)) {

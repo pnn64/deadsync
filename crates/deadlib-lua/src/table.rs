@@ -359,9 +359,12 @@ impl Table {
         if self.slots.is_empty() {
             return None;
         }
-        let hash = key.hash();
+        self.slot_hashed(key, key.hash())
+    }
+    fn slot_hashed(&self, key: Key, hash: usize) -> Option<(usize, Option<usize>)> {
+        let mask = self.slots.len().checked_sub(1)?;
         let (tag, index) = Self::slot_tag(self.slots.len(), hash);
-        let mut slot = hash & (self.slots.len() - 1);
+        let mut slot = hash & mask;
         loop {
             let word = self.slots[slot];
             if word == 0 {
@@ -373,7 +376,7 @@ impl Table {
                     return Some((slot, Some(entry)));
                 }
             }
-            slot = (slot + 1) & (self.slots.len() - 1);
+            slot = (slot + 1) & mask;
         }
     }
     // All storage was reserved before tombstones or traversal positions change.
