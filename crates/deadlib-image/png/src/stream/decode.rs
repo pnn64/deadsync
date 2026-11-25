@@ -116,6 +116,30 @@ fn fill(
     Ok(*have == dst.len())
 }
 
+#[inline]
+fn field<'a, const N: usize>(
+    input: &'a [u8],
+    pos: &mut usize,
+    scratch: &'a mut [u8; N],
+    have: &mut usize,
+    budget: &mut usize,
+) -> Result<Option<&'a [u8; N]>, Error> {
+    if *have == 0
+        && *budget >= N
+        && let Some(bytes) = input[*pos..].first_chunk::<N>()
+    {
+        *pos += N;
+        *budget -= N;
+        *have = N;
+        return Ok(Some(bytes));
+    }
+    if fill(input, pos, scratch, have, budget)? {
+        Ok(Some(scratch))
+    } else {
+        Ok(None)
+    }
+}
+
 impl StreamDecoder {
     pub fn new(options: DecodeOptions) -> Self {
         Self::with_metadata_values(options, true)
@@ -613,36 +637,38 @@ impl StreamDecoder {
         loop {
             match self.state {
                 State::Signature => {
-                    if !fill(
+                    let Some(signature) = field(
                         input,
                         &mut pos,
-                        &mut self.fixed[..8],
+                        self.fixed.first_chunk_mut::<8>().unwrap(),
                         &mut self.have,
                         &mut self.input_left,
-                    )? {
+                    )?
+                    else {
                         break;
-                    }
-                    if &self.fixed[..8] != SIGNATURE {
+                    };
+                    if signature != SIGNATURE {
                         return Err(Error::Invalid("signature"));
                     }
                     self.have = 0;
                     self.state = State::ChunkHeader;
                 }
                 State::ChunkHeader => {
-                    if !fill(
+                    let Some(header) = field(
                         input,
                         &mut pos,
-                        &mut self.fixed[..8],
+                        self.fixed.first_chunk_mut::<8>().unwrap(),
                         &mut self.have,
                         &mut self.input_left,
-                    )? {
+                    )?
+                    else {
                         break;
-                    }
-                    self.length = be32(&self.fixed) as usize;
+                    };
+                    self.length = be32(header) as usize;
                     if self.length > 0x7fff_ffff {
                         return Err(Error::Invalid("chunk length exceeds 31 bits"));
                     }
-                    self.kind = self.fixed[4..8].try_into().unwrap();
+                    self.kind = header[4..8].try_into().unwrap();
                     if !self.kind.iter().all(u8::is_ascii_alphabetic) {
                         return Err(Error::Invalid("chunk type"));
                     }
@@ -765,16 +791,17 @@ impl StreamDecoder {
                     self.state = State::ChunkCrc;
                 }
                 State::ChunkCrc => {
-                    if !fill(
+                    let Some(crc) = field(
                         input,
                         &mut pos,
                         &mut self.prefix,
                         &mut self.have,
                         &mut self.input_left,
-                    )? {
+                    )?
+                    else {
                         break;
-                    }
-                    if be32(&self.prefix) != self.crc.finish() {
+                    };
+                    if be32(crc) != self.crc.finish() {
                         if self.options.metadata_policy.discard_bad_crc(&self.kind) {
                             self.validator.charge(self.length)?;
                             self.have = 0;
