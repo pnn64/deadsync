@@ -40,31 +40,30 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
     bitmap.validate()?;
     let width = i32::try_from(bitmap.width).map_err(|_| Error::LimitExceeded)?;
     let height = i32::try_from(bitmap.height).map_err(|_| Error::LimitExceeded)?;
-    let (header, channels): (&[u8], usize) = match &bitmap.pixels {
+    let (header, channels): (&[u8], u64) = match &bitmap.pixels {
         Pixels::Indexed { .. } | Pixels::Rgb(_) => (&RGB_HEADER, 3),
         Pixels::Rgba(_) => (&RGBA_HEADER, 4),
     };
-    let row_bytes = (width as usize)
-        .checked_mul(channels)
-        .ok_or(Error::LimitExceeded)?;
-    let pitch = row_bytes.checked_add(3).ok_or(Error::LimitExceeded)? & !3;
-    let pixel_bytes = pitch
-        .checked_mul(height as usize)
-        .ok_or(Error::LimitExceeded)?;
+    // Signed DIB dimensions and at most four bytes per pixel bound the
+    // padded raster and file header to less than u64::MAX.
+    let row_bytes = width as u64 * channels;
+    let pitch = (row_bytes + 3) & !3;
+    let pixel_bytes = pitch * height as u64;
     let offset = header.len();
-    let file_size = offset
-        .checked_add(pixel_bytes)
-        .ok_or(Error::LimitExceeded)?;
-    let file_size_u32 = u32::try_from(file_size).map_err(|_| Error::LimitExceeded)?;
-    if file_size > options.max_output_bytes {
+    let file_size = offset as u64 + pixel_bytes;
+    let max_file_size = options.max_output_bytes.min(u32::MAX as usize);
+    if file_size > max_file_size as u64 {
         return Err(Error::LimitExceeded);
     }
+    let file_size = file_size as usize;
+    let row_bytes = row_bytes as usize;
+    let pitch = pitch as usize;
 
     let mut output = Vec::new();
     reserve(&mut output, file_size)?;
     output.extend_from_slice(header);
     let fields = &mut output[..RGB_HEADER.len()];
-    put_u32(fields, 2, file_size_u32);
+    put_u32(fields, 2, file_size as u32);
     put_u32(fields, 18, width as u32);
     let stored_height = if options.top_down { -height } else { height };
     put_u32(fields, 22, stored_height as u32);
