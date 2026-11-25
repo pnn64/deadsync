@@ -117,18 +117,30 @@ pub fn encode_with_options(bitmap: &Bitmap, options: EncodeOptions) -> Result<Ve
             } else {
                 output.resize(file_size, 0);
                 let mut sources = indices.chunks_exact(width);
-                let rows = std::iter::from_fn(|| {
-                    if options.top_down {
-                        sources.next()
-                    } else {
-                        sources.next_back()
-                    }
-                });
-                for (source, row) in rows.zip(output[offset..].chunks_exact_mut(pitch)) {
+                let rows = output[offset..].chunks_exact_mut(pitch);
+                let write = |(source, row): (&[u8], &mut [u8])| {
                     for (&index, bgr) in source.iter().zip(row[..row_bytes].as_chunks_mut::<3>().0)
                     {
                         let [red, green, blue] = palette[usize::from(index)];
                         *bgr = [blue, green, red];
+                    }
+                };
+                if cfg!(target_arch = "x86") {
+                    if options.top_down {
+                        sources.zip(rows).for_each(write);
+                    } else {
+                        sources.rev().zip(rows).for_each(write);
+                    }
+                } else {
+                    let sources = std::iter::from_fn(|| {
+                        if options.top_down {
+                            sources.next()
+                        } else {
+                            sources.next_back()
+                        }
+                    });
+                    for pair in sources.zip(rows) {
+                        write(pair);
                     }
                 }
             }
