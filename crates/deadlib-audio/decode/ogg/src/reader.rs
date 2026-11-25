@@ -247,10 +247,13 @@ fn capture_pattern_sse2(bytes: &[u8]) -> Option<usize> {
         let o = _mm_movemask_epi8(_mm_cmpeq_epi8(lanes, _mm_set1_epi8(b'O' as i8)));
         if o != 0 {
             let g = _mm_movemask_epi8(_mm_cmpeq_epi8(lanes, _mm_set1_epi8(b'g' as i8)));
-            let s = _mm_movemask_epi8(_mm_cmpeq_epi8(lanes, _mm_set1_epi8(b'S' as i8)));
-            let matches = o & (g >> 1) & (g >> 2) & (s >> 3);
-            if matches != 0 {
-                return Some(bytes.len() - rest.len() + matches.trailing_zeros() as usize);
+            let prefix = o & (g >> 1) & (g >> 2);
+            if prefix != 0 {
+                let s = _mm_movemask_epi8(_mm_cmpeq_epi8(lanes, _mm_set1_epi8(b'S' as i8)));
+                let matches = prefix & (s >> 3);
+                if matches != 0 {
+                    return Some(bytes.len() - rest.len() + matches.trailing_zeros() as usize);
+                }
             }
         }
         // Retain three bytes so the next load sees any pattern crossing this one.
