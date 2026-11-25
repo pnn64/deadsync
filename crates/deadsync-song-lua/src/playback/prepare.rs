@@ -694,7 +694,17 @@ fn build_song_lua_compiled_visual_layer_runtime<S: Clone + std::fmt::Debug>(
         &message_seconds,
         &compiled.song_foreground.message_commands,
     );
-    let overlays = song_lua_runtime_overlays(compiled, timing_player, global_offset_seconds);
+    let update_offset = if compiled.foreground_beats.is_some()
+        && crate::legacy_xml::is_xml(&compiled.entry_path)
+    {
+        // The legacy On and queue commands are compiled on the initial actor
+        // clock. Native Foreground starts that clock when the entry is shown.
+        start_second - timing_player.get_time_for_beat_exact(0.0)
+    } else {
+        0.0
+    };
+    let overlays =
+        song_lua_runtime_overlays(compiled, timing_player, global_offset_seconds, update_offset);
 
     let mut layer = deadsync_gameplay::build_song_lua_visual_layer_runtime(
         start_second,
@@ -714,19 +724,24 @@ fn song_lua_runtime_overlays<S: Clone + std::fmt::Debug>(
     compiled: &CompiledSongLua<S>,
     timing_player: &deadsync_rules::timing::TimingData,
     global_offset_seconds: f32,
+    update_offset: f32,
 ) -> Vec<SongLuaOverlayActor<S>> {
     let mut overlays = compiled.overlays.clone();
-    let tracks = crate::gameplay::build_song_lua_overlay_update_tracks(
+    let mut tracks = crate::gameplay::build_song_lua_overlay_update_tracks(
         compiled,
         timing_player,
         global_offset_seconds,
     );
+    if update_offset != 0.0 {
+        offset_legacy_foreground_updates(&mut overlays, &mut tracks, update_offset);
+    }
     if !tracks.is_empty() || !compiled.draw_frames.is_empty() {
         let mut draw_frames = compiled.draw_frames.clone();
         for frame in &mut draw_frames {
             // Draw calls share the raw music clock of overlay captures.
             frame.second -= global_offset_seconds * timing_player.global_offset_rate()
                 - compiled.overlay_capture_calibration_seconds;
+            frame.second += update_offset;
         }
         overlays.push(SongLuaOverlayActor {
             kind: SongLuaOverlayKind::UpdateTracks {
@@ -740,6 +755,51 @@ fn song_lua_runtime_overlays<S: Clone + std::fmt::Debug>(
         });
     }
     overlays
+}
+
+fn offset_legacy_foreground_updates<S>(
+    overlays: &mut [SongLuaOverlayActor<S>],
+    tracks: &mut [crate::SongLuaOverlayRuntimeUpdateTrack],
+    offset: f32,
+) {
+    use crate::{SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue};
+    let timers: std::collections::HashMap<_, _> = tracks
+        .iter()
+        .filter(|track| track.target == SongLuaOverlayUpdateTarget::EffectTimer)
+        .map(|track| (track.overlay_index, track.samples.clone()))
+        .collect();
+    for track in tracks {
+        let initial_timer = overlays[track.overlay_index].initial_state.effect_timer;
+        let timers = timers.get(&track.overlay_index);
+        for sample in &mut track.samples {
+            if track.target == SongLuaOverlayUpdateTarget::EffectTime
+                && let SongLuaOverlayUpdateValue::Vec2([anchor, _]) = &mut sample.value
+            {
+                let timer = timers
+                    .and_then(|samples| {
+                        let end = samples.partition_point(|state| state.second <= sample.second);
+                        samples.get(end.checked_sub(1)?)
+                    })
+                    .and_then(|state| match state.value {
+                        SongLuaOverlayUpdateValue::Bool(timer) => Some(timer),
+                        _ => None,
+                    })
+                    .unwrap_or(initial_timer);
+                // Song and beat effects still take their time from the song.
+                // A timer effect's anchor moves with the owning actor.
+                if timer {
+                    *anchor += offset;
+                }
+            }
+            sample.second += offset;
+        }
+    }
+    for overlay in overlays {
+        let state = &mut overlay.initial_state;
+        if state.effect_timer && let Some([anchor, _]) = &mut state.effect_time {
+            *anchor += offset;
+        }
+    }
 }
 
 fn log_song_lua_runtime_debug<S: Clone + std::fmt::Debug>(
@@ -1147,6 +1207,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             visual_compiled,
             params.timing_players[0],
             params.machine_global_offset_seconds,
+            0.0,
         );
         let message_seconds = deadsync_gameplay::build_song_lua_message_seconds(
             compiled.messages.iter().map(|message| message.beat),
@@ -1411,6 +1472,52 @@ pub(crate) fn visit_scheduled_song_lua_sound_events(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_foreground_offsets_actor_tweens_and_preserves_song_clock_effects() {
+        use crate::{SongLuaOverlayRuntimeUpdateSample, SongLuaOverlayRuntimeUpdateTrack};
+        use crate::{SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue};
+
+        let mut overlays = [SongLuaOverlayActor::<()> {
+            name: None,
+            parent_index: None,
+            kind: SongLuaOverlayKind::Quad,
+            initial_state: SongLuaOverlayState {
+                effect_timer: true,
+                effect_time: Some([0.0, 0.0]),
+                ..Default::default()
+            },
+            message_commands: Vec::new(),
+        }];
+        let sample = |second, value| SongLuaOverlayRuntimeUpdateSample { second, value };
+        let mut tracks = [
+            SongLuaOverlayRuntimeUpdateTrack {
+                overlay_index: 0,
+                target: SongLuaOverlayUpdateTarget::EffectTimer,
+                samples: vec![sample(2.0, SongLuaOverlayUpdateValue::Bool(false))],
+            },
+            SongLuaOverlayRuntimeUpdateTrack {
+                overlay_index: 0,
+                target: SongLuaOverlayUpdateTarget::EffectTime,
+                samples: vec![
+                    sample(1.0, SongLuaOverlayUpdateValue::Vec2([1.0, 0.5])),
+                    sample(2.0, SongLuaOverlayUpdateValue::Vec2([2.0, 2.0])),
+                ],
+            },
+        ];
+        offset_legacy_foreground_updates(&mut overlays, &mut tracks, 40.0);
+
+        assert_eq!(overlays[0].initial_state.effect_time, Some([40.0, 0.0]));
+        assert_eq!(tracks[0].samples[0].second, 42.0);
+        assert_eq!(
+            tracks[1].samples,
+            [
+                sample(41.0, SongLuaOverlayUpdateValue::Vec2([41.0, 0.5])),
+                sample(42.0, SongLuaOverlayUpdateValue::Vec2([2.0, 2.0])),
+            ]
+        );
+    }
+
     #[test]
     fn song_lua_sound_crossing_keeps_zero_and_forward_edge_semantics() {
         assert!(song_lua_sound_time_crossed(0.0, 0.0, 0.0));
