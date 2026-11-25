@@ -104,6 +104,19 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 } else if header.info.top_down && width == header.row_pitch {
                     validate_indices(source)?;
                     indices.extend_from_slice(source);
+                } else if width == header.row_pitch && width <= 512 {
+                    // Validate groups of complete rows, then copy them while hot.
+                    let block_bytes = if check_indices {
+                        (8192 / width) * width
+                    } else {
+                        source.len()
+                    };
+                    for block in source.rchunks(block_bytes) {
+                        validate_indices(block)?;
+                        for row in block.rchunks_exact(width) {
+                            indices.extend_from_slice(row);
+                        }
+                    }
                 } else {
                     for row in rows {
                         let row = &row[..width];

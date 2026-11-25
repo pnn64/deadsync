@@ -375,6 +375,27 @@ fn aligned_top_down_byte_indices_validate_the_last_row() {
     );
 }
 
+#[test]
+fn aligned_bottom_up_byte_indices_include_partial_block() {
+    let colors = palette(2);
+    let mut rows: Vec<_> = (0..4 * 2051).map(|i| u8::from(i % 7 < 3)).collect();
+    assert_eq!(
+        decode(&wire(Format::rgb(8), 4, 2051, false, &colors, &rows))
+            .unwrap()
+            .pixels,
+        Pixels::Indexed {
+            bit_depth: 8,
+            indices: rows.clone(),
+            palette: colors.clone(),
+        }
+    );
+    *rows.last_mut().unwrap() = 2;
+    assert_eq!(
+        decode(&wire(Format::rgb(8), 4, 2051, false, &colors, &rows)),
+        Err(Error::Invalid("pixel index exceeds the palette"))
+    );
+}
+
 // Repeat bits from most significant to least significant until eight are filled.
 // This avoids using the decoder's multiplier/downshift expansion formula.
 fn repeat_bits(value: u32, bits: u32) -> u8 {
