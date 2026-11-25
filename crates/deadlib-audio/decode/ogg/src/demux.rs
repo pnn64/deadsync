@@ -407,35 +407,26 @@ impl<P: Assembly> Demux<P> {
             offset
         };
         let carried = stream.partial.pending();
-        let mut length = carried;
-        let mut pending = self.pending - length;
+        let mut pending = self.pending - carried;
         let body = page.body().len();
-        // An empty body cannot enlarge a previously validated cached packet.
-        if body == 0 {
-            if complete != 0 {
-                length = 0;
-            }
-        } else if length != 0
-            || body > self.limits.max_packet_bytes
-            || pending
-                .checked_add(body)
-                .is_none_or(|n| n > self.limits.max_pending_bytes)
-        {
+        // If the whole body fits, every packet on this page fits.
+        let room = self
+            .limits
+            .max_packet_bytes
+            .min(self.limits.max_pending_bytes.saturating_sub(pending));
+        if body > room.saturating_sub(carried) {
             if complete == 0 {
-                // Without a terminator, the entire body belongs to one packet.
-                length = length
+                // A body without a terminator belongs to one packet.
+                let fits_packet = carried
                     .checked_add(body)
-                    .ok_or(Error::LimitExceeded("packet size"))?;
-                if length > self.limits.max_packet_bytes {
-                    return Err(Error::LimitExceeded("packet size"));
-                }
-                if pending
-                    .checked_add(length)
-                    .is_none_or(|n| n > self.limits.max_pending_bytes)
-                {
-                    return Err(Error::LimitExceeded("pending packet bytes"));
-                }
+                    .is_some_and(|length| length <= self.limits.max_packet_bytes);
+                return Err(Error::LimitExceeded(if fits_packet {
+                    "pending packet bytes"
+                } else {
+                    "packet size"
+                }));
             } else {
+                let mut length = carried;
                 for fragment in page.fragments() {
                     length = length
                         .checked_add(fragment.data.len())
@@ -458,9 +449,8 @@ impl<P: Assembly> Demux<P> {
             }
         }
         if header.is_eos()
-            && (length != 0
-                || page.lacing().last() == Some(&255)
-                || (page.lacing().is_empty() && stream.continuing))
+            && (page.lacing().last() == Some(&255)
+                || (page.lacing().is_empty() && (stream.continuing || carried != 0)))
         {
             return Err(Error::Invalid("unfinished packet at EOS"));
         }
@@ -468,7 +458,9 @@ impl<P: Assembly> Demux<P> {
         if let Some(partial) = stream.partial.buffer() {
             let mut remaining = complete;
             for fragment in page.fragments() {
-                if !fragment.starts_packet || !fragment.ends_packet {
+                let (data, start_page_offset) = if fragment.starts_packet && fragment.ends_packet {
+                    (fragment.data, offset)
+                } else {
                     if fragment.starts_packet {
                         stream.packet_offset = offset;
                     }
@@ -478,13 +470,9 @@ impl<P: Assembly> Demux<P> {
                     if stream.continuing {
                         break;
                     }
-                }
-                remaining -= 1;
-                let (data, start_page_offset) = if fragment.starts_packet {
-                    (fragment.data, offset)
-                } else {
                     (partial.as_slice(), stream.packet_offset)
                 };
+                remaining -= 1;
                 let info = PacketInfo {
                     serial: stream.serial,
                     chain: stream.chain,
