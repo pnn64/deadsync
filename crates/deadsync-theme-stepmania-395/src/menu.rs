@@ -1,7 +1,7 @@
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::{Actor, TextAlign, TextContent};
 use deadlib_present::anim::{self, TweenSeq, TweenState};
-use deadsync_config::{coin::CoinMode, theme::GameFlag};
+use deadsync_core::session_flow::{CoinMode, GameFlag};
 use deadsync_input::InputEvent;
 use deadsync_theme::main_menu::{
     MainMenuFrame, MainMenuItem, MainMenuPhase, MainMenuRuntimeView, MainMenuSelection,

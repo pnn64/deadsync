@@ -145,6 +145,8 @@ own HUD artwork, labels, and layouts. Practice uses the Simply Love gameplay
 adapter with the existing editor. All presenters use the same prepared stage.
 The standard gameplay HUD reads its lobby code through a shell-supplied
 accessor to the live session. OpenITG and StepMania 3.95 draw their own labels.
+The shell prepares the standard presenter's display settings. Both title
+menus read the shared game and coin mode from `deadsync-core::session_flow`.
 For song intros, the shell resolves the optional pack event name with the
 simfile catalog. StepMania 3.95 and Simply Love choose their labels from that
 stage fact. OpenITG supplies its own label.

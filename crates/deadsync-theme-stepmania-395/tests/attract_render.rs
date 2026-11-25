@@ -149,7 +149,7 @@ fn native_attract_captures() {
         phase_started_at: std::time::Instant::now(),
     };
     let mut loading = Vec::new();
-    StepManiaStartup::default().push_loading(&mut loading, Some(&progress), &Default::default());
+    StepManiaStartup::default().push_loading(&mut loading, Some(&progress), &());
     capture_actors(
         "loading",
         &loading,
@@ -231,9 +231,9 @@ fn native_attract_captures() {
         );
     }
     for (name, mode, credits, remainder, price) in [
-        ("title-free", deadsync_config::coin::CoinMode::Free, 0, 0, 1),
-        ("title-pay-partial", deadsync_config::coin::CoinMode::Pay, 0, 1, 3),
-        ("title-pay-credit", deadsync_config::coin::CoinMode::Pay, 2, 1, 3),
+        ("title-free", deadsync_core::session_flow::CoinMode::Free, 0, 0, 1),
+        ("title-pay-partial", deadsync_core::session_flow::CoinMode::Pay, 0, 1, 3),
+        ("title-pay-credit", deadsync_core::session_flow::CoinMode::Pay, 2, 1, 3),
     ] {
         let actors = support::title_actors_with_runtime(1.5,
             deadsync_theme::main_menu::MainMenuRuntimeView {
@@ -241,7 +241,7 @@ fn native_attract_captures() {
                 credits,
                 credit_remainder: remainder,
                 coins_per_credit: price,
-                can_start: mode != deadsync_config::coin::CoinMode::Pay || credits > 0,
+                can_start: mode != deadsync_core::session_flow::CoinMode::Pay || credits > 0,
                 song_count: 37,
                 pack_count: 4,
                 course_count: 3,

@@ -6,10 +6,9 @@ use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_assets::gameplay_presentation::{
     GameplayPresentationInit,
-    standard::{GameplayHudLabel, StandardGameplay, StandardGameplayStyle},
+    standard::{GameplayHudLabel, StandardGameplay, StandardGameplaySettings, StandardGameplayStyle},
 };
 use deadsync_assets::gameplay_stage::{ActiveGameplayStage, GameplayStageAssets};
-use deadsync_config::app_config::Config;
 use deadsync_gameplay::HoldToExitKey;
 use deadsync_theme::views::{GameplayStageIntro, GameplayStageView};
 
@@ -22,7 +21,7 @@ impl crate::OpenItgTheme {
         stage: &ActiveGameplayStage,
         mut assets: GameplayStageAssets,
         view: &GameplayStageView,
-        config: &Config,
+        settings: StandardGameplaySettings,
         init: Option<GameplayPresentationInit>,
         lobby_code: fn(&L) -> Option<&str>,
     ) -> StandardGameplay<L> {
@@ -49,7 +48,7 @@ impl crate::OpenItgTheme {
         StandardGameplay::new(
             stage,
             assets,
-            config,
+            settings,
             init,
             StandardGameplayStyle {
                 hud: GAMEPLAY_HUD,

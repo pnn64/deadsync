@@ -7,8 +7,7 @@ use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::dsl::SpriteBuilder;
 use deadlib_present::render::BlendMode;
 use deadlib_present::space::{screen_height, screen_width};
-use deadsync_config::coin::CoinMode;
-use deadsync_config::theme::GameFlag;
+use deadsync_core::session_flow::{CoinMode, GameFlag};
 use deadsync_input::InputEvent;
 #[cfg(test)]
 use deadsync_input::VirtualAction;

@@ -563,6 +563,7 @@ fn gameplay_stage_bootstrap_is_game_owned() {
     let mount = production_source(&root.join("crates/deadsync-shell/src/mounted_theme.rs"));
     assert!(!mount.contains("deadsync_theme_simply_love"));
     assert!(contains_rust(&mount, "pub fn gameplay_lobby_code(lobby: &GameplayLobbySession)"));
+    assert!(contains_rust(&mount, "pub fn standard_gameplay_settings(config: &Config)"));
     for (name, file) in [
         ("deadsync-theme-openitg", "gameplay_screen.rs"),
         ("deadsync-theme-stepmania-395", "gameplay.rs"),
@@ -571,7 +572,9 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         let manifest = read_source(theme.join("Cargo.toml")).expect("theme manifest");
         let presenter = production_source(&theme.join("src").join(file));
         assert!(!manifest.contains("deadsync-online"));
+        assert!(!manifest.split("[dev-dependencies]").next().unwrap().contains("deadsync-config"));
         assert!(contains_rust(&presenter, "lobby_code: fn(&L) -> Option<&str>"));
+        assert!(presenter.contains("settings: StandardGameplaySettings"));
     }
     assert!(!app.contains("gameplay_stats::refresh_density_graph_meshes("));
     assert!(!app.contains("notefield::prewarm_frame_text_scratch("));
@@ -9569,7 +9572,7 @@ fn gameplay_presenters_receive_resolved_song_event_names() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let stepmania = root.join("crates/deadsync-theme-stepmania-395");
     let manifest = read_source(stepmania.join("Cargo.toml")).expect("StepMania 3.95 manifest");
-    assert!(!manifest.contains("deadsync-simfile"));
+    assert!(!manifest.split("[dev-dependencies]").next().unwrap().contains("deadsync-simfile"));
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell gameplay entry source");
     assert!(contains_rust(

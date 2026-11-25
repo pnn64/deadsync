@@ -219,8 +219,8 @@ pub fn title_actors(elapsed: f32) -> Vec<Actor> {
 pub fn title_actors_with_runtime(
     elapsed: f32,
     runtime: deadsync_theme::main_menu::MainMenuRuntimeView<
-        deadsync_config::theme::GameFlag,
-        deadsync_config::coin::CoinMode,
+        deadsync_core::session_flow::GameFlag,
+        deadsync_core::session_flow::CoinMode,
     >,
 ) -> Vec<Actor> {
     use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};

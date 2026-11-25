@@ -1,6 +1,5 @@
 use deadlib_present::actors::{Actor, TextContent};
 use deadsync_assets::progress::{ContentReloadPhase, LibraryLoadView};
-use deadsync_config::app_config::Config;
 use deadsync_theme::Screen;
 use deadsync_theme::app_requests::AppEffect;
 use deadsync_theme::attract::AttractPresentation;
@@ -15,7 +14,7 @@ pub struct StepManiaStartup {
     intro: StepManiaIntro,
 }
 
-impl StartupPresentation<Actor, LibraryLoadView, Config> for StepManiaStartup {
+impl<Policy> StartupPresentation<Actor, LibraryLoadView, Policy> for StepManiaStartup {
     fn reset_intro(&mut self, _color_index: i32) {
         self.intro.reset();
     }
@@ -32,7 +31,7 @@ impl StartupPresentation<Actor, LibraryLoadView, Config> for StepManiaStartup {
         &self,
         actors: &mut Vec<Actor>,
         progress: Option<&LibraryLoadView>,
-        _policy: &Config,
+        _policy: &Policy,
     ) {
         let layout = Layout::current();
         actors.push(layout.solid([320.0, 240.0], [640.0, 480.0], [0.0, 0.0, 0.0, 1.0], -100));
@@ -91,7 +90,7 @@ impl StartupPresentation<Actor, LibraryLoadView, Config> for StepManiaStartup {
         }
     }
 
-    fn push_intro(&self, actors: &mut Vec<Actor>, _policy: &Config) {
+    fn push_intro(&self, actors: &mut Vec<Actor>, _policy: &Policy) {
         self.intro.push_actors(actors, None);
     }
 }

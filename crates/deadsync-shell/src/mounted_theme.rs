@@ -5,7 +5,8 @@ use deadlib_present::actors::Actor;
 use deadlib_present::actors::TextContent;
 use deadsync_assets::gameplay_presentation::{
     GameplayPresentationInit, GameplayRenderView, GameplayScreen, PracticeGameplayHud,
-    PracticeTimingLabels, standard::StandardGameplay,
+    PracticeTimingLabels,
+    standard::{StandardGameplay, StandardGameplaySettings},
 };
 use deadsync_assets::gameplay_stage::{
     ActiveGameplayStage, GameplayStageAssets, PreparedGameplayStage,
@@ -124,6 +125,17 @@ pub fn gameplay_lobby_code(lobby: &GameplayLobbySession) -> Option<&str> {
         .joined_lobby
         .as_ref()
         .map(|lobby| lobby.code.as_str())
+}
+
+/// Resolve the machine settings used by the standard gameplay presenter.
+pub fn standard_gameplay_settings(config: &Config) -> StandardGameplaySettings {
+    StandardGameplaySettings {
+        translated_titles: config.translated_titles,
+        center_single_notefield: config.center_1player_notefield,
+        background_brightness: config.bg_brightness,
+        background_color: config.gameplay_bg_color,
+        machine_font: config.machine_font,
+    }
 }
 
 enum GameplayMount {

@@ -56,6 +56,14 @@ pub enum GameplayHudLabel<'a> {
     LobbyCode(&'a str),
 }
 
+pub struct StandardGameplaySettings {
+    pub translated_titles: bool,
+    pub center_single_notefield: bool,
+    pub background_brightness: f32,
+    pub background_color: Color,
+    pub machine_font: MachineFont,
+}
+
 pub struct StandardGameplayStyle<L> {
     pub hud: GameplayHud<Actor>,
     pub badge: Arc<str>,
@@ -98,12 +106,12 @@ impl<L> StandardGameplay<L> {
     pub fn new(
         stage: &ActiveGameplayStage,
         assets: GameplayStageAssets,
-        config: &Config,
+        settings: StandardGameplaySettings,
         init: Option<GameplayPresentationInit>,
         style: StandardGameplayStyle<L>,
     ) -> Self {
         let palettes = init.as_ref().map(|init| init.judgment_palettes);
-        let center_single = init.is_some() && config.center_1player_notefield;
+        let center_single = init.is_some() && settings.center_single_notefield;
         let profiles = std::array::from_fn(|player| &stage.profiles()[player].0);
         let widths = field::gameplay_notefield_widths(&stage.gameplay, &stage.noteskin_assets);
         let fields = std::array::from_fn(|player| {
@@ -138,14 +146,14 @@ impl<L> StandardGameplay<L> {
             style,
             background: GameplayBackground::new(stage),
             hide_intro: assets.hide_song_intro,
-            title: Arc::from(stage.song().display_full_title(config.translated_titles)),
+            title: Arc::from(stage.song().display_full_title(settings.translated_titles)),
             rate: Arc::from(""),
             pack_banner: assets.pack_banner_path,
             profiles: init.map(|init| init.hud),
             center_single,
-            background_brightness: config.bg_brightness,
-            background_color: config.gameplay_bg_color,
-            machine_font: config.machine_font,
+            background_brightness: settings.background_brightness,
+            background_color: settings.background_color,
+            machine_font: settings.machine_font,
             palettes,
             fields,
             life: stage.players().each_ref().map(|player| {

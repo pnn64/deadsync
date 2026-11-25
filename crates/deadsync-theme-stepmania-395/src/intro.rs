@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use deadlib_present::actors::{Actor, SpriteSource};
 use deadlib_present::dsl::SpriteBuilder;
-use deadsync_config::theme::GameFlag;
+use deadsync_core::session_flow::GameFlag;
 use deadsync_theme::attract::{
     AttractDemoChart, AttractDemoRequest, AttractMedia, AttractPresentation,
 };

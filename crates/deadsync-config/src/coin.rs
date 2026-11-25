@@ -1,6 +1,7 @@
 use crate::bools::parse_loose_bool_str;
 use crate::ini::SimpleIni;
 use crate::writer::{push_bool, push_line};
+pub use deadsync_core::session_flow::CoinMode;
 use std::str::FromStr;
 
 pub const MIN_COINS_PER_CREDIT: u8 = 1;
@@ -9,45 +10,6 @@ pub const MIN_SONGS_PER_PLAY: u8 = 1;
 pub const MAX_SONGS_PER_PLAY: u8 = 7;
 pub const MAX_PREMIUM_FREE_MINUTES: u8 = 60;
 pub const MAX_SONG_CUTOFF_SECONDS: u16 = 3_600;
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum CoinMode {
-    Pay,
-    Free,
-    #[default]
-    Home,
-}
-
-impl CoinMode {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Pay => "Pay",
-            Self::Free => "Free",
-            Self::Home => "Home",
-        }
-    }
-}
-
-impl FromStr for CoinMode {
-    type Err = ();
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-    match value.trim().as_bytes() {
-        [a, b, c] if [*a | 0x20, *b | 0x20, *c | 0x20] == *b"pay" => Ok(Self::Pay),
-        [a, b, c, d] => {
-            const FREE: u32 = u32::from_le_bytes(*b"free");
-            const HOME: u32 = u32::from_le_bytes(*b"home");
-            match u32::from_le_bytes([*a, *b, *c, *d]) | 0x20202020 {
-                FREE => Ok(Self::Free),
-                HOME => Ok(Self::Home),
-                _ => Err(()),
-            }
-        }
-        _ => Err(()),
-    }
-}
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CoinOptions {

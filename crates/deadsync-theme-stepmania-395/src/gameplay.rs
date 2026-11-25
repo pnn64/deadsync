@@ -3,10 +3,9 @@ use std::sync::Arc;
 use deadlib_present::actors::{Actor, TextContent};
 use deadsync_assets::gameplay_presentation::{
     GameplayPresentationInit,
-    standard::{GameplayHudLabel, StandardGameplay, StandardGameplayStyle},
+    standard::{GameplayHudLabel, StandardGameplay, StandardGameplaySettings, StandardGameplayStyle},
 };
 use deadsync_assets::gameplay_stage::{ActiveGameplayStage, GameplayStageAssets};
-use deadsync_config::app_config::Config;
 use deadsync_core::hud_style::{
     ComboArtworkStyle, FieldFeedbackStyle, HoldFeedbackStyle, TapFeedbackTween,
 };
@@ -25,7 +24,7 @@ impl crate::StepManiaTheme {
         stage: &ActiveGameplayStage,
         mut assets: GameplayStageAssets,
         view: &GameplayStageView,
-        config: &Config,
+        settings: StandardGameplaySettings,
         init: Option<GameplayPresentationInit>,
         lobby_code: fn(&L) -> Option<&str>,
     ) -> StandardGameplay<L> {
@@ -49,7 +48,7 @@ impl crate::StepManiaTheme {
         StandardGameplay::new(
             stage,
             assets,
-            config,
+            settings,
             init,
             StandardGameplayStyle {
                 hud: GAMEPLAY_HUD,

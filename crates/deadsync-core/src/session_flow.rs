@@ -34,6 +34,46 @@ impl FromStr for GameFlag {
     }
 }
 
+/// The cabinet's credit policy.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CoinMode {
+    Pay,
+    Free,
+    #[default]
+    Home,
+}
+
+impl CoinMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pay => "Pay",
+            Self::Free => "Free",
+            Self::Home => "Home",
+        }
+    }
+}
+
+impl FromStr for CoinMode {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().as_bytes() {
+            [a, b, c] if [*a | 0x20, *b | 0x20, *c | 0x20] == *b"pay" => Ok(Self::Pay),
+            [a, b, c, d] => {
+                const FREE: u32 = u32::from_le_bytes(*b"free");
+                const HOME: u32 = u32::from_le_bytes(*b"home");
+                match u32::from_le_bytes([*a, *b, *c, *d]) | 0x20202020 {
+                    FREE => Ok(Self::Free),
+                    HOME => Ok(Self::Home),
+                    _ => Err(()),
+                }
+            }
+            _ => Err(()),
+        }
+    }
+}
+
 /// Preferred number and arrangement of players before applying join state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MachinePreferredPlayStyle {

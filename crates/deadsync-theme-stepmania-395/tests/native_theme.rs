@@ -2,11 +2,9 @@ use std::{path::Path, time::Instant};
 mod support;
 
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadsync_config::{
-    coin::CoinMode,
-    theme::{GameFlag, ThemeFlag},
-};
+use deadsync_config::theme::ThemeFlag;
 use deadsync_core::input::InputSource;
+use deadsync_core::session_flow::{CoinMode, GameFlag};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_theme::attract::AttractPresentation;
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, MainMenuRuntimeView, ThemeMainMenu};
@@ -409,9 +407,10 @@ fn native_startup_presents_real_library_progress_and_keeps_the_original_intro() 
         started_at: now,
         phase_started_at: now,
     };
-    let mut startup = StepManiaStartup::default();
+    let startup: &mut dyn StartupPresentation<Actor, LibraryLoadView, ()> =
+        &mut StepManiaStartup::default();
     let mut actors = Vec::new();
-    startup.push_loading(&mut actors, Some(&progress), &Default::default());
+    startup.push_loading(&mut actors, Some(&progress), &());
     assert!(
         actors
             .iter()
@@ -430,7 +429,7 @@ fn native_startup_presents_real_library_progress_and_keeps_the_original_intro() 
     progress.phase = ContentReloadPhase::ReplayGain;
     progress.can_skip_replaygain = true;
     actors.clear();
-    startup.push_loading(&mut actors, Some(&progress), &Default::default());
+    startup.push_loading(&mut actors, Some(&progress), &());
     assert!(
         actors
             .iter()
@@ -444,7 +443,7 @@ fn native_startup_presents_real_library_progress_and_keeps_the_original_intro() 
     ));
     startup.reset_intro(0);
     actors.clear();
-    startup.push_intro(&mut actors, &Default::default());
+    startup.push_intro(&mut actors, &());
     assert!(
         actors
             .iter()
