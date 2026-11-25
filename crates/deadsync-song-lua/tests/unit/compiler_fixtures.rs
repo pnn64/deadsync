@@ -7387,7 +7387,9 @@ return Def.Sound{
     )
     .unwrap();
     let mut context = SongLuaCompileContext::new(&song_dir, "Sound length");
-    context.media_probes = deadsync_assets::song_lua::MEDIA_PROBES;
+    context.media_probes.sound_length_seconds = Some(|path| {
+        deadlib_audio_decode::file_length_seconds(path, Default::default())
+    });
     let compiled = test_compile_song_lua(&entry, &context).unwrap();
     // ActorSound::play is immediate even after sleep(). Its file is the
     // one loaded at the call, rather than the final File on the actor.

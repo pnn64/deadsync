@@ -47,30 +47,18 @@ pub type SongLuaOverlayKind = deadsync_song_lua::SongLuaOverlayKind<
 pub type SongLuaOverlayActor = deadsync_song_lua::SongLuaOverlayActor<SongLuaOverlayKind>;
 pub type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
 
+/// Movie metadata used by asset-backed compilation. Stage callers supply sound metadata.
 pub const MEDIA_PROBES: SongLuaMediaProbes = SongLuaMediaProbes {
-    sound_length_seconds: Some(sound_length_seconds),
+    sound_length_seconds: None,
     movie_dimensions: Some(deadlib_video::dimensions),
 };
 
-fn sound_length_seconds(path: &Path) -> Result<f32, String> {
-    deadlib_audio_decode::file_length_seconds(path, Default::default())
-}
-
-fn context_with_media_probes(context: &SongLuaCompileContext) -> Cow<'_, SongLuaCompileContext> {
-    if context.media_probes.sound_length_seconds.is_some()
-        && context.media_probes.movie_dimensions.is_some()
-    {
+fn context_with_movie_probe(context: &SongLuaCompileContext) -> Cow<'_, SongLuaCompileContext> {
+    if context.media_probes.movie_dimensions.is_some() {
         return Cow::Borrowed(context);
     }
     let mut context = context.clone();
-    context.media_probes.sound_length_seconds = context
-        .media_probes
-        .sound_length_seconds
-        .or(MEDIA_PROBES.sound_length_seconds);
-    context.media_probes.movie_dimensions = context
-        .media_probes
-        .movie_dimensions
-        .or(MEDIA_PROBES.movie_dimensions);
+    context.media_probes.movie_dimensions = MEDIA_PROBES.movie_dimensions;
     Cow::Owned(context)
 }
 
@@ -95,7 +83,7 @@ pub fn compile_song_lua(
     entry_path: &Path,
     context: &SongLuaCompileContext,
 ) -> Result<CompiledSongLua, String> {
-    let context = context_with_media_probes(context);
+    let context = context_with_movie_probe(context);
     deadsync_song_lua::compile_song_lua(
         entry_path,
         &context,
@@ -111,7 +99,7 @@ pub fn compile_song_lua_layers(
     primary_index: usize,
     context: &SongLuaCompileContext,
 ) -> Result<Vec<CompiledSongLua>, String> {
-    let context = context_with_media_probes(context);
+    let context = context_with_movie_probe(context);
     deadsync_song_lua::compile_song_lua_layers(
         entry_paths,
         primary_index,

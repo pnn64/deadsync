@@ -19,6 +19,7 @@ type State = deadsync_assets::gameplay_stage::GameplayCoreState;
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::gameplay_entry::SONG_LUA_MEDIA_PROBES;
 
     use super::{MAX_PLAYERS, ScrollSpeedSetting, refresh_active_attack_masks};
     use crate::graphics::RenderAssets;
@@ -654,6 +655,7 @@ pub(crate) mod tests {
         };
         let prepared = if until_beat.is_none() && configure_compile_clocks.is_none() {
             crate::gameplay_entry::prepare_song_lua(
+                SONG_LUA_MEDIA_PROBES,
                 &song,
                 &charts,
                 std::array::from_fn(|p| &gameplay_charts[p].timing),
@@ -677,6 +679,7 @@ pub(crate) mod tests {
             )
         } else {
             let mut context = crate::gameplay_entry::song_lua_context(
+                SONG_LUA_MEDIA_PROBES,
                 &song,
                 &charts,
                 std::array::from_fn(|p| &gameplay_charts[p].timing),
@@ -8689,7 +8692,7 @@ return Def.ActorFrame{}
                             session.play_style.player_count(),
                             &runtime_profiles,
                         );
-                        let context = deadsync_assets::song_lua::song_lua_compile_context(
+                        let mut context = deadsync_assets::song_lua::song_lua_compile_context(
                             song.as_ref(),
                             &charts,
                             session.play_style.player_count(),
@@ -8701,6 +8704,7 @@ return Def.ActorFrame{}
                             &session,
                             false,
                         );
+                        context.media_probes = SONG_LUA_MEDIA_PROBES;
                         let primary = song
                             .foreground_lua_changes
                             .iter()

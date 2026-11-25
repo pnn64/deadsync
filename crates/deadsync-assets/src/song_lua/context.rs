@@ -7,6 +7,7 @@ use deadsync_gameplay::SongLuaCompilePlayStyleLike;
 use deadsync_profile_gameplay::{
     gameplay_pack_data, gameplay_turn_option, scroll_effects_from_option,
 };
+use deadsync_song_lua::SongLuaMediaProbes;
 use log::warn;
 use std::sync::Arc;
 
@@ -389,6 +390,7 @@ pub fn song_lua_play_context(
 
 /// Build production Lua host inputs, chart timings and initial resources.
 pub fn song_lua_context(
+    media_probes: SongLuaMediaProbes,
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     timing: [&deadsync_rules::timing::TimingData; MAX_PLAYERS],
@@ -420,6 +422,10 @@ pub fn song_lua_context(
         config,
         video_renderer,
     );
+    context.media_probes = SongLuaMediaProbes {
+        movie_dimensions: media_probes.movie_dimensions.or(context.media_probes.movie_dimensions),
+        ..media_probes
+    };
     context.random_seed = random_seed;
     context.live = live;
     context.theme_combo_font_directory = Some(crate::resolve_asset_path("assets/fonts/_combo"));
@@ -541,6 +547,7 @@ pub fn song_lua_context(
 /// Prepare baked or runtime song playback on the load worker, retaining authored
 /// Lua when input callbacks or player statistics require runtime execution even in baked mode.
 pub fn prepare_song_lua(
+    media_probes: SongLuaMediaProbes,
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     timing: [&deadsync_rules::timing::TimingData; MAX_PLAYERS],
@@ -563,6 +570,7 @@ pub fn prepare_song_lua(
     }
     let live = mode == deadsync_config::options::SongLuaMode::Runtime;
     let mut context = match song_lua_context(
+        media_probes,
         song,
         charts,
         timing,

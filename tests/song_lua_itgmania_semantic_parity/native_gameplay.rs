@@ -1742,7 +1742,7 @@ end }
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
         let config = GameplayConfig { global_offset_seconds: -0.008, ..Default::default() };
         let viewport = GameplayViewport::default();
-        let mut context = deadsync_shell::gameplay_entry::song_lua_context(&song, &charts,
+        let mut context = deadsync_shell::gameplay_entry::song_lua_context(deadsync_shell::gameplay_entry::SONG_LUA_MEDIA_PROBES, &song, &charts,
             std::array::from_fn(|p| &payloads[p].timing), &profiles, &scroll, 1.0, viewport,
             (854, 480), 16.0/9.0, 1.0, &session, &config, "null", 1, true).unwrap();
         context.defer_initial_live_update = true;
@@ -1920,7 +1920,7 @@ end }
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
         let viewport = GameplayViewport::default();
         let config = GameplayConfig { global_offset_seconds: -0.008, ..Default::default() };
-        let context = deadsync_shell::gameplay_entry::song_lua_context(&song, &charts,
+        let context = deadsync_shell::gameplay_entry::song_lua_context(deadsync_shell::gameplay_entry::SONG_LUA_MEDIA_PROBES, &song, &charts,
             std::array::from_fn(|p| &payloads[p].timing), &profiles, &scroll, 1.0, viewport,
             (854,480), 16.0/9.0, 0.0, &session, &config, "null", 1, true).unwrap();
         assert_eq!(song.charts.len(), 4, "couple and routine are playable partner charts");
@@ -2356,6 +2356,7 @@ end }}
         let chart = Arc::new(song.charts[0].clone());
         let payload = Arc::new(load_gameplay_charts(&song, &[0], -0.008).unwrap().remove(0));
         let mut context = deadsync_song_lua::SongLuaCompileContext::new(&dir, name);
+        context.media_probes = deadsync_shell::gameplay_entry::SONG_LUA_MEDIA_PROBES;
         context.live = true;
         context.defer_initial_live_update = true;
         context.players[1].enabled = false;
@@ -5761,6 +5762,7 @@ fn replay_mode(
         number(&trace["display"], "logical_height")? as f32,
     );
     let mut context = deadsync_shell::gameplay_entry::song_lua_context(
+        deadsync_shell::gameplay_entry::SONG_LUA_MEDIA_PROBES,
         &song,
         &charts,
         std::array::from_fn(|p| &payloads[p].timing),
@@ -5825,6 +5827,7 @@ fn replay_mode(
     assert!(context.defer_initial_live_update);
     let prepared = if production_path {
         deadsync_shell::gameplay_entry::prepare_song_lua(
+            deadsync_shell::gameplay_entry::SONG_LUA_MEDIA_PROBES,
             &song,
             &charts,
             std::array::from_fn(|p| &payloads[p].timing),
@@ -6482,6 +6485,7 @@ pub(super) fn compile_generated(
         number(&trace["display"], "logical_height")? as f32,
     );
     let mut context = deadsync_shell::gameplay_entry::song_lua_context(
+        deadsync_shell::gameplay_entry::SONG_LUA_MEDIA_PROBES,
         &song,
         &charts,
         std::array::from_fn(|p| &payloads[p].timing),

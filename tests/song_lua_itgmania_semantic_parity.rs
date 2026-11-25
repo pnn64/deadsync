@@ -771,6 +771,7 @@ fn compile_trace_song_at(
         simfile.parent().unwrap_or_else(|| Path::new(".")),
         song.title.clone(),
     );
+    context.media_probes = deadsync_shell::gameplay_entry::SONG_LUA_MEDIA_PROBES;
     context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
     let selected_step = song.charts.iter().position(|chart| chart.chart_type == trace.steps_type
         && chart.difficulty.eq_ignore_ascii_case(trace.difficulty.trim_start_matches("Difficulty_"))

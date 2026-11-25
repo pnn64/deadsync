@@ -56,6 +56,7 @@ fn main() {
     }
     let scroll = [profiles[0].scroll_speed, profiles[1].scroll_speed];
     let mut prepared = deadsync_shell::gameplay_entry::prepare_song_lua(
+        deadsync_shell::gameplay_entry::SONG_LUA_MEDIA_PROBES,
         &song,
         &charts,
         [&payloads[0].timing, &payloads[1].timing],

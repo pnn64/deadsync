@@ -14207,7 +14207,7 @@ fn prepare_fixture(
     config: &GameplayConfig,
     video_renderer: BackendType,
 ) -> super::PreparedGameplaySongLua<SpriteSlot> {
-    let context = deadsync_assets::song_lua::song_lua_play_context(
+    let mut context = deadsync_assets::song_lua::song_lua_play_context(
         song,
         charts,
         timing,
@@ -14222,6 +14222,9 @@ fn prepare_fixture(
         config,
         &video_renderer.to_string(),
     );
+    context.media_probes.sound_length_seconds = Some(|path| {
+        deadlib_audio_decode::file_length_seconds(path, Default::default())
+    });
     super::prepare_song_lua(
         song,
         &context,

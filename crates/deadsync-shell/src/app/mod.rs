@@ -60,7 +60,7 @@ use crate::frame_stats::{
     FrameStatsSummaryContext, frame_stats_summary, frame_stats_target_us, frame_stats_two_player,
 };
 use crate::frame_stutter::{ComposeBreakdown, trace_frame_stutter};
-use crate::gameplay_entry::gameplay_last_played_commands;
+use crate::gameplay_entry::{SONG_LUA_MEDIA_PROBES, gameplay_last_played_commands};
 use crate::gameplay_prewarm::{
     GameplayLiveTextures, GameplaySfx, prewarm_gameplay_assets, prewarm_gameplay_sfx,
 };
@@ -3047,6 +3047,7 @@ impl App {
                 .map(|gameplay_song| {
                     let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
                     let song_lua = crate::gameplay_entry::prepare_song_lua(
+                        SONG_LUA_MEDIA_PROBES,
                         song.as_ref(),
                         &charts,
                         std::array::from_fn(|player| &gameplay_song[player].timing),
@@ -9997,6 +9998,7 @@ impl App {
                     space::set_current_metrics(metrics);
                     space::set_current_window_px(display_size.0, display_size.1);
                     let prepared_song_lua = crate::gameplay_entry::prepare_song_lua(
+                        SONG_LUA_MEDIA_PROBES,
                         &song_arc,
                         &charts,
                         std::array::from_fn(|p| &gameplay_charts[p].timing),
@@ -10451,6 +10453,7 @@ impl App {
                     } else {
                         prepared_song_lua.unwrap_or_else(|| {
                         crate::gameplay_entry::prepare_song_lua(
+                            SONG_LUA_MEDIA_PROBES,
                             &song_arc,
                             &charts,
                             std::array::from_fn(|p| &gameplay_charts[p].timing),

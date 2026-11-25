@@ -9581,6 +9581,13 @@ fn song_lua_takes_media_probes_from_its_host() {
             file.display(),
         );
     }
+    let assets = read_source(root.join("crates/deadsync-assets/Cargo.toml"))
+        .expect("game asset manifest");
+    assert!(!assets.contains("deadlib-audio-decode"));
+    let host = production_source(&root.join("crates/deadsync-shell/src/gameplay_entry.rs"));
+    assert!(host.contains("sound_length_seconds: Some(song_lua_sound_length_seconds)"));
+    let context = production_source(&root.join("crates/deadsync-assets/src/song_lua/context.rs"));
+    assert!(context.contains("..media_probes"));
 }
 
 #[test]

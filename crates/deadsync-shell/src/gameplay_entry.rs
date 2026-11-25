@@ -5,6 +5,17 @@ use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::stage_charts::GameplayChartEntryPlan;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
+use deadsync_song_lua::SongLuaMediaProbes;
+
+/// Media metadata available to the stage and headless callers using the same assets.
+pub const SONG_LUA_MEDIA_PROBES: SongLuaMediaProbes = SongLuaMediaProbes {
+    sound_length_seconds: Some(song_lua_sound_length_seconds),
+    ..deadsync_assets::song_lua::MEDIA_PROBES
+};
+
+fn song_lua_sound_length_seconds(path: &std::path::Path) -> Result<f32, String> {
+    deadlib_audio_decode::file_length_seconds(path, Default::default())
+}
 
 pub(crate) fn gameplay_last_played_commands(
     song: &SongData,
@@ -144,9 +155,26 @@ mod tests {
             #METER:1;\n#NOTES:\n1000\n0000\n0010\n0000\n;\n",
         )
         .unwrap();
+        let frames = 2_000_u32;
+        let rate = 8_000_u32;
+        let mut wav = b"RIFF".to_vec();
+        wav.extend_from_slice(&(36 + frames).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt \x10\0\0\0\x01\0\x01\0");
+        wav.extend_from_slice(&rate.to_le_bytes());
+        wav.extend_from_slice(&rate.to_le_bytes());
+        wav.extend_from_slice(b"\x01\0\x08\0data");
+        wav.extend_from_slice(&frames.to_le_bytes());
+        wav.resize(44 + frames as usize, 128);
+        std::fs::write(dir.path().join("probe.wav"), wav).unwrap();
         std::fs::write(
             &source,
-            "return Def.Quad { OnCommand = function(self) self:linear(1):x(100) end }",
+            r#"return Def.ActorFrame {
+                Def.Quad { OnCommand = function(self) self:linear(1):x(100) end },
+                Def.Sound {
+                    File = 'probe.wav',
+                    InitCommand = function(self) assert(self:get():get_length() == 0.25) end,
+                },
+            }"#,
         )
         .unwrap();
         let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap();
@@ -162,6 +190,7 @@ mod tests {
         };
         let prepare = |song: &SongData, mode, progress| {
             prepare_song_lua(
+                SONG_LUA_MEDIA_PROBES,
                 song,
                 &charts,
                 [&loaded[0].timing; MAX_PLAYERS],
@@ -249,7 +278,7 @@ mod tests {
             let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
             let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
             let config = deadsync_gameplay::GameplayConfig { global_offset_seconds: 0.0, ..Default::default() };
-            let prepared = prepare_song_lua(&song, &charts,
+            let prepared = prepare_song_lua(SONG_LUA_MEDIA_PROBES, &song, &charts,
                 std::array::from_fn(|p| &payloads[p].timing), &profiles, &scroll, 1.0,
                 deadsync_gameplay::GameplayViewport::design(), (1280, 720), 16.0 / 9.0,
                 1.0, &session, &config, "Software", 1,

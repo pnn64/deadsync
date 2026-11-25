@@ -100,7 +100,9 @@ impl Pair {
             files.source()
         );
         let mut context = SongLuaCompileContext::new(&files.dir, "sound migration");
-        context.media_probes = deadsync_assets::song_lua::MEDIA_PROBES;
+        context.media_probes.sound_length_seconds = Some(|path| {
+            deadlib_audio_decode::file_length_seconds(path, Default::default())
+        });
         context.live = live;
         let mut rust = SongRuntime::new(&context).unwrap();
         let definition = execute(&mut rust, &source)[0];

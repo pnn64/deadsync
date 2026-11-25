@@ -9,7 +9,6 @@ deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render-core = { path = "../deadlib-render-core" }
 deadlib-video = { path = "../deadlib-video" }
-deadlib-audio-decode = { path = "../deadlib-audio-decode" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }

@@ -12,6 +12,7 @@ use deadsync_assets::song_lua::{
     SongLuaCompileContext, SongLuaDifficulty, SongLuaPlayerContext, SongLuaSpeedMod,
     compile_song_lua_layers,
 };
+use deadsync_shell::gameplay_entry::SONG_LUA_MEDIA_PROBES;
 use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -250,6 +251,7 @@ fn compile_corpus(max_seconds: Option<f32>) -> (usize, Vec<String>) {
             simfile.parent().unwrap_or_else(|| Path::new(".")),
             song.title.clone(),
         );
+        context.media_probes = SONG_LUA_MEDIA_PROBES;
         context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
         context.music_length_seconds = max_seconds.map_or_else(
             || song.precise_last_second(),
@@ -351,6 +353,7 @@ fn reported_song_lua_failures_compile() {
             simfile.parent().expect("song directory"),
             song.title.clone(),
         );
+        context.media_probes = SONG_LUA_MEDIA_PROBES;
         context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
         context.song_timing_bpms = deadsync_song_lua::parse_song_timing_bpms(&song.normalized_bpms);
         context.music_length_seconds = limit.map_or(song.precise_last_second(), |limit| {
