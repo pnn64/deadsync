@@ -276,17 +276,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     deadsync_audio_stream::set_audio_mix_levels(config_effects.audio_mix_levels);
     deadsync_audio_stream::set_replaygain_enabled(config_effects.replaygain_enabled);
     deadsync_audio_stream::set_preserve_pitch_enabled(config_effects.preserve_pitch_enabled);
-    let (audio, music_clock) = match deadsync_audio_stream::init(
-        deadlib_audio::InitConfig {
+    let audio = deadsync_audio_replaygain::init(deadsync_audio_replaygain::InitConfig {
+        cache_file: dirs.replaygain_cache_file(),
+        legacy_cache_dir: dirs.replaygain_cache_dir(),
+        result_callback: deadsync_audio_stream::set_music_replaygain_if_matches,
+    })
+    .map_err(str::to_owned)
+    .and_then(|()| {
+        deadsync_audio_stream::init(deadlib_audio::InitConfig {
             output_device_index: cfg.audio_output_device_index,
             output_mode: cfg.audio_output_mode,
             #[cfg(target_os = "linux")]
             linux_backend: cfg.linux_audio_backend,
             sample_rate_hz: cfg.audio_sample_rate_hz,
-        },
-        dirs.replaygain_cache_file(),
-        dirs.replaygain_cache_dir(),
-    ) {
+        })
+    });
+    let (audio, music_clock) = match audio {
         Ok((audio, clock)) => {
             logging::write_report_block(
                 "Startup audio devices",
@@ -298,8 +303,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // it doesn't audibly adjust loudness a few seconds in. Background
             // priority keeps the foreground song preview ahead of this; already
             // cached tracks are a cheap disk hit, so this is a no-op once warmed.
-            // Gated on the audio runtime initializing, since that is what sets up
-            // the ReplayGain subsystem the prewarm workers depend on.
+            // Startup has initialized both the ReplayGain workers and audio output.
             if cfg.enable_replaygain && live_case.is_none() {
                 deadsync_audio_replaygain::prewarm_paths(
                     visual_styles::bundled_music_asset_paths()
@@ -326,6 +330,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
         }
     };
+    let audio = audio.with_music_gain_lookup(deadsync_audio_replaygain::get_or_queue_gain_linear);
 
     app::run(dirs, audio, music_clock, live_case, |config| {
         theme_registry::mount(config.theme_flag)

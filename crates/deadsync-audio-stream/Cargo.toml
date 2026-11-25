@@ -8,7 +8,6 @@ license = "GPL-3.0"
 deadlib-audio-decode = { path = "../deadlib-audio-decode" }
 deadlib-audio-core = { path = "../deadlib-audio-core" }
 deadlib-audio = { path = "../deadlib-audio" }
-deadsync-audio-replaygain = { path = "../deadsync-audio-replaygain" }
 deadsync-core = { path = "../deadsync-core" }
 deadlib-platform = { path = "../deadlib-platform" }
 log = "0.4.35"

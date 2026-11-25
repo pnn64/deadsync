@@ -211,6 +211,8 @@ theme to describe an input or store a setting:
   applies the loaded mixer levels, ReplayGain, and pitch preservation before
   starting `deadsync-audio-stream`. The shell applies live requests, including
   forwarding pitch preservation to the current stream through `AudioControl`.
+  The executable initializes the ReplayGain cache and supplies the gain lookup.
+  Playback associates the initial and late gains with the active track.
   Config and playback share the mixer volume percentages defined in
   `deadsync-core`.
 - `deadlib-audio-core` defines the saved Linux backend and output mode choices.

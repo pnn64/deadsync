@@ -170,8 +170,7 @@ mod tests {
 
     #[test]
     fn snapshots_preserve_precision_across_playback_states() {
-        // Keep the global clock/transport transitions in one test. Other tests
-        // in this crate do not use the process-global playback clock.
+        let _playback = crate::PLAYBACK_TEST_LOCK.lock().unwrap();
         for (origin, origin_nanos) in [
             (0.000_000_1, 100i64),
             (3_600.000_1, 3_600_000_100_000),

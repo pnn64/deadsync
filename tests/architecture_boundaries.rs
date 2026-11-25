@@ -8669,6 +8669,21 @@ fn config_keeps_audio_stream_side_effects_in_the_host() {
 }
 
 #[test]
+fn playback_supplies_track_identity_to_the_hosts_gain_lookup() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let stream = root.join("crates/deadsync-audio-stream");
+    let manifest = read_source(stream.join("Cargo.toml")).expect("audio stream manifest");
+    assert!(!manifest.contains("deadsync-audio-replaygain"));
+    for file in production_rust_files(&stream.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadsync_audio_replaygain"),
+            "{} imports the ReplayGain analyzer",
+            file.display(),
+        );
+    }
+}
+
+#[test]
 fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for relative in [
@@ -8772,7 +8787,7 @@ fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
     let runtime =
         read_source(game.join("runtime.rs")).expect("game audio should be readable");
     assert!(runtime.contains("stream::start(output_plan)?"));
-    assert!(runtime.contains("replaygain::get_or_queue_gain_linear"));
+    assert!(runtime.contains("lookup(&path, track_id)"));
     assert!(runtime.contains("set_music_replaygain_if_matches"));
     assert!(runtime.contains("stop_assist_tick_bus()"));
     let mix = read_source(game.join("mix.rs")).expect("bus policy should be readable");
