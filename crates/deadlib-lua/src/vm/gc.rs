@@ -1493,11 +1493,17 @@ impl Vm {
             .take_while(|&index| index < metatable_end)
             .filter(|&index| self.tables[index].metatable().is_some())
             .count();
-        let cells = self
-            .upvalues
-            .marked_slots()
-            .filter(|&index| matches!(self.upvalues[index], Cell::Open(..)))
-            .count();
+        // The active stack owns all open cells when it is the only live thread.
+        let refresh_open_cells = self.upvalues.live_len() != 0
+            && (!self.open_upvalues.is_empty() || self.threads.live_len() != 1);
+        let cells = if refresh_open_cells {
+            self.upvalues
+                .marked_slots()
+                .filter(|&index| matches!(self.upvalues[index], Cell::Open(..)))
+                .count()
+        } else {
+            0
+        };
         let refresh = threads.saturating_add(tables).saturating_add(cells);
         let available = (work.capacity() - work.len()).saturating_sub(refresh);
         let roots = self.seed_gc_root_count(available);
@@ -1514,9 +1520,11 @@ impl Vm {
                 work.push(Trace::TableAgain(TableId(self.tables.key(index).unwrap())));
             }
         }
-        for index in self.upvalues.marked_slots() {
-            if matches!(self.upvalues[index], Cell::Open(..)) {
-                work.push(Trace::CellAgain(index));
+        if refresh_open_cells {
+            for index in self.upvalues.marked_slots() {
+                if matches!(self.upvalues[index], Cell::Open(..)) {
+                    work.push(Trace::CellAgain(index));
+                }
             }
         }
         self.seed_gc_roots(work);
