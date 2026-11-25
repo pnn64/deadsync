@@ -197,11 +197,25 @@ impl Table {
         identity_hash: usize,
         vacant: Option<usize>,
     ) -> Result<(), Error> {
-        let Some(mut vacant) = vacant else {
-            self.native_rehash(key)?;
-            return self.native_set(key, value, |_| hash);
+        let (mut vacant, mut position) = match vacant {
+            Some(slot) => (slot, main_position(key, hash, self.entries.len())),
+            None if self.array.is_empty() => {
+                debug_assert!(self.entries.is_empty());
+                // With one key, only array index 1 can exceed half occupancy.
+                let array =
+                    usize::from(matches!(key, Key::Number(bits) if bits == 1.0_f64.to_bits()));
+                self.native_resize(array, 1 - array)?;
+                if array != 0 {
+                    self.array[0] = value;
+                    return Ok(());
+                }
+                (identity_hash & (self.slots.len() - 1), 0)
+            }
+            None => {
+                self.native_rehash(key)?;
+                return self.native_set(key, value, |_| hash);
+            }
         };
-        let mut position = main_position(key, hash, self.entries.len());
         if self.entries[position].value != Value::Nil {
             let free = self.entries[..self.last_free as usize]
                 .iter()
@@ -259,12 +273,6 @@ impl Table {
     }
 
     fn native_rehash(&mut self, extra: Key) -> Result<(), Error> {
-        if self.entries.is_empty() && self.array.is_empty() {
-            // With one key, only array index 1 can exceed half occupancy.
-            let array =
-                usize::from(matches!(extra, Key::Number(bits) if bits == 1.0_f64.to_bits()));
-            return self.native_resize(array, 1 - array);
-        }
         let mut counts = [0usize; 27];
         let mut total = 1;
         // Each bucket covers the array slots added by the corresponding power of two.
