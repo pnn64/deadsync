@@ -131,7 +131,10 @@ impl<W: Write> PacketWriter<W> {
             if self.body.is_empty() {
                 self.emit(false, payload)?;
             } else {
-                self.append_body(payload, data.len())?;
+                if payload.len() > self.body.capacity() - self.body.len() {
+                    grow_body(&mut self.body, payload.len())?;
+                }
+                self.body.extend_from_slice(payload);
                 self.emit(false, &[])?;
             }
             remaining = rest;
@@ -220,4 +223,14 @@ impl<W: Write> PacketWriter<W> {
         }
         result
     }
+}
+
+#[cold]
+fn grow_body(body: &mut Vec<u8>, additional: usize) -> Result<(), Error> {
+    // Lacing bounds any buffered body at one full page.
+    let max = 255 * 255;
+    if body.capacity() > max / 2 && body.try_reserve_exact(max - body.len()).is_ok() {
+        return Ok(());
+    }
+    reserve(body, additional)
 }
