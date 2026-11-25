@@ -295,26 +295,11 @@ impl Compositor {
                 } else if visible <= 256
                     && let Some(palette) = local.and_then(|p| p.first_chunk::<256>())
                 {
-                    let rows = &mut canvas.0[r.y * stride..(r.y + r.h) * stride];
-                    let transparent = transparent.map_or(256, u16::from);
-                    let paint = |dest: &mut [[u8; 4]], source: &[u8]| {
-                        for (pixel, &index) in dest.iter_mut().zip(source) {
-                            if u16::from(index) != transparent {
-                                let [red, green, blue] = palette[usize::from(index)];
-                                *pixel = [red, green, blue, 255];
-                            }
-                        }
-                    };
-                    if r.w == stride && width == stride {
-                        paint(rows, indices);
-                    } else {
-                        for (source, dest) in indices
-                            .chunks_exact(width)
-                            .zip(rows.chunks_exact_mut(stride))
-                        {
-                            paint(&mut dest[r.x..r.x + r.w], source);
-                        }
-                    }
+                    draw_local_colors(canvas, r, indices, width, palette, transparent);
+                } else if visible <= 64
+                    && let Some(palette) = local.filter(|p| visible <= 32 || p.len() >= 32)
+                {
+                    draw_local_colors(canvas, r, indices, width, palette, transparent);
                 } else {
                     let local_table;
                     let table = if let Some(p) = local {
@@ -467,6 +452,37 @@ impl Compositor {
             rgba: self.pixels.as_flattened(),
             control: text.control,
         })
+    }
+}
+
+#[inline]
+fn draw_local_colors<P: std::ops::Index<usize, Output = [u8; 3]> + ?Sized>(
+    (canvas, stride): (&mut [[u8; 4]], usize),
+    r: Rect,
+    indices: &[u8],
+    width: usize,
+    palette: &P,
+    transparent: Option<u8>,
+) {
+    let rows = &mut canvas[r.y * stride..(r.y + r.h) * stride];
+    let transparent = transparent.map_or(256, u16::from);
+    let paint = |dest: &mut [[u8; 4]], source: &[u8]| {
+        for (pixel, &index) in dest.iter_mut().zip(source) {
+            if u16::from(index) != transparent {
+                let [r, g, b] = palette[usize::from(index)];
+                *pixel = [r, g, b, 255];
+            }
+        }
+    };
+    if r.w == stride && width == stride {
+        paint(rows, indices);
+    } else {
+        for (source, dest) in indices
+            .chunks_exact(width)
+            .zip(rows.chunks_exact_mut(stride))
+        {
+            paint(&mut dest[r.x..r.x + r.w], source);
+        }
     }
 }
 
