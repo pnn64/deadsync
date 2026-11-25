@@ -478,7 +478,7 @@ impl Demuxer {
         if !header.is_bos() {
             self.bos_phase = false;
         }
-        self.compatibility.add(compatibility)?;
+        self.compatibility.record(compatibility)?;
         Ok(PageState {
             stream: index,
             first_packet_offset,

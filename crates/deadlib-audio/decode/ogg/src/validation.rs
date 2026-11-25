@@ -18,15 +18,21 @@ pub struct CompatibilityStats {
     pub zero_span_granules: u64,
     pub decreasing_eos_granules: u64,
 }
+pub(crate) enum GranuleException {
+    None,
+    ZeroSpan,
+    DecreasingEos,
+}
+
 impl CompatibilityStats {
-    pub(crate) fn add(&mut self, value: Self) -> Result<(), Error> {
-        self.zero_span_granules = self
-            .zero_span_granules
-            .checked_add(value.zero_span_granules)
-            .ok_or(Error::LimitExceeded("compatibility event count"))?;
-        self.decreasing_eos_granules = self
-            .decreasing_eos_granules
-            .checked_add(value.decreasing_eos_granules)
+    pub(crate) fn record(&mut self, exception: GranuleException) -> Result<(), Error> {
+        let count = match exception {
+            GranuleException::None => return Ok(()),
+            GranuleException::ZeroSpan => &mut self.zero_span_granules,
+            GranuleException::DecreasingEos => &mut self.decreasing_eos_granules,
+        };
+        *count = count
+            .checked_add(1)
             .ok_or(Error::LimitExceeded("compatibility event count"))?;
         Ok(())
     }
@@ -37,13 +43,11 @@ pub(crate) fn granule(
     complete: usize,
     previous: Option<u64>,
     options: ValidationOptions,
-) -> Result<(Option<u64>, CompatibilityStats), Error> {
+) -> Result<(Option<u64>, GranuleException), Error> {
     let gp = header.granule_position;
-    let mut stats = CompatibilityStats::default();
     if complete == 0 && !page.lacing().is_empty() && gp != UNKNOWN_GRANULE_POSITION {
         if options.allow_zero_span_granules && gp == 0 {
-            stats.zero_span_granules = 1;
-            return Ok((None, stats));
+            return Ok((None, GranuleException::ZeroSpan));
         }
         return Err(Error::Invalid("granule on page without a completed packet"));
     }
@@ -53,13 +57,13 @@ pub(crate) fn granule(
                 "unknown granule on page with completed packets",
             ));
         }
-        return Ok((None, stats));
+        return Ok((None, GranuleException::None));
     }
     if previous.is_some_and(|previous| gp < previous) {
         if !header.is_eos() || !options.allow_decreasing_eos_granule {
             return Err(Error::Invalid("decreasing granule position"));
         }
-        stats.decreasing_eos_granules = 1;
+        return Ok((Some(gp), GranuleException::DecreasingEos));
     }
-    Ok((Some(gp), stats))
+    Ok((Some(gp), GranuleException::None))
 }

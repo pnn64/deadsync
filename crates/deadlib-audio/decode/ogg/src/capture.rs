@@ -12,7 +12,7 @@ struct PendingPage {
     segment: usize,
     body: usize,
     remaining: usize,
-    compatibility: CompatibilityStats,
+    exception: validation::GranuleException,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -205,7 +205,7 @@ impl PacketCapture {
             self.skipping = header.is_continued();
             self.continuing = self.skipping;
         }
-        let (granule, compatibility) =
+        let (granule, exception) =
             validation::granule(page, header, complete, self.granule, self.validation).map_err(
                 |error| {
                     if error == Error::Invalid("decreasing granule position") {
@@ -260,7 +260,7 @@ impl PacketCapture {
             segment: 0,
             body: 0,
             remaining: complete,
-            compatibility,
+            exception,
         })
     }
     fn push_inner(
@@ -349,7 +349,7 @@ impl PacketCapture {
         if cursor.header.is_eos() {
             self.ended = true;
         }
-        self.compatibility.add(cursor.compatibility)?;
+        self.compatibility.record(cursor.exception)?;
         Ok(true)
     }
 }
