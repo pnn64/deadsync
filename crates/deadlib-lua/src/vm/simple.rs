@@ -6,7 +6,7 @@
 use super::{
     Arena, ByteString, Cell, StringId, Table, TableId, ThreadId, Value, Vm, slot_index, threads,
 };
-use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN, Op, RK};
+use crate::bytecode::{COMPARE_BRANCH, Instruction, NUMERIC_WHILE, OPEN, Op, RK};
 
 pub(super) const FIELD_HINTS: usize = 32;
 
@@ -23,6 +23,7 @@ pub(super) struct Context<'a> {
     pub thread: ThreadId,
     pub code: &'a [Instruction],
     pub stop_before_for_loop: Option<usize>,
+    pub ignored_numeric_while: Option<usize>,
     pub env: TableId,
     pub base: usize,
     /// A pending collection must still be polled by the normal SetTable path.
@@ -341,7 +342,12 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             };
         }
         Op::Close if cx.closed => {}
-        Op::Jump => next = i.c as usize,
+        Op::Jump => {
+            if i.b == NUMERIC_WHILE && cx.ignored_numeric_while != Some(pc) {
+                return None;
+            }
+            next = i.c as usize;
+        }
         Op::JumpFalse => {
             if !cx.registers[a].is_truthy() {
                 next = i.c as usize;

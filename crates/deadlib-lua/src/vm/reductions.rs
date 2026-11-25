@@ -2,11 +2,14 @@
 
 use super::{
     TableId, Value, Vm,
+    math::{MATH_MAX, MATH_MIN},
     numeric_leaf::{Expression, Input},
     slot_index,
     threads::{CO_RESUME, inline_resume::ParkedIndex},
 };
 use crate::bytecode::{Instruction, OPEN_ARGS, Op, Prototype, RK};
+
+mod while_numeric;
 
 const EXACT_INTEGER: i128 = 1 << 53;
 const BODY_LIMIT: usize = 32;
@@ -38,6 +41,10 @@ struct Series {
 }
 
 impl Series {
+    fn sum(self, count: i128) -> i128 {
+        count * (self.first + self.last) / 2
+    }
+
     fn checked(self) -> Option<Self> {
         (self.first.abs() <= EXACT_INTEGER && self.last.abs() <= EXACT_INTEGER).then_some(self)
     }
@@ -267,8 +274,8 @@ impl Body<'_> {
         let operand = self.read(call)?;
         let function = match self.literal(operand)? {
             Value::Function(function) if wanted == 1 => function,
-            Value::Native(id @ (43 | 44)) if wanted == 1 => {
-                return self.extremum(call, count, id == 43);
+            Value::Native(id @ (MATH_MIN | MATH_MAX)) if wanted == 1 => {
+                return self.extremum(call, count, id == MATH_MIN);
             }
             Value::Native(CO_RESUME) if count == 1 && wanted == 2 => return self.resume(call),
             Value::Native(0) if count == 1 && wanted <= 1 => {
@@ -577,7 +584,7 @@ impl Vm {
                     None => integer(self.registers[base + register])?,
                 };
                 // Same-signed terms and accumulator make every partial sum monotone.
-                let sum = segment_count * (terms.first + terms.last) / 2;
+                let sum = terms.sum(segment_count);
                 if (total != 0 && total.signum() != terms.first.signum())
                     || (total + sum).abs() > EXACT_INTEGER
                 {

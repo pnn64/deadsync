@@ -8,8 +8,8 @@ impl Vm {
         minimum: bool,
         checkpoint_ready: bool,
     ) -> bool {
-        let (Value::Number(first), Value::Number(second)) =
-            (self.registers[call + 1], self.registers[call + 2])
+        let Some(result) =
+            math::numeric_extremum(self.registers[call + 1], self.registers[call + 2], minimum)
         else {
             return false;
         };
@@ -19,12 +19,7 @@ impl Vm {
         {
             return false;
         }
-        let replace = if minimum {
-            second < first
-        } else {
-            second > first
-        };
-        self.registers[call] = Value::Number(if replace { second } else { first });
+        self.registers[call] = result;
         self.top = call + usize::from(keep);
         true
     }
@@ -329,12 +324,12 @@ impl Vm {
         let Value::Number(mut result) = self.registers[call + 1] else {
             return None;
         };
-        if matches!(id, 43 | 44) {
+        if matches!(id, math::MATH_MIN | math::MATH_MAX) {
             for &value in self.registers.get(call + 2..call + 1 + count)? {
                 let Value::Number(number) = value else {
                     return None;
                 };
-                if if id == 43 {
+                if if id == math::MATH_MIN {
                     number < result
                 } else {
                     number > result

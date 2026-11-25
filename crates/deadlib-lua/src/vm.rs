@@ -1983,6 +1983,7 @@ impl Vm {
             // allocate or change frame observers. Any other dispatch ends
             // this interval, and a new frame always starts with a GC poll.
             let mut numeric_checkpoint_ready = false;
+            let mut ignored_numeric_while = None;
             loop {
                 // With no hook or instruction limit counting instructions,
                 // runs of simple ones execute without frame bookkeeping.
@@ -2002,6 +2003,7 @@ impl Vm {
                             .as_ref()
                             .filter(|retry| retry.frame == frame_index)
                             .map(|retry| retry.pc),
+                        ignored_numeric_while,
                         env,
                         base,
                         gc_pending: self.gc.pending,
@@ -2315,7 +2317,22 @@ impl Vm {
                     }
                     Op::Not => self.registers[a] = Value::Boolean(!self.registers[b].is_truthy()),
                     Op::Len => self.length(self.registers[b], a)?,
-                    Op::Jump => pc = c,
+                    Op::Jump => {
+                        if i.b == crate::bytecode::NUMERIC_WHILE
+                            && ignored_numeric_while != Some(pc - 1)
+                            && !self.run_numeric_while(
+                                &prototype.code,
+                                c,
+                                pc - 1,
+                                base,
+                                program_index,
+                                proto_index,
+                            )
+                        {
+                            ignored_numeric_while = Some(pc - 1);
+                        }
+                        pc = c;
+                    }
                     Op::JumpFalse => {
                         if !self.registers[a].is_truthy() {
                             pc = c;
@@ -2420,8 +2437,16 @@ impl Vm {
                                 Value::Native(0) if i.b == 1 && i.c <= 1 => {
                                     self.try_inline_assert(a, i.c == 1, checkpoint_ready)
                                 }
-                                Value::Native(id @ (43 | 44)) if i.b == 2 && i.c <= 1 => self
-                                    .try_inline_extremum(a, i.c == 1, id == 43, checkpoint_ready),
+                                Value::Native(id @ (math::MATH_MIN | math::MATH_MAX))
+                                    if i.b == 2 && i.c <= 1 =>
+                                {
+                                    self.try_inline_extremum(
+                                        a,
+                                        i.c == 1,
+                                        id == math::MATH_MIN,
+                                        checkpoint_ready,
+                                    )
+                                }
                                 Value::Native(threads::CO_RESUME) if i.b == 1 && i.c != OPEN => {
                                     self.try_inline_coroutine_resume(a, c, checkpoint_ready)
                                 }

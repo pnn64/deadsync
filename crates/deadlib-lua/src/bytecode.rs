@@ -11,6 +11,7 @@ pub(crate) const OPEN: u32 = u32::MAX;
 pub(crate) const OPEN_ARGS: u16 = u16::MAX;
 pub(crate) const COMPARE_BRANCH: u16 = 1;
 pub(crate) const BOOLEAN_SKIP: u16 = 2;
+pub(crate) const NUMERIC_WHILE: u16 = 3;
 /// On RK-capable operands, values below this boundary are register indices;
 /// larger values are constant indices plus this boundary.
 pub(crate) const RK: u32 = 256;
@@ -760,6 +761,7 @@ impl Prototype {
                 }
                 Op::Jump => {
                     if i.b != 0
+                        && !(i.b == NUMERIC_WHILE && (i.c as usize) < pc)
                         && (i.b != BOOLEAN_SKIP
                             || pc == 0
                             || i.c as usize != pc + 2

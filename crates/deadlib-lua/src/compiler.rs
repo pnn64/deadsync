@@ -6,8 +6,8 @@ use crate::{
     Error, ErrorKind,
     bytecode::{
         BOOLEAN_SKIP, COMPARE_BRANCH, Constant, DebugCall, DebugInfo, DebugLocal, DebugName,
-        Instruction, InstructionMetadata, NameKind, OPEN, OPEN_ARGS, Op, Program, Prototype,
-        RK, Upvalue,
+        Instruction, InstructionMetadata, NUMERIC_WHILE, NameKind, OPEN, OPEN_ARGS, Op, Program,
+        Prototype, RK, Upvalue,
     },
     lexer::{Kind, Lexeme},
     parser::{Ast, Expr, ExprId, NameBinding, Stmt, StmtId},
@@ -344,6 +344,25 @@ impl<'a> Compiler<'a> {
             };
             if instruction.op == Op::Load {
                 instruction.b &= 1;
+            }
+            if instruction.op == Op::Jump
+                && instruction.b == 0
+                && let Some([compare, branch, update, body @ ..]) =
+                    f.code.get(instruction.c as usize..pc)
+                && matches!(compare.op, Op::Lt | Op::Le | Op::Gt | Op::Ge)
+                && branch.op == Op::JumpFalse
+                && branch.b == COMPARE_BRANCH
+                && branch.c as usize == pc + 1
+                && matches!(update.op, Op::Add | Op::Sub)
+                && body.len() <= 32
+                && body
+                    .iter()
+                    .all(|i| matches!(i.op, Op::Add | Op::Call | Op::Close | Op::Load | Op::Move))
+                && body
+                    .iter()
+                    .any(|i| i.op == Op::Call && i.b == 2 && i.c == 1)
+            {
+                instruction.b = NUMERIC_WHILE;
             }
             if instruction.op != Op::Close {
                 previous = Some(instruction);

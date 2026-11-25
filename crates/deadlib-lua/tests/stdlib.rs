@@ -778,6 +778,37 @@ fn numeric_extrema_keep_argument_order_and_sum_across_crossings() {
 }
 
 #[test]
+fn numeric_while_preserves_steps_and_loop_carried_extremum_arguments() {
+    let program = compile(
+        br#"
+        local min,max = math.min,math.max
+        local bound,step,i,total = -2,0.5,10,0
+        while i >= bound do
+            i = i - step
+            total = total + max(2,i) + min(i,4)
+        end
+        local expected = 0
+        for j=1,25 do
+            local n = 10 - j*0.5
+            expected = expected + max(2,n) + min(n,4)
+        end
+        assert(total == expected and i == -2.5)
+        local j, sum = 0, 1
+        while j < 12 do
+            j = j + 1
+            sum = sum + min(j, sum)
+        end
+        assert(sum == 79)
+    "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    vm.execute(&program).unwrap();
+    vm.set_instruction_limit(Some(10_000));
+    vm.execute(&program).unwrap();
+}
+
+#[test]
 fn radix_conversions_follow_platform_unsigned_long_width() {
     for source in [
         "return tonumber(' 1010 ',2),tonumber('10',36),tonumber('ffffFFFF',16),tonumber(string.rep('1',42),2)",

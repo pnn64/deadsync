@@ -3,7 +3,22 @@ use super::*;
 use std::cell::Cell;
 
 pub(super) const MATH_FIRST: u64 = 32;
+pub(super) const MATH_MIN: u64 = 43;
+pub(super) const MATH_MAX: u64 = 44;
 pub(super) const MATH_LAST: u64 = 59;
+
+#[inline]
+pub(super) fn numeric_extremum(first: Value, second: Value, minimum: bool) -> Option<Value> {
+    let (Value::Number(first), Value::Number(second)) = (first, second) else {
+        return None;
+    };
+    let replace = if minimum {
+        second < first
+    } else {
+        second > first
+    };
+    Some(Value::Number(if replace { second } else { first }))
+}
 
 // The Windows CRT used by the reference keeps rand/srand state per OS thread,
 // shared by Lua states on that thread. This stream is portable and deterministic;
@@ -241,11 +256,11 @@ impl Vm {
         }
         let x = self.math_number(base, count, 0)?;
         let result = match id {
-            43 | 44 => {
+            MATH_MIN | MATH_MAX => {
                 let mut best = x;
                 for index in 1..count {
                     let n = self.math_number(base, count, index)?;
-                    if if id == 43 { n < best } else { n > best } {
+                    if if id == MATH_MIN { n < best } else { n > best } {
                         best = n;
                     }
                 }

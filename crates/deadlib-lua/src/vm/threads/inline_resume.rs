@@ -274,6 +274,7 @@ impl Vm {
             thread,
             code: &prototype.code,
             stop_before_for_loop: None,
+            ignored_numeric_while: None,
             env: closure.env,
             base: 0,
             gc_pending: false,
