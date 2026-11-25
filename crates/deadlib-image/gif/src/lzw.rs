@@ -262,7 +262,7 @@ impl Encoder {
             if minimum == 3 && pixels <= 2048 {
                 return Self::encode_direct::<3, { direct_table_slots(2048, 8) }>(rows, emit);
             }
-            return Self::encode_large(rows, minimum, emit);
+            return Self::encode_hashed::<8192>(rows, minimum, emit);
         }
         if pixels <= 2 {
             // CLEAR, up to two literals, and EOI all use the initial width.
@@ -306,11 +306,11 @@ impl Encoder {
         // Each insertion needs a new pixel, so the small tables stay below half full.
         if pixels <= 32 {
             return if pixels <= 8 {
-                Self::encode_tiny::<16>(rows, minimum, emit)
+                Self::encode_hashed::<16>(rows, minimum, emit)
             } else if minimum == 2 {
                 Self::encode_direct::<2, { direct_table_slots(32, 4) }>(rows, emit)
             } else {
-                Self::encode_tiny::<64>(rows, minimum, emit)
+                Self::encode_hashed::<64>(rows, minimum, emit)
             };
         }
         match (minimum, pixels <= 256) {
@@ -318,8 +318,8 @@ impl Encoder {
             (2, false) => Self::encode_direct::<2, { direct_table_slots(1024, 4) }>(rows, emit),
             (3, true) => Self::encode_direct::<3, { direct_table_slots(256, 8) }>(rows, emit),
             (3, false) => Self::encode_direct::<3, { direct_table_slots(1024, 8) }>(rows, emit),
-            (_, true) => Self::encode_table(rows, minimum, &mut [0u32; 512], emit),
-            (_, false) => Self::encode_table(rows, minimum, &mut [0u32; 2048], emit),
+            (_, true) => Self::encode_hashed::<512>(rows, minimum, emit),
+            (_, false) => Self::encode_hashed::<2048>(rows, minimum, emit),
         }
     }
 
@@ -332,16 +332,7 @@ impl Encoder {
     }
 
     #[inline(never)]
-    fn encode_large<'a>(
-        rows: impl Iterator<Item = &'a [u8]>,
-        minimum: u8,
-        emit: impl FnMut(u64, usize) -> Result<(), Error>,
-    ) -> Result<(), Error> {
-        Self::encode_table(rows, minimum, &mut [0u32; 8192], emit)
-    }
-
-    #[inline(never)]
-    fn encode_tiny<'a, const SLOTS: usize>(
+    fn encode_hashed<'a, const SLOTS: usize>(
         rows: impl Iterator<Item = &'a [u8]>,
         minimum: u8,
         emit: impl FnMut(u64, usize) -> Result<(), Error>,
