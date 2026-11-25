@@ -14,9 +14,8 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::GameplayProfileData;
 use deadsync_profile as profile_data;
 use deadsync_profile::{Profile, RemoveMask, TimingWindowsOption};
-use deadsync_profile_gameplay::{
+use deadsync_profile::groovestats::{
     groovestats_eval_state_from_profile, groovestats_submit_invalid_reason_from_profile,
-    itl_current_score_hundredths_from_runtime,
 };
 use deadsync_rules::{judgment, note::Note, scroll::ScrollSpeedSetting, timing::WindowCounts};
 use deadsync_score::{
@@ -1854,6 +1853,7 @@ pub fn submit_gameplay_from_app_runtime<RuntimeProfile, OverlayActor, CapturedAc
         CapturedActor,
         StateDelta,
     >,
+    itl_score_hundredths_for_player: impl FnMut(usize) -> Option<u32>,
 ) -> bool
 where
     RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
@@ -1872,7 +1872,7 @@ where
             autosubmit_course_scores_individually: cfg.autosubmit_course_scores_individually,
         },
         deadsync_profile::runtime_active_local_profile_id_for_side,
-        |player_idx| itl_current_score_hundredths_from_runtime(gs, player_idx),
+        itl_score_hundredths_for_player,
         deadsync_score::lua_chart_submit_allowed,
         submit_fail_type_ok_from_app_runtime(),
         cache_submit_success_from_app_runtime,

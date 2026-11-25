@@ -6859,7 +6859,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "scores::get_cached_local_ex_score_for_side",
         "scores::get_cached_local_hard_ex_score_for_side",
         "scores::get_or_fetch_player_leaderboards_for_profile",
-        "scores::should_warn_cmod_for_itl_chart",
+        "deadsync_profile_gameplay::should_warn_itl_cmod_from_app_runtime",
         "state.score_refresh.has_pending()",
         "state.score_refresh.poll(&mut state.stage.gameplay,",
         "state.presentation.sync_leaderboards(updates)",
@@ -7024,7 +7024,7 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
         .map(|(body, _)| body)
         .expect("live Gameplay score polling should be present");
     assert!(
-        !live_score_poll.contains("should_warn_cmod_for_itl_chart")
+        !live_score_poll.contains("should_warn_itl_cmod_from_app_runtime")
             && !live_score_poll.contains("itl_cmod_warning"),
         "live score polling must leave the retained ITL warning alone"
     );
@@ -7035,7 +7035,7 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
         .map(|(body, _)| body)
         .expect("initial Gameplay score sync should be present");
     assert!(
-        initial_score_sync.contains("scores::should_warn_cmod_for_itl_chart")
+        initial_score_sync.contains("deadsync_profile_gameplay::should_warn_itl_cmod_from_app_runtime")
             && initial_score_sync.contains("state.presentation.sync_itl_cmod_warning(warnings)"),
         "Gameplay entry must still prepare the ITL warning"
     );
@@ -7107,13 +7107,16 @@ fn evaluation_score_service_is_shell_prepared() {
 #[test]
 fn evaluation_submission_runtime_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let online = read_source(root.join("crates/deadsync-online/Cargo.toml"))
+        .expect("online manifest");
+    assert!(!online.split("[dev-dependencies]").next().unwrap().contains("deadsync-profile-gameplay"));
     let evaluation = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
     )
     .expect("Simply Love Evaluation source should be readable");
     for runtime_call in [
-        "scores::save_local_scores_from_gameplay",
-        "scores::save_itl_data_from_gameplay",
+        "deadsync_profile_gameplay::save_local_scores_from_app_runtime",
+        "deadsync_profile_gameplay::save_itl_data_from_app_runtime",
         "scores::submit_groovestats_payloads_from_gameplay",
         "scores::submit_arrowcloud_payloads_from_gameplay",
         "scores::tick_groovestats_auto_retries",
@@ -7162,7 +7165,9 @@ fn evaluation_submission_runtime_is_shell_owned() {
         "fn submission_views",
         "fn execute_evaluation_score_runtime",
         "fn retry_evaluation_submissions",
-        "scores::save_local_scores_from_gameplay",
+        "deadsync_profile_gameplay::save_local_scores_from_app_runtime",
+        "deadsync_profile_gameplay::save_itl_data_from_app_runtime",
+        "deadsync_profile_gameplay::itl_current_score_hundredths_from_runtime(gameplay, player)",
         "scores::submit_groovestats_payloads_from_gameplay",
         "scores::tick_evaluation_auto_retries",
         "scores::retry_groovestats_submit",
@@ -7187,7 +7192,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
         "scores::get_machine_leaderboard_local",
         "scores::get_personal_leaderboard_local_for_side",
         "scores::groovestats_eval_state_from_gameplay",
-        "scores::itl_eval_state_from_gameplay",
+        "deadsync_profile_gameplay::itl_eval_state_from_app_runtime",
     ] {
         assert!(
             !evaluation.contains(runtime_access),
@@ -7227,6 +7232,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
         "scores::get_machine_leaderboard_local",
         "scores::get_personal_leaderboard_local_for_side",
         "scores::groovestats_eval_state_from_gameplay",
+        "deadsync_profile_gameplay::itl_eval_state_from_app_runtime",
         "scores::get_or_fetch_player_leaderboards_for_profile",
         "profile_data::runtime_music_profile_snapshot",
         "ActiveTheme::evaluation_leaderboard_requests",

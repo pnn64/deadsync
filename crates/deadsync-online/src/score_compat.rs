@@ -24,12 +24,6 @@ pub use crate::score_import::{
     fetch_and_store_grade_from_app_runtime as fetch_and_store_grade,
     import_scores_for_profile_from_app_runtime as import_scores_for_profile,
 };
-pub use deadsync_profile_gameplay::{
-    itl_eval_state_from_app_runtime as itl_eval_state_from_gameplay,
-    save_itl_data_from_app_runtime as save_itl_data_from_gameplay,
-    save_local_scores_from_app_runtime as save_local_scores_from_gameplay,
-    should_warn_itl_cmod_from_app_runtime as should_warn_cmod_for_itl_chart,
-};
 pub use deadsync_score::{
     Grade, gameplay_run_failed, gameplay_run_passed, is_itl_unlocks_pack, itl_points_for_chart,
     runtime_cached_best_itg_scores as cached_best_itg_scores,

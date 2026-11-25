@@ -243,6 +243,9 @@ theme to describe an input or store a setting:
 - `deadsync-online` owns DeadSync's HTTP User-Agent and shared connection
   pools. `deadsync-net` builds clients with caller-supplied settings and
   handles HTTP errors, body size limits, and response decoding.
+- The shell calls the profile gameplay adapter for local and ITL score work
+  and supplies the resulting ITL score to GrooveStats on demand. The profile
+  crate supplies the eligibility projection used for online and ITL results.
 - Song Lua owns media path lookup and actor metadata caching. The shell supplies
   the sound duration probe to stage preparation. Asset-backed compilation
   supplies movie dimensions, and headless callers can supply a sound probe.

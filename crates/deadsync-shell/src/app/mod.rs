@@ -3535,7 +3535,7 @@ impl App {
             }
             (
                 scores::groovestats_eval_state_from_gameplay(gameplay, player),
-                scores::itl_eval_state_from_gameplay(gameplay, player),
+                deadsync_profile_gameplay::itl_eval_state_from_app_runtime(gameplay, player),
             )
         });
         deadsync_profile_gameplay::results::stage_result(&gameplay.gameplay, online)
@@ -3572,9 +3572,11 @@ impl App {
     fn execute_evaluation_score_runtime(gameplay: &ActiveGameplayStage, pack_group: &str) {
         // Persist one score file per play, including fails and replay lane input,
         // unless the gameplay runtime marked the run as disqualified.
-        scores::save_local_scores_from_gameplay(gameplay);
-        let _ = scores::save_itl_data_from_gameplay(gameplay);
-        scores::submit_groovestats_payloads_from_gameplay(gameplay);
+        deadsync_profile_gameplay::save_local_scores_from_app_runtime(gameplay);
+        let _ = deadsync_profile_gameplay::save_itl_data_from_app_runtime(gameplay);
+        scores::submit_groovestats_payloads_from_gameplay(gameplay, |player| {
+            deadsync_profile_gameplay::itl_current_score_hundredths_from_runtime(gameplay, player)
+        });
         scores::submit_arrowcloud_payloads_from_gameplay(gameplay, pack_group);
     }
 

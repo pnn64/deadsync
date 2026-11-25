@@ -335,7 +335,8 @@ pub(crate) fn sync_initial_scores<P: GameplayLivePresentation<GameplayCoreState>
     state: &mut GameplayHost<GameplayLobbySession, P>,
 ) {
     let warnings = std::array::from_fn(|player| {
-        player < state.stage.num_players() && scores::should_warn_cmod_for_itl_chart(&state.stage, player)
+        player < state.stage.num_players()
+            && deadsync_profile_gameplay::should_warn_itl_cmod_from_app_runtime(&state.stage, player)
     });
     state.presentation.sync_itl_cmod_warning(warnings);
 }

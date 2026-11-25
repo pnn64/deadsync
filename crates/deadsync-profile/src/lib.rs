@@ -39,6 +39,7 @@ impl std::fmt::Debug for SecretString {
 pub mod app_runtime;
 pub mod compat;
 pub mod favorites_view;
+pub mod groovestats;
 pub mod lock_wait;
 pub mod pad_config;
 pub mod pad_config_sync;
