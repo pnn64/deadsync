@@ -448,8 +448,10 @@ impl Demuxer {
                     }
                 }
             }
+            pending += partial.len();
         } else {
             let lacing = page.lacing();
+            let mut next_length = carried;
             // Nil pages leave a carried packet alone.
             if let Some(&last) = lacing.last() {
                 let continuing = last == 255;
@@ -457,13 +459,14 @@ impl Demuxer {
                     let PartialPacket::Length(length) = &mut stream.partial else {
                         unreachable!("an index without observers only needs lengths");
                     };
-                    *length = if !continuing {
+                    next_length = if !continuing {
                         0
                     } else if complete == 0 {
                         carried + body
                     } else {
                         lacing.iter().rev().take_while(|&&lace| lace == 255).count() * 255
                     };
+                    *length = next_length;
                     stream.continuing = continuing;
                 }
                 // Only the leading continuation started on an earlier page.
@@ -475,8 +478,8 @@ impl Demuxer {
                 .packets
                 .checked_add(complete as u64)
                 .ok_or(Error::LimitExceeded("packet count"))?;
+            pending += next_length;
         }
-        pending += stream.partial.len();
         self.pending = pending;
         stream.next_sequence = header.sequence.wrapping_add(1);
         if header.is_eos() {
