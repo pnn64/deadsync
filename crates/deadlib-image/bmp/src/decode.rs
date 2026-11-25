@@ -240,12 +240,15 @@ fn append_narrow_indexed<const WIDTH: usize>(
 fn append_four_bit_rows(source: &[u8], header: &Header, indices: &mut Vec<u8>) {
     let width = header.info.width as usize;
     let top_down = header.info.top_down;
-    if width <= 4 {
+    if width <= 7 {
         let append = match width {
             1 => append_narrow_nibbles::<1>,
             2 => append_narrow_nibbles::<2>,
             3 => append_narrow_nibbles::<3>,
-            _ => append_narrow_nibbles::<4>,
+            4 => append_narrow_nibbles::<4>,
+            5 => append_narrow_nibbles::<5>,
+            6 => append_narrow_nibbles::<6>,
+            _ => append_narrow_nibbles::<7>,
         };
         append(source, indices, top_down);
         return;
