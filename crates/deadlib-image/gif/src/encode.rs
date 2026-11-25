@@ -169,6 +169,20 @@ impl<W: Write> EncoderOutput<W> {
                 }
                 return Ok(());
             }
+            if capacity == 2 {
+                let prefix = if filled == 0 { 0 } else { u64::from(buffer[0]) };
+                let bytes = (prefix | (bits << (filled * 8))).to_le_bytes();
+                let (pairs, tail) = bytes[..filled + count].as_chunks::<2>();
+                for pair in pairs {
+                    writer.write_all(&[2])?;
+                    writer.write_all(pair)?;
+                }
+                if let [byte] = tail {
+                    buffer[0] = *byte;
+                }
+                filled = tail.len();
+                return Ok(());
+            }
             buffer[filled..filled + size_of::<u64>()].copy_from_slice(&bytes);
             filled += count;
             if filled >= capacity {
