@@ -96,6 +96,11 @@ fn every_16_bit_word_preserves_555_565_and_explicit_alpha() {
             rows[y * pitch + x * 2..y * pitch + x * 2 + 2].copy_from_slice(&value.to_le_bytes());
         }
     }
+    let narrow_words = [0x7c00u16, 0x03e0, 0x001f, 0xffff, 0x8000, 0x4210];
+    let narrow_rows: Vec<_> = narrow_words
+        .into_iter()
+        .flat_map(u16::to_le_bytes)
+        .collect();
     for (format, green_bits, has_alpha) in [
         (Format::rgb(16), 5, false),
         (
@@ -155,12 +160,28 @@ fn every_16_bit_word_preserves_555_565_and_explicit_alpha() {
                 expected.push(if word & 0x8000 == 0 { 0 } else { 255 });
             }
         }
-        for top_down in [false, true] {
-            let bitmap = decode(&wire(format, width, height, top_down, &[], &rows)).unwrap();
-            match &bitmap.pixels {
-                Pixels::Rgb(samples) if !has_alpha => assert_eq!(samples, &expected),
-                Pixels::Rgba(samples) if has_alpha => assert_eq!(samples, &expected),
-                _ => panic!("unexpected pixel model for 16-bit mask combination"),
+        let channels = if has_alpha { 4 } else { 3 };
+        let narrow_expected: Vec<_> = narrow_words
+            .into_iter()
+            .flat_map(|word| {
+                expected
+                    .chunks_exact(channels)
+                    .nth(usize::from(word))
+                    .unwrap()
+            })
+            .copied()
+            .collect();
+        for (width, height, rows, expected) in [
+            (width, height, rows.as_slice(), expected.as_slice()),
+            (2, 3, narrow_rows.as_slice(), narrow_expected.as_slice()),
+        ] {
+            for top_down in [false, true] {
+                let bitmap = decode(&wire(format, width, height, top_down, &[], rows)).unwrap();
+                match &bitmap.pixels {
+                    Pixels::Rgb(samples) if !has_alpha => assert_eq!(samples, expected),
+                    Pixels::Rgba(samples) if has_alpha => assert_eq!(samples, expected),
+                    _ => panic!("unexpected pixel model for 16-bit mask combination"),
+                }
             }
         }
     }
