@@ -259,6 +259,12 @@ impl Table {
     }
 
     fn native_rehash(&mut self, extra: Key) -> Result<(), Error> {
+        if self.entries.is_empty() && self.array.is_empty() {
+            // With one key, only array index 1 can exceed half occupancy.
+            let array =
+                usize::from(matches!(extra, Key::Number(bits) if bits == 1.0_f64.to_bits()));
+            return self.native_resize(array, 1 - array);
+        }
         let mut counts = [0usize; 27];
         let mut total = 1;
         // Each bucket covers the array slots added by the corresponding power of two.
