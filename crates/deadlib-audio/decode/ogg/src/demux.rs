@@ -64,6 +64,8 @@ enum Streams<P> {
     Many {
         streams: Vec<Stream<P>>,
         serials: Option<HashMap<u32, u32>>,
+        serial_max: u32,
+        serial_min: u32,
     },
 }
 
@@ -81,7 +83,17 @@ impl<P> Streams<P> {
                 .as_mut()
                 .filter(|s| s.serial == serial)
                 .map(|s| (0, s)),
-            Self::Many { streams, serials } => Self::find_many(streams, serials, serial),
+            Self::Many {
+                streams,
+                serials,
+                serial_max,
+                serial_min,
+            } => {
+                if serial > *serial_max || serial < *serial_min {
+                    return None;
+                }
+                Self::find_many(streams, serials, serial)
+            }
         }
     }
 
@@ -123,9 +135,16 @@ impl<P> Streams<P> {
     fn clear(&mut self) {
         match self {
             Self::Single(stream) => *stream = None,
-            Self::Many { streams, serials } => {
+            Self::Many {
+                streams,
+                serials,
+                serial_max,
+                serial_min,
+            } => {
                 streams.clear();
                 *serials = None;
+                *serial_max = 0;
+                *serial_min = u32::MAX;
             }
         }
     }
@@ -142,13 +161,22 @@ impl<P> Streams<P> {
                 streams.push(first.take().unwrap());
                 streams.push(stream);
                 *self = Self::Many {
+                    serial_max: streams[0].serial.max(streams[1].serial),
+                    serial_min: streams[0].serial.min(streams[1].serial),
                     streams,
                     serials: None,
                 };
                 Ok(1)
             }
-            Self::Many { streams, serials } => {
+            Self::Many {
+                streams,
+                serials,
+                serial_max,
+                serial_min,
+            } => {
                 reserve(streams, 1)?;
+                *serial_max = (*serial_max).max(stream.serial);
+                *serial_min = (*serial_min).min(stream.serial);
                 let index = streams.len();
                 if let Some(map) = serials {
                     Self::append_serial(map, stream.serial, index as u32);
