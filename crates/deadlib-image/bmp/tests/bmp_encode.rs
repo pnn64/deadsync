@@ -80,6 +80,25 @@ fn rgb_header_pixels_and_zero_padding_are_independent_of_the_decoder() {
 }
 
 #[test]
+fn two_pixel_rgb_rows_preserve_order_and_padding() {
+    let bitmap = Bitmap {
+        width: 2,
+        height: 2,
+        pixels: Pixels::Rgb((1..=12).collect()),
+    };
+    let first = [3, 2, 1, 6, 5, 4, 0, 0];
+    let second = [9, 8, 7, 12, 11, 10, 0, 0];
+    for (top_down, expected) in [(true, [first, second]), (false, [second, first])] {
+        let options = EncodeOptions {
+            top_down,
+            ..Default::default()
+        };
+        let bytes = encode_with_options(&bitmap, options).unwrap();
+        assert_eq!(&bytes[54..], expected.as_flattened());
+    }
+}
+
+#[test]
 fn rgba_v4_masks_preserve_explicit_alpha() {
     let bitmap = rgba_image();
     let bytes = encode(&bitmap).unwrap();

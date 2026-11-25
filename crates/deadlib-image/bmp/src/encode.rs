@@ -195,6 +195,8 @@ fn append_mapped_rows<const INPUT: usize, const OUTPUT: usize>(
         } else {
             output.extend(pixels.rev().flat_map(row));
         }
+    } else if source_row_bytes == INPUT * 2 {
+        append_mapped_pairs(output, samples, top_down, reorder);
     } else {
         let mut rows = samples.chunks_exact(source_row_bytes);
         while let Some(row) = if top_down {
@@ -205,6 +207,27 @@ fn append_mapped_rows<const INPUT: usize, const OUTPUT: usize>(
             let pixels = row.as_chunks::<INPUT>().0.iter().flat_map(&mut reorder);
             output.extend(pixels.chain(padding.iter().copied()));
         }
+    }
+}
+
+#[inline(never)]
+fn append_mapped_pairs<const INPUT: usize, const OUTPUT: usize>(
+    output: &mut Vec<u8>,
+    samples: &[u8],
+    top_down: bool,
+    mut reorder: impl FnMut(&[u8; INPUT]) -> [u8; OUTPUT],
+) {
+    let pairs = samples.as_chunks::<INPUT>().0.as_chunks::<2>().0.iter();
+    let pack = |[first, second]: &[[u8; INPUT]; 2]| {
+        let mut row = [0; 8];
+        row[..OUTPUT].copy_from_slice(&reorder(first));
+        row[OUTPUT..2 * OUTPUT].copy_from_slice(&reorder(second));
+        row
+    };
+    if top_down {
+        output.extend(pairs.flat_map(pack));
+    } else {
+        output.extend(pairs.rev().flat_map(pack));
     }
 }
 
