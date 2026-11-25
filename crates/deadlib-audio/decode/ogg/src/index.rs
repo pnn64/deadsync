@@ -536,7 +536,7 @@ impl OggIndex {
             {
                 end
             } else {
-                earlier.partition_point(|page| page.first_packet <= number)
+                packet_end(earlier, number)
             };
             earlier[..end].split_last()?
         };
@@ -550,6 +550,23 @@ impl OggIndex {
         }
         packet_origin(before, offset)
     }
+}
+
+#[inline]
+fn packet_end(pages: &[IndexedPage], number: u64) -> usize {
+    // The first page starts packet zero. Only the upper boundary needs searching.
+    debug_assert!(!pages.is_empty() && pages[0].first_packet <= number);
+    let mut first = 0;
+    let mut size = pages.len();
+    while size > 1 {
+        let half = size / 2;
+        let middle = first + half;
+        if pages[middle].first_packet <= number {
+            first = middle;
+        }
+        size -= half;
+    }
+    first + 1
 }
 
 #[inline(never)]
