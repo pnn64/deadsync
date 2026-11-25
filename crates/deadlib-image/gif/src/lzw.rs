@@ -358,6 +358,49 @@ impl Encoder {
             };
             return emit(bits, usize::from(count.div_ceil(8)));
         }
+        if pixels == 4 {
+            let mut symbols = rows.flatten().copied().map(u64::from);
+            let first = symbols.next().unwrap();
+            let second = symbols.next().unwrap();
+            let third = symbols.next().unwrap();
+            let fourth = symbols.next().unwrap();
+            let clear = 1u64 << minimum;
+            let width = minimum + 1;
+            // For a two-bit alphabet the decoder grows after its second insertion.
+            let end_width = width + u8::from(minimum == 2);
+            let prefix = clear | (first << width);
+            let (body, used) = if first == second && second == third {
+                (
+                    prefix | ((clear + 2) << (2 * width)) | (fourth << (3 * width)),
+                    4 * width,
+                )
+            } else {
+                let prefix = prefix | (second << (2 * width));
+                let pair = if third == first && fourth == second {
+                    clear + 2
+                } else if third == second && fourth == third {
+                    clear + 3
+                } else {
+                    0
+                };
+                if pair != 0 {
+                    (prefix | (pair << (3 * width)), 4 * width)
+                } else {
+                    (
+                        prefix | (third << (3 * width)) | (fourth << (4 * width)),
+                        4 * width + end_width,
+                    )
+                }
+            };
+            let bits = body | ((clear + 1) << used);
+            let count = used + end_width;
+            if count > 48 {
+                // Six nine-bit codes use the same six-byte flush and one-byte tail as BitWriter.
+                emit(bits, 6)?;
+                return emit(bits >> 48, 1);
+            }
+            return emit(bits, usize::from(count.div_ceil(8)));
+        }
         // Each insertion needs a new pixel, so the small tables stay below half full.
         if pixels <= 32 {
             return if pixels <= 8 {
