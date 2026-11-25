@@ -54,7 +54,7 @@ use deadsync_profile_gameplay::results::{EvaluationStage, course_summary_records
 #[cfg(test)]
 use deadsync_gameplay::course_run::{CourseRun, CourseStageRuntime};
 use crate::diagnostics::{TimingHealth, timing_health};
-use crate::dynamic_media::{BgVideoTiming, DynamicMedia};
+use crate::dynamic_media::{BgVideoTiming, DynamicMedia, banner_cache_options};
 use crate::frame_pacing_trace::{GameplayPacingPhases, GameplayStorageSample};
 use crate::frame_stats::{
     FrameStatsSummaryContext, frame_stats_summary, frame_stats_target_us, frame_stats_two_player,
@@ -962,7 +962,9 @@ fn prewarm_gameplay_banners(
     for path in &visible_paths {
         if deadlib_assets::dynamic::is_dynamic_video_path(path) {
             if let Err(e) =
-                deadsync_assets::dynamic_media::set_banner_texture_for_path(assets, backend, path)
+                deadsync_assets::dynamic_media::set_banner_texture_for_path(
+                    assets, backend, path, banner_cache_options(),
+                )
             {
                 warn!(
                     "Failed to reset gameplay banner poster '{}': {e:?}",
@@ -970,7 +972,7 @@ fn prewarm_gameplay_banners(
                 );
             }
         } else {
-            media_cache::ensure_banner_texture(assets, backend, path);
+            media_cache::ensure_banner_texture(assets, backend, path, banner_cache_options);
         }
     }
     if let Some(looped) = mode.looped() {
@@ -7517,7 +7519,9 @@ impl App {
             && let Some(path) = self.state.screens.evaluation_stage.as_ref()
                 .and_then(|stage| stage.song.banner_path.as_deref())
         {
-            media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+            media_cache::ensure_banner_texture(
+                &mut self.asset_manager, backend, path, banner_cache_options,
+            );
         }
     }
 
@@ -10568,7 +10572,9 @@ impl App {
             if let (Some(backend), Some(gs)) = (self.backend.as_mut(), gameplay_results.as_ref())
                 && let Some(path) = gs.song().banner_path.as_ref()
             {
-                media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+                media_cache::ensure_banner_texture(
+                    &mut self.asset_manager, backend, path, banner_cache_options,
+                );
             }
             let color_idx = gameplay_results.as_ref().map_or(
                 ActiveTheme::evaluation_color_index(&self.state.screens.evaluation_state),
@@ -10687,7 +10693,9 @@ impl App {
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {
                     if let Some(path) = stage.song.banner_path.as_ref() {
-                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+                        media_cache::ensure_banner_texture(
+                            &mut self.asset_manager, backend, path, banner_cache_options,
+                        );
                     }
                 }
             }
@@ -10733,7 +10741,9 @@ impl App {
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {
                     if let Some(path) = stage.song.banner_path.as_ref() {
-                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+                        media_cache::ensure_banner_texture(
+                            &mut self.asset_manager, backend, path, banner_cache_options,
+                        );
                     }
                 }
             }

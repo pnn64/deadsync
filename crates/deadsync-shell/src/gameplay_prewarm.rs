@@ -1,3 +1,4 @@
+use crate::dynamic_media::banner_cache_options;
 use crate::graphics::RenderAssets;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
@@ -99,7 +100,7 @@ impl GameplayLiveTextures {
             if !reload && assets.has_uploaded_texture_key(key) {
                 return true;
             }
-            let rgba = match media_cache::load_banner_source_rgba(path) {
+            let rgba = match media_cache::load_banner_source_rgba(path, banner_cache_options()) {
                 Ok(rgba) => rgba,
                 Err(error) => {
                     warn!("Failed to load live song Lua image {path:?}: {error}. Skipping.");
@@ -211,7 +212,7 @@ pub fn prewarm_gameplay_assets<StateDelta>(
     for path in deadsync_assets::dynamic_media::gameplay_media_paths(song, background_changes) {
         let key = path.to_string_lossy();
         if insert_texture_key(&mut seen, key.as_ref()) {
-            media_cache::ensure_banner_texture(assets, backend, path);
+            media_cache::ensure_banner_texture(assets, backend, path, banner_cache_options);
         }
     }
 
@@ -257,7 +258,7 @@ pub fn prewarm_gameplay_assets<StateDelta>(
                         let first_seen = insert_texture_key(&mut seen, key);
                         let sampler = deadsync_assets::song_lua::overlay_sampler(overlay);
                         if sampler != SamplerDesc::default() {
-                            match media_cache::load_banner_source_rgba(texture_path) {
+                            match media_cache::load_banner_source_rgba(texture_path, banner_cache_options()) {
                                 Ok(rgba) => {
                                     if let Err(error) = assets.update_texture_for_key_with_sampler(
                                         backend, key, &rgba, sampler,
@@ -274,7 +275,7 @@ pub fn prewarm_gameplay_assets<StateDelta>(
                                 }
                             }
                         } else if first_seen {
-                            media_cache::ensure_banner_texture(assets, backend, texture_path);
+                            media_cache::ensure_banner_texture(assets, backend, texture_path, banner_cache_options);
                         }
                     }
                 }
@@ -341,7 +342,7 @@ pub fn prewarm_gameplay_assets<StateDelta>(
     for player in &song_lua_visuals.player_actors {
         for texture in &player.judgment.textures {
             if insert_texture_key(&mut seen, &texture.key) {
-                media_cache::ensure_banner_texture(assets, backend, &texture.path);
+                media_cache::ensure_banner_texture(assets, backend, &texture.path, banner_cache_options);
             }
         }
     }

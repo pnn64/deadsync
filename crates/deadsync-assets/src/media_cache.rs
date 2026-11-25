@@ -7,22 +7,6 @@ use log::warn;
 use rustc_hash::FxHashSet;
 use std::path::{Path, PathBuf};
 
-#[inline(always)]
-#[must_use]
-pub fn banner_cache_options() -> dynamic::BannerCacheOptions {
-    dynamic::BannerCacheOptions {
-        enabled: deadsync_config::runtime::get().banner_cache,
-    }
-}
-
-#[inline(always)]
-#[must_use]
-pub fn cdtitle_cache_options() -> dynamic::BannerCacheOptions {
-    dynamic::BannerCacheOptions {
-        enabled: deadsync_config::runtime::get().cdtitle_cache,
-    }
-}
-
 fn decode_artwork_source(path: &Path) -> image::ImageResult<RgbaImage> {
     if dynamic::is_dynamic_video_path(path) {
         return video::load_poster(path)
@@ -31,8 +15,10 @@ fn decode_artwork_source(path: &Path) -> image::ImageResult<RgbaImage> {
     Ok(deadlib_assets::open_image_fallback_quiet(path)?.into_rgba8())
 }
 
-pub fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
-    let opts = banner_cache_options();
+pub fn load_banner_source_rgba(
+    path: &Path,
+    opts: dynamic::BannerCacheOptions,
+) -> Result<RgbaImage, String> {
     if opts.enabled {
         return dynamic::load_or_build_cached_dynamic_image(
             path,
@@ -50,8 +36,10 @@ pub fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
         .map_err(|e| e.to_string())
 }
 
-pub fn load_cdtitle_source_rgba(path: &Path) -> Result<RgbaImage, String> {
-    let opts = cdtitle_cache_options();
+pub fn load_cdtitle_source_rgba(
+    path: &Path,
+    opts: dynamic::BannerCacheOptions,
+) -> Result<RgbaImage, String> {
     if opts.enabled {
         return dynamic::load_or_build_cached_dynamic_image(
             path,
@@ -70,13 +58,14 @@ pub fn ensure_banner_texture<B: TextureBackend<RgbaImage = RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     path: &Path,
+    cache_options: impl FnOnce() -> dynamic::BannerCacheOptions,
 ) {
     let key = path.to_string_lossy().into_owned();
     if assets.has_texture_key(&key) {
         return;
     }
 
-    let rgba = match load_banner_source_rgba(path) {
+    let rgba = match load_banner_source_rgba(path, cache_options()) {
         Ok(rgba) => rgba,
         Err(e) => {
             warn!("Failed to load banner source {path:?}: {e}. Skipping.");
@@ -144,9 +133,12 @@ fn build_artwork_cache_plan(
 }
 
 #[must_use]
-pub fn artwork_cache_plan(banner_paths: &[PathBuf], cdtitle_paths: &[PathBuf]) -> ArtworkCachePlan {
-    let banner_opts = banner_cache_options();
-    let cdtitle_opts = cdtitle_cache_options();
+pub fn artwork_cache_plan(
+    banner_paths: &[PathBuf],
+    cdtitle_paths: &[PathBuf],
+    banner_opts: dynamic::BannerCacheOptions,
+    cdtitle_opts: dynamic::BannerCacheOptions,
+) -> ArtworkCachePlan {
     let bcache = &crate::paths().banner_cache;
     let ccache = &crate::paths().cdtitle_cache;
     build_artwork_cache_plan(

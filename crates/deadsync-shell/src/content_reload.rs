@@ -302,7 +302,13 @@ fn scan_library(
 
 fn prewarm_artwork(tx: &SyncSender<ContentReloadEvent>) {
     let (banner_paths, cdtitle_paths) = artwork_cache_paths();
-    let plan = deadsync_assets::media_cache::artwork_cache_plan(&banner_paths, &cdtitle_paths);
+    let config = deadsync_config::runtime::get();
+    let plan = deadsync_assets::media_cache::artwork_cache_plan(
+        &banner_paths,
+        &cdtitle_paths,
+        deadlib_assets::dynamic::BannerCacheOptions { enabled: config.banner_cache },
+        deadlib_assets::dynamic::BannerCacheOptions { enabled: config.cdtitle_cache },
+    );
     let total = plan.job_count();
     let _ = tx.send(ContentReloadEvent::Phase(ContentReloadPhase::Artwork));
     info!(

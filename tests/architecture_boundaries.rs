@@ -9653,6 +9653,20 @@ fn asset_loading_takes_texture_operations_from_the_renderer() {
 }
 
 #[test]
+fn artwork_loaders_take_cache_options_from_the_shell() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for file in ["media_cache.rs", "dynamic_media.rs"] {
+        let assets = production_source(&root.join("crates/deadsync-assets/src").join(file));
+        assert!(!assets.contains("deadsync_config::runtime"));
+    }
+    let shell = production_source(&root.join("crates/deadsync-shell/src/dynamic_media.rs"));
+    assert!(contains_rust(&shell, "prepare_banner_video(job.key, job.path, job.looped, banner_cache_options())"));
+    let reload = production_source(&root.join("crates/deadsync-shell/src/content_reload.rs"));
+    assert!(reload.contains("enabled: config.banner_cache"));
+    assert!(reload.contains("enabled: config.cdtitle_cache"));
+}
+
+#[test]
 fn asset_loading_is_independent_of_video_playback() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let assets = root.join("crates/deadlib-assets");

@@ -180,8 +180,14 @@ struct BannerVideoPrepJob {
     looped: bool,
 }
 
+pub(crate) fn banner_cache_options() -> dynamic::BannerCacheOptions {
+    dynamic::BannerCacheOptions {
+        enabled: deadsync_config::runtime::get().banner_cache,
+    }
+}
+
 fn run_banner_video_prep(job: BannerVideoPrepJob) -> BannerVideoPrepResult {
-    prepare_banner_video(job.key, job.path, job.looped)
+    prepare_banner_video(job.key, job.path, job.looped, banner_cache_options())
 }
 
 struct GameplayBackgroundPrepJob {
@@ -438,7 +444,7 @@ impl DynamicMedia {
         let profile = profile::get();
         for p in profile::scan_local_profiles() {
             if let Some(path) = p.avatar_path {
-                media_cache::ensure_banner_texture(assets, backend, &path);
+                media_cache::ensure_banner_texture(assets, backend, &path, banner_cache_options);
                 self.preloaded_profile_avatar_keys
                     .insert(path.to_string_lossy().into_owned());
             }
@@ -516,7 +522,10 @@ impl DynamicMedia {
             }
 
             self.destroy_current_dynamic_cdtitle(assets, backend);
-            match create_cdtitle_texture(assets, backend, &path) {
+            let cache_options = dynamic::BannerCacheOptions {
+                enabled: deadsync_config::runtime::get().cdtitle_cache,
+            };
+            match create_cdtitle_texture(assets, backend, &path, cache_options) {
                 Ok(key) => {
                     let key = Arc::<str>::from(key);
                     self.current_dynamic_cdtitle = Some((key.clone(), path));
@@ -548,7 +557,7 @@ impl DynamicMedia {
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
     ) {
-        let banner_cache_opts = media_cache::banner_cache_options();
+        let banner_cache_opts = banner_cache_options();
         if let Some(path) = path_opt {
             if self
                 .current_dynamic_pack_banner
@@ -584,7 +593,7 @@ impl DynamicMedia {
                 return;
             }
 
-            match create_inserted_banner_texture(assets, backend, &path) {
+            match create_inserted_banner_texture(assets, backend, &path, banner_cache_opts) {
                 Ok(key) => {
                     if banner_cache_opts.enabled {
                         self.dynamic_pack_banner_keys.insert(key.clone());
@@ -618,7 +627,7 @@ impl DynamicMedia {
         let mut release_keys =
             self.wheel_item_background_keys
                 .reconcile_paths(paths.iter(), |path| {
-                    media_cache::ensure_banner_texture(assets, backend, path);
+                    media_cache::ensure_banner_texture(assets, backend, path, banner_cache_options);
                 });
         for key in release_keys.drain(..) {
             self.release_texture_key(assets, backend, key);
@@ -711,7 +720,7 @@ impl DynamicMedia {
         let key = if let Some(banner) = reusable {
             Arc::clone(&banner.key)
         } else {
-            match set_banner_texture_for_path(assets, backend, &path) {
+            match set_banner_texture_for_path(assets, backend, &path, banner_cache_options()) {
                 Ok(key) => Arc::from(key),
                 Err(DynamicImageTextureError::Load(e)) => {
                     warn!("Failed to load banner '{}': {e}. Using fallback.", path.display());
@@ -1350,7 +1359,7 @@ impl DynamicMedia {
             }
             self.destroy_current_profile_avatar_for_side(assets, backend, side);
             let key = path.to_string_lossy().into_owned();
-            media_cache::ensure_banner_texture(assets, backend, &path);
+            media_cache::ensure_banner_texture(assets, backend, &path, banner_cache_options);
             self.current_profile_avatars[ix] = Some((key.clone(), path));
             if assets.has_texture_key(&key) {
                 profile::set_avatar_texture_key_for_side(side, Some(key));

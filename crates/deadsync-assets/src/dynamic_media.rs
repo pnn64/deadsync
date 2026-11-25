@@ -321,9 +321,10 @@ pub fn create_cdtitle_texture<B: TextureBackend<RgbaImage = image::RgbaImage>>(
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     path: &Path,
+    cache_options: dynamic::BannerCacheOptions,
 ) -> Result<String, DynamicImageTextureError> {
     let rgba =
-        media_cache::load_cdtitle_source_rgba(path).map_err(DynamicImageTextureError::Load)?;
+        media_cache::load_cdtitle_source_rgba(path, cache_options).map_err(DynamicImageTextureError::Load)?;
     let texture = backend
         .create_texture(&rgba, SamplerDesc::default())
         .map_err(|e| DynamicImageTextureError::Create(e.to_string()))?;
@@ -337,9 +338,10 @@ pub fn create_inserted_banner_texture<B: TextureBackend<RgbaImage = image::RgbaI
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     path: &Path,
+    cache_options: dynamic::BannerCacheOptions,
 ) -> Result<String, DynamicImageTextureError> {
     let rgba =
-        media_cache::load_banner_source_rgba(path).map_err(DynamicImageTextureError::Load)?;
+        media_cache::load_banner_source_rgba(path, cache_options).map_err(DynamicImageTextureError::Load)?;
     let texture = backend
         .create_texture(&rgba, SamplerDesc::default())
         .map_err(|e| DynamicImageTextureError::Create(e.to_string()))?;
@@ -353,9 +355,10 @@ pub fn set_banner_texture_for_path<B: TextureBackend<RgbaImage = image::RgbaImag
     assets: &mut AssetManager<B::Texture>,
     backend: &mut B,
     path: &Path,
+    cache_options: dynamic::BannerCacheOptions,
 ) -> Result<String, DynamicImageTextureError> {
     let rgba =
-        media_cache::load_banner_source_rgba(path).map_err(DynamicImageTextureError::Load)?;
+        media_cache::load_banner_source_rgba(path, cache_options).map_err(DynamicImageTextureError::Load)?;
     let texture = backend
         .create_texture(&rgba, SamplerDesc::default())
         .map_err(|e| DynamicImageTextureError::Create(e.to_string()))?;
@@ -516,8 +519,13 @@ impl DynamicBackgroundState {
 }
 
 #[must_use]
-pub fn prepare_banner_video(key: String, path: PathBuf, looped: bool) -> BannerVideoPrepResult {
-    if !media_cache::banner_cache_options().enabled {
+pub fn prepare_banner_video(
+    key: String,
+    path: PathBuf,
+    looped: bool,
+    cache_options: dynamic::BannerCacheOptions,
+) -> BannerVideoPrepResult {
+    if !cache_options.enabled {
         return match video::open(&path, looped) {
             Ok(video) => BannerVideoPrepResult::Ready(Box::new(PreparedBannerVideo {
                 key,
@@ -530,7 +538,7 @@ pub fn prepare_banner_video(key: String, path: PathBuf, looped: bool) -> BannerV
         };
     }
 
-    let poster = match media_cache::load_banner_source_rgba(&path) {
+    let poster = match media_cache::load_banner_source_rgba(&path, cache_options) {
         Ok(rgba) => rgba,
         Err(msg) => {
             return BannerVideoPrepResult::Failed { path, looped, msg };
