@@ -53,6 +53,21 @@ struct Rect {
     w: usize,
     h: usize,
 }
+impl Rect {
+    fn spans(self, stride: usize) -> impl Iterator<Item = std::ops::Range<usize>> {
+        let start = self.y * stride + self.x;
+        // A full-width rectangle is one contiguous span of the canvas.
+        let (width, rows) = if self.w == stride {
+            (self.w * self.h, 1)
+        } else {
+            (self.w, self.h)
+        };
+        (0..rows).map(move |row| {
+            let offset = start + row * stride;
+            offset..offset + width
+        })
+    }
+}
 
 /// One reusable RGBA8 canvas plus an optional saved *rectangle*, not a second
 /// whole-screen snapshot. Disposal is applied just before the next graphic.
@@ -165,29 +180,16 @@ impl Compositor {
             reserve(&mut self.saved, extra)?;
         }
         let stride = self.width as usize;
-        // A full-width rectangle is one contiguous span of the canvas.
-        let spans = |rect: Rect| {
-            let start = rect.y * stride + rect.x;
-            let (width, rows) = if rect.w == stride {
-                (rect.w * rect.h, 1)
-            } else {
-                (rect.w, rect.h)
-            };
-            (0..rows).map(move |row| {
-                let offset = start + row * stride;
-                offset..offset + width
-            })
-        };
         let keep_saved = match self.pending {
             Some((r, Disposal::Background)) => {
-                for span in spans(r) {
+                for span in r.spans(stride) {
                     self.pixels[span].fill(self.background);
                 }
                 false
             }
             Some((r, Disposal::Previous)) => {
                 let mut saved = self.saved.as_slice();
-                for span in spans(r) {
+                for span in r.spans(stride) {
                     let dest = &mut self.pixels[span];
                     let (source, remaining) = saved.split_at(dest.len());
                     dest.copy_from_slice(source);
@@ -201,7 +203,7 @@ impl Compositor {
         if !keep_saved {
             self.saved.clear();
             if save {
-                for span in spans(rect) {
+                for span in rect.spans(stride) {
                     self.saved.extend_from_slice(&self.pixels[span]);
                 }
             }
@@ -284,16 +286,23 @@ impl Compositor {
             return Err(Error::LimitExceeded);
         }
         let rect = self.clip(text.left, text.top, text.width, text.height);
-        self.text_coverage.clear();
-        let visible = rect.w * rect.h;
-        reserve(&mut self.text_coverage, visible)?;
-        self.text_coverage.resize(visible, 0);
         let cw = text.cell_width as usize;
         let ch = text.cell_height as usize;
         let columns = text.width as usize / cw;
         let rows = text.height as usize / ch;
         let glyph_count = columns * rows;
-        if glyph_count != 0 && text.data.iter().any(|block| !block.is_empty()) {
+        let has_glyphs = glyph_count != 0 && text.data.iter().any(|block| !block.is_empty());
+        let background = text.background_index;
+        let foreground = text.foreground_index;
+        let single_color = !has_glyphs || background == foreground;
+        let coverage_height = if single_color { 0 } else { rect.h };
+        if !single_color {
+            self.text_coverage.clear();
+            let visible = rect.w * rect.h;
+            reserve(&mut self.text_coverage, visible)?;
+            self.text_coverage.resize(visible, 0);
+        }
+        if has_glyphs {
             let mask_size = cw * ch;
             let extra = mask_size.saturating_sub(self.mask.len());
             reserve(&mut self.mask, extra)?;
@@ -313,9 +322,14 @@ impl Compositor {
                 text.cell_height,
                 &mut self.mask,
             )?;
-            if x < rect.w && y < rect.h {
+            if x < rect.w && y < coverage_height {
                 let width = cw.min(rect.w - x);
-                for (row, mask) in self.mask.chunks_exact(cw).take(rect.h - y).enumerate() {
+                for (row, mask) in self
+                    .mask
+                    .chunks_exact(cw)
+                    .take(coverage_height - y)
+                    .enumerate()
+                {
                     let start = (y + row) * rect.w + x;
                     let dest = &mut self.text_coverage[start..start + width];
                     dest.copy_from_slice(&mask[..width]);
@@ -328,10 +342,15 @@ impl Compositor {
             }
         }
         if self.prepare(rect, text.control)? {
-            let background = text.background_index;
-            let foreground = text.foreground_index;
             let transparent = text.control.and_then(|c| c.transparent_index);
-            if transparent != Some(background) || transparent != Some(foreground) {
+            if single_color {
+                if transparent != Some(background) {
+                    let color = self.palette[usize::from(background)];
+                    for span in rect.spans(self.width as usize) {
+                        self.pixels[span].fill(color);
+                    }
+                }
+            } else {
                 let transparent = match transparent {
                     Some(i) if i == background => Some(0),
                     Some(i) if i == foreground => Some(1),
