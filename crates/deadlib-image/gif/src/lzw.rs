@@ -400,12 +400,15 @@ impl Encoder {
         let shift = u32::BITS - SLOTS.ilog2();
         let clear = 1u16 << minimum;
         let mut next = clear + 2;
+        let initial_width = minimum + 1;
+        let mut width = initial_width;
+        let mut limit = clear << 1;
         let mut bits = BitWriter {
             emit,
             bits: 0,
             count: 0,
         };
-        bits.code(clear, minimum + 1)?;
+        bits.code(clear, width)?;
         let mut pending = None;
         for row in rows {
             let mut symbols = row.iter().copied();
@@ -447,25 +450,32 @@ impl Encoder {
                     }
                 };
                 // The decoder adds this phrase after reading the next code.
-                bits.code(prefix, (next - 1).ilog2() as u8 + 1)?;
-                if next < 4096 {
-                    // The assigned code is never zero, even when the key is.
-                    table[slot] = Entry::try_from(tag | u32::from(next)).ok().unwrap();
-                    next += 1;
-                } else {
-                    bits.code(clear, 12)?;
-                    table.fill(Entry::default());
-                    next = clear + 2;
-                }
+                bits.code(prefix, width)?;
                 prefix = symbol.into();
+                if next == limit {
+                    if limit == 4096 {
+                        bits.code(clear, 12)?;
+                        table.fill(Entry::default());
+                        next = clear + 2;
+                        width = initial_width;
+                        limit = clear << 1;
+                        continue 'symbols;
+                    }
+                    width += 1;
+                    limit <<= 1;
+                }
+                // The assigned code is never zero, even when the key is.
+                table[slot] = Entry::try_from(tag | u32::from(next)).ok().unwrap();
+                next += 1;
             }
             pending = Some(prefix);
         }
         if let Some(prefix) = pending {
-            bits.code(prefix, (next - 1).ilog2() as u8 + 1)?;
+            bits.code(prefix, width)?;
         }
         // The final prefix has caught the decoder up to the encoder's table.
-        bits.code(clear + 1, next.min(4095).ilog2() as u8 + 1)?;
+        let end_width = width + u8::from(next == limit && limit < 4096);
+        bits.code(clear + 1, end_width)?;
         bits.finish()
     }
 }
