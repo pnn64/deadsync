@@ -23,13 +23,10 @@ pub(crate) fn compress_image<'a, 'image>(
         && let Samples::U8(pixels) = &image.samples
     {
         let stride = image.width as usize * image.color_type.channels();
-        let rows = pixels.chunks_exact(stride);
         if options.compression == zlib::Compression::Stored {
-            for row in rows {
-                compressor.push_stored_row(row);
-            }
+            compressor.push_stored_rows(pixels, stride);
         } else {
-            for row in rows {
+            for row in pixels.chunks_exact(stride) {
                 compressor.push_zeros(1);
                 compressor.push(row);
             }

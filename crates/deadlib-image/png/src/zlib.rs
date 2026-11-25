@@ -1943,25 +1943,28 @@ impl Compressor {
         self.w.stored_header(block, block == self.stored_remaining);
         self.stored_block_left = block;
     }
-    /// Append a native 8-bit row and its None filter byte.
-    pub(crate) fn push_stored_row(&mut self, row: &[u8]) {
-        let len = row.len() + 1;
+    /// Append native 8-bit rows with a None filter byte per row.
+    pub(crate) fn push_stored_rows(&mut self, pixels: &[u8], stride: usize) {
         debug_assert_eq!(self.mode, Compression::Stored);
-        debug_assert!(len <= self.stored_remaining);
-        if self.stored_block_left == 0 {
-            self.start_stored_block();
+        debug_assert!(pixels.len().is_multiple_of(stride));
+        debug_assert!(pixels.len() + pixels.len() / stride <= self.stored_remaining);
+        let len = stride + 1;
+        let mut checksum_start = self.w.bytes.len();
+        for row in pixels.chunks_exact(stride) {
+            if len <= self.stored_block_left {
+                self.w.bytes.push(0);
+                self.w.bytes.extend_from_slice(row);
+                self.stored_block_left -= len;
+                self.stored_remaining -= len;
+            } else {
+                // Finish the contiguous payload before append writes a header.
+                self.checksum.update(&self.w.bytes[checksum_start..]);
+                self.append_stored(None, 1);
+                self.append_stored(Some(row), row.len());
+                checksum_start = self.w.bytes.len();
+            }
         }
-        if len > self.stored_block_left {
-            self.append_stored(None, 1);
-            self.append_stored(Some(row), row.len());
-            return;
-        }
-        let start = self.w.bytes.len();
-        self.w.bytes.push(0);
-        self.w.bytes.extend_from_slice(row);
-        self.checksum.update(&self.w.bytes[start..]);
-        self.stored_block_left -= len;
-        self.stored_remaining -= len;
+        self.checksum.update(&self.w.bytes[checksum_start..]);
     }
     fn append_stored(&mut self, mut input: Option<&[u8]>, mut len: usize) {
         debug_assert!(len <= self.stored_remaining);
@@ -2080,16 +2083,14 @@ mod tests {
             STORED_BLOCK_SIZE,
             STORED_BLOCK_SIZE + 1,
         ] {
-            let pixels: Vec<_> = (0..width).map(|i| i.wrapping_mul(193) as u8).collect();
+            let pixels: Vec<_> = (0..width * 3).map(|i| i.wrapping_mul(193) as u8).collect();
             let mut input = Vec::new();
-            for _ in 0..3 {
+            for row in pixels.chunks_exact(width) {
                 input.push(0);
-                input.extend_from_slice(&pixels);
+                input.extend_from_slice(row);
             }
             compressor.reset(input.len()).unwrap();
-            for _ in 0..3 {
-                compressor.push_stored_row(&pixels);
-            }
+            compressor.push_stored_rows(&pixels, width);
             assert_eq!(
                 compressor.finish(),
                 compress(&input, Compression::Stored).unwrap(),
