@@ -37,6 +37,7 @@ mod mount;
 mod noteskins;
 mod pack_options;
 mod pane;
+pub use pane::OptionsPane;
 mod panes;
 mod profile;
 mod render;

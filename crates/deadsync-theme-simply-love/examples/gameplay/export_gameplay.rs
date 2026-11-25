@@ -1,13 +1,16 @@
 //! Export the real Simply Love gameplay presentation without changing player settings.
 mod export_gameplay_viewer;
+mod export_worker;
+use crate::export_support;
+pub use export_support::Size;
 
 use deadlib_present::{
     actors::Actor,
     compose::{self, ComposeScratch, TextLayoutCache},
     space::{self, Metrics},
-    texture::{TextureContext, TextureMeta},
+    texture::TextureContext,
 };
-use deadlib_render::{Backend, BackendType, PresentModePolicy, RenderFrame, TextureHandle};
+use deadlib_render::RenderFrame;
 use deadsync_gameplay::{
     GameplayInputPlayStyle, GameplayInputPlayerSide, GameplaySession, GameplayViewport,
 };
@@ -15,84 +18,44 @@ use deadsync_profile as profile;
 use deadsync_song_lua::gameplay_presentation::{FramePresentationContext, SongFrameContent};
 use deadsync_theme_simply_love::{self as theme, screens::gameplay, views::GameplayInitView};
 use std::{
-    cell::RefCell,
     collections::BTreeSet,
-    error::Error,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Instant,
 };
 
-type RenderAssets = deadlib_assets::AssetManager<deadlib_render::Texture>;
+use export_support::{CaptureTextures, PRESETS, RenderAssets, ScreenshotTimer};
+use export_worker::{CaptureSpec, ExportProfiling, ProfilePhase};
 
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
-
-const PRESETS: &[(&str, u32, u32)] = &[
-    ("vga", 640, 480),
-    ("svga", 800, 600),
-    ("xga", 1024, 768),
-    ("5-4", 1280, 1024),
-    ("720p", 1280, 720),
-    ("square", 640, 640),
-    ("16-10", 1280, 800),
-    ("ultrawide", 1280, 540),
-    ("uwqhd", 1720, 720),
-    ("portrait-9-16", 540, 960),
-    ("portrait-10-16", 540, 960),
-];
+pub(super) type Result<T> = export_support::Result<T>;
 const LAYOUTS: &[&str] = &["p1", "p2", "versus", "double"];
 const HELP: &str = "\
 Export Simply Love gameplay PNGs (requires a desktop and Vulkan-capable GPU).
 
-cargo test -p deadsync-theme-simply-love --example export_gameplay -- [OPTIONS]
+cargo run -p deadsync-theme-simply-love --example export_screenshot -- gameplay [OPTIONS]
 
   --preset NAME   Select a preset; repeat to select several (default: all)
   --reverse       Use reverse scrolling
+    --images-only   Export images without writing the gallery index
+    --index-only    Write the gallery index without exporting images
   --help          Show this help
 
 Available presets: vga, svga, xga, 5-4, square, 16-10, 720p, ultrawide,
 uwqhd, portrait-9-16, portrait-10-16.";
 
-#[derive(Clone, Debug, PartialEq)]
-struct Size {
-    width: u32,
-    height: u32,
-    aspect: (u32, u32),
-}
-
-impl Size {
-    fn from_preset(width: u32, height: u32) -> Self {
-        let divisor = gcd(width, height);
-        Self {
-            width,
-            height,
-            aspect: (width / divisor, height / divisor),
-        }
-    }
-
-    fn name(&self) -> String {
-        format!(
-            "{}x{}-{}x{}",
-            self.width, self.height, self.aspect.0, self.aspect.1
-        )
-    }
-}
-
-fn gcd(mut a: u32, mut b: u32) -> u32 {
-    while b != 0 {
-        (a, b) = (b, a % b);
-    }
-    a
-}
-
 struct Options {
     sizes: Vec<Size>,
     reverse: bool,
+    images_only: bool,
+    index_only: bool,
 }
 
 fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
     let mut args = args.into_iter();
     let mut sizes = Vec::new();
     let mut reverse = false;
+    let mut images_only = false;
+    let mut index_only = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
@@ -100,6 +63,8 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
                 return Ok(None);
             }
             "--reverse" => reverse = true,
+            "--images-only" => images_only = true,
+            "--index-only" => index_only = true,
             "--preset" => {
                 let name = args.next().ok_or("--preset requires a name")?;
                 let &(_, width, height) = PRESETS
@@ -114,6 +79,9 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
             _ => return Err(format!("unknown option '{arg}'; use --help").into()),
         }
     }
+    if images_only && index_only {
+        return Err("--images-only and --index-only cannot be combined".into());
+    }
     if sizes.is_empty() {
         for &(_, width, height) in PRESETS {
             let size = Size::from_preset(width, height);
@@ -122,51 +90,43 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
             }
         }
     }
-    Ok(Some(Options { sizes, reverse }))
+    Ok(Some(Options {
+        sizes,
+        reverse,
+        images_only,
+        index_only,
+    }))
 }
 
-fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("Simply Love crate is under the workspace crates directory")
-        .to_path_buf()
-}
-
-struct Logger;
-impl log::Log for Logger {
-    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
-        metadata.level() <= log::Level::Warn
-    }
-    fn log(&self, record: &log::Record<'_>) {
-        if self.enabled(record.metadata()) {
-            eprintln!("{}: {}", record.level(), record.args());
-        }
-    }
-    fn flush(&self) {}
-}
-
-fn main() -> Result<()> {
+pub(super) fn run(args: Vec<String>) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         return std::thread::Builder::new()
             .name("gameplay-export".into())
             .stack_size(32 * 1024 * 1024)
-            .spawn(|| run().map_err(|error| error.to_string()))?
+            .spawn(move || run_with_args(args).map_err(|error| error.to_string()))?
             .join()
             .map_err(|_| "gameplay export thread panicked")?
             .map_err(Into::into);
     }
     #[cfg(not(target_os = "windows"))]
-    run()
+    run_with_args(args)
 }
 
-fn run() -> Result<()> {
-    let Some(options) = options(std::env::args().skip(1))? else {
+fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<()> {
+    let Some(options) = options(args)? else {
         return Ok(());
     };
-    log::set_logger(&Logger).map_err(|e| e.to_string())?;
-    log::set_max_level(log::LevelFilter::Warn);
+    let output = export_support::workspace_root()
+        .join("target")
+        .join("gameplay-exports");
+    if options.index_only {
+        std::fs::create_dir_all(&output)?;
+        export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
+        return Ok(());
+    }
+    let started = Instant::now();
+    export_support::init_logger()?;
     let isolated = tempfile::tempdir()?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
     let dirs = deadsync_config::dirs::AppDirs {
@@ -175,31 +135,45 @@ fn run() -> Result<()> {
         exe_dir: root.to_path_buf(),
         portable: false,
     };
-    dirs.ensure_dirs_exist();
-    deadsync_assets::init_paths(dirs.asset_paths(None))?;
+    export_support::initialize_runtime(&dirs)?;
     theme::i18n::init_for_tests();
-    deadsync_config::runtime::init_paths(dirs.config_path(), dirs.judgment_palettes_path())?;
-    deadsync_profile::app_runtime::init_paths(
-        dirs.profiles_root(),
-        dirs.default_player_options_path(),
-        dirs.pad_config_path(),
-    )?;
-    deadsync_simfile::app_runtime::init_paths(
-        deadsync_simfile::app_runtime::ScanPaths {
-            song_cache: dirs.song_cache_dir(),
-            extra_songs: Vec::new(),
-            extra_courses: Vec::new(),
-            autogen_courses: dirs.courses_dir(),
-            song_movies: Vec::new(),
-            random_movies: Vec::new(),
-            bg_animations: Vec::new(),
-        },
-        |_| Ok(0.0),
-    )?;
     let (simfile, pack_directory, pack_name) = sample_song(isolated.path())?;
     let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(
         &simfile, 0.0,
     )?);
+    let charts = [
+        Arc::new(song.charts[0].clone()),
+        Arc::new(song.charts[1].clone()),
+    ];
+    let cfg = deadsync_config::runtime::get();
+    let gameplay_charts = [
+        Arc::new(
+            deadsync_simfile::app_runtime::load_gameplay_charts(
+                &song,
+                &[0],
+                deadsync_simfile::runtime::RuntimeSongConfig::new(
+                    cfg.fastload,
+                    cfg.cachesongs,
+                    0.0,
+                ),
+                deadsync_config::runtime::group_is_never_cached,
+            )?
+            .remove(0),
+        ),
+        Arc::new(
+            deadsync_simfile::app_runtime::load_gameplay_charts(
+                &song,
+                &[1],
+                deadsync_simfile::runtime::RuntimeSongConfig::new(
+                    cfg.fastload,
+                    cfg.cachesongs,
+                    0.0,
+                ),
+                deadsync_config::runtime::group_is_never_cached,
+            )?
+            .remove(0),
+        ),
+    ];
     deadsync_simfile::runtime_cache::set_song_cache(vec![deadsync_chart::SongPack {
         group_name: pack_name.clone(),
         name: pack_name,
@@ -232,107 +206,124 @@ fn run() -> Result<()> {
                 .with_inner_size(winit::dpi::PhysicalSize::new(640, 480)),
         )?,
     );
-    export(&options, song, window)
+    export(&options, song, charts, gameplay_charts, window)?;
+    println!(
+        "Gameplay export completed in {:.1}s",
+        started.elapsed().as_secs_f64()
+    );
+    Ok(())
 }
 
 fn export(
     options: &Options,
     song: Arc<deadsync_chart::SongData>,
+    charts: [Arc<deadsync_chart::ChartData>; 2],
+    gameplay_charts: [Arc<deadsync_chart::GameplayChartData>; 2],
     window: Arc<winit::window::Window>,
 ) -> Result<()> {
-    let mut backend = deadlib_render::create_backend(
-        BackendType::VulkanWgpu,
-        window,
-        Metrics::centered(640.0, 480.0).projection(),
-        false,
-        PresentModePolicy::Immediate,
-        false,
-        true,
-    )?;
+    let mut backend = export_support::create_backend(window)?;
     let mut assets = RenderAssets::new();
-    deadsync_assets::load_initial_assets(&mut assets, &mut backend, theme::asset_manifest())?;
-    let output = workspace_root().join("target").join("gameplay-exports");
+    export_support::load_initial_assets(&mut assets, &mut backend)?;
+    let mut pipeline = export_support::CapturePipeline::new(backend, assets);
+    let output = export_support::workspace_root()
+        .join("target")
+        .join("gameplay-exports");
     std::fs::create_dir_all(&output)?;
-    export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
+    if !options.images_only {
+        export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
+    }
+    let mut reports = Vec::with_capacity(options.sizes.len());
     for size in &options.sizes {
+        let mut timer = ScreenshotTimer::new();
         let logical_width = 480.0 * size.aspect.0 as f32 / size.aspect.1 as f32;
         let logical_height = 480.0;
         let metrics = Metrics::centered(logical_width, logical_height);
-        space::set_current_metrics(metrics);
-        space::set_current_window_px(size.width, size.height);
-        backend.resize(size.width, size.height);
-        backend.set_default_projection(metrics.projection());
-        for &layout in LAYOUTS {
-            let mut variants = vec![(layout.to_owned(), false)];
-            if matches!(layout, "p1" | "p2") {
-                variants.push((format!("{layout}-centered"), true));
-            }
-            for (export_layout, center_single_notefield) in variants {
-                let folder = output.join(size.name()).join(&export_layout);
-                std::fs::create_dir_all(&folder)?;
-                for (show_scorebox, stem) in [(true, "gameplay"), (false, "gameplay-hmr")] {
-                    let mut state = sample_state(
-                        song.clone(),
-                        logical_width,
-                        logical_height,
-                        layout,
-                        options.reverse,
-                        show_scorebox,
-                        center_single_notefield,
-                    )?;
-                    preload_noteskins(&state, &mut assets, &mut backend)?;
-                    let context = CaptureTextures {
-                        assets: &assets,
-                        keys: RefCell::default(),
-                    };
-                    drop(compose(
-                        &mut state,
-                        &assets,
-                        &metrics,
-                        &context,
-                        center_single_notefield,
-                    ));
-                    let missing: Vec<_> = context
-                        .keys
-                        .into_inner()
-                        .into_iter()
-                        .filter(|key| !assets.has_uploaded_texture_key(key))
-                        .collect();
-                    for key in missing {
-                        load_texture(&mut assets, &mut backend, &key, false)?;
+        timer.record_resize(pipeline.begin_resolution(size, metrics.projection())?);
+        let report_size = size.clone();
+        let resolution_size = size.clone();
+        let output = output.clone();
+        let song = Arc::clone(&song);
+        let charts = charts.clone();
+        let gameplay_charts = gameplay_charts.clone();
+        let reverse = options.reverse;
+        let backend_timings = pipeline.run_producer(&mut timer, move |producer| {
+            space::set_current_metrics(metrics);
+            space::set_current_window_px(resolution_size.width, resolution_size.height);
+            let mut captures = Vec::with_capacity(12);
+            for &layout in LAYOUTS {
+                let mut variants = vec![(format!("{layout}"), false)];
+                if matches!(layout, "p1" | "p2") {
+                    variants.push((format!("{layout}-centered"), true));
+                }
+                for (export_layout, center_single_notefield) in variants {
+                    let folder = output.join(resolution_size.name()).join(&export_layout);
+                    std::fs::create_dir_all(&folder)?;
+                    for (show_scorebox, stem) in [(true, "gameplay"), (false, "gameplay-hmr")] {
+                        let filename =
+                            format!("{stem}{}.png", if reverse { "-reverse" } else { "" });
+                        captures.push(CaptureSpec {
+                            layout,
+                            show_scorebox,
+                            center_single_notefield,
+                            path: folder.join(filename),
+                        });
                     }
-                    let frame = compose(
-                        &mut state,
-                        &assets,
-                        &metrics,
-                        assets.texture_context(),
-                        center_single_notefield,
-                    );
-                    backend.request_screenshot();
-                    backend.draw(&frame, assets.textures(), false)?;
-                    let image = backend.capture_frame()?;
-                    if image.dimensions() != (size.width, size.height) {
-                        return Err(format!(
-                            "capture returned {:?}, expected {}x{}",
-                            image.dimensions(),
-                            size.width,
-                            size.height
-                        )
-                        .into());
-                    }
-                    let filename = format!(
-                        "{stem}{}.png",
-                        if options.reverse { "-reverse" } else { "" }
-                    );
-                    let output = folder.join(&filename);
-                    image.save(&output)?;
-                    println!("{}", output.display());
                 }
             }
-        }
+
+            let worker_count = std::thread::available_parallelism()
+                .map_or(1, std::num::NonZeroUsize::get)
+                .min(4)
+                .min(captures.len());
+            let profiling = ExportProfiling::default();
+            for batch in captures.chunks(worker_count) {
+                let prepared_batch = profiling.measure(ProfilePhase::StateBatchWall, || {
+                    export_worker::prepare_batch(
+                        batch,
+                        &song,
+                        &charts,
+                        &gameplay_charts,
+                        logical_width,
+                        logical_height,
+                        reverse,
+                        metrics,
+                        resolution_size.width,
+                        resolution_size.height,
+                        &profiling,
+                    )
+                })?;
+                for (capture, mut prepared) in batch.iter().zip(prepared_batch) {
+                    let frame_started = Instant::now();
+                    let texture_keys = profiling.measure(ProfilePhase::TextureKeys, || {
+                        noteskin_texture_keys(&prepared.state)
+                    });
+                    profiling.measure(ProfilePhase::TextureUpload, || {
+                        producer.load_textures(texture_keys)
+                    })?;
+                    let frame = profiling.measure(ProfilePhase::Compose, || {
+                        prepare_capture_frame(
+                            &mut prepared.state,
+                            producer,
+                            &metrics,
+                            capture.center_single_notefield,
+                        )
+                    })?;
+                    producer.submit(
+                        frame,
+                        capture.path.clone(),
+                        prepared.elapsed + frame_started.elapsed(),
+                    )?;
+                }
+            }
+            profiling.report(&resolution_size.name(), worker_count);
+            Ok(())
+        })?;
+        reports.push((timer, report_size, backend_timings));
     }
-    backend.dispose_textures(&mut assets.take_textures());
-    backend.cleanup();
+    pipeline.finish()?;
+    for (timer, size, backend_timings) in reports {
+        timer.report("gameplay", &size, Some(backend_timings))?;
+    }
     println!(
         "Exported {} PNGs. Gallery: {}",
         options.sizes.len()
@@ -445,13 +436,17 @@ fn sample_profile(reverse: bool, show_scorebox: bool) -> profile::Profile {
 
 fn sample_state(
     song: Arc<deadsync_chart::SongData>,
+    charts: &[Arc<deadsync_chart::ChartData>; 2],
+    gameplay_charts: &[Arc<deadsync_chart::GameplayChartData>; 2],
     width: f32,
     height: f32,
     layout: &str,
     reverse: bool,
     show_scorebox: bool,
     center_single_notefield: bool,
+    profiling: &ExportProfiling,
 ) -> Result<gameplay::State> {
+    let setup_scope = profiling.scope(ProfilePhase::StateSetup);
     let (play_style, side) = match layout {
         "p1" => (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P1),
         "p2" => (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P2),
@@ -460,17 +455,8 @@ fn sample_state(
         _ => return Err(format!("invalid layout {layout}").into()),
     };
     let chart_index = usize::from(play_style == GameplayInputPlayStyle::Double);
-    let cfg = deadsync_config::runtime::get();
-    let payload = Arc::new(
-        deadsync_simfile::app_runtime::load_gameplay_charts(
-            &song,
-            &[chart_index],
-            deadsync_simfile::runtime::RuntimeSongConfig::new(cfg.fastload, cfg.cachesongs, 0.0),
-            deadsync_config::runtime::group_is_never_cached,
-        )?
-        .remove(0),
-    );
-    let chart = Arc::new(song.charts[chart_index].clone());
+    let payload = Arc::clone(&gameplay_charts[chart_index]);
+    let chart = Arc::clone(&charts[chart_index]);
     let joined = match layout {
         "p2" => [false, true],
         "versus" => [true, true],
@@ -506,7 +492,7 @@ fn sample_state(
     init.hud.player_side = theme_side;
     init.hud.p1.joined = joined[0];
     init.hud.p2.joined = joined[1];
-    init.scores.scorebox_visible = [true; 2];
+    init.scores.scorebox_visible = joined;
     let scorebox_snapshot =
         deadsync_score::CachedPlayerLeaderboardData::ready(deadsync_score::PlayerLeaderboardData {
             panes: vec![deadsync_score::LeaderboardPane {
@@ -543,37 +529,41 @@ fn sample_state(
             itl_self_rank: None,
         });
     init.scores.scorebox_snapshots = [Some(scorebox_snapshot.clone()), Some(scorebox_snapshot)];
-    let mut state = gameplay::init(
-        song,
-        [chart.clone(), chart],
-        [payload.clone(), payload],
-        GameplayViewport::new(width, height),
-        session,
-        deadsync_gameplay::GameplayConfig {
-            center_1player_notefield: center_single_notefield,
-            ..Default::default()
-        },
-        5,
-        1.0,
-        scroll,
-        profiles,
-        None,
-        None,
-        None,
-        Arc::from("EVENT"),
-        None,
-        None,
-        None,
-        None,
-        None,
-        [deadsync_gameplay::CourseLifeConfig::Bar; 2],
-        false,
-        None,
-        None,
-        [0; 2],
-        Default::default(),
-        init,
-    );
+    drop(setup_scope);
+    let mut state = profiling.measure(ProfilePhase::StateInit, || {
+        gameplay::init(
+            song,
+            [chart.clone(), chart],
+            [payload.clone(), payload],
+            GameplayViewport::new(width, height),
+            session,
+            deadsync_gameplay::GameplayConfig {
+                center_1player_notefield: center_single_notefield,
+                ..Default::default()
+            },
+            5,
+            1.0,
+            scroll,
+            profiles,
+            None,
+            None,
+            None,
+            Arc::from("EVENT"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            [deadsync_gameplay::CourseLifeConfig::Bar; 2],
+            false,
+            None,
+            None,
+            [0; 2],
+            Default::default(),
+            init,
+        )
+    });
+    let data_scope = profiling.scope(ProfilePhase::StateData);
     state.boundary.total_elapsed_in_screen = 32.05;
     state.set_current_music_time_ns(32_050_000_000);
     for player in 0..state.num_players() {
@@ -651,33 +641,12 @@ fn sample_state(
             }),
         },
     );
+    drop(data_scope);
     Ok(state)
 }
 
-fn load_texture(
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
-    key: &str,
-    model: bool,
-) -> Result<()> {
-    if assets.has_uploaded_texture_key(key) || assets.load_generated_texture(backend, key, None)? {
-        return Ok(());
-    }
-    assets
-        .load_texture(
-            backend,
-            &deadsync_assets::textures::texture_decode_job(key, model),
-        )
-        .map_err(|e| format!("cannot load capture texture '{key}': {e}"))?;
-    Ok(())
-}
-
-fn preload_noteskins(
-    state: &gameplay::State,
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
-) -> Result<()> {
-    let mut keys = BTreeSet::new();
+fn noteskin_texture_keys(state: &gameplay::State) -> Vec<(String, bool)> {
+    let mut texture_keys = BTreeSet::new();
     for skin in [
         &state.noteskin_assets.noteskin,
         &state.noteskin_assets.mine_noteskin,
@@ -689,37 +658,41 @@ fn preload_noteskins(
     {
         skin.for_each_slot(|slot| {
             for slot in std::iter::once(slot).chain(slot.model_additive.as_deref()) {
-                keys.insert((slot.texture_key().to_owned(), slot.model.is_some()));
+                texture_keys.insert((slot.texture_key().to_owned(), slot.model.is_some()));
                 for key in slot.model_texture_keys.iter() {
-                    keys.insert((key.to_string(), true));
+                    texture_keys.insert((key.to_string(), true));
                 }
             }
         });
     }
-    for (key, model) in keys {
-        load_texture(assets, backend, &key, model)?;
-    }
-    Ok(())
+    texture_keys.into_iter().collect()
 }
 
-struct CaptureTextures<'a> {
-    assets: &'a RenderAssets,
-    keys: RefCell<BTreeSet<String>>,
-}
-impl TextureContext for CaptureTextures<'_> {
-    fn texture_registry_generation(&self) -> u64 {
-        self.assets.texture_context().revision()
+fn prepare_capture_frame(
+    state: &mut gameplay::State,
+    producer: &mut export_support::CaptureProducer,
+    metrics: &Metrics,
+    center_single_notefield: bool,
+) -> Result<RenderFrame> {
+    let (missing, frame) = producer.with_assets(|assets| {
+        let context = CaptureTextures::new(assets);
+        let frame = compose(state, assets, metrics, &context, center_single_notefield);
+        let missing = context.missing_keys();
+        Ok((missing, frame))
+    })?;
+    if !missing.is_empty() {
+        producer.load_textures(missing.into_iter().map(|key| (key, false)).collect())?;
+        return producer.with_assets(|assets| {
+            Ok(compose(
+                state,
+                assets,
+                metrics,
+                assets.texture_context(),
+                center_single_notefield,
+            ))
+        });
     }
-    fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
-        self.assets.texture_context().texture_dims(key)
-    }
-    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
-        self.assets.texture_context().sprite_sheet_dims(key)
-    }
-    fn texture_handle(&self, key: &str) -> TextureHandle {
-        self.keys.borrow_mut().insert(key.to_owned());
-        self.assets.texture_context().texture_handle(key)
-    }
+    Ok(frame)
 }
 
 fn compose(

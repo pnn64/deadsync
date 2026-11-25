@@ -248,6 +248,24 @@ impl Backend {
         }
     }
 
+    pub fn request_screenshot_offline(&mut self) {
+        match &mut self.0 {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendImpl::Vulkan(state) => vulkan::request_screenshot(state),
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendImpl::VulkanWgpu(state) => wgpu_core::request_screenshot_offline(state),
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => metal::request_screenshot(state),
+            #[cfg(target_os = "macos")]
+            BackendImpl::MetalWgpu(state) => wgpu_core::request_screenshot_offline(state),
+            BackendImpl::OpenGL(state) => opengl::request_screenshot(state),
+            BackendImpl::OpenGLWgpu(state) => wgpu_core::request_screenshot_offline(state),
+            BackendImpl::Software(state) => software::request_screenshot(state),
+            #[cfg(target_os = "windows")]
+            BackendImpl::DirectX(state) => wgpu_core::request_screenshot_offline(state),
+        }
+    }
+
     pub fn capture_frame(&mut self) -> Result<RgbaImage, Box<dyn Error>> {
         match &mut self.0 {
             BackendImpl::OpenGL(state) => opengl::capture_frame(state),
