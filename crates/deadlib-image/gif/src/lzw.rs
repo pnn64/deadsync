@@ -232,7 +232,13 @@ const FOUR_SYMBOL_SLOTS: usize = 4096 * 4;
 const fn direct_table_slots(pixels: usize, literals: usize) -> usize {
     // At most literals² insertions emit one pixel. The other insertions
     // emit at least two, and the final phrase leaves one or more pixels.
-    let insertions = (pixels - 1 + literals * literals) / 2;
+    let pairs = pixels - 1;
+    let insertions = (pairs + literals * literals) / 2;
+    let insertions = if insertions > pairs {
+        pairs
+    } else {
+        insertions
+    };
     (literals + 2 + insertions) * literals
 }
 
@@ -349,6 +355,8 @@ impl Encoder {
                 Self::encode_hashed::<16>(rows, minimum, emit)
             } else if minimum == 2 {
                 Self::encode_direct::<2, { direct_table_slots(32, 4) }>(rows, emit)
+            } else if minimum == 3 {
+                Self::encode_direct::<3, { direct_table_slots(32, 8) }>(rows, emit)
             } else {
                 Self::encode_hashed::<64>(rows, minimum, emit)
             };
