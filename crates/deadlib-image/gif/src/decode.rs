@@ -532,6 +532,17 @@ impl Decoder {
                             if size == 0 {
                                 break;
                             }
+                            if size == 1
+                                && let Some(&[a, 1, b, 1, c, 1, d]) = input[at..].first_chunk::<7>()
+                                && self.remaining_input_bytes >= 7
+                            {
+                                // Four complete one-byte sub-blocks fit in one LZW refill.
+                                self.remaining_input_bytes -= 7;
+                                self.lzw
+                                    .update(&[a, b, c, d], &mut self.frame.indices, pixels)?;
+                                at += 7;
+                                continue;
+                            }
                             remaining = usize::from(size);
                         }
                         let count = remaining.min(input.len() - at);
