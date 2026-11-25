@@ -28,7 +28,8 @@ pub(super) fn unfilter<const N: usize, const PAETH: bool>(
 /// Sub-unfilter a row of N-byte pixels where the vector kernel applies.
 pub(super) fn sub<const N: usize>(row: &mut [u8]) -> bool {
     assert!(matches!(N, 1 | 2 | 3 | 4 | 6 | 8));
-    if row.len() >= 64 && std::is_x86_feature_detected!("sse4.1") {
+    let minimum = if N == 2 { 32 } else { 64 };
+    if row.len() >= minimum && std::is_x86_feature_detected!("sse4.1") {
         // SAFETY: SSE4.1 availability is checked above. Byte accesses use
         // checked slices and fixed-size arrays.
         let done = unsafe { sub_run::<N>(row) };
@@ -550,7 +551,7 @@ mod tests {
                     }
                     let row = &mut actual[offset..offset + len];
                     let mut copy = row.to_vec();
-                    assert_eq!(sub::<N>(&mut copy), len >= 64);
+                    assert_eq!(sub::<N>(&mut copy), len >= 64 || (N == 2 && len >= 32));
                     super::super::unfilter(row, &[], N, 1).unwrap();
                     assert_eq!(
                         actual, expected,
