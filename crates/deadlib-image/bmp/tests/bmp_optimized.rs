@@ -282,26 +282,29 @@ fn one_color_indices_require_zero_only_in_used_bits() {
         if !row_bits.is_multiple_of(8) {
             row[row_bits / 8] >>= row_bits % 8;
         }
-        let rows = row.repeat(2);
-        let mut invalid = rows.clone();
+        let height = 5;
+        let rows = row.repeat(height);
         let last_pixel = row_bits - usize::from(bits);
-        invalid[pitch + last_pixel / 8] |= 0x80 >> (last_pixel % 8);
         for top_down in [false, true] {
             let format = Format::rgb(bits);
             assert_eq!(
-                decode(&wire(format, width, 2, top_down, &colors, &rows))
+                decode(&wire(format, width, height, top_down, &colors, &rows))
                     .unwrap()
                     .pixels,
                 Pixels::Indexed {
                     bit_depth: bits as u8,
-                    indices: vec![0; width * 2],
+                    indices: vec![0; width * height],
                     palette: colors.clone(),
                 }
             );
-            assert_eq!(
-                decode(&wire(format, width, 2, top_down, &colors, &invalid)),
-                Err(Error::Invalid("pixel index exceeds the palette"))
-            );
+            for row in [1, height - 1] {
+                let mut invalid = rows.clone();
+                invalid[row * pitch + last_pixel / 8] |= 0x80 >> (last_pixel % 8);
+                assert_eq!(
+                    decode(&wire(format, width, height, top_down, &colors, &invalid)),
+                    Err(Error::Invalid("pixel index exceeds the palette"))
+                );
+            }
         }
     }
 }
