@@ -4987,6 +4987,7 @@ fn lighting_consumes_chart_data_and_grade_suffixes_without_runtime_dependencies(
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for (name, forbidden_crate, forbidden_import) in [
         ("deadsync-lights", "deadsync-gameplay", "deadsync_gameplay"),
+        ("deadsync-smx", "deadsync-gameplay", "deadsync_gameplay"),
         ("deadsync-smx", "deadsync-score", "deadsync_score"),
     ] {
         let crate_dir = root.join("crates").join(name);

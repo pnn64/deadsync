@@ -1887,7 +1887,6 @@ version = "0.1.0"
 dependencies = [
  "deadlib-platform",
  "deadsync-core",
- "deadsync-gameplay",
  "deadsync-input",
  "deadsync-rules",
  "hashbrown 0.17.1",

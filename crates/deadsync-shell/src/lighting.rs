@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::smx_config::smx_options_light_preview_active;
 use crate::song_loading;
 use deadsync_config::options::SmxPackName;
-use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState};
+use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState, active_hold_is_engaged};
 use deadsync_input::VirtualAction;
 use deadsync_lights::cabinet_chart::{
     CabinetLightEvent, CabinetLightPlan, GameplayLightChartKey, cabinet_light_chart_from_loaded,
@@ -21,7 +21,7 @@ use deadsync_profile_gameplay::results::EvaluationStage;
 use deadsync_score::Grade;
 use deadsync_smx::gameplay_driver as smx_driver;
 use deadsync_smx::gifs::{FullPadAnim, difficulty_tag};
-use deadsync_smx::panel_fx::JudgementGifs;
+use deadsync_smx::panel_fx::{HoldLightJudgment, JudgementGifs, TapLightJudgment};
 use deadsync_smx::panels::{Clock, PADS};
 use deadsync_theme::views::LightsTestView;
 use deadsync_theme::Screen as Screen;
@@ -405,8 +405,29 @@ impl SmxPanelDriver {
     ) where
         Profile: GameplayProfileData,
     {
-        self.inner
-            .update(state, smx_slot_for_gameplay(state, play_style, player_side));
+        self.inner.update(
+            state.notes().as_ptr() as usize,
+            state.cols_per_player(),
+            state.num_players(),
+            smx_slot_for_gameplay(state, play_style, player_side),
+            |col| smx_driver::LaneLightState {
+                pressed: state.lane_is_pressed(col),
+                tap_judgment: state.last_tap_judgment(col).map(|judged| TapLightJudgment {
+                    grade: judged.grade,
+                    blue_fantastic: judged.blue_fantastic,
+                    at_screen_s: judged.at_screen_s,
+                }),
+                engaged_hold: state
+                    .active_hold(col)
+                    .filter(|hold| active_hold_is_engaged(hold))
+                    .map(|hold| hold.note_type),
+                hold_judgment: state.hold_judgment(col).map(|judged| HoldLightJudgment {
+                    result: judged.result,
+                    at_screen_s: judged.started_at_screen_s,
+                }),
+                mine_at_screen_s: state.mine_started_at_screen_s(col),
+            },
+        );
     }
 
     pub fn deactivate(&mut self) {

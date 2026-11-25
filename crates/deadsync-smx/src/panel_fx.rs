@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use deadsync_core::note::NoteType;
-use deadsync_gameplay::{ColumnTapJudgment, HoldJudgmentRenderInfo};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::HoldResult;
 
@@ -10,6 +9,19 @@ use crate::panels::OverlayDrive;
 
 /// Sentinel `*_at_screen_s` meaning "nothing seen yet for this column".
 pub const NO_EVENT: f32 = f32::NEG_INFINITY;
+
+#[derive(Clone, Copy, Debug)]
+pub struct TapLightJudgment {
+    pub grade: JudgeGrade,
+    pub blue_fantastic: bool,
+    pub at_screen_s: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct HoldLightJudgment {
+    pub result: HoldResult,
+    pub at_screen_s: f32,
+}
 
 /// Resolved per-panel judgement animations from the GIF registry. A slot is
 /// `None` only when nothing resolved for that name (the shipped default pack
@@ -174,7 +186,7 @@ pub fn results_role_candidates(
 /// Decide a new tap judgement for a column (the grade and its FA+ white/blue flag).
 /// Records the judgement time so the same one is not re-fired, and re-arms (sentinel)
 /// when the column currently has no judgement.
-pub fn tap_event(judged: Option<ColumnTapJudgment>, prev: &mut f32) -> Option<(JudgeGrade, bool)> {
+pub fn tap_event(judged: Option<TapLightJudgment>, prev: &mut f32) -> Option<(JudgeGrade, bool)> {
     match judged {
         Some(j) if j.at_screen_s != *prev => {
             *prev = j.at_screen_s;
@@ -201,13 +213,10 @@ pub const fn hold_edge(engaged: bool, prev: &mut bool) -> Option<bool> {
 
 /// Decide a new freeze/roll outcome for a column. Held shows OK, dropped shows the
 /// failure effect, missed consumes the event but shows nothing.
-pub fn hold_outcome_event(
-    judged: Option<HoldJudgmentRenderInfo>,
-    prev: &mut f32,
-) -> Option<HoldResult> {
+pub fn hold_outcome_event(judged: Option<HoldLightJudgment>, prev: &mut f32) -> Option<HoldResult> {
     match judged {
-        Some(j) if j.started_at_screen_s != *prev => {
-            *prev = j.started_at_screen_s;
+        Some(j) if j.at_screen_s != *prev => {
+            *prev = j.at_screen_s;
             match j.result {
                 HoldResult::Held | HoldResult::LetGo => Some(j.result),
                 HoldResult::Missed => None,
@@ -241,19 +250,18 @@ pub fn mine_event(hit_at: Option<f32>, prev: &mut f32) -> bool {
 mod tests {
     use super::*;
 
-    fn tap(grade: JudgeGrade, blue_fantastic: bool, at: f32) -> ColumnTapJudgment {
-        ColumnTapJudgment {
+    fn tap(grade: JudgeGrade, blue_fantastic: bool, at: f32) -> TapLightJudgment {
+        TapLightJudgment {
             grade,
             blue_fantastic,
             at_screen_s: at,
         }
     }
 
-    fn hold(result: HoldResult, at: f32) -> HoldJudgmentRenderInfo {
-        HoldJudgmentRenderInfo {
+    fn hold(result: HoldResult, at: f32) -> HoldLightJudgment {
+        HoldLightJudgment {
             result,
-            started_at_screen_s: at,
-            alternate: false,
+            at_screen_s: at,
         }
     }
 

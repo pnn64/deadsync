@@ -4,21 +4,30 @@
 //! compares small per-column state and pushes O(1) events to the SMX lights worker, so no
 //! frame building or colour math happens on the gameplay/render path. The per-column
 //! decisions are pure helpers (`tap_flash`, `hold_edge`, `hold_outcome_flash`, `mine_flash`)
-//! so they can be unit-tested without constructing a whole gameplay `State`.
+//! so they can be unit-tested independently.
 
 use std::sync::Arc;
 
 use crate::gifs::FullPadAnim;
 use crate::panel_fx::{
-    JudgementGifs, NO_EVENT, hold_edge, hold_outcome_event, mine_event, sustain_anim,
-    sustain_drive, tap_event,
+    HoldLightJudgment, JudgementGifs, NO_EVENT, TapLightJudgment, hold_edge, hold_outcome_event,
+    mine_event, sustain_anim, sustain_drive, tap_event,
 };
 use crate::panels::{Clock, OverlayDrive, PADS, SmxPanelLights, smx_panel_for_col};
 use deadsync_core::note::NoteType;
-use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState, active_hold_is_engaged};
 use deadsync_rules::note::HoldResult;
 
 const MAX_COLS: usize = deadsync_core::input::MAX_COLS;
+
+/// Lane input and feedback sampled by the caller for one frame.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LaneLightState {
+    pub pressed: bool,
+    pub tap_judgment: Option<TapLightJudgment>,
+    pub engaged_hold: Option<NoteType>,
+    pub hold_judgment: Option<HoldLightJudgment>,
+    pub mine_at_screen_s: Option<f32>,
+}
 
 /// Whether `update` started a gif overlay on a column's panel for the current sustain,
 /// so the matching release is sent when it disengages.
@@ -30,7 +39,7 @@ enum HoldFx {
 }
 
 /// Owns the panel-lighting worker handle plus the per-column "last seen" trackers used to
-/// detect new judgements and hold transitions by diffing gameplay `State` each frame.
+/// detect new judgements and hold transitions by diffing lane samples each frame.
 ///
 /// `Default::default()` spawns the worker thread (via `SmxPanelLights::new`); construct one
 /// per `App` and keep it for the app's lifetime.
@@ -88,30 +97,29 @@ impl Default for SmxPanelDriver {
 impl SmxPanelDriver {
     /// Called each frame while on a gameplay screen with the feature enabled. Diffs the
     /// per-column flash, active-hold, hold-judgement, and mine state and emits panel events.
-    pub fn update<Profile, OverlayActor, CapturedActor, StateDelta>(
+    pub fn update(
         &mut self,
-        state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        notes_ptr: usize,
+        cols_per_player: usize,
+        num_players: usize,
         slot_for_pad: [usize; PADS],
-    ) where
-        Profile: GameplayProfileData,
-    {
+        mut lane_state: impl FnMut(usize) -> LaneLightState,
+    ) {
         // Re-arm on entering gameplay or when the chart's note buffer changes (a restart or
         // a new song), so stale `*_at_screen_s` values do not swallow the first event.
-        let notes_ptr = state.notes().as_ptr() as usize;
-        if !self.gameplay_active || notes_ptr != self.notes_ptr || self.slot_for_pad != slot_for_pad
-        {
-            self.activate(state, slot_for_pad);
+        if !self.gameplay_active || notes_ptr != self.notes_ptr || self.slot_for_pad != slot_for_pad {
+            self.activate(notes_ptr, slot_for_pad);
         }
 
-        let cpp = state.cols_per_player();
-        let np = state.num_players();
-        let cols = cpp.saturating_mul(np).min(MAX_COLS);
+        let cols = cols_per_player.saturating_mul(num_players).min(MAX_COLS);
         for col in 0..cols {
             // Resolve the panel once and translate the chart pad index to the physical SMX
             // slot the player's pad sits on. The trackers below still update even when a
             // column maps to no panel, so events are consumed rather than replayed later.
-            let panel = smx_panel_for_col(cpp, np, col).map(|(pad, p)| (self.slot_for_pad[pad], p));
-            let pressed = state.lane_is_pressed(col);
+            let panel = smx_panel_for_col(cols_per_player, num_players, col)
+                .map(|(pad, p)| (self.slot_for_pad[pad], p));
+            let lane = lane_state(col);
+            let pressed = lane.pressed;
             let press_edge = hold_edge(pressed, &mut self.prev_pressed[col]);
             let released = press_edge == Some(false);
 
@@ -125,8 +133,7 @@ impl SmxPanelDriver {
                 self.lights.release_overlay(pad, p);
             }
 
-            if let Some((grade, blue)) =
-                tap_event(state.last_tap_judgment(col), &mut self.prev_flash[col])
+            if let Some((grade, blue)) = tap_event(lane.tap_judgment, &mut self.prev_flash[col])
                 && let Some((pad, p)) = panel
                 && let Some(anim) = self.judgement_gifs[pad].for_grade(grade, blue)
             {
@@ -134,13 +141,13 @@ impl SmxPanelDriver {
                     .play_overlay(pad, p, anim.clone(), OverlayDrive::OneShot { pressed });
             }
 
-            let engaged = state.active_hold(col).is_some_and(active_hold_is_engaged);
+            let kind = lane.engaged_hold;
+            let engaged = kind.is_some();
             let engage_edge = hold_edge(engaged, &mut self.prev_engaged[col]);
             if let Some(now_engaged) = engage_edge
                 && let Some((pad, p)) = panel
             {
                 if now_engaged {
-                    let kind = state.active_hold(col).map(|h| h.note_type);
                     // First engage: play the intro, then loop (freeze) or drain
                     // into the outro (roll). No gif = no effect on this column.
                     if let Some(anim) = sustain_anim(&self.judgement_gifs[pad], kind) {
@@ -169,7 +176,6 @@ impl SmxPanelDriver {
                 && self.prev_hold_fx[col] == HoldFx::Overlay
                 && let Some((pad, p)) = panel
             {
-                let kind = state.active_hold(col).map(|h| h.note_type);
                 if kind == Some(NoteType::Roll) {
                     if press_edge == Some(true)
                         && let Some(anim) = sustain_anim(&self.judgement_gifs[pad], kind)
@@ -196,7 +202,7 @@ impl SmxPanelDriver {
             }
 
             if let Some(result) =
-                hold_outcome_event(state.hold_judgment(col), &mut self.prev_hold_judged[col])
+                hold_outcome_event(lane.hold_judgment, &mut self.prev_hold_judged[col])
                 && let Some((pad, p)) = panel
             {
                 let anim = match result {
@@ -213,10 +219,8 @@ impl SmxPanelDriver {
                 }
             }
 
-            if mine_event(
-                state.mine_started_at_screen_s(col),
-                &mut self.prev_mine[col],
-            ) && let Some((pad, p)) = panel
+            if mine_event(lane.mine_at_screen_s, &mut self.prev_mine[col])
+                && let Some((pad, p)) = panel
                 && let Some(anim) = &self.judgement_gifs[pad].mine
             {
                 self.lights
@@ -349,15 +353,9 @@ impl SmxPanelDriver {
         }
     }
 
-    fn activate<Profile, OverlayActor, CapturedActor, StateDelta>(
-        &mut self,
-        state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
-        slot_for_pad: [usize; PADS],
-    ) where
-        Profile: GameplayProfileData,
-    {
+    fn activate(&mut self, notes_ptr: usize, slot_for_pad: [usize; PADS]) {
         self.gameplay_active = true;
-        self.notes_ptr = state.notes().as_ptr() as usize;
+        self.notes_ptr = notes_ptr;
         self.slot_for_pad = slot_for_pad;
         self.prev_flash = [NO_EVENT; MAX_COLS];
         self.prev_engaged = [false; MAX_COLS];
