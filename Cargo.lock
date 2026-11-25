@@ -1562,7 +1562,6 @@ dependencies = [
 name = "deadsync-config"
 version = "0.1.0"
 dependencies = [
- "deadlib-audio",
  "deadlib-audio-core",
  "deadlib-input-native",
  "deadlib-platform",

@@ -14,8 +14,7 @@ use crate::theme::{
     SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
     ThemePresentationOptions, TournamentModeOptions, VersionOverlaySide, VisualStyle,
 };
-use deadlib_audio::LinuxAudioBackend;
-use deadlib_audio_core::AudioOutputMode;
+use deadlib_audio_core::{AudioOutputMode, LinuxAudioBackend};
 use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;

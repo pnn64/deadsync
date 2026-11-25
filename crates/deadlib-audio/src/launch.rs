@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+use deadlib_audio_core::LinuxAudioBackend;
 use deadlib_audio_core::{
     AudioOutputMode, AudioStreamHandle, MixControls, OutputBackendReady, OutputDeviceInfo,
     RenderState, SfxReceiver, SfxSender, music_transport, sfx_transport,
@@ -18,7 +20,6 @@ use deadlib_audio_backend_pulse as linux_pulse;
 #[cfg(windows)]
 use deadlib_audio_backend_wasapi as windows_wasapi;
 use log::{debug, info, warn};
-use std::str::FromStr;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,43 +29,6 @@ pub struct InitConfig {
     #[cfg(target_os = "linux")]
     pub linux_backend: LinuxAudioBackend,
     pub sample_rate_hz: Option<u32>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LinuxAudioBackend {
-    Auto,
-    PipeWire,
-    PulseAudio,
-    Jack,
-    Alsa,
-}
-
-impl LinuxAudioBackend {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Auto => "Auto",
-            Self::PipeWire => "PipeWire",
-            Self::PulseAudio => "PulseAudio",
-            Self::Jack => "JACK",
-            Self::Alsa => "ALSA",
-        }
-    }
-}
-
-impl FromStr for LinuxAudioBackend {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "auto" => Ok(Self::Auto),
-            "pipewire" | "pipe-wire" | "pw" => Ok(Self::PipeWire),
-            "pulseaudio" | "pulse" => Ok(Self::PulseAudio),
-            "jack" => Ok(Self::Jack),
-            "alsa" => Ok(Self::Alsa),
-            _ => Err(()),
-        }
-    }
 }
 
 pub const SFX_QUEUE_CAP: usize = 128;
@@ -1162,28 +1126,10 @@ fn start_wasapi_backend(
     Ok((stream, ready, sfx_sender, stream_handle))
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
-    use super::LinuxAudioBackend;
-    #[cfg(target_os = "linux")]
-    use super::{available_linux_backends_for, effective_linux_backend};
-    use std::str::FromStr;
+    use super::{LinuxAudioBackend, available_linux_backends_for, effective_linux_backend};
 
-    #[test]
-    fn linux_backend_config_is_owned_by_the_native_facade() {
-        for (text, expected) in [
-            ("auto", LinuxAudioBackend::Auto),
-            ("pipe-wire", LinuxAudioBackend::PipeWire),
-            ("pulse", LinuxAudioBackend::PulseAudio),
-            ("jack", LinuxAudioBackend::Jack),
-            ("alsa", LinuxAudioBackend::Alsa),
-        ] {
-            assert_eq!(LinuxAudioBackend::from_str(text), Ok(expected));
-            assert_ne!(expected.as_str(), "");
-        }
-    }
-
-    #[cfg(target_os = "linux")]
     #[test]
     fn linux_backend_list_reflects_runtime_availability() {
         assert_eq!(
@@ -1202,7 +1148,6 @@ mod tests {
         );
     }
 
-    #[cfg(target_os = "linux")]
     #[test]
     fn unavailable_explicit_pipewire_falls_back_to_auto() {
         assert_eq!(

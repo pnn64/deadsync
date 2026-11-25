@@ -872,6 +872,29 @@ mod tests {
     }
 
     #[test]
+    fn linux_audio_backend_alias_is_saved_under_its_canonical_name() {
+        use deadlib_audio_core::LinuxAudioBackend;
+
+        let mut conf = SimpleIni::new();
+        conf.load_str("[Options]\nLinuxAudioBackend=pw\n");
+        let loaded = crate::load::load_app_config(&conf, Config::default());
+        assert_eq!(loaded.linux_audio_backend, LinuxAudioBackend::PipeWire);
+
+        let saved =
+            build_saved_app_config_file(&loaded, &Keymap::default(), "", &[], &[], "", "", "", "");
+        let mut saved_conf = SimpleIni::new();
+        saved_conf.load_str(&saved);
+        assert_eq!(
+            saved_conf.get("Options", "LinuxAudioBackend"),
+            Some("PipeWire")
+        );
+        assert_eq!(
+            crate::load::load_app_config(&saved_conf, Config::default()).linux_audio_backend,
+            LinuxAudioBackend::PipeWire
+        );
+    }
+
+    #[test]
     fn cabinet_light_preferences_round_trip_legacy_names() {
         use deadsync_core::lights::{DriverKind, GameplayPadLightMode, PacDriveLightOrdering};
 

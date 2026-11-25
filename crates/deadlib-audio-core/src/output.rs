@@ -54,6 +54,44 @@ impl FromStr for AudioOutputMode {
     }
 }
 
+/// Requested backend for Linux audio output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinuxAudioBackend {
+    Auto,
+    PipeWire,
+    PulseAudio,
+    Jack,
+    Alsa,
+}
+
+impl LinuxAudioBackend {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::PipeWire => "PipeWire",
+            Self::PulseAudio => "PulseAudio",
+            Self::Jack => "JACK",
+            Self::Alsa => "ALSA",
+        }
+    }
+}
+
+impl FromStr for LinuxAudioBackend {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "pipewire" | "pipe-wire" | "pw" => Ok(Self::PipeWire),
+            "pulseaudio" | "pulse" => Ok(Self::PulseAudio),
+            "jack" => Ok(Self::Jack),
+            "alsa" => Ok(Self::Alsa),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct OutputDeviceInfo {
     pub name: String,
@@ -106,5 +144,32 @@ impl OutputTimingSnapshot {
             || self.clock_fallback_count != 0
             || self.timing_sanity_failure_count != 0
             || self.underrun_count != 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LinuxAudioBackend;
+
+    #[test]
+    fn linux_backend_names_and_aliases_round_trip() {
+        for (backend, canonical, aliases) in [
+            (LinuxAudioBackend::Auto, "Auto", &["auto"][..]),
+            (
+                LinuxAudioBackend::PipeWire,
+                "PipeWire",
+                &["pipe-wire", " pw "],
+            ),
+            (LinuxAudioBackend::PulseAudio, "PulseAudio", &["pulse"]),
+            (LinuxAudioBackend::Jack, "JACK", &["jack"]),
+            (LinuxAudioBackend::Alsa, "ALSA", &["alsa"]),
+        ] {
+            assert_eq!(backend.as_str(), canonical);
+            assert_eq!(canonical.parse(), Ok(backend));
+            for alias in aliases {
+                assert_eq!(alias.parse(), Ok(backend));
+            }
+        }
+        assert!("unknown".parse::<LinuxAudioBackend>().is_err());
     }
 }

@@ -14,8 +14,7 @@ use crate::theme::{
     MachineFlowOptions, ThemePresentationOptions, ThemeShortcutOptions, load_machine_flow_options,
     load_theme_presentation_options, load_theme_shortcut_options,
 };
-use deadlib_audio::LinuxAudioBackend;
-use deadlib_audio_core::AudioOutputMode;
+use deadlib_audio_core::{AudioOutputMode, LinuxAudioBackend};
 use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;

@@ -16,9 +16,9 @@ use crate::theme::{
     SrpgVariant, SyncGraphMode, ThemeFlag, TournamentScoringSystem, VersionOverlaySide,
     VisualStyle,
 };
-#[cfg(target_os = "linux")]
-use deadlib_audio::LinuxAudioBackend;
 use deadlib_audio_core::AudioOutputMode;
+#[cfg(target_os = "linux")]
+use deadlib_audio_core::LinuxAudioBackend;
 #[cfg(target_os = "windows")]
 use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::logging;

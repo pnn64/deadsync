@@ -8567,6 +8567,25 @@ fn audio_core_lives_in_audio_crate() {
 }
 
 #[test]
+fn config_can_read_audio_preferences_without_output_backends() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config = root.join("crates/deadsync-config");
+    let manifest = read_source(config.join("Cargo.toml")).expect("config manifest");
+    assert!(
+        !manifest.contains("\"../deadlib-audio\"") && !manifest.contains("deadlib-audio-backend-"),
+        "config depends on the native audio runtime"
+    );
+    for file in production_rust_files(&config.join("src")) {
+        assert_eq!(
+            count_token_refs(&production_source(&file), "deadlib_audio"),
+            0,
+            "{} imports the native audio runtime",
+            file.display()
+        );
+    }
+}
+
+#[test]
 fn config_keeps_audio_stream_side_effects_in_the_host() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let config = root.join("crates/deadsync-config");
