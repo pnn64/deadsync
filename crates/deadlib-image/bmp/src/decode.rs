@@ -107,7 +107,7 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 let fixed_width_limit = if check_indices && !cfg!(target_arch = "x86") {
                     12
                 } else {
-                    16
+                    24
                 };
                 if width < fixed_width_limit && !width.is_multiple_of(4) && header.info.height > 1 {
                     let append = match width {
@@ -122,7 +122,13 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                         11 => append_narrow_indexed::<11, 12>,
                         13 => append_narrow_indexed::<13, 16>,
                         14 => append_narrow_indexed::<14, 16>,
-                        _ => append_narrow_indexed::<15, 16>,
+                        15 => append_narrow_indexed::<15, 16>,
+                        17 => append_narrow_indexed::<17, 20>,
+                        18 => append_narrow_indexed::<18, 20>,
+                        19 => append_narrow_indexed::<19, 20>,
+                        21 => append_narrow_indexed::<21, 24>,
+                        22 => append_narrow_indexed::<22, 24>,
+                        _ => append_narrow_indexed::<23, 24>,
                     };
                     append(source, &mut indices, header.info.top_down, palette_len)?;
                 } else if header.info.top_down && width == header.row_pitch {

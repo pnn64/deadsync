@@ -356,6 +356,12 @@ fn byte_indices_validate_short_palettes_without_including_padding() {
         (13, 3),
         (14, 3),
         (15, 3),
+        (17, 3),
+        (18, 3),
+        (19, 3),
+        (21, 3),
+        (22, 3),
+        (23, 3),
         (257, 34),
     ] {
         let pitch = width.div_ceil(4) * 4;
