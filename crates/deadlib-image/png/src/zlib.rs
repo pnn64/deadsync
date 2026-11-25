@@ -1603,6 +1603,16 @@ impl Writer {
 
     fn rle_block(&mut self, input: &[u8], final_block: bool, checksum: &mut Adler32) {
         debug_assert!(input.len() <= matcher::WINDOW);
+        // A stored header consumes up to 42 bits, including alignment. A
+        // nonempty RLE block needs its header, end code, and one literal.
+        const STORED_OVERHEAD: usize = 3 + 7 + 32;
+        const RLE_OVERHEAD: usize =
+            3 + RLE_HEADER.bits + RLE_CODES[256].1 as usize + RLE_ZERO_BITS as usize;
+        if input.len() <= (RLE_OVERHEAD - STORED_OVERHEAD - 1) / 8 {
+            self.stored(input, final_block);
+            checksum.update(input);
+            return;
+        }
         let checkpoint = self.start_rle(final_block);
         let mut checksum_start = 0;
         let mut pos = 0;
