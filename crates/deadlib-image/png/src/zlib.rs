@@ -379,6 +379,39 @@ impl Huffman {
         });
     }
 
+    /// Combine the two Huffman codes for short, non-overlapping copies.
+    /// Distance extra bits can follow the index and are decoded at run time.
+    fn combine_short_matches(&self, distances: &Huffman<32>, wide: &mut [[u32; 512]; 8]) {
+        let wide = wide.as_flattened_mut();
+        for n in 1..12 {
+            let start = self.offsets[n] as usize;
+            let matches = &self.symbols[start..start + self.counts[n] as usize];
+            let first = matches.partition_point(|&symbol| symbol < 257);
+            for (offset, &symbol) in matches.iter().enumerate().skip(first) {
+                if symbol > 262 {
+                    break;
+                }
+                let prefix = (self.first[n] + offset as u16).reverse_bits() >> (16 - n);
+                for m in 1..=(12 - n).min(usize::from(distances.max)) {
+                    let start = distances.offsets[m] as usize;
+                    for offset in 0..distances.counts[m] {
+                        let distance = usize::from(distances.symbols[start + usize::from(offset)]);
+                        if !(6..30).contains(&distance) {
+                            continue;
+                        }
+                        let suffix = (distances.first[m] + offset).reverse_bits() >> (16 - m);
+                        let entry = (n as u32) << MATCH_WIDTH_SHIFT
+                            | (DIST_BASE[distance] as u32) << 11
+                            | u32::from(DIST_EXTRA[distance]) << 7
+                            | u32::from(symbol - 257) << 4
+                            | (n + m) as u32;
+                        fill(wide, prefix | suffix << n, n + m, entry);
+                    }
+                }
+            }
+        }
+    }
+
     fn pairing(&self) -> Pairing {
         let mut literals = [0; 12];
         for (n, literals) in literals.iter_mut().enumerate().skip(1) {
@@ -507,6 +540,11 @@ const PAIR_WORK: usize = 4096 * 1024;
 /// Twelve-bit entries of at least `LITERAL` decode `entry >> 30` literals.
 const LITERAL: u32 = 1 << 30;
 const PAIR: u32 = 2 << 30;
+// Fused matches use 4 bits for the combined code width, 3 for the length
+// index, 4 for the distance extra width, and 15 for the distance base.
+// The original literal/length code width distinguishes these from unfused
+// entries and lets the slow decoder recover the first symbol.
+const MATCH_WIDTH_SHIFT: u32 = 26;
 
 /// A twelve-bit primary table entry: `u16` for `wide_primary`, `u32` for
 /// `pair_primary`.
@@ -519,6 +557,10 @@ trait Entry: Copy {
     fn put(self, output: &mut [u8], at: usize) -> usize;
     /// The symbol of an entry that is not a literal.
     fn symbol(self) -> usize;
+    /// A fused length and distance code among non-literal entries, or zero.
+    fn short_match(self) -> u32 {
+        0
+    }
     /// The equivalent `wide_primary` entry, for its first symbol only.
     fn single(self) -> u16;
 }
@@ -556,9 +598,19 @@ impl Entry for u32 {
     fn symbol(self) -> usize {
         (self >> 4) as usize
     }
+    fn short_match(self) -> u32 {
+        if self >= 1 << MATCH_WIDTH_SHIFT {
+            self
+        } else {
+            0
+        }
+    }
     fn single(self) -> u16 {
         if self.literal() {
             (self & 0xff0 | self >> 20 & 15) as u16
+        } else if self >= 1 << MATCH_WIDTH_SHIFT {
+            let symbol = 257 + (self >> 4 & 7);
+            ((symbol << 4) | self >> MATCH_WIDTH_SHIFT) as u16
         } else {
             self as u16
         }
@@ -730,6 +782,22 @@ fn inflate_sized_fast<E: Entry, const PARTIAL_OUTPUT: bool>(
                 produced += entry.put(output, produced);
                 break 'token;
             }
+            let combined = entry.short_match();
+            if combined != 0 {
+                let len = ((combined >> 4) & 7) as usize + 3;
+                let extra_bits = ((combined >> 7) & 15) as u8;
+                let base = ((combined >> 11) & 0x7fff) as usize;
+                let distance = base + (word & ((1u64 << extra_bits) - 1)) as usize;
+                if distance > produced || distance > window {
+                    return Err(Error::Invalid("distance outside history window"));
+                }
+                word >>= extra_bits;
+                count -= extra_bits;
+                let start = produced - distance;
+                output.copy_within(start..start + 8, produced);
+                produced += len;
+                break 'token;
+            }
             let symbol = entry.symbol();
             let index = symbol.wrapping_sub(257);
             if index > 28 {
@@ -877,6 +945,7 @@ fn inflate_sized_codes<O: Output, const FAST: bool>(
     // Built in place: a returned table would be copied.
     let mut primary = [lit.pair_prefix(&pairing); 8];
     lit.pair_primary(&pairing, &mut primary);
+    lit.combine_short_matches(&dist, &mut primary);
     let fast = primary.as_flattened().try_into().unwrap();
     let tables = (&lit, &dist, fast, &distance_fast);
     inflate_symbols::<O, u32, FAST>(bits, buffer, written, tables, window, limit)
@@ -3000,6 +3069,71 @@ mod tests {
                     }
                 };
                 assert_eq!(entry, expected, "{lengths:?} {index}");
+            }
+        }
+    }
+
+    #[test]
+    fn fused_short_matches_preserve_the_copy_and_bit_boundary() {
+        let lengths = fixed_lengths();
+        let length_codes = reversed_codes(&lengths);
+        let mut varying = [5; 32];
+        varying[21] = 4;
+        varying[6] = 6;
+        varying[7] = 6;
+        for distance_lengths in [[5; 32], varying] {
+            let distances = Huffman::<32>::new(&distance_lengths, false, false).unwrap();
+            let distance_codes = reversed_codes(&distance_lengths);
+            let distance_fast = distances.distance_primary();
+            let pairing = FIXED.0.pairing();
+            let mut wide = [FIXED.0.pair_prefix(&pairing); 8];
+            FIXED.0.pair_primary(&pairing, &mut wide);
+            FIXED.0.combine_short_matches(&distances, &mut wide);
+            let fast = wide.as_flattened().try_into().unwrap();
+
+            let start = 32768;
+            let mut output: Vec<_> = (0..start + 258).map(|i| (i * 31 + i / 257) as u8).collect();
+            for length in 3..=8 {
+                let len_symbol = 254 + length;
+                let n = lengths[len_symbol];
+                for (dist_symbol, &m) in distance_lengths[..30].iter().enumerate() {
+                    let index =
+                        usize::from(length_codes[len_symbol] | distance_codes[dist_symbol] << n);
+                    let entry = wide.as_flattened()[index & 4095];
+                    let fused = dist_symbol >= 6 && n + m <= 12;
+                    assert_eq!(entry.short_match() != 0, fused);
+                    assert_eq!(entry.single(), (len_symbol as u16) << 4 | u16::from(n));
+
+                    let extra_width = DIST_EXTRA[dist_symbol];
+                    for extra in [0, (1usize << extra_width) - 1] {
+                        let input = (index as u64 | (extra as u64) << (n + m)).to_le_bytes();
+                        let mut bits = Bits::new(&input);
+                        let distance = DIST_BASE[dist_symbol] + extra;
+                        let mut expected = [0; 8];
+                        for i in 0..length {
+                            expected[i] = output[start - distance + i % distance];
+                        }
+                        let mut pos = start;
+                        assert!(
+                            !inflate_sized_fast::<_, true>(
+                                &mut bits,
+                                &mut output,
+                                &mut pos,
+                                &distances,
+                                fast,
+                                &distance_fast,
+                                start,
+                            )
+                            .unwrap()
+                        );
+                        assert_eq!(pos, start + length);
+                        assert_eq!(output[start..pos], expected[..length]);
+                        assert_eq!(
+                            bits.pos * 8 - usize::from(bits.count),
+                            usize::from(n + m + extra_width)
+                        );
+                    }
+                }
             }
         }
     }

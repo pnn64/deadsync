@@ -416,6 +416,7 @@ impl Inflater {
                 let pairing = literals.pairing();
                 tables.literals.fill(literals.pair_prefix(&pairing));
                 literals.pair_primary(&pairing, &mut tables.literals);
+                literals.combine_short_matches(distances, &mut tables.literals);
                 tables.distances = distances.distance_primary();
                 tables.valid = true;
             }
