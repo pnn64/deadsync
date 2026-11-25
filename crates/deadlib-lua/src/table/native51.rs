@@ -68,7 +68,7 @@ impl Table {
     }
 
     pub(crate) fn retire_native_keys_in_trace_slice(&mut self, cursor: usize, budget: usize) {
-        if !self.native51 {
+        if !self.native_dead_keys {
             return;
         }
         let start = cursor >> 1;
@@ -140,6 +140,9 @@ impl Table {
         }
         let vacant = match self.slot(key) {
             Some((_, Some(index))) => {
+                if value == Value::Nil && key.dead().is_some() {
+                    self.native_dead_keys = true;
+                }
                 self.entries[index].value = value;
                 self.touch_fields();
                 if matches!(key, Key::String(_)) {
@@ -200,6 +203,9 @@ impl Table {
         }
         self.entries[position].key = key;
         self.entries[position].value = value;
+        if value == Value::Nil && key.dead().is_some() {
+            self.native_dead_keys = true;
+        }
         self.entries[position].native_hash = hash;
         self.slots[vacant] = (position as u32 + 1) | Self::slot_tag(self.slots.len(), key.hash()).0;
         self.touch_fields();
@@ -303,6 +309,7 @@ impl Table {
         self.entries = replacement.entries;
         self.slots = replacement.slots;
         self.last_free = replacement.last_free;
+        self.native_dead_keys = false;
         self.next_hash_hint.store(0, Ordering::Relaxed);
         self.invalidate_trace();
         self.touch_fields();

@@ -189,6 +189,7 @@ pub(crate) struct Table {
     entries: Buffer<Entry>,
     slots: Buffer<u32>,
     native51: bool,
+    native_dead_keys: bool,
     last_free: usize,
     // Two one-based hash entry indices, packed into one atomic word. Always
     // compare keys before reuse: mutations can move or remove entries.
@@ -218,6 +219,7 @@ impl Table {
             entries: Buffer::new_in(memory.clone()),
             slots: Buffer::new_in(memory),
             native51: false,
+            native_dead_keys: false,
             last_free: 0,
             next_hash_hint: AtomicU64::new(0),
             metatable: 0,
