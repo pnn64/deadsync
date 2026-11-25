@@ -335,34 +335,36 @@ pub(crate) fn unfilter_first(row: &mut [u8], bpp: usize, filter: u8) -> Result<(
     Ok(())
 }
 
+#[inline(never)]
+fn compact_one_pixel<const N: usize>(raw: &mut [u8], count: usize) -> Result<(), Error> {
+    let mut above = [0u8; N];
+    let rows = count / N;
+    for index in 0..rows {
+        let read = index * (N + 1);
+        let write = index * N;
+        let row = raw.get(read..read + N + 1).ok_or(Error::Truncated)?;
+        let residual = row[1..].first_chunk::<N>().unwrap();
+        let predictor = match row[0] {
+            0 | 1 => [0; N],
+            2 | 4 => above,
+            3 => above.map(|value| value >> 1),
+            _ => return Err(Error::Invalid("scanline filter")),
+        };
+        above = core::array::from_fn(|i| residual[i].wrapping_add(predictor[i]));
+        raw[write..write + N].copy_from_slice(&above);
+    }
+    if rows * (N + 1) != raw.len() {
+        return Err(Error::Invalid("extra image data"));
+    }
+    Ok(())
+}
+
 fn compact_plain_bytes(
     raw: &mut [u8],
     stride: usize,
     count: usize,
     bpp: usize,
 ) -> Result<(), Error> {
-    if stride == 1 {
-        let mut above = 0u8;
-        for write in 0..count {
-            let read = write * 2;
-            let [filter, value] = *raw
-                .get(read..)
-                .and_then(|bytes| bytes.first_chunk::<2>())
-                .ok_or(Error::Truncated)?;
-            let predictor = match filter {
-                0 | 1 => 0,
-                2 | 4 => above,
-                3 => above >> 1,
-                _ => return Err(Error::Invalid("scanline filter")),
-            };
-            above = value.wrapping_add(predictor);
-            raw[write] = above;
-        }
-        if count * 2 != raw.len() {
-            return Err(Error::Invalid("extra image data"));
-        }
-        return Ok(());
-    }
     let wire_stride = stride + 1;
     let mut read = 0;
     let mut write = 0;
@@ -430,7 +432,17 @@ pub(crate) fn decode(
     let bpp = (channels * depth as usize).div_ceil(8);
     if depth == 8 && !interlaced {
         let stride = row_bytes(width as usize, channels, depth)?;
-        compact_plain_bytes(&mut raw, stride, count, bpp)?;
+        if width == 1 {
+            match channels {
+                1 => compact_one_pixel::<1>(&mut raw, count),
+                2 => compact_one_pixel::<2>(&mut raw, count),
+                3 => compact_one_pixel::<3>(&mut raw, count),
+                4 => compact_one_pixel::<4>(&mut raw, count),
+                _ => unreachable!("validated 8-bit PNG pixel stride"),
+            }?;
+        } else {
+            compact_plain_bytes(&mut raw, stride, count, bpp)?;
+        }
         raw.truncate(count);
         return Ok(Image {
             width,
@@ -893,22 +905,19 @@ mod tests {
     #[test]
     fn compact_one_byte_rows_preserves_predictors_and_errors() {
         let mut rows = [2, 9, 1, 8, 3, 13, 4, 5, 0, 1, 2, 255];
-        compact_plain_bytes(&mut rows, 1, 6, 1).unwrap();
+        compact_one_pixel::<1>(&mut rows, 6).unwrap();
         assert_eq!(rows[..6], [9, 8, 17, 22, 1, 0]);
 
         let mut rows = [5];
-        assert_eq!(
-            compact_plain_bytes(&mut rows, 1, 1, 1),
-            Err(Error::Truncated)
-        );
+        assert_eq!(compact_one_pixel::<1>(&mut rows, 1), Err(Error::Truncated));
         let mut rows = [5, 0];
         assert_eq!(
-            compact_plain_bytes(&mut rows, 1, 1, 1),
+            compact_one_pixel::<1>(&mut rows, 1),
             Err(Error::Invalid("scanline filter"))
         );
         let mut rows = [0, 0, 0];
         assert_eq!(
-            compact_plain_bytes(&mut rows, 1, 1, 1),
+            compact_one_pixel::<1>(&mut rows, 1),
             Err(Error::Invalid("extra image data"))
         );
     }
