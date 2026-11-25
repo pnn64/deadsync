@@ -99,6 +99,22 @@ fn two_pixel_rgb_rows_preserve_order_and_padding() {
 }
 
 #[test]
+fn four_pixel_rgb_rows_keep_pixel_order_when_reversed() {
+    let bitmap = Bitmap {
+        width: 4,
+        height: 2,
+        pixels: Pixels::Rgb((1..=24).collect()),
+    };
+    let bytes = encode(&bitmap).unwrap();
+    assert_eq!(
+        &bytes[54..],
+        &[
+            15, 14, 13, 18, 17, 16, 21, 20, 19, 24, 23, 22, 3, 2, 1, 6, 5, 4, 9, 8, 7, 12, 11, 10
+        ]
+    );
+}
+
+#[test]
 fn three_pixel_rgba_rows_reverse_without_reordering_pixels() {
     let bitmap = Bitmap {
         width: 3,

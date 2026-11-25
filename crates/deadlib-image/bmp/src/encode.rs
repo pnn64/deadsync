@@ -199,6 +199,8 @@ fn append_mapped_rows<const INPUT: usize, const OUTPUT: usize>(
         append_mapped_pairs(output, samples, top_down, reorder);
     } else if source_row_bytes == INPUT * 3 {
         append_mapped_triples(output, samples, top_down, reorder);
+    } else if OUTPUT == 3 && source_row_bytes == INPUT * 4 {
+        append_bgr_quads(output, samples, reorder);
     } else {
         let mut rows = samples.chunks_exact(source_row_bytes);
         while let Some(row) = if top_down {
@@ -253,6 +255,24 @@ fn append_mapped_triples<const INPUT: usize, const OUTPUT: usize>(
     } else {
         output.extend(triples.rev().flat_map(pack));
     }
+}
+
+#[inline(never)]
+fn append_bgr_quads<const INPUT: usize, const OUTPUT: usize>(
+    output: &mut Vec<u8>,
+    samples: &[u8],
+    mut reorder: impl FnMut(&[u8; INPUT]) -> [u8; OUTPUT],
+) {
+    // Four pixels need no padding and top-down rows use the contiguous path.
+    let rows = samples.as_chunks::<INPUT>().0.as_chunks::<4>().0.iter();
+    output.extend(rows.rev().flat_map(|[first, second, third, fourth]| {
+        let mut row = [0; 12];
+        row[..OUTPUT].copy_from_slice(&reorder(first));
+        row[OUTPUT..2 * OUTPUT].copy_from_slice(&reorder(second));
+        row[2 * OUTPUT..3 * OUTPUT].copy_from_slice(&reorder(third));
+        row[3 * OUTPUT..4 * OUTPUT].copy_from_slice(&reorder(fourth));
+        row
+    }));
 }
 
 // Keep the palette table off the stack of small encodes.
