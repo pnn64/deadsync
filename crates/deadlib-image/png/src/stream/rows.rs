@@ -169,7 +169,23 @@ impl ImageRows {
             let filter = self.row[0];
             if filter != 0 {
                 let bpp = usize::from(self.bpp);
-                if self.row_index == 0 {
+                if self.row.len() == bpp + 1 {
+                    // With no left pixel, Paeth uses the pixel above.
+                    match filter {
+                        1 => {}
+                        2..=4 => {
+                            if self.row_index != 0 {
+                                let shift = u8::from(filter == 3);
+                                for (value, &above) in
+                                    self.row[1..].iter_mut().zip(&self.previous[1..])
+                                {
+                                    *value = value.wrapping_add(above >> shift);
+                                }
+                            }
+                        }
+                        _ => return Err(Error::Invalid("scanline filter")),
+                    }
+                } else if self.row_index == 0 {
                     scanline::unfilter_first(&mut self.row[1..], bpp, filter)?;
                 } else {
                     scanline::unfilter(&mut self.row[1..], &self.previous[1..], bpp, filter)?;
