@@ -635,11 +635,7 @@ impl Vm {
     pub fn heap_stats(&mut self) -> HeapStats {
         let mut payload = self.strings.payload_bytes + self.strings.buckets.capacity() * 4;
         payload += self.tables.iter().map(Table::heap_bytes).sum::<usize>();
-        payload += self
-            .functions
-            .iter()
-            .map(|f| f.upvalues.len() * 4)
-            .sum::<usize>();
+        payload += self.closure_upvalue_bytes;
         payload += self.programs.iter().map(program_bytes).sum::<usize>();
         payload += self
             .parser_prototypes
@@ -1630,7 +1626,13 @@ impl Vm {
             let before = cursor;
             let count = match self.gc.sweep_arena {
                 0 => self.tables.sweep_some(&mut cursor, budget),
-                1 => self.functions.sweep_some(&mut cursor, budget),
+                1 => {
+                    let bytes = &mut self.closure_upvalue_bytes;
+                    self.functions
+                        .sweep_with(&mut cursor, budget, |functions, index| {
+                            *bytes -= functions[index].upvalues.len() * size_of::<u32>();
+                        })
+                }
                 2 => self.upvalues.sweep_some(&mut cursor, budget),
                 3 => self.threads.sweep_some(&mut cursor, budget),
                 4 => self.native_closures.sweep_some(&mut cursor, budget),

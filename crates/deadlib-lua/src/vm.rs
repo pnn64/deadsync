@@ -493,6 +493,7 @@ pub struct Vm {
     registers: Buffer<Value>,
     programs: Arena<LoadedProgram>,
     functions: Arena<Closure>,
+    closure_upvalue_bytes: usize,
     upvalues: Arena<Cell>,
     open_upvalues: Buffer<u32>,
     frames: Buffer<Frame>,
@@ -631,6 +632,7 @@ impl Vm {
             registers: Buffer::new_in(memory.clone()),
             programs: Arena::new_in(memory.clone()),
             functions: Arena::identified_in(memory.clone()),
+            closure_upvalue_bytes: 0,
             upvalues: Arena::new_in(memory.clone()),
             open_upvalues: Buffer::new_in(memory.clone()),
             frames: Buffer::new_in(memory.clone()),
@@ -1276,14 +1278,12 @@ impl Vm {
             }
             self.functions.try_reserve(1)?;
             let upvalues = self.entry_upvalues(program)?;
-            self.functions
-                .note_alloc(upvalues.capacity() * size_of::<u32>());
-            let entry = FunctionId(self.functions.insert(Closure {
+            let entry = self.insert_closure(Closure {
                 program: index,
                 prototype: program.data.entry as usize,
                 upvalues,
                 env: self.globals,
-            }));
+            });
             self.programs[index].entry = entry;
             self.gc_new_value(Value::Function(entry));
             return Ok(entry);
@@ -1343,17 +1343,24 @@ impl Vm {
         let bytes = gc::program_bytes(&loaded);
         let index = slot_index(self.programs.insert(loaded));
         self.programs.note_alloc(bytes);
-        self.functions
-            .note_alloc(upvalues.capacity() * size_of::<u32>());
-        let entry = FunctionId(self.functions.insert(Closure {
+        let entry = self.insert_closure(Closure {
             program: index,
             prototype: program.data.entry as usize,
             upvalues,
             env: self.globals,
-        }));
+        });
         self.programs[index].entry = entry;
         self.gc_new_value(Value::Function(entry));
         Ok(entry)
+    }
+
+    fn insert_closure(&mut self, closure: Closure) -> FunctionId {
+        let bytes = closure.upvalues.len() * size_of::<u32>();
+        self.functions
+            .note_alloc(closure.upvalues.capacity() * size_of::<u32>());
+        let id = FunctionId(self.functions.insert(closure));
+        self.closure_upvalue_bytes += bytes;
+        id
     }
 
     fn entry_upvalues(&mut self, program: &Program) -> Result<Buffer<u32>, Error> {
@@ -2144,14 +2151,12 @@ impl Vm {
                             });
                         }
                         self.reserve_gc_new_value()?;
-                        self.functions
-                            .note_alloc(upvalues.capacity() * size_of::<u32>());
-                        let id = FunctionId(self.functions.insert(Closure {
+                        let id = self.insert_closure(Closure {
                             program: program_index,
                             prototype: target,
                             upvalues,
                             env,
-                        }));
+                        });
                         self.registers[a] = Value::Function(id);
                         self.gc_new_value(Value::Function(id));
                         self.maybe_gc()?;
