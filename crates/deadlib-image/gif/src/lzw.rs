@@ -198,7 +198,9 @@ impl Decoder {
     }
 }
 
-/// Reusable flat hash-table encoder; no production codec dependencies.
+const FOUR_SYMBOL_SLOTS: usize = 4096 * 4;
+
+/// Reusable flat-table encoder; no production codec dependencies.
 pub struct Encoder(());
 impl Default for Encoder {
     fn default() -> Self {
@@ -246,6 +248,9 @@ impl Encoder {
             }
         }
         if pixels > 1024 {
+            if minimum == 2 {
+                return Self::encode_four_symbols(rows, emit);
+            }
             return Self::encode_large(rows, minimum, emit);
         }
         if pixels <= 2 {
@@ -296,9 +301,17 @@ impl Encoder {
             };
         }
         if pixels <= 256 {
-            return Self::encode_table(rows, minimum, &mut [0; 512], emit);
+            return Self::encode_table(rows, minimum, &mut [0u32; 512], emit);
         }
-        Self::encode_table(rows, minimum, &mut [0; 2048], emit)
+        Self::encode_table(rows, minimum, &mut [0u32; 2048], emit)
+    }
+
+    #[inline(never)]
+    fn encode_four_symbols<'a>(
+        rows: impl Iterator<Item = &'a [u8]>,
+        emit: impl FnMut(u64, usize) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        Self::encode_table(rows, 2, &mut [0u16; FOUR_SYMBOL_SLOTS], emit)
     }
 
     #[inline(never)]
@@ -307,7 +320,7 @@ impl Encoder {
         minimum: u8,
         emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
-        Self::encode_table(rows, minimum, &mut [0; 8192], emit)
+        Self::encode_table(rows, minimum, &mut [0u32; 8192], emit)
     }
 
     #[inline(never)]
@@ -316,7 +329,7 @@ impl Encoder {
         minimum: u8,
         emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
-        Self::encode_table(rows, minimum, &mut [0; SLOTS], emit)
+        Self::encode_table(rows, minimum, &mut [0u32; SLOTS], emit)
     }
 
     fn encode_repeated(
@@ -357,12 +370,15 @@ impl Encoder {
         bits.finish()
     }
 
-    fn encode_table<'a, const SLOTS: usize>(
+    fn encode_table<'a, Entry, const SLOTS: usize>(
         rows: impl Iterator<Item = &'a [u8]>,
         minimum: u8,
-        table: &mut [u32; SLOTS],
+        table: &mut [Entry; SLOTS],
         emit: impl FnMut(u64, usize) -> Result<(), Error>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        Entry: Copy + Default + Into<u32> + TryFrom<u32>,
+    {
         let mask = SLOTS - 1;
         let shift = u32::BITS - SLOTS.ilog2();
         let clear = 1u16 << minimum;
@@ -380,38 +396,49 @@ impl Encoder {
                 continue;
             };
             'symbols: for symbol in symbols {
-                let key = (u32::from(prefix) << 8) | u32::from(symbol);
-                let tag = key << 12;
-                let hash = key.wrapping_mul(0x9e3779b1);
-                let mut slot = (hash >> shift) as usize;
-                let step = if SLOTS <= 2048 {
-                    1
-                } else {
-                    // An odd stride visits every slot in a power-of-two table.
-                    (hash as usize & mask) | 1
-                };
-                loop {
-                    let entry = table[slot];
-                    if entry == 0 {
-                        break;
-                    }
-                    // A matching tag leaves just the 12-bit code.
-                    let code = entry ^ tag;
-                    if code < 4096 {
-                        prefix = code as u16;
+                let (slot, tag) = if SLOTS == FOUR_SYMBOL_SLOTS {
+                    // Four possible suffixes per prefix code fit in a direct table.
+                    let slot = (usize::from(prefix) << 2) | usize::from(symbol);
+                    let code = table[slot].into() as u16;
+                    if code != 0 {
+                        prefix = code;
                         continue 'symbols;
                     }
-                    slot = (slot + step) & mask;
-                }
+                    (slot, 0)
+                } else {
+                    let key = (u32::from(prefix) << 8) | u32::from(symbol);
+                    let tag = key << 12;
+                    let hash = key.wrapping_mul(0x9e3779b1);
+                    let mut slot = (hash >> shift) as usize;
+                    let step = if SLOTS <= 2048 {
+                        1
+                    } else {
+                        // An odd stride visits every slot in a power-of-two table.
+                        (hash as usize & mask) | 1
+                    };
+                    loop {
+                        let entry = table[slot].into();
+                        if entry == 0 {
+                            break (slot, tag);
+                        }
+                        // A matching tag leaves just the 12-bit code.
+                        let code = entry ^ tag;
+                        if code < 4096 {
+                            prefix = code as u16;
+                            continue 'symbols;
+                        }
+                        slot = (slot + step) & mask;
+                    }
+                };
                 // The decoder adds this phrase after reading the next code.
                 bits.code(prefix, (next - 1).ilog2() as u8 + 1)?;
                 if next < 4096 {
                     // The assigned code is never zero, even when the key is.
-                    table[slot] = tag | u32::from(next);
+                    table[slot] = Entry::try_from(tag | u32::from(next)).ok().unwrap();
                     next += 1;
                 } else {
                     bits.code(clear, 12)?;
-                    table.fill(0);
+                    table.fill(Entry::default());
                     next = clear + 2;
                 }
                 prefix = symbol.into();
