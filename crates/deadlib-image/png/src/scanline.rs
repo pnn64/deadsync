@@ -200,13 +200,12 @@ fn unpack_groups<const N: usize>(
     step: usize,
     expand: impl Fn(u8) -> [u8; N],
 ) {
-    if step != 1 {
-        for (&byte, group) in row.iter().zip(out.chunks_mut(N * step)) {
-            for (pixel, sample) in group.chunks_mut(step).zip(expand(byte)) {
-                pixel[0] = sample;
-            }
-        }
-        return;
+    match step {
+        1 => {}
+        2 => return unpack_strided::<N, 2>(row, out, expand),
+        4 => return unpack_strided::<N, 4>(row, out, expand),
+        8 => return unpack_strided::<N, 8>(row, out, expand),
+        _ => unreachable!("validated PNG pass step"),
     }
     // Complete bytes have a fixed number of independent output lanes. Keep the
     // short final group out of this loop so its length cannot limit unrolling.
@@ -219,6 +218,26 @@ fn unpack_groups<const N: usize>(
     {
         let values = expand(byte);
         tail.copy_from_slice(&values[..tail.len()]);
+    }
+}
+
+fn unpack_strided<const N: usize, const STEP: usize>(
+    row: &[u8],
+    out: &mut [u8],
+    expand: impl Fn(u8) -> [u8; N],
+) {
+    let count = out.len() / (N * STEP);
+    let (full, tail) = out.split_at_mut(count * N * STEP);
+    let groups = full.as_chunks_mut::<STEP>().0.as_chunks_mut::<N>().0;
+    for (pixels, &byte) in groups.iter_mut().zip(row) {
+        for (pixel, sample) in pixels.iter_mut().zip(expand(byte)) {
+            pixel[0] = sample;
+        }
+    }
+    if let Some(&byte) = row.get(count) {
+        for (pixel, sample) in tail.iter_mut().step_by(STEP).zip(expand(byte)) {
+            *pixel = sample;
+        }
     }
 }
 
@@ -893,6 +912,34 @@ mod tests {
                         actual, expected,
                         "depth={depth} input_len={input_len} width={width}"
                     );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unpack_preserves_partial_adam7_groups() {
+        let input = [0x96, 0x69, 0x37, 0xc8, 0xff];
+        for depth in [1, 2, 4] {
+            for step in [2, 4, 8] {
+                for span in 0..=(4 * 8 / usize::from(depth) + 1) * step {
+                    let mut samples = vec![0xa5; span.div_ceil(step)];
+                    reference_unpack_bits(depth, &input[..4], &mut samples);
+                    let mut actual = vec![0xa5; span + 2];
+                    let mut expected = actual.clone();
+                    for (pixel, sample) in
+                        expected[1..1 + span].iter_mut().step_by(step).zip(samples)
+                    {
+                        *pixel = sample;
+                    }
+                    let out = &mut actual[1..1 + span];
+                    match depth {
+                        1 => unpack::<1>(&input[..4], out, step),
+                        2 => unpack::<2>(&input[..4], out, step),
+                        4 => unpack::<4>(&input[..4], out, step),
+                        _ => unreachable!(),
+                    }
+                    assert_eq!(actual, expected, "depth={depth} step={step} span={span}");
                 }
             }
         }
