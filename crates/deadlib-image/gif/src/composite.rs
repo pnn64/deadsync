@@ -220,20 +220,25 @@ impl Compositor {
         }
         let r = self.clip(frame.left, frame.top, frame.width, frame.height);
         let transparent = frame.control.and_then(|c| c.transparent_index);
-        // A covering opaque frame replaces the pending rectangle before it can be seen.
-        if let Some((pending, _)) = self.pending
+        let mut reuse_saved = false;
+        if let Some((pending, pending_disposal)) = self.pending
             && transparent.is_none()
-            && frame
-                .control
-                .is_none_or(|control| control.disposal != Disposal::Previous)
-            && r.x <= pending.x
-            && r.y <= pending.y
-            && pending.x + pending.w <= r.x + r.w
-            && pending.y + pending.h <= r.y + r.h
         {
-            self.pending = None;
+            if frame
+                .control
+                .is_some_and(|control| control.disposal == Disposal::Previous)
+            {
+                // The existing snapshot already contains the next frame's background.
+                reuse_saved = pending_disposal == Disposal::Previous && pending == r;
+            } else if r.x <= pending.x
+                && r.y <= pending.y
+                && pending.x + pending.w <= r.x + r.w
+                && pending.y + pending.h <= r.y + r.h
+            {
+                self.pending = None;
+            }
         }
-        if self.prepare(r, frame.control)? {
+        if reuse_saved || self.prepare(r, frame.control)? {
             let binary_colors = match local {
                 Some(&[a, b]) => Some([a, b].map(|[r, g, b]| [r, g, b, 255])),
                 None if self.palette_len == Some(2) => Some([self.palette[0], self.palette[1]]),
