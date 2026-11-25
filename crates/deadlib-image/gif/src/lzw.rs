@@ -180,7 +180,8 @@ impl Decoder {
                         // are initialized and within the caller's bound; drop
                         // the extra suffix before exposing the output again.
                         reserve(output, 8)?;
-                        output.extend_from_within(offset..offset + 8);
+                        let bytes = *output[offset..].first_chunk::<8>().unwrap();
+                        output.extend_from_slice(&bytes);
                         output.truncate(start + length);
                     } else {
                         let count = length.min(available);
