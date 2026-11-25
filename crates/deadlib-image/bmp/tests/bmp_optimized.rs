@@ -311,7 +311,7 @@ fn one_color_indices_require_zero_only_in_used_bits() {
 
 #[test]
 fn byte_indices_validate_short_palettes_without_including_padding() {
-    for width in [1usize, 257] {
+    for width in [1usize, 2, 3, 257] {
         let height = 3;
         let pitch = width.div_ceil(4) * 4;
         for size in 1..=256 {

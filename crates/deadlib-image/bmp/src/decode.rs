@@ -99,8 +99,13 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 }
                 indices.resize(header.pixel_count, 0);
             } else if header.info.bit_depth == 8 {
-                if width == 1 && source.len() > 4 {
-                    append_indexed_column(source, &mut indices, header.info.top_down, palette_len)?;
+                if width <= 3 && source.len() > 4 {
+                    let append = match width {
+                        1 => append_narrow_indexed::<1>,
+                        2 => append_narrow_indexed::<2>,
+                        _ => append_narrow_indexed::<3>,
+                    };
+                    append(source, &mut indices, header.info.top_down, palette_len)?;
                 } else if header.info.top_down && width == header.row_pitch {
                     validate_indices(source)?;
                     indices.extend_from_slice(source);
@@ -197,26 +202,26 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
 }
 
 #[inline(never)]
-fn append_indexed_column(
+fn append_narrow_indexed<const WIDTH: usize>(
     source: &[u8],
     indices: &mut Vec<u8>,
     top_down: bool,
     palette_len: usize,
 ) -> Result<(), Error> {
     let rows = source.as_chunks::<4>().0;
-    let index = |row: &[u8; 4]| row[0];
+    let pixels = |row: &[u8; 4]| *row.first_chunk::<WIDTH>().unwrap();
     if palette_len < 256
         && rows
             .iter()
-            .map(index)
+            .flat_map(pixels)
             .any(|i| usize::from(i) >= palette_len)
     {
         return Err(Error::Invalid("pixel index exceeds the palette"));
     }
     if top_down {
-        indices.extend(rows.iter().map(index));
+        indices.extend(rows.iter().flat_map(pixels));
     } else {
-        indices.extend(rows.iter().rev().map(index));
+        indices.extend(rows.iter().rev().flat_map(pixels));
     }
     Ok(())
 }
