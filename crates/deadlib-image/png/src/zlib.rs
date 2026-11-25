@@ -1923,13 +1923,36 @@ impl Compressor {
             }
         }
     }
+    fn start_stored_block(&mut self) {
+        let block = self.stored_remaining.min(STORED_BLOCK_SIZE);
+        self.w.stored_header(block, block == self.stored_remaining);
+        self.stored_block_left = block;
+    }
+    /// Append a native 8-bit row and its None filter byte.
+    pub(crate) fn push_stored_row(&mut self, row: &[u8]) {
+        let len = row.len() + 1;
+        debug_assert_eq!(self.mode, Compression::Stored);
+        debug_assert!(len <= self.stored_remaining);
+        if self.stored_block_left == 0 {
+            self.start_stored_block();
+        }
+        if len > self.stored_block_left {
+            self.append_stored(None, 1);
+            self.append_stored(Some(row), row.len());
+            return;
+        }
+        let start = self.w.bytes.len();
+        self.w.bytes.push(0);
+        self.w.bytes.extend_from_slice(row);
+        self.checksum.update(&self.w.bytes[start..]);
+        self.stored_block_left -= len;
+        self.stored_remaining -= len;
+    }
     fn append_stored(&mut self, mut input: Option<&[u8]>, mut len: usize) {
         debug_assert!(len <= self.stored_remaining);
         while len != 0 {
             if self.stored_block_left == 0 {
-                let block = self.stored_remaining.min(STORED_BLOCK_SIZE);
-                self.w.stored_header(block, block == self.stored_remaining);
-                self.stored_block_left = block;
+                self.start_stored_block();
             }
             let n = len.min(self.stored_block_left);
             if let Some(bytes) = &mut input {
@@ -2028,6 +2051,35 @@ mod tests {
                 }
                 assert_eq!(compressor.finish(), expected, "length {len}, chunk {chunk}");
             }
+        }
+    }
+
+    #[test]
+    fn borrowed_stored_rows_match_whole_input_across_block_boundaries() {
+        let mut compressor = Compressor::new(Compression::Stored);
+        for width in [
+            1,
+            126,
+            STORED_BLOCK_SIZE - 2,
+            STORED_BLOCK_SIZE - 1,
+            STORED_BLOCK_SIZE,
+            STORED_BLOCK_SIZE + 1,
+        ] {
+            let pixels: Vec<_> = (0..width).map(|i| i.wrapping_mul(193) as u8).collect();
+            let mut input = Vec::new();
+            for _ in 0..3 {
+                input.push(0);
+                input.extend_from_slice(&pixels);
+            }
+            compressor.reset(input.len()).unwrap();
+            for _ in 0..3 {
+                compressor.push_stored_row(&pixels);
+            }
+            assert_eq!(
+                compressor.finish(),
+                compress(&input, Compression::Stored).unwrap(),
+                "width {width}"
+            );
         }
     }
 

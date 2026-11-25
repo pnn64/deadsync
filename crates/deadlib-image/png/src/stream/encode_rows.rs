@@ -16,16 +16,23 @@ pub(crate) fn compress_image<'a, 'image>(
         options.interlaced,
     )?;
     compressor.reset(size)?;
-    if options.compression == zlib::Compression::Rle
+    if options.compression != zlib::Compression::Fast
         && !options.interlaced
         && options.filter == Filter::None
         && image.bit_depth == 8
         && let Samples::U8(pixels) = &image.samples
     {
         let stride = image.width as usize * image.color_type.channels();
-        for row in pixels.chunks_exact(stride) {
-            compressor.push_zeros(1);
-            compressor.push(row);
+        let rows = pixels.chunks_exact(stride);
+        if options.compression == zlib::Compression::Stored {
+            for row in rows {
+                compressor.push_stored_row(row);
+            }
+        } else {
+            for row in rows {
+                compressor.push_zeros(1);
+                compressor.push(row);
+            }
         }
         return Ok(compressor.finish());
     }
