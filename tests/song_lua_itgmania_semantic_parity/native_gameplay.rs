@@ -2934,8 +2934,7 @@ return Def.ActorFrame {
         let mut recorded = output.draw_frames[0].clone();
         assert!(recorded.immediate);
         assert_eq!(recorded.ops.len(), 3, "Begin, Quad, Finish; the proxy has no target yet");
-        let Op::Draw { state: frozen, parents, .. } = &recorded.ops[1] else { panic!("frozen Quad") };
-        let frozen = *frozen;
+        let Some(Op::Draw { state: frozen, parents, .. }) = recorded.ops.get(1) else { panic!("frozen Quad") };
         assert_eq!([frozen.x, frozen.y], [3.0, 5.0]);
         assert_eq!(frozen.diffuse, [0.25,0.5,0.75,1.0]);
         assert!(parents.is_empty(), "BeginRenderingTo resets the translated/rotated ancestor stack");
@@ -2948,13 +2947,15 @@ return Def.ActorFrame {
             _ => None,
         }).collect();
         for owner in &mut recorded.owners { *owner = local[&*owner]; }
-        for op in &mut recorded.ops {
+        let mut ops = recorded.ops.iter().collect::<Vec<_>>();
+        for op in &mut ops {
             match op {
                 Op::Begin { capture, .. } | Op::Finish { capture } => *capture = local[&*capture],
                 Op::Draw { source: Source::Overlay(index), .. } => *index = local[&*index],
                 _ => {}
             }
         }
+        recorded.ops = ops.into();
         let visuals = &state.gameplay.mods.song_lua_visuals;
         let overlays = match group {
             Target::Root(_) => &visuals.overlays,
@@ -3066,9 +3067,9 @@ return Def.ActorFrame {
         assert_eq!(calls[0].2, calls[2].2, "FinishRenderingTo restores the caller transform");
         assert_eq!(calls[0].3, calls[2].3, "FinishRenderingTo restores the caller camera");
         assert_eq!(calls[0].3.as_ref().and_then(|camera| camera.fov), Some(60.0));
-        assert!(matches!(normal.ops[1], Op::Begin { preserve: true, .. }));
-        assert!(matches!((&normal.ops[1], &normal.ops[3]),
-            (Op::Begin { capture: a, .. }, Op::Finish { capture: b }) if a == b));
+        assert!(matches!(normal.ops.get(1), Some(Op::Begin { preserve: true, .. })));
+        assert!(matches!((normal.ops.get(1), normal.ops.get(3)),
+            (Some(Op::Begin { capture: a, .. }), Some(Op::Finish { capture: b })) if a == b));
 
         let bindings = state.song_lua.as_ref().unwrap().visual_draw_bindings();
         let group = bindings.iter().find(|(global, _)| *global == normal.owners[0]).unwrap().1;
@@ -3081,13 +3082,15 @@ return Def.ActorFrame {
         let mut frames = output.draw_frames.clone();
         for frame in &mut frames {
             for owner in &mut frame.owners { *owner = local[&*owner]; }
-            for op in &mut frame.ops {
+            let mut ops = frame.ops.iter().collect::<Vec<_>>();
+            for op in &mut ops {
                 match op {
                     Op::Begin { capture, .. } | Op::Finish { capture } => *capture = local[&*capture],
                     Op::Draw { source: Source::Overlay(index), .. } => *index = local[&*index],
                     _ => {}
                 }
             }
+            frame.ops = ops.into();
         }
         let visuals = &state.gameplay.mods.song_lua_visuals;
         let overlays = match group {

@@ -879,7 +879,8 @@ impl DrawChecks {
             };
             for owner in &mut frame.owners { remap(owner)?; }
             if !frame.immediate { normal_owners.extend(frame.owners.iter().copied()); }
-            for op in &mut frame.ops {
+            let mut ops = frame.ops.iter().collect::<Vec<_>>();
+            for op in &mut ops {
                 match op {
                     deadsync_song_lua::SongLuaDrawOp::Begin { capture, .. }
                         | deadsync_song_lua::SongLuaDrawOp::Finish { capture } => remap(capture)?,
@@ -887,6 +888,7 @@ impl DrawChecks {
                     _ => {}
                 }
             }
+            frame.ops = ops.into();
             for (index, frame) in composer.render_recorded_frame(&overlays, &states, &frame, screen, clock[0], clock[1]) {
                 let texture = frame.ops.first().and_then(|op| match op {
                     DrawOp::TexturedMesh(r) => Some(composer.texture_key(r.texture_handle).to_owned()),

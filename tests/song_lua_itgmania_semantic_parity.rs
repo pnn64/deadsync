@@ -1790,7 +1790,7 @@ fn looping_position_spline_curves_match_native_cpp() {
         let data = deadsync_gameplay::SongLuaSplineData {
             absolute: true,
             coefficients: deadsync_gameplay::SongLuaSplineSolver::default()
-                .solve_with_loop(&points, true).into(),
+                .solve_with_loop(&points, true).to_vec().into(),
             constant: points.iter().all(|point| *point == points[0]),
             looping: true,
             beats_per_t: case["beats_per_t"].as_f64().unwrap() as f32,
@@ -1846,7 +1846,7 @@ fn position_spline_tracks_keep_native_clock_and_modifier_state() {
     for (second, first_y) in [(1.5, -135.0), (2.5, -115.0)] {
         let frame = track.at_second(second).expect("active frame");
         assert_eq!(
-            frame.position.as_ref().expect("Position").coefficients[0][1][0],
+            frame.position.as_ref().expect("Position").coefficients.view().get(0).unwrap()[1][0],
             first_y
         );
         assert_eq!(frame.position.as_ref().expect("Position").beats_per_t, 0.5);
@@ -4389,7 +4389,7 @@ fn compare_column_splines(
             {
                 if let Some(frame) = track.at_second(music_seconds) {
                     if let Some(position) = &frame.position {
-                        actual = position.coefficients[0][1][0];
+                        actual = position.coefficients.view().get(0).unwrap()[1][0];
                     }
                 }
             }
