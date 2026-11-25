@@ -242,14 +242,13 @@ fn group_pages(pages: &mut [IndexedPage], streams: &mut [StreamIndex]) {
 // Keep the extra arithmetic off the small-index search path.
 #[inline(never)]
 fn offset_hint(pages: &[IndexedPage], end: u64, offset: u64, scale: u64) -> Option<&IndexedPage> {
+    if scale == 0 {
+        return multiplexed_offset_hint(pages, end, offset);
+    }
     let start = pages.first()?.offset;
     let distance = offset.checked_sub(start)?;
     // The surrounding search already excludes offsets at or beyond end.
-    let slot = if scale == 0 {
-        (distance.checked_mul(pages.len() as u64)? / (end - start)) as usize
-    } else {
-        ((u128::from(distance) * u128::from(scale)) >> 64) as usize
-    };
+    let slot = ((u128::from(distance) * u128::from(scale)) >> 64) as usize;
     let page = pages.get(slot)?;
     // A verified page containing the offset is necessarily the last start before it.
     let covers = |page: &IndexedPage| {
@@ -266,6 +265,26 @@ fn offset_hint(pages: &[IndexedPage], end: u64, offset: u64, scale: u64) -> Opti
         pages.get(slot + 1)?
     };
     covers(neighbor).then_some(neighbor)
+}
+
+#[inline(never)]
+fn multiplexed_offset_hint(pages: &[IndexedPage], end: u64, offset: u64) -> Option<&IndexedPage> {
+    let start = pages.first()?.offset;
+    let distance = offset.checked_sub(start)?;
+    let slot = (distance.checked_mul(pages.len() as u64)? / (end - start)) as usize;
+    let page = pages.get(slot)?;
+    // A gap can belong to this stream's preceding page. Check page starts.
+    if offset < page.offset {
+        let previous = pages.get(slot.checked_sub(1)?)?;
+        return (previous.offset <= offset).then_some(previous);
+    }
+    let next = pages.get(slot + 1);
+    if offset < next.map_or(end, |next| next.offset) {
+        Some(page)
+    } else {
+        let after = pages.get(slot + 2).map_or(end, |after| after.offset);
+        next.filter(|_| offset < after)
+    }
 }
 
 fn granule_scale(pages: &[IndexedPage]) -> u64 {
