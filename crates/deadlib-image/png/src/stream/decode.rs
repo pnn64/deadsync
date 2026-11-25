@@ -357,11 +357,23 @@ impl StreamDecoder {
         if self.sample_bytes > self.options.limits.max_output_bytes {
             return Err(Error::LimitExceeded);
         }
+        let palette = self.palette.len();
+        // PLTE is complete before the first IDAT and shared by all frames.
+        let strict_palette = if h.color == ColorType::Indexed
+            && self.options.palette_policy == crate::PalettePolicy::Strict
+            && palette < 1usize << h.depth
+        {
+            Some(palette as u8)
+        } else {
+            None
+        };
         self.rows = Some(ImageRows::new(
             h,
             kind,
             self.options.limits.max_output_bytes,
             core::mem::take(&mut self.buffers),
+            self.full_events,
+            strict_palette,
         )?);
         self.image_kind = Some(kind);
         self.update_memory();
@@ -739,12 +751,7 @@ impl StreamDecoder {
                             .as_mut()
                             .ok_or(Error::Invalid("missing image decoder"))?;
                         if !rows.is_done() {
-                            let result = rows.feed(
-                                &input[pos..pos + available],
-                                self.palette.len(),
-                                self.options.palette_policy,
-                                self.full_events,
-                            );
+                            let result = rows.feed(&input[pos..pos + available]);
                             let buffers_can_grow = rows.buffers_can_grow();
                             let (used, event) = result.map_err(|error| {
                                 if frame_data {

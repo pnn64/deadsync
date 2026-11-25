@@ -1,6 +1,6 @@
 use super::{ImageKind, Row, RowSamples};
 use crate::{
-    ColorType, Error, Image, PalettePolicy, Samples,
+    Error, Image, Samples,
     codec::Header,
     reserve, scanline,
     zlib::{Inflater, StreamStatus},
@@ -39,6 +39,9 @@ pub(super) struct ImageRows {
     dx: u32,
     dy: u32,
     have: usize,
+    bpp: u8,
+    strict_palette: Option<u8>,
+    materialize_samples: bool,
     ready: bool,
     complete: bool,
 }
@@ -48,6 +51,8 @@ impl ImageRows {
         kind: ImageKind,
         limit: usize,
         buffers: RowBuffers,
+        full_events: bool,
+        strict_palette: Option<u8>,
     ) -> Result<Self, Error> {
         let expected = scanline::filtered_size(
             header.width,
@@ -89,6 +94,9 @@ impl ImageRows {
             dx: 0,
             dy: 0,
             have: 0,
+            bpp: (header.color.channels() * header.depth as usize).div_ceil(8) as u8,
+            strict_palette,
+            materialize_samples: header.depth != 8 && (full_events || strict_palette.is_some()),
             ready: false,
             complete: false,
         };
@@ -148,13 +156,7 @@ impl ImageRows {
         Ok(())
     }
     /// Consume compressed bytes until one complete row is ready or input ends.
-    pub(super) fn feed(
-        &mut self,
-        input: &[u8],
-        palette: usize,
-        policy: PalettePolicy,
-        materialize_samples: bool,
-    ) -> Result<(usize, bool), Error> {
+    pub(super) fn feed(&mut self, input: &[u8]) -> Result<(usize, bool), Error> {
         debug_assert!(!self.ready);
         let output = if self.complete {
             &mut [][..]
@@ -166,7 +168,7 @@ impl ImageRows {
         if !self.complete && self.have == self.row.len() {
             let filter = self.row[0];
             if filter != 0 {
-                let bpp = (self.header.color.channels() * self.header.depth as usize).div_ceil(8);
+                let bpp = usize::from(self.bpp);
                 if self.row_index == 0 {
                     scanline::unfilter_first(&mut self.row[1..], bpp, filter)?;
                 } else {
@@ -174,34 +176,33 @@ impl ImageRows {
                 }
             }
             let depth = self.header.depth;
-            let check_indices = self.header.color == ColorType::Indexed
-                && policy == PalettePolicy::Strict
-                && palette < 1usize << depth;
-            if depth == 16 && materialize_samples {
-                let count = self.width * self.header.color.channels();
-                self.native16.clear();
-                reserve(&mut self.native16, count)?;
-                self.native16.extend(
-                    self.row[1..]
-                        .as_chunks::<2>()
-                        .0
-                        .iter()
-                        .copied()
-                        .map(u16::from_be_bytes),
-                );
-            } else if depth < 8 && (materialize_samples || check_indices) {
-                let additional = self.width.saturating_sub(self.native8.len());
-                reserve(&mut self.native8, additional)?;
-                self.native8.resize(self.width, 0);
-                unpack_row(depth, &self.row[1..], &mut self.native8, 1);
+            if self.materialize_samples {
+                if depth == 16 {
+                    let count = self.width * self.header.color.channels();
+                    self.native16.clear();
+                    reserve(&mut self.native16, count)?;
+                    self.native16.extend(
+                        self.row[1..]
+                            .as_chunks::<2>()
+                            .0
+                            .iter()
+                            .copied()
+                            .map(u16::from_be_bytes),
+                    );
+                } else {
+                    let additional = self.width.saturating_sub(self.native8.len());
+                    reserve(&mut self.native8, additional)?;
+                    self.native8.resize(self.width, 0);
+                    unpack_row(depth, &self.row[1..], &mut self.native8, 1);
+                }
             }
-            if check_indices {
+            if let Some(palette) = self.strict_palette {
                 let values = if depth == 8 {
                     &self.row[1..]
                 } else {
                     &self.native8
                 };
-                if crate::codec::indices_outside_palette(values, palette, depth) {
+                if crate::codec::indices_outside_palette(values, usize::from(palette), depth) {
                     return Err(Error::Invalid("palette index outside PLTE"));
                 }
             }
@@ -340,7 +341,7 @@ impl ImageRows {
 mod tests {
     use super::*;
     use crate::{
-        PalettePolicy,
+        ColorType,
         zlib::{Compression, compress},
     };
 
@@ -380,23 +381,17 @@ mod tests {
             }
             let encoded = compress(&filtered, Compression::Fast).unwrap();
             let kind = ImageKind::AnimationFrame(frame as u32);
-            let mut reused = ImageRows::new(header, kind, 65536, buffers).unwrap();
-            let mut fresh = ImageRows::new(header, kind, 65536, RowBuffers::default()).unwrap();
+            let mut reused = ImageRows::new(header, kind, 65536, buffers, true, None).unwrap();
+            let mut fresh =
+                ImageRows::new(header, kind, 65536, RowBuffers::default(), true, None).unwrap();
             let mut remaining = encoded.as_slice();
             loop {
                 let before = reused.memory_bytes();
                 reused.advance().unwrap();
                 fresh.advance().unwrap();
                 assert_eq!(reused.memory_bytes(), fresh.memory_bytes());
-                let (used, ready) = reused
-                    .feed(remaining, 0, PalettePolicy::Strict, true)
-                    .unwrap();
-                assert_eq!(
-                    (used, ready),
-                    fresh
-                        .feed(remaining, 0, PalettePolicy::Strict, true)
-                        .unwrap()
-                );
+                let (used, ready) = reused.feed(remaining).unwrap();
+                assert_eq!((used, ready), fresh.feed(remaining).unwrap());
                 assert_eq!(reused.memory_bytes(), fresh.memory_bytes());
                 if !reused.buffers_can_grow() {
                     assert_eq!(reused.memory_bytes(), before);
