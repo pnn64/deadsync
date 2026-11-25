@@ -63,12 +63,13 @@ impl Table {
         {
             self.native_index_remove_at(slot);
             self.entries[index].key = dead;
+            self.native_dead_key_removed();
             self.touch_fields();
         }
     }
 
     pub(crate) fn retire_native_keys_in_trace_slice(&mut self, cursor: usize, budget: usize) {
-        if !self.native_dead_keys {
+        if self.native_dead_keys == 0 {
             return;
         }
         let start = cursor >> 1;
@@ -88,7 +89,16 @@ impl Table {
         for index in start..end {
             if self.entries[index].value == Value::Nil {
                 self.retire_indexed_native_key(self.entries[index].key);
+                if self.native_dead_keys == 0 {
+                    break;
+                }
             }
+        }
+    }
+
+    fn native_dead_key_removed(&mut self) {
+        if self.native_dead_keys != u8::MAX {
+            self.native_dead_keys -= 1;
         }
     }
 
@@ -140,8 +150,15 @@ impl Table {
         }
         let vacant = match self.slot(key) {
             Some((_, Some(index))) => {
-                if value == Value::Nil && key.dead().is_some() {
-                    self.native_dead_keys = true;
+                if value == Value::Nil {
+                    if self.entries[index].value != Value::Nil && key.dead().is_some() {
+                        self.native_dead_keys = self.native_dead_keys.saturating_add(1);
+                    }
+                } else if self.native_dead_keys != 0
+                    && self.entries[index].value == Value::Nil
+                    && key.dead().is_some()
+                {
+                    self.native_dead_key_removed();
                 }
                 self.entries[index].value = value;
                 self.touch_fields();
@@ -197,6 +214,9 @@ impl Table {
             && let Some((slot, Some(_))) = self.slot(self.entries[position].key)
         {
             // A deleted main node is reusable, but its collision chain remains.
+            if self.entries[position].key.dead().is_some() {
+                self.native_dead_key_removed();
+            }
             self.native_index_remove_at(slot);
             // Deletion can shift the identity probe chain before insertion.
             vacant = self.slot(key).expect("allocated identity index").0;
@@ -204,7 +224,7 @@ impl Table {
         self.entries[position].key = key;
         self.entries[position].value = value;
         if value == Value::Nil && key.dead().is_some() {
-            self.native_dead_keys = true;
+            self.native_dead_keys = self.native_dead_keys.saturating_add(1);
         }
         self.entries[position].native_hash = hash;
         self.slots[vacant] = (position as u32 + 1) | Self::slot_tag(self.slots.len(), key.hash()).0;
@@ -309,7 +329,7 @@ impl Table {
         self.entries = replacement.entries;
         self.slots = replacement.slots;
         self.last_free = replacement.last_free;
-        self.native_dead_keys = false;
+        self.native_dead_keys = 0;
         self.next_hash_hint.store(0, Ordering::Relaxed);
         self.invalidate_trace();
         self.touch_fields();
@@ -322,6 +342,31 @@ mod tests {
     use super::*;
     use crate::allocation_probe::probe;
 
+    #[test]
+    fn native_retirement_count_tracks_revivals_and_saturation() {
+        let mut table = Table::with_native51_capacity(0, 512, Memory::default()).unwrap();
+        let key = |index| Key::String(StringId(index));
+        let hash = |id: StringId| id.0 as u32;
+        table.native_set(key(1), Value::Nil, hash).unwrap();
+        table.native_set(key(1), Value::Nil, hash).unwrap();
+        assert_eq!(table.native_dead_keys, 1);
+        table.native_set(key(1), Value::Number(1.0), hash).unwrap();
+        assert_eq!(table.native_dead_keys, 0);
+        table.native_set(key(1), Value::Nil, hash).unwrap();
+        table.retire_native_keys_in_trace_slice(1, 512);
+        assert_eq!(table.native_dead_keys, 0);
+        assert!(table.slot(key(1)).unwrap().1.is_none());
+
+        for index in 2..=256 {
+            table.native_set(key(index), Value::Nil, hash).unwrap();
+        }
+        assert_eq!(table.native_dead_keys, u8::MAX);
+        table.retire_native_keys_in_trace_slice(1, 512);
+        assert_eq!(table.native_dead_keys, u8::MAX);
+        assert!((2..=256).all(|index| table.slot(key(index)).unwrap().1.is_none()));
+        table.native_resize(0, 512).unwrap();
+        assert_eq!(table.native_dead_keys, 0);
+    }
     #[test]
     fn reusing_a_deleted_main_node_keeps_the_new_key_reachable() {
         let mut table = Table::with_native51_capacity(0, 8, Memory::default()).unwrap();
