@@ -185,15 +185,21 @@ impl Vm {
             }
             Trace::Program(i) if self.programs.key(i).is_some() => {
                 let program = &self.programs[i];
-                let mut count = program.debug_strings.len();
-                for constants in &program.constants {
-                    count =
-                        count.saturating_add(constants.iter().copied().filter_map(edge).count());
+                let names = program
+                    .upvalue_names
+                    .iter()
+                    .fold(program.debug_strings.len(), |count, names| {
+                        count.saturating_add(names.len())
+                    });
+                let upper = program.constants.iter().fold(names, |count, constants| {
+                    count.saturating_add(constants.len())
+                });
+                if upper.saturating_sub(1) <= work.capacity() - work.len() {
+                    return Ok(());
                 }
-                for names in &program.upvalue_names {
-                    count = count.saturating_add(names.len());
-                }
-                count
+                program.constants.iter().fold(names, |count, constants| {
+                    count.saturating_add(constants.iter().copied().filter_map(edge).count())
+                })
             }
             _ => 0,
         };
