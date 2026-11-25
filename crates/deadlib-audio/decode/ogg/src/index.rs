@@ -279,7 +279,6 @@ impl OggIndex {
             length: 0,
             compatibility: CompatibilityStats::default(),
         };
-        let mut all_known = true;
         while let Some(located) = reader.next_page()? {
             let page = located.page;
             let header = page.header();
@@ -310,7 +309,15 @@ impl OggIndex {
             let stream = &mut index.streams[state.stream];
             reserve(&mut index.pages, 1)?;
             let granule = header.granule_position;
-            all_known &= granule != UNKNOWN_GRANULE_POSITION;
+            let (granule_floor, landmark) = if granule == UNKNOWN_GRANULE_POSITION {
+                let previous = index
+                    .pages
+                    .last()
+                    .expect("stream starts with a known granule");
+                (previous.granule_floor, previous.landmark)
+            } else {
+                (granule, index.pages.len())
+            };
             index.pages.push(IndexedPage {
                 offset: located.offset,
                 length: page.bytes().len() as u32,
@@ -319,8 +326,8 @@ impl OggIndex {
                 first_packet: stream.packets,
                 completed_packets: state.completed_packets,
                 first_packet_offset: state.first_packet_offset,
-                granule_floor: granule,
-                landmark: index.pages.len(),
+                granule_floor,
+                landmark,
             });
             stream.packets = state.packets;
             index.length = located
@@ -343,7 +350,7 @@ impl OggIndex {
             .streams
             .windows(2)
             .all(|pair| pair[0].pages.end == pair[1].pages.start);
-        if grouped && all_known && index.compatibility == CompatibilityStats::default() {
+        if grouped && index.compatibility == CompatibilityStats::default() {
             return Ok(index);
         }
         if !grouped {
