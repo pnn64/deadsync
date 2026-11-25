@@ -103,14 +103,26 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 }
                 indices.resize(header.pixel_count, 0);
             } else if header.info.bit_depth == 8 {
-                if matches!(width, 1..=3 | 5..=7) && header.info.height > 1 {
+                // Keep block validation for the wider short-palette rows on x64.
+                let fixed_width_limit = if check_indices && !cfg!(target_arch = "x86") {
+                    12
+                } else {
+                    16
+                };
+                if width < fixed_width_limit && !width.is_multiple_of(4) && header.info.height > 1 {
                     let append = match width {
                         1 => append_narrow_indexed::<1, 4>,
                         2 => append_narrow_indexed::<2, 4>,
                         3 => append_narrow_indexed::<3, 4>,
                         5 => append_narrow_indexed::<5, 8>,
                         6 => append_narrow_indexed::<6, 8>,
-                        _ => append_narrow_indexed::<7, 8>,
+                        7 => append_narrow_indexed::<7, 8>,
+                        9 => append_narrow_indexed::<9, 12>,
+                        10 => append_narrow_indexed::<10, 12>,
+                        11 => append_narrow_indexed::<11, 12>,
+                        13 => append_narrow_indexed::<13, 16>,
+                        14 => append_narrow_indexed::<14, 16>,
+                        _ => append_narrow_indexed::<15, 16>,
                     };
                     append(source, &mut indices, header.info.top_down, palette_len)?;
                 } else if header.info.top_down && width == header.row_pitch {
