@@ -6313,17 +6313,21 @@ fn select_music_uses_shell_prepared_paths_and_playlists() {
 }
 
 #[test]
-fn simfile_takes_load_settings_from_its_callers() {
+fn simfile_takes_load_settings_and_duration_probing_from_its_callers() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let simfile = root.join("crates/deadsync-simfile");
     let manifest = read_source(simfile.join("Cargo.toml")).expect("simfile manifest");
     assert!(!manifest.contains("deadsync-config"));
+    assert!(!manifest.contains("deadlib-audio-decode"));
     for file in production_rust_files(&simfile.join("src")) {
-        assert!(
-            !production_source(&file).contains("deadsync_config"),
-            "{} reads application settings",
-            file.display()
-        );
+        let source = production_source(&file);
+        for dependency in ["deadsync_config", "deadlib_audio_decode"] {
+            assert!(
+                !source.contains(dependency),
+                "{} uses {dependency}",
+                file.display(),
+            );
+        }
     }
 }
 
@@ -14595,7 +14599,6 @@ fn mp3_timeline_policy_is_selected_by_the_game() {
     for relative in [
         "crates/deadsync-audio-stream/src/lib.rs",
         "crates/deadsync-audio-analysis/src/lib.rs",
-        "crates/deadsync-simfile/src/app_runtime.rs",
         "crates/deadsync-shell/src/sync_analysis.rs",
     ] {
         // sync_analysis keeps production functions after its test module.
@@ -14611,4 +14614,8 @@ fn mp3_timeline_policy_is_selected_by_the_game() {
     ] {
         assert!(production_source(&root.join(relative)).contains("crate::DECODE_OPTIONS"));
     }
+    let playback = production_source(&root.join("crates/deadsync-audio-stream/src/lib.rs"));
+    assert!(playback.contains("file_length_seconds(path, DECODE_OPTIONS)"));
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).expect("shell startup");
+    assert!(shell.contains("deadsync_audio_stream::music_length_seconds"));
 }

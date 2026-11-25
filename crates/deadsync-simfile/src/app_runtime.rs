@@ -16,7 +16,6 @@ use crate::scan::{
     scan_and_load_songs_with_progress_counts_runtime,
 };
 use crate::song::{ParseSongOptions, SongAnalyzer, SongParseScratch};
-use deadlib_audio_decode as decode;
 use deadsync_chart::{
     GameplayChartData, SongBackgroundChange, SongData, background::expand_random_background_changes,
 };
@@ -35,17 +34,32 @@ pub struct ScanPaths {
     pub bg_animations: Vec<PathBuf>,
 }
 
-static PATHS: std::sync::OnceLock<ScanPaths> = std::sync::OnceLock::new();
+struct ScanRuntime {
+    paths: ScanPaths,
+    probe_music_length: fn(&Path) -> Result<f32, String>,
+}
 
-/// Install scan roots and cache paths before any scan or chart-loading work.
-pub fn init_paths(paths: ScanPaths) -> Result<(), &'static str> {
-    PATHS
-        .set(paths)
+static RUNTIME: std::sync::OnceLock<ScanRuntime> = std::sync::OnceLock::new();
+
+/// Install scan paths and the host's music duration probe before loading charts.
+pub fn init_paths(
+    paths: ScanPaths,
+    probe_music_length: fn(&Path) -> Result<f32, String>,
+) -> Result<(), &'static str> {
+    RUNTIME
+        .set(ScanRuntime {
+            paths,
+            probe_music_length,
+        })
         .map_err(|_| "scan paths already initialized")
 }
 
+fn runtime() -> &'static ScanRuntime {
+    RUNTIME.get().expect("scan paths initialized at startup")
+}
+
 fn paths() -> &'static ScanPaths {
-    PATHS.get().expect("scan paths initialized at startup")
+    &runtime().paths
 }
 
 pub fn scan_and_load_songs_with_progress_counts<F>(
@@ -408,20 +422,13 @@ fn parse_song_options() -> ParseSongOptions {
     )
 }
 
-/// Computes the length of the music file in seconds when the decode layer supports it.
+/// Probes the music file length in seconds through the host.
 /// Returns 0.0 on failure or if no music path is provided.
 fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
     let Some(path) = music_path else {
         return 0.0;
     };
-    // Match gameplay: ITG chart time includes MP3 delay, padding and Info silence.
-    match decode::file_length_seconds(
-        path,
-        decode::DecodeOptions {
-            mp3_gapless: false,
-            mp3_info_silence: true,
-        },
-    ) {
+    match (runtime().probe_music_length)(path) {
         Ok(sec) => sec,
         Err(e) => {
             warn!("Failed to compute audio length for {path:?}: {e}");
@@ -446,20 +453,33 @@ mod tests {
             std::env::temp_dir().join(format!("deadsync-load-{}-{nanos}", std::process::id()));
         let simfile = root.join("Songs/Test Pack/Test Song/chart.sm");
         fs::create_dir_all(simfile.parent().unwrap()).unwrap();
-        let source = "#TITLE:Chart;#OFFSET:0;#BPMS:0=120;#NOTES:dance-single::Hard:9:0,0,0,0,0:\n1000\n0100\n0010\n0001\n;";
+        let source = "#TITLE:Chart;#MUSIC:track.ogg;#OFFSET:0;#BPMS:0=120;#NOTES:dance-single::Hard:9:0,0,0,0,0:\n1000\n0100\n0010\n0001\n;";
         fs::write(&simfile, source).unwrap();
+        fs::write(simfile.with_file_name("track.ogg"), []).unwrap();
         let cache_dir = root.join("cache");
-        init_paths(ScanPaths {
-            song_cache: cache_dir.clone(),
-            extra_songs: Vec::new(),
-            extra_courses: Vec::new(),
-            autogen_courses: root.join("Courses"),
-            song_movies: Vec::new(),
-            random_movies: Vec::new(),
-            bg_animations: Vec::new(),
-        })
+        init_paths(
+            ScanPaths {
+                song_cache: cache_dir.clone(),
+                extra_songs: Vec::new(),
+                extra_courses: Vec::new(),
+                autogen_courses: root.join("Courses"),
+                song_movies: Vec::new(),
+                random_movies: Vec::new(),
+                bg_animations: Vec::new(),
+            },
+            |path| {
+                if path.ends_with("track.ogg") {
+                    Ok(12.5)
+                } else {
+                    Err("unknown test track".into())
+                }
+            },
+        )
         .unwrap();
         let song = parse_song_for_test(&simfile, 0.0).unwrap();
+        assert_eq!(song.music_length_seconds, 12.5);
+        assert_eq!(compute_music_length_seconds(Some(&simfile)), 0.0);
+        assert_eq!(compute_music_length_seconds(None), 0.0);
         let cache_path = crate::cache::song_cache_path(&cache_dir, &simfile).unwrap();
         let config = RuntimeSongConfig::new(true, true, 0.25);
 

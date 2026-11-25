@@ -206,8 +206,9 @@ theme to describe an input or store a setting:
   `deadlib-audio` owns backend discovery, startup, and fallback.
 - Song and course scans receive additional song roots from the shell. Scan,
   reload, and stage callers supply the cache preferences, pack exclusions,
-  and timing offsets needed for each operation. `deadsync-simfile` owns the
-  catalog, parsing, cache refresh, and sync analysis load policy.
+  and timing offsets needed for each operation. The shell supplies the music
+  duration probe using the same audio timeline as playback. `deadsync-simfile`
+  owns the catalog, parsing, cache refresh, and sync analysis load policy.
 
 ## Gameplay policy and presentation
 

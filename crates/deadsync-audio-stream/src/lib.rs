@@ -26,3 +26,8 @@ const DECODE_OPTIONS: deadlib_audio_decode::DecodeOptions = deadlib_audio_decode
     mp3_gapless: false,
     mp3_info_silence: true,
 };
+
+/// Measures a song on the same source timeline as gameplay playback.
+pub fn music_length_seconds(path: &std::path::Path) -> Result<f32, String> {
+    deadlib_audio_decode::file_length_seconds(path, DECODE_OPTIONS)
+}

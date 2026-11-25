@@ -28,15 +28,26 @@ pub(crate) fn init_paths() {
             dirs.pad_config_path(),
         )
         .expect("initialize fixture profiles");
-        deadsync_simfile::app_runtime::init_paths(deadsync_simfile::app_runtime::ScanPaths {
-            song_cache: dirs.song_cache_dir(),
-            extra_songs: Vec::new(),
-            extra_courses: Vec::new(),
-            autogen_courses: dirs.courses_dir(),
-            song_movies: Vec::new(),
-            random_movies: Vec::new(),
-            bg_animations: Vec::new(),
-        })
+        deadsync_simfile::app_runtime::init_paths(
+            deadsync_simfile::app_runtime::ScanPaths {
+                song_cache: dirs.song_cache_dir(),
+                extra_songs: Vec::new(),
+                extra_courses: Vec::new(),
+                autogen_courses: dirs.courses_dir(),
+                song_movies: Vec::new(),
+                random_movies: Vec::new(),
+                bg_animations: Vec::new(),
+            },
+            |path| {
+                deadlib_audio_decode::file_length_seconds(
+                    path,
+                    deadlib_audio_decode::DecodeOptions {
+                        mp3_gapless: false,
+                        mp3_info_silence: true,
+                    },
+                )
+            },
+        )
         .expect("initialize fixture scanning");
     });
 }

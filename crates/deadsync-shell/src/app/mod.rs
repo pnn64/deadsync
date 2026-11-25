@@ -11396,15 +11396,18 @@ pub fn init_paths(dirs: &AppDirs) -> Result<(), &'static str> {
         dirs.default_player_options_path(),
         dirs.pad_config_path(),
     )?;
-    deadsync_simfile::app_runtime::init_paths(deadsync_simfile::app_runtime::ScanPaths {
-        song_cache: dirs.song_cache_dir(),
-        extra_songs: dirs.extra_song_roots(),
-        extra_courses: dirs.extra_course_roots(),
-        autogen_courses: dirs.courses_dir(),
-        song_movies: media_roots(SONG_MOVIES_DIR),
-        random_movies: media_roots(RANDOM_MOVIES_DIR),
-        bg_animations: media_roots(BG_ANIMATIONS_DIR),
-    })?;
+    deadsync_simfile::app_runtime::init_paths(
+        deadsync_simfile::app_runtime::ScanPaths {
+            song_cache: dirs.song_cache_dir(),
+            extra_songs: dirs.extra_song_roots(),
+            extra_courses: dirs.extra_course_roots(),
+            autogen_courses: dirs.courses_dir(),
+            song_movies: media_roots(SONG_MOVIES_DIR),
+            random_movies: media_roots(RANDOM_MOVIES_DIR),
+            bg_animations: media_roots(BG_ANIMATIONS_DIR),
+        },
+        deadsync_audio_stream::music_length_seconds,
+    )?;
     deadsync_online::runtime::init_paths(
         dirs.downloads_dir(),
         dirs.songs_dir(),

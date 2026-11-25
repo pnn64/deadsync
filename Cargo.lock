@@ -1865,7 +1865,6 @@ name = "deadsync-simfile"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
- "deadlib-audio-decode",
  "deadlib-bincode",
  "deadsync-chart",
  "deadsync-core",

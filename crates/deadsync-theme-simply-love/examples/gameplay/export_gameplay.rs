@@ -183,15 +183,18 @@ fn run() -> Result<()> {
         dirs.default_player_options_path(),
         dirs.pad_config_path(),
     )?;
-    deadsync_simfile::app_runtime::init_paths(deadsync_simfile::app_runtime::ScanPaths {
-        song_cache: dirs.song_cache_dir(),
-        extra_songs: Vec::new(),
-        extra_courses: Vec::new(),
-        autogen_courses: dirs.courses_dir(),
-        song_movies: Vec::new(),
-        random_movies: Vec::new(),
-        bg_animations: Vec::new(),
-    })?;
+    deadsync_simfile::app_runtime::init_paths(
+        deadsync_simfile::app_runtime::ScanPaths {
+            song_cache: dirs.song_cache_dir(),
+            extra_songs: Vec::new(),
+            extra_courses: Vec::new(),
+            autogen_courses: dirs.courses_dir(),
+            song_movies: Vec::new(),
+            random_movies: Vec::new(),
+            bg_animations: Vec::new(),
+        },
+        |_| Ok(0.0),
+    )?;
     let (simfile, pack_directory, pack_name) = sample_song(isolated.path())?;
     let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(
         &simfile, 0.0,

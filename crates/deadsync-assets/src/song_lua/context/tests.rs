@@ -18,15 +18,18 @@ type TestCompiledSongLua = CompiledSongLua<SongLuaOverlayActor<()>>;
 fn catalog_note_bounds_include_pack_sync_before_global_offset() {
     let dir = std::env::temp_dir().join(format!("deadsync-catalog-sync-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let _ = deadsync_simfile::app_runtime::init_paths(deadsync_simfile::app_runtime::ScanPaths {
-        song_cache: dir.join("cache"),
-        extra_songs: vec![],
-        extra_courses: vec![],
-        autogen_courses: dir.join("autogen"),
-        song_movies: vec![],
-        random_movies: vec![],
-        bg_animations: vec![],
-    });
+    let _ = deadsync_simfile::app_runtime::init_paths(
+        deadsync_simfile::app_runtime::ScanPaths {
+            song_cache: dir.join("cache"),
+            extra_songs: vec![],
+            extra_courses: vec![],
+            autogen_courses: dir.join("autogen"),
+            song_movies: vec![],
+            random_movies: vec![],
+            bg_animations: vec![],
+        },
+        |_| Ok(0.0),
+    );
     let path = dir.join("control.sm");
     std::fs::write(&path, "#TITLE:Catalog sync;#BPMS:0=80;#LASTSECONDHINT:103.502998;#NOTES:dance-single::Challenge:1:0,0,0,0,0:\n1000\n0000\n0000\n0001\n;").unwrap();
     let mut song = deadsync_simfile::app_runtime::parse_song_for_test(&path, 0.0).unwrap();
