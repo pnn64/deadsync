@@ -3,7 +3,7 @@ use deadlib_assets::AssetManager;
 use deadsync_config::options::{MAX_FPS_MAX, MAX_FPS_MIN};
 use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_lights::DriverKind as LightsDriverKind;
+use deadsync_core::lights::DriverKind as LightsDriverKind;
 use deadsync_profile as profile_data;
 use deadsync_theme::views::{
     AppPathView, AppPathsView, AudioOutputDeviceView, GraphicsOptionsView, NoteskinCatalogView,

@@ -1,4 +1,5 @@
 use deadsync_config as config;
+use deadsync_core::lights;
 use deadsync_profile::compat as profile;
 use deadsync_theme::app_requests::{
     AdvancedConfigRequest,
@@ -116,23 +117,23 @@ pub(super) fn execute_lights(request: LightsConfigRequest) {
 
     match request {
         Request::Driver(driver) => config::runtime_update::update_lights_driver(match driver {
-            LightsDriver::Off => deadsync_lights::DriverKind::Off,
-            LightsDriver::Snek => deadsync_lights::DriverKind::Snek,
-            LightsDriver::Litboard => deadsync_lights::DriverKind::Litboard,
-            LightsDriver::Win32Serial => deadsync_lights::DriverKind::Win32Serial,
-            LightsDriver::Fusion => deadsync_lights::DriverKind::Fusion,
-            LightsDriver::Gpb => deadsync_lights::DriverKind::Gpb,
-            LightsDriver::PacDrive => deadsync_lights::DriverKind::PacDrive,
-            LightsDriver::PiuioLeds => deadsync_lights::DriverKind::PiuioLeds,
-            LightsDriver::Itgio => deadsync_lights::DriverKind::Itgio,
-            LightsDriver::HidBlueDot => deadsync_lights::DriverKind::HidBlueDot,
-            LightsDriver::Stac2 => deadsync_lights::DriverKind::Stac2,
-            LightsDriver::MinimaidHid => deadsync_lights::DriverKind::MinimaidHid,
+            LightsDriver::Off => lights::DriverKind::Off,
+            LightsDriver::Snek => lights::DriverKind::Snek,
+            LightsDriver::Litboard => lights::DriverKind::Litboard,
+            LightsDriver::Win32Serial => lights::DriverKind::Win32Serial,
+            LightsDriver::Fusion => lights::DriverKind::Fusion,
+            LightsDriver::Gpb => lights::DriverKind::Gpb,
+            LightsDriver::PacDrive => lights::DriverKind::PacDrive,
+            LightsDriver::PiuioLeds => lights::DriverKind::PiuioLeds,
+            LightsDriver::Itgio => lights::DriverKind::Itgio,
+            LightsDriver::HidBlueDot => lights::DriverKind::HidBlueDot,
+            LightsDriver::Stac2 => lights::DriverKind::Stac2,
+            LightsDriver::MinimaidHid => lights::DriverKind::MinimaidHid,
         }),
         Request::GameplayPadLights(mode) => {
             config::runtime_update::update_lights_gameplay_pad_lights(match mode {
-                GameplayPadLights::Input => deadsync_lights::GameplayPadLightMode::Input,
-                GameplayPadLights::Chart => deadsync_lights::GameplayPadLightMode::Chart,
+                GameplayPadLights::Input => lights::GameplayPadLightMode::Input,
+                GameplayPadLights::Chart => lights::GameplayPadLightMode::Chart,
             })
         }
         Request::SimplifyBass(enabled) => {

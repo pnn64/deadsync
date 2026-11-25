@@ -31,9 +31,9 @@ use deadlib_audio_core::AudioOutputMode;
 use deadlib_input_native::WindowsPadBackend;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_core::color::DifficultyColorScheme;
+use deadsync_core::lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use deadsync_input::clamp_input_debounce_seconds;
 use deadsync_input::devices::SmxPadPreset;
-use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 
 pub fn set_display_mode(cfg: &mut Config, mode: DisplayMode) -> bool {

@@ -3872,8 +3872,9 @@ fn simply_love_lights_options_persist_through_shell() {
             && options_source.contains("SimplyLoveLightsConfigRequest::GameplayPadLights")
             && shell.contains("config_requests::execute_lights(request)")
             && executor.contains("pub(super) fn execute_lights")
-            && executor.contains("deadsync_lights::DriverKind::MinimaidHid")
-            && executor.contains("deadsync_lights::GameplayPadLightMode::Chart")
+            && executor.contains("use deadsync_core::lights;")
+            && executor.contains("lights::DriverKind::MinimaidHid")
+            && executor.contains("lights::GameplayPadLightMode::Chart")
             && executor.contains("config::runtime_update::update_lights_simplify_bass(enabled)"),
         "light option values must cross neutral requests and be mapped by shell"
     );
@@ -4972,23 +4973,37 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
 }
 
 #[test]
+fn cabinet_light_preferences_do_not_depend_on_the_lighting_runtime() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for name in ["deadsync-core", "deadsync-config", "deadsync-profile"] {
+        let crate_dir = root.join("crates").join(name);
+        let manifest = read_source(crate_dir.join("Cargo.toml")).expect("crate manifest");
+        assert!(
+            !manifest.contains("deadsync-lights"),
+            "{name} depends on lighting drivers"
+        );
+        for file in production_rust_files(&crate_dir.join("src")) {
+            assert!(
+                !production_source(&file).contains("deadsync_lights"),
+                "{} imports the lighting runtime",
+                file.display()
+            );
+        }
+    }
+}
+
+#[test]
 fn simply_love_test_lights_uses_shell_prepared_state() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
     let manifest = read_source(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
-    let dependencies = manifest
-        .split_once("[dev-dependencies]")
-        .map_or(manifest.as_str(), |(normal, _)| normal);
-    assert!(!dependencies.contains("deadsync-lights"));
+    assert!(!manifest.contains("deadsync-lights"));
 
     let mut failures = Vec::new();
     for file in rust_files(&theme.join("src")) {
         let source = read_source(&file).expect("theme source should be readable");
-        if source
-            .replace("deadsync_lights::DriverKind", "")
-            .contains("deadsync_lights")
-        {
+        if source.contains("deadsync_lights") {
             failures.push(rel_path(&root, &file));
         }
     }

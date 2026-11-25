@@ -57,10 +57,10 @@ use crate::theme::{
 use crate::writer::{push_bool, push_line};
 #[cfg(windows)]
 use deadlib_input_native::WindowsPadBackend;
-use deadsync_lights::{
+use deadsync_core::color::DifficultyColorScheme;
+use deadsync_core::lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering,
 };
-use deadsync_core::color::DifficultyColorScheme;
 use std::str::FromStr;
 use std::time::Duration;
 

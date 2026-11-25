@@ -20,11 +20,9 @@ use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;
 use deadlib_render_core::{BackendType, PresentModePolicy};
+use deadsync_core::lights::{DriverKind, GameplayPadLightMode, SerialPortName};
 use deadsync_input::devices::SmxPadPreset;
 use deadsync_input::parse_keycode_to_key;
-use deadsync_lights::{
-    SerialPortName, parse_driver_or_default, parse_gameplay_pad_lights_or_default,
-};
 use std::path::Path;
 use std::str::FromStr;
 use winit::keyboard::KeyCode;
@@ -195,8 +193,18 @@ pub fn load_app_config(conf: &SimpleIni, default: Config) -> Config {
             parse_linux_backend: |value| LinuxAudioBackend::from_str(value).ok(),
             parse_audio_output_mode: |value| AudioOutputMode::from_str(value).ok(),
             parse_input_debounce_seconds: deadsync_input::parse_input_debounce_seconds,
-            parse_lights_driver: parse_driver_or_default,
-            parse_gameplay_pad_lights: parse_gameplay_pad_lights_or_default,
+            parse_lights_driver: |raw, default| {
+                raw.parse().unwrap_or_else(|_| {
+                    log::warn!("Ignoring unknown LightsDriver value '{raw}'");
+                    default
+                })
+            },
+            parse_gameplay_pad_lights: |raw, default| {
+                raw.parse().unwrap_or_else(|_| {
+                    log::warn!("Ignoring unknown GameplayPadLights value '{raw}'");
+                    default
+                })
+            },
             parse_lights_com_port: SerialPortName::parse,
             parse_color: Color::from_hex,
             parse_key: parse_keycode_to_key,
@@ -400,11 +408,7 @@ const fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
 
 const fn apply_runtime_opts(
     loaded: RuntimeOptions,
-    io: RuntimeIoLoadOptions<
-        deadsync_lights::DriverKind,
-        deadsync_lights::GameplayPadLightMode,
-        SerialPortName,
-    >,
+    io: RuntimeIoLoadOptions<DriverKind, GameplayPadLightMode, SerialPortName>,
     cfg: &mut Config,
 ) {
     cfg.fastload = loaded.fastload;

@@ -25,8 +25,8 @@ use deadlib_platform::logging;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_core::audio::AudioMixLevels;
 use deadsync_core::color::DifficultyColorScheme;
+use deadsync_core::lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use deadsync_input::devices::SmxPadPreset;
-use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use log::warn;
 use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 

@@ -872,6 +872,52 @@ mod tests {
     }
 
     #[test]
+    fn cabinet_light_preferences_round_trip_legacy_names() {
+        use deadsync_core::lights::{DriverKind, GameplayPadLightMode, PacDriveLightOrdering};
+
+        let mut conf = SimpleIni::new();
+        conf.load_str(concat!(
+            "[Options]\n",
+            "LightsDriver=LightsDriver_Win32Serial\n",
+            "GameplayPadLights=NoteData\n",
+            "PacDriveLightOrdering=lumenar\n",
+            "LightsComPort= COM12 \n",
+        ));
+        let loaded = crate::load::load_app_config(&conf, Config::default());
+        assert_eq!(loaded.lights_driver, DriverKind::Win32Serial);
+        assert_eq!(
+            loaded.lights_gameplay_pad_lights,
+            GameplayPadLightMode::Chart
+        );
+        assert_eq!(
+            loaded.pac_drive_light_ordering,
+            PacDriveLightOrdering::OpenItg
+        );
+        assert_eq!(loaded.lights_com_port.as_str(), "COM12");
+
+        let saved = build_saved_app_config_file(
+            &loaded, &Keymap::default(), "", &[], &[], "", "", "", "",
+        );
+        for option in [
+            "LightsDriver=Win32Serial\n",
+            "GameplayPadLights=Chart\n",
+            "PacDriveLightOrdering=openitg\n",
+            "LightsComPort=COM12\n",
+        ] {
+            assert!(saved.contains(option), "missing {option:?}");
+        }
+
+        let mut invalid = SimpleIni::new();
+        invalid.load_str("[Options]\nLightsDriver=unknown\nGameplayPadLights=unknown\n");
+        let fallback = crate::load::load_app_config(&invalid, loaded);
+        assert_eq!(fallback.lights_driver, DriverKind::Win32Serial);
+        assert_eq!(
+            fallback.lights_gameplay_pad_lights,
+            GameplayPadLightMode::Chart
+        );
+    }
+
+    #[test]
     fn saved_content_round_trips_smx_preset_and_lighting_options() {
         use deadsync_input::devices::SmxPadPreset;
 

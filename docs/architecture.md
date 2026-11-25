@@ -164,6 +164,10 @@ theme to describe an input or store a setting:
   used by config, profiles, and presentation. The shell passes the selected
   preset and enabled underglow colors to `deadsync-smx`, which owns threshold
   values, LED color conversion, wire order, and device commands.
+- `deadsync-core::lights` owns the saved cabinet driver, gameplay pad-light
+  mode, PacDrive ordering, and serial port types. Config reads and writes
+  these preferences. The shell supplies them to `deadsync-lights` for driver
+  startup, device I/O, and gameplay light updates.
 - The shell supplies DeadSync's Vulkan instance names through
   `deadlib-render::BackendOptions` at startup and renderer recreation.
   The engine provides generic defaults and labels its own GPU resources.

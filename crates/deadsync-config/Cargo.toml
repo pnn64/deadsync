@@ -14,7 +14,6 @@ deadsync-core = { path = "../deadsync-core" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-input = { path = "../deadsync-input" }
 deadlib-input-native = { path = "../deadlib-input-native" }
-deadsync-lights = { path = "../deadsync-lights" }
 log = "0.4.35"
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 rustc-hash = "2.1.3"

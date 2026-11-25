@@ -52,7 +52,6 @@ twox-hash = "2.1.5"
 
 [dev-dependencies]
 askama = "0.16.1"
-deadsync-lights = { path = "../deadsync-lights" }
 deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
 deadlib-render = { path = "../deadlib-render" }
 deadsync-notefield = { path = "../deadsync-notefield" }
