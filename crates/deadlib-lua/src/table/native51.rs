@@ -203,9 +203,9 @@ impl Table {
         };
         let mut position = main_position(key, hash, self.entries.len());
         if self.entries[position].value != Value::Nil {
-            let free = (0..self.last_free as usize)
-                .rev()
-                .find(|&i| self.entries[i].key == Key::Vacant);
+            let free = self.entries[..self.last_free as usize]
+                .iter()
+                .rposition(|entry| matches!(entry.key, Key::Vacant));
             let Some(free) = free else {
                 self.native_rehash(key)?;
                 return self.native_set(key, value, |_| hash);
