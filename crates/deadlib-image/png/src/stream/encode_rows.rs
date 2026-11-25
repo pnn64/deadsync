@@ -261,6 +261,7 @@ impl<'a> Rows<'a> {
             let mut best = u64::MAX;
             let mut best_kind = 5;
             let first_row = self.index == 0;
+            let no_left = row.len() == bpp;
             // On the first row Up equals None and Paeth equals Sub.
             const ORDERS: [[u8; 4]; 4] = [[1, 2, 3, 4], [2, 1, 3, 4], [3, 1, 2, 4], [4, 1, 2, 3]];
             let kinds: &[u8] = if first_row {
@@ -268,6 +269,13 @@ impl<'a> Rows<'a> {
                     &[3, 1]
                 } else {
                     &[1, 3]
+                }
+            } else if no_left {
+                // Sub equals None and Paeth equals Up without a left pixel.
+                if self.last_kind == 3 {
+                    &[3, 2]
+                } else {
+                    &[2, 3]
                 }
             } else {
                 &ORDERS[usize::from(self.last_kind - 1)]
@@ -304,6 +312,9 @@ impl<'a> Rows<'a> {
             self.last_kind = best_kind;
             if scanline::score_at_most(row, best) {
                 selected = 0;
+                if no_left {
+                    self.last_kind = 1;
+                }
                 self.output[1..].copy_from_slice(row);
             }
         } else {
