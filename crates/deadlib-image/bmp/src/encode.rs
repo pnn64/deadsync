@@ -211,6 +211,16 @@ fn append_indexed_rows(
     for (&[red, green, blue], color) in palette.iter().zip(&mut bgr) {
         *color = u32::from_le_bytes([blue, green, red, 0]);
     }
+    if chunk_pixels == 1 {
+        // Each palette word already includes the row's padding byte.
+        let row = |&index| bgr[usize::from(index)].to_le_bytes();
+        if top_down {
+            output.extend(indices.iter().flat_map(row));
+        } else {
+            output.extend(indices.iter().rev().flat_map(row));
+        }
+        return;
+    }
     let mut rows = indices.chunks_exact(chunk_pixels);
     while let Some(row) = if top_down {
         rows.next()
