@@ -1983,11 +1983,15 @@ impl Vm {
             // allocate or change frame observers. Any other dispatch ends
             // this interval, and a new frame always starts with a GC poll.
             let mut numeric_checkpoint_ready = false;
+            let mut resume_hints = threads::inline_resume::ResumeHints::default();
             let mut ignored_numeric_while = None;
             loop {
                 // With no hook or instruction limit counting instructions,
                 // runs of simple ones execute without frame bookkeeping.
                 if self.hooks.mask & (hooks::LINE | hooks::COUNT) == 0 && self.budget.is_none() {
+                    let inline_calls = numeric_checkpoint_ready
+                        && self.frames.len() < self.frames.capacity()
+                        && self.frames.len() + 1 < usize::from(self.call_slots);
                     let mut cx = simple::Context {
                         registers: &mut self.registers,
                         constants: &self.programs[program_index].constants[proto_index],
@@ -1996,7 +2000,7 @@ impl Vm {
                         strings: &self.strings.bytes,
                         upvalue_ids: &self.functions[slot_index(function.0)].upvalues,
                         upvalues: &self.upvalues,
-                        threads: &self.threads,
+                        threads: &mut self.threads,
                         thread: self.thread,
                         code: &prototype.code,
                         stop_before_for_loop: reduction_retry
@@ -2015,10 +2019,80 @@ impl Vm {
                             strings: &self.strings.bytes,
                         }),
                     };
-                    while let Some(next) = simple::step(&mut cx, pc) {
+                    if inline_calls
+                        && let Some((next, resumed)) =
+                            resume_hints.run_consumer_cycle(&mut cx, pc, &mut self.top)
+                    {
                         pc = next;
+                        if resumed {
+                            self.gc.pending = false;
+                        }
+                    }
+                    loop {
+                        while let Some(next) = simple::step(&mut cx, pc) {
+                            pc = next;
+                        }
+                        if !inline_calls {
+                            break;
+                        }
+                        let call = cx.code[pc];
+                        if call.op != Op::Call {
+                            break;
+                        }
+                        let slot = base + usize::from(call.a);
+                        let callee = cx.registers[slot];
+                        match (callee, call.b) {
+                            (Value::Native(threads::CO_RESUME), 1)
+                                if call.c == 2 && resume_hints.resume(&mut cx, slot) =>
+                            {
+                                self.gc.pending = false;
+                            }
+                            (Value::Native(threads::CO_RESUME), 1)
+                                if call.c != OPEN
+                                    && resume_hints.resume_projected(
+                                        &mut cx,
+                                        &self.functions,
+                                        &self.programs,
+                                        slot,
+                                        call.c as usize,
+                                    ) =>
+                            {
+                                self.gc.pending = false;
+                            }
+                            (Value::Native(0), 1)
+                                if call.c <= 1 && cx.registers[slot + 1].is_truthy() =>
+                            {
+                                cx.registers[slot] = cx.registers[slot + 1];
+                            }
+                            (Value::Native(id @ (math::MATH_MIN | math::MATH_MAX)), 2)
+                                if call.c <= 1 =>
+                            {
+                                let Some(value) = math::numeric_extremum(
+                                    cx.registers[slot + 1],
+                                    cx.registers[slot + 2],
+                                    id == math::MATH_MIN,
+                                ) else {
+                                    break;
+                                };
+                                cx.registers[slot] = value;
+                            }
+                            _ => break,
+                        }
+                        self.top = slot + call.c as usize;
+                        pc += 1;
+                    }
+                    // The parked stack has no open upvalues. Each call above
+                    // publishes its own result, and no instruction in this
+                    // loop can observe the child's numeric register copies.
+                    if inline_calls {
+                        resume_hints.write_back(cx.threads);
+                    } else {
+                        // A general instruction ended the previous checkpoint.
+                        resume_hints.clear();
                     }
                 }
+                let i = prototype.code[pc];
+                let a = base + usize::from(i.a);
                 if self.hooks.mask & (hooks::LINE | hooks::COUNT) != 0
                     && self.hook_instruction(frame_index, pc, prototype.metadata[pc].hook_line)?
                 {
@@ -2026,10 +2100,8 @@ impl Vm {
                 }
                 self.charge()?;
                 let checkpoint_ready = std::mem::take(&mut numeric_checkpoint_ready);
-                let i = prototype.code[pc];
                 *error_line = prototype.metadata[pc].line;
                 pc += 1;
-                let a = base + usize::from(i.a);
                 let b = base + usize::from(i.b);
                 let c = i.c as usize;
                 self.frames[frame_index].pc = pc as u32;
@@ -2448,7 +2520,12 @@ impl Vm {
                                     )
                                 }
                                 Value::Native(threads::CO_RESUME) if i.b == 1 && i.c != OPEN => {
-                                    self.try_inline_coroutine_resume(a, c, checkpoint_ready)
+                                    self.try_inline_coroutine_resume(
+                                        a,
+                                        c,
+                                        checkpoint_ready,
+                                        &mut resume_hints,
+                                    )
                                 }
                                 Value::Function(_) if i.c <= 1 => self.try_numeric_leaf_call(
                                     &mut numeric_call_cache,

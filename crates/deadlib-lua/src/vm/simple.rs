@@ -7,11 +7,12 @@ use super::{
     Arena, ByteString, Cell, StringId, Table, TableId, ThreadId, Value, Vm, slot_index, threads,
 };
 use crate::bytecode::{COMPARE_BRANCH, Instruction, NUMERIC_WHILE, OPEN, Op, RK};
+use std::ops::Deref;
 
 pub(super) const FIELD_HINTS: usize = 32;
 
 /// The registers, constants and tables one simple instruction can touch.
-pub(super) struct Context<'a> {
+pub(super) struct Context<'a, Threads = &'a Arena<threads::Thread>> {
     pub registers: &'a mut [Value],
     pub constants: &'a [Value],
     pub field_hints: &'a mut [[u32; 2]; FIELD_HINTS],
@@ -19,7 +20,7 @@ pub(super) struct Context<'a> {
     pub strings: &'a Arena<ByteString>,
     pub upvalue_ids: &'a [u32],
     pub upvalues: &'a Arena<Cell>,
-    pub threads: &'a Arena<threads::Thread>,
+    pub threads: Threads,
     pub thread: ThreadId,
     pub code: &'a [Instruction],
     pub stop_before_for_loop: Option<usize>,
@@ -76,7 +77,7 @@ impl Resolvers<'_> {
 /// interpreter, which owns the 100-step `loop in gettable` diagnostic.
 const INDEX_CHAIN: usize = 8;
 
-impl Context<'_> {
+impl<Threads> Context<'_, Threads> {
     #[inline(always)]
     fn constant(&self, index: usize) -> Value {
         self.constants[index]
@@ -145,7 +146,10 @@ pub(super) fn inherited(
 /// Execute the instruction at `pc` if it is simple, returning the next pc.
 /// `None` leaves every register unchanged for the general interpreter.
 #[inline(always)]
-pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
+pub(super) fn step(
+    cx: &mut Context<'_, impl Deref<Target = Arena<threads::Thread>>>,
+    pc: usize,
+) -> Option<usize> {
     let i = cx.code[pc];
     let base = cx.base;
     let a = base + usize::from(i.a);
