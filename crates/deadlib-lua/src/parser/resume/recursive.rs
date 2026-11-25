@@ -9,7 +9,7 @@ use super::*;
 /// Deeper syntax nesting uses the resumable parser, which needs no native stack.
 const MAX_DEPTH: u16 = 48;
 
-/// Position data of a consumed token; its payload stays in the staged slot.
+/// Position data of a consumed token.
 #[derive(Clone, Copy)]
 struct Taken {
     kind: Kind,
@@ -22,10 +22,19 @@ fn abandon() -> Error {
 }
 
 impl Parser {
+    // Complete source restarts through the streaming grammar after a syntax
+    // failure and has no native reader roots to publish while parsing.
+    fn raccount<T>(
+        &mut self,
+        input: &[u8],
+        action: impl FnOnce(&mut Resources, &Context<'_>) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        self.account_with::<false, T>(input, action)
+    }
+
     /// Parse complete `input` from the parser's initial state.
     pub(super) fn recursive(&mut self, input: &[u8]) -> Result<Ast, Error> {
-        self.rscan(input)?;
-        self.token = Some(std::mem::take(&mut self.staged));
+        self.token = Some(self.rtoken(input)?);
         let body = self.rblock(input)?;
         self.ast.end_line = self.previous_line;
         if self.kind() != Kind::Eof {
@@ -41,7 +50,6 @@ impl Parser {
         self.scanner = Scanner::default();
         self.token = None;
         self.lookahead = None;
-        self.staged = Token::default();
         self.previous_line = 1;
         self.depth = 0;
         self.loops = 0;
@@ -65,49 +73,63 @@ impl Parser {
         Ok(())
     }
 
-    /// Scan one token into the staged slot, interning identifiers as the
-    /// resumable scan does.
-    fn rscan(&mut self, input: &[u8]) -> Result<(), Error> {
-        self.scanner.next_closed(input, &mut self.staged)?;
-        if self.staged.kind == Kind::Name {
-            let (start, end) = self.scanner.name_span();
-            self.bindings.intern(input, start, end)?;
+    /// Borrowed names keep source offsets until the grammar needs a symbol.
+    fn rscan(
+        scanner: &mut Scanner,
+        bindings: &mut Bindings,
+        input: &[u8],
+        out: &mut Token,
+    ) -> Result<(), Error> {
+        scanner.next_closed(input, out)?;
+        if out.kind == Kind::Name && matches!(out.text, Lexeme::Owned(_)) {
+            let (start, end) = scanner.name_span();
+            out.symbol = bindings.intern(input, start, end)?;
         }
         Ok(())
     }
+
+    fn rtoken(&mut self, input: &[u8]) -> Result<Token, Error> {
+        let mut token = Token::default();
+        Self::rscan(&mut self.scanner, &mut self.bindings, input, &mut token)?;
+        Ok(token)
+    }
+
     /// Consume the current token and fetch its successor.
     #[inline]
     fn bump(&mut self, input: &[u8]) -> Result<Taken, Error> {
-        if self.kind() == Kind::Eof {
+        let current = self.token.as_mut().expect("current token");
+        if current.kind == Kind::Eof {
             return Err(abandon());
         }
-        match self.lookahead.take() {
-            Some(next) => self.staged = next,
-            None => self.rscan(input)?,
-        }
-        let current = self.token.as_mut().expect("current token");
-        std::mem::swap(current, &mut self.staged);
         let taken = Taken {
-            kind: self.staged.kind,
-            line: self.staged.line,
-            end_line: self.staged.end_line,
+            kind: current.kind,
+            line: current.line,
+            end_line: current.end_line,
         };
+        match self.lookahead.take() {
+            Some(next) => *current = next,
+            None => Self::rscan(&mut self.scanner, &mut self.bindings, input, current)?,
+        }
         self.previous_line = taken.end_line;
         Ok(taken)
     }
-    /// The text of the token `bump` just consumed.
-    fn taken_text(&mut self) -> Text {
-        std::mem::take(&mut self.staged.text)
-    }
     /// Consume the current token and return its text.
-    fn bump_text(&mut self, input: &[u8]) -> Result<Text, Error> {
+    fn bump_text(&mut self, input: &[u8]) -> Result<Lexeme, Error> {
+        let text = std::mem::take(&mut self.token.as_mut().expect("current token").text);
         self.bump(input)?;
-        Ok(self.taken_text())
+        Ok(text)
     }
     /// Consume a name token and return its text.
-    fn rname(&mut self, input: &[u8]) -> Result<Text, Error> {
-        self.rexpect(input, Kind::Name)?;
-        Ok(self.taken_text())
+    fn rname(&mut self, input: &[u8]) -> Result<Lexeme, Error> {
+        if self.kind() != Kind::Name {
+            return Err(abandon());
+        }
+        self.bump_text(input)
+    }
+    fn rsymbol(&mut self, input: &[u8]) -> Result<(Lexeme, u32), Error> {
+        let name = self.rname(input)?;
+        let symbol = self.bindings.intern_lexeme(input, &name)?;
+        Ok((name, symbol))
     }
     fn rexpect(&mut self, input: &[u8], kind: Kind) -> Result<Taken, Error> {
         if self.kind() != kind {
@@ -132,8 +154,9 @@ impl Parser {
         self.bindings.truncate(count);
     }
     fn rstatement_node(&mut self, stmt: Stmt, line: u32) -> Result<StmtId, Error> {
-        self.statement(stmt, line)?;
-        Ok(self.stmt)
+        let id = self.ast.stmts.len();
+        self.ast.stmts.try_push((stmt, line))?;
+        Ok(id)
     }
 
     fn rblock(&mut self, input: &[u8]) -> Result<Block, Error> {
@@ -179,7 +202,7 @@ impl Parser {
                     Span::default()
                 } else {
                     let values = self.rlist(input)?;
-                    self.account(input, |r, cx| r.return_values(cx.ast.ids(values), cx))?;
+                    self.raccount(input, |r, cx| r.return_values(cx.ast.ids(values), cx))?;
                     values
                 };
                 self.rstatement_node(Stmt::Return(values, self.previous_line), line)
@@ -200,7 +223,7 @@ impl Parser {
             Kind::While => {
                 self.bump(input)?;
                 let cond = self.rexpr(input, 0)?;
-                self.account(input, |r, cx| r.condition(cond, cx))?;
+                self.raccount(input, |r, cx| r.condition(cond, cx))?;
                 self.rexpect(input, Kind::Do)?;
                 self.loops += 1;
                 let body = self.rblock(input)?;
@@ -216,7 +239,7 @@ impl Parser {
                 let body = self.rstatements(input)?;
                 self.rexpect(input, Kind::Until)?;
                 let cond = self.rexpr(input, 0)?;
-                self.account(input, |r, cx| r.condition(cond, cx))?;
+                self.raccount(input, |r, cx| r.condition(cond, cx))?;
                 self.loops -= 1;
                 let stmt = self.rstatement_node(Stmt::Repeat(body, cond), line)?;
                 self.restore_locals(locals);
@@ -238,7 +261,7 @@ impl Parser {
         let mark = self.scratch.arms.len();
         loop {
             let cond = self.rexpr(input, 0)?;
-            self.account(input, |r, cx| r.condition(cond, cx))?;
+            self.raccount(input, |r, cx| r.condition(cond, cx))?;
             self.rexpect(input, Kind::Then)?;
             let body = self.rblock(input)?;
             self.scratch.arms.try_push((cond, body))?;
@@ -273,17 +296,17 @@ impl Parser {
         Self::rlocals(usize::from(self.locals) + 4)?;
         self.bump(input)?;
         let start = self.rexpr(input, 0)?;
-        self.account(input, |r, cx| r.next(start, cx))?;
+        self.raccount(input, |r, cx| r.next(start, cx))?;
         self.rexpect(input, Kind::Comma)?;
         let limit = self.rexpr(input, 0)?;
-        self.account(input, |r, cx| r.next(limit, cx))?;
+        self.raccount(input, |r, cx| r.next(limit, cx))?;
         let step = if self.kind() == Kind::Comma {
             self.bump(input)?;
             let step = self.rexpr(input, 0)?;
-            self.account(input, |r, cx| r.next(step, cx))?;
+            self.raccount(input, |r, cx| r.next(step, cx))?;
             Some(step)
         } else {
-            self.account(input, |r, cx| r.default_step(cx))?;
+            self.raccount(input, |r, cx| r.default_step(cx))?;
             None
         };
         let do_line = self.rexpect(input, Kind::Do)?.end_line;
@@ -311,7 +334,7 @@ impl Parser {
         )
     }
 
-    fn rfor_in(&mut self, input: &[u8], line: u32, first: Text) -> Result<StmtId, Error> {
+    fn rfor_in(&mut self, input: &[u8], line: u32, first: Lexeme) -> Result<StmtId, Error> {
         let mark = self.scratch.names.len();
         self.scratch.names.try_push(first)?;
         loop {
@@ -327,7 +350,7 @@ impl Parser {
         }
         let iter_line = self.current().end_line;
         let values = self.rlist(input)?;
-        self.account(input, |r, cx| {
+        self.raccount(input, |r, cx| {
             r.adjust(3, cx.ast.ids(values), cx)?;
             r.check(3)
         })?;
@@ -352,7 +375,7 @@ impl Parser {
             self.bump(input)?;
             let name = self.rname(input)?;
             Self::rlocals(usize::from(self.locals) + 1)?;
-            self.account(input, |r, _| r.reserve(1))?;
+            self.raccount(input, |r, _| r.reserve(1))?;
             self.locals += 1;
             self.resources.locals(self.locals);
             self.bindings.declare(input, &name)?;
@@ -377,10 +400,10 @@ impl Parser {
         let values = if self.kind() == Kind::Assign {
             self.bump(input)?;
             let values = self.rlist(input)?;
-            self.account(input, |r, cx| r.adjust(count, cx.ast.ids(values), cx))?;
+            self.raccount(input, |r, cx| r.adjust(count, cx.ast.ids(values), cx))?;
             values
         } else {
-            self.account(input, |r, cx| r.adjust(count, &[], cx))?;
+            self.raccount(input, |r, cx| r.adjust(count, &[], cx))?;
             Span::default()
         };
         self.locals += count as u16;
@@ -391,22 +414,20 @@ impl Parser {
     }
 
     fn rfunction_statement(&mut self, input: &[u8], line: u32) -> Result<StmtId, Error> {
-        let name = self.rname(input)?;
-        let mut target = self.expression(input, Expr::Name(name), line)?;
-        self.rresolve(input, target)?;
+        let mut target = self.rresolved_name(input, line)?;
         let mut method = false;
         while matches!(self.kind(), Kind::Dot | Kind::Colon) {
-            self.account(input, |r, cx| r.any(target, cx))?;
+            self.raccount(input, |r, cx| r.any(target, cx))?;
             method = self.bump(input)?.kind == Kind::Colon;
             let field = self.rname(input)?;
-            let key = self.expression(input, Expr::String(field), line)?;
-            target = self.expression(input, Expr::Index(target, key), line)?;
+            let key = self.rstring(input, field, line)?;
+            target = self.expression_with::<false>(input, Expr::Index(target, key), line)?;
             if method {
                 break;
             }
         }
         let value = self.rfunction(input, line, method)?;
-        self.account(input, |r, cx| r.assignment(&[target], &[value], cx))?;
+        self.raccount(input, |r, cx| r.assignment(&[target], &[value], cx))?;
         let targets = self.one(target)?;
         let values = self.one(value)?;
         self.rstatement_node(Stmt::FunctionDefinition(targets, values), line)
@@ -432,7 +453,7 @@ impl Parser {
             // Taking the scratch stack moves no elements and lets the
             // accounting closure borrow the open target list.
             let open = std::mem::take(&mut self.scratch.ids);
-            let conflict = self.account(input, |r, _| r.conflict(&open[mark..], target));
+            let conflict = self.raccount(input, |r, _| r.conflict(&open[mark..], target));
             self.scratch.ids = open;
             conflict?;
             let limit = 200 - i32::from(self.base_depth.wrapping_add(self.depth));
@@ -444,7 +465,7 @@ impl Parser {
         self.rexpect(input, Kind::Assign)?;
         let values = self.rlist(input)?;
         let targets = self.publish_ids(mark)?;
-        self.account(input, |r, cx| {
+        self.raccount(input, |r, cx| {
             r.assignment(cx.ast.ids(targets), cx.ast.ids(values), cx)
         })?;
         self.rstatement_node(Stmt::Assign(targets, values), line)
@@ -460,7 +481,7 @@ impl Parser {
             }
             let separator = self.bump(input)?;
             self.ast.exprs[value].1.discharge = separator.end_line;
-            self.account(input, |r, cx| r.next(value, cx))?;
+            self.raccount(input, |r, cx| r.next(value, cx))?;
         }
         self.publish_ids(mark)
     }
@@ -472,31 +493,31 @@ impl Parser {
             Kind::Not | Kind::Minus | Kind::Hash => {
                 let op = self.bump(input)?.kind;
                 let inner = self.rexpr(input, 7)?;
-                self.expression(input, Expr::Unary(op, inner), line)?
+                self.expression_with::<false>(input, Expr::Unary(op, inner), line)?
             }
             Kind::Nil => {
                 self.bump(input)?;
-                self.expression(input, Expr::Nil, line)?
+                self.expression_with::<false>(input, Expr::Nil, line)?
             }
             Kind::True | Kind::False => {
                 let value = self.bump(input)?.kind == Kind::True;
-                self.expression(input, Expr::Boolean(value), line)?
+                self.expression_with::<false>(input, Expr::Boolean(value), line)?
             }
             Kind::Number => {
+                let number = self.current().number;
                 self.bump(input)?;
-                let number = self.staged.number;
-                self.expression(input, Expr::Number(number), line)?
+                self.rnumber(input, number, line)?
             }
             Kind::String => {
                 let text = self.bump_text(input)?;
-                self.expression(input, Expr::String(text), line)?
+                self.rstring(input, text, line)?
             }
             Kind::Dots => {
                 if !self.vararg {
                     return Err(abandon());
                 }
                 self.bump(input)?;
-                self.expression(input, Expr::Vararg, line)?
+                self.expression_with::<false>(input, Expr::Vararg, line)?
             }
             Kind::Function => {
                 self.bump(input)?;
@@ -509,9 +530,9 @@ impl Parser {
             && left_power > min
         {
             let token = self.bump(input)?;
-            self.account(input, |r, cx| r.infix(left, token.kind, cx))?;
+            self.raccount(input, |r, cx| r.infix(left, token.kind, cx))?;
             let right = self.rexpr(input, right_power)?;
-            left = self.expression(
+            left = self.expression_with::<false>(
                 input,
                 Expr::Binary(token.kind, left, right, token.end_line),
                 line,
@@ -521,61 +542,96 @@ impl Parser {
         Ok(left)
     }
 
-    fn rresolve(&mut self, input: &[u8], id: ExprId) -> Result<(), Error> {
-        let Expr::Name(name) = &self.ast.exprs[id].0 else {
-            unreachable!("resolved name")
+    fn rresolved_name(&mut self, input: &[u8], line: u32) -> Result<ExprId, Error> {
+        let (mut name, symbol) = self.rsymbol(input)?;
+        let reference = self.bindings.reference_symbol(symbol)?;
+        let binding = reference.binding();
+        if let Some(slot) = self.raccount(input, |r, cx| r.push_reference(reference, cx))? {
+            name.set_string_slot(slot);
+        }
+        self.rpush_expr(Expr::Name(name), line, 1, binding)
+    }
+
+    fn rnumber(&mut self, input: &[u8], number: f64, line: u32) -> Result<ExprId, Error> {
+        self.raccount(input, |r, _| r.push_number(number))?;
+        self.rpush_expr(Expr::Number(number), line, 1, NameBinding::default())
+    }
+
+    fn rstring(&mut self, input: &[u8], text: Lexeme, line: u32) -> Result<ExprId, Error> {
+        let id = self.rpush_expr(Expr::String(text), line, 0, NameBinding::default())?;
+        let slot = self.raccount(input, |r, cx| r.push_string(id, cx))?;
+        let Expr::String(text) = &mut self.ast.exprs[id].0 else {
+            unreachable!("string expression")
         };
-        let reference = self.bindings.reference(input, name)?;
-        self.account(input, |r, cx| r.resolve(id, reference, cx))
+        text.set_string_slot(slot);
+        Ok(id)
+    }
+
+    fn rpush_expr(
+        &mut self,
+        expr: Expr,
+        line: u32,
+        scalar_cost: u8,
+        binding: NameBinding,
+    ) -> Result<ExprId, Error> {
+        let id = self.ast.exprs.len();
+        self.ast.exprs.try_push((
+            expr,
+            SourceSpan {
+                start: line,
+                end: self.previous_line,
+                discharge: self.previous_line,
+                scalar_cost,
+                operand: 0,
+                binding,
+            },
+        ))?;
+        Ok(id)
     }
 
     fn rprefix(&mut self, input: &[u8]) -> Result<ExprId, Error> {
         let line = self.line();
         let mut id = match self.kind() {
-            Kind::Name => {
-                let name = self.bump_text(input)?;
-                let id = self.expression(input, Expr::Name(name), line)?;
-                self.rresolve(input, id)?;
-                id
-            }
+            Kind::Name => self.rresolved_name(input, line)?,
             Kind::LParen => {
                 self.bump(input)?;
                 let inner = self.rexpr(input, 0)?;
                 self.rexpect(input, Kind::RParen)?;
-                self.expression(input, Expr::Paren(inner), line)?
+                self.expression_with::<false>(input, Expr::Paren(inner), line)?
             }
             _ => return Err(abandon()),
         };
         loop {
             match self.kind() {
                 Kind::Dot => {
-                    self.account(input, |r, cx| r.any(id, cx))?;
+                    self.raccount(input, |r, cx| r.any(id, cx))?;
                     self.bump(input)?;
                     let name = self.rname(input)?;
-                    let key = self.expression(input, Expr::String(name), line)?;
-                    id = self.expression(input, Expr::Index(id, key), line)?;
+                    let key = self.rstring(input, name, line)?;
+                    id = self.expression_with::<false>(input, Expr::Index(id, key), line)?;
                 }
                 Kind::LBracket => {
-                    self.account(input, |r, cx| r.any(id, cx))?;
+                    self.raccount(input, |r, cx| r.any(id, cx))?;
                     self.bump(input)?;
                     let key = self.rexpr(input, 0)?;
-                    self.account(input, |r, cx| r.val(key, cx))?;
+                    self.raccount(input, |r, cx| r.val(key, cx))?;
                     self.rexpect(input, Kind::RBracket)?;
-                    id = self.expression(input, Expr::Index(id, key), line)?;
+                    id = self.expression_with::<false>(input, Expr::Index(id, key), line)?;
                 }
                 Kind::Colon => {
                     self.bump(input)?;
-                    let name = self.rname(input)?;
-                    self.account(input, |r, cx| r.method(id, &name, cx))?;
+                    let (mut name, symbol) = self.rsymbol(input)?;
+                    let slot = self.raccount(input, |r, cx| r.method(id, symbol, cx))?;
+                    name.set_string_slot(slot);
                     let call_line = self.current().end_line;
                     let args = self.rargs(input)?;
-                    id = self.expression(input, Expr::Method(id, name, args, call_line), line)?;
+                    id = self.expression_with::<false>(input, Expr::Method(id, name, args, call_line), line)?;
                 }
                 Kind::LParen | Kind::LBrace | Kind::String => {
-                    self.account(input, |r, cx| r.next(id, cx))?;
+                    self.raccount(input, |r, cx| r.next(id, cx))?;
                     let call_line = self.current().end_line;
                     let args = self.rargs(input)?;
-                    id = self.expression(input, Expr::Call(id, args, call_line), line)?;
+                    id = self.expression_with::<false>(input, Expr::Call(id, args, call_line), line)?;
                 }
                 _ => return Ok(id),
             }
@@ -594,7 +650,7 @@ impl Parser {
                     return Ok(Span::default());
                 }
                 let values = self.rlist(input)?;
-                self.account(input, |r, cx| r.arguments(cx.ast.ids(values)))?;
+                self.raccount(input, |r, cx| r.arguments(cx.ast.ids(values)))?;
                 self.rexpect(input, Kind::RParen)?;
                 Ok(values)
             }
@@ -603,9 +659,9 @@ impl Parser {
                 self.one(table)
             }
             Kind::String => {
-                let token = self.bump(input)?;
-                let text = self.taken_text();
-                let id = self.expression(input, Expr::String(text), token.line)?;
+                let line = self.line();
+                let text = self.bump_text(input)?;
+                let id = self.rstring(input, text, line)?;
                 self.one(id)
             }
             _ => Err(abandon()),
@@ -619,17 +675,16 @@ impl Parser {
     }
 
     fn rtable(&mut self, input: &[u8]) -> Result<ExprId, Error> {
-        self.account(input, |r, _| r.begin_table())?;
+        self.raccount(input, |r, _| r.begin_table())?;
         let previous = self.previous_line;
         let line = self.rexpect(input, Kind::LBrace)?.line;
         let mark = self.scratch.fields.len();
         loop {
             if self.kind() != Kind::RBrace {
-                self.account(input, |r, cx| r.prepare_field(cx))?;
+                self.raccount(input, |r, cx| r.prepare_field(cx))?;
             }
             if self.kind() == Kind::Name && self.lookahead.is_none() {
-                self.rscan(input)?;
-                self.lookahead = Some(std::mem::take(&mut self.staged));
+                self.lookahead = Some(self.rtoken(input)?);
             }
             if self.kind() == Kind::RBrace {
                 let end_line = self.current().end_line;
@@ -643,25 +698,25 @@ impl Parser {
                     .as_ref()
                     .is_some_and(|t| t.kind == Kind::Assign)
             {
-                let token = self.bump(input)?;
-                let text = self.taken_text();
-                let key = self.expression(input, Expr::String(text), token.line)?;
+                let line = self.line();
+                let text = self.bump_text(input)?;
+                let key = self.rstring(input, text, line)?;
                 self.rexpect(input, Kind::Assign)?;
-                self.account(input, |r, cx| r.record_key(key, cx))?;
+                self.raccount(input, |r, cx| r.record_key(key, cx))?;
                 Some(key)
             } else if self.kind() == Kind::LBracket {
                 self.bump(input)?;
                 let key = self.rexpr(input, 0)?;
-                self.account(input, |r, cx| r.val(key, cx))?;
+                self.raccount(input, |r, cx| r.val(key, cx))?;
                 self.rexpect(input, Kind::RBracket)?;
                 self.rexpect(input, Kind::Assign)?;
-                self.account(input, |r, cx| r.record_key(key, cx))?;
+                self.raccount(input, |r, cx| r.record_key(key, cx))?;
                 Some(key)
             } else {
                 None
             };
             let value = self.rexpr(input, 0)?;
-            self.account(input, |r, cx| r.field(key, value, cx))?;
+            self.raccount(input, |r, cx| r.field(key, value, cx))?;
             self.scratch.fields.try_push((key, value))?;
             if matches!(self.kind(), Kind::Comma | Kind::Semi) {
                 let separator = self.bump(input)?;
@@ -674,7 +729,7 @@ impl Parser {
             }
         }
         let fields = publish(&mut self.ast.fields, &mut self.scratch.fields, mark)?;
-        self.expression(input, Expr::Table(fields, previous), line)
+        self.expression_with::<false>(input, Expr::Table(fields, previous), line)
     }
 
     /// Parse a parameter list and body after `function`.
@@ -682,7 +737,9 @@ impl Parser {
         self.rexpect(input, Kind::LParen)?;
         let mark = self.scratch.names.len();
         if method {
-            self.scratch.names.try_push(Text::new(b"self")?)?;
+            self.scratch
+                .names
+                .try_push(Lexeme::Owned(Text::new(b"self")?))?;
         }
         let mut allow_end = true;
         let vararg = loop {
@@ -726,7 +783,7 @@ impl Parser {
         if let Some(sign) = sign {
             self.ast.zero_signs.try_push((self.ast.exprs.len(), sign))?;
         }
-        self.expression(
+        self.expression_with::<false>(
             input,
             Expr::Function {
                 params,

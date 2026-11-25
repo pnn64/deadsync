@@ -66,7 +66,7 @@ impl Vm {
         let program = &self.programs[closure.program];
         let Prototype {
             code,
-            lines,
+            metadata,
             params,
             registers,
             vararg,
@@ -119,7 +119,7 @@ impl Vm {
         Some(Leaf {
             registers: usize::from(*registers),
             expression,
-            line: lines[return_pc],
+            line: metadata[return_pc].line,
         })
     }
 

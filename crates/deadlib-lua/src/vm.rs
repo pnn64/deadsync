@@ -1315,19 +1315,18 @@ impl Vm {
                     Constant::Nil => Value::Nil,
                     Constant::Boolean(v) => Value::Boolean(*v),
                     Constant::Number(v) => Value::Number(*v),
-                    Constant::String(s) => self.try_intern(s)?,
+                    Constant::String(_) | Constant::PooledString { .. } => self.bind_constant_string(
+                        k.string(&prototype.constant_strings)
+                            .expect("verified constant string"),
+                    )?,
                 });
             }
             constants.push(values);
-            let count = prototype
-                .debug
-                .native
-                .as_ref()
-                .map_or(prototype.debug.upvalues.len(), |native| native.wire.names);
+            let defined_names = prototype.debug.upvalue_names();
             let mut names = Buffer::new_in(memory.clone());
-            names.try_reserve_exact(count)?;
-            for name in &prototype.debug.upvalues[..count] {
-                let Value::String(id) = self.try_intern(name)? else {
+            names.try_reserve_exact(defined_names.len())?;
+            for name in defined_names {
+                let Value::String(id) = self.try_intern(prototype.debug.name(name))? else {
                     unreachable!()
                 };
                 names.push(id);
@@ -2019,14 +2018,14 @@ impl Vm {
                     }
                 }
                 if self.hooks.mask & (hooks::LINE | hooks::COUNT) != 0
-                    && self.hook_instruction(frame_index, pc, prototype.debug.hook_lines[pc])?
+                    && self.hook_instruction(frame_index, pc, prototype.metadata[pc].hook_line)?
                 {
                     continue 'frames;
                 }
                 self.charge()?;
                 let checkpoint_ready = std::mem::take(&mut numeric_checkpoint_ready);
                 let i = prototype.code[pc];
-                *error_line = prototype.lines[pc];
+                *error_line = prototype.metadata[pc].line;
                 pc += 1;
                 let a = base + usize::from(i.a);
                 let b = base + usize::from(i.b);

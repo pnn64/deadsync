@@ -10,7 +10,7 @@ fn definition(proto: &Prototype, end: usize, register: u8) -> Option<(usize, Ins
         let instruction = proto.code[pc];
         let a = instruction.a;
         let test_only = matches!(instruction.op, Op::JumpFalse | Op::JumpTrue)
-            && (proto.debug.hook_lines[pc] == 0
+            && (proto.metadata[pc].hook_line == 0
                 || last.is_some_and(|(_, previous): (usize, Instruction)| {
                     previous.c as usize == pc
                         && matches!(
@@ -55,7 +55,7 @@ fn local_name(proto: &Prototype, pc: usize, register: u8) -> Option<&[u8]> {
         (local.register == u16::from(register)
             && local.start as usize <= pc
             && pc < local.end as usize)
-            .then_some(local.name.as_ref())
+            .then(|| proto.debug.name(&local.name))
     })
 }
 
@@ -67,33 +67,31 @@ fn object_name(proto: &Prototype, pc: usize, mut register: u8) -> Option<(&[u8],
         let (producer, instruction) = definition(proto, pc, register)?;
         match instruction.op {
             Op::GetGlobal => {
-                let Constant::String(name) = &proto.constants[instruction.c as usize] else {
-                    return None;
-                };
+                let name =
+                    proto.constants[instruction.c as usize].string(&proto.constant_strings)?;
                 return Some((name, NameKind::Global));
             }
             Op::GetUpvalue => {
                 return Some((
-                    &proto.debug.upvalues[instruction.c as usize],
+                    proto
+                        .debug
+                        .name(&proto.debug.upvalues[instruction.c as usize]),
                     NameKind::Upvalue,
                 ));
             }
             Op::GetTable => {
                 let key = instruction.c as u8;
                 let name = if instruction.c >= crate::bytecode::RK {
-                    if let Constant::String(name) =
-                        &proto.constants[(instruction.c - crate::bytecode::RK) as usize]
-                    {
-                        name.as_ref()
-                    } else {
-                        b"?"
-                    }
+                    proto.constants[(instruction.c - crate::bytecode::RK) as usize]
+                        .string(&proto.constant_strings)
+                        .unwrap_or(b"?")
                 } else if local_name(proto, producer, key).is_none()
                     && let Some((_, load)) = definition(proto, producer, key)
                     && load.op == Op::Load
-                    && let Constant::String(name) = &proto.constants[load.c as usize]
+                    && let Some(name) =
+                        proto.constants[load.c as usize].string(&proto.constant_strings)
                 {
-                    name.as_ref()
+                    name
                 } else {
                     b"?"
                 };
@@ -274,7 +272,7 @@ impl Vm {
             {
                 let call = &proto.debug.calls[index];
                 if matches!(call.kind, NameKind::Method) {
-                    return Some((call.name.as_ref(), call.kind));
+                    return Some((proto.debug.name(&call.name), call.kind));
                 }
             }
             object_name(proto, pc, register as u8)

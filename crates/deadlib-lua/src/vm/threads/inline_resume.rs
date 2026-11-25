@@ -145,7 +145,7 @@ impl Vm {
             control,
             function: base + plan.function,
             level,
-            line: prototype.lines[caller.pc() - 1],
+            line: prototype.metadata[caller.pc() - 1].line,
         })
     }
 
@@ -243,7 +243,7 @@ impl Vm {
             if !in_range || yield_function != Value::Native(CO_YIELD) || level >= 200 {
                 return false;
             }
-            let line = prototype.lines[caller.pc() - 1];
+            let line = prototype.metadata[caller.pc() - 1].line;
             let index = Value::Number(index);
             let function = base + plan.function;
             let state = &mut self.threads[slot_index(thread.0)];
@@ -340,7 +340,7 @@ impl Vm {
         }
         let child_call = usize::from(instruction.a);
         let args = &registers[child_call + 1..child_call + 1 + count];
-        let line = prototype.lines[pc];
+        let line = prototype.metadata[pc].line;
 
         let state = &mut self.threads[slot_index(thread.0)];
         state.registers[base..end].copy_from_slice(&registers[..width]);

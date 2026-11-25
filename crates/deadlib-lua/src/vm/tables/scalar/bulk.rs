@@ -52,7 +52,7 @@ impl Vm {
         }
         let constants = &loaded.constants[closure.prototype];
         let mut code = &*prototype.code;
-        let mut lines = &*prototype.lines;
+        let mut metadata = &*prototype.metadata;
         let mut counter = None;
         let mut changed = None;
         if Self::sort_counter_prefix(code, prototype.params) {
@@ -89,7 +89,7 @@ impl Vm {
             });
             changed = Some(get.a);
             code = &code[3..];
-            lines = &lines[3..];
+            metadata = &metadata[3..];
         }
         let initial = |register: u16| -> Option<bool> {
             if changed.is_some_and(|r| u16::from(r) == register) {
@@ -105,7 +105,7 @@ impl Vm {
             return Some(Plan {
                 predicate: Predicate::Always(first.c == 1 && initial(u16::from(first.a))?),
                 counter,
-                line: lines[0],
+                line: metadata[0].line,
             });
         }
         let second = *code.get(1)?;
@@ -119,7 +119,7 @@ impl Vm {
                         first,
                         second,
                         code,
-                        lines,
+                        metadata,
                         prototype.params,
                         counter,
                     );
@@ -128,17 +128,17 @@ impl Vm {
             return Some(Plan {
                 predicate: Predicate::Always(value),
                 counter,
-                line: lines[1],
+                line: metadata[1].line,
             });
         }
-        self.bulk_numeric_plan(first, second, code, lines, prototype.params, counter)
+        self.bulk_numeric_plan(first, second, code, metadata, prototype.params, counter)
     }
     fn bulk_numeric_plan(
         &self,
         first: Instruction,
         second: Instruction,
         code: &[Instruction],
-        lines: &[u32],
+        metadata: &[crate::bytecode::InstructionMetadata],
         params: u16,
         counter: Option<Counter>,
     ) -> Option<Plan> {
@@ -149,13 +149,13 @@ impl Vm {
             return None;
         }
         let line = if second.op == Op::Return && second.c == 1 && second.a == first.a {
-            lines[1]
+            metadata[1].line
         } else if second.op == Op::Bool && second.c == 0 {
             let third = *code.get(2)?;
             if third.op != Op::Return || third.c != 1 || third.a != second.a {
                 return None;
             }
-            lines[2]
+            metadata[2].line
         } else {
             return None;
         };

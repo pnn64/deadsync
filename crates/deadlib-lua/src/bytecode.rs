@@ -151,6 +151,25 @@ pub(crate) enum Constant {
     Boolean(bool),
     Number(f64),
     String(Box<[u8]>),
+    PooledString { start: u32, end: u32 },
+}
+
+impl Constant {
+    pub(crate) fn string<'a>(&'a self, pool: &'a [u8]) -> Option<&'a [u8]> {
+        match self {
+            Self::String(bytes) => Some(bytes),
+            Self::PooledString { start, end } => pool.get(*start as usize..*end as usize),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn owned_bytes(&self) -> usize {
+        if let Self::String(bytes) = self {
+            bytes.len()
+        } else {
+            0
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -175,8 +194,46 @@ pub(crate) struct NativeDebug {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) enum DebugName {
+    Owned(Box<[u8]>),
+    Pooled { start: u32, end: u32 },
+}
+
+impl DebugName {
+    pub(crate) fn store(pool: &mut Vec<u8>, bytes: &[u8]) -> Result<Self, Error> {
+        let start = pool.len();
+        if let Some(end) = start
+            .checked_add(bytes.len())
+            .and_then(|end| u32::try_from(end).ok())
+        {
+            pool.try_extend_from_slice(bytes)?;
+            Ok(Self::Pooled {
+                start: start as u32,
+                end,
+            })
+        } else {
+            Ok(Self::Owned(bytes.try_boxed()?))
+        }
+    }
+
+    fn bytes<'a>(&'a self, pool: &'a [u8]) -> Option<&'a [u8]> {
+        match self {
+            Self::Owned(bytes) => Some(bytes),
+            Self::Pooled { start, end } => pool.get(*start as usize..*end as usize),
+        }
+    }
+
+    fn heap_bytes(&self) -> usize {
+        match self {
+            Self::Owned(bytes) => bytes.len(),
+            Self::Pooled { .. } => 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct DebugLocal {
-    pub name: Box<[u8]>,
+    pub name: DebugName,
     pub start: u32,
     pub end: u32,
     pub register: u16,
@@ -207,7 +264,7 @@ impl NameKind {
 #[derive(Clone, Debug)]
 pub(crate) struct DebugCall {
     pub pc: u32,
-    pub name: Box<[u8]>,
+    pub name: DebugName,
     pub kind: NameKind,
     pub temporaries: std::ops::Range<u32>,
 }
@@ -217,36 +274,67 @@ pub(crate) struct DebugInfo {
     pub stack: u16,
     pub native: Option<Box<NativeDebug>>,
     pub defined: [u32; 2],
-    pub upvalues: Box<[Box<[u8]>]>,
+    pub names: Box<[u8]>,
+    pub upvalues: Box<[DebugName]>,
     pub locals: Box<[DebugLocal]>,
     pub calls: Box<[DebugCall]>,
     pub active_lines: Box<[u32]>,
-    pub hook_lines: Box<[u32]>,
     pub temporaries: Box<[u8]>,
 }
 impl DebugInfo {
+    pub(crate) fn name<'a>(&'a self, name: &'a DebugName) -> &'a [u8] {
+        name.bytes(&self.names).expect("verified debug name")
+    }
+
+    pub(crate) fn upvalue_names(&self) -> &[DebugName] {
+        let count = self
+            .native
+            .as_ref()
+            .map_or(self.upvalues.len(), |native| native.wire.names);
+        &self.upvalues[..count]
+    }
+
     pub fn heap_bytes(&self) -> usize {
         self.native.as_ref().map_or(0, |n| {
             std::mem::size_of_val(n.as_ref()) + n.wire.heap_bytes()
         }) + std::mem::size_of_val(self.upvalues.as_ref())
             + std::mem::size_of_val(self.active_lines.as_ref())
-            + std::mem::size_of_val(self.hook_lines.as_ref())
-            + self.upvalues.iter().map(|n| n.len()).sum::<usize>()
+            + self.names.len()
+            + self
+                .upvalues
+                .iter()
+                .map(DebugName::heap_bytes)
+                .sum::<usize>()
             + std::mem::size_of_val(self.locals.as_ref())
-            + self.locals.iter().map(|l| l.name.len()).sum::<usize>()
+            + self
+                .locals
+                .iter()
+                .map(|l| l.name.heap_bytes())
+                .sum::<usize>()
             + std::mem::size_of_val(self.calls.as_ref())
-            + self.calls.iter().map(|c| c.name.len()).sum::<usize>()
+            + self
+                .calls
+                .iter()
+                .map(|c| c.name.heap_bytes())
+                .sum::<usize>()
             + self.temporaries.len()
     }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct InstructionMetadata {
+    pub line: u32,
+    pub hook_line: u32,
+    pub gc_live: u32,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct Prototype {
     pub code: Box<[Instruction]>,
-    pub lines: Box<[u32]>,
-    pub gc_live: Box<[u32]>,
+    pub metadata: Box<[InstructionMetadata]>,
     pub gc_maps: Box<[[u64; 4]]>,
     pub constants: Box<[Constant]>,
+    pub constant_strings: Box<[u8]>,
     pub registers: u16,
     pub params: u16,
     pub vararg: bool,
@@ -278,8 +366,7 @@ impl ProgramData {
         for prototype in &self.prototypes {
             bytes += std::mem::size_of_val(prototype.code.as_ref())
                 + prototype.debug.heap_bytes()
-                + std::mem::size_of_val(prototype.lines.as_ref())
-                + std::mem::size_of_val(prototype.gc_live.as_ref())
+                + std::mem::size_of_val(prototype.metadata.as_ref())
                 + std::mem::size_of_val(prototype.gc_maps.as_ref())
                 + std::mem::size_of_val(prototype.upvalues.as_ref())
                 + std::mem::size_of_val(prototype.bindings.as_ref())
@@ -289,16 +376,11 @@ impl ProgramData {
                     .map(|binding| std::mem::size_of_val(binding.upvalues.as_ref()))
                     .sum::<usize>()
                 + std::mem::size_of_val(prototype.constants.as_ref())
+                + prototype.constant_strings.len()
                 + prototype
                     .constants
                     .iter()
-                    .map(|constant| {
-                        if let Constant::String(bytes) = constant {
-                            bytes.len()
-                        } else {
-                            0
-                        }
-                    })
+                    .map(Constant::owned_bytes)
                     .sum::<usize>();
         }
         bytes
@@ -419,7 +501,7 @@ impl Prototype {
         if self.debug.native.as_ref().is_some_and(|n| !n.has_lines) {
             0
         } else {
-            i64::from(self.lines[pc] as i32)
+            i64::from(self.metadata[pc].line as i32)
         }
     }
 
@@ -438,7 +520,7 @@ impl Prototype {
         let fail = |pc: usize, message: &'static str| {
             Error::new_static(
                 ErrorKind::Bytecode,
-                self.lines.get(pc).copied().unwrap_or(0),
+                self.metadata.get(pc).map_or(0, |m| m.line),
                 message,
             )
         };
@@ -447,17 +529,13 @@ impl Prototype {
             || self.registers == 0
             || self.params > self.registers
             || self.upvalues.len() > if self.debug.native.is_some() { 255 } else { 60 }
-            || self
-                .debug
-                .native
-                .as_ref()
-                .is_some_and(|n| n.stack == 0 || n.stack > self.registers)
-            || self.lines.len() != self.code.len()
-            || self.debug.hook_lines.len() != self.code.len()
-            || self.gc_live.len() != self.code.len()
-            || self.gc_live.iter().any(|&m| {
-                (m as u16 as usize) >= self.gc_maps.len()
-                    || ((m >> 16) as usize) >= self.gc_maps.len()
+            || self.debug.native.as_ref().is_some_and(|n| {
+                n.stack == 0 || n.stack > self.registers || n.wire.names > self.debug.upvalues.len()
+            })
+            || self.metadata.len() != self.code.len()
+            || self.metadata.iter().any(|m| {
+                (m.gc_live as u16 as usize) >= self.gc_maps.len()
+                    || ((m.gc_live >> 16) as usize) >= self.gc_maps.len()
             })
             || self.gc_maps.iter().any(|mask| {
                 // Any live bit at or above the register count is invalid.
@@ -467,12 +545,24 @@ impl Prototype {
                 })
             })
             || self.code.is_empty()
+            || self.constants.iter().any(|constant| {
+                matches!(constant, Constant::PooledString { start, end }
+                    if start > end || *end as usize > self.constant_strings.len())
+            })
             || self.debug.upvalues.len() != self.upvalues.len()
+            || self
+                .debug
+                .upvalues
+                .iter()
+                .any(|name| name.bytes(&self.debug.names).is_none())
             || self.debug.defined[0] > self.debug.defined[1]
             || self.debug.active_lines.first() == Some(&0)
             || self.debug.active_lines.windows(2).any(|l| l[0] >= l[1])
             || self.debug.locals.iter().any(|l| {
-                l.start > l.end || l.end as usize > self.code.len() || l.register >= self.registers
+                l.start > l.end
+                    || l.end as usize > self.code.len()
+                    || l.register >= self.registers
+                    || l.name.bytes(&self.debug.names).is_none()
             })
             || self.debug.calls.windows(2).any(|c| c[0].pc >= c[1].pc)
             || self.debug.calls.iter().any(|c| {
@@ -480,6 +570,7 @@ impl Prototype {
                     return true;
                 };
                 !matches!(i.op, Op::Call | Op::TailCall | Op::CallIter)
+                    || c.name.bytes(&self.debug.names).is_none()
                     || c.temporaries.start > c.temporaries.end
                     || c.temporaries.end as usize > self.debug.temporaries.len()
                     || self.debug.temporaries
@@ -492,7 +583,8 @@ impl Prototype {
                         .any(|&r| {
                             r >= i.a
                                 || u16::from(r) >= self.registers
-                                || self.gc_maps[self.gc_live[c.pc as usize] as u16 as usize]
+                                || self.gc_maps
+                                    [self.metadata[c.pc as usize].gc_live as u16 as usize]
                                     [usize::from(r) / 64]
                                     & (1u64 << (r % 64))
                                     == 0
@@ -526,7 +618,9 @@ impl Prototype {
                         .constants
                         .get(i.c as usize)
                         .ok_or_else(|| fail(pc, "constant out of bounds"))?;
-                    if i.op != Op::Load && !matches!(k, Constant::String(_)) {
+                    if i.op != Op::Load
+                        && !matches!(k, Constant::String(_) | Constant::PooledString { .. })
+                    {
                         return Err(fail(pc, "global name must be a string"));
                     }
                     if i.op == Op::Load && (i.b > 1 || (i.b == 1 && !matches!(k, Constant::Nil))) {
@@ -761,7 +855,7 @@ mod tests {
                         .unwrap();
                     jump.c = boolean as u32;
                 }
-                _ => proto.debug.hook_lines = Box::new([]),
+                _ => proto.metadata = Box::new([]),
             }
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
         }
@@ -846,7 +940,7 @@ mod tests {
                 .iter()
                 .any(|i| i.op.rk_b() && u32::from(i.b) >= RK)
         );
-        for corrupt in 0..4 {
+        for corrupt in 0..5 {
             let mut bad = good.clone();
             let data = Shared::make_mut(&mut bad.data);
             let p = &mut data.prototypes[data.entry as usize];
@@ -855,6 +949,17 @@ mod tests {
                 0 => p.code.iter_mut().find(|i| i.op.rk_b()).unwrap().b = (RK + count) as u16,
                 1 => p.code.iter_mut().find(|i| i.op.rk_c()).unwrap().c = RK + count,
                 2 => p.code.iter_mut().find(|i| i.op == Op::GetTable).unwrap().b = RK as u16,
+                3 => {
+                    let constant = p
+                        .constants
+                        .iter_mut()
+                        .find(|constant| matches!(constant, Constant::PooledString { .. }))
+                        .unwrap();
+                    *constant = Constant::PooledString {
+                        start: 0,
+                        end: u32::MAX,
+                    };
+                }
                 _ => p.debug.stack = p.registers + 1,
             }
             assert_eq!(bad.verify().unwrap_err().kind(), ErrorKind::Bytecode);
@@ -869,8 +974,8 @@ mod tests {
             let data = Shared::make_mut(&mut p.data);
             let prototype = &mut data.prototypes[data.entry as usize];
             match corrupt {
-                0 => prototype.gc_live = Box::new([]),
-                1 => prototype.gc_live[0] = u32::MAX,
+                0 => prototype.metadata = Box::new([]),
+                1 => prototype.metadata[0].gc_live = u32::MAX,
                 _ => prototype.gc_maps[0][3] = 1u64 << 63,
             }
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
@@ -881,7 +986,7 @@ mod tests {
     fn verifier_rejects_corrupt_debug_ranges_names_and_call_sites() {
         let good =
             crate::compile(b"local x=1;local function f()return x end;f();return f()").unwrap();
-        for corrupt in 0..10 {
+        for corrupt in 0..12 {
             let mut p = good.clone();
             let data = Shared::make_mut(&mut p.data);
             let proto = &mut data.prototypes[data.entry as usize];
@@ -902,10 +1007,17 @@ mod tests {
                         .upvalues = Box::new([])
                 }
                 8 => proto.debug.calls[0].temporaries = 0..u32::MAX,
-                _ => {
+                9 => {
                     proto.debug.temporaries =
                         Box::new([proto.code[proto.debug.calls[0].pc as usize].a]);
                     proto.debug.calls[0].temporaries = 0..1;
+                }
+                10 => proto.debug.locals[0].name = DebugName::Pooled { start: 2, end: 1 },
+                _ => {
+                    proto.debug.calls[0].name = DebugName::Pooled {
+                        start: 0,
+                        end: u32::MAX,
+                    }
                 }
             }
             assert_eq!(

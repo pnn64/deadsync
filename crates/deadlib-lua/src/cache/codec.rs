@@ -176,8 +176,8 @@ impl Writer {
             w.u16(i.b)?;
             w.u32(i.c)
         })?;
-        self.words(&p.lines)?;
-        self.words(&p.gc_live)?;
+        self.list(&p.metadata, |w, metadata| w.u32(metadata.line))?;
+        self.list(&p.metadata, |w, metadata| w.u32(metadata.gc_live))?;
         self.list(&p.gc_maps, |w, mask| {
             for &word in mask {
                 w.u64(word)?;
@@ -194,9 +194,9 @@ impl Writer {
                 w.u8(2)?;
                 w.u64(value.to_bits())
             }
-            Constant::String(value) => {
+            Constant::String(_) | Constant::PooledString { .. } => {
                 w.u8(3)?;
-                w.bytes(value)
+                w.bytes(k.string(&p.constant_strings)?)
             }
         })?;
         self.list(&p.bindings, |w, binding| {
@@ -208,16 +208,16 @@ impl Writer {
         for n in d.defined {
             self.u32(n)?;
         }
-        self.list(&d.upvalues, |w, name| w.bytes(name))?;
+        self.list(&d.upvalues, |w, name| w.bytes(d.name(name)))?;
         self.list(&d.locals, |w, local| {
-            w.bytes(&local.name)?;
+            w.bytes(d.name(&local.name))?;
             w.u32(local.start)?;
             w.u32(local.end)?;
             w.u16(local.register)
         })?;
         self.list(&d.calls, |w, call| {
             w.u32(call.pc)?;
-            w.bytes(&call.name)?;
+            w.bytes(d.name(&call.name))?;
             w.u8(match call.kind {
                 NameKind::Unknown => 0,
                 NameKind::Local => 1,
@@ -230,7 +230,7 @@ impl Writer {
             w.u32(call.temporaries.end)
         })?;
         self.words(&d.active_lines)?;
-        self.words(&d.hook_lines)?;
+        self.list(&p.metadata, |w, metadata| w.u32(metadata.hook_line))?;
         self.bytes(&d.temporaries)?;
         self.u8(u8::from(d.native.is_some()))?;
         if let Some(n) = &d.native {
@@ -315,6 +315,19 @@ impl<'a> Reader<'a> {
     fn words(&mut self) -> Option<Box<[u32]>> {
         self.list(4, Self::u32)
     }
+    fn metadata_words(
+        &mut self,
+        metadata: &mut [InstructionMetadata],
+        mut write: impl FnMut(&mut InstructionMetadata, u32),
+    ) -> Option<()> {
+        if self.u32()? as usize != metadata.len() {
+            return None;
+        }
+        for instruction in metadata {
+            write(instruction, self.u32()?);
+        }
+        Some(())
+    }
     fn upvalues(&mut self) -> Option<Box<[Upvalue]>> {
         self.list(3, |r| {
             let tag = r.u8()?;
@@ -340,8 +353,13 @@ impl<'a> Reader<'a> {
                 c: r.u32()?,
             })
         })?;
-        let lines = self.words()?;
-        let gc_live = self.words()?;
+        let mut metadata = self.list(4, |r| {
+            Some(InstructionMetadata {
+                line: r.u32()?,
+                ..Default::default()
+            })
+        })?;
+        self.metadata_words(&mut metadata, |m, value| m.gc_live = value)?;
         let gc_maps = self.list(32, |r| Some([r.u64()?, r.u64()?, r.u64()?, r.u64()?]))?;
         let constants = self.list(1, |r| match r.u8()? {
             0 => Some(Constant::Nil),
@@ -358,10 +376,10 @@ impl<'a> Reader<'a> {
         })?;
         let stack = self.u16()?;
         let defined = [self.u32()?, self.u32()?];
-        let names = self.list(4, Self::boxed)?;
+        let names = self.list(4, |r| Some(DebugName::Owned(r.boxed()?)))?;
         let locals = self.list(14, |r| {
             Some(DebugLocal {
-                name: r.boxed()?,
+                name: DebugName::Owned(r.boxed()?),
                 start: r.u32()?,
                 end: r.u32()?,
                 register: r.u16()?,
@@ -369,7 +387,7 @@ impl<'a> Reader<'a> {
         })?;
         let calls = self.list(17, |r| {
             let pc = r.u32()?;
-            let name = r.boxed()?;
+            let name = DebugName::Owned(r.boxed()?);
             let kind = match r.u8()? {
                 0 => NameKind::Unknown,
                 1 => NameKind::Local,
@@ -387,7 +405,7 @@ impl<'a> Reader<'a> {
             })
         })?;
         let active_lines = self.words()?;
-        let hook_lines = self.words()?;
+        self.metadata_words(&mut metadata, |m, value| m.hook_line = value)?;
         let temporaries = self.boxed()?;
         let native = if self.boolean()? {
             self.charge(size_of::<NativeDebug>())?;
@@ -415,20 +433,20 @@ impl<'a> Reader<'a> {
             compat_arg,
             upvalues,
             code,
-            lines,
-            gc_live,
+            metadata,
             gc_maps,
             constants,
+            constant_strings: Box::default(),
             bindings,
             debug: DebugInfo {
                 stack,
                 native,
                 defined,
+                names: Box::default(),
                 upvalues: names,
                 locals,
                 calls,
                 active_lines,
-                hook_lines,
                 temporaries,
             },
         })
@@ -444,27 +462,20 @@ fn decoded_bytes(data: &ProgramData) -> usize {
         + size_of_val(data.prototypes.as_ref());
     for p in &data.prototypes {
         bytes += size_of_val(p.code.as_ref())
-            + size_of_val(p.lines.as_ref())
-            + size_of_val(p.gc_live.as_ref())
+            + size_of_val(p.metadata.as_ref())
             + size_of_val(p.gc_maps.as_ref())
             + size_of_val(p.upvalues.as_ref())
             + size_of_val(p.constants.as_ref())
+            + p.constant_strings.len()
             + size_of_val(p.bindings.as_ref())
+            // Each pooled debug name occupies its own range. Decoding these
+            // names into separate boxes uses the same byte payload.
             + p.debug.heap_bytes()
             + p.bindings
                 .iter()
                 .map(|b| size_of_val(b.upvalues.as_ref()))
                 .sum::<usize>()
-            + p.constants
-                .iter()
-                .map(|k| {
-                    if let Constant::String(s) = k {
-                        s.len()
-                    } else {
-                        0
-                    }
-                })
-                .sum::<usize>();
+            + p.constants.iter().map(Constant::owned_bytes).sum::<usize>();
     }
     if data.prototypes.iter().any(|p| p.debug.native.is_some()) {
         bytes += data.prototypes.len();

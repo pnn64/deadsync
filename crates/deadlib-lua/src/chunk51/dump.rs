@@ -157,9 +157,12 @@ fn serialize(data: &ProgramData, entry: usize, blocks: bool) -> Result<Output, E
                             output.block(&[3])?;
                             output.block(&n.to_ne_bytes())?;
                         }
-                        Constant::String(s) => {
+                        Constant::String(_) | Constant::PooledString { .. } => {
                             output.block(&[4])?;
-                            output.string(Some(s))?;
+                            let bytes = k
+                                .string(&p.constant_strings)
+                                .expect("verified constant string");
+                            output.string(Some(bytes))?;
                         }
                     }
                 }
@@ -184,7 +187,7 @@ fn serialize(data: &ProgramData, entry: usize, blocks: bool) -> Result<Output, E
                 for index in 0..count {
                     let local =
                         &p.debug.locals[remapped.map_or(index, |ranges| ranges[index].index)];
-                    output.string(Some(&local.name))?;
+                    output.string(Some(p.debug.name(&local.name)))?;
                     let bounds = match (&body, remapped) {
                         (Body::Native(wire), _) => wire.locals[index],
                         (Body::Source(_), Some(ranges)) => [ranges[index].start, ranges[index].end],
@@ -203,7 +206,7 @@ fn serialize(data: &ProgramData, entry: usize, blocks: bool) -> Result<Output, E
                 };
                 output.integer(count)?;
                 for name in &p.debug.upvalues[..count] {
-                    output.string(Some(name))?;
+                    output.string(Some(p.debug.name(name)))?;
                 }
             }
         }

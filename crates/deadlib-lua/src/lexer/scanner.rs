@@ -1,8 +1,7 @@
 //! Resumable lexical state over append-only input, with no token replay.
-use super::{Kind, Token, parse_number};
+use super::{Kind, Lexeme, Token, parse_number};
 use crate::memory::fallible::{self, SliceExt, VecExt};
-use crate::memory::text::Text;
-use crate::pattern::{byte_run, scan_boundary};
+use crate::pattern::{ascii_alphanumeric_lanes, byte_run, scan_boundary};
 use crate::{Error, ErrorKind};
 
 #[derive(Clone, Copy, Debug)]
@@ -74,7 +73,8 @@ fn empty(line: u32) -> Token {
         kind: Kind::Eof,
         line,
         end_line: line,
-        text: Text::default(),
+        symbol: 0,
+        text: Lexeme::default(),
         number: 0.0,
     }
 }
@@ -89,6 +89,29 @@ fn scan_token_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
 
 fn word_boundary(byte: u8) -> bool {
     !(byte.is_ascii_alphanumeric() | (byte == b'_'))
+}
+
+fn ascii_identifier_end(bytes: &[u8]) -> usize {
+    const LOW: u64 = 0x7f7f_7f7f_7f7f_7f7f;
+    const HIGH: u64 = !LOW;
+    const UNDERSCORES: u64 = u64::from_le_bytes([b'_'; 8]);
+    let (chunks, tail) = bytes.as_chunks::<8>();
+    for (index, &chunk) in chunks.iter().enumerate() {
+        let word = u64::from_le_bytes(chunk);
+        let different = word ^ UNDERSCORES;
+        // The low seven bits plus 127 fit in one byte. This marks every
+        // underscore exactly, even next to a non-ASCII byte.
+        let underscores = !(((different & LOW) + LOW) | different) & HIGH;
+        let boundary = !(ascii_alphanumeric_lanes(word) | underscores) & HIGH;
+        if boundary != 0 {
+            return index * 8 + (boundary.trailing_zeros() / 8) as usize;
+        }
+    }
+    bytes.len() - tail.len()
+        + tail
+            .iter()
+            .position(|&byte| word_boundary(byte))
+            .unwrap_or(tail.len())
 }
 
 fn number_boundary(byte: u8) -> bool {
@@ -183,9 +206,10 @@ impl Scanner {
                         .expect("long string delimiter")
                         + 2
                 };
-                let mut out = fallible::with_capacity(prefix * 2 + token.text.len())?;
+                let text = token.text.bytes(raw);
+                let mut out = fallible::with_capacity(prefix * 2 + text.len())?;
                 out.try_extend_from_slice(&raw[..prefix])?;
-                out.try_extend_from_slice(&token.text)?;
+                out.try_extend_from_slice(text)?;
                 out.try_extend(
                     raw[..prefix]
                         .iter()
@@ -290,17 +314,24 @@ impl Scanner {
     }
 
     fn string(&mut self) -> Result<(), Error> {
-        self.token.text = std::mem::take(&mut self.text)
-            .try_into_boxed_slice()?
-            .into();
+        self.token.text = Lexeme::Owned(
+            std::mem::take(&mut self.text)
+                .try_into_boxed_slice()?
+                .into(),
+        );
         self.emit(Kind::String);
         Ok(())
     }
 
     /// Scan one common token of complete input into `out` in a single pass.
     /// `false` leaves the cursor at the token start for the resumable states.
-    /// Produced tokens, spans and line counts match the state machine exactly.
-    fn fast(&mut self, input: &[u8], out: &mut Token) -> Result<bool, Error> {
+    /// Tokens and line counts match the state machine. The parser that restarts
+    /// on errors only needs scanner spans for names too large to borrow.
+    fn fast<const DIAGNOSTICS: bool>(
+        &mut self,
+        input: &[u8],
+        out: &mut Token,
+    ) -> Result<bool, Error> {
         if self.pos == 0 && input.len() >= 64 {
             let first = input[0];
             if matches!(first, b'\n' | b'\r') && input[..8] == [first; 8] {
@@ -310,42 +341,46 @@ impl Scanner {
                 self.line += count as u32;
             }
         }
-        loop {
-            match input.get(self.pos) {
-                Some(b' ' | b'\t' | 11 | 12) => {
+        let c = loop {
+            let Some(&byte) = input.get(self.pos) else {
+                if DIAGNOSTICS {
+                    self.buffer = Buffer::Empty;
+                }
+                *out = empty(self.line);
+                return Ok(true);
+            };
+            match byte {
+                b' ' | b'\t' | 11 | 12 => {
                     self.skip_horizontal_space(input);
                 }
-                Some(b'\n' | b'\r') => {
+                b'\n' | b'\r' => {
                     self.newline(input, true)?;
                 }
-                Some(b'-')
+                b'-'
                     if input[self.pos..].starts_with(b"--")
                         && input.get(self.pos + 2) != Some(&b'[') =>
                 {
                     self.pos += 2;
                     self.skip_line_comment(input);
                 }
-                _ => break,
+                _ => break byte,
             }
-        }
-        let start = self.pos;
-        let Some(&c) = input.get(start) else {
-            return Ok(false);
         };
-        let mut text = Text::default();
+        let start = self.pos;
+        let mut text = Lexeme::default();
         let mut number = 0.0;
         let next = input.get(start + 1).copied();
         let (kind, end) = match c {
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 let tail = &input[start + 1..];
-                let end = start + 1 + scan_token_boundary(tail, word_boundary);
+                let end = start + 1 + ascii_identifier_end(tail);
                 if input.get(end).is_some_and(|&b| b >= 128) {
                     return Ok(false);
                 }
                 let word = &input[start..end];
                 let kind = keyword(word);
                 if kind == Kind::Name {
-                    text = Text::new(word)?;
+                    text = Lexeme::source(input, start, end)?;
                 }
                 (kind, end)
             }
@@ -374,7 +409,7 @@ impl Scanner {
                 if rest.get(len) != Some(&c) {
                     return Ok(false);
                 }
-                text = Text::new(&rest[..len])?;
+                text = Lexeme::source(input, start + 1, start + 1 + len)?;
                 (Kind::String, start + len + 2)
             }
             b'-' if next != Some(b'-') => (Kind::Minus, start + 1),
@@ -417,17 +452,18 @@ impl Scanner {
             b',' => (Kind::Comma, start + 1),
             _ => return Ok(false),
         };
-        // The scanner's own token stays pristine: this path builds its result
-        // directly and records only the span that `emit` would have recorded.
-        self.start = start;
         self.pos = end;
-        self.buffer = match kind {
-            Kind::String => Buffer::String(start, end),
-            Kind::Dot | Kind::Concat | Kind::Dots => Buffer::Raw(start, start + 1),
-            Kind::Name | Kind::Number => Buffer::Raw(start, end),
-            _ if c.is_ascii_alphabetic() => Buffer::Raw(start, end),
-            _ => Buffer::Empty,
-        };
+        if DIAGNOSTICS {
+            self.buffer = match kind {
+                Kind::String => Buffer::String(start, end),
+                Kind::Dot | Kind::Concat | Kind::Dots => Buffer::Raw(start, start + 1),
+                Kind::Name | Kind::Number => Buffer::Raw(start, end),
+                _ if c.is_ascii_alphabetic() => Buffer::Raw(start, end),
+                _ => Buffer::Empty,
+            };
+        } else if kind == Kind::Name && matches!(text, Lexeme::Owned(_)) {
+            self.buffer = Buffer::Raw(start, end);
+        }
         out.kind = kind;
         out.line = self.line;
         out.end_line = self.line;
@@ -436,9 +472,9 @@ impl Scanner {
         Ok(true)
     }
 
-    /// Scan the next token of complete input into `out`.
+    /// Scan complete input for the parser that restarts on a syntax error.
     pub(crate) fn next_closed(&mut self, input: &[u8], out: &mut Token) -> Result<(), Error> {
-        if matches!(self.state, State::Skip) && self.fast(input, out)? {
+        if matches!(self.state, State::Skip) && self.fast::<false>(input, out)? {
             return Ok(());
         }
         *out = self
@@ -450,7 +486,7 @@ impl Scanner {
     pub(crate) fn next(&mut self, input: &[u8], closed: bool) -> Result<Option<Token>, Error> {
         if closed && matches!(self.state, State::Skip) {
             let mut token = Token::default();
-            if self.fast(input, &mut token)? {
+            if self.fast::<true>(input, &mut token)? {
                 return Ok(Some(token));
             }
         }
@@ -631,7 +667,7 @@ impl Scanner {
                     let text = &input[self.start..self.pos];
                     let kind = keyword(text);
                     if kind == Kind::Name {
-                        self.token.text = Text::new(text)?;
+                        self.token.text = Lexeme::source(input, self.start, self.pos)?;
                     }
                     self.emit(kind);
                 }
@@ -793,7 +829,15 @@ impl Scanner {
                     }
                     Some(c) if c == quote => {
                         self.pos += 1;
-                        self.string()?;
+                        // Every escape shortens the spelling by at least one
+                        // byte. An equal length still denotes the source bytes.
+                        if self.text.len() == self.pos - self.start - 2 {
+                            self.token.text = Lexeme::source(input, self.start + 1, self.pos - 1)?;
+                            self.text.clear();
+                            self.emit(Kind::String);
+                        } else {
+                            self.string()?;
+                        }
                     }
                     Some(b'\\') => {
                         self.pos += 1;
@@ -876,6 +920,23 @@ mod tests {
     type Observed = (Kind, u32, u32, Vec<u8>, u64);
     type Outcome = Result<Vec<Observed>, (ErrorKind, u32, String)>;
 
+    #[test]
+    fn identifier_boundary_matches_scalar_classification_at_each_byte() {
+        let words = *b"a_0BCd3__e4F5gH_6I7__j8K9z";
+        for index in 0..words.len() {
+            for byte in 0..=u8::MAX {
+                let mut input = words;
+                input[index] = byte;
+                let expected = if word_boundary(byte) {
+                    index
+                } else {
+                    input.len()
+                };
+                assert_eq!(ascii_identifier_end(&input), expected, "{index} {byte}");
+            }
+        }
+    }
+
     fn tokens(source: &[u8], ends: &[usize]) -> Outcome {
         let mut scanner = Scanner::default();
         let mut result = Vec::new();
@@ -892,7 +953,7 @@ mod tests {
                     token.kind,
                     token.line,
                     token.end_line,
-                    token.text.to_vec(),
+                    token.text.bytes(source).to_vec(),
                     token.number.to_bits(),
                 ));
                 if done {
@@ -1009,11 +1070,11 @@ mod tests {
     }
 
     #[test]
-    fn quoted_literals_preserve_bytes_and_inline_storage_boundary() {
+    fn unescaped_literals_borrow_source_and_escaped_literals_preserve_bytes() {
         for (source, decoded, heap_bytes) in [
             (b"''".as_slice(), b"".as_slice(), 0),
             (b"\"abcdefg\"", b"abcdefg", 0),
-            (b"'abcdefgh'", b"abcdefgh", 8),
+            (b"'abcdefgh'", b"abcdefgh", 0),
             (b"'\xff'", b"\xff", 0),
             (b"\"a\\nb\"", b"a\nb", 3),
         ] {
@@ -1021,12 +1082,16 @@ mod tests {
             let mut token = Token::default();
             scanner.next_closed(source, &mut token).unwrap();
             assert_eq!(token.kind, Kind::String, "{source:?}");
-            assert_eq!(token.text.as_ref(), decoded, "{source:?}");
+            assert_eq!(token.text.bytes(source), decoded, "{source:?}");
             assert_eq!(token.text.heap_bytes(), heap_bytes, "{source:?}");
 
             let slow = Scanner::default().slow(source, true).unwrap().unwrap();
             assert_eq!(slow.kind, token.kind, "{source:?}");
-            assert_eq!(slow.text.as_ref(), token.text.as_ref(), "{source:?}");
+            assert_eq!(
+                slow.text.bytes(source),
+                token.text.bytes(source),
+                "{source:?}"
+            );
             assert_eq!((slow.line, slow.end_line), (token.line, token.end_line));
         }
     }

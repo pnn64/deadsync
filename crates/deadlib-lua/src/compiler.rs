@@ -5,11 +5,12 @@ use crate::memory::fallible::{self, SliceExt, VecExt};
 use crate::{
     Error, ErrorKind,
     bytecode::{
-        BOOLEAN_SKIP, COMPARE_BRANCH, Constant, DebugCall, DebugInfo, DebugLocal, Instruction,
-        NameKind, OPEN, OPEN_ARGS, Op, Program, Prototype, RK, Upvalue,
+        BOOLEAN_SKIP, COMPARE_BRANCH, Constant, DebugCall, DebugInfo, DebugLocal, DebugName,
+        Instruction, InstructionMetadata, NameKind, OPEN, OPEN_ARGS, Op, Program, Prototype,
+        RK, Upvalue,
     },
-    lexer::Kind,
-    parser::{Ast, Expr, ExprId, Stmt, StmtId},
+    lexer::{Kind, Lexeme},
+    parser::{Ast, Expr, ExprId, NameBinding, Stmt, StmtId},
 };
 
 mod boolean;
@@ -52,12 +53,14 @@ struct Local {
 }
 const TAIL: u32 = OPEN - 1;
 const RK_LOAD: u16 = 2;
+#[derive(Clone, Copy)]
 enum Target {
     Local(u8),
     Upvalue(u16),
     Global(u32),
     Index(u8, TargetKey),
 }
+#[derive(Clone, Copy)]
 enum TargetKey {
     Register(u8),
     Constant(u32),
@@ -111,8 +114,9 @@ struct Function {
     defined: [u32; 2],
     debug_locals: Vec<DebugLocal>,
     debug_calls: Vec<DebugCall>,
+    debug_names: Vec<u8>,
     debug_temporaries: Vec<u8>,
-    debug_lines: Vec<u32>,
+    active_lines: Vec<u32>,
     hook_visible: usize,
     logical_tests: Vec<usize>,
     debug_stack: u16,
@@ -141,8 +145,9 @@ impl Function {
         self.defined = [0; 2];
         self.debug_locals.clear();
         self.debug_calls.clear();
+        self.debug_names.clear();
         self.debug_temporaries.clear();
-        self.debug_lines.clear();
+        self.active_lines.clear();
         self.hook_visible = 0;
         self.logical_tests.clear();
         self.debug_stack = 0;
@@ -152,6 +157,7 @@ impl Function {
 
 struct Compiler<'a> {
     ast: &'a Ast,
+    source: &'a [u8],
     function: Function,
     parents: Vec<Function>,
     /// Finished functions whose cleared buffers serve later nested functions.
@@ -161,6 +167,8 @@ struct Compiler<'a> {
     prototypes: Vec<Prototype>,
     folded: Vec<Option<f64>>,
     tasks: Vec<Task<'a>>,
+    /// Assignment targets nest if a target or value contains a function.
+    assignment_targets: Vec<Target>,
     result: u8,
     boolean: boolean::Boolean,
     line: u32,
@@ -170,9 +178,11 @@ struct Compiler<'a> {
 #[derive(Default)]
 pub(crate) struct Spare {
     functions: Vec<Function>,
+    parents: Vec<Function>,
     names: Vec<u8>,
     folded: Vec<Option<f64>>,
     tasks: Vec<Task<'static>>,
+    assignment_targets: Vec<Target>,
 }
 
 /// Reuse an empty continuation stack for a borrow of a different syntax tree.
@@ -189,12 +199,17 @@ fn drain_boxed<T>(values: &mut Vec<T>) -> Result<Box<[T]>, Error> {
     exact.try_into_boxed_slice()
 }
 
-pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
-    compile_in(&ast, name, &mut Spare::default())
+pub(crate) fn compile(ast: Ast, source: &[u8], name: &[u8]) -> Result<Program, Error> {
+    compile_in(&ast, source, name, &mut Spare::default())
 }
 
 /// Compile with storage from `spare`, which keeps it again after success.
-pub(crate) fn compile_in(ast: &Ast, name: &[u8], spare: &mut Spare) -> Result<Program, Error> {
+pub(crate) fn compile_in(
+    ast: &Ast,
+    source: &[u8],
+    name: &[u8],
+    spare: &mut Spare,
+) -> Result<Program, Error> {
     let mut functions = std::mem::take(&mut spare.functions);
     let mut function = functions.pop().unwrap_or_default();
     function.vararg = true;
@@ -205,25 +220,29 @@ pub(crate) fn compile_in(ast: &Ast, name: &[u8], spare: &mut Spare) -> Result<Pr
     let mut names = std::mem::take(&mut spare.names);
     names.clear();
     let mut tasks = recycle(std::mem::take(&mut spare.tasks));
+    let mut prototypes = Vec::new();
     if !crate::memory::compilation::active() {
         // Every AST node emits about one instruction. Sizing the entry
         // function's buffers up front avoids their growth copies; nested
         // functions reuse buffers released by earlier functions.
         let estimate = ast.exprs.len() + ast.stmts.len() + 8;
         fallible::reserve(&mut function.code, estimate)?;
-        fallible::reserve(&mut function.debug_lines, estimate)?;
         fallible::reserve(&mut tasks, 64)?;
+        // The parser records one stack size for each nested function.
+        prototypes = fallible::with_capacity(ast.stacks.len() + 1)?;
     }
     tasks.try_push(Task::Block(ast.ids(ast.body)))?;
     let mut c = Compiler {
         ast,
+        source,
         function,
-        parents: Vec::new(),
+        parents: std::mem::take(&mut spare.parents),
         spare: functions,
         names,
-        prototypes: Vec::new(),
+        prototypes,
         folded,
         tasks,
+        assignment_targets: std::mem::take(&mut spare.assignment_targets),
         result: 0,
         boolean: boolean::Boolean::default(),
         line: 1,
@@ -233,9 +252,13 @@ pub(crate) fn compile_in(ast: &Ast, name: &[u8], spare: &mut Spare) -> Result<Pr
     c.emit(Op::Return, 0, 0, 0)?;
     let entry = c.finish()?;
     spare.functions = c.spare;
+    debug_assert!(c.parents.is_empty());
+    spare.parents = c.parents;
     spare.names = c.names;
     spare.folded = c.folded;
     spare.tasks = recycle(c.tasks);
+    debug_assert!(c.assignment_targets.is_empty());
+    spare.assignment_targets = c.assignment_targets;
     let p = Program::try_new(c.prototypes, entry, name)?;
     p.verify()?;
     Ok(p)
@@ -263,10 +286,6 @@ impl<'a> Compiler<'a> {
                 f.code[pc].c += 1;
             }
         }
-        f.debug_lines.retain(|&l| l != 0);
-        f.debug_lines.dedup();
-        f.debug_lines.sort_unstable();
-        f.debug_lines.dedup();
         for local in &mut f.debug_locals {
             if local.end == u32::MAX {
                 local.end = f.code.len() as u32;
@@ -275,17 +294,30 @@ impl<'a> Compiler<'a> {
         let mut names = fallible::with_capacity(f.upvalues.len())?;
         let mut upvalues = fallible::with_capacity(f.upvalues.len())?;
         for &(name, value) in &f.upvalues {
-            names.push(self.names[name.range()].try_boxed()?);
+            names.push(DebugName::store(
+                &mut f.debug_names,
+                &self.names[name.range()],
+            )?);
             upvalues.push(value);
         }
         let id = self.prototypes.len() as u32;
         let mut code = fallible::with_capacity(f.code.len())?;
-        let mut lines = fallible::with_capacity(f.code.len())?;
-        let mut live = fallible::with_capacity(f.code.len())?;
-        let mut hooks = fallible::with_capacity(f.code.len())?;
+        let mut metadata = fallible::with_capacity(f.code.len())?;
         let mut previous: Option<Instruction> = None;
+        let first_line = f.defined[0].clamp(1, u32::MAX - 63);
+        let mut nearby_lines = 0u64;
         for (pc, emitted) in f.code.iter().enumerate() {
             let mut instruction = emitted.instruction;
+            // Active lines include comparisons and branches whose individual
+            // hook events are coalesced below.
+            if emitted.hook != 0 {
+                let offset = emitted.hook.wrapping_sub(first_line);
+                if offset < 64 {
+                    nearby_lines |= 1 << offset;
+                } else if f.active_lines.last().copied() != Some(emitted.hook) {
+                    f.active_lines.try_push(emitted.hook)?;
+                }
+            }
             let hook = match instruction.op {
                 Op::JumpFalse | Op::JumpTrue
                     if previous.is_some_and(|p| {
@@ -317,18 +349,31 @@ impl<'a> Compiler<'a> {
                 previous = Some(instruction);
             }
             code.push(instruction);
-            lines.push(emitted.line);
-            live.push(emitted.live);
-            hooks.push(hook);
+            metadata.push(InstructionMetadata {
+                line: emitted.line,
+                hook_line: hook,
+                gc_live: emitted.live,
+            });
+        }
+        let sort_lines = !f.active_lines.is_empty();
+        fallible::reserve(&mut f.active_lines, nearby_lines.count_ones() as usize)?;
+        while nearby_lines != 0 {
+            f.active_lines.push(first_line + nearby_lines.trailing_zeros());
+            nearby_lines &= nearby_lines - 1;
+        }
+        if sort_lines {
+            f.active_lines.sort_unstable();
+            f.active_lines.dedup();
         }
         let debug_locals = drain_boxed(&mut f.debug_locals)?;
         let debug_calls = drain_boxed(&mut f.debug_calls)?;
+        let constants = f.constants.finish()?;
         self.prototypes.try_push(Prototype {
             code: code.try_into_boxed_slice()?,
-            lines: lines.try_into_boxed_slice()?,
-            gc_live: live.try_into_boxed_slice()?,
+            metadata: metadata.try_into_boxed_slice()?,
             gc_maps: f.gc_maps.try_boxed()?,
-            constants: f.constants.finish()?,
+            constants: constants.values,
+            constant_strings: constants.strings,
             registers: f.max.max(f.debug_stack).max(2),
             params: f.params,
             vararg: f.vararg,
@@ -339,11 +384,11 @@ impl<'a> Compiler<'a> {
                 stack: f.debug_stack,
                 native: None,
                 defined: f.defined,
+                names: f.debug_names.try_boxed()?,
                 upvalues: names.try_into_boxed_slice()?,
                 locals: debug_locals,
                 calls: debug_calls,
-                active_lines: f.debug_lines.try_boxed()?,
-                hook_lines: hooks.try_into_boxed_slice()?,
+                active_lines: f.active_lines.try_boxed()?,
                 temporaries: f.debug_temporaries.try_boxed()?,
             },
         })?;
@@ -435,18 +480,35 @@ impl<'a> Compiler<'a> {
             .map_err(|_| self.error(ErrorKind::Limit, "function needs too many registers"))
     }
     fn reset(&mut self, next: u16) {
-        self.function.next = next;
+        let f = &mut self.function;
+        f.next = next;
+        // The largest allocation tells us whether the upper register words
+        // have ever been used by this function.
+        if f.max <= 64 {
+            debug_assert_eq!(f.live[1..], [0; 3]);
+            debug_assert_eq!(f.debug_hidden[1..], [0; 3]);
+            if next < 64 {
+                let mask = (1u64 << next) - 1;
+                let live = f.live[0] & mask;
+                if live != f.live[0] {
+                    f.live[0] = live;
+                    f.gc_last = None;
+                }
+                f.debug_hidden[0] &= mask;
+            }
+            return;
+        }
         let word = usize::from(next) / 64;
         let bit = next % 64;
         if word < 4 {
-            let before = self.function.live;
-            self.function.live[word] &= (1u64 << bit) - 1;
-            self.function.live[word + 1..].fill(0);
-            if self.function.live != before {
-                self.function.gc_last = None;
+            let before = f.live;
+            f.live[word] &= (1u64 << bit) - 1;
+            f.live[word + 1..].fill(0);
+            if f.live != before {
+                f.gc_last = None;
             }
-            self.function.debug_hidden[word] &= (1u64 << bit) - 1;
-            self.function.debug_hidden[word + 1..].fill(0);
+            f.debug_hidden[word] &= (1u64 << bit) - 1;
+            f.debug_hidden[word + 1..].fill(0);
         }
     }
     fn live_register(&mut self, register: u16) {
@@ -514,7 +576,6 @@ impl<'a> Compiler<'a> {
                 let before = removed.live as u16 as usize;
                 self.function.live = self.function.gc_maps[before];
                 self.function.gc_last = Some(before as u16);
-                self.function.debug_lines.pop();
                 assert_eq!(removed.hook, 0);
             }
         }
@@ -523,7 +584,7 @@ impl<'a> Compiler<'a> {
             return Err(self.error(ErrorKind::Limit, "function has too many instructions"));
         }
         let before = self.live_map()?;
-        match op {
+        let writes_register = match op {
             Op::Load
             | Op::Move
             | Op::Bool
@@ -548,7 +609,10 @@ impl<'a> Compiler<'a> {
             | Op::Lt
             | Op::Le
             | Op::Gt
-            | Op::Ge => self.live_register(u16::from(a)),
+            | Op::Ge => {
+                self.live_register(u16::from(a));
+                true
+            }
             Op::Call | Op::CallIter | Op::TailCall | Op::Vararg => {
                 let saved = self.function.next;
                 self.reset(u16::from(a));
@@ -561,11 +625,15 @@ impl<'a> Compiler<'a> {
                 for r in u16::from(a)..u16::from(a) + count {
                     self.live_register(r);
                 }
+                true
             }
-            Op::ForLoop => self.live_register(u16::from(a) + 3),
-            _ => {}
-        }
-        let after = self.live_map()?;
+            Op::ForLoop => {
+                self.live_register(u16::from(a) + 3);
+                true
+            }
+            _ => false,
+        };
+        let after = if writes_register { self.live_map()? } else { before };
         let hook = if op == Op::Close { 0 } else { self.line };
         self.function.code.try_push(Emission {
             instruction: Instruction { op, a, b, c },
@@ -574,7 +642,6 @@ impl<'a> Compiler<'a> {
             hook,
         })?;
         self.function.hook_visible += usize::from(op != Op::Close && self.line != 0);
-        self.function.debug_lines.try_push(hook)?;
         if op == Op::Move
             && (c == OPEN
                 || u16::from(a) == b
@@ -592,37 +659,38 @@ impl<'a> Compiler<'a> {
         let previous = self.function.code.last().expect("emitted hook line").hook;
         self.function.hook_visible =
             self.function.hook_visible + usize::from(line != 0) - usize::from(previous != 0);
-        *self
-            .function
-            .debug_lines
-            .last_mut()
-            .expect("emitted debug line") = line;
         self.function
             .code
             .last_mut()
             .expect("emitted hook line")
             .hook = line;
     }
-    fn constant(&mut self, mut k: Constant) -> Result<u32, Error> {
-        if let Constant::Number(number) = &mut k
-            && *number == 0.0
+    fn normalized_number(&self, number: f64) -> f64 {
+        if number == 0.0
             && let Some(negative) = self.function.zero_sign
         {
-            *number = if negative { -0.0 } else { 0.0 };
+            if negative { -0.0 } else { 0.0 }
+        } else {
+            number
+        }
+    }
+    fn constant(&mut self, mut k: Constant) -> Result<u32, Error> {
+        if let Constant::Number(number) = &mut k {
+            *number = self.normalized_number(*number);
         }
         self.function
             .constants
             .intern(k)?
             .ok_or_else(|| self.error(ErrorKind::Limit, "too many constants"))
     }
-    fn string_constant(&mut self, bytes: &[u8]) -> Result<u32, Error> {
+    fn string_constant(&mut self, spelling: &Lexeme) -> Result<u32, Error> {
         self.function
             .constants
-            .string(bytes)?
+            .source_string(spelling, self.source)?
             .ok_or_else(|| self.error(ErrorKind::Limit, "too many constants"))
     }
-    fn load_string(&mut self, dst: u8, bytes: &[u8]) -> Result<(), Error> {
-        let id = self.string_constant(bytes)?;
+    fn load_string(&mut self, dst: u8, spelling: &Lexeme) -> Result<(), Error> {
+        let id = self.string_constant(spelling)?;
         self.emit(Op::Load, dst, 0, id)?;
         Ok(())
     }
@@ -638,14 +706,30 @@ impl<'a> Compiler<'a> {
         }
         Ok(())
     }
-    fn local(&self, name: &[u8]) -> Option<u8> {
-        let head = name_head(name);
-        self.function
-            .locals
-            .iter()
-            .rev()
-            .find(|l| l.name.equals(&self.names, name, head))
-            .map(|l| l.reg)
+    fn local_register(&self, id: ExprId) -> Option<u8> {
+        let (expr, span) = &self.ast.exprs[id];
+        let slot = span.binding.local_index()?;
+        let local = &self.function.locals[slot];
+        debug_assert!(matches!(expr, Expr::Name(name) if {
+            let name = name.bytes(self.source);
+            local.name.equals(&self.names, name, name_head(name))
+        }));
+        Some(local.reg)
+    }
+    fn resolve_name(&mut self, id: ExprId) -> Result<Target, Error> {
+        if let Some(reg) = self.local_register(id) {
+            return Ok(Target::Local(reg));
+        }
+        let (Expr::Name(name), span) = &self.ast.exprs[id] else {
+            unreachable!("name binding requires a name expression");
+        };
+        if span.binding == NameBinding::UPVALUE {
+            let up = self
+                .upvalue(name.bytes(self.source))?
+                .expect("parsed upvalue has a binding");
+            return Ok(Target::Upvalue(up));
+        }
+        self.string_constant(name).map(Target::Global)
     }
     fn bind(&mut self, name: &[u8], reg: u8) -> Result<(), Error> {
         if self.function.locals.len() >= 200 {
@@ -666,7 +750,7 @@ impl<'a> Compiler<'a> {
         self.function.debug_named[usize::from(reg) / 64] |= 1u64 << (reg % 64);
         let index = self.function.debug_locals.len();
         self.function.debug_locals.try_push(DebugLocal {
-            name: name.try_boxed()?,
+            name: DebugName::store(&mut self.function.debug_names, name)?,
             start: self.function.code.len() as u32,
             end: u32::MAX,
             register: u16::from(reg),
@@ -711,7 +795,7 @@ impl<'a> Compiler<'a> {
             loop {
                 match self.ast.exprs[function].0 {
                     Expr::Paren(inner) => function = inner,
-                    Expr::Binary(Kind::Or, left, right, _)
+                    Expr::Binary(Kind::Or, left, right, ..)
                         if matches!(self.ast.exprs[left].0, Expr::Binary(Kind::And, ..)) =>
                     {
                         function = right
@@ -721,7 +805,8 @@ impl<'a> Compiler<'a> {
             }
             match &self.ast.exprs[function].0 {
                 Expr::Name(name) => {
-                    let kind = if self.local(name).is_some() {
+                    let name = name.bytes(self.source);
+                    let kind = if self.local_register(function).is_some() {
                         NameKind::Local
                     } else if self
                         .function
@@ -733,11 +818,11 @@ impl<'a> Compiler<'a> {
                     } else {
                         NameKind::Global
                     };
-                    (name.as_ref(), kind)
+                    (name, kind)
                 }
                 Expr::Index(_, key) => {
                     let name = if let Expr::String(name) = &self.ast.exprs[*key].0 {
-                        name.as_ref()
+                        name.bytes(self.source)
                     } else {
                         b"?"
                     };
@@ -748,21 +833,27 @@ impl<'a> Compiler<'a> {
         };
         let start = u32::try_from(self.function.debug_temporaries.len())
             .map_err(|_| self.error(ErrorKind::Limit, "too many debug temporaries"))?;
-        for r in 0..base {
-            if self.function.live[usize::from(r) / 64]
-                & !self.function.debug_hidden[usize::from(r) / 64]
-                & !self.function.debug_named[usize::from(r) / 64]
-                & (1u64 << (r % 64))
-                != 0
-            {
-                self.function.debug_temporaries.try_push(r)?;
+        let base = u32::from(base);
+        for word in 0..base.div_ceil(64) {
+            let first = word * 64;
+            let below_base = u64::MAX >> (64 - (base - first).min(64));
+            let word = word as usize;
+            let mut visible = self.function.live[word]
+                & !self.function.debug_hidden[word]
+                & !self.function.debug_named[word]
+                & below_base;
+            while visible != 0 {
+                self.function
+                    .debug_temporaries
+                    .try_push((first + visible.trailing_zeros()) as u8)?;
+                visible &= visible - 1;
             }
         }
         let end = u32::try_from(self.function.debug_temporaries.len())
             .map_err(|_| self.error(ErrorKind::Limit, "too many debug temporaries"))?;
         self.function.debug_calls.try_push(DebugCall {
             pc: self.function.code.len() as u32,
-            name: name.try_boxed()?,
+            name: DebugName::store(&mut self.function.debug_names, name)?,
             kind,
             temporaries: start..end,
         })?;
@@ -773,10 +864,11 @@ impl<'a> Compiler<'a> {
         loop {
             match &self.ast.exprs[id].0 {
                 Expr::Paren(inner) | Expr::Binary(Kind::And | Kind::Or, _, inner, _) => id = *inner,
-                Expr::Name(name) => {
-                    if matches!(usage, LineUse::Condition) && self.local(name).is_some() {
+                Expr::Name(_) => {
+                    let local = self.local_register(id).is_some();
+                    if matches!(usage, LineUse::Condition) && local {
                         self.debug_line(0);
-                    } else if matches!(usage, LineUse::Copy) || self.local(name).is_none() {
+                    } else if matches!(usage, LineUse::Copy) || !local {
                         self.debug_line(line);
                     }
                     return;

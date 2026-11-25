@@ -88,7 +88,7 @@ impl Vm {
         let constants = &loaded.constants[closure.prototype];
         let mut changed = None;
         let mut code = &*prototype.code;
-        let mut lines = &*prototype.lines;
+        let mut metadata = &*prototype.metadata;
         if Self::sort_counter_prefix(code, prototype.params) {
             let get = code[0];
             let arithmetic = code[1];
@@ -123,7 +123,7 @@ impl Vm {
             });
             changed = Some((usize::from(get.a), Value::Number(number)));
             code = &code[3..];
-            lines = &lines[3..];
+            metadata = &metadata[3..];
         }
         let first = *code.first()?;
         let initial = |index: usize| {
@@ -146,8 +146,8 @@ impl Vm {
         };
         if first.op == Op::Return {
             return match first.c {
-                0 => Some((Value::Nil, 0, lines[0])),
-                1 => Some((initial(usize::from(first.a)), 1, lines[0])),
+                0 => Some((Value::Nil, 0, metadata[0].line)),
+                1 => Some((initial(usize::from(first.a)), 1, metadata[0].line)),
                 _ => None,
             };
         }
@@ -165,9 +165,11 @@ impl Vm {
                         initial(usize::from(first.a))
                     },
                     1,
-                    lines[1],
+                    metadata[1].line,
                 )),
-                Op::Move if first.c != OPEN => Some((initial(usize::from(first.b)), 1, lines[1])),
+                Op::Move if first.c != OPEN => {
+                    Some((initial(usize::from(first.b)), 1, metadata[1].line))
+                }
                 _ => None,
             };
         }
@@ -204,11 +206,11 @@ impl Vm {
                 return Some((
                     Value::Boolean(if second.c == 0 { result } else { !result }),
                     1,
-                    lines[2],
+                    metadata[2].line,
                 ));
             }
             if second.op == Op::Return && second.c == 1 && second.a == first.a {
-                return Some((Value::Boolean(result), 1, lines[1]));
+                return Some((Value::Boolean(result), 1, metadata[1].line));
             }
         }
         None

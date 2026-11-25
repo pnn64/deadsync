@@ -295,8 +295,8 @@ fn cache_bytecode_verification_and_decode_budgets_are_enforced() {
         let p = &mut data.prototypes[data.entry as usize];
         match change {
             0 => p.code[0].c = u32::MAX,
-            1 => p.gc_live[0] = u32::MAX,
-            2 => p.debug.hook_lines = Box::default(),
+            1 => p.metadata[0].gc_live = u32::MAX,
+            2 => p.metadata = Box::default(),
             _ => p.registers = 0,
         }
         assert!(decode(&encode(&bad, source, b"=cache"), source, b"=cache").is_none());

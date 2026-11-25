@@ -1,5 +1,35 @@
 use super::*;
 
+#[test]
+fn decoded_string_finds_a_parsed_string_after_switching_to_content_lookup() {
+    use crate::memory::text::Text;
+
+    let mut pool = Constants::default();
+    let name = Lexeme::Source {
+        start: 0,
+        end: 3,
+        string_id: 1,
+    };
+    assert_eq!(pool.source_string(&name, b"old").unwrap(), Some(0));
+    for i in 0..32 {
+        assert_eq!(
+            pool.intern(Constant::Number(i as f64)).unwrap(),
+            Some(i + 1)
+        );
+    }
+    let decoded = Lexeme::Owned(Text::new(b"old").unwrap());
+    assert_eq!(pool.source_string(&decoded, b"").unwrap(), Some(0));
+    assert_eq!(pool.source_string(&name, b"old").unwrap(), Some(0));
+    assert_eq!(pool.finish().unwrap().values.len(), 33);
+
+    assert_eq!(pool.source_string(&name, b"new").unwrap(), Some(0));
+    let finished = pool.finish().unwrap();
+    assert_eq!(
+        finished.values[0].string(&finished.strings),
+        Some(b"new".as_slice())
+    );
+}
+
 fn equivalent(a: &Constant, b: &Constant) -> bool {
     match (a, b) {
         (Constant::Nil, Constant::Nil) => true,
@@ -9,9 +39,10 @@ fn equivalent(a: &Constant, b: &Constant) -> bool {
         _ => false,
     }
 }
-fn same_bits(a: &Constant, b: &Constant) -> bool {
+fn same_bits(a: &Constant, b: &Constant, strings: &[u8]) -> bool {
     match (a, b) {
         (Constant::Number(a), Constant::Number(b)) => a.to_bits() == b.to_bits(),
+        (a, Constant::String(b)) => a.string(strings) == Some(b),
         _ => equivalent(a, b),
     }
 }
@@ -56,9 +87,14 @@ fn indexed_pool_matches_append_ordered_linear_numeric_and_binary_pooling() {
         };
         assert_eq!(got, Some(id));
     }
-    let values = actual.finish().unwrap();
+    let PackedConstants { values, strings } = actual.finish().unwrap();
     assert_eq!(values.len(), expected.len());
-    assert!(values.iter().zip(&expected).all(|(a, b)| same_bits(a, b)));
+    assert!(
+        values
+            .iter()
+            .zip(&expected)
+            .all(|(a, b)| same_bits(a, b, &strings))
+    );
 }
 
 #[test]
@@ -81,13 +117,13 @@ fn collided_wrapped_clusters_keep_full_equality_and_stable_ids_after_growth() {
             Some(i as u32)
         );
     }
-    let values = pool.finish().unwrap();
+    let PackedConstants { values, strings } = pool.finish().unwrap();
     assert_eq!(values.len(), keys.len());
     assert!(
         values
             .iter()
             .zip(keys)
-            .all(|(v, k)| matches!(v,Constant::String(s)if s.as_ref()==k))
+            .all(|(v, k)| v.string(&strings) == Some(k.as_slice()))
     );
 }
 
@@ -111,7 +147,7 @@ fn borrowed_literals_copy_only_new_values_and_own_their_bytes() {
     let mut changed = original.clone();
     changed[2048] = 0;
     assert_eq!(pool.string(&changed).unwrap(), Some(1));
-    let values = pool.finish().unwrap();
-    assert!(matches!(&values[0],Constant::String(s)if s.as_ref()==original));
-    assert!(matches!(&values[1],Constant::String(s)if s.as_ref()==changed));
+    let PackedConstants { values, strings } = pool.finish().unwrap();
+    assert_eq!(values[0].string(&strings), Some(original.as_slice()));
+    assert_eq!(values[1].string(&strings), Some(changed.as_slice()));
 }

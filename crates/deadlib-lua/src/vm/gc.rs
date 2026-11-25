@@ -355,8 +355,7 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
     for f in &p.data.prototypes {
         bytes += f.code.len() * 8
             + f.debug.heap_bytes()
-            + f.lines.len() * 4
-            + f.gc_live.len() * 4
+            + std::mem::size_of_val(f.metadata.as_ref())
             + f.gc_maps.len() * 32
             + f.upvalues.len() * std::mem::size_of::<Upvalue>()
             + std::mem::size_of_val(f.bindings.as_ref())
@@ -365,16 +364,8 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
                 .map(|b| std::mem::size_of_val(b.upvalues.as_ref()))
                 .sum::<usize>()
             + f.constants.len() * std::mem::size_of::<Constant>()
-            + f.constants
-                .iter()
-                .map(|v| {
-                    if let Constant::String(s) = v {
-                        s.len()
-                    } else {
-                        0
-                    }
-                })
-                .sum::<usize>();
+            + f.constant_strings.len()
+            + f.constants.iter().map(Constant::owned_bytes).sum::<usize>();
     }
     bytes + native_roots
 }
@@ -475,7 +466,7 @@ fn frames_roots(
                     register_roots_span(registers, frame.base.min(end)..end, live, work);
                 }
                 let pc = frame.pc().saturating_sub(1).min(proto.code.len() - 1);
-                let maps = proto.gc_live[pc];
+                let maps = proto.metadata[pc].gc_live;
                 // Finalization interrupts an already completed opcode. Its
                 // destination/results are live, unlike an outstanding Lua call.
                 let interrupt = frames

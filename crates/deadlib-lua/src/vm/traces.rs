@@ -46,7 +46,7 @@ impl Vm {
                 let closure = &self.functions[slot_index(id.0)];
                 let program = &self.programs[closure.program].data;
                 let proto = &program.prototypes[closure.prototype];
-                let pc = frame.pc().saturating_sub(1).min(proto.lines.len() - 1);
+                let pc = frame.pc().saturating_sub(1).min(proto.metadata.len() - 1);
                 (
                     crate::bytecode::chunk_id_into(program.source(proto), &mut source),
                     Some(proto.debug.defined[0]),

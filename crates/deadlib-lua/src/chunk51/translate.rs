@@ -1,8 +1,8 @@
 //! Translate verified native words once, then use the shared register VM.
 use super::{Chunk, Prototype as Native, invalid};
 use crate::bytecode::{
-    ClosureBinding, Constant, DebugCall, DebugInfo, DebugLocal, Instruction, NameKind, NativeDebug,
-    OPEN, OPEN_ARGS, Op, Program, Prototype, Upvalue,
+    ClosureBinding, Constant, DebugCall, DebugInfo, DebugLocal, DebugName, Instruction,
+    InstructionMetadata, NameKind, NativeDebug, OPEN, OPEN_ARGS, Op, Program, Prototype, Upvalue,
 };
 use crate::memory::fallible::Map as HashMap;
 use crate::{
@@ -72,8 +72,7 @@ pub(super) fn program(mut chunk: Chunk) -> Result<Program, Error> {
 
 struct Builder {
     code: Vec<Instruction>,
-    lines: Vec<u32>,
-    hooks: Vec<u32>,
+    metadata: Vec<InstructionMetadata>,
     patches: Vec<(usize, usize)>,
     constants: Vec<Constant>,
     line: u32,
@@ -82,8 +81,10 @@ impl Builder {
     fn emit(&mut self, op: Op, a: u8, b: u16, c: u32) -> Result<usize, Error> {
         let pc = self.code.len();
         self.code.try_push(Instruction { op, a, b, c })?;
-        self.lines.try_push(self.line)?;
-        self.hooks.try_push(0)?;
+        self.metadata.try_push(InstructionMetadata {
+            line: self.line,
+            ..Default::default()
+        })?;
         Ok(pc)
     }
     fn jump(&mut self, op: Op, a: u8, target: usize) -> Result<(), Error> {
@@ -130,8 +131,7 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
     }
     let mut out = Builder {
         code: fallible::with_capacity(n)?,
-        lines: fallible::with_capacity(n)?,
-        hooks: fallible::with_capacity(n)?,
+        metadata: fallible::with_capacity(n)?,
         patches: Vec::new(),
         constants: std::mem::take(&mut p.constants),
         line: 0,
@@ -373,7 +373,7 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
         }
         // Native dispatch counts once, even when an instruction consumes a
         // following jump, binding words or an extended SETLIST count.
-        out.hooks[first] = if out.line == 0 { u32::MAX } else { out.line };
+        out.metadata[first].hook_line = if out.line == 0 { u32::MAX } else { out.line };
     }
     map[n] = out.code.len() as u32;
     for (pc, native) in out.patches {
@@ -383,16 +383,20 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
     for (local, register) in p.locals.into_iter().zip(local_registers) {
         let start = map[local.start as usize];
         locals.try_push(DebugLocal {
-            name: local.name.unwrap_or_default(),
+            name: DebugName::Owned(local.name.unwrap_or_default()),
             start,
             end: map[local.end as usize],
             register,
         })?;
     }
     let mut names = fallible::with_capacity(usize::from(p.nups))?;
-    names.try_extend(p.names.into_iter().map(Option::unwrap_or_default))?;
+    names.try_extend(
+        p.names
+            .into_iter()
+            .map(|name| DebugName::Owned(name.unwrap_or_default())),
+    )?;
     while names.len() < usize::from(p.nups) {
-        names.try_push(b"?".try_boxed()?)?;
+        names.try_push(DebugName::Owned(b"?".try_boxed()?))?;
     }
     let mut active_lines = p.lines.try_to_vec()?;
     active_lines.retain(|&l| l != 0);
@@ -411,7 +415,6 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
             }
         }
     }
-    let mut gc_live = fallible::repeat(0u32, out.code.len())?;
     let mut masks = masks.try_to_vec()?;
     let mut call_masks = [None; 256];
     for range in map.windows(2) {
@@ -440,15 +443,15 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
             } else {
                 u16::from(live)
             };
-            gc_live[pc] = u32::from(before) | (u32::from(after) << 16);
+            out.metadata[pc].gc_live = u32::from(before) | (u32::from(after) << 16);
         }
     }
     Ok(Prototype {
-        gc_live: gc_live.try_into_boxed_slice()?,
         gc_maps: masks.try_into_boxed_slice()?,
         code: out.code.try_into_boxed_slice()?,
-        lines: out.lines.try_into_boxed_slice()?,
+        metadata: out.metadata.try_into_boxed_slice()?,
         constants: out.constants.try_into_boxed_slice()?,
+        constant_strings: Box::default(),
         registers,
         params: u16::from(p.params),
         vararg: p.vararg & 2 != 0,
@@ -473,11 +476,11 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
                 },
             })?),
             defined: p.defined,
+            names: Box::default(),
             upvalues: names.try_into_boxed_slice()?,
             locals: locals.try_into_boxed_slice()?,
             calls: calls.try_into_boxed_slice()?,
             active_lines: active_lines.try_into_boxed_slice()?,
-            hook_lines: out.hooks.try_into_boxed_slice()?,
             temporaries: temporaries.try_into_boxed_slice()?,
         },
     })
@@ -551,7 +554,7 @@ fn call_info(
     temporaries.try_extend((named as u8..register).filter(|&r| r < p.stack))?;
     calls.try_push(DebugCall {
         pc: call as u32,
-        name: name.try_boxed()?,
+        name: DebugName::Owned(name.try_boxed()?),
         kind,
         temporaries: start..temporaries.len() as u32,
     })?;

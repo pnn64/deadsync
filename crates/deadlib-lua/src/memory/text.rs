@@ -32,9 +32,6 @@ impl Text {
             Ok(Self(Data::Heap(bytes.try_boxed()?)))
         }
     }
-    pub(crate) fn try_clone(&self) -> Result<Self, Error> {
-        Self::new(self)
-    }
     pub(crate) fn heap_bytes(&self) -> usize {
         match &self.0 {
             Data::Inline { .. } => 0,
@@ -81,7 +78,6 @@ mod tests {
             let text = Text::new(bytes).unwrap();
             assert_eq!(text.as_ref(), bytes);
             assert_eq!(format!("{text:?}"), format!("{:?}", bytes));
-            assert_eq!(text.try_clone().unwrap().as_ref(), bytes);
             assert_eq!(
                 text.heap_bytes(),
                 if bytes.len() <= INLINE {

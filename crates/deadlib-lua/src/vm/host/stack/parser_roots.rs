@@ -151,6 +151,9 @@ impl Vm {
                                 Constant::Boolean(value) => Value::Boolean(value),
                                 Constant::Number(value) => Value::Number(value),
                                 Constant::String(bytes) => self.try_intern(&bytes)?,
+                                Constant::PooledString { .. } => {
+                                    unreachable!("parser roots own their bytes")
+                                }
                             };
                             self.reserve_gc_barrier(Value::ParserPrototype(id), value)?;
                             let p = &mut self.parser_prototypes[slot_index(id.0)];

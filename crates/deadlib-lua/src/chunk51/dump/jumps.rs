@@ -198,7 +198,7 @@ pub(super) fn relax(
                 next_lines.try_push(line)?;
                 relays[relay].site = next.len();
                 next.try_push(JMP)?;
-                next_lines.try_push(prototype.lines[relays[relay].origin])?;
+                next_lines.try_push(prototype.metadata[relays[relay].origin].line)?;
                 relay += 1;
             }
             positions.try_push(next.len())?;
@@ -320,7 +320,14 @@ mod tests {
         code[STEP] = true_word;
         code[count - 1] = 30 | (2 << 23);
         let mut lines = vec![1; count];
-        prototype.lines = lines.clone().into_boxed_slice();
+        prototype.metadata = vec![
+            crate::bytecode::InstructionMetadata {
+                line: 1,
+                ..Default::default()
+            };
+            count
+        ]
+        .into_boxed_slice();
         let mut pcs = (0..=count as u32).collect::<Vec<_>>();
         relax(
             &mut code,

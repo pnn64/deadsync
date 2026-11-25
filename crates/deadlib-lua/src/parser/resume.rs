@@ -1,5 +1,5 @@
 //! Flat grammar continuations for fixed and reader-supplied source.
-use super::bindings::Bindings;
+use super::bindings::{Bindings, Reference};
 use super::resources::{Context, Resources};
 use super::*;
 use crate::lexer::Scanner;
@@ -25,8 +25,8 @@ enum Task {
     LocalNames(u32, usize),
     LocalEnd(u32, usize),
     LocalFunctionName(u32),
-    LocalFunctionBody(u32, Text),
-    LocalFunctionEnd(u32, Text),
+    LocalFunctionBody(u32, Lexeme),
+    LocalFunctionEnd(u32, Lexeme),
     FunctionName(u32),
     FunctionTarget(u32, ExprId),
     FunctionField(u32, ExprId, bool),
@@ -43,11 +43,11 @@ enum Task {
     IfArm(u32, usize, ExprId),
     IfElse(u32, usize),
     ForName(u32),
-    ForChoice(u32, Text),
-    ForStart(u32, Text),
-    ForLimit(u32, Text, ExprId),
-    ForStep(u32, Text, ExprId, ExprId),
-    ForEnd(u32, Text, ExprId, ExprId, Option<ExprId>, u32),
+    ForChoice(u32, Lexeme),
+    ForStart(u32, Lexeme),
+    ForLimit(u32, Lexeme, ExprId),
+    ForStep(u32, Lexeme, ExprId, ExprId),
+    ForEnd(u32, Lexeme, ExprId, ExprId, Option<ExprId>, u32),
     ForNames(u32, usize),
     ForMoreName(u32, usize),
     ForBegin(u32, usize),
@@ -70,12 +70,12 @@ enum Task {
     Unary(Kind, u32),
     Binary(u8, u32, ExprId, Kind, u32),
     Prefix,
-    ResolveName(ExprId),
+    ResolveName(ExprId, u32),
     Paren(u32),
     ParenEnd(u32),
     Suffix(u32, ExprId),
     Field(u32, ExprId),
-    FieldName(u32, ExprId, Text, Option<bool>),
+    FieldName(u32, ExprId, Lexeme, Option<bool>),
     Index(u32, ExprId),
     IndexEnd(u32, ExprId, ExprId),
     FunctionFieldEnd(u32, ExprId, ExprId, bool),
@@ -83,8 +83,8 @@ enum Task {
     ResourceInfix(ExprId, Kind),
     ResourceKey(ExprId),
     MethodName(u32, ExprId),
-    MethodArgs(u32, ExprId, Text),
-    MethodEnd(u32, ExprId, Text, u32),
+    MethodArgs(u32, ExprId, Lexeme),
+    MethodEnd(u32, ExprId, Lexeme, u32),
     CallEnd(u32, ExprId, u32),
     Args,
     ArgsParen(u32),
@@ -121,14 +121,14 @@ impl Spare {
 #[derive(Debug, Default)]
 struct Scratch {
     ids: Vec<usize>,
-    names: Vec<Text>,
+    names: Vec<Lexeme>,
     fields: Vec<(Option<ExprId>, ExprId)>,
     arms: Vec<(ExprId, Block)>,
 }
 impl Scratch {
     fn heap_bytes(&self) -> usize {
         self.ids.capacity() * size_of::<usize>()
-            + self.names.capacity() * size_of::<Text>()
+            + self.names.capacity() * size_of::<Lexeme>()
             + self.names.iter().map(|n| n.heap_bytes()).sum::<usize>()
             + self.fields.capacity() * size_of::<(Option<ExprId>, ExprId)>()
             + self.arms.capacity() * size_of::<(ExprId, Block)>()
@@ -144,7 +144,6 @@ pub(crate) struct Parser {
     lookahead: Option<Token>,
     /// The recursive parser scans here, then swaps with the current token, so
     /// this holds the token most recently consumed.
-    staged: Token,
     previous_line: u32,
     depth: u16,
     base_depth: u16,
@@ -176,7 +175,6 @@ impl Parser {
             scanner: Scanner::default(),
             token: None,
             lookahead: None,
-            staged: Token::default(),
             previous_line: 1,
             depth: 0,
             base_depth: 0,
@@ -202,7 +200,7 @@ impl Parser {
     }
     /// A parser for complete source reusing `spare` storage.
     pub(crate) fn try_new_in(spare: &mut Spare, native_depth: usize) -> Result<Self, Error> {
-        let ast = std::mem::take(&mut spare.ast);
+        let mut ast = std::mem::take(&mut spare.ast);
         let mut tasks = std::mem::take(&mut spare.tasks);
         tasks.clear();
         fallible::reserve(&mut tasks, 64)?;
@@ -217,6 +215,7 @@ impl Parser {
         };
         let mut resources = std::mem::take(&mut spare.resources);
         resources.clear();
+        resources.reuse_operands(&mut ast);
         let mut scratch = std::mem::take(&mut spare.scratch);
         scratch.ids.clear();
         scratch.names.clear();
@@ -226,7 +225,6 @@ impl Parser {
             scanner: Scanner::default(),
             token: None,
             lookahead: None,
-            staged: Token::default(),
             previous_line: 1,
             depth: 0,
             base_depth: native_depth as u16,
@@ -413,14 +411,24 @@ impl Parser {
         input: &[u8],
         action: impl FnOnce(&mut Resources, &Context<'_>) -> Result<T, Error>,
     ) -> Result<T, Error> {
+        self.account_with::<true, T>(input, action)
+    }
+    fn account_with<const STREAMING: bool, T>(
+        &mut self,
+        input: &[u8],
+        action: impl FnOnce(&mut Resources, &Context<'_>) -> Result<T, Error>,
+    ) -> Result<T, Error> {
         let cx = Context {
             ast: &self.ast,
             input,
             bindings: &self.bindings,
         };
-        let before = self.resources.constant_count();
+        let before = (STREAMING && self.native_events.is_some())
+            .then(|| self.resources.constant_count());
         let result = action(&mut self.resources, &cx);
-        if let Some(events) = &mut self.native_events {
+        if let Some(before) = before
+            && let Some(events) = &mut self.native_events
+        {
             events.try_extend(
                 self.resources
                     .native_constants(before, &cx)?
@@ -430,7 +438,7 @@ impl Parser {
         }
         result.map_err(|error| {
             let mut error = error.at_line(self.scanner.line());
-            error.near = error.kind() != ErrorKind::Memory;
+            error.near = STREAMING && error.kind() != ErrorKind::Memory;
             error
         })
     }
@@ -502,6 +510,14 @@ impl Parser {
         )
     }
     fn expression(&mut self, input: &[u8], expr: Expr, line: u32) -> Result<ExprId, Error> {
+        self.expression_with::<true>(input, expr, line)
+    }
+    fn expression_with<const STREAMING: bool>(
+        &mut self,
+        input: &[u8],
+        expr: Expr,
+        line: u32,
+    ) -> Result<ExprId, Error> {
         let id = self.ast.exprs.len();
         let scalar_cost = match &expr {
             Expr::Number(_) | Expr::Name(_) => 1,
@@ -533,15 +549,39 @@ impl Parser {
                 end: self.previous_line,
                 discharge: self.previous_line,
                 scalar_cost,
+                operand: 0,
+                binding: NameBinding::default(),
             },
         ))?;
-        self.account(input, |r, cx| r.expression(id, cx))?;
-        self.expr = id;
+        if let Some(slot) = self.account_with::<STREAMING, _>(input, |r, cx| r.expression(id, cx))? {
+            let Expr::String(spelling) = &mut self.ast.exprs[id].0 else {
+                unreachable!("a string slot belongs to a string literal");
+            };
+            spelling.set_string_slot(slot);
+        }
+        if STREAMING {
+            self.expr = id;
+        }
         Ok(id)
     }
     fn statement(&mut self, stmt: Stmt, line: u32) -> Result<(), Error> {
         self.stmt = self.ast.stmts.len();
         self.ast.stmts.try_push((stmt, line))?;
+        Ok(())
+    }
+    fn resolve_name(
+        &mut self,
+        input: &[u8],
+        id: ExprId,
+        reference: Reference,
+    ) -> Result<(), Error> {
+        self.ast.exprs[id].1.binding = reference.binding();
+        if let Some(slot) = self.account(input, |r, cx| r.resolve(id, reference, cx))? {
+            let Expr::Name(spelling) = &mut self.ast.exprs[id].0 else {
+                unreachable!("a global slot belongs to a name expression");
+            };
+            spelling.set_string_slot(slot);
+        }
         Ok(())
     }
     fn start_function_body(
@@ -578,7 +618,7 @@ impl Parser {
         &mut self,
         input: &[u8],
         line: u32,
-        name: Text,
+        name: Lexeme,
         start: ExprId,
         limit: ExprId,
         step: Option<ExprId>,
@@ -647,12 +687,12 @@ impl Parser {
         })
     }
     fn scan(&mut self, input: &[u8], closed: bool) -> Result<Option<Token>, Error> {
-        let token = self.scanner.next(input, closed)?;
+        let mut token = self.scanner.next(input, closed)?;
         if let Some(token) = &token
             && let Some(events) = &mut self.native_events
         {
             let text = match token.kind {
-                Kind::Name | Kind::String => Some(token.text.try_clone()?),
+                Kind::Name | Kind::String => Some(Text::new(token.text.bytes(input))?),
                 Kind::And
                 | Kind::Break
                 | Kind::Do
@@ -682,9 +722,11 @@ impl Parser {
                 events.try_push(NativeRootEvent::Anchor(text))?;
             }
         }
-        if token.as_ref().is_some_and(|t| t.kind == Kind::Name) {
+        if let Some(token) = &mut token
+            && token.kind == Kind::Name
+        {
             let (start, end) = self.scanner.name_span();
-            self.bindings.intern(input, start, end)?;
+            token.symbol = self.bindings.intern(input, start, end)?;
         }
         Ok(token)
     }
@@ -889,10 +931,10 @@ impl Parser {
                     self.statement(Stmt::LocalFunction(name, self.expr), line)?
                 }
                 Task::FunctionName(line) => {
-                    let name = self.expect(Kind::Name)?.text;
-                    let id = self.expression(input, Expr::Name(name), line)?;
+                    let token = self.expect(Kind::Name)?;
+                    let id = self.expression(input, Expr::Name(token.text), line)?;
                     self.tasks.try_push(Task::FunctionTarget(line, id))?;
-                    self.tasks.try_push(Task::ResolveName(id))?;
+                    self.tasks.try_push(Task::ResolveName(id, token.symbol))?;
                 }
                 Task::FunctionTarget(line, id) => {
                     if matches!(self.kind(), Kind::Dot | Kind::Colon) {
@@ -1215,7 +1257,9 @@ impl Parser {
                     self.expect(Kind::LParen)?;
                     let params = self.scratch.names.len();
                     if method {
-                        self.scratch.names.try_push(Text::new(b"self")?)?;
+                        self.scratch
+                            .names
+                            .try_push(Lexeme::Owned(Text::new(b"self")?))?;
                     }
                     self.tasks.try_push(Task::Params(line, params, true))?;
                 }
@@ -1291,7 +1335,9 @@ impl Parser {
                         if let Some(token) = &self.token
                             && matches!(token.kind, Kind::Name | Kind::String)
                         {
-                            events.try_push(NativeRootEvent::Anchor(token.text.try_clone()?))?;
+                            events.try_push(NativeRootEvent::Anchor(Text::new(
+                                token.text.bytes(input),
+                            )?))?;
                         }
                     }
                     self.loops = loops;
@@ -1388,10 +1434,10 @@ impl Parser {
                 Task::Prefix => {
                     let line = self.line();
                     if self.kind() == Kind::Name {
-                        let name = self.take().text;
-                        let id = self.expression(input, Expr::Name(name), line)?;
+                        let token = self.take();
+                        let id = self.expression(input, Expr::Name(token.text), line)?;
                         self.tasks.try_push(Task::Suffix(line, id))?;
-                        self.tasks.try_push(Task::ResolveName(id))?;
+                        self.tasks.try_push(Task::ResolveName(id, token.symbol))?;
                     } else if self.kind() == Kind::LParen {
                         self.take();
                         self.tasks.try_push(Task::Paren(line))?;
@@ -1400,18 +1446,15 @@ impl Parser {
                         return Err(self.error("unexpected symbol"));
                     }
                 }
-                Task::ResolveName(id) => {
-                    let Expr::Name(name) = &self.ast.exprs[id].0 else {
-                        unreachable!()
-                    };
-                    let reference = self.bindings.reference(input, name).map_err(|error| {
+                Task::ResolveName(id, symbol) => {
+                    let reference = self.bindings.reference_symbol(symbol).map_err(|error| {
                         if error.kind() == ErrorKind::Memory {
                             error
                         } else {
                             self.limit_error(60, "upvalues", error.line())
                         }
                     })?;
-                    self.account(input, |r, cx| r.resolve(id, reference, cx))?;
+                    self.resolve_name(input, id, reference)?;
                 }
                 Task::Paren(line) => {
                     self.close(Kind::RParen, Kind::LParen, line)?;
@@ -1470,8 +1513,10 @@ impl Parser {
                     let name = self.expect(Kind::Name)?.text;
                     self.tasks.try_push(Task::MethodArgs(line, id, name))?;
                 }
-                Task::MethodArgs(line, id, name) => {
-                    self.account(input, |r, cx| r.method(id, &name, cx))?;
+                Task::MethodArgs(line, id, mut name) => {
+                    let symbol = self.bindings.name(input, name.bytes(input));
+                    let slot = self.account(input, |r, cx| r.method(id, symbol, cx))?;
+                    name.set_string_slot(slot);
                     self.tasks.try_push(Task::MethodEnd(
                         line,
                         id,

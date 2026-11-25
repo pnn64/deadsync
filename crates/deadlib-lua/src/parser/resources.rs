@@ -8,7 +8,7 @@ use super::{
     bindings::{Bindings, Reference},
     hash,
 };
-use crate::lexer::Kind;
+use crate::lexer::{Kind, Lexeme};
 use crate::{
     Error, ErrorKind,
     memory::fallible::{self, SliceExt, VecExt},
@@ -89,6 +89,7 @@ pub(super) struct Context<'a> {
     pub input: &'a [u8],
     pub bindings: &'a Bindings,
 }
+
 impl Key {
     fn constant(self, cx: &Context<'_>) -> Result<crate::bytecode::Constant, Error> {
         use crate::bytecode::Constant;
@@ -117,19 +118,26 @@ impl Key {
             let Expr::String(bytes) = &cx.ast.exprs[self.data as usize].0 else {
                 unreachable!()
             };
-            bytes
+            bytes.bytes(cx.input)
         }
     }
 }
 impl Pool {
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.buckets.clear();
+    }
+
     fn insert(&mut self, key: Key, cx: &Context<'_>) -> Result<u32, Error> {
+        let mut slot = 0;
         if !self.buckets.is_empty() {
-            let mut slot = key.hash as usize & (self.buckets.len() - 1);
+            let mask = self.buckets.len() - 1;
+            slot = key.hash as usize & mask;
             while self.buckets[slot] != 0 {
                 let index = self.buckets[slot] - 1;
                 let old = self.entries[index as usize];
                 if old.hash == key.hash
-                    && (if old.kind >= 4 && key.kind >= 4 {
+                    && (if old.kind >= 4 && key.kind >= 4 && (old.kind != 5 || key.kind != 5) {
                         old.bytes(cx) == key.bytes(cx)
                     } else {
                         old.kind == key.kind && old.data == key.data
@@ -137,7 +145,7 @@ impl Pool {
                 {
                     return Ok(index);
                 }
-                slot = (slot + 1) & (self.buckets.len() - 1);
+                slot = (slot + 1) & mask;
             }
         }
         if (self.entries.len() + 1) * 2 >= self.buckets.len() {
@@ -151,14 +159,14 @@ impl Pool {
                 }
                 self.buckets[slot] = index as u32 + 1;
             }
+            slot = key.hash as usize & (size - 1);
+            while self.buckets[slot] != 0 {
+                slot = (slot + 1) & (size - 1);
+            }
         }
         let index = self.entries.len() as u32;
-        let mut slot = key.hash as usize & (self.buckets.len() - 1);
-        while self.buckets[slot] != 0 {
-            slot = (slot + 1) & (self.buckets.len() - 1);
-        }
-        self.buckets[slot] = index + 1;
         self.entries.try_push(key)?;
+        self.buckets[slot] = index + 1;
         Ok(index)
     }
     fn heap_bytes(&self) -> usize {
@@ -185,6 +193,7 @@ struct Table {
 pub(super) struct Resources {
     function: Function,
     parents: Vec<Function>,
+    child_pool: Pool,
     values: Vec<Value>,
     tables: Vec<Table>,
     constants: Vec<(ExprId, ConstantOperand)>,
@@ -192,9 +201,7 @@ pub(super) struct Resources {
 impl Resources {
     /// Return to the default state, keeping storage.
     pub(super) fn clear(&mut self) {
-        let pool = &mut self.function.pool;
-        pool.entries.clear();
-        pool.buckets.clear();
+        self.function.pool.clear();
         self.function.next = 0;
         self.function.max = 0;
         self.function.locals = 0;
@@ -203,6 +210,13 @@ impl Resources {
         self.values.clear();
         self.tables.clear();
         self.constants.clear();
+    }
+
+    pub(super) fn reuse_operands(&mut self, ast: &mut Ast) {
+        // A successful parse moved the operand buffer into the output tree.
+        if ast.constant_operands.capacity() > self.constants.capacity() {
+            std::mem::swap(&mut ast.constant_operands, &mut self.constants);
+        }
     }
     /// Reserve per-expression accounting for an estimated expression count.
     pub(super) fn reserve_values(&mut self, expressions: usize) -> Result<(), Error> {
@@ -235,6 +249,7 @@ impl Resources {
             + self.tables.capacity() * size_of::<Table>()
             + self.constants.capacity() * size_of::<(ExprId, ConstantOperand)>()
             + self.function.pool.heap_bytes()
+            + self.child_pool.heap_bytes()
             + self
                 .parents
                 .iter()
@@ -270,21 +285,71 @@ impl Resources {
     }
     pub(super) fn enter(&mut self, count: u16) -> Result<(), Error> {
         self.parents.try_push(std::mem::take(&mut self.function))?;
+        self.function.pool = std::mem::take(&mut self.child_pool);
         self.locals(count);
         Ok(())
     }
     pub(super) fn leave(&mut self) -> (Option<bool>, u16) {
-        let child = std::mem::replace(
+        let mut child = std::mem::replace(
             &mut self.function,
             self.parents.pop().expect("resource parent"),
         );
+        child.pool.clear();
+        if child.pool.entries.capacity() > self.child_pool.entries.capacity() {
+            self.child_pool.entries = child.pool.entries;
+        }
+        if child.pool.buckets.capacity() > self.child_pool.buckets.capacity() {
+            self.child_pool.buckets = child.pool.buckets;
+        }
         (child.zero_sign, child.max.max(2))
     }
     pub(super) fn finish(&mut self, ast: &mut Ast) {
-        self.constants.sort_unstable_by_key(|&(id, _)| id);
+        // An operand normally has a direct index. Only oversized operand
+        // lists and conflicting entries require the ordered lookup path.
+        let indexed = self.constants.len() < usize::from(u16::MAX)
+            && self
+                .constants
+                .iter()
+                .enumerate()
+                .all(|(index, &(id, operand))| {
+                    let slot = &mut ast.exprs[id].1.operand;
+                    if *slot == 0 {
+                        *slot = (index + 1) as u16;
+                        true
+                    } else {
+                        Self::same_operand(self.constants[usize::from(*slot - 1)].1, operand)
+                    }
+                });
+        if !indexed {
+            self.constants.sort_unstable_by_key(|&(id, _)| id);
+            let mut offset = 0;
+            for group in self.constants.chunk_by(|left, right| left.0 == right.0) {
+                let id = group[0].0;
+                let index = if group.len() == 1 {
+                    offset
+                } else {
+                    self.constants
+                        .binary_search_by_key(&id, |&(id, _)| id)
+                        .expect("known operand")
+                };
+                ast.exprs[id].1.operand = u16::try_from(index + 1).unwrap_or(u16::MAX);
+                offset += group.len();
+            }
+        }
         ast.constant_operands = std::mem::take(&mut self.constants);
         ast.root_zero_sign = self.function.zero_sign;
         ast.root_stack = self.function.max.max(2);
+    }
+    fn same_operand(left: ConstantOperand, right: ConstantOperand) -> bool {
+        match (left, right) {
+            (ConstantOperand::Nil, ConstantOperand::Nil) => true,
+            (ConstantOperand::Boolean(left), ConstantOperand::Boolean(right)) => left == right,
+            (ConstantOperand::String(left), ConstantOperand::String(right)) => left == right,
+            (ConstantOperand::Number(left, a), ConstantOperand::Number(right, b)) => {
+                left.to_bits() == right.to_bits() && a == b
+            }
+            _ => false,
+        }
     }
     fn number(&mut self, number: f64, cx: &Context<'_>) -> Result<u32, Error> {
         if number == 0.0 && self.function.zero_sign.is_none() {
@@ -306,7 +371,7 @@ impl Resources {
                     } else {
                         number
                     },
-                    true,
+                    Some((operand - RK) as u8),
                 )
             }
             1 => ConstantOperand::Nil,
@@ -427,22 +492,14 @@ impl Resources {
         self.values[id] = v;
         Ok(())
     }
-    pub(super) fn resolve(
-        &mut self,
-        id: ExprId,
-        reference: Reference,
-        cx: &Context<'_>,
-    ) -> Result<(), Error> {
-        let Expr::Name(name) = &cx.ast.exprs[id].0 else {
-            unreachable!()
-        };
-        self.values[id] = match reference {
-            Reference::Local(reg) => Value::new(Form::Local, u32::from(reg)),
+    fn reference(&mut self, reference: Reference, cx: &Context<'_>) -> Check<Value> {
+        Ok(match reference {
+            Reference::Local { register, .. } => Value::new(Form::Local, u32::from(register)),
             Reference::Upvalue => Value::new(Form::Upvalue, 0),
             Reference::Global(symbol) => {
                 let index = self.function.pool.insert(
                     Key {
-                        hash: hash(name),
+                        hash: cx.bindings.symbol_hash(symbol),
                         data: u64::from(symbol),
                         kind: 5,
                     },
@@ -450,8 +507,26 @@ impl Resources {
                 )?;
                 Value::new(Form::Global, index)
             }
-        };
-        Ok(())
+        })
+    }
+    pub(super) fn resolve(
+        &mut self,
+        id: ExprId,
+        reference: Reference,
+        cx: &Context<'_>,
+    ) -> Check<Option<u32>> {
+        let value = self.reference(reference, cx)?;
+        self.values[id] = value;
+        Ok((value.form == Form::Global).then_some(value.info))
+    }
+    pub(super) fn push_reference(
+        &mut self,
+        reference: Reference,
+        cx: &Context<'_>,
+    ) -> Check<Option<u32>> {
+        let value = self.reference(reference, cx)?;
+        self.values.try_push(value)?;
+        Ok((value.form == Form::Global).then_some(value.info))
     }
     fn condition_value(&mut self, value: &mut Value, truth: bool, cx: &Context<'_>) -> Check {
         self.discharge(value);
@@ -584,7 +659,7 @@ impl Resources {
             && let Some(number) = folded_left
         {
             self.constants
-                .try_push((left, ConstantOperand::Number(number, false)))?;
+                .try_push((left, ConstantOperand::Number(number, None)))?;
         }
         if ar > br {
             self.free_value(a);
@@ -598,11 +673,10 @@ impl Resources {
             0,
         ))
     }
-    pub(super) fn method(&mut self, id: ExprId, name: &[u8], cx: &Context<'_>) -> Check {
-        let symbol = cx.bindings.name(cx.input, name);
+    pub(super) fn method(&mut self, id: ExprId, symbol: u32, cx: &Context<'_>) -> Check<u32> {
         let index = self.function.pool.insert(
             Key {
-                hash: hash(name),
+                hash: cx.bindings.symbol_hash(symbol),
                 data: u64::from(symbol),
                 kind: 5,
             },
@@ -616,7 +690,7 @@ impl Resources {
         self.rk(&mut key, cx)?;
         self.free_value(key);
         self.values[id] = Value::new(Form::Temp, u32::from(base));
-        Ok(())
+        Ok(index)
     }
     fn returns(&mut self, value: Value, count: Option<usize>) -> Check {
         if value.form == Form::Vararg {
@@ -776,25 +850,46 @@ impl Resources {
         t.prepared = false;
         Ok(())
     }
-    pub(super) fn expression(&mut self, id: ExprId, cx: &Context<'_>) -> Check {
+    fn string_constant(&mut self, id: ExprId, text: &Lexeme, cx: &Context<'_>) -> Check<u32> {
+        let slot = self.function.pool.insert(
+            Key {
+                hash: hash(text.bytes(cx.input)),
+                data: id as u64,
+                kind: 4,
+            },
+            cx,
+        )?;
+        // An identifier or method may have interned these bytes first.
+        // Retain this literal as an allocation-free compiler source.
+        self.function.pool.entries[slot as usize].kind = 4;
+        self.function.pool.entries[slot as usize].data = id as u64;
+        Ok(slot)
+    }
+
+    pub(super) fn push_number(&mut self, number: f64) -> Check {
+        self.values.try_push(Value::number(number))
+    }
+
+    pub(super) fn push_string(&mut self, id: ExprId, cx: &Context<'_>) -> Check<u32> {
+        let Expr::String(text) = &cx.ast.exprs[id].0 else {
+            unreachable!("string expression")
+        };
+        debug_assert_eq!(self.values.len(), id);
+        let slot = self.string_constant(id, text, cx)?;
+        self.values.try_push(Value::new(Form::Constant, slot))?;
+        Ok(slot)
+    }
+
+    pub(super) fn expression(&mut self, id: ExprId, cx: &Context<'_>) -> Check<Option<u32>> {
+        let mut string_slot = None;
         let v = match &cx.ast.exprs[id].0 {
             Expr::Nil => Value::new(Form::Nil, 0),
             Expr::Boolean(v) => Value::new(if *v { Form::True } else { Form::False }, 0),
             Expr::Number(n) => Value::number(*n),
             Expr::Name(_) => Value::new(Form::Void, 0),
             Expr::String(bytes) => {
-                let k = self.function.pool.insert(
-                    Key {
-                        hash: hash(bytes),
-                        data: id as u64,
-                        kind: 4,
-                    },
-                    cx,
-                )?;
-                // An identifier or method may have interned these bytes first.
-                // Retain this literal as an allocation-free compiler source.
-                self.function.pool.entries[k as usize].kind = 4;
-                self.function.pool.entries[k as usize].data = id as u64;
+                let k = self.string_constant(id, bytes, cx)?;
+                string_slot = Some(k);
                 Value::new(Form::Constant, k)
             }
             Expr::Vararg => Value::new(Form::Vararg, 0),
@@ -844,6 +939,6 @@ impl Resources {
         };
         debug_assert_eq!(self.values.len(), id);
         self.values.try_push(v)?;
-        Ok(())
+        Ok(string_slot)
     }
 }

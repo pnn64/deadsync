@@ -79,5 +79,5 @@ pub fn compile_named(source: &[u8], name: &[u8]) -> Result<Program, Error> {
     if source.first() == Some(&27) {
         return chunk51::compile(source, name, 0);
     }
-    compiler::compile(parser::parse(source)?, name)
+    compiler::compile(parser::parse(source)?, source, name)
 }

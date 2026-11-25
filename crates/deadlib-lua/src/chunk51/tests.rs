@@ -98,6 +98,9 @@ fn encode(chunk: &Chunk) -> Vec<u8> {
                         output.push(4);
                         string(&mut output, Some(s));
                     }
+                    Constant::PooledString { .. } => {
+                        unreachable!("native constants own their bytes")
+                    }
                 }
             }
             integer(&mut output, p.children.len());

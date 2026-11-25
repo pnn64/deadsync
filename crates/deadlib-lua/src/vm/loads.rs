@@ -44,14 +44,15 @@ impl NativeRoots {
     }
 }
 
-/// Compiler storage a VM keeps between unbudgeted source loads. It is not
-/// VM heap: budgeted compilations charge and release fresh storage instead.
+/// Reusable compiler storage and lookup hints for loading programs.
+/// Budgeted compilations charge and release fresh parser and compiler storage.
 #[derive(Default)]
 pub(super) struct Spare {
     parser: crate::parser::Spare,
     compiler: crate::compiler::Spare,
     recent_sources: [Option<(SourceKey, u64)>; 8],
     next_source: usize,
+    constant_strings: [Option<(ShortConstant, StringId)>; 32],
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -60,6 +61,48 @@ struct SourceKey {
     name: StringId,
     depth: usize,
     locale: u64,
+}
+
+/// Fixed-width contents of a short string. The two words cover every byte,
+/// including embedded zeros, without loading the interned string's buffer.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ShortConstant {
+    first: u64,
+    last: u64,
+    len: u8,
+}
+
+impl ShortConstant {
+    fn new(bytes: &[u8]) -> Option<Self> {
+        let len = bytes.len();
+        let (first, last) = match len {
+            0 => (0, 0),
+            1..=3 => (
+                u64::from(bytes[0]) | (u64::from(bytes[len / 2]) << 8),
+                u64::from(bytes[len - 1]),
+            ),
+            4..=7 => (
+                u64::from(u32::from_le_bytes(*bytes.first_chunk().unwrap())),
+                u64::from(u32::from_le_bytes(*bytes.last_chunk().unwrap())),
+            ),
+            8..=16 => (
+                u64::from_le_bytes(*bytes.first_chunk().unwrap()),
+                u64::from_le_bytes(*bytes.last_chunk().unwrap()),
+            ),
+            _ => return None,
+        };
+        Some(Self {
+            first,
+            last,
+            len: len as u8,
+        })
+    }
+
+    fn slot(self) -> usize {
+        ((self.first ^ self.last.rotate_left(19) ^ u64::from(self.len))
+            .wrapping_mul(0x9e3779b185ebca87)
+            >> 59) as usize
+    }
 }
 impl std::fmt::Debug for Spare {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -70,6 +113,28 @@ impl std::fmt::Debug for Spare {
 const SPARE_SOURCE_LIMIT: usize = 64 * 1024;
 
 impl Vm {
+    pub(super) fn bind_constant_string(&mut self, bytes: &[u8]) -> Result<Value, Error> {
+        let Some(key) = ShortConstant::new(bytes) else {
+            return self.try_intern(bytes);
+        };
+        let slot = key.slot();
+        if let Some((cached, id)) = self.compile_spare.constant_strings[slot]
+            && cached == key
+            && self.strings.bytes.contains(id.0)
+        {
+            // The hint owns no string. A hit inherits the usual protection for
+            // a reference created during an incremental collection.
+            self.strings.bytes.preserve_new_reference(id.0);
+            return Ok(Value::String(id));
+        }
+        let value = self.try_intern(bytes)?;
+        let Value::String(id) = value else {
+            unreachable!("interned string")
+        };
+        self.compile_spare.constant_strings[slot] = Some((key, id));
+        Ok(value)
+    }
+
     pub(super) fn load_string_program(
         &mut self,
         source: StringId,
@@ -153,13 +218,13 @@ pub(super) fn compile(
     if crate::memory::compilation::active() || source.len() > SPARE_SOURCE_LIMIT {
         return crate::parser::Parser::with_native_depth(depth)?
             .resume(source, true)
-            .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), name));
+            .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), source, name));
     }
     let mut parser = crate::parser::Parser::try_new_in(&mut spare.parser, depth)?;
     let parsed = parser.resume(source, true);
     parser.recycle(&mut spare.parser);
     let ast = parsed?.expect("closed source");
-    let program = crate::compiler::compile_in(&ast, name, &mut spare.compiler);
+    let program = crate::compiler::compile_in(&ast, source, name, &mut spare.compiler);
     spare.parser.keep_ast(ast);
     program
 }
@@ -345,9 +410,10 @@ impl Loading {
             return Ok(None);
         };
         if !self.parser.reusable() {
-            return crate::compiler::compile(ast, &self.name).map(Some);
+            return crate::compiler::compile(ast, &self.source, &self.name).map(Some);
         }
-        let program = crate::compiler::compile_in(&ast, &self.name, &mut spare.compiler);
+        let program =
+            crate::compiler::compile_in(&ast, &self.source, &self.name, &mut spare.compiler);
         spare.parser.keep_ast(ast);
         program.map(Some)
     }
@@ -996,3 +1062,33 @@ impl Vm {
 
 #[cfg(test)]
 mod allocation_tests;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constant_binding_reuses_live_ids_and_rejects_recycled_slots() {
+        let mut vm = Vm::new();
+        let text = b"cold\0const\xffvalue";
+        let first = vm.bind_constant_string(text).unwrap();
+        assert_eq!(vm.bind_constant_string(text).unwrap(), first);
+        let Value::String(first) = first else {
+            unreachable!();
+        };
+
+        vm.collect_garbage().unwrap();
+        assert!(!vm.strings.bytes.contains(first.0));
+        let Value::String(other) = vm.try_intern(b"slot filled again").unwrap() else {
+            unreachable!();
+        };
+        assert_eq!(slot_index(other.0), slot_index(first.0));
+
+        let Value::String(rebound) = vm.bind_constant_string(text).unwrap() else {
+            unreachable!();
+        };
+        assert_ne!(rebound, first);
+        assert_ne!(rebound, other);
+        assert_eq!(vm.strings.bytes[slot_index(rebound.0)].as_ref(), text);
+    }
+}

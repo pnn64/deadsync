@@ -337,8 +337,12 @@ impl Vm {
         if let FrameKind::Lua(id) = self.frames[index].function {
             let c = &self.functions[slot_index(id.0)];
             let p = &self.programs[c.program].data.prototypes[c.prototype];
-            self.frames[index].pc =
-                p.debug.hook_lines.iter().position(|&l| l != 0).unwrap_or(0) as u32 + 1;
+            self.frames[index].pc = p
+                .metadata
+                .iter()
+                .position(|m| m.hook_line != 0)
+                .unwrap_or(0) as u32
+                + 1;
         }
         self.hook_callback(b"call", None, index, pc)?;
         if self.hooks.allowed() {
@@ -427,15 +431,15 @@ impl Vm {
             .filter(|&(i, _)| usize::from(i) == index)
             .map_or_else(
                 || {
-                    proto.debug.hook_lines[..pc]
+                    proto.metadata[..pc]
                         .iter()
-                        .rposition(|&l| l != 0)
+                        .rposition(|m| m.hook_line != 0)
                         .unwrap_or(0)
                 },
                 |(_, p)| p as usize,
             );
         let line_event = self.hooks.mask & LINE != 0
-            && (pc == 0 || pc <= previous || line != proto.debug.hook_lines[previous]);
+            && (pc == 0 || pc <= previous || line != proto.metadata[previous].hook_line);
         if self.hooks.allowed()
             && (line_event || (self.hooks.mask & COUNT != 0 && self.hooks.ticks == 1))
         {
@@ -518,9 +522,9 @@ impl Vm {
                         let c = &self.functions[slot_index(id.0)];
                         let proto = &self.programs[c.program].data.prototypes[c.prototype];
                         Some(if proto.debug.native.is_some() {
-                            proto.lines[frame.argc()]
+                            proto.metadata[frame.argc()].line
                         } else {
-                            proto.debug.hook_lines[frame.argc()]
+                            proto.metadata[frame.argc()].hook_line
                         })
                     };
                     self.hook_callback(

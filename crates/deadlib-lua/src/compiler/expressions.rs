@@ -3,8 +3,20 @@ use super::{
     tasks::{CallState, TableState},
     *,
 };
+use crate::parser::ConstantOperand;
 
 impl<'a> Compiler<'a> {
+    fn leaf(expr: &Expr) -> bool {
+        matches!(
+            expr,
+            Expr::Nil | Expr::Boolean(_) | Expr::Number(_) | Expr::String(_) | Expr::Name(_)
+        )
+    }
+
+    fn emits_immediately(&self, id: ExprId) -> bool {
+        Self::leaf(&self.ast.exprs[id].0) || self.folded[id].is_some()
+    }
+
     pub(super) fn expr(&mut self, id: ExprId, dst: u8) -> Result<(), Error> {
         let saved = self.function.next;
         let (expr, span) = &self.ast.exprs[id];
@@ -16,10 +28,7 @@ impl<'a> Compiler<'a> {
         }
         // A leaf emits at once, so its end continuation runs here instead of
         // travelling through the task stack.
-        let leaf = matches!(
-            expr,
-            Expr::Nil | Expr::Boolean(_) | Expr::Number(_) | Expr::String(_) | Expr::Name(_)
-        );
+        let leaf = Self::leaf(expr);
         if !leaf {
             self.tasks.try_push(Task::ExprEnd(saved, dst))?;
         }
@@ -28,16 +37,18 @@ impl<'a> Compiler<'a> {
             Expr::Boolean(b) => self.load(dst, Constant::Boolean(*b))?,
             Expr::Number(n) => self.load(dst, Constant::Number(*n))?,
             Expr::String(s) => self.load_string(dst, s)?,
-            Expr::Name(name) => {
-                if let Some(src) = self.local(name) {
+            Expr::Name(_) => match self.resolve_name(id)? {
+                Target::Local(src) => {
                     self.emit(Op::Move, dst, u16::from(src), 0)?;
-                } else if let Some(up) = self.upvalue(name)? {
+                }
+                Target::Upvalue(up) => {
                     self.emit(Op::GetUpvalue, dst, 0, u32::from(up))?;
-                } else {
-                    let k = self.string_constant(name)?;
+                }
+                Target::Global(k) => {
                     self.emit(Op::GetGlobal, dst, 0, k)?;
                 }
-            }
+                Target::Index(..) => unreachable!("name expression cannot use an index"),
+            },
             Expr::Paren(inner) => {
                 self.tasks.try_push(Task::Paren(*inner, span.discharge))?;
                 self.tasks.try_push(Task::Expr(*inner, dst))?;
@@ -117,8 +128,13 @@ impl<'a> Compiler<'a> {
             }
             Expr::Index(table, _) => {
                 let work = self.work_register(dst)?;
-                self.tasks.try_push(Task::IndexTable(id, dst, work))?;
-                self.tasks.try_push(Task::Operand(*table, work))?;
+                if self.emits_immediately(*table) {
+                    self.operand(*table, work)?;
+                    self.index_table(id, dst, work)?;
+                } else {
+                    self.tasks.try_push(Task::IndexTable(id, dst, work))?;
+                    self.tasks.try_push(Task::Operand(*table, work))?;
+                }
             }
             Expr::Table(fields, load_line) => {
                 // Lua 5.1 reserves constructor slots before evaluating fields.
@@ -190,7 +206,7 @@ impl<'a> Compiler<'a> {
                 let ast = self.ast;
                 for name in ast.names(*params) {
                     let reg = self.alloc(1)?;
-                    self.bind(name, reg)?;
+                    self.bind(name.bytes(self.source), reg)?;
                 }
                 if *vararg {
                     let reg = self.alloc(1)?;
@@ -215,8 +231,10 @@ impl<'a> Compiler<'a> {
             }
             Expr::Vararg => self.vararg(dst, wanted)?,
             _ => {
-                // The expression is the next continuation: compile it directly.
-                self.tasks.try_push(Task::FillNil(dst, wanted))?;
+                // The ordinary single result already has its destination.
+                if wanted > 1 || u16::from(dst) + wanted as u16 > self.function.next {
+                    self.tasks.try_push(Task::FillNil(dst, wanted))?;
+                }
                 self.expr(id, dst)?;
             }
         }
@@ -245,16 +263,18 @@ impl<'a> Compiler<'a> {
             self.result = reg;
             return Ok(());
         }
-        if self.rk_operand(id)
-            && let Some(constant) = self.constant_operand(id)?
-            && constant <= u32::from(u16::MAX) - RK
+        if let Some(operand) = self.ast.constant_operand(id)
+            && !matches!(operand, ConstantOperand::Number(_, None))
         {
-            self.line = self.ast.exprs[id].1.discharge;
-            self.emit(Op::Load, dst, RK_LOAD, constant)?;
-            self.function.debug_hidden[usize::from(dst) / 64] |= 1u64 << (dst % 64);
-            self.debug_line(0);
-            self.result = dst;
-            return Ok(());
+            let constant = self.intern_operand(operand)?;
+            if constant <= u32::from(u16::MAX) - RK {
+                self.line = self.ast.exprs[id].1.discharge;
+                self.emit(Op::Load, dst, RK_LOAD, constant)?;
+                self.function.debug_hidden[usize::from(dst) / 64] |= 1u64 << (dst % 64);
+                self.debug_line(0);
+                self.result = dst;
+                return Ok(());
+            }
         }
         self.expr(id, dst)
     }
@@ -265,11 +285,7 @@ impl<'a> Compiler<'a> {
         id
     }
     pub(super) fn local_operand(&self, id: ExprId) -> Option<u8> {
-        if let Expr::Name(name) = &self.ast.exprs[self.unparen(id)].0 {
-            self.local(name)
-        } else {
-            None
-        }
+        self.local_register(self.unparen(id))
     }
     pub(super) fn constant_truth(&self, mut id: ExprId) -> Option<bool> {
         let mut invert = false;
@@ -495,6 +511,25 @@ impl<'a> Compiler<'a> {
         self.emit(Op::Load, reg, 0, constant)?;
         self.binary_right(id, dst, u16::from(reg))
     }
+    pub(super) fn index_table(&mut self, id: ExprId, dst: u8, work: u8) -> Result<(), Error> {
+        let Expr::Index(_, key) = self.ast.exprs[id].0 else {
+            unreachable!("indexed expression")
+        };
+        let table = self.result;
+        let key_reg = self.right_register(key, table, work, false)?;
+        if self.emits_immediately(key) {
+            self.operand(key, key_reg)?;
+            self.index_key(id, dst, table)
+        } else {
+            self.tasks.try_push(Task::IndexKey(id, dst, table))?;
+            self.tasks.try_push(Task::Operand(key, key_reg))
+        }
+    }
+    pub(super) fn index_key(&mut self, id: ExprId, dst: u8, table: u8) -> Result<(), Error> {
+        self.line = self.ast.exprs[id].1.discharge;
+        self.emit(Op::GetTable, dst, u16::from(table), u32::from(self.result))?;
+        Ok(())
+    }
     pub(super) fn table_next(&mut self, state: TableState) -> Result<(), Error> {
         let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
             unreachable!()
@@ -505,18 +540,16 @@ impl<'a> Compiler<'a> {
                     let reg = self.alloc(1)?;
                     self.tasks
                         .try_push(Task::TableConstant(state, reg, constant))?;
-                    self.tasks.try_push(Task::Operand(value, reg))?;
-                    return Ok(());
+                    return self.operand(value, reg);
                 }
                 let regs = self.alloc(1)?;
                 self.tasks.try_push(Task::TableKey(state, regs))?;
-                self.tasks.try_push(Task::Operand(key, regs))?;
+                self.operand(key, regs)?;
             } else {
                 let reg = self.alloc(1)?;
                 let open = state.index + 1 == fields.len() && self.multiple(value);
                 self.tasks.try_push(Task::TableList(state, open))?;
-                self.tasks
-                    .try_push(Task::Results(value, reg, if open { OPEN } else { 1 }))?;
+                self.expr_results(value, reg, if open { OPEN } else { 1 })?;
             }
         } else {
             if state.pending != 0 {
@@ -530,38 +563,39 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
     pub(super) fn constant_operand(&mut self, id: ExprId) -> Result<Option<u32>, Error> {
-        let Ok(index) = self
-            .ast
-            .constant_operands
-            .binary_search_by_key(&id, |&(id, _)| id)
-        else {
-            return Ok(None);
-        };
-        let constant = match self.ast.constant_operands[index].1 {
-            crate::parser::ConstantOperand::Nil => Constant::Nil,
-            crate::parser::ConstantOperand::Boolean(value) => Constant::Boolean(value),
-            crate::parser::ConstantOperand::Number(value, _) => Constant::Number(value),
-            crate::parser::ConstantOperand::String(source) => {
+        self.ast
+            .constant_operand(id)
+            .map(|operand| self.intern_operand(operand))
+            .transpose()
+    }
+    fn intern_operand(&mut self, operand: ConstantOperand) -> Result<u32, Error> {
+        let constant = match operand {
+            ConstantOperand::Nil => Constant::Nil,
+            ConstantOperand::Boolean(value) => Constant::Boolean(value),
+            ConstantOperand::Number(value, Some(slot)) => {
+                let number = self.normalized_number(value);
+                return self
+                    .function
+                    .constants
+                    .source_number(usize::from(slot), number)?
+                    .ok_or_else(|| self.error(ErrorKind::Limit, "too many constants"));
+            }
+            ConstantOperand::Number(value, None) => Constant::Number(value),
+            ConstantOperand::String(source) => {
                 let Expr::String(bytes) = &self.ast.exprs[source].0 else {
                     unreachable!("constant key literal")
                 };
-                return self.string_constant(bytes).map(Some);
+                return self.string_constant(bytes);
             }
         };
-        self.constant(constant).map(Some)
+        self.constant(constant)
     }
     pub(super) fn rk_operand(&self, id: ExprId) -> bool {
         self.ast
-            .constant_operands
-            .binary_search_by_key(&id, |&(id, _)| id)
-            .is_ok_and(|index| {
-                !matches!(
-                    self.ast.constant_operands[index].1,
-                    crate::parser::ConstantOperand::Number(_, false)
-                )
-            })
+            .constant_operand(id)
+            .is_some_and(|operand| !matches!(operand, ConstantOperand::Number(_, None)))
     }
-    pub(super) fn call_parts(&self, id: ExprId) -> (ExprId, Option<&'a [u8]>, &'a [ExprId], u32) {
+    fn call_parts(&self, id: ExprId) -> (ExprId, Option<&'a Lexeme>, &'a [ExprId], u32) {
         let ast = self.ast;
         match &ast.exprs[id].0 {
             Expr::Call(function, args, line) => (*function, None, ast.ids(*args), *line),
@@ -580,16 +614,64 @@ impl<'a> Compiler<'a> {
         } else {
             self.alloc(1)?
         };
-        self.tasks.try_push(Task::CallCallee(CallState {
+        let state = CallState {
             id,
             wanted,
             saved,
             index: 0,
             base,
             dst,
-        }))?;
+        };
+        if Self::leaf(&self.ast.exprs[function].0) {
+            self.expr(function, base)?;
+            return self.call_callee(state);
+        }
+        self.tasks.try_push(Task::CallCallee(state))?;
         self.tasks.try_push(Task::Expr(function, base))?;
         Ok(())
+    }
+
+    pub(super) fn call_callee(&mut self, state: CallState) -> Result<(), Error> {
+        let (_, method, _, _) = self.call_parts(state.id);
+        if let Some(method) = method {
+            let receiver = self.alloc(1)?;
+            debug_assert_eq!(u16::from(receiver), u16::from(state.base) + 1);
+            self.emit(Op::Move, receiver, u16::from(state.base), 0)?;
+            let key = self.alloc(1)?;
+            self.load_string(key, method)?;
+            self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
+            self.emit(
+                Op::GetTable,
+                state.base,
+                u16::from(receiver),
+                u32::from(key),
+            )?;
+            self.reset(u16::from(key));
+        }
+        self.call_args(state)
+    }
+
+    pub(super) fn call_args(&mut self, mut state: CallState) -> Result<(), Error> {
+        let (_, method, args, _) = self.call_parts(state.id);
+        while let Some(&id) = args.get(usize::from(state.index)) {
+            let dst = self.alloc(1)?;
+            debug_assert_eq!(
+                usize::from(dst),
+                usize::from(state.base)
+                    + 1
+                    + usize::from(method.is_some())
+                    + usize::from(state.index)
+            );
+            state.index += 1;
+            if self.emits_immediately(id) {
+                self.expr(id, dst)?;
+                continue;
+            }
+            let open = usize::from(state.index) == args.len() && self.multiple(id);
+            self.tasks.try_push(Task::CallArgs(state))?;
+            return self.expr_results(id, dst, if open { OPEN } else { 1 });
+        }
+        self.call_end(state)
     }
     pub(super) fn call_end(&mut self, state: CallState) -> Result<(), Error> {
         let CallState {
@@ -601,6 +683,7 @@ impl<'a> Compiler<'a> {
             ..
         } = state;
         let (function, method, args, line) = self.call_parts(id);
+        let method = method.map(|name| name.bytes(self.source));
         self.line = line;
         let argc = if args.last().is_some_and(|id| self.multiple(*id)) {
             OPEN_ARGS

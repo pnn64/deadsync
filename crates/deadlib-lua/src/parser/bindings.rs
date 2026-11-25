@@ -1,6 +1,6 @@
 //! Lexical capture limits while parsing, including unfinished reader input.
-use super::hash;
-use crate::memory::text::Text;
+use super::{NameBinding, hash};
+use crate::lexer::Lexeme;
 use crate::{
     Error, ErrorKind,
     memory::fallible::{self, VecExt},
@@ -9,9 +9,18 @@ const NONE: u32 = u32::MAX;
 const MAX_UPVALUES: u8 = 60;
 
 pub(super) enum Reference {
-    Local(u16),
+    Local { register: u16, visible: u8 },
     Upvalue,
     Global(u32),
+}
+impl Reference {
+    pub(super) fn binding(&self) -> NameBinding {
+        match *self {
+            Self::Local { visible, .. } => NameBinding::local(visible),
+            Self::Upvalue => NameBinding::UPVALUE,
+            Self::Global(_) => NameBinding::GLOBAL,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -19,6 +28,13 @@ struct Name {
     start: usize,
     len: usize,
     hash: u64,
+}
+#[derive(Clone, Copy, Debug)]
+struct Local {
+    symbol: u32,
+    // Slot among source-level variables. Logical stack accounting also
+    // includes the hidden numeric and generic for loop controls.
+    visible: u8,
 }
 #[derive(Debug)]
 struct Scope {
@@ -39,7 +55,7 @@ struct Capture {
 pub(super) struct Bindings {
     names: Vec<Name>,
     buckets: Vec<u32>,
-    locals: Vec<u32>,
+    locals: Vec<Local>,
     scopes: Vec<Scope>,
     captures: Vec<Capture>,
     free: u32,
@@ -83,7 +99,7 @@ impl Bindings {
     pub(super) fn heap_bytes(&self) -> usize {
         self.names.capacity() * size_of::<Name>()
             + self.buckets.capacity() * size_of::<u32>()
-            + self.locals.capacity() * size_of::<u32>()
+            + self.locals.capacity() * size_of::<Local>()
             + self.scopes.capacity() * size_of::<Scope>()
             + self.captures.capacity() * size_of::<Capture>()
     }
@@ -110,18 +126,17 @@ impl Bindings {
             slot = (slot + 1) & (self.buckets.len() - 1);
         }
     }
-    pub(super) fn intern(&mut self, input: &[u8], start: usize, end: usize) -> Result<(), Error> {
+    pub(super) fn intern(&mut self, input: &[u8], start: usize, end: usize) -> Result<u32, Error> {
         let bytes = &input[start..end];
-        if self
-            .last_token
-            .is_some_and(|id| self.bytes(input, id) == bytes)
+        if let Some(id) = self.last_token
+            && self.bytes(input, id) == bytes
         {
-            return Ok(());
+            return Ok(id);
         }
         let hash = hash(bytes);
         if let Some(id) = self.lookup(input, bytes, hash) {
             self.last_token = Some(id);
-            return Ok(());
+            return Ok(id);
         }
         if (self.names.len() + 1) * 2 >= self.buckets.len() {
             let size = (self.buckets.len() * 2).max(16);
@@ -139,14 +154,15 @@ impl Bindings {
         while self.buckets[slot] != 0 {
             slot = (slot + 1) & (self.buckets.len() - 1);
         }
-        self.buckets[slot] = self.names.len() as u32 + 2;
+        let id = self.names.len() as u32 + 2;
         self.names.try_push(Name {
             start,
             len: bytes.len(),
             hash,
         })?;
-        self.last_token = Some(self.buckets[slot]);
-        Ok(())
+        self.buckets[slot] = id;
+        self.last_token = Some(id);
+        Ok(id)
     }
     pub(super) fn name(&self, input: &[u8], bytes: &[u8]) -> u32 {
         // The lexer usually just interned the name that the grammar resolves.
@@ -168,12 +184,43 @@ impl Bindings {
             }
         }
     }
-    pub(super) fn declare(&mut self, input: &[u8], bytes: &[u8]) -> Result<(), Error> {
-        self.locals.try_push(self.name(input, bytes))?;
-        Ok(())
+    pub(super) fn symbol_hash(&self, symbol: u32) -> u64 {
+        match symbol {
+            0 => hash(b"arg"),
+            1 => hash(b"self"),
+            _ => self.names[symbol as usize - 2].hash,
+        }
+    }
+    pub(super) fn intern_lexeme(&mut self, input: &[u8], name: &Lexeme) -> Result<u32, Error> {
+        if let Lexeme::Source { start, end, .. } = *name {
+            self.intern(input, start as usize, end as usize)
+        } else {
+            // Synthesized parameters and heap-backed names already have a symbol.
+            Ok(self.name(input, name.bytes(input)))
+        }
+    }
+    pub(super) fn declare(&mut self, input: &[u8], name: &Lexeme) -> Result<(), Error> {
+        let symbol = self.intern_lexeme(input, name)?;
+        self.declare_symbol(symbol)
+    }
+    fn declare_symbol(&mut self, symbol: u32) -> Result<(), Error> {
+        let visible = self.next_visible();
+        self.locals.try_push(Local { symbol, visible })
+    }
+    fn next_visible(&self) -> u8 {
+        self.locals[self.scopes.last().unwrap().base..]
+            .last()
+            .map_or(0, |local| local.visible + u8::from(local.symbol != NONE))
     }
     pub(super) fn hidden(&mut self, count: usize) -> Result<(), Error> {
-        self.locals.try_resize(self.locals.len() + count, NONE)?;
+        let visible = self.next_visible();
+        self.locals.try_resize(
+            self.locals.len() + count,
+            Local {
+                symbol: NONE,
+                visible,
+            },
+        )?;
         Ok(())
     }
     pub(super) fn truncate(&mut self, count: u16) {
@@ -184,7 +231,7 @@ impl Bindings {
         &mut self,
         input: &[u8],
         line: u32,
-        params: &[Text],
+        params: &[Lexeme],
         vararg: bool,
     ) -> Result<(), Error> {
         self.scopes.try_push(Scope {
@@ -197,7 +244,7 @@ impl Bindings {
             self.declare(input, param)?;
         }
         if vararg {
-            self.locals.try_push(0)?;
+            self.declare_symbol(0)?;
         }
         Ok(())
     }
@@ -226,17 +273,21 @@ impl Bindings {
     }
     /// Return the first overflowing function's definition line. Captures must
     /// propagate from the owning scope outwards, as for nested closures in 5.1.
-    pub(super) fn reference(&mut self, input: &[u8], bytes: &[u8]) -> Result<Reference, Error> {
-        let name = self.name(input, bytes);
+    pub(super) fn reference_symbol(&mut self, name: u32) -> Result<Reference, Error> {
         let mut end = self.locals.len();
         let mut owner = None;
         for index in (0..self.scopes.len()).rev() {
             let start = self.scopes[index].base;
-            let local = self.locals[start..end].iter().rposition(|&n| n == name);
+            let local = self.locals[start..end]
+                .iter()
+                .rposition(|n| n.symbol == name);
             if index + 1 == self.scopes.len()
                 && let Some(reg) = local
             {
-                return Ok(Reference::Local(reg as u16));
+                return Ok(Reference::Local {
+                    register: reg as u16,
+                    visible: self.locals[start + reg].visible,
+                });
             }
             if local.is_some() || self.captured(index, name) {
                 owner = Some(index);

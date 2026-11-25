@@ -20,61 +20,6 @@ pub(super) struct TableState {
     pub dst: u8,
 }
 
-/// Most assignments have one target; avoid a heap allocation for that case.
-pub(super) enum AssignmentTargets {
-    Inline(Option<Target>),
-    Heap(Vec<Target>),
-}
-
-impl Default for AssignmentTargets {
-    fn default() -> Self {
-        Self::Inline(None)
-    }
-}
-
-impl AssignmentTargets {
-    pub(super) fn try_push(&mut self, target: Target, total: usize) -> Result<(), Error> {
-        match self {
-            Self::Inline(slot) => {
-                if slot.is_none() {
-                    *slot = Some(target);
-                } else {
-                    // Allocate before moving the first target, so failure
-                    // leaves the inline value and its ownership intact.
-                    let mut values = fallible::with_capacity(total.max(2))?;
-                    values.push(slot.take().expect("inline assignment target"));
-                    values.push(target);
-                    *self = Self::Heap(values);
-                }
-                Ok(())
-            }
-            Self::Heap(values) => values.try_push(target),
-        }
-    }
-}
-
-impl std::ops::Deref for AssignmentTargets {
-    type Target = [Target];
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            Self::Inline(Some(target)) => std::slice::from_ref(target),
-            Self::Inline(None) => &[],
-            Self::Heap(values) => values,
-        }
-    }
-}
-
-impl std::ops::DerefMut for AssignmentTargets {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match self {
-            Self::Inline(Some(target)) => std::slice::from_mut(target),
-            Self::Inline(None) => &mut [],
-            Self::Heap(values) => values,
-        }
-    }
-}
-
 pub(super) enum Task<'a> {
     Block(&'a [StmtId]),
     Scope(&'a [StmtId]),
@@ -84,20 +29,20 @@ pub(super) enum Task<'a> {
     ValuesNext(&'a [ExprId], u16, u8, u16),
     BindLocal(StmtId),
     LocalFunctionEnd,
-    AssignNext(StmtId, usize, AssignmentTargets),
-    AssignKey(StmtId, usize, AssignmentTargets),
-    AssignIndex(StmtId, usize, AssignmentTargets, u8),
-    AssignEnd(StmtId, AssignmentTargets),
+    AssignNext(StmtId, usize),
+    AssignKey(StmtId, usize),
+    AssignIndex(StmtId, usize, u8),
+    AssignEnd(StmtId, usize),
     ReturnNext(StmtId, u8, usize, u32),
     TailEnd(u32),
     WhileCond(StmtId, u16, u32, u8),
     WhileEnd(u32, boolean::List),
     RepeatCond(StmtId, u16, u32, usize),
     RepeatEnd(ExprId, u16, u32, usize, u8),
-    IfNext(StmtId, usize, u16, Vec<usize>),
-    IfCond(StmtId, usize, u16, Vec<usize>, u8),
-    IfBody(StmtId, usize, u16, Vec<usize>, boolean::List),
-    IfEnd(Vec<usize>),
+    IfNext(StmtId, usize, u16, boolean::List),
+    IfCond(StmtId, usize, u16, boolean::List, u8),
+    IfBody(StmtId, usize, u16, boolean::List, boolean::List),
+    IfEnd(boolean::List),
     ForLimit(StmtId, u16, u8),
     ForStep(StmtId, u16, u8),
     ForInit(StmtId, u16, u8),
@@ -106,7 +51,6 @@ pub(super) enum Task<'a> {
     ForInEnd(u8, usize, usize, u32, usize),
     Expr(ExprId, u8),
     ExprEnd(u16, u8),
-    Results(ExprId, u8, u32),
     FillNil(u8, u32),
     Operand(ExprId, u8),
     Paren(ExprId, u32),
@@ -136,7 +80,7 @@ pub(super) enum Task<'a> {
 }
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<Task<'_>>() <= 64);
+const _: () = assert!(std::mem::size_of::<Task<'_>>() <= 48);
 
 impl<'a> Compiler<'a> {
     pub(super) fn run(&mut self) -> Result<(), Error> {
@@ -184,8 +128,7 @@ impl<'a> Compiler<'a> {
                         };
                         self.tasks
                             .try_push(Task::ValuesNext(values, wanted, start, index + 1))?;
-                        self.tasks
-                            .try_push(Task::Results(value, start + index as u8, returns))?;
+                        self.expr_results(value, start + index as u8, returns)?;
                     } else {
                         let end = u16::from(start) + wanted.max(values.len() as u16).max(1);
                         if end > self.function.next {
@@ -207,7 +150,7 @@ impl<'a> Compiler<'a> {
                     let base = self.result;
                     self.reset(u16::from(base) + names.len() as u16);
                     for (i, name) in names.iter().enumerate() {
-                        self.bind(name, (usize::from(base) + i) as u8)?;
+                        self.bind(name.bytes(self.source), (usize::from(base) + i) as u8)?;
                     }
                 }
                 Task::LocalFunctionEnd => {
@@ -219,21 +162,14 @@ impl<'a> Compiler<'a> {
                         .debug;
                     self.function.debug_locals[index].start = self.function.code.len() as u32;
                 }
-                Task::AssignNext(id, index, locations) => self.assign_next(id, index, locations)?,
-                Task::AssignKey(id, index, locations) => {
-                    let table = self.result;
-                    self.assign_key(id, index, locations, table)?;
+                Task::AssignNext(id, start) => self.assign_next(id, start)?,
+                Task::AssignKey(id, start) => self.assign_key(id, start, self.result)?,
+                Task::AssignIndex(id, start, table) => {
+                    self.assignment_targets
+                        .try_push(Target::Index(table, TargetKey::Register(self.result)))?;
+                    self.tasks.try_push(Task::AssignNext(id, start))?;
                 }
-                Task::AssignIndex(id, index, mut locations, table) => {
-                    let total = self.assignment(id).0.len();
-                    locations.try_push(
-                        Target::Index(table, TargetKey::Register(self.result)),
-                        total,
-                    )?;
-                    self.tasks
-                        .try_push(Task::AssignNext(id, index + 1, locations))?;
-                }
-                Task::AssignEnd(id, locations) => {
+                Task::AssignEnd(id, start) => {
                     if matches!(self.ast.stmts[id].0, Stmt::FunctionDefinition(..)) {
                         self.line = self.ast.stmts[id].1;
                     } else {
@@ -243,33 +179,33 @@ impl<'a> Compiler<'a> {
                             .discharge;
                     }
                     let base = self.result;
-                    for (i, target) in locations.iter().enumerate().rev() {
-                        let src = (usize::from(base) + i) as u8;
-                        match target {
+                    for at in (start..self.assignment_targets.len()).rev() {
+                        let src = (usize::from(base) + at - start) as u8;
+                        match self.assignment_targets[at] {
                             Target::Local(dst) => {
-                                self.emit(Op::Move, *dst, u16::from(src), 0)?;
+                                self.emit(Op::Move, dst, u16::from(src), 0)?;
                             }
                             Target::Upvalue(up) => {
-                                self.emit(Op::SetUpvalue, src, 0, u32::from(*up))?;
+                                self.emit(Op::SetUpvalue, src, 0, u32::from(up))?;
                             }
                             Target::Global(k) => {
-                                self.emit(Op::SetGlobal, src, 0, *k)?;
+                                self.emit(Op::SetGlobal, src, 0, k)?;
                             }
                             Target::Index(table, key) => {
                                 let saved = self.function.next;
                                 let reg = match key {
-                                    TargetKey::Register(reg) => *reg,
+                                    TargetKey::Register(reg) => reg,
                                     TargetKey::Constant(constant) => {
                                         let reg = self.alloc(1)?;
                                         self.emit(
                                             Op::Load,
                                             reg,
-                                            if *constant <= u32::from(u16::MAX) - RK {
+                                            if constant <= u32::from(u16::MAX) - RK {
                                                 RK_LOAD
                                             } else {
                                                 0
                                             },
-                                            *constant,
+                                            constant,
                                         )?;
                                         self.function.debug_hidden[usize::from(reg) / 64] |=
                                             1u64 << (reg % 64);
@@ -277,11 +213,12 @@ impl<'a> Compiler<'a> {
                                         reg
                                     }
                                 };
-                                self.emit(Op::SetTable, *table, u16::from(reg), u32::from(src))?;
+                                self.emit(Op::SetTable, table, u16::from(reg), u32::from(src))?;
                                 self.reset(saved);
                             }
                         }
                     }
+                    self.assignment_targets.truncate(start);
                 }
                 Task::ReturnNext(id, base, index, count) => {
                     let Stmt::Return(values, end_line) = &self.ast.stmts[id].0 else {
@@ -300,11 +237,11 @@ impl<'a> Compiler<'a> {
                             index + 1,
                             if all { OPEN } else { count },
                         ))?;
-                        self.tasks.try_push(Task::Results(
+                        self.expr_results(
                             value,
                             (usize::from(base) + index) as u8,
                             if all { OPEN } else { 1 },
-                        ))?;
+                        )?;
                     } else {
                         self.line = *end_line;
                         self.emit(Op::Return, base, 0, count)?;
@@ -393,16 +330,15 @@ impl<'a> Compiler<'a> {
                         unreachable!()
                     };
                     if index + 1 < arms.len() || other.is_some() {
-                        exits.try_push(self.emit(Op::Jump, 0, 0, 0)?)?;
+                        let exit = self.emit(Op::Jump, 0, 0, 0)?;
+                        self.list_push(&mut exits, exit);
                     }
                     self.list_patch(skip, self.function.code.len());
                     self.tasks
                         .try_push(Task::IfNext(id, index + 1, saved, exits))?;
                 }
                 Task::IfEnd(exits) => {
-                    for pc in exits {
-                        self.patch(pc);
-                    }
+                    self.list_patch(exits, self.function.code.len());
                 }
                 Task::ForLimit(id, saved, base) => {
                     let Stmt::For { limit, .. } = self.ast.stmts[id].0 else {
@@ -443,7 +379,7 @@ impl<'a> Compiler<'a> {
                     let prep = self.emit(Op::ForPrep, base, 0, 0)?;
                     let head = self.function.code.len() as u32;
                     let locals = self.function.locals.len();
-                    self.bind(name, base + 3)?;
+                    self.bind(name.bytes(self.source), base + 3)?;
                     self.function.loops.try_push((saved, Vec::new()))?;
                     self.tasks
                         .try_push(Task::ForEnd(id, base, controls, locals, prep, head))?;
@@ -472,7 +408,6 @@ impl<'a> Compiler<'a> {
                     self.reset(saved);
                     self.result = dst;
                 }
-                Task::Results(id, dst, wanted) => self.expr_results(id, dst, wanted)?,
                 Task::FillNil(dst, wanted) => {
                     if wanted != OPEN {
                         let end = u16::from(dst) + wanted as u16;
@@ -538,19 +473,8 @@ impl<'a> Compiler<'a> {
                 Task::BinaryConstant(id, dst, work, constant) => {
                     self.binary_constant(id, dst, work, constant)?
                 }
-                Task::IndexTable(id, dst, work) => {
-                    let Expr::Index(_, key) = self.ast.exprs[id].0 else {
-                        unreachable!()
-                    };
-                    let table = self.result;
-                    let key_reg = self.right_register(key, table, work, false)?;
-                    self.tasks.try_push(Task::IndexKey(id, dst, table))?;
-                    self.tasks.try_push(Task::Operand(key, key_reg))?;
-                }
-                Task::IndexKey(id, dst, table) => {
-                    self.line = self.ast.exprs[id].1.discharge;
-                    self.emit(Op::GetTable, dst, u16::from(table), u32::from(self.result))?;
-                }
+                Task::IndexTable(id, dst, work) => self.index_table(id, dst, work)?,
+                Task::IndexKey(id, dst, table) => self.index_key(id, dst, table)?,
                 Task::TableNext(state) => self.table_next(state)?,
                 Task::TableKey(state, regs) => {
                     let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
@@ -561,7 +485,7 @@ impl<'a> Compiler<'a> {
                     let value = fields[state.index].1;
                     let value_reg = self.right_register(value, key, regs, false)?;
                     self.tasks.try_push(Task::TableValue(state, regs, key))?;
-                    self.tasks.try_push(Task::Operand(value, value_reg))?;
+                    self.operand(value, value_reg)?;
                 }
                 Task::TableValue(mut state, regs, key) => {
                     self.emit(
@@ -572,7 +496,7 @@ impl<'a> Compiler<'a> {
                     )?;
                     self.reset(u16::from(regs));
                     state.index += 1;
-                    self.tasks.try_push(Task::TableNext(state))?;
+                    self.table_next(state)?;
                 }
                 Task::TableConstant(mut state, scratch, constant) => {
                     let value = self.result;
@@ -581,31 +505,29 @@ impl<'a> Compiler<'a> {
                     } else {
                         scratch
                     };
-                    let line = self.line;
-                    let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
-                        unreachable!()
+                    let key = if constant <= u32::from(u16::MAX) - RK {
+                        // SetTable can encode this key directly. A temporary
+                        // load would be removed by emit's operand folding.
+                        (RK + constant) as u16
+                    } else {
+                        let line = self.line;
+                        let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
+                            unreachable!()
+                        };
+                        let fields = self.ast.fields(*fields);
+                        self.line = self.ast.exprs[fields[state.index].0.expect("constant key")]
+                            .1
+                            .discharge;
+                        self.emit(Op::Load, key, 0, constant)?;
+                        self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
+                        self.debug_line(0);
+                        self.line = line;
+                        u16::from(key)
                     };
-                    let fields = self.ast.fields(*fields);
-                    self.line = self.ast.exprs[fields[state.index].0.expect("constant key")]
-                        .1
-                        .discharge;
-                    self.emit(
-                        Op::Load,
-                        key,
-                        if constant <= u32::from(u16::MAX) - RK {
-                            RK_LOAD
-                        } else {
-                            0
-                        },
-                        constant,
-                    )?;
-                    self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
-                    self.debug_line(0);
-                    self.line = line;
-                    self.emit(Op::SetTable, state.table, u16::from(key), u32::from(value))?;
+                    self.emit(Op::SetTable, state.table, key, u32::from(value))?;
                     self.reset(u16::from(scratch));
                     state.index += 1;
-                    self.tasks.try_push(Task::TableNext(state))?;
+                    self.table_next(state)?;
                 }
                 Task::TableList(mut state, open) => {
                     state.pending += 1;
@@ -621,48 +543,11 @@ impl<'a> Compiler<'a> {
                         self.reset(u16::from(state.table) + 1);
                     }
                     state.index += 1;
-                    self.tasks.try_push(Task::TableNext(state))?;
+                    self.table_next(state)?;
                 }
                 Task::Call(id, dst, wanted) => self.call(id, dst, wanted)?,
-                Task::CallCallee(state) => {
-                    let (_, method, _, _) = self.call_parts(state.id);
-                    if let Some(method) = method {
-                        let receiver = self.alloc(1)?;
-                        debug_assert_eq!(u16::from(receiver), u16::from(state.base) + 1);
-                        self.emit(Op::Move, receiver, u16::from(state.base), 0)?;
-                        let key = self.alloc(1)?;
-                        self.load_string(key, method)?;
-                        self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
-                        self.emit(
-                            Op::GetTable,
-                            state.base,
-                            u16::from(receiver),
-                            u32::from(key),
-                        )?;
-                        self.reset(u16::from(key));
-                    }
-                    self.tasks.try_push(Task::CallArgs(state))?;
-                }
-                Task::CallArgs(mut state) => {
-                    let (_, method, args, _) = self.call_parts(state.id);
-                    if let Some(&id) = args.get(usize::from(state.index)) {
-                        let all = usize::from(state.index) + 1 == args.len() && self.multiple(id);
-                        let dst = self.alloc(1)?;
-                        debug_assert_eq!(
-                            usize::from(dst),
-                            usize::from(state.base)
-                                + 1
-                                + usize::from(method.is_some())
-                                + usize::from(state.index)
-                        );
-                        state.index += 1;
-                        self.tasks.try_push(Task::CallArgs(state))?;
-                        self.tasks
-                            .try_push(Task::Results(id, dst, if all { OPEN } else { 1 }))?;
-                    } else {
-                        self.call_end(state)?;
-                    }
-                }
+                Task::CallCallee(state) => self.call_callee(state)?,
+                Task::CallArgs(state) => self.call_args(state)?,
                 Task::ChildEnd(line, dst) => {
                     self.line = line;
                     self.emit(Op::Return, 0, 0, 0)?;

@@ -100,7 +100,7 @@ impl Vm {
         if call.kind.bytes().is_empty() {
             return None;
         }
-        Some((c_bytes(&call.name), call.kind.bytes()))
+        Some((c_bytes(proto.debug.name(&call.name)), call.kind.bytes()))
     }
     pub(super) fn debug_nups(&self, id: u64) -> usize {
         match id {
@@ -206,7 +206,7 @@ impl Vm {
                     let pc = self.debug_frames(thread)[i]
                         .pc()
                         .saturating_sub(1)
-                        .min(proto.lines.len() - 1);
+                        .min(proto.metadata.len() - 1);
                     proto.debug_line(pc)
                 }
                 _ => -1,
@@ -267,10 +267,7 @@ impl Vm {
         let debug = &self.programs[closure.program].data.prototypes[closure.prototype].debug;
         // Native chunks may omit debug names while retaining executable cells.
         // Lua 5.1 exposes only the names present in the imported prototype.
-        let named = debug
-            .native
-            .as_ref()
-            .map_or(debug.upvalues.len(), |native| native.wire.names);
+        let named = debug.upvalue_names().len();
         let Some(&cell) = n
             .checked_sub(1)
             .and_then(|n| usize::try_from(n).ok())
@@ -280,7 +277,8 @@ impl Vm {
             return Ok(0);
         };
         let data = self.programs[closure.program].data.clone();
-        let name = c_bytes(&data.prototypes[closure.prototype].debug.upvalues[n as usize - 1]);
+        let debug = &data.prototypes[closure.prototype].debug;
+        let name = c_bytes(debug.name(&debug.upvalues[n as usize - 1]));
         if id == SET_UPVALUE {
             // lua_setupvalue consumes the actual top, including extra arguments.
             self.set_cell(cell as usize, self.argument(base, count, count - 1))?;
@@ -463,7 +461,7 @@ impl Vm {
                         })
                         .min(proto.debug_registers())
                 };
-                let pc = (pc as usize).min(proto.gc_live.len() - 1);
+                let pc = (pc as usize).min(proto.metadata.len() - 1);
                 if let Ok(i) = proto
                     .debug
                     .calls
@@ -478,7 +476,7 @@ impl Vm {
                         LocalSlot::Register(frame.base + usize::from(register)),
                     ));
                 }
-                let live = &proto.gc_maps[proto.gc_live[pc] as u16 as usize];
+                let live = &proto.gc_maps[proto.metadata[pc].gc_live as u16 as usize];
                 let mut wanted = n.checked_sub(named)?;
                 for r in 0..limit {
                     if live[r / 64] & !active[r / 64] & (1u64 << (r % 64)) != 0 {
@@ -688,10 +686,8 @@ impl Vm {
         }
         let name = match name {
             LocalName::Named(program, prototype, local) => {
-                let bytes = &self.programs[program].data.prototypes[prototype]
-                    .debug
-                    .locals[local]
-                    .name;
+                let debug = &self.programs[program].data.prototypes[prototype].debug;
+                let bytes = debug.name(&debug.locals[local].name);
                 Value::String(
                     self.strings
                         .try_intern(c_bytes(bytes))

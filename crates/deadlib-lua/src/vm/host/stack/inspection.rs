@@ -211,9 +211,10 @@ impl NativeStack<'_, '_> {
             LocalName::Temporary => Ok(NativeDebugString::Static(b"(*temporary)\0")),
             LocalName::Named(p, proto, local) => {
                 let data = self.call.vm.programs[p].data.clone();
+                let debug = &data.prototypes[proto].debug;
                 self.call
                     .vm
-                    .native_debug_string(p, &data.prototypes[proto].debug.locals[local].name)
+                    .native_debug_string(p, debug.name(&debug.locals[local].name))
             }
         }
     }
@@ -378,7 +379,7 @@ impl NativeStack<'_, '_> {
                         self.call.vm.debug_frames(record.thread)[i]
                             .pc()
                             .saturating_sub(1)
-                            .min(proto.lines.len() - 1),
+                            .min(proto.metadata.len() - 1),
                     ) as i32
                 }
                 _ => -1,
@@ -411,9 +412,14 @@ impl NativeStack<'_, '_> {
                 })
             });
             if let Some((p, proto, pc, data, kind)) = name {
-                let calls = &data.prototypes[proto].debug.calls;
+                let debug = &data.prototypes[proto].debug;
+                let calls = &debug.calls;
                 let call = &calls[calls.binary_search_by_key(&pc, |c| c.pc).unwrap()];
-                info.name = Some(Some(self.call.vm.native_debug_string(p, &call.name)?));
+                info.name = Some(Some(
+                    self.call
+                        .vm
+                        .native_debug_string(p, debug.name(&call.name))?,
+                ));
                 info.name_what = Some(match kind {
                     b"global" => b"global\0",
                     b"local" => b"local\0",

@@ -786,8 +786,12 @@ impl Vm {
         let closure = &self.functions[slot_index(function.0)];
         let program = &self.programs[closure.program].data;
         let prototype = &program.prototypes[closure.prototype];
-        let line =
-            prototype.debug_line(frame.pc().saturating_sub(1).min(prototype.lines.len() - 1));
+        let line = prototype.debug_line(
+            frame
+                .pc()
+                .saturating_sub(1)
+                .min(prototype.metadata.len() - 1),
+        );
         let mut chunk = [0; 60];
         let used = crate::bytecode::chunk_id_into(program.source(prototype), &mut chunk);
         let build = || -> Result<Vec<u8>, Error> {
@@ -821,8 +825,12 @@ impl Vm {
         let closure = &self.functions[slot_index(function.0)];
         let program = &self.programs[closure.program].data;
         let prototype = &program.prototypes[closure.prototype];
-        let line =
-            prototype.debug_line(frame.pc().saturating_sub(1).min(prototype.lines.len() - 1));
+        let line = prototype.debug_line(
+            frame
+                .pc()
+                .saturating_sub(1)
+                .min(prototype.metadata.len() - 1),
+        );
         if line == 0 {
             return Vec::new();
         }

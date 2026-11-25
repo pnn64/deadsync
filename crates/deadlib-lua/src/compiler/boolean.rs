@@ -75,7 +75,7 @@ impl Default for Boolean {
     }
 }
 impl Compiler<'_> {
-    fn list_push(&mut self, list: &mut List, pc: usize) {
+    pub(super) fn list_push(&mut self, list: &mut List, pc: usize) {
         let link = pc as u32 + 1;
         if list.tail != 0 {
             self.function.code[list.tail as usize - 1].c = link;
@@ -106,7 +106,6 @@ impl Compiler<'_> {
     fn pop_boolean_code(&mut self) -> Instruction {
         let removed = self.function.code.pop().unwrap();
         self.function.hook_visible -= usize::from(removed.hook != 0);
-        self.function.debug_lines.pop();
         removed.instruction
     }
     pub(super) fn boolean_node(&mut self, id: ExprId, work: u8) -> Result<(), Error> {

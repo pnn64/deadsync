@@ -130,12 +130,78 @@ impl Kind {
     }
 }
 
+/// Ordinary tokens borrow offsets in the source retained by the loader.
+/// Escaped and synthesized text owns the bytes the compiler will read.
+#[derive(Debug)]
+pub(crate) enum Lexeme {
+    Source {
+        start: u32,
+        end: u32,
+        /// One-based identity in the parser's per-function constant pool.
+        string_id: u32,
+    },
+    Owned(Text),
+}
+
+impl Default for Lexeme {
+    fn default() -> Self {
+        Self::Source {
+            start: 0,
+            end: 0,
+            string_id: 0,
+        }
+    }
+}
+
+impl Lexeme {
+    fn source(input: &[u8], start: usize, end: usize) -> Result<Self, crate::Error> {
+        Ok(if let Ok(end) = u32::try_from(end) {
+            Self::Source {
+                start: start as u32,
+                end,
+                string_id: 0,
+            }
+        } else {
+            Self::Owned(Text::new(&input[start..end])?)
+        })
+    }
+
+    pub(crate) fn bytes<'a>(&'a self, input: &'a [u8]) -> &'a [u8] {
+        match self {
+            Self::Source { start, end, .. } => &input[*start as usize..*end as usize],
+            Self::Owned(text) => text,
+        }
+    }
+
+    pub(crate) fn set_string_slot(&mut self, slot: u32) {
+        if let Self::Source { string_id, .. } = self {
+            *string_id = slot.checked_add(1).unwrap_or(0);
+        }
+    }
+
+    pub(crate) fn string_slot(&self) -> Option<usize> {
+        match *self {
+            Self::Source { string_id, .. } => string_id.checked_sub(1).map(|id| id as usize),
+            Self::Owned(_) => None,
+        }
+    }
+
+    pub(crate) fn heap_bytes(&self) -> usize {
+        match self {
+            Self::Source { .. } => 0,
+            Self::Owned(text) => text.heap_bytes(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Token {
     pub kind: Kind,
     pub line: u32,
     pub end_line: u32,
-    pub text: Text,
+    /// Assigned by the parser when interning a name token.
+    pub symbol: u32,
+    pub text: Lexeme,
     pub number: f64,
 }
 
@@ -145,7 +211,8 @@ impl Default for Token {
             kind: Kind::Eof,
             line: 0,
             end_line: 0,
-            text: Text::default(),
+            symbol: 0,
+            text: Lexeme::default(),
             number: 0.0,
         }
     }

@@ -3,7 +3,7 @@ use crate::memory::text::Text;
 
 use crate::{
     Error, ErrorKind,
-    lexer::{Kind, Token},
+    lexer::{Kind, Lexeme, Token},
 };
 
 pub(crate) type ExprId = usize;
@@ -60,8 +60,8 @@ pub(crate) enum Expr {
     Nil,
     Boolean(bool),
     Number(f64),
-    String(Text),
-    Name(Text),
+    String(Lexeme),
+    Name(Lexeme),
     Unary(Kind, ExprId),
     Binary(Kind, ExprId, ExprId, u32),
     Paren(ExprId),
@@ -70,7 +70,7 @@ pub(crate) enum Expr {
     Table(Span, u32),
     /// Arguments in [`Ast::ids`].
     Call(ExprId, Span, u32),
-    Method(ExprId, Text, Span, u32),
+    Method(ExprId, Lexeme, Span, u32),
     Function {
         /// Parameter names in [`Ast::names`].
         params: Span,
@@ -86,7 +86,7 @@ pub(crate) enum Expr {
 #[derive(Debug)]
 pub(crate) enum Stmt {
     Local(Span, Span),
-    LocalFunction(Text, ExprId),
+    LocalFunction(Lexeme, ExprId),
     Assign(Span, Span),
     FunctionDefinition(Span, Span),
     Call(ExprId),
@@ -97,7 +97,7 @@ pub(crate) enum Stmt {
     Repeat(Block, ExprId),
     If(Span, Option<Block>),
     For {
-        name: Text,
+        name: Lexeme,
         start: ExprId,
         limit: ExprId,
         step: Option<ExprId>,
@@ -107,6 +107,29 @@ pub(crate) enum Stmt {
     ForIn(Span, Span, Block, [u32; 2]),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct NameBinding(u8);
+
+impl NameBinding {
+    pub(crate) const UPVALUE: Self = Self(254);
+    pub(crate) const GLOBAL: Self = Self(255);
+
+    fn local(index: u8) -> Self {
+        debug_assert!(index < 200);
+        Self(index)
+    }
+
+    pub(crate) fn local_index(self) -> Option<usize> {
+        (self.0 < Self::UPVALUE.0).then_some(usize::from(self.0))
+    }
+}
+
+impl Default for NameBinding {
+    fn default() -> Self {
+        Self::GLOBAL
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct SourceSpan {
     pub start: u32,
@@ -114,6 +137,9 @@ pub(crate) struct SourceSpan {
     pub discharge: u32,
     /// Conservative scalar-tree size, 1..=32; zero excludes eager grouping.
     pub scalar_cost: u8,
+    /// One-based index into the resolved constant operands. Zero is absent.
+    pub operand: u16,
+    pub binding: NameBinding,
 }
 
 #[cfg(target_pointer_width = "64")]
@@ -127,7 +153,7 @@ pub(crate) struct Ast {
     pub stmts: Vec<(Stmt, u32)>,
     /// Statement and expression identifier lists.
     pub ids: Vec<usize>,
-    pub names: Vec<Text>,
+    pub names: Vec<Lexeme>,
     pub fields: Vec<(Option<ExprId>, ExprId)>,
     pub arms: Vec<(ExprId, Block)>,
     pub body: Block,
@@ -159,7 +185,7 @@ impl Ast {
     pub(crate) fn ids(&self, span: Span) -> &[usize] {
         &self.ids[span.range()]
     }
-    pub(crate) fn names(&self, span: Span) -> &[Text] {
+    pub(crate) fn names(&self, span: Span) -> &[Lexeme] {
         &self.names[span.range()]
     }
     pub(crate) fn fields(&self, span: Span) -> &[(Option<ExprId>, ExprId)] {
@@ -168,10 +194,21 @@ impl Ast {
     pub(crate) fn arms(&self, span: Span) -> &[(ExprId, Block)] {
         &self.arms[span.range()]
     }
+    pub(crate) fn constant_operand(&self, id: ExprId) -> Option<ConstantOperand> {
+        let index = match self.exprs[id].1.operand {
+            0 => return None,
+            u16::MAX => self
+                .constant_operands
+                .binary_search_by_key(&id, |&(id, _)| id)
+                .ok()?,
+            index => usize::from(index - 1),
+        };
+        Some(self.constant_operands[index].1)
+    }
     /// Pool storage, including owned parameter and local name text.
     pub(crate) fn list_bytes(&self) -> usize {
         self.ids.capacity() * size_of::<usize>()
-            + self.names.capacity() * size_of::<Text>()
+            + self.names.capacity() * size_of::<Lexeme>()
             + self.names.iter().map(|n| n.heap_bytes()).sum::<usize>()
             + self.fields.capacity() * size_of::<(Option<ExprId>, ExprId)>()
             + self.arms.capacity() * size_of::<(ExprId, Block)>()
@@ -203,11 +240,14 @@ pub(crate) fn publish<T>(
 pub(crate) enum ConstantOperand {
     Nil,
     Boolean(bool),
-    /// The flag records an RK operand; a folded left value can be known even
+    /// The slot records an RK operand. A folded left value can also be known
     /// when the reference must materialize it in a register.
-    Number(f64, bool),
+    Number(f64, Option<u8>),
     String(ExprId),
 }
+
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(size_of::<ConstantOperand>() == 16);
 
 mod bindings;
 mod resources;
