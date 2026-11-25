@@ -213,10 +213,9 @@ fn bound(call: &mut HostCall<'_>) -> Result<(), Error> {
                     Some(file) => path(call, actor, file)?,
                     None => None,
                 };
+                let probe = call.store().media_probes.sound_length_seconds;
                 let value = path
-                    .and_then(|path| {
-                        deadlib_audio_decode::file_length_seconds(&path, Default::default()).ok()
-                    })
+                    .and_then(|path| probe.and_then(|probe| probe(&path).ok()))
                     .map(|seconds| (seconds * 1000.0).trunc() / 1000.0)
                     .unwrap_or(-1.0);
                 *length.lock().unwrap() = Some((file, value));

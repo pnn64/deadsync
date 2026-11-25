@@ -1,3 +1,4 @@
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use super::*;
 use std::collections::BTreeMap;
 
@@ -302,7 +303,7 @@ fn check_edgar_model_squash(compiled: &CompiledSongLua, context: &SongLuaCompile
         WholeSongComposer, compose_overlay_states,
     };
     let screen = [context.screen_width, context.screen_height];
-    let mut composer = WholeSongComposer::new(&compiled.overlays);
+    let mut composer = WholeSongComposer::new(&compiled.overlays, MEDIA_PROBES.movie_dimensions);
     for (tap, first) in [(1, 112.0), (2, 114.0), (3, 116.0), (4, 118.0)] {
         let frame = compiled
             .overlays
@@ -361,7 +362,7 @@ fn check_edgar_tap_draws(compiled: &CompiledSongLua, context: &SongLuaCompileCon
         WholeSongComposer, compose_overlay_states,
     };
     let screen = [context.screen_width, context.screen_height];
-    let mut composer = WholeSongComposer::new(&compiled.overlays);
+    let mut composer = WholeSongComposer::new(&compiled.overlays, MEDIA_PROBES.movie_dimensions);
     let oracle: Value = serde_json::from_slice(
         &std::fs::read(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -539,7 +540,7 @@ fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompil
             .iter()
             .map(|layer| deadsync_song_lua::replay_model_texture(layer, &updates))
             .collect();
-        let mut composer = WholeSongComposer::new(&overlays);
+        let mut composer = WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
         let baseline = composer.render_overlay(&overlays, &states, arrow, screen, 0.0, beat);
         assert_eq!(baseline.tmesh_instances.len(), slots.len());
         for sample in samples {

@@ -314,6 +314,7 @@ pub(crate) fn configure_column_turns(
 #[derive(Default)]
 struct Store {
     clock: Arc<super::Clock>,
+    media_probes: super::SongLuaMediaProbes,
     column_take_from: Option<[[usize; deadsync_core::input::MAX_COLS]; crate::LUA_PLAYERS]>,
     initial_turn_options: Option<[deadsync_gameplay::GameplayTurnOption; crate::LUA_PLAYERS]>,
     playback: bool,
@@ -561,10 +562,12 @@ impl Actors {
         vm: &mut Vm,
         clock: Arc<super::Clock>,
         players: usize,
+        media_probes: super::SongLuaMediaProbes,
         #[cfg(feature = "test-support")] observations: super::observations::Observations,
     ) -> Result<Self, Error> {
         vm.set_host_state(Box::new(Store {
             clock,
+            media_probes,
             graph_size: crate::graph_display_body_size(players),
             #[cfg(feature = "test-support")]
             observations,

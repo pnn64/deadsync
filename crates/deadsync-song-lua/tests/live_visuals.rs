@@ -1,3 +1,4 @@
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use deadlib_lua::compile_named;
 use deadlib_present::actors::TextAttribute;
 use deadsync_song_lua::{self as song, SongLuaLiveTarget as Target};
@@ -1251,7 +1252,7 @@ fn scheduled_foreground_on_load_publishes_initially_textureless_sprite() {
     scene.write_visuals(&mut visual).unwrap();
     assert!(matches!(visual.overlays[index].kind, RenderKind::Actor));
     assert!(!visual.overlays[index].initial_state.sprite_texture);
-    let mut composer = WholeSongComposer::new(&visual.overlays);
+    let mut composer = WholeSongComposer::new(&visual.overlays, MEDIA_PROBES.movie_dimensions);
     for (seconds, beat, delta) in [(0., 0., 0.), (0.6, 1.2, 0.6)] {
         let updated = scene.update(song::SongLuaLiveFrame {
             music_seconds: seconds, screen_seconds: seconds, beat,
@@ -1346,7 +1347,7 @@ fn mixed_case_texture_resolves_on_linux_and_preserves_its_logical_path() {
     let mut visual = visuals(compiled);
     scene.write_visuals(&mut visual).unwrap();
     let states = visual.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
-    let mut composer = WholeSongComposer::new(&visual.overlays);
+    let mut composer = WholeSongComposer::new(&visual.overlays, MEDIA_PROBES.movie_dimensions);
     for (name, expected) in [
         ("MixedCaseTexture", [583., 525.]),
         ("DeclaredFrames", [1750. / 3., 525.]),
@@ -1482,7 +1483,7 @@ fn scheduled_amv_aft_publication_tracks_binding_changes_without_replacing_slots(
     assert!(matches!(visual.overlays[mesh].kind, RenderKind::ActorMultiVertex { capture_name: None, .. }));
     assert!(matches!(&visual.overlays[alias].kind, RenderKind::ActorMultiVertex { capture_name: Some(name), .. } if name == "capture-b"),
         "unchanged declarative registered-texture binding remains valid");
-    let mut composer = WholeSongComposer::new(&visual.overlays);
+    let mut composer = WholeSongComposer::new(&visual.overlays, MEDIA_PROBES.movie_dimensions);
     let a_handle = composer.capture_handle(a).unwrap();
     let b_handle = composer.capture_handle(b).unwrap();
     publish(&mut scene, &mut visual, 0.);

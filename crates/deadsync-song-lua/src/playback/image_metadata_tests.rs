@@ -1,3 +1,4 @@
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use super::*;
 
 #[test]
@@ -34,7 +35,7 @@ fn image_content_dimensions_preserve_sprite_geometry() {
                 initial_state: state,
                 message_commands: Vec::new(),
             }];
-        let mut composer = WholeSongComposer::new(&overlays);
+        let mut composer = WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
         let meta = deadlib_assets::texture_dims(&key).expect("registered source dimensions");
         assert_eq!([meta.w, meta.h], [37, 23], "source {name}");
         let frame = composer.render_overlay(&overlays, &[state], 0, [854.0, 480.0], 0.0, 0.0);

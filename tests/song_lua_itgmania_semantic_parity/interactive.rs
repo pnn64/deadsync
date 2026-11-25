@@ -1,4 +1,5 @@
 //! Independent input and final draw-stream checks for executable captures.
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use super::{gameplay, native_creation_order_with_coverage_for_entries};
 use deadlib_present::render::{DrawOp, RenderFrame};
 use deadsync_assets::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind};
@@ -868,7 +869,7 @@ impl DrawChecks {
             overlays.push(overlay);
         }
         let states = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
-        let mut composer = WholeSongComposer::new(&overlays);
+        let mut composer = WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
         let mut recorded = RecordedDraws::default();
         let mut normal_owners = std::collections::BTreeSet::new();
         for original in frames {
@@ -1089,7 +1090,7 @@ impl DrawChecks {
             let composer = self
                 .composers
                 .entry(group)
-                .or_insert_with(|| WholeSongComposer::new(overlays));
+                .or_insert_with(|| WholeSongComposer::new(overlays, MEDIA_PROBES.movie_dimensions));
             let (frame, recorded_texture, recorded_aft) = match recorded.draws.get_mut(&(group, index)).and_then(VecDeque::pop_front) {
                 Some(draw) => {
                     if !random_ids.is_empty() {
@@ -1702,7 +1703,7 @@ fn owned_aft_uv_proof_requires_the_composers_actual_capture_handle() {
         message_commands: Vec::new(),
     };
     let overlays = vec![capture("first"), capture("second")];
-    let composer = WholeSongComposer::new(&overlays);
+    let composer = WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
     let handle = composer.capture_handle(0).unwrap();
     let sprite = |texture_handle| DrawOp::Sprite(SpriteRun {
         texture_handle, instance_start: 0, instance_count: 1,
@@ -1725,7 +1726,7 @@ fn owned_aft_uv_proof_requires_the_composers_actual_capture_handle() {
     assert_eq!(owned_aft_backing(&frame, &composer, &overlays), None,
         "an ordinary image handle is not a render-target proof");
     frame.ops = vec![sprite(handle)];
-    let other_composer = WholeSongComposer::new(&overlays);
+    let other_composer = WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
     assert_eq!(owned_aft_backing(&frame, &other_composer, &overlays), None,
         "a recorded draw must retain its own composer allocation");
     let mut unallocated = overlays.clone();

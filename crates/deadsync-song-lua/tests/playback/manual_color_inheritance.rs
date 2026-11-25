@@ -1,3 +1,4 @@
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use super::*;
 use deadlib_lua::{Value, compile_named};
 use deadlib_render_core::{DrawOp, RenderFrame};
@@ -92,7 +93,7 @@ return Def.ActorFrame {
         .iter()
         .map(|actor| actor.initial_state)
         .collect::<Vec<_>>();
-    let mut composer = actor_conformance::WholeSongComposer::new(&compiled.overlays);
+    let mut composer = actor_conformance::WholeSongComposer::new(&compiled.overlays, MEDIA_PROBES.movie_dimensions);
     for immediate in [true, false] {
         let frame = compiled
             .draw_frames

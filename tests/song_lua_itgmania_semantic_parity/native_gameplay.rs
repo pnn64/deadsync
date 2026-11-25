@@ -578,6 +578,7 @@ fn load_gameplay_charts(
 
 #[cfg(test)]
 mod tests {
+    use deadsync_assets::song_lua::MEDIA_PROBES;
     use super::load_gameplay_charts;
     #[test]
     fn external_clock_input_bridge_keeps_call_sites_and_legacy_capture_support() {
@@ -2963,7 +2964,7 @@ return Def.ActorFrame {
             Target::Background(layer, _) => &visuals.background_visual_layers[layer].overlays,
         };
         let states = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
-        let mut composer = WholeSongComposer::new(overlays);
+        let mut composer = WholeSongComposer::new(overlays, MEDIA_PROBES.movie_dimensions);
         composer.set_draw_frames(overlays, &[recorded.clone()]);
         let context = state.song_lua.as_ref().unwrap().context();
         let screen = [context.screen_width, context.screen_height];
@@ -3099,7 +3100,7 @@ return Def.ActorFrame {
             Target::Background(layer, _) => &visuals.background_visual_layers[layer].overlays,
         };
         let states = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
-        let mut composer = WholeSongComposer::new(overlays);
+        let mut composer = WholeSongComposer::new(overlays, MEDIA_PROBES.movie_dimensions);
         let composed = frames.iter().flat_map(|frame|
             composer.render_recorded_frame(overlays, &states, frame, screen, frame.second, 0.0))
             .map(|(_, frame)| frame).collect::<Vec<_>>();

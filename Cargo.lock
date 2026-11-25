@@ -1490,6 +1490,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "deadlib-assets",
+ "deadlib-audio-decode",
  "deadlib-present",
  "deadlib-render",
  "deadlib-render-core",
@@ -1902,7 +1903,6 @@ dependencies = [
  "deadlib-present",
  "deadlib-render",
  "deadlib-render-core",
- "deadlib-video",
  "deadsync-assets",
  "deadsync-chart",
  "deadsync-config",

@@ -1,3 +1,4 @@
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use super::*;
 
 type Slot = deadsync_assets::noteskin::SpriteSlot;
@@ -82,7 +83,7 @@ fn retained_layer_parent_compensates_screen_translation_in_production_and_replay
     let parent = song_lua_layer_parent_state::<Slot>(parents[0], parents[1], size, [0.0; 2]);
     let states = compose_overlay_states(&overlays, &local, size, [0.0; 2]);
     let replay_states = compose_layer_overlay_states(&overlays, &local, size, [0.0; 2], parents);
-    let mut composer = WholeSongComposer::new(&overlays);
+    let mut composer = WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
     for fov in [None, Some(0.0)] {
         let screen = SongLuaOverlayState {
             x: size[0] * 0.5,

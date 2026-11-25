@@ -302,6 +302,7 @@ impl SongRuntime {
             &mut vm,
             clock.clone(),
             crate::song_lua_human_player_count(context),
+            context.media_probes,
             #[cfg(feature = "test-support")]
             observations.clone(),
         )?;
@@ -2489,8 +2490,18 @@ pub struct SongLuaHostClockInput {
     pub value: f64,
 }
 
+pub type SongLuaMovieDimensionsProbe = fn(&Path) -> Result<(u32, u32), String>;
+
+/// Media metadata supplied by the host. Absent probes leave the metadata unavailable.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SongLuaMediaProbes {
+    pub sound_length_seconds: Option<fn(&Path) -> Result<f32, String>>,
+    pub movie_dimensions: Option<SongLuaMovieDimensionsProbe>,
+}
+
 #[derive(Debug, Clone)]
 pub struct SongLuaCompileContext {
+    pub media_probes: SongLuaMediaProbes,
     /// Optional worker progress; never changes script execution or output.
     pub bake_progress: Option<SongLuaBakeProgress>,
     /// Retain the initialized scene for actual gameplay instead of probing
@@ -2626,6 +2637,7 @@ impl SongLuaCompileContext {
         let song_dir = song_dir.into();
         let song_dir = std::path::absolute(&song_dir).unwrap_or(song_dir);
         Self {
+            media_probes: SongLuaMediaProbes::default(),
             background_layer_count: 0,
             background_sources: Vec::new(),
             bake_progress: None,

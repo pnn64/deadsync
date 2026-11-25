@@ -124,6 +124,7 @@ pub fn song_lua_compile_context(
             .unwrap_or_default(),
         song.title.clone(),
     );
+    context.media_probes = super::MEDIA_PROBES;
     context.song_steps = song
         .charts
         .iter()

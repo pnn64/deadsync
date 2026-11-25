@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -10,7 +11,8 @@ use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
 use deadsync_profile_gameplay::stage_charts::{StageChartReload, apply_stage_chart_reload};
 use deadsync_song_lua::playback::PreparedGameplaySongLua;
 use deadsync_song_lua::{
-    overlay_model_layers_from_slots, song_lua_human_player_count, song_lua_style_info,
+    SongLuaMediaProbes, overlay_model_layers_from_slots, song_lua_human_player_count,
+    song_lua_style_info,
 };
 
 mod context;
@@ -45,6 +47,33 @@ pub type SongLuaOverlayKind = deadsync_song_lua::SongLuaOverlayKind<
 pub type SongLuaOverlayActor = deadsync_song_lua::SongLuaOverlayActor<SongLuaOverlayKind>;
 pub type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
 
+pub const MEDIA_PROBES: SongLuaMediaProbes = SongLuaMediaProbes {
+    sound_length_seconds: Some(sound_length_seconds),
+    movie_dimensions: Some(deadlib_video::dimensions),
+};
+
+fn sound_length_seconds(path: &Path) -> Result<f32, String> {
+    deadlib_audio_decode::file_length_seconds(path, Default::default())
+}
+
+fn context_with_media_probes(context: &SongLuaCompileContext) -> Cow<'_, SongLuaCompileContext> {
+    if context.media_probes.sound_length_seconds.is_some()
+        && context.media_probes.movie_dimensions.is_some()
+    {
+        return Cow::Borrowed(context);
+    }
+    let mut context = context.clone();
+    context.media_probes.sound_length_seconds = context
+        .media_probes
+        .sound_length_seconds
+        .or(MEDIA_PROBES.sound_length_seconds);
+    context.media_probes.movie_dimensions = context
+        .media_probes
+        .movie_dimensions
+        .or(MEDIA_PROBES.movie_dimensions);
+    Cow::Owned(context)
+}
+
 #[must_use]
 pub fn overlay_sampler(overlay: &SongLuaOverlayActor) -> SamplerDesc {
     SamplerDesc {
@@ -66,9 +95,10 @@ pub fn compile_song_lua(
     entry_path: &Path,
     context: &SongLuaCompileContext,
 ) -> Result<CompiledSongLua, String> {
+    let context = context_with_media_probes(context);
     deadsync_song_lua::compile_song_lua(
         entry_path,
-        context,
+        &context,
         song_lua_noteskin_resolver(),
         crate::noteskin::load_itg_model_slots,
         model_layer_from_slot,
@@ -81,10 +111,11 @@ pub fn compile_song_lua_layers(
     primary_index: usize,
     context: &SongLuaCompileContext,
 ) -> Result<Vec<CompiledSongLua>, String> {
+    let context = context_with_media_probes(context);
     deadsync_song_lua::compile_song_lua_layers(
         entry_paths,
         primary_index,
-        context,
+        &context,
         song_lua_noteskin_resolver(),
         crate::noteskin::load_itg_model_slots,
         model_layer_from_slot,

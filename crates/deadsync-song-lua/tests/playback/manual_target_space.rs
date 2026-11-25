@@ -1,3 +1,4 @@
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use super::*;
 use deadlib_present::actors::{Background, RenderTarget};
 use deadlib_present::space::{Metrics, current_metrics, with_current_metrics};
@@ -169,7 +170,7 @@ fn recorded(overlays: &[SongLuaOverlayActor], frame: &SongLuaDrawFrame) -> Vec<R
         .iter()
         .map(|actor| actor.initial_state)
         .collect::<Vec<_>>();
-    WholeSongComposer::new(overlays)
+    WholeSongComposer::new(overlays, MEDIA_PROBES.movie_dimensions)
         .render_recorded_frame(overlays, &states, frame, SCREEN, 0.0, 0.0)
         .into_iter()
         .map(|(_, frame)| frame)

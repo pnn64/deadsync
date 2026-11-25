@@ -232,7 +232,10 @@ pub(super) fn movie_size(
     let value = call.try_intern(path_text.as_bytes())?;
     set(call, actor, "__songlua_movie_path", value)?;
     set(call, actor, "__songlua_movie_size", Value::Nil)?;
-    match deadlib_video::dimensions(&path) {
+    let Some(probe) = call.store().media_probes.movie_dimensions else {
+        return Ok(None);
+    };
+    match probe(&path) {
         Ok((w, h)) => {
             let size = [w as f32, h as f32];
             put_vector(call, actor, "__songlua_movie_size", &size)?;

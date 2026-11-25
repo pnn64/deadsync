@@ -9473,6 +9473,32 @@ fn smx_imports_do_not_use_engine_facade() {
 }
 
 #[test]
+fn song_lua_takes_media_probes_from_its_host() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let song_lua = root.join("crates/deadsync-song-lua");
+    let manifest = read_source(song_lua.join("Cargo.toml")).expect("Song Lua manifest");
+    let mut production = true;
+    for line in manifest.lines().map(str::trim) {
+        if line.starts_with('[') {
+            production = !line.contains("dev-dependencies");
+        }
+        if production
+            && let Some((name, _)) = line.split_once('=')
+        {
+            assert!(!matches!(name.trim(), "deadlib-audio-decode" | "deadlib-video"));
+        }
+    }
+    for file in production_rust_files(&song_lua.join("src")) {
+        let source = production_source(&file);
+        assert!(
+            !source.contains("deadlib_audio_decode::") && !source.contains("deadlib_video::"),
+            "{} probes media directly",
+            file.display(),
+        );
+    }
+}
+
+#[test]
 fn asset_loading_takes_texture_operations_from_the_renderer() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let assets = root.join("crates/deadlib-assets");

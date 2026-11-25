@@ -1,6 +1,7 @@
 #[path = "support/paths.rs"]
 mod paths;
 
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use deadlib_present::anim::EffectMode;
 use deadsync_assets::song_lua::{
     CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
@@ -5592,7 +5593,7 @@ fn assert_screen_parent_draws(name: &str, check_depth: bool) {
     let layer = &compiled[0];
     let screen_index = layer.screen_overlay_index.expect("captured top screen");
     let map = projected_drawable_map(&trace, &compiled);
-    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let mut composer = WholeSongComposer::new(&layer.overlays, MEDIA_PROBES.movie_dimensions);
     let mut checks = 0;
     for track in &trace.projected_vertex_tracks {
         let &(layer_index, index) = map.get(&track.actor).expect("native drawable");
@@ -6581,7 +6582,7 @@ fn compare_manual_meshes(
     let mut composers = compiled
         .iter()
         .map(|layer| {
-            let mut composer = WholeSongComposer::new(&layer.overlays);
+            let mut composer = WholeSongComposer::new(&layer.overlays, MEDIA_PROBES.movie_dimensions);
             composer.set_draw_frames(&layer.overlays, &layer.draw_frames);
             composer
         })
@@ -7172,7 +7173,7 @@ fn last_parent_write_waits_for_child_update() {
         (states[index].diffuse[3] - 0.99).abs() <= 0.0001,
         "last draw keeps the prior callback's color"
     );
-    let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
+    let mut composer = WholeSongComposer::new(&compiled[primary].overlays, MEDIA_PROBES.movie_dimensions);
     let frame = composer.render_overlay(
         &compiled[primary].overlays,
         &states,
@@ -7220,7 +7221,7 @@ fn shadow_setters_bypass_child_tweens() {
         .iter()
         .position(|actor| actor.name.as_deref() == Some("Shadow"))
         .expect("shadow quad");
-    let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
+    let mut composer = WholeSongComposer::new(&compiled[primary].overlays, MEDIA_PROBES.movie_dimensions);
     let sample = trace.projected_vertex_tracks[0]
         .samples
         .iter()
@@ -7313,7 +7314,7 @@ fn image_texture_aliases_match_native_draws() {
     };
     let first = index("First");
     let second = index("Second");
-    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let mut composer = WholeSongComposer::new(&layer.overlays, MEDIA_PROBES.movie_dimensions);
     let screen = [context.screen_width, context.screen_height];
     let mut handles = Vec::new();
     // Exercise the actual gameplay builder, including a backward seek after the
@@ -8036,7 +8037,7 @@ fn wrapper_transform_matches_native_drawing() {
     )
     .unwrap();
     assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
-    let mut composer = WholeSongComposer::new(&compiled[0].overlays);
+    let mut composer = WholeSongComposer::new(&compiled[0].overlays, MEDIA_PROBES.movie_dimensions);
     let screen = [context.screen_width, context.screen_height];
     let samples = native["samples"].as_array().unwrap();
     let mut checks = 0;
@@ -10372,7 +10373,7 @@ fn native_effect_draws(stem: &str) -> (usize, usize) {
         .unwrap()
     };
     assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
-    let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
+    let mut composer = WholeSongComposer::new(&compiled[primary].overlays, MEDIA_PROBES.movie_dimensions);
     let mut checked = 0;
     for sample in native["samples"].as_array().unwrap() {
         let second = sample["time"].as_f64().unwrap() as f32;
@@ -10532,7 +10533,7 @@ fn pulse_driver_native_draws() {
         .iter()
         .position(|actor| actor.name.as_deref() == Some("Body"))
         .unwrap();
-    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let mut composer = WholeSongComposer::new(&layer.overlays, MEDIA_PROBES.movie_dimensions);
     let mut checked = 0;
     for sample in &trace.projected_vertex_tracks[0].samples {
         let beat = value_f32(sample.get(0)).unwrap();
@@ -10615,7 +10616,7 @@ fn effect_switch_native_draws() {
     )
     .unwrap();
     let layer = &compiled[primary];
-    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let mut composer = WholeSongComposer::new(&layer.overlays, MEDIA_PROBES.movie_dimensions);
     let (mut selectors, mut corners, mut colors) = (0, 0, 0);
     for sample in native["samples"].as_array().unwrap() {
         let seconds = sample["time"].as_f64().unwrap() as f32;
@@ -10731,7 +10732,7 @@ fn native_color_draws(fixture: &str, end_seconds: f32) -> usize {
     .unwrap();
     assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
     let layer = &compiled[0];
-    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let mut composer = WholeSongComposer::new(&layer.overlays, MEDIA_PROBES.movie_dimensions);
     let (mut colors, mut failures) = (0, Vec::new());
     for sample in native["samples"].as_array().unwrap() {
         let seconds = sample["time"].as_f64().unwrap() as f32;
@@ -10823,7 +10824,7 @@ fn native_actor_draws(name: &str, duration: f32) -> (usize, usize) {
     )
     .expect("native actor JSON");
     let layer = &compiled[0];
-    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let mut composer = WholeSongComposer::new(&layer.overlays, MEDIA_PROBES.movie_dimensions);
     let (mut channels, mut draws, mut failures) = (0, 0, Vec::new());
     for sample in native["samples"].as_array().expect("native samples") {
         let seconds = sample["time"].as_f64().expect("sample time") as f32;
@@ -11372,7 +11373,7 @@ fn bad_apple_whole_song_matches_native() {
     // Gameplay's worker warmup supplies decoded movie dimensions. Compilation
     // alone does not register video pixels; exercise that production path here.
     warm_lua_movie(texture_key, (320, 240));
-    let mut composer = WholeSongComposer::new(&compiled[layer].overlays);
+    let mut composer = WholeSongComposer::new(&compiled[layer].overlays, MEDIA_PROBES.movie_dimensions);
     let screen = [context.screen_width, context.screen_height];
     for sample in &track.samples {
         let sample = sample.as_array().expect("movie sample");
@@ -11466,7 +11467,7 @@ fn goodbye_whole_song_matches_native() {
     let map = projected_drawable_map(&trace, &compiled);
     let screen = [context.screen_width, context.screen_height];
 
-    let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
+    let mut composer = WholeSongComposer::new(&compiled[primary].overlays, MEDIA_PROBES.movie_dimensions);
     let mut drawn_faces = 0;
     for track in trace.projected_vertex_tracks.iter().filter(|track| {
         map.get(&track.actor).is_some_and(|&(layer, index)| {
@@ -11862,7 +11863,7 @@ fn compare_image_draws(
     let map = projected_drawable_map(trace, compiled);
     let mut composers = compiled
         .iter()
-        .map(|layer| WholeSongComposer::new(&layer.overlays))
+        .map(|layer| WholeSongComposer::new(&layer.overlays, MEDIA_PROBES.movie_dimensions))
         .collect::<Vec<_>>();
     let screen = [context.screen_width, context.screen_height];
     let mut checks = 0;
@@ -12375,7 +12376,7 @@ fn karachi_whole_native() {
         draws, 7600,
         "retain every visible PNG and render-target sample"
     );
-    let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
+    let mut composer = WholeSongComposer::new(&compiled[primary].overlays, MEDIA_PROBES.movie_dimensions);
     let mut capture_handle = None;
     for track in &captures {
         let &(_, index) = map.get(&track.actor).unwrap();

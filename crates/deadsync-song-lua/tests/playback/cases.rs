@@ -1,3 +1,4 @@
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use super::*;
 
 mod native_vertex_colors {
@@ -787,7 +788,7 @@ return Def.ActorFrame {
     let meshes = [index("AftMesh"), index("ImageMesh")];
     let states = compiled.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
     let expected = [(true, false), (false, false), (false, true), (true, true)];
-    let mut composer = actor_conformance::WholeSongComposer::new(&compiled.overlays);
+    let mut composer = actor_conformance::WholeSongComposer::new(&compiled.overlays, MEDIA_PROBES.movie_dimensions);
     for immediate in [true, false] {
         let frozen = compiled.draw_frames.iter()
             .find(|frame| frame.immediate == immediate && !frame.ops.is_empty())
@@ -2871,7 +2872,7 @@ fn song_lua_late_wrappers_preserve_composition_order_and_capture_handles() {
             size: Some([8.; 2]), ..Default::default()
         }),
     ];
-    let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+    let mut composer = actor_conformance::WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
     let handle = composer.capture_handle(3).unwrap();
     let local = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
     let composed = actor_conformance::compose_overlay_states(&overlays, &local, [640.,480.], [0.;2]);
@@ -2936,7 +2937,7 @@ fn song_lua_late_wrappers_preserve_composition_order_and_capture_handles() {
     });
     let prepared_local = prepared.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
     let prepared_states = actor_conformance::compose_overlay_states(&prepared, &prepared_local, [640.,480.], [0.;2]);
-    let expected = actor_conformance::WholeSongComposer::new(&prepared)
+    let expected = actor_conformance::WholeSongComposer::new(&prepared, MEDIA_PROBES.movie_dimensions)
         .render_overlay(&prepared, &prepared_states, remap[1], [640.,480.], 0., 0.);
     assert_eq!(compare_render_frames_semantic(&expected, &after), Ok(()));
 
@@ -2994,7 +2995,7 @@ fn song_lua_late_wrappers_refresh_same_count_parent_camera_changes() {
             size: Some([16.;2]), rot_x_deg: 30., ..Default::default()
         }),
     ];
-    let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+    let mut composer = actor_conformance::WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
     overlays[2].parent_index = Some(3);
     overlays.push(actor(SongLuaOverlayKind::WrapperState, Some(1), SongLuaOverlayState {
         x: 10., ..Default::default()
@@ -3009,7 +3010,7 @@ fn song_lua_late_wrappers_refresh_same_count_parent_camera_changes() {
     let local = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
     let states = actor_conformance::compose_overlay_states(&overlays, &local, [640.,480.], [0.;2]);
     let after = composer.model_matrices(&states, 2, [640.,480.]);
-    let expected = actor_conformance::WholeSongComposer::new(&overlays)
+    let expected = actor_conformance::WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions)
         .model_matrices(&states, 2, [640.,480.]);
     assert_ne!(before, after);
     assert_eq!(after, expected);
@@ -8207,7 +8208,7 @@ fn native_unlit_model_colors_match_production() {
                 };
             }
         }
-        let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+        let mut composer = actor_conformance::WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
         let mut checked = 0;
         for (index, overlay) in overlays.iter().enumerate() {
             let Some(expected) = overlay
@@ -8386,7 +8387,7 @@ fn check_native_model_draws(
                 }
             }
         }
-        let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+        let mut composer = actor_conformance::WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
         let mut checked = 0;
         let mut passes = 0;
         let frames = if manual {
@@ -8633,7 +8634,7 @@ fn check_native_model_textures(name: &str, native: &str, explicit_updates: bool,
             }
             tracks.push(samples);
         }
-        let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+        let mut composer = actor_conformance::WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
         let mut update_cursors = vec![0; runtime_updates.len()];
         let mut message_caches = vec![SongLuaMessageStateCache::default(); overlays.len()];
         let mut checked = 0;
@@ -8750,7 +8751,7 @@ fn native_model_material_passes_match_production() {
                 texture_samples: tracks,
             };
         }
-        let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+        let mut composer = actor_conformance::WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
         let states = overlays
             .iter()
             .map(|actor| actor.initial_state)
@@ -8905,7 +8906,7 @@ fn native_model_material_mapping_matches_production() {
                 };
             }
         }
-        let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+        let mut composer = actor_conformance::WholeSongComposer::new(&overlays, MEDIA_PROBES.movie_dimensions);
         let states = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
         let mut checked = 0;
         for (index, actor) in overlays.iter().enumerate() {

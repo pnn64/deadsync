@@ -1,4 +1,5 @@
 //! Bounded generated scenes: native submissions versus compiled actor playback.
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use super::{
     Parity, compare_compile_info, compiled_local_states_at, compiled_overlay_states_at,
     native_gameplay,
@@ -78,7 +79,7 @@ pub(super) fn compare(trace: &Value, trace_path: &Path, simfile: &Path) -> Resul
     }
     let mut composers: Vec<_> = compiled
         .iter()
-        .map(|l| WholeSongComposer::new(&l.overlays))
+        .map(|l| WholeSongComposer::new(&l.overlays, MEDIA_PROBES.movie_dimensions))
         .collect();
     let mut mismatches = Vec::new();
     let mut failures = 0;

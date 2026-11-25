@@ -308,6 +308,7 @@ pub fn compose_layer_overlay_states<S: NoteskinSlot + Clone>(
 /// composition consumes metadata and handles, not sampled pixels.
 pub struct WholeSongComposer {
     assets: AssetManager,
+    movie_dimensions: Option<crate::SongLuaMovieDimensionsProbe>,
     mesh_scratch: Vec<SongLuaProjectedMeshScratch>,
     topology: SongLuaOverlayTopologyIndex,
     manual: SongLuaManualScratch,
@@ -324,7 +325,7 @@ impl WholeSongComposer {
                 SongLuaOverlayKind::Sprite { texture_key, .. }
                 | SongLuaOverlayKind::ActorMultiVertex {
                     texture_key: Some(texture_key), ..
-                } => queue_texture(&mut self.assets, texture_key),
+                } => queue_texture(&mut self.assets, texture_key, self.movie_dimensions),
                 _ => {}
             }
         }
@@ -375,45 +376,49 @@ impl WholeSongComposer {
     }
 
     #[must_use]
-    pub fn new<S: NoteskinSlot + Clone>(overlays: &[SongLuaOverlayActor<S>]) -> Self {
+    pub fn new<S: NoteskinSlot + Clone>(
+        overlays: &[SongLuaOverlayActor<S>],
+        movie_dimensions: Option<crate::SongLuaMovieDimensionsProbe>,
+    ) -> Self {
         let mut assets = AssetManager::<()>::new();
+        let mut queue = |key: &str| queue_texture(&mut assets, key, movie_dimensions);
         for overlay in overlays {
             match &overlay.kind {
-                SongLuaOverlayKind::Quad => queue_texture(&mut assets, &white_texture_key()),
+                SongLuaOverlayKind::Quad => queue(&white_texture_key()),
                 SongLuaOverlayKind::Sprite {
                     texture_key,
                     textures,
                     ..
                 } => {
-                    queue_texture(&mut assets, texture_key);
+                    queue(texture_key);
                     for texture in textures.iter() {
-                        queue_texture(&mut assets, &texture.key);
+                        queue(&texture.key);
                     }
                 }
                 SongLuaOverlayKind::ActorMultiVertex {
                     texture_key: Some(texture_key),
                     ..
-                } => queue_texture(&mut assets, texture_key),
+                } => queue(texture_key),
                 SongLuaOverlayKind::NoteskinActor { slots, .. } => {
                     for slot in slots.iter() {
-                        queue_texture(&mut assets, slot.texture_key_shared().as_ref());
+                        queue(slot.texture_key_shared().as_ref());
                         if let Some((key, _)) = slot.model_additive(0.0) {
-                            queue_texture(&mut assets, &key);
+                            queue(&key);
                         }
                         for key in slot
                             .model_texture_keys()
                             .iter()
                             .chain(slot.model_additive_keys())
                         {
-                            queue_texture(&mut assets, key);
+                            queue(key);
                         }
                     }
                 }
                 SongLuaOverlayKind::Model { layers } => {
                     for layer in layers.iter() {
-                        queue_texture(&mut assets, &layer.texture_key);
+                        queue(&layer.texture_key);
                         if let Some(key) = &layer.additive {
-                            queue_texture(&mut assets, key);
+                            queue(key);
                         }
                         for key in layer
                             .texture_frames
@@ -421,7 +426,7 @@ impl WholeSongComposer {
                             .chain(layer.additive_frames.iter())
                             .filter_map(|frame| frame.texture_key.as_ref())
                         {
-                            queue_texture(&mut assets, key);
+                            queue(key);
                         }
                     }
                 }
@@ -430,6 +435,7 @@ impl WholeSongComposer {
         }
         Self {
             assets,
+            movie_dimensions,
             mesh_scratch: song_lua_projected_mesh_scratch_for(overlays),
             topology: SongLuaOverlayTopologyIndex::new(overlays),
             manual: SongLuaManualScratch::new(overlays),
@@ -717,7 +723,11 @@ impl WholeSongComposer {
     }
 }
 
-fn queue_texture(assets: &mut AssetManager, key: &str) {
+fn queue_texture(
+    assets: &mut AssetManager,
+    key: &str,
+    movie_dimensions: Option<crate::SongLuaMovieDimensionsProbe>,
+) {
     if assets.has_texture_key(key) {
         return;
     }
@@ -727,13 +737,16 @@ fn queue_texture(assets: &mut AssetManager, key: &str) {
     let source_key = key.strip_suffix("#itg-model").unwrap_or(key);
     // Song assets can have a misleading extension. Use the same content-aware
     // source dimensions as live Sprite loading before publishing the metadata.
-    let source_dims = deadlib_assets::texture_source_size(Path::new(source_key))
+    let path = Path::new(source_key);
+    let source_dims = deadlib_assets::texture_source_size(path)
         .ok()
         .or_else(|| {
-            let path = Path::new(source_key);
-            crate::is_song_lua_video_path(path)
-                .then(|| deadlib_video::dimensions(path).ok())
-                .flatten()
+            let probe = movie_dimensions?;
+            if crate::is_song_lua_video_path(path) {
+                probe(path).ok()
+            } else {
+                None
+            }
         });
     let dims = source_dims.map(|(w,h)| deadlib_assets::TexMeta { w,h })
         .or_else(|| deadlib_assets::texture_dims(key));

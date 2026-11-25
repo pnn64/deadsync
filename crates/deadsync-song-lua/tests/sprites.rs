@@ -37,6 +37,37 @@ fn execute(runtime: &mut SongRuntime, source: &str) -> Vec<Value> {
         .unwrap()
         .to_vec()
 }
+
+#[test]
+fn sprite_movie_dimensions_come_from_the_host_and_are_cached() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static PROBES: AtomicUsize = AtomicUsize::new(0);
+    let directory = tempfile::tempdir().unwrap();
+    let movie = directory.path().join("clip.mpg");
+    std::fs::write(&movie, b"fixture").unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "movie metadata");
+    context.media_probes.movie_dimensions = Some(|path| {
+        assert!(path.ends_with("clip.mpg"));
+        PROBES.fetch_add(1, Ordering::Relaxed);
+        Ok((352, 240))
+    });
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let source = format!(
+        "return Def.Sprite{{Texture={:?}}}",
+        song::file_path_string(&movie)
+    );
+    let definition = execute(&mut runtime, &source)[0];
+    let scene = runtime.instantiate_actor(definition).unwrap();
+    let sprite = runtime.actor_scene_root(scene).unwrap();
+    runtime.vm_mut().set_global(b"sprite", sprite).unwrap();
+    execute(
+        &mut runtime,
+        "for i=1,2 do local t=sprite:GetTexture(); assert(t:GetSourceWidth()==352 and t:GetSourceHeight()==240) end",
+    );
+    assert_eq!(PROBES.load(Ordering::Relaxed), 1);
+}
+
 struct Pair {
     rust: SongRuntime,
     scene: ActorScene,

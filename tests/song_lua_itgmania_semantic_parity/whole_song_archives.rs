@@ -1,3 +1,4 @@
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use super::*;
 use deadsync_song_lua::playback::actor_conformance::{WholeSongComposer, compose_overlay_states};
 use serde::Deserialize;
@@ -718,7 +719,7 @@ fn compose_entire_song_with_progress(
     }
     let composers = compiled_layers
         .iter()
-        .map(|compiled| WholeSongComposer::new(&compiled.overlays))
+        .map(|compiled| WholeSongComposer::new(&compiled.overlays, MEDIA_PROBES.movie_dimensions))
         .collect::<Vec<_>>();
     let mut actor_samples = 0usize;
     let render_actors = projected_drawable_map(trace, compiled_layers)

@@ -1,5 +1,6 @@
 #![cfg(feature = "test-support")]
 
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use deadlib_lua::compile_named;
 use deadlib_render_core::{DrawOp, RenderFrame};
 use deadsync_assets::noteskin::SpriteSlot;
@@ -137,7 +138,7 @@ impl Fixture {
                 .map(|index| (layer, index))
         }).expect("prepared background leaf");
         let states = layer.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
-        let mut composer = song::playback::actor_conformance::WholeSongComposer::new(&layer.overlays);
+        let mut composer = song::playback::actor_conformance::WholeSongComposer::new(&layer.overlays, MEDIA_PROBES.movie_dimensions);
         composer.render_overlay(&layer.overlays, &states, index, [854., 480.],
             self.last_seconds, self.last_seconds * 2.)
     }

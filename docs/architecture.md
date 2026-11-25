@@ -223,6 +223,8 @@ theme to describe an input or store a setting:
 - `deadsync-online` owns DeadSync's HTTP User-Agent and shared connection
   pools. `deadsync-net` builds clients with caller-supplied settings and
   handles HTTP errors, body size limits, and response decoding.
+- Song Lua owns media path lookup and actor metadata caching. The asset host
+  supplies sound duration and movie dimension probes to each song VM.
 
 ## Gameplay policy and presentation
 

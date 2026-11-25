@@ -1,5 +1,6 @@
 //! Native Model observations and comparisons of the production mesh pipeline.
 
+use deadsync_assets::song_lua::MEDIA_PROBES;
 use super::*;
 use deadlib_present::render::{DrawOp, MeshSampler, RenderFrame, SamplerFilter, SamplerWrap, textured_mesh_uvs};
 use deadsync_song_lua::playback::actor_conformance::{
@@ -634,7 +635,7 @@ pub(super) fn compare_models(
     let map = projected_drawable_map(trace, compiled);
     let mut composers = compiled
         .iter()
-        .map(|layer| WholeSongComposer::new(&layer.overlays))
+        .map(|layer| WholeSongComposer::new(&layer.overlays, MEDIA_PROBES.movie_dimensions))
         .collect::<Vec<_>>();
     for (composer, layer) in composers.iter_mut().zip(compiled) {
         composer.set_draw_frames(&layer.overlays, &layer.draw_frames);
@@ -1078,7 +1079,7 @@ fn model_alpha_cutoff() {
         .expect("compile Model alpha controls");
     let c = &compiled[0];
     let states = compiled_overlay_states_at(c, &context, 0.0, 0.0);
-    let mut composer = WholeSongComposer::new(&c.overlays);
+    let mut composer = WholeSongComposer::new(&c.overlays, MEDIA_PROBES.movie_dimensions);
     let mut cases = 0;
     for actor in native["samples"][0]["actors"].as_array().expect("native actors") {
         if actor["kind"] != "model" { continue; }
@@ -1139,7 +1140,7 @@ fn native_model_initial_frames_match_selected_trace() {
                 );
             }
         }
-        let mut composer = WholeSongComposer::new(&compiled[layer].overlays);
+        let mut composer = WholeSongComposer::new(&compiled[layer].overlays, MEDIA_PROBES.movie_dimensions);
         let frame = composer.render_overlay(
             &compiled[layer].overlays,
             &states,
