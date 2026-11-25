@@ -10803,6 +10803,20 @@ fn download_protocol_imports_do_not_use_game_facade() {
 }
 
 #[test]
+fn simply_love_receives_version_strings_from_the_shell() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/deadsync-theme-simply-love");
+    let manifest = read_source(root.join("Cargo.toml")).expect("Simply Love manifest");
+    assert!(!manifest.contains("deadsync-version"));
+    for file in production_rust_files(&root.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadsync_version::"),
+            "{} reads the application version directly",
+            file.display(),
+        );
+    }
+}
+
+#[test]
 fn net_takes_application_identity_from_its_callers() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let net = root.join("crates/deadsync-net");

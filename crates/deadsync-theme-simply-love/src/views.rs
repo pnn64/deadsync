@@ -1305,6 +1305,7 @@ pub enum SimplyLoveUpdatePhase {
     Idle,
     Checking,
     ConfirmDownload {
+        current_tag: String,
         info: SimplyLoveReleaseView,
         asset: SimplyLoveReleaseAssetView,
     },
@@ -1313,6 +1314,7 @@ pub enum SimplyLoveUpdatePhase {
     },
     RollbackChecking,
     RollbackPick {
+        current_tag: String,
         candidates: Vec<SimplyLoveReleaseView>,
         selected: usize,
     },

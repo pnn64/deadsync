@@ -399,6 +399,7 @@ fn phase_text<T: From<String>>(
             None,
         ),
         ActionPhase::RollbackPick {
+            current_tag,
             candidates,
             selected,
         } => {
@@ -406,7 +407,7 @@ fn phase_text<T: From<String>>(
             body.push(text(tr_fmt(
                 "Updater",
                 "BodyRollbackCurrent",
-                &[("version", &deadsync_version::current_tag())],
+                &[("version", current_tag)],
             )));
             for (i, info) in candidates.iter().enumerate() {
                 let key = if i == *selected {
@@ -438,12 +439,12 @@ fn phase_text<T: From<String>>(
             text(tr("Updater", "FooterDismiss")),
             None,
         ),
-        ActionPhase::ConfirmDownload { info, asset } => {
+        ActionPhase::ConfirmDownload { current_tag, info, asset } => {
             let mut body = Vec::with_capacity(5);
             body.push(text(tr_fmt(
                 "Updater",
                 "BodyCurrent",
-                &[("version", &deadsync_version::current_tag())],
+                &[("version", current_tag)],
             )));
             body.push(text(tr_fmt(
                 "Updater",
@@ -839,7 +840,11 @@ mod tests {
         asset.digest = Some(
             "sha256:c154351dd3874a4a4630b16dbe673eb81b549342ac374ebf547d6fc3ac2e2b68".to_owned(),
         );
-        let phase = ActionPhase::ConfirmDownload { info: r, asset };
+        let phase = ActionPhase::ConfirmDownload {
+            current_tag: "v0.1.0".into(),
+            info: r,
+            asset,
+        };
         let (_t, body, _f, progress) = phase_strings(&phase);
         assert!(progress.is_none());
         let joined = body.join("\n");
@@ -858,6 +863,7 @@ mod tests {
             joined.contains("Current"),
             "current label missing from {joined:?}"
         );
+        assert!(body[0].contains("v0.1.0"));
         assert!(joined.contains("MiB"), "size missing from {joined:?}");
         assert!(
             joined.contains("2026-04-30"),
@@ -878,7 +884,11 @@ mod tests {
         let mut r = sample_release();
         r.published_at = None;
         let asset = sample_asset();
-        let phase = ActionPhase::ConfirmDownload { info: r, asset };
+        let phase = ActionPhase::ConfirmDownload {
+            current_tag: "v0.1.0".into(),
+            info: r,
+            asset,
+        };
         let (_t, body, _f, _p) = phase_strings(&phase);
         // Current + Latest + Size remain even when date/digest are absent.
         assert_eq!(body.len(), 3, "body had {} lines: {body:?}", body.len());
@@ -1026,6 +1036,7 @@ mod tests {
             }
         };
         ActionPhase::RollbackPick {
+            current_tag: "v0.3.0".into(),
             candidates: vec![mk(0, 3, 10), mk(0, 3, 9), mk(0, 3, 8)],
             selected,
         }
@@ -1035,6 +1046,7 @@ mod tests {
     fn phase_strings_rollback_pick_lists_versions_and_marks_selection() {
         let (title, body, footer, progress) = phase_strings(&rollback_pick(1));
         assert!(!title.is_empty());
+        assert!(body[0].contains("v0.3.0"));
         let joined = body.join("\n");
         for tag in ["v0.3.10", "v0.3.9", "v0.3.8"] {
             assert!(joined.contains(tag), "body should list {tag}: {joined:?}");

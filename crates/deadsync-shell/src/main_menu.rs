@@ -8,6 +8,10 @@ use deadsync_theme::main_menu::{
     MainMenuArrowCloudError, MainMenuArrowCloudStatus, MainMenuGrooveError, MainMenuGrooveStatus,
     MainMenuRuntimeView as SharedMainMenuRuntimeView, MainMenuSmxConflictView,
 };
+use std::sync::{Arc, LazyLock};
+
+static INSTALLED_VERSION: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::from(deadsync_version::current().to_string()));
 
 pub(crate) type MainMenuRuntimeView = SharedMainMenuRuntimeView<
     deadsync_config::theme::GameFlag,
@@ -79,6 +83,7 @@ pub(crate) fn runtime_view(coin_balance: u32) -> MainMenuRuntimeView {
     MainMenuRuntimeView {
         game,
         coin_mode: coin.mode,
+        installed_version: Arc::clone(&INSTALLED_VERSION),
         event_mode: coin.event_mode(),
         credits,
         credit_remainder: (coin_balance % u32::from(coin.coins_per_credit)) as u8,

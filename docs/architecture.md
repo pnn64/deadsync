@@ -33,6 +33,8 @@ focus and input handling for the list of menu actions.
 Each theme owns its presentation clock and receives the same prepared
 credit and session facts. The shell admits Start and records the physical
 side before the title requests profile selection.
+The shell supplies the installed version to the title menu and updater views.
+The version watermark receives the compiled version and build hash.
 
 Attract presentations own their scene sequence and media choices. A demo
 request specifies its chart filter, player count, HUD visibility, and whether

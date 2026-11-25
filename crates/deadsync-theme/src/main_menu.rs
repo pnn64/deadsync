@@ -148,6 +148,7 @@ pub struct MainMenuSmxConflictView {
 pub struct MainMenuRuntimeView<Game, CoinMode> {
     pub game: Game,
     pub coin_mode: CoinMode,
+    pub installed_version: Arc<str>,
     pub event_mode: bool,
     pub credits: u32,
     /// Coins already inserted toward the next whole credit.
@@ -171,6 +172,7 @@ impl<Game: Default, CoinMode: Default> Default for MainMenuRuntimeView<Game, Coi
         Self {
             game: Game::default(),
             coin_mode: CoinMode::default(),
+            installed_version: Arc::default(),
             event_mode: true,
             credits: 0,
             credit_remainder: 0,

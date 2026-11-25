@@ -69,10 +69,11 @@ const fn log_warning_text(level: LogLevel) -> Option<&'static str> {
 pub fn build(
     side: VersionOverlaySide,
     log_level: LogLevel,
+    compiled_version: &'static str,
     build_hash: Option<&'static str>,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(2);
-    push(&mut actors, side, log_level, build_hash);
+    push(&mut actors, side, log_level, compiled_version, build_hash);
     actors
 }
 
@@ -81,9 +82,10 @@ pub fn push(
     actors: &mut Vec<Actor>,
     side: VersionOverlaySide,
     log_level: LogLevel,
+    compiled_version: &'static str,
     build_hash: Option<&'static str>,
 ) {
-    let text = version_text(deadsync_version::current_static(), build_hash);
+    let text = version_text(compiled_version, build_hash);
     let w = screen_width();
     let h = screen_height();
     let warning = log_warning_text(log_level);

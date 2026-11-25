@@ -125,6 +125,7 @@ fn update_phase(phase: ActionPhase) -> SimplyLoveUpdatePhase {
         ActionPhase::Idle => SimplyLoveUpdatePhase::Idle,
         ActionPhase::Checking => SimplyLoveUpdatePhase::Checking,
         ActionPhase::ConfirmDownload { info, asset } => SimplyLoveUpdatePhase::ConfirmDownload {
+            current_tag: deadsync_version::current_tag(),
             info: release_view(info),
             asset: asset_view(asset),
         },
@@ -134,6 +135,7 @@ fn update_phase(phase: ActionPhase) -> SimplyLoveUpdatePhase {
             candidates,
             selected,
         } => SimplyLoveUpdatePhase::RollbackPick {
+            current_tag: deadsync_version::current_tag(),
             candidates: candidates
                 .into_iter()
                 .map(|(info, _)| release_view(info))

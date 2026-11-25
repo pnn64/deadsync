@@ -8506,6 +8506,7 @@ impl App {
                 &mut actors,
                 policy.version_overlay_side,
                 policy.log_level,
+                deadsync_version::current_static(),
                 option_env!("DEADSYNC_BUILD_HASH"),
             );
         }

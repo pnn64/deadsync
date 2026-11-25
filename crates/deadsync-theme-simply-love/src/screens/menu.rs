@@ -333,6 +333,9 @@ pub fn sync_runtime_view(state: &mut State, view: MainMenuRuntimeView) {
     if state.runtime_view.credits != view.credits {
         state.credit_text_cache.get_mut().take();
     }
+    if state.runtime_view.installed_version != view.installed_version {
+        state.info_text_cache.get_mut().take();
+    }
     state.runtime_view = view;
     let selected_index = state
         .selected_index
@@ -582,8 +585,12 @@ fn menu_info_text(state: &State, update_banner_tag: Option<&str>) -> Arc<str> {
         course_count,
     };
 
-    let version = deadsync_version::current().to_string();
-    let mut version_line = tr_fmt("Menu", "VersionLine", &[("version", &version)]).to_string();
+    let mut version_line = tr_fmt(
+        "Menu",
+        "VersionLine",
+        &[("version", &state.runtime_view.installed_version)],
+    )
+    .to_string();
     if let Some(tag) = key.banner_tag.as_deref() {
         let suffix = tr_fmt("Menu", "UpdateAvailableSuffix", &[("version", tag)]);
         version_line.push(' ');
@@ -1329,6 +1336,21 @@ mod tests {
             assert!(!actors.iter().any(|actor| matches!(actor, Actor::Sprite { source, .. } if matches!(source.texture_key(), Some("dance.png" | "pump.png")))));
         }
         set_current_metrics(previous);
+    }
+
+    #[test]
+    fn title_info_refreshes_when_the_supplied_version_changes() {
+        let mut state = init();
+        for installed_version in ["0.1.0", "0.2.0"] {
+            sync_runtime_view(
+                &mut state,
+                MainMenuRuntimeView {
+                    installed_version: Arc::from(installed_version),
+                    ..Default::default()
+                },
+            );
+            assert!(menu_info_text(&state, None).contains(installed_version));
+        }
     }
 
     #[test]
