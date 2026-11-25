@@ -309,16 +309,30 @@ impl Compositor {
         let columns = text.width as usize / cw;
         let rows = text.height as usize / ch;
         let glyph_count = columns * rows;
+        let right = columns * cw;
         let has_glyphs = glyph_count != 0 && text.data.iter().any(|block| !block.is_empty());
         let background = text.background_index;
         let foreground = text.foreground_index;
         let single_color = !has_glyphs || background == foreground;
         let coverage_height = if single_color { 0 } else { rect.h };
         if !single_color {
-            self.text_coverage.clear();
             let visible = rect.w * rect.h;
-            reserve(&mut self.text_coverage, visible)?;
-            self.text_coverage.resize(visible, 0);
+            let mut remaining = glyph_count;
+            if visible == 0
+                || (self.text_coverage.len() >= visible
+                    && right >= rect.w
+                    && rows * ch >= rect.h
+                    && text.data.iter().any(|block| {
+                        remaining = remaining.saturating_sub(block.len());
+                        remaining == 0
+                    }))
+            {
+                self.text_coverage.truncate(visible);
+            } else {
+                self.text_coverage.clear();
+                reserve(&mut self.text_coverage, visible)?;
+                self.text_coverage.resize(visible, 0);
+            }
         }
         if has_glyphs {
             let mask_size = cw * ch;
@@ -326,7 +340,6 @@ impl Compositor {
             reserve(&mut self.mask, extra)?;
             self.mask.resize(mask_size, 0);
         }
-        let right = columns * cw;
         let (mut x, mut y) = (0, 0);
         for &character in text.data.iter().flatten().take(glyph_count) {
             self.mask.fill(0);
