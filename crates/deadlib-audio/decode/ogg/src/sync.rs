@@ -201,14 +201,11 @@ impl SyncBuffer {
                 return Ok(Step::Page);
             }
         }
-        let skip = if bytes[1] == b'O' {
-            1
-        } else if bytes[2] == b'O' {
-            2
-        } else if bytes[3] == b'O' {
-            3
-        } else if bytes[4] == b'O' {
-            4
+        let first = u32::from_le_bytes(bytes[1..5].try_into().unwrap()) ^ 0x4f4f_4f4f;
+        let matches = first.wrapping_sub(0x0101_0101) & !first & 0x8080_8080;
+        let skip = if matches != 0 {
+            // Borrow propagation can mark later lanes, but the first is exact.
+            1 + matches.trailing_zeros() as usize / 8
         } else {
             capture_byte(&bytes[5..]).map_or(bytes.len(), |n| n + 5)
         };
