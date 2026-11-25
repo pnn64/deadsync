@@ -524,7 +524,7 @@ impl<P: Assembly> Demux<P> {
                     } else if complete == 0 {
                         carried + body
                     } else {
-                        lacing.iter().rev().take_while(|&&lace| lace == 255).count() * 255
+                        trailing_laces(lacing) * 255
                     };
                     stream.partial.set_len(next_length);
                     stream.continuing = continuing;
@@ -560,6 +560,19 @@ impl<P: Assembly> Demux<P> {
             completed_packets: complete as u16,
         })
     }
+}
+
+#[inline(never)]
+fn trailing_laces(lacing: &[u8]) -> usize {
+    let (head, words) = lacing.as_rchunks::<8>();
+    for (i, word) in words.iter().rev().enumerate() {
+        // In little-endian order, leading zero bits represent trailing 255 laces.
+        let remaining = !u64::from_le_bytes(*word);
+        if remaining != 0 {
+            return i * 8 + remaining.leading_zeros() as usize / 8;
+        }
+    }
+    words.len() * 8 + head.iter().rev().take_while(|&&lace| lace == 255).count()
 }
 
 // Indexing without callbacks keeps only a length. Both representations
