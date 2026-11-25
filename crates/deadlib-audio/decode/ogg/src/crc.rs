@@ -93,10 +93,19 @@ pub(crate) fn update_scalar(mut crc: u32, bytes: &[u8]) -> u32 {
     } else {
         tail
     };
-    for &byte in tail {
-        crc = (crc << 8) ^ TABLES[0][((crc >> 24) as u8 ^ byte) as usize];
+    let [x, y, z, _] = crc.to_be_bytes();
+    match *tail {
+        [] => crc,
+        [a] => (crc << 8) ^ TABLES[0][(x ^ a) as usize],
+        [a, b] => (crc << 16) ^ TABLES[1][(x ^ a) as usize] ^ TABLES[0][(y ^ b) as usize],
+        [a, b, c] => {
+            (crc << 24)
+                ^ TABLES[2][(x ^ a) as usize]
+                ^ TABLES[1][(y ^ b) as usize]
+                ^ TABLES[0][(z ^ c) as usize]
+        }
+        _ => unreachable!("complete CRC words were already folded"),
     }
-    crc
 }
 
 pub fn crc32(bytes: &[u8]) -> u32 {
