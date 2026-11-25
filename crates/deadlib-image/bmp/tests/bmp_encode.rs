@@ -159,7 +159,9 @@ fn indexed_input_expands_into_bgr24_rows() {
 
 #[test]
 fn indexed_and_rgb_encoders_match_across_the_palette_lookup_cutoff() {
-    let colors = [[11, 23, 37], [47, 59, 71], [83, 97, 101]];
+    let colors: Vec<_> = (0..128u8)
+        .map(|index| [index, index.wrapping_mul(17), index ^ 0x55])
+        .collect();
     for (width, height) in [
         (1, 1),
         (1, 127),
@@ -173,12 +175,16 @@ fn indexed_and_rgb_encoders_match_across_the_palette_lookup_cutoff() {
         (3, 42),
         (3, 43),
         (17, 8),
+        (17, 15),
+        (16, 16),
+        (7, 73),
+        (8, 64),
         (5, 204),
         (5, 205),
         (4, 255),
         (4, 256),
     ] {
-        for palette_len in 1..=colors.len() {
+        for palette_len in [1, 2, 3, 17, 64, 128] {
             let indices: Vec<_> = (0..(width * height) as usize)
                 .map(|i| (i % palette_len) as u8)
                 .collect();
