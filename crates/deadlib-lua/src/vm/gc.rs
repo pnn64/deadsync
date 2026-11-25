@@ -170,6 +170,19 @@ fn table_edge(value: Value, weak: bool) -> Option<Trace> {
     }
     edge(value)
 }
+#[derive(Default)]
+struct TableModeCache {
+    entries: [(u64, (bool, bool)); 4],
+}
+impl TableModeCache {
+    fn get(&mut self, vm: &Vm, metatable: TableId) -> (bool, bool) {
+        let cached = &mut self.entries[slot_index(metatable.0) & 3];
+        if cached.0 != metatable.0 {
+            *cached = (metatable.0, vm.metatable_mode(metatable));
+        }
+        cached.1
+    }
+}
 #[derive(Debug)]
 pub(super) struct Collector {
     phase: Phase,
@@ -1245,6 +1258,8 @@ impl Vm {
     }
     fn trace_some(&mut self, work: &mut Work, budget: usize) -> Result<usize, Error> {
         let mut visited = 0;
+        // No mutator runs within this trace batch.
+        let mut modes = TableModeCache::default();
         while visited < budget {
             let Some(item) = work.last().copied() else {
                 break;
@@ -1277,7 +1292,7 @@ impl Vm {
                 }
                 Trace::Value(Value::Table(id)) => {
                     if self.tables.mark(id.0) || forced {
-                        self.trace_table(id, work);
+                        self.trace_table(id, work, &mut modes);
                     }
                 }
                 Trace::Value(Value::Function(id)) => {
@@ -1333,8 +1348,10 @@ impl Vm {
                     }
                 }
                 Trace::ThreadAgain(id) => self.trace_thread(id, work),
-                Trace::TableAgain(id) => self.trace_table(id, work),
-                Trace::TableSlice(id, cursor) => self.trace_table_slice(id, cursor, work),
+                Trace::TableAgain(id) => self.trace_table(id, work, &mut modes),
+                Trace::TableSlice(id, cursor) => {
+                    self.trace_table_slice(id, cursor, work, &mut modes)
+                }
                 Trace::CellAgain(i) => work.extend(edge(self.cell_value(i))),
                 Trace::Program(i) => {
                     if self.programs.mark_slot(i) {
@@ -1370,19 +1387,27 @@ impl Vm {
     fn trace_graph(&mut self, work: &mut Work) -> Result<(), Error> {
         self.trace_some(work, usize::MAX).map(|_| ())
     }
-    fn trace_table(&mut self, id: TableId, work: &mut Work) {
+    fn trace_table(&mut self, id: TableId, work: &mut Work, modes: &mut TableModeCache) {
         // Fresh marks also discard scan state left by an interrupted cycle.
         self.tables[slot_index(id.0)].trace = TableTrace::Restart;
-        self.trace_table_slice(id, 0, work);
+        self.trace_table_slice(id, 0, work, modes);
     }
-    fn trace_table_slice(&mut self, id: TableId, cursor: usize, work: &mut Work) {
+    fn trace_table_slice(
+        &mut self,
+        id: TableId,
+        cursor: usize,
+        work: &mut Work,
+        modes: &mut TableModeCache,
+    ) {
         let table = &self.tables[slot_index(id.0)];
         // Read __mode once per scan. The atomic metatable refresh observes mode
         // mutations before weak cleanup, just as for an unsliced table scan.
         let (cursor, weak_keys, weak_values) = match table.trace {
             TableTrace::Pending(wk, wv) => (cursor, wk, wv),
             TableTrace::Idle | TableTrace::Restart => {
-                let (wk, wv) = self.table_mode(table);
+                let (wk, wv) = table
+                    .metatable()
+                    .map_or((false, false), |mt| modes.get(self, mt));
                 (0, wk, wv)
             }
         };
@@ -1591,7 +1616,7 @@ impl Vm {
         let mut metatable_end = 0;
         // A string __mode survives weak cleanup. Clearing a non-string mode
         // leaves the same strong-table flags.
-        let mut cached = (None, (false, false));
+        let mut modes = TableModeCache::default();
         for word in 0..(self.gc.metatable_table_end as usize).div_ceil(64) {
             let mut marked = self.tables.marked_word(word);
             while marked != 0 {
@@ -1601,10 +1626,7 @@ impl Vm {
                     continue;
                 };
                 metatable_end = index as u32 + 1;
-                if cached.0 != Some(mt) {
-                    cached = (Some(mt), self.metatable_mode(mt));
-                }
-                let (weak_keys, weak_values) = cached.1;
+                let (weak_keys, weak_values) = modes.get(self, mt);
                 if !weak_keys && !weak_values {
                     continue;
                 }
