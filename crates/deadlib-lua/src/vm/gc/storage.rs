@@ -126,16 +126,10 @@ impl Vm {
         (count, registers.len().div_ceil(64))
     }
     pub(super) fn reserve_trace_item(&mut self, item: Trace, work: &mut Work) -> Result<(), Error> {
-        let (item, forced) = match item {
-            Trace::MarkedValue(value) => (Trace::Value(value), true),
-            item => (item, false),
+        let item = match item {
+            Trace::MarkedValue(value) => Trace::Value(value),
+            item => item,
         };
-        if let Trace::Value(value) = item
-            && !forced
-            && self.marked_value(value)
-        {
-            return Ok(());
-        }
         let mut words = 0;
         let count = match item {
             // A slice queues at most two edges per slot, a continuation, a
