@@ -226,6 +226,80 @@ fn consecutive_idat_checks_preserve_error_order_and_input_progress() {
 }
 
 #[test]
+fn stored_idat_batches_keep_row_errors_and_chunk_limits_in_order() {
+    let width = 37u32;
+    let height = 17u32;
+    for depth in [8, 16] {
+        let stride = 1 + width as usize * 4 * usize::from(depth / 8);
+        let mut raw = vec![0; stride * height as usize];
+        for (y, row) in raw.chunks_exact_mut(stride).enumerate() {
+            row[0] = (y % 5) as u8;
+            for (x, value) in row[1..].iter_mut().enumerate() {
+                *value = (x * 71 + y * 13) as u8;
+            }
+        }
+        let parts = |raw: &[u8]| {
+            let mut ihdr = Vec::from(width.to_be_bytes());
+            ihdr.extend(height.to_be_bytes());
+            ihdr.extend([depth, 6, 0, 0, 0]);
+            let mut chunks = vec![chunk(*b"IHDR", &ihdr)];
+            for (i, payload) in stored(raw).chunks(29).enumerate() {
+                if i % 11 == 0 {
+                    chunks.push(chunk(*b"IDAT", &[]));
+                }
+                chunks.push(chunk(*b"IDAT", payload));
+            }
+            chunks.push(chunk(*b"IEND", &[]));
+            chunks
+        };
+        let chunks = parts(&raw);
+        let wire = file(&chunks);
+        let expected = decode(&wire).unwrap();
+        let mut options = DecodeOptions::default();
+        options.limits.max_chunks = chunks.len();
+        options.limits.max_input_bytes = wire.len();
+        for fragment in [7, 115, 701, wire.len()] {
+            assert_eq!(
+                decode_reader(Fragmented(&wire, fragment), &options),
+                Ok(expected.clone())
+            );
+        }
+
+        let faulty_chunk = chunks.len() / 2;
+        let mut limited = options;
+        limited.limits.max_chunks = faulty_chunk;
+        assert_eq!(
+            decode_reader(wire.as_slice(), &limited),
+            Err(Error::LimitExceeded)
+        );
+        limited = options;
+        limited.limits.max_input_bytes =
+            8 + chunks[..faulty_chunk].iter().map(Vec::len).sum::<usize>() + 9;
+        assert_eq!(
+            decode_reader(wire.as_slice(), &limited),
+            Err(Error::LimitExceeded)
+        );
+
+        let mut corrupt = chunks;
+        *corrupt[faulty_chunk].last_mut().unwrap() ^= 1;
+        assert_eq!(
+            decode_reader(file(&corrupt).as_slice(), &options),
+            Err(Error::Checksum)
+        );
+        raw[stride] = 5;
+        corrupt = parts(&raw);
+        *corrupt[faulty_chunk].last_mut().unwrap() ^= 1;
+        let wire = file(&corrupt);
+        for fragment in [7, 115, wire.len()] {
+            assert_eq!(
+                decode_reader(Fragmented(&wire, fragment), &options),
+                Err(Error::Invalid("scanline filter")),
+            );
+        }
+    }
+}
+
+#[test]
 fn standard_names_are_literal_not_case_folded() {
     let mut count = 0;
     for canonical in STANDARD_NAMES {

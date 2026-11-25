@@ -216,6 +216,12 @@ impl Inflater {
                 State::Codes | State::Literal(_) | State::Copy { .. }
             )
     }
+    pub(crate) fn stored_remaining(&self) -> usize {
+        match self.state {
+            State::Stored(left) => left,
+            _ => 0,
+        }
+    }
     /// Confirm end-of-input after all pending output has been drained.
     pub fn finish(&self) -> Result<(), Error> {
         if let Some(error) = &self.failure {

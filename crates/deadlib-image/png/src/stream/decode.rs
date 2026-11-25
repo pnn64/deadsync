@@ -12,6 +12,9 @@ use crate::{
     reserve,
 };
 
+const SMALL_IDAT_BYTES: usize = 512;
+const IDAT_BATCH_BYTES: usize = 4096;
+
 #[derive(Clone, Copy)]
 enum State {
     Signature,
@@ -665,6 +668,116 @@ impl StreamDecoder {
         self.state = State::ChunkBody;
     }
 
+    #[inline(never)]
+    fn collect_stored_idats(
+        &mut self,
+        input: &[u8],
+        png: &mut Png,
+        stored_remaining: usize,
+    ) -> Result<usize, Error> {
+        // Stop inside the stored block, before any new block header or Adler
+        // trailer can change the ordering of inflate and row validation.
+        let capacity = (stored_remaining - 1).min(IDAT_BATCH_BYTES);
+        let chunks_left = self.options.limits.max_chunks - self.chunks;
+        if chunks_left == 0 {
+            return Ok(0);
+        }
+        let input = &input[..input.len().min(self.input_left)];
+        let mut batch = [0; IDAT_BATCH_BYTES];
+        let mut written = 0;
+        let mut consumed = 0;
+        let mut next_body = 0;
+        let mut length = self.length;
+        let mut count = 0;
+        loop {
+            let end = next_body + length;
+            if written + length > capacity || input.len() - next_body < length + 4 {
+                break;
+            }
+            let body = &input[next_body..end];
+            let mut crc = const { Crc32::with_type(*b"IDAT") };
+            crc.update(body);
+            if crc.finish() != be32(&input[end..end + 4]) {
+                break;
+            }
+            batch[written..written + length].copy_from_slice(body);
+            written += length;
+            consumed = end + 4;
+            count += 1;
+            if count > chunks_left {
+                break;
+            }
+            let Some(header) = input[consumed..].first_chunk::<8>() else {
+                break;
+            };
+            length = be32(header) as usize;
+            if length > SMALL_IDAT_BYTES || &header[4..] != b"IDAT" {
+                break;
+            }
+            next_body = consumed + 8;
+        }
+        if count < 2 {
+            return Ok(0);
+        }
+
+        let mut staged = 0;
+        let event = self.feed_image(&batch[..written], &mut staged, Some(png), false)?;
+        debug_assert!(!event && staged == written);
+        self.chunks += count - 1; // The first IDAT header was already accepted.
+        self.input_left -= consumed;
+        self.left = 0;
+        self.state = State::ChunkHeader;
+        Ok(consumed)
+    }
+
+    #[inline(never)]
+    fn feed_image(
+        &mut self,
+        input: &[u8],
+        pos: &mut usize,
+        mut png: Option<&mut Png>,
+        frame_data: bool,
+    ) -> Result<bool, Error> {
+        let rows = self
+            .rows
+            .as_mut()
+            .ok_or(Error::Invalid("missing image decoder"))?;
+        while !rows.is_done() {
+            let result = rows.feed(&input[*pos..]);
+            let buffers_can_grow = rows.buffers_can_grow();
+            let (used, event) = result.map_err(|error| {
+                if frame_data {
+                    self.animation_fault = Some(AnimationFault::Body);
+                    // This limit is the frame's exact filtered size.
+                    if error == Error::LimitExceeded {
+                        return Error::Invalid("APNG frame data length");
+                    }
+                }
+                error
+            })?;
+            *pos += used;
+            if buffers_can_grow {
+                self.peak_image_buffers = self.peak_image_buffers.max(rows.memory_bytes());
+            }
+            if !event {
+                break;
+            }
+            if let Some(png) = png.as_deref_mut() {
+                let kind = self
+                    .image_kind
+                    .ok_or(Error::Invalid("missing image decoder"))?;
+                rows.copy_into(row_image(png, kind)?)?;
+                rows.advance()?;
+            } else {
+                return Ok(true);
+            }
+        }
+        if rows.is_done() {
+            *pos = input.len();
+        }
+        Ok(false)
+    }
+
     fn run(&mut self, input: &[u8], mut png: Option<&mut Png>) -> Result<DecodeProgress, Error> {
         let mut pos = 0;
         if self.animation.is_some()
@@ -766,47 +879,12 @@ impl StreamDecoder {
                         }
                         let end = pos + self.left.min(input.len() - pos).min(self.input_left);
                         let start = pos;
-                        let result = (|| -> Result<bool, Error> {
-                            let rows = self
-                                .rows
-                                .as_mut()
-                                .ok_or(Error::Invalid("missing image decoder"))?;
-                            while !rows.is_done() {
-                                let result = rows.feed(&input[pos..end]);
-                                let buffers_can_grow = rows.buffers_can_grow();
-                                let (used, event) = result.map_err(|error| {
-                                    if frame_data {
-                                        self.animation_fault = Some(AnimationFault::Body);
-                                        // This limit is the frame's exact filtered size.
-                                        if error == Error::LimitExceeded {
-                                            return Error::Invalid("APNG frame data length");
-                                        }
-                                    }
-                                    error
-                                })?;
-                                pos += used;
-                                if buffers_can_grow {
-                                    self.peak_image_buffers =
-                                        self.peak_image_buffers.max(rows.memory_bytes());
-                                }
-                                if !event {
-                                    break;
-                                }
-                                if let Some(png) = png.as_deref_mut() {
-                                    let kind = self
-                                        .image_kind
-                                        .ok_or(Error::Invalid("missing image decoder"))?;
-                                    rows.copy_into(row_image(png, kind)?)?;
-                                    rows.advance()?;
-                                } else {
-                                    return Ok(true);
-                                }
-                            }
-                            if rows.is_done() {
-                                pos = end;
-                            }
-                            Ok(false)
-                        })();
+                        let result = self.feed_image(
+                            &input[..end],
+                            &mut pos,
+                            png.as_deref_mut(),
+                            frame_data,
+                        );
                         // Commit the whole accepted span together, including
                         // on error so APNG recovery replays only unread bytes.
                         let n = pos - start;
@@ -883,6 +961,20 @@ impl StreamDecoder {
                             self.have = 8;
                             self.read_chunk_header(*header, true)?;
                             self.continue_idat();
+                            if self.length <= SMALL_IDAT_BYTES
+                                && input.len() - pos >= self.length + 16
+                                && let Some(png) = png.as_deref_mut()
+                            {
+                                let stored_remaining =
+                                    self.rows.as_ref().map_or(0, ImageRows::stored_remaining);
+                                if stored_remaining > self.length.max(1) {
+                                    pos += self.collect_stored_idats(
+                                        &input[pos..],
+                                        png,
+                                        stored_remaining,
+                                    )?;
+                                }
+                            }
                         }
                         continue;
                     }

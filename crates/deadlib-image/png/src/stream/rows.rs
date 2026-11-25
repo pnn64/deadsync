@@ -351,6 +351,9 @@ impl ImageRows {
             samples,
         }
     }
+    pub(super) fn stored_remaining(&self) -> usize {
+        self.inflater.stored_remaining()
+    }
     pub(super) fn is_done(&self) -> bool {
         self.inflater.is_done()
     }
