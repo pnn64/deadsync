@@ -394,12 +394,9 @@ impl<P: Assembly> Demux<P> {
                 (index, self.streams.get_mut(index))
             }
         };
-        let previous = (stream.granule != UNKNOWN_GRANULE_POSITION).then_some(stream.granule);
         let (granule, compatibility) =
-            validation::granule(page, header, complete, previous, self.validation)?;
-        if let Some(granule) = granule {
-            stream.granule = granule;
-        }
+            validation::granule(page, header, complete, stream.granule, self.validation)?;
+        stream.granule = granule;
         // Preflight the entire page before emitting any of its packets.
         let first_packet_offset = if header.is_continued() {
             stream.packet_offset

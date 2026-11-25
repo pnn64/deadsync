@@ -1,6 +1,6 @@
 use crate::{
     CompatibilityStats, Error, IndexedPage, Limits, MAX_PAGE_SIZE, Page, PageHeader,
-    ValidationOptions, reserve, validation,
+    UNKNOWN_GRANULE_POSITION, ValidationOptions, reserve, validation,
 };
 use core::ops::ControlFlow;
 
@@ -50,7 +50,7 @@ pub struct PacketCapture {
     skipping: bool,
     started: bool,
     ended: bool,
-    granule: Option<u64>,
+    granule: u64,
     failed: bool,
     validation: ValidationOptions,
     compatibility: CompatibilityStats,
@@ -72,7 +72,7 @@ impl PacketCapture {
             skipping: false,
             started: false,
             ended: false,
-            granule: None,
+            granule: UNKNOWN_GRANULE_POSITION,
             failed: false,
             validation,
             compatibility: CompatibilityStats::default(),
@@ -102,7 +102,7 @@ impl PacketCapture {
         self.skipping = false;
         self.started = false;
         self.ended = false;
-        self.granule = None;
+        self.granule = UNKNOWN_GRANULE_POSITION;
         self.failed = false;
         self.compatibility = CompatibilityStats::default();
         self.page = None;
@@ -218,9 +218,7 @@ impl PacketCapture {
                     }
                 },
             )?;
-        if granule.is_some() {
-            self.granule = granule;
-        }
+        self.granule = granule;
         let mut skipping = self.skipping;
         let mut length = self.partial.len();
         let body = page.body().len();

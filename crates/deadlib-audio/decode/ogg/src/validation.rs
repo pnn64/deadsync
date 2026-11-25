@@ -41,13 +41,13 @@ pub(crate) fn granule(
     page: Page<'_>,
     header: crate::PageHeader,
     complete: usize,
-    previous: Option<u64>,
+    previous: u64,
     options: ValidationOptions,
-) -> Result<(Option<u64>, GranuleException), Error> {
+) -> Result<(u64, GranuleException), Error> {
     let gp = header.granule_position;
     if complete == 0 && !page.lacing().is_empty() && gp != UNKNOWN_GRANULE_POSITION {
         if options.allow_zero_span_granules && gp == 0 {
-            return Ok((None, GranuleException::ZeroSpan));
+            return Ok((previous, GranuleException::ZeroSpan));
         }
         return Err(Error::Invalid("granule on page without a completed packet"));
     }
@@ -57,13 +57,13 @@ pub(crate) fn granule(
                 "unknown granule on page with completed packets",
             ));
         }
-        return Ok((None, GranuleException::None));
+        return Ok((previous, GranuleException::None));
     }
-    if previous.is_some_and(|previous| gp < previous) {
+    if gp < previous && previous != UNKNOWN_GRANULE_POSITION {
         if !header.is_eos() || !options.allow_decreasing_eos_granule {
             return Err(Error::Invalid("decreasing granule position"));
         }
-        return Ok((Some(gp), GranuleException::DecreasingEos));
+        return Ok((gp, GranuleException::DecreasingEos));
     }
-    Ok((Some(gp), GranuleException::None))
+    Ok((gp, GranuleException::None))
 }
