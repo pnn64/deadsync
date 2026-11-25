@@ -1649,7 +1649,6 @@ version = "0.1.0"
 dependencies = [
  "deadsync-chart",
  "deadsync-core",
- "deadsync-input",
  "deadsync-rules",
  "hidapi",
  "libc",

@@ -178,7 +178,8 @@ theme to describe an input or store a setting:
 - `deadsync-core::lights` owns the saved cabinet driver, gameplay pad-light
   mode, PacDrive ordering, and serial port types. Config reads and writes
   these preferences. The shell supplies them to `deadsync-lights` for driver
-  startup, device I/O, and gameplay light updates.
+  startup, device I/O, and gameplay light updates. It translates virtual actions
+  into cabinet pad and menu light events and routes the operator button.
 - Cabinet chart lighting borrows notes and timestamps from the shell and
   receives the song clock and columns per player. The shell supplies
   StepManiaX lane input and judgment snapshots and resolves result grades to

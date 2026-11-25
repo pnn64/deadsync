@@ -277,7 +277,9 @@ pub const fn operator_menu_button_route(
     pressed: bool,
     action: VirtualAction,
 ) -> OperatorMenuButtonRoute {
-    if !pressed || !deadsync_lights::operator_menu_action(action) {
+    if !pressed
+        || !matches!(action, VirtualAction::p1_operator | VirtualAction::p2_operator)
+    {
         return OperatorMenuButtonRoute::Ignore;
     }
     if deadsync_lights::screen_allows_operator_menu_button(screen_light_context(screen)) {
@@ -302,14 +304,47 @@ pub enum LightInputRoute {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ButtonSource {
+    Pad(Player, ButtonLight),
+    Menu(Player, ButtonLight),
+}
+
+#[must_use]
+const fn button_source_from_action(action: VirtualAction) -> Option<ButtonSource> {
+    match action {
+        VirtualAction::p1_left => Some(ButtonSource::Pad(Player::P1, ButtonLight::Left)),
+        VirtualAction::p1_down => Some(ButtonSource::Pad(Player::P1, ButtonLight::Down)),
+        VirtualAction::p1_up => Some(ButtonSource::Pad(Player::P1, ButtonLight::Up)),
+        VirtualAction::p1_right => Some(ButtonSource::Pad(Player::P1, ButtonLight::Right)),
+        VirtualAction::p1_menu_left => Some(ButtonSource::Menu(Player::P1, ButtonLight::Left)),
+        VirtualAction::p1_menu_down => Some(ButtonSource::Menu(Player::P1, ButtonLight::Down)),
+        VirtualAction::p1_menu_up => Some(ButtonSource::Menu(Player::P1, ButtonLight::Up)),
+        VirtualAction::p1_menu_right => Some(ButtonSource::Menu(Player::P1, ButtonLight::Right)),
+        VirtualAction::p1_start => Some(ButtonSource::Menu(Player::P1, ButtonLight::Start)),
+        VirtualAction::p1_select => Some(ButtonSource::Menu(Player::P1, ButtonLight::Select)),
+        VirtualAction::p2_left => Some(ButtonSource::Pad(Player::P2, ButtonLight::Left)),
+        VirtualAction::p2_down => Some(ButtonSource::Pad(Player::P2, ButtonLight::Down)),
+        VirtualAction::p2_up => Some(ButtonSource::Pad(Player::P2, ButtonLight::Up)),
+        VirtualAction::p2_right => Some(ButtonSource::Pad(Player::P2, ButtonLight::Right)),
+        VirtualAction::p2_menu_left => Some(ButtonSource::Menu(Player::P2, ButtonLight::Left)),
+        VirtualAction::p2_menu_down => Some(ButtonSource::Menu(Player::P2, ButtonLight::Down)),
+        VirtualAction::p2_menu_up => Some(ButtonSource::Menu(Player::P2, ButtonLight::Up)),
+        VirtualAction::p2_menu_right => Some(ButtonSource::Menu(Player::P2, ButtonLight::Right)),
+        VirtualAction::p2_start => Some(ButtonSource::Menu(Player::P2, ButtonLight::Start)),
+        VirtualAction::p2_select => Some(ButtonSource::Menu(Player::P2, ButtonLight::Select)),
+        _ => None,
+    }
+}
+
 pub const fn light_input_route(action: VirtualAction, pressed: bool) -> LightInputRoute {
-    match deadsync_lights::button_source_from_action(action) {
-        Some(deadsync_lights::ButtonSource::Pad(player, button)) => LightInputRoute::Pad {
+    match button_source_from_action(action) {
+        Some(ButtonSource::Pad(player, button)) => LightInputRoute::Pad {
             player,
             button,
             pressed,
         },
-        Some(deadsync_lights::ButtonSource::Menu(player, button)) => LightInputRoute::Menu {
+        Some(ButtonSource::Menu(player, button)) => LightInputRoute::Menu {
             player,
             button,
             pressed,
@@ -610,6 +645,10 @@ mod tests {
             OperatorMenuButtonRoute::NavigateOptions,
         );
         assert_eq!(
+            operator_menu_button_route(Screen::Menu, true, VirtualAction::p2_operator),
+            OperatorMenuButtonRoute::NavigateOptions,
+        );
+        assert_eq!(
             operator_menu_button_route(Screen::Mappings, true, VirtualAction::p1_operator),
             OperatorMenuButtonRoute::ConsumeLocked,
         );
@@ -634,12 +673,24 @@ mod tests {
             },
         );
         assert_eq!(
+            light_input_route(VirtualAction::p1_start, true),
+            LightInputRoute::Menu {
+                player: Player::P1,
+                button: ButtonLight::Start,
+                pressed: true,
+            },
+        );
+        assert_eq!(
             light_input_route(VirtualAction::p2_menu_right, false),
             LightInputRoute::Menu {
                 player: Player::P2,
                 button: ButtonLight::Right,
                 pressed: false,
             },
+        );
+        assert_eq!(
+            light_input_route(VirtualAction::p1_operator, true),
+            LightInputRoute::Ignore,
         );
         assert_eq!(
             light_input_route(VirtualAction::system_fast_forward, true),
