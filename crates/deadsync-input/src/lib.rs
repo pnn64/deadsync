@@ -25,7 +25,7 @@ pub use bindings::{
     updated_keymap_unique_gamepad, updated_keymap_unique_keyboard,
     write_default_keymap_ini_section, write_keymap_ini_section,
 };
-pub use callback_input::{CallbackInputState, HeldCallbackInputs};
+pub use callback_input::{CallbackInputState, HeldCallbackInputs, song_lua_device_names};
 pub use keymap::{
     InputBinding, Keymap, PhysicalInput, any_player_has_dedicated_menu_buttons_for_mode,
     any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons, get_keymap,

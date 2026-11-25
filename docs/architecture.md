@@ -235,6 +235,8 @@ theme to describe an input or store a setting:
   handles HTTP errors, body size limits, and response decoding.
 - Song Lua owns media path lookup and actor metadata caching. The asset host
   supplies sound duration and movie dimension probes to each song VM.
+  `deadsync-input` translates physical events into legacy device and button
+  names for accepted Song Lua callbacks.
 
 ## Gameplay policy and presentation
 

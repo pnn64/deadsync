@@ -21,6 +21,7 @@ use deadsync_gameplay::{
 };
 use deadsync_input::{
     CallbackInputState, HeldCallbackInputs, InputEvent, PhysicalInput, VirtualAction,
+    song_lua_device_names,
 };
 use deadsync_notefield::{NotefieldFieldScratch, NotefieldNoteskinView, NotefieldSettings};
 use deadsync_noteskin::{NoteskinRuntime, NoteskinSlot};
@@ -1220,96 +1221,4 @@ fn handle_input_with_action<P: GameplayProfileData, O, C, D, T>(
         session.output.errors.push(error);
     }
     Some(effect)
-}
-
-fn song_lua_device_names(physical: Option<PhysicalInput>) -> (String, String) {
-    use deadlib_platform::input::{KeyCode, PadDir};
-    let (device, button) = match physical {
-        Some(PhysicalInput::Key(key)) => {
-            let name = match key {
-                KeyCode::ArrowLeft => "left".into(),
-                KeyCode::ArrowRight => "right".into(),
-                KeyCode::ArrowUp => "up".into(),
-                KeyCode::ArrowDown => "down".into(),
-                KeyCode::Enter => "enter".into(),
-                KeyCode::Escape => "escape".into(),
-                KeyCode::Space => "space".into(),
-                KeyCode::Tab => "tab".into(),
-                KeyCode::Backspace => "backspace".into(),
-                KeyCode::ControlLeft => "left ctrl".into(),
-                KeyCode::ControlRight => "right ctrl".into(),
-                KeyCode::ShiftLeft => "left shift".into(),
-                KeyCode::ShiftRight => "right shift".into(),
-                KeyCode::AltLeft => "left alt".into(),
-                KeyCode::AltRight => "right alt".into(),
-                KeyCode::SuperLeft => "left super".into(),
-                KeyCode::SuperRight => "right super".into(),
-                KeyCode::PageUp => "pgup".into(),
-                KeyCode::PageDown => "pgdn".into(),
-                KeyCode::Home => "home".into(),
-                KeyCode::End => "end".into(),
-                KeyCode::Insert => "insert".into(),
-                KeyCode::Delete => "delete".into(),
-                KeyCode::Comma => "comma".into(),
-                KeyCode::Period => "period".into(),
-                KeyCode::Backslash => "backslash".into(),
-                KeyCode::Minus => "-".into(),
-                KeyCode::Equal => "=".into(),
-                KeyCode::BracketLeft => "[".into(),
-                KeyCode::BracketRight => "]".into(),
-                KeyCode::Semicolon => ";".into(),
-                KeyCode::Quote => "'".into(),
-                KeyCode::Backquote => "\u{0060}".into(),
-                KeyCode::NumpadEnter => "KP enter".into(),
-                KeyCode::NumpadAdd => "KP +".into(),
-                KeyCode::NumpadSubtract => "KP -".into(),
-                KeyCode::NumpadMultiply => "KP *".into(),
-                KeyCode::NumpadDivide => "KP /".into(),
-                KeyCode::NumpadDecimal => "KP .".into(),
-                _ => {
-                    let key = format!("{key:?}");
-                    if let Some(key) = key
-                        .strip_prefix("Key")
-                        .or_else(|| key.strip_prefix("Digit"))
-                    {
-                        key.to_ascii_lowercase()
-                    } else if key
-                        .strip_prefix('F')
-                        .and_then(|n| n.parse::<u8>().ok())
-                        .is_some_and(|n| (1..=16).contains(&n))
-                    {
-                        key
-                    } else if let Some(n) = key
-                        .strip_prefix("Numpad")
-                        .filter(|n| n.len() == 1 && n.as_bytes()[0].is_ascii_digit())
-                    {
-                        format!("KP {n}")
-                    } else {
-                        "Invalid".into()
-                    }
-                }
-            };
-            ("InputDevice_Key".into(), name)
-        }
-        Some(PhysicalInput::PadDirection(id, dir)) => (
-            format!("InputDevice_Joy{}", id.0 + 1),
-            match dir {
-                PadDir::Left => "Left1",
-                PadDir::Right => "Right1",
-                PadDir::Up => "Up1",
-                PadDir::Down => "Down1",
-            }
-            .into(),
-        ),
-        Some(PhysicalInput::PadButton(id, code)) => (
-            format!("InputDevice_Joy{}", id.0 + 1),
-            if code.into_u32() < 32 {
-                format!("B{}", code.into_u32() + 1)
-            } else {
-                "Invalid".into()
-            },
-        ),
-        None => return ("InputDevice_Invalid".into(), "DeviceButton_Invalid".into()),
-    };
-    (device, format!("DeviceButton_{button}"))
 }

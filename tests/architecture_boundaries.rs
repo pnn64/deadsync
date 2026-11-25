@@ -759,6 +759,11 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
             "game input must own callback input state through {contract}"
         );
     }
+    assert!(contains_rust(&inputs, "pub fn song_lua_device_names("));
+    assert!(contains_rust(&controller, "song_lua_device_names(physical)"));
+    let manifest = read_source(root.join("crates/deadsync-song-lua/Cargo.toml"))
+        .expect("Song Lua manifest");
+    assert!(!manifest.contains("deadlib-platform"));
     for forbidden in [
         "struct SongLuaOut {",
         "struct SongLuaHeldInputs(",

@@ -8,7 +8,6 @@ license = "GPL-3.0"
 test-support = []
 [dependencies]
 deadlib-lua = { path = "../deadlib-lua", default-features = false }
-deadlib-platform = { path = "../deadlib-platform" }
 deadlib-render-core = { path = "../deadlib-render-core" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

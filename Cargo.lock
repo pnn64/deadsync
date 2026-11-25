@@ -1894,7 +1894,6 @@ dependencies = [
  "deadlib-assets",
  "deadlib-audio-decode",
  "deadlib-lua",
- "deadlib-platform",
  "deadlib-present",
  "deadlib-render",
  "deadlib-render-core",
