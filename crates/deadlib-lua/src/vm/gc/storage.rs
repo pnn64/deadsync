@@ -26,6 +26,9 @@ impl Vm {
         additional: usize,
     ) -> Result<(), Error> {
         let before = work.capacity();
+        if additional <= before - work.len() {
+            return Ok(());
+        }
         let result = work.try_reserve(additional);
         self.gc_note_control((work.capacity() - before) * size_of::<Trace>());
         result.map_err(|_| self.memory_failure())
@@ -195,12 +198,11 @@ impl Vm {
             _ => 0,
         };
         let before = self.gc.live.capacity();
-        let result = self
-            .gc
-            .live
-            .try_reserve(words.saturating_sub(self.gc.live.len()));
-        self.gc_note_control((self.gc.live.capacity() - before) * size_of::<u64>());
-        result.map_err(|_| self.memory_failure())?;
+        if words > before {
+            let result = self.gc.live.try_reserve(words - self.gc.live.len());
+            self.gc_note_control((self.gc.live.capacity() - before) * size_of::<u64>());
+            result.map_err(|_| self.memory_failure())?;
+        }
         // The current item still occupies its slot until both reservations
         // succeed. Popping it makes one slot available for its children.
         self.reserve_trace_work(work, count.saturating_sub(1))
