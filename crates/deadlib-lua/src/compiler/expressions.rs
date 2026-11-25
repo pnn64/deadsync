@@ -468,6 +468,7 @@ impl<'a> Compiler<'a> {
             let boolean = self.alloc(1)?;
             self.emit(op, boolean, left, u32::from(right))?;
             self.function.live[usize::from(boolean) / 64] &= !(1u64 << (boolean % 64));
+            self.function.gc_last = None;
             self.line = self.ast.exprs[id].1.discharge;
             self.emit(Op::Bool, dst, u16::from(boolean), 0)?;
         } else {

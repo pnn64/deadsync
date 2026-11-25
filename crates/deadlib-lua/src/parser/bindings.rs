@@ -43,6 +43,7 @@ pub(super) struct Bindings {
     scopes: Vec<Scope>,
     captures: Vec<Capture>,
     free: u32,
+    last_token: Option<u32>,
 }
 impl Bindings {
     pub(super) fn try_new() -> Result<Self, Error> {
@@ -58,6 +59,7 @@ impl Bindings {
             }])?,
             captures: Vec::new(),
             free: NONE,
+            last_token: None,
         })
     }
 }
@@ -69,6 +71,7 @@ impl Bindings {
         self.locals.clear();
         self.captures.clear();
         self.free = NONE;
+        self.last_token = None;
         self.scopes.clear();
         self.scopes.try_push(Scope {
             base: 0,
@@ -109,8 +112,15 @@ impl Bindings {
     }
     pub(super) fn intern(&mut self, input: &[u8], start: usize, end: usize) -> Result<(), Error> {
         let bytes = &input[start..end];
+        if self
+            .last_token
+            .is_some_and(|id| self.bytes(input, id) == bytes)
+        {
+            return Ok(());
+        }
         let hash = hash(bytes);
-        if self.lookup(input, bytes, hash).is_some() {
+        if let Some(id) = self.lookup(input, bytes, hash) {
+            self.last_token = Some(id);
             return Ok(());
         }
         if (self.names.len() + 1) * 2 >= self.buckets.len() {
@@ -135,9 +145,16 @@ impl Bindings {
             len: bytes.len(),
             hash,
         })?;
+        self.last_token = Some(self.buckets[slot]);
         Ok(())
     }
     pub(super) fn name(&self, input: &[u8], bytes: &[u8]) -> u32 {
+        // The lexer usually just interned the name that the grammar resolves.
+        if let Some(id) = self.last_token
+            && self.bytes(input, id) == bytes
+        {
+            return id;
+        }
         self.lookup(input, bytes, hash(bytes))
             .expect("lexer interned identifier")
     }

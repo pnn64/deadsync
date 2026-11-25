@@ -248,11 +248,6 @@ impl<'a> Compiler<'a> {
     }
     fn finish(&mut self) -> Result<u32, Error> {
         let mut f = std::mem::take(&mut self.function);
-        for i in &mut f.code {
-            if i.op == Op::Load {
-                i.b &= 1;
-            }
-        }
         boolean::thread_jumps(&mut f.code)?;
         for &pc in &f.logical_tests {
             let i = f.code[pc];
@@ -268,31 +263,8 @@ impl<'a> Compiler<'a> {
                 f.code[pc].c += 1;
             }
         }
-        for pc in 0..f.code.len() {
-            let i = f.code[pc];
-            let consumed_branch = matches!(i.op, Op::JumpFalse | Op::JumpTrue)
-                && f.code[..pc]
-                    .iter()
-                    .rev()
-                    .find(|p| p.op != Op::Close)
-                    .is_some_and(|previous| {
-                        matches!(
-                            previous.op,
-                            Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge | Op::Bool
-                        ) && previous.a == i.a
-                    });
-            let branch_value = i.op == Op::Bool
-                && f.code[pc + 1..]
-                    .iter()
-                    .find(|next| next.op != Op::Close)
-                    .is_some_and(|next| {
-                        matches!(next.op, Op::JumpFalse | Op::JumpTrue) && next.a == i.a
-                    });
-            if consumed_branch || branch_value {
-                f.code[pc].hook = 0;
-            }
-        }
         f.debug_lines.retain(|&l| l != 0);
+        f.debug_lines.dedup();
         f.debug_lines.sort_unstable();
         f.debug_lines.dedup();
         for local in &mut f.debug_locals {
@@ -311,11 +283,43 @@ impl<'a> Compiler<'a> {
         let mut lines = fallible::with_capacity(f.code.len())?;
         let mut live = fallible::with_capacity(f.code.len())?;
         let mut hooks = fallible::with_capacity(f.code.len())?;
-        for emitted in &f.code {
-            code.push(emitted.instruction);
+        let mut previous: Option<Instruction> = None;
+        for (pc, emitted) in f.code.iter().enumerate() {
+            let mut instruction = emitted.instruction;
+            let hook = match instruction.op {
+                Op::JumpFalse | Op::JumpTrue
+                    if previous.is_some_and(|p| {
+                        matches!(
+                            p.op,
+                            Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge | Op::Bool
+                        ) && p.a == instruction.a
+                    }) =>
+                {
+                    0
+                }
+                Op::Bool
+                    if f.code[pc + 1..]
+                        .iter()
+                        .find(|next| next.op != Op::Close)
+                        .is_some_and(|next| {
+                            matches!(next.op, Op::JumpFalse | Op::JumpTrue)
+                                && next.a == instruction.a
+                        }) =>
+                {
+                    0
+                }
+                _ => emitted.hook,
+            };
+            if instruction.op == Op::Load {
+                instruction.b &= 1;
+            }
+            if instruction.op != Op::Close {
+                previous = Some(instruction);
+            }
+            code.push(instruction);
             lines.push(emitted.line);
             live.push(emitted.live);
-            hooks.push(emitted.hook);
+            hooks.push(hook);
         }
         let debug_locals = drain_boxed(&mut f.debug_locals)?;
         let debug_calls = drain_boxed(&mut f.debug_calls)?;
@@ -435,27 +439,33 @@ impl<'a> Compiler<'a> {
         let word = usize::from(next) / 64;
         let bit = next % 64;
         if word < 4 {
+            let before = self.function.live;
             self.function.live[word] &= (1u64 << bit) - 1;
             self.function.live[word + 1..].fill(0);
+            if self.function.live != before {
+                self.function.gc_last = None;
+            }
             self.function.debug_hidden[word] &= (1u64 << bit) - 1;
             self.function.debug_hidden[word + 1..].fill(0);
         }
     }
     fn live_register(&mut self, register: u16) {
         if register < 256 {
-            self.function.live[usize::from(register) / 64] |= 1u64 << (register % 64);
-            self.function.debug_hidden[usize::from(register) / 64] &= !(1u64 << (register % 64));
+            let word = usize::from(register) / 64;
+            let bit = 1u64 << (register % 64);
+            if self.function.live[word] & bit == 0 {
+                self.function.live[word] |= bit;
+                self.function.gc_last = None;
+            }
+            self.function.debug_hidden[word] &= !bit;
         }
     }
     fn live_map(&mut self) -> Result<u16, Error> {
-        let mask = self.function.live;
-        // Most instructions reuse the preceding map, including the before/after
-        // pair of instructions that do not change register liveness.
-        if let Some(index) = self.function.gc_last
-            && self.function.gc_maps[usize::from(index)] == mask
-        {
+        // Register changes invalidate the current map at the point of mutation.
+        if let Some(index) = self.function.gc_last {
             return Ok(index);
         }
+        let mask = self.function.live;
         // Small functions need only a few maps. Their dense vector avoids both
         // hashing and an additional allocation until a larger index is useful.
         let present = if self.function.gc_maps.len() <= 16 {
@@ -503,6 +513,7 @@ impl<'a> Compiler<'a> {
                 let removed = self.function.code.pop().unwrap();
                 let before = removed.live as u16 as usize;
                 self.function.live = self.function.gc_maps[before];
+                self.function.gc_last = Some(before as u16);
                 self.function.debug_lines.pop();
                 assert_eq!(removed.hook, 0);
             }
