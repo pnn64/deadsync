@@ -82,9 +82,7 @@ impl Vm {
     }
 
     pub(super) fn separate_userdata(&mut self, all: bool) {
-        let live = self.userdata.live_len();
-        // A mark always belongs to a live slot, so a full set leaves no candidate.
-        if live == 0 || (!all && !self.userdata.at_most_marked(live - 1)) {
+        if self.userdata.live_len() == 0 || (!all && !self.userdata.has_unmarked()) {
             return;
         }
         let mut candidates = std::mem::take(&mut self.gc.candidates);

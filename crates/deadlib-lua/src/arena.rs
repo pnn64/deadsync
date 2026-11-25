@@ -256,6 +256,9 @@ impl<T> Arena<T> {
         }
         true
     }
+    pub(crate) fn has_unmarked(&self) -> bool {
+        self.live != 0 && self.at_most_marked(self.live - 1)
+    }
     pub fn clear_marks(&mut self) {
         self.marks.fill(0);
     }
@@ -283,7 +286,7 @@ impl<T> Arena<T> {
             || (end == 0
                 && *cursor == self.values.len()
                 && self.live <= self.values.len() / 2
-                && !self.at_most_marked(self.live - 1))
+                && !self.has_unmarked())
         {
             *cursor = end;
             return 0;
