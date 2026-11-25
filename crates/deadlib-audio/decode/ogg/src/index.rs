@@ -185,6 +185,7 @@ pub struct OggIndex {
     pages: Vec<IndexedPage>,
     length: u64,
     granule_reciprocal: u64,
+    offset_scale: u64,
     compatibility: CompatibilityStats,
 }
 
@@ -227,11 +228,15 @@ fn group_pages(pages: &mut [IndexedPage], streams: &mut [StreamIndex]) {
 
 // Keep the extra arithmetic off the small-index search path.
 #[inline(never)]
-fn offset_hint(pages: &[IndexedPage], end: u64, offset: u64) -> Option<&IndexedPage> {
+fn offset_hint(pages: &[IndexedPage], end: u64, offset: u64, scale: u64) -> Option<&IndexedPage> {
     let start = pages.first()?.offset;
     let distance = offset.checked_sub(start)?;
     // The surrounding search already excludes offsets at or beyond end.
-    let slot = (distance.checked_mul(pages.len() as u64)? / (end - start)) as usize;
+    let slot = if scale == 0 {
+        (distance.checked_mul(pages.len() as u64)? / (end - start)) as usize
+    } else {
+        ((u128::from(distance) * u128::from(scale)) >> 64) as usize
+    };
     let page = pages.get(slot)?;
     // A verified page containing the offset is necessarily the last start before it.
     let covers = |page: &IndexedPage| {
@@ -313,6 +318,7 @@ impl OggIndex {
             pages: Vec::new(),
             length: 0,
             granule_reciprocal: 0,
+            offset_scale: 0,
             compatibility: CompatibilityStats::default(),
         };
         while let Some(located) = reader.next_page()? {
@@ -386,6 +392,13 @@ impl OggIndex {
             .streams
             .windows(2)
             .all(|pair| pair[0].pages.end == pair[1].pages.start);
+        if index.streams.len() == 1 && index.pages.len() >= 33 {
+            let pages = &index.pages;
+            // Each indexed page spans multiple bytes, so the 64-bit scale fits.
+            let span = pages[pages.len() - 1].offset - pages[1].offset;
+            index.offset_scale =
+                (((pages.len() - 2) as u128) << 64).div_ceil(u128::from(span)) as u64;
+        }
         if grouped && index.compatibility == CompatibilityStats::default() {
             if index.streams.len() == 1 {
                 index.granule_reciprocal = regular_granule_reciprocal(&index.pages);
@@ -477,7 +490,7 @@ impl OggIndex {
             return Some(last);
         }
         if earlier.len() >= 32
-            && let Some(page) = offset_hint(&earlier[1..], last.offset, offset)
+            && let Some(page) = offset_hint(&earlier[1..], last.offset, offset, self.offset_scale)
         {
             return Some(page);
         }
