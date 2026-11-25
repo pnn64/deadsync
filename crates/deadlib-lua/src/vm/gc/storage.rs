@@ -71,13 +71,18 @@ impl Vm {
             }
         };
         let (next, array, pairs) = table.trace_slice(cursor, TABLE_TRACE_SLOTS);
+        let array_edges = if weak_values {
+            array
+                .iter()
+                .filter(|v| matches!(v, Value::String(_)))
+                .count()
+        } else {
+            array.iter().copied().filter_map(edge).count()
+        };
         let mut count = usize::from(next.is_some())
             + usize::from(cursor == 0 && table.metatable().is_some())
             + usize::from(cursor == 0 && table.host_state().is_some())
-            + array
-                .iter()
-                .filter_map(|&value| table_edge(value, weak_values))
-                .count();
+            + array_edges;
         for (_, key, value) in pairs {
             count += usize::from(table_edge(key, weak_keys).is_some());
             count += usize::from(table_edge(value, weak_values).is_some());

@@ -1433,11 +1433,14 @@ impl Vm {
         {
             work.push(Trace::Value(Value::Table(state)));
         }
-        work.extend(
-            array
-                .iter()
-                .filter_map(|&value| table_edge(value, weak_values)),
-        );
+        if weak_values {
+            work.extend(array.iter().copied().filter_map(|value| match value {
+                Value::String(_) => Some(Trace::Value(value)),
+                _ => None,
+            }));
+        } else {
+            work.extend(array.iter().copied().filter_map(edge));
+        }
         for (_, key, value) in pairs {
             work.extend(table_edge(key, weak_keys));
             work.extend(table_edge(value, weak_values));
