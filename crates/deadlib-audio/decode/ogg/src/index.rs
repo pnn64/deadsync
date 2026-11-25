@@ -572,6 +572,9 @@ impl OggIndex {
                 return Some(page);
             }
         }
+        if number == 0 {
+            return pages.first();
+        }
         let (last, earlier) = pages.split_last()?;
         let (page, earlier) = if last.first_packet <= number {
             (last, earlier)
