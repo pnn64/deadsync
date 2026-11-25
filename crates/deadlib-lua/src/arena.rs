@@ -299,23 +299,27 @@ impl<T> Arena<T> {
         mut before_remove: impl FnMut(&Self, usize),
     ) -> u64 {
         let end = cursor.saturating_sub(budget);
-        // In a sparse arena, counting mark bits is cheaper than checking holes.
-        // Only count for a whole sweep to avoid rescanning on every small step.
-        if self.live == 0
-            || end == *cursor
-            || (end == 0
-                && *cursor == self.values.len()
-                && self.live <= self.values.len() / 2
-                && !self.has_unmarked())
-        {
+        let mut upper = *cursor;
+        if self.live == 0 || end == upper {
             *cursor = end;
             return 0;
         }
+        if end == 0 && upper == self.values.len() {
+            if self.live == upper {
+                upper = self.dense_unmarked_end(upper);
+            } else if self.live <= upper / 2 && !self.has_unmarked() {
+                upper = 0;
+            }
+            if upper == 0 {
+                *cursor = 0;
+                return 0;
+            }
+        }
         let mut reclaimed = 0;
         let first_word = end / 64;
-        let last_word = (*cursor - 1) / 64;
+        let last_word = (upper - 1) / 64;
         // Only the first and last bitmap words can be partial.
-        let mut range = u64::MAX >> (63 - (*cursor - 1) % 64);
+        let mut range = u64::MAX >> (63 - (upper - 1) % 64);
         for word in (first_word..=last_word).rev() {
             if word == first_word {
                 range &= u64::MAX << (end % 64);
@@ -338,6 +342,24 @@ impl<T> Arena<T> {
         }
         *cursor = end;
         reclaimed
+    }
+    fn dense_unmarked_end(&self, len: usize) -> usize {
+        let (last, full) = self.marks.split_last().expect("occupied arena bitmap");
+        let tail = u64::MAX >> (63 - (len - 1) % 64);
+        if *last != tail {
+            return len;
+        }
+        // Sweep can start at the first group with an unmarked slot.
+        let (head, quads) = full.as_rchunks::<4>();
+        if let Some(quad) = quads
+            .iter()
+            .rposition(|&[a, b, c, d]| a & b & c & d != u64::MAX)
+        {
+            return (head.len() + (quad + 1) * 4) * 64;
+        }
+        head.iter()
+            .rposition(|&word| word != u64::MAX)
+            .map_or(0, |word| (word + 1) * 64)
     }
     pub fn len(&self) -> usize {
         self.values.len()
