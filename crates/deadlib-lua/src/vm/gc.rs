@@ -1747,9 +1747,15 @@ impl Vm {
         self.strings.rebuild();
         self.patterns
             .retain(|(id, _), _| self.strings.bytes.contains(id.0));
-        for (id, env) in self.builtin_envs.iter_mut().enumerate() {
-            if self.gc.natives[id / 64] & (1u64 << (id % 64)) == 0 {
-                *env = None;
+        for (envs, marked) in self.builtin_envs.chunks_mut(64).zip(self.gc.natives) {
+            if marked == 0 {
+                envs.fill(None);
+                continue;
+            }
+            let mut clear = !marked & (u64::MAX >> (64 - envs.len()));
+            while clear != 0 {
+                envs[clear.trailing_zeros() as usize] = None;
+                clear &= clear - 1;
             }
         }
         self.gc.phase = Phase::Finalize;
