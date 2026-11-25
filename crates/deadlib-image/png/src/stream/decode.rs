@@ -380,6 +380,9 @@ impl StreamDecoder {
                 if self.length == 0 || self.length > 768 || !self.length.is_multiple_of(3) {
                     return Err(Error::Invalid("PLTE contents"));
                 }
+                let entries = self.length / 3;
+                reserve(&mut self.palette, entries)?;
+                self.palette.resize(entries, [0; 3]);
             }
             b"tRNS" => {
                 if self.seen_data || self.transparency.is_some() || self.length > 256 {
@@ -440,7 +443,9 @@ impl StreamDecoder {
         self.crc = Crc32::new();
         self.crc.update(&self.kind);
         self.data.clear();
-        if !matches!(&self.kind, b"IHDR" | b"IDAT" | b"fdAT") && !self.discarded_animation_chunk() {
+        if !matches!(&self.kind, b"IHDR" | b"PLTE" | b"IDAT" | b"fdAT")
+            && !self.discarded_animation_chunk()
+        {
             reserve(&mut self.data, self.length)?;
         }
         self.state = State::ChunkBody;
@@ -472,7 +477,6 @@ impl StreamDecoder {
                 {
                     return Err(Error::Invalid("PLTE contents"));
                 }
-                self.palette.extend_from_slice(d.as_chunks::<3>().0);
                 Some(Event::Palette)
             }
             b"tRNS" => {
@@ -738,11 +742,12 @@ impl StreamDecoder {
                         let n = self.left.min(input.len() - pos).min(self.input_left);
                         let bytes = &input[pos..pos + n];
                         if !self.discarded_animation_chunk() {
-                            if &self.kind == b"IHDR" {
-                                let start = self.length - self.left;
-                                self.fixed[start..start + n].copy_from_slice(bytes);
-                            } else {
-                                self.data.extend_from_slice(bytes);
+                            let start = self.length - self.left;
+                            match &self.kind {
+                                b"IHDR" => self.fixed[start..start + n].copy_from_slice(bytes),
+                                b"PLTE" => self.palette.as_flattened_mut()[start..start + n]
+                                    .copy_from_slice(bytes),
+                                _ => self.data.extend_from_slice(bytes),
                             }
                         }
                         self.crc.update(bytes);

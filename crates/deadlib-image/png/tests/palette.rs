@@ -236,4 +236,19 @@ fn independent_palette_overflow_fixture() {
         decode_reader(OneByte(&bytes), &Default::default()).unwrap(),
         png
     );
+
+    let mut decoder = StreamDecoder::new(DecodeOptions::default());
+    let header = decoder.process(&bytes).unwrap();
+    assert!(matches!(decoder.event(), Some(DecodeEvent::Header(_))));
+    let start = header.consumed;
+    assert_eq!(&bytes[start + 4..start + 8], b"PLTE");
+    let last_crc = start + 8 + 3 + 3;
+    let palette = decoder.process(&bytes[start..last_crc]).unwrap();
+    assert_eq!(palette.status, DecodeStatus::NeedInput);
+    assert!(decoder.event().is_none());
+    assert_eq!(
+        decoder.process(&[bytes[last_crc] ^ 1]),
+        Err(deadlib_image_png::Error::Checksum)
+    );
+    assert!(decoder.event().is_none());
 }
