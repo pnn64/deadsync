@@ -125,7 +125,7 @@ impl<W: Write> EncoderOutput<W> {
         Ok(())
     }
     fn frame(&mut self, header: &Header, f: &Frame) -> Result<(), Error> {
-        let (maximum, repeated) = f.validate::<true>(
+        let (index_bits, repeated) = f.validate::<true>(
             (header.width, header.height),
             header.global_palette.as_ref().map(Vec::len),
             true,
@@ -135,7 +135,7 @@ impl<W: Write> EncoderOutput<W> {
         }
         // Derive the minimum from actual indices; unused palette colors need
         // not increase the code width. No indices or palette entries change.
-        let minimum = (8 - maximum.leading_zeros() as u8).max(2);
+        let minimum = (8 - index_bits.leading_zeros() as u8).max(2);
         self.control(header.version, f.control)?;
         self.writer.write_all(&[0x2c])?;
         for n in [f.left, f.top, f.width, f.height] {

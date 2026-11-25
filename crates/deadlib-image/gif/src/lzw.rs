@@ -221,10 +221,9 @@ impl Encoder {
     pub fn encode(&mut self, input: &[u8], minimum: u8, output: &mut Vec<u8>) -> Result<(), Error> {
         if !(2..=8).contains(&minimum)
             || (minimum < 8
-                && input.chunks(256).any(|chunk| {
-                    // A high bit in any literal survives the OR reduction.
-                    chunk.iter().fold(0, |bits, &pixel| bits | pixel) >> minimum != 0
-                }))
+                && input
+                    .chunks(256)
+                    .any(|chunk| index_bits(chunk) >> minimum != 0))
         {
             return Err(Error::Invalid("LZW minimum code size or literal range"));
         }
@@ -469,6 +468,11 @@ impl Encoder {
         bits.code(clear + 1, next.min(4095).ilog2() as u8 + 1)?;
         bits.finish()
     }
+}
+
+// The highest bit set in any index determines the required alphabet width.
+pub(crate) fn index_bits(indices: &[u8]) -> u8 {
+    indices.iter().fold(0, |bits, &index| bits | index)
 }
 
 pub(crate) fn repeated_index(indices: &[u8]) -> Option<u8> {

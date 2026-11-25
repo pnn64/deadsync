@@ -176,21 +176,21 @@ impl Frame {
         } else {
             None
         };
-        // A byte maximum vectorizes. Encoders also use it to choose the LZW width.
-        let maximum = if let Some(index) = repeated {
+        // Palette sizes are powers of two, so only the highest index bit matters.
+        let bits = if let Some(index) = repeated {
             index
         } else if ENCODE || colors.is_some_and(|len| len < 256) {
-            self.indices.iter().copied().max().unwrap_or(0)
+            crate::lzw::index_bits(&self.indices)
         } else {
             0
         };
         if let Some(len) = colors {
-            if usize::from(maximum) >= len {
+            if usize::from(bits) >= len {
                 return Err(Error::Invalid("pixel index outside active palette"));
             }
             validate_control(self.control, len)?;
         }
-        Ok((maximum, repeated))
+        Ok((bits, repeated))
     }
 }
 

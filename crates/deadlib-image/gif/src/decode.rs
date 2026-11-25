@@ -573,13 +573,7 @@ impl Decoder {
                     {
                         // Every expanded phrase contains only LZW literals.
                         if self.lzw.literal_count() > palette.len()
-                            && self
-                                .frame
-                                .indices
-                                .iter()
-                                .copied()
-                                .max()
-                                .is_some_and(|index| usize::from(index) >= palette.len())
+                            && usize::from(lzw::index_bits(&self.frame.indices)) >= palette.len()
                         {
                             return Err(Error::Invalid("pixel index outside active palette"));
                         }
