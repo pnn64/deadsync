@@ -341,6 +341,28 @@ fn compact_plain_bytes(
     count: usize,
     bpp: usize,
 ) -> Result<(), Error> {
+    if stride == 1 {
+        let mut above = 0u8;
+        for write in 0..count {
+            let read = write * 2;
+            let [filter, value] = *raw
+                .get(read..)
+                .and_then(|bytes| bytes.first_chunk::<2>())
+                .ok_or(Error::Truncated)?;
+            let predictor = match filter {
+                0 | 1 => 0,
+                2 | 4 => above,
+                3 => above >> 1,
+                _ => return Err(Error::Invalid("scanline filter")),
+            };
+            above = value.wrapping_add(predictor);
+            raw[write] = above;
+        }
+        if count * 2 != raw.len() {
+            return Err(Error::Invalid("extra image data"));
+        }
+        return Ok(());
+    }
     let wire_stride = stride + 1;
     let mut read = 0;
     let mut write = 0;
@@ -866,6 +888,29 @@ mod tests {
             4 => unpack::<4>(row, out, 1),
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    fn compact_one_byte_rows_preserves_predictors_and_errors() {
+        let mut rows = [2, 9, 1, 8, 3, 13, 4, 5, 0, 1, 2, 255];
+        compact_plain_bytes(&mut rows, 1, 6, 1).unwrap();
+        assert_eq!(rows[..6], [9, 8, 17, 22, 1, 0]);
+
+        let mut rows = [5];
+        assert_eq!(
+            compact_plain_bytes(&mut rows, 1, 1, 1),
+            Err(Error::Truncated)
+        );
+        let mut rows = [5, 0];
+        assert_eq!(
+            compact_plain_bytes(&mut rows, 1, 1, 1),
+            Err(Error::Invalid("scanline filter"))
+        );
+        let mut rows = [0, 0, 0];
+        assert_eq!(
+            compact_plain_bytes(&mut rows, 1, 1, 1),
+            Err(Error::Invalid("extra image data"))
+        );
     }
 
     #[test]
