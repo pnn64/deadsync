@@ -78,6 +78,10 @@ impl Crc32 {
         }
     }
     pub(crate) fn update(&mut self, bytes: &[u8]) {
+        if let [byte] = bytes {
+            self.state = (self.state >> 8) ^ CRC_TABLE[((self.state as u8) ^ byte) as usize];
+            return;
+        }
         #[cfg(target_arch = "x86_64")]
         if let Some(state) = x86::update(self.state, bytes) {
             self.state = state;
