@@ -407,6 +407,7 @@ impl OggIndex {
         };
         Some(&self.pages[page.landmark])
     }
+    #[inline]
     pub fn page_at_or_before(&self, serial: u32, offset: u64) -> Option<&IndexedPage> {
         let pages = self.pages(serial)?;
         let (last, earlier) = pages.split_last()?;
