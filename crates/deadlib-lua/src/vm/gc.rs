@@ -1223,6 +1223,8 @@ impl Vm {
                     true
                 }
                 Trace::Value(value) => self.marked_value(value),
+                Trace::Program(slot) => self.programs.slot_marked(slot),
+                Trace::Cell(slot) => self.upvalues.slot_marked(slot),
                 _ => false,
             };
             if handled {

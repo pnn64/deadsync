@@ -177,20 +177,10 @@ impl Vm {
             .saturating_add(1),
             Trace::Value(Value::Native(id)) if id < 256 => 1,
             Trace::CellAgain(i) => usize::from(edge(self.cell_value(i)).is_some()),
-            Trace::Cell(i)
-                if self
-                    .upvalues
-                    .key(i)
-                    .is_some_and(|key| !self.upvalues.marked(key)) =>
-            {
+            Trace::Cell(i) if self.upvalues.key(i).is_some() => {
                 usize::from(edge(self.cell_value(i)).is_some())
             }
-            Trace::Program(i)
-                if self
-                    .programs
-                    .key(i)
-                    .is_some_and(|key| !self.programs.marked(key)) =>
-            {
+            Trace::Program(i) if self.programs.key(i).is_some() => {
                 let program = &self.programs[i];
                 let mut count = program.debug_strings.len();
                 for constants in &program.constants {
