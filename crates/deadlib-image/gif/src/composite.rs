@@ -614,7 +614,7 @@ fn draw_binary_indices<const NORMALIZE: bool>(
 #[inline]
 fn uniform_index(indices: &[u8]) -> Option<u8> {
     // Short rows are cheaper to expand directly.
-    if indices.len() < 32 {
+    if indices.len() < 32 || indices[0] != indices[1] {
         return None;
     }
     let index = indices[0];
