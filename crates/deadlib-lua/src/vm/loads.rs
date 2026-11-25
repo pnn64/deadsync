@@ -900,7 +900,7 @@ impl Vm {
         let bytes = prototypes.capacity() * size_of::<ParserPrototypeId>();
         self.programs.note_alloc(bytes);
         self.programs[loaded].parser_prototypes = prototypes;
-        self.code_payload_bytes = self.code_payload_bytes - before + bytes;
+        self.object_payload_bytes = self.object_payload_bytes - before + bytes;
         self.loads[index]
             .native
             .as_mut()

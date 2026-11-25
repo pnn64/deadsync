@@ -79,7 +79,7 @@ impl Vm {
             names.push(id);
             let growth = (names.capacity() - before) * size_of::<StringId>();
             self.programs.note_alloc(growth);
-            self.code_payload_bytes += growth;
+            self.object_payload_bytes += growth;
         }
         self.gc_new_value(Value::String(id));
         Ok(NativeDebugString::Interned(id))

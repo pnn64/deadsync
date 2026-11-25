@@ -493,8 +493,8 @@ pub struct Vm {
     registers: Buffer<Value>,
     programs: Arena<LoadedProgram>,
     functions: Arena<Closure>,
-    // Heap payload of loaded programs and closure upvalues.
-    code_payload_bytes: usize,
+    // Heap payload of table buffers, loaded programs, and closure upvalues.
+    object_payload_bytes: usize,
     upvalues: Arena<Cell>,
     open_upvalues: Buffer<u32>,
     frames: Buffer<Frame>,
@@ -633,7 +633,7 @@ impl Vm {
             registers: Buffer::new_in(memory.clone()),
             programs: Arena::new_in(memory.clone()),
             functions: Arena::identified_in(memory.clone()),
-            code_payload_bytes: 0,
+            object_payload_bytes: 0,
             upvalues: Arena::new_in(memory.clone()),
             open_upvalues: Buffer::new_in(memory.clone()),
             frames: Buffer::new_in(memory.clone()),
@@ -1123,11 +1123,8 @@ impl Vm {
         let result = table.set_with_native_hash(key, value, |id| {
             Table::native_string_hash(&self.strings.bytes[slot_index(id.0)])
         });
-        let growth = table.heap_bytes().saturating_sub(before);
-        if growth != 0 {
-            self.tables.note_alloc(growth);
-            self.gc.pending = true;
-        }
+        let after = table.heap_bytes();
+        self.note_table_resize(before, after);
         if let Err(error) = result {
             return Err(if error.kind() == ErrorKind::Memory {
                 self.memory_failure()
@@ -1137,6 +1134,15 @@ impl Vm {
         }
         self.gc_table_write(id, key, value);
         Ok(())
+    }
+    #[inline]
+    fn note_table_resize(&mut self, before: usize, after: usize) {
+        if before != after {
+            self.object_payload_bytes = self.object_payload_bytes - before + after;
+            let growth = after.saturating_sub(before);
+            self.tables.note_alloc(growth);
+            self.gc.pending |= growth != 0;
+        }
     }
     fn memory_failure(&self) -> Error {
         Error::memory().with_value(Value::String(self.memory_error))
@@ -1225,6 +1231,7 @@ impl Vm {
                 .try_insert(table)
                 .map_err(|_| self.memory_failure())?,
         );
+        self.object_payload_bytes += bytes;
         self.tables.note_alloc(bytes);
         self.gc.pending |= bytes != 0;
         self.gc_new_value(Value::Table(id));
@@ -1344,7 +1351,7 @@ impl Vm {
         let bytes = gc::program_bytes(&loaded);
         let index = slot_index(self.programs.insert(loaded));
         self.programs.note_alloc(bytes);
-        self.code_payload_bytes += bytes;
+        self.object_payload_bytes += bytes;
         let entry = self.insert_closure(Closure {
             program: index,
             prototype: program.data.entry as usize,
@@ -1361,7 +1368,7 @@ impl Vm {
         self.functions
             .note_alloc(closure.upvalues.capacity() * size_of::<u32>());
         let id = FunctionId(self.functions.insert(closure));
-        self.code_payload_bytes += bytes;
+        self.object_payload_bytes += bytes;
         id
     }
 
@@ -2086,11 +2093,8 @@ impl Vm {
                         let target = &mut self.tables[slot_index(id.0)];
                         let before = target.heap_bytes();
                         let result = target.grow_list_array(end);
-                        let growth = target.heap_bytes().saturating_sub(before);
-                        if growth != 0 {
-                            self.tables.note_alloc(growth);
-                            self.gc.pending = true;
-                        }
+                        let after = target.heap_bytes();
+                        self.note_table_resize(before, after);
                         result.map_err(|_| self.memory_failure())?;
                         if end <= u32::MAX as usize {
                             for offset in 0..count {

@@ -634,8 +634,7 @@ impl Vm {
     /// Inspect live object counts and estimated VM-owned heap storage.
     pub fn heap_stats(&mut self) -> HeapStats {
         let mut payload = self.strings.payload_bytes + self.strings.buckets.capacity() * 4;
-        payload += self.tables.iter().map(Table::heap_bytes).sum::<usize>();
-        payload += self.code_payload_bytes;
+        payload += self.object_payload_bytes;
         payload += self
             .parser_prototypes
             .iter()
@@ -1623,9 +1622,15 @@ impl Vm {
             let mut cursor = self.gc.sweep_cursor;
             let before = cursor;
             let count = match self.gc.sweep_arena {
-                0 => self.tables.sweep_some(&mut cursor, budget),
+                0 => {
+                    let bytes = &mut self.object_payload_bytes;
+                    self.tables
+                        .sweep_with(&mut cursor, budget, |tables, index| {
+                            *bytes -= tables[index].heap_bytes();
+                        })
+                }
                 1 => {
-                    let bytes = &mut self.code_payload_bytes;
+                    let bytes = &mut self.object_payload_bytes;
                     self.functions
                         .sweep_with(&mut cursor, budget, |functions, index| {
                             *bytes -= functions[index].upvalues.len() * size_of::<u32>();
@@ -1635,7 +1640,7 @@ impl Vm {
                 3 => self.threads.sweep_some(&mut cursor, budget),
                 4 => self.native_closures.sweep_some(&mut cursor, budget),
                 5 => {
-                    let bytes = &mut self.code_payload_bytes;
+                    let bytes = &mut self.object_payload_bytes;
                     self.programs
                         .sweep_with(&mut cursor, budget, |programs, index| {
                             *bytes -= program_bytes(&programs[index]);
