@@ -190,7 +190,7 @@ fn vector_adler_matches_byte_oracle_for_states_splits_and_modulus_boundaries() {
         return;
     }
     for constant in [false, true] {
-        let bytes: Vec<u8> = (0..65600)
+        let bytes: Vec<u8> = (0u64..65600)
             .map(|n| {
                 if constant {
                     255
