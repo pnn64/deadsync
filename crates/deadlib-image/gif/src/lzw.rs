@@ -302,6 +302,8 @@ impl Encoder {
         if pixels <= 32 {
             return if pixels <= 8 {
                 Self::encode_tiny::<16>(rows, minimum, emit)
+            } else if minimum == 2 {
+                Self::encode_direct::<2, { direct_table_slots(32, 4) }>(rows, emit)
             } else {
                 Self::encode_tiny::<64>(rows, minimum, emit)
             };
