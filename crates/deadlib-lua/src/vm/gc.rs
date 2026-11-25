@@ -174,7 +174,8 @@ fn table_edge(value: Value, weak: bool) -> Option<Trace> {
 pub(super) struct Collector {
     phase: Phase,
     sweep_arena: u8,
-    sweep_cursor: usize,
+    // Arena slot counts are bounded by u32::MAX.
+    sweep_cursor: u32,
     stopped: bool,
     pause: i32,
     stepmul: i32,
@@ -1556,7 +1557,7 @@ impl Vm {
         self.protect_new_allocations(true);
         self.gc.phase = Phase::Sweep;
         self.gc.sweep_arena = 0;
-        self.gc.sweep_cursor = self.tables.len();
+        self.gc.sweep_cursor = self.tables.len() as u32;
         Ok(())
     }
     fn clear_weak_tables(&mut self) {
@@ -1623,8 +1624,8 @@ impl Vm {
         self.parser_prototypes.protect_new(enabled);
         self.io.files.protect_new(enabled);
     }
-    fn sweep_arena_len(&self, arena: u8) -> usize {
-        match arena {
+    fn sweep_arena_len(&self, arena: u8) -> u32 {
+        (match arena {
             0 => self.tables.len(),
             1 => self.functions.len(),
             2 => self.upvalues.len(),
@@ -1636,11 +1637,11 @@ impl Vm {
             8 => self.io.files.len(),
             9 => self.parser_prototypes.len(),
             _ => 0,
-        }
+        }) as u32
     }
     fn sweep_gc_some(&mut self, mut budget: usize) {
         while budget != 0 && self.gc.sweep_arena < 10 {
-            let mut cursor = self.gc.sweep_cursor;
+            let mut cursor = self.gc.sweep_cursor as usize;
             let before = cursor;
             let count = match self.gc.sweep_arena {
                 0 => {
@@ -1693,11 +1694,12 @@ impl Vm {
             };
             self.gc.reclaimed += count;
             budget -= before - cursor;
-            if cursor == 0 {
+            self.gc.sweep_cursor = if cursor == 0 {
                 self.gc.sweep_arena += 1;
-                cursor = self.sweep_arena_len(self.gc.sweep_arena);
-            }
-            self.gc.sweep_cursor = cursor;
+                self.sweep_arena_len(self.gc.sweep_arena)
+            } else {
+                cursor as u32
+            };
         }
         if self.gc.sweep_arena != 10 {
             return;
