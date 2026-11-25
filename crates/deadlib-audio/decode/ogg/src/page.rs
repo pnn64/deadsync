@@ -85,6 +85,9 @@ impl<'a> Page<'a> {
     #[inline]
     pub fn completed_packets(self) -> usize {
         let lacing = self.lacing();
+        if let [lace] = lacing {
+            return usize::from(*lace != 255);
+        }
         if lacing.len() < 8 {
             return lacing.iter().filter(|&&lace| lace < 255).count();
         }
