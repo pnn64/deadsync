@@ -7,6 +7,8 @@ use std::time::Instant;
 #[doc(inline)]
 pub use winit::keyboard::KeyCode;
 
+pub mod pad_order;
+
 /// Number of supported native pad slots, including the shared overflow slot.
 /// Slots `0..64` identify devices without growing hot-path input state.
 pub const NATIVE_PAD_ID_COUNT_CAP: usize = 65;
@@ -48,6 +50,78 @@ pub enum PadBackend {
     #[cfg(target_os = "macos")]
     MacOsIohid,
 }
+
+/// Preferred Windows controller backend, including the automatic choice.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WindowsPadBackend {
+    /// Choose the default Windows backend (currently Raw Input).
+    Auto,
+    #[default]
+    RawInput,
+    Wgi,
+}
+
+impl WindowsPadBackend {
+    #[inline(always)]
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::RawInput => "RawInput",
+            Self::Wgi => "WGI",
+        }
+    }
+}
+
+impl std::fmt::Display for WindowsPadBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for WindowsPadBackend {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("auto") {
+            return Ok(Self::Auto);
+        }
+        if s.eq_ignore_ascii_case("rawinput")
+            || s.eq_ignore_ascii_case("raw_input")
+            || s.eq_ignore_ascii_case("raw")
+        {
+            return Ok(Self::RawInput);
+        }
+        if s.eq_ignore_ascii_case("wgi")
+            || s.eq_ignore_ascii_case("windowsgaminginput")
+            || s.eq_ignore_ascii_case("gaminginput")
+        {
+            return Ok(Self::Wgi);
+        }
+        Err(())
+    }
+}
+
+/// Native input backends that use stable pad slots.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PadOrderBackend {
+    RawInput,
+    Wgi,
+    IoHid,
+    Hidraw,
+    LinuxEvdev,
+    FreeBsdEvdev,
+}
+
+pub const PAD_ORDER_BACKENDS: [PadOrderBackend; 6] = [
+    PadOrderBackend::RawInput,
+    PadOrderBackend::Wgi,
+    PadOrderBackend::IoHid,
+    PadOrderBackend::Hidraw,
+    PadOrderBackend::LinuxEvdev,
+    PadOrderBackend::FreeBsdEvdev,
+];
 
 /// Physical controller lifecycle event with a caller-selectable provider identity.
 #[derive(Clone, Debug)]

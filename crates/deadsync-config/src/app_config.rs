@@ -15,8 +15,8 @@ use crate::theme::{
     ThemePresentationOptions, TournamentModeOptions, VersionOverlaySide, VisualStyle,
 };
 use deadlib_audio_core::{AudioOutputMode, LinuxAudioBackend};
-use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::display::FullscreenType;
+use deadlib_platform::input::WindowsPadBackend;
 use deadlib_present::color::Color;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_core::color::DifficultyColorScheme;

@@ -1,9 +1,8 @@
-//! Native keyboard/controller capture and stable device-slot assignment.
+//! Native keyboard and controller capture.
 
 mod backend;
 mod launch;
-mod pad_order;
 
 pub use backend::*;
+pub use deadlib_platform::input::pad_order::*;
 pub use launch::*;
-pub use pad_order::*;

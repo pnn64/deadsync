@@ -1,6 +1,6 @@
 use crate::UserEvent;
 #[cfg(windows)]
-use deadlib_input_native::WindowsPadBackend;
+use deadlib_platform::input::WindowsPadBackend;
 use deadsync_input::devices::GamepadBackend;
 use winit::event_loop::EventLoopProxy;
 

@@ -429,7 +429,7 @@ impl RuntimeConfigStore {
 
     pub fn reset_load_state(&self) {
         self.reset_runtime_state();
-        deadlib_input_native::reset_pad_order();
+        deadlib_platform::input::pad_order::reset_pad_order();
     }
 
     /// # Panics

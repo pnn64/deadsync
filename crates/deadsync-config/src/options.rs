@@ -56,7 +56,7 @@ use crate::theme::{
 };
 use crate::writer::{push_bool, push_line};
 #[cfg(windows)]
-use deadlib_input_native::WindowsPadBackend;
+use deadlib_platform::input::WindowsPadBackend;
 use deadsync_core::color::DifficultyColorScheme;
 use deadsync_core::lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering,

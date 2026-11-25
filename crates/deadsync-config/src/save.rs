@@ -872,6 +872,25 @@ mod tests {
     }
 
     #[test]
+    fn gamepad_backend_alias_is_saved_under_its_canonical_name() {
+        use deadlib_platform::input::WindowsPadBackend;
+
+        let mut conf = SimpleIni::new();
+        conf.load_str("[Options]\nGamepadBackend=WindowsGamingInput\n");
+        let loaded = crate::load::load_app_config(&conf, Config::default());
+        assert_eq!(loaded.windows_gamepad_backend, WindowsPadBackend::Wgi);
+
+        let saved =
+            build_saved_app_config_file(&loaded, &Keymap::default(), "", &[], &[], "", "", "", "");
+        conf.load_str(&saved);
+        assert_eq!(conf.get("Options", "GamepadBackend"), Some("WGI"));
+        assert_eq!(
+            crate::load::load_app_config(&conf, Config::default()).windows_gamepad_backend,
+            WindowsPadBackend::Wgi
+        );
+    }
+
+    #[test]
     fn linux_audio_backend_alias_is_saved_under_its_canonical_name() {
         use deadlib_audio_core::LinuxAudioBackend;
 

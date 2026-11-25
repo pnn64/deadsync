@@ -2614,7 +2614,7 @@ fn generic_theme_contract_stays_runtime_independent() {
             if owns_app_requests && matches!(*token,
                 "deadsync-config" | "deadsync_config" | "deadsync-gameplay" | "deadsync_gameplay"
                 | "deadsync-online" | "deadsync_online" | "deadsync-profile" | "deadsync_profile"
-                | "deadsync-simfile" | "deadsync_simfile" | "deadlib-input-native" | "deadlib_input_native"
+                | "deadsync-simfile" | "deadsync_simfile"
                 | "deadlib-platform" | "deadlib_platform")
             {
                 // The request protocol names the owning crates' data types.
@@ -4935,14 +4935,13 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
         "Simply Love should consume physical keyboard codes through deadlib-platform::input"
     );
     assert!(
-        manifest.contains("deadlib-input-native"),
-        "Simply Love must import the backend selection type from its owner"
+        !manifest.contains("deadlib-input-native"),
+        "Simply Love must remain independent of native input drivers"
     );
 
     let mut failures = Vec::new();
     for file in production_rust_files(&theme.join("src")) {
         let source = production_source(&file);
-        let source = source.replace("deadlib_input_native::WindowsPadBackend", "");
         for token in ["winit::", "deadlib_input_native"] {
             if source.contains(token) {
                 failures.push(format!("{}: {token}", rel_path(&root, &file)));
@@ -8927,6 +8926,26 @@ fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
     assert!(mapping.contains("deadlib_platform::input::"));
     let backend = read_source(native.join("src/launch.rs")).expect("native launch");
     assert!(backend.contains("deadlib_platform::input::{PadEvent, RawKeyboardEvent}"));
+}
+
+#[test]
+fn controller_preferences_do_not_depend_on_native_drivers() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for name in ["deadlib-platform", "deadsync-config", "deadsync-profile"] {
+        let crate_dir = root.join("crates").join(name);
+        let manifest = read_source(crate_dir.join("Cargo.toml")).expect("crate manifest");
+        assert!(
+            !manifest.contains("deadlib-input-native"),
+            "{name} depends on native input drivers"
+        );
+        for file in production_rust_files(&crate_dir.join("src")) {
+            assert!(
+                !production_source(&file).contains("deadlib_input_native"),
+                "{} imports native input drivers",
+                file.display()
+            );
+        }
+    }
 }
 
 #[test]

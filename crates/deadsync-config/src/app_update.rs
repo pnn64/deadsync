@@ -28,7 +28,7 @@ use crate::update::{
 use deadlib_audio_core::AudioOutputMode;
 #[cfg(target_os = "linux")]
 use deadlib_audio_core::LinuxAudioBackend;
-use deadlib_input_native::WindowsPadBackend;
+use deadlib_platform::input::WindowsPadBackend;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_core::color::DifficultyColorScheme;
 use deadsync_core::lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};

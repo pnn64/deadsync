@@ -1272,7 +1272,6 @@ dependencies = [
 name = "deadlib-input-native"
 version = "0.1.0"
 dependencies = [
- "arrayvec",
  "deadlib-platform",
  "hidparser",
  "libc",
@@ -1292,6 +1291,7 @@ version = "0.1.0"
 name = "deadlib-platform"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "chrono",
  "dbus",
  "directories",
@@ -1563,7 +1563,6 @@ name = "deadsync-config"
 version = "0.1.0"
 dependencies = [
  "deadlib-audio-core",
- "deadlib-input-native",
  "deadlib-platform",
  "deadlib-present",
  "deadlib-render-core",
@@ -1944,7 +1943,6 @@ name = "deadsync-theme"
 version = "0.1.0"
 dependencies = [
  "deadlib-assets",
- "deadlib-input-native",
  "deadlib-platform",
  "deadsync-chart",
  "deadsync-config",
@@ -1985,7 +1983,6 @@ dependencies = [
  "bitflags 2.13.2",
  "chrono",
  "deadlib-assets",
- "deadlib-input-native",
  "deadlib-lua",
  "deadlib-platform",
  "deadlib-present",

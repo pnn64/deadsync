@@ -6,9 +6,9 @@ use crate::profile_picker::ManageLocalProfilesView;
 use crate::select_music::DensityGraphSlot;
 use crate::views::DensityGraphView;
 use crate::{AudioRequest, GraphicsRequest, PlatformRequest};
-#[cfg(target_os = "windows")]
-use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::input::KeyCode;
+#[cfg(target_os = "windows")]
+use deadlib_platform::input::WindowsPadBackend;
 use deadsync_config::audio::NoteScrollClock;
 use deadsync_config::coin::CoinMode;
 use deadsync_config::options::SmxPackName;

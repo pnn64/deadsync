@@ -3,9 +3,8 @@
 use std::sync::{LazyLock, Mutex};
 
 use arrayvec::ArrayVec;
-use deadlib_platform::input::NATIVE_PAD_ID_COUNT_CAP;
 
-use crate::backend::{PAD_ORDER_BACKENDS, PadOrderBackend};
+use super::{NATIVE_PAD_ID_COUNT_CAP, PAD_ORDER_BACKENDS, PadOrderBackend};
 
 /// Maximum stable device slots per backend before the shared overflow slot.
 pub const PAD_ORDER_CAP: usize = NATIVE_PAD_ID_COUNT_CAP - 1;

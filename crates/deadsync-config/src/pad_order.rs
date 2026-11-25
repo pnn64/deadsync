@@ -3,7 +3,8 @@
 use crate::ini::SimpleIni;
 use crate::runtime::save_without_keymaps;
 use crate::writer::push_line;
-use deadlib_input_native::{PadOrderBackend, pad_index_for_uuid, pad_order, set_pad_order};
+use deadlib_platform::input::PadOrderBackend;
+use deadlib_platform::input::pad_order::{pad_index_for_uuid, pad_order, set_pad_order};
 use std::fmt::Display;
 
 const PAD_ORDER_FIELDS: [(PadOrderBackend, &str); 6] = [
@@ -122,7 +123,7 @@ fn uuid_from_hex(s: &str) -> Option<[u8; 16]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadlib_input_native::{PAD_ORDER_CAP, PadOrderAssignment};
+    use deadlib_platform::input::pad_order::{PAD_ORDER_CAP, PadOrderAssignment};
 
     #[test]
     fn canonical_uuid_text_roundtrips_and_rejects_malformed_input() {

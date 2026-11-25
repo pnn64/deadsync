@@ -1,6 +1,8 @@
 use std::time::Instant;
 
-pub use deadlib_platform::input::{GpSystemEvent, PadBackend};
+pub use deadlib_platform::input::{
+    GpSystemEvent, PAD_ORDER_BACKENDS, PadBackend, PadOrderBackend, WindowsPadBackend,
+};
 use deadlib_platform::input::{PadDir, PadEvent, PadId};
 
 #[cfg(any(target_os = "linux", test))]
@@ -27,77 +29,6 @@ mod unix_time;
 pub mod w32_raw_input;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 pub mod wgi;
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum WindowsPadBackend {
-    /// Choose the default Windows backend (currently Raw Input).
-    Auto,
-    #[default]
-    RawInput,
-    Wgi,
-}
-
-impl WindowsPadBackend {
-    #[inline(always)]
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Auto => "Auto",
-            Self::RawInput => "RawInput",
-            Self::Wgi => "WGI",
-        }
-    }
-}
-
-impl std::fmt::Display for WindowsPadBackend {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl std::str::FromStr for WindowsPadBackend {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.trim();
-        if s.is_empty() || s.eq_ignore_ascii_case("auto") {
-            return Ok(Self::Auto);
-        }
-        if s.eq_ignore_ascii_case("rawinput")
-            || s.eq_ignore_ascii_case("raw_input")
-            || s.eq_ignore_ascii_case("raw")
-        {
-            return Ok(Self::RawInput);
-        }
-        if s.eq_ignore_ascii_case("wgi")
-            || s.eq_ignore_ascii_case("windowsgaminginput")
-            || s.eq_ignore_ascii_case("gaminginput")
-        {
-            return Ok(Self::Wgi);
-        }
-        Err(())
-    }
-}
-
-/// Native input backends that use stable pad slots.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum PadOrderBackend {
-    RawInput,
-    Wgi,
-    IoHid,
-    Hidraw,
-    LinuxEvdev,
-    FreeBsdEvdev,
-}
-
-pub const PAD_ORDER_BACKENDS: [PadOrderBackend; 6] = [
-    PadOrderBackend::RawInput,
-    PadOrderBackend::Wgi,
-    PadOrderBackend::IoHid,
-    PadOrderBackend::Hidraw,
-    PadOrderBackend::LinuxEvdev,
-    PadOrderBackend::FreeBsdEvdev,
-];
 
 #[derive(Clone, Copy)]
 pub struct BackendHost {

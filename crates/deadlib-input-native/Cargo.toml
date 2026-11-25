@@ -5,7 +5,6 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
-arrayvec = "0.7.8"
 deadlib-platform = { path = "../deadlib-platform" }
 log = "0.4.35"
 rustc-hash = "2.1.3"

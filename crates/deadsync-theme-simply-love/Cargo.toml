@@ -16,7 +16,6 @@ test = false
 [dependencies]
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
-deadlib-input-native = { path = "../deadlib-input-native" }
 deadlib-platform = { path = "../deadlib-platform" }
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
