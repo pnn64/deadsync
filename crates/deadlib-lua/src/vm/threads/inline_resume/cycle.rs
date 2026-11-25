@@ -2,6 +2,8 @@
 use super::*;
 use crate::bytecode::COMPARE_BRANCH;
 
+pub(super) mod pair;
+
 type Context<'a, 'threads> = simple::Context<'a, &'threads mut Arena<Thread>>;
 
 #[derive(Clone, Copy)]
@@ -134,6 +136,11 @@ pub(super) fn run<'a, 'threads>(
     for (slot, instruction) in arithmetic.iter_mut().zip(&tail[..count]) {
         *slot = Numeric::decode(cx, *instruction)?;
     }
+    let linked_additions = count == 3
+        && arithmetic[..3].iter().all(|add| add.op == Op::Add)
+        && arithmetic[..3].windows(2).all(
+            |pair| matches!(pair[1].left, Operand::Register(register) if register == pair[0].dst),
+        );
     let base = cx.base;
     let assert_slot = base + usize::from(assertion.a);
     let resume_slot = base + usize::from(call.a);
@@ -152,9 +159,24 @@ pub(super) fn run<'a, 'threads>(
         cx.registers[assert_slot] = status;
         cx.registers[assert_slot + 1] = status;
         *top = assert_slot + assertion.c as usize;
-        for (index, add) in arithmetic[..count].iter().enumerate() {
-            if add.arithmetic(cx.registers).is_none() {
-                return Some((pc + 3 + index, resumed));
+        if linked_additions {
+            let Some(mut sum) = arithmetic[0].left.number(cx.registers) else {
+                return Some((pc + 3, resumed));
+            };
+            // Keep the accumulator in numeric form and publish every write
+            // so a failed guard can resume at the exact addition it reached.
+            for (index, add) in arithmetic[..3].iter().enumerate() {
+                let Some(next) = add.right.number(cx.registers) else {
+                    return Some((pc + 3 + index, resumed));
+                };
+                sum += next;
+                cx.registers[add.dst] = Value::Number(sum);
+            }
+        } else {
+            for (index, add) in arithmetic[..count].iter().enumerate() {
+                if add.arithmetic(cx.registers).is_none() {
+                    return Some((pc + 3 + index, resumed));
+                }
             }
         }
         let Some((left, right)) = test.operands(cx.registers) else {

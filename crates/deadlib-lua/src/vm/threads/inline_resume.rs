@@ -263,6 +263,9 @@ impl ResumeHints {
                 wanted == 2 && plan.resume(cx, call)
             });
         }
+        if let [Some(first), Some(second)] = &mut self.plans {
+            return cycle::pair::run(cx, pc, top, first, second);
+        }
         None
     }
 

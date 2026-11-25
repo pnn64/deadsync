@@ -91,6 +91,66 @@ fn individual_resumes_sync_the_parked_numeric_loop_before_debug_calls() {
 }
 
 #[test]
+fn interleaved_resumes_sync_both_threads_on_loop_exit_and_fallback() {
+    let program = compile(
+        br#"
+        local check = assert
+        local yield, resume = coroutine.yield, coroutine.resume
+        local function producer(first, last, step)
+            return coroutine.create(function()
+                for i = first, last, step do yield(i) end
+                return last + step
+            end)
+        end
+        local function consume(resume, a, b, limit)
+            local count, sum = 0, 0
+            while count < limit do
+                count = count + 1
+                local ok, x = resume(a)
+                assert(ok)
+                local ok, y = resume(b)
+                assert(ok and x == count and y == -count)
+                sum = sum + x - y
+            end
+            return sum
+        end
+
+        local a, b = producer(1, 23, 1), producer(-1, -40, -1)
+        check(consume(resume, a, b, 23) == 552)
+        local control, x = debug.getlocal(a, 1, 1)
+        local name, y = debug.getlocal(b, 1, 4)
+        check(control == '(for index)' and x == 23 and name == 'i' and y == -23)
+        local ok, last = resume(a)
+        check(ok and last == 24 and coroutine.status(a) == 'dead')
+        local ok, next_y = resume(b)
+        check(ok and next_y == -24)
+
+        a, b = producer(1, 23, 1), producer(-1, -40, -1)
+        local ok, message = pcall(consume, resume, a, b, 26)
+        check(not ok and type(message) == 'string' and coroutine.status(a) == 'dead')
+        local _, parked = debug.getlocal(b, 1, 4)
+        check(parked == -24)
+
+        a, b = producer(1, 23, 1), producer(-1, -40, -1)
+        local calls = 0
+        assert = function(ok)
+            calls = calls + 1
+            local _, current = debug.getlocal(a, 1, 4)
+            check(ok and current == math.floor((calls + 1) / 2))
+        end
+        check(consume(resume, a, b, 23) == 552 and calls == 46)
+        assert = check
+        return 42
+    "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+    vm.set_instruction_limit(Some(10_000));
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+}
+
+#[test]
 fn repeating_payload_resumes_update_the_frame_at_a_different_yield_site() {
     let program = compile(
         br#"
@@ -168,6 +228,50 @@ fn repeated_payload_consumer_falls_back_for_a_replaced_assertion() {
     let mut vm = Vm::new();
     assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
     vm.set_instruction_limit(Some(10_000));
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+}
+
+#[test]
+fn linked_resume_additions_preserve_rounding_and_the_next_yield() {
+    let program = compile(
+        br#"
+        local yield, resume = coroutine.yield, coroutine.resume
+        local function producer()
+            for i = 1, 120 do yield(1e16, -1e16, i / 8) end
+            yield('9', '4', '1')
+            return 42
+        end
+        local function consume(co)
+            local count, sum = 0, 0
+            while count < 121 do
+                count = count + 1
+                local ok, a, b, c = resume(co)
+                assert(ok)
+                sum = sum + a + b + c
+            end
+            return sum
+        end
+        local fast = coroutine.create(producer)
+        local sum = consume(fast)
+        assert(debug.getinfo(fast, 0, 'f').func == yield)
+        local ok, result = resume(fast)
+        assert(ok and result == 42 and coroutine.status(fast) == 'dead')
+
+        local hooked = coroutine.create(producer)
+        local calls = 0
+        debug.sethook(function() calls = calls + 1 end, '', 1)
+        local reference = consume(hooked)
+        debug.sethook()
+        assert(sum == reference and calls > 121)
+        local ok, result = resume(hooked)
+        assert(ok and coroutine.status(hooked) == 'dead')
+        return result
+    "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+    vm.set_instruction_limit(Some(50_000));
     assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
 }
 
