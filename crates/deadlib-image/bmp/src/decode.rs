@@ -125,6 +125,14 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                                 .extend(block.as_chunks::<8>().0.iter().rev().copied().flatten()),
                             16 => indices
                                 .extend(block.as_chunks::<16>().0.iter().rev().copied().flatten()),
+                            32 => indices
+                                .extend(block.as_chunks::<32>().0.iter().rev().copied().flatten()),
+                            64 => indices
+                                .extend(block.as_chunks::<64>().0.iter().rev().copied().flatten()),
+                            128 => indices
+                                .extend(block.as_chunks::<128>().0.iter().rev().copied().flatten()),
+                            256 => indices
+                                .extend(block.as_chunks::<256>().0.iter().rev().copied().flatten()),
                             _ => {
                                 for row in block.rchunks_exact(width) {
                                     indices.extend_from_slice(row);

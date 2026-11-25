@@ -378,7 +378,15 @@ fn aligned_top_down_byte_indices_validate_the_last_row() {
 #[test]
 fn aligned_bottom_up_byte_indices_include_partial_block() {
     let colors = palette(2);
-    for (width, height) in [(4, 2051), (8, 1027), (16, 515)] {
+    for (width, height) in [
+        (4, 2051),
+        (8, 1027),
+        (16, 515),
+        (32, 257),
+        (64, 129),
+        (128, 65),
+        (256, 33),
+    ] {
         let mut rows: Vec<_> = (0..width * height).map(|i| u8::from(i % 7 < 3)).collect();
         assert_eq!(
             decode(&wire(Format::rgb(8), width, height, false, &colors, &rows))
