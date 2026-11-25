@@ -219,25 +219,29 @@ impl Compositor {
         let r = self.clip(frame.left, frame.top, frame.width, frame.height);
         if self.prepare(r, frame.control)? {
             let transparent = frame.control.and_then(|c| c.transparent_index);
-            let local_table;
-            let table = if let Some(p) = local {
-                local_table = expand_palette(p);
-                &local_table
-            } else {
-                &self.palette
+            let binary_colors = match local {
+                Some(&[a, b]) => Some([a, b].map(|[r, g, b]| [r, g, b, 255])),
+                None if self.palette_len == Some(2) => Some([self.palette[0], self.palette[1]]),
+                _ => None,
             };
-            let two_colors = local.map(<[_]>::len).or(self.palette_len) == Some(2);
             let canvas = (self.pixels.as_mut_slice(), self.width as usize);
-            if two_colors {
+            if let Some(colors) = binary_colors {
                 draw_binary_indices::<false>(
                     canvas,
                     r,
                     &frame.indices,
                     frame.width as usize,
-                    [table[0], table[1]],
+                    colors,
                     transparent,
                 );
             } else {
+                let local_table;
+                let table = if let Some(p) = local {
+                    local_table = expand_palette(p);
+                    &local_table
+                } else {
+                    &self.palette
+                };
                 draw_indices(
                     canvas,
                     r,
@@ -355,7 +359,7 @@ impl Compositor {
     }
 }
 
-#[inline(always)]
+#[inline(never)]
 fn draw_indices(
     (canvas, stride): (&mut [[u8; 4]], usize),
     r: Rect,
