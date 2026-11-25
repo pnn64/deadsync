@@ -1477,7 +1477,7 @@ impl Vm {
         self.trace_graph(work)?;
         // Snapshot the already reached containers before refreshing roots;
         // newly reached threads/cells still receive their ordinary first scan.
-        let threads = self.threads.marked_slots().count();
+        let threads = self.threads.marked_count();
         let tables = self
             .tables
             .marked_slots()
@@ -1495,10 +1495,8 @@ impl Vm {
                 .saturating_add(cells)
                 .saturating_add(self.seed_gc_root_count()),
         )?;
-        for index in self.threads.marked_slots() {
-            work.push(Trace::ThreadAgain(ThreadId(
-                self.threads.key(index).unwrap(),
-            )));
+        for key in self.threads.marked_keys() {
+            work.push(Trace::ThreadAgain(ThreadId(key)));
         }
         for index in self.tables.marked_slots() {
             if self.tables[index].metatable().is_some() {

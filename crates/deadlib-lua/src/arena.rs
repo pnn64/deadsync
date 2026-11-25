@@ -232,6 +232,16 @@ impl<T> Arena<T> {
     pub(crate) fn marked_word(&self, word: usize) -> u64 {
         self.marks[word]
     }
+    pub(crate) fn marked_count(&self) -> usize {
+        self.marks
+            .iter()
+            .map(|word| word.count_ones() as usize)
+            .sum()
+    }
+    pub(crate) fn marked_keys(&self) -> impl Iterator<Item = u64> + '_ {
+        self.marked_slots()
+            .map(|slot| (u64::from(self.generations[slot]) << 32) | slot as u64)
+    }
     // Removing a value clears its mark, so every returned slot is live.
     pub(crate) fn marked_slots(&self) -> impl Iterator<Item = usize> + '_ {
         let mut words = self.marks.iter().copied().enumerate();
