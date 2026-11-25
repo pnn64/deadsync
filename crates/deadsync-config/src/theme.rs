@@ -13,56 +13,11 @@ use crate::defaults::{
 };
 use crate::ini::SimpleIni;
 use crate::writer::{push_bool, push_line};
+use deadsync_core::preference_key::NormalizedAsciiKey;
+pub use deadsync_core::session_flow::{
+    GameFlag, MachinePreferredPlayMode, MachinePreferredPlayStyle,
+};
 use std::str::FromStr;
-
-// All accepted punctuation-insensitive preference aliases fit in this stack
-// buffer. A longer normalized key cannot match any supported alias.
-const NORMALIZED_KEY_CAPACITY: usize = 32;
-
-struct NormalizedAsciiKey {
-    bytes: [u8; NORMALIZED_KEY_CAPACITY],
-    len: u8,
-}
-
-impl NormalizedAsciiKey {
-    fn parse(raw: &str) -> Option<Self> {
-        const MAP: [u8; 256] = {
-            let mut map = [0u8; 256];
-            let mut byte = 0usize;
-            while byte < 256 {
-                let value = byte as u8;
-                if value.is_ascii_alphanumeric() {
-                    map[byte] = value.to_ascii_lowercase();
-                }
-                byte += 1;
-            }
-            map
-        };
-        let mut key = Self {
-            bytes: [0; NORMALIZED_KEY_CAPACITY],
-            len: 0,
-        };
-        let mut len = 0usize;
-        for byte in raw.bytes() {
-            let byte = MAP[usize::from(byte)];
-            if byte == 0 {
-                continue;
-            }
-            let index = len;
-            if index == NORMALIZED_KEY_CAPACITY {
-                return None;
-            }
-            key.bytes[index] = byte;
-            len += 1;
-        }
-        key.len = len as u8;
-        Some(key)
-    }
-
-    fn as_str(&self) -> &str {
-        std::str::from_utf8(&self.bytes[..usize::from(self.len)]).unwrap_or_default()
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BreakdownStyle {
@@ -1090,73 +1045,6 @@ impl FromStr for SyncGraphMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MachinePreferredPlayStyle {
-    #[default]
-    Single,
-    Versus,
-    Double,
-}
-
-impl MachinePreferredPlayStyle {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Single => "Single",
-            Self::Versus => "Versus",
-            Self::Double => "Double",
-        }
-    }
-}
-
-impl FromStr for MachinePreferredPlayStyle {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let Some(key) = NormalizedAsciiKey::parse(s) else {
-            return Err(());
-        };
-        match key.as_str() {
-            "single" | "1player" | "oneplayer" => Ok(Self::Single),
-            "versus" | "2player" | "2players" | "twoplayer" | "twoplayers" => Ok(Self::Versus),
-            "double" => Ok(Self::Double),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MachinePreferredPlayMode {
-    #[default]
-    Regular,
-    Marathon,
-}
-
-impl MachinePreferredPlayMode {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Regular => "Regular",
-            Self::Marathon => "Marathon",
-        }
-    }
-}
-
-impl FromStr for MachinePreferredPlayMode {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.trim();
-        match s.len() {
-            7 if s.eq_ignore_ascii_case("regular") => Ok(Self::Regular),
-            8 if s.eq_ignore_ascii_case("marathon") => Ok(Self::Marathon),
-            _ => Err(()),
-        }
-    }
-}
-
-/// When to auto-show the `ArrowCloud` QR-login screen after the user picks
-/// a profile.  Mirrors Simply Love's `QRLogin` theme pref.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ArrowCloudQrLoginWhen {
     /// Always show the login screen after Select Profile.
     Always,
@@ -1412,36 +1300,6 @@ impl FromStr for MachineEvaluationStyle {
             "default" | "auto" | "theme" | "themedriven" => Ok(Self::Default),
             "opaque" | "solid" | "hearts" => Ok(Self::Opaque),
             "transparent" | "transparant" | "clear" | "technique" => Ok(Self::Transparent),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum GameFlag {
-    #[default]
-    Dance,
-    Pump,
-}
-
-impl GameFlag {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Dance => "dance",
-            Self::Pump => "pump",
-        }
-    }
-}
-
-impl FromStr for GameFlag {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.trim();
-        match s.len() {
-            4 if s.eq_ignore_ascii_case("pump") => Ok(Self::Pump),
-            5 if s.eq_ignore_ascii_case("dance") => Ok(Self::Dance),
             _ => Err(()),
         }
     }
@@ -2282,24 +2140,6 @@ impl FromStr for LogLevel {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn stack_normalized_keys_strip_punctuation_and_non_ascii() {
-        for (raw, expected) in [
-            ("Simply Love", "simplylove"),
-            ("  POST-kernel_fingerprint ", "postkernelfingerprint"),
-            ("1-player", "1player"),
-            ("sïmply_love", "smplylove"),
-            ("___", ""),
-            ("S----------------------------RPG10", "srpg10"),
-        ] {
-            let key = NormalizedAsciiKey::parse(raw).expect("valid-size normalized key");
-            assert_eq!(key.as_str(), expected, "input {raw:?}");
-        }
-
-        let too_long = "a".repeat(NORMALIZED_KEY_CAPACITY + 1);
-        assert!(NormalizedAsciiKey::parse(&too_long).is_none());
-    }
 
     #[test]
     fn normalized_preference_parsers_accept_supported_aliases() {

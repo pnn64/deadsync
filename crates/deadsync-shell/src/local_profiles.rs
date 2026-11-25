@@ -1,13 +1,29 @@
+use deadsync_config as config;
+use deadsync_profile::app_runtime as profile_runtime;
 use deadsync_profile::compat as profile;
 use deadsync_profile::picker::{ProfilePickerEntryView, ProfilePickerView};
-use deadsync_profile::{ActiveProfile, PlayerSide};
+use deadsync_profile::{ActiveProfile, NoteSkin, PLAYER_SLOTS, PlayerOptionsData, PlayerSide};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme::app_requests::LocalProfileEvent;
 use deadsync_theme::profile_picker::{LocalProfileView, ManageLocalProfilesView};
 use std::str::FromStr;
 
+pub(crate) fn configured_default_profiles() -> [Option<String>; PLAYER_SLOTS] {
+    let (p1, p2) = config::runtime::default_profiles();
+    [p1, p2]
+}
+
+pub(crate) fn machine_player_options_fallback() -> PlayerOptionsData {
+    PlayerOptionsData {
+        noteskin: NoteSkin::new(&config::runtime::machine_default_noteskin()),
+        pad_light_brightness: config::runtime::get().smx_default_light_brightness.min(100),
+        ..PlayerOptionsData::default()
+    }
+}
+
 pub fn view() -> ManageLocalProfilesView {
-    let config = deadsync_config::runtime::get();
+    let config = config::runtime::get();
+    let defaults = configured_default_profiles();
     ManageLocalProfilesView {
         profiles: profile::scan_local_profiles()
             .into_iter()
@@ -17,15 +33,15 @@ pub fn view() -> ManageLocalProfilesView {
             })
             .collect(),
         default_profile_ids: [
-            profile::default_local_profile_id_for_side(PlayerSide::P1),
-            profile::default_local_profile_id_for_side(PlayerSide::P2),
+            profile_runtime::default_local_profile_id_for_side(&defaults, PlayerSide::P1),
+            profile_runtime::default_local_profile_id_for_side(&defaults, PlayerSide::P2),
         ],
         dedicated_three_key_nav: config.three_key_navigation && config.only_dedicated_menu_buttons,
     }
 }
 
 pub fn picker_view() -> ProfilePickerView {
-    let config = deadsync_config::runtime::get();
+    let config = config::runtime::get();
     let default_options = profile::new_profile_player_options();
     let guest_options = profile::guest_player_options();
     let default_speed_mod = default_options.scroll_speed.to_string();
@@ -39,7 +55,7 @@ pub fn picker_view() -> ProfilePickerView {
             let content = std::fs::read_to_string(&ini_path).ok();
             let ini = content
                 .as_deref()
-                .map(deadsync_config::ini::borrowed_ini_sections)
+                .map(deadlib_platform::ini::borrowed_ini_sections)
                 .unwrap_or_default();
             let section = ini.get(player_options_section);
             let get_player_option = |key: &str| section.and_then(|values| values.get(key).copied());
@@ -103,6 +119,7 @@ pub fn picker_view() -> ProfilePickerView {
             }
         })
         .collect();
+    let defaults = configured_default_profiles();
     ProfilePickerView {
         game: config.game_flag,
         guest: ProfilePickerEntryView {
@@ -118,8 +135,8 @@ pub fn picker_view() -> ProfilePickerView {
         },
         profiles,
         default_profiles: [
-            profile::get_default_profile_for_side(PlayerSide::P1),
-            profile::get_default_profile_for_side(PlayerSide::P2),
+            profile_runtime::default_profile_for_side(&defaults, PlayerSide::P1),
+            profile_runtime::default_profile_for_side(&defaults, PlayerSide::P2),
         ],
         three_key_navigation: config.three_key_navigation,
     }
@@ -134,7 +151,13 @@ fn parse_ini_bool(raw: &str) -> Option<bool> {
 }
 
 pub fn create(display_name: &str) -> LocalProfileEvent {
-    let result = profile::create_local_profile(display_name).map_err(|error| {
+    let result = profile_runtime::create_local_profile(
+        display_name,
+        &profile::new_profile_player_options(),
+        configured_default_profiles(),
+        config::runtime_update::update_default_profiles,
+    )
+    .map_err(|error| {
         log::warn!("Failed to create local profile: {error}");
     });
     LocalProfileEvent::Created {
@@ -155,16 +178,29 @@ pub fn rename(profile_id: &str, display_name: &str) -> LocalProfileEvent {
 }
 
 pub fn set_default(side: PlayerSide, profile_id: String) -> LocalProfileEvent {
-    profile::set_default_profile_for_side(side, ActiveProfile::Local { id: profile_id });
+    profile_runtime::update_default_profile_for_side(
+        configured_default_profiles(),
+        side,
+        &ActiveProfile::Local { id: profile_id },
+        config::runtime_update::update_default_profiles,
+    );
     LocalProfileEvent::DefaultSet { view: view() }
 }
 
 pub fn delete(profile_id: &str) -> LocalProfileEvent {
-    let result = profile::delete_local_profile(profile_id).map_err(|error| {
+    let result = delete_profile(profile_id).map_err(|error| {
         log::warn!("Failed to delete local profile {profile_id}: {error}");
     });
     LocalProfileEvent::Deleted {
         result,
         view: view(),
     }
+}
+
+pub(crate) fn delete_profile(profile_id: &str) -> std::io::Result<()> {
+    profile_runtime::delete_local_profile_with_defaults(
+        profile_id,
+        configured_default_profiles(),
+        config::runtime_update::update_default_profiles,
+    )
 }

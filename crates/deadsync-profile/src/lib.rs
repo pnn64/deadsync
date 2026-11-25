@@ -2,6 +2,7 @@ use bincode::{Decode, Encode};
 use bitflags::bitflags;
 use chrono::{Datelike, Local};
 use deadlib_platform::atomic_write::{AtomicFile, write_atomic};
+use deadsync_core::session_flow::{GameFlag, MachinePreferredPlayMode, MachinePreferredPlayStyle};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score::ScoreImportEndpoint;
@@ -4212,10 +4213,9 @@ pub enum PlayMode {
 
 #[must_use]
 pub const fn play_style_from_machine_preference(
-    style: deadsync_config::theme::MachinePreferredPlayStyle,
-    game: deadsync_config::theme::GameFlag,
+    style: MachinePreferredPlayStyle,
+    game: GameFlag,
 ) -> PlayStyle {
-    use deadsync_config::theme::{GameFlag, MachinePreferredPlayStyle};
     match (game, style) {
         (GameFlag::Dance, MachinePreferredPlayStyle::Single) => PlayStyle::Single,
         (GameFlag::Dance, MachinePreferredPlayStyle::Versus) => PlayStyle::Versus,
@@ -4227,12 +4227,10 @@ pub const fn play_style_from_machine_preference(
 }
 
 #[must_use]
-pub const fn play_mode_from_machine_preference(
-    mode: deadsync_config::theme::MachinePreferredPlayMode,
-) -> PlayMode {
+pub const fn play_mode_from_machine_preference(mode: MachinePreferredPlayMode) -> PlayMode {
     match mode {
-        deadsync_config::theme::MachinePreferredPlayMode::Regular => PlayMode::Regular,
-        deadsync_config::theme::MachinePreferredPlayMode::Marathon => PlayMode::Marathon,
+        MachinePreferredPlayMode::Regular => PlayMode::Regular,
+        MachinePreferredPlayMode::Marathon => PlayMode::Marathon,
     }
 }
 
@@ -11072,8 +11070,6 @@ mod tests {
 
     #[test]
     fn machine_style_preference_uses_the_active_game() {
-        use deadsync_config::theme::{GameFlag, MachinePreferredPlayStyle};
-
         assert_eq!(
             play_style_from_machine_preference(MachinePreferredPlayStyle::Single, GameFlag::Dance),
             PlayStyle::Single

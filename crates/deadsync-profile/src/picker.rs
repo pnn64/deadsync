@@ -2,7 +2,7 @@ use crate::{
     ActiveProfile, JudgmentGraphic, MiniIndicator, NoteSkin, PLAYER_SLOTS, PlayerOptionsData,
     PlayerSide, ScrollOption, player_side_index,
 };
-use deadsync_config::theme::GameFlag;
+use deadsync_core::session_flow::GameFlag;
 
 /// Catalog and session preferences used by the profile picker.
 #[derive(Clone, Debug, PartialEq, Eq)]

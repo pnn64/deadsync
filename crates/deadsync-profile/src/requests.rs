@@ -129,6 +129,8 @@ pub fn select_profiles(
     p2: ActiveProfile,
     p1_joined: bool,
     p2_joined: bool,
+    default_profiles: [Option<String>; PLAYER_SLOTS],
+    update_default_profiles: impl FnOnce(Option<String>, Option<String>),
 ) -> ProfileSelection {
     let previous_session = runtime_session_snapshot();
     let previous_profiles = runtime_active_profiles();
@@ -138,7 +140,11 @@ pub fn select_profiles(
     runtime_set_session_player_side(session.active_side);
     runtime_set_session_joined(session.p1_joined, session.p2_joined);
     runtime_set_session_play_style(session.play_style);
-    let profiles = app_runtime::set_active_profiles_from_config(p1, p2);
+    let profiles = app_runtime::set_active_profiles_with_defaults(
+        [p1, p2],
+        default_profiles,
+        update_default_profiles,
+    );
     ProfileSelection {
         previous_session,
         previous_guests: previous_profiles.each_ref().map(active_profile_is_guest),

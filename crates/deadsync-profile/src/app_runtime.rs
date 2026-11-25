@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use deadsync_config as config;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use log::{debug, info, warn};
 
@@ -1091,28 +1090,6 @@ pub fn restore_default_profiles(default_profiles: [Option<String>; PLAYER_SLOTS]
     crate::runtime_restore_default_profiles(&default_profiles, |id| local_profile_dir(id).is_dir());
 }
 
-#[inline(always)]
-#[must_use]
-pub fn machine_default_noteskin_value() -> NoteSkin {
-    NoteSkin::new(&config::runtime::machine_default_noteskin())
-}
-
-/// Machine-default pad-light brightness used to seed a new profile, mirroring
-/// `machine_default_noteskin_value`. Players adjust their own value afterwards.
-#[inline(always)]
-#[must_use]
-pub fn machine_default_light_brightness() -> u8 {
-    config::runtime::get().smx_default_light_brightness
-}
-
-fn legacy_common_player_options() -> PlayerOptionsData {
-    PlayerOptionsData {
-        noteskin: machine_default_noteskin_value(),
-        pad_light_brightness: machine_default_light_brightness().min(100),
-        ..PlayerOptionsData::default()
-    }
-}
-
 fn default_player_options_path() -> PathBuf {
     PATHS
         .get()
@@ -1164,21 +1141,17 @@ fn read_machine_player_defaults(
     }
 }
 
-pub fn initialize_machine_player_defaults_from_config() {
-    let defaults = read_machine_player_defaults(
-        &default_player_options_path(),
-        &legacy_common_player_options(),
-    );
+pub fn initialize_machine_player_defaults(base_common: &PlayerOptionsData) {
+    let defaults = read_machine_player_defaults(&default_player_options_path(), base_common);
     crate::runtime_set_machine_player_defaults(defaults);
 }
 
-fn update_common_machine_player_default(key: &str, value: &str) {
+fn update_common_machine_player_default(key: &str, value: &str, base_common: &PlayerOptionsData) {
     let path = default_player_options_path();
-    let base_common = legacy_common_player_options();
     let content = match fs::read_to_string(&path) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            crate::render_machine_player_defaults_template(&base_common)
+            crate::render_machine_player_defaults_template(base_common)
         }
         Err(error) => {
             warn!(
@@ -1207,7 +1180,7 @@ fn update_common_machine_player_default(key: &str, value: &str) {
         return;
     }
 
-    let defaults = crate::machine_player_defaults_from_ini(&content, &base_common);
+    let defaults = crate::machine_player_defaults_from_ini(&content, base_common);
     crate::runtime_update_guest_profile_player_options(&defaults.guest);
     crate::runtime_set_machine_player_defaults(defaults);
 }
@@ -1230,27 +1203,31 @@ pub fn new_profile_player_options() -> PlayerOptionsData {
     crate::runtime_machine_player_defaults().new_profile
 }
 
-pub fn update_machine_default_scroll_speed(setting: ScrollSpeedSetting) {
-    update_common_machine_player_default("ScrollSpeed", &setting.to_string());
+pub fn update_machine_default_scroll_speed(
+    setting: ScrollSpeedSetting,
+    base_common: &PlayerOptionsData,
+) {
+    update_common_machine_player_default("ScrollSpeed", &setting.to_string(), base_common);
 }
 
-pub fn update_machine_default_scroll(setting: ScrollOption) {
-    update_common_machine_player_default("Scroll", &setting.to_string());
+pub fn update_machine_default_scroll(setting: ScrollOption, base_common: &PlayerOptionsData) {
+    update_common_machine_player_default("Scroll", &setting.to_string(), base_common);
 }
 
-pub fn update_machine_default_background_filter(setting: BackgroundFilter) {
-    update_common_machine_player_default("BackgroundFilter", &setting.to_string());
+pub fn update_machine_default_background_filter(
+    setting: BackgroundFilter,
+    base_common: &PlayerOptionsData,
+) {
+    update_common_machine_player_default("BackgroundFilter", &setting.to_string(), base_common);
 }
 
-pub fn update_machine_default_noteskin_from_config(setting: NoteSkin) {
-    config::runtime_update::update_machine_default_noteskin(setting.as_str());
-    update_common_machine_player_default("NoteSkin", setting.as_str());
+pub fn update_machine_default_noteskin(setting: NoteSkin, base_common: &PlayerOptionsData) {
+    update_common_machine_player_default("NoteSkin", setting.as_str(), base_common);
 }
 
-pub fn update_machine_default_light_brightness_from_config(percent: u8) {
+pub fn update_machine_default_light_brightness(percent: u8, base_common: &PlayerOptionsData) {
     let percent = percent.min(100);
-    config::runtime_update::update_smx_default_light_brightness(percent);
-    update_common_machine_player_default("PadLightBrightness", &percent.to_string());
+    update_common_machine_player_default("PadLightBrightness", &percent.to_string(), base_common);
 }
 
 pub fn load_profile_for_side(side: PlayerSide) {
@@ -1346,54 +1323,36 @@ pub fn load_profiles(
     load_profile_for_side(PlayerSide::P2);
 }
 
-pub fn load_profiles_from_config() {
-    initialize_machine_player_defaults_from_config();
-    let (p1, p2) = config::runtime::default_profiles();
-    load_profiles([p1, p2], config::runtime_update::update_default_profiles);
-}
-
 #[must_use]
 pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
     crate::scan_local_profile_summaries(&profiles_root())
 }
 
 #[must_use]
-pub fn default_local_profile_options_from_config() -> (PlayerOptionsData, PlayerOptionsData) {
+pub fn default_local_profile_options() -> (PlayerOptionsData, PlayerOptionsData) {
     let options = new_profile_player_options();
     (options.clone(), options)
 }
 
 #[must_use]
 pub fn default_profile_for_side(
-    default_profiles: [Option<String>; PLAYER_SLOTS],
+    default_profiles: &[Option<String>; PLAYER_SLOTS],
     side: PlayerSide,
 ) -> ActiveProfile {
-    crate::default_active_profile_for_side(&default_profiles, side, |id| {
+    crate::default_active_profile_for_side(default_profiles, side, |id| {
         local_profile_dir(id).is_dir()
     })
 }
 
 #[must_use]
 pub fn default_local_profile_id_for_side(
-    default_profiles: [Option<String>; PLAYER_SLOTS],
+    default_profiles: &[Option<String>; PLAYER_SLOTS],
     side: PlayerSide,
 ) -> Option<String> {
     match default_profile_for_side(default_profiles, side) {
         ActiveProfile::Local { id } => Some(id),
         ActiveProfile::Guest => None,
     }
-}
-
-#[must_use]
-pub fn default_profile_for_side_from_config(side: PlayerSide) -> ActiveProfile {
-    let (p1, p2) = config::runtime::default_profiles();
-    default_profile_for_side([p1, p2], side)
-}
-
-#[must_use]
-pub fn default_local_profile_id_for_side_from_config(side: PlayerSide) -> Option<String> {
-    let (p1, p2) = config::runtime::default_profiles();
-    default_local_profile_id_for_side([p1, p2], side)
 }
 
 pub fn update_default_profile_for_side(
@@ -1406,16 +1365,6 @@ pub fn update_default_profile_for_side(
         is_local_profile_id(id) && local_profile_dir(id).is_dir()
     });
     update_default_profiles(p1, p2);
-}
-
-pub fn update_default_profile_for_side_from_config(side: PlayerSide, profile: ActiveProfile) {
-    let (p1, p2) = config::runtime::default_profiles();
-    update_default_profile_for_side(
-        [p1, p2],
-        side,
-        &profile,
-        config::runtime_update::update_default_profiles,
-    );
 }
 
 #[inline(always)]
@@ -1454,43 +1403,6 @@ pub fn smx_gif_packs<T: Copy>(
     crate::runtime_smx_pack_names_for_profiles(machine_bg, machine_judge, parse)
 }
 
-pub fn smx_gif_packs_from_config(
-    machine_bg: config::options::SmxPackName,
-    machine_judge: config::options::SmxPackName,
-) -> (
-    [config::options::SmxPackName; PLAYER_SLOTS],
-    [config::options::SmxPackName; PLAYER_SLOTS],
-) {
-    smx_gif_packs(
-        machine_bg,
-        machine_judge,
-        config::options::SmxPackName::parse,
-    )
-}
-
-#[must_use]
-pub fn scorebox_profile_snapshot_from_config(
-    player_profile: &Profile,
-    side_joined: bool,
-    persistent_profile_id: Option<String>,
-) -> deadsync_score::GameplayScoreboxProfileSnapshot {
-    let cfg = config::runtime::get();
-    crate::scorebox_profile_snapshot(
-        player_profile,
-        side_joined,
-        cfg.enable_groovestats,
-        cfg.enable_arrowcloud,
-        cfg.auto_populate_gs_scores,
-        persistent_profile_id,
-    )
-}
-
-#[inline(always)]
-#[must_use]
-pub fn groovestats_score_service_allowed() -> bool {
-    config::runtime::get().enable_groovestats
-}
-
 pub fn toggle_favorite(side: PlayerSide, chart_hash: &str) -> bool {
     crate::runtime_toggle_favorite_for_side(
         &profiles_root(),
@@ -1519,23 +1431,12 @@ pub fn toggle_series_favorite(side: PlayerSide, series_name: &str) -> bool {
 }
 
 #[must_use]
-pub fn set_active_profile_for_side_with_defaults(
-    side: PlayerSide,
-    profile: ActiveProfile,
-) -> Profile {
+pub fn set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> Profile {
     if !crate::runtime_set_active_profile_for_side(side, profile) {
         return crate::runtime_profile_for_side(side);
     }
     load_profile_for_side(side);
     crate::runtime_profile_for_side(side)
-}
-
-#[must_use]
-pub fn set_active_profile_for_side_from_config(
-    side: PlayerSide,
-    profile: ActiveProfile,
-) -> Profile {
-    set_active_profile_for_side_with_defaults(side, profile)
 }
 
 pub fn set_active_profiles_with_defaults(
@@ -1556,18 +1457,6 @@ pub fn set_active_profiles_with_defaults(
     ]
 }
 
-pub fn set_active_profiles_from_config(
-    p1: ActiveProfile,
-    p2: ActiveProfile,
-) -> [Profile; PLAYER_SLOTS] {
-    let (p1_default, p2_default) = config::runtime::default_profiles();
-    set_active_profiles_with_defaults(
-        [p1, p2],
-        [p1_default, p2_default],
-        config::runtime_update::update_default_profiles,
-    )
-}
-
 #[must_use]
 pub fn load_default_profiles_for_joined_sides_with_defaults(
     default_profiles: [Option<String>; PLAYER_SLOTS],
@@ -1586,12 +1475,6 @@ pub fn load_default_profiles_for_joined_sides_with_defaults(
     ]
 }
 
-#[must_use]
-pub fn load_default_profiles_for_joined_sides_from_config() -> [Profile; PLAYER_SLOTS] {
-    let (p1, p2) = config::runtime::default_profiles();
-    load_default_profiles_for_joined_sides_with_defaults([p1, p2])
-}
-
 pub fn create_local_profile(
     display_name: &str,
     player_options: &PlayerOptionsData,
@@ -1607,17 +1490,6 @@ pub fn create_local_profile(
     let [p1, p2] = result.default_profiles;
     update_default_profiles(p1, p2);
     Ok(result.id)
-}
-
-pub fn create_local_profile_from_config(display_name: &str) -> Result<String, std::io::Error> {
-    let (p1_default, p2_default) = config::runtime::default_profiles();
-    let player_options = new_profile_player_options();
-    create_local_profile(
-        display_name,
-        &player_options,
-        [p1_default, p2_default],
-        config::runtime_update::update_default_profiles,
-    )
 }
 
 pub fn create_local_profile_from_import(
@@ -1671,15 +1543,6 @@ pub fn delete_local_profile_with_defaults(
     }
 
     Ok(())
-}
-
-pub fn delete_local_profile_from_config(id: &str) -> Result<(), std::io::Error> {
-    let (p1_default, p2_default) = config::runtime::default_profiles();
-    delete_local_profile_with_defaults(
-        id,
-        [p1_default, p2_default],
-        config::runtime_update::update_default_profiles,
-    )
 }
 
 /// Machine-global pad config store (`save/padconfig.ini` under the data dir).

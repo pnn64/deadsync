@@ -1,3 +1,5 @@
+//! Owned and borrowed readers for section-based INI files.
+
 use rustc_hash::FxHashMap;
 use std::path::Path;
 

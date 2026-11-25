@@ -1,4 +1,4 @@
-use deadsync_config::ini::{BorrowedIniSections, borrowed_ini_sections};
+use deadlib_platform::ini::{BorrowedIniSections, borrowed_ini_sections};
 
 #[derive(Debug, Default)]
 pub(super) struct ProfileIni<'a> {

@@ -68,7 +68,11 @@ pub(super) fn execute_options(
             config::runtime_update::update_smx_default_pad_config(preset)
         }
         Request::SmxDefaultLightBrightness(percent) => {
-            profile::update_machine_default_light_brightness_from_config(percent);
+            config::runtime_update::update_smx_default_light_brightness(percent);
+            profile::update_machine_default_light_brightness(
+                percent,
+                &crate::local_profiles::machine_player_options_fallback(),
+            );
         }
         Request::SmxPadGifsPack(pack) => config::runtime_update::update_smx_pad_gifs_pack(pack),
         Request::SmxJudgeGifsPack(pack) => config::runtime_update::update_smx_judge_gifs_pack(pack),

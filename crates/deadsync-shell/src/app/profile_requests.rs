@@ -1,5 +1,6 @@
 use super::{App, CurrentScreen, music_session_view, prepare_music_profile_selection};
 use crate::ActiveTheme;
+use crate::local_profiles::{configured_default_profiles, machine_player_options_fallback};
 use crate::screen_flow::profile_selection_target;
 use deadsync_config as config;
 use deadsync_profile::compat as profile;
@@ -18,7 +19,14 @@ impl App {
                 p2_joined,
                 fast_switch,
             } => self.refresh_profile_selection(
-                select_profiles(p1, p2, p1_joined, p2_joined),
+                select_profiles(
+                    p1,
+                    p2,
+                    p1_joined,
+                    p2_joined,
+                    configured_default_profiles(),
+                    config::runtime_update::update_default_profiles,
+                ),
                 fast_switch,
             ),
             ProfileRequest::SetPlayStyle(play_style) => profile::set_session_play_style(play_style),
@@ -37,16 +45,26 @@ impl App {
                 self.state.session.pending_difficulty_index = Some(index);
             }
             ProfileRequest::SetMachineDefaultScrollSpeed(setting) => {
-                profile::update_machine_default_scroll_speed(setting);
+                profile::update_machine_default_scroll_speed(
+                    setting,
+                    &machine_player_options_fallback(),
+                );
             }
             ProfileRequest::SetMachineDefaultScroll(setting) => {
-                profile::update_machine_default_scroll(setting);
+                profile::update_machine_default_scroll(setting, &machine_player_options_fallback());
             }
             ProfileRequest::SetMachineDefaultBackgroundFilter(setting) => {
-                profile::update_machine_default_background_filter(setting);
+                profile::update_machine_default_background_filter(
+                    setting,
+                    &machine_player_options_fallback(),
+                );
             }
             ProfileRequest::SetMachineDefaultNoteskin(noteskin) => {
-                profile::update_machine_default_noteskin(noteskin);
+                config::runtime_update::update_machine_default_noteskin(noteskin.as_str());
+                profile::update_machine_default_noteskin(
+                    noteskin,
+                    &machine_player_options_fallback(),
+                );
             }
             ProfileRequest::UpdatePlayerOptions {
                 side,

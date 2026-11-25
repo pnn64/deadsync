@@ -73,7 +73,7 @@ fn borrowed_ini_matches_shared_ini_parser() {
         &duplicate,
     ];
     for text in texts {
-        let mut old = deadsync_config::ini::SimpleIni::new();
+        let mut old = deadlib_platform::ini::SimpleIni::new();
         old.load_str(text);
         let current = ProfileIni::parse(text);
         for (section, properties) in old.sections() {

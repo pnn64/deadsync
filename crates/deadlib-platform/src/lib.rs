@@ -7,6 +7,7 @@ pub mod folder_dialog;
 pub mod frame_pacing;
 pub mod host_time;
 pub mod idle_inhibit;
+pub mod ini;
 pub mod input;
 pub mod lock_wait;
 pub mod logging;

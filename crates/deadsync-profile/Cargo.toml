@@ -15,7 +15,7 @@ uuid = { version = "1.29.0", features = ["v4", "v5"] }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
 deadsync-chart = { path = "../deadsync-chart" }
-deadsync-config = { path = "../deadsync-config" }
+deadsync-core = { path = "../deadsync-core" }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

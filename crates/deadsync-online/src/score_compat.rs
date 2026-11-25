@@ -1,3 +1,5 @@
+use deadsync_config::runtime as config;
+use deadsync_profile::Profile;
 use deadsync_profile::compat as profile;
 use std::time::Instant;
 
@@ -48,8 +50,7 @@ pub use profile::{
     cached_local_pass_rate_with_profile as get_cached_local_pass_rate_with_profile,
     cached_local_score_for_side as get_cached_local_score_for_side,
     ensure_itl_wheel_caches_loaded_for_id as ensure_itl_wheel_caches_loaded,
-    ensure_score_caches_loaded_for_id as ensure_score_caches_loaded,
-    groovestats_score_service_allowed as is_gs_get_scores_service_allowed, import_itl_json,
+    ensure_score_caches_loaded_for_id as ensure_score_caches_loaded, import_itl_json,
     import_local_scores_for_id as import_local_scores,
     itl_song_folder_unlocked_for_side as is_itl_song_folder_unlocked_for_side,
     itl_song_folders_unlocked_with_profiles,
@@ -64,12 +65,33 @@ pub use profile::{
     played_chart_history_for_machine, prewarm_select_music_score_caches,
     recent_played_chart_hashes_for_id as recent_played_chart_hashes_for_profile,
     recent_played_chart_hashes_for_machine, save_local_summary_score_for_side,
-    scorebox_profile_snapshot, seed_session_gs_score_for_id as seed_session_gs_score,
-    seed_session_itl_unlock_folders,
+    seed_session_gs_score_for_id as seed_session_gs_score, seed_session_itl_unlock_folders,
     seed_session_local_itg_score_for_id as seed_session_local_itg_score,
     seed_session_online_itl_self_rank, seed_session_online_itl_self_score,
     total_songs_played_for_id as total_songs_played_for_profile, total_songs_played_for_side,
 };
+
+#[must_use]
+pub fn is_gs_get_scores_service_allowed() -> bool {
+    config::get().enable_groovestats
+}
+
+#[must_use]
+pub fn scorebox_profile_snapshot(
+    player_profile: &Profile,
+    side_joined: bool,
+    persistent_profile_id: Option<String>,
+) -> deadsync_score::GameplayScoreboxProfileSnapshot {
+    let cfg = config::get();
+    deadsync_profile::scorebox_profile_snapshot(
+        player_profile,
+        side_joined,
+        cfg.enable_groovestats,
+        cfg.enable_arrowcloud,
+        cfg.auto_populate_gs_scores,
+        persistent_profile_id,
+    )
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct EvaluationSubmissionSnapshot {

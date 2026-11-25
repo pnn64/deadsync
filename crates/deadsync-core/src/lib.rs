@@ -5,6 +5,7 @@ pub mod hud_style;
 pub mod input;
 pub mod lights;
 pub mod note;
+pub mod preference_key;
 pub mod session_flow;
 pub mod song_time;
 pub mod timing;

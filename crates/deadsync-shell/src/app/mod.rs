@@ -3473,7 +3473,11 @@ impl App {
         // lock, no clones; skipped entirely while the feature is off.
         let (bg_packs, judge_packs) = if plan.smx_panels_enabled {
             let defaults = self.smx_gif_defaults;
-            profile::smx_gif_packs(defaults.pad, defaults.judge)
+            profile::smx_gif_packs(
+                defaults.pad,
+                defaults.judge,
+                config::options::SmxPackName::parse,
+            )
         } else {
             let none = [config::options::SmxPackName::default(); 2];
             (none, none)
@@ -7598,7 +7602,10 @@ impl App {
         let join_profile = if show_select_profile {
             profile_data::ActiveProfile::Guest
         } else {
-            profile::get_default_profile_for_side(join_side)
+            profile_data::app_runtime::default_profile_for_side(
+                &crate::local_profiles::configured_default_profiles(),
+                join_side,
+            )
         };
         let joined_profile = profile::set_active_profile_for_side(join_side, join_profile);
         self.state.session.combo_carry[profile_data::player_side_index(join_side)] =
@@ -9679,7 +9686,10 @@ impl App {
             };
             self.state.screens.profile_load_state = profile_load::init();
             self.state.screens.profile_load_state.active_color_index = current_color_index;
-            let profiles = profile::load_default_profiles_for_joined_sides();
+            let profiles =
+                profile_data::app_runtime::load_default_profiles_for_joined_sides_with_defaults(
+                    crate::local_profiles::configured_default_profiles(),
+                );
             let profiles = if let Some(index) = self.state.session.pending_difficulty_index.take() {
                 let session = profile::get_session_snapshot();
                 for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
@@ -11402,6 +11412,17 @@ pub fn init_paths(dirs: &AppDirs) -> Result<(), &'static str> {
         dirs.unlock_cache_path(),
     )?;
     deadsync_updater::init_cache_dir(dirs.cache_dir.clone())
+}
+
+/// Load local profiles after the machine settings have been loaded.
+pub fn load_profiles() {
+    profile_data::app_runtime::initialize_machine_player_defaults(
+        &crate::local_profiles::machine_player_options_fallback(),
+    );
+    profile_data::app_runtime::load_profiles(
+        crate::local_profiles::configured_default_profiles(),
+        config::runtime_update::update_default_profiles,
+    );
 }
 
 pub fn run(

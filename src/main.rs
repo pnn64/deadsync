@@ -265,7 +265,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(windows)]
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
-    profile::load();
+    app::load_profiles();
     // One-time merge of legacy per-profile pad configs into the machine store,
     // done at startup so the store is ready before any pad-config consumer.
     profile::migrate_pad_configs();

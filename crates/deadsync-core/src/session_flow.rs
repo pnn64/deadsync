@@ -1,5 +1,108 @@
-//! Session routing and defaults around a theme's optional screens.
+//! Session preferences and routing around a theme's optional screens.
 
+use crate::preference_key::NormalizedAsciiKey;
+use std::str::FromStr;
+
+/// The active dance game.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GameFlag {
+    #[default]
+    Dance,
+    Pump,
+}
+
+impl GameFlag {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Dance => "dance",
+            Self::Pump => "pump",
+        }
+    }
+}
+
+impl FromStr for GameFlag {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        match s.len() {
+            4 if s.eq_ignore_ascii_case("pump") => Ok(Self::Pump),
+            5 if s.eq_ignore_ascii_case("dance") => Ok(Self::Dance),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Preferred number and arrangement of players before applying join state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MachinePreferredPlayStyle {
+    #[default]
+    Single,
+    Versus,
+    Double,
+}
+
+impl MachinePreferredPlayStyle {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Single => "Single",
+            Self::Versus => "Versus",
+            Self::Double => "Double",
+        }
+    }
+}
+
+impl FromStr for MachinePreferredPlayStyle {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
+        match key.as_str() {
+            "single" | "1player" | "oneplayer" => Ok(Self::Single),
+            "versus" | "2player" | "2players" | "twoplayer" | "twoplayers" => Ok(Self::Versus),
+            "double" => Ok(Self::Double),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Preferred session mode when the play mode screen is skipped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MachinePreferredPlayMode {
+    #[default]
+    Regular,
+    Marathon,
+}
+
+impl MachinePreferredPlayMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Regular => "Regular",
+            Self::Marathon => "Marathon",
+        }
+    }
+}
+
+impl FromStr for MachinePreferredPlayMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        match s.len() {
+            7 if s.eq_ignore_ascii_case("regular") => Ok(Self::Regular),
+            8 if s.eq_ignore_ascii_case("marathon") => Ok(Self::Marathon),
+            _ => Err(()),
+        }
+    }
+}
+
+/// When to auto-show the `ArrowCloud` QR-login screen after the user picks
+/// a profile.  Mirrors Simply Love's `QRLogin` theme pref.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SessionScreens<S> {
     pub menu: S,

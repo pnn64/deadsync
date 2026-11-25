@@ -222,7 +222,7 @@ where
             )
         },
         |profile_id| {
-            if let Err(error) = profile::delete_local_profile(profile_id) {
+            if let Err(error) = crate::local_profiles::delete_profile(profile_id) {
                 log::warn!("Failed to delete canceled import profile {profile_id}: {error}");
             }
         },

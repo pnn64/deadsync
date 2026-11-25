@@ -1,4 +1,4 @@
-use deadsync_config::ini::SimpleIni;
+use deadlib_platform::ini::SimpleIni;
 use deadsync_profile::compat as profile;
 use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
 use deadsync_theme::app_requests::ScoreImportProfile;

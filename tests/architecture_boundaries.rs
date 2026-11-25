@@ -3114,7 +3114,7 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
             && shell.contains("pub fn picker_view() -> ProfilePickerView")
             && shell.contains("profile::scan_local_profiles()")
             && shell.contains("total_songs_played_for_profile")
-            && shell.contains("deadsync_config::ini::borrowed_ini_sections")
+            && shell.contains("deadlib_platform::ini::borrowed_ini_sections")
             && select_music.contains("profile_picker: state.profile_picker.clone()")
             && shell_app.contains("select_music::sync_profile_picker("),
         "shell must prepare and Select Music must retain the shared profile-picker catalog"
@@ -3394,13 +3394,15 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
             && profile_requests.contains("SetMachineDefaultBackgroundFilter")
             && profile_requests.contains("SetMachineDefaultNoteskin")
             && shell.contains("config_requests::execute_options(request, &mut self.input)")
-            && profile_executor.contains("profile::update_machine_default_scroll_speed(setting)")
-            && profile_executor.contains("profile::update_machine_default_scroll(setting)")
-            && profile_executor.contains("profile::update_machine_default_background_filter(setting)")
-            && profile_executor.contains("profile::update_machine_default_noteskin(noteskin)")
+            && profile_executor.contains("profile::update_machine_default_scroll_speed(")
+            && profile_executor.contains("profile::update_machine_default_scroll(")
+            && profile_executor.contains("profile::update_machine_default_background_filter(")
+            && profile_executor.contains("profile::update_machine_default_noteskin(")
+            && profile_executor.contains("config::runtime_update::update_machine_default_noteskin(")
+            && profile_executor.contains("&machine_player_options_fallback()")
             && executor.contains("pub(super) fn execute_options")
-            && executor
-                .contains("profile::update_machine_default_light_brightness_from_config(percent)")
+            && executor.contains("profile::update_machine_default_light_brightness(")
+            && executor.contains("config::runtime_update::update_smx_default_light_brightness(")
             && executor
                 .contains("config::runtime_update::update_only_dedicated_menu_buttons(enabled)"),
         "shell must prepare Options runtime state and execute its typed persistence requests"
@@ -4821,7 +4823,10 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
     assert!(!theme_effects.contains("pub enum ProfileRequest"));
     assert!(shell_app.contains("self.handle_profile_request(request)"));
     assert!(profile_executor.contains("request: ProfileRequest"));
-    assert!(profile_executor.contains("select_profiles(p1, p2, p1_joined, p2_joined)"));
+    assert!(contains_rust(
+        &profile_executor,
+        "select_profiles(p1, p2, p1_joined, p2_joined, configured_default_profiles(), config::runtime_update::update_default_profiles,)",
+    ));
     assert!(!profile_executor.contains("profile_selection_session_plan("));
     assert!(profile_requests.contains("profile_selection_session_plan(previous_session.play_style"));
     assert!(profile_requests.contains("runtime_set_session_player_side(session.active_side)"));
@@ -8926,6 +8931,24 @@ fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
     assert!(mapping.contains("deadlib_platform::input::"));
     let backend = read_source(native.join("src/launch.rs")).expect("native launch");
     assert!(backend.contains("deadlib_platform::input::{PadEvent, RawKeyboardEvent}"));
+}
+
+#[test]
+fn profiles_do_not_depend_on_application_config() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let profile = root.join("crates/deadsync-profile");
+    let manifest = read_source(profile.join("Cargo.toml")).expect("profile manifest");
+    assert!(
+        !manifest.contains("deadsync-config"),
+        "the profile crate must receive machine settings from its caller"
+    );
+    for file in production_rust_files(&profile.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadsync_config"),
+            "{} imports application config",
+            file.display(),
+        );
+    }
 }
 
 #[test]
