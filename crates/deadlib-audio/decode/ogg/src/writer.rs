@@ -22,6 +22,7 @@ impl Default for WriteOptions {
 pub struct PacketWriter<W> {
     inner: W,
     sequence: u32,
+    serial_crc: u32,
     header: [u8; MAX_HEADER_SIZE],
     header_len: usize,
     body: Vec<u8>,
@@ -44,6 +45,7 @@ impl<W: Write> PacketWriter<W> {
         Self {
             inner,
             sequence: 0,
+            serial_crc: crate::crc::serial_crc(serial),
             header,
             header_len: FIXED_HEADER_SIZE,
             body: Vec::new(),
@@ -173,7 +175,7 @@ impl<W: Write> PacketWriter<W> {
         header[6..14].copy_from_slice(&granule.to_le_bytes());
         header[18..22].copy_from_slice(&self.sequence.to_le_bytes());
         header[26] = (self.header_len - FIXED_HEADER_SIZE) as u8;
-        write_page_inner(
+        write_page_inner::<_, true>(
             &mut self.inner,
             header,
             if self.body.is_empty() {
@@ -181,6 +183,7 @@ impl<W: Write> PacketWriter<W> {
             } else {
                 &self.body
             },
+            self.serial_crc,
         )?;
         self.sequence = self.sequence.wrapping_add(1);
         self.started = true;

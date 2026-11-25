@@ -112,17 +112,18 @@ pub fn crc32(bytes: &[u8]) -> u32 {
     update(0, bytes)
 }
 
+const CAPTURE_CRC: u32 = {
+    let mut crc = u32::from_be_bytes(*b"OggS");
+    let mut count = 0;
+    while count < 26 {
+        crc = (crc << 8) ^ TABLES[0][(crc >> 24) as usize];
+        count += 1;
+    }
+    crc
+};
+
 // The capture pattern is known. Input may stop after the lacing table.
 pub(crate) fn page_crc(bytes: &[u8]) -> u32 {
-    const CAPTURE_CRC: u32 = {
-        let mut crc = u32::from_be_bytes(*b"OggS");
-        let mut count = 0;
-        while count < 26 {
-            crc = (crc << 8) ^ TABLES[0][(crc >> 24) as usize];
-            count += 1;
-        }
-        crc
-    };
     let (header, tail) = bytes.split_first_chunk::<26>().unwrap();
     debug_assert!(header.starts_with(b"OggS"));
     // The fixed capture contributes a constant. The four zero checksum
@@ -131,6 +132,29 @@ pub(crate) fn page_crc(bytes: &[u8]) -> u32 {
     for (&byte, table) in header[4..22].iter().zip(TABLES[4..].iter().rev()) {
         crc ^= table[usize::from(byte)];
     }
+    update(crc, tail)
+}
+
+pub(crate) fn serial_crc(serial: u32) -> u32 {
+    let [a, b, c, d] = serial.to_le_bytes();
+    CAPTURE_CRC
+        ^ TABLES[11][a as usize]
+        ^ TABLES[10][b as usize]
+        ^ TABLES[9][c as usize]
+        ^ TABLES[8][d as usize]
+}
+
+fn header_crc(crc: &mut u32, bytes: &[u8], tables: &[[u32; 256]]) {
+    for (&byte, table) in bytes.iter().zip(tables.iter().rev()) {
+        *crc ^= table[usize::from(byte)];
+    }
+}
+
+pub(crate) fn packet_page_crc(mut crc: u32, bytes: &[u8]) -> u32 {
+    let (header, tail) = bytes.split_first_chunk::<26>().unwrap();
+    // The writer contributes a fixed capture, version 0 and one serial.
+    header_crc(&mut crc, &header[5..14], &TABLES[12..21]);
+    header_crc(&mut crc, &header[18..22], &TABLES[4..8]);
     update(crc, tail)
 }
 
