@@ -640,17 +640,6 @@ impl Vm {
             .iter()
             .map(loads::ParserPrototype::heap_bytes)
             .sum::<usize>();
-        payload += self
-            .native_closures
-            .iter()
-            .map(|f| {
-                f.captures.capacity() * size_of::<Value>()
-                    + match &f.kind {
-                        threads::NativeKind::Host(f) => f.heap_bytes(),
-                        _ => 0,
-                    }
-            })
-            .sum::<usize>();
         payload += self.io.heap_bytes();
         let mut control = self.registers.capacity() * std::mem::size_of::<Value>()
             + self.frames.capacity() * std::mem::size_of::<Frame>()
@@ -1633,7 +1622,13 @@ impl Vm {
                 }
                 2 => self.upvalues.sweep_some(&mut cursor, budget),
                 3 => self.threads.sweep_some(&mut cursor, budget),
-                4 => self.native_closures.sweep_some(&mut cursor, budget),
+                4 => {
+                    let bytes = &mut self.object_payload_bytes;
+                    self.native_closures
+                        .sweep_with(&mut cursor, budget, |closures, index| {
+                            *bytes -= closures[index].heap_bytes();
+                        })
+                }
                 5 => {
                     let bytes = &mut self.object_payload_bytes;
                     self.programs

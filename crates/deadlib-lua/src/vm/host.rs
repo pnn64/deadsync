@@ -311,10 +311,7 @@ impl Vm {
             data,
             resolver: None,
         };
-        let bytes = function.heap_bytes();
-        let value = self.new_native(threads::NativeKind::Host(function), captures)?;
-        self.native_closures.note_alloc(bytes);
-        Ok(value)
+        self.new_native(threads::NativeKind::Host(function), captures)
     }
 
     /// Attach a pure fast path to a host function used as an `__index` handler.

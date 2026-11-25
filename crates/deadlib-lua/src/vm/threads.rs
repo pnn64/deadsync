@@ -120,6 +120,15 @@ pub(super) struct NativeClosure {
     pub kind: NativeKind,
     pub captures: Buffer<Value>,
 }
+impl NativeClosure {
+    pub(super) fn heap_bytes(&self) -> usize {
+        let data = match &self.kind {
+            NativeKind::Host(function) => function.heap_bytes(),
+            _ => 0,
+        };
+        self.captures.capacity() * size_of::<Value>() + data
+    }
+}
 
 #[derive(Debug)]
 pub(super) enum Transition {
@@ -305,16 +314,18 @@ impl Vm {
             .try_reserve_exact(captures.len())
             .map_err(|_| self.memory_failure())?;
         owned.extend_from_slice(captures);
-        let bytes = owned.capacity() * size_of::<Value>();
+        let closure = NativeClosure {
+            env,
+            kind,
+            captures: owned,
+        };
+        let bytes = closure.heap_bytes();
         self.reserve_gc_new_value()?;
         let id = self
             .native_closures
-            .try_insert(NativeClosure {
-                env,
-                kind,
-                captures: owned,
-            })
+            .try_insert(closure)
             .map_err(|_| self.memory_failure())?;
+        self.object_payload_bytes += bytes;
         self.native_closures.note_alloc(bytes);
         self.gc_new_value(Value::Native(id));
         Ok(Value::Native(id))
