@@ -164,6 +164,14 @@ impl<W: Write> EncoderOutput<W> {
             buffer[filled..filled + size_of::<u64>()].copy_from_slice(&bits.to_le_bytes());
             filled += count;
             if filled >= capacity {
+                if capacity == 1 {
+                    for byte in buffer[..filled].as_chunks::<1>().0 {
+                        writer.write_all(&[1])?;
+                        writer.write_all(byte)?;
+                    }
+                    filled = 0;
+                    return Ok(());
+                }
                 let mut written = 0;
                 loop {
                     let end = written + capacity;
