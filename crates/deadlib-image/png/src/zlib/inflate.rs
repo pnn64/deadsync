@@ -6,7 +6,7 @@ use crate::{Error, checksum::Adler32, reserve};
 
 const WINDOW_SIZE: usize = 32 * 1024;
 
-struct WideTables {
+pub(super) struct WideTables {
     valid: bool,
     literals: [[u32; 512]; 8],
     distances: [u32; 512],
@@ -36,6 +36,7 @@ impl InflateWindow {
                 .map_err(|_| Error::Allocation)?;
         }
         bytes.resize(len, 0);
+        inflater.history_pos = pos;
         Ok(Self {
             bytes,
             pos,
@@ -51,9 +52,18 @@ impl InflateWindow {
         row: &mut [u8],
     ) -> Result<InflateProgress, Error> {
         if row.len() > self.bytes.len() - self.pos {
+            if let Some(error) = &inflater.failure {
+                return Err(error.clone());
+            }
+            // The filtered bytes are still available here. Checksum a full
+            // window span before moving history back to the start.
+            inflater
+                .checksum
+                .update(&self.bytes[inflater.history_pos..self.pos]);
             let slide = self.pos - WINDOW_SIZE;
             self.bytes.copy_within(slide..self.pos, 0);
             self.pos = WINDOW_SIZE;
+            inflater.history_pos = self.pos;
         }
         let start = self.pos;
         let progress = inflater.process_output::<true>(
@@ -134,6 +144,8 @@ pub struct Inflater {
     final_block: bool,
     window: usize,
     history: Vec<u8>,
+    // Next ring write. When InflateWindow owns the history bytes, this is
+    // the first filtered byte still pending an Adler update in that window.
     history_pos: usize,
     // None borrows fixed tables; Some owns a dynamic table.
     literals: Option<Huffman>,
@@ -400,6 +412,21 @@ impl Inflater {
         written: &mut usize,
         tables: &mut Vec<WideTables>,
     ) -> Result<bool, Error> {
+        #[cfg(all(target_arch = "x86_64", not(target_feature = "bmi2")))]
+        let ended = super::x86::wide_codes(self, bits, output, written, tables);
+        #[cfg(any(not(target_arch = "x86_64"), target_feature = "bmi2"))]
+        let ended = self.decode_wide_codes(bits, output, written, tables);
+        ended
+    }
+
+    #[inline(always)]
+    pub(super) fn decode_wide_codes(
+        &mut self,
+        bits: &mut Bits<'_>,
+        output: &mut [u8],
+        written: &mut usize,
+        tables: &mut Vec<WideTables>,
+    ) -> Result<bool, Error> {
         let distances = self.distances.as_ref().unwrap_or(&FIXED.1);
         let start = *written;
         let ended = if let Some(literals) = &self.literals {
@@ -465,10 +492,16 @@ impl Inflater {
         mut written: usize,
         tables: &mut Vec<WideTables>,
     ) -> Result<(usize, StreamStatus), Error> {
-        let mut checksummed = written;
+        let mut checksummed = if CONTIGUOUS {
+            self.history_pos
+        } else {
+            written
+        };
         macro_rules! stop {
             ($status:expr) => {{
-                self.checksum.update(&output[checksummed..written]);
+                if !CONTIGUOUS {
+                    self.checksum.update(&output[checksummed..written]);
+                }
                 return Ok((written, $status));
             }};
         }
@@ -738,6 +771,9 @@ impl Inflater {
                 State::Adler => {
                     self.checksum.update(&output[checksummed..written]);
                     checksummed = written;
+                    if CONTIGUOUS {
+                        self.history_pos = written;
+                    }
                     bits.align();
                     let expected = read!(32).swap_bytes();
                     if expected != self.checksum.finish() {
@@ -815,6 +851,66 @@ mod tests {
                     "the window must have moved"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn contiguous_output_checks_the_trailer_and_keeps_a_terminal_error() {
+        use std::io::Write;
+
+        let raw: Vec<_> = (0..100_003usize)
+            .map(|i| (i * 31 + i / 269) as u8)
+            .collect();
+        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::none());
+        encoder.write_all(&raw).unwrap();
+        let mut input = encoder.finish().unwrap();
+        *input.last_mut().unwrap() ^= 1;
+        let trailer = input.len() - 4;
+        for split in [true, false] {
+            let mut inflater = Inflater::new(raw.len()).unwrap();
+            let mut row = [0; 131];
+            let mut window = InflateWindow::new(&mut inflater, row.len()).unwrap();
+            let mut read = 0;
+            let mut written = 0;
+            loop {
+                let end = if !split {
+                    input.len()
+                } else if read < trailer {
+                    trailer
+                } else {
+                    read + 1
+                };
+                match window.process(&mut inflater, &input[read..end], &mut row) {
+                    Ok(progress) => {
+                        assert!(progress.consumed != 0 || progress.written != 0);
+                        assert_ne!(progress.status, StreamStatus::Done);
+                        read += progress.consumed;
+                        let end = written + progress.written;
+                        assert_eq!(row[..progress.written], raw[written..end]);
+                        written = end;
+                    }
+                    Err(error) => {
+                        assert_eq!(error, Error::Checksum);
+                        if split {
+                            assert_eq!(read, input.len() - 1);
+                            assert_eq!(written, raw.len());
+                        } else {
+                            assert!(written < raw.len());
+                        }
+                        assert_eq!(inflater.total_out(), raw.len());
+                        assert!(window.pos < written, "the window must have moved");
+                        break;
+                    }
+                }
+            }
+            // Ask for enough output to enter the slide branch. It must
+            // return the sticky checksum failure before moving the window.
+            let mut larger_row = vec![0; window.bytes.len() - window.pos + 1];
+            assert_eq!(
+                window.process(&mut inflater, &[], &mut larger_row),
+                Err(Error::Checksum),
+            );
+            assert_eq!(inflater.finish(), Err(Error::Checksum));
         }
     }
 
