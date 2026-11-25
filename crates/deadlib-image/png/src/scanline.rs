@@ -706,18 +706,6 @@ fn score_chunk(bytes: &[u8; 32]) -> u16 {
     sum
 }
 
-fn score_bytes(bytes: &[u8]) -> u64 {
-    let (chunks, tail) = bytes.as_chunks::<32>();
-    let mut score = 0u64;
-    for chunk in chunks {
-        score += u64::from(score_chunk(chunk));
-    }
-    for &value in tail {
-        score += u64::from((value as i8).unsigned_abs());
-    }
-    score
-}
-
 pub(crate) fn score_at_most(bytes: &[u8], limit: u64) -> bool {
     let (chunks, tail) = bytes.as_chunks::<32>();
     let mut score = 0u64;
@@ -750,13 +738,18 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
     };
     let out = &mut out[..row.len()];
     let split = bpp.min(row.len());
+    let mut score = 0u64;
     for (n, (&value, out)) in row[..split].iter().zip(&mut out[..split]).enumerate() {
         let predictor = match FILTER {
             2 | 4 => prev[n],
             3 => prev[n] / 2,
             _ => 0,
         };
-        *out = value.wrapping_sub(predictor);
+        let value = value.wrapping_sub(predictor);
+        *out = value;
+        if SCORE {
+            score += u64::from((value as i8).unsigned_abs());
+        }
     }
     // All remaining bytes have a left neighbor. Keeping the boundary out of
     // this loop makes its byte lanes independent for compiler vectorization.
@@ -767,7 +760,6 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
         // slices avoid accessing the empty previous row of None/Sub.
         (&row[split..], &row[..row.len() - split])
     };
-    let mut score = if SCORE { score_bytes(&out[..split]) } else { 0 };
     let (values, values_tail) = row[split..].as_chunks::<32>();
     let (left, left_tail) = row[..row.len() - split].as_chunks::<32>();
     let (upper, upper_tail) = upper.as_chunks::<32>();
