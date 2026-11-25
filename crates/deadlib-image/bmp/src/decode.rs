@@ -99,11 +99,14 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 }
                 indices.resize(header.pixel_count, 0);
             } else if header.info.bit_depth == 8 {
-                if width <= 3 && source.len() > 4 {
+                if matches!(width, 1..=3 | 5..=7) && header.info.height > 1 {
                     let append = match width {
-                        1 => append_narrow_indexed::<1>,
-                        2 => append_narrow_indexed::<2>,
-                        _ => append_narrow_indexed::<3>,
+                        1 => append_narrow_indexed::<1, 4>,
+                        2 => append_narrow_indexed::<2, 4>,
+                        3 => append_narrow_indexed::<3, 4>,
+                        5 => append_narrow_indexed::<5, 8>,
+                        6 => append_narrow_indexed::<6, 8>,
+                        _ => append_narrow_indexed::<7, 8>,
                     };
                     append(source, &mut indices, header.info.top_down, palette_len)?;
                 } else if header.info.top_down && width == header.row_pitch {
@@ -227,14 +230,14 @@ fn append_reversed_index_blocks<const WIDTH: usize>(
 }
 
 #[inline(never)]
-fn append_narrow_indexed<const WIDTH: usize>(
+fn append_narrow_indexed<const WIDTH: usize, const PITCH: usize>(
     source: &[u8],
     indices: &mut Vec<u8>,
     top_down: bool,
     palette_len: usize,
 ) -> Result<(), Error> {
-    let rows = source.as_chunks::<4>().0;
-    let pixels = |row: &[u8; 4]| *row.first_chunk::<WIDTH>().unwrap();
+    let rows = source.as_chunks::<PITCH>().0;
+    let pixels = |row: &[u8; PITCH]| *row.first_chunk::<WIDTH>().unwrap();
     if palette_len < 256
         && rows
             .iter()
