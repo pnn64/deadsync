@@ -33,6 +33,15 @@ pub(crate) fn compress_image<'a, 'image>(
         }
         return Ok(compressor.finish());
     }
+    if options.compression == zlib::Compression::Stored
+        && !options.interlaced
+        && options.filter == Filter::None
+        && let Samples::U16(pixels) = &image.samples
+    {
+        compressor
+            .push_stored_word_rows(pixels, image.width as usize * image.color_type.channels());
+        return Ok(compressor.finish());
+    }
     rows.reset(image);
     while let Some(row) = rows.next_row()? {
         if row.zero {

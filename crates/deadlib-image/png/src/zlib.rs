@@ -1972,6 +1972,61 @@ impl Compressor {
         }
         self.checksum.update(&self.w.bytes[checksum_start..]);
     }
+    /// Pack native 16-bit rows directly into the stored block payload.
+    pub(crate) fn push_stored_word_rows(&mut self, pixels: &[u16], stride: usize) {
+        debug_assert_eq!(self.mode, Compression::Stored);
+        debug_assert!(pixels.len().is_multiple_of(stride));
+        debug_assert!(pixels.len() * 2 + pixels.len() / stride <= self.stored_remaining);
+        let len = stride * 2 + 1;
+        let mut checksum_start = self.w.bytes.len();
+        for mut row in pixels.chunks_exact(stride) {
+            if len <= self.stored_block_left {
+                self.w.bytes.push(0);
+                self.write_stored_words(row);
+                self.stored_block_left -= 1;
+                self.stored_remaining -= 1;
+                continue;
+            }
+
+            self.checksum.update(&self.w.bytes[checksum_start..]);
+            self.append_stored(None, 1);
+            checksum_start = self.w.bytes.len();
+            while !row.is_empty() {
+                if self.stored_block_left == 0 {
+                    self.checksum.update(&self.w.bytes[checksum_start..]);
+                    self.start_stored_block();
+                    checksum_start = self.w.bytes.len();
+                }
+                let n = row.len().min(self.stored_block_left / 2);
+                let (words, rest) = row.split_at(n);
+                self.write_stored_words(words);
+                row = rest;
+                if !row.is_empty() && self.stored_block_left == 1 {
+                    // Only a block boundary can split an encoded sample.
+                    self.checksum.update(&self.w.bytes[checksum_start..]);
+                    self.append_stored(Some(&row[0].to_be_bytes()), 2);
+                    checksum_start = self.w.bytes.len();
+                    row = &row[1..];
+                }
+            }
+        }
+        self.checksum.update(&self.w.bytes[checksum_start..]);
+    }
+    fn write_stored_words(&mut self, words: &[u16]) {
+        let start = self.w.bytes.len();
+        let len = words.len() * 2;
+        self.w.bytes.resize(start + len, 0);
+        for (bytes, word) in self.w.bytes[start..]
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(words)
+        {
+            *bytes = word.to_be_bytes();
+        }
+        self.stored_remaining -= len;
+        self.stored_block_left -= len;
+    }
     fn append_stored(&mut self, mut input: Option<&[u8]>, mut len: usize) {
         debug_assert!(len <= self.stored_remaining);
         while len != 0 {
@@ -2097,6 +2152,26 @@ mod tests {
             }
             compressor.reset(input.len()).unwrap();
             compressor.push_stored_rows(&pixels, width);
+            assert_eq!(
+                compressor.finish(),
+                compress(&input, Compression::Stored).unwrap(),
+                "width {width}"
+            );
+        }
+    }
+
+    #[test]
+    fn stored_word_rows_match_whole_input_across_block_boundaries() {
+        let mut compressor = Compressor::new(Compression::Stored);
+        for width in [1usize, 126, 32_766, 32_767, 32_768, 32_769, 65_536] {
+            let pixels: Vec<_> = (0..width * 3).map(|i| (i * 193 + 513) as u16).collect();
+            let mut input = Vec::new();
+            for row in pixels.chunks_exact(width) {
+                input.push(0);
+                input.extend(row.iter().flat_map(|word| word.to_be_bytes()));
+            }
+            compressor.reset(input.len()).unwrap();
+            compressor.push_stored_word_rows(&pixels, width);
             assert_eq!(
                 compressor.finish(),
                 compress(&input, Compression::Stored).unwrap(),
