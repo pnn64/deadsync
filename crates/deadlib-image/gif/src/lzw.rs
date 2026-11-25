@@ -248,7 +248,7 @@ impl Encoder {
         }
         if pixels > 1024 {
             if minimum == 2 {
-                return Self::encode_four_symbols(rows, emit);
+                return Self::encode_four_symbols::<FOUR_SYMBOL_SLOTS>(rows, emit);
             }
             return Self::encode_large(rows, minimum, emit);
         }
@@ -299,6 +299,14 @@ impl Encoder {
                 Self::encode_tiny::<64>(rows, minimum, emit)
             };
         }
+        if minimum == 2 {
+            // The first new code is 6, and at most pixels - 1 codes can be added.
+            return if pixels <= 256 {
+                Self::encode_four_symbols::<{ (256 + 5) * 4 }>(rows, emit)
+            } else {
+                Self::encode_four_symbols::<{ (1024 + 5) * 4 }>(rows, emit)
+            };
+        }
         if pixels <= 256 {
             return Self::encode_table(rows, minimum, &mut [0u32; 512], emit);
         }
@@ -306,11 +314,11 @@ impl Encoder {
     }
 
     #[inline(never)]
-    fn encode_four_symbols<'a>(
+    fn encode_four_symbols<'a, const SLOTS: usize>(
         rows: impl Iterator<Item = &'a [u8]>,
         emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
-        Self::encode_table(rows, 2, &mut [0u16; FOUR_SYMBOL_SLOTS], emit)
+        Self::encode_table(rows, 2, &mut [0u16; SLOTS], emit)
     }
 
     #[inline(never)]
@@ -395,7 +403,7 @@ impl Encoder {
                 continue;
             };
             'symbols: for symbol in symbols {
-                let (slot, tag) = if SLOTS == FOUR_SYMBOL_SLOTS {
+                let (slot, tag) = if size_of::<Entry>() == size_of::<u16>() {
                     // Four possible suffixes per prefix code fit in a direct table.
                     let slot = (usize::from(prefix) << 2) | usize::from(symbol);
                     let code = table[slot].into() as u16;
