@@ -4,9 +4,11 @@ pub mod flac;
 pub mod mp3;
 pub mod ogg_vorbis;
 pub mod opus;
+mod probe_context;
 pub mod resample;
 pub mod wav;
 
+pub use probe_context::init_probe_log_scope;
 use std::path::Path;
 
 /// Source timeline choices applied consistently to decoding, duration and seeks.

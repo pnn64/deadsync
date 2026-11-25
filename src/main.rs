@@ -176,6 +176,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         config::runtime_load::bootstrap_log_to_file(),
         dirs.log_path(),
     );
+    deadlib_audio_decode::init_probe_log_scope(|path, probe| {
+        logging::with_file_context(path, probe);
+    })
+    .map_err(std::io::Error::other)?;
     install_panic_hook();
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);

@@ -73,6 +73,10 @@ fn engine_initialization_receives_host_identity_and_log_path() {
         &executable,
         "logging::init(config::runtime_load::bootstrap_log_to_file(), dirs.log_path(),",
     ));
+    assert!(contains_rust(
+        &executable,
+        "deadlib_audio_decode::init_probe_log_scope(|path, probe| { logging::with_file_context(path, probe); })",
+    ));
 }
 
 #[test]
@@ -8694,11 +8698,11 @@ fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
             }
         }
     }
-    for file in rust_files(&root.join("crates/deadlib-audio-decode/src")) {
-        // Codec diagnostics may attach a filename to engine logging; no other
-        // platform service belongs in decode machinery.
-        let source = read_source(&file).expect("codec source should be readable")
-            .replace("deadlib_platform::logging::with_file_context", "");
+    let decode = root.join("crates/deadlib-audio-decode");
+    let manifest = read_source(decode.join("Cargo.toml")).expect("codec manifest");
+    assert!(!manifest.contains("deadlib-platform") && !manifest.contains("winit"));
+    for file in rust_files(&decode.join("src")) {
+        let source = read_source(&file).expect("codec source should be readable");
         for token in AUDIO_DECODE_FORBIDDEN_TOKENS {
             assert!(
                 !source.contains(token),

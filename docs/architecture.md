@@ -195,6 +195,7 @@ theme to describe an input or store a setting:
   The engine provides generic defaults and labels its own GPU resources.
   The executable supplies the log path from `AppDirs` to
   `deadlib-platform::logging`, which handles rotation at that path.
+  The executable also supplies the logger's file context to audio codec probes.
 - `deadsync-config` validates and saves audio preferences. The executable
   applies the loaded mixer levels, ReplayGain, and pitch preservation before
   starting `deadsync-audio-stream`. The shell applies live requests, including

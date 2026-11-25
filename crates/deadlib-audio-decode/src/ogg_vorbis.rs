@@ -67,7 +67,7 @@ fn probe_format(
     let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
     let mut hint = Hint::new();
     hint.with_extension("ogg");
-    deadlib_platform::logging::with_file_context(path, || {
+    crate::probe_context::with_probe_log_scope(path, || {
         symphonia::default::get_probe()
             .probe(
                 &hint,

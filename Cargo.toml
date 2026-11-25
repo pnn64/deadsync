@@ -104,6 +104,7 @@ harness = false
 
 [dependencies]
 deadlib-audio = { path = "crates/deadlib-audio" }
+deadlib-audio-decode = { path = "crates/deadlib-audio-decode" }
 deadlib-platform = { path = "crates/deadlib-platform" }
 deadsync-audio-analysis = { path = "crates/deadsync-audio-analysis" }
 deadsync-audio-replaygain = { path = "crates/deadsync-audio-replaygain" }
