@@ -10,7 +10,7 @@
 //! is evicted on the way out: the runtime cache and the textures are the ones
 //! gameplay uses too.
 
-use deadsync_assets::RenderAssets;
+use crate::graphics::RenderAssets;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
 use deadsync_assets::noteskin::{self, Noteskin, Style};

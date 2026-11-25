@@ -21,6 +21,7 @@ pub(crate) mod tests {
     use super::*;
 
     use super::{MAX_PLAYERS, ScrollSpeedSetting, refresh_active_attack_masks};
+    use crate::graphics::RenderAssets;
     use deadlib_present::{
         actors::{Actor, SpriteSource},
         compose::{self, TextureContext, TextureMeta},
@@ -380,8 +381,8 @@ pub(crate) mod tests {
             .max()
     }
 
-    pub(crate) fn fixture_assets() -> deadsync_assets::RenderAssets {
-        let mut assets = deadsync_assets::RenderAssets::new();
+    pub(crate) fn fixture_assets() -> RenderAssets {
+        let mut assets = RenderAssets::new();
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let asset_root = project_root.join("assets");
         for spec in deadsync_theme_simply_love::asset_manifest().fonts {
@@ -879,7 +880,7 @@ pub(crate) mod tests {
 
     fn compose_fixture_frame_with_textures<T: TextureContext + ?Sized>(
         state: &mut screen_gameplay::State,
-        assets: &deadsync_assets::RenderAssets,
+        assets: &RenderAssets,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -919,7 +920,7 @@ pub(crate) mod tests {
     )]
     fn compose_fixture_frame_with_view<T: TextureContext + ?Sized>(
         state: &mut screen_gameplay::State,
-        assets: &deadsync_assets::RenderAssets,
+        assets: &RenderAssets,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -935,7 +936,7 @@ pub(crate) mod tests {
     #[expect(clippy::too_many_arguments, reason = "native frame inputs remain explicit")]
     fn compose_fixture_frame_with_view_and_clock<T: TextureContext + ?Sized>(
         state: &mut screen_gameplay::State,
-        assets: &deadsync_assets::RenderAssets,
+        assets: &RenderAssets,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -984,7 +985,7 @@ pub(crate) mod tests {
 
     fn compose_fixture_frame(
         state: &mut screen_gameplay::State,
-        assets: &deadsync_assets::RenderAssets,
+        assets: &RenderAssets,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -1003,7 +1004,7 @@ pub(crate) mod tests {
 
     fn compose_practice_fixture_frame(
         state: &mut deadsync_theme_simply_love::screens::practice::State,
-        assets: &deadsync_assets::RenderAssets,
+        assets: &RenderAssets,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -1034,7 +1035,7 @@ pub(crate) mod tests {
 
     fn prepare_fixture_frame(
         state: &mut screen_gameplay::State,
-        assets: &deadsync_assets::RenderAssets,
+        assets: &RenderAssets,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -1069,7 +1070,7 @@ pub(crate) mod tests {
 
     fn assert_repeatable_frame(
         state: &mut screen_gameplay::State,
-        assets: &deadsync_assets::RenderAssets,
+        assets: &RenderAssets,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -1205,7 +1206,7 @@ L000
         simfile: &Path,
     ) -> (
         screen_gameplay::State,
-        deadsync_assets::RenderAssets,
+        RenderAssets,
         space::Metrics,
     ) {
         let metrics = space::Metrics::centered(640.0, 480.0);
@@ -2114,7 +2115,7 @@ end
 
     #[cfg(target_os = "windows")]
     struct CaptureTextureContext<'a> {
-        assets: &'a deadsync_assets::RenderAssets,
+        assets: &'a RenderAssets,
         keys: std::cell::RefCell<std::collections::HashSet<String>>,
     }
 
@@ -2140,7 +2141,7 @@ end
 
     #[cfg(target_os = "windows")]
     fn load_gpu_capture_assets(
-        assets: &mut deadsync_assets::RenderAssets,
+        assets: &mut RenderAssets,
         backend: &mut deadlib_render::Backend,
     ) -> Result<(), String> {
         let texture_assets = deadsync_theme_simply_love::asset_manifest()
@@ -2206,7 +2207,7 @@ end
 
     #[cfg(target_os = "windows")]
     fn ensure_gpu_capture_texture(
-        assets: &mut deadsync_assets::RenderAssets,
+        assets: &mut RenderAssets,
         backend: &mut deadlib_render::Backend,
         key: &str,
         sampler: Option<deadlib_render_core::SamplerDesc>,
@@ -2267,7 +2268,7 @@ end
     #[cfg(target_os = "windows")]
     fn prewarm_gpu_noteskins(
         state: &ActiveGameplayStage,
-        assets: &mut deadsync_assets::RenderAssets,
+        assets: &mut RenderAssets,
         backend: &mut deadlib_render::Backend,
     ) -> Result<(), String> {
         let mut seen = std::collections::HashSet::<String>::with_capacity(128);
@@ -2331,7 +2332,7 @@ end
     #[cfg(target_os = "windows")]
     fn missing_capture_texture_keys(
         texture_ctx: &CaptureTextureContext,
-        assets: &deadsync_assets::RenderAssets,
+        assets: &RenderAssets,
     ) -> Vec<String> {
         texture_ctx
             .keys
@@ -2348,7 +2349,7 @@ end
     #[cfg(target_os = "windows")]
     fn missing_capture_texture_report(
         missing_keys: &[String],
-        assets: &deadsync_assets::RenderAssets,
+        assets: &RenderAssets,
     ) -> String {
         missing_keys
             .iter()
@@ -2374,7 +2375,7 @@ end
     fn capture_gpu_frame(
         name: &str,
         state: &mut screen_gameplay::State,
-        assets: &mut deadsync_assets::RenderAssets,
+        assets: &mut RenderAssets,
         backend: &mut deadlib_render::Backend,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
@@ -2533,7 +2534,7 @@ end
             true,
         )
         .map_err(|error| format!("failed to create {backend_type} backend: {error}"))?;
-        let mut assets = deadsync_assets::RenderAssets::new();
+        let mut assets = RenderAssets::new();
         let result = (|| {
             load_gpu_capture_assets(&mut assets, &mut backend)?;
             let (mut state, _, metrics) = sprite_core_fixture(simfile);
@@ -3040,7 +3041,7 @@ M000
                 assert!(!evaluation::all_joined_players_failed(&screen));
                 assert!(evaluation::overview_pane_selected(&screen));
                 space::with_current_metrics(space::Metrics::centered(854.0, 480.0), || {
-                    let assets = deadsync_assets::RenderAssets::new();
+                    let assets = RenderAssets::new();
                     let mut actors = Vec::new();
                     let mut openitg = deadsync_theme_openitg::OpenItgEvaluation::default();
                     let frame = overview.view(
@@ -4901,7 +4902,7 @@ return Def.ActorFrame{
     fn assert_alternate_stage_presentation(
         state: screen_gameplay::State,
         session: deadsync_gameplay::practice::PracticeSession,
-        assets: &deadsync_assets::RenderAssets,
+        assets: &RenderAssets,
     ) {
         let GameplayHost {
             stage,
@@ -6388,7 +6389,7 @@ return Def.ActorFrame {
     #[cfg(target_os = "windows")]
     struct SongLuaNotePixelCapture {
         backend: deadlib_render::Backend,
-        assets: deadsync_assets::RenderAssets,
+        assets: RenderAssets,
         _event_loop: winit::event_loop::EventLoop<()>,
         output: PathBuf,
     }
@@ -6421,7 +6422,7 @@ return Def.ActorFrame {
                 true,
             )
             .unwrap();
-            let mut assets = deadsync_assets::RenderAssets::new();
+            let mut assets = RenderAssets::new();
             load_gpu_capture_assets(&mut assets, &mut backend).unwrap();
             prewarm_gpu_noteskins(state, &mut assets, &mut backend).unwrap();
             // Lua sprites bind and Models check texture availability during actor
@@ -7429,7 +7430,7 @@ return Def.ActorFrame {
             true,
         )
         .expect("capture renderer");
-        let mut assets = deadsync_assets::RenderAssets::new();
+        let mut assets = RenderAssets::new();
         load_gpu_capture_assets(&mut assets, &mut backend).expect("theme textures and fonts");
         prewarm_gpu_noteskins(state, &mut assets, &mut backend).expect("note textures");
         let mut frame = compose_fixture_frame_with_textures(
@@ -7636,7 +7637,7 @@ return Def.ActorFrame {
             .into_rgba8();
         assert_eq!(image.dimensions(), (1920, 1080));
         let key = movie.to_string_lossy().into_owned();
-        let mut assets = deadsync_assets::RenderAssets::new();
+        let mut assets = RenderAssets::new();
         load_gpu_capture_assets(&mut assets, &mut backend).expect("theme textures and fonts");
         prewarm_gpu_noteskins(state, &mut assets, &mut backend).expect("note textures");
         let texture = backend
@@ -8738,7 +8739,7 @@ return Def.ActorFrame{}
                         times.sort_by(f32::total_cmp);
                         times.dedup_by(|a, b| (*a - *b).abs() <= 0.001);
 
-                        let assets = deadsync_assets::RenderAssets::new();
+                        let assets = RenderAssets::new();
                         for time in times {
                             state.clock.song_position.current_music_time_display = time;
                             state.clock.visible_timing.current_music_time = [time; MAX_PLAYERS];

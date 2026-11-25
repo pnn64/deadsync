@@ -82,7 +82,7 @@ fn gameplay_identity_fixture(reverse: bool, scripted: bool) -> MountedStageFixtu
 
 fn compose_native_fixture_frame<T: TextureContext + ?Sized>(
     state: &mut MountedStageFixture,
-    assets: &deadsync_assets::RenderAssets,
+    assets: &RenderAssets,
     metrics: &space::Metrics,
     actors: &mut Vec<Actor>,
     text: &mut compose::TextLayoutCache,
@@ -272,7 +272,7 @@ fn native_gameplay_composition_captures() {
                 true,
             )
             .unwrap();
-            let mut assets = deadsync_assets::RenderAssets::new();
+            let mut assets = RenderAssets::new();
             load_gpu_capture_assets(&mut assets, &mut backend).unwrap();
             deadsync_assets::load_initial_assets(
                 &mut assets,

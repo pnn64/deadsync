@@ -65,6 +65,7 @@ use crate::gameplay_prewarm::{
     GameplayLiveTextures, GameplaySfx, prewarm_gameplay_assets, prewarm_gameplay_sfx,
 };
 pub use crate::input::UserEvent;
+use crate::graphics::RenderAssets;
 use crate::input::{
     AppRawKeyShortcut, EvaluationRawKeyShortcut, QueuedInputBatchState, RawKeyScreenRoute,
     RawKeyTextRoute, RawPadScreenRoute, app_raw_key_shortcut, evaluation_raw_key_shortcut,
@@ -115,7 +116,6 @@ use crate::window_state::{WindowMinimizePlan, exclusive_fullscreen_focus_plan};
 use crate::window_state::{
     apply_shell_surface_active, apply_shell_window_focus, apply_shell_window_occlusion,
 };
-use deadsync_assets::RenderAssets;
 use deadlib_assets::upload::TextureUploadBudget;
 use deadlib_platform::frame_pacing::{
     FrameIntervalState, FrameLoopMode, FrameWaitControl, elapsed_us_between, elapsed_us_since,

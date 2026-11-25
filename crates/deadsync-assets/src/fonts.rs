@@ -1,16 +1,15 @@
-use crate::RenderAssets;
 use deadlib_assets::{
-    PreparedFontTexture, parse_font_asset_specs, parse_font_with_asset_context,
+    AssetManager, PreparedFontTexture, parse_font_asset_specs, parse_font_with_asset_context,
     prepare_required_font_textures,
 };
 use deadlib_present::font::Font;
-use deadlib_render::Backend;
+use deadlib_render_core::TextureBackend;
 use log::debug;
 use std::path::Path;
 
-fn upload_font_textures(
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
+fn upload_font_textures<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+    assets: &mut AssetManager<B::Texture>,
+    backend: &mut B,
     font: &Font,
     required_textures: &[std::path::PathBuf],
 ) -> Result<(), deadlib_assets::AssetError> {
@@ -26,9 +25,9 @@ fn upload_font_textures(
     Ok(())
 }
 
-pub fn load_font_from_ini_path(
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
+pub fn load_font_from_ini_path<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+    assets: &mut AssetManager<B::Texture>,
+    backend: &mut B,
     name: &'static str,
     ini_path: &Path,
 ) -> Result<(), deadlib_assets::AssetError> {
@@ -39,9 +38,9 @@ pub fn load_font_from_ini_path(
 }
 
 /// Registers a font and uploads its pages on startup or renderer replacement.
-pub fn load_font_at_renderer_startup(
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
+pub fn load_font_at_renderer_startup<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+    assets: &mut AssetManager<B::Texture>,
+    backend: &mut B,
     name: &'static str,
     ini_path: &Path,
 ) -> Result<(), deadlib_assets::AssetError> {
@@ -56,9 +55,9 @@ pub fn load_font_at_renderer_startup(
     Ok(())
 }
 
-pub fn load_initial_fonts(
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
+pub fn load_initial_fonts<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+    assets: &mut AssetManager<B::Texture>,
+    backend: &mut B,
     fonts: &'static [deadlib_assets::FontAssetSpec],
 ) -> Result<(), deadlib_assets::AssetError> {
     let dirs = crate::paths();

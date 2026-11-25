@@ -1,11 +1,9 @@
-use crate::RenderAssets;
 use deadlib_assets::{
-    TextureAssetSpec, TextureChoice, TextureDecodeJob, TextureHints,
+    AssetManager, TextureAssetSpec, TextureChoice, TextureDecodeJob, TextureHints,
     canonical_texture_key_with_asset_roots, parse_texture_hints, strip_sprite_hints,
     texture_filename_has_multiframe_hint, texture_key_sampler,
 };
-use deadlib_render::Backend;
-use deadlib_render_core::{SamplerDesc, SamplerWrap};
+use deadlib_render_core::{SamplerDesc, SamplerWrap, TextureBackend};
 use deadsync_config::dirs::AssetPaths;
 use log::warn;
 use std::{
@@ -128,9 +126,9 @@ pub fn texture_decode_job(key: &str, model: bool) -> TextureDecodeJob {
 ///
 /// # Errors
 /// Returns an error if a GPU texture cannot be created.
-pub fn preload_texture_keys(
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
+pub fn preload_texture_keys<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+    assets: &mut AssetManager<B::Texture>,
+    backend: &mut B,
     textures: impl IntoIterator<Item = (std::sync::Arc<str>, bool)>,
 ) -> Result<(), deadlib_assets::AssetError> {
     let mut jobs = Vec::new();
@@ -185,9 +183,9 @@ pub fn initial_texture_jobs(
         .collect()
 }
 
-pub fn ensure_texture_for_key(
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
+pub fn ensure_texture_for_key<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+    assets: &mut AssetManager<B::Texture>,
+    backend: &mut B,
     texture_key: &str,
     needs_repeat: fn(&str) -> bool,
 ) {
@@ -195,27 +193,27 @@ pub fn ensure_texture_for_key(
 }
 
 /// Load a game-owned sprite using its native filename sampling hints.
-pub fn ensure_native_texture_for_key(
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
+pub fn ensure_native_texture_for_key<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+    assets: &mut AssetManager<B::Texture>,
+    backend: &mut B,
     texture_key: &str,
 ) {
     ensure_texture_for_key(assets, backend, texture_key, |_| false);
 }
 
 /// An explicit sampler forces replacement, even if this key is already loaded.
-pub fn ensure_texture_for_key_with_sampler(
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
+pub fn ensure_texture_for_key_with_sampler<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+    assets: &mut AssetManager<B::Texture>,
+    backend: &mut B,
     texture_key: &str,
     sampler: SamplerDesc,
 ) {
     load_texture_key(assets, backend, texture_key, Some(sampler), |_| false);
 }
 
-fn load_texture_key(
-    assets: &mut RenderAssets,
-    backend: &mut Backend,
+fn load_texture_key<B: TextureBackend<RgbaImage = image::RgbaImage>>(
+    assets: &mut AssetManager<B::Texture>,
+    backend: &mut B,
     texture_key: &str,
     sampler_override: Option<SamplerDesc>,
     needs_repeat: fn(&str) -> bool,

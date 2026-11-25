@@ -905,7 +905,7 @@ fn apply_practice_output<P, Q: PracticeLivePresentation<P>>(
 pub(crate) fn push_actors<L, P: GameplayStagePresenter<L>>(
     actors: &mut Vec<deadlib_present::actors::Actor>,
     state: &mut GameplayHost<L, P>,
-    assets: &deadsync_assets::RenderAssets,
+    assets: &crate::graphics::RenderAssets,
     view: P::View,
     uptime_seconds: f64,
     policy: P::Policy,
@@ -925,7 +925,7 @@ pub(crate) fn push_actors<L, P: GameplayStagePresenter<L>>(
 pub(crate) fn push_practice_actors<L, P, Q>(
     actors: &mut Vec<deadlib_present::actors::Actor>,
     state: &mut PracticeHost<GameplayHost<L, P>, Q>,
-    assets: &deadsync_assets::RenderAssets,
+    assets: &crate::graphics::RenderAssets,
     arrow_effect_time_s: f64,
     visual_policy: P::Policy,
 ) -> deadsync_song_lua::playback::GameplayActorSegments

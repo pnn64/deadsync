@@ -1,4 +1,4 @@
-use deadsync_assets::RenderAssets;
+use crate::graphics::RenderAssets;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
 use deadsync_assets::media_cache;

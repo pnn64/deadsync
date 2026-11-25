@@ -9517,25 +9517,32 @@ fn song_lua_takes_media_probes_from_its_host() {
 #[test]
 fn asset_loading_takes_texture_operations_from_the_renderer() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let assets = root.join("crates/deadlib-assets");
-    let manifest = read_source(assets.join("Cargo.toml")).expect("asset manifest");
-    let mut production = true;
-    for line in manifest.lines().map(str::trim) {
-        if line.starts_with('[') {
-            production = !line.contains("dev-dependencies");
+    for name in ["deadlib-assets", "deadsync-assets"] {
+        let assets = root.join("crates").join(name);
+        let manifest = read_source(assets.join("Cargo.toml")).expect("asset manifest");
+        let mut production = true;
+        for line in manifest.lines().map(str::trim) {
+            if line.starts_with('[') {
+                production = !line.contains("dev-dependencies");
+            }
+            if production
+                && let Some((dependency, _)) = line.split_once('=')
+            {
+                let dependency = dependency.trim();
+                assert!(
+                    dependency != "deadlib-render" && !dependency.starts_with("deadlib-render-backend-"),
+                    "{name} depends on a concrete renderer: {dependency}",
+                );
+            }
         }
-        if production
-            && let Some((name, _)) = line.split_once('=')
-        {
-            assert_ne!(name.trim(), "deadlib-render");
+        for file in production_rust_files(&assets.join("src")) {
+            let source = production_source(&file);
+            assert!(
+                !source.contains("deadlib_render::") && !source.contains("deadlib_render_backend_"),
+                "{} imports the concrete renderer",
+                file.display(),
+            );
         }
-    }
-    for file in production_rust_files(&assets.join("src")) {
-        assert!(
-            !production_source(&file).contains("deadlib_render::"),
-            "{} imports the concrete renderer",
-            file.display(),
-        );
     }
 }
 

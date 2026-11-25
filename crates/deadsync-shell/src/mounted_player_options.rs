@@ -1,8 +1,8 @@
 //! Startup-selected Player Options layout and shared editor handoff.
 
 use crate::{ActiveTheme, ThemeScreen as Screen, TransitionState};
+use crate::graphics::RenderAssets;
 use crate::mounted_theme::PlayerOptionsLayoutFactory;
-use deadsync_assets::RenderAssets;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::{Actor, TextContent};
 use deadsync_assets::noteskin::Noteskin;

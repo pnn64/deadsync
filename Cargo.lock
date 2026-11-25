@@ -1492,7 +1492,6 @@ dependencies = [
  "deadlib-assets",
  "deadlib-audio-decode",
  "deadlib-present",
- "deadlib-render",
  "deadlib-render-core",
  "deadlib-video",
  "deadsync-chart",

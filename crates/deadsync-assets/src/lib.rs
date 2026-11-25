@@ -14,9 +14,10 @@ pub mod song_lua;
 pub mod textures;
 
 use deadlib_assets::{
-    open_image_fallback, register_generated_texture, register_texture_dims, sprite_sheet_dims,
-    texture_dims, texture_source_frame_dims_from_real,
+    AssetManager, open_image_fallback, register_generated_texture, register_texture_dims,
+    sprite_sheet_dims, texture_dims, texture_source_frame_dims_from_real,
 };
+use deadlib_render_core::TextureBackend;
 
 static PATHS: std::sync::OnceLock<deadsync_config::dirs::AssetPaths> = std::sync::OnceLock::new();
 
@@ -69,18 +70,16 @@ pub fn open_bundled_image(path: &str) -> image::ImageResult<image::DynamicImage>
     open_image_fallback(&resolve_asset_path(path))
 }
 
-/// Asset storage for the renderer selected by the application.
-pub type RenderAssets = deadlib_assets::AssetManager<deadlib_render::Texture>;
-
 /// Resolve the theme manifest and the game's discovered assets before passing
 /// decode/upload work to the engine.
-pub fn load_initial_assets<T>(
-    assets: &mut RenderAssets,
-    backend: &mut deadlib_render::Backend,
+pub fn load_initial_assets<T, B>(
+    assets: &mut AssetManager<B::Texture>,
+    backend: &mut B,
     manifest: deadlib_assets::AssetManifest<T>,
 ) -> Result<(), deadlib_assets::AssetError>
 where
     T: IntoIterator<Item = deadlib_assets::TextureAssetSpec>,
+    B: TextureBackend<RgbaImage = image::RgbaImage>,
 {
     let jobs = textures::initial_texture_jobs(
         manifest.textures,

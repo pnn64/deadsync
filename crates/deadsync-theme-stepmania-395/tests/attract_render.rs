@@ -8,7 +8,6 @@
 use std::{path::PathBuf, sync::Arc};
 mod support;
 
-use deadsync_assets::RenderAssets;
 use deadlib_present::{
     actors::Actor,
     compose,
@@ -27,6 +26,8 @@ use winit::{
     dpi::PhysicalSize, event_loop::EventLoop, platform::windows::EventLoopBuilderExtWindows,
     window::Window,
 };
+
+type RenderAssets = deadlib_assets::AssetManager<deadlib_render::Texture>;
 
 #[test]
 #[ignore = "requires a graphics device; writes reference captures under target"]
@@ -491,7 +492,7 @@ fn selection_actors_with_style(
     actors
 }
 
-fn options_actors(assets: &deadsync_assets::RenderAssets, players: Option<[bool; 2]>) -> Vec<Actor> {
+fn options_actors(assets: &RenderAssets, players: Option<[bool; 2]>) -> Vec<Actor> {
     use deadlib_present::actors::TextContent;
     use deadsync_theme::player_options::{
         PlayerOptionsInline, PlayerOptionsLayout, PlayerOptionsPage, PlayerOptionsRow,

@@ -10,7 +10,6 @@ use deadlib_render::{
     render_size_for_physical, render_size_for_window,
 };
 use deadlib_render_core::{BackendType, PresentModePolicy};
-use deadsync_assets::RenderAssets;
 use deadsync_config::app_config::DisplayMode;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event_loop::ActiveEventLoop;
@@ -19,6 +18,8 @@ use winit::window::Window;
 use crate::dynamic_media::DynamicMedia;
 use crate::window::{AppWindowConfig, AppWindowSetup, DisplayModeChange, ResolutionChange};
 use crate::ShellState;
+
+pub(crate) type RenderAssets = deadlib_assets::AssetManager<deadlib_render::Texture>;
 
 #[derive(Clone, Copy)]
 pub struct RendererInitConfig {

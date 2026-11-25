@@ -1,8 +1,8 @@
 //! Host adapter for installed session-ending presentations and game result data.
 
+use crate::graphics::RenderAssets;
 use deadlib_assets::media_path_key;
 use deadlib_present::actors::Actor;
-use deadsync_assets::RenderAssets;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_score::{
     session_summary::{self, SessionSummary},

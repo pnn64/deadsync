@@ -5,8 +5,8 @@
 //! survive screen exits; only unneeded entries are evicted while browsing options.
 //! Existing session textures are borrowed and never counted as eviction candidates.
 
+use crate::graphics::RenderAssets;
 use crate::player_options::PlayerOptionsState;
-use deadsync_assets::RenderAssets;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
 use deadsync_assets::noteskin::{self, Noteskin, Style};

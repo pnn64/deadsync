@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use deadsync_assets::RenderAssets;
+use crate::graphics::RenderAssets;
 use deadlib_assets::register_texture_dims;
 use deadlib_present::actors::Actor;
 use deadlib_render::Backend;

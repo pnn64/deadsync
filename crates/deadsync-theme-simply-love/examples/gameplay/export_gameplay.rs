@@ -1,7 +1,6 @@
 //! Export the real Simply Love gameplay presentation without changing player settings.
 mod export_gameplay_viewer;
 
-use deadsync_assets::RenderAssets;
 use deadlib_present::{
     actors::Actor,
     compose::{self, ComposeScratch, TextLayoutCache},
@@ -22,6 +21,8 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+type RenderAssets = deadlib_assets::AssetManager<deadlib_render::Texture>;
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 

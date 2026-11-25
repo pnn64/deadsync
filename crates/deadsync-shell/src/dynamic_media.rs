@@ -1,4 +1,4 @@
-use deadsync_assets::RenderAssets;
+use crate::graphics::RenderAssets;
 use deadlib_assets::dynamic;
 use deadlib_render::{Backend, Texture as RendererTexture};
 use deadlib_render_core::TextureHandle;
