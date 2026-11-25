@@ -294,8 +294,10 @@ impl Table {
             }
         }
         count(extra);
+        // An array of twice the total population or more cannot be over half full.
+        let powers = (usize::BITS + 1 - (total - 1).leading_zeros()) as usize;
         let (mut used, mut array, mut array_used) = (0, 0, 0);
-        for (power, count) in counts.into_iter().enumerate() {
+        for (power, &count) in counts[..powers.min(counts.len())].iter().enumerate() {
             used += count;
             if used > (1usize << power) / 2 {
                 array = 1usize << power;
