@@ -276,8 +276,11 @@ impl Encoder {
                 }
                 return Self::encode_direct::<2, FOUR_SYMBOL_SLOTS>(rows, emit);
             }
-            if minimum == 3 && pixels <= 2048 {
-                return Self::encode_direct::<3, { direct_table_slots(2048, 8) }>(rows, emit);
+            if minimum == 3 {
+                if pixels <= 2048 {
+                    return Self::encode_direct::<3, { direct_table_slots(2048, 8) }>(rows, emit);
+                }
+                return Self::encode_direct::<3, { 4096 * 8 }>(rows, emit);
             }
             if pixels <= 1152 {
                 return Self::encode_hashed::<4096>(rows, minimum, emit);
