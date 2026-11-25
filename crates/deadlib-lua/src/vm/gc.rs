@@ -244,7 +244,7 @@ enum Phase {
 }
 
 impl Strings {
-    fn sweep_some(&mut self, cursor: &mut usize, budget: usize) -> u64 {
+    fn sweep_some(&mut self, cursor: &mut usize, budget: usize, finishes_sweep: bool) -> u64 {
         let live = self.bytes.live_len();
         if live >= 1024
             && *cursor == self.bytes.len()
@@ -252,9 +252,12 @@ impl Strings {
             && self.bytes.at_most_marked(live / 4)
         {
             // A single batch can rebuild from survivors without hashing each
-            // dead string and its neighbors. Keep the bucket length until the
-            // normal end-of-cycle compaction.
+            // dead string and its neighbors. Compact now only when sweep will
+            // finish before the mutator can insert any more strings.
             let reclaimed = self.bytes.sweep_some(cursor, budget);
+            if finishes_sweep {
+                self.buckets.truncate(self.rebuilt_bucket_count());
+            }
             self.reindex();
             return reclaimed;
         }
@@ -290,18 +293,18 @@ impl Strings {
         if self.buckets.is_empty() {
             return;
         }
-        // Sweeping already removes dead entries in place. Rebuilding may compact
-        // the logical index, but must never grow it while reclaiming memory.
-        // The insertion load limit can leave a table smaller than 2 * live.
-        let size = (self.bytes.live_len().saturating_mul(2))
+        let size = self.rebuilt_bucket_count();
+        if size < self.buckets.len() {
+            self.buckets.truncate(size);
+            self.reindex();
+        }
+    }
+    fn rebuilt_bucket_count(&self) -> usize {
+        // Reclamation can compact the logical index but must never grow it.
+        (self.bytes.live_len().saturating_mul(2))
             .max(16)
             .next_power_of_two()
-            .min(self.buckets.len());
-        if size == self.buckets.len() {
-            return;
-        }
-        self.buckets.resize(size, 0);
-        self.reindex();
+            .min(self.buckets.len())
     }
     fn reindex(&mut self) {
         self.buckets.fill(0);
@@ -1702,7 +1705,16 @@ impl Vm {
                             *bytes -= program_bytes(&programs[index]);
                         })
                 }
-                6 => self.strings.sweep_some(&mut cursor, budget),
+                6 => {
+                    let later = self
+                        .userdata
+                        .len()
+                        .saturating_add(self.io.files.len())
+                        .saturating_add(self.parser_prototypes.len());
+                    // Leave budget for advancing past any trailing empty arena.
+                    let finishes_sweep = budget.saturating_sub(cursor) > later;
+                    self.strings.sweep_some(&mut cursor, budget, finishes_sweep)
+                }
                 7 => {
                     let bytes = &mut self.object_payload_bytes;
                     self.userdata
@@ -2797,11 +2809,11 @@ mod tests {
         pool.bytes.mark(ids[3].0);
         pool.bytes.protect_new(true);
         let mut cursor = pool.bytes.len();
-        assert_eq!(pool.sweep_some(&mut cursor, 2), 2);
+        assert_eq!(pool.sweep_some(&mut cursor, 2, false), 2);
         assert_eq!(pool.intern(&texts[2]), ids[2]);
         let fresh = pool.intern(b"new-after-sweep");
         while cursor != 0 {
-            pool.sweep_some(&mut cursor, 2);
+            pool.sweep_some(&mut cursor, 2, false);
         }
         for index in [0, 2, 3] {
             assert_eq!(pool.find(&texts[index]), Some(ids[index]));
@@ -2818,7 +2830,7 @@ mod tests {
         pool.bytes.protect_new(false);
         pool.bytes.clear_marks();
         let mut cursor = pool.bytes.len();
-        pool.sweep_some(&mut cursor, usize::MAX);
+        pool.sweep_some(&mut cursor, usize::MAX, false);
         assert_eq!(pool.find(b"new-after-sweep"), None);
         assert_eq!(pool.bytes.live_len(), 0);
     }
@@ -2840,7 +2852,7 @@ mod tests {
         pool.bytes.mark(first.0);
         pool.bytes.mark(last.0);
         let mut cursor = pool.bytes.len();
-        pool.sweep_some(&mut cursor, usize::MAX);
+        pool.sweep_some(&mut cursor, usize::MAX, false);
         assert_eq!(pool.buckets.len(), capacity);
         assert_eq!(pool.find(b"first"), Some(first));
         assert_eq!(pool.find(b"last"), Some(last));
