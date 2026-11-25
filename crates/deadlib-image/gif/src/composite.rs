@@ -241,39 +241,49 @@ impl Compositor {
         if reuse_saved || self.prepare(r, frame.control)? {
             let stride = self.width as usize;
             let width = frame.width as usize;
-            let visible = r.w * r.h;
+            let mut r = r;
+            let mut visible = r.w * r.h;
+            let mut indices = frame.indices.as_slice();
             // Wider rows already use bulk fills. Probe them only to skip transparent spans.
-            let solid = if (width < 64 || transparent.is_some())
+            if (width < 64 || transparent.is_some())
                 && r.w == stride
                 && width == stride
                 && visible >= 256
             {
-                let indices = &frame.indices[..visible];
                 let first = indices[0];
-                if (width < 64 || transparent == Some(first))
-                    && first == indices[visible / 2]
-                    && indices[visible - 16..] == [first; 16]
-                {
-                    crate::lzw::repeated_index(indices)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-            if let Some(index) = solid {
-                if transparent != Some(index) {
-                    let index = usize::from(index);
-                    let color = if let Some(palette) = local {
-                        let [red, green, blue] = palette[index];
-                        [red, green, blue, 255]
+                if (width < 64 || transparent == Some(first)) && indices[1] == first {
+                    let (chunks, tail) = indices[..visible].as_chunks::<16>();
+                    let rows = if let Some(chunk) =
+                        chunks.iter().position(|chunk| *chunk != [first; 16])
+                    {
+                        chunk * 16 / width
+                    } else if tail.iter().all(|&index| index == first) {
+                        r.h
                     } else {
-                        self.palette[index]
+                        chunks.len() * 16 / width
                     };
-                    let start = r.y * stride;
-                    self.pixels[start..start + visible].fill(color);
+                    // The scan proved these complete rows solid even if a later row differs.
+                    if rows != 0 {
+                        let count = rows * width;
+                        if transparent != Some(first) {
+                            let index = usize::from(first);
+                            let color = if let Some(palette) = local {
+                                let [red, green, blue] = palette[index];
+                                [red, green, blue, 255]
+                            } else {
+                                self.palette[index]
+                            };
+                            let start = r.y * stride;
+                            self.pixels[start..start + count].fill(color);
+                        }
+                        r.y += rows;
+                        r.h -= rows;
+                        visible -= count;
+                        indices = &indices[count..];
+                    }
                 }
-            } else {
+            }
+            if visible != 0 {
                 let binary_colors = match local {
                     Some(&[a, b]) => Some([a, b].map(|[r, g, b]| [r, g, b, 255])),
                     None if self.palette_len == Some(2) => Some([self.palette[0], self.palette[1]]),
@@ -281,14 +291,7 @@ impl Compositor {
                 };
                 let canvas = (self.pixels.as_mut_slice(), stride);
                 if let Some(colors) = binary_colors {
-                    draw_binary_indices::<false>(
-                        canvas,
-                        r,
-                        &frame.indices,
-                        width,
-                        colors,
-                        transparent,
-                    );
+                    draw_binary_indices::<false>(canvas, r, indices, width, colors, transparent);
                 } else if visible <= 256
                     && r.w == stride
                     && width == stride
@@ -296,9 +299,7 @@ impl Compositor {
                 {
                     let start = r.y * stride;
                     let transparent = transparent.map_or(256, u16::from);
-                    for (pixel, &index) in canvas.0[start..start + visible]
-                        .iter_mut()
-                        .zip(&frame.indices)
+                    for (pixel, &index) in canvas.0[start..start + visible].iter_mut().zip(indices)
                     {
                         if u16::from(index) != transparent {
                             let [red, green, blue] = palette[usize::from(index)];
@@ -313,7 +314,7 @@ impl Compositor {
                     } else {
                         &self.palette
                     };
-                    draw_indices(canvas, r, &frame.indices, width, table, transparent);
+                    draw_indices(canvas, r, indices, width, table, transparent);
                 }
             }
         }
