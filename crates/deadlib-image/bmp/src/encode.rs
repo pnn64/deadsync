@@ -171,6 +171,19 @@ fn append_mapped_rows<const INPUT: usize, const OUTPUT: usize>(
 ) {
     if top_down && padding.is_empty() {
         output.extend(samples.as_chunks::<INPUT>().0.iter().flat_map(reorder));
+    } else if source_row_bytes == INPUT {
+        // One pixel and its padding always form a four-byte row.
+        let pixels = samples.as_chunks::<INPUT>().0.iter();
+        let row = |pixel| {
+            let mut row = [0; 4];
+            row[..OUTPUT].copy_from_slice(&reorder(pixel));
+            row
+        };
+        if top_down {
+            output.extend(pixels.flat_map(row));
+        } else {
+            output.extend(pixels.rev().flat_map(row));
+        }
     } else {
         let mut rows = samples.chunks_exact(source_row_bytes);
         while let Some(row) = if top_down {
