@@ -1726,8 +1726,21 @@ fn fast_block(
             // Bound work on sustained incompressible input. Search resumes
             // within at most 15 literal bytes of new structure.
             let count = (1 + (misses >> 8)).min(16).min(end - pos);
-            for &byte in &data[pos..pos + count] {
-                w.literal(byte as usize);
+            if count == 1 {
+                w.literal(usize::from(data[pos]));
+            } else {
+                let (pairs, tail) = data[pos..pos + count].as_chunks::<2>();
+                for &[first, second] in pairs {
+                    let (low, low_bits) = FIXED_CODES[usize::from(first)];
+                    let (high, high_bits) = FIXED_CODES[usize::from(second)];
+                    w.write(
+                        u32::from(low) | (u32::from(high) << low_bits),
+                        low_bits + high_bits,
+                    );
+                }
+                if let Some(&last) = tail.first() {
+                    w.literal(usize::from(last));
+                }
             }
             misses += count;
             pos += count;
