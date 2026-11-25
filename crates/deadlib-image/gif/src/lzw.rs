@@ -256,19 +256,26 @@ impl Encoder {
         Self(())
     }
     pub fn encode(&mut self, input: &[u8], minimum: u8, output: &mut Vec<u8>) -> Result<(), Error> {
-        if !(2..=8).contains(&minimum)
-            || (minimum < 8
-                && input
+        let invalid = Error::Invalid("LZW minimum code size or literal range");
+        let first = input.first().copied().unwrap_or(0);
+        if !(2..=8).contains(&minimum) || u16::from(first) >> minimum != 0 {
+            return Err(invalid);
+        }
+        let suffix = nonuniform_suffix(input);
+        if minimum < 8
+            && suffix.is_some_and(|indices| {
+                indices
                     .chunks(256)
-                    .any(|chunk| index_bits(chunk) >> minimum != 0))
+                    .any(|chunk| index_bits(chunk) >> minimum != 0)
+            })
         {
-            return Err(Error::Invalid("LZW minimum code size or literal range"));
+            return Err(invalid);
         }
         Self::encode_rows(
             std::iter::once(input),
             input,
             minimum,
-            repeated_index(input),
+            suffix.is_none().then_some(first),
             |bits, count| {
                 reserve(output, count)?;
                 output.extend_from_slice(&bits.to_le_bytes()[..count]);
@@ -526,14 +533,20 @@ pub(crate) fn index_bits(indices: &[u8]) -> u8 {
     indices.iter().fold(0, |bits, &index| bits | index)
 }
 
-pub(crate) fn repeated_index(indices: &[u8]) -> Option<u8> {
+// Return the samples still needing an OR scan, or None for a long solid run.
+pub(crate) fn nonuniform_suffix(indices: &[u8]) -> Option<&[u8]> {
     if indices.len() < 32 || indices[0] != indices[1] {
-        return None;
+        return Some(indices);
     }
     let pixel = indices[0];
     let (chunks, tail) = indices.as_chunks::<16>();
-    (chunks.iter().all(|chunk| *chunk == [pixel; 16]) && tail.iter().all(|&index| index == pixel))
-        .then_some(pixel)
+    if let Some(chunk) = chunks.iter().position(|chunk| *chunk != [pixel; 16]) {
+        Some(&indices[chunk * 16..])
+    } else if tail.iter().all(|&index| index == pixel) {
+        None
+    } else {
+        Some(tail)
+    }
 }
 
 struct BitWriter<F> {

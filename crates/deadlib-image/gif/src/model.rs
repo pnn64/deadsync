@@ -171,18 +171,19 @@ impl Frame {
             }
             None => fallback_colors,
         };
-        let repeated = if ENCODE {
-            crate::lzw::repeated_index(&self.indices)
-        } else {
-            None
-        };
         // Palette sizes are powers of two, so only the highest index bit matters.
-        let bits = if let Some(index) = repeated {
-            index
-        } else if ENCODE || colors.is_some_and(|len| len < 256) {
-            crate::lzw::index_bits(&self.indices)
+        let (bits, repeated) = if ENCODE {
+            let first = self.indices[0];
+            if let Some(suffix) = crate::lzw::nonuniform_suffix(&self.indices) {
+                // The skipped prefix contains only the first index.
+                (first | crate::lzw::index_bits(suffix), None)
+            } else {
+                (first, Some(first))
+            }
+        } else if colors.is_some_and(|len| len < 256) {
+            (crate::lzw::index_bits(&self.indices), None)
         } else {
-            0
+            (0, None)
         };
         if let Some(len) = colors {
             if usize::from(bits) >= len {
