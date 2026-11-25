@@ -98,7 +98,9 @@ impl<R: Read> PageReader<R> {
         let mut filled = self.filled;
         if target > self.buffer.len() {
             let additional = target - self.buffer.len();
-            reserve(&mut self.buffer, additional)?;
+            if additional > self.buffer.capacity() - self.buffer.len() {
+                reserve_read_buffer(&mut self.buffer, additional)?;
+            }
             self.buffer.resize(target, 0);
         }
         let result = loop {
@@ -208,6 +210,18 @@ impl<R: Read> PageReader<R> {
             page,
         }))
     }
+}
+
+#[cold]
+fn reserve_read_buffer(buffer: &mut Vec<u8>, additional: usize) -> Result<(), Error> {
+    if buffer.capacity() > MAX_PAGE_SIZE / 2
+        && buffer
+            .try_reserve_exact(MAX_PAGE_SIZE - buffer.len())
+            .is_ok()
+    {
+        return Ok(());
+    }
+    reserve(buffer, additional)
 }
 
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
