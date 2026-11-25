@@ -41,6 +41,24 @@ pub(crate) struct Matched {
 }
 impl Matched {
     pub fn capture(&self, index: usize) -> Result<Capture, Error> {
+        MatchSpan {
+            start: self.start,
+            end: self.end,
+            count: self.count,
+        }
+        .capture(&self.captures, index)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct MatchSpan {
+    pub start: usize,
+    pub end: usize,
+    count: u8,
+}
+
+impl MatchSpan {
+    fn capture(self, captures: &[Capture; 32], index: usize) -> Result<Capture, Error> {
         if self.count == 0 && index == 0 {
             return Ok(Capture {
                 start: self.start,
@@ -50,7 +68,7 @@ impl Matched {
         if index >= usize::from(self.count) {
             return Err(error("invalid capture index"));
         }
-        let c = self.captures[index];
+        let c = captures[index];
         if c.end == UNFINISHED {
             return Err(error("unfinished capture"));
         }
@@ -81,6 +99,8 @@ enum Repeat {
     Optional,
     Star,
     Plus,
+    DisjointStar,
+    DisjointPlus,
     Minimal,
 }
 #[derive(Clone, Copy, Debug)]
@@ -109,15 +129,8 @@ impl LeadingByte<'_> {
         match self {
             Self::Literal(byte) => find_byte(bytes, byte),
             Self::Class(set) => {
-                if bytes.len() >= 64 {
-                    if set_has(set, bytes[0]) {
-                        return Some(0);
-                    }
-                    if let Some(end) = range_set_run(bytes, &set.map(|word| !word)) {
-                        return (end < bytes.len()).then_some(end);
-                    }
-                }
-                bytes.iter().position(|&byte| set_has(set, byte))
+                let end = class_run::<true>(bytes, set);
+                (end < bytes.len()).then_some(end)
             }
         }
     }
@@ -159,6 +172,19 @@ impl Default for Work {
     }
 }
 impl Work {
+    pub(crate) fn capture(&self, span: MatchSpan, index: usize) -> Result<Capture, Error> {
+        span.capture(&self.captures, index)
+    }
+
+    pub(crate) fn materialize(&self, span: MatchSpan) -> Matched {
+        Matched {
+            start: span.start,
+            end: span.end,
+            count: span.count,
+            captures: self.captures,
+        }
+    }
+
     pub(crate) fn new_in(memory: Memory) -> Self {
         Self {
             choices: Buffer::new_in(memory),
@@ -239,6 +265,29 @@ pub(crate) fn has_magic(bytes: &[u8]) -> bool {
 const ASCII_SPACE_BITS: u64 = crate::locale::ascii_class_bits(b's')[0];
 
 #[inline(never)]
+fn class_run<const INVERT: bool>(bytes: &[u8], set: &[u64; 4]) -> usize {
+    let stop = |&byte: &u8| set_has(set, byte) == INVERT;
+    let Some((head, tail)) = bytes.split_first_chunk::<4>() else {
+        return bytes.iter().position(stop).unwrap_or(bytes.len());
+    };
+    // Short matches and separators are common even in long subjects.
+    // Inspect them before classifying the bitmap for the wider scanner.
+    if let Some(end) = head.iter().position(stop) {
+        return end;
+    }
+    if tail.len() >= 64 {
+        let end = if INVERT {
+            range_set_run(tail, &set.map(|word| !word))
+        } else {
+            range_set_run(tail, set)
+        };
+        if let Some(end) = end {
+            return head.len() + end;
+        }
+    }
+    head.len() + tail.iter().position(stop).unwrap_or(tail.len())
+}
+
 fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     if bytes.first().is_some_and(|&byte| !set_has(set, byte)) {
         return Some(0);
@@ -295,20 +344,23 @@ fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     })
 }
 
-fn ascii_word_boundary(bytes: &[u8]) -> usize {
+pub(crate) fn ascii_alphanumeric_lanes(word: u64) -> u64 {
     const LANES: u64 = 0x0101_0101_0101_0101;
     const HIGH: u64 = LANES * 0x80;
+    // Setting high bits prevents borrows between byte lanes.
+    let padded = word | HIGH;
+    let lower = padded | (LANES * 0x20);
+    let digits = padded.wrapping_sub(LANES * u64::from(b'0'))
+        & !padded.wrapping_sub(LANES * u64::from(b'9' + 1));
+    let letters = lower.wrapping_sub(LANES * u64::from(b'a'))
+        & !lower.wrapping_sub(LANES * u64::from(b'z' + 1));
+    (digits | letters) & !word & HIGH
+}
+
+fn ascii_word_boundary(bytes: &[u8]) -> usize {
     let (words, tail) = bytes.as_chunks::<8>();
     for (index, &word) in words.iter().enumerate() {
-        let word = u64::from_le_bytes(word);
-        // Setting the high bit prevents borrows between byte lanes.
-        let padded = word | HIGH;
-        let lower = padded | (LANES * 0x20);
-        let digits = padded.wrapping_sub(LANES * u64::from(b'0'))
-            & !padded.wrapping_sub(LANES * u64::from(b'9' + 1));
-        let letters = lower.wrapping_sub(LANES * u64::from(b'a'))
-            & !lower.wrapping_sub(LANES * u64::from(b'z' + 1));
-        let hits = (digits | letters) & !word & HIGH;
+        let hits = ascii_alphanumeric_lanes(u64::from_le_bytes(word));
         if hits != 0 {
             return index * 8 + (hits.trailing_zeros() / 8) as usize;
         }
@@ -583,6 +635,46 @@ fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
     Some((end + 1, set))
 }
 
+fn prune_disjoint_repeats(code: &mut [Instruction], sets: &[[u64; 4]]) {
+    let mut next: Option<Instruction> = None;
+    for instruction in code.iter_mut().rev() {
+        if matches!(instruction.kind, Kind::Open | Kind::Close | Kind::Position) {
+            continue;
+        }
+        if matches!(instruction.repeat, Repeat::Star | Repeat::Plus)
+            && let Some(following) = next
+            && following.repeat == Repeat::One
+        {
+            let disjoint = match (instruction.kind, following.kind) {
+                (Kind::Byte, Kind::Byte | Kind::Literal) => {
+                    instruction.arg as u8 != following.arg as u8
+                }
+                (Kind::Set, Kind::Byte | Kind::Literal) => {
+                    !set_has(&sets[instruction.arg as usize], following.arg as u8)
+                }
+                (Kind::Byte, Kind::Set) => {
+                    !set_has(&sets[following.arg as usize], instruction.arg as u8)
+                }
+                (Kind::Set, Kind::Set) => sets[instruction.arg as usize]
+                    .iter()
+                    .zip(sets[following.arg as usize])
+                    .all(|(left, right)| left & right == 0),
+                _ => false,
+            };
+            // Shortening this run would put one of its own bytes at the
+            // required next atom, which rejects every byte in the run.
+            if disjoint {
+                instruction.repeat = if instruction.repeat == Repeat::Plus {
+                    Repeat::DisjointPlus
+                } else {
+                    Repeat::DisjointStar
+                };
+            }
+        }
+        next = Some(*instruction);
+    }
+}
+
 impl Pattern {
     pub fn compile(pattern: &[u8], anchor: bool, memory: Memory) -> Result<Self, Error> {
         // Lua 5.1's pattern interpreter treats a zero byte as the pattern terminator.
@@ -592,6 +684,7 @@ impl Pattern {
         let mut code = Buffer::<Instruction>::new_in(memory.clone());
         code.try_reserve_exact(pattern.len())
             .map_err(|_| Error::memory())?;
+        let prune_repeats = memory.uses_global_allocator();
         let mut sets = Buffer::new_in(memory);
         let mut open = [0u32; 32];
         let mut open_count = 0;
@@ -737,6 +830,9 @@ impl Pattern {
                 break;
             }
         }
+        if prune_repeats {
+            prune_disjoint_repeats(&mut code, &sets);
+        }
         Ok(Self {
             code,
             sets,
@@ -763,7 +859,10 @@ impl Pattern {
         let first = self.code.iter().find(|instruction| {
             !matches!(instruction.kind, Kind::Open | Kind::Close | Kind::Position)
         })?;
-        if !matches!(first.repeat, Repeat::One | Repeat::Plus) {
+        if !matches!(
+            first.repeat,
+            Repeat::One | Repeat::Plus | Repeat::DisjointPlus
+        ) {
             return None;
         }
         match first.kind {
@@ -808,6 +907,17 @@ impl Pattern {
         start: usize,
         work: &mut Work,
     ) -> Result<Option<Matched>, Error> {
+        Ok(self
+            .match_span(source, start, work)?
+            .map(|span| work.materialize(span)))
+    }
+
+    pub(crate) fn match_span(
+        &self,
+        source: &[u8],
+        start: usize,
+        work: &mut Work,
+    ) -> Result<Option<MatchSpan>, Error> {
         // Slots at or beyond `count` are never read, and every opened slot is
         // written before use, so earlier attempts' captures need no reset.
         work.choices.clear();
@@ -817,10 +927,9 @@ impl Pattern {
         let mut pos = start;
         'match_loop: loop {
             if pc == self.code.len() {
-                return Ok(Some(Matched {
+                return Ok(Some(MatchSpan {
                     start,
                     end: pos,
-                    captures: work.captures,
                     count: work.count,
                 }));
             }
@@ -874,32 +983,27 @@ impl Pattern {
                                 pos += 1;
                             }
                         }
-                        Repeat::Star | Repeat::Plus => {
+                        Repeat::Star
+                        | Repeat::Plus
+                        | Repeat::DisjointStar
+                        | Repeat::DisjointPlus => {
                             let rest = source.get(pos..).unwrap_or_default();
                             let run = match i.kind {
                                 Kind::Any => rest.len(),
                                 Kind::Byte => byte_run(rest, i.arg as u8),
-                                Kind::Set => {
-                                    let set = &self.sets[i.arg as usize];
-                                    if rest.len() >= 64
-                                        && let Some(run) = range_set_run(rest, set)
-                                    {
-                                        run
-                                    } else {
-                                        rest.iter()
-                                            .position(|&byte| !set_has(set, byte))
-                                            .unwrap_or(rest.len())
-                                    }
-                                }
+                                Kind::Set => class_run::<false>(rest, &self.sets[i.arg as usize]),
                                 _ => unreachable!("repeated pattern atom"),
                             };
-                            let min = usize::from(i.repeat == Repeat::Plus);
+                            let min = usize::from(matches!(
+                                i.repeat,
+                                Repeat::Plus | Repeat::DisjointPlus
+                            ));
                             if run < min {
                                 matched = false;
                             } else {
                                 let start = pos;
                                 pos += run;
-                                if run > min {
+                                if run > min && matches!(i.repeat, Repeat::Star | Repeat::Plus) {
                                     work.push_choice(Choice {
                                         pc: pc + 1,
                                         pos: pos - 1,
@@ -917,8 +1021,10 @@ impl Pattern {
                     if i.kind == Kind::Close && work.captures[slot].end != UNFINISHED {
                         return Err(error("invalid pattern capture"));
                     }
-                    work.undo[work.undo_len] = (slot as u8, work.captures[slot]);
-                    work.undo_len += 1;
+                    if !work.choices.is_empty() {
+                        work.undo[work.undo_len] = (slot as u8, work.captures[slot]);
+                        work.undo_len += 1;
+                    }
                     if i.kind == Kind::Close {
                         work.captures[slot].end = pos;
                     } else {
@@ -1032,9 +1138,26 @@ impl Pattern {
 #[cfg(test)]
 mod byte_search_tests {
     use super::{
-        Memory, Pattern, Work, balance_end, byte_run, find_byte, find_dense_literal, has_magic,
-        range_set_run, set_has,
+        Memory, Pattern, Work, balance_end, byte_run, class_run, find_byte, find_dense_literal,
+        has_magic, range_set_run, set_has,
     };
+
+    #[test]
+    fn disjoint_runs_keep_captures_with_and_without_earlier_backtracking() {
+        let mut work = Work::default();
+        let pattern = Pattern::compile(b"^(%d+):(%u%u)$", true, Memory::default()).unwrap();
+        let found = pattern.find(b"12:AB", 0, &mut work).unwrap().unwrap();
+        assert_eq!(found.capture(0).unwrap().range().unwrap(), 0..2);
+        assert_eq!(found.capture(1).unwrap().range().unwrap(), 3..5);
+        assert!(work.choices.is_empty());
+        assert_eq!(work.choices.capacity(), 0);
+        assert!(pattern.find(b"12:Ab", 0, &mut work).unwrap().is_none());
+
+        let pattern = Pattern::compile(b"^.*#(%d+):(%u%u).*$", true, Memory::default()).unwrap();
+        let found = pattern.find(b"#12:AB#3:Ax", 0, &mut work).unwrap().unwrap();
+        assert_eq!(found.capture(0).unwrap().range().unwrap(), 1..3);
+        assert_eq!(found.capture(1).unwrap().range().unwrap(), 4..6);
+    }
 
     #[test]
     fn magic_scan_keeps_the_first_special_byte_across_blocks() {
@@ -1213,7 +1336,8 @@ mod byte_search_tests {
                 }
             }
             let mut bytes = [first; 73];
-            for index in [0, 1, 31, 32, 33, 63, 64, 72] {
+            let excluded = set.map(|word| !word);
+            for index in [0, 1, 3, 4, 5, 31, 32, 33, 63, 64, 72] {
                 for byte in 0..=u8::MAX {
                     bytes[index] = byte;
                     let end = bytes
@@ -1221,6 +1345,8 @@ mod byte_search_tests {
                         .position(|&byte| !set_has(&set, byte))
                         .unwrap_or(bytes.len());
                     assert_eq!(range_set_run(&bytes, &set), Some(end));
+                    assert_eq!(class_run::<false>(&bytes, &set), end);
+                    assert_eq!(class_run::<true>(&bytes, &excluded), end);
                 }
                 bytes[index] = first;
             }

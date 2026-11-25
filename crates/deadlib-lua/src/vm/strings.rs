@@ -40,8 +40,8 @@ enum SubAction {
 enum Scan {
     /// A match at the cursor is stored in the substitution.
     Found,
-    /// Unmatched bytes were copied; the source may be exhausted.
-    Skipped,
+    /// The scan copied unmatched bytes or replaced a match in the buffer.
+    Advanced,
     /// Use one per-position attempt.
     Single,
 }
@@ -892,12 +892,14 @@ impl Vm {
 
     /// Copy a text replacement directly when it fits in the current buffer.
     /// Hooks and native buffer observers still use the capture stack path.
-    fn append_replacement(&mut self, index: usize, replacement: StringId) -> bool {
-        let state = &mut self.substitutions[index];
-        let found = state.matched.as_ref().expect("substitution has a match");
-        let source = &self.strings.bytes[slot_index(state.source.0)];
-        let mut text: &[u8] = &self.strings.bytes[slot_index(replacement.0)];
-        let start = state.output.len();
+    fn append_replacement(
+        output: &mut Buffer<u8>,
+        source: &[u8],
+        mut text: &[u8],
+        matched: std::ops::Range<usize>,
+        capture: impl Fn(usize) -> Result<Capture, Error>,
+    ) -> bool {
+        let start = output.len();
         let appended = (|| {
             while let Some((&byte, rest)) = text.split_first() {
                 text = rest;
@@ -905,38 +907,50 @@ impl Vm {
                     let (&escaped, rest) = text.split_first()?;
                     text = rest;
                     match escaped {
-                        b'0' => &source[found.start..found.end],
+                        b'0' => &source[matched.clone()],
                         b'1'..=b'9' => {
-                            let capture = found.capture(usize::from(escaped - b'1')).ok()?;
+                            let capture = capture(usize::from(escaped - b'1')).ok()?;
                             &source[capture.range().ok()?]
                         }
                         0x80..=0xff => return None,
                         _ => {
-                            if state.output.len() == io::LINE_BUFFER {
+                            if output.len() == io::LINE_BUFFER {
                                 return None;
                             }
-                            state.output.push(escaped);
+                            output.push(escaped);
                             continue;
                         }
                     }
                 } else {
-                    if state.output.len() == io::LINE_BUFFER {
+                    if output.len() == io::LINE_BUFFER {
                         return None;
                     }
-                    state.output.push(byte);
+                    output.push(byte);
                     continue;
                 };
-                if bytes.len() > io::LINE_BUFFER - state.output.len() {
+                if bytes.len() > io::LINE_BUFFER - output.len() {
                     return None;
                 }
-                state.output.extend_from_slice(bytes);
+                output.extend_from_slice(bytes);
             }
             Some(())
         })();
         if appended.is_none() {
-            state.output.truncate(start);
+            output.truncate(start);
         }
         appended.is_some()
+    }
+
+    fn append_current_replacement(&mut self, index: usize, replacement: StringId) -> bool {
+        let state = &mut self.substitutions[index];
+        let found = state.matched.as_ref().expect("substitution has a match");
+        Self::append_replacement(
+            &mut state.output,
+            &self.strings.bytes[slot_index(state.source.0)],
+            &self.strings.bytes[slot_index(replacement.0)],
+            found.start..found.end,
+            |index| found.capture(index),
+        )
     }
     fn substitution_complete(&mut self, index: usize, phase: u8) -> Result<Option<usize>, Error> {
         let queued = self.substitutions[index].actions.len();
@@ -1081,6 +1095,14 @@ impl Vm {
         let batch = self.budget.is_none() && self.hooks.mask == 0;
         let direct_replacement =
             self.registers.memory().uses_global_allocator() && self.sort_fast_context();
+        let direct_text = if direct_replacement
+            && let Value::String(id) =
+                self.argument(frame.vararg_start - 1, self.substitutions[index].top, 2)
+        {
+            Some(id)
+        } else {
+            None
+        };
         loop {
             if self.substitutions[index].done
                 || self.substitutions[index].count >= self.substitutions[index].maximum
@@ -1090,14 +1112,20 @@ impl Vm {
             let state = &self.substitutions[index];
             let (source, pattern, cursor) = (state.source, state.pattern, state.cursor);
             let room = io::LINE_BUFFER - state.output.len();
-            let scan = if batch && state.level == 0 && state.actions.is_empty() && room > 0 {
-                self.substitution_scan(index, source, pattern, cursor, room)?
+            // Text replacements can scan the next buffer with earlier chunks
+            // already on the stack. Flushes still use the native stack path.
+            let scan = if batch
+                && state.actions.is_empty()
+                && room > 0
+                && (state.level == 0 || direct_text.is_some() && self.can_skip_gc_checkpoint())
+            {
+                self.substitution_scan(index, direct_text)?
             } else {
                 Scan::Single
             };
             match scan {
                 Scan::Found => {}
-                Scan::Skipped => continue,
+                Scan::Advanced => continue,
                 Scan::Single => {
                     let found =
                         self.with_pattern(pattern, true, source, |pattern, text, work| {
@@ -1113,7 +1141,7 @@ impl Vm {
                     self.argument(frame.vararg_start - 1, self.substitutions[index].top, 2);
                 match replacement {
                     Value::String(text)
-                        if direct_replacement && self.append_replacement(index, text) =>
+                        if direct_replacement && self.append_current_replacement(index, text) =>
                     {
                         if !self.substitution_advance(index)? {
                             return Ok(None);
@@ -1190,56 +1218,79 @@ impl Vm {
             }
         }
     }
-    /// Advance a batched substitution to its next match within the output
-    /// buffer's free space, appending the skipped bytes at once. This matches
-    /// the per-position path, which emits one unmatched byte per attempt, and
-    /// never flushes. Anchored patterns keep that path.
+    /// Scan a buffer's worth of text using one compiled pattern. Return to
+    /// the native stack path when a match needs a callback or a flush.
     fn substitution_scan(
         &mut self,
         index: usize,
-        source: StringId,
-        pattern: StringId,
-        cursor: usize,
-        room: usize,
+        replacement: Option<StringId>,
     ) -> Result<Scan, Error> {
-        let pattern_index = self.prepare_pattern(pattern, true)?;
+        let pattern_index = self.prepare_pattern(self.substitutions[index].pattern, true)?;
         let compiled = self.patterns.get_at(pattern_index);
         if compiled.anchored {
             return Ok(Scan::Single);
         }
+        let revision = self.pattern_locale;
         let first = compiled.leading_byte();
-        let text = &self.strings.bytes[slot_index(source.0)];
-        let before = self.pattern_work.heap_bytes();
-        let limit = (cursor + room).min(text.len());
-        let mut at = cursor;
-        let result = loop {
-            if let Some(first) = first {
-                at += first.find_in(&text[at..limit]).unwrap_or(limit - at);
-            }
-            if at == limit && (at < text.len() || first.is_some()) {
-                break Ok(None);
-            }
-            match compiled.match_at(text, at, &mut self.pattern_work) {
-                Ok(Some(found)) => break Ok(Some(found)),
-                Ok(None) if at < text.len() => at += 1,
-                Ok(None) => break Ok(None),
-                Err(error) => break Err(error),
-            }
-        };
-        let end = text.len();
-        self.gc_note_control(self.pattern_work.heap_bytes().saturating_sub(before));
-        let found = result.map_err(|error| self.pattern_error(error))?;
         let state = &mut self.substitutions[index];
-        state
-            .output
-            .extend_from_slice(&self.strings.bytes[slot_index(source.0)][cursor..at]);
-        state.cursor = at;
-        if found.is_none() {
-            state.done = at == end;
-            return Ok(Scan::Skipped);
-        }
-        state.matched = found;
-        Ok(Scan::Found)
+        let text = &self.strings.bytes[slot_index(state.source.0)];
+        let replacement = replacement.map(|id| &self.strings.bytes[slot_index(id.0)]);
+        let before = self.pattern_work.heap_bytes();
+        let result = (|| {
+            loop {
+                let cursor = state.cursor;
+                let room = io::LINE_BUFFER - state.output.len();
+                let limit = (cursor + room).min(text.len());
+                let mut at = cursor;
+                let found = loop {
+                    if let Some(first) = first {
+                        at += first.find_in(&text[at..limit]).unwrap_or(limit - at);
+                    }
+                    if at == limit && (at < text.len() || first.is_some()) {
+                        break None;
+                    }
+                    if let Some(found) = compiled.match_span(text, at, &mut self.pattern_work)? {
+                        break Some(found);
+                    }
+                    if at == text.len() {
+                        break None;
+                    }
+                    at += 1;
+                };
+                state.output.extend_from_slice(&text[cursor..at]);
+                state.cursor = at;
+                let Some(found) = found else {
+                    state.done = at == text.len();
+                    return Ok(Scan::Advanced);
+                };
+                // A nonempty match can advance without a flush. Use its
+                // capture offsets before the next scan reuses the work buffer.
+                if let Some(replacement) = replacement
+                    && found.end > found.start
+                    && Self::append_replacement(
+                        &mut state.output,
+                        text,
+                        replacement,
+                        found.start..found.end,
+                        |index| self.pattern_work.capture(found, index),
+                    )
+                {
+                    state.cursor = found.end;
+                    state.count += 1;
+                    if state.count == state.maximum
+                        || state.output.len() == io::LINE_BUFFER
+                        || crate::locale::revision() != revision
+                    {
+                        return Ok(Scan::Advanced);
+                    }
+                } else {
+                    state.matched = Some(self.pattern_work.materialize(found));
+                    return Ok(Scan::Found);
+                }
+            }
+        })();
+        self.gc_note_control(self.pattern_work.heap_bytes().saturating_sub(before));
+        result.map_err(|error| self.pattern_error(error))
     }
     fn string_format(&mut self, base: usize, count: usize) -> Result<usize, Error> {
         let mut scratch = crate::format::Scratch::new(self.registers.memory().clone());
