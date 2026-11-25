@@ -214,6 +214,17 @@ pub(crate) fn be16(data: &[u8]) -> u16 {
     u16::from_be_bytes(data[..2].try_into().unwrap())
 }
 
+#[inline]
+pub(crate) fn chunk_type_valid(kind: [u8; 4]) -> bool {
+    let bytes = u32::from_ne_bytes(kind);
+    let lower = bytes | 0x2020_2020;
+    // For ASCII lanes neither addition carries into the next byte. The high
+    // bit marks >= 'a' after adding 31 and > 'z' after adding 5.
+    let at_least_a = lower.wrapping_add(0x1f1f_1f1f);
+    let after_z = lower.wrapping_add(0x0505_0505);
+    (bytes | !at_least_a | after_z) & 0x8080_8080 == 0
+}
+
 fn chunk<'a>(input: &mut &'a [u8]) -> Result<([u8; 4], &'a [u8], bool), Error> {
     if input.len() < 12 {
         return Err(Error::Truncated);
@@ -227,7 +238,7 @@ fn chunk<'a>(input: &mut &'a [u8]) -> Result<([u8; 4], &'a [u8], bool), Error> {
         return Err(Error::Truncated);
     }
     let kind: [u8; 4] = input[4..8].try_into().unwrap();
-    if !kind.iter().all(u8::is_ascii_alphabetic) {
+    if !chunk_type_valid(kind) {
         return Err(Error::Invalid("chunk type"));
     }
     let trailer = end - 4;
@@ -527,7 +538,7 @@ fn write_ancillary(out: &mut Vec<u8>, png: &Png, position: ChunkPosition) -> Res
 pub(crate) fn ancillary_writable(c: &AncillaryChunk) -> Result<bool, Error> {
     if c.kind[0] & 32 == 0
         || c.kind[2] & 32 != 0
-        || !c.kind.iter().all(u8::is_ascii_alphabetic)
+        || !chunk_type_valid(c.kind)
         || matches!(&c.kind, b"tRNS" | b"acTL" | b"fcTL" | b"fdAT")
     {
         return Err(Error::Invalid("ancillary chunk type"));
@@ -621,7 +632,18 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::indices_outside_palette;
+    use super::{chunk_type_valid, indices_outside_palette};
+
+    #[test]
+    fn chunk_type_word_check_matches_ascii_in_every_lane() {
+        for lane in 0..4 {
+            for byte in 0..=u8::MAX {
+                let mut kind = *b"ruSt";
+                kind[lane] = byte;
+                assert_eq!(chunk_type_valid(kind), byte.is_ascii_alphabetic());
+            }
+        }
+    }
 
     #[test]
     fn palette_word_check_matches_scalar_in_every_lane_and_tail() {

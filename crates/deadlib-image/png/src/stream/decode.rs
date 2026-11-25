@@ -6,7 +6,7 @@ use crate::{
     AncillaryChunk, AnimationPolicy, ChunkPosition, ColorType, DecodeOptions, Error, FrameControl,
     Metadata, MetadataPolicy, Transparency,
     checksum::Crc32,
-    codec::{Header, SIGNATURE, be16, be32},
+    codec::{Header, SIGNATURE, be16, be32, chunk_type_valid},
     metadata::Validator,
     reserve,
 };
@@ -670,7 +670,7 @@ impl StreamDecoder {
                         return Err(Error::Invalid("chunk length exceeds 31 bits"));
                     }
                     self.kind = header[4..8].try_into().unwrap();
-                    if !self.kind.iter().all(u8::is_ascii_alphabetic) {
+                    if !chunk_type_valid(self.kind) {
                         return Err(Error::Invalid("chunk type"));
                     }
                     self.chunks = self.chunks.checked_add(1).ok_or(Error::LimitExceeded)?;
