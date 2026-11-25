@@ -224,6 +224,11 @@ fn group_pages(pages: &mut [IndexedPage], streams: &mut [StreamIndex]) {
             pages[position] = page;
         }
     }
+    let mut start = 0;
+    for stream in streams {
+        stream.pages.start = start;
+        start = stream.pages.end;
+    }
 }
 
 // Keep the extra arithmetic off the small-index search path.
@@ -321,6 +326,7 @@ impl OggIndex {
             offset_scale: 0,
             compatibility: CompatibilityStats::default(),
         };
+        let mut has_unknown = false;
         while let Some(located) = reader.next_page()? {
             let page = located.page;
             let mut failure = None;
@@ -351,6 +357,7 @@ impl OggIndex {
             reserve(&mut index.pages, 1)?;
             let granule = header.granule_position;
             let (granule_floor, landmark) = if granule == UNKNOWN_GRANULE_POSITION {
+                has_unknown = true;
                 let previous = index
                     .pages
                     .last()
@@ -399,7 +406,8 @@ impl OggIndex {
             index.offset_scale =
                 (((pages.len() - 2) as u128) << 64).div_ceil(u128::from(span)) as u64;
         }
-        if grouped && index.compatibility == CompatibilityStats::default() {
+        let strict_granules = index.compatibility == CompatibilityStats::default();
+        if grouped && strict_granules {
             if index.streams.len() == 1 {
                 index.granule_reciprocal = regular_granule_reciprocal(&index.pages);
             }
@@ -408,16 +416,18 @@ impl OggIndex {
         if !grouped {
             group_pages(&mut index.pages, &mut index.streams);
         }
-        let single_stream = index.streams.len() == 1;
-        let mut position = 0;
-        for (stream_id, stream) in index.streams.iter_mut().enumerate() {
-            let start = position;
+        // Grouping assigned each known granule its final page position.
+        if strict_granules && !has_unknown {
+            return Ok(index);
+        }
+        for stream in &index.streams {
             let mut floor = 0;
-            let mut landmark = start;
-            for page in &mut index.pages[start..] {
-                if !single_stream && page.stream != stream_id {
-                    break;
-                }
+            let mut landmark = stream.pages.start;
+            for (position, page) in stream
+                .pages
+                .clone()
+                .zip(&mut index.pages[stream.pages.clone()])
+            {
                 if page.header.granule_position != UNKNOWN_GRANULE_POSITION
                     && (page.completed_packets != 0 || page.length == 27)
                     && page.header.granule_position >= floor
@@ -427,9 +437,7 @@ impl OggIndex {
                 }
                 page.granule_floor = floor;
                 page.landmark = landmark;
-                position += 1;
             }
-            stream.pages = start..position;
         }
         Ok(index)
     }
