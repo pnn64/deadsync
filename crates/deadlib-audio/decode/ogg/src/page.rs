@@ -186,7 +186,11 @@ pub struct Fragments<'a> {
 
 // Keep the wide scan out of packet loops; most fragments end in the first few laces.
 #[inline(never)]
-fn fragment_segment_count(lacing: &[u8]) -> usize {
+fn fragment_segment_count(lacing: &[u8], body_len: usize) -> usize {
+    // The laces sum to the remaining body length.
+    if body_len == lacing.len() * 255 {
+        return lacing.len();
+    }
     let (words, tail) = lacing.as_chunks::<8>();
     for (i, word) in words.iter().enumerate() {
         // Only 0xff continues a packet. The first differing bit identifies
@@ -221,7 +225,7 @@ impl<'a> Iterator for Fragments<'a> {
             // A maximum-sized body requires all 255 laces to be 255.
             _ if self.body.len() == 255 * 255 => (&[][..], 255 * 255, false),
             lacing => {
-                let count = fragment_segment_count(lacing);
+                let count = fragment_segment_count(lacing, self.body.len());
                 let last = lacing[count - 1];
                 // Every segment before the terminator is exactly 255 bytes.
                 (
