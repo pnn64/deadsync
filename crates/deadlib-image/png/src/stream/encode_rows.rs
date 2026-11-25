@@ -92,6 +92,31 @@ fn resize(bytes: &mut Vec<u8>, length: usize) -> Result<(), Error> {
     bytes.resize(length, 0);
     Ok(())
 }
+
+fn filter_pixel(row: &[u8], previous: &[u8], output: &mut [u8]) -> u8 {
+    // The largest filter pixel is four 16-bit channels.
+    let mut up = [0; 8];
+    let mut average = [0; 8];
+    let (mut plain_score, mut up_score, mut average_score) = (0u16, 0u16, 0u16);
+    for (((&value, &above), up), average) in row.iter().zip(previous).zip(&mut up).zip(&mut average)
+    {
+        *up = value.wrapping_sub(above);
+        *average = value.wrapping_sub(above / 2);
+        plain_score += u16::from((value as i8).unsigned_abs());
+        up_score += u16::from((*up as i8).unsigned_abs());
+        average_score += u16::from((*average as i8).unsigned_abs());
+    }
+    let (kind, filtered) = if plain_score <= up_score.min(average_score) {
+        (0, row)
+    } else if up_score <= average_score {
+        (2, &up[..row.len()])
+    } else {
+        (3, &average[..row.len()])
+    };
+    output.copy_from_slice(filtered);
+    kind
+}
+
 impl<'a> Rows<'a> {
     pub(crate) fn new(image: &'a Image, interlaced: bool, filter: Filter) -> Result<Self, Error> {
         scanline::filtered_size(
@@ -253,6 +278,16 @@ impl<'a> Rows<'a> {
                 };
                 self.output[1..].fill(0);
             }
+        } else if self.filter == Filter::Adaptive && row.len() == bpp {
+            // Without a left pixel, Sub equals None and Paeth equals Up.
+            selected = if self.index == 0 {
+                self.output[1..].copy_from_slice(row);
+                0
+            } else {
+                filter_pixel(row, previous, &mut self.output[1..])
+            };
+            // Sub was the best non-None candidate whenever None won.
+            self.last_kind = selected.max(1);
         } else if self.filter == Filter::Adaptive {
             // The lowest score wins and ties keep the earlier filter. Trying
             // the previous row's choice first usually sets a tight limit, so
@@ -261,7 +296,6 @@ impl<'a> Rows<'a> {
             let mut best = u64::MAX;
             let mut best_kind = 5;
             let first_row = self.index == 0;
-            let no_left = row.len() == bpp;
             // On the first row Up equals None and Paeth equals Sub.
             const ORDERS: [[u8; 4]; 4] = [[1, 2, 3, 4], [2, 1, 3, 4], [3, 1, 2, 4], [4, 1, 2, 3]];
             let kinds: &[u8] = if first_row {
@@ -269,13 +303,6 @@ impl<'a> Rows<'a> {
                     &[3, 1]
                 } else {
                     &[1, 3]
-                }
-            } else if no_left {
-                // Sub equals None and Paeth equals Up without a left pixel.
-                if self.last_kind == 3 {
-                    &[3, 2]
-                } else {
-                    &[2, 3]
                 }
             } else {
                 &ORDERS[usize::from(self.last_kind - 1)]
@@ -312,9 +339,6 @@ impl<'a> Rows<'a> {
             self.last_kind = best_kind;
             if scanline::score_at_most(row, best) {
                 selected = 0;
-                if no_left {
-                    self.last_kind = 1;
-                }
                 self.output[1..].copy_from_slice(row);
             }
         } else {
