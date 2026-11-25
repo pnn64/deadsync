@@ -15,7 +15,6 @@ use crate::panel_fx::{
 };
 use crate::panels::{Clock, OverlayDrive, PADS, SmxPanelLights, smx_panel_for_col};
 use deadsync_core::note::NoteType;
-use deadsync_rules::note::HoldResult;
 
 const MAX_COLS: usize = deadsync_core::input::MAX_COLS;
 
@@ -133,9 +132,9 @@ impl SmxPanelDriver {
                 self.lights.release_overlay(pad, p);
             }
 
-            if let Some((grade, blue)) = tap_event(lane.tap_judgment, &mut self.prev_flash[col])
+            if let Some(effect) = tap_event(lane.tap_judgment, &mut self.prev_flash[col])
                 && let Some((pad, p)) = panel
-                && let Some(anim) = self.judgement_gifs[pad].for_grade(grade, blue)
+                && let Some(anim) = self.judgement_gifs[pad].for_tap_effect(effect)
             {
                 self.lights
                     .play_overlay(pad, p, anim.clone(), OverlayDrive::OneShot { pressed });
@@ -201,22 +200,13 @@ impl SmxPanelDriver {
                 }
             }
 
-            if let Some(result) =
+            if let Some(effect) =
                 hold_outcome_event(lane.hold_judgment, &mut self.prev_hold_judged[col])
                 && let Some((pad, p)) = panel
+                && let Some(anim) = self.judgement_gifs[pad].for_hold_effect(effect)
             {
-                let anim = match result {
-                    HoldResult::Held => self.judgement_gifs[pad].ok.as_ref(),
-                    _ => self.judgement_gifs[pad].bad.as_ref(),
-                };
-                if let Some(anim) = anim {
-                    self.lights.play_overlay(
-                        pad,
-                        p,
-                        anim.clone(),
-                        OverlayDrive::OneShot { pressed },
-                    );
-                }
+                self.lights
+                    .play_overlay(pad, p, anim.clone(), OverlayDrive::OneShot { pressed });
             }
 
             if mine_event(lane.mine_at_screen_s, &mut self.prev_mine[col])

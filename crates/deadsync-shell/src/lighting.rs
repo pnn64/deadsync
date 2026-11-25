@@ -20,11 +20,14 @@ use deadsync_profile::{
     HideLightType, PlayStyle, PlayerSide, physical_player_slot_for_chart_pad, player_side_index,
 };
 use deadsync_profile_gameplay::results::EvaluationStage;
-use deadsync_rules::note::Note;
+use deadsync_rules::judgment::JudgeGrade;
+use deadsync_rules::note::{HoldResult, Note};
 use deadsync_score::Grade;
 use deadsync_smx::gameplay_driver as smx_driver;
 use deadsync_smx::gifs::{FullPadAnim, difficulty_tag};
-use deadsync_smx::panel_fx::{HoldLightJudgment, JudgementGifs, TapLightJudgment};
+use deadsync_smx::panel_fx::{
+    HoldLightEffect, HoldLightJudgment, JudgementGifs, TapLightEffect, TapLightJudgment,
+};
 use deadsync_smx::panels::{Clock, PADS};
 use deadsync_theme::views::LightsTestView;
 use deadsync_theme::Screen as Screen;
@@ -458,8 +461,7 @@ impl SmxPanelDriver {
             |col| smx_driver::LaneLightState {
                 pressed: state.lane_is_pressed(col),
                 tap_judgment: state.last_tap_judgment(col).map(|judged| TapLightJudgment {
-                    grade: judged.grade,
-                    blue_fantastic: judged.blue_fantastic,
+                    effect: smx_tap_light_effect(judged.grade, judged.blue_fantastic),
                     at_screen_s: judged.at_screen_s,
                 }),
                 engaged_hold: state
@@ -467,7 +469,7 @@ impl SmxPanelDriver {
                     .filter(|hold| active_hold_is_engaged(hold))
                     .map(|hold| hold.note_type),
                 hold_judgment: state.hold_judgment(col).map(|judged| HoldLightJudgment {
-                    result: judged.result,
+                    effect: smx_hold_light_effect(judged.result),
                     at_screen_s: judged.started_at_screen_s,
                 }),
                 mine_at_screen_s: state.mine_started_at_screen_s(col),
@@ -508,6 +510,26 @@ impl SmxPanelDriver {
     }
 }
 
+const fn smx_tap_light_effect(grade: JudgeGrade, blue_fantastic: bool) -> TapLightEffect {
+    match grade {
+        JudgeGrade::Fantastic if blue_fantastic => TapLightEffect::FantasticBlue,
+        JudgeGrade::Fantastic => TapLightEffect::FantasticWhite,
+        JudgeGrade::Excellent => TapLightEffect::Excellent,
+        JudgeGrade::Great => TapLightEffect::Great,
+        JudgeGrade::Decent => TapLightEffect::Decent,
+        JudgeGrade::WayOff => TapLightEffect::WayOff,
+        JudgeGrade::Miss => TapLightEffect::Miss,
+    }
+}
+
+const fn smx_hold_light_effect(result: HoldResult) -> Option<HoldLightEffect> {
+    match result {
+        HoldResult::Held => Some(HoldLightEffect::Ok),
+        HoldResult::LetGo => Some(HoldLightEffect::Bad),
+        HoldResult::Missed => None,
+    }
+}
+
 fn smx_slot_for_gameplay<Profile, OverlayActor, CapturedActor, StateDelta>(
     state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     play_style: PlayStyle,
@@ -525,6 +547,30 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gameplay_judgments_select_smx_light_effects() {
+        for (grade, blue, expected) in [
+            (JudgeGrade::Fantastic, true, TapLightEffect::FantasticBlue),
+            (JudgeGrade::Fantastic, false, TapLightEffect::FantasticWhite),
+            (JudgeGrade::Excellent, true, TapLightEffect::Excellent),
+            (JudgeGrade::Great, false, TapLightEffect::Great),
+            (JudgeGrade::Decent, false, TapLightEffect::Decent),
+            (JudgeGrade::WayOff, false, TapLightEffect::WayOff),
+            (JudgeGrade::Miss, false, TapLightEffect::Miss),
+        ] {
+            assert_eq!(smx_tap_light_effect(grade, blue), expected);
+        }
+        assert_eq!(
+            smx_hold_light_effect(HoldResult::Held),
+            Some(HoldLightEffect::Ok),
+        );
+        assert_eq!(
+            smx_hold_light_effect(HoldResult::LetGo),
+            Some(HoldLightEffect::Bad),
+        );
+        assert_eq!(smx_hold_light_effect(HoldResult::Missed), None);
+    }
 
     #[test]
     fn pad_lights_use_judged_visible_step_notes() {

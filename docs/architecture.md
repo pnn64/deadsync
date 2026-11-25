@@ -188,9 +188,9 @@ theme to describe an input or store a setting:
 - The shell selects and loads cabinet charts and prepares their timestamped
   lighting events. The cabinet driver schedules those events and receives
   note timestamps and eligible columns from the shell for timed pad blinks.
-  The shell supplies
-  StepManiaX lane input and judgment snapshots and resolves result grades to
-  GIF suffixes. The SMX driver tracks lane events and drives panel animations.
+  The shell supplies StepManiaX lane input, translates judgments into panel
+  effects, and resolves result grades to GIF suffixes. The SMX driver tracks
+  lane events and drives panel animations.
 - Config and profiles read INI files with `deadlib-platform::ini`.
   `deadsync-core::session_flow` defines the game, preferred play style, and
   preferred play mode shared by both crates. The shell supplies machine defaults

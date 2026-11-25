@@ -1881,7 +1881,6 @@ dependencies = [
  "deadlib-platform",
  "deadsync-core",
  "deadsync-input",
- "deadsync-rules",
  "hashbrown 0.17.1",
  "image",
  "log",

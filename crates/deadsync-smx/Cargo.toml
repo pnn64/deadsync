@@ -7,7 +7,6 @@ license = "GPL-3.0"
 [dependencies]
 deadsync-core = { path = "../deadsync-core" }
 deadsync-input = { path = "../deadsync-input" }
-deadsync-rules = { path = "../deadsync-rules" }
 deadlib-platform = { path = "../deadlib-platform" }
 hashbrown = "0.17.1"
 image = { version = "0.25.10", default-features = false, features = ["gif"] }

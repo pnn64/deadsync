@@ -9489,6 +9489,20 @@ fn smx_imports_do_not_use_engine_facade() {
 }
 
 #[test]
+fn smx_driver_receives_prepared_judgment_effects() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/deadsync-smx");
+    let manifest = read_source(root.join("Cargo.toml")).expect("SMX manifest");
+    assert!(!manifest.contains("deadsync-rules"));
+    for file in production_rust_files(&root.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadsync_rules::"),
+            "{} imports gameplay judgments",
+            file.display(),
+        );
+    }
+}
+
+#[test]
 fn song_lua_takes_media_probes_from_its_host() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let song_lua = root.join("crates/deadsync-song-lua");

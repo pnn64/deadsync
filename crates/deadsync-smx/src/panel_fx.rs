@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
 use deadsync_core::note::NoteType;
-use deadsync_rules::judgment::JudgeGrade;
-use deadsync_rules::note::HoldResult;
 
 use crate::gifs::{GifRegistry, PadSize, PanelAnim};
 use crate::panels::OverlayDrive;
@@ -10,16 +8,33 @@ use crate::panels::OverlayDrive;
 /// Sentinel `*_at_screen_s` meaning "nothing seen yet for this column".
 pub const NO_EVENT: f32 = f32::NEG_INFINITY;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TapLightEffect {
+    FantasticBlue,
+    FantasticWhite,
+    Excellent,
+    Great,
+    Decent,
+    WayOff,
+    Miss,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HoldLightEffect {
+    Ok,
+    Bad,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct TapLightJudgment {
-    pub grade: JudgeGrade,
-    pub blue_fantastic: bool,
+    pub effect: TapLightEffect,
     pub at_screen_s: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct HoldLightJudgment {
-    pub result: HoldResult,
+    /// A judgment without a light effect still advances the event tracker.
+    pub effect: Option<HoldLightEffect>,
     pub at_screen_s: f32,
 }
 
@@ -113,21 +128,24 @@ impl JudgementGifs {
         }
     }
 
-    /// The one-shot animation for a tap grade, honouring the FA+ white/blue split.
     #[must_use]
-    pub const fn for_grade(
-        &self,
-        grade: JudgeGrade,
-        blue_fantastic: bool,
-    ) -> Option<&Arc<PanelAnim>> {
-        match grade {
-            JudgeGrade::Fantastic if blue_fantastic => self.fantastic_blue.as_ref(),
-            JudgeGrade::Fantastic => self.fantastic_white.as_ref(),
-            JudgeGrade::Excellent => self.excellent.as_ref(),
-            JudgeGrade::Great => self.great.as_ref(),
-            JudgeGrade::Decent => self.decent.as_ref(),
-            JudgeGrade::WayOff => self.way_off.as_ref(),
-            JudgeGrade::Miss => self.miss.as_ref(),
+    pub(crate) const fn for_tap_effect(&self, effect: TapLightEffect) -> Option<&Arc<PanelAnim>> {
+        match effect {
+            TapLightEffect::FantasticBlue => self.fantastic_blue.as_ref(),
+            TapLightEffect::FantasticWhite => self.fantastic_white.as_ref(),
+            TapLightEffect::Excellent => self.excellent.as_ref(),
+            TapLightEffect::Great => self.great.as_ref(),
+            TapLightEffect::Decent => self.decent.as_ref(),
+            TapLightEffect::WayOff => self.way_off.as_ref(),
+            TapLightEffect::Miss => self.miss.as_ref(),
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn for_hold_effect(&self, effect: HoldLightEffect) -> Option<&Arc<PanelAnim>> {
+        match effect {
+            HoldLightEffect::Ok => self.ok.as_ref(),
+            HoldLightEffect::Bad => self.bad.as_ref(),
         }
     }
 }
@@ -183,14 +201,14 @@ pub fn results_role_candidates(
     out
 }
 
-/// Decide a new tap judgement for a column (the grade and its FA+ white/blue flag).
+/// Return the effect for a new tap judgment in this column.
 /// Records the judgement time so the same one is not re-fired, and re-arms (sentinel)
 /// when the column currently has no judgement.
-pub fn tap_event(judged: Option<TapLightJudgment>, prev: &mut f32) -> Option<(JudgeGrade, bool)> {
+pub fn tap_event(judged: Option<TapLightJudgment>, prev: &mut f32) -> Option<TapLightEffect> {
     match judged {
         Some(j) if j.at_screen_s != *prev => {
             *prev = j.at_screen_s;
-            Some((j.grade, j.blue_fantastic))
+            Some(j.effect)
         }
         None => {
             *prev = NO_EVENT;
@@ -211,16 +229,15 @@ pub const fn hold_edge(engaged: bool, prev: &mut bool) -> Option<bool> {
     }
 }
 
-/// Decide a new freeze/roll outcome for a column. Held shows OK, dropped shows the
-/// failure effect, missed consumes the event but shows nothing.
-pub fn hold_outcome_event(judged: Option<HoldLightJudgment>, prev: &mut f32) -> Option<HoldResult> {
+/// Consume a new hold judgment and return its effect when one was supplied.
+pub fn hold_outcome_event(
+    judged: Option<HoldLightJudgment>,
+    prev: &mut f32,
+) -> Option<HoldLightEffect> {
     match judged {
         Some(j) if j.at_screen_s != *prev => {
             *prev = j.at_screen_s;
-            match j.result {
-                HoldResult::Held | HoldResult::LetGo => Some(j.result),
-                HoldResult::Missed => None,
-            }
+            j.effect
         }
         None => {
             *prev = NO_EVENT;
@@ -250,17 +267,16 @@ pub fn mine_event(hit_at: Option<f32>, prev: &mut f32) -> bool {
 mod tests {
     use super::*;
 
-    fn tap(grade: JudgeGrade, blue_fantastic: bool, at: f32) -> TapLightJudgment {
+    fn tap(effect: TapLightEffect, at: f32) -> TapLightJudgment {
         TapLightJudgment {
-            grade,
-            blue_fantastic,
+            effect,
             at_screen_s: at,
         }
     }
 
-    fn hold(result: HoldResult, at: f32) -> HoldLightJudgment {
+    fn hold(effect: Option<HoldLightEffect>, at: f32) -> HoldLightJudgment {
         HoldLightJudgment {
-            result,
+            effect,
             at_screen_s: at,
         }
     }
@@ -268,10 +284,10 @@ mod tests {
     #[test]
     fn tap_flash_fires_once_per_new_judgment() {
         let mut prev = NO_EVENT;
-        assert!(tap_event(Some(tap(JudgeGrade::Great, false, 1.0)), &mut prev).is_some());
+        assert!(tap_event(Some(tap(TapLightEffect::Great, 1.0)), &mut prev).is_some());
         assert_eq!(prev, 1.0);
-        assert!(tap_event(Some(tap(JudgeGrade::Great, false, 1.0)), &mut prev).is_none());
-        assert!(tap_event(Some(tap(JudgeGrade::Miss, false, 2.0)), &mut prev).is_some());
+        assert!(tap_event(Some(tap(TapLightEffect::Great, 1.0)), &mut prev).is_none());
+        assert!(tap_event(Some(tap(TapLightEffect::Miss, 2.0)), &mut prev).is_some());
         assert_eq!(prev, 2.0);
     }
 
@@ -280,19 +296,19 @@ mod tests {
         let mut prev = 5.0;
         assert!(tap_event(None, &mut prev).is_none());
         assert_eq!(prev, NO_EVENT);
-        assert!(tap_event(Some(tap(JudgeGrade::Decent, false, 0.0)), &mut prev).is_some());
+        assert!(tap_event(Some(tap(TapLightEffect::Decent, 0.0)), &mut prev).is_some());
     }
 
     #[test]
-    fn tap_event_carries_grade_and_fa_plus_flag() {
+    fn tap_event_returns_the_supplied_effect() {
         let mut prev = NO_EVENT;
         assert_eq!(
-            tap_event(Some(tap(JudgeGrade::Miss, false, 1.0)), &mut prev),
-            Some((JudgeGrade::Miss, false))
+            tap_event(Some(tap(TapLightEffect::Miss, 1.0)), &mut prev),
+            Some(TapLightEffect::Miss)
         );
         assert_eq!(
-            tap_event(Some(tap(JudgeGrade::Fantastic, true, 2.0)), &mut prev),
-            Some((JudgeGrade::Fantastic, true))
+            tap_event(Some(tap(TapLightEffect::FantasticBlue, 2.0)), &mut prev),
+            Some(TapLightEffect::FantasticBlue)
         );
     }
 
@@ -306,18 +322,18 @@ mod tests {
     }
 
     #[test]
-    fn hold_outcome_event_maps_result() {
+    fn hold_outcome_event_consumes_judgments_with_or_without_an_effect() {
         let mut prev = NO_EVENT;
         assert_eq!(
-            hold_outcome_event(Some(hold(HoldResult::Held, 1.0)), &mut prev),
-            Some(HoldResult::Held)
+            hold_outcome_event(Some(hold(Some(HoldLightEffect::Ok), 1.0)), &mut prev),
+            Some(HoldLightEffect::Ok)
         );
         assert_eq!(
-            hold_outcome_event(Some(hold(HoldResult::LetGo, 2.0)), &mut prev),
-            Some(HoldResult::LetGo)
+            hold_outcome_event(Some(hold(Some(HoldLightEffect::Bad), 2.0)), &mut prev),
+            Some(HoldLightEffect::Bad)
         );
         assert_eq!(
-            hold_outcome_event(Some(hold(HoldResult::Missed, 3.0)), &mut prev),
+            hold_outcome_event(Some(hold(None, 3.0)), &mut prev),
             None
         );
         assert_eq!(prev, 3.0);
@@ -327,11 +343,11 @@ mod tests {
     fn hold_outcome_event_ignores_repeat_and_rearms() {
         let mut prev = NO_EVENT;
         assert_eq!(
-            hold_outcome_event(Some(hold(HoldResult::Held, 1.0)), &mut prev),
-            Some(HoldResult::Held)
+            hold_outcome_event(Some(hold(Some(HoldLightEffect::Ok), 1.0)), &mut prev),
+            Some(HoldLightEffect::Ok)
         );
         assert_eq!(
-            hold_outcome_event(Some(hold(HoldResult::Held, 1.0)), &mut prev),
+            hold_outcome_event(Some(hold(Some(HoldLightEffect::Ok), 1.0)), &mut prev),
             None
         );
         assert_eq!(hold_outcome_event(None, &mut prev), None);
@@ -358,18 +374,22 @@ mod tests {
     }
 
     #[test]
-    fn for_grade_picks_the_right_animation_and_falls_back() {
+    fn judgment_effects_select_the_matching_animation() {
         let gifs = JudgementGifs {
             fantastic_blue: Some(anim(1)),
             fantastic_white: Some(anim(2)),
             miss: Some(anim(3)),
+            ok: Some(anim(4)),
+            bad: Some(anim(5)),
             ..Default::default()
         };
         let frame0 = |a: Option<&Arc<PanelAnim>>| a.unwrap().frames[0][0];
-        assert_eq!(frame0(gifs.for_grade(JudgeGrade::Fantastic, true)), 1);
-        assert_eq!(frame0(gifs.for_grade(JudgeGrade::Fantastic, false)), 2);
-        assert_eq!(frame0(gifs.for_grade(JudgeGrade::Miss, false)), 3);
-        assert!(gifs.for_grade(JudgeGrade::Great, false).is_none());
+        assert_eq!(frame0(gifs.for_tap_effect(TapLightEffect::FantasticBlue)), 1);
+        assert_eq!(frame0(gifs.for_tap_effect(TapLightEffect::FantasticWhite)), 2);
+        assert_eq!(frame0(gifs.for_tap_effect(TapLightEffect::Miss)), 3);
+        assert!(gifs.for_tap_effect(TapLightEffect::Great).is_none());
+        assert_eq!(frame0(gifs.for_hold_effect(HoldLightEffect::Ok)), 4);
+        assert_eq!(frame0(gifs.for_hold_effect(HoldLightEffect::Bad)), 5);
     }
 
     #[test]
