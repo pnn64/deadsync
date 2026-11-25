@@ -70,6 +70,75 @@ struct Stream {
     granule: u64,
 }
 
+// Keep the first stream inline and retain the heap storage once it is needed.
+enum Streams {
+    Single(Option<Stream>),
+    Many(Vec<Stream>),
+}
+
+impl Streams {
+    fn as_slice(&self) -> &[Stream] {
+        match self {
+            Self::Single(stream) => stream.as_slice(),
+            Self::Many(streams) => streams,
+        }
+    }
+
+    fn find(&self, serial: u32) -> Option<(usize, &Stream)> {
+        match self {
+            Self::Single(stream) => stream
+                .as_ref()
+                .filter(|s| s.serial == serial)
+                .map(|s| (0, s)),
+            Self::Many(streams) => streams
+                .iter()
+                .enumerate()
+                .rev()
+                .find(|(_, s)| s.serial == serial),
+        }
+    }
+
+    fn get_mut(&mut self, index: usize) -> &mut Stream {
+        match self {
+            Self::Single(stream) => {
+                debug_assert_eq!(index, 0);
+                stream.as_mut().unwrap()
+            }
+            Self::Many(streams) => &mut streams[index],
+        }
+    }
+
+    fn clear(&mut self) {
+        match self {
+            Self::Single(stream) => *stream = None,
+            Self::Many(streams) => streams.clear(),
+        }
+    }
+
+    fn push(&mut self, stream: Stream) -> Result<usize, Error> {
+        match self {
+            Self::Single(first) if first.is_none() => {
+                *first = Some(stream);
+                Ok(0)
+            }
+            Self::Single(first) => {
+                let mut streams = Vec::new();
+                reserve(&mut streams, 2)?;
+                streams.push(first.take().unwrap());
+                streams.push(stream);
+                *self = Self::Many(streams);
+                Ok(1)
+            }
+            Self::Many(streams) => {
+                reserve(streams, 1)?;
+                let index = streams.len();
+                streams.push(stream);
+                Ok(index)
+            }
+        }
+    }
+}
+
 pub(crate) struct PageState {
     pub stream: usize,
     pub first_packet_offset: u64,
@@ -82,7 +151,7 @@ pub(crate) struct PageState {
 /// until reset. Codec-specific header ordering and time interpretation belong
 /// to the codec mapping, not this container.
 pub struct Demuxer {
-    streams: Vec<Stream>,
+    streams: Streams,
     limits: Limits,
     active: usize,
     chain: u32,
@@ -103,7 +172,7 @@ impl Demuxer {
     }
     pub fn with_validation(limits: Limits, validation: ValidationOptions) -> Self {
         Self {
-            streams: Vec::new(),
+            streams: Streams::Single(None),
             limits,
             active: 0,
             chain: 0,
@@ -140,7 +209,7 @@ impl Demuxer {
         if self.failed {
             return Err(Error::Failed);
         }
-        if self.streams.is_empty() || self.active != 0 {
+        if self.streams.as_slice().is_empty() || self.active != 0 {
             self.failed = true;
             return Err(Error::Truncated);
         }
@@ -178,9 +247,8 @@ impl Demuxer {
     ) -> Result<PageState, Error> {
         let header = page.header();
         let complete = page.completed_packets();
-        let index = match self.streams.iter().rposition(|s| s.serial == header.serial) {
-            Some(index) => {
-                let stream = &self.streams[index];
+        let index = match self.streams.find(header.serial) {
+            Some((index, stream)) => {
                 if header.is_bos() {
                     return Err(Error::Invalid("duplicate serial/BOS"));
                 }
@@ -215,7 +283,8 @@ impl Demuxer {
                         "BOS must contain one complete initial packet",
                     ));
                 }
-                if self.active == 0 && !self.streams.is_empty() {
+                let streams = self.streams.as_slice();
+                if self.active == 0 && !streams.is_empty() {
                     self.chain = self
                         .chain
                         .checked_add(1)
@@ -225,11 +294,10 @@ impl Demuxer {
                 if !self.bos_phase {
                     return Err(Error::Invalid("BOS after non-BOS page in a group"));
                 }
-                if self.streams.len() == self.limits.max_streams {
+                if streams.len() == self.limits.max_streams {
                     return Err(Error::LimitExceeded("logical streams"));
                 }
-                reserve(&mut self.streams, 1)?;
-                self.streams.push(Stream {
+                let index = self.streams.push(Stream {
                     serial: header.serial,
                     chain: self.chain,
                     next_sequence: 0,
@@ -243,12 +311,12 @@ impl Demuxer {
                     packet_offset: offset,
                     packets: 0,
                     granule: UNKNOWN_GRANULE_POSITION,
-                });
+                })?;
                 self.active += 1;
-                self.streams.len() - 1
+                index
             }
         };
-        let stream = &mut self.streams[index];
+        let stream = self.streams.get_mut(index);
         let previous = (stream.granule != UNKNOWN_GRANULE_POSITION).then_some(stream.granule);
         let (granule, compatibility) =
             validation::granule(page, complete, previous, self.validation)?;

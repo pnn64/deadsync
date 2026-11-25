@@ -121,7 +121,7 @@ fn demux_reset_reuses_capacity_and_restarts_packet_numbering() {
         assert_eq!(number, 101);
         demux.finish().unwrap();
     };
-    decode();
+    allocations::assert_no_churn(&mut decode);
     allocations::assert_no_churn(decode);
 }
 
