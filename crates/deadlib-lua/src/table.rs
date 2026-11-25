@@ -75,8 +75,13 @@ impl Key {
     }
     fn value(self) -> Value {
         match self {
-            Self::Vacant | Self::DeadString(_) | Self::DeadTable(_) | Self::DeadFunction(_)
-            | Self::DeadNative(_) | Self::DeadThread(_) | Self::DeadUserdata(_)
+            Self::Vacant
+            | Self::DeadString(_)
+            | Self::DeadTable(_)
+            | Self::DeadFunction(_)
+            | Self::DeadNative(_)
+            | Self::DeadThread(_)
+            | Self::DeadUserdata(_)
             | Self::DeadParserPrototype(_) => Value::Nil,
             Self::Boolean(v) => Value::Boolean(v),
             Self::Number(v) => Value::Number(f64::from_bits(v)),
@@ -278,7 +283,10 @@ impl Table {
     }
     #[inline]
     fn touch_fields(&mut self) {
-        self.fields_version = self.fields_version.wrapping_add(1);
+        self.advance_fields_version(1);
+    }
+    pub(crate) fn advance_fields_version(&mut self, writes: u32) {
+        self.fields_version = self.fields_version.wrapping_add(writes);
     }
     pub fn heap_bytes(&self) -> usize {
         self.array.capacity() * std::mem::size_of::<Value>()
@@ -516,6 +524,36 @@ impl Table {
     pub(crate) fn get_string(&self, key: StringId) -> Value {
         self.get_key(Key::String(key))
     }
+
+    /// A remembered entry is only a position hint. Check the key again and
+    /// load the current value so overwrites, removal and compaction remain visible.
+    #[inline]
+    pub(crate) fn get_string_cached(&self, key: StringId, hint: &mut u32) -> Value {
+        if self.entries.is_empty() {
+            return Value::Nil;
+        }
+        let key = Key::String(key);
+        if let Some(entry) = self.entries.get(hint.wrapping_sub(1) as usize)
+            && entry.key == key
+            && entry.value != Value::Nil
+        {
+            return entry.value;
+        }
+        self.find_string_entry(key, hint)
+    }
+
+    #[cold]
+    fn find_string_entry(&self, key: Key, hint: &mut u32) -> Value {
+        if let Some((_, Some(index))) = self.slot(key) {
+            let value = self.entries[index].value;
+            if value != Value::Nil {
+                *hint = (index + 1) as u32;
+            }
+            value
+        } else {
+            Value::Nil
+        }
+    }
     #[inline]
     fn get_key(&self, key: Key) -> Value {
         if self.slots.is_empty() {
@@ -611,6 +649,44 @@ impl Table {
             return true;
         }
         false
+    }
+
+    #[inline]
+    pub(crate) fn set_string_scalar_cached(
+        &mut self,
+        key: StringId,
+        value: Value,
+        hint: &mut u32,
+    ) -> bool {
+        if !matches!(
+            value,
+            Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_)
+        ) {
+            return false;
+        }
+        if let Some(entry) = self.entries.get_mut(hint.wrapping_sub(1) as usize)
+            && entry.key == Key::String(key)
+            && entry.value != Value::Nil
+        {
+            entry.value = value;
+            self.touch_fields();
+            return true;
+        }
+        self.find_and_set_string_scalar(key, value, hint)
+    }
+
+    #[cold]
+    fn find_and_set_string_scalar(&mut self, key: StringId, value: Value, hint: &mut u32) -> bool {
+        if let Some((_, Some(index))) = self.slot(Key::String(key))
+            && self.entries[index].value != Value::Nil
+        {
+            self.entries[index].value = value;
+            self.touch_fields();
+            *hint = (index + 1) as u32;
+            true
+        } else {
+            false
+        }
     }
     #[inline]
     fn remember_hash_entry(&self, index: u32) {
@@ -885,8 +961,15 @@ impl Table {
             } else {
                 self.slot(key)
                     .and_then(|(_, index)| index)
-                    .or_else(|| self.native51.then(|| self.entries.iter()
-                        .position(|entry| entry.key.matches_next(key))).flatten())
+                    .or_else(|| {
+                        self.native51
+                            .then(|| {
+                                self.entries
+                                    .iter()
+                                    .position(|entry| entry.key.matches_next(key))
+                            })
+                            .flatten()
+                    })
                     .ok_or(InvalidNextKey)?
             };
             (self.array.len(), index + 1)

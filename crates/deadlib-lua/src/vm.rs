@@ -24,6 +24,7 @@ mod memory_limit;
 mod meta;
 mod native;
 mod native_fast;
+mod numeric_leaf;
 mod os;
 mod package;
 mod reductions;
@@ -1448,13 +1449,28 @@ impl Vm {
         let base = self.registers.len();
         self.reserve_registers(base + registers)?;
         let fixed = call + 1..call + 1 + count.min(params);
-        if fixed.len() >= 32 {
-            // A wide argument prefix already supplies initialized values.
-            self.registers.extend_from_within(fixed.clone());
-            self.registers.resize(base + registers, Value::Nil);
-        } else {
-            self.registers.resize(base + registers, Value::Nil);
-            self.registers.copy_within(fixed.clone(), base);
+        // Small fixed prefixes can be copied directly from the caller while
+        // initializing the callee's window. Only the tail still needs nils.
+        match fixed.len() {
+            0 => self.registers.resize(base + registers, Value::Nil),
+            1 => {
+                let argument = self.registers[fixed.start];
+                self.registers.push(argument);
+                self.registers.resize(base + registers, Value::Nil);
+            }
+            2 => {
+                let arguments = [self.registers[fixed.start], self.registers[fixed.start + 1]];
+                self.registers.extend_from_slice(&arguments);
+                self.registers.resize(base + registers, Value::Nil);
+            }
+            32.. => {
+                self.registers.extend_from_within(fixed.clone());
+                self.registers.resize(base + registers, Value::Nil);
+            }
+            _ => {
+                self.registers.resize(base + registers, Value::Nil);
+                self.registers.copy_within(fixed.clone(), base);
+            }
         }
         // lua_pcall keeps a stack-slot reference, including when that slot is
         // passed as a parameter. Follow moved fixed arguments; vararg entry
@@ -1906,6 +1922,9 @@ impl Vm {
         // calls and returns within one program keep it without touching its
         // atomic reference count.
         let mut held: Option<crate::memory::Shared<ProgramData>> = None;
+        let mut numeric_call_cache = numeric_leaf::Cache::default();
+        let mut field_hints = [[0; 2]; simple::FIELD_HINTS];
+        let mut reduction_retry: Option<reductions::Retry> = None;
         'frames: loop {
             self.maybe_gc()?;
             let frame_index = self.frames.len() - 1;
@@ -1922,9 +1941,12 @@ impl Vm {
                     self.charge()?;
                     let id = self.body_code(self.thread, frame_index).unwrap_or(id);
                     let previous = self.active_native.replace(frame_index);
-                    let result = self
-                        .step_native(id, frame)
-                        .map_err(|error| self.attach_error_value(error, 1));
+                    let result = if matches!(id, threads::CO_RESUME | threads::CO_YIELD) {
+                        self.coroutine_step(id, frame)
+                    } else {
+                        self.step_native(id, frame)
+                    }
+                    .map_err(|error| self.attach_error_value(error, 1));
                     self.active_native = previous;
                     if let Some(line) = self.sort_line.take() {
                         *error_line = line;
@@ -1958,6 +1980,10 @@ impl Vm {
             let prototype = &data.prototypes[proto_index];
             let mut pc = frame.pc();
             let base = frame.base;
+            // Simple instructions and successful numeric leaf calls cannot
+            // allocate or change frame observers. Any other dispatch ends
+            // this interval, and a new frame always starts with a GC poll.
+            let mut numeric_checkpoint_ready = false;
             loop {
                 // With no hook or instruction limit counting instructions,
                 // runs of simple ones execute without frame bookkeeping.
@@ -1965,6 +1991,7 @@ impl Vm {
                     let mut cx = simple::Context {
                         registers: &mut self.registers,
                         constants: &self.programs[program_index].constants[proto_index],
+                        field_hints: &mut field_hints,
                         tables: &mut self.tables,
                         strings: &self.strings.bytes,
                         upvalue_ids: &self.functions[slot_index(function.0)].upvalues,
@@ -1972,6 +1999,10 @@ impl Vm {
                         threads: &self.threads,
                         thread: self.thread,
                         code: &prototype.code,
+                        stop_before_for_loop: reduction_retry
+                            .as_ref()
+                            .filter(|retry| retry.frame == frame_index)
+                            .map(|retry| retry.pc),
                         env,
                         base,
                         gc_pending: self.gc.pending,
@@ -1993,6 +2024,7 @@ impl Vm {
                     continue 'frames;
                 }
                 self.charge()?;
+                let checkpoint_ready = std::mem::take(&mut numeric_checkpoint_ready);
                 let i = prototype.code[pc];
                 *error_line = prototype.lines[pc];
                 pc += 1;
@@ -2312,27 +2344,55 @@ impl Vm {
                         self.registers[a] = Value::Number(start - step);
                         self.registers[a + 1] = Value::Number(limit);
                         self.registers[a + 2] = Value::Number(step);
-                        if self.hooks.mask & (hooks::LINE | hooks::COUNT) == 0
-                            // A skipped Close must not capture an intermediate
-                            // register value in an existing open upvalue.
-                            && !self.open_upvalues.iter().any(|&id| {
-                                matches!(self.upvalues[id as usize], Cell::Open(_, r) if r >= base)
-                            })
-                            && let Some(skipped) = reductions::sum_loop(
-                                &mut self.registers,
-                                base,
-                                usize::from(i.a),
-                                c,
-                                &prototype.code,
-                                self.budget.map(|_| self.remaining),
-                            )
-                            && self.budget.is_some()
-                        {
-                            self.remaining -= skipped;
+                        match self.reduce_numeric_loop(
+                            base,
+                            usize::from(i.a),
+                            c,
+                            prototype,
+                            program_index,
+                            proto_index,
+                        ) {
+                            Some(reductions::Reduction::Applied(skipped))
+                                if self.budget.is_some() =>
+                            {
+                                self.remaining -= skipped;
+                            }
+                            Some(reductions::Reduction::Retry) => {
+                                // The first call can still need a stack growth or GC checkpoint.
+                                // Retry at the backedge after ordinary dispatch has run it.
+                                reduction_retry = Some(reductions::Retry {
+                                    frame: frame_index,
+                                    pc: c,
+                                    attempts: 8,
+                                });
+                            }
+                            _ => {}
                         }
                         pc = c;
                     }
                     Op::ForLoop => {
+                        if let Some(retry) = &mut reduction_retry
+                            && retry.frame == frame_index
+                            && retry.pc + 1 == pc
+                        {
+                            retry.attempts -= 1;
+                            if retry.attempts == 0
+                                || self.budget.is_some()
+                                || !matches!(
+                                    self.reduce_numeric_loop(
+                                        base,
+                                        usize::from(i.a),
+                                        pc - 1,
+                                        prototype,
+                                        program_index,
+                                        proto_index,
+                                    ),
+                                    Some(reductions::Reduction::Retry)
+                                )
+                            {
+                                reduction_retry = None;
+                            }
+                        }
                         let (Value::Number(index), Value::Number(limit), Value::Number(step)) = (
                             self.registers[a],
                             self.registers[a + 1],
@@ -2356,6 +2416,29 @@ impl Vm {
                         }
                     }
                     Op::Call | Op::TailCall | Op::CallIter => {
+                        if i.op == Op::Call && i.b != OPEN_ARGS {
+                            let completed = match self.registers[a] {
+                                Value::Native(0) if i.b == 1 && i.c <= 1 => {
+                                    self.try_inline_assert(a, i.c == 1, checkpoint_ready)
+                                }
+                                Value::Native(threads::CO_RESUME) if i.b == 1 && i.c != OPEN => {
+                                    self.try_inline_coroutine_resume(a, c, checkpoint_ready)
+                                }
+                                Value::Function(_) if i.c <= 1 => self.try_numeric_leaf_call(
+                                    &mut numeric_call_cache,
+                                    checkpoint_ready,
+                                    a,
+                                    usize::from(i.b),
+                                    i.c == 1,
+                                    error_line,
+                                ),
+                                _ => false,
+                            };
+                            if completed {
+                                numeric_checkpoint_ready = true;
+                                continue;
+                            }
+                        }
                         let count = if i.b == OPEN_ARGS {
                             self.top.checked_sub(a + 1).ok_or_else(|| {
                                 Error::new(ErrorKind::Runtime, 0, "invalid open argument range")

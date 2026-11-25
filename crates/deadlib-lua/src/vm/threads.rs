@@ -1,5 +1,6 @@
 //! Shared-heap Lua threads with vector context switches and an explicit scheduler.
 use super::*;
+pub(super) mod inline_resume;
 
 pub(super) const CO_CREATE: u64 = 80;
 pub(super) const CO_RESUME: u64 = 81;
@@ -167,6 +168,68 @@ pub(super) struct Thread {
     pub(super) host_states: Buffer<host::ThreadData>,
 }
 impl Thread {
+    fn plain_suspended_builtin(&self, builtin: u64) -> Option<(Frame, Frame)> {
+        let [.., caller, frame] = &*self.frames else {
+            return None;
+        };
+        if !matches!(caller.function, FrameKind::Lua(_))
+            || !matches!(frame.function, FrameKind::Native(id) if id == builtin)
+            || frame.pc != 1
+            || self.active_native.is_some()
+            || !self.open_upvalues.is_empty()
+            || self.hooks.mask != 0
+            || self.hooks.enter.is_some()
+            || self.hooks.tail.is_some()
+            || self.hooks.running.is_some()
+            || self.hooks.host_running.is_some()
+            || self.hooks.resumed_top.is_some()
+            || self.hooks.yield_owner.is_some()
+            || !self.hooks.popped.is_empty()
+            || !self.hooks.hidden.is_empty()
+        {
+            return None;
+        }
+        Some((*caller, *frame))
+    }
+
+    /// Complete a suspended builtin before bringing this Lua stack active.
+    /// Its real native frame remains visible for the entire suspension.
+    fn finish_plain_builtin(
+        &mut self,
+        builtin: u64,
+        first: Option<Value>,
+        values: &[Value],
+    ) -> bool {
+        let Some((_, frame)) = self.plain_suspended_builtin(builtin) else {
+            return false;
+        };
+        let actual = values.len() + usize::from(first.is_some());
+        let wanted = if frame.wanted == FRAME_OPEN {
+            actual
+        } else {
+            usize::from(frame.wanted)
+        };
+        let mut start = frame.result;
+        let end = start + wanted;
+        if end > self.registers.len() || frame.stack_start > self.registers.len() {
+            return false;
+        }
+        if wanted != 0
+            && let Some(first) = first
+        {
+            self.registers[start] = first;
+            start += 1;
+        }
+        let output = &mut self.registers[start..end];
+        let copied = output.len().min(values.len());
+        output[..copied].copy_from_slice(&values[..copied]);
+        output[copied..].fill(Value::Nil);
+        self.registers.truncate(frame.stack_start.max(end));
+        self.top = end;
+        self.frames.pop();
+        true
+    }
+
     pub fn main(globals: TableId, memory: Memory) -> Self {
         Self {
             registers: Buffer::new_in(memory.clone()),
@@ -418,25 +481,61 @@ impl Vm {
     }
     // Active vectors stay directly in Vm for ordinary dispatch. Switching swaps
     // ownership with the inactive thread slots; it never copies stack contents.
-    fn exchange_thread(&mut self, id: ThreadId, line: &mut u32) {
-        let state = &mut self.threads[slot_index(id.0)];
-        std::mem::swap(&mut self.registers, &mut state.registers);
-        std::mem::swap(&mut self.frames, &mut state.frames);
-        std::mem::swap(&mut self.call_slots, &mut state.call_slots);
-        std::mem::swap(&mut self.open_upvalues, &mut state.open_upvalues);
-        std::mem::swap(&mut self.globals, &mut state.globals);
-        std::mem::swap(&mut self.top, &mut state.top);
-        std::mem::swap(&mut self.active_native, &mut state.active_native);
-        std::mem::swap(&mut self.substitutions, &mut state.substitutions);
-        std::mem::swap(&mut self.sorts, &mut state.sorts);
-        std::mem::swap(&mut self.loads, &mut state.loads);
-        std::mem::swap(&mut self.tracebacks, &mut state.tracebacks);
-        std::mem::swap(&mut self.hooks, &mut state.hooks);
-        std::mem::swap(line, &mut state.line);
-    }
     pub(super) fn switch_thread(&mut self, id: ThreadId, line: &mut u32) {
-        self.exchange_thread(self.thread, line);
-        self.exchange_thread(id, line);
+        if id == self.thread {
+            return;
+        }
+        let (outgoing, incoming) = self
+            .threads
+            .distinct_slots_mut(slot_index(self.thread.0), slot_index(id.0));
+        // Move each active field directly between disjoint locations. The
+        // outgoing thread's placeholder becomes the incoming thread's.
+        #[inline(always)]
+        fn exchange<T>(active: &mut T, outgoing: &mut T, incoming: &mut T) {
+            std::mem::swap(active, outgoing);
+            std::mem::swap(active, incoming);
+        }
+        exchange(
+            &mut self.registers,
+            &mut outgoing.registers,
+            &mut incoming.registers,
+        );
+        exchange(&mut self.frames, &mut outgoing.frames, &mut incoming.frames);
+        exchange(
+            &mut self.call_slots,
+            &mut outgoing.call_slots,
+            &mut incoming.call_slots,
+        );
+        exchange(
+            &mut self.open_upvalues,
+            &mut outgoing.open_upvalues,
+            &mut incoming.open_upvalues,
+        );
+        exchange(
+            &mut self.globals,
+            &mut outgoing.globals,
+            &mut incoming.globals,
+        );
+        exchange(&mut self.top, &mut outgoing.top, &mut incoming.top);
+        exchange(
+            &mut self.active_native,
+            &mut outgoing.active_native,
+            &mut incoming.active_native,
+        );
+        exchange(
+            &mut self.substitutions,
+            &mut outgoing.substitutions,
+            &mut incoming.substitutions,
+        );
+        exchange(&mut self.sorts, &mut outgoing.sorts, &mut incoming.sorts);
+        exchange(&mut self.loads, &mut outgoing.loads, &mut incoming.loads);
+        exchange(
+            &mut self.tracebacks,
+            &mut outgoing.tracebacks,
+            &mut incoming.tracebacks,
+        );
+        exchange(&mut self.hooks, &mut outgoing.hooks, &mut incoming.hooks);
+        exchange(line, &mut outgoing.line, &mut incoming.line);
         self.thread = id;
     }
     pub(super) fn apply_transition(&mut self, line: &mut u32) -> Result<Option<usize>, Error> {
@@ -503,7 +602,7 @@ impl Vm {
         let source = values.start;
         let inverted = values.end < values.start;
         let count = if inverted { 1 } else { values.len() };
-        self.reserve_thread_return(count)?;
+        let prefix = self.reserve_thread_return(count)?;
         let id = self.thread;
         let host = self.frames.last().is_some_and(
             |f| matches!(f.function, FrameKind::Native(id) if self.host_callback(id).is_some()),
@@ -544,21 +643,39 @@ impl Vm {
             self.switch_thread(parent, line);
             return Ok(true);
         }
-        let caller_index = self.threads[slot_index(parent.0)].frames.len() - 1;
-        let body = self.body_code(parent, caller_index);
         let parent_function = if inverted {
             self.calling_function(parent).unwrap_or(Value::Nil)
         } else {
             Value::Nil
         };
+        let direct = suspended
+            && !failed
+            && !inverted
+            && prefix == 1
+            && self.sort_fast_context()
+            && self.can_skip_gc_checkpoint();
         let caller = &mut self.threads[slot_index(parent.0)];
+        if direct
+            && caller.finish_plain_builtin(
+                CO_RESUME,
+                Some(Value::Boolean(true)),
+                &self.registers[values.clone()],
+            )
+        {
+            caller.status = Status::Running;
+            let state = &mut self.threads[slot_index(id.0)];
+            state.status = Status::Suspended;
+            state.resume_status = NativeThreadStatus::Yielded;
+            state.api_stack = source..source;
+            self.top = source;
+            self.gc.pending = false;
+            self.switch_thread(parent, line);
+            return Ok(false);
+        }
         let frame = caller
             .frames
             .last_mut()
             .expect("resumer has an awaiting frame");
-        let prefix = usize::from(
-            body == Some(CO_RESUME) || matches!(frame.function, FrameKind::Native(CO_RESUME)),
-        );
         let base = frame.base;
         let arguments = frame.argc();
         caller.registers.resize(
@@ -617,10 +734,10 @@ impl Vm {
         self.switch_thread(parent, line);
         Ok(false)
     }
-    fn reserve_thread_return(&mut self, count: usize) -> Result<(), Error> {
+    fn reserve_thread_return(&mut self, count: usize) -> Result<usize, Error> {
         let child = &self.threads[slot_index(self.thread.0)];
         if child.native_resumer {
-            return Ok(());
+            return Ok(0);
         }
         let parent = child.resumer.expect("returning thread has a resumer");
         let index = self.threads[slot_index(parent.0)].frames.len() - 1;
@@ -637,7 +754,7 @@ impl Vm {
             .try_reserve(needed.saturating_sub(caller.registers.len()));
         let growth = (caller.registers.capacity() - before) * size_of::<Value>();
         self.threads.note_alloc(growth);
-        reserved.map_err(|_| self.memory_failure())
+        reserved.map(|()| prefix).map_err(|_| self.memory_failure())
     }
     pub(super) fn fail_thread(&mut self, error: &Error, line: &mut u32) -> Result<(), Error> {
         let child = self.thread;
@@ -847,6 +964,14 @@ impl Vm {
         let boundaries = frames[..end]
             .iter().enumerate()
             .filter(|(index, f)| {
+                // These frames add no C-call depth unless a host has
+                // attached a builtin body. Iterator boundaries are counted
+                // separately above even when they call a Lua function.
+                if self.native_bodies.is_empty()
+                    && matches!(f.function, FrameKind::Lua(_) | FrameKind::Native(CO_RESUME | CO_YIELD))
+                {
+                    return false;
+                }
                 if f.pc == host::API_YIELDED && matches!(f.function, FrameKind::Native(CONT_RAW | CONT_BOOL | CONT_NOT | CONT_IGNORE)) {
                     return false;
                 }
@@ -1106,10 +1231,16 @@ impl Vm {
             .try_reserve(needed.saturating_sub(state.registers.len()))
             .map_err(|_| self.memory_failure())?;
         self.resume_api_barriers(thread);
+        let direct = count == 0 && self.sort_fast_context() && self.can_skip_gc_checkpoint();
         let args =
             &self.registers[frame.vararg_start + offset..frame.vararg_start + offset + count];
         let state = &mut self.threads[slot_index(thread.0)];
-        if state.frames.is_empty() {
+        if direct
+            && state.resumed_values.is_none()
+            && state.finish_plain_builtin(CO_YIELD, None, &[])
+        {
+            self.gc.pending = false;
+        } else if state.frames.is_empty() {
             let call = state.api_stack.end - 1;
             state.registers.truncate(state.api_stack.end);
             state.registers.extend_from_slice(args);

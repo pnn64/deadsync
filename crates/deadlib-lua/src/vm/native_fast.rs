@@ -1,6 +1,25 @@
 //! Non-allocating builtin results when no frame observer is active.
 use super::*;
 impl Vm {
+    pub(super) fn try_inline_assert(
+        &mut self,
+        call: usize,
+        keep: bool,
+        checkpoint_ready: bool,
+    ) -> bool {
+        let value = self.registers[call + 1];
+        if !value.is_truthy()
+            || self.frames.len() == self.frames.capacity()
+            || self.frames.len() + 1 >= usize::from(self.call_slots)
+            || (!checkpoint_ready && !(self.sort_fast_context() && self.sort_gc_ready()))
+        {
+            return false;
+        }
+        self.registers[call] = value;
+        self.top = call + usize::from(keep);
+        true
+    }
+
     #[inline(never)]
     pub(super) fn try_fast_native(&mut self, id: u64, call: usize, count: usize) -> Option<usize> {
         if !self.sort_fast_context() {

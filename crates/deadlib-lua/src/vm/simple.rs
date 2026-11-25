@@ -8,10 +8,13 @@ use super::{
 };
 use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN, Op, RK};
 
+pub(super) const FIELD_HINTS: usize = 32;
+
 /// The registers, constants and tables one simple instruction can touch.
 pub(super) struct Context<'a> {
     pub registers: &'a mut [Value],
     pub constants: &'a [Value],
+    pub field_hints: &'a mut [[u32; 2]; FIELD_HINTS],
     pub tables: &'a mut Arena<Table>,
     pub strings: &'a Arena<ByteString>,
     pub upvalue_ids: &'a [u32],
@@ -19,6 +22,7 @@ pub(super) struct Context<'a> {
     pub threads: &'a Arena<threads::Thread>,
     pub thread: ThreadId,
     pub code: &'a [Instruction],
+    pub stop_before_for_loop: Option<usize>,
     pub env: TableId,
     pub base: usize,
     /// A pending collection must still be polled by the normal SetTable path.
@@ -100,9 +104,16 @@ pub(super) fn inherited(
     mut owner: TableId,
     mut metatable: TableId,
     key: Value,
+    mut hints: Option<&mut [u32; 2]>,
 ) -> Option<Value> {
     for _ in 0..INDEX_CHAIN {
-        let parent_id = match tables[slot_index(metatable.0)].get_string(index_name) {
+        let table = &tables[slot_index(metatable.0)];
+        let handler = if let Some(hints) = hints.as_deref_mut() {
+            table.get_string_cached(index_name, &mut hints[1])
+        } else {
+            table.get_string(index_name)
+        };
+        let parent_id = match handler {
             Value::Nil => return Some(Value::Nil),
             Value::Table(parent) => parent,
             Value::Native(handler) => {
@@ -111,9 +122,10 @@ pub(super) fn inherited(
             _ => return None,
         };
         let parent = &tables[slot_index(parent_id.0)];
-        let value = match key {
-            Value::String(id) => parent.get_string(id),
-            key => parent.get(key),
+        let value = match (key, hints.as_deref_mut()) {
+            (Value::String(id), Some(hints)) => parent.get_string_cached(id, &mut hints[0]),
+            (Value::String(id), None) => parent.get_string(id),
+            (key, _) => parent.get(key),
         };
         if value != Value::Nil {
             return Some(value);
@@ -148,7 +160,9 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             let table = &cx.tables[slot_index(cx.env.0)];
             let key = cx.constant(i.c as usize);
             let mut value = match key {
-                Value::String(id) => table.get_string(id),
+                Value::String(id) => {
+                    table.get_string_cached(id, &mut cx.field_hints[pc % FIELD_HINTS][0])
+                }
                 key => table.get(key),
             };
             if value == Value::Nil
@@ -161,6 +175,7 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
                     cx.env,
                     metatable,
                     key,
+                    Some(&mut cx.field_hints[pc % FIELD_HINTS]),
                 )?;
             }
             cx.registers[a] = value;
@@ -171,7 +186,11 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             };
             // An existing, non-nil scalar can be overwritten without
             // invoking __newindex, allocating, or adding a GC edge.
-            if !cx.tables[slot_index(cx.env.0)].set_existing_string_scalar(name, cx.registers[a]) {
+            if !cx.tables[slot_index(cx.env.0)].set_string_scalar_cached(
+                name,
+                cx.registers[a],
+                &mut cx.field_hints[pc % FIELD_HINTS][0],
+            ) {
                 return None;
             }
         }
@@ -182,7 +201,9 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             let table = &cx.tables[slot_index(id.0)];
             let key = cx.operand(i.c);
             let mut value = match key {
-                Value::String(id) => table.get_string(id),
+                Value::String(id) => {
+                    table.get_string_cached(id, &mut cx.field_hints[pc % FIELD_HINTS][0])
+                }
                 key => table.get(key),
             };
             if value == Value::Nil
@@ -195,6 +216,7 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
                     id,
                     metatable,
                     key,
+                    Some(&mut cx.field_hints[pc % FIELD_HINTS]),
                 )?;
             }
             cx.registers[a] = value;
@@ -223,7 +245,11 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             // metatable. Array writes need an absent metatable because a
             // missing value can trigger __newindex. Scalars create no GC edge.
             let written = match key {
-                Value::String(name) => table.set_existing_string_scalar(name, value),
+                Value::String(name) => table.set_string_scalar_cached(
+                    name,
+                    value,
+                    &mut cx.field_hints[pc % FIELD_HINTS][0],
+                ),
                 _ if table.metatable().is_none() => table.set_array_scalar_in_place(key, value),
                 _ => false,
             };
@@ -327,6 +353,9 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             }
         }
         Op::ForLoop => {
+            if cx.stop_before_for_loop == Some(pc) {
+                return None;
+            }
             let (Value::Number(index), Value::Number(limit), Value::Number(step)) =
                 (cx.registers[a], cx.registers[a + 1], cx.registers[a + 2])
             else {

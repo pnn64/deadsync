@@ -1019,17 +1019,22 @@ impl Vm {
     // Scalar callbacks and batched continuations can skip only a checkpoint
     // with no collector work. Keep pending-state behavior identical to maybe_gc.
     pub(super) fn sort_gc_ready(&mut self) -> bool {
-        if self.gc.phase == Phase::Pause
-            && self.gc.running == 0
-            && !self.gc.closing
-            && (self.gc.stopped
-                || self.gc.last_live.saturating_add(self.gc_debt()) < self.gc.threshold)
-        {
+        if self.can_skip_gc_checkpoint() {
             self.gc.pending = false;
             true
         } else {
             false
         }
+    }
+
+    pub(super) fn can_reuse_loaded_program(&self) -> bool {
+        self.gc.phase == Phase::Pause && self.gc.running == 0 && !self.gc.closing
+    }
+
+    pub(super) fn can_skip_gc_checkpoint(&self) -> bool {
+        self.can_reuse_loaded_program()
+            && (self.gc.stopped
+                || self.gc.last_live.saturating_add(self.gc_debt()) < self.gc.threshold)
     }
 
     // Runs at every frame entry: the test stays inline and the work does not.

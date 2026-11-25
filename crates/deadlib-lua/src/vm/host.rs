@@ -4,9 +4,9 @@ use crate::memory::Shared;
 use std::any::Any;
 mod api;
 pub(in crate::vm) mod stack;
-mod thread;
 #[cfg(test)]
 mod tests;
+mod thread;
 pub(super) use api::ApiCall;
 pub(in crate::vm) use stack::Body;
 pub use stack::{
@@ -120,9 +120,15 @@ impl<'a> IndexView<'a> {
     pub fn get(&self, table: TableId, key: Value) -> Option<Value> {
         let entries = self.tables.get(table.0)?;
         match (entries.get(key), entries.metatable()) {
-            (Value::Nil, Some(metatable)) => {
-                simple::inherited(self.tables, self.index_name, None, table, metatable, key)
-            }
+            (Value::Nil, Some(metatable)) => simple::inherited(
+                self.tables,
+                self.index_name,
+                None,
+                table,
+                metatable,
+                key,
+                None,
+            ),
             (value, _) => Some(value),
         }
     }
@@ -765,6 +771,7 @@ impl HostCall<'_> {
                     id,
                     metatable,
                     key,
+                    None,
                 ),
                 (value, _) => Some(value),
             };
@@ -1254,6 +1261,7 @@ impl HostCall<'_> {
                 id,
                 metatable,
                 key,
+                None,
             ),
             None => Some(Value::Nil),
         })

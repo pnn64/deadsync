@@ -175,6 +175,17 @@ impl<T> Arena<T> {
         }
         self.values.get(slot)?.as_ref()
     }
+
+    pub(crate) fn distinct_slots_mut(&mut self, first: usize, second: usize) -> (&mut T, &mut T) {
+        let [first, second] = self
+            .values
+            .get_disjoint_mut([first, second])
+            .expect("distinct live slots");
+        (
+            first.as_mut().expect("live slot"),
+            second.as_mut().expect("live slot"),
+        )
+    }
     pub fn remove(&mut self, key: u64) -> Option<T> {
         let slot = index(key);
         if self.generations.get(slot).copied() != Some((key >> 32) as u32) {
