@@ -25,10 +25,9 @@ pub(super) fn unfilter<const N: usize, const PAETH: bool>(
     }
 }
 
-/// Sub-unfilter `row`, of pixels of `N` (3 or 4) bytes, where the vector
-/// kernel applies.
+/// Sub-unfilter a row of N-byte pixels where the vector kernel applies.
 pub(super) fn sub<const N: usize>(row: &mut [u8]) -> bool {
-    assert!(matches!(N, 3 | 4));
+    assert!(matches!(N, 1 | 2 | 3 | 4 | 6 | 8));
     if row.len() >= 64 && std::is_x86_feature_detected!("sse4.1") {
         // SAFETY: SSE4.1 availability is checked above. Byte accesses use
         // checked slices and fixed-size arrays.
@@ -41,40 +40,62 @@ pub(super) fn sub<const N: usize>(row: &mut [u8]) -> bool {
     }
 }
 
-/// Sub reconstruction in groups of four pixels, returning the reconstructed
+/// Sub reconstruction in groups of complete pixels, returning the reconstructed
 /// length. Shifted additions sum each group's residuals within its pixels,
 /// independently of earlier groups; adding the preceding group's last pixel,
 /// spread to every pixel, is the only dependency between groups. Stores write
 /// exactly the group, so the next group's load never overlaps a pending store.
 #[target_feature(enable = "sse4.1")]
 unsafe fn sub_run<const N: usize>(row: &mut [u8]) -> usize {
-    let spread = if N == 4 {
-        _mm_setr_epi8(
-            12, 13, 14, 15, 12, 13, 14, 15, 12, 13, 14, 15, 12, 13, 14, 15,
-        )
-    } else {
-        _mm_setr_epi8(9, 10, 11, 9, 10, 11, 9, 10, 11, 9, 10, 11, -1, -1, -1, -1)
+    let (group, lanes) = const {
+        let group = if matches!(N, 3 | 6) { 12 } else { 16 };
+        let mut lanes = [u8::MAX; 16];
+        let mut i = 0;
+        while i < group {
+            lanes[i] = (group - N + i % N) as u8;
+            i += 1;
+        }
+        (group, lanes)
     };
+    let spread = load(&lanes);
     let mut carry = _mm_setzero_si128();
     let mut pos = 0;
     while row.len() - pos >= 16 {
         let bytes: &mut [u8; 16] = (&mut row[pos..pos + 16]).try_into().unwrap();
         let residual = load(bytes);
-        let pixels = if N == 4 {
-            let sum = _mm_add_epi8(residual, _mm_slli_si128::<4>(residual));
-            _mm_add_epi8(_mm_add_epi8(sum, _mm_slli_si128::<8>(sum)), carry)
-        } else {
-            let sum = _mm_add_epi8(residual, _mm_slli_si128::<3>(residual));
-            _mm_add_epi8(_mm_add_epi8(sum, _mm_slli_si128::<6>(sum)), carry)
+        let sum = match N {
+            1 => {
+                let sum = _mm_add_epi8(residual, _mm_slli_si128::<1>(residual));
+                let sum = _mm_add_epi8(sum, _mm_slli_si128::<2>(sum));
+                let sum = _mm_add_epi8(sum, _mm_slli_si128::<4>(sum));
+                _mm_add_epi8(sum, _mm_slli_si128::<8>(sum))
+            }
+            2 => {
+                let sum = _mm_add_epi8(residual, _mm_slli_si128::<2>(residual));
+                let sum = _mm_add_epi8(sum, _mm_slli_si128::<4>(sum));
+                _mm_add_epi8(sum, _mm_slli_si128::<8>(sum))
+            }
+            3 => {
+                let sum = _mm_add_epi8(residual, _mm_slli_si128::<3>(residual));
+                _mm_add_epi8(sum, _mm_slli_si128::<6>(sum))
+            }
+            4 => {
+                let sum = _mm_add_epi8(residual, _mm_slli_si128::<4>(residual));
+                _mm_add_epi8(sum, _mm_slli_si128::<8>(sum))
+            }
+            6 => _mm_add_epi8(residual, _mm_slli_si128::<6>(residual)),
+            8 => _mm_add_epi8(residual, _mm_slli_si128::<8>(residual)),
+            _ => unreachable!(),
         };
+        let pixels = _mm_add_epi8(sum, carry);
         carry = _mm_shuffle_epi8(pixels, spread);
-        if N == 4 {
+        if group == 16 {
             store(bytes, pixels);
         } else {
             bytes[..8].copy_from_slice(&_mm_cvtsi128_si64(pixels).to_le_bytes());
             bytes[8..12].copy_from_slice(&_mm_extract_epi32::<2>(pixels).to_le_bytes());
         }
-        pos += 4 * N;
+        pos += group;
     }
     pos
 }
@@ -544,8 +565,12 @@ mod tests {
         if !std::is_x86_feature_detected!("sse4.1") {
             return;
         }
+        subs::<1>();
+        subs::<2>();
         subs::<3>();
         subs::<4>();
+        subs::<6>();
+        subs::<8>();
     }
 
     #[test]

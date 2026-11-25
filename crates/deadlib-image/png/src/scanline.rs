@@ -156,14 +156,7 @@ fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize
 pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> Result<(), Error> {
     match filter {
         0 => (),
-        1 => match bpp {
-            1 | 3 | 4 | 6 => unfilter_first_neighbors::<false>(row, bpp),
-            _ => {
-                for n in bpp..row.len() {
-                    row[n] = row[n].wrapping_add(row[n - bpp]);
-                }
-            }
-        },
+        1 => unfilter_first_neighbors::<false>(row, bpp),
         2 => {
             for (v, &up) in row.iter_mut().zip(prev) {
                 *v = v.wrapping_add(up);
@@ -269,8 +262,12 @@ fn unfilter_first_neighbors<const HALF: bool>(row: &mut [u8], bpp: usize) {
     #[cfg(target_arch = "x86_64")]
     if !HALF
         && match bpp {
+            1 => x86::sub::<1>(row),
+            2 => x86::sub::<2>(row),
             3 => x86::sub::<3>(row),
             4 => x86::sub::<4>(row),
+            6 => x86::sub::<6>(row),
+            8 => x86::sub::<8>(row),
             _ => false,
         }
     {
@@ -295,8 +292,7 @@ pub(crate) fn unfilter_first(row: &mut [u8], bpp: usize, filter: u8) -> Result<(
     // With a zero row above, Paeth is Sub and Average uses half of the left byte.
     match filter {
         0 | 2 => (),
-        1 => return unfilter(row, &[], bpp, 1),
-        4 => unfilter_first_neighbors::<false>(row, bpp),
+        1 | 4 => unfilter_first_neighbors::<false>(row, bpp),
         3 => unfilter_first_neighbors::<true>(row, bpp),
         _ => return Err(Error::Invalid("scanline filter")),
     }
