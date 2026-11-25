@@ -242,17 +242,17 @@ impl Compositor {
             let stride = self.width as usize;
             let width = frame.width as usize;
             let visible = r.w * r.h;
-            // Wide rows already use bulk fills. Probe them only to skip transparent spans.
-            let solid = if (width < 32 || transparent.is_some())
+            // Wider rows already use bulk fills. Probe them only to skip transparent spans.
+            let solid = if (width < 64 || transparent.is_some())
                 && r.w == stride
                 && width == stride
                 && visible >= 256
             {
                 let indices = &frame.indices[..visible];
                 let first = indices[0];
-                if (width < 32 || transparent == Some(first))
-                    && first == indices[visible - 1]
+                if (width < 64 || transparent == Some(first))
                     && first == indices[visible / 2]
+                    && indices[visible - 16..] == [first; 16]
                 {
                     crate::lzw::repeated_index(indices)
                 } else {
