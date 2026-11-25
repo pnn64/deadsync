@@ -4,7 +4,6 @@ use deadsync_core::note::NoteType;
 use deadsync_gameplay::{ColumnTapJudgment, HoldJudgmentRenderInfo};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::HoldResult;
-use deadsync_score::Grade;
 
 use crate::gifs::{GifRegistry, PadSize, PanelAnim};
 use crate::panels::OverlayDrive;
@@ -151,15 +150,15 @@ pub const fn sustain_drive(kind: Option<NoteType>, resume: bool) -> OverlayDrive
 /// `results@{diff}@S+ -> results@S+ -> results@{diff}@S -> results@S ->
 /// results@{diff}` (then `results -> default`).
 #[must_use]
-pub fn results_role_candidates(grade: Grade, difficulty: Option<&str>) -> Vec<String> {
-    let base = grade.gif_base();
-    let mut out = Vec::with_capacity(if base.is_some() { 5 } else { 3 });
-    for suffix in [
-        Some(grade.gif_suffix()),
-        base.map(|grade| grade.gif_suffix()),
-    ]
-    .into_iter()
-    .flatten()
+pub fn results_role_candidates(
+    grade_suffix: &str,
+    base_grade_suffix: Option<&str>,
+    difficulty: Option<&str>,
+) -> Vec<String> {
+    let mut out = Vec::with_capacity(if base_grade_suffix.is_some() { 5 } else { 3 });
+    for suffix in [Some(grade_suffix), base_grade_suffix]
+        .into_iter()
+        .flatten()
     {
         if let Some(diff) = difficulty {
             out.push(format!("results@{diff}@{suffix}"));
@@ -383,7 +382,7 @@ mod tests {
     #[test]
     fn results_role_candidates_follow_the_documented_chain() {
         assert_eq!(
-            results_role_candidates(Grade::Tier05, Some("hard")),
+            results_role_candidates("S+", Some("S"), Some("hard")),
             [
                 "results@hard@S+",
                 "results@S+",
@@ -393,19 +392,19 @@ mod tests {
             ]
         );
         assert_eq!(
-            results_role_candidates(Grade::Tier05, None),
+            results_role_candidates("S+", Some("S"), None),
             ["results@S+", "results@S"]
         );
         assert_eq!(
-            results_role_candidates(Grade::Tier06, Some("edit")),
+            results_role_candidates("S", None, Some("edit")),
             ["results@edit@S", "results@S", "results@edit"]
         );
         assert_eq!(
-            results_role_candidates(Grade::Quint, None),
+            results_role_candidates("star5", None, None),
             ["results@star5"]
         );
         assert_eq!(
-            results_role_candidates(Grade::Failed, Some("challenge")),
+            results_role_candidates("F", None, Some("challenge")),
             ["results@challenge@F", "results@F", "results@challenge"]
         );
     }

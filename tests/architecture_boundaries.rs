@@ -4979,6 +4979,26 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
 }
 
 #[test]
+fn lighting_consumes_chart_data_and_grade_suffixes_without_runtime_dependencies() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for (name, forbidden_crate, forbidden_import) in [
+        ("deadsync-lights", "deadsync-gameplay", "deadsync_gameplay"),
+        ("deadsync-smx", "deadsync-score", "deadsync_score"),
+    ] {
+        let crate_dir = root.join("crates").join(name);
+        let manifest = read_source(crate_dir.join("Cargo.toml")).expect("lighting manifest");
+        assert!(!manifest.contains(forbidden_crate), "{name} depends on {forbidden_crate}");
+        for file in production_rust_files(&crate_dir.join("src")) {
+            assert!(
+                !production_source(&file).contains(forbidden_import),
+                "{} imports {forbidden_crate}",
+                file.display(),
+            );
+        }
+    }
+}
+
+#[test]
 fn cabinet_light_preferences_do_not_depend_on_the_lighting_runtime() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for name in ["deadsync-core", "deadsync-config", "deadsync-profile"] {

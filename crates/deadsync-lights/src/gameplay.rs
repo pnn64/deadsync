@@ -2,11 +2,19 @@ use crate::cabinet_chart::{CabinetLightEvent, GameplayLightChartKey, cabinet_lig
 use crate::{ButtonLight, Manager, Player};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
-use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState};
 use deadsync_rules::note::Note;
 
 const LIGHTS_AHEAD_NS: SongTimeNs = 50_000_000;
 const LIGHTS_MAX_CATCHUP_NS: SongTimeNs = 500_000_000;
+
+/// Borrowed chart data and clock for one lighting update.
+#[derive(Clone, Copy)]
+pub struct GameplayLightFrame<'a> {
+    pub music_time_ns: SongTimeNs,
+    pub notes: &'a [Note],
+    pub note_times_ns: &'a [SongTimeNs],
+    pub cols_per_player: usize,
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct GameplayLightTracker {
@@ -45,19 +53,15 @@ impl GameplayLightTracker {
         self.restart_cabinet_chart();
     }
 
-    pub fn queue_blinks<Profile, OverlayActor, CapturedActor, StateDelta>(
+    pub fn queue_blinks(
         &mut self,
         lights: &mut Manager,
-        state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        frame: GameplayLightFrame<'_>,
         simplify_bass: bool,
-    ) where
-        Profile: GameplayProfileData,
-    {
-        let now_ns = state
-            .current_music_time_ns()
-            .saturating_add(LIGHTS_AHEAD_NS);
+    ) {
+        let now_ns = frame.music_time_ns.saturating_add(LIGHTS_AHEAD_NS);
         self.queue_cabinet_blinks(lights, now_ns, simplify_bass);
-        self.queue_pad_blinks(lights, state, now_ns);
+        self.queue_pad_blinks(lights, frame, now_ns);
     }
 
     fn queue_cabinet_blinks(
@@ -88,33 +92,33 @@ impl GameplayLightTracker {
         self.cabinet_last_time_ns = now_ns;
     }
 
-    fn queue_pad_blinks<Profile, OverlayActor, CapturedActor, StateDelta>(
+    fn queue_pad_blinks(
         &mut self,
         lights: &mut Manager,
-        state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        frame: GameplayLightFrame<'_>,
         now_ns: SongTimeNs,
-    ) where
-        Profile: GameplayProfileData,
-    {
-        let notes = state.notes();
-        let notes_ptr = notes.as_ptr() as usize;
+    ) {
+        let note_count = frame.notes.len().min(frame.note_times_ns.len());
+        let notes_ptr = frame.notes.as_ptr() as usize;
         let reset = self.pad_notes_ptr != notes_ptr
-            || self.pad_notes_len != notes.len()
+            || self.pad_notes_len != note_count
             || now_ns < self.pad_last_time_ns
             || now_ns.saturating_sub(self.pad_last_time_ns) > LIGHTS_MAX_CATCHUP_NS;
         if reset {
             self.pad_notes_ptr = notes_ptr;
-            self.pad_notes_len = notes.len();
-            self.pad_cursor = state.note_time_cache_ns().partition_point(|&t| t <= now_ns);
+            self.pad_notes_len = note_count;
+            self.pad_cursor = frame.note_times_ns[..note_count].partition_point(|&t| t <= now_ns);
             self.pad_last_time_ns = now_ns;
             return;
         }
 
-        let note_time_cache_ns = state.note_time_cache_ns();
-        while self.pad_cursor < notes.len() && note_time_cache_ns[self.pad_cursor] <= now_ns {
-            let note = &notes[self.pad_cursor];
-            if gameplay_note_lights(note) {
-                blink_pad_lights(lights, state, note.column);
+        while self.pad_cursor < note_count && frame.note_times_ns[self.pad_cursor] <= now_ns {
+            let note = &frame.notes[self.pad_cursor];
+            if gameplay_note_lights(note)
+                && let Some((player, button)) =
+                    pad_light_for_col(frame.cols_per_player, note.column)
+            {
+                lights.blink_button(player, button);
             }
             self.pad_cursor += 1;
         }
@@ -131,33 +135,15 @@ const fn gameplay_note_lights(note: &Note) -> bool {
         )
 }
 
-fn blink_pad_lights<Profile, OverlayActor, CapturedActor, StateDelta>(
-    lights: &mut Manager,
-    state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
-    column: usize,
-) where
-    Profile: GameplayProfileData,
-{
-    if let Some((player, button)) = pad_light_for_col(state, column) {
-        lights.blink_button(player, button);
-    }
-}
-
-fn pad_light_for_col<Profile, OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
-    column: usize,
-) -> Option<(Player, ButtonLight)>
-where
-    Profile: GameplayProfileData,
-{
-    if state.cols_per_player() == 0 {
+fn pad_light_for_col(cols_per_player: usize, column: usize) -> Option<(Player, ButtonLight)> {
+    if cols_per_player == 0 {
         return None;
     }
-    let local = column % state.cols_per_player();
-    let pump = matches!(state.cols_per_player(), 5 | 10);
+    let local = column % cols_per_player;
+    let pump = matches!(cols_per_player, 5 | 10);
     let lanes_per_pad = if pump { 5 } else { 4 };
     // A field spanning both pads (doubles, or each Routine participant).
-    let (player, local_col) = if state.cols_per_player() > lanes_per_pad {
+    let (player, local_col) = if cols_per_player > lanes_per_pad {
         let player = if local < lanes_per_pad {
             Player::P1
         } else {
@@ -165,7 +151,7 @@ where
         };
         (player, local % lanes_per_pad)
     } else {
-        let player_ix = column / state.cols_per_player();
+        let player_ix = column / cols_per_player;
         let player = match player_ix {
             0 => Player::P1,
             1 => Player::P2,
@@ -200,6 +186,51 @@ const fn button_light_for_col(pump: bool, local_col: usize) -> Option<ButtonLigh
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_core::lights::{DEFAULT_LITBOARD_PORT, DriverKind, PacDriveLightOrdering};
+
+    #[test]
+    fn borrowed_chart_frame_preserves_blink_timing_and_pad_mapping() {
+        let mut lights = Manager::new(
+            DriverKind::Off,
+            DEFAULT_LITBOARD_PORT,
+            PacDriveLightOrdering::default(),
+        );
+        let mut tracker = GameplayLightTracker::default();
+        let mut notes = [
+            test_note(NoteType::Tap, true, false),
+            test_note(NoteType::Tap, true, false),
+        ];
+        notes[0].column = 5;
+        let note_times_ns = [100_000_000];
+        let mut frame = GameplayLightFrame {
+            music_time_ns: 0,
+            notes: &notes,
+            note_times_ns: &note_times_ns,
+            cols_per_player: 8,
+        };
+        tracker.queue_blinks(&mut lights, frame, false);
+        frame.music_time_ns = 49_999_999;
+        tracker.queue_blinks(&mut lights, frame, false);
+        assert_eq!(lights.chart_directions(), [[false; 4]; 2]);
+
+        frame.music_time_ns = 50_000_000;
+        tracker.queue_blinks(&mut lights, frame, false);
+        assert_eq!(
+            lights.chart_directions(),
+            [[false; 4], [false, true, false, false]]
+        );
+
+        lights.clear_blinks();
+        frame.music_time_ns = 0;
+        tracker.queue_blinks(&mut lights, frame, false);
+        assert_eq!(lights.chart_directions(), [[false; 4]; 2]);
+        frame.music_time_ns = 50_000_000;
+        tracker.queue_blinks(&mut lights, frame, false);
+        assert_eq!(
+            lights.chart_directions(),
+            [[false; 4], [false, true, false, false]]
+        );
+    }
 
     #[test]
     fn gameplay_note_lights_only_judged_visible_step_notes() {

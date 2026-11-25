@@ -179,6 +179,9 @@ theme to describe an input or store a setting:
   mode, PacDrive ordering, and serial port types. Config reads and writes
   these preferences. The shell supplies them to `deadsync-lights` for driver
   startup, device I/O, and gameplay light updates.
+- Cabinet chart lighting borrows notes and timestamps from the shell and
+  receives the song clock and columns per player. The shell also resolves
+  result grades to GIF suffixes for StepManiaX pad lights.
 - Config and profiles read INI files with `deadlib-platform::ini`.
   `deadsync-core::session_flow` defines the game, preferred play style, and
   preferred play mode shared by both crates. The shell supplies machine defaults

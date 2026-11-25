@@ -9,7 +9,6 @@ deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-rules = { path = "../deadsync-rules" }
-deadsync-score = { path = "../deadsync-score" }
 deadlib-platform = { path = "../deadlib-platform" }
 hashbrown = "0.17.1"
 image = { version = "0.25.10", default-features = false, features = ["gif"] }

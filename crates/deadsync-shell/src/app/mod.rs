@@ -4229,36 +4229,33 @@ impl App {
         play_style: profile_data::PlayStyle,
         player_side: profile_data::PlayerSide,
     ) {
-        match target {
-            GameplayLightSyncTarget::Gameplay => {
-                if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
-                    self.gameplay_lights
-                        .queue_blinks(&mut self.lights, gs, simplify_bass);
-                    if smx_enabled {
-                        self.smx_panels.update(gs, play_style, player_side);
-                    } else {
-                        self.smx_panels.deactivate();
-                    }
-                    return;
-                }
+        let gameplay = match target {
+            GameplayLightSyncTarget::Gameplay => self.state.screens.gameplay_state.as_ref(),
+            GameplayLightSyncTarget::Practice => self
+                .state
+                .screens
+                .practice_state
+                .as_ref()
+                .map(|state| &state.gameplay),
+            GameplayLightSyncTarget::Clear => None,
+        };
+        if let Some(gameplay) = gameplay {
+            self.gameplay_lights.queue_blinks(
+                &mut self.lights,
+                lights::gameplay::GameplayLightFrame {
+                    music_time_ns: gameplay.current_music_time_ns(),
+                    notes: gameplay.notes(),
+                    note_times_ns: gameplay.note_time_cache_ns(),
+                    cols_per_player: gameplay.cols_per_player(),
+                },
+                simplify_bass,
+            );
+            if smx_enabled {
+                self.smx_panels.update(gameplay, play_style, player_side);
+            } else {
+                self.smx_panels.deactivate();
             }
-            GameplayLightSyncTarget::Practice => {
-                if let Some(ps) = self.state.screens.practice_state.as_ref() {
-                    self.gameplay_lights.queue_blinks(
-                        &mut self.lights,
-                        &ps.gameplay,
-                        simplify_bass,
-                    );
-                    if smx_enabled {
-                        self.smx_panels
-                            .update(&ps.gameplay, play_style, player_side);
-                    } else {
-                        self.smx_panels.deactivate();
-                    }
-                    return;
-                }
-            }
-            GameplayLightSyncTarget::Clear => {}
+            return;
         }
         self.gameplay_lights.clear();
         self.smx_panels.deactivate();
@@ -4385,7 +4382,8 @@ impl App {
                         eval_grade
                             .map(|grade| {
                                 deadsync_smx::panel_fx::results_role_candidates(
-                                    grade,
+                                    grade.gif_suffix(),
+                                    grade.gif_base().map(|base| base.gif_suffix()),
                                     eval_difficulty,
                                 )
                             })

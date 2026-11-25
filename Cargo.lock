@@ -1649,7 +1649,6 @@ version = "0.1.0"
 dependencies = [
  "deadsync-chart",
  "deadsync-core",
- "deadsync-gameplay",
  "deadsync-input",
  "deadsync-rules",
  "hidapi",
@@ -1892,7 +1891,6 @@ dependencies = [
  "deadsync-gameplay",
  "deadsync-input",
  "deadsync-rules",
- "deadsync-score",
  "hashbrown 0.17.1",
  "image",
  "log",
