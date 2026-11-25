@@ -382,7 +382,6 @@ pub fn update_log_to_file(enabled: bool) {
 
 pub fn update_overscan(translate_x: i32, translate_y: i32, add_width: i32, add_height: i32) {
     let dirty = RUNTIME_CONFIG.update_overscan(translate_x, translate_y, add_width, add_height);
-    deadlib_present::space::set_overscan(translate_x, translate_y, add_width, add_height);
     if dirty {
         save_without_keymaps();
     }

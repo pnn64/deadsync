@@ -30,7 +30,7 @@ pub fn bootstrap_update_install() -> bool {
     load_bootstrap_bool(config_path(), "UpdaterInstallEnabled", default)
 }
 
-/// Load settings and return the resolved values for the host to initialize audio.
+/// Load settings and return the resolved values for the host to initialize its subsystems.
 pub fn load() -> PublishedConfigEffects {
     ensure_config_file();
 
@@ -62,8 +62,6 @@ fn ensure_config_file() {
 
 fn load_from_ini(conf: &SimpleIni) -> PublishedConfigEffects {
     let effects = RUNTIME_CONFIG.load_from_ini(conf, Config::default());
-    let (translate_x, translate_y, add_width, add_height) = effects.overscan;
-    deadlib_present::space::set_overscan(translate_x, translate_y, add_width, add_height);
     logging::set_file_logging_enabled(effects.log_to_file);
     info!("Configuration loaded from '{}'.", config_path().display());
     backfill_missing_fields(conf);

@@ -6318,6 +6318,7 @@ impl App {
                         add_width,
                         add_height,
                     );
+                    space::set_overscan(translate_x, translate_y, add_width, add_height);
                     Vec::new()
                 }
                 RuntimeRequest::Config(ConfigRequest::Advanced(request)) => {
@@ -11412,6 +11413,14 @@ pub fn init_paths(dirs: &AppDirs) -> Result<(), &'static str> {
         dirs.unlock_cache_path(),
     )?;
     deadsync_updater::init_cache_dir(dirs.cache_dir.clone())
+}
+
+/// Load machine settings and apply the initial overscan to presentation.
+pub fn load_config() -> config::runtime_state::PublishedConfigEffects {
+    let effects = config::runtime_load::load();
+    let (translate_x, translate_y, add_width, add_height) = effects.overscan;
+    space::set_overscan(translate_x, translate_y, add_width, add_height);
+    effects
 }
 
 /// Load local profiles after the machine settings have been loaded.

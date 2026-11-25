@@ -1,3 +1,4 @@
+pub mod color;
 mod frame;
 #[cfg(any(test, feature = "test-util"))]
 pub mod frame_compare;

@@ -2931,10 +2931,12 @@ fn overscan_runtime_and_persistence_are_shell_owned() {
             && shell_nav.contains("config.center_image_translate_x")
             && shell_nav.contains("config.center_image_add_height")
             && shell.contains("ConfigRequest::Overscan {")
-            && shell.split_whitespace().collect::<String>().contains(
-                "config::runtime_update::update_overscan(translate_x,translate_y,add_width,add_height,)"
+            && contains_rust(
+                &shell,
+                "config::runtime_update::update_overscan(translate_x, translate_y, add_width, add_height,);
+                 space::set_overscan(translate_x, translate_y, add_width, add_height);",
             ),
-        "shell must prepare and persist Overscan Adjustment state"
+        "shell must prepare, persist, and apply confirmed overscan adjustments"
     );
 }
 
@@ -8931,6 +8933,24 @@ fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
     assert!(mapping.contains("deadlib_platform::input::"));
     let backend = read_source(native.join("src/launch.rs")).expect("native launch");
     assert!(backend.contains("deadlib_platform::input::{PadEvent, RawKeyboardEvent}"));
+}
+
+#[test]
+fn application_config_is_independent_of_presentation() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config = root.join("crates/deadsync-config");
+    let manifest = read_source(config.join("Cargo.toml")).expect("config manifest");
+    assert!(
+        !manifest.contains("deadlib-present"),
+        "application config must use shared render types without the presentation crate"
+    );
+    for file in production_rust_files(&config.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadlib_present"),
+            "{} imports presentation code",
+            file.display(),
+        );
+    }
 }
 
 #[test]

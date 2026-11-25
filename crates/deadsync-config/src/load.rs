@@ -17,8 +17,7 @@ use crate::theme::{
 use deadlib_audio_core::{AudioOutputMode, LinuxAudioBackend};
 use deadlib_platform::display::FullscreenType;
 use deadlib_platform::input::WindowsPadBackend;
-use deadlib_present::color::Color;
-use deadlib_render_core::{BackendType, PresentModePolicy};
+use deadlib_render_core::{BackendType, PresentModePolicy, color::Color};
 use deadsync_core::lights::{DriverKind, GameplayPadLightMode, SerialPortName};
 use deadsync_input::devices::SmxPadPreset;
 use deadsync_input::parse_keycode_to_key;

@@ -148,6 +148,9 @@ theme to describe an input or store a setting:
   palette data. Concrete palette values remain supplied by themes.
   The shell uses the installed theme's judgment preset for Player Options,
   gameplay, Evaluation, post-song screens, and palette editing.
+- `deadlib-render-core::color` defines the shared color value and hex format.
+  Config persists overscan settings, and the shell applies them to
+  `deadlib-present` on startup and after a confirmed adjustment.
 - `deadlib-assets::AssetManifest` describes fonts, textures, and texture sampling
   requirements. The game resolves its catalog and paths before engine loading.
 - `deadsync-theme` reexports the original public style/color names and

@@ -64,7 +64,7 @@ fn run_child(theme: &str) {
         ),
     )
     .unwrap();
-    config::runtime_load::load();
+    load_config();
     config::runtime::flush_pending_saves();
     deadsync_theme_simply_love::i18n::init_for_tests();
     seed_library(&dirs);

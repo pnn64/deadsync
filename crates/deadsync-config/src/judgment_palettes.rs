@@ -1,6 +1,6 @@
 use crate::ini::borrowed_ini_sections;
 use crate::runtime::palette_path;
-use deadlib_present::color::Color;
+use deadlib_render_core::color::Color;
 use deadsync_core::color::{JudgmentColorRole, JudgmentPalette, JudgmentPalettePreset};
 use std::fmt::Write as _;
 use std::path::Path;

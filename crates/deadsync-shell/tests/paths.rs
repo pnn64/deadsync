@@ -8,7 +8,8 @@ fn startup_supplies_isolated_paths_to_persistence_assets_and_scanning() {
     dirs.ensure_dirs_exist();
     std::fs::write(
         dirs.config_path(),
-        "[Options]\nLogToFile=0\nShowConsole=1\nDefaultNoteSkin=Cyber\nSmxDefaultLightBrightness=67\n",
+        "[Options]\nLogToFile=0\nShowConsole=1\nDefaultNoteSkin=Cyber\nSmxDefaultLightBrightness=67\n\
+         CenterImageTranslateX=-8\nCenterImageTranslateY=6\nCenterImageAddWidth=14\nCenterImageAddHeight=-2\n",
     )
     .expect("write config fixture");
     let overlay = data.join("assets/startup-path-test.txt");
@@ -25,7 +26,9 @@ fn startup_supplies_isolated_paths_to_persistence_assets_and_scanning() {
         deadsync_profile::app_runtime::profiles_root(),
         data.join("save/profiles")
     );
-    deadsync_config::runtime_load::load();
+    let config_effects = deadsync_shell::app::load_config();
+    assert_eq!(config_effects.overscan, (-8, 6, 14, -2));
+    assert_eq!(deadlib_present::space::overscan(), config_effects.overscan);
     deadsync_shell::app::load_profiles();
     let guest = deadsync_profile::app_runtime::guest_player_options();
     assert_eq!(guest.noteskin.as_str(), "cyber");

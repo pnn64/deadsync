@@ -202,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(code);
     }
 
-    let config_effects = config::runtime_load::load();
+    let config_effects = app::load_config();
     let cfg = config::runtime::get();
     if let Some(case) = live_case.as_ref() {
         case.validate_config(&cfg).map_err(std::io::Error::other)?;
