@@ -1041,3 +1041,43 @@ fn indexless_search_uses_absolute_64_bit_offsets_and_fenced_reads() {
             .is_none()
     );
 }
+
+#[test]
+fn wide_mux_restarts_serial_lookup_after_reset() {
+    let mut bytes = Vec::new();
+    for (sequence, flags) in [(0, BOS), (1, EOS)] {
+        for serial in 0u32..300 {
+            write_page(
+                &mut bytes,
+                PageHeader {
+                    serial: serial.wrapping_mul(0x9e37_79b1),
+                    flags,
+                    sequence,
+                    granule_position: u64::from(sequence),
+                },
+                &[1],
+                &[serial as u8],
+            )
+            .unwrap();
+        }
+    }
+    let mut demux = Demuxer::default();
+    for _ in 0..2 {
+        let mut reader = PageReader::new(bytes.as_slice());
+        let mut packets = 0u32;
+        while let Some(located) = reader.next_page().unwrap() {
+            demux
+                .push_page(located.page, located.offset, |packet| {
+                    let serial = packets % 300;
+                    assert_eq!(packet.info.serial, serial.wrapping_mul(0x9e37_79b1));
+                    assert_eq!(packet.info.number, u64::from(packets / 300));
+                    assert_eq!(packet.data, &[serial as u8]);
+                    packets += 1;
+                })
+                .unwrap();
+        }
+        assert_eq!(packets, 600);
+        demux.finish().unwrap();
+        demux.reset();
+    }
+}

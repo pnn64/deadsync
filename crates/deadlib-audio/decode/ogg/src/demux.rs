@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     CompatibilityStats, Error, MAX_PAGE_SIZE, Page, UNKNOWN_GRANULE_POSITION, ValidationOptions,
     reserve, validation,
@@ -59,14 +61,17 @@ struct Stream<P> {
 // Keep the first stream inline and retain the heap storage once it is needed.
 enum Streams<P> {
     Single(Option<Stream<P>>),
-    Many(Vec<Stream<P>>),
+    Many {
+        streams: Vec<Stream<P>>,
+        serials: Option<HashMap<u32, u32>>,
+    },
 }
 
 impl<P> Streams<P> {
     fn as_slice(&self) -> &[Stream<P>] {
         match self {
             Self::Single(stream) => stream.as_slice(),
-            Self::Many(streams) => streams,
+            Self::Many { streams, .. } => streams,
         }
     }
 
@@ -76,12 +81,33 @@ impl<P> Streams<P> {
                 .as_mut()
                 .filter(|s| s.serial == serial)
                 .map(|s| (0, s)),
-            Self::Many(streams) => streams
-                .iter_mut()
-                .enumerate()
-                .rev()
-                .find(|(_, s)| s.serial == serial),
+            Self::Many { streams, serials } => Self::find_many(streams, serials, serial),
         }
+    }
+
+    #[inline(never)]
+    fn find_many<'a>(
+        streams: &'a mut [Stream<P>],
+        serials: &mut Option<HashMap<u32, u32>>,
+        serial: u32,
+    ) -> Option<(usize, &'a mut Stream<P>)> {
+        let (last, earlier) = streams.split_last_mut()?;
+        if last.serial == serial {
+            return Some((earlier.len(), last));
+        }
+        // A wide group only needs a table when a lookup goes past the last stream.
+        if earlier.len() >= 127 {
+            let map = serials.get_or_insert_with(|| Self::index_serials(earlier, last));
+            if !map.is_empty() {
+                let index = *map.get(&serial)? as usize;
+                return Some((index, &mut earlier[index]));
+            }
+        }
+        earlier
+            .iter_mut()
+            .enumerate()
+            .rev()
+            .find(|(_, s)| s.serial == serial)
     }
 
     fn get_mut(&mut self, index: usize) -> &mut Stream<P> {
@@ -90,14 +116,17 @@ impl<P> Streams<P> {
                 debug_assert_eq!(index, 0);
                 stream.as_mut().unwrap()
             }
-            Self::Many(streams) => &mut streams[index],
+            Self::Many { streams, .. } => &mut streams[index],
         }
     }
 
     fn clear(&mut self) {
         match self {
             Self::Single(stream) => *stream = None,
-            Self::Many(streams) => streams.clear(),
+            Self::Many { streams, serials } => {
+                streams.clear();
+                *serials = None;
+            }
         }
     }
 
@@ -112,16 +141,50 @@ impl<P> Streams<P> {
                 reserve(&mut streams, 2)?;
                 streams.push(first.take().unwrap());
                 streams.push(stream);
-                *self = Self::Many(streams);
+                *self = Self::Many {
+                    streams,
+                    serials: None,
+                };
                 Ok(1)
             }
-            Self::Many(streams) => {
+            Self::Many { streams, serials } => {
                 reserve(streams, 1)?;
                 let index = streams.len();
+                if let Some(map) = serials {
+                    Self::append_serial(map, stream.serial, index as u32);
+                }
                 streams.push(stream);
                 Ok(index)
             }
         }
+    }
+
+    #[cold]
+    fn append_serial(map: &mut HashMap<u32, u32>, serial: u32, index: u32) {
+        if !map.is_empty() {
+            if map.try_reserve(1).is_ok() {
+                map.insert(serial, index);
+            } else {
+                map.clear();
+            }
+        }
+    }
+
+    #[cold]
+    fn index_serials(earlier: &[Stream<P>], last: &Stream<P>) -> HashMap<u32, u32> {
+        let mut map = HashMap::new();
+        // An empty map keeps the linear lookup active if allocation fails.
+        if map.try_reserve(earlier.len() + 1).is_ok() {
+            // Unique u32 serials guarantee that every stream index fits in u32.
+            map.extend(
+                earlier
+                    .iter()
+                    .enumerate()
+                    .map(|(i, s)| (s.serial, i as u32)),
+            );
+            map.insert(last.serial, earlier.len() as u32);
+        }
+        map
     }
 }
 
