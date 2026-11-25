@@ -57,7 +57,10 @@ pub(crate) fn pixel_count(width: u32, height: u32) -> Result<usize, Error> {
 impl Bitmap {
     /// Validate dimensions, sample counts, palette size, and every used index.
     pub fn validate(&self) -> Result<(), Error> {
-        let count = pixel_count(self.width, self.height)?;
+        self.validate_pixels(pixel_count(self.width, self.height)?)
+    }
+
+    fn validate_pixels(&self, count: usize) -> Result<(), Error> {
         match &self.pixels {
             Pixels::Indexed {
                 bit_depth,
@@ -104,7 +107,7 @@ impl Bitmap {
         if count > limits.max_pixels || bytes > limits.max_decoded_bytes {
             return Err(Error::LimitExceeded);
         }
-        self.validate()?;
+        self.validate_pixels(count)?;
         let mut output = Vec::new();
         reserve(&mut output, count)?;
         match &self.pixels {
