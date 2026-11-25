@@ -188,10 +188,10 @@ pub struct OggIndex {
 
 #[inline(never)]
 fn group_pages(pages: &mut [IndexedPage], streams: &mut [StreamIndex]) {
-    if pages.is_sorted_by_key(|page| page.stream) {
-        return;
+    // Reuse the physical ranges as counts, then stable destinations.
+    for stream in streams.iter_mut() {
+        stream.pages.end = 0;
     }
-    // Fresh private ranges provide counts, then stable destinations.
     for page in pages.iter() {
         streams[page.stream].pages.end += 1;
     }
@@ -304,7 +304,7 @@ impl OggIndex {
                     eos_offset: 0,
                     end_offset: 0,
                     packets: 0,
-                    pages: 0..0,
+                    pages: index.pages.len()..0,
                 });
             }
             let stream = &mut index.streams[state.stream];
@@ -330,6 +330,7 @@ impl OggIndex {
             if header.is_eos() {
                 stream.eos_offset = located.offset;
                 stream.end_offset = index.length;
+                stream.pages.end = index.pages.len();
             }
             observe(IndexEvent::Page {
                 page,
@@ -338,14 +339,17 @@ impl OggIndex {
         }
         demux.finish()?;
         index.compatibility = demux.compatibility();
-        let single_stream = index.streams.len() == 1;
-        if single_stream && all_known && index.compatibility == CompatibilityStats::default() {
-            index.streams[0].pages = 0..index.pages.len();
+        let grouped = index
+            .streams
+            .windows(2)
+            .all(|pair| pair[0].pages.end == pair[1].pages.start);
+        if grouped && all_known && index.compatibility == CompatibilityStats::default() {
             return Ok(index);
         }
-        if !single_stream {
+        if !grouped {
             group_pages(&mut index.pages, &mut index.streams);
         }
+        let single_stream = index.streams.len() == 1;
         let mut position = 0;
         for (stream_id, stream) in index.streams.iter_mut().enumerate() {
             let start = position;
