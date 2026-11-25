@@ -143,9 +143,30 @@ impl Bitmap {
                 }
             }
             Pixels::Rgb(samples) => {
-                output.extend(
+                let tail = if cfg!(target_arch = "x86_64") && count >= 256 {
+                    let (groups, tail) = samples.as_chunks::<12>();
+                    output.extend(groups.iter().flat_map(|group| {
+                        // Reassemble four RGB triples from three input words, then set alpha.
+                        let [first, second, third] = group
+                            .as_chunks::<4>()
+                            .0
+                            .first_chunk::<3>()
+                            .unwrap()
+                            .map(u32::from_le_bytes);
+                        [
+                            first,
+                            (first >> 24) | (second << 8),
+                            (second >> 16) | (third << 16),
+                            third >> 8,
+                        ]
+                        .map(|rgb| (rgb | 0xff00_0000).to_le_bytes())
+                    }));
+                    tail
+                } else {
                     samples
-                        .as_chunks::<3>()
+                };
+                output.extend(
+                    tail.as_chunks::<3>()
                         .0
                         .iter()
                         .map(|&[red, green, blue]| [red, green, blue, 255]),

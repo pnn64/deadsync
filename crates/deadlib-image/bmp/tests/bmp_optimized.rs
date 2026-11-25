@@ -642,7 +642,8 @@ fn rgba_conversion_handles_all_palette_sizes_and_rgb_chunk_tails() {
         assert_eq!(bitmap.to_rgba8().unwrap(), expected);
     }
     for count in [
-        1usize, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 255, 256, 257, 1023, 1024, 1025,
+        1usize, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 255, 256, 257, 258, 259, 1023,
+        1024, 1025,
     ] {
         let mut rgb = Vec::new();
         let mut expected = Vec::new();
