@@ -319,7 +319,10 @@ impl<T> Arena<T> {
         self.live
     }
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        self.values.iter().filter_map(Option::as_ref)
+        self.values
+            .iter()
+            .filter_map(Option::as_ref)
+            .take(self.live)
     }
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.values.iter_mut().filter_map(Option::as_mut)
@@ -329,6 +332,7 @@ impl<T> Arena<T> {
             .iter()
             .enumerate()
             .filter_map(|(i, v)| v.as_ref().map(|v| (i, v)))
+            .take(self.live)
     }
     pub fn storage_bytes(&self) -> usize {
         self.values.capacity() * std::mem::size_of::<Option<T>>()
