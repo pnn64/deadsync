@@ -1567,12 +1567,10 @@ impl Vm {
         self.trace_graph(work)?;
         let metatable_end = self.clear_weak_tables();
         if self.threads.has_unmarked() {
-            for (i, t) in self.threads.entries() {
-                if !self.threads.slot_marked(i) {
-                    for &cell in &t.open_upvalues {
-                        if let Cell::Open(_, r) = self.upvalues[cell as usize] {
-                            self.upvalues[cell as usize] = Cell::Closed(t.registers[r]);
-                        }
+            for thread in self.threads.unmarked_values() {
+                for &cell in &thread.open_upvalues {
+                    if let Cell::Open(_, r) = self.upvalues[cell as usize] {
+                        self.upvalues[cell as usize] = Cell::Closed(thread.registers[r]);
                     }
                 }
             }

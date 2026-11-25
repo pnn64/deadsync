@@ -268,6 +268,25 @@ impl<T> Arena<T> {
             Some(slot)
         })
     }
+    pub(crate) fn unmarked_values(&self) -> impl Iterator<Item = &T> {
+        self.values
+            .chunks(64)
+            .zip(self.marks.iter().copied())
+            .flat_map(|(values, marked)| {
+                let mut bits = !marked & (u64::MAX >> (64 - values.len()));
+                std::iter::from_fn(move || {
+                    while bits != 0 {
+                        let slot = bits.trailing_zeros() as usize;
+                        bits &= bits - 1;
+                        if let Some(value) = &values[slot] {
+                            return Some(value);
+                        }
+                    }
+                    None
+                })
+            })
+    }
+
     pub(crate) fn at_most_marked(&self, mut limit: usize) -> bool {
         for &bits in &*self.marks {
             let Some(remaining) = limit.checked_sub(bits.count_ones() as usize) else {
