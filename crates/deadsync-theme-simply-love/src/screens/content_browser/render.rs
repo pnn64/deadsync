@@ -7,7 +7,7 @@
 //! search prompt.
 
 use crate::color;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, TextContent};
 use deadsync_online::itgdb::ItgdbPhase;
 use deadsync_online::pack_page::PagePhase;
@@ -76,7 +76,7 @@ pub(super) fn accent(state: &State) -> [f32; 4] {
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     let w = lo::width();
@@ -681,7 +681,7 @@ fn push_too_narrow(actors: &mut Vec<Actor>, w: f32, h: f32) {
 /// Not a prompt to open: the reader arrives on this tab and types. It sits in
 /// the band's own space, so it displaces the heading rather than floating over
 /// anything, and the list below it answers as the characters land.
-fn push_search_field(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager, w: f32) {
+fn push_search_field(actors: &mut Vec<Actor>, state: &State, asset_manager: &dyn AssetView, w: f32) {
     /// Where the typed line starts, clear of the magnifier.
     const TEXT_X: f32 = 40.0;
     const TEXT_ZOOM: f32 = 0.68;
@@ -2419,14 +2419,14 @@ fn three_key_footer(state: &State) -> String {
 
 // --- transitions --------------------------------------------------------------
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn get_actors(state: &State, asset_manager: &dyn AssetView) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(lo::ROWS * 8 + 120);
     push_actors(&mut actors, state, asset_manager, Default::default());
     actors
 }
 
 /// A line's width in logical pixels at zoom 1, as the font will lay it out.
-pub(super) fn text_width(asset_manager: &AssetManager, font: &str, text: &str) -> f32 {
+pub(super) fn text_width(asset_manager: &dyn AssetView, font: &str, text: &str) -> f32 {
     asset_manager.with_fonts(|all_fonts| {
         asset_manager
             .with_font(font, |measure| {

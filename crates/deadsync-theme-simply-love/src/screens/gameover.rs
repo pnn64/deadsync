@@ -6,7 +6,7 @@ use crate::i18n::{tr, tr_fmt};
 use crate::screens::Screen;
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::views::{PostSongPlayerView, PostSongRuntimeView};
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
@@ -289,7 +289,7 @@ pub const fn handle_input(_state: &mut State, ev: &InputEvent) -> ThemeEffect {
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    _asset_manager: &AssetManager,
+    _asset_manager: &dyn AssetView,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(64);
@@ -447,7 +447,7 @@ pub fn push_actors(
 pub fn get_actors(
     state: &mut State,
     stages: &[stage_stats::StageSummary],
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
 ) -> Vec<Actor> {
     sync_text(state, stages);
     let mut actors = Vec::with_capacity(64);

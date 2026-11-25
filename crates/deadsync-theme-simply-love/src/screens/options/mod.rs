@@ -10,6 +10,7 @@ use crate::views::{
     SimplyLoveUpdaterView,
 };
 use crate::visual_styles;
+#[cfg(test)]
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};

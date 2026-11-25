@@ -114,7 +114,7 @@ use crate::window_state::{WindowMinimizePlan, exclusive_fullscreen_focus_plan};
 use crate::window_state::{
     apply_shell_surface_active, apply_shell_window_focus, apply_shell_window_occlusion,
 };
-use deadlib_assets::AssetManager;
+use deadsync_assets::RenderAssets;
 use deadlib_assets::upload::TextureUploadBudget;
 use deadlib_platform::frame_pacing::{
     FrameIntervalState, FrameLoopMode, FrameWaitControl, elapsed_us_between, elapsed_us_since,
@@ -940,7 +940,7 @@ struct PostSelectStageKey {
 
 fn sync_gameplay_banners(
     media: &mut DynamicMedia,
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut renderer_backend::Backend,
     state: &GameplayState,
     mode: config::theme::GameplayBannerMode,
@@ -964,7 +964,7 @@ fn sync_gameplay_banners(
 
 fn prewarm_gameplay_banners(
     media: &mut DynamicMedia,
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut renderer_backend::Backend,
     state: &GameplayState,
     mode: config::theme::GameplayBannerMode,
@@ -1018,7 +1018,7 @@ fn independent_banner_video_paths<'a>(
 }
 
 fn prewarm_gameplay_text_layout_cache(
-    assets: &AssetManager,
+    assets: &RenderAssets,
     metrics: &Metrics,
     cache: &mut compose::TextLayoutCache,
     compose_scratch: &mut compose::ComposeScratch,
@@ -1435,7 +1435,7 @@ impl ScreensState {
         now: Instant,
         session: &SessionState,
         premium_seconds_left: Option<u32>,
-        asset_manager: &AssetManager,
+        asset_manager: &RenderAssets,
         audio: &mut deadsync_audio_stream::AudioControl,
         gameplay_sfx: &GameplaySfx,
         music_clock: &mut deadsync_audio_stream::MusicClock,
@@ -1774,7 +1774,7 @@ pub struct App {
             std::sync::Arc<deadsync_smx::gifs::FullPadAnim>,
         ),
     >,
-    asset_manager: AssetManager,
+    asset_manager: RenderAssets,
     option_previews: option_previews::Service,
     /// The reader's noteskin for the Content Browser's chart preview.
     browser_skin: browser_skin::Service,
@@ -5724,7 +5724,7 @@ impl App {
             smx_scoped_bg_cache: std::collections::HashMap::new(),
             smx_scoped_bg_generation: 0,
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
-            asset_manager: AssetManager::new(),
+            asset_manager: RenderAssets::new(),
             option_previews: option_previews::Service::default(),
             browser_skin: browser_skin::Service::default(),
             dynamic_media: DynamicMedia::new(),
@@ -12180,7 +12180,7 @@ mod tests {
         use deadsync_profile::{PlayStyle, PlayerSide};
         use deadsync_theme_simply_love::views::EvaluationContextView;
 
-        let assets = AssetManager::new();
+        let assets = RenderAssets::new();
         let label = deadsync_theme_simply_love::i18n::tr("Evaluation", "Barely");
         for (style, side) in [
             (PlayStyle::Single, PlayerSide::P1),

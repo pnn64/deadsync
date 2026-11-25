@@ -9,6 +9,7 @@ mod manual_color_inheritance {
 mod manual_target_space {
     include!("manual_target_space.rs");
 }
+use deadlib_assets::AssetView;
 use deadlib_render_core::BackendType;
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_assets::song_lua::{
@@ -21,6 +22,7 @@ use deadsync_profile as profile_data;
 use deadsync_rules::{scroll::ScrollSpeedSetting, timing::TimingData};
 type GameplayCoreState =
     super::GameplayCoreState<deadsync_profile_gameplay::GameplayProfile, SpriteSlot>;
+type AssetManager = deadlib_assets::AssetManager<()>;
 
 use deadlib_present::actors::{ActorResourceArena, RetainedActorFrame};
 use deadlib_present::compose::ComposeScratch;
@@ -10796,7 +10798,7 @@ fn song_lua_bound_sprite_draw_refreshes_identity_size_and_uv() {
         message_commands: Vec::new(),
     };
     let mut scratch = SongLuaProjectedMeshScratch::textured(PROJECTED_MESH_VERTEX_CAPACITY);
-    let mut draw = |assets: &AssetManager| {
+    let mut draw = |assets: &dyn AssetView| {
         build_song_lua_overlay_actor_with_scratch(
             &overlay,
             SongLuaOverlayState {

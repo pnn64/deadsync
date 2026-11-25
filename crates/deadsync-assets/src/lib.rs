@@ -69,10 +69,13 @@ pub fn open_bundled_image(path: &str) -> image::ImageResult<image::DynamicImage>
     open_image_fallback(&resolve_asset_path(path))
 }
 
+/// Asset storage for the renderer selected by the application.
+pub type RenderAssets = deadlib_assets::AssetManager<deadlib_render::Texture>;
+
 /// Resolve the theme manifest and the game's discovered assets before passing
 /// decode/upload work to the engine.
 pub fn load_initial_assets<T>(
-    assets: &mut deadlib_assets::AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut deadlib_render::Backend,
     manifest: deadlib_assets::AssetManifest<T>,
 ) -> Result<(), deadlib_assets::AssetError>

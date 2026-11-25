@@ -1,5 +1,5 @@
 use super::*;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadsync_config::options::{MAX_FPS_MAX, MAX_FPS_MIN};
 use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
@@ -10,6 +10,8 @@ use deadsync_theme::views::{
     SmxAssignmentPadView, SmxAssignmentView, SmxGifCatalogView,
 };
 use std::time::{Duration, Instant};
+
+type AssetManager = deadlib_assets::AssetManager<()>;
 
 pub(super) fn init() -> State {
     init_with_audio(AudioOptionsView::default())
@@ -2057,7 +2059,7 @@ fn srpg_shop_folder_is_hidden_when_shop_is_disabled() {
 
 fn press(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     action: VirtualAction,
 ) -> Vec<ThemeEffect> {
     let mut effects = Vec::new();
@@ -2073,7 +2075,7 @@ fn press(
 
 fn apply_choice_effects(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     delta: isize,
     wrap: NavWrap,
 ) -> Vec<ThemeEffect> {
@@ -2094,7 +2096,7 @@ fn is_change_value_sfx(effect: &ThemeEffect) -> bool {
 
 fn dedicated_press(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     action: VirtualAction,
 ) -> ThemeEffect {
     handle_dedicated_three_key_options_input(state, asset_manager, &input_event(action, true))
@@ -4055,13 +4057,13 @@ fn replaygain_progress_replaces_completed_song_scan_progress() {
 
 /// Run pending submenu fades to completion (cap iterations so a stuck transition
 /// fails the test rather than hanging).
-fn settle_submenu(state: &mut State, asset_manager: &AssetManager) {
+fn settle_submenu(state: &mut State, asset_manager: &dyn AssetView) {
     settle_submenu_with_effects(state, asset_manager, &mut Vec::new());
 }
 
 fn settle_submenu_with_effects(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     effects: &mut Vec<ThemeEffect>,
 ) {
     for _ in 0..16 {

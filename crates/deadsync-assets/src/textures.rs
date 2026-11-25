@@ -1,5 +1,6 @@
+use crate::RenderAssets;
 use deadlib_assets::{
-    AssetManager, TextureAssetSpec, TextureChoice, TextureDecodeJob, TextureHints,
+    TextureAssetSpec, TextureChoice, TextureDecodeJob, TextureHints,
     canonical_texture_key_with_asset_roots, parse_texture_hints, strip_sprite_hints,
     texture_filename_has_multiframe_hint, texture_key_sampler,
 };
@@ -128,7 +129,7 @@ pub fn texture_decode_job(key: &str, model: bool) -> TextureDecodeJob {
 /// # Errors
 /// Returns an error if a GPU texture cannot be created.
 pub fn preload_texture_keys(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     textures: impl IntoIterator<Item = (std::sync::Arc<str>, bool)>,
 ) -> Result<(), deadlib_assets::AssetError> {
@@ -185,7 +186,7 @@ pub fn initial_texture_jobs(
 }
 
 pub fn ensure_texture_for_key(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     texture_key: &str,
     needs_repeat: fn(&str) -> bool,
@@ -195,7 +196,7 @@ pub fn ensure_texture_for_key(
 
 /// Load a game-owned sprite using its native filename sampling hints.
 pub fn ensure_native_texture_for_key(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     texture_key: &str,
 ) {
@@ -204,7 +205,7 @@ pub fn ensure_native_texture_for_key(
 
 /// An explicit sampler forces replacement, even if this key is already loaded.
 pub fn ensure_texture_for_key_with_sampler(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     texture_key: &str,
     sampler: SamplerDesc,
@@ -213,7 +214,7 @@ pub fn ensure_texture_for_key_with_sampler(
 }
 
 fn load_texture_key(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     texture_key: &str,
     sampler_override: Option<SamplerDesc>,

@@ -1,5 +1,5 @@
 use crate::{media_cache, open_image_fallback, register_texture_dims};
-use deadlib_assets::AssetManager;
+use crate::RenderAssets;
 use deadlib_assets::dynamic;
 use deadlib_render::Backend;
 use deadlib_render_core::{SamplerDesc, TextureHandle};
@@ -320,7 +320,7 @@ fn visit_bgchange_paths<'a>(change: &'a SongBackgroundChange, visit: &mut impl F
 }
 
 pub fn create_cdtitle_texture(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     path: &Path,
 ) -> Result<String, DynamicImageTextureError> {
@@ -336,7 +336,7 @@ pub fn create_cdtitle_texture(
 }
 
 pub fn create_inserted_banner_texture(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     path: &Path,
 ) -> Result<String, DynamicImageTextureError> {
@@ -352,7 +352,7 @@ pub fn create_inserted_banner_texture(
 }
 
 pub fn set_banner_texture_for_path(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     path: &Path,
 ) -> Result<String, DynamicImageTextureError> {
@@ -372,7 +372,7 @@ pub fn start_background_video(path: &Path) -> Result<video::Player, String> {
 }
 
 pub fn set_video_background_texture(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     path: &Path,
     video_started_at_sec: f32,
@@ -403,7 +403,7 @@ pub fn set_video_background_texture(
 }
 
 pub fn set_video_background_poster_texture(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     path: &Path,
     video_started_at_sec: f32,
@@ -429,7 +429,7 @@ pub fn set_video_background_poster_texture(
 }
 
 pub fn set_image_background_texture(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     path: &Path,
     video_started_at_sec: f32,

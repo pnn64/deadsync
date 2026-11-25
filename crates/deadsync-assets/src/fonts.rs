@@ -1,5 +1,6 @@
+use crate::RenderAssets;
 use deadlib_assets::{
-    AssetManager, PreparedFontTexture, parse_font_asset_specs, parse_font_with_asset_context,
+    PreparedFontTexture, parse_font_asset_specs, parse_font_with_asset_context,
     prepare_required_font_textures,
 };
 use deadlib_present::font::Font;
@@ -8,7 +9,7 @@ use log::debug;
 use std::path::Path;
 
 fn upload_font_textures(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     font: &Font,
     required_textures: &[std::path::PathBuf],
@@ -26,7 +27,7 @@ fn upload_font_textures(
 }
 
 pub fn load_font_from_ini_path(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     name: &'static str,
     ini_path: &Path,
@@ -39,7 +40,7 @@ pub fn load_font_from_ini_path(
 
 /// Registers a font and uploads its pages on startup or renderer replacement.
 pub fn load_font_at_renderer_startup(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     name: &'static str,
     ini_path: &Path,
@@ -56,7 +57,7 @@ pub fn load_font_at_renderer_startup(
 }
 
 pub fn load_initial_fonts(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     fonts: &'static [deadlib_assets::FontAssetSpec],
 ) -> Result<(), deadlib_assets::AssetError> {

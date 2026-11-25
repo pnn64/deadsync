@@ -1,4 +1,5 @@
 use super::*;
+use deadlib_assets::AssetManager;
 use deadlib_present::compose::{ComposeScratch, NullTextureContext};
 use deadlib_present::space::Metrics;
 
@@ -483,7 +484,7 @@ fn screen_transform_preserves_generic_sprite_and_quad_masks() {
     let metrics = Metrics::centered(640.0, 480.0);
     deadlib_present::space::set_current_metrics(metrics);
     deadlib_present::space::set_current_window_px(640, 480);
-    let mut assets = AssetManager::new();
+    let mut assets = AssetManager::<()>::new();
     for key in [white_texture_key(), Arc::from("screen-mask.png")] {
         assets.queue_texture_upload(
             key.to_string(), image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),

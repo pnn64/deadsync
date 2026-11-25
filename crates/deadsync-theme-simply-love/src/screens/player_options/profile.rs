@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 use crate::fonts::machine_font_key;
 use deadsync_profile::NoCmodAlternative;
@@ -499,7 +500,7 @@ pub(super) fn scaled_speed_helper_bpm(
 
 #[inline(always)]
 pub(super) fn measure_header_text_width(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     text: &str,
     machine_font: deadsync_config::theme::MachineFont,
 ) -> f32 {

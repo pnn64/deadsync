@@ -5,7 +5,7 @@ use crate::playback::{
     FieldFrame, FieldLayout, FrameOptions, FrameScratch, GameplayActorSegments, GameplayCoreState,
     ScreenLayer, compose_frame,
 };
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw};
 use deadsync_core::hud_style::NotefieldHudStyle;
 use deadsync_gameplay::GameplayProfileData;
@@ -59,7 +59,7 @@ impl SongFrameContent {
 
 #[derive(Clone, Copy)]
 pub struct FramePresentationContext<'a, View, Policy> {
-    pub assets: &'a AssetManager,
+    pub assets: &'a dyn AssetView,
     pub view: View,
     pub uptime_seconds: f64,
     pub policy: Policy,

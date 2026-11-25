@@ -9466,6 +9466,31 @@ fn smx_imports_do_not_use_engine_facade() {
 }
 
 #[test]
+fn asset_loading_takes_texture_operations_from_the_renderer() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let assets = root.join("crates/deadlib-assets");
+    let manifest = read_source(assets.join("Cargo.toml")).expect("asset manifest");
+    let mut production = true;
+    for line in manifest.lines().map(str::trim) {
+        if line.starts_with('[') {
+            production = !line.contains("dev-dependencies");
+        }
+        if production
+            && let Some((name, _)) = line.split_once('=')
+        {
+            assert_ne!(name.trim(), "deadlib-render");
+        }
+    }
+    for file in production_rust_files(&assets.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadlib_render::"),
+            "{} imports the concrete renderer",
+            file.display(),
+        );
+    }
+}
+
+#[test]
 fn asset_loading_is_independent_of_video_playback() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let assets = root.join("crates/deadlib-assets");

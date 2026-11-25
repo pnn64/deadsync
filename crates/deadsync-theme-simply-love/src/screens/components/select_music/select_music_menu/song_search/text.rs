@@ -1,6 +1,6 @@
 //! Search completion assembly and text fitting.
 use super::SONG_SEARCH_MAX_LEN;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 
 fn character_prefix(text: &str, count: usize) -> &str {
     let end = text
@@ -56,7 +56,7 @@ pub fn song_search_query_completed_with(query: &str, label: &str) -> String {
 /// The same binary-search fitting decisions as before, using borrowed UTF-8
 /// prefixes. Nonfinite widths and negative advances retain their old behavior.
 pub(super) fn song_search_fit<'a>(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     text: &'a str,
     max_w: f32,
     zoom: f32,

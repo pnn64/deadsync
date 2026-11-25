@@ -30,7 +30,7 @@ impl TextureChoice {
     pub fn actor_texture_source(
         &self,
         arena: &ActorResourceArena,
-        textures: &impl TextureContext,
+        textures: &(impl TextureContext + ?Sized),
     ) -> SpriteSource {
         let generation = textures.texture_registry_generation();
         let mut handle = self.cached_handle.load(Ordering::Relaxed);

@@ -1,10 +1,11 @@
+use deadlib_assets::AssetView;
 use super::*;
 use deadsync_profile as profile_data;
 
 pub fn update(
     state: &mut State,
     dt: f32,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     effects: &mut Vec<ThemeEffect>,
 ) {
     // Keep options-screen noteskin previews on a stable clock.
@@ -345,7 +346,7 @@ fn all_active_players_on_row(
 
 pub(super) fn handle_nav_event(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
     dir: NavDirection,
@@ -404,7 +405,7 @@ pub(super) fn clear_nav_hold(state: &mut State, player_idx: usize) {
 
 pub(super) fn handle_arcade_start_press(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
     repeated: bool,
@@ -429,7 +430,7 @@ pub(super) fn handle_arcade_start_press(
 
 pub(super) fn repeat_held_arcade_start(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
     dt: f32,
@@ -524,7 +525,7 @@ pub(super) fn move_arcade_horizontal_focus(
 
 pub(super) fn handle_arcade_prev_event(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
 ) {
@@ -551,7 +552,7 @@ pub(super) fn handle_arcade_prev_event(
 
 pub(super) fn handle_arcade_start_event(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
 ) -> Option<ThemeEffect> {
@@ -685,7 +686,7 @@ pub(super) const fn what_comes_next_pane(
 
 fn handle_input_inner(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     ev: &InputEvent,
 ) -> ThemeEffect {
     let active = state.active;
@@ -858,7 +859,7 @@ fn handle_input_inner(
 
 pub fn handle_input(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     ev: &InputEvent,
     effects: &mut Vec<ThemeEffect>,
 ) {

@@ -10,7 +10,7 @@ use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBa
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::views::MappingsRuntimeView;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_platform::input::KeyCode;
 use deadlib_platform::input::PadEvent;
 use deadlib_platform::input::RawKeyboardEvent;
@@ -1246,7 +1246,7 @@ fn editable_slot_indices_for_action(keymap: &Keymap, action: VirtualAction) -> (
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -1927,7 +1927,7 @@ pub fn push_actors(
 
 pub fn get_actors(
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);

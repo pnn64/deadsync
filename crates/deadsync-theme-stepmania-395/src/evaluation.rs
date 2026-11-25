@@ -1,4 +1,4 @@
-use deadlib_assets::{AssetManager, present_dsl::cover_sprite};
+use deadlib_assets::{AssetView, present_dsl::cover_sprite};
 use deadlib_present::actors::{Actor, TextAlign, TextContent};
 use deadsync_theme::stage::EvaluationOverviewPresentation;
 use deadsync_theme::views::{EvaluationOverview, EvaluationPlayerOverview, Grade};
@@ -21,7 +21,7 @@ impl EvaluationOverviewPresentation<Actor> for StepManiaEvaluation {
     fn push_overview(
         &mut self,
         actors: &mut Vec<Actor>,
-        _assets: &AssetManager,
+        _assets: &dyn AssetView,
         page: EvaluationOverview<'_>,
     ) {
         push_page(actors, page, None);
@@ -31,7 +31,7 @@ impl EvaluationOverviewPresentation<Actor> for StepManiaEvaluation {
 fn push_page(
     actors: &mut Vec<Actor>,
     page: EvaluationOverview<'_>,
-    summary: Option<(&AssetManager, &[std::sync::Arc<str>])>,
+    summary: Option<(&dyn AssetView, &[std::sync::Arc<str>])>,
 ) {
     let layout = Layout::current();
     let elapsed = page.elapsed.max(0.0);
@@ -469,7 +469,7 @@ pub(crate) fn push_departure(actors: &mut Vec<Actor>, elapsed: f32) {
 
 pub(crate) fn push_session_summary(
     actors: &mut Vec<Actor>,
-    assets: &AssetManager,
+    assets: &dyn AssetView,
     summary: deadsync_theme::post_game::SessionSummaryPage<'_>,
 ) {
     use std::sync::Arc;

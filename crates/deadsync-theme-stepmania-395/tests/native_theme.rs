@@ -866,7 +866,7 @@ fn native_options_accept_shared_rows_and_preserve_second_player_focus() {
     use std::sync::Arc;
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let mut assets = AssetManager::new();
+    let mut assets = AssetManager::<()>::new();
     for spec in StepManiaTheme::asset_manifest().fonts {
         let parsed =
             deadlib_present::font::parse(root.join(spec.ini_path).to_str().unwrap()).unwrap();

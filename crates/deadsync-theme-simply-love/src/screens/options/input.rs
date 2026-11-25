@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 use deadsync_profile as profile_data;
 
@@ -46,7 +47,7 @@ pub(super) fn on_lr_release(state: &mut State, delta: isize) {
 
 pub(super) fn apply_submenu_choice_delta(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     delta: isize,
     wrap: NavWrap,
 ) -> Option<ThemeEffect> {
@@ -1357,7 +1358,7 @@ fn move_main_selection(state: &mut State, dir: NavDirection) {
 
 fn move_options_selection_vertical(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     dir: NavDirection,
 ) {
     match state.view {
@@ -1443,7 +1444,7 @@ fn selected_row_lr_navigates(state: &State) -> bool {
 
 fn handle_dedicated_three_key_start_nav(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     kind: SubmenuKind,
     side: profile_data::PlayerSide,
     repeated: bool,
@@ -1477,7 +1478,7 @@ fn handle_dedicated_three_key_start_nav(
 
 pub(super) fn repeat_held_dedicated_three_key_start(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     side: profile_data::PlayerSide,
     dt: f32,
 ) -> Option<ThemeEffect> {
@@ -1508,7 +1509,7 @@ pub(super) fn repeat_held_dedicated_three_key_start(
 
 pub(super) fn handle_dedicated_three_key_options_input(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     ev: &InputEvent,
 ) -> ThemeEffect {
     if !ev.pressed {
@@ -1665,7 +1666,7 @@ pub(super) const fn cancel_current_view(state: &mut State) -> ThemeEffect {
     }
 }
 
-pub(super) fn undo_three_key_selection(state: &mut State, asset_manager: &AssetManager) {
+pub(super) fn undo_three_key_selection(state: &mut State, asset_manager: &dyn AssetView) {
     match state.menu_lr_undo {
         1 => match state.view {
             OptionsView::Main => {
@@ -1711,7 +1712,7 @@ pub(super) fn undo_three_key_selection(state: &mut State, asset_manager: &AssetM
 
 pub(super) fn activate_current_selection(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
 ) -> ThemeEffect {
     match state.view {
         OptionsView::Main => {
@@ -2229,7 +2230,7 @@ pub(super) fn activate_current_selection(
 
 pub fn handle_input(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     updater: &SimplyLoveUpdaterView,
     ev: &InputEvent,
     effects: &mut Vec<ThemeEffect>,
@@ -2240,7 +2241,7 @@ pub fn handle_input(
 
 fn handle_input_impl(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     updater: &SimplyLoveUpdaterView,
     ev: &InputEvent,
     effects: &mut Vec<ThemeEffect>,

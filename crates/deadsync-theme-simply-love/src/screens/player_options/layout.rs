@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 use deadsync_theme::player_options::PlayerOptionsViewport;
 
@@ -358,7 +359,7 @@ pub(super) fn row_f_pos_for_index(
 
 pub(super) fn cursor_dest_for_player(
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     player_idx: usize,
 ) -> Option<(f32, f32, f32, f32)> {
     let visibility = row_visibility(
@@ -372,7 +373,7 @@ pub(super) fn cursor_dest_for_player(
 
 pub(super) fn cursor_dest_for_player_with_visibility(
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     player_idx: usize,
     visibility: RowVisibility,
 ) -> Option<(f32, f32, f32, f32)> {

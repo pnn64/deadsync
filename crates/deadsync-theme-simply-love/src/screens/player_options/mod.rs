@@ -9,7 +9,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::views::{PlayerOptionsInitView, PlayerOptionsPolicyView};
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
@@ -93,7 +93,7 @@ pub use deadsync_theme::player_options::{
     NoteskinPreviewRequest,
 };
 
-pub fn prepare_presentation(state: &mut State, asset_manager: &AssetManager) {
+pub fn prepare_presentation(state: &mut State, asset_manager: &dyn AssetView) {
     prepare_row_titles(state);
     prepare_speed_values(state, asset_manager);
     prepare_speed_headers(state, asset_manager);

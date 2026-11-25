@@ -1,4 +1,4 @@
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::Actor;
 use deadsync_theme::{ThemeTransitions, TransitionKind, TransitionState};
 
@@ -17,7 +17,7 @@ const DEFAULT_ACTOR_EXIT_DURATION: f32 = 0.4;
 
 pub struct PlayEntryTransition<'a> {
     pub gameplay: Option<&'a gameplay::State>,
-    pub assets: &'a AssetManager,
+    pub assets: &'a dyn AssetView,
     pub restart: bool,
     pub policy: SimplyLoveVisualPolicyView,
 }

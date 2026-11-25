@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 use deadsync_profile as profile_data;
 use deadsync_theme::GraphicsRequest;
@@ -250,7 +251,7 @@ fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
 pub fn update(
     state: &mut State,
     dt: f32,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     smx_assignment: &SmxAssignmentView,
     effects: &mut Vec<ThemeEffect>,
 ) {
@@ -274,7 +275,7 @@ pub(super) fn sync_smx_assignment(state: &mut State, view: &SmxAssignmentView) {
     clear_render_cache(state);
 }
 
-fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
+fn update_impl(state: &mut State, dt: f32, asset_manager: &dyn AssetView) -> Option<ThemeEffect> {
     search::update(&mut state.search, dt);
     if !overlay_visible(&state.download_packs_overlay)
         && !judgment_palette_overlay_visible(&state.judgment_palette_overlay)

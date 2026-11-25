@@ -1,7 +1,7 @@
 use crate::act;
 use crate::color;
 use crate::views::ScoreInfo;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{
     Actor, InlineU32Text, SharedActorFrameScratch, SizeSpec, TextContent,
 };
@@ -371,7 +371,7 @@ pub fn build_column_judgments_pane(
     score_info: &ScoreInfo,
     controller: profile_data::PlayerSide,
     player_side: profile_data::PlayerSide,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     preview_elapsed: f32,
     arrow_glow_active: bool,
 ) -> Vec<Actor> {
@@ -392,7 +392,7 @@ pub fn build_column_judgments_pane_with_palette(
     score_info: &ScoreInfo,
     controller: profile_data::PlayerSide,
     player_side: profile_data::PlayerSide,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     preview_elapsed: f32,
     arrow_glow_active: bool,
     palette: JudgmentPalette,
@@ -413,7 +413,7 @@ fn build_column_judgments_pane_from_inputs(
     inputs: ColumnPaneInputs<'_>,
     controller: profile_data::PlayerSide,
     player_side: profile_data::PlayerSide,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     preview_elapsed: f32,
     arrow_glow_active: bool,
     palette: JudgmentPalette,
@@ -438,7 +438,7 @@ fn push_column_judgments_pane_from_inputs(
     inputs: ColumnPaneInputs<'_>,
     controller: profile_data::PlayerSide,
     player_side: profile_data::PlayerSide,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     preview_elapsed: f32,
     arrow_glow_active: bool,
     palette: JudgmentPalette,
@@ -872,7 +872,7 @@ pub(crate) fn push_cached_column_judgments_pane_with_palette(
     score_info: &ScoreInfo,
     controller: profile_data::PlayerSide,
     player_side: profile_data::PlayerSide,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     preview_elapsed: f32,
     arrow_glow_active: bool,
     palette: JudgmentPalette,
@@ -897,7 +897,7 @@ fn push_cached_column_judgments_pane_from_inputs(
     inputs: ColumnPaneInputs<'_>,
     controller: profile_data::PlayerSide,
     player_side: profile_data::PlayerSide,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     preview_elapsed: f32,
     arrow_glow_active: bool,
     palette: JudgmentPalette,

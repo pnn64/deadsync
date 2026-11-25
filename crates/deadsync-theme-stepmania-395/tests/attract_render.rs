@@ -8,7 +8,7 @@
 use std::{path::PathBuf, sync::Arc};
 mod support;
 
-use deadlib_assets::AssetManager;
+use deadsync_assets::RenderAssets;
 use deadlib_present::{
     actors::Actor,
     compose,
@@ -55,7 +55,7 @@ fn native_attract_captures() {
         true,
     )
     .unwrap();
-    let mut assets = AssetManager::new();
+    let mut assets = RenderAssets::new();
     assets.load_textures(&mut backend, Vec::new()).unwrap();
     let manifest = StepManiaTheme::asset_manifest();
     for &png in manifest.embedded_pngs {
@@ -374,7 +374,7 @@ fn capture(
     output: &std::path::Path,
     metrics: &Metrics,
     backend: &mut deadlib_render::Backend,
-    assets: &AssetManager,
+    assets: &RenderAssets,
 ) {
     let mut actors: Vec<Actor> = Vec::new();
     intro.push_actors(&mut actors, None);
@@ -396,7 +396,7 @@ fn capture_actors(
     output: &std::path::Path,
     metrics: &Metrics,
     backend: &mut deadlib_render::Backend,
-    assets: &AssetManager,
+    assets: &RenderAssets,
 ) {
     let frame = compose::build_screen_with_texture_context(
         actors,
@@ -491,7 +491,7 @@ fn selection_actors_with_style(
     actors
 }
 
-fn options_actors(assets: &deadlib_assets::AssetManager, players: Option<[bool; 2]>) -> Vec<Actor> {
+fn options_actors(assets: &deadsync_assets::RenderAssets, players: Option<[bool; 2]>) -> Vec<Actor> {
     use deadlib_present::actors::TextContent;
     use deadsync_theme::player_options::{
         PlayerOptionsInline, PlayerOptionsLayout, PlayerOptionsPage, PlayerOptionsRow,

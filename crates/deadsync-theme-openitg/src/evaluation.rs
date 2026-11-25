@@ -4,7 +4,9 @@ mod life_graph;
 
 use std::sync::{Arc, LazyLock};
 
-use deadlib_assets::{AssetManager, present_dsl::cover_uv};
+#[cfg(test)]
+use deadlib_assets::AssetManager;
+use deadlib_assets::{AssetView, present_dsl::cover_uv};
 use deadlib_present::actors::{Actor, MeshTexture, SizeSpec, TextContent};
 use deadlib_present::anim::bounceend_p;
 use deadlib_present::dsl::TextBuilder;
@@ -145,7 +147,7 @@ impl OpenItgEvaluation {
     pub fn push_overview(
         &mut self,
         actors: &mut Vec<Actor>,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         page: EvaluationOverview<'_>,
     ) {
         let viewport = [screen_width(), screen_height()];
@@ -235,7 +237,7 @@ impl OpenItgEvaluation {
 
 fn push_machine_record(
     actors: &mut Vec<Actor>,
-    assets: &AssetManager,
+    assets: &dyn AssetView,
     layout: Layout,
     seat: Seat,
     p2: bool,
@@ -984,7 +986,7 @@ mod tests {
     fn departure_moves_the_results_and_keeps_the_backdrop_at_both_widths() {
         let title = Arc::from("Fixture");
         let mods = Arc::from("C500");
-        let assets = AssetManager::new();
+        let assets = AssetManager::<()>::new();
         for width in [640.0, 854.0] {
             with_current_metrics(Metrics::centered(width, 480.0), || {
                 let mut presentation = OpenItgEvaluation::default();
@@ -1072,7 +1074,7 @@ mod tests {
                 let mut actors = Vec::new();
                 OpenItgEvaluation::default().push_overview(
                     &mut actors,
-                    &AssetManager::new(),
+                    &AssetManager::<()>::new(),
                     EvaluationOverview {
                         title: &title,
                         artist: &artist,
@@ -1178,7 +1180,7 @@ mod tests {
                 let mut actors = Vec::new();
                 OpenItgEvaluation::default().push_overview(
                     &mut actors,
-                    &AssetManager::new(),
+                    &AssetManager::<()>::new(),
                     EvaluationOverview {
                         title: &title,
                         artist: &empty,
@@ -1215,7 +1217,7 @@ mod tests {
             let mut actors = Vec::new();
             OpenItgEvaluation::default().push_overview(
                 &mut actors,
-                &AssetManager::new(),
+                &AssetManager::<()>::new(),
                 EvaluationOverview {
                     title: &title,
                     artist: &empty,
@@ -1249,7 +1251,7 @@ mod tests {
             let mut actors = Vec::new();
             OpenItgEvaluation::default().push_overview(
                 &mut actors,
-                &AssetManager::new(),
+                &AssetManager::<()>::new(),
                 EvaluationOverview {
                     title: &title,
                     artist: &Arc::from(""),

@@ -17,7 +17,7 @@ use crate::gameplay_stage::{
     ActiveGameplayStage, GameplayCoreState, GameplayStageAssets, GameplayStagePresenter,
 };
 use crate::noteskin::SpriteSlot;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::color::Color;
 use deadlib_present::dsl::SpriteBuilder;
@@ -300,7 +300,7 @@ impl<L> GameplayScreen<L, GameplayHud<Actor>> for StandardGameplay<L> {
         &self,
         _: &ActiveGameplayStage,
         _: &L,
-        _: &AssetManager,
+        _: &dyn AssetView,
         restart: bool,
         _: &Config,
     ) -> (Vec<Actor>, f32) {

@@ -1,4 +1,4 @@
-use deadlib_assets::AssetManager;
+use deadsync_assets::RenderAssets;
 use deadlib_assets::dynamic;
 use deadlib_render::{Backend, Texture as RendererTexture};
 use deadlib_render_core::TextureHandle;
@@ -434,7 +434,7 @@ impl DynamicMedia {
         }
     }
 
-    pub fn preload_profile_avatars(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
+    pub fn preload_profile_avatars(&mut self, assets: &mut RenderAssets, backend: &mut Backend) {
         let profile = profile::get();
         for p in profile::scan_local_profiles() {
             if let Some(path) = p.avatar_path {
@@ -446,7 +446,7 @@ impl DynamicMedia {
         self.set_profile_avatar(assets, backend, profile.avatar_path);
     }
 
-    pub fn destroy_assets(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
+    pub fn destroy_assets(&mut self, assets: &mut RenderAssets, backend: &mut Backend) {
         self.ui_background = None;
         let mut keys: Vec<String> = Vec::with_capacity(
             self.active_banner_videos
@@ -503,7 +503,7 @@ impl DynamicMedia {
 
     pub fn set_cdtitle(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
     ) -> Option<Arc<str>> {
@@ -544,7 +544,7 @@ impl DynamicMedia {
 
     pub fn set_pack_banner(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
     ) {
@@ -611,7 +611,7 @@ impl DynamicMedia {
 
     pub fn set_wheel_item_backgrounds(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         paths: Vec<PathBuf>,
     ) {
@@ -647,7 +647,7 @@ impl DynamicMedia {
     /// Retire expired banner textures, or all outgoing textures when changing screens.
     pub(crate) fn expire_outgoing_banners(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         now: Option<Instant>,
     ) {
@@ -662,7 +662,7 @@ impl DynamicMedia {
 
     pub(crate) fn set_banner(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         path: Option<PathBuf>,
         fade_lifetime: Option<Duration>,
@@ -700,7 +700,7 @@ impl DynamicMedia {
 
     fn load_dynamic_banner(
         &self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         path: PathBuf,
     ) -> Option<DynamicBannerState> {
@@ -728,7 +728,7 @@ impl DynamicMedia {
 
     pub fn sync_active_banner_video(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         desired_path: Option<&Path>,
         looped: bool,
@@ -765,7 +765,7 @@ impl DynamicMedia {
 
     pub fn sync_active_banner_videos(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         desired_paths: &[&Path],
         looped: bool,
@@ -824,7 +824,7 @@ impl DynamicMedia {
 
     pub fn sync_ui_background(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         movie: Option<MenuBackgroundMovie>,
         now: f32,
@@ -912,7 +912,7 @@ impl DynamicMedia {
 
     pub fn set_background(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
         video_started_at_sec: f32,
@@ -1056,7 +1056,7 @@ impl DynamicMedia {
 
     pub fn sync_gameplay_background(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         desired_path: Option<&Path>,
         desired_key: Option<&str>,
@@ -1222,7 +1222,7 @@ impl DynamicMedia {
 
     pub fn sync_active_song_lua_videos(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         paths: &[PathBuf],
     ) {
@@ -1291,7 +1291,7 @@ impl DynamicMedia {
 
     pub fn set_gameplay_background_paths(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         song: &SongData,
         gameplay_background_changes: &[SongBackgroundChange],
@@ -1305,7 +1305,7 @@ impl DynamicMedia {
         self.gameplay_background_keys.recycle_stale(stale);
     }
 
-    pub fn clear_gameplay_backgrounds(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
+    pub fn clear_gameplay_backgrounds(&mut self, assets: &mut RenderAssets, backend: &mut Backend) {
         self.destroy_current_dynamic_background(assets, backend);
         for (key, state) in std::mem::take(&mut self.active_song_lua_videos) {
             retire_video_player(state.player);
@@ -1323,7 +1323,7 @@ impl DynamicMedia {
 
     pub fn set_profile_avatar(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
     ) {
@@ -1333,7 +1333,7 @@ impl DynamicMedia {
 
     pub fn set_profile_avatar_for_side(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         side: profile_data::PlayerSide,
         path_opt: Option<PathBuf>,
@@ -1375,7 +1375,7 @@ impl DynamicMedia {
 
     pub fn queue_video_frames(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         gameplay_time_sec: Option<f32>,
         ui_time_sec: f32,
     ) {
@@ -1407,7 +1407,7 @@ impl DynamicMedia {
 
     pub fn queue_song_lua_video_frame(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         path: &Path,
         position_seconds: f32,
         looped: bool,
@@ -1476,7 +1476,7 @@ impl DynamicMedia {
     #[inline(always)]
     fn take_releasable_texture(
         &self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         key: &str,
     ) -> Option<(TextureHandle, RendererTexture)> {
         if self.texture_key_in_use(key) {
@@ -1488,7 +1488,7 @@ impl DynamicMedia {
 
     fn release_texture_key(
         &self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         key: impl AsRef<str>,
     ) {
@@ -1499,7 +1499,7 @@ impl DynamicMedia {
 
     fn destroy_current_dynamic_cdtitle(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
     ) {
         if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
@@ -1509,7 +1509,7 @@ impl DynamicMedia {
 
     fn destroy_current_dynamic_background(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
     ) {
         self.ui_background = None;
@@ -1574,7 +1574,7 @@ impl DynamicMedia {
 
     fn drain_banner_video_preps(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         desired_path: Option<&Path>,
         looped: bool,
     ) {
@@ -1624,7 +1624,7 @@ impl DynamicMedia {
 
     fn drain_banner_video_preps_multi(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         desired_paths: &[&Path],
         looped: bool,
     ) {
@@ -1690,7 +1690,7 @@ impl DynamicMedia {
 
     fn drain_gameplay_background_preps(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         desired_key: &str,
         timing: BgVideoTiming,
@@ -1753,7 +1753,7 @@ impl DynamicMedia {
     }
     fn destroy_current_profile_avatar_for_side(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         side: profile_data::PlayerSide,
     ) {
@@ -1775,7 +1775,7 @@ impl Default for DynamicMedia {
 }
 
 fn queue_video_frame_upload(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     handle: TextureHandle,
     frame: video::VideoFrame,
 ) {
@@ -2056,7 +2056,7 @@ mod tests {
 
     #[test]
     fn shared_dynamic_key_stays_until_last_owner_releases_it() {
-        let mut assets = AssetManager::new();
+        let mut assets = RenderAssets::new();
         let mut media = DynamicMedia::new();
         let key = "shared.mp4".to_string();
         let path = PathBuf::from(&key);
@@ -2084,7 +2084,7 @@ mod tests {
 
     #[test]
     fn last_dynamic_owner_releases_texture_mapping() {
-        let mut assets = AssetManager::new();
+        let mut assets = RenderAssets::new();
         let mut media = DynamicMedia::new();
         let key = "banner.mp4".to_string();
         let path = PathBuf::from(&key);
@@ -2104,7 +2104,7 @@ mod tests {
 
     #[test]
     fn outgoing_banner_owns_its_texture_until_expiry_even_after_reselection() {
-        let mut assets = AssetManager::new();
+        let mut assets = RenderAssets::new();
         let mut media = DynamicMedia::new();
         let key = Arc::<str>::from("banner.png");
         assets.reserve_texture_handle(key.to_string());
@@ -2145,7 +2145,7 @@ mod tests {
 
     #[test]
     fn gameplay_background_pool_counts_as_dynamic_texture_owner() {
-        let mut assets = AssetManager::new();
+        let mut assets = RenderAssets::new();
         let mut media = DynamicMedia::new();
         let key = "queued-bg.mp4".to_string();
 
@@ -2164,7 +2164,7 @@ mod tests {
 
     #[test]
     fn song_lua_video_key_counts_as_dynamic_texture_owner() {
-        let mut assets = AssetManager::new();
+        let mut assets = RenderAssets::new();
         let mut media = DynamicMedia::new();
         let key = "overlay.avi".to_string();
 
@@ -2179,7 +2179,7 @@ mod tests {
 
     #[test]
     fn failed_banner_video_prep_saturates_until_the_request_changes() {
-        let mut assets = AssetManager::new();
+        let mut assets = RenderAssets::new();
         let mut media = DynamicMedia::new();
         let key = "banner.mp4".to_string();
         media
@@ -2207,7 +2207,7 @@ mod tests {
 
     #[test]
     fn banner_completion_bursts_drain_under_a_per_frame_budget() {
-        let mut assets = AssetManager::new();
+        let mut assets = RenderAssets::new();
         let mut media = DynamicMedia::new();
         let paths: Vec<PathBuf> = (0..5)
             .map(|index| PathBuf::from(format!("stale-{index}.mp4")))
@@ -2256,7 +2256,7 @@ mod tests {
 
     #[test]
     fn stale_banner_prep_result_keeps_new_playback_request_pending() {
-        let mut assets = AssetManager::new();
+        let mut assets = RenderAssets::new();
         let mut media = DynamicMedia::new();
         let path = PathBuf::from("banner.mp4");
         media

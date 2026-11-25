@@ -1,4 +1,4 @@
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, TextContent};
 use deadsync_theme::post_game::{
     NameEntryPage, SessionEndPolicy, SessionEndPresentation, SessionSummaryPage, TimedEntryPolicy,
@@ -29,7 +29,7 @@ impl SessionEndPresentation<Actor> for StepManiaSessionEnd {
     fn push_summary(
         &self,
         actors: &mut Vec<Actor>,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         page: SessionSummaryPage<'_>,
     ) {
         crate::evaluation::push_session_summary(actors, assets, page);

@@ -1,5 +1,5 @@
 use crate::open_image_fallback;
-use deadlib_assets::AssetManager;
+use crate::RenderAssets;
 use deadlib_assets::dynamic;
 use deadlib_render::Backend;
 use deadlib_video as video;
@@ -67,7 +67,7 @@ pub fn load_cdtitle_source_rgba(path: &Path) -> Result<RgbaImage, String> {
         .map_err(|e| e.to_string())
 }
 
-pub fn ensure_banner_texture(assets: &mut AssetManager, backend: &mut Backend, path: &Path) {
+pub fn ensure_banner_texture(assets: &mut RenderAssets, backend: &mut Backend, path: &Path) {
     let key = path.to_string_lossy().into_owned();
     if assets.has_texture_key(&key) {
         return;

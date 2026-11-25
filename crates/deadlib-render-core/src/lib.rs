@@ -2,6 +2,7 @@ pub mod color;
 mod frame;
 #[cfg(any(test, feature = "test-util"))]
 pub mod frame_compare;
+mod texture_backend;
 mod yuv;
 
 pub use frame::{
@@ -12,6 +13,7 @@ pub use frame::{
     resolve_render_target_textured_mesh_geometries, resolve_textured_mesh_geometries,
     resolve_textured_meshes,
 };
+pub use texture_backend::TextureBackend;
 pub use yuv::{Yuv420Image, Yuv420Upload, YuvConversion};
 
 use glam::Mat4 as Matrix4;

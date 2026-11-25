@@ -1,4 +1,5 @@
 use super::*;
+use deadlib_assets::AssetManager;
 use deadlib_present::compose::{
     ComposeScratch, build_screen_cached_with_scratch_and_texture_context,
 };
@@ -102,7 +103,7 @@ fn draw_text(
         overlay,
         state,
         camera,
-        &AssetManager::new(),
+        &AssetManager::<()>::new(),
         20,
         640.0,
         480.0,
@@ -286,7 +287,7 @@ fn projected_glyphs_preserve_alignment_fit_attributes_and_screen_world() {
         &overlay,
         state,
         camera,
-        &AssetManager::new(),
+        &AssetManager::<()>::new(),
         20,
         [640.0, 480.0],
         [0.0; 2],

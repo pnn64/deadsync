@@ -1,7 +1,7 @@
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::screens::components::shared::profile_boxes;
 use crate::views::ProfilePickerView;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::Actor;
 use deadsync_input::InputEvent;
 use deadsync_profile as profile_data;
@@ -67,7 +67,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeE
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -83,7 +83,7 @@ pub fn push_actors(
 #[inline(always)]
 pub fn get_actors(
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     profile_boxes::get_actors(state, asset_manager, alpha_multiplier)
@@ -93,7 +93,7 @@ impl ThemeProfilePicker for crate::SimplyLoveTheme {
     type ProfilePickerState = State;
     type ProfilePickerView = ProfilePickerView;
     type ProfilePickerInput = InputEvent;
-    type ProfilePickerAssets = AssetManager;
+    type ProfilePickerAssets = dyn AssetView;
     type ProfilePickerVisualPolicy = crate::views::SimplyLoveVisualPolicyView;
 
     fn init_profile_picker(view: ProfilePickerView, context: ProfilePickerContext) -> State {
@@ -137,7 +137,7 @@ impl ThemeProfilePicker for crate::SimplyLoveTheme {
     fn push_profile_picker_actors(
         actors: &mut Vec<Actor>,
         state: &State,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         alpha_multiplier: f32,
         visual_policy: Self::ProfilePickerVisualPolicy,
     ) {

@@ -10,7 +10,7 @@ use crate::{
     SongLuaOverlayState, SongLuaProxyTarget, SongLuaTextGlowMode,
 };
 use crate::{apply_overlay_delta, overlay_state_lerp};
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{
     Actor, FlatDraw, SharedActorFrameScratch, SizeSpec, SpriteSource, TextAttribute,
     TextAttributes, TextContent,
@@ -436,10 +436,10 @@ impl SongLuaProjectedMeshScratch {
     // a steady draw only checks the revision and Arc identity. A changed key or
     // store revision performs one local lookup (and metadata fallback if needed).
     // Missing assets stay missing until that revision changes; no draw-time I/O.
-    fn bind_sprite<T>(
+    fn bind_sprite(
         &mut self,
         key: &Arc<str>,
-        textures: &deadlib_assets::TextureStore<T>,
+        textures: &(impl deadlib_assets::TextureBindingContext + ?Sized),
     ) -> Option<deadlib_assets::BoundTexture> {
         let revision = textures.revision();
         if self.sprite_revision != revision
@@ -3801,7 +3801,7 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
     op: &SongLuaDrawOp,
     vertices: &Arc<[TexturedMeshVertex]>,
     camera: SongLuaDrawCamera,
-    assets: &AssetManager,
+    assets: &dyn AssetView,
     screen: [f32; 2],
     clock: [f32; 2],
     z: i16,
@@ -4085,7 +4085,7 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
     frame_index: usize,
     owner: usize,
     sources: &SongLuaScreenProxySources<'_>,
-    assets: &AssetManager,
+    assets: &dyn AssetView,
     screen: [f32; 2],
     clock: [f32; 2],
     elapsed: impl Into<SongLuaDrawTime>,
@@ -6455,7 +6455,7 @@ fn song_lua_append_local_proxy_target<S: NoteskinSlot + Clone>(
     local_overlay_states: &[SongLuaOverlayState],
     order_cache: &SongLuaOverlayOrderCache,
     topology_index: &SongLuaOverlayTopologyIndex,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     index: usize,
     state: SongLuaOverlayState,
     overlay_space_width: f32,
@@ -6561,7 +6561,7 @@ fn song_lua_build_local_proxy_actor<S: NoteskinSlot + Clone>(
     local_overlay_states: &[SongLuaOverlayState],
     order_cache: &SongLuaOverlayOrderCache,
     topology_index: &SongLuaOverlayTopologyIndex,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     target_index: usize,
     proxy_state: SongLuaOverlayState,
     z: i16,
@@ -6670,7 +6670,7 @@ fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
     local_overlay_states: &[SongLuaOverlayState],
     order_cache: &mut SongLuaOverlayOrderCache,
     topology_index: &SongLuaOverlayTopologyIndex,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     capture_index: usize,
     proxy_sources: &SongLuaScreenProxySources<'_>,
     mut proxy_actor_scratch: Option<&mut SongLuaProxyActorScratch>,
@@ -6856,7 +6856,7 @@ fn song_lua_capture_children<S: NoteskinSlot + Clone>(
     local_overlay_states: &[SongLuaOverlayState],
     order_cache: &mut SongLuaOverlayOrderCache,
     topology_index: &SongLuaOverlayTopologyIndex,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     capture_index: usize,
     proxy_sources: &SongLuaScreenProxySources<'_>,
     overlay_space_width: f32,
@@ -8740,7 +8740,7 @@ fn append_song_lua_model_actors(
     layers: &[SongLuaOverlayModelLayer],
     state: SongLuaOverlayState,
     camera_state: impl Into<SongLuaDrawCamera>,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     z: i16,
     x_scale: f32,
     y_scale: f32,
@@ -9057,7 +9057,7 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
     texture_samples: &[Arc<[crate::SongLuaTextureSample]>],
     state: SongLuaOverlayState,
     camera_state: impl Into<SongLuaDrawCamera>,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     z: i16,
     x_scale: f32,
     y_scale: f32,
@@ -9386,7 +9386,7 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
 fn song_lua_noteskin_actor<S: NoteskinSlot + Clone>(
     slots: &[S],
     state: SongLuaOverlayState,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     z: i16,
     x_scale: f32,
     y_scale: f32,
@@ -10982,7 +10982,7 @@ fn append_song_lua_overlay_output<S: NoteskinSlot + Clone>(
     overlay: &SongLuaOverlayActor<S>,
     state: SongLuaOverlayState,
     camera: SongLuaDrawCamera,
-    assets: &AssetManager,
+    assets: &dyn AssetView,
     z: i16,
     size: [f32; 2],
     clock: [f32; 2],
@@ -11040,7 +11040,7 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
     overlay: &SongLuaOverlayActor<S>,
     state: SongLuaOverlayState,
     camera_state: impl Into<SongLuaDrawCamera>,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     z: i16,
     overlay_space_width: f32,
     overlay_space_height: f32,
@@ -11146,7 +11146,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
     overlay: &SongLuaOverlayActor<S>,
     state: SongLuaOverlayState,
     camera_state: impl Into<SongLuaDrawCamera>,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     z: i16,
     overlay_space_width: f32,
     overlay_space_height: f32,
@@ -12291,7 +12291,7 @@ fn build_song_lua_overlay_actor<S: NoteskinSlot + Clone>(
     overlay: &SongLuaOverlayActor<S>,
     state: SongLuaOverlayState,
     camera_state: Option<SongLuaOverlayState>,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     z: i16,
     overlay_space_width: f32,
     overlay_space_height: f32,
@@ -14041,7 +14041,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
     proxy_sources: &SongLuaScreenProxySources<'_>,
     mut direct_proxies: Option<&mut SongLuaDirectProxies>,
     mut proxy_actor_scratch: Option<&mut SongLuaProxyActorScratch>,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     space_width: f32,
     space_height: f32,
     effect_time: f32,
@@ -15164,7 +15164,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     state: &GameplayCoreState<P, S>,
     media: &SongMedia,
     frame_scratch: &mut FrameScratch,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     view: FrameOptions,
     mut draw_layer: impl FnMut(ScreenLayer, &mut Vec<Actor>, FieldLayout),
     mut draw_field: impl FnMut(
@@ -16734,7 +16734,7 @@ pub fn prewarm_texture_bindings<
 >(
     state: &GameplayCoreState<P, S>,
     scratch: &mut FrameScratch,
-    assets: &AssetManager,
+    assets: &dyn AssetView,
 ) {
     let visuals = state.song_lua_visuals();
     let layers = std::iter::once((

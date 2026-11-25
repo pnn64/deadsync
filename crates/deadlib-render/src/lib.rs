@@ -8,6 +8,7 @@ use deadlib_render_backend_software as software;
 #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
 use deadlib_render_backend_vulkan as vulkan;
 use deadlib_render_backend_wgpu as wgpu_core;
+use deadlib_render_core::TextureBackend;
 // The renderer and its core contract form one public umbrella.
 pub use deadlib_render_core::{
     BackendType, BlendMode, CameraUploadCache, ClockDomainTrace, DRAW_STORAGE_NAMES,
@@ -587,6 +588,51 @@ impl Backend {
             #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => wgpu_core::wait_for_idle(state),
         }
+    }
+}
+
+impl TextureBackend for Backend {
+    type Texture = Texture;
+    type RgbaImage = RgbaImage;
+
+    fn create_texture(
+        &mut self,
+        image: &RgbaImage,
+        sampler: SamplerDesc,
+    ) -> Result<Texture, Box<dyn Error>> {
+        Backend::create_texture(self, image, sampler)
+    }
+
+    fn update_texture(
+        &mut self,
+        texture: &mut Texture,
+        image: &RgbaImage,
+    ) -> Result<(), Box<dyn Error>> {
+        Backend::update_texture(self, texture, image)
+    }
+
+    fn create_yuv420_texture(
+        &mut self,
+        image: Yuv420Upload<'_>,
+        sampler: SamplerDesc,
+    ) -> Result<Texture, Box<dyn Error>> {
+        Backend::create_yuv420_texture(self, image, sampler)
+    }
+
+    fn update_yuv420_texture(
+        &mut self,
+        texture: &mut Texture,
+        image: Yuv420Upload<'_>,
+    ) -> Result<(), Box<dyn Error>> {
+        Backend::update_yuv420_texture(self, texture, image)
+    }
+
+    fn texture_is_yuv420(&self, texture: &Texture) -> bool {
+        Backend::texture_is_yuv420(texture)
+    }
+
+    fn retire_texture(&mut self, texture: Texture) {
+        Backend::retire_texture(self, texture);
     }
 }
 

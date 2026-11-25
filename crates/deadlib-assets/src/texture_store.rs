@@ -26,6 +26,15 @@ pub struct BoundTexture {
     pub sheet: (u32, u32),
 }
 
+/// Texture identities and metadata for presentation.
+pub trait TextureBindingContext: TextureContext {
+    fn bind_texture(&self, key: &str) -> Option<BoundTexture>;
+
+    fn revision(&self) -> u64 {
+        self.texture_registry_generation()
+    }
+}
+
 /// Application-owned GPU identities and pending uploads, borrowed by presentation.
 ///
 /// The render/asset owner mutates this store at load, upload, and release boundaries;
@@ -495,6 +504,16 @@ impl<T> TextureStore<T> {
             self.revision.set(next_texture_revision());
         }
         self.textures.insert(handle, texture)
+    }
+}
+
+impl<T> TextureBindingContext for TextureStore<T> {
+    fn bind_texture(&self, key: &str) -> Option<BoundTexture> {
+        TextureStore::bind_texture(self, key)
+    }
+
+    fn revision(&self) -> u64 {
+        TextureStore::revision(self)
     }
 }
 

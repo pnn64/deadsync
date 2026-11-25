@@ -162,7 +162,7 @@ pub(super) mod tests {
             super::HeartRateDevicesView::default(),
             test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]),
         );
-        let mut asset_manager = AssetManager::new();
+        let mut asset_manager = AssetManager::<()>::new();
         register_test_fonts(&mut asset_manager);
         super::super::prepare_presentation(&mut state, &asset_manager);
         let row = state
@@ -1908,7 +1908,7 @@ pub(super) mod tests {
         ensure_i18n();
         let song = test_song();
 
-        let mut asset_manager = AssetManager::new();
+        let mut asset_manager = AssetManager::<()>::new();
         register_test_fonts(&mut asset_manager);
 
         let mut state = super::init(
@@ -1949,7 +1949,7 @@ pub(super) mod tests {
         ensure_i18n();
         let song = test_song();
 
-        let mut asset_manager = AssetManager::new();
+        let mut asset_manager = AssetManager::<()>::new();
         register_test_fonts(&mut asset_manager);
 
         let mut state = super::init(
@@ -2025,7 +2025,7 @@ pub(super) mod tests {
         init_view: crate::views::PlayerOptionsInitView,
     ) -> (super::State, AssetManager) {
         let song = test_song();
-        let mut asset_manager = AssetManager::new();
+        let mut asset_manager = AssetManager::<()>::new();
         register_test_fonts(&mut asset_manager);
         let state = super::init(
             song,
@@ -2044,7 +2044,7 @@ pub(super) mod tests {
 
     fn setup_versus_state() -> (super::State, AssetManager) {
         let song = test_song();
-        let mut asset_manager = AssetManager::new();
+        let mut asset_manager = AssetManager::<()>::new();
         register_test_fonts(&mut asset_manager);
         let state = super::init(
             song,

@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 use deadsync_config::options::{
     auto_screenshot_bit_from_choice, groovestats_scorebox_bit_from_choice,
@@ -10,7 +11,7 @@ use deadsync_theme::views::{
 pub(super) fn push_page(
     actors: &mut Vec<Actor>,
     state: &State,
-    assets: &AssetManager,
+    assets: &dyn AssetView,
     draw: &mut dyn FnMut(&mut Vec<Actor>, SystemOptionsPage<'_>),
     screen_phase: SystemOptionsPhase,
 ) {

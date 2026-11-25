@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use deadlib_assets::AssetManager;
+use deadsync_assets::RenderAssets;
 use deadlib_assets::register_texture_dims;
 use deadlib_present::actors::Actor;
 use deadlib_render::Backend;
@@ -149,7 +149,7 @@ pub fn capture_screenshot(
 
 /// Replace the dynamic texture used by the evaluation screenshot preview.
 pub fn replace_screenshot_preview_texture(
-    asset_manager: &mut AssetManager,
+    asset_manager: &mut RenderAssets,
     backend: &mut Backend,
     image: &image::RgbaImage,
 ) -> Result<(), ScreenshotFlowError> {
@@ -178,7 +178,7 @@ pub fn capture_pending_screenshot<F>(
     screenshots_dir: &std::path::Path,
     state: &mut ScreenshotRuntimeState<PlayerSide>,
     backend: Option<&mut Backend>,
-    asset_manager: &mut AssetManager,
+    asset_manager: &mut RenderAssets,
     song_info: Option<(&str, Option<u32>)>,
     now: Instant,
     show_preview: bool,
@@ -531,7 +531,7 @@ mod tests {
             std::path::Path::new("unused-screenshots"),
             &mut state,
             None,
-            &mut AssetManager::new(),
+            &mut RenderAssets::new(),
             None,
             Instant::now(),
             false,
@@ -544,7 +544,7 @@ mod tests {
             std::path::Path::new("unused-screenshots"),
             &mut state,
             None,
-            &mut AssetManager::new(),
+            &mut RenderAssets::new(),
             None,
             Instant::now(),
             false,

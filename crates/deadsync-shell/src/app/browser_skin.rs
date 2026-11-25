@@ -10,7 +10,7 @@
 //! is evicted on the way out: the runtime cache and the textures are the ones
 //! gameplay uses too.
 
-use deadlib_assets::AssetManager;
+use deadsync_assets::RenderAssets;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
 use deadsync_assets::noteskin::{self, Noteskin, Style};
@@ -64,7 +64,7 @@ impl Service {
     /// shapes.
     pub(super) fn update(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
     ) -> Option<Arc<Noteskin>> {
         // Compared in place: the name is only copied when it changes, not on

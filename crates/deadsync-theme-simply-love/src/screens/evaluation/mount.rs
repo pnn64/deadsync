@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 use crate::views::VisualBackgroundView;
 use deadsync_core::session_flow::EvaluationOrigin;
@@ -143,13 +144,13 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
     fn push_evaluation_actors(
         actors: &mut Vec<Actor>,
         state: &State,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         visual_policy: Self::EvaluationVisualPolicy,
     ) {
         push_actors(actors, state, assets, visual_policy);
     }
 
-    fn push_evaluation_overlays(actors: &mut Vec<Actor>, state: &State, assets: &AssetManager) {
+    fn push_evaluation_overlays(actors: &mut Vec<Actor>, state: &State, assets: &dyn AssetView) {
         push_heart_rates(actors, state);
         push_submission_overlay(actors, state, assets);
         push_visit_overlays(actors, state, assets, false);

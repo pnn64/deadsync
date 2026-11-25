@@ -143,7 +143,7 @@ pub(crate) fn compose_hud(
     request: &NotefieldComposeRequest<'_, SpriteSlot>,
     prepared: &PreparedNotefield<'_, SpriteSlot>,
     visual_effects: &'static crate::visual_styles::EffectAssets,
-    textures: &impl deadlib_present::texture::TextureContext,
+    textures: &(impl deadlib_present::texture::TextureContext + ?Sized),
     broken_run_lookup: &BrokenRunLookup,
     stream_progress_lookup: &StreamProgressLookup,
     warn_cmod_for_itl_chart: bool,

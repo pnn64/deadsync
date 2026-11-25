@@ -1,8 +1,9 @@
+use deadlib_assets::AssetView;
 use super::text_wrap::wrap_text_with_measure;
 use super::*;
 
 #[inline(always)]
-pub(super) fn measure_text_box(asset_manager: &AssetManager, text: &str, zoom: f32) -> (f32, f32) {
+pub(super) fn measure_text_box(asset_manager: &dyn AssetView, text: &str, zoom: f32) -> (f32, f32) {
     let mut out_w = 1.0_f32;
     let mut out_h = 16.0_f32;
     asset_manager.with_fonts(|all_fonts| {
@@ -56,7 +57,7 @@ pub(super) fn row_mid_y_for_cursor(
 
 #[inline(always)]
 pub(super) fn wrap_miso_text(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     raw_text: &str,
     max_width_px: f32,
     zoom: f32,
@@ -209,7 +210,7 @@ mod description_tests {
 }
 
 pub(super) fn build_description_layout(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     key: DescriptionCacheKey,
     item: &Item,
     s: f32,
@@ -327,7 +328,7 @@ pub(super) fn build_description_layout(
 
 pub(super) fn description_layout<'a>(
     state: &'a State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     key: DescriptionCacheKey,
     item: &Item,
     s: f32,
@@ -406,7 +407,7 @@ fn top_bar_actor(
 
 pub(super) fn submenu_cursor_dest(
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     kind: SubmenuKind,
     s: f32,
     list_x: f32,
@@ -527,7 +528,7 @@ pub(super) fn push_yes_no_confirm_overlay(
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -537,7 +538,7 @@ pub fn push_actors(
 pub fn push_actors_with_layout(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     renderer: Option<deadsync_theme::views::SystemOptionsRenderer<'_, Actor>>,
@@ -701,7 +702,7 @@ pub fn push_actors_with_layout(
 fn push_legacy_page(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     let is_fading_submenu = !matches!(state.submenu_transition, SubmenuTransition::None);
@@ -1469,7 +1470,7 @@ pub fn sync_updater_panels(
 
 pub fn get_actors(
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(320);

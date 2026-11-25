@@ -66,7 +66,7 @@ impl StageNoteskins<SpriteSlot> for GameplayNoteskinAssets {
         &self,
         slot: &SpriteSlot,
         arena: &ActorResourceArena,
-        textures: &impl TextureContext,
+        textures: &(impl TextureContext + ?Sized),
     ) -> SpriteSource {
         slot.actor_texture_source(arena, textures)
     }

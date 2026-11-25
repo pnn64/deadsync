@@ -1,4 +1,4 @@
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, TextAlign};
 use deadsync_theme::views::{SystemOptionsPage, SystemOptionsPhase};
 
@@ -29,7 +29,7 @@ pub(super) struct OptionsHelp {
 impl OptionsHelp {
     pub(super) fn update(
         &mut self,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         page: &SystemOptionsPage<'_>,
         new_page: bool,
         now: f64,
@@ -59,7 +59,7 @@ impl OptionsHelp {
         }
     }
 
-    fn fit(&mut self, assets: &AssetManager) {
+    fn fit(&mut self, assets: &dyn AssetView) {
         let measure = |text: &Option<Explanation>| {
             text.as_ref().map_or([0; 2], |text| {
                 text.measure(assets.fonts(), MENU_NORMAL_FONT, WRAP_WIDTH)

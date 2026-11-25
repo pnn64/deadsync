@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 
 #[derive(Clone, Copy, Debug)]
@@ -313,7 +314,7 @@ pub(super) fn submenu_display_choice_texts(
 
 pub(super) fn build_submenu_row_layout(
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     kind: SubmenuKind,
     row_idx: usize,
 ) -> Option<SubmenuRowLayout> {
@@ -396,7 +397,7 @@ pub(super) fn build_submenu_row_layout(
 
 pub(super) fn borrow_submenu_row_layout<'a>(
     state: &'a State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     kind: SubmenuKind,
     row_idx: usize,
 ) -> Option<std::cell::Ref<'a, SubmenuRowLayout>> {
@@ -443,7 +444,7 @@ pub fn clear_submenu_row_layout_cache(state: &State) {
 
 pub(super) fn sync_submenu_inline_x_from_row(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     kind: SubmenuKind,
     visible_row_idx: usize,
 ) {
@@ -469,7 +470,7 @@ pub(super) fn sync_submenu_inline_x_from_row(
 
 pub(super) fn apply_submenu_inline_x_to_row(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     kind: SubmenuKind,
     visible_row_idx: usize,
 ) {
@@ -498,7 +499,7 @@ pub(super) fn apply_submenu_inline_x_to_row(
 
 pub(super) fn move_submenu_selection_vertical(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     kind: SubmenuKind,
     dir: NavDirection,
     wrap: NavWrap,

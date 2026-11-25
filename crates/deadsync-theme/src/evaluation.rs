@@ -6,7 +6,7 @@ use crate::views::{
     EvaluationOverview, EvaluationPlayerOverview, EvaluationScores, EvaluationStageView,
     HeartRateView,
 };
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadsync_core::{input::MAX_PLAYERS, session_flow::EvaluationOrigin};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -80,7 +80,7 @@ impl<N, S> EvaluationOverviewPage<N, S> {
     /// Borrows the score records and the prepared artwork and text keys.
     pub fn view(
         &self,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         transliterated: bool,
         elapsed: f32,
         departure_elapsed: Option<f32>,
@@ -205,14 +205,14 @@ pub trait ThemeEvaluation: ThemeTransitions {
     fn push_evaluation_actors(
         actors: &mut Vec<Self::Actor>,
         state: &Self::EvaluationState,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         visual_policy: Self::EvaluationVisualPolicy,
     );
     /// Existing service overlays usable over a mounted overview.
     fn push_evaluation_overlays(
         _actors: &mut Vec<Self::Actor>,
         _state: &Self::EvaluationState,
-        _assets: &AssetManager,
+        _assets: &dyn AssetView,
     ) {}
     fn sync_evaluation_runtime(state: &mut Self::EvaluationState, view: Self::EvaluationRuntime);
     fn evaluation_heart_rate_generation(state: &Self::EvaluationState) -> Option<(bool, u64, u64)>;

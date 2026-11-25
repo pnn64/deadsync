@@ -1,26 +1,52 @@
 use crate::{
-    AssetError, FontStore, TextureDecodeJob, TextureStore, black_texture_image,
+    AssetError, FontStore, TextureBindingContext, TextureDecodeJob, TextureStore, black_texture_image,
     decode::{TextureDecodeResult, decode_texture_jobs_with},
     decode_texture, fallback_texture_image, generated_texture, register_texture_dims,
     upload::{TextureUploadBudget, TextureUploadImage},
     white_texture_image,
 };
 use deadlib_present::font::{Font, FontMap};
-use deadlib_render::{Backend, Texture as RendererTexture};
-use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap, Yuv420Image};
+use deadlib_render_core::{SamplerDesc, TextureBackend, TextureHandle, TextureHandleMap, Yuv420Image};
 use image::RgbaImage;
 use log::{debug, warn};
 use std::sync::mpsc::SyncSender;
 
+/// Read-only fonts and texture bindings for presentation.
+pub trait AssetView {
+    fn fonts(&self) -> &FontMap;
+    fn texture_context(&self) -> &dyn TextureBindingContext;
+    fn has_texture_key(&self, key: &str) -> bool;
+
+    fn has_font(&self, name: &str) -> bool {
+        self.fonts().contains_key(name)
+    }
+}
+
+impl dyn AssetView + '_ {
+    pub fn with_fonts<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&FontMap) -> R,
+    {
+        f(self.fonts())
+    }
+
+    pub fn with_font<F, R>(&self, name: &str, f: F) -> Option<R>
+    where
+        F: FnOnce(&Font) -> R,
+    {
+        self.fonts().get(name).map(f)
+    }
+}
+
 /// Render-thread asset owner. Workers only supply decoded images; renderer calls
 /// and retirement stay on the owner thread. Identities and upload queues retain
 /// their storage across frames, and replacement delegates destruction to the backend.
-pub struct AssetManager {
-    texture_store: TextureStore<RendererTexture>,
+pub struct AssetManager<T = ()> {
+    texture_store: TextureStore<T>,
     font_store: FontStore,
 }
 
-impl AssetManager {
+impl<T> AssetManager<T> {
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -30,7 +56,7 @@ impl AssetManager {
     }
 
     /// Borrows this store's texture identities and dimensions for presentation.
-    pub fn texture_context(&self) -> &TextureStore<RendererTexture> {
+    pub fn texture_context(&self) -> &TextureStore<T> {
         &self.texture_store
     }
 
@@ -69,7 +95,7 @@ impl AssetManager {
 
     #[inline(always)]
     #[must_use]
-    pub const fn textures(&self) -> &TextureHandleMap<RendererTexture> {
+    pub const fn textures(&self) -> &TextureHandleMap<T> {
         self.texture_store.textures()
     }
 
@@ -97,7 +123,7 @@ impl AssetManager {
         self.texture_store.has_pending_texture_upload_handle(handle)
     }
 
-    pub fn take_textures(&mut self) -> TextureHandleMap<RendererTexture> {
+    pub fn take_textures(&mut self) -> TextureHandleMap<T> {
         self.texture_store.take_textures()
     }
 
@@ -108,23 +134,23 @@ impl AssetManager {
     pub fn insert_texture(
         &mut self,
         key: String,
-        texture: RendererTexture,
+        texture: T,
         width: u32,
         height: u32,
-    ) -> Option<RendererTexture> {
+    ) -> Option<T> {
         self.texture_store
             .insert_texture(key, texture, width, height)
     }
 
-    pub fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, RendererTexture)> {
+    pub fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, T)> {
         self.texture_store.remove_texture(key)
     }
 
     pub fn set_texture_for_key(
         &mut self,
-        backend: &mut Backend,
+        backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
         key: String,
-        texture: RendererTexture,
+        texture: T,
         width: u32,
         height: u32,
     ) -> TextureHandle {
@@ -139,14 +165,14 @@ impl AssetManager {
 
     pub fn update_texture_for_key(
         &mut self,
-        backend: &mut Backend,
+        backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
         key: &str,
         rgba: &RgbaImage,
     ) -> Result<(), AssetError> {
         if let Some(texture) =
             self.texture_store
                 .uploaded_texture_mut(key, rgba.width(), rgba.height())
-            && !Backend::texture_is_yuv420(texture)
+            && !backend.texture_is_yuv420(texture)
         {
             backend.update_texture(texture, rgba)?;
             let handle = self.texture_store.texture_handle(key);
@@ -160,7 +186,7 @@ impl AssetManager {
 
     pub fn update_texture_for_key_with_sampler(
         &mut self,
-        backend: &mut Backend,
+        backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
         key: &str,
         rgba: &RgbaImage,
         sampler: SamplerDesc,
@@ -197,7 +223,11 @@ impl AssetManager {
 
     /// Drains the render-thread queue with count/byte budgets. Pending uploads own
     /// their recycle sender, so every exit (including failure) returns frame storage.
-    pub fn drain_texture_uploads(&mut self, backend: &mut Backend, budget: TextureUploadBudget) {
+    pub fn drain_texture_uploads(
+        &mut self,
+        backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
+        budget: TextureUploadBudget,
+    ) {
         let mut drained_uploads = 0usize;
         let mut drained_bytes = 0usize;
         while let Some((handle, upload)) =
@@ -210,7 +240,7 @@ impl AssetManager {
             if let Some(texture) =
                 self.texture_store
                     .apply_upload_update(handle, image.width(), image.height())
-                && Backend::texture_is_yuv420(texture)
+                && backend.texture_is_yuv420(texture)
                     == matches!(image, TextureUploadImage::Yuv420(_))
             {
                 match update_upload_texture(backend, texture, image) {
@@ -253,7 +283,7 @@ impl AssetManager {
     /// Decodes and uploads a bundled image using the ordinary texture registry.
     pub fn load_embedded_png(
         &mut self,
-        backend: &mut Backend,
+        backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
         png: crate::EmbeddedPng,
     ) -> Result<(), AssetError> {
         let image = image::load_from_memory_with_format(png.bytes, image::ImageFormat::Png)?.into_rgba8();
@@ -262,7 +292,7 @@ impl AssetManager {
 
     pub fn load_textures(
         &mut self,
-        backend: &mut Backend,
+        backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
         jobs: Vec<TextureDecodeJob>,
     ) -> Result<(), AssetError> {
         self.texture_store
@@ -309,7 +339,7 @@ impl AssetManager {
     /// Decode and upload one resolved asset at a loading boundary.
     pub fn load_texture(
         &mut self,
-        backend: &mut Backend,
+        backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
         job: &TextureDecodeJob,
     ) -> Result<(), AssetError> {
         let decoded = decode_texture(&job.path, &job.hints)?;
@@ -322,7 +352,7 @@ impl AssetManager {
 
     pub fn load_generated_texture(
         &mut self,
-        backend: &mut Backend,
+        backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
         key: &str,
         sampler: Option<SamplerDesc>,
     ) -> Result<bool, AssetError> {
@@ -345,11 +375,11 @@ impl AssetManager {
     }
 }
 
-fn create_upload_texture(
-    backend: &mut Backend,
+fn create_upload_texture<T>(
+    backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
     image: TextureUploadImage<'_>,
     sampler: SamplerDesc,
-) -> Result<RendererTexture, AssetError> {
+) -> Result<T, AssetError> {
     match image {
         TextureUploadImage::Rgba(image) => Ok(backend.create_texture(image, sampler)?),
         TextureUploadImage::Yuv420(image) => {
@@ -358,9 +388,9 @@ fn create_upload_texture(
     }
 }
 
-fn update_upload_texture(
-    backend: &mut Backend,
-    texture: &mut RendererTexture,
+fn update_upload_texture<T>(
+    backend: &mut impl TextureBackend<Texture = T, RgbaImage = RgbaImage>,
+    texture: &mut T,
     image: TextureUploadImage<'_>,
 ) -> Result<(), AssetError> {
     match image {
@@ -371,15 +401,31 @@ fn update_upload_texture(
     }
 }
 
-impl Default for AssetManager {
+impl<T> Default for AssetManager<T> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<T> AssetView for AssetManager<T> {
+    fn fonts(&self) -> &FontMap {
+        AssetManager::fonts(self)
+    }
+
+    fn texture_context(&self) -> &dyn TextureBindingContext {
+        AssetManager::texture_context(self)
+    }
+
+    fn has_texture_key(&self, key: &str) -> bool {
+        AssetManager::has_texture_key(self, key)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "windows")]
+    use deadlib_render::{Backend, Texture as RendererTexture};
 
     fn blank_rgba(width: u32, height: u32) -> RgbaImage {
         RgbaImage::from_pixel(width, height, image::Rgba([0, 0, 0, 0]))
@@ -387,7 +433,7 @@ mod tests {
 
     #[test]
     fn remove_texture_cancels_pending_upload_for_reserved_handle() {
-        let mut assets = AssetManager::new();
+        let mut assets = AssetManager::<()>::new();
         assets.queue_texture_upload("queued".to_string(), blank_rgba(2, 2));
 
         assert!(assets.has_texture_key("queued"));
@@ -578,7 +624,7 @@ mod tests {
     }
 
     #[cfg(target_os = "windows")]
-    fn software_image<'a>(assets: &'a AssetManager, key: &str) -> &'a RgbaImage {
+    fn software_image<'a>(assets: &'a AssetManager<RendererTexture>, key: &str) -> &'a RgbaImage {
         let handle = assets
             .texture_store
             .bind_texture(key)

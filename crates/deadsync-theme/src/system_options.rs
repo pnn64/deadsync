@@ -1,4 +1,4 @@
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 
 use crate::views::{
     SystemOptionsPhase, SystemOptionsRenderer, SystemOptionsServiceRow, SystemOptionsTiming,
@@ -19,7 +19,7 @@ pub trait SystemOptionsPresentation<A> {
         &mut self,
         phase: SystemOptionsPhase,
         now_seconds: f64,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         draw: &mut dyn FnMut(SystemOptionsRenderer<'_, A>),
     );
 }

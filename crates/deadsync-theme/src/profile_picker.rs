@@ -36,7 +36,7 @@ pub trait ThemeProfilePicker: ThemeTransitions {
     type ProfilePickerState;
     type ProfilePickerView;
     type ProfilePickerInput;
-    type ProfilePickerAssets;
+    type ProfilePickerAssets: ?Sized;
     type ProfilePickerVisualPolicy;
 
     fn init_profile_picker(

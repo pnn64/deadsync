@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 use crate::views::{GameplayPolicyView, SimplyLoveVisualPolicyView};
 use deadsync_assets::gameplay_presentation::{
@@ -198,7 +199,7 @@ impl GameplayScreen<GameplayLobbySession, GameplayHud<Actor>> for SimplyLoveGame
         &self,
         stage: &ActiveGameplayStage,
         lobby: &GameplayLobbySession,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         restarting: bool,
         config: &Config,
     ) -> (Vec<Actor>, f32) {

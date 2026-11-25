@@ -6,7 +6,7 @@
 //! Existing session textures are borrowed and never counted as eviction candidates.
 
 use crate::player_options::PlayerOptionsState;
-use deadlib_assets::AssetManager;
+use deadsync_assets::RenderAssets;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
 use deadsync_assets::noteskin::{self, Noteskin, Style};
@@ -57,7 +57,7 @@ impl Runtime {
         }
     }
 
-    fn ready_parts(&self, assets: &AssetManager) -> u16 {
+    fn ready_parts(&self, assets: &RenderAssets) -> u16 {
         self.components
             .iter()
             .filter(|(_, textures)| {
@@ -121,7 +121,7 @@ impl Service {
     pub(super) fn update(
         &mut self,
         state: &mut PlayerOptionsState,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
     ) {
         let Some(cols) = state.take_noteskin_requests(&mut self.requests)
@@ -145,7 +145,7 @@ impl Service {
         }
     }
 
-    fn update_cache(&mut self, cols: usize, assets: &mut AssetManager, backend: &mut Backend) {
+    fn update_cache(&mut self, cols: usize, assets: &mut RenderAssets, backend: &mut Backend) {
         let catalog = noteskin::pack_catalog();
         let changed = self.cols != cols
             || self
@@ -214,7 +214,7 @@ impl Service {
         }
     }
 
-    fn next_work(&mut self, assets: &AssetManager) -> Option<Work> {
+    fn next_work(&mut self, assets: &RenderAssets) -> Option<Work> {
         for request in &self.requests {
             let runtime = self.runtimes.get_mut(&request.name);
             let loaded = runtime.as_ref().map_or(0, |runtime| runtime.loaded_parts);
@@ -297,7 +297,7 @@ impl Service {
         }
     }
 
-    fn poll(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
+    fn poll(&mut self, assets: &mut RenderAssets, backend: &mut Backend) {
         // Poll every slot so a slow background choice cannot hold up a ready
         // focused choice. Consume at most one result/upload per frame.
         let Some((index, result)) = self
@@ -417,7 +417,7 @@ impl Service {
         &mut self,
         bytes: usize,
         visible: bool,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
     ) -> bool {
         while self.resident_bytes.saturating_add(bytes) > TEXTURE_BUDGET {
@@ -618,7 +618,7 @@ return Def.Sprite {
             false,
         )
         .unwrap();
-        let mut assets = AssetManager::new();
+        let mut assets = RenderAssets::new();
         deadsync_assets::load_initial_assets(
             &mut assets,
             &mut backend,

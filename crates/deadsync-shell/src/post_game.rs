@@ -1,7 +1,8 @@
 //! Host adapter for installed session-ending presentations and game result data.
 
-use deadlib_assets::{AssetManager, media_path_key};
+use deadlib_assets::media_path_key;
 use deadlib_present::actors::Actor;
+use deadsync_assets::RenderAssets;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_score::{
     session_summary::{self, SessionSummary},
@@ -206,7 +207,7 @@ impl SessionEndRuntime {
         &self,
         screen: Screen,
         actors: &mut Vec<Actor>,
-        assets: &AssetManager,
+        assets: &RenderAssets,
         transition: &TransitionState<Screen>,
     ) {
         match screen {

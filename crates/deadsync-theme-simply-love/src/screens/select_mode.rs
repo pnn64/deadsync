@@ -10,7 +10,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, select_flow_footer, visual_style_bg};
 use crate::screens::select_mode_flow::{self as mode_flow, Choice, InputEffect, State as ModeFlow};
 use crate::views::SelectFlowRuntimeView;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::Actor;
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y};
@@ -412,7 +412,7 @@ pub fn with_play_selection_view(state: &State, draw: impl FnOnce(PlaySelectionVi
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(256);
@@ -735,7 +735,7 @@ pub fn push_actors(
     }
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn get_actors(state: &State, asset_manager: &dyn AssetView) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     push_actors(
         &mut actors,

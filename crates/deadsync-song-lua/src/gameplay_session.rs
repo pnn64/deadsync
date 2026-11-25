@@ -77,7 +77,7 @@ pub trait StageNoteskins<S: NoteskinSlot> {
         &self,
         slot: &S,
         _arena: &ActorResourceArena,
-        textures: &impl TextureContext,
+        textures: &(impl TextureContext + ?Sized),
     ) -> SpriteSource {
         let key = slot.texture_key_shared();
         SpriteSource::TextureHandle {
@@ -273,7 +273,7 @@ impl<P: GameplayProfileData, S: NoteskinSlot + Clone, N: StageNoteskins<S>>
         }
     }
 
-    pub fn prewarm_song_texture_bindings(&mut self, assets: &deadlib_assets::AssetManager) {
+    pub fn prewarm_song_texture_bindings(&mut self, assets: &dyn deadlib_assets::AssetView) {
         if let Some(scratch) = self.song_scratch.as_deref_mut() {
             prewarm_texture_bindings(&self.gameplay, scratch, assets);
         }

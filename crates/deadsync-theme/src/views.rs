@@ -1004,7 +1004,7 @@ pub trait TwitchChatPresentation<A, Message, Options> {
     fn push_chat(
         &mut self,
         actors: &mut Vec<A>,
-        assets: &deadlib_assets::AssetManager,
+        assets: &dyn deadlib_assets::AssetView,
         view: TwitchChatView<'_, Message, Options>,
     );
 }

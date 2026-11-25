@@ -7,7 +7,7 @@ use crate::presentation::{
     push_options_highlight, push_options_panel, push_red_backdrop, push_red_streaks, sprite,
 };
 use crate::resources::MENU_NORMAL_FONT;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::anim::bounceend_p;
 use deadlib_present::font::FontMap;
@@ -90,7 +90,7 @@ impl PlayerOptionsLayout<Actor, TextContent> for OpenItgPlayerOptions {
         &mut self,
         actors: &mut Vec<Actor>,
         page: Page<'_>,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         now: f64,
         _transition: &TransitionState<Screen>,
     ) {
@@ -696,7 +696,7 @@ mod tests {
             vec![root.clone()],
         )
         .expect("bundled font");
-        let mut assets = deadlib_assets::AssetManager::new();
+        let mut assets = deadlib_assets::AssetManager::<()>::new();
         assets.register_font(MENU_NORMAL_FONT, font.font);
         let fonts = assets.fonts();
         let font = fonts.get(MENU_NORMAL_FONT).unwrap();

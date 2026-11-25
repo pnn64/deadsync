@@ -241,11 +241,11 @@ mod tests {
         let mut state = super::super::tests::init();
         state.view = OptionsView::Submenu(SubmenuKind::Streaming);
         state.sub_selected = 0;
-        let effect = apply_submenu_choice_delta(&mut state, &AssetManager::new(), 1, NavWrap::Wrap);
+        let effect = apply_submenu_choice_delta(&mut state, &AssetManager::<()>::new(), 1, NavWrap::Wrap);
         assert!(effect.is_some());
         assert!(state.twitch.enabled);
         state.sub_selected = 4;
-        apply_submenu_choice_delta(&mut state, &AssetManager::new(), 1, NavWrap::Wrap);
+        apply_submenu_choice_delta(&mut state, &AssetManager::<()>::new(), 1, NavWrap::Wrap);
         assert!(!state.twitch.show_gameplay);
         assert!(state.twitch.show_badges && state.twitch.show_emotes);
     }

@@ -1,7 +1,7 @@
 //! Export the real Simply Love gameplay presentation without changing player settings.
 mod export_gameplay_viewer;
 
-use deadlib_assets::AssetManager;
+use deadsync_assets::RenderAssets;
 use deadlib_present::{
     actors::Actor,
     compose::{self, ComposeScratch, TextLayoutCache},
@@ -248,7 +248,7 @@ fn export(
         false,
         true,
     )?;
-    let mut assets = AssetManager::new();
+    let mut assets = RenderAssets::new();
     deadsync_assets::load_initial_assets(&mut assets, &mut backend, theme::asset_manifest())?;
     let output = workspace_root().join("target").join("gameplay-exports");
     std::fs::create_dir_all(&output)?;
@@ -654,7 +654,7 @@ fn sample_state(
 }
 
 fn load_texture(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     key: &str,
     model: bool,
@@ -673,7 +673,7 @@ fn load_texture(
 
 fn preload_noteskins(
     state: &gameplay::State,
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
 ) -> Result<()> {
     let mut keys = BTreeSet::new();
@@ -702,7 +702,7 @@ fn preload_noteskins(
 }
 
 struct CaptureTextures<'a> {
-    assets: &'a AssetManager,
+    assets: &'a RenderAssets,
     keys: RefCell<BTreeSet<String>>,
 }
 impl TextureContext for CaptureTextures<'_> {
@@ -723,7 +723,7 @@ impl TextureContext for CaptureTextures<'_> {
 
 fn compose(
     state: &mut gameplay::State,
-    assets: &AssetManager,
+    assets: &RenderAssets,
     metrics: &Metrics,
     textures: &impl TextureContext,
     center_single_notefield: bool,

@@ -97,7 +97,7 @@ impl SpriteSource {
     pub fn actor_texture_source(
         &self,
         arena: &ActorResourceArena,
-        textures: &impl TextureContext,
+        textures: &(impl TextureContext + ?Sized),
     ) -> ActorSpriteSource {
         let (texture_key, cached_handle, cached_generation, cached_actor_texture) = match self {
             Self::Atlas {
@@ -277,7 +277,7 @@ impl SpriteSlot {
     pub fn actor_texture_source(
         &self,
         arena: &ActorResourceArena,
-        textures: &impl TextureContext,
+        textures: &(impl TextureContext + ?Sized),
     ) -> ActorSpriteSource {
         self.source.actor_texture_source(arena, textures)
     }

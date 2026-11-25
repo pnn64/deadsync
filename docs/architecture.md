@@ -153,6 +153,10 @@ theme to describe an input or store a setting:
   `deadlib-present` on startup and after a confirmed adjustment.
 - `deadlib-assets::AssetManifest` describes fonts, textures, and texture sampling
   requirements. The game resolves its catalog and paths before engine loading.
+- `deadlib-assets` owns the font catalog, texture identities, and upload queue.
+  On the render thread, `deadlib-render` supplies the texture operations defined
+  in `deadlib-render-core`. Presentation borrows fonts and texture bindings
+  through `AssetView`.
 - Video decoding and texture uploads share the packed YUV420 image and color
   conversion defined by `deadlib-render-core`. The shell hands each image and
   its buffer recycler to the asset queue. The game supplies artwork and video

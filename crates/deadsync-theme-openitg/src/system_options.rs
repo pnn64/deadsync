@@ -1,7 +1,9 @@
 mod choice_layout;
 mod help;
 
+#[cfg(test)]
 use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_theme::system_options::{SystemOptionsLayout, SystemOptionsPresentation};
@@ -68,7 +70,7 @@ impl SystemOptionsPresentation<Actor> for OpenItgSystemOptions {
         &mut self,
         phase: SystemOptionsPhase,
         now_seconds: f64,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         draw: &mut dyn FnMut(SystemOptionsRenderer<'_, Actor>),
     ) {
         let mut page = |actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>| {
@@ -197,7 +199,7 @@ impl OpenItgSystemOptions {
         &mut self,
         actors: &mut Vec<Actor>,
         page: SystemOptionsPage<'_>,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         now: f64,
     ) {
         let width = screen_width();
@@ -577,7 +579,7 @@ mod tests {
     }
 
     fn push_page(actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>) {
-        OpenItgSystemOptions::default().push_page(actors, page, &AssetManager::new(), 0.0);
+        OpenItgSystemOptions::default().push_page(actors, page, &AssetManager::<()>::new(), 0.0);
     }
 
     #[test]
@@ -697,7 +699,7 @@ mod tests {
             let labels = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
             let row = |index: usize| Some(action(labels[index]));
             let mut visual = OpenItgSystemOptions::default();
-            let assets = AssetManager::new();
+            let assets = AssetManager::<()>::new();
             let mut actors = Vec::new();
             let mut frame = |selected: usize, now: f64| {
                 actors.clear();
@@ -741,7 +743,7 @@ mod tests {
         with_current_metrics(Metrics::centered(640.0, 480.0), || {
             let choices: Arc<[Arc<str>]> = Arc::from(["Off".into(), "Low".into(), "High".into()]);
             let mut visual = OpenItgSystemOptions::default();
-            let assets = AssetManager::new();
+            let assets = AssetManager::<()>::new();
             let mut actors = Vec::new();
             let mut cursor_geometry = |id, choice, now| {
                 let row = |_| {
@@ -784,7 +786,7 @@ mod tests {
             vec![assets_root.clone()],
         )
         .expect("bundled font");
-        let mut assets = AssetManager::new();
+        let mut assets = AssetManager::<()>::new();
         assets.register_font(MENU_NORMAL_FONT, font.font);
         let metrics = TextMetrics::new(assets.fonts(), MENU_NORMAL_FONT);
         let narrow_width = metrics.width("iii") * INLINE_ZOOM;
@@ -829,7 +831,7 @@ mod tests {
     fn explanation_reveal_follows_text_changes_and_page_entry_time() {
         with_current_metrics(Metrics::centered(640.0, 480.0), || {
             let mut visual = OpenItgSystemOptions::default();
-            let assets = AssetManager::new();
+            let assets = AssetManager::<()>::new();
             let mut actors = Vec::new();
             let row = |_| Some(action("Input"));
             let mut frame = |text: &str, selected, phase, now| {

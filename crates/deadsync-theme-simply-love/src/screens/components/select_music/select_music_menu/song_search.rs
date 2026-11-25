@@ -17,7 +17,7 @@ use crate::screens::components::select_music::push_retained_overlay;
 use crate::screens::components::shared::fuzzy;
 #[cfg(test)]
 use crate::screens::select_music::MusicWheelEntry;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_config::theme::MachineFont;
@@ -256,7 +256,7 @@ pub fn push_song_search_overlay(
     state: &SongSearchState,
     active_color_index: i32,
     machine_font: MachineFont,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
 ) -> bool {
     let SongSearchState::Open(open) = state else {
         return false;
@@ -306,7 +306,7 @@ fn push_song_search_overlay_unreserved(
     open: &SongSearchOpen,
     active_color_index: i32,
     machine_font: MachineFont,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
 ) {
     let cx = screen_center_x();
     let cy = screen_center_y();

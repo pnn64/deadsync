@@ -2,7 +2,9 @@
 //! Original copyright and permission notice: deadsync-online/src/twitch-LICENSE.
 use crate::{act, color};
 use deadsync_theme::{Screen, views::GameplayChatLayout};
+#[cfg(test)]
 use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::{
     actors::{Actor, DynamicText, TextAttribute, TextAttributes, TextContent},
     font,
@@ -254,7 +256,7 @@ impl Overlay {
         revision: u64,
         rect: Rect,
         options: TwitchOptions,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
     ) {
         let key = (revision, rect, options.show_badges, options.show_emotes);
         if self.key != Some(key) {
@@ -323,7 +325,7 @@ impl deadsync_theme::views::TwitchChatPresentation<Actor, Entry, TwitchOptions> 
     fn push_chat(
         &mut self,
         actors: &mut Vec<Actor>,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         view: deadsync_theme::views::TwitchChatView<'_, Entry, TwitchOptions>,
     ) {
         if view.screen == Screen::Gameplay && !view.options.show_gameplay {
@@ -504,7 +506,7 @@ mod tests {
             |path| root.join(path),
         )
         .unwrap();
-        let mut assets = AssetManager::new();
+        let mut assets = AssetManager::<()>::new();
         assets.register_fonts(fonts.into_iter().map(|f| (f.name, f.font)));
         let rect = Rect {
             x: 0.0,

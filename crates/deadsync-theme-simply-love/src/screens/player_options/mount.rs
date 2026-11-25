@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 use deadsync_profile_gameplay::stage_options::StageOptions;
 use deadsync_theme::player_options::{
@@ -61,14 +62,14 @@ impl ThemePlayerOptions for crate::SimplyLoveTheme {
         &mut state.song
     }
 
-    fn prepare_player_options(state: &mut State, assets: &AssetManager) {
+    fn prepare_player_options(state: &mut State, assets: &dyn AssetView) {
         prepare_presentation(state, assets);
     }
 
     fn update_player_options(
         state: &mut State,
         dt: f32,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         effects: &mut Vec<ThemeEffect>,
     ) {
         update(state, dt, assets, effects);
@@ -76,7 +77,7 @@ impl ThemePlayerOptions for crate::SimplyLoveTheme {
 
     fn handle_player_options_input(
         state: &mut State,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         input: &InputEvent,
         effects: &mut Vec<ThemeEffect>,
     ) {
@@ -96,7 +97,7 @@ impl ThemePlayerOptions for crate::SimplyLoveTheme {
     fn push_player_options_actors(
         actors: &mut Vec<Actor>,
         state: &State,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         visual_policy: Self::PlayerOptionsVisualPolicy,
     ) {
         push_actors(actors, state, assets, visual_policy);

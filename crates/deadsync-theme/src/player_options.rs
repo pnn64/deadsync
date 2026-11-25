@@ -2,7 +2,7 @@
 
 use crate::views::{NoteskinCatalogView, SmxGifCatalogView};
 use crate::{Screen, ThemeEffect, ThemeTransitions, TransitionState};
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -66,7 +66,7 @@ pub trait PlayerOptionsLayout<A, T> {
         &mut self,
         actors: &mut Vec<A>,
         page: PlayerOptionsPage<'_, T, A>,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         now: f64,
         transition: &TransitionState<Screen>,
     );
@@ -150,16 +150,16 @@ pub trait ThemePlayerOptions: ThemeTransitions {
     ) -> PlayerOptionsSelection<'_, Self::Screen>;
     fn player_options_stage(state: &Self::PlayerOptionsState) -> Self::PlayerOptionsStage;
     fn player_options_song_mut(state: &mut Self::PlayerOptionsState) -> &mut Arc<SongData>;
-    fn prepare_player_options(state: &mut Self::PlayerOptionsState, assets: &AssetManager);
+    fn prepare_player_options(state: &mut Self::PlayerOptionsState, assets: &dyn AssetView);
     fn update_player_options(
         state: &mut Self::PlayerOptionsState,
         dt: f32,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         effects: &mut Vec<ThemeEffect<Self::Screen, Self::RuntimeRequest>>,
     );
     fn handle_player_options_input(
         state: &mut Self::PlayerOptionsState,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         input: &Self::PlayerOptionsInput,
         effects: &mut Vec<ThemeEffect<Self::Screen, Self::RuntimeRequest>>,
     );
@@ -173,7 +173,7 @@ pub trait ThemePlayerOptions: ThemeTransitions {
     fn push_player_options_actors(
         actors: &mut Vec<Self::Actor>,
         state: &Self::PlayerOptionsState,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         visual_policy: Self::PlayerOptionsVisualPolicy,
     );
     fn set_player_options_viewport(

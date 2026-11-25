@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 
 /// Keep navigation's logical x positions in reading order. Only presentation
@@ -63,7 +64,7 @@ pub(super) fn inline_choice_geometry(
     Some([width.mul_add(0.5, left_x + offset), width])
 }
 
-pub(super) fn prepare_choice_layouts(state: &mut State, asset_manager: &AssetManager) {
+pub(super) fn prepare_choice_layouts(state: &mut State, asset_manager: &dyn AssetView) {
     if state.pane().choice_layout_ready {
         return;
     }
@@ -297,7 +298,7 @@ pub(super) fn apply_inline_intent_to_row(state: &mut State, player_idx: usize, r
 
 pub(super) fn move_selection_vertical(
     state: &mut State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
     dir: NavDirection,
@@ -334,7 +335,7 @@ pub(super) fn move_selection_vertical(
 
 #[inline(always)]
 pub(super) fn measure_option_text(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     text: &str,
     zoom: f32,
 ) -> (f32, f32) {
@@ -397,7 +398,7 @@ pub(super) fn arcade_row_focuses_next_row(
         && state.pane().selected_row[idx] == row_idx
 }
 
-pub(super) fn arcade_next_row_size(state: &State, asset_manager: &AssetManager) -> [f32; 2] {
+pub(super) fn arcade_next_row_size(state: &State, asset_manager: &dyn AssetView) -> [f32; 2] {
     if let Some(size) = state.arcade_next_row_size.get() {
         return size;
     }
@@ -414,7 +415,7 @@ pub(super) fn arcade_next_row_size(state: &State, asset_manager: &AssetManager) 
 pub(super) fn arcade_next_row_layout(
     state: &State,
     row_idx: usize,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
 ) -> (f32, f32, f32) {
     let [draw_w, draw_h] = arcade_next_row_size(state, asset_manager);
     let left_x = inline_choice_left_x_for_row(state, row_idx) - draw_w - arcade_next_row_gap_x();

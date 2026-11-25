@@ -1,4 +1,4 @@
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::Actor;
 use deadsync_theme::stage::{
     EvaluationAudio, EvaluationDeparture, EvaluationFallbackSounds, EvaluationOverviewPresentation,
@@ -78,7 +78,7 @@ impl EvaluationOverviewPresentation<Actor> for OpenItgEvaluation {
     fn push_overview(
         &mut self,
         actors: &mut Vec<Actor>,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         page: EvaluationOverview<'_>,
     ) {
         OpenItgEvaluation::push_overview(self, actors, assets, page);

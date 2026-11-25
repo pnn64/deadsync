@@ -19,7 +19,9 @@ use super::rip::{self, CardMotion, Choice, PackMotion, Pick, Row, Stage, TitleFi
 use super::spinner;
 use super::state::{State, Zone, banner_is_lost, three_key};
 use crate::act;
+#[cfg(test)]
 use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, TextContent};
 use deadsync_online::rip_packs::{BOOSTER_SONGS, Era, Pace, RipSong, SongState};
 use std::borrow::Cow;
@@ -261,7 +263,7 @@ fn content(text: Cow<'static, str>) -> TextContent {
 pub(super) fn push_rip(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     w: f32,
     h: f32,
 ) {
@@ -478,7 +480,7 @@ fn push_stage(
     actors: &mut Vec<Actor>,
     state: &State,
     accent: [f32; 4],
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
 ) {
     let rip = &state.rip;
     actors.push(act!(text:
@@ -666,7 +668,7 @@ fn push_cards(
     state: &State,
     accent: [f32; 4],
     elapsed: f32,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
 ) {
     let rip = &state.rip;
     let songs = &rip.snapshot.songs;
@@ -1209,7 +1211,7 @@ fn push_picker(actors: &mut Vec<Actor>, state: &State, accent: [f32; 4], w: f32,
 pub(super) fn push_prompt(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     w: f32,
     h: f32,
 ) {
@@ -1344,7 +1346,7 @@ mod tests {
     fn the_idle_stage_draws_the_originals_words() {
         let state = rip_tab();
         let mut actors = Vec::new();
-        push_rip(&mut actors, &state, &AssetManager::new(), 854.0, 480.0);
+        push_rip(&mut actors, &state, &AssetManager::<()>::new(), 854.0, 480.0);
         let words = texts(&actors);
         for expected in [
             "ERA",
@@ -1394,7 +1396,7 @@ mod tests {
         state.zone = Zone::Rip;
         state.rip.row = 4;
         let mut actors = Vec::new();
-        push_rip(&mut actors, &state, &AssetManager::new(), 854.0, 480.0);
+        push_rip(&mut actors, &state, &AssetManager::<()>::new(), 854.0, 480.0);
         assert_eq!(glyphs(&texts(&actors)), 1);
     }
 
@@ -1434,7 +1436,7 @@ mod tests {
         state::update(&mut state, 3.0);
 
         let mut actors = Vec::new();
-        push_rip(&mut actors, &state, &AssetManager::new(), 854.0, 480.0);
+        push_rip(&mut actors, &state, &AssetManager::<()>::new(), 854.0, 480.0);
         let words = texts(&actors);
         assert!(words.iter().any(|word| word == "KEEP"));
         assert!(words.iter().any(|word| word == "RE-RIP"));
@@ -1474,7 +1476,7 @@ mod tests {
         let authors = Arc::clone(&state.rip.authors);
         rip::sync(&mut state.rip, Arc::new(kept), authors);
         let mut actors = Vec::new();
-        push_rip(&mut actors, &state, &AssetManager::new(), 854.0, 480.0);
+        push_rip(&mut actors, &state, &AssetManager::<()>::new(), 854.0, 480.0);
         let words = texts(&actors);
         assert!(words.iter().any(|word| word == "could not be downloaded"));
         assert!(words.iter().any(|word| word == "--"));
@@ -1609,7 +1611,7 @@ mod tests {
             rip::Heard::Start
         );
         let mut actors = Vec::new();
-        push_rip(&mut actors, &state, &AssetManager::new(), 854.0, 480.0);
+        push_rip(&mut actors, &state, &AssetManager::<()>::new(), 854.0, 480.0);
         let words = texts(&actors);
         for expected in [
             "CHOOSE ERAS",
@@ -1641,7 +1643,7 @@ mod tests {
         rip::press(&mut state, rip::Key::Start, true);
         rip::prompt_type(&mut state.rip, "Someone");
         let mut actors = Vec::new();
-        push_prompt(&mut actors, &state, &AssetManager::new(), 854.0, 480.0);
+        push_prompt(&mut actors, &state, &AssetManager::<()>::new(), 854.0, 480.0);
         let words = texts(&actors);
         assert!(
             words

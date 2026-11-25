@@ -1,6 +1,6 @@
 //! Presentation of the completed session and its ranking-name editor.
 
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 pub use deadsync_score::name_entry::{TimedEntryPolicy, TimedNameEntry};
 pub use deadsync_score::session_summary::{SessionPlayerSummary, SessionSummary};
 use std::sync::Arc;
@@ -41,7 +41,7 @@ pub trait SessionEndPresentation<A> {
     fn push_summary(
         &self,
         actors: &mut Vec<A>,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         page: SessionSummaryPage<'_>,
     );
     fn push_name_entry(&self, actors: &mut Vec<A>, page: NameEntryPage<'_>);

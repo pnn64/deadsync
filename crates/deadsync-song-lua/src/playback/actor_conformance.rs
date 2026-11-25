@@ -5,6 +5,7 @@
 //! compared in ITGmania's logical top-left screen space without exemptions.
 
 use super::*;
+use deadlib_assets::AssetManager;
 
 #[derive(Clone, Copy, Debug)]
 pub struct EffectSample {
@@ -375,7 +376,7 @@ impl WholeSongComposer {
 
     #[must_use]
     pub fn new<S: NoteskinSlot + Clone>(overlays: &[SongLuaOverlayActor<S>]) -> Self {
-        let mut assets = AssetManager::new();
+        let mut assets = AssetManager::<()>::new();
         for overlay in overlays {
             match &overlay.kind {
                 SongLuaOverlayKind::Quad => queue_texture(&mut assets, &white_texture_key()),

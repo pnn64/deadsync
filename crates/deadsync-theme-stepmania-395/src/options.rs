@@ -1,4 +1,4 @@
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, TextAlign, TextContent};
 use deadlib_present::font::{FontMap, measure_line_width_logical};
 use deadsync_theme::player_options::{
@@ -38,7 +38,7 @@ impl SystemOptionsPresentation<Actor> for StepManiaSystemOptions {
         &mut self,
         phase: SystemOptionsPhase,
         _now_seconds: f64,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         draw: &mut dyn FnMut(SystemOptionsRenderer<'_, Actor>),
     ) {
         let mut page = |actors: &mut Vec<Actor>, page: SystemOptionsPage<'_>| {
@@ -195,7 +195,7 @@ impl PlayerOptionsLayout<Actor, TextContent> for StepManiaPlayerOptions {
         &mut self,
         actors: &mut Vec<Actor>,
         page: PlayerOptionsPage<'_, TextContent, Actor>,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         now: f64,
         transition: &TransitionState<Screen>,
     ) {

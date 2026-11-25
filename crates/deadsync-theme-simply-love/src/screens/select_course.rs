@@ -19,7 +19,9 @@ use crate::views::{
     SelectCourseScoreRequest, SelectCourseScoreView,
     SelectFlowPlayerView,
 };
+#[cfg(test)]
 use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_platform::input::PadDir;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
@@ -1949,7 +1951,7 @@ pub fn select_course_view<'a>(
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    _asset_manager: &AssetManager,
+    _asset_manager: &dyn AssetView,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(256);
@@ -2526,7 +2528,7 @@ pub fn push_exit_prompt(
     }
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn get_actors(state: &State, asset_manager: &dyn AssetView) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     push_actors(
         &mut actors,
@@ -2819,7 +2821,7 @@ mod presentation_tests {
         let mut state = init(SelectCourseInitView::default());
         for (show_ex, expected) in [(false, "ITG"), (true, "EX")] {
             state.score_view.mode_show_ex_score = show_ex;
-            let actors = get_actors(&state, &AssetManager::new());
+            let actors = get_actors(&state, &AssetManager::<()>::new());
             assert!(actors.iter().any(|actor| {
                 matches!(
                     actor,

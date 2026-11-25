@@ -1,3 +1,4 @@
+use deadlib_assets::AssetView;
 use super::*;
 use crate::fonts::machine_font_key;
 use crate::screens::components::shared::noteskin_draw;
@@ -68,7 +69,7 @@ pub(super) fn prepare_row_titles(state: &mut State) {
     state.row_titles[pane_idx] = compile_row_titles(&state.panes[pane_idx].row_map, i18n_revision);
 }
 
-pub(super) fn prepare_speed_values(state: &mut State, asset_manager: &AssetManager) {
+pub(super) fn prepare_speed_values(state: &mut State, asset_manager: &dyn AssetView) {
     let mut dirty = std::mem::take(&mut state.speed_value_dirty);
     while dirty != 0 {
         let player_idx = dirty.trailing_zeros() as usize;
@@ -106,7 +107,7 @@ pub(super) const fn speed_value(state: &State, player_idx: usize) -> &SpeedValue
         .expect("Player Options speed presentation must be prepared")
 }
 
-pub(super) fn prepare_speed_headers(state: &mut State, asset_manager: &AssetManager) {
+pub(super) fn prepare_speed_headers(state: &mut State, asset_manager: &dyn AssetView) {
     let mut dirty = std::mem::take(&mut state.speed_header_dirty);
     while dirty != 0 {
         let player_idx = dirty.trailing_zeros() as usize;
@@ -325,7 +326,7 @@ fn push_search_hint(actors: &mut Vec<Actor>, state: &State) {
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     actors.reserve(64);
@@ -688,7 +689,7 @@ pub(super) fn revealed_text(
     }
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn get_actors(state: &State, asset_manager: &dyn AssetView) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(64);
     push_actors(
         &mut actors,
@@ -703,7 +704,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 /// `get_actors` invocation. Held by reference inside `RowCtx`.
 pub(super) struct FrameCtx<'a> {
     pub state: &'a State,
-    pub asset_manager: &'a AssetManager,
+    pub asset_manager: &'a dyn AssetView,
     pub active: [bool; PLAYER_SLOTS],
     pub show_p2: bool,
     pub option_column_x: [f32; PLAYER_SLOTS],

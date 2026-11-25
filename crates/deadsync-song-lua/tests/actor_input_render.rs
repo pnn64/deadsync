@@ -21,6 +21,7 @@ macro_rules! playback_fixture_tests {
 )]
 mod renderer {
     include!("../src/playback.rs");
+    use deadlib_assets::AssetManager;
 
     struct WhiteTextureContext;
     impl deadlib_present::texture::TextureContext for WhiteTextureContext {
@@ -73,7 +74,7 @@ mod renderer {
             &mut composed,
             [0.0; 2],
         );
-        let assets = AssetManager::new();
+        let assets = AssetManager::<()>::new();
         let mut actors = Vec::new();
         for (index, overlay) in overlays.iter().enumerate() {
             if !matches!(overlay.kind, SongLuaOverlayKind::Quad) {

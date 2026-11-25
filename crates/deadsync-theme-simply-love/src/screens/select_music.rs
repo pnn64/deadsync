@@ -2,7 +2,7 @@ use crate::act;
 use crate::fonts::machine_font_key;
 use crate::i18n;
 use crate::i18n::{tr, tr_fmt};
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 pub use deadsync_gameplay::music_wheel::MusicWheelEntry;
 use deadsync_gameplay::music_wheel::{RandomSongPool, WheelRandomAction, wheel_entry_index};
 use deadsync_config::null_or_die::GraphOrigin;
@@ -12586,7 +12586,7 @@ fn test_media_song(index: usize) -> Arc<SongData> {
 fn push_folder_stats_overlay(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     side: profile_data::PlayerSide,
     display_name: &str,
     target_chart_type: &str,
@@ -13073,7 +13073,7 @@ mod select_heart_rate_tests {
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     stage_number: usize,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -14348,7 +14348,7 @@ pub fn push_actors(
 pub fn push_select_music_overlays(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     show_launch_prompt: bool,
     profile_picker_renderer: Option<
@@ -14764,7 +14764,7 @@ fn push_song_delete_prompt(actors: &mut Vec<Actor>, state: &State) {
     ));
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usize) -> Vec<Actor> {
+pub fn get_actors(state: &State, asset_manager: &dyn AssetView, stage_number: usize) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     push_actors(
         &mut actors,
@@ -15379,7 +15379,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let stale_actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
+        let stale_actors = super::get_actors(&state, &deadlib_assets::AssetManager::<()>::new(), 1);
         assert!(
             !stale_actors
                 .iter()
@@ -15405,7 +15405,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let matched_actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
+        let matched_actors = super::get_actors(&state, &deadlib_assets::AssetManager::<()>::new(), 1);
         assert!(
             matched_actors
                 .iter()
@@ -16474,7 +16474,7 @@ mod tests {
         super::push_folder_stats_overlay(
             &mut actors,
             &state,
-            &deadlib_assets::AssetManager::new(),
+            &deadlib_assets::AssetManager::<()>::new(),
             profile_data::PlayerSide::P1,
             "Rairly",
             "dance-single",
@@ -16515,7 +16515,7 @@ mod tests {
 
         let mut state = folder_stats_state();
         state.session.guest[0] = false;
-        let assets = deadlib_assets::AssetManager::new();
+        let assets = deadlib_assets::AssetManager::<()>::new();
         // Arrow-Cloud/theme v20260901.2, PerPlayer/FolderStats.lua: show
         // columns from the best earned grade down to one star, including quints.
         for (ex_percent, star_counts, sprite_states) in [
@@ -16988,7 +16988,7 @@ mod tests {
         set_current_window_px(3_686, 2_560);
         set_current_metrics(Metrics::centered(691.125, 480.0));
         let logical_width = screen_width();
-        let actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
+        let actors = super::get_actors(&state, &deadlib_assets::AssetManager::<()>::new(), 1);
         let gs_logo = actors
             .iter()
             .find_map(|actor| texture_offset(actor, "GrooveStats.png"));
@@ -17017,7 +17017,7 @@ mod tests {
                 let side_idx = profile_data::player_side_index(gs_side);
                 let state = versus_scorebox_state(incumbent, [side_idx == 0, side_idx == 1]);
 
-                let actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
+                let actors = super::get_actors(&state, &deadlib_assets::AssetManager::<()>::new(), 1);
                 let [x, _] = actors
                     .iter()
                     .find_map(|actor| texture_offset(actor, "GrooveStats.png"))
@@ -17040,7 +17040,7 @@ mod tests {
         set_current_metrics(Metrics::centered(854.0, 480.0));
         let center_x = screen_center_x();
         let state = versus_scorebox_state(profile_data::PlayerSide::P1, [true, true]);
-        let actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
+        let actors = super::get_actors(&state, &deadlib_assets::AssetManager::<()>::new(), 1);
         let mut logo_xs: Vec<_> = actors
             .iter()
             .filter_map(|actor| texture_offset(actor, "GrooveStats.png"))
@@ -18608,7 +18608,7 @@ mod tests {
                 }),
                 ..Default::default()
             });
-        let assets = deadlib_assets::AssetManager::new();
+        let assets = deadlib_assets::AssetManager::<()>::new();
 
         let _ = super::get_actors(&state, &assets, 1);
         let _ = super::get_actors(&state, &assets, 1);

@@ -2,7 +2,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
 
-use deadlib_assets::{AssetManager, AssetManifest, TextureAssetSpec};
+use deadlib_assets::{AssetManifest, TextureAssetSpec};
 use deadlib_platform::display::{self, FullscreenType, MonitorSpec};
 use deadlib_present::space::{self, Metrics};
 use deadlib_render::{
@@ -10,6 +10,7 @@ use deadlib_render::{
     render_size_for_physical, render_size_for_window,
 };
 use deadlib_render_core::{BackendType, PresentModePolicy};
+use deadsync_assets::RenderAssets;
 use deadsync_config::app_config::DisplayMode;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event_loop::ActiveEventLoop;
@@ -163,7 +164,7 @@ pub(crate) fn metrics_for_aspect(aspect: f32) -> Metrics {
 pub fn initialize_renderer(
     setup: AppWindowSetup,
     config: RendererInitConfig,
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     dynamic_media: &mut DynamicMedia,
     manifest: AssetManifest<impl IntoIterator<Item = TextureAssetSpec>>,
 ) -> Result<RendererInitResult, Box<dyn Error>> {
@@ -234,7 +235,7 @@ pub fn start_renderer_runtime(
     shell: &mut ShellState,
     event_loop: &ActiveEventLoop,
     config: RendererStartupConfig,
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     dynamic_media: &mut DynamicMedia,
     manifest: AssetManifest<impl IntoIterator<Item = TextureAssetSpec>>,
     now: Instant,
@@ -327,7 +328,7 @@ pub fn begin_renderer_switch(
     shell: &mut ShellState,
     window: Option<&Window>,
     backend: &mut Option<Backend>,
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     dynamic_media: &mut DynamicMedia,
     config: RendererSwitchWindowConfig,
     now: Instant,
@@ -349,7 +350,7 @@ pub fn reset_renderer_switch_clock(shell: &mut ShellState, now: Instant) {
 
 pub fn dispose_renderer(
     backend: &mut Option<Backend>,
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     dynamic_media: &mut DynamicMedia,
 ) {
     let Some(mut backend) = backend.take() else {
@@ -1300,7 +1301,7 @@ mod tests {
             &mut shell,
             None,
             &mut None,
-            &mut AssetManager::new(),
+            &mut RenderAssets::new(),
             &mut DynamicMedia::new(),
             RendererSwitchWindowConfig {
                 backend_type: BackendType::Software,

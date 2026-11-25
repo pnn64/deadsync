@@ -4,7 +4,7 @@ use crate::fonts::machine_font_key;
 use crate::i18n::{LookupKey, lookup_key};
 use crate::screens::evaluation::EvalPane;
 use crate::views::ScoreInfo;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::font;
 use deadlib_present::space::screen_center_y;
@@ -77,7 +77,7 @@ impl StatsPanePresentation {
         &self,
         pane: EvalPane,
         controller: profile_data::PlayerSide,
-        asset_manager: &AssetManager,
+        asset_manager: &dyn AssetView,
         machine_font: MachineFont,
         palette: JudgmentPalette,
     ) -> Arc<[Actor]> {
@@ -125,7 +125,7 @@ const fn stats_pane_index(pane: EvalPane) -> Option<usize> {
     }
 }
 
-fn stats_font_key(asset_manager: &AssetManager, machine_font: MachineFont) -> (usize, usize) {
+fn stats_font_key(asset_manager: &dyn AssetView, machine_font: MachineFont) -> (usize, usize) {
     let address = asset_manager
         .with_font(
             machine_font_key(machine_font, FontRole::ScreenEval),
@@ -322,7 +322,7 @@ fn push_stats_actors(
     presentation: &StatsPanePresentation,
     pane: EvalPane,
     controller: profile_data::PlayerSide,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     elapsed_s: f32,
     machine_font: MachineFont,
     palette: JudgmentPalette,
@@ -639,7 +639,7 @@ pub(crate) fn push_stats_pane_with_palette(
     presentation: &StatsPanePresentation,
     pane: EvalPane,
     controller: profile_data::PlayerSide,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     elapsed_s: f32,
     machine_font: MachineFont,
     palette: JudgmentPalette,

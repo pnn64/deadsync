@@ -144,7 +144,7 @@ pub fn evaluation_actors_with_style(
         .unwrap()
         .push_overview(
             &mut actors,
-            &AssetManager::new(),
+            &AssetManager::<()>::new(),
             EvaluationOverview {
                 session_style,
                 title: &title,
@@ -304,7 +304,7 @@ pub fn session_actors(screen: deadsync_theme::Screen, elapsed: f32, p2_only: boo
             let banners: [Arc<str>; 3] = std::array::from_fn(|_| "".into());
             presentation.push_summary(
                 &mut actors,
-                &AssetManager::new(),
+                &AssetManager::<()>::new(),
                 SessionSummaryPage {
                     session_style: deadsync_theme::select_music::SessionStyleView {
                         double: false,

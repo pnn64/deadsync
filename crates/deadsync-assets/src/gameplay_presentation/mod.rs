@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::gameplay_stage::{ActiveGameplayStage, GameplayStagePresenter};
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::Actor;
 use deadlib_present::compose::{ComposeScratch, TextLayoutCache};
 use deadsync_config::app_config::Config;
@@ -114,7 +114,7 @@ impl Default for GameplayBackgroundMedia {
 pub struct GameplayTextPrewarm<'a> {
     pub cache: &'a mut TextLayoutCache,
     pub scratch: &'a mut ComposeScratch,
-    pub assets: &'a AssetManager,
+    pub assets: &'a dyn AssetView,
     pub edit_measure_text: bool,
 }
 
@@ -178,7 +178,7 @@ pub trait GameplayScreen<L, H>:
         &self,
         stage: &ActiveGameplayStage,
         lobby: &L,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         restarting: bool,
         config: &Config,
     ) -> (Vec<Actor>, f32);

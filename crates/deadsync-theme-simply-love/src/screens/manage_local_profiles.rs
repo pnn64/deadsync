@@ -12,7 +12,7 @@ use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
 use crate::views::{LocalProfileView, ManageLocalProfilesView};
 use crate::{SimplyLoveEffect as ThemeEffect, SimplyLoveInputResult as ThemeInputResult};
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_platform::input::KeyCode;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::{Actor, TextContent};
@@ -2134,7 +2134,7 @@ const IMPORT_PICK_MAX_NAME_REF: &str = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
 fn push_import_picker_overlay(
     ui: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     header_font: &'static str,
 ) {
     let Some(picker) = &state.import_picker else {
@@ -2460,7 +2460,7 @@ fn format_eta(secs: u64) -> String {
 fn push_import_message_overlay(
     ui: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     header_font: &'static str,
 ) {
     let Some(message) = &state.import_message else {
@@ -2603,7 +2603,7 @@ fn push_import_message_overlay(
 }
 
 /// Measures the rendered width (logical px) of `text` in `font_key` at `zoom`.
-fn measure_text_width(asset_manager: &AssetManager, font_key: &str, text: &str, zoom: f32) -> f32 {
+fn measure_text_width(asset_manager: &dyn AssetView, font_key: &str, text: &str, zoom: f32) -> f32 {
     let mut out = 0.0_f32;
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font(font_key, |measure_font| {
@@ -2618,7 +2618,7 @@ fn measure_text_width(asset_manager: &AssetManager, font_key: &str, text: &str, 
 }
 
 /// Measures the rendered width (logical px) of a `miso` label at `zoom`.
-fn measure_label_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f32 {
+fn measure_label_width(asset_manager: &dyn AssetView, text: &str, zoom: f32) -> f32 {
     measure_text_width(asset_manager, "miso", text, zoom)
 }
 
@@ -2928,7 +2928,7 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -3000,7 +3000,7 @@ pub fn push_actors(
 
 pub fn get_actors(
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(220);

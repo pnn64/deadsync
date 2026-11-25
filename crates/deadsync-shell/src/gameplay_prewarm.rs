@@ -1,4 +1,4 @@
-use deadlib_assets::AssetManager;
+use deadsync_assets::RenderAssets;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
 use deadsync_assets::media_cache;
@@ -21,7 +21,7 @@ pub(super) fn insert_texture_key(seen: &mut FastHashSet<String>, key: &str) -> b
 }
 
 fn prewarm_model_texture_key(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     seen: &mut FastHashSet<String>,
     seen_model_textures: &mut FastHashSet<String>,
@@ -41,7 +41,7 @@ fn prewarm_model_texture_key(
 }
 
 fn prewarm_noteskin_textures(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     seen: &mut FastHashSet<String>,
     seen_model_textures: &mut FastHashSet<String>,
@@ -90,7 +90,7 @@ impl GameplayLiveTextures {
 
     pub fn sync<'a>(
         &mut self,
-        assets: &mut AssetManager,
+        assets: &mut RenderAssets,
         backend: &mut Backend,
         overlays: impl IntoIterator<Item = &'a SongLuaOverlayActor>,
     ) {
@@ -181,7 +181,7 @@ impl GameplayLiveTextures {
 }
 
 pub fn prewarm_gameplay_assets<StateDelta>(
-    assets: &mut AssetManager,
+    assets: &mut RenderAssets,
     backend: &mut Backend,
     noteskin_sets: [&[Option<Arc<Noteskin>>; MAX_PLAYERS]; 4],
     song: &SongData,

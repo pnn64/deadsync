@@ -2,7 +2,7 @@
 
 use crate::{ActiveTheme, ThemeScreen as Screen, TransitionState};
 use crate::mounted_theme::PlayerOptionsLayoutFactory;
-use deadlib_assets::AssetManager;
+use deadsync_assets::RenderAssets;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::{Actor, TextContent};
 use deadsync_assets::noteskin::Noteskin;
@@ -39,7 +39,7 @@ impl PlayerOptionsState {
         Self { editor, layout }
     }
 
-    pub(crate) fn prepare(&mut self, assets: &AssetManager) {
+    pub(crate) fn prepare(&mut self, assets: &RenderAssets) {
         ActiveTheme::prepare_player_options(&mut self.editor, assets);
     }
 
@@ -58,7 +58,7 @@ impl PlayerOptionsState {
     pub(crate) fn update(
         &mut self,
         dt: f32,
-        assets: &AssetManager,
+        assets: &RenderAssets,
         host: &mut Vec<AppEffect>,
     ) {
         ActiveTheme::update_player_options(&mut self.editor, dt, assets, host);
@@ -66,7 +66,7 @@ impl PlayerOptionsState {
 
     pub(crate) fn handle_input(
         &mut self,
-        assets: &AssetManager,
+        assets: &RenderAssets,
         input: &InputEvent,
         host: &mut Vec<AppEffect>,
     ) {
@@ -86,7 +86,7 @@ impl PlayerOptionsState {
     pub(crate) fn push_actors(
         &mut self,
         actors: &mut Vec<Actor>,
-        assets: &AssetManager,
+        assets: &RenderAssets,
         policy: SimplyLoveVisualPolicyView,
         now: f64,
         transition: &TransitionState,

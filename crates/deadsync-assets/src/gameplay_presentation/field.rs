@@ -540,7 +540,7 @@ pub fn compose_hud(
     request: &NotefieldComposeRequest<'_, SpriteSlot>,
     prepared: &PreparedNotefield<'_, SpriteSlot>,
     player_color: [f32; 4],
-    textures: &impl deadlib_present::texture::TextureContext,
+    textures: &(impl deadlib_present::texture::TextureContext + ?Sized),
     broken_run_lookup: &BrokenRunLookup,
     stream_progress_lookup: &StreamProgressLookup,
     buffers: FieldHudBuffers<'_>,

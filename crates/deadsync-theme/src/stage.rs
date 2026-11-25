@@ -1,6 +1,6 @@
 //! Presentation choices for a stage and its results. The host supplies game facts.
 
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -72,7 +72,7 @@ pub trait EvaluationOverviewPresentation<A> {
     fn push_overview(
         &mut self,
         actors: &mut Vec<A>,
-        assets: &AssetManager,
+        assets: &dyn AssetView,
         page: EvaluationOverview<'_>,
     );
 }

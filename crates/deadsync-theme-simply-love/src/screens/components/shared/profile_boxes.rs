@@ -8,7 +8,9 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::views::ProfilePickerView;
+#[cfg(test)]
 use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadsync_assets::noteskin::{self, Noteskin};
 
 use crate::color;
@@ -1269,7 +1271,7 @@ fn push_join_prompt(
 #[allow(clippy::too_many_arguments)]
 fn push_scroller_frame(
     out: &mut Vec<Actor>,
-    _asset_manager: &AssetManager,
+    _asset_manager: &dyn AssetView,
     choices: &[Choice],
     selected_index: usize,
     scroll_anim: f32,
@@ -1727,7 +1729,7 @@ fn push_scroller_frame(
 fn push_box_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -1747,7 +1749,7 @@ fn push_box_actors(
 fn push_box_actors_with_model_cache(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     mut model_mesh_cache: Option<&mut ModelMeshCache>,
@@ -1979,7 +1981,7 @@ fn push_box_actors_with_model_cache(
 pub fn push_box_actors_with_z(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
     z_offset: i16,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
@@ -2003,7 +2005,7 @@ pub fn push_box_actors_with_z(
 #[cfg(test)]
 fn get_box_actors_with_z(
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
     z_offset: i16,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
@@ -2023,7 +2025,7 @@ fn get_box_actors_with_z(
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
@@ -2124,7 +2126,7 @@ pub fn with_screen_view(
 
 pub fn get_actors(
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(160);
@@ -2199,7 +2201,7 @@ mod tests {
         let state = init(picker_fixture());
         let actors = get_box_actors_with_z(
             &state,
-            &AssetManager::new(),
+            &AssetManager::<()>::new(),
             1.0,
             0,
             crate::views::SimplyLoveVisualPolicyView::default(),

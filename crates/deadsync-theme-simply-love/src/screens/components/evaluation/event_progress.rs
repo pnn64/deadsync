@@ -2,7 +2,7 @@ use crate::act;
 use crate::color::JUDGMENT_RGBA;
 use crate::fonts::machine_font_key_for_text;
 use crate::screens::components::shared::banner as shared_banner;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, SizeSpec, TextAttribute};
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
@@ -82,13 +82,13 @@ impl Default for EventActorCache {
     }
 }
 
-fn font_address(asset_manager: &AssetManager, name: &str) -> usize {
+fn font_address(asset_manager: &dyn AssetView, name: &str) -> usize {
     asset_manager
         .with_font(name, |font| std::ptr::from_ref(font) as usize)
         .unwrap_or(0)
 }
 
-fn event_font_key(asset_manager: &AssetManager, machine_font: MachineFont) -> EventFontKey {
+fn event_font_key(asset_manager: &dyn AssetView, machine_font: MachineFont) -> EventFontKey {
     EventFontKey {
         font_count: asset_manager.fonts().len(),
         miso: font_address(asset_manager, "miso"),
@@ -506,7 +506,7 @@ fn body_bounds(pane_height: f32, row_height: f32, bottom_reserved: f32) -> BodyB
 
 #[inline(always)]
 fn body_layout(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     text: &str,
     pane_width: f32,
     max_height: f32,
@@ -539,7 +539,7 @@ fn body_layout(
 }
 
 #[inline(always)]
-fn upper_header_layout(asset_manager: &AssetManager, text: &str, pane_width: f32) -> HeaderLayout {
+fn upper_header_layout(asset_manager: &dyn AssetView, text: &str, pane_width: f32) -> HeaderLayout {
     asset_manager
         .with_fonts(|all_fonts| {
             asset_manager.with_font(UPPER_HEADER_FONT, |header_font| {
@@ -677,7 +677,7 @@ fn build_body_attributes(text: &str, default_number_color: [f32; 4]) -> Vec<Text
 
 #[inline(always)]
 fn build_upper_header_text(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     text: String,
     pane_width: f32,
     y: f32,
@@ -721,7 +721,7 @@ fn build_header_text(
 
 #[inline(always)]
 fn build_body_text(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     text: String,
     wrap_width: f32,
     bounds: BodyBounds,
@@ -908,7 +908,7 @@ fn build_overlay_banner_and_song(song: &SongData, translated_titles: bool, z: i1
 }
 
 fn build_upper_panel(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     center_x: f32,
     center_y: f32,
     pane_width: f32,
@@ -960,7 +960,7 @@ fn build_upper_panel(
 }
 
 fn build_overlay_panel(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     center_x: f32,
     center_y: f32,
     pane_width: f32,
@@ -1113,7 +1113,7 @@ fn build_overlay_panel(
 
 #[must_use]
 pub fn build_event_progress_boxes(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     side: profile_data::PlayerSide,
     single_player: bool,
     progress: &[score_data::EventProgress],
@@ -1162,7 +1162,7 @@ pub fn build_event_progress_boxes(
 
 #[must_use]
 pub fn build_event_overlay(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     single_player: bool,
     song: Option<&SongData>,
     translated_titles: bool,
@@ -1232,7 +1232,7 @@ pub(crate) fn push_cached_event_progress_boxes(
     cache: &mut EventActorCache,
     player_index: usize,
     revision: u64,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     side: profile_data::PlayerSide,
     single_player: bool,
     progress: &[score_data::EventProgress],
@@ -1270,7 +1270,7 @@ pub(crate) fn push_cached_event_overlay(
     cache: &mut EventActorCache,
     revisions: [u64; 2],
     pages: [usize; 2],
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     single_player: bool,
     song: Option<&SongData>,
     translated_titles: bool,

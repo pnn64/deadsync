@@ -15,7 +15,7 @@ use crate::step_stats::{
     STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsGraphRect, StepStatsPaneLayout,
     StepStatsPaneParams, StepStatsSongInfoSlide,
 };
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{Actor, InlineText, SizeSpec, TextAlign, TextContent};
 use deadlib_present::compose::{
     ComposeScratch, TextLayoutCache, prewarm_prepared_inline_text_slot,
@@ -1265,7 +1265,7 @@ fn push_versus_count_texts(
 fn cached_game_time_width_for_key(
     key: (u32, u8),
     slot: usize,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
 ) -> f32 {
     GAME_TIME_WIDTH_SLOT_CACHE.with(|cache| {
         cache.borrow_mut().get_or_insert(slot, key, || {
@@ -1317,7 +1317,7 @@ fn prewarm_count_static_text(
 pub fn prewarm_text_layout(
     cache: &mut TextLayoutCache,
     fonts: &font::FontMap,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     state: &impl GameplayScreenView,
 ) {
     prewarm_score_counter_layout(cache, fonts, gameplay_font_key(state, FontRole::Numbers));
@@ -1528,7 +1528,7 @@ pub fn prewarm_frame_text_scratch(
 pub fn push_step_stats(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     playfield_center_x: f32,
     player_side: profile_data::PlayerSide,
 ) {
@@ -1782,7 +1782,7 @@ fn push_peak_nps_on_graph(
 pub fn push_versus_step_stats(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
 ) {
     if !is_wide() {
         return;
@@ -2106,7 +2106,7 @@ pub fn push_versus_step_stats(
 pub fn push_double_step_stats(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     playfield_center_x: f32,
 ) {
     push_split_step_stats(actors, state, asset_manager, playfield_center_x, false);
@@ -2115,7 +2115,7 @@ pub fn push_double_step_stats(
 pub fn push_centered_single_split_step_stats(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     playfield_center_x: f32,
 ) {
     push_split_step_stats(actors, state, asset_manager, playfield_center_x, true);
@@ -2124,7 +2124,7 @@ pub fn push_centered_single_split_step_stats(
 fn push_split_step_stats(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     playfield_center_x: f32,
     centered_single_split: bool,
 ) {
@@ -2694,7 +2694,7 @@ fn build_pack_banner(
 fn build_steps_info(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     layout: StepStatsPaneLayout,
     player_side: profile_data::PlayerSide,
     show_song_info: bool,
@@ -2775,7 +2775,7 @@ fn build_steps_info(
 }
 
 fn fit_song_info_values(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     values: [&str; 4],
     zoom: f32,
     max_width: f32,
@@ -2841,7 +2841,7 @@ mod song_info_text_fit_tests {
 fn push_holds_mines_rolls_pane_at(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     frame_cx: f32,
     frame_cy: f32,
     frame_zoom: f32,
@@ -2952,7 +2952,7 @@ fn notefield_width(state: &impl GameplayScreenView) -> Option<f32> {
 fn build_holds_mines_rolls_pane(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     layout: StepStatsPaneLayout,
     player_side: profile_data::PlayerSide,
 ) {
@@ -3149,7 +3149,7 @@ fn push_live_timing_stats_at(
 fn build_side_pane(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     layout: StepStatsPaneLayout,
     wide: bool,
     player_side: profile_data::PlayerSide,

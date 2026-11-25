@@ -37,7 +37,7 @@ use crate::fonts::{machine_font_key, machine_font_key_for_text};
 use crate::i18n::{tr, tr_fmt};
 use crate::screens::input as screen_input;
 use crate::visual_styles;
-use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::font;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::lobby_wait::{
@@ -479,7 +479,7 @@ fn submit_footer_cell(backend_label: Arc<str>, status: SubmitFooterStatus) -> Su
     SubmitFooterCell::new(backend_label, icon, countdown_secs, reason)
 }
 
-fn measure_text_width(asset_manager: &AssetManager, font_key: &str, text: &str, zoom: f32) -> f32 {
+fn measure_text_width(asset_manager: &dyn AssetView, font_key: &str, text: &str, zoom: f32) -> f32 {
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font(font_key, |measure_font| {
@@ -493,7 +493,7 @@ fn measure_text_width(asset_manager: &AssetManager, font_key: &str, text: &str, 
     out_w
 }
 
-fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f32 {
+fn measure_footer_text_width(asset_manager: &dyn AssetView, text: &str, zoom: f32) -> f32 {
     measure_text_width(asset_manager, "miso", text, zoom)
 }
 
@@ -668,7 +668,7 @@ struct SubmitLayout {
 }
 
 fn build_submit_layout(
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     presentation: &SubmitPresentation,
 ) -> SubmitLayout {
     let record_width = presentation
@@ -5563,7 +5563,7 @@ pub fn overview_pane_selected(state: &State) -> bool {
 pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
     let policy = &state.context.policy;
@@ -7022,7 +7022,7 @@ pub fn push_actors(
     push_visit_overlays(actors, state, asset_manager, true);
 }
 
-fn push_submission_overlay(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+fn push_submission_overlay(actors: &mut Vec<Actor>, state: &State, asset_manager: &dyn AssetView) {
     let play_style = state.context.play_style;
     // Auto-submit UI text (SL/zmod parity with AutoSubmitScore.lua):
     // top PB/WR banner plus bottom submit-status actors.
@@ -7135,7 +7135,7 @@ fn push_submission_overlay(actors: &mut Vec<Actor>, state: &State, asset_manager
 fn push_visit_overlays(
     actors: &mut Vec<Actor>,
     state: &State,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     show_stinger: bool,
 ) {
     let play_style = state.context.play_style;
@@ -7211,7 +7211,7 @@ fn push_visit_overlays(
     }
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn get_actors(state: &State, asset_manager: &dyn AssetView) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(20);
     push_actors(
         &mut actors,

@@ -20,7 +20,9 @@ use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenB
 use crate::screens::components::shared::{gs_scorebox, lobby_hud};
 use crate::views::{GameplayInitView, GameplayRuntimeView};
 use crate::visual_styles;
+#[cfg(test)]
 use deadlib_assets::AssetManager;
+use deadlib_assets::AssetView;
 use deadlib_present::actors::{
     Actor, InlineText, RetainedActorFrame, SizeSpec, TextAlign, TextContent,
 };
@@ -1340,7 +1342,7 @@ impl GameplayLobbyHudVisibility {
     }
 }
 
-fn intro_text_width_for_font(asset_manager: &AssetManager, font_key: &str, text: &str) -> f32 {
+fn intro_text_width_for_font(asset_manager: &dyn AssetView, font_key: &str, text: &str) -> f32 {
     asset_manager.with_fonts(|all_fonts| {
         asset_manager
             .with_font(font_key, |f| {
@@ -1351,7 +1353,7 @@ fn intro_text_width_for_font(asset_manager: &AssetManager, font_key: &str, text:
     })
 }
 
-fn intro_text_width(asset_manager: &AssetManager, state: &impl GameplayScreenView, text: &str) -> f32 {
+fn intro_text_width(asset_manager: &dyn AssetView, state: &impl GameplayScreenView, text: &str) -> f32 {
     intro_text_width_for_font(
         asset_manager,
         machine_font_key(state.presentation().machine_font(), FontRole::Header),
@@ -1371,7 +1373,7 @@ fn cached_intro_text_width(cache: &Cell<Option<f32>>, measure: impl FnOnce() -> 
 
 fn intro_text_target_x(
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     text: &str,
     play_style: profile_data::PlayStyle,
     player_side: profile_data::PlayerSide,
@@ -1401,7 +1403,7 @@ fn intro_text_target_x(
 fn push_stage_label(
     actors: &mut Vec<Actor>,
     state: &impl GameplayScreenView,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     motion: GameplayHudMotion,
 ) {
     let presentation = state.presentation();
@@ -2783,7 +2785,7 @@ pub fn prewarm_compose_storage(scratch: &mut ComposeScratch, state: &impl Gamepl
 // --- TRANSITIONS ---
 pub fn in_transition(
     state: Option<&State>,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     is_restart: bool,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> (Vec<Actor>, f32) {
@@ -2792,7 +2794,7 @@ pub fn in_transition(
 
 fn in_transition_for(
     state: Option<&impl GameplayScreenView>,
-    asset_manager: &AssetManager,
+    asset_manager: &dyn AssetView,
     is_restart: bool,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> (Vec<Actor>, f32) {
@@ -2951,7 +2953,7 @@ fn gameplay_header_rgba(color: deadlib_present::color::Color) -> [f32; 4] {
 pub fn frame_layers<'a>(
     state: &'a impl GameplayScreenView,
     scratch: &'a mut GameplayFrameScratch,
-    asset_manager: &'a AssetManager,
+    asset_manager: &'a dyn AssetView,
     view: ActorViewOverride,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> impl FnMut(
@@ -4702,7 +4704,7 @@ fn draw_smx_mini_pad(
 mod tests {
     #[test]
     fn pending_gameplay_keeps_intro_black() {
-        let assets = AssetManager::new();
+        let assets = AssetManager::<()>::new();
         let policy = crate::views::SimplyLoveVisualPolicyView::default();
         for (restart, expected_duration) in [
             (false, TRANSITION_IN_DURATION),
