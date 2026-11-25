@@ -314,7 +314,6 @@ impl OggIndex {
         };
         while let Some(located) = reader.next_page()? {
             let page = located.page;
-            let header = page.header();
             let mut failure = None;
             let state = demux.push_indexed_page(page, located.offset, |packet| {
                 if failure.is_none() {
@@ -327,6 +326,7 @@ impl OggIndex {
             if index.pages.len() == options.max_pages {
                 return Err(Error::LimitExceeded("index pages").into());
             }
+            let header = page.header();
             if header.is_bos() {
                 reserve(&mut index.streams, 1)?;
                 index.streams.push(StreamIndex {
