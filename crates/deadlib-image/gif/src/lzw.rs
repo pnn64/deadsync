@@ -200,6 +200,13 @@ impl Decoder {
 
 const FOUR_SYMBOL_SLOTS: usize = 4096 * 4;
 
+const fn direct_table_slots(pixels: usize, literals: usize) -> usize {
+    // At most literals² insertions emit one pixel. The other insertions
+    // emit at least two, and the final phrase leaves one or more pixels.
+    let insertions = (pixels - 1 + literals * literals) / 2;
+    (literals + 2 + insertions) * literals
+}
+
 /// Reusable flat-table encoder; no production codec dependencies.
 pub struct Encoder(());
 impl Default for Encoder {
@@ -300,11 +307,10 @@ impl Encoder {
             };
         }
         if minimum == 2 {
-            // The first new code is 6, and at most pixels - 1 codes can be added.
             return if pixels <= 256 {
-                Self::encode_four_symbols::<{ (256 + 5) * 4 }>(rows, emit)
+                Self::encode_four_symbols::<{ direct_table_slots(256, 4) }>(rows, emit)
             } else {
-                Self::encode_four_symbols::<{ (1024 + 5) * 4 }>(rows, emit)
+                Self::encode_four_symbols::<{ direct_table_slots(1024, 4) }>(rows, emit)
             };
         }
         if pixels <= 256 {
