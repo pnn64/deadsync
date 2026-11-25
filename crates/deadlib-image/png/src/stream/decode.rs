@@ -78,7 +78,7 @@ pub struct StreamDecoder {
     palette: Vec<[u8; 3]>,
     transparency: Option<Transparency>,
     validator: Validator,
-    collect_metadata: bool,
+    full_events: bool,
     ancillary: Option<AncillaryChunk>,
     metadata: Option<Metadata>,
     seen_data: bool,
@@ -142,9 +142,12 @@ fn field<'a, const N: usize>(
 
 impl StreamDecoder {
     pub fn new(options: DecodeOptions) -> Self {
-        Self::with_metadata_values(options, true)
+        Self::with_events(options, true)
     }
-    pub(super) fn with_metadata_values(options: DecodeOptions, collect_metadata: bool) -> Self {
+    pub(super) fn for_reader(options: DecodeOptions) -> Self {
+        Self::with_events(options, false)
+    }
+    fn with_events(options: DecodeOptions, full_events: bool) -> Self {
         Self {
             options,
             state: State::Signature,
@@ -165,7 +168,7 @@ impl StreamDecoder {
             palette: Vec::new(),
             transparency: None,
             validator: Validator::new(options.limits.max_metadata_bytes, options.metadata_policy),
-            collect_metadata,
+            full_events,
             ancillary: None,
             metadata: None,
             seen_data: false,
@@ -237,6 +240,13 @@ impl StreamDecoder {
             Event::Row => DecodeEvent::Row(self.rows.as_ref()?.row()),
             Event::ImageEnd(kind) => DecodeEvent::ImageEnd(kind),
         })
+    }
+    pub(super) fn ready_word_row(&self) -> Option<(ImageKind, &ImageRows)> {
+        if matches!(self.event, Some(Event::Row)) && self.header?.depth == 16 {
+            Some((self.image_kind?, self.rows.as_ref()?))
+        } else {
+            None
+        }
     }
     pub(super) fn owned_ancillary(&mut self) -> Option<AncillaryChunk> {
         let chunk = self.ancillary.as_ref()?;
@@ -602,7 +612,7 @@ impl StreamDecoder {
                     position,
                 };
                 let h = h.ok_or(Error::Invalid("missing IHDR"))?;
-                let value = if self.collect_metadata {
+                let value = if self.full_events {
                     self.validator.check::<true>(&chunk, h, self.palette.len())
                 } else {
                     self.validator.check::<false>(&chunk, h, self.palette.len())
@@ -733,6 +743,7 @@ impl StreamDecoder {
                                 &input[pos..pos + available],
                                 self.palette.len(),
                                 self.options.palette_policy,
+                                self.full_events,
                             );
                             let buffers_can_grow = rows.buffers_can_grow();
                             let (used, event) = result.map_err(|error| {

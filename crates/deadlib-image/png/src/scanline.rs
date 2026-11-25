@@ -233,7 +233,7 @@ pub(crate) fn scatter<T: Copy, const CHANNELS: usize>(row: &[T], out: &mut [T], 
     }
 }
 
-fn scatter_words<const CHANNELS: usize>(row: &[[u8; 2]], out: &mut [u16], step: usize) {
+pub(crate) fn scatter_words<const CHANNELS: usize>(row: &[[u8; 2]], out: &mut [u16], step: usize) {
     for (pixel, dst) in row
         .as_chunks::<CHANNELS>()
         .0

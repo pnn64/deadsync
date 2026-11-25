@@ -1,6 +1,6 @@
 use super::{ImageKind, Row, RowSamples};
 use crate::{
-    ColorType, Error,
+    ColorType, Error, Image, Samples,
     codec::Header,
     reserve, scanline,
     zlib::{Inflater, StreamStatus},
@@ -144,6 +144,7 @@ impl ImageRows {
         input: &[u8],
         palette: usize,
         policy: crate::PalettePolicy,
+        materialize_words: bool,
     ) -> Result<(usize, bool), Error> {
         debug_assert!(!self.ready);
         let output = if self.complete {
@@ -164,7 +165,7 @@ impl ImageRows {
                 }
             }
             let count = self.width * self.header.color.channels();
-            if self.header.depth == 16 {
+            if self.header.depth == 16 && materialize_words {
                 self.native16.clear();
                 reserve(&mut self.native16, count)?;
                 self.native16.extend(
@@ -172,7 +173,8 @@ impl ImageRows {
                         .as_chunks::<2>()
                         .0
                         .iter()
-                        .map(|&b| u16::from_be_bytes(b)),
+                        .copied()
+                        .map(u16::from_be_bytes),
                 );
             } else if self.header.depth < 8 {
                 let additional = count.saturating_sub(self.native8.len());
@@ -205,6 +207,34 @@ impl ImageRows {
             return Err(Error::Invalid("extra image data"));
         }
         Ok((progress.consumed, false))
+    }
+    pub(super) fn copy_words_into(&self, image: &mut Image) -> Result<(), Error> {
+        let Samples::U16(out) = &mut image.samples else {
+            return Err(Error::Invalid("row sample representation"));
+        };
+        let words = self.row[1..].as_chunks::<2>().0;
+        if !self.header.interlaced {
+            out.extend(words.iter().copied().map(u16::from_be_bytes));
+            return Ok(());
+        }
+        let channels = self.header.color.channels();
+        let y = self.y as usize + self.row_index * self.dy as usize;
+        let start = (y * self.header.width as usize + self.x as usize) * channels;
+        let out = &mut out[start..];
+        let step = self.dx as usize;
+        if step == 1 {
+            for (out, &word) in out.iter_mut().zip(words) {
+                *out = u16::from_be_bytes(word);
+            }
+        } else {
+            match channels {
+                1 => scanline::scatter_words::<1>(words, out, step),
+                2 => scanline::scatter_words::<2>(words, out, step),
+                3 => scanline::scatter_words::<3>(words, out, step),
+                _ => scanline::scatter_words::<4>(words, out, step),
+            }
+        }
+        Ok(())
     }
     pub(super) fn row(&self) -> Row<'_> {
         let samples = if self.header.depth == 16 {
@@ -313,10 +343,14 @@ mod tests {
                 reused.advance().unwrap();
                 fresh.advance().unwrap();
                 assert_eq!(reused.memory_bytes(), fresh.memory_bytes());
-                let (used, ready) = reused.feed(remaining, 0, PalettePolicy::Strict).unwrap();
+                let (used, ready) = reused
+                    .feed(remaining, 0, PalettePolicy::Strict, true)
+                    .unwrap();
                 assert_eq!(
                     (used, ready),
-                    fresh.feed(remaining, 0, PalettePolicy::Strict).unwrap()
+                    fresh
+                        .feed(remaining, 0, PalettePolicy::Strict, true)
+                        .unwrap()
                 );
                 assert_eq!(reused.memory_bytes(), fresh.memory_bytes());
                 if !reused.buffers_can_grow() {
