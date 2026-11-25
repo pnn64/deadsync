@@ -746,13 +746,13 @@ impl StreamDecoder {
                             let result = self.sequence(be32(&self.prefix));
                             self.animation_result(result, AnimationFault::Body)?;
                         }
-                        let available = self.left.min(input.len() - pos).min(self.input_left);
+                        let end = pos + self.left.min(input.len() - pos).min(self.input_left);
                         let rows = self
                             .rows
                             .as_mut()
                             .ok_or(Error::Invalid("missing image decoder"))?;
-                        if !rows.is_done() {
-                            let result = rows.feed(&input[pos..pos + available]);
+                        while !rows.is_done() {
+                            let result = rows.feed(&input[pos..end]);
                             let buffers_can_grow = rows.buffers_can_grow();
                             let (used, event) = result.map_err(|error| {
                                 if frame_data {
@@ -785,13 +785,14 @@ impl StreamDecoder {
                                 }
                                 return Ok(self.emit(Event::Row, pos));
                             }
+                            break;
                         }
-                        if self.rows.as_ref().is_some_and(ImageRows::is_done) {
-                            let n = self.left.min(input.len() - pos).min(self.input_left);
-                            self.crc.update(&input[pos..pos + n]);
+                        if rows.is_done() {
+                            let n = end - pos;
+                            self.crc.update(&input[pos..end]);
                             self.left -= n;
                             self.input_left -= n;
-                            pos += n;
+                            pos = end;
                         }
                     } else {
                         let n = self.left.min(input.len() - pos).min(self.input_left);
