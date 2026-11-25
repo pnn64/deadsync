@@ -319,7 +319,7 @@ impl Demuxer {
         let stream = self.streams.get_mut(index);
         let previous = (stream.granule != UNKNOWN_GRANULE_POSITION).then_some(stream.granule);
         let (granule, compatibility) =
-            validation::granule(page, complete, previous, self.validation)?;
+            validation::granule(page, header, complete, previous, self.validation)?;
         if let Some(granule) = granule {
             stream.granule = granule;
         }

@@ -206,7 +206,7 @@ impl PacketCapture {
             self.continuing = self.skipping;
         }
         let (granule, compatibility) =
-            validation::granule(page, complete, self.granule, self.validation).map_err(
+            validation::granule(page, header, complete, self.granule, self.validation).map_err(
                 |error| {
                     if error == Error::Invalid("decreasing granule position") {
                         Error::Invalid("decreasing captured granule")

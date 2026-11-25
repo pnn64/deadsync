@@ -33,11 +33,11 @@ impl CompatibilityStats {
 }
 pub(crate) fn granule(
     page: Page<'_>,
+    header: crate::PageHeader,
     complete: usize,
     previous: Option<u64>,
     options: ValidationOptions,
 ) -> Result<(Option<u64>, CompatibilityStats), Error> {
-    let header = page.header();
     let gp = header.granule_position;
     let mut stats = CompatibilityStats::default();
     if complete == 0 && !page.lacing().is_empty() && gp != UNKNOWN_GRANULE_POSITION {
