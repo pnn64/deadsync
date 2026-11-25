@@ -123,8 +123,8 @@ fn main() {
                     .position
                     .as_ref()
                     .expect("authored reversal position spline");
-                let y0 = position.coefficients[0][1][0];
-                let y1 = position.coefficients[1][1][0];
+                let y0 = position.coefficients.view().get(0).unwrap()[1][0];
+                let y1 = position.coefficients.view().get(1).unwrap()[1][0];
                 assert!(
                     (y1 - y0) * direction > 0.0,
                     "wrong reversal direction at beat {beat}, column {}",
@@ -139,7 +139,7 @@ fn main() {
                     serde_json::json!({"ahead":ahead,"position":position})
                 });
                 observations.push(serde_json::json!({"beat":beat,"column":track.column,"y0":y0,"y1":y1,"position":true,"zoom":true,
-                    "points":position.coefficients.len(),"last_point":position.coefficients.last().map(|axes| axes.map(|axis| axis[0])),"samples":samples,
+                    "points":position.coefficients.len(),"last_point":position.coefficients.iter().last().map(|axes| axes.map(|axis| axis[0])),"samples":samples,
                     "receptor_y":240.0+y0*mini_scale,"endpoint_y":240.0+position.view().sample(beat,beat+8.0).0[1]*mini_scale}));
             } else {
                 assert!(
@@ -158,7 +158,7 @@ fn main() {
             let frame = track.at_second(second).unwrap();
             if beat < 208.0 {
                 let position = frame.position.as_ref().expect("late lane reversal spline");
-                let slope = position.coefficients[1][1][0] - position.coefficients[0][1][0];
+                let slope = position.coefficients.view().get(1).unwrap()[1][0] - position.coefficients.view().get(0).unwrap()[1][0];
                 if beat == 207.5 || track.column == 2 {
                     assert!(slope < 0.0);
                 }

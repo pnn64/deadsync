@@ -132,14 +132,14 @@ fn chart_handlers_follow_destination_to_source_maps_for_both_players_and_capture
                     let frame = track(&tracks, player, column).at_second(0.).unwrap();
                     let position = frame.position.as_ref().unwrap();
                     assert_eq!(
-                        position.coefficients[0].map(|axis| axis[0]),
+                        position.coefficients.view().get(0).unwrap().map(|axis| axis[0]),
                         [n, n + 1., n + 2.]
                     );
                     assert_eq!((position.beats_per_t, position.receptor_t), (2., 0.5));
                     assert!(!position.subtract_song_beat);
                     let zoom = frame.zoom.as_ref().unwrap();
                     assert_eq!(
-                        zoom.coefficients[0].map(|axis| axis[0]),
+                        zoom.coefficients.view().get(0).unwrap().map(|axis| axis[0]),
                         [n + 3., n + 4., n + 5.]
                     );
                     assert_eq!((zoom.beats_per_t, zoom.receptor_t), (3., -0.25));
