@@ -247,20 +247,29 @@ impl<'a> Rows<'a> {
             // best also wins a tie, so its limit is one higher.
             let mut best = u64::MAX;
             let mut best_kind = 5;
-            let first = self.last_kind;
-            for kind in core::iter::once(first).chain((1..5).filter(|&kind| kind != first)) {
-                if self.index == 0 && matches!(kind, 2 | 4) {
-                    continue;
+            let first_row = self.index == 0;
+            // On the first row Up equals None and Paeth equals Sub.
+            const ORDERS: [[u8; 4]; 4] = [[1, 2, 3, 4], [2, 1, 3, 4], [3, 1, 2, 4], [4, 1, 2, 3]];
+            let kinds: &[u8] = if first_row {
+                if self.last_kind == 3 {
+                    &[3, 1]
+                } else {
+                    &[1, 3]
                 }
+            } else {
+                &ORDERS[usize::from(self.last_kind - 1)]
+            };
+            for &kind in kinds {
                 let limit = if kind < best_kind {
                     best.saturating_add(1)
                 } else {
                     best
                 };
                 if limit == 0 {
-                    continue;
+                    // After the initial hint, the remaining kinds ascend.
+                    break;
                 }
-                let score = if self.index == 0 {
+                let score = if first_row {
                     scanline::filter_first::<true>(row, bpp, kind, &mut self.candidate[1..], limit)
                 } else {
                     scanline::filter_into::<true>(
