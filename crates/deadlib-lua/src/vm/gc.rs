@@ -815,8 +815,8 @@ impl Vm {
             .saturating_add(self.io.files.allocated)
             .saturating_add(self.gc.control_allocated)
     }
-    fn mark_barrier_value(&mut self, value: Value, work: &mut Work) {
-        let fresh = match value {
+    fn mark_barrier_value(&mut self, value: Value) -> bool {
+        match value {
             Value::String(id) => {
                 self.strings.bytes.mark(id.0);
                 false
@@ -841,9 +841,6 @@ impl Vm {
                 fresh
             }
             _ => false,
-        };
-        if fresh {
-            work.push(Trace::MarkedValue(value));
         }
     }
     pub(super) fn reserve_gc_new_value(&mut self) -> Result<(), Error> {
@@ -868,10 +865,8 @@ impl Vm {
         Ok(())
     }
     pub(super) fn gc_new_value(&mut self, value: Value) {
-        if self.gc.phase == Phase::Propagate {
-            let mut work = std::mem::take(&mut self.gc.work);
-            self.mark_barrier_value(value, &mut work);
-            self.gc.work = work;
+        if self.gc.phase == Phase::Propagate && self.mark_barrier_value(value) {
+            self.gc.work.push(Trace::MarkedValue(value));
         }
     }
     pub(super) fn gc_barrier(&mut self, owner: Value, value: Value) {
@@ -906,13 +901,12 @@ impl Vm {
                 .upvalues
                 .key(cell)
                 .is_some_and(|key| self.upvalues.marked(key))
+            && self.mark_barrier_value(value)
         {
             // Closing also runs during error unwinding. Each open cell reserved
             // its slot when captured, before publication. Mark immediately and
             // retain the forced scan without requiring another allocation.
-            let mut closed = std::mem::take(&mut self.gc.closed);
-            self.mark_barrier_value(value, &mut closed);
-            self.gc.closed = closed;
+            self.gc.closed.push(Trace::MarkedValue(value));
         }
     }
     pub(super) fn gc_new_cell(&mut self, cell: usize) {
@@ -943,14 +937,13 @@ impl Vm {
     pub(super) fn gc_table_write(&mut self, id: TableId, key: Value, value: Value) {
         if self.gc.phase == Phase::Propagate && self.tables.marked(id.0) {
             let (weak_keys, weak_values) = self.table_mode(&self.tables[slot_index(id.0)]);
-            let mut work = std::mem::take(&mut self.gc.work);
-            if !weak_keys || matches!(key, Value::String(_)) {
-                self.mark_barrier_value(key, &mut work);
+            if (!weak_keys || matches!(key, Value::String(_))) && self.mark_barrier_value(key) {
+                self.gc.work.push(Trace::MarkedValue(key));
             }
-            if !weak_values || matches!(value, Value::String(_)) {
-                self.mark_barrier_value(value, &mut work);
+            if (!weak_values || matches!(value, Value::String(_))) && self.mark_barrier_value(value)
+            {
+                self.gc.work.push(Trace::MarkedValue(value));
             }
-            self.gc.work = work;
         }
     }
     pub(super) fn gc_metatable_write(&mut self, owner: Value, table: Option<TableId>) {
