@@ -193,7 +193,7 @@ struct Table {
 pub(super) struct Resources {
     function: Function,
     parents: Vec<Function>,
-    child_pool: Pool,
+    child_pools: Vec<Pool>,
     values: Vec<Value>,
     tables: Vec<Table>,
     constants: Vec<(ExprId, ConstantOperand)>,
@@ -201,12 +201,16 @@ pub(super) struct Resources {
 impl Resources {
     /// Return to the default state, keeping storage.
     pub(super) fn clear(&mut self) {
+        // A recursive parse can stop inside a function before the streaming
+        // parser restarts. Recover the pools from those unfinished scopes too.
+        while !self.parents.is_empty() {
+            self.leave();
+        }
         self.function.pool.clear();
         self.function.next = 0;
         self.function.max = 0;
         self.function.locals = 0;
         self.function.zero_sign = None;
-        self.parents.clear();
         self.values.clear();
         self.tables.clear();
         self.constants.clear();
@@ -249,7 +253,8 @@ impl Resources {
             + self.tables.capacity() * size_of::<Table>()
             + self.constants.capacity() * size_of::<(ExprId, ConstantOperand)>()
             + self.function.pool.heap_bytes()
-            + self.child_pool.heap_bytes()
+            + self.child_pools.capacity() * size_of::<Pool>()
+            + self.child_pools.iter().map(Pool::heap_bytes).sum::<usize>()
             + self
                 .parents
                 .iter()
@@ -284,8 +289,12 @@ impl Resources {
         self.function.next = self.function.locals;
     }
     pub(super) fn enter(&mut self, count: u16) -> Result<(), Error> {
+        let depth = self.parents.len();
+        if depth == self.child_pools.len() {
+            self.child_pools.try_push(Pool::default())?;
+        }
         self.parents.try_push(std::mem::take(&mut self.function))?;
-        self.function.pool = std::mem::take(&mut self.child_pool);
+        self.function.pool = std::mem::take(&mut self.child_pools[depth]);
         self.locals(count);
         Ok(())
     }
@@ -295,12 +304,7 @@ impl Resources {
             self.parents.pop().expect("resource parent"),
         );
         child.pool.clear();
-        if child.pool.entries.capacity() > self.child_pool.entries.capacity() {
-            self.child_pool.entries = child.pool.entries;
-        }
-        if child.pool.buckets.capacity() > self.child_pool.buckets.capacity() {
-            self.child_pool.buckets = child.pool.buckets;
-        }
+        self.child_pools[self.parents.len()] = child.pool;
         (child.zero_sign, child.max.max(2))
     }
     pub(super) fn finish(&mut self, ast: &mut Ast) {
@@ -940,5 +944,34 @@ impl Resources {
         debug_assert_eq!(self.values.len(), id);
         self.values.try_push(v)?;
         Ok(string_slot)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parser_restart_recovers_constant_buffers_from_unfinished_scopes() {
+        let mut resources = Resources::default();
+        for (depth, capacity) in [8, 16, 32].into_iter().enumerate() {
+            if depth != 0 {
+                resources.enter(1).unwrap();
+            }
+            let pool = &mut resources.function.pool;
+            fallible::reserve(&mut pool.entries, capacity).unwrap();
+            pool.entries.push(Key::number(depth as f64));
+        }
+
+        resources.clear();
+        assert!(resources.parents.is_empty());
+        for (depth, capacity) in [8, 16, 32].into_iter().enumerate() {
+            if depth != 0 {
+                resources.enter(1).unwrap();
+            }
+            let pool = &resources.function.pool;
+            assert!(pool.entries.is_empty());
+            assert!(pool.entries.capacity() >= capacity);
+        }
     }
 }

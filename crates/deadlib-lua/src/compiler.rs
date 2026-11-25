@@ -7,7 +7,7 @@ use crate::{
     bytecode::{
         BOOLEAN_SKIP, COMPARE_BRANCH, Constant, DebugCall, DebugInfo, DebugLocal, DebugName,
         Instruction, InstructionMetadata, NUMERIC_WHILE, NameKind, OPEN, OPEN_ARGS, Op, Program,
-        Prototype, RK, Upvalue,
+        Prototype, PrototypeBody, RK, RegisterMaps, Upvalue,
     },
     lexer::{Kind, Lexeme},
     parser::{Ast, Expr, ExprId, NameBinding, Stmt, StmtId},
@@ -18,6 +18,7 @@ mod constants;
 mod expressions;
 mod statements;
 mod tasks;
+mod templates;
 use tasks::Task;
 
 /// Bytes of a local or upvalue name in the compiler's name pool.
@@ -96,7 +97,10 @@ impl std::ops::DerefMut for Emission {
 #[derive(Default)]
 struct Function {
     code: Vec<Emission>,
+    // An empty dense table keeps the function in consecutive-prefix mode.
     gc_maps: Vec<[u64; 4]>,
+    gc_prefix_start: u8,
+    gc_prefix_len: u8,
     gc_index: HashMap<[u64; 4], u16>,
     gc_last: Option<u16>,
     live: [u64; 4],
@@ -128,6 +132,8 @@ impl Function {
     fn reset(&mut self) {
         self.code.clear();
         self.gc_maps.clear();
+        self.gc_prefix_start = 0;
+        self.gc_prefix_len = 0;
         self.gc_index.clear();
         self.gc_last = None;
         self.live = [0; 4];
@@ -158,13 +164,15 @@ impl Function {
 struct Compiler<'a> {
     ast: &'a Ast,
     source: &'a [u8],
-    function: Function,
-    parents: Vec<Function>,
+    // Move only a pointer when entering or leaving a nested function.
+    function: Box<Function>,
+    parents: Vec<Box<Function>>,
     /// Finished functions whose cleared buffers serve later nested functions.
-    spare: Vec<Function>,
+    spare: Vec<Box<Function>>,
     /// Local and upvalue names of every function in this compilation.
     names: Vec<u8>,
     prototypes: Vec<Prototype>,
+    templates: templates::Templates,
     folded: Vec<Option<f64>>,
     tasks: Vec<Task<'a>>,
     /// Assignment targets nest if a target or value contains a function.
@@ -177,12 +185,13 @@ struct Compiler<'a> {
 /// Code generation storage kept between compilations by one owner.
 #[derive(Default)]
 pub(crate) struct Spare {
-    functions: Vec<Function>,
-    parents: Vec<Function>,
+    functions: Vec<Box<Function>>,
+    parents: Vec<Box<Function>>,
     names: Vec<u8>,
     folded: Vec<Option<f64>>,
     tasks: Vec<Task<'static>>,
     assignment_targets: Vec<Target>,
+    templates: templates::Templates,
 }
 
 /// Reuse an empty continuation stack for a borrow of a different syntax tree.
@@ -210,8 +219,13 @@ pub(crate) fn compile_in(
     name: &[u8],
     spare: &mut Spare,
 ) -> Result<Program, Error> {
+    let mut templates = std::mem::take(&mut spare.templates);
+    templates.clear();
     let mut functions = std::mem::take(&mut spare.functions);
-    let mut function = functions.pop().unwrap_or_default();
+    let mut function = match functions.pop() {
+        Some(function) => function,
+        None => fallible::boxed(Function::default())?,
+    };
     function.vararg = true;
     function.zero_sign = ast.root_zero_sign;
     function.debug_stack = ast.root_stack;
@@ -240,6 +254,7 @@ pub(crate) fn compile_in(
         spare: functions,
         names,
         prototypes,
+        templates,
         folded,
         tasks,
         assignment_targets: std::mem::take(&mut spare.assignment_targets),
@@ -251,10 +266,12 @@ pub(crate) fn compile_in(
     c.line = ast.end_line;
     c.emit(Op::Return, 0, 0, 0)?;
     let entry = c.finish()?;
+    c.spare.try_push(c.function)?;
     spare.functions = c.spare;
     debug_assert!(c.parents.is_empty());
     spare.parents = c.parents;
     spare.names = c.names;
+    spare.templates = c.templates;
     spare.folded = c.folded;
     spare.tasks = recycle(c.tasks);
     debug_assert!(c.assignment_targets.is_empty());
@@ -266,11 +283,14 @@ pub(crate) fn compile_in(
 
 impl<'a> Compiler<'a> {
     /// A cleared function, reusing the buffers of a finished one when possible.
-    fn fresh_function(&mut self) -> Function {
-        self.spare.pop().unwrap_or_default()
+    fn fresh_function(&mut self) -> Result<Box<Function>, Error> {
+        match self.spare.pop() {
+            Some(function) => Ok(function),
+            None => fallible::boxed(Function::default()),
+        }
     }
     fn finish(&mut self) -> Result<u32, Error> {
-        let mut f = std::mem::take(&mut self.function);
+        let f = &mut *self.function;
         boolean::thread_jumps(&mut f.code)?;
         for &pc in &f.logical_tests {
             let i = f.code[pc];
@@ -387,32 +407,41 @@ impl<'a> Compiler<'a> {
         let debug_locals = drain_boxed(&mut f.debug_locals)?;
         let debug_calls = drain_boxed(&mut f.debug_calls)?;
         let constants = f.constants.finish()?;
-        self.prototypes.try_push(Prototype {
-            code: code.try_into_boxed_slice()?,
-            metadata: metadata.try_into_boxed_slice()?,
-            gc_maps: f.gc_maps.try_boxed()?,
-            constants: constants.values,
-            constant_strings: constants.strings,
-            registers: f.max.max(f.debug_stack).max(2),
-            params: f.params,
-            vararg: f.vararg,
-            compat_arg: f.compat_arg,
-            upvalues: upvalues.try_into_boxed_slice()?,
-            bindings: Box::default(),
-            debug: DebugInfo {
-                stack: f.debug_stack,
-                native: None,
-                defined: f.defined,
-                names: f.debug_names.try_boxed()?,
-                upvalues: names.try_into_boxed_slice()?,
-                locals: debug_locals,
-                calls: debug_calls,
-                active_lines: f.active_lines.try_boxed()?,
-                temporaries: f.debug_temporaries.try_boxed()?,
+        self.prototypes.try_push(Prototype::new(
+            PrototypeBody {
+                code: code.try_into_boxed_slice()?,
+                gc_maps: if f.gc_maps.is_empty() {
+                    RegisterMaps::Prefix {
+                        start: f.gc_prefix_start,
+                        len: f.gc_prefix_len,
+                    }
+                } else {
+                    RegisterMaps::Owned(f.gc_maps.try_boxed()?)
+                },
+                constants: constants.values,
+                constant_strings: constants.strings,
+                registers: f.max.max(f.debug_stack).max(2),
+                params: f.params,
+                vararg: f.vararg,
+                compat_arg: f.compat_arg,
+                upvalues: upvalues.try_into_boxed_slice()?,
+                bindings: Box::default(),
+                debug: DebugInfo {
+                    stack: f.debug_stack,
+                    native: None,
+                    names: f.debug_names.try_boxed()?,
+                    upvalues: names.try_into_boxed_slice()?,
+                    locals: debug_locals,
+                    calls: debug_calls,
+                    temporaries: f.debug_temporaries.try_boxed()?,
+                },
+                ..PrototypeBody::default()
             },
-        })?;
+            metadata.try_into_boxed_slice()?,
+            f.defined,
+            f.active_lines.try_boxed()?,
+        ))?;
         f.reset();
-        self.spare.try_push(f)?;
         Ok(id)
     }
     fn intern_name(&mut self, name: &[u8]) -> Result<Name, Error> {
@@ -547,6 +576,26 @@ impl<'a> Compiler<'a> {
             return Ok(index);
         }
         let mask = self.function.live;
+        if self.function.gc_maps.is_empty() {
+            let low = mask[0];
+            if low & low.wrapping_add(1) == 0 && mask[1..] == [0; 3] {
+                let count = low.trailing_ones() as u8;
+                let f = &mut self.function;
+                if f.gc_prefix_len == 0 {
+                    f.gc_prefix_start = count;
+                }
+                if let Some(index) = count.checked_sub(f.gc_prefix_start)
+                    && index <= f.gc_prefix_len
+                {
+                    if index == f.gc_prefix_len {
+                        f.gc_prefix_len += 1;
+                    }
+                    f.gc_last = Some(u16::from(index));
+                    return Ok(u16::from(index));
+                }
+            }
+            self.promote_gc_maps()?;
+        }
         // Small functions need only a few maps. Their dense vector avoids both
         // hashing and an additional allocation until a larger index is useful.
         let present = if self.function.gc_maps.len() <= 16 {
@@ -577,6 +626,20 @@ impl<'a> Compiler<'a> {
         self.function.gc_last = Some(index);
         Ok(index)
     }
+    #[cold]
+    fn promote_gc_maps(&mut self) -> Result<(), Error> {
+        let f = &mut self.function;
+        let maps = RegisterMaps::prefix(f.gc_prefix_start, f.gc_prefix_len);
+        f.gc_maps.try_extend_from_slice(maps)?;
+        f.gc_prefix_len = 0;
+        if maps.len() > 16 {
+            f.gc_index.try_reserve(maps.len())?;
+            for (i, &mask) in maps.iter().enumerate() {
+                f.gc_index.insert(mask, i as u16);
+            }
+        }
+        Ok(())
+    }
     fn emit(&mut self, op: Op, a: u8, mut b: u16, mut c: u32) -> Result<usize, Error> {
         if op.rk_c() {
             while let Some(load) = self.function.code.last().copied().filter(|load| {
@@ -593,7 +656,12 @@ impl<'a> Compiler<'a> {
                 }
                 let removed = self.function.code.pop().unwrap();
                 let before = removed.live as u16 as usize;
-                self.function.live = self.function.gc_maps[before];
+                let f = &mut self.function;
+                f.live = if f.gc_maps.is_empty() {
+                    RegisterMaps::prefix(f.gc_prefix_start, f.gc_prefix_len)[before]
+                } else {
+                    f.gc_maps[before]
+                };
                 self.function.gc_last = Some(before as u16);
                 assert_eq!(removed.hook, 0);
             }

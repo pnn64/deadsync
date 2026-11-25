@@ -223,7 +223,7 @@ impl ResumeHints {
         registers[..width].copy_from_slice(&state.registers[live.clone()]);
         let mut child = Projection {
             registers: &mut registers[..width],
-            constants: &program.constants[closure.prototype],
+            constants: program.bound_constants(closure.prototype),
             captures: &closure.upvalues,
             upvalues: cx.upvalues,
             threads: cx.threads,
@@ -437,7 +437,7 @@ impl Vm {
             control,
             function: base + plan.function,
             level,
-            line: prototype.metadata[caller.pc() - 1].line,
+            line: prototype.instruction_line(caller.pc() - 1),
         })
     }
 
@@ -531,7 +531,7 @@ impl Vm {
             {
                 return false;
             }
-            let line = prototype.metadata[caller.pc() - 1].line;
+            let line = prototype.instruction_line(caller.pc() - 1);
             let value = Value::Number(index);
             let function = base + plan.function;
             let state = &mut self.threads[slot_index(thread.0)];
@@ -566,7 +566,7 @@ impl Vm {
         registers[..width].copy_from_slice(&state.registers[base..end]);
         let mut child = Projection {
             registers: &mut registers[..width],
-            constants: &program.constants[closure.prototype],
+            constants: program.bound_constants(closure.prototype),
             captures: &closure.upvalues,
             upvalues: &self.upvalues,
             threads: &self.threads,
@@ -588,7 +588,7 @@ impl Vm {
         if level >= 200 {
             return false;
         }
-        let line = prototype.metadata[pc].line;
+        let line = prototype.instruction_line(pc);
         let child_wanted = frame_wanted(instruction.c);
 
         let state = &mut self.threads[slot_index(thread.0)];

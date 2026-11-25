@@ -49,7 +49,7 @@ impl Vm {
                 let pc = frame.pc().saturating_sub(1).min(proto.metadata.len() - 1);
                 (
                     crate::bytecode::chunk_id_into(program.source(proto), &mut source),
-                    Some(proto.debug.defined[0]),
+                    Some(proto.defined[0]),
                     Some(proto.debug_line(pc)),
                 )
             } else {

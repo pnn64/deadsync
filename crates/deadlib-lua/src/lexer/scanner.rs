@@ -177,6 +177,15 @@ impl Default for Scanner {
 }
 
 impl Scanner {
+    pub(crate) fn position(&self) -> usize {
+        self.pos
+    }
+    pub(crate) fn skip_closed_bytes(&mut self, pos: usize, line: u32) {
+        debug_assert!(matches!(self.state, State::Skip) && pos >= self.pos);
+        self.pos = pos;
+        self.line = line;
+    }
+
     pub(crate) fn name_span(&self) -> (usize, usize) {
         match self.buffer {
             Buffer::Raw(start, end) => (start, end),

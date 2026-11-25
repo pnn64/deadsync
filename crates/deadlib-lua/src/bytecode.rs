@@ -274,12 +274,10 @@ pub(crate) struct DebugCall {
 pub(crate) struct DebugInfo {
     pub stack: u16,
     pub native: Option<Box<NativeDebug>>,
-    pub defined: [u32; 2],
     pub names: Box<[u8]>,
     pub upvalues: Box<[DebugName]>,
     pub locals: Box<[DebugLocal]>,
     pub calls: Box<[DebugCall]>,
-    pub active_lines: Box<[u32]>,
     pub temporaries: Box<[u8]>,
 }
 impl DebugInfo {
@@ -299,7 +297,6 @@ impl DebugInfo {
         self.native.as_ref().map_or(0, |n| {
             std::mem::size_of_val(n.as_ref()) + n.wire.heap_bytes()
         }) + std::mem::size_of_val(self.upvalues.as_ref())
-            + std::mem::size_of_val(self.active_lines.as_ref())
             + self.names.len()
             + self
                 .upvalues
@@ -329,11 +326,73 @@ pub(crate) struct InstructionMetadata {
     pub gc_live: u32,
 }
 
+/// GC maps of a compiled function. Consecutive low-register prefixes
+/// borrow the same immutable masks, regardless of which function uses them.
 #[derive(Clone, Debug)]
-pub(crate) struct Prototype {
+pub(crate) enum RegisterMaps {
+    Prefix { start: u8, len: u8 },
+    Owned(Box<[[u64; 4]]>),
+}
+
+impl RegisterMaps {
+    pub(crate) fn prefix(start: u8, len: u8) -> &'static [[u64; 4]] {
+        static MASKS: [[u64; 4]; 65] = {
+            let mut masks = [[0; 4]; 65];
+            let mut n = 1;
+            while n < masks.len() {
+                masks[n][0] = u64::MAX >> (64 - n);
+                n += 1;
+            }
+            masks
+        };
+        let start = usize::from(start);
+        &MASKS[start..start + usize::from(len)]
+    }
+
+    pub(crate) fn heap_bytes(&self) -> usize {
+        match self {
+            Self::Prefix { .. } => 0,
+            Self::Owned(maps) => std::mem::size_of_val(maps.as_ref()),
+        }
+    }
+}
+
+impl Default for RegisterMaps {
+    fn default() -> Self {
+        Self::Prefix { start: 0, len: 0 }
+    }
+}
+
+impl std::ops::Deref for RegisterMaps {
+    type Target = [[u64; 4]];
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        match self {
+            &Self::Prefix { start, len } => Self::prefix(start, len),
+            Self::Owned(maps) => maps,
+        }
+    }
+}
+
+#[cfg(test)]
+impl std::ops::DerefMut for RegisterMaps {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        if let &mut Self::Prefix { start, len } = self {
+            *self = Self::Owned(Self::prefix(start, len).into());
+        }
+        match self {
+            Self::Owned(maps) => maps,
+            _ => unreachable!("owned register maps"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct PrototypeBody {
     pub code: Box<[Instruction]>,
     pub metadata: Box<[InstructionMetadata]>,
-    pub gc_maps: Box<[[u64; 4]]>,
+    pub active_lines: Box<[u32]>,
+    pub gc_maps: RegisterMaps,
     pub constants: Box<[Constant]>,
     pub constant_strings: Box<[u8]>,
     pub registers: u16,
@@ -343,6 +402,156 @@ pub(crate) struct Prototype {
     pub upvalues: Box<[Upvalue]>,
     pub bindings: Box<[ClosureBinding]>,
     pub debug: DebugInfo,
+}
+
+#[derive(Clone, Debug)]
+enum PrototypeStorage {
+    Owned(PrototypeBody),
+    Shared {
+        body: Shared<PrototypeBody>,
+        owner: u32,
+    },
+}
+
+/// Identical leaves share their immutable body, including instruction
+/// metadata. Each occurrence carries its own source line displacement.
+#[derive(Clone, Debug)]
+pub(crate) struct Prototype {
+    storage: PrototypeStorage,
+    pub defined: [u32; 2],
+    line_bias: u32,
+}
+
+impl std::ops::Deref for Prototype {
+    type Target = PrototypeBody;
+
+    #[inline]
+    fn deref(&self) -> &PrototypeBody {
+        match &self.storage {
+            PrototypeStorage::Owned(body) => body,
+            PrototypeStorage::Shared { body, .. } => body,
+        }
+    }
+}
+
+#[cfg(test)]
+impl std::ops::DerefMut for Prototype {
+    fn deref_mut(&mut self) -> &mut PrototypeBody {
+        if let PrototypeStorage::Shared { body, .. } = &self.storage {
+            let mut body = (**body).clone();
+            Self::shift_metadata(&mut body, self.line_bias);
+            self.line_bias = 0;
+            self.storage = PrototypeStorage::Owned(body);
+        }
+        let PrototypeStorage::Owned(body) = &mut self.storage else {
+            unreachable!("materialized prototype");
+        };
+        body
+    }
+}
+
+impl Prototype {
+    pub(crate) fn new(
+        mut body: PrototypeBody,
+        metadata: Box<[InstructionMetadata]>,
+        defined: [u32; 2],
+        active_lines: Box<[u32]>,
+    ) -> Self {
+        body.metadata = metadata;
+        body.active_lines = active_lines;
+        Self {
+            storage: PrototypeStorage::Owned(body),
+            defined,
+            line_bias: 0,
+        }
+    }
+
+    fn shift_metadata(body: &mut PrototypeBody, bias: u32) {
+        for metadata in &mut *body.metadata {
+            if metadata.line != 0 {
+                metadata.line = metadata.line.wrapping_add(bias);
+            }
+            if metadata.hook_line != 0 {
+                metadata.hook_line = metadata.hook_line.wrapping_add(bias);
+            }
+        }
+        for line in &mut *body.active_lines {
+            *line = line.wrapping_add(bias);
+        }
+    }
+
+    /// An AST template which missed the code cache was emitted with the
+    /// original definition's lines. Move its freshly generated metadata.
+    pub(crate) fn relocate(&mut self, end: u32) {
+        let bias = end.wrapping_sub(self.defined[1]);
+        let PrototypeStorage::Owned(body) = &mut self.storage else {
+            unreachable!("freshly generated prototype");
+        };
+        Self::shift_metadata(body, bias);
+        self.defined = [self.defined[0].wrapping_add(bias), end];
+    }
+
+    /// A shared prototype has real source lines for all its instructions.
+    #[inline]
+    pub(crate) fn adjust_line(&self, line: u32) -> u32 {
+        line.wrapping_add(self.line_bias)
+    }
+
+    #[inline]
+    pub(crate) fn adjust_hook_line(&self, line: u32) -> u32 {
+        if line == 0 { 0 } else { self.adjust_line(line) }
+    }
+
+    #[inline]
+    pub(crate) fn instruction_line(&self, pc: usize) -> u32 {
+        self.adjust_line(self.metadata[pc].line)
+    }
+
+    #[inline]
+    pub(crate) fn hook_line(&self, pc: usize) -> u32 {
+        self.adjust_hook_line(self.metadata[pc].hook_line)
+    }
+
+    pub(crate) fn template_lines_valid(&self) -> bool {
+        let lines = self.defined[0]..=self.defined[1];
+        self.line_bias == 0
+            && self.defined[0] != 0
+            && self.metadata.iter().all(|m| {
+                lines.contains(&m.line) && (m.hook_line == 0 || lines.contains(&m.hook_line))
+            })
+            && self.active_lines.iter().all(|line| lines.contains(line))
+    }
+
+    pub(crate) fn shared_owner(&self) -> Option<u32> {
+        match self.storage {
+            PrototypeStorage::Owned(_) => None,
+            PrototypeStorage::Shared { owner, .. } => Some(owner),
+        }
+    }
+
+    pub(crate) fn reuse_leaf(&mut self, id: u32, end: u32) -> Result<Self, Error> {
+        debug_assert_eq!(self.line_bias, 0);
+        let line_bias = end.wrapping_sub(self.defined[1]);
+        if let PrototypeStorage::Owned(body) = &mut self.storage {
+            self.storage = PrototypeStorage::Shared {
+                body: Shared::try_new_in(std::mem::take(body), Memory::default())?,
+                owner: id,
+            };
+        }
+        Ok(Self {
+            storage: self.storage.clone(),
+            defined: [self.defined[0].wrapping_add(line_bias), end],
+            line_bias,
+        })
+    }
+
+    fn same_body(&self, original: &Self) -> bool {
+        matches!(
+            (&self.storage, &original.storage),
+            (PrototypeStorage::Shared { body: a, owner }, PrototypeStorage::Shared { body: b, owner: origin })
+                if owner == origin && Shared::ptr_eq(a, b)
+        )
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -364,11 +573,18 @@ impl ProgramData {
                 .map(|source| source.len())
                 .sum::<usize>()
             + std::mem::size_of_val(self.prototypes.as_ref());
-        for prototype in &self.prototypes {
+        for (id, prototype) in self.prototypes.iter().enumerate() {
+            if let PrototypeStorage::Shared { body, owner } = &prototype.storage {
+                if *owner as usize != id {
+                    continue;
+                }
+                bytes += body.heap_bytes();
+            }
             bytes += std::mem::size_of_val(prototype.code.as_ref())
-                + prototype.debug.heap_bytes()
                 + std::mem::size_of_val(prototype.metadata.as_ref())
-                + std::mem::size_of_val(prototype.gc_maps.as_ref())
+                + std::mem::size_of_val(prototype.active_lines.as_ref())
+                + prototype.debug.heap_bytes()
+                + prototype.gc_maps.heap_bytes()
                 + std::mem::size_of_val(prototype.upvalues.as_ref())
                 + std::mem::size_of_val(prototype.bindings.as_ref())
                 + prototype
@@ -478,7 +694,33 @@ impl Program {
                 "invalid entry prototype",
             ));
         }
-        for prototype in &self.data.prototypes {
+        for (id, prototype) in self.data.prototypes.iter().enumerate() {
+            if let Some(owner) = prototype.shared_owner() {
+                let owner = owner as usize;
+                if owner < id {
+                    let origin = &self.data.prototypes[owner];
+                    // The earlier owner verified the shared payload once.
+                    if prototype.same_body(origin)
+                        && prototype.defined[0] != 0
+                        && prototype.defined[0] <= prototype.defined[1]
+                        && prototype.defined
+                            == origin.defined.map(|line| prototype.adjust_line(line))
+                    {
+                        continue;
+                    }
+                } else if owner == id
+                    && prototype.template_lines_valid()
+                    && prototype.debug.native.is_none()
+                {
+                    prototype.verify(&self.data.prototypes)?;
+                    continue;
+                }
+                return Err(Error::new_static(
+                    ErrorKind::Bytecode,
+                    0,
+                    "invalid shared prototype",
+                ));
+            }
             if prototype
                 .debug
                 .native
@@ -502,7 +744,7 @@ impl Prototype {
         if self.debug.native.as_ref().is_some_and(|n| !n.has_lines) {
             0
         } else {
-            i64::from(self.metadata[pc].line as i32)
+            i64::from(self.instruction_line(pc) as i32)
         }
     }
 
@@ -521,7 +763,9 @@ impl Prototype {
         let fail = |pc: usize, message: &'static str| {
             Error::new_static(
                 ErrorKind::Bytecode,
-                self.metadata.get(pc).map_or(0, |m| m.line),
+                self.metadata
+                    .get(pc)
+                    .map_or(0, |m| self.adjust_line(m.line)),
                 message,
             )
         };
@@ -556,9 +800,9 @@ impl Prototype {
                 .upvalues
                 .iter()
                 .any(|name| name.bytes(&self.debug.names).is_none())
-            || self.debug.defined[0] > self.debug.defined[1]
-            || self.debug.active_lines.first() == Some(&0)
-            || self.debug.active_lines.windows(2).any(|l| l[0] >= l[1])
+            || self.defined[0] > self.defined[1]
+            || self.active_lines.first() == Some(&0)
+            || self.active_lines.windows(2).any(|l| l[0] >= l[1])
             || self.debug.locals.iter().any(|l| {
                 l.start > l.end
                     || l.end as usize > self.code.len()
@@ -839,6 +1083,59 @@ mod tests {
     use super::*;
 
     #[test]
+    fn compiler_shares_prefix_register_maps_and_promotes_wide_functions() {
+        let a = crate::compile(b"return 42").unwrap();
+        let b = crate::compile(b"return true").unwrap();
+        let a_maps = &a.data.prototypes[a.data.entry as usize].gc_maps;
+        let b_maps = &b.data.prototypes[b.data.entry as usize].gc_maps;
+        assert!(matches!(a_maps, RegisterMaps::Prefix { .. }));
+        assert!(std::ptr::eq(&**a_maps, &**b_maps));
+
+        // The early masks fit a prefix. The wide function adds another word
+        // after the dense map index has passed its linear-search threshold.
+        let names = (0..80).map(|i| format!("r{i}")).collect::<Vec<_>>();
+        let values = vec!["{}"; names.len()];
+        let source = format!(
+            "local {} = {}\nreturn r79",
+            names.join(","),
+            values.join(",")
+        );
+        let wide = crate::compile(source.as_bytes()).unwrap();
+        let maps = &wide.data.prototypes[wide.data.entry as usize].gc_maps;
+        assert!(matches!(maps, RegisterMaps::Owned(_)));
+        assert!(maps.iter().any(|map| map[1] != 0));
+        wide.verify().unwrap();
+    }
+
+    #[test]
+    fn shared_leaf_prototypes_share_metadata_and_validate_line_bias() {
+        let source = format!(
+            "local a = function() return 'shared callback literal' end\n\
+             local b = function() return 'shared callback literal' end\n\
+             return a, b\n--{}",
+            ".".repeat(2200)
+        );
+        let mut program = crate::compile(source.as_bytes()).unwrap();
+        let [first, second, _] = program.data.prototypes.as_ref() else {
+            panic!("expected two leaves and their parent");
+        };
+        assert_eq!(second.shared_owner(), Some(0));
+        assert!(second.same_body(first));
+        assert_eq!(first.defined, [1; 2]);
+        assert_eq!(second.defined, [2; 2]);
+        assert_eq!(first.instruction_line(0), 1);
+        assert_eq!(second.instruction_line(0), 2);
+        assert!(std::ptr::eq(
+            first.metadata.as_ref(),
+            second.metadata.as_ref()
+        ));
+
+        let data = Shared::make_mut(&mut program.data);
+        data.prototypes[1].line_bias = 0;
+        assert_eq!(program.verify().unwrap_err().kind(), ErrorKind::Bytecode);
+    }
+
+    #[test]
     fn verifier_rejects_invalid_comparison_materialization_and_hook_maps() {
         let good = crate::compile(b"local x=1; if x<3 then x=x+1 end;return x==2").unwrap();
         for corrupt in 0..4 {
@@ -999,7 +1296,7 @@ mod tests {
                 3 => proto.debug.calls[0].pc = u32::MAX,
                 4 => proto.debug.calls[0].pc = 0,
                 5 => proto.debug.calls[1].pc = proto.debug.calls[0].pc,
-                6 => proto.debug.active_lines = Box::new([3, 2]),
+                6 => proto.active_lines = Box::new([3, 2]),
                 7 => {
                     data.prototypes
                         .iter_mut()

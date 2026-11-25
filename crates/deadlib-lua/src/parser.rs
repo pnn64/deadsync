@@ -77,6 +77,9 @@ pub(crate) enum Expr {
         vararg: bool,
         body: Block,
         end_line: u32,
+        template_source: [u32; 2],
+        /// Starting line of a reused body, or zero when parsed here.
+        template_line: u32,
     },
     Vararg,
 }

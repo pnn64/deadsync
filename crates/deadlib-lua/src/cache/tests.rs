@@ -93,6 +93,33 @@ fn source_cache_round_trips_complete_metadata_and_number_bits() {
 }
 
 #[test]
+fn shared_leaf_cache_preserves_literals_and_lines() {
+    for (body, line_count) in [
+        ("function() return 'shared callback literal' end", 1),
+        (
+            "function()\r\n    return 'shared callback literal'\r\nend",
+            3,
+        ),
+    ] {
+        let source = format!(
+            "local a = {body}\nlocal b = {body}\n\
+             a = nil; collectgarbage('collect'); return b(), debug.getinfo(b, 'S').linedefined\n--{}",
+            ".".repeat(2200)
+        );
+        let source = source.as_bytes();
+        let name = b"@shared-leaves";
+        let program = crate::compile_named(source, name).unwrap();
+        let alias = &program.data.prototypes[1];
+        assert_eq!(alias.shared_owner(), Some(0));
+        assert_eq!(alias.defined, [line_count + 1, line_count * 2]);
+        let bytes = encode(&program, source, name);
+        let cached = decode(&bytes, source, name).unwrap();
+        assert_eq!(results(&cached), results(&program));
+        assert_eq!(bytes, encode(&cached, source, name));
+    }
+}
+
+#[test]
 fn imported_chunks_retain_native_words_sources_captures_and_debug_data() {
     for source in [
         b"local x=11;return function(a)return x+a end".as_slice(),
@@ -126,13 +153,15 @@ fn retained_native_export_ranges_and_tree_edges_are_checked() {
         let mut bad = good.clone();
         let data = Shared::make_mut(&mut bad.data);
         let p = &mut data.prototypes[0];
+        let constants = p.constants.len();
+        let names = p.debug.upvalues.len();
         let n = p.debug.native.as_mut().unwrap();
         match change {
             0 => n.wire.children = Box::new([0]),
             1 => n.wire.children = Box::new([usize::MAX]),
             2 => n.wire.locals = Box::new([[0, u32::MAX]]),
-            3 => n.wire.constants = p.constants.len() + 1,
-            4 => n.wire.names = p.debug.upvalues.len() + 1,
+            3 => n.wire.constants = constants + 1,
+            4 => n.wire.names = names + 1,
             5 => n.wire.vararg ^= 2,
             _ => n.source = u32::MAX,
         }

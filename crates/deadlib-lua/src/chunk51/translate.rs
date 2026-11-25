@@ -2,7 +2,8 @@
 use super::{Chunk, Prototype as Native, invalid};
 use crate::bytecode::{
     ClosureBinding, Constant, DebugCall, DebugInfo, DebugLocal, DebugName, Instruction,
-    InstructionMetadata, NameKind, NativeDebug, OPEN, OPEN_ARGS, Op, Program, Prototype, Upvalue,
+    InstructionMetadata, NameKind, NativeDebug, OPEN, OPEN_ARGS, Op, Program, Prototype,
+    PrototypeBody, RegisterMaps, Upvalue,
 };
 use crate::memory::fallible::Map as HashMap;
 use crate::{
@@ -446,44 +447,47 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
             out.metadata[pc].gc_live = u32::from(before) | (u32::from(after) << 16);
         }
     }
-    Ok(Prototype {
-        gc_maps: masks.try_into_boxed_slice()?,
-        code: out.code.try_into_boxed_slice()?,
-        metadata: out.metadata.try_into_boxed_slice()?,
-        constants: out.constants.try_into_boxed_slice()?,
-        constant_strings: Box::default(),
-        registers,
-        params: u16::from(p.params),
-        vararg: p.vararg & 2 != 0,
-        compat_arg: p.vararg & 4 != 0,
-        upvalues: fallible::repeat(Upvalue::Outer(0), usize::from(p.nups))?
-            .try_into_boxed_slice()?,
-        bindings: bindings.try_into_boxed_slice()?,
-        debug: DebugInfo {
-            stack: 0,
-            native: Some(fallible::boxed(NativeDebug {
-                source,
-                stack: u16::from(p.stack),
-                has_lines: !p.lines.is_empty(),
-                wire: super::Wire {
-                    code: p.code.try_into_boxed_slice()?,
-                    lines: p.lines.try_into_boxed_slice()?,
-                    locals: local_bounds,
-                    children: p.children.try_into_boxed_slice()?,
-                    constants: constant_count,
-                    names: name_count,
-                    vararg: p.vararg,
-                },
-            })?),
-            defined: p.defined,
-            names: Box::default(),
-            upvalues: names.try_into_boxed_slice()?,
-            locals: locals.try_into_boxed_slice()?,
-            calls: calls.try_into_boxed_slice()?,
-            active_lines: active_lines.try_into_boxed_slice()?,
-            temporaries: temporaries.try_into_boxed_slice()?,
+    Ok(Prototype::new(
+        PrototypeBody {
+            gc_maps: RegisterMaps::Owned(masks.try_into_boxed_slice()?),
+            code: out.code.try_into_boxed_slice()?,
+            constants: out.constants.try_into_boxed_slice()?,
+            constant_strings: Box::default(),
+            registers,
+            params: u16::from(p.params),
+            vararg: p.vararg & 2 != 0,
+            compat_arg: p.vararg & 4 != 0,
+            upvalues: fallible::repeat(Upvalue::Outer(0), usize::from(p.nups))?
+                .try_into_boxed_slice()?,
+            bindings: bindings.try_into_boxed_slice()?,
+            debug: DebugInfo {
+                stack: 0,
+                native: Some(fallible::boxed(NativeDebug {
+                    source,
+                    stack: u16::from(p.stack),
+                    has_lines: !p.lines.is_empty(),
+                    wire: super::Wire {
+                        code: p.code.try_into_boxed_slice()?,
+                        lines: p.lines.try_into_boxed_slice()?,
+                        locals: local_bounds,
+                        children: p.children.try_into_boxed_slice()?,
+                        constants: constant_count,
+                        names: name_count,
+                        vararg: p.vararg,
+                    },
+                })?),
+                names: Box::default(),
+                upvalues: names.try_into_boxed_slice()?,
+                locals: locals.try_into_boxed_slice()?,
+                calls: calls.try_into_boxed_slice()?,
+                temporaries: temporaries.try_into_boxed_slice()?,
+            },
+            ..PrototypeBody::default()
         },
-    })
+        out.metadata.try_into_boxed_slice()?,
+        p.defined,
+        active_lines.try_into_boxed_slice()?,
+    ))
 }
 
 fn scratch_usage(i: Instruction, scratch: u8) -> (u8, u8) {

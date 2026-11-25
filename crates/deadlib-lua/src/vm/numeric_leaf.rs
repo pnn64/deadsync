@@ -1,7 +1,7 @@
 //! Numeric Lua functions whose result fits in a single straight-line operation.
 
 use super::{FunctionId, Value, Vm, slot_index};
-use crate::bytecode::{Op, Prototype, RK};
+use crate::bytecode::{Op, PrototypeBody, RK};
 
 #[derive(Clone, Copy)]
 pub(super) enum Input {
@@ -64,19 +64,19 @@ impl Vm {
     pub(super) fn numeric_leaf(&self, function: FunctionId) -> Option<Leaf> {
         let closure = &self.functions[slot_index(function.0)];
         let program = &self.programs[closure.program];
-        let Prototype {
+        let prototype = &program.data.prototypes[closure.prototype];
+        let PrototypeBody {
             code,
-            metadata,
             params,
             registers,
             vararg,
             compat_arg,
             ..
-        } = &program.data.prototypes[closure.prototype];
+        } = &**prototype;
         if *vararg || *compat_arg {
             return None;
         }
-        let constants = &program.constants[closure.prototype];
+        let constants = program.bound_constants(closure.prototype);
         let operand = |index| {
             if index < u32::from(*params) {
                 Some(Input::Argument(index as usize))
@@ -119,7 +119,7 @@ impl Vm {
         Some(Leaf {
             registers: usize::from(*registers),
             expression,
-            line: metadata[return_pc].line,
+            line: prototype.instruction_line(return_pc),
         })
     }
 

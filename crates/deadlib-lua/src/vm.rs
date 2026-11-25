@@ -336,6 +336,16 @@ struct LoadedProgram {
     entry: FunctionId,
 }
 
+impl LoadedProgram {
+    #[inline]
+    fn bound_constants(&self, prototype: usize) -> &[Value] {
+        let owner = self.data.prototypes[prototype]
+            .shared_owner()
+            .map_or(prototype, |owner| owner as usize);
+        &self.constants[owner]
+    }
+}
+
 #[derive(Debug)]
 struct Closure {
     program: usize,
@@ -1307,19 +1317,25 @@ impl Vm {
         let mut upvalue_names = Buffer::new_in(memory.clone());
         constants.try_reserve_exact(program.data.prototypes.len())?;
         upvalue_names.try_reserve_exact(program.data.prototypes.len())?;
-        for prototype in &program.data.prototypes {
+        for (index, prototype) in program.data.prototypes.iter().enumerate() {
             let mut values = Buffer::new_in(memory.clone());
-            values.try_reserve_exact(prototype.constants.len())?;
-            for k in &prototype.constants {
-                values.push(match k {
-                    Constant::Nil => Value::Nil,
-                    Constant::Boolean(v) => Value::Boolean(*v),
-                    Constant::Number(v) => Value::Number(*v),
-                    Constant::String(_) | Constant::PooledString { .. } => self.bind_constant_string(
-                        k.string(&prototype.constant_strings)
-                            .expect("verified constant string"),
-                    )?,
-                });
+            if !prototype
+                .shared_owner()
+                .is_some_and(|owner| owner as usize != index)
+            {
+                values.try_reserve_exact(prototype.constants.len())?;
+                for k in &prototype.constants {
+                    values.push(match k {
+                        Constant::Nil => Value::Nil,
+                        Constant::Boolean(v) => Value::Boolean(*v),
+                        Constant::Number(v) => Value::Number(*v),
+                        Constant::String(_) | Constant::PooledString { .. } => self
+                            .bind_constant_string(
+                                k.string(&prototype.constant_strings)
+                                    .expect("verified constant string"),
+                            )?,
+                    });
+                }
             }
             constants.push(values);
             let defined_names = prototype.debug.upvalue_names();
@@ -1994,7 +2010,7 @@ impl Vm {
                         && self.frames.len() + 1 < usize::from(self.call_slots);
                     let mut cx = simple::Context {
                         registers: &mut self.registers,
-                        constants: &self.programs[program_index].constants[proto_index],
+                        constants: self.programs[program_index].bound_constants(proto_index),
                         field_hints: &mut field_hints,
                         tables: &mut self.tables,
                         strings: &self.strings.bytes,
@@ -2094,13 +2110,13 @@ impl Vm {
                 let i = prototype.code[pc];
                 let a = base + usize::from(i.a);
                 if self.hooks.mask & (hooks::LINE | hooks::COUNT) != 0
-                    && self.hook_instruction(frame_index, pc, prototype.metadata[pc].hook_line)?
+                    && self.hook_instruction(frame_index, pc, prototype.hook_line(pc))?
                 {
                     continue 'frames;
                 }
                 self.charge()?;
                 let checkpoint_ready = std::mem::take(&mut numeric_checkpoint_ready);
-                *error_line = prototype.metadata[pc].line;
+                *error_line = prototype.instruction_line(pc);
                 pc += 1;
                 let b = base + usize::from(i.b);
                 let c = i.c as usize;
@@ -2126,7 +2142,7 @@ impl Vm {
                         // hook can already have replaced them before execution.
                         if i.b == 0 {
                             self.registers[a] =
-                                self.programs[program_index].constants[proto_index][c];
+                                self.programs[program_index].bound_constants(proto_index)[c];
                         }
                     }
                     Op::Move if i.c == OPEN => {
@@ -2147,11 +2163,11 @@ impl Vm {
                     }
                     Op::GetGlobal => self.get_table(
                         Value::Table(env),
-                        self.programs[program_index].constants[proto_index][c],
+                        self.programs[program_index].bound_constants(proto_index)[c],
                         a,
                     )?,
                     Op::SetGlobal => {
-                        let key = self.programs[program_index].constants[proto_index][c];
+                        let key = self.programs[program_index].bound_constants(proto_index)[c];
                         let value = self.registers[a];
                         if !matches!(key, Value::String(name)
                             if self.tables[slot_index(env.0)].set_existing_string_scalar(name, value))
@@ -2606,7 +2622,8 @@ impl Vm {
         if operand < crate::bytecode::RK {
             self.registers[base + operand as usize]
         } else {
-            self.programs[program].constants[prototype][(operand - crate::bytecode::RK) as usize]
+            self.programs[program].bound_constants(prototype)
+                [(operand - crate::bytecode::RK) as usize]
         }
     }
 

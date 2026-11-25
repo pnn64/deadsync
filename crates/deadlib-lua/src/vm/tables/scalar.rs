@@ -85,7 +85,7 @@ impl Vm {
         if prototype.vararg || prototype.compat_arg {
             return None;
         }
-        let constants = &loaded.constants[closure.prototype];
+        let constants = loaded.bound_constants(closure.prototype);
         let mut changed = None;
         let mut code = &*prototype.code;
         let mut metadata = &*prototype.metadata;
@@ -146,8 +146,12 @@ impl Vm {
         };
         if first.op == Op::Return {
             return match first.c {
-                0 => Some((Value::Nil, 0, metadata[0].line)),
-                1 => Some((initial(usize::from(first.a)), 1, metadata[0].line)),
+                0 => Some((Value::Nil, 0, prototype.adjust_line(metadata[0].line))),
+                1 => Some((
+                    initial(usize::from(first.a)),
+                    1,
+                    prototype.adjust_line(metadata[0].line),
+                )),
                 _ => None,
             };
         }
@@ -165,11 +169,13 @@ impl Vm {
                         initial(usize::from(first.a))
                     },
                     1,
-                    metadata[1].line,
+                    prototype.adjust_line(metadata[1].line),
                 )),
-                Op::Move if first.c != OPEN => {
-                    Some((initial(usize::from(first.b)), 1, metadata[1].line))
-                }
+                Op::Move if first.c != OPEN => Some((
+                    initial(usize::from(first.b)),
+                    1,
+                    prototype.adjust_line(metadata[1].line),
+                )),
                 _ => None,
             };
         }
@@ -206,11 +212,15 @@ impl Vm {
                 return Some((
                     Value::Boolean(if second.c == 0 { result } else { !result }),
                     1,
-                    metadata[2].line,
+                    prototype.adjust_line(metadata[2].line),
                 ));
             }
             if second.op == Op::Return && second.c == 1 && second.a == first.a {
-                return Some((Value::Boolean(result), 1, metadata[1].line));
+                return Some((
+                    Value::Boolean(result),
+                    1,
+                    prototype.adjust_line(metadata[1].line),
+                ));
             }
         }
         None

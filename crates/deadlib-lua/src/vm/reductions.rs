@@ -520,7 +520,7 @@ impl Vm {
             let mut analysis = Body {
                 vm: self,
                 registers: &self.registers[base..],
-                constants: &self.programs[program].constants[prototype_index],
+                constants: self.programs[program].bound_constants(prototype_index),
                 control,
                 env,
                 iterations: segment_count,

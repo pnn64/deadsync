@@ -181,12 +181,12 @@ impl Vm {
                 let proto = &data.prototypes[*p];
                 (
                     c_bytes(data.source(proto)),
-                    if proto.debug.defined[0] == 0 {
+                    if proto.defined[0] == 0 {
                         b"main".as_slice()
                     } else {
                         b"Lua"
                     },
-                    proto.debug.defined.map(i64::from),
+                    proto.defined.map(i64::from),
                 )
             } else if tail {
                 (b"=(tail call)".as_slice(), b"tail".as_slice(), [-1, -1])
@@ -240,7 +240,9 @@ impl Vm {
             && let Some((data, p)) = &code
         {
             let lines = self.new_table();
-            for &line in &data.prototypes[*p].debug.active_lines {
+            let prototype = &data.prototypes[*p];
+            for &raw in &prototype.active_lines {
+                let line = prototype.adjust_line(raw);
                 self.raw_set(lines, Value::Number(f64::from(line)), Value::Boolean(true))?;
             }
             self.debug_field(table, b"activelines", Value::Table(lines))?;

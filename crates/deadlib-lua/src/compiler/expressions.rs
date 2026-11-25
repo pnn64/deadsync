@@ -183,11 +183,25 @@ impl<'a> Compiler<'a> {
                 vararg,
                 body,
                 end_line,
+                template_source,
+                template_line,
             } => {
-                let mut child = self.fresh_function();
+                let template = templates::Source::new(self.source, *template_source);
+                if let Some(source) = template
+                    && let Some(child) = self.reuse_template(source, *end_line)?
+                {
+                    self.line = *end_line;
+                    self.emit(Op::Closure, dst, 0, child)?;
+                    return Ok(());
+                }
+                let mut child = self.fresh_function()?;
                 child.vararg = *vararg;
                 child.compat_arg = *vararg;
-                child.defined = [span.start, *end_line];
+                child.defined = if *template_line == 0 {
+                    [span.start, *end_line]
+                } else {
+                    [*template_line, *template_line + (*end_line - span.start)]
+                };
                 child.debug_stack = self
                     .ast
                     .stacks
@@ -212,7 +226,8 @@ impl<'a> Compiler<'a> {
                     let reg = self.alloc(1)?;
                     self.bind(b"arg", reg)?;
                 }
-                self.tasks.try_push(Task::ChildEnd(*end_line, dst))?;
+                self.tasks
+                    .try_push(Task::ChildEnd(*end_line, dst, template, *template_line))?;
                 self.tasks.try_push(Task::Block(ast.ids(*body)))?;
             }
             Expr::Vararg => self.vararg(dst, 1)?,
@@ -530,35 +545,58 @@ impl<'a> Compiler<'a> {
         self.emit(Op::GetTable, dst, u16::from(table), u32::from(self.result))?;
         Ok(())
     }
-    pub(super) fn table_next(&mut self, state: TableState) -> Result<(), Error> {
+    pub(super) fn table_next(&mut self, mut state: TableState) -> Result<(), Error> {
         let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
             unreachable!()
         };
-        if let Some(&(key, value)) = self.ast.fields(*fields).get(state.index) {
+        let fields = self.ast.fields(*fields);
+        while let Some(&(key, value)) = fields.get(state.index) {
             if let Some(key) = key {
                 if let Some(constant) = self.constant_operand(key)? {
                     let reg = self.alloc(1)?;
+                    const RK_LAST: u32 = u16::MAX as u32 - RK;
+                    if constant <= RK_LAST
+                        && let Some(literal) = self.ast.constant_operand(value)
+                        && !matches!(literal, ConstantOperand::Number(_, None))
+                    {
+                        let value_constant = self.intern_operand(literal)?;
+                        if value_constant <= RK_LAST {
+                            // The temporary Load would be hidden and folded
+                            // into this instruction. Keep the same register
+                            // high-water mark without generating its dead map.
+                            self.line = self.ast.exprs[value].1.discharge;
+                            self.alloc(1)?;
+                            self.emit(
+                                Op::SetTable,
+                                state.table,
+                                (RK + constant) as u16,
+                                RK + value_constant,
+                            )?;
+                            self.result = reg;
+                            self.reset(u16::from(reg));
+                            state.index += 1;
+                            continue;
+                        }
+                    }
                     self.tasks
                         .try_push(Task::TableConstant(state, reg, constant))?;
                     return self.operand(value, reg);
                 }
                 let regs = self.alloc(1)?;
                 self.tasks.try_push(Task::TableKey(state, regs))?;
-                self.operand(key, regs)?;
-            } else {
-                let reg = self.alloc(1)?;
-                let open = state.index + 1 == fields.len() && self.multiple(value);
-                self.tasks.try_push(Task::TableList(state, open))?;
-                self.expr_results(value, reg, if open { OPEN } else { 1 })?;
+                return self.operand(key, regs);
             }
-        } else {
-            if state.pending != 0 {
-                self.line = self.ast.exprs[state.id].1.end;
-                self.emit(Op::SetList, state.table, state.pending, state.flushed + 1)?;
-            }
-            if state.dst != state.table {
-                self.emit(Op::Move, state.dst, u16::from(state.table), 0)?;
-            }
+            let reg = self.alloc(1)?;
+            let open = state.index + 1 == fields.len() && self.multiple(value);
+            self.tasks.try_push(Task::TableList(state, open))?;
+            return self.expr_results(value, reg, if open { OPEN } else { 1 });
+        }
+        if state.pending != 0 {
+            self.line = self.ast.exprs[state.id].1.end;
+            self.emit(Op::SetList, state.table, state.pending, state.flushed + 1)?;
+        }
+        if state.dst != state.table {
+            self.emit(Op::Move, state.dst, u16::from(state.table), 0)?;
         }
         Ok(())
     }

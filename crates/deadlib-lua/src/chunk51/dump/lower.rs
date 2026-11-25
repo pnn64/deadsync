@@ -193,7 +193,7 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
         if skip[pc] {
             continue;
         }
-        out.line = p.metadata[pc].line;
+        out.line = p.instruction_line(pc);
         let a = mapped(u16::from(i.a));
         let b = mapped(i.b.min(255));
         let c = mapped(i.c.min(255) as u16);

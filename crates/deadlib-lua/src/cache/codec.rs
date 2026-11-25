@@ -176,7 +176,9 @@ impl Writer {
             w.u16(i.b)?;
             w.u32(i.c)
         })?;
-        self.list(&p.metadata, |w, metadata| w.u32(metadata.line))?;
+        self.list(&p.metadata, |w, metadata| {
+            w.u32(p.adjust_line(metadata.line))
+        })?;
         self.list(&p.metadata, |w, metadata| w.u32(metadata.gc_live))?;
         self.list(&p.gc_maps, |w, mask| {
             for &word in mask {
@@ -205,7 +207,7 @@ impl Writer {
         })?;
         let d = &p.debug;
         self.u16(d.stack)?;
-        for n in d.defined {
+        for n in p.defined {
             self.u32(n)?;
         }
         self.list(&d.upvalues, |w, name| w.bytes(d.name(name)))?;
@@ -229,8 +231,10 @@ impl Writer {
             w.u32(call.temporaries.start)?;
             w.u32(call.temporaries.end)
         })?;
-        self.words(&d.active_lines)?;
-        self.list(&p.metadata, |w, metadata| w.u32(metadata.hook_line))?;
+        self.list(&p.active_lines, |w, line| w.u32(p.adjust_line(*line)))?;
+        self.list(&p.metadata, |w, metadata| {
+            w.u32(p.adjust_hook_line(metadata.hook_line))
+        })?;
         self.bytes(&d.temporaries)?;
         self.u8(u8::from(d.native.is_some()))?;
         if let Some(n) = &d.native {
@@ -426,30 +430,33 @@ impl<'a> Reader<'a> {
         } else {
             None
         };
-        Some(Prototype {
-            registers,
-            params,
-            vararg,
-            compat_arg,
-            upvalues,
-            code,
-            metadata,
-            gc_maps,
-            constants,
-            constant_strings: Box::default(),
-            bindings,
-            debug: DebugInfo {
-                stack,
-                native,
-                defined,
-                names: Box::default(),
-                upvalues: names,
-                locals,
-                calls,
-                active_lines,
-                temporaries,
+        Some(Prototype::new(
+            PrototypeBody {
+                registers,
+                params,
+                vararg,
+                compat_arg,
+                upvalues,
+                code,
+                gc_maps: RegisterMaps::Owned(gc_maps),
+                constants,
+                constant_strings: Box::default(),
+                bindings,
+                debug: DebugInfo {
+                    stack,
+                    native,
+                    names: Box::default(),
+                    upvalues: names,
+                    locals,
+                    calls,
+                    temporaries,
+                },
+                ..PrototypeBody::default()
             },
-        })
+            metadata,
+            defined,
+            active_lines,
+        ))
     }
 }
 
@@ -463,7 +470,8 @@ fn decoded_bytes(data: &ProgramData) -> usize {
     for p in &data.prototypes {
         bytes += size_of_val(p.code.as_ref())
             + size_of_val(p.metadata.as_ref())
-            + size_of_val(p.gc_maps.as_ref())
+            // Cache decoding materializes the full map array.
+            + size_of_val(&*p.gc_maps)
             + size_of_val(p.upvalues.as_ref())
             + size_of_val(p.constants.as_ref())
             + p.constant_strings.len()
@@ -471,6 +479,7 @@ fn decoded_bytes(data: &ProgramData) -> usize {
             // Each pooled debug name occupies its own range. Decoding these
             // names into separate boxes uses the same byte payload.
             + p.debug.heap_bytes()
+            + size_of_val(p.active_lines.as_ref())
             + p.bindings
                 .iter()
                 .map(|b| size_of_val(b.upvalues.as_ref()))

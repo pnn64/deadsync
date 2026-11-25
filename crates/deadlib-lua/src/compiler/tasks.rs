@@ -76,7 +76,7 @@ pub(super) enum Task<'a> {
     Call(ExprId, u8, u32),
     CallCallee(CallState),
     CallArgs(CallState),
-    ChildEnd(u32, u8),
+    ChildEnd(u32, u8, Option<templates::Source>, u32),
 }
 
 #[cfg(target_pointer_width = "64")]
@@ -548,11 +548,25 @@ impl<'a> Compiler<'a> {
                 Task::Call(id, dst, wanted) => self.call(id, dst, wanted)?,
                 Task::CallCallee(state) => self.call_callee(state)?,
                 Task::CallArgs(state) => self.call_args(state)?,
-                Task::ChildEnd(line, dst) => {
-                    self.line = line;
+                Task::ChildEnd(line, dst, template, original_line) => {
+                    self.line = if original_line == 0 {
+                        line
+                    } else {
+                        self.function.defined[1]
+                    };
                     self.emit(Op::Return, 0, 0, 0)?;
                     let child = self.finish()?;
-                    self.function = self.parents.pop().expect("child has a parent");
+                    if original_line != 0 {
+                        self.prototypes[child as usize].relocate(line);
+                    }
+                    self.line = line;
+                    if let Some(source) = template {
+                        self.templates
+                            .remember(source, child, &self.prototypes[child as usize])?;
+                    }
+                    let parent = self.parents.pop().expect("child has a parent");
+                    self.spare
+                        .try_push(std::mem::replace(&mut self.function, parent))?;
                     self.emit(Op::Closure, dst, 0, child)?;
                 }
             }

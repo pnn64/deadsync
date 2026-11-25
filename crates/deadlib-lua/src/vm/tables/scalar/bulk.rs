@@ -50,7 +50,7 @@ impl Vm {
         if prototype.vararg || prototype.compat_arg {
             return None;
         }
-        let constants = &loaded.constants[closure.prototype];
+        let constants = loaded.bound_constants(closure.prototype);
         let mut code = &*prototype.code;
         let mut metadata = &*prototype.metadata;
         let mut counter = None;
@@ -105,7 +105,7 @@ impl Vm {
             return Some(Plan {
                 predicate: Predicate::Always(first.c == 1 && initial(u16::from(first.a))?),
                 counter,
-                line: metadata[0].line,
+                line: prototype.adjust_line(metadata[0].line),
             });
         }
         let second = *code.get(1)?;
@@ -115,23 +115,17 @@ impl Vm {
                 Op::Load => initial(u16::from(first.a))?,
                 Op::Move if first.c != OPEN => initial(first.b)?,
                 _ => {
-                    return self.bulk_numeric_plan(
-                        first,
-                        second,
-                        code,
-                        metadata,
-                        prototype.params,
-                        counter,
-                    );
+                    return self
+                        .bulk_numeric_plan(first, second, code, metadata, prototype, counter);
                 }
             };
             return Some(Plan {
                 predicate: Predicate::Always(value),
                 counter,
-                line: metadata[1].line,
+                line: prototype.adjust_line(metadata[1].line),
             });
         }
-        self.bulk_numeric_plan(first, second, code, metadata, prototype.params, counter)
+        self.bulk_numeric_plan(first, second, code, metadata, prototype, counter)
     }
     fn bulk_numeric_plan(
         &self,
@@ -139,10 +133,10 @@ impl Vm {
         second: Instruction,
         code: &[Instruction],
         metadata: &[crate::bytecode::InstructionMetadata],
-        params: u16,
+        prototype: &crate::bytecode::Prototype,
         counter: Option<Counter>,
     ) -> Option<Plan> {
-        if params < 2
+        if prototype.params < 2
             || !matches!(first.op, Op::Lt | Op::Gt)
             || !matches!((first.b, first.c), (0, 1) | (1, 0))
         {
@@ -162,7 +156,7 @@ impl Vm {
         Some(Plan {
             predicate: Predicate::Numbers((first.op == Op::Gt) ^ (first.b == 1)),
             counter,
-            line,
+            line: prototype.adjust_line(line),
         })
     }
     pub(in crate::vm::tables) fn try_bulk_sort(

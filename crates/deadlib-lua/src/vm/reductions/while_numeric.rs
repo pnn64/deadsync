@@ -591,7 +591,7 @@ impl Vm {
             &code[head..edge],
             edge + 1,
             &self.registers[base..],
-            &self.programs[program].constants[prototype],
+            self.programs[program].bound_constants(prototype),
         ) else {
             return false;
         };

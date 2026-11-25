@@ -198,7 +198,7 @@ pub(super) fn relax(
                 next_lines.try_push(line)?;
                 relays[relay].site = next.len();
                 next.try_push(JMP)?;
-                next_lines.try_push(prototype.metadata[relays[relay].origin].line)?;
+                next_lines.try_push(prototype.instruction_line(relays[relay].origin))?;
                 relay += 1;
             }
             positions.try_push(next.len())?;

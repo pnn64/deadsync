@@ -8,6 +8,94 @@ enum Scalar {
 }
 
 #[test]
+fn repeated_leaf_bodies_preserve_lines_captures_and_token_boundaries() {
+    let program = compile(
+        br#"
+        local pad = '\n--' .. string.rep('.', 2200)
+        local source = [=[
+local unused = false and function(x) return x + 12345 - 12345 end
+local first = function(x) return x + 12345 - 12345 end
+local second = function(x) return x + 12345 - 12345 end
+local global = function(x) return x + fallback_value end
+local captured
+do
+    local fallback_value = 41
+    captured = function(x) return x + fallback_value end
+end
+fallback_value = 20
+return first, second, global, captured
+]=] .. pad
+        local function streamed(text)
+            local offset = 1
+            return load(function()
+                if offset > #text then return end
+                local part = text:sub(offset, offset + 6)
+                offset = offset + 7
+                return part
+            end, '@leaves')
+        end
+        local load_all = assert(loadstring(source, '@leaves'))
+        assert(string.dump(load_all) == string.dump(assert(streamed(source))))
+        local first, second, global, captured = load_all()
+        assert(first ~= second and first(42) == 42 and second(42) == 42)
+        assert(debug.getinfo(first, 'S').linedefined == 2)
+        assert(debug.getinfo(second, 'S').linedefined == 3)
+        assert(global(22) == 42 and captured(1) == 42)
+
+        local malformed = 'local a = function(x) return x + 12345 - 12345 end\n'
+            .. 'local b = function(x) return x + 12345 - 12345 end_open' .. pad
+        local direct, first_error = loadstring(malformed, '@leaves')
+        local reader, second_error = streamed(malformed)
+        assert(not direct and not reader and first_error == second_error)
+        return 42
+    "#,
+    )
+    .unwrap();
+    assert_eq!(Vm::new().execute(&program).unwrap(), [Value::Number(42.0)]);
+}
+
+#[test]
+fn shared_multiline_callbacks_report_their_own_error_and_hook_lines() {
+    let program = compile(
+        br#"
+        local source = [=[
+local a = function(t)
+    local nested = t.child
+    return nested.answer
+end
+local b = function(t)
+    local nested = t.child
+    return nested.answer
+end
+return a, b
+]=]
+        local first, second = assert(loadstring(source .. '\n--' .. string.rep('.', 2300), '@shared-errors'))()
+        assert(first ~= second)
+        assert(debug.getinfo(first, 'SL').activelines[3])
+        assert(debug.getinfo(second, 'SL').activelines[7])
+        local ok, err = pcall(first, {})
+        assert(not ok and string.find(err, 'shared-errors:3:', 1, true))
+        local ok, err = pcall(second, {})
+        assert(not ok and string.find(err, 'shared-errors:7:', 1, true))
+
+        local lines = {}
+        debug.sethook(function(kind, line)
+            if debug.getinfo(2, 'f').func == second then
+                assert(kind == 'line' and (line == 6 or line == 7))
+                lines[line] = true
+            end
+        end, 'l')
+        local result = second({child = {answer = 42}})
+        debug.sethook()
+        assert(lines[6] and lines[7])
+        return result
+    "#,
+    )
+    .unwrap();
+    assert_eq!(Vm::new().execute(&program).unwrap(), [Value::Number(42.0)]);
+}
+
+#[test]
 fn lua_readers_expose_and_retain_real_parser_tables_through_eof_and_return_hooks() {
     compare(br#"
 local out={};local loadfn=load

@@ -106,6 +106,7 @@ pub(crate) struct Spare {
     scratch: Scratch,
     bindings: Option<Bindings>,
     resources: Resources,
+    parsed_leaves: Vec<Option<recursive::ParsedLeaf>>,
     ast: Ast,
 }
 impl Spare {
@@ -152,6 +153,7 @@ pub(crate) struct Parser {
     locals: u16,
     function_line: u32,
     bindings: Bindings,
+    parsed_leaves: Vec<Option<recursive::ParsedLeaf>>,
     resources: Resources,
     tasks: Vec<Task>,
     ast: Ast,
@@ -196,6 +198,7 @@ impl Parser {
             keep: false,
             presized: false,
             started: false,
+            parsed_leaves: Vec::new(),
         })
     }
     /// A parser for complete source reusing `spare` storage.
@@ -213,6 +216,8 @@ impl Parser {
             }
             None => Bindings::try_new()?,
         };
+        let mut parsed_leaves = std::mem::take(&mut spare.parsed_leaves);
+        parsed_leaves.clear();
         let mut resources = std::mem::take(&mut spare.resources);
         resources.clear();
         resources.reuse_operands(&mut ast);
@@ -246,6 +251,7 @@ impl Parser {
             keep: true,
             presized: false,
             started: false,
+            parsed_leaves,
         })
     }
     /// Whether this parser was built from reusable storage.
@@ -265,6 +271,7 @@ impl Parser {
         spare.scratch = self.scratch;
         spare.bindings = Some(self.bindings);
         spare.resources = self.resources;
+        spare.parsed_leaves = self.parsed_leaves;
     }
 }
 
@@ -314,6 +321,7 @@ impl Parser {
             + native_root_bytes(&self.native_events)
             + self.bindings.heap_bytes()
             + self.resources.heap_bytes()
+            + self.parsed_leaves.capacity() * size_of::<Option<recursive::ParsedLeaf>>()
             + self.ast.zero_signs.capacity() * size_of::<(ExprId, bool)>()
             + self.ast.stacks.capacity() * size_of::<(ExprId, u16)>()
             + self.ast.constant_operands.capacity() * size_of::<(ExprId, ConstantOperand)>()
@@ -1358,6 +1366,8 @@ impl Parser {
                             vararg,
                             body,
                             end_line,
+                            template_source: [0; 2],
+                            template_line: 0,
                         },
                         line,
                     )?;

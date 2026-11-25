@@ -348,25 +348,7 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
             .iter()
             .map(|names| names.capacity() * size_of::<StringId>())
             .sum::<usize>();
-    bytes += p.data.name.len()
-        + std::mem::size_of_val(p.data.sources.as_ref())
-        + p.data.sources.iter().map(|s| s.len()).sum::<usize>()
-        + p.data.prototypes.len() * std::mem::size_of::<crate::bytecode::Prototype>();
-    for f in &p.data.prototypes {
-        bytes += f.code.len() * 8
-            + f.debug.heap_bytes()
-            + std::mem::size_of_val(f.metadata.as_ref())
-            + f.gc_maps.len() * 32
-            + f.upvalues.len() * std::mem::size_of::<Upvalue>()
-            + std::mem::size_of_val(f.bindings.as_ref())
-            + f.bindings
-                .iter()
-                .map(|b| std::mem::size_of_val(b.upvalues.as_ref()))
-                .sum::<usize>()
-            + f.constants.len() * std::mem::size_of::<Constant>()
-            + f.constant_strings.len()
-            + f.constants.iter().map(Constant::owned_bytes).sum::<usize>();
-    }
+    bytes += crate::bytecode::ProgramData::heap_bytes(&p.data);
     bytes + native_roots
 }
 fn register_roots(

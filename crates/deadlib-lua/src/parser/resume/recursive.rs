@@ -8,6 +8,10 @@ use super::*;
 
 /// Deeper syntax nesting uses the resumable parser, which needs no native stack.
 const MAX_DEPTH: u16 = 48;
+// Larger chunks can amortize the lookup cost across repeated short bodies.
+const MIN_TEMPLATE_SOURCE: usize = 2048;
+const MAX_TEMPLATE_BODY: usize = 256;
+const LEAF_SLOTS: usize = 32;
 
 /// Position data of a consumed token.
 #[derive(Clone, Copy)]
@@ -15,6 +19,19 @@ struct Taken {
     kind: Kind,
     line: u32,
     end_line: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ParsedLeaf {
+    id: ExprId,
+    offsets: [u32; 2],
+    depth: u16,
+    stack: u16,
+    zero_sign: Option<bool>,
+}
+
+fn leaf_slot(input: &[u8], start: usize) -> Option<usize> {
+    Some(crate::hash::hash_bytes(input.get(start..start + 24)?) as usize % LEAF_SLOTS)
 }
 
 fn abandon() -> Error {
@@ -48,6 +65,7 @@ impl Parser {
     /// Return to the initial state after an abandoned attempt.
     pub(super) fn restart(&mut self) -> Result<(), Error> {
         self.scanner = Scanner::default();
+        self.parsed_leaves.clear();
         self.token = None;
         self.lookahead = None;
         self.previous_line = 1;
@@ -732,8 +750,84 @@ impl Parser {
         self.expression_with::<false>(input, Expr::Table(fields, previous), line)
     }
 
+    fn repeated_leaf(
+        &mut self,
+        input: &[u8],
+        line: u32,
+        start: usize,
+        old: ParsedLeaf,
+    ) -> Result<Option<ExprId>, Error> {
+        if self.depth > old.depth {
+            return Ok(None);
+        }
+        let old_line = self.ast.exprs[old.id].1.start;
+        let [old_start, old_end] = old.offsets.map(|offset| offset as usize);
+        let end = start + old_end - old_start;
+        if input.get(start..end) != Some(&input[old_start..old_end])
+            || input
+                .get(end)
+                .is_some_and(|&byte| byte == b'_' || crate::locale::is_alnum(byte))
+        {
+            return Ok(None);
+        }
+        let Expr::Function {
+            params,
+            vararg,
+            body,
+            end_line,
+            ..
+        } = self.ast.exprs[old.id].0
+        else {
+            unreachable!("parsed leaf function");
+        };
+        let Some(new_end) = line.checked_add(end_line - old_line) else {
+            return Ok(None);
+        };
+        // The first parse checked this body at an equal or greater nesting
+        // depth. Every name binds within the leaf.
+        self.scanner.skip_closed_bytes(end, new_end);
+        self.bump(input)?;
+        self.previous_line = new_end;
+        self.ast
+            .stacks
+            .try_push((self.ast.exprs.len(), old.stack))?;
+        if let Some(sign) = old.zero_sign {
+            self.ast.zero_signs.try_push((self.ast.exprs.len(), sign))?;
+        }
+        self.expression_with::<false>(
+            input,
+            Expr::Function {
+                params,
+                vararg,
+                body,
+                end_line: new_end,
+                template_source: old.offsets,
+                template_line: old_line,
+            },
+            line,
+        )
+        .map(Some)
+    }
+
     /// Parse a parameter list and body after `function`.
     fn rfunction(&mut self, input: &[u8], line: u32, method: bool) -> Result<ExprId, Error> {
+        let source_start = self.scanner.position();
+        let source_candidate = input.len() >= MIN_TEMPLATE_SOURCE
+            && !method
+            && self.lookahead.is_none()
+            && self.kind() == Kind::LParen
+            && self.line() == line;
+        let slot = source_candidate
+            .then(|| leaf_slot(input, source_start))
+            .flatten();
+        if let Some(slot) = slot
+            && let Some(&Some(old)) = self.parsed_leaves.get(slot)
+            && let Some(id) = self.repeated_leaf(input, line, source_start, old)?
+        {
+            return Ok(id);
+        }
+        let first_expr = self.ast.exprs.len();
+        let children = self.ast.stacks.len();
         self.rexpect(input, Kind::LParen)?;
         let mark = self.scratch.names.len();
         if method {
@@ -775,11 +869,42 @@ impl Parser {
         self.locals = count as u16;
         self.resources.enter(self.locals)?;
         let body = self.rblock(input)?;
+        let source_end = self.scanner.position();
+        let leaf = source_candidate
+            && self.lookahead.is_none()
+            && self.ast.stacks.len() == children
+            && !self.bindings.has_captures();
         let end_line = self.rexpect(input, Kind::End)?.end_line;
+        let template_source = if leaf
+            && source_end - source_start <= MAX_TEMPLATE_BODY
+            && let Ok(end) = u32::try_from(source_end)
+        {
+            [source_start as u32, end]
+        } else {
+            [0; 2]
+        };
         (self.loops, self.vararg, self.locals, self.function_line) = parent;
         self.bindings.leave();
         let (sign, stack) = self.resources.leave();
-        self.ast.stacks.try_push((self.ast.exprs.len(), stack))?;
+        let id = self.ast.exprs.len();
+        if template_source[0] != template_source[1]
+            && let Some(slot) = slot
+            && self.ast.exprs[first_expr..].iter().all(|(expr, span)| {
+                !matches!(expr, Expr::Name(_)) || span.binding.local_index().is_some()
+            })
+        {
+            if self.parsed_leaves.is_empty() {
+                self.parsed_leaves.try_resize(LEAF_SLOTS, None)?;
+            }
+            self.parsed_leaves[slot] = Some(ParsedLeaf {
+                id,
+                offsets: template_source,
+                depth: self.depth,
+                stack,
+                zero_sign: sign,
+            });
+        }
+        self.ast.stacks.try_push((id, stack))?;
         if let Some(sign) = sign {
             self.ast.zero_signs.try_push((self.ast.exprs.len(), sign))?;
         }
@@ -790,6 +915,8 @@ impl Parser {
                 vararg,
                 body,
                 end_line,
+                template_source,
+                template_line: 0,
             },
             line,
         )

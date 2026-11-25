@@ -439,7 +439,7 @@ impl Vm {
                 |(_, p)| p as usize,
             );
         let line_event = self.hooks.mask & LINE != 0
-            && (pc == 0 || pc <= previous || line != proto.metadata[previous].hook_line);
+            && (pc == 0 || pc <= previous || line != proto.hook_line(previous));
         if self.hooks.allowed()
             && (line_event || (self.hooks.mask & COUNT != 0 && self.hooks.ticks == 1))
         {
@@ -522,9 +522,9 @@ impl Vm {
                         let c = &self.functions[slot_index(id.0)];
                         let proto = &self.programs[c.program].data.prototypes[c.prototype];
                         Some(if proto.debug.native.is_some() {
-                            proto.metadata[frame.argc()].line
+                            proto.instruction_line(frame.argc())
                         } else {
-                            proto.metadata[frame.argc()].hook_line
+                            proto.hook_line(frame.argc())
                         })
                     };
                     self.hook_callback(

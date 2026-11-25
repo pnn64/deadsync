@@ -338,12 +338,12 @@ impl NativeStack<'_, '_> {
                 let proto = &data.prototypes[*proto];
                 (
                     self.call.vm.native_debug_string(*p, data.source(proto))?,
-                    if proto.debug.defined[0] == 0 {
+                    if proto.defined[0] == 0 {
                         b"main\0".as_slice()
                     } else {
                         b"Lua\0"
                     },
-                    proto.debug.defined.map(|n| n as i32),
+                    proto.defined.map(|n| n as i32),
                 )
             } else if tail {
                 (
@@ -439,7 +439,9 @@ impl NativeStack<'_, '_> {
         if options.contains(&b'L') {
             let lines = if let Some((_, p, data)) = &code {
                 let table = self.call.vm.new_table();
-                for &line in &data.prototypes[*p].debug.active_lines {
+                let prototype = &data.prototypes[*p];
+                for &raw in &prototype.active_lines {
+                    let line = prototype.adjust_line(raw);
                     self.call.vm.raw_set(
                         table,
                         Value::Number(f64::from(line)),

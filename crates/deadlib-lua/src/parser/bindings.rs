@@ -248,6 +248,10 @@ impl Bindings {
         }
         Ok(())
     }
+    pub(super) fn has_captures(&self) -> bool {
+        self.scopes.last().expect("function scope").count != 0
+    }
+
     pub(super) fn leave(&mut self) {
         let scope = self.scopes.pop().expect("nested function");
         self.locals.truncate(scope.base);

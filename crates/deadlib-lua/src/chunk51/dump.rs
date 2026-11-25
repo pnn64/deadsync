@@ -126,7 +126,7 @@ fn serialize(data: &ProgramData, entry: usize, blocks: bool) -> Result<Output, E
                 } else {
                     Some(source)
                 })?;
-                for line in p.debug.defined {
+                for line in p.defined {
                     output.block(&line.to_ne_bytes())?;
                 }
                 let (stack, vararg, constants) = match &body {
