@@ -294,7 +294,7 @@ pub fn write_page(
     let len = FIXED_HEADER_SIZE + lacing.len();
     header[..FIXED_HEADER_SIZE].copy_from_slice(&encoded_header(fields, lacing.len() as u8));
     header[FIXED_HEADER_SIZE..len].copy_from_slice(lacing);
-    write_page_inner::<_, false>(writer, &mut header[..len], body, (0, 0))
+    write_page_inner::<_, false>(writer, &mut header[..len], body, (0, 0, 0))
 }
 
 // The prefix contains the header and laces.
@@ -302,18 +302,19 @@ pub(crate) fn write_page_inner<W: Write, const FIXED_SERIAL: bool>(
     mut writer: W,
     header: &mut [u8],
     body: &[u8],
-    serial_crc: (u32, u32),
+    serial_crc: (u32, u32, u32),
 ) -> Result<usize, Error> {
+    let (prefix_crc, one_lace_crc, one_byte_crc) = serial_crc;
     let checksum = if FIXED_SERIAL
         && let [payload] = *body
         && let Ok(prefix) = <&[u8; 28]>::try_from(&*header)
     {
-        crc::packet_byte_crc(serial_crc.1, prefix, payload)
+        crc::packet_byte_crc(one_byte_crc, prefix, payload)
     } else {
         // Keep long prefixes contiguous for the hardware fold.
         let prefix = if header.len() < 64 {
             if FIXED_SERIAL {
-                crc::packet_page_crc(serial_crc.0, header)
+                crc::packet_page_crc(prefix_crc, one_lace_crc, header)
             } else {
                 crc::page_crc(header)
             }

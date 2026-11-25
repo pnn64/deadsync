@@ -146,15 +146,16 @@ pub(crate) fn page_crc(bytes: &[u8]) -> u32 {
     update(crc, tail)
 }
 
-pub(crate) fn serial_crc(serial: u32) -> (u32, u32) {
+pub(crate) fn serial_crc(serial: u32) -> (u32, u32, u32) {
     let [a, b, c, d] = serial.to_le_bytes();
     let crc = CAPTURE_CRC
         ^ TABLES[11][a as usize]
         ^ TABLES[10][b as usize]
         ^ TABLES[9][c as usize]
         ^ TABLES[8][d as usize];
-    // The second remainder also advances past the one-byte packet's suffix.
-    (crc, advance_zeros(crc, 3))
+    // Advance by the lacing suffix and, separately, one payload byte.
+    let empty = advance_zeros(crc, 2);
+    (crc, empty, advance_zeros(empty, 1))
 }
 
 fn header_crc(crc: &mut u32, bytes: &[u8], tables: &[[u32; 256]]) {
@@ -172,8 +173,14 @@ pub(crate) fn packet_byte_crc(mut crc: u32, header: &[u8; 28], payload: u8) -> u
         ^ TABLES[0][payload as usize]
 }
 
-pub(crate) fn packet_page_crc(mut crc: u32, bytes: &[u8]) -> u32 {
+pub(crate) fn packet_page_crc(mut crc: u32, short_crc: u32, bytes: &[u8]) -> u32 {
     let (header, tail) = bytes.split_first_chunk::<26>().unwrap();
+    if let [segments, lace] = *tail {
+        let mut crc = short_crc;
+        header_crc(&mut crc, &header[5..14], &TABLES[14..23]);
+        header_crc(&mut crc, &header[18..22], &TABLES[6..10]);
+        return crc ^ TABLES[1][segments as usize] ^ TABLES[0][lace as usize];
+    }
     // The writer contributes a fixed capture, version 0 and one serial.
     header_crc(&mut crc, &header[5..14], &TABLES[12..21]);
     header_crc(&mut crc, &header[18..22], &TABLES[4..8]);
