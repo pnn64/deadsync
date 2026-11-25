@@ -255,7 +255,13 @@ impl Encoder {
         }
         if pixels > 1024 {
             if minimum == 2 {
+                if pixels <= 2048 {
+                    return Self::encode_direct::<2, { direct_table_slots(2048, 4) }>(rows, emit);
+                }
                 return Self::encode_direct::<2, FOUR_SYMBOL_SLOTS>(rows, emit);
+            }
+            if minimum == 3 && pixels <= 2048 {
+                return Self::encode_direct::<3, { direct_table_slots(2048, 8) }>(rows, emit);
             }
             return Self::encode_large(rows, minimum, emit);
         }
