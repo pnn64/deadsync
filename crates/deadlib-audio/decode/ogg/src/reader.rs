@@ -423,7 +423,7 @@ impl PageDecoder {
             } else if self.buffer.len() < 27 {
                 27
             } else {
-                let header = page::header_size(&self.buffer)?;
+                let header = 27 + usize::from(self.buffer[26]);
                 if self.buffer.len() < header {
                     header
                 } else {
@@ -443,6 +443,10 @@ impl PageDecoder {
             if self.length != 0 {
                 page::check_crc(&self.buffer)?;
                 return Ok((consumed, true));
+            }
+            if target == 27 {
+                // The fixed header just arrived. Later fills only need its size.
+                page::header_size(&self.buffer)?;
             }
         }
     }
