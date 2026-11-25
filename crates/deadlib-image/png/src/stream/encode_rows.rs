@@ -229,17 +229,22 @@ impl<'a> Rows<'a> {
         }
         let y = self.y as usize + self.index * self.dy as usize;
         if self.filter == Filter::None {
-            scanline::pack_row(
-                self.image,
-                y,
-                self.x as usize,
-                self.dx as usize,
-                self.width,
-                &mut self.output[1..],
-            );
-            self.output[0] = 0;
+            // The filter tag remains zero from the output buffer's initial fill.
+            let output = &mut self.output[1..];
+            if let Some(pixels) = self.pixels {
+                let start = self.index * output.len();
+                output.copy_from_slice(&pixels[start..start + output.len()]);
+            } else {
+                scanline::pack_row(
+                    self.image,
+                    y,
+                    self.x as usize,
+                    self.dx as usize,
+                    self.width,
+                    output,
+                );
+            }
             self.index += 1;
-            self.zeroed = false;
             return Ok(Some(FilteredRow {
                 bytes: &self.output,
                 zero: false,
