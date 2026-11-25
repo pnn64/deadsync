@@ -1612,11 +1612,16 @@ impl Writer {
             let start = pos;
             let groups = input[pos..].as_chunks::<32>().0;
             pos += 32 * groups.iter().take_while(|group| **group == [0; 32]).count();
-            let words = input[pos..].as_chunks::<8>().0;
-            pos += 8 * words.iter().take_while(|word| **word == [0; 8]).count();
-            while pos < input.len() && input[pos] == 0 {
-                pos += 1;
-            }
+            let (words, tail) = input[pos..].as_chunks::<8>();
+            let first_nonzero = words
+                .iter()
+                .map(|word| u64::from_le_bytes(*word))
+                .enumerate()
+                .find(|&(_, word)| word != 0);
+            pos += match first_nonzero {
+                Some((index, word)) => 8 * index + word.trailing_zeros() as usize / 8,
+                None => 8 * words.len() + tail.iter().take_while(|&&byte| byte == 0).count(),
+            };
             if pos - start >= 128 {
                 checksum.update(&input[checksum_start..start]);
                 checksum.update_zeros(pos - start);
