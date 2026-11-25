@@ -3,6 +3,12 @@ use super::*;
 use deadlib_lua::NativeStack;
 use sprites::set;
 
+#[derive(Default)]
+pub(super) struct Workspace {
+    points: Vec<[f32; 3]>,
+    solver: deadsync_gameplay::SongLuaSplineSolver,
+}
+
 pub(super) fn handler(call: &mut HostCall<'_>) -> Result<TableId, Error> {
     let owner = call.try_new_table()?;
     call.with_roots(&[Value::Table(owner)], |call| {
@@ -152,6 +158,9 @@ fn assign(
     stack.set_table(owner as isize, false)
 }
 fn raw_index(stack: &mut NativeStack<'_, '_>, owner: usize, index: usize) -> Result<(), Error> {
+    if let Ok(index) = i32::try_from(index) {
+        return stack.raw_get_integer(owner as isize, index);
+    }
     stack.push(Value::Number(index as f64))?;
     stack.get_table(owner as isize, true)
 }
@@ -161,6 +170,10 @@ fn raw_assign(
     index: usize,
     value: Value,
 ) -> Result<(), Error> {
+    if let Ok(index) = i32::try_from(index) {
+        stack.push(value)?;
+        return stack.raw_set_integer(owner as isize, index);
+    }
     stack.push(Value::Number(index as f64))?;
     stack.push(value)?;
     stack.set_table(owner as isize, true)
@@ -195,6 +208,20 @@ fn push_vector(stack: &mut NativeStack<'_, '_>, values: &[f32]) -> Result<(), Er
 fn spline_method(call: &mut HostCall<'_>) -> Result<(), Error> {
     let name = *call.function_data::<&'static str>().unwrap();
     let owner = call.captures()[0];
+    if name == "Solve" && let Value::Table(table) = owner {
+        let mut workspace = std::mem::take(&mut call.store().spline_workspace);
+        let result = solve_numeric(call, table, &mut workspace);
+        call.store().spline_workspace = workspace;
+        if result? {
+            return Ok(());
+        }
+    }
+    if name == "SetPoint"
+        && let Value::Table(table) = owner
+        && set_numeric_point(call, table)?
+    {
+        return Ok(());
+    }
     // Reserve argument slots before adding temporaries. Native spline methods
     // always use argument two, even for detached or non-table receiver calls.
     let mut stack = call.native_stack()?;
@@ -271,8 +298,9 @@ fn spline_method(call: &mut HostCall<'_>) -> Result<(), Error> {
             }
             stack.create_table(3, 0)?;
             let point = stack.top();
-            for axis in 1..=stack.object_len(3)?.max(3) {
-                let value = if axis <= stack.object_len(3)? {
+            let dimensions = stack.object_len(3)?;
+            for axis in 1..=dimensions.max(3) {
+                let value = if axis <= dimensions {
                     raw_index(&mut stack, 3, axis)?;
                     let n = stack
                         .to_number(-1)
@@ -309,6 +337,48 @@ fn spline_method(call: &mut HostCall<'_>) -> Result<(), Error> {
     stack.finish(1)
 }
 
+fn set_numeric_point(call: &mut HostCall<'_>, owner: TableId) -> Result<bool, Error> {
+    let [_, Value::Number(index), Value::Table(input)] = call.arguments() else {
+        return Ok(false);
+    };
+    let index = index.trunc();
+    let input = *input;
+    if call.raw_metatable(owner)?.is_some() {
+        return Ok(false);
+    }
+    let Value::Number(size) = get_static(call, owner, b"__songlua_spline_size")? else {
+        return Ok(false);
+    };
+    let size = size.trunc();
+    if !(0.0..=65536.0).contains(&size) || !(1.0..=size).contains(&index) {
+        return Ok(false);
+    }
+    let Value::Table(points) = get_static(call, owner, b"__songlua_spline_points")? else {
+        return Ok(false);
+    };
+    // Lua can supply sparse, wider, or coercible rows. Let the stack route
+    // validate those with its original length and conversion rules.
+    if call.raw_table_len(input)? != 3 {
+        return Ok(false);
+    }
+    let mut values = [0.0; 3];
+    for (axis, value) in values.iter_mut().enumerate() {
+        let Value::Number(number) = call.raw_table_get(input, Value::Number((axis + 1) as f64))?
+        else {
+            return Ok(false);
+        };
+        *value = number as f32;
+    }
+    let mut stack = call.native_stack()?;
+    stack.push(Value::Table(points))?;
+    let target = stack.top();
+    push_vector(&mut stack, &values)?;
+    stack.raw_set_integer(target as isize, index as i32)?;
+    stack.push(Value::Table(owner))?;
+    stack.finish(1)?;
+    Ok(true)
+}
+
 fn solve(stack: &mut NativeStack<'_, '_>, owner: usize) -> Result<(), Error> {
     stack.get_field(owner as isize, b"__songlua_spline_size")?;
     let size = integer(stack, -1, true)? as usize;
@@ -325,7 +395,61 @@ fn solve(stack: &mut NativeStack<'_, '_>, owner: usize) -> Result<(), Error> {
     stack.get_field(owner as isize, b"__songlua_spline_loop")?;
     let looping = stack.to_boolean(-1);
     let mut solver = deadsync_gameplay::SongLuaSplineSolver::default();
-    let coefficients = solver.solve_with_loop(&points, looping);
+    write_coefficients(stack, owner, solver.solve_with_loop(&points, looping))
+}
+
+fn solve_numeric(
+    call: &mut HostCall<'_>,
+    owner: TableId,
+    workspace: &mut Workspace,
+) -> Result<bool, Error> {
+    // Keep getter and setter dispatch on the stack path when Lua can observe it.
+    if call.raw_metatable(owner)?.is_some() {
+        return Ok(false);
+    }
+    let Value::Number(size) = get_static(call, owner, b"__songlua_spline_size")? else {
+        return Ok(false);
+    };
+    let size = size.trunc();
+    if !(0.0..=65536.0).contains(&size) {
+        return Ok(false);
+    }
+    let Value::Table(points) = get_static(call, owner, b"__songlua_spline_points")? else {
+        return Ok(false);
+    };
+    workspace.points.clear();
+    workspace
+        .points
+        .try_reserve_exact(size as usize)
+        .map_err(|_| call.error(b"spline point allocation failed"))?;
+    for index in 1..=size as usize {
+        let row = call.raw_table_get(points, Value::Number(index as f64))?;
+        let Some(point) = super::song_columns::raw_numeric_point(call, row)? else {
+            return Ok(false);
+        };
+        workspace.points.push(point);
+    }
+    let looping = get_static(call, owner, b"__songlua_spline_loop")?;
+    if looping == Value::Nil {
+        return Ok(false);
+    }
+    let coefficients = workspace.solver.solve_with_loop(&workspace.points, looping.is_truthy());
+    let mut stack = call.native_stack()?;
+    stack.set_top(stack.top().max(3))?;
+    let owner = Value::Table(owner);
+    stack.push(owner)?;
+    let target = stack.top();
+    write_coefficients(&mut stack, target, coefficients)?;
+    stack.push(owner)?;
+    stack.finish(1)?;
+    Ok(true)
+}
+
+fn write_coefficients(
+    stack: &mut NativeStack<'_, '_>,
+    owner: usize,
+    coefficients: &[deadsync_gameplay::SongLuaSplinePointCoefficients],
+) -> Result<(), Error> {
     stack.create_table(coefficients.len(), 0)?;
     let result = stack.top();
     for (index, point) in coefficients.iter().enumerate() {

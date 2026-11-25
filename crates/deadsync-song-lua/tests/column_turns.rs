@@ -282,13 +282,13 @@ fn changing_raw_handler_timing_reselects_tracks_without_rebinding_public_columns
     let down = track(&tracks, 0, 1);
     assert!(down.at_second(0.).unwrap().position.is_none());
     let down = down.at_second(1.).unwrap().position.as_ref().unwrap();
-    assert_eq!(down.coefficients[0][0][0], 22.);
+    assert_eq!(down.coefficients.view().get(0).unwrap()[0][0], 22.);
     assert!(down.subtract_song_beat);
     let up = track(&tracks, 0, 2);
     let incoming = up.at_second(0.).unwrap().position.as_ref().unwrap();
-    assert_eq!(incoming.coefficients[0][0][0], 22.);
+    assert_eq!(incoming.coefficients.view().get(0).unwrap()[0][0], 22.);
     assert!(!incoming.subtract_song_beat);
     let own = up.at_second(1.).unwrap().position.as_ref().unwrap();
-    assert_eq!(own.coefficients[0][0][0], 33.);
+    assert_eq!(own.coefficients.view().get(0).unwrap()[0][0], 33.);
     assert!(own.subtract_song_beat);
 }

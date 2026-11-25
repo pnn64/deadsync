@@ -317,6 +317,7 @@ struct Store {
     media_probes: super::SongLuaMediaProbes,
     column_take_from: Option<[[usize; deadsync_core::input::MAX_COLS]; crate::LUA_PLAYERS]>,
     initial_turn_options: Option<[deadsync_gameplay::GameplayTurnOption; crate::LUA_PLAYERS]>,
+    spline_workspace: splines::Workspace,
     playback: bool,
     replay_frame: Option<(u64, f64)>,
     replay_dispatch: Option<song_immediate::Dispatch>,

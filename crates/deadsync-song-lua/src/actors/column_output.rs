@@ -1,13 +1,13 @@
 //! Typed observations for the production column spline and zoom-hide outputs.
 use super::super::song_column_output::{Scratch, State};
 use super::song_columns::{
-    Numeric, note_field, numeric, optional_integer, point, text, with_table,
+    Numeric, note_field, numeric, optional_integer, point, raw_numeric_point, text, with_table,
 };
 use super::*;
 use crate::SongLuaNoteHideWindow;
 use deadsync_gameplay::{
     SongLuaColumnSplineFrame as Frame, SongLuaSplineCoefficients as Coefficients,
-    SongLuaSplineData as Spline,
+    SongLuaSplineData as Spline, SongLuaSplinePointCoefficients as PointCoefficients,
 };
 
 impl Actors {
@@ -211,6 +211,34 @@ fn same_coefficients(a: &[[[f32; 4]; 3]], b: &[[[f32; 4]; 3]]) -> bool {
             .all(|(a, b)| a.to_bits() == b.to_bits())
 }
 
+fn read_coefficients(
+    call: &mut HostCall<'_>,
+    entry: Value,
+    values: [f32; 3],
+) -> Result<PointCoefficients, Error> {
+    let mut row = values.map(|a| [a, 0., 0., 0.]);
+    if entry == Value::Nil {
+        return Ok(row);
+    }
+    let entry_id = table(call, entry)?;
+    // Ordinary coefficient rows use only raw numeric reads, so they need no
+    // temporary roots. Root the row before the slow path can reenter Lua.
+    for (axis, coefficients) in row.iter_mut().enumerate() {
+        let axis_row = call.raw_table_get(entry_id, Value::Number((axis + 1) as f64))?;
+        let Some(axis_values) = raw_numeric_point(call, axis_row)? else {
+            return call.with_roots(&[entry], |call| {
+                let mut row = values.map(|a| [a, 0., 0., 0.]);
+                for (axis, coefficients) in row.iter_mut().enumerate() {
+                    coefficients[1..].copy_from_slice(&point(call, entry_id, axis + 1)?);
+                }
+                Ok(row)
+            });
+        };
+        coefficients[1..].copy_from_slice(&axis_values);
+    }
+    Ok(row)
+}
+
 fn read_spline(
     call: &mut HostCall<'_>,
     column: TableId,
@@ -270,19 +298,7 @@ fn read_spline(
                         for (index, values) in scratch.points.iter().enumerate() {
                             let entry =
                                 call.raw_table_get(encoded, Value::Number((index + 1) as f64))?;
-                            let coefficients = with_table(call, entry, |call, entry| {
-                                let mut row = values.map(|a| [a, 0., 0., 0.]);
-                                if let Some(entry) = entry {
-                                    for (axis, coefficients) in row.iter_mut().enumerate() {
-                                        coefficients[1..].copy_from_slice(&point(
-                                            call,
-                                            entry,
-                                            axis + 1,
-                                        )?);
-                                    }
-                                }
-                                Ok(row)
-                            })?;
+                            let coefficients = read_coefficients(call, entry, *values)?;
                             scratch.coefficients.push(coefficients);
                         }
                     } else {

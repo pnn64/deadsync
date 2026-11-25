@@ -64,6 +64,15 @@ fn convert(call: &mut HostCall<'_>) -> Result<(), Error> {
     stack.finish(1)
 }
 pub(super) fn numeric(call: &mut HostCall<'_>, value: Value, mode: Numeric) -> Result<f64, Error> {
+    if let Value::Number(number) = value {
+        match mode {
+            Numeric::Float => return Ok(number),
+            Numeric::Unsigned if (0.0..usize::MAX as f64).contains(&number) => {
+                return Ok((number as usize) as f64);
+            }
+            _ => {}
+        }
+    }
     let name: &[u8] = match mode {
         Numeric::Float => b"column_float",
         Numeric::Integer => b"column_integer",
@@ -119,10 +128,11 @@ pub(super) fn point(
     index: usize,
 ) -> Result<[f32; 3], Error> {
     let value = call.raw_table_get(points, Value::Number(index as f64))?;
-    with_table(call, value, |call, point| {
-        let Some(point) = point else {
-            return Ok([0.; 3]);
-        };
+    if let Some(point) = raw_numeric_point(call, value)? {
+        return Ok(point);
+    }
+    let point = table(call, value)?;
+    call.with_roots(&[value], |call| {
         let mut result = [0.; 3];
         for (axis, result) in result.iter_mut().enumerate() {
             let value = call.raw_table_get(point, Value::Number((axis + 1) as f64))?;
@@ -132,6 +142,27 @@ pub(super) fn point(
         }
         Ok(result)
     })
+}
+
+/// A raw row used by spline capture and Solve. No VM reentry is needed for
+/// ordinary numeric coordinates, so the owner already roots the whole row.
+pub(super) fn raw_numeric_point(call: &HostCall<'_>, value: Value) -> Result<Option<[f32; 3]>, Error> {
+    if value == Value::Nil {
+        return Ok(Some([0.; 3]));
+    }
+    let Value::Table(point) = value else {
+        return Ok(None);
+    };
+    let mut result = [0.; 3];
+    for (axis, result) in result.iter_mut().enumerate() {
+        let coordinate = call.raw_table_get(point, Value::Number((axis + 1) as f64))?;
+        match coordinate {
+            Value::Nil => {}
+            Value::Number(number) => *result = number as f32,
+            _ => return Ok(None),
+        }
+    }
+    Ok(Some(result))
 }
 fn spline_size(call: &mut HostCall<'_>, spline: TableId) -> Result<usize, Error> {
     let value = field(call, spline, SIZE)?;
