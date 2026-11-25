@@ -20,8 +20,8 @@ const fn table() -> [u32; 256] {
     }
     out
 }
-const fn tables() -> [[u32; 256]; 22] {
-    let mut out = [[0; 256]; 22];
+const fn tables() -> [[u32; 256]; 25] {
+    let mut out = [[0; 256]; 25];
     out[0] = table();
     let mut power = 1;
     while power < out.len() {
@@ -36,7 +36,7 @@ const fn tables() -> [[u32; 256]; 22] {
     }
     out
 }
-static TABLES: [[u32; 256]; 22] = tables();
+static TABLES: [[u32; 256]; 25] = tables();
 
 #[inline]
 pub(crate) fn update(crc: u32, bytes: &[u8]) -> u32 {
@@ -112,26 +112,31 @@ pub fn crc32(bytes: &[u8]) -> u32 {
     update(0, bytes)
 }
 
-const CAPTURE_CRC: u32 = {
-    let mut crc = u32::from_be_bytes(*b"OggS");
-    let mut count = 0;
-    while count < 26 {
+const CAPTURE_CRC: u32 = advance_zeros(u32::from_be_bytes(*b"OggS"), 26);
+
+const fn advance_zeros(mut crc: u32, bytes: usize) -> u32 {
+    let mut i = 0;
+    while i < bytes {
         crc = (crc << 8) ^ TABLES[0][(crc >> 24) as usize];
-        count += 1;
+        i += 1;
     }
     crc
-};
+}
 
 // The capture pattern is known. Input may stop after the lacing table.
 pub(crate) fn page_crc(bytes: &[u8]) -> u32 {
     let (header, tail) = bytes.split_first_chunk::<26>().unwrap();
     debug_assert!(header.starts_with(b"OggS"));
+    if let [a, b, c] = *tail {
+        // Fold the three tail bytes with the header, so the CRC needs no final update.
+        let mut crc = const { advance_zeros(CAPTURE_CRC, 3) };
+        header_crc(&mut crc, &header[4..22], &TABLES[7..25]);
+        return crc ^ TABLES[2][a as usize] ^ TABLES[1][b as usize] ^ TABLES[0][c as usize];
+    }
     // The fixed capture contributes a constant. The four zero checksum
     // bytes advance the table powers without contributing a remainder.
     let mut crc = CAPTURE_CRC;
-    for (&byte, table) in header[4..22].iter().zip(TABLES[4..].iter().rev()) {
-        crc ^= table[usize::from(byte)];
-    }
+    header_crc(&mut crc, &header[4..22], &TABLES[4..22]);
     update(crc, tail)
 }
 
