@@ -169,26 +169,28 @@ pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> R
     Ok(())
 }
 
-static ONE_BIT_SAMPLES: [[u8; 8]; 256] = {
-    let mut table = [[0; 8]; 256];
+static ONE_BIT_SAMPLES: [[u8; 8]; 256] = packed_samples::<8, 1>();
+static TWO_BIT_SAMPLES: [[u8; 4]; 256] = packed_samples::<4, 2>();
+
+const fn packed_samples<const N: usize, const DEPTH: u8>() -> [[u8; N]; 256] {
+    let mut table = [[0; N]; 256];
     let mut byte = 0;
     while byte < 256 {
         let mut lane = 0;
-        while lane < 8 {
-            table[byte][lane] = ((byte >> (7 - lane)) & 1) as u8;
+        while lane < N {
+            let shift = 8 - (lane + 1) * DEPTH as usize;
+            table[byte][lane] = ((byte >> shift) & ((1 << DEPTH) - 1)) as u8;
             lane += 1;
         }
         byte += 1;
     }
     table
-};
+}
 
 pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8], step: usize) {
     match DEPTH {
         1 => unpack_groups::<8>(row, out, step, |byte| ONE_BIT_SAMPLES[usize::from(byte)]),
-        2 => unpack_groups::<4>(row, out, step, |byte| {
-            [byte >> 6, (byte >> 4) & 3, (byte >> 2) & 3, byte & 3]
-        }),
+        2 => unpack_groups::<4>(row, out, step, |byte| TWO_BIT_SAMPLES[usize::from(byte)]),
         4 => unpack_groups::<2>(row, out, step, |byte| [byte >> 4, byte & 15]),
         _ => unreachable!("validated packed PNG depth"),
     }
