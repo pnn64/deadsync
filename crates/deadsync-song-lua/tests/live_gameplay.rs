@@ -52,7 +52,7 @@ fn game_for_style(dir: &Path, style: game::GameplayInputPlayStyle) -> Game {
     let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&p, 0.).unwrap());
     let mut chart = song.charts[0].clone();
     let mut data =
-        deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.)
+        paths::load_gameplay_charts(&song, &[0], 0.)
             .unwrap()
             .remove(0);
     if style.is_routine() {

@@ -18,6 +18,18 @@ pub struct RuntimeSongConfig {
     pub capture_debug_logs: bool,
 }
 
+impl RuntimeSongConfig {
+    #[must_use]
+    pub fn new(fastload: bool, cachesongs: bool, global_offset_seconds: f32) -> Self {
+        Self {
+            fastload,
+            cachesongs,
+            global_offset_seconds,
+            capture_debug_logs: log::log_enabled!(log::Level::Debug),
+        }
+    }
+}
+
 fn simfile_group_name(simfile_path: &Path) -> Option<&str> {
     simfile_path
         .parent()
@@ -52,11 +64,8 @@ pub fn gameplay_chart_load_options<'a>(
 }
 
 pub fn sync_analysis_chart_load_options<'a>(
-    _song: &SongData,
     cache_dir: &'a Path,
     parse_options: &'a ParseSongOptions,
-    _config: RuntimeSongConfig,
-    _group_is_never_cached: impl FnMut(&str) -> bool,
 ) -> GameplayChartLoadOptions<'a> {
     // Sync analysis must observe a just-saved #OFFSET even when FastLoad is enabled.
     // Parsing the simfile is cheap compared with decoding and analyzing its audio,
@@ -95,17 +104,9 @@ pub fn load_sync_analysis_chart_runtime(
     chart_ix: usize,
     cache_dir: &Path,
     parse_options: &ParseSongOptions,
-    config: RuntimeSongConfig,
-    group_is_never_cached: impl FnMut(&str) -> bool,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<GameplayChartLoadResult, String> {
-    let options = sync_analysis_chart_load_options(
-        song,
-        cache_dir,
-        parse_options,
-        config,
-        group_is_never_cached,
-    );
+    let options = sync_analysis_chart_load_options(cache_dir, parse_options);
     load_sync_analysis_chart_with_options(song, chart_ix, &options, music_len)
 }
 

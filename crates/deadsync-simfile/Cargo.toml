@@ -9,7 +9,6 @@ arrayvec = "0.7.8"
 bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 deadlib-audio-decode = { path = "../deadlib-audio-decode" }
 deadsync-chart = { path = "../deadsync-chart" }
-deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
 image = "0.25.10"

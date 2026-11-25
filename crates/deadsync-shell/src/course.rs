@@ -27,7 +27,7 @@ pub fn renew_endless_cycle(course: &mut CourseRunState, chart_type: &str) -> boo
     match course.run.append_endless_cycle(
         source.next_cycle(),
         chart_type,
-        deadsync_simfile::app_runtime::load_gameplay_charts,
+        crate::song_loading::load_gameplay_charts,
     ) {
         Ok(appended) => appended,
         Err(error) => {
@@ -44,7 +44,7 @@ pub fn build_course_run_from_selection(
     match build_course_run_from_selection_with_loader(
         start,
         chart_type,
-        deadsync_simfile::app_runtime::load_gameplay_charts,
+        crate::song_loading::load_gameplay_charts,
     ) {
         Ok(course) => course,
         Err(error) => {

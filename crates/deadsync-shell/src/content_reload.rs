@@ -1,3 +1,4 @@
+use crate::song_loading;
 use deadsync_assets::progress::{ContentReloadEvent, ContentReloadPhase};
 use deadsync_assets::progress::{LibraryLoadProgress, LibraryLoadView};
 use deadsync_config as config;
@@ -198,8 +199,11 @@ impl Service {
             };
             deadsync_simfile::app_runtime::reload_song_dirs_with_progress_counts(
                 &songs_root,
+                song_loading::additional_song_roots(),
+                song_loading::scan_options(),
                 &pack_dirs,
                 &mut on_song,
+                config::runtime::group_is_never_cached,
             );
             analyze_replaygain(&tx, Some(&pack_dirs), audio_available);
             send_finished(&tx);
@@ -263,8 +267,11 @@ fn scan_library(
     };
     deadsync_simfile::app_runtime::scan_and_load_songs_with_progress_counts(
         songs_root,
+        song_loading::additional_song_roots(),
+        song_loading::scan_options(),
         mode,
         &mut on_song,
+        config::runtime::group_is_never_cached,
     );
 
     let _ = tx.send(ContentReloadEvent::Phase(ContentReloadPhase::Courses));
@@ -288,6 +295,7 @@ fn scan_library(
     deadsync_simfile::app_runtime::scan_and_load_courses_with_progress_counts(
         courses_root,
         songs_root,
+        song_loading::additional_song_roots(),
         &mut on_course,
     );
 }
@@ -640,7 +648,7 @@ fn finished_event() -> ContentReloadEvent {
 }
 
 pub(crate) fn reload_song(path: &Path) -> Result<Vec<deadsync_chart::SongPack>, String> {
-    deadsync_simfile::app_runtime::reload_song_in_cache(path)?;
+    song_loading::reload_song_in_cache(path)?;
     Ok(deadsync_simfile::runtime_cache::get_song_cache().clone())
 }
 

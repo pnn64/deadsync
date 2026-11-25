@@ -36,8 +36,14 @@ fn main() {
         Arc::new(song.charts[index].clone()),
         Arc::new(song.charts[index].clone()),
     ];
-    let payloads =
-        deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[index, index], 0.0).unwrap();
+    let cfg = deadsync_config::runtime::get();
+    let payloads = deadsync_simfile::app_runtime::load_gameplay_charts(
+        &song,
+        &[index, index],
+        deadsync_simfile::runtime::RuntimeSongConfig::new(cfg.fastload, cfg.cachesongs, 0.0),
+        deadsync_config::runtime::group_is_never_cached,
+    )
+    .unwrap();
     let mut profiles = [
         deadsync_profile::Profile::default(),
         deadsync_profile::Profile::default(),

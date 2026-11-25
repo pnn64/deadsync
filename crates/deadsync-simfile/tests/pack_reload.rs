@@ -60,7 +60,7 @@ fn downloaded_pack_reload_refreshes_changed_charts_with_fastload_enabled() {
                 global_offset_seconds: config.global_offset_seconds,
                 song_parsing_threads: threads,
             },
-            requested_threads: threads as u8,
+            requested_threads: threads,
         };
         let process = |scratch: &mut SongParseScratch, path, fastload, cachesongs, offset| {
             let (song, hit, _) = load_song_for_scan_runtime_in(

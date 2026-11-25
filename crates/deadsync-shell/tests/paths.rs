@@ -15,6 +15,8 @@ fn startup_supplies_isolated_paths_to_persistence_assets_and_scanning() {
     std::fs::create_dir_all(overlay.parent().expect("asset parent")).expect("create overlay root");
     std::fs::write(&overlay, b"overlay").expect("write asset fixture");
     std::fs::create_dir_all(dirs.songs_dir()).expect("create isolated song root");
+    let additional_songs = data.join("additional-songs");
+    std::fs::create_dir_all(&additional_songs).expect("create additional song root");
 
     deadsync_shell::app::init_paths(&dirs).expect("initialize application services");
     assert!(!deadsync_config::runtime_load::bootstrap_log_to_file());
@@ -27,10 +29,12 @@ fn startup_supplies_isolated_paths_to_persistence_assets_and_scanning() {
         deadsync_assets::resolve_asset_path("assets/startup-path-test.txt"),
         overlay
     );
-    assert!(
-        deadsync_simfile::app_runtime::collect_song_scan_roots(&dirs.songs_dir())
-            .contains(&dirs.songs_dir())
+    let song_roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
+        &dirs.songs_dir(),
+        vec![("additional-songs".into(), additional_songs.clone())],
     );
+    assert_eq!(song_roots.first(), Some(&dirs.songs_dir()));
+    assert!(song_roots.contains(&additional_songs));
 
     deadsync_config::runtime::queue_save_write("[Options]\nShowConsole=0\n".to_owned());
     deadsync_config::runtime::flush_pending_saves();

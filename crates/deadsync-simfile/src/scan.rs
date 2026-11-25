@@ -74,7 +74,7 @@ pub struct RuntimeSongScanInput {
     pub song_roots: Vec<PathBuf>,
     pub cache_dir: PathBuf,
     pub load_options: SongLoadOptions,
-    pub requested_threads: u8,
+    pub requested_threads: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -84,7 +84,7 @@ pub struct RuntimeSongScanEnv {
     pub additional_song_roots: Vec<(String, PathBuf)>,
     pub cache_dir: PathBuf,
     pub load_options: SongLoadOptions,
-    pub requested_threads: u8,
+    pub requested_threads: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -144,7 +144,7 @@ pub enum RuntimeSongScanEvent {
     },
     UsedParallel {
         parse_threads: usize,
-        requested_threads: u8,
+        requested_threads: u32,
     },
     FinishedScan {
         packs: usize,

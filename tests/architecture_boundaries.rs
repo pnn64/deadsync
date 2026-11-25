@@ -6262,6 +6262,21 @@ fn select_music_uses_shell_prepared_paths_and_playlists() {
 }
 
 #[test]
+fn simfile_takes_load_settings_from_its_callers() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let simfile = root.join("crates/deadsync-simfile");
+    let manifest = read_source(simfile.join("Cargo.toml")).expect("simfile manifest");
+    assert!(!manifest.contains("deadsync-config"));
+    for file in production_rust_files(&simfile.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadsync_config"),
+            "{} reads application settings",
+            file.display()
+        );
+    }
+}
+
+#[test]
 fn content_reload_execution_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = read_source(

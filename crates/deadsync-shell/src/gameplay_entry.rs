@@ -152,7 +152,7 @@ mod tests {
         let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap();
         let chart = Arc::new(song.charts[0].clone());
         let charts = [chart.clone(), chart];
-        let loaded = deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap();
+        let loaded = crate::song_loading::load_gameplay_charts(&song, &[0], 0.0).unwrap();
         let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
         let session = deadsync_gameplay::GameplaySession::default();
@@ -244,7 +244,7 @@ mod tests {
                 ..Default::default()
             };
             let mut charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
-            let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+            let payload = Arc::new(crate::song_loading::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
             let mut payloads = [payload.clone(), payload];
             let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
             let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
@@ -304,7 +304,7 @@ mod tests {
         let song = deadsync_simfile::app_runtime::parse_song_for_test(&path, 0.0).unwrap();
         let chart = Arc::new(song.charts[0].clone());
         let payload = Arc::new(
-            deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0)
+            crate::song_loading::load_gameplay_charts(&song, &[0], 0.0)
                 .unwrap()
                 .remove(0),
         );

@@ -612,7 +612,7 @@ pub(crate) mod tests {
             .position(|chart| chart.difficulty.eq_ignore_ascii_case("challenge"))
             .unwrap_or(0);
         let gameplay_chart = Arc::new(
-            deadsync_simfile::app_runtime::load_gameplay_charts(
+            crate::song_loading::load_gameplay_charts(
                 &song, &[chart_ix], config.global_offset_seconds,
             )
                 .expect("generated gameplay fixture chart should load")
@@ -8634,7 +8634,7 @@ return Def.ActorFrame{}
                     .position(|chart| chart.difficulty.eq_ignore_ascii_case("challenge"))
                     .unwrap_or(0);
                 let gameplay_chart = Arc::new(
-                    deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[chart_ix], 0.0)
+                    crate::song_loading::load_gameplay_charts(&song, &[chart_ix], 0.0)
                         .expect("generated lua gameplay chart should load")
                         .remove(0),
                 );

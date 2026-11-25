@@ -47,7 +47,7 @@ fn library_reload_refreshes_added_and_removed_music_with_fastload_enabled() {
                 global_offset_seconds: 0.0,
                 song_parsing_threads: threads,
             },
-            requested_threads: threads as u8,
+            requested_threads: threads,
         };
         let scan = |mode| {
             let mut stats = None;

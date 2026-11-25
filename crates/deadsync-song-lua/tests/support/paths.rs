@@ -40,3 +40,25 @@ pub(crate) fn init_paths() {
         .expect("initialize fixture scanning");
     });
 }
+
+#[allow(
+    dead_code,
+    reason = "some fixture suites only need path initialization"
+)]
+pub(crate) fn load_gameplay_charts(
+    song: &deadsync_chart::SongData,
+    chart_indices: &[usize],
+    global_offset_seconds: f32,
+) -> Result<Vec<deadsync_chart::GameplayChartData>, String> {
+    let cfg = deadsync_config::runtime::get();
+    deadsync_simfile::app_runtime::load_gameplay_charts(
+        song,
+        chart_indices,
+        deadsync_simfile::runtime::RuntimeSongConfig::new(
+            cfg.fastload,
+            cfg.cachesongs,
+            global_offset_seconds,
+        ),
+        deadsync_config::runtime::group_is_never_cached,
+    )
+}

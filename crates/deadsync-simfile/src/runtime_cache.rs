@@ -1,6 +1,5 @@
 use deadsync_chart::song::{standard_difficulty_index, sync_pref_offset};
 use deadsync_chart::{SongData, SongPack, SyncPref};
-use deadsync_config::app_config::Config;
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -158,15 +157,6 @@ pub fn pack_sync_offset_for_song(
 ) -> f32 {
     let song_cache = get_song_cache();
     pack_sync_offset_for_song_in_packs(song, song_cache.as_slice(), enabled, default_sync_pref)
-}
-
-#[must_use]
-pub fn pack_sync_offset_for_song_config(song: &SongData, cfg: &Config) -> f32 {
-    pack_sync_offset_for_song(
-        song,
-        cfg.machine_pack_ini_offsets,
-        cfg.machine_default_sync_offset.sync_pref(),
-    )
 }
 
 #[must_use]

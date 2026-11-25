@@ -68,7 +68,7 @@ fn game_for_style(dir: &Path, style: game::GameplayInputPlayStyle, notes: &str) 
     let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&path, 0.).unwrap());
     let chart = Arc::new(song.charts[0].clone());
     let data = Arc::new(
-        deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.)
+        paths::load_gameplay_charts(&song, &[0], 0.)
             .unwrap()
             .remove(0),
     );

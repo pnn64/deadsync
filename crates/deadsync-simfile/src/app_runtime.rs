@@ -11,8 +11,8 @@ use crate::runtime::{
 use crate::scan::{
     RuntimeCourseScanEnv, RuntimeScanAdapterEvent, RuntimeScanLogEntry, RuntimeScanLogLevel,
     RuntimeSongScanEnv, SongLoadOptions, SongScanMode, SongScanRootEvent,
-    reload_song_dirs_with_progress_counts_runtime, runtime_collect_song_scan_roots,
-    runtime_song_scan_log_entry, scan_and_load_courses_with_progress_counts_runtime,
+    reload_song_dirs_with_progress_counts_runtime, runtime_song_scan_log_entry,
+    scan_and_load_courses_with_progress_counts_runtime,
     scan_and_load_songs_with_progress_counts_runtime,
 };
 use crate::song::{ParseSongOptions, SongAnalyzer, SongParseScratch};
@@ -50,12 +50,15 @@ fn paths() -> &'static ScanPaths {
 
 pub fn scan_and_load_songs_with_progress_counts<F>(
     root_path: &Path,
+    additional_song_roots: Vec<(String, PathBuf)>,
+    load_options: SongLoadOptions,
     mode: SongScanMode,
     progress: &mut F,
+    group_is_never_cached: impl Fn(&str) -> bool,
 ) where
     F: FnMut(usize, usize, &str, &str),
 {
-    let env = song_scan_env(root_path);
+    let env = song_scan_env(root_path, additional_song_roots, load_options);
     let cache_dir = env.cache_dir.clone();
     let parse_options = parse_song_options();
     let analyzer = SongAnalyzer::new(&parse_options);
@@ -74,19 +77,22 @@ pub fn scan_and_load_songs_with_progress_counts<F>(
             };
             load_song_for_scan(path, config, &cache_dir, &parse_options, &analyzer, scratch)
         },
-        deadsync_config::runtime::group_is_never_cached,
+        group_is_never_cached,
         emit_scan_adapter_log,
     );
 }
 
 pub fn reload_song_dirs_with_progress_counts<F>(
     root_path: &Path,
+    additional_song_roots: Vec<(String, PathBuf)>,
+    load_options: SongLoadOptions,
     dirs: &[PathBuf],
     progress: &mut F,
+    group_is_never_cached: impl Fn(&str) -> bool,
 ) where
     F: FnMut(usize, usize, &str, &str),
 {
-    let env = song_scan_env(root_path);
+    let env = song_scan_env(root_path, additional_song_roots, load_options);
     let cache_dir = env.cache_dir.clone();
     let parse_options = parse_song_options();
     let analyzer = SongAnalyzer::new(&parse_options);
@@ -105,7 +111,7 @@ pub fn reload_song_dirs_with_progress_counts<F>(
             };
             load_song_for_scan(path, config, &cache_dir, &parse_options, &analyzer, scratch)
         },
-        deadsync_config::runtime::group_is_never_cached,
+        group_is_never_cached,
         emit_scan_adapter_log,
     );
 }
@@ -113,34 +119,50 @@ pub fn reload_song_dirs_with_progress_counts<F>(
 pub fn scan_and_load_courses_with_progress_counts<F>(
     courses_root: &Path,
     songs_root: &Path,
+    additional_song_roots: Vec<(String, PathBuf)>,
     progress: &mut F,
 ) where
     F: FnMut(usize, usize, &str, &str),
 {
     scan_and_load_courses_with_progress_counts_runtime(
-        course_scan_env(courses_root, songs_root),
+        course_scan_env(courses_root, songs_root, additional_song_roots),
         progress,
         emit_scan_adapter_log,
     );
 }
 
-pub fn collect_song_scan_roots(root_path: &Path) -> Vec<PathBuf> {
-    runtime_collect_song_scan_roots(&song_scan_env(root_path), emit_scan_adapter_log)
+pub fn collect_song_scan_roots(
+    root_path: &Path,
+    additional_song_roots: Vec<(String, PathBuf)>,
+) -> Vec<PathBuf> {
+    let report = crate::scan::collect_song_scan_roots(
+        root_path,
+        existing_roots(&paths().extra_songs),
+        additional_song_roots,
+    );
+    for event in report.events {
+        emit_song_root_log(event);
+    }
+    report.roots
 }
 
 /// Re-parse one simfile and replace its in-memory song-cache entry.
 ///
 /// This is used after writing sync edits to disk so immediate replays use the
 /// updated timing without a full songs rescan.
-pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String> {
+pub fn reload_song_in_cache(
+    simfile_path: &Path,
+    config: RuntimeSongConfig,
+    group_is_never_cached: impl FnMut(&str) -> bool,
+) -> Result<Arc<SongData>, String> {
     let cache_dir = &paths().song_cache;
     let parse_options = parse_song_options();
     reload_song_in_cache_runtime(
         simfile_path,
         cache_dir,
         &parse_options,
-        runtime_song_config(),
-        deadsync_config::runtime::group_is_never_cached,
+        config,
+        group_is_never_cached,
         compute_music_length_seconds,
         emit_runtime_song_load_log,
     )
@@ -150,42 +172,34 @@ fn existing_roots(roots: &[PathBuf]) -> Vec<PathBuf> {
     roots.iter().filter(|path| path.is_dir()).cloned().collect()
 }
 
-fn song_scan_env(root_path: &Path) -> RuntimeSongScanEnv {
-    let config = deadsync_config::runtime::get();
+fn song_scan_env(
+    root_path: &Path,
+    additional_song_roots: Vec<(String, PathBuf)>,
+    load_options: SongLoadOptions,
+) -> RuntimeSongScanEnv {
     RuntimeSongScanEnv {
         base_root: root_path.to_path_buf(),
         extra_song_roots: existing_roots(&paths().extra_songs),
-        additional_song_roots: additional_song_roots(),
+        additional_song_roots,
         cache_dir: paths().song_cache.clone(),
-        load_options: SongLoadOptions {
-            fastload: config.fastload,
-            cachesongs: config.cachesongs,
-            global_offset_seconds: config.global_offset_seconds,
-            song_parsing_threads: u32::from(config.song_parsing_threads),
-        },
-        requested_threads: config.song_parsing_threads,
+        load_options,
+        requested_threads: load_options.song_parsing_threads,
     }
 }
 
-fn course_scan_env(courses_root: &Path, songs_root: &Path) -> RuntimeCourseScanEnv {
+fn course_scan_env(
+    courses_root: &Path,
+    songs_root: &Path,
+    additional_song_roots: Vec<(String, PathBuf)>,
+) -> RuntimeCourseScanEnv {
     RuntimeCourseScanEnv {
         courses_root: courses_root.to_path_buf(),
         songs_root: songs_root.to_path_buf(),
         extra_course_roots: existing_roots(&paths().extra_courses),
         extra_song_roots: existing_roots(&paths().extra_songs),
-        additional_song_roots: additional_song_roots(),
+        additional_song_roots,
         autogen_courses_root: paths().autogen_courses.clone(),
     }
-}
-
-fn additional_song_roots() -> Vec<(String, PathBuf)> {
-    deadsync_config::runtime::additional_song_folder_roots()
-        .into_iter()
-        .map(|folder| {
-            let path = PathBuf::from(folder.path.as_str());
-            (folder.path, path)
-        })
-        .collect()
 }
 
 fn emit_scan_adapter_log(event: RuntimeScanAdapterEvent) {
@@ -225,7 +239,8 @@ fn emit_scan_log(entry: RuntimeScanLogEntry) {
 pub fn load_gameplay_charts(
     song: &SongData,
     requested_chart_ixs: &[usize],
-    global_offset_seconds: f32,
+    config: RuntimeSongConfig,
+    group_is_never_cached: impl FnMut(&str) -> bool,
 ) -> Result<Vec<GameplayChartData>, String> {
     let cache_dir = &paths().song_cache;
     let parse_options = parse_song_options();
@@ -234,11 +249,8 @@ pub fn load_gameplay_charts(
         requested_chart_ixs,
         cache_dir,
         &parse_options,
-        RuntimeSongConfig {
-            global_offset_seconds,
-            ..runtime_song_config()
-        },
-        deadsync_config::runtime::group_is_never_cached,
+        config,
+        group_is_never_cached,
         compute_music_length_seconds,
     )?;
     log_gameplay_chart_load(song, &result.report);
@@ -256,8 +268,6 @@ pub fn load_sync_analysis_chart(
         chart_ix,
         cache_dir,
         &parse_options,
-        runtime_song_config(),
-        deadsync_config::runtime::group_is_never_cached,
         compute_music_length_seconds,
     )?;
     log_gameplay_chart_load(song, &result.report);
@@ -270,23 +280,29 @@ pub fn load_sync_analysis_chart(
 /// Called during song preparation, before the gameplay Lua VM is compiled.
 pub fn load_chart_timings(
     song: &SongData,
-    global_offset_seconds: f32,
+    config: RuntimeSongConfig,
+    group_is_never_cached: impl FnMut(&str) -> bool,
 ) -> Result<Vec<deadsync_rules::timing::TimingData>, String> {
-    Ok(load_chart_timing_and_notes(song, global_offset_seconds)?
-        .into_iter()
-        .map(|(timing, _, _)| timing)
-        .collect())
+    Ok(
+        load_chart_timing_and_notes(song, config, group_is_never_cached)?
+            .into_iter()
+            .map(|(timing, _, _)| timing)
+            .collect(),
+    )
 }
 
 pub fn load_chart_timing_and_notes(
     song: &SongData,
-    global_offset_seconds: f32,
+    config: RuntimeSongConfig,
+    group_is_never_cached: impl FnMut(&str) -> bool,
 ) -> Result<Vec<(deadsync_rules::timing::TimingData, Vec<u8>, Vec<f32>)>, String> {
     let parse_options = parse_song_options();
     let options = crate::runtime::gameplay_chart_load_options(
-        song, &paths().song_cache, &parse_options,
-        RuntimeSongConfig { global_offset_seconds, ..runtime_song_config() },
-        deadsync_config::runtime::group_is_never_cached,
+        song,
+        &paths().song_cache,
+        &parse_options,
+        config,
+        group_is_never_cached,
     );
     let started = std::time::Instant::now();
     let timings =
@@ -392,16 +408,6 @@ fn parse_song_options() -> ParseSongOptions {
     )
 }
 
-fn runtime_song_config() -> RuntimeSongConfig {
-    let config = deadsync_config::runtime::get();
-    RuntimeSongConfig {
-        fastload: config.fastload,
-        cachesongs: config.cachesongs,
-        global_offset_seconds: config.global_offset_seconds,
-        capture_debug_logs: log::log_enabled!(log::Level::Debug),
-    }
-}
-
 /// Computes the length of the music file in seconds when the decode layer supports it.
 /// Returns 0.0 on failure or if no music path is provided.
 fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
@@ -421,5 +427,59 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
             warn!("Failed to compute audio length for {path:?}: {e}");
             0.0
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn chart_load_uses_the_supplied_cache_policy_and_timing_offset() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("deadsync-load-{}-{nanos}", std::process::id()));
+        let simfile = root.join("Songs/Test Pack/Test Song/chart.sm");
+        fs::create_dir_all(simfile.parent().unwrap()).unwrap();
+        let source = "#TITLE:Chart;#OFFSET:0;#BPMS:0=120;#NOTES:dance-single::Hard:9:0,0,0,0,0:\n1000\n0100\n0010\n0001\n;";
+        fs::write(&simfile, source).unwrap();
+        let cache_dir = root.join("cache");
+        init_paths(ScanPaths {
+            song_cache: cache_dir.clone(),
+            extra_songs: Vec::new(),
+            extra_courses: Vec::new(),
+            autogen_courses: root.join("Courses"),
+            song_movies: Vec::new(),
+            random_movies: Vec::new(),
+            bg_animations: Vec::new(),
+        })
+        .unwrap();
+        let song = parse_song_for_test(&simfile, 0.0).unwrap();
+        let cache_path = crate::cache::song_cache_path(&cache_dir, &simfile).unwrap();
+        let config = RuntimeSongConfig::new(true, true, 0.25);
+
+        let uncached =
+            load_gameplay_charts(&song, &[0], config, |pack| pack == "Test Pack").unwrap();
+        assert!(!cache_path.exists());
+        assert_eq!(uncached[0].timing.get_time_for_beat(0.0), -0.25);
+
+        load_gameplay_charts(&song, &[0], config, |_| false).unwrap();
+        assert!(cache_path.is_file());
+        fs::write(&simfile, source.replace("0=120", "0=240")).unwrap();
+
+        let timings =
+            load_chart_timings(&song, RuntimeSongConfig::new(true, true, 0.5), |_| false).unwrap();
+        assert_eq!(timings[0].get_time_for_beat(0.0), -0.5);
+        assert_eq!(timings[0].get_time_for_beat(1.0), 0.0);
+
+        let analysis = load_sync_analysis_chart(&song, 0).unwrap();
+        assert_eq!(analysis.timing.get_time_for_beat(0.0), 0.0);
+        assert_eq!(analysis.timing.get_time_for_beat(1.0), 0.25);
+        fs::remove_dir_all(root).unwrap();
     }
 }

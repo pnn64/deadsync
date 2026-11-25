@@ -1872,7 +1872,6 @@ dependencies = [
  "deadlib-audio-decode",
  "deadlib-bincode",
  "deadsync-chart",
- "deadsync-config",
  "deadsync-core",
  "deadsync-rules",
  "image",

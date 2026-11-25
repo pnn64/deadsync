@@ -391,7 +391,7 @@ fn manual_player_compositor_matches_native_geometry() {
     let chart = Arc::new(song.charts[0].clone());
     let charts = [chart.clone(), chart];
     let gameplay_chart = Arc::new(
-        deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0)
+        crate::tests::load_gameplay_charts(&song, &[0], 0.0)
             .unwrap()
             .remove(0),
     );
@@ -13703,7 +13703,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
     let chart = Arc::new(song.charts[0].clone());
     let charts = [chart.clone(), chart];
     let gameplay_chart = Arc::new(
-        deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0)
+        crate::tests::load_gameplay_charts(&song, &[0], 0.0)
             .unwrap()
             .remove(0),
     );

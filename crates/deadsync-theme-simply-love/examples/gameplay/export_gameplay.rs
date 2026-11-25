@@ -456,8 +456,15 @@ fn sample_state(
         _ => return Err(format!("invalid layout {layout}").into()),
     };
     let chart_index = usize::from(play_style == GameplayInputPlayStyle::Double);
+    let cfg = deadsync_config::runtime::get();
     let payload = Arc::new(
-        deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[chart_index], 0.0)?.remove(0),
+        deadsync_simfile::app_runtime::load_gameplay_charts(
+            &song,
+            &[chart_index],
+            deadsync_simfile::runtime::RuntimeSongConfig::new(cfg.fastload, cfg.cachesongs, 0.0),
+            deadsync_config::runtime::group_is_never_cached,
+        )?
+        .remove(0),
     );
     let chart = Arc::new(song.charts[chart_index].clone());
     let joined = match layout {

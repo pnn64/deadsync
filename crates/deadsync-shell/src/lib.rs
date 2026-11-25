@@ -53,6 +53,7 @@ mod select_music;
 mod session;
 mod session_results;
 mod smx_config;
+mod song_loading;
 mod song_search;
 mod stutter_diag;
 mod sync_analysis;

@@ -425,9 +425,15 @@ pub fn song_lua_context(
     // The screen owns the first clocked Update(0), after audio is initialized.
     context.defer_initial_live_update = live;
     context.screen_loading = live;
+    let cfg = deadsync_config::runtime::get();
     let inputs = deadsync_simfile::app_runtime::load_chart_timing_and_notes(
         song,
-        config.global_offset_seconds,
+        deadsync_simfile::runtime::RuntimeSongConfig::new(
+            cfg.fastload,
+            cfg.cachesongs,
+            config.global_offset_seconds,
+        ),
+        deadsync_config::runtime::group_is_never_cached,
     )?;
     let sync_offset = if config.machine_pack_ini_offsets {
         deadsync_chart::song::sync_pref_offset(

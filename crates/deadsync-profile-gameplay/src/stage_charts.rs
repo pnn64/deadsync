@@ -8,6 +8,7 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::stage_charts::{self, GameplayChartEntryPlan, lua_reload_chart_indices};
 use deadsync_gameplay::{GameplayInputPlayStyle, GameplaySession};
 use deadsync_profile::{PlayStyle, PlayerSide};
+use deadsync_simfile::runtime::RuntimeSongConfig;
 use std::sync::Arc;
 
 /// Resolve primary backgrounds using the final stage's master chart.
@@ -146,8 +147,13 @@ pub fn apply_stage_chart_reload(
         selected_session.play_style = play_style;
     }
     let indices = lua_reload_chart_indices(song, reload.steps, selected_session.play_style)?;
-    let loaded =
-        deadsync_simfile::app_runtime::load_gameplay_charts(song, &indices, global_offset_seconds)?;
+    let cfg = deadsync_config::runtime::get();
+    let loaded = deadsync_simfile::app_runtime::load_gameplay_charts(
+        song,
+        &indices,
+        RuntimeSongConfig::new(cfg.fastload, cfg.cachesongs, global_offset_seconds),
+        deadsync_config::runtime::group_is_never_cached,
+    )?;
     let selected_payloads = stage_charts::take_player_charts(loaded);
     let selected_charts =
         std::array::from_fn(|player| Arc::new(song.charts[indices[player]].clone()));

@@ -219,7 +219,7 @@ pub(crate) fn init_view(dirs: &deadsync_config::dirs::AppDirs) -> SelectMusicIni
     let cfg = config::runtime::get();
     let session = session_view();
     SelectMusicInitView {
-        song_scan_roots: deadsync_simfile::app_runtime::collect_song_scan_roots(&songs_root),
+        song_scan_roots: crate::song_loading::collect_song_scan_roots(&songs_root),
         song_packs: deadsync_simfile::runtime_cache::get_song_cache().clone(),
         songs_root,
         courses_root: dirs.courses_dir(),

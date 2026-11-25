@@ -97,6 +97,7 @@ use crate::restart::{
 };
 use crate::runtime::ShellState;
 use crate::screen_flow::evaluation_summary_return_to;
+use crate::song_loading;
 pub use crate::session::SessionState;
 use crate::session_results::{
     fill_stage_indices, post_select_display_stage_count, post_select_display_stages,
@@ -138,7 +139,7 @@ use deadsync_profile_gameplay::{
     gameplay_config_from_config, gameplay_play_style_from_profile,
     gameplay_player_side_from_profile, gameplay_tick_mode_from_profile,
 };
-use deadsync_simfile::{app_runtime as song_loading, sync_offset};
+use deadsync_simfile::sync_offset;
 use deadsync_theme_simply_love::color;
 use deadsync_theme_simply_love::views::{
     BookkeepingView, OptionsInitView,
@@ -2755,7 +2756,7 @@ impl App {
         let Some(group_name) = content_browser::wanted_pack_check(state) else {
             return;
         };
-        let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(&self.dirs.songs_dir());
+        let roots = song_loading::collect_song_scan_roots(&self.dirs.songs_dir());
         let result = crate::content_reload::writable_pack(
             &group_name,
             &roots,
@@ -2785,7 +2786,7 @@ impl App {
                 Err(error),
             );
         };
-        let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(&self.dirs.songs_dir());
+        let roots = song_loading::collect_song_scan_roots(&self.dirs.songs_dir());
         let pack = match crate::content_reload::writable_pack(
             &group_name,
             &roots,
@@ -2893,7 +2894,7 @@ impl App {
             );
         };
 
-        let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(&self.dirs.songs_dir());
+        let roots = song_loading::collect_song_scan_roots(&self.dirs.songs_dir());
         let recorded = crate::content_reload::writable_pack(
             &group_name,
             &roots,
@@ -6121,9 +6122,7 @@ impl App {
                             let config = config::runtime::get();
                             let result = if config.allow_song_deletion {
                                 let songs_root = self.dirs.songs_dir();
-                                let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
-                                    &songs_root,
-                                );
+                                let roots = song_loading::collect_song_scan_roots(&songs_root);
                                 crate::content_reload::delete_song(&simfile_path, &roots)
                             } else {
                                 Err("AllowSongDeletion is disabled".to_owned())
@@ -6150,8 +6149,7 @@ impl App {
                         // keeps its own rules about what it may remove.
                         ContentRequest::DeletePack { group_name } => {
                             let songs_root = self.dirs.songs_dir();
-                            let roots =
-                                deadsync_simfile::app_runtime::collect_song_scan_roots(&songs_root);
+                            let roots = song_loading::collect_song_scan_roots(&songs_root);
                             let result = crate::content_reload::delete_pack(
                                 &group_name,
                                 &roots,
@@ -6183,9 +6181,8 @@ impl App {
                             );
                         }
                         ContentRequest::SetPackSync { group_name, itg } => {
-                            let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
-                                &self.dirs.songs_dir(),
-                            );
+                            let roots =
+                                song_loading::collect_song_scan_roots(&self.dirs.songs_dir());
                             let result = crate::content_reload::set_pack_sync(
                                 &group_name,
                                 itg,
@@ -6227,9 +6224,8 @@ impl App {
                             // Proved again before any simfile is measured for
                             // saving: a pack the review could save into but
                             // not record would end up shifted twice.
-                            let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
-                                &self.dirs.songs_dir(),
-                            );
+                            let roots =
+                                song_loading::collect_song_scan_roots(&self.dirs.songs_dir());
                             if let Err(error) = crate::content_reload::writable_pack(
                                 &group_name,
                                 &roots,
@@ -9906,10 +9902,7 @@ impl App {
                 self.state.play_input_policy = InputRoutePolicy::from_config(&cfg);
                 let global_offset_seconds = cfg.global_offset_seconds;
                 let pack_sync_offset_seconds =
-                    deadsync_simfile::runtime_cache::pack_sync_offset_for_song_config(
-                        song_arc.as_ref(),
-                        &cfg,
-                    );
+                    song_loading::pack_sync_offset_for_song(song_arc.as_ref(), &cfg);
                 let cabinet_light_plan = cabinet_light_plan(song_arc.as_ref(), chart_ixs[0]);
                 let mut requested_chart_ixs = chart_ixs.to_vec();
                 let light_payload_start = requested_chart_ixs.len();
@@ -10229,10 +10222,7 @@ impl App {
                 self.state.play_input_policy = InputRoutePolicy::from_config(&cfg);
                 let global_offset_seconds = cfg.global_offset_seconds;
                 let pack_sync_offset_seconds =
-                    deadsync_simfile::runtime_cache::pack_sync_offset_for_song_config(
-                        song_arc.as_ref(),
-                        &cfg,
-                    );
+                    song_loading::pack_sync_offset_for_song(song_arc.as_ref(), &cfg);
                 let cabinet_light_plan = cabinet_light_plan(song_arc.as_ref(), chart_ixs[0]);
                 let cabinet_light_key = cabinet_light_plan.as_ref().map(|plan| {
                     cabinet_light_key(

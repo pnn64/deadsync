@@ -171,6 +171,10 @@ theme to describe an input or store a setting:
   forwarding pitch preservation to the current stream through `AudioControl`.
   Config and playback share the mixer volume percentages defined in
   `deadsync-core`.
+- Song and course scans receive additional song roots from the shell. Scan,
+  reload, and stage callers supply the cache preferences, pack exclusions,
+  and timing offsets needed for each operation. `deadsync-simfile` owns the
+  catalog, parsing, cache refresh, and sync analysis load policy.
 
 ## Gameplay policy and presentation
 

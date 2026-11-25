@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use crate::smx_config::smx_options_light_preview_active;
+use crate::song_loading;
 use deadsync_config::options::SmxPackName;
 use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState};
 use deadsync_input::VirtualAction;
@@ -18,7 +19,6 @@ use deadsync_profile::{
 };
 use deadsync_profile_gameplay::results::EvaluationStage;
 use deadsync_score::Grade;
-use deadsync_simfile::app_runtime as song_loading;
 use deadsync_smx::gameplay_driver as smx_driver;
 use deadsync_smx::gifs::{FullPadAnim, difficulty_tag};
 use deadsync_smx::panel_fx::JudgementGifs;

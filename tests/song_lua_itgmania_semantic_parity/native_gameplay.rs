@@ -558,8 +558,27 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
             "additional game/style/input/course contexts", "production live mode activation"]})
 }
 
+fn load_gameplay_charts(
+    song: &deadsync_chart::SongData,
+    chart_indices: &[usize],
+    global_offset_seconds: f32,
+) -> Result<Vec<deadsync_chart::GameplayChartData>, String> {
+    let cfg = deadsync_config::runtime::get();
+    deadsync_simfile::app_runtime::load_gameplay_charts(
+        song,
+        chart_indices,
+        deadsync_simfile::runtime::RuntimeSongConfig::new(
+            cfg.fastload,
+            cfg.cachesongs,
+            global_offset_seconds,
+        ),
+        deadsync_config::runtime::group_is_never_cached,
+    )
+}
+
 #[cfg(test)]
 mod tests {
+    use super::load_gameplay_charts;
     #[test]
     fn external_clock_input_bridge_keeps_call_sites_and_legacy_capture_support() {
         use serde_json::json;
@@ -1716,7 +1735,7 @@ end }
         assert!(super::native_starting_chart(&song, &session, &json!({"input":{"requested_difficulty":"Hard"}})).is_err());
         let chart = Arc::new(song.charts[selected].clone());
         let charts = [chart.clone(), chart];
-        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[selected], -0.008).unwrap().remove(0));
+        let payload = Arc::new(load_gameplay_charts(&song, &[selected], -0.008).unwrap().remove(0));
         let payloads = [payload.clone(), payload];
         let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
@@ -1894,7 +1913,7 @@ end }
         let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap());
         let mut session = GameplaySession::default();
         let mut charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
-        let first = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], -0.008).unwrap().remove(0));
+        let first = Arc::new(load_gameplay_charts(&song, &[0], -0.008).unwrap().remove(0));
         let mut payloads = [first.clone(), first];
         let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
@@ -2187,7 +2206,7 @@ end }}
         let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
         assert_eq!(song.precise_last_second(), 4.0_f32.max(hint));
         let chart = Arc::new(song.charts[0].clone());
-        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+        let payload = Arc::new(load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
         let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
         let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
@@ -2234,7 +2253,7 @@ end }}
             let mut song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
             Arc::make_mut(&mut song).music_length_seconds = audio_length;
             let chart = Arc::new(song.charts[0].clone());
-            let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+            let payload = Arc::new(load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
             let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
             let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
             let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
@@ -2271,7 +2290,7 @@ end }}
         let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
         assert!(song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty());
         let chart = Arc::new(song.charts[0].clone());
-        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+        let payload = Arc::new(load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
         let mut context = deadsync_song_lua::SongLuaCompileContext::new(&dir, "empty declared layers");
         let mut inactive = deadsync_song_lua::playback::prepare_song_lua(
             &song, &context, deadsync_assets::song_lua::compile_song_lua,
@@ -2334,7 +2353,7 @@ end }}
         std::fs::write(dir.join("default.lua"), script).unwrap();
         let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap());
         let chart = Arc::new(song.charts[0].clone());
-        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], -0.008).unwrap().remove(0));
+        let payload = Arc::new(load_gameplay_charts(&song, &[0], -0.008).unwrap().remove(0));
         let mut context = deadsync_song_lua::SongLuaCompileContext::new(&dir, name);
         context.live = true;
         context.defer_initial_live_update = true;
@@ -3301,7 +3320,7 @@ return Def.ActorFrame {
 "#).unwrap();
         let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
         let chart = Arc::new(song.charts[0].clone());
-        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+        let payload = Arc::new(load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
         let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
         let mut context = SongLuaCompileContext::new(&dir, "natural owned End");
@@ -3449,7 +3468,7 @@ return Def.ActorFrame {
         let config = GameplayConfig::default();
         let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
         let chart = Arc::new(song.charts[0].clone());
-        let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+        let payload = Arc::new(load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
         let mut context = SongLuaCompileContext::new(&dir, "engine tap");
         context.live = true;
         context.defer_initial_live_update = true;
@@ -5723,7 +5742,7 @@ fn replay_mode(
     let first = Arc::new(song.charts[initial].clone());
     let charts = [first.clone(), first];
     let initial_payload = Arc::new(
-        deadsync_simfile::app_runtime::load_gameplay_charts(
+        load_gameplay_charts(
             &song,
             &[initial],
             config.global_offset_seconds,
@@ -6444,7 +6463,7 @@ pub(super) fn compile_generated(
     let first = Arc::new(song.charts[initial].clone());
     let charts = [first.clone(), first];
     let initial_payload = Arc::new(
-        deadsync_simfile::app_runtime::load_gameplay_charts(
+        load_gameplay_charts(
             &song,
             &[initial],
             config.global_offset_seconds,
