@@ -3553,6 +3553,9 @@ fn simply_love_options_audio_settings_use_theme_requests() {
         "config::runtime_update::update_global_offset(milliseconds as f32 / 1000.0)",
         "config::runtime_update::update_rate_mod_preserves_pitch(enabled)",
         "config::runtime_update::update_enable_replaygain(enabled)",
+        "deadsync_audio_stream::set_audio_mix_levels(levels)",
+        "audio.set_preserve_pitch_enabled(enabled)",
+        "audio.set_replaygain_enabled(enabled)",
     ] {
         assert!(
             shell
@@ -8525,6 +8528,36 @@ fn audio_core_lives_in_audio_crate() {
         "audio core primitives and native backends should live in dedicated deadlib crates:\n{}",
         failures.join("\n")
     );
+}
+
+#[test]
+fn config_keeps_audio_stream_side_effects_in_the_host() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config = root.join("crates/deadsync-config");
+    let manifest = read_source(config.join("Cargo.toml")).expect("config manifest should be readable");
+    assert!(!manifest.contains("deadsync-audio-stream"));
+    for file in production_rust_files(&config.join("src")) {
+        assert!(
+            !production_source(&file).contains("deadsync_audio_stream"),
+            "{} references the audio stream runtime",
+            file.display()
+        );
+    }
+
+    let startup = read_source(root.join("src/main.rs")).expect("startup source should be readable");
+    let (before_audio, _) = startup
+        .split_once("deadsync_audio_stream::init(")
+        .expect("audio startup should live in the executable");
+    for preference in [
+        "set_audio_mix_levels(config_effects.audio_mix_levels)",
+        "set_replaygain_enabled(config_effects.replaygain_enabled)",
+        "set_preserve_pitch_enabled(config_effects.preserve_pitch_enabled)",
+    ] {
+        assert!(
+            before_audio.contains(preference),
+            "startup is missing {preference}"
+        );
+    }
 }
 
 #[test]

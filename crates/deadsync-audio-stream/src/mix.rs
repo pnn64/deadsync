@@ -1,4 +1,5 @@
 use deadlib_audio_core::{MixBus, MixControls};
+use deadsync_core::audio::AudioMixLevels;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 
@@ -7,14 +8,6 @@ pub const SCREEN_BUS: MixBus = MixBus::new(1);
 pub const ASSIST_TICK_BUS: MixBus = MixBus::new(2);
 /// Gameplay-owned mine voices must stop when the gameplay screen exits.
 pub const MINE_BUS: MixBus = MixBus::new(3);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AudioMixLevels {
-    pub master_volume: u8,
-    pub music_volume: u8,
-    pub sfx_volume: u8,
-    pub assist_tick_volume: u8,
-}
 
 const DEFAULT_LEVELS: AudioMixLevels = AudioMixLevels {
     master_volume: 90,
@@ -117,21 +110,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dead_sync_levels_map_to_generic_mixer_buses() {
-        let controls = MixControls::new();
-        apply_levels(
-            &controls,
-            AudioMixLevels {
-                master_volume: 50,
-                music_volume: 80,
-                sfx_volume: 60,
-                assist_tick_volume: 40,
-            },
-        );
+    fn startup_and_live_levels_apply_to_mixer_buses() {
+        let startup = AudioMixLevels {
+            master_volume: 50,
+            music_volume: 80,
+            sfx_volume: 60,
+            assist_tick_volume: 40,
+        };
+        set_audio_mix_levels(startup);
+        let controls = init_controls();
         assert!((controls.stream_gain() - 0.4).abs() <= f32::EPSILON);
         assert!((controls.bus_gain(EFFECT_BUS) - 0.3).abs() <= f32::EPSILON);
         assert!((controls.bus_gain(SCREEN_BUS) - 0.3).abs() <= f32::EPSILON);
         assert!((controls.bus_gain(MINE_BUS) - 0.3).abs() <= f32::EPSILON);
         assert!((controls.bus_gain(ASSIST_TICK_BUS) - 0.2).abs() <= f32::EPSILON);
+
+        set_audio_mix_levels(AudioMixLevels {
+            master_volume: 25,
+            ..startup
+        });
+        assert!((controls.stream_gain() - 0.2).abs() <= f32::EPSILON);
+        assert!((controls.bus_gain(EFFECT_BUS) - 0.15).abs() <= f32::EPSILON);
+        assert!((controls.bus_gain(ASSIST_TICK_BUS) - 0.1).abs() <= f32::EPSILON);
     }
 }

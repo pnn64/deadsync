@@ -30,23 +30,26 @@ pub fn bootstrap_update_install() -> bool {
     load_bootstrap_bool(config_path(), "UpdaterInstallEnabled", default)
 }
 
-pub fn load() {
+/// Load settings and return the resolved values for the host to initialize audio.
+pub fn load() -> PublishedConfigEffects {
     ensure_config_file();
 
     let mut conf = SimpleIni::new();
     let path = config_path();
-    match conf.load(path) {
+    let effects = match conf.load(path) {
         Ok(()) => load_from_ini(&conf),
         Err(e) => {
             warn!(
                 "Failed to load '{}': {e}. Using default values.",
                 path.display()
             );
-            load_defaults_after_error();
+            RUNTIME_CONFIG.reset_load_state();
+            PublishedConfigEffects::from_config(&Config::default())
         }
-    }
+    };
 
     apply_input_runtime_state();
+    effects
 }
 
 fn ensure_config_file() {
@@ -57,29 +60,14 @@ fn ensure_config_file() {
     }
 }
 
-fn load_from_ini(conf: &SimpleIni) {
-    publish_config(RUNTIME_CONFIG.load_from_ini(conf, Config::default()));
-    backfill_missing_fields(conf);
-}
-
-fn publish_config(effects: PublishedConfigEffects) {
-    apply_published_config_effects(effects);
-    info!("Configuration loaded from '{}'.", config_path().display());
-}
-
-fn apply_published_config_effects(effects: PublishedConfigEffects) {
-    deadsync_audio_stream::set_audio_mix_levels(effects.audio_mix_levels);
-    deadsync_audio_stream::set_replaygain_enabled(effects.replaygain_enabled);
-    deadsync_audio_stream::set_preserve_pitch_enabled(effects.preserve_pitch_enabled);
+fn load_from_ini(conf: &SimpleIni) -> PublishedConfigEffects {
+    let effects = RUNTIME_CONFIG.load_from_ini(conf, Config::default());
     let (translate_x, translate_y, add_width, add_height) = effects.overscan;
     deadlib_present::space::set_overscan(translate_x, translate_y, add_width, add_height);
     logging::set_file_logging_enabled(effects.log_to_file);
-}
-
-fn load_defaults_after_error() {
-    RUNTIME_CONFIG.reset_load_state();
-    deadsync_audio_stream::set_replaygain_enabled(Config::default().enable_replaygain);
-    deadsync_audio_stream::set_preserve_pitch_enabled(Config::default().rate_mod_preserves_pitch);
+    info!("Configuration loaded from '{}'.", config_path().display());
+    backfill_missing_fields(conf);
+    effects
 }
 
 fn backfill_missing_fields(conf: &SimpleIni) {

@@ -165,6 +165,12 @@ theme to describe an input or store a setting:
   The engine provides generic defaults and labels its own GPU resources.
   The executable supplies the log path from `AppDirs` to
   `deadlib-platform::logging`, which handles rotation at that path.
+- `deadsync-config` validates and saves audio preferences. The executable
+  applies the loaded mixer levels, ReplayGain, and pitch preservation before
+  starting `deadsync-audio-stream`. The shell applies live requests, including
+  forwarding pitch preservation to the current stream through `AudioControl`.
+  Config and playback share the mixer volume percentages defined in
+  `deadsync-core`.
 
 ## Gameplay policy and presentation
 

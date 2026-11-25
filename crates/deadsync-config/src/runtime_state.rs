@@ -19,7 +19,7 @@ use crate::{
     },
 };
 use deadlib_platform::lock_wait::{LockWaitStats, lock_mutex};
-use deadsync_audio_stream::AudioMixLevels;
+use deadsync_core::audio::AudioMixLevels;
 use deadsync_input::Keymap;
 use null_or_die::BiasCfg;
 use std::path::Path;
@@ -949,7 +949,11 @@ DefaultLocalProfileIDP2= profile-2\n"));
             &ini("[Options]\n\
 DefaultNoteSkin= cyber \n\
 MasterVolume=77\n\
+MusicVolume=72\n\
+SFXVolume=105\n\
+AssistTickVolume=17\n\
 ReplayGain=1\n\
+RateModPreservesPitch=0\n\
 SmxP1Serial= pad-1\n"),
             Config::default(),
         );
@@ -957,8 +961,17 @@ SmxP1Serial= pad-1\n"),
         assert_eq!(store.machine_default_noteskin(), "cyber");
         assert_eq!(store.smx_pad_assignment().0.as_deref(), Some("pad-1"));
         assert_eq!(store.config().master_volume, 77);
-        assert_eq!(effects.audio_mix_levels.master_volume, 77);
+        assert_eq!(
+            effects.audio_mix_levels,
+            AudioMixLevels {
+                master_volume: 77,
+                music_volume: 72,
+                sfx_volume: 100,
+                assist_tick_volume: 17,
+            }
+        );
         assert!(effects.replaygain_enabled);
+        assert!(!effects.preserve_pitch_enabled);
     }
 
     #[test]
@@ -1083,7 +1096,26 @@ SmxP1Serial= pad-1\n"),
         let levels = store
             .update_assist_tick_volume(20)
             .expect("volume should change");
-        assert_eq!(levels.assist_tick_volume, 20);
+        assert_eq!(
+            levels,
+            AudioMixLevels {
+                master_volume: 40,
+                music_volume: 60,
+                sfx_volume: 30,
+                assist_tick_volume: 20,
+            }
+        );
+        let clamped = store
+            .update_music_volume(u8::MAX)
+            .expect("volume should change");
+        assert_eq!(
+            clamped,
+            AudioMixLevels {
+                music_volume: 100,
+                ..levels
+            }
+        );
+        assert_eq!(store.update_music_volume(u8::MAX), None);
     }
 
     #[test]

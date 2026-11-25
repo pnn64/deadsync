@@ -202,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(code);
     }
 
-    config::runtime_load::load();
+    let config_effects = config::runtime_load::load();
     let cfg = config::runtime::get();
     if let Some(case) = live_case.as_ref() {
         case.validate_config(&cfg).map_err(std::io::Error::other)?;
@@ -269,6 +269,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // One-time merge of legacy per-profile pad configs into the machine store,
     // done at startup so the store is ready before any pad-config consumer.
     profile::migrate_pad_configs();
+    deadsync_audio_stream::set_audio_mix_levels(config_effects.audio_mix_levels);
+    deadsync_audio_stream::set_replaygain_enabled(config_effects.replaygain_enabled);
+    deadsync_audio_stream::set_preserve_pitch_enabled(config_effects.preserve_pitch_enabled);
     let (audio, music_clock) = match deadsync_audio_stream::init(
         deadlib_audio::InitConfig {
             output_device_index: cfg.audio_output_device_index,

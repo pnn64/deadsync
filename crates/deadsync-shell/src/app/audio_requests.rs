@@ -189,14 +189,19 @@ pub(super) fn execute(audio: &mut AudioControl, sounds: &UiSfx, request: AudioRe
         ),
         AudioRequest::StopMusic => audio.stop_music(),
         AudioRequest::SetMusicRate(rate) => audio.set_music_rate(rate),
-        AudioRequest::SetVolume { target, percent } => match target {
-            AudioVolumeTarget::Master => config::runtime_update::update_master_volume(percent),
-            AudioVolumeTarget::Music => config::runtime_update::update_music_volume(percent),
-            AudioVolumeTarget::Sfx => config::runtime_update::update_sfx_volume(percent),
-            AudioVolumeTarget::AssistTick => {
-                config::runtime_update::update_assist_tick_volume(percent)
+        AudioRequest::SetVolume { target, percent } => {
+            let levels = match target {
+                AudioVolumeTarget::Master => config::runtime_update::update_master_volume(percent),
+                AudioVolumeTarget::Music => config::runtime_update::update_music_volume(percent),
+                AudioVolumeTarget::Sfx => config::runtime_update::update_sfx_volume(percent),
+                AudioVolumeTarget::AssistTick => {
+                    config::runtime_update::update_assist_tick_volume(percent)
+                }
+            };
+            if let Some(levels) = levels {
+                deadsync_audio_stream::set_audio_mix_levels(levels);
             }
-        },
+        }
         AudioRequest::SetOutputDevice(device) => {
             config::runtime_update::update_audio_output_device(device)
         }

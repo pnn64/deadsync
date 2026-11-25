@@ -1,3 +1,4 @@
+pub mod audio;
 pub mod color;
 pub mod display;
 pub mod hud_style;

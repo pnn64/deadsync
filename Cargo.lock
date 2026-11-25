@@ -1542,6 +1542,7 @@ dependencies = [
  "deadlib-audio-decode",
  "deadlib-platform",
  "deadsync-audio-replaygain",
+ "deadsync-core",
  "log",
 ]
 
@@ -1567,7 +1568,6 @@ dependencies = [
  "deadlib-platform",
  "deadlib-present",
  "deadlib-render-core",
- "deadsync-audio-stream",
  "deadsync-chart",
  "deadsync-core",
  "deadsync-input",

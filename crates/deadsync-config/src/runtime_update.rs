@@ -23,8 +23,9 @@ use deadlib_audio_core::AudioOutputMode;
 use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::logging;
 use deadlib_render_core::{BackendType, PresentModePolicy};
-use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
+use deadsync_core::audio::AudioMixLevels;
 use deadsync_core::color::DifficultyColorScheme;
+use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use log::warn;
 use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 
@@ -87,6 +88,8 @@ update_config_fn!(pub fn update_audio_output_device(index: Option<u16>) => set_a
 update_config_fn!(pub fn update_audio_output_mode(mode: AudioOutputMode) => set_audio_output_mode);
 update_config_fn!(#[cfg(target_os = "linux")] pub fn update_linux_audio_backend(backend: LinuxAudioBackend) => set_linux_audio_backend);
 update_config_fn!(pub fn update_mine_hit_sound(enabled: bool) => set_mine_hit_sound);
+runtime_config_fn!(pub fn update_rate_mod_preserves_pitch(enabled: bool) => update_rate_mod_preserves_pitch);
+runtime_config_fn!(pub fn update_enable_replaygain(enabled: bool) => update_enable_replaygain);
 update_config_fn!(pub fn update_music_wheel_switch_speed(speed: u8) => set_music_wheel_switch_speed);
 update_config_fn!(pub fn update_translated_titles(enabled: bool) => set_translated_titles);
 
@@ -260,46 +263,27 @@ update_config_fn!(pub fn update_lights_driver(driver: LightsDriverKind) => set_l
 update_config_fn!(pub fn update_lights_gameplay_pad_lights(mode: GameplayPadLightMode) => set_lights_gameplay_pad_lights);
 update_config_fn!(pub fn update_lights_simplify_bass(enabled: bool) => set_lights_simplify_bass);
 
-pub fn update_master_volume(volume: u8) {
-    if let Some(levels) = RUNTIME_CONFIG.update_master_volume(volume) {
-        deadsync_audio_stream::set_audio_mix_levels(levels);
-        save_without_keymaps();
-    }
+pub fn update_master_volume(volume: u8) -> Option<AudioMixLevels> {
+    save_audio_mix_change(RUNTIME_CONFIG.update_master_volume(volume))
 }
 
-pub fn update_music_volume(volume: u8) {
-    if let Some(levels) = RUNTIME_CONFIG.update_music_volume(volume) {
-        deadsync_audio_stream::set_audio_mix_levels(levels);
-        save_without_keymaps();
-    }
+pub fn update_music_volume(volume: u8) -> Option<AudioMixLevels> {
+    save_audio_mix_change(RUNTIME_CONFIG.update_music_volume(volume))
 }
 
-pub fn update_sfx_volume(volume: u8) {
-    if let Some(levels) = RUNTIME_CONFIG.update_sfx_volume(volume) {
-        deadsync_audio_stream::set_audio_mix_levels(levels);
-        save_without_keymaps();
-    }
+pub fn update_sfx_volume(volume: u8) -> Option<AudioMixLevels> {
+    save_audio_mix_change(RUNTIME_CONFIG.update_sfx_volume(volume))
 }
 
-pub fn update_assist_tick_volume(volume: u8) {
-    if let Some(levels) = RUNTIME_CONFIG.update_assist_tick_volume(volume) {
-        deadsync_audio_stream::set_audio_mix_levels(levels);
-        save_without_keymaps();
-    }
+pub fn update_assist_tick_volume(volume: u8) -> Option<AudioMixLevels> {
+    save_audio_mix_change(RUNTIME_CONFIG.update_assist_tick_volume(volume))
 }
 
-pub fn update_rate_mod_preserves_pitch(enabled: bool) {
-    if RUNTIME_CONFIG.update_rate_mod_preserves_pitch(enabled) {
-        deadsync_audio_stream::set_preserve_pitch_enabled(enabled);
+fn save_audio_mix_change(levels: Option<AudioMixLevels>) -> Option<AudioMixLevels> {
+    if levels.is_some() {
         save_without_keymaps();
     }
-}
-
-pub fn update_enable_replaygain(enabled: bool) {
-    if RUNTIME_CONFIG.update_enable_replaygain(enabled) {
-        deadsync_audio_stream::set_replaygain_enabled(enabled);
-        save_without_keymaps();
-    }
+    levels
 }
 
 #[inline(always)]
