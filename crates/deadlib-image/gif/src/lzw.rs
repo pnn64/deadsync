@@ -332,13 +332,15 @@ impl Encoder {
             // With at most two pixels, interlacing preserves the input order.
             let clear = 1u64 << minimum;
             let width = minimum + 1;
-            let mut bits = clear;
-            let mut used = width;
-            for &pixel in indices {
-                bits |= u64::from(pixel) << used;
-                used += width;
-            }
-            bits |= (clear + 1) << used;
+            let (payload, used) = match *indices {
+                [first, second] => (
+                    (u64::from(first) << width) | (u64::from(second) << (2 * width)),
+                    3 * width,
+                ),
+                [first] => (u64::from(first) << width, 2 * width),
+                _ => (0, width),
+            };
+            let bits = clear | payload | ((clear + 1) << used);
             return emit(bits, usize::from((used + width).div_ceil(8)));
         }
         if pixels == 3 {
