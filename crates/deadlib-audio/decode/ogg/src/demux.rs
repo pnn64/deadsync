@@ -239,6 +239,62 @@ impl Demuxer {
         }
         result
     }
+    #[cold]
+    #[inline(never)]
+    fn start_stream<const OBSERVE: bool>(
+        &mut self,
+        page: Page<'_>,
+        header: crate::PageHeader,
+        offset: u64,
+        complete: usize,
+    ) -> Result<usize, Error> {
+        if !header.is_bos() {
+            return Err(Error::Invalid("logical stream missing BOS"));
+        }
+        if header.sequence != 0 {
+            return Err(Error::Sequence {
+                serial: header.serial,
+                expected: 0,
+                actual: header.sequence,
+            });
+        }
+        if header.is_continued() || complete != 1 || page.lacing().last() == Some(&255) {
+            return Err(Error::Invalid(
+                "BOS must contain one complete initial packet",
+            ));
+        }
+        let streams = self.streams.as_slice();
+        if self.active == 0 && !streams.is_empty() {
+            self.chain = self
+                .chain
+                .checked_add(1)
+                .ok_or(Error::LimitExceeded("chain count"))?;
+            self.bos_phase = true;
+        }
+        if !self.bos_phase {
+            return Err(Error::Invalid("BOS after non-BOS page in a group"));
+        }
+        if streams.len() == self.limits.max_streams {
+            return Err(Error::LimitExceeded("logical streams"));
+        }
+        let index = self.streams.push(Stream {
+            serial: header.serial,
+            chain: self.chain,
+            next_sequence: 0,
+            ended: false,
+            continuing: false,
+            partial: if OBSERVE {
+                PartialPacket::Bytes(Vec::new())
+            } else {
+                PartialPacket::Length(0)
+            },
+            packet_offset: offset,
+            packets: 0,
+            granule: UNKNOWN_GRANULE_POSITION,
+        })?;
+        self.active += 1;
+        Ok(index)
+    }
     fn push_inner<const OBSERVE: bool>(
         &mut self,
         page: Page<'_>,
@@ -268,51 +324,7 @@ impl Demuxer {
                 (index, stream)
             }
             None => {
-                if !header.is_bos() {
-                    return Err(Error::Invalid("logical stream missing BOS"));
-                }
-                if header.sequence != 0 {
-                    return Err(Error::Sequence {
-                        serial: header.serial,
-                        expected: 0,
-                        actual: header.sequence,
-                    });
-                }
-                if header.is_continued() || complete != 1 || page.lacing().last() == Some(&255) {
-                    return Err(Error::Invalid(
-                        "BOS must contain one complete initial packet",
-                    ));
-                }
-                let streams = self.streams.as_slice();
-                if self.active == 0 && !streams.is_empty() {
-                    self.chain = self
-                        .chain
-                        .checked_add(1)
-                        .ok_or(Error::LimitExceeded("chain count"))?;
-                    self.bos_phase = true;
-                }
-                if !self.bos_phase {
-                    return Err(Error::Invalid("BOS after non-BOS page in a group"));
-                }
-                if streams.len() == self.limits.max_streams {
-                    return Err(Error::LimitExceeded("logical streams"));
-                }
-                let index = self.streams.push(Stream {
-                    serial: header.serial,
-                    chain: self.chain,
-                    next_sequence: 0,
-                    ended: false,
-                    continuing: false,
-                    partial: if OBSERVE {
-                        PartialPacket::Bytes(Vec::new())
-                    } else {
-                        PartialPacket::Length(0)
-                    },
-                    packet_offset: offset,
-                    packets: 0,
-                    granule: UNKNOWN_GRANULE_POSITION,
-                })?;
-                self.active += 1;
+                let index = self.start_stream::<OBSERVE>(page, header, offset, complete)?;
                 (index, self.streams.get_mut(index))
             }
         };
