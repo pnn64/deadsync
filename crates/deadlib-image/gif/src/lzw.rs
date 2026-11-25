@@ -255,7 +255,7 @@ impl Encoder {
         }
         if pixels > 1024 {
             if minimum == 2 {
-                return Self::encode_four_symbols::<FOUR_SYMBOL_SLOTS>(rows, emit);
+                return Self::encode_direct::<2, FOUR_SYMBOL_SLOTS>(rows, emit);
             }
             return Self::encode_large(rows, minimum, emit);
         }
@@ -306,25 +306,22 @@ impl Encoder {
                 Self::encode_tiny::<64>(rows, minimum, emit)
             };
         }
-        if minimum == 2 {
-            return if pixels <= 256 {
-                Self::encode_four_symbols::<{ direct_table_slots(256, 4) }>(rows, emit)
-            } else {
-                Self::encode_four_symbols::<{ direct_table_slots(1024, 4) }>(rows, emit)
-            };
+        match (minimum, pixels <= 256) {
+            (2, true) => Self::encode_direct::<2, { direct_table_slots(256, 4) }>(rows, emit),
+            (2, false) => Self::encode_direct::<2, { direct_table_slots(1024, 4) }>(rows, emit),
+            (3, true) => Self::encode_direct::<3, { direct_table_slots(256, 8) }>(rows, emit),
+            (3, false) => Self::encode_direct::<3, { direct_table_slots(1024, 8) }>(rows, emit),
+            (_, true) => Self::encode_table(rows, minimum, &mut [0u32; 512], emit),
+            (_, false) => Self::encode_table(rows, minimum, &mut [0u32; 2048], emit),
         }
-        if pixels <= 256 {
-            return Self::encode_table(rows, minimum, &mut [0u32; 512], emit);
-        }
-        Self::encode_table(rows, minimum, &mut [0u32; 2048], emit)
     }
 
     #[inline(never)]
-    fn encode_four_symbols<'a, const SLOTS: usize>(
+    fn encode_direct<'a, const MINIMUM: u8, const SLOTS: usize>(
         rows: impl Iterator<Item = &'a [u8]>,
         emit: impl FnMut(u64, usize) -> Result<(), Error>,
     ) -> Result<(), Error> {
-        Self::encode_table(rows, 2, &mut [0u16; SLOTS], emit)
+        Self::encode_table(rows, MINIMUM, &mut [0u16; SLOTS], emit)
     }
 
     #[inline(never)]
@@ -410,8 +407,7 @@ impl Encoder {
             };
             'symbols: for symbol in symbols {
                 let (slot, tag) = if size_of::<Entry>() == size_of::<u16>() {
-                    // Four possible suffixes per prefix code fit in a direct table.
-                    let slot = (usize::from(prefix) << 2) | usize::from(symbol);
+                    let slot = (usize::from(prefix) << minimum) | usize::from(symbol);
                     let code = table[slot].into() as u16;
                     if code != 0 {
                         prefix = code;
