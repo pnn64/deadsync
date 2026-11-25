@@ -167,7 +167,7 @@ fn indexed_headers_preserve_indices_palettes_orientation_and_packed_tails() {
 #[test]
 fn rgb24_headers_decode_bgr_rows_with_every_padding_length() {
     for size in [12, 40, 52, 56, 108, 124] {
-        for width in [1usize, 2, 3, 4, 5, 17] {
+        for width in [1usize, 2, 3, 4, 5, 12, 17] {
             for top_down in [false, true] {
                 if size == 12 && top_down {
                     continue;

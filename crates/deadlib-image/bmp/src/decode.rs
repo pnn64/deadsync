@@ -168,6 +168,12 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 palette,
             }
         }
+        Format::Rgb24
+            if (cfg!(target_arch = "x86") && header.info.width.is_multiple_of(4))
+                || (header.info.width == 4 && !header.info.top_down) =>
+        {
+            Pixels::Rgb(decode_rgb24_quads(source, &header)?)
+        }
         Format::Rgb24 => Pixels::Rgb(map_rows(source, &header, |[blue, green, red]| {
             [red, green, blue]
         })?),
@@ -375,6 +381,25 @@ fn map_rows<const INPUT: usize, const OUTPUT: usize>(
         for row in display_rows(source, header.row_pitch, header.info.top_down) {
             let (pixels, _) = row.as_chunks::<INPUT>();
             samples.extend(pixels[..width].iter().copied().map(&mut pixel));
+        }
+    }
+    Ok(samples.into_flattened())
+}
+
+#[inline(never)]
+fn decode_rgb24_quads(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> {
+    let swap = |&[b0, g0, r0, b1, g1, r1, b2, g2, r2, b3, g3, r3]: &[u8; 12]| {
+        [r0, g0, b0, r1, g1, b1, r2, g2, b2, r3, g3, b3]
+    };
+    let mut samples = Vec::new();
+    reserve(&mut samples, header.pixel_count / 4)?;
+    if cfg!(target_arch = "x86") && header.info.top_down {
+        samples.extend(source.as_chunks::<12>().0.iter().map(swap));
+    } else if !cfg!(target_arch = "x86") || header.row_pitch == 12 {
+        samples.extend(source.as_chunks::<12>().0.iter().rev().map(swap));
+    } else {
+        for row in source.rchunks_exact(header.row_pitch) {
+            samples.extend(row.as_chunks::<12>().0.iter().map(swap));
         }
     }
     Ok(samples.into_flattened())
