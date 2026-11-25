@@ -12,7 +12,6 @@ use deadsync_config::theme::MachineFont;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_notefield::{TimingSegmentLabel, ViewOverride};
 use deadsync_profile::GameplayHudSnapshot;
-use deadsync_score::SelectMusicScoreboxFilter;
 use deadsync_song_lua::gameplay_presentation::GameplayFrameView;
 use deadsync_song_lua::playback::{
     NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY, PLAYER_ACTOR_SCRATCH_CAPACITY,
@@ -86,7 +85,6 @@ impl From<GameplayRenderView> for GameplayFrameView {
 pub struct GameplayPresentationInit {
     pub hud: GameplayHudSnapshot,
     pub judgment_palettes: [JudgmentPalette; MAX_PLAYERS],
-    pub scorebox_pane_filter: SelectMusicScoreboxFilter,
 }
 
 /// Media binding updated by the shell when the current song background changes.

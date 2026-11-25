@@ -446,6 +446,10 @@ pub(crate) mod tests {
         let (mut prepared, scene, init) = prepare_stage_fixture(
             simfile, viewport, session, profiles, "Software", Some(32.0), false, None, None, false,
         );
+        let config = deadsync_config::app_config::Config {
+            arrowcloud_regular_boards: Some(init.runtime.policy.scorebox_pane_filter.arrowcloud_regular),
+            ..Default::default()
+        };
         (presentation.prepare)(&mut prepared);
         crate::gameplay_runtime::present_stage(
             prepared, scene, None,
@@ -470,11 +474,10 @@ pub(crate) mod tests {
                         replay: None,
                         course: None,
                     },
-                    &Default::default(),
+                    &config,
                     Some(deadsync_assets::gameplay_presentation::GameplayPresentationInit {
                         hud: init.hud,
                         judgment_palettes: init.judgment_palettes,
-                        scorebox_pane_filter: init.runtime.policy.scorebox_pane_filter,
                     }),
                     scores,
                 )

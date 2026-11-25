@@ -19,7 +19,6 @@ deadsync-noteskin = { path = "../deadsync-noteskin" }
 deadsync-profile = { path = "../deadsync-profile" }
 deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }
 deadsync-rules = { path = "../deadsync-rules" }
-deadsync-score = { path = "../deadsync-score" }
 deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 chrono = "0.4.45"

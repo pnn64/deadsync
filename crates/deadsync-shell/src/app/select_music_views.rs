@@ -2,6 +2,7 @@ use super::{App, MusicWheelDisplayPolicy, post_step_sync_needed};
 use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
+use deadsync_profile_gameplay::stage_scores::scorebox_pane_filter;
 use deadsync_theme::views::AudioPlaybackView;
 #[cfg(test)]
 use deadsync_theme_simply_love::screens::select_course;
@@ -201,7 +202,7 @@ impl SelectMusicFramePolicy {
         Self {
             view: crate::select_music::policy_view(config),
             wheel: MusicWheelDisplayPolicy::from_config(config),
-            pane_filter: super::scorebox_pane_filter(config),
+            pane_filter: scorebox_pane_filter(config),
             sync_graph_mode: config.null_or_die_sync_graph,
             sync_graph_orientation: config.null_or_die_graph_orientation,
             sync_graph_origin: config.null_or_die_graph_origin,

@@ -61,6 +61,9 @@ result. The mounted Evaluation overview and the Simply Love panes borrow
 those records. Course paging shares the same records, including the timing
 and life histories. The score crate resolves the displayed Routine grade
 from the combined percentage and the participants' failure states.
+`deadsync-profile-gameplay` resolves the shared scorebox pane settings for
+Select Music, Evaluation, and Simply Love gameplay. Simply Love applies them
+when mounting its gameplay HUD.
 The shell prepares the visible song or course banner through the same cache
 when a result page opens. The mounted stage chooses its results music and
 which cues the fallback panes may play during the visit.

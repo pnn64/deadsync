@@ -1,11 +1,29 @@
+use deadsync_config::{app_config::Config, options::arrowcloud_regular_boards_shown};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState};
 use deadsync_profile::{MiniIndicatorScoreType, player_side_index};
 use deadsync_score::{
     CachedPlayerLeaderboardData, GameplayScoreboxProfileSnapshot, LeaderboardPane,
+    SelectMusicScoreboxFilter,
 };
 
 use crate::profile_side_from_gameplay;
+
+/// Resolve the machine's leaderboard pane settings for gameplay, song selection, and results.
+pub const fn scorebox_pane_filter(config: &Config) -> SelectMusicScoreboxFilter {
+    SelectMusicScoreboxFilter {
+        groovestats_itg: config.groovestats_scorebox_itg,
+        groovestats_ex: config.groovestats_scorebox_ex,
+        groovestats_events: config.groovestats_scorebox_events,
+        arrowcloud_regular: arrowcloud_regular_boards_shown(
+            config.arrowcloud_regular_boards,
+            config.enable_groovestats,
+        ),
+        arrowcloud_events: config.arrowcloud_event_boards,
+        golf: config.enable_golf,
+        events_first: config.select_music_scorebox_events_first,
+    }
+}
 
 /// Initial leaderboard displays by physical player side.
 #[derive(Clone, Debug, Default)]
@@ -137,6 +155,37 @@ pub fn mini_indicator_rival_score(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scorebox_filter_respects_service_settings_and_inherited_arrowcloud_default() {
+        let mut config = Config {
+            enable_groovestats: false,
+            groovestats_scorebox_itg: false,
+            groovestats_scorebox_ex: true,
+            groovestats_scorebox_events: false,
+            arrowcloud_regular_boards: None,
+            arrowcloud_event_boards: true,
+            enable_golf: true,
+            select_music_scorebox_events_first: false,
+            ..Config::default()
+        };
+        assert_eq!(
+            scorebox_pane_filter(&config),
+            SelectMusicScoreboxFilter {
+                groovestats_itg: false,
+                groovestats_ex: true,
+                groovestats_events: false,
+                arrowcloud_regular: true,
+                arrowcloud_events: true,
+                golf: true,
+                events_first: false,
+            },
+        );
+        config.enable_groovestats = true;
+        assert!(!scorebox_pane_filter(&config).arrowcloud_regular);
+        config.arrowcloud_regular_boards = Some(true);
+        assert!(scorebox_pane_filter(&config).arrowcloud_regular);
+    }
 
     #[test]
     fn scorebox_polling_requires_a_loading_board_and_a_consumer() {

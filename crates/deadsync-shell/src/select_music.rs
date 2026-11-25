@@ -1,6 +1,7 @@
 use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile::{PlayerSide, compat as profile};
+use deadsync_profile_gameplay::stage_scores::scorebox_pane_filter;
 use deadsync_theme_simply_love::views::{
     SelectMusicHistorySideView, SelectMusicHistoryView, SelectMusicInitView,
     SelectMusicInteractionPolicyView, SelectMusicLastPlayedView, SelectMusicMediaPolicyView,
@@ -333,7 +334,7 @@ pub(crate) fn policy_view(config: &config::app_config::Config) -> SelectMusicPol
             show_golf_pars: config.enable_golf && config.select_music_show_golf_pars,
             show_scorebox: config.show_select_music_scorebox,
             scorebox_cycle_enabled: deadsync_score::select_music_scorebox_filter_has_any(
-                crate::app::scorebox_pane_filter(config),
+                scorebox_pane_filter(config),
             ),
             scorebox_in_step_pane: config.select_music_scorebox_placement
                 == config::theme::SelectMusicScoreboxPlacement::StepPane,

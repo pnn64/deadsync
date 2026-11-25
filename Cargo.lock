@@ -1503,7 +1503,6 @@ dependencies = [
  "deadsync-profile",
  "deadsync-profile-gameplay",
  "deadsync-rules",
- "deadsync-score",
  "deadsync-simfile",
  "deadsync-song-lua",
  "image",

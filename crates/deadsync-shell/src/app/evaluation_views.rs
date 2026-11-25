@@ -1,7 +1,7 @@
 use super::{
     App, EVALUATION_LEADERBOARD_ROWS, EvaluationPolicyView, EvaluationRuntimeView, EvaluationState,
     EvaluationSubmissionView, MAX_PLAYERS, ScoreboxSideView, SimplyLoveGrooveStatsService,
-    evaluation_context_view, scorebox_pane_filter,
+    evaluation_context_view,
 };
 use super::screenshot::EvaluationCapture;
 use crate::ActiveTheme;
@@ -9,6 +9,7 @@ use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::results::EvaluationStage;
+use deadsync_profile_gameplay::stage_scores::scorebox_pane_filter;
 use deadsync_theme::evaluation::{EvaluationOverviewPage, ThemeEvaluation};
 use deadsync_theme::views::EvaluationScores;
 use deadsync_theme::Screen as CurrentScreen;

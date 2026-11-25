@@ -596,7 +596,6 @@ type PracticeEditSnapshot = crate::gameplay_runtime::PracticeEditSnapshot<
 >;
 
 fn gameplay_presentation_init(
-    config: &config::app_config::Config,
     profiles: &[profile_data::Profile; MAX_PLAYERS],
 ) -> GameplayPresentationInit {
     let hud = profile::gameplay_hud_snapshot();
@@ -606,7 +605,6 @@ fn gameplay_presentation_init(
     GameplayPresentationInit {
         hud,
         judgment_palettes,
-        scorebox_pane_filter: scorebox_pane_filter(config),
     }
 }
 
@@ -853,23 +851,6 @@ fn evaluation_context_view(
                     .resolve(runtime_profile.judgment_palette_id.as_deref()),
             }
         }),
-    }
-}
-
-pub(crate) const fn scorebox_pane_filter(
-    config: &config::app_config::Config,
-) -> deadsync_score::SelectMusicScoreboxFilter {
-    deadsync_score::SelectMusicScoreboxFilter {
-        groovestats_itg: config.groovestats_scorebox_itg,
-        groovestats_ex: config.groovestats_scorebox_ex,
-        groovestats_events: config.groovestats_scorebox_events,
-        arrowcloud_regular: config::options::arrowcloud_regular_boards_shown(
-            config.arrowcloud_regular_boards,
-            config.enable_groovestats,
-        ),
-        arrowcloud_events: config.arrowcloud_event_boards,
-        golf: config.enable_golf,
-        events_first: config.select_music_scorebox_events_first,
     }
 }
 
@@ -9990,7 +9971,7 @@ impl App {
                 );
 
                 let mut gameplay_session = gameplay_session();
-                let presentation_init = gameplay_presentation_init(&cfg, &player_profiles);
+                let presentation_init = gameplay_presentation_init(&player_profiles);
                 let presentation = self.practice_gameplay_presentation;
                 let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
                     lobby_views::refresh(),
@@ -10413,7 +10394,7 @@ impl App {
                     cfg.enable_golf,
                 );
                 let mut gameplay_session = gameplay_session();
-                let presentation_init = gameplay_presentation_init(&cfg, &player_profiles);
+                let presentation_init = gameplay_presentation_init(&player_profiles);
                 let presentation = self.gameplay_presentation;
                 let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
                     self.gameplay_lobby.refresh_now(),

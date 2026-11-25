@@ -5512,7 +5512,7 @@ fn select_music_feature_policy_is_shell_prepared() {
         "config.music_select_shortcut_load_songs",
         "config.music_select_shortcut_test_input",
         "config.show_select_music_scorebox",
-        "crate::app::scorebox_pane_filter(config)",
+        "scorebox_pane_filter(config)",
         "config.select_music_scorebox_placement",
         "config.show_select_music_stage_display",
         "config.show_select_music_gameplay_timer",
@@ -6842,7 +6842,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         .0;
     for input in [
         "profile::gameplay_hud_snapshot()",
-        "scorebox_pane_filter: scorebox_pane_filter(config)",
+        "judgment_palettes,",
     ] {
         assert!(presentation_init.contains(input), "Gameplay presentation is missing {input}");
     }
@@ -6865,6 +6865,14 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
     let stage_scores = production_source(
         &root.join("crates/deadsync-profile-gameplay/src/stage_scores.rs"),
     );
+    assert!(stage_scores.contains("pub const fn scorebox_pane_filter("));
+    let mounted = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/gameplay/mounted.rs"),
+    );
+    assert!(mounted.contains("GameplayPolicyView::from_config(config, scorebox_pane_filter(config))"));
+    let assets = read_source(root.join("crates/deadsync-assets/Cargo.toml"))
+        .expect("game assets manifest");
+    assert!(!assets.contains("deadsync-score"));
     assert!(stage_scores.contains("pub struct GameplayScoreSnapshots"));
     assert!(stage_scores.contains("pub scorebox_visible: [bool; MAX_PLAYERS]"));
     let startup = adapter.split_once("pub(crate) struct GameplayStartup").unwrap().1;

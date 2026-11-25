@@ -6,6 +6,7 @@ use deadsync_assets::gameplay_presentation::{
     PracticeGameplayHud,
 };
 use deadsync_config::app_config::Config;
+use deadsync_profile_gameplay::stage_scores::scorebox_pane_filter;
 use deadsync_theme::views::{GameplayChatLayout, GameplayLivePresentation, GameplayStageView};
 
 struct SimplyLoveGameplay {
@@ -26,7 +27,7 @@ impl crate::SimplyLoveTheme {
     + use<> {
         let init = init.map_or_else(GameplayInitView::default, |init| GameplayInitView {
             runtime: GameplayRuntimeView {
-                policy: GameplayPolicyView::from_config(config, init.scorebox_pane_filter),
+                policy: GameplayPolicyView::from_config(config, scorebox_pane_filter(config)),
                 play_style: init.hud.play_style,
                 player_side: init.hud.player_side,
                 joined: [init.hud.p1.joined, init.hud.p2.joined],
