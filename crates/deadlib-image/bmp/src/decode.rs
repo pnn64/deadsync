@@ -259,6 +259,18 @@ fn append_four_bit_rows(source: &[u8], header: &Header, indices: &mut Vec<u8>) {
         append_narrow_packed::<4>(source, indices, width, top_down);
         return;
     }
+    if width == 8 {
+        // The top-down case is already handled by contiguous unpacking.
+        indices.extend(source.as_chunks::<4>().0.iter().rev().flat_map(|&row| {
+            // Widen each byte to a 16-bit lane so its two nibbles can split into bytes.
+            let word = u64::from(u32::from_le_bytes(row));
+            let halves = (word | (word << 16)) & 0x0000_ffff_0000_ffff;
+            let bytes = (halves | (halves << 8)) & 0x00ff_00ff_00ff_00ff;
+            let mask = 0x000f_000f_000f_000f;
+            (((bytes >> 4) & mask) | ((bytes & mask) << 8)).to_le_bytes()
+        }));
+        return;
+    }
     let pairs = width / 2;
     let has_tail = !width.is_multiple_of(2);
     for row in display_rows(source, header.row_pitch, top_down) {
