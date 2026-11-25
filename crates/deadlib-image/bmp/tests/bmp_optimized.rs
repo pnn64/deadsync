@@ -490,7 +490,7 @@ fn rgba_byte_order_copy_preserves_explicit_alpha_and_source_extent() {
             compression: 3,
             masks: [0xff, 0xff00, 0xff0000, 0xff000000],
         };
-        for width in [1usize, 3, 17, 257] {
+        for width in [1usize, 2, 3, 17, 257] {
             for zero_alpha in [false, true] {
                 let mut expected = Vec::new();
                 for i in 0..width * 3 {
@@ -538,7 +538,7 @@ fn rgba_byte_order_copy_preserves_explicit_alpha_and_source_extent() {
 
 #[test]
 fn bgra_zero_alpha_repair_covers_row_boundaries_and_final_pixels() {
-    for width in [1usize, 3, 4, 7, 8, 15, 16, 17, 31, 32, 33, 257] {
+    for width in [1usize, 2, 3, 4, 7, 8, 15, 16, 17, 31, 32, 33, 257] {
         let count = width * 3;
         let mut rows = Vec::new();
         let mut expected = Vec::new();

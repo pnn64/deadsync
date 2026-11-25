@@ -413,6 +413,8 @@ fn map_rows<const INPUT: usize, const OUTPUT: usize>(
             let &[first, second] = row.as_chunks::<INPUT>().0.first_chunk().unwrap();
             [pixel(first), pixel(second)]
         }));
+    } else if INPUT != 2 && width == 2 {
+        append_wide_pixel_pairs(source, &mut samples, header.info.top_down, pixel);
     } else if cfg!(target_pointer_width = "64") && width == 1 {
         // A one-pixel truecolor row always occupies four bytes with padding.
         // Restrict this specialization to 64-bit builds to keep x86 decodes small.
@@ -430,6 +432,25 @@ fn map_rows<const INPUT: usize, const OUTPUT: usize>(
         }
     }
     Ok(samples.into_flattened())
+}
+
+#[inline(never)]
+fn append_wide_pixel_pairs<const INPUT: usize, const OUTPUT: usize>(
+    source: &[u8],
+    samples: &mut Vec<[u8; OUTPUT]>,
+    top_down: bool,
+    mut pixel: impl FnMut([u8; INPUT]) -> [u8; OUTPUT],
+) {
+    let rows = source.as_chunks::<8>().0.iter();
+    let unpack = |row: &[u8; 8]| {
+        let &[first, second] = row.as_chunks::<INPUT>().0.first_chunk().unwrap();
+        [pixel(first), pixel(second)]
+    };
+    if INPUT == 3 && top_down {
+        samples.extend(rows.flat_map(unpack));
+    } else {
+        samples.extend(rows.rev().flat_map(unpack));
+    }
 }
 
 #[inline(never)]
