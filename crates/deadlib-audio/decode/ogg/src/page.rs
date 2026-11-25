@@ -95,6 +95,10 @@ impl<'a> Page<'a> {
         if self.bytes.len() < FIXED_HEADER_SIZE + lacing.len() + 255 {
             return lacing.len();
         }
+        // At maximum body size every lace continues a packet.
+        if self.bytes.len() == FIXED_HEADER_SIZE + 256 * lacing.len() {
+            return 0;
+        }
         // Each of the at most 255 laces terminates at most one packet.
         usize::from(lacing.iter().map(|&lace| u8::from(lace != 255)).sum::<u8>())
     }
