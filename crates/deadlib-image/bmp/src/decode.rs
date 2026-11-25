@@ -118,8 +118,18 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     };
                     for block in source.rchunks(block_bytes) {
                         validate_indices(block)?;
-                        for row in block.rchunks_exact(width) {
-                            indices.extend_from_slice(row);
+                        match width {
+                            4 => indices
+                                .extend(block.as_chunks::<4>().0.iter().rev().copied().flatten()),
+                            8 => indices
+                                .extend(block.as_chunks::<8>().0.iter().rev().copied().flatten()),
+                            16 => indices
+                                .extend(block.as_chunks::<16>().0.iter().rev().copied().flatten()),
+                            _ => {
+                                for row in block.rchunks_exact(width) {
+                                    indices.extend_from_slice(row);
+                                }
+                            }
                         }
                     }
                 } else {
