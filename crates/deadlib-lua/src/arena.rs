@@ -223,7 +223,9 @@ impl<T> Arena<T> {
         true
     }
     pub fn marked(&self, key: u64) -> bool {
-        self.slot_marked(index(key)) && self.contains(key)
+        let slot = index(key);
+        // Only occupied slots have marks.
+        self.slot_marked(slot) && self.generations.get(slot).copied() == Some((key >> 32) as u32)
     }
     pub(crate) fn slot_marked(&self, slot: usize) -> bool {
         self.marks
