@@ -223,16 +223,13 @@ impl PacketCapture {
         }
         let mut skipping = self.skipping;
         let mut length = self.partial.len();
-        let mut continuing = self.continuing;
         let body = page.body().len();
-        if length == 0
-            && body <= self.limits.max_packet_bytes
-            && body <= self.limits.max_pending_bytes
-        {
-            continuing = page.lacing().last().map_or(continuing, |&n| n == 255);
-        } else {
+        let limit = self
+            .limits
+            .max_packet_bytes
+            .min(self.limits.max_pending_bytes);
+        if length.checked_add(body).is_none_or(|upper| upper > limit) {
             for fragment in page.fragments() {
-                continuing = !fragment.ends_packet;
                 if !skipping {
                     length = length
                         .checked_add(fragment.data.len())
@@ -252,7 +249,7 @@ impl PacketCapture {
                 }
             }
         }
-        if header.is_eos() && continuing {
+        if header.is_eos() && page.lacing().last().map_or(self.continuing, |&n| n == 255) {
             return Err(Error::Invalid("unfinished captured packet at EOS"));
         }
         Ok((complete, exception))
