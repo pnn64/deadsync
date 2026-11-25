@@ -114,6 +114,7 @@ fn unfilter_paeth_pair(row: &mut [u8], next: &mut [u8], prev: &[u8], bpp: usize)
     #[cfg(target_arch = "x86_64")]
     {
         match bpp {
+            2 => x86::unfilter::<2, true>(row, prev, Some(next)),
             3 => x86::unfilter::<3, true>(row, prev, Some(next)),
             4 => x86::unfilter::<4, true>(row, prev, Some(next)),
             _ => false,
@@ -403,14 +404,32 @@ fn decode_plain_words(
     bpp: usize,
     out: &mut Vec<u16>,
 ) -> Result<(), Error> {
-    let mut rows = raw.chunks_exact_mut(stride + 1);
+    let wire_stride = stride + 1;
+    let mut input = raw;
+    let mut remaining = height;
     let mut previous = None;
-    for _ in 0..height {
-        let (filter, row) = rows
-            .next()
-            .ok_or(Error::Truncated)?
-            .split_first_mut()
-            .unwrap();
+    while remaining != 0 {
+        let (tagged, tail) = input
+            .split_at_mut_checked(wire_stride)
+            .ok_or(Error::Truncated)?;
+        input = tail;
+        let (filter, row) = tagged.split_first_mut().unwrap();
+        remaining -= 1;
+        if *filter == 4
+            && remaining != 0
+            && let Some(previous_row) = previous
+            && input.first() == Some(&4)
+            && let Some(next) = input.get_mut(1..wire_stride)
+            && unfilter_paeth_pair(row, next, previous_row, bpp)
+        {
+            let (next, tail) = input.split_at_mut(wire_stride);
+            append_word_row(out, row);
+            append_word_row(out, &next[1..]);
+            previous = Some(&next[1..]);
+            input = tail;
+            remaining -= 1;
+            continue;
+        }
         if *filter != 0 {
             if let Some(previous) = previous {
                 unfilter(row, previous, bpp, *filter)?;
@@ -418,19 +437,24 @@ fn decode_plain_words(
                 unfilter_first(row, bpp, *filter)?;
             }
         }
-        out.extend(
-            row.as_chunks::<2>()
-                .0
-                .iter()
-                .copied()
-                .map(u16::from_be_bytes),
-        );
+        append_word_row(out, row);
         previous = Some(&*row);
     }
-    if rows.next().is_some() || !rows.into_remainder().is_empty() {
+    if !input.is_empty() {
         return Err(Error::Invalid("extra image data"));
     }
     Ok(())
+}
+
+#[inline]
+fn append_word_row(out: &mut Vec<u16>, row: &[u8]) {
+    out.extend(
+        row.as_chunks::<2>()
+            .0
+            .iter()
+            .copied()
+            .map(u16::from_be_bytes),
+    );
 }
 
 fn compact_plain_bytes(

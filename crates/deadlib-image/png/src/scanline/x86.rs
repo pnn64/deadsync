@@ -7,7 +7,7 @@ pub(super) fn unfilter<const N: usize, const PAETH: bool>(
     prev: &[u8],
     next: Option<&mut [u8]>,
 ) -> bool {
-    assert!(matches!(N, 3 | 4 | 6 | 8));
+    assert!(matches!(N, 2 | 3 | 4 | 6 | 8));
     assert!(next.is_none() || PAETH && N <= 4);
     if row.len() >= 64 && std::is_x86_feature_detected!("sse4.1") {
         let prev = &prev[..row.len()];
@@ -462,6 +462,7 @@ mod tests {
         if !std::is_x86_feature_detected!("sse4.1") {
             return;
         }
+        rows::<2, true>();
         rows::<3, true>();
         rows::<4, true>();
         rows::<6, true>();
@@ -578,6 +579,7 @@ mod tests {
         if !std::is_x86_feature_detected!("sse4.1") {
             return;
         }
+        pairs::<2>();
         pairs::<3>();
         pairs::<4>();
     }
