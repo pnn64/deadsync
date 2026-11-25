@@ -189,9 +189,9 @@ pub(crate) struct Table {
     entries: Buffer<Entry>,
     slots: Buffer<u32>,
     native51: bool,
-    // Outstanding collectable nil keys. A saturated count stays conservative until resize.
-    native_dead_keys: u8,
-    last_free: usize,
+    // Both native counters are bounded by the native hash node limit.
+    native_dead_keys: u32,
+    last_free: u32,
     // Two one-based hash entry indices, packed into one atomic word. Always
     // compare keys before reuse: mutations can move or remove entries.
     next_hash_hint: AtomicU64,

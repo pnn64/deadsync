@@ -63,7 +63,7 @@ impl Table {
         {
             self.native_index_remove_at(slot);
             self.entries[index].key = dead;
-            self.native_dead_key_removed();
+            self.native_dead_keys -= 1;
             self.touch_fields();
         }
     }
@@ -93,12 +93,6 @@ impl Table {
                     break;
                 }
             }
-        }
-    }
-
-    fn native_dead_key_removed(&mut self) {
-        if self.native_dead_keys != u8::MAX {
-            self.native_dead_keys -= 1;
         }
     }
 
@@ -157,13 +151,13 @@ impl Table {
             Some((_, Some(index))) => {
                 if value == Value::Nil {
                     if self.entries[index].value != Value::Nil && key.dead().is_some() {
-                        self.native_dead_keys = self.native_dead_keys.saturating_add(1);
+                        self.native_dead_keys += 1;
                     }
                 } else if self.native_dead_keys != 0
                     && self.entries[index].value == Value::Nil
                     && key.dead().is_some()
                 {
-                    self.native_dead_key_removed();
+                    self.native_dead_keys -= 1;
                 }
                 self.entries[index].value = value;
                 self.touch_fields();
@@ -192,14 +186,14 @@ impl Table {
         };
         let mut position = main_position(key, hash, self.entries.len());
         if self.entries[position].value != Value::Nil {
-            let free = (0..self.last_free)
+            let free = (0..self.last_free as usize)
                 .rev()
                 .find(|&i| self.entries[i].key == Key::Vacant);
             let Some(free) = free else {
                 self.native_rehash(key)?;
                 return self.native_set(key, value, |_| hash);
             };
-            self.last_free = free;
+            self.last_free = free as u32;
             let old = self.entries[position];
             let other = main_position(old.key, old.native_hash, self.entries.len());
             if other != position {
@@ -221,7 +215,7 @@ impl Table {
         {
             // A deleted main node is reusable, but its collision chain remains.
             if self.entries[position].key.dead().is_some() {
-                self.native_dead_key_removed();
+                self.native_dead_keys -= 1;
             }
             self.native_index_remove_at(slot);
             // Deletion can shift the identity probe chain before insertion.
@@ -233,7 +227,7 @@ impl Table {
         self.entries[position].key = key;
         self.entries[position].value = value;
         if value == Value::Nil && key.dead().is_some() {
-            self.native_dead_keys = self.native_dead_keys.saturating_add(1);
+            self.native_dead_keys += 1;
         }
         self.entries[position].native_hash = hash;
         self.slots[vacant] =
@@ -322,7 +316,7 @@ impl Table {
             .try_reserve_exact(slots)
             .map_err(|_| Error::memory())?;
         replacement.slots.resize(slots, 0);
-        replacement.last_free = records;
+        replacement.last_free = records as u32;
         for index in array..self.array.len() {
             if self.array[index] != Value::Nil {
                 replacement.native_set(
@@ -353,7 +347,7 @@ mod tests {
     use crate::allocation_probe::probe;
 
     #[test]
-    fn native_retirement_count_tracks_revivals_and_saturation() {
+    fn native_retirement_count_tracks_revivals_and_large_deletions() {
         let mut table = Table::with_native51_capacity(0, 512, Memory::default()).unwrap();
         let key = |index| Key::String(StringId(index));
         let hash = |id: StringId| id.0 as u32;
@@ -370,10 +364,12 @@ mod tests {
         for index in 2..=256 {
             table.native_set(key(index), Value::Nil, hash).unwrap();
         }
-        assert_eq!(table.native_dead_keys, u8::MAX);
+        assert_eq!(table.native_dead_keys, 255);
         table.retire_native_keys_in_trace_slice(1, 512);
-        assert_eq!(table.native_dead_keys, u8::MAX);
+        assert_eq!(table.native_dead_keys, 0);
         assert!((2..=256).all(|index| table.slot(key(index)).unwrap().1.is_none()));
+        table.native_set(key(256), Value::Nil, hash).unwrap();
+        assert_eq!(table.native_dead_keys, 1);
         table.native_resize(0, 512).unwrap();
         assert_eq!(table.native_dead_keys, 0);
     }
