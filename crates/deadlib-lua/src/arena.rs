@@ -231,6 +231,22 @@ impl<T> Arena<T> {
         let (offset, bits) = rest.iter().enumerate().find(|(_, bits)| **bits != 0)?;
         Some((word + 1 + offset) * 64 + bits.trailing_zeros() as usize)
     }
+    // Removing a value clears its mark, so every returned slot is live.
+    pub(crate) fn marked_slots(&self) -> impl Iterator<Item = usize> + '_ {
+        let mut words = self.marks.iter().copied().enumerate();
+        let mut base = 0;
+        let mut bits: u64 = 0;
+        std::iter::from_fn(move || {
+            if bits == 0 {
+                let (word, nonzero) = words.find(|&(_, bits)| bits != 0)?;
+                base = word * 64;
+                bits = nonzero;
+            }
+            let slot = base + bits.trailing_zeros() as usize;
+            bits &= bits - 1;
+            Some(slot)
+        })
+    }
     pub(crate) fn at_most_marked(&self, mut limit: usize) -> bool {
         for &bits in &*self.marks {
             let Some(remaining) = limit.checked_sub(bits.count_ones() as usize) else {

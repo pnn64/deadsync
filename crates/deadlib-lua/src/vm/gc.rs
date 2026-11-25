@@ -1478,22 +1478,16 @@ impl Vm {
         self.trace_graph(work)?;
         // Snapshot the already reached containers before refreshing roots;
         // newly reached threads/cells still receive their ordinary first scan.
-        let threads = self
-            .threads
-            .entries()
-            .filter(|(index, _)| self.threads.slot_marked(*index))
-            .count();
+        let threads = self.threads.marked_slots().count();
         let tables = self
             .tables
-            .entries()
-            .filter(|(index, table)| table.metatable().is_some() && self.tables.slot_marked(*index))
+            .marked_slots()
+            .filter(|&index| self.tables[index].metatable().is_some())
             .count();
         let cells = self
             .upvalues
-            .entries()
-            .filter(|(index, cell)| {
-                matches!(cell, Cell::Open(..)) && self.upvalues.slot_marked(*index)
-            })
+            .marked_slots()
+            .filter(|&index| matches!(self.upvalues[index], Cell::Open(..)))
             .count();
         self.reserve_trace_work(
             work,
@@ -1502,20 +1496,18 @@ impl Vm {
                 .saturating_add(cells)
                 .saturating_add(self.seed_gc_root_count()),
         )?;
-        for index in 0..self.threads.len() {
-            if self.threads.slot_marked(index) {
-                work.push(Trace::ThreadAgain(ThreadId(
-                    self.threads.key(index).unwrap(),
-                )));
-            }
+        for index in self.threads.marked_slots() {
+            work.push(Trace::ThreadAgain(ThreadId(
+                self.threads.key(index).unwrap(),
+            )));
         }
-        for (index, table) in self.tables.entries() {
-            if table.metatable().is_some() && self.tables.slot_marked(index) {
+        for index in self.tables.marked_slots() {
+            if self.tables[index].metatable().is_some() {
                 work.push(Trace::TableAgain(TableId(self.tables.key(index).unwrap())));
             }
         }
-        for (index, cell) in self.upvalues.entries() {
-            if matches!(cell, Cell::Open(..)) && self.upvalues.slot_marked(index) {
+        for index in self.upvalues.marked_slots() {
+            if matches!(self.upvalues[index], Cell::Open(..)) {
                 work.push(Trace::CellAgain(index));
             }
         }
