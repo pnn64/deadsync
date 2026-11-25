@@ -531,14 +531,15 @@ impl OggIndex {
         let (page, earlier) = if last.first_packet <= number {
             (last, earlier)
         } else {
-            let end = if self.packet_scale != 0
+            let slot = if self.packet_scale != 0
                 && let Some(end) = packet_hint(pages, number, self.packet_scale)
             {
-                end
+                end - 1
             } else {
-                packet_end(earlier, number)
+                packet_floor(earlier, number)
             };
-            earlier[..end].split_last()?
+            let (before, from) = earlier.split_at(slot);
+            (&from[0], before)
         };
         let offset = page.first_packet_offset;
         if number != page.first_packet || offset == page.offset {
@@ -553,7 +554,7 @@ impl OggIndex {
 }
 
 #[inline]
-fn packet_end(pages: &[IndexedPage], number: u64) -> usize {
+fn packet_floor(pages: &[IndexedPage], number: u64) -> usize {
     // The first page starts packet zero. Only the upper boundary needs searching.
     debug_assert!(!pages.is_empty() && pages[0].first_packet <= number);
     let mut first = 0;
@@ -561,12 +562,11 @@ fn packet_end(pages: &[IndexedPage], number: u64) -> usize {
     while size > 1 {
         let half = size / 2;
         let middle = first + half;
-        if pages[middle].first_packet <= number {
-            first = middle;
-        }
+        first =
+            core::hint::select_unpredictable(pages[middle].first_packet <= number, middle, first);
         size -= half;
     }
-    first + 1
+    first
 }
 
 #[inline(never)]
