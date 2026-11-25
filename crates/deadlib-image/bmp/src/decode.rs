@@ -275,24 +275,36 @@ fn append_four_bit_rows(source: &[u8], header: &Header, indices: &mut Vec<u8>) {
         );
         return;
     }
-    if width == 16 {
-        indices.extend(source.as_chunks::<8>().0.iter().rev().flat_map(|row| {
-            let &[first, second] = row.as_chunks::<4>().0.first_chunk().unwrap();
-            let mut unpacked = [0; 16];
-            unpacked[..8].copy_from_slice(&unpack_eight_nibbles(first));
-            unpacked[8..].copy_from_slice(&unpack_eight_nibbles(second));
-            unpacked
-        }));
-        return;
-    }
-    let pairs = width / 2;
-    let has_tail = !width.is_multiple_of(2);
-    for row in display_rows(source, header.row_pitch, top_down) {
-        indices.extend(row[..pairs].iter().flat_map(|&byte| [byte >> 4, byte & 15]));
-        if has_tail {
-            indices.push(row[pairs] >> 4);
+    match width {
+        16 => append_nibble_word_rows::<8, 16>(source, indices),
+        24 => append_nibble_word_rows::<12, 24>(source, indices),
+        32 => append_nibble_word_rows::<16, 32>(source, indices),
+        _ => {
+            let pairs = width / 2;
+            let has_tail = !width.is_multiple_of(2);
+            for row in display_rows(source, header.row_pitch, top_down) {
+                indices.extend(row[..pairs].iter().flat_map(|&byte| [byte >> 4, byte & 15]));
+                if has_tail {
+                    indices.push(row[pairs] >> 4);
+                }
+            }
         }
     }
+}
+
+#[inline(never)]
+fn append_nibble_word_rows<const PACKED: usize, const WIDTH: usize>(
+    source: &[u8],
+    indices: &mut Vec<u8>,
+) {
+    indices.extend(source.as_chunks::<PACKED>().0.iter().rev().flat_map(|row| {
+        let mut unpacked = [0; WIDTH];
+        let words = row.as_chunks::<4>().0;
+        for (out, &word) in unpacked.as_chunks_mut::<8>().0.iter_mut().zip(words) {
+            *out = unpack_eight_nibbles(word);
+        }
+        unpacked
+    }));
 }
 
 fn unpack_eight_nibbles(packed: [u8; 4]) -> [u8; 8] {
