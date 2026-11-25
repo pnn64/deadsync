@@ -690,32 +690,34 @@ fn deinterlace(
         return Ok(());
     }
     if height <= 64 {
-        if width == 1 {
-            permute_interlace::<1, true>(pixels, width, height, row)
-        } else {
-            permute_interlace::<1, false>(pixels, width, height, row)
+        match width {
+            1 => permute_interlace::<1, 1>(pixels, width, height, row),
+            2 => permute_interlace::<1, 2>(pixels, width, height, row),
+            4 => permute_interlace::<1, 4>(pixels, width, height, row),
+            8 => permute_interlace::<1, 8>(pixels, width, height, row),
+            _ => permute_interlace::<1, 0>(pixels, width, height, row),
         }
     } else if height <= 1024 {
         if width == 1 {
-            permute_interlace::<16, true>(pixels, width, height, row)
+            permute_interlace::<16, 1>(pixels, width, height, row)
         } else {
-            permute_interlace::<16, false>(pixels, width, height, row)
+            permute_interlace::<16, 0>(pixels, width, height, row)
         }
     } else if width == 1 {
-        permute_interlace::<1024, true>(pixels, width, height, row)
+        permute_interlace::<1024, 1>(pixels, width, height, row)
     } else {
-        permute_interlace::<1024, false>(pixels, width, height, row)
+        permute_interlace::<1024, 0>(pixels, width, height, row)
     }
 }
 
 #[inline(never)]
-fn permute_interlace<const WORDS: usize, const SINGLE_PIXEL: bool>(
+fn permute_interlace<const WORDS: usize, const FIXED_WIDTH: usize>(
     pixels: &mut [u8],
     width: usize,
     height: usize,
     row: &mut Vec<u8>,
 ) -> Result<(), Error> {
-    let width = if SINGLE_PIXEL { 1 } else { width };
+    let width = if FIXED_WIDTH == 0 { width } else { FIXED_WIDTH };
     let mut narrow = [0; 64];
     let row = if width <= narrow.len() {
         &mut narrow[..width]
@@ -765,7 +767,7 @@ fn permute_interlace<const WORDS: usize, const SINGLE_PIXEL: bool>(
                     pixels[dest * width..(dest + 1) * width].copy_from_slice(row);
                     break;
                 }
-                if SINGLE_PIXEL {
+                if FIXED_WIDTH == 1 {
                     pixels[dest] = pixels[source];
                 } else {
                     pixels.copy_within(source * width..(source + 1) * width, dest * width);
@@ -854,7 +856,7 @@ mod tests {
         for height in (1..=257).chain([
             511, 512, 513, 1023, 1024, 1025, 8193, 65535, 17, 17, 3, 65, 2, 1,
         ]) {
-            for width in [1, 3, 17, 64, 65] {
+            for width in [1, 2, 3, 4, 8, 17, 64, 65] {
                 let expected: Vec<_> = (0..height)
                     .flat_map(|y| (0..width).map(move |x| ((y * 137 + x * 71) % 251) as u8))
                     .collect();
