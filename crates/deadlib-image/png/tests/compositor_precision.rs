@@ -88,12 +88,12 @@ fn every_palette_size_transparency_length_and_expansion_boundary_matches_model()
 
 #[test]
 fn indexed_frame_lookup_at_the_size_boundary_matches_the_model() {
-    for width in [255, 256, 257] {
+    for (width, bit_depth) in [(31, 4), (32, 4), (33, 4), (255, 8), (256, 8), (257, 8)] {
         let image = |width, height, seed| Image {
             width,
             height,
             color_type: ColorType::Indexed,
-            bit_depth: 4,
+            bit_depth,
             samples: Samples::U8(
                 (0..width * height)
                     .map(|n| ((n + seed) % 16) as u8)

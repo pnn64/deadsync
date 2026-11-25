@@ -50,8 +50,8 @@ fn palette_rgba(png: &Png, index: usize) -> [u16; 4] {
 }
 
 #[inline(always)]
-fn expanded_palette(png: &Png) -> [[u16; 4]; 256] {
-    let mut palette = [[0, 0, 0, 65535]; 256];
+fn expanded_palette<const ENTRIES: usize>(png: &Png) -> [[u16; 4]; ENTRIES] {
+    let mut palette = [[0, 0, 0, 65535]; ENTRIES];
     for (out, &[r, g, b]) in palette.iter_mut().zip(&png.palette) {
         *out = [
             u16::from(r) * 257,
@@ -204,6 +204,7 @@ fn source_rgba_rows(canvas: &mut [u16], stride: usize, width: usize, samples: &S
     }
 }
 
+#[inline(never)]
 fn render_alpha_rows<T: Copy, const N: usize>(
     canvas: &mut [u16],
     stride: usize,
@@ -244,22 +245,45 @@ fn render_indexed_rows(
     control: FrameControl,
     samples: &[u8],
 ) {
-    let palette = expanded_palette(png);
     let offset = control.y_offset as usize * stride + control.x_offset as usize * 4;
     let canvas = canvas[offset..].as_chunks_mut::<4>().0;
+    let stride = stride / 4;
+    if samples.len() >= 256 {
+        let palette = expanded_palette::<256>(png);
+        render_indices(canvas, stride, control, samples, |index| {
+            palette[usize::from(index)]
+        });
+    } else if png.image.bit_depth < 8 && samples.len() >= 32 {
+        let palette = expanded_palette::<16>(png);
+        render_indices(canvas, stride, control, samples, |index| {
+            // Validated sub-byte frame samples fit in four bits.
+            palette[usize::from(index & 15)]
+        });
+    } else {
+        render_indices(canvas, stride, control, samples, |index| {
+            palette_rgba(png, usize::from(index))
+        });
+    }
+}
+
+#[inline]
+fn render_indices(
+    canvas: &mut [[u16; 4]],
+    stride: usize,
+    control: FrameControl,
+    samples: &[u8],
+    lookup: impl Fn(u8) -> [u16; 4],
+) {
     let width = control.width as usize;
-    for (dst, indices) in canvas
-        .chunks_mut(stride / 4)
-        .zip(samples.chunks_exact(width))
-    {
+    for (dst, indices) in canvas.chunks_mut(stride).zip(samples.chunks_exact(width)) {
         let pixels = dst[..width].iter_mut().zip(indices);
         if control.blend == BlendOp::Source {
             for (dst, &index) in pixels {
-                *dst = palette[usize::from(index)];
+                *dst = lookup(index);
             }
         } else {
             for (dst, &index) in pixels {
-                over::<false>(dst, palette[usize::from(index)]);
+                over::<false>(dst, lookup(index));
             }
         }
     }
@@ -345,7 +369,7 @@ impl Png {
                 out.extend_from_slice(samples.as_chunks::<4>().0)
             }
             (Samples::U8(samples), ColorType::Indexed) if samples.len() >= 256 => {
-                let palette = expanded_palette(self);
+                let palette = expanded_palette::<256>(self);
                 out.extend(samples.iter().map(|&index| palette[usize::from(index)]));
             }
             (Samples::U8(samples), ColorType::Indexed) => {
@@ -572,25 +596,7 @@ impl Compositor<'_> {
         } else if let (ColorType::Indexed, Samples::U8(samples)) =
             (image.color_type, &image.samples)
         {
-            if samples.len() >= 256 {
-                render_indexed_rows(self.png, &mut self.canvas, stride, c, samples);
-            } else {
-                for y in 0..c.height as usize {
-                    for x in 0..c.width as usize {
-                        let src =
-                            palette_rgba(self.png, usize::from(samples[y * c.width as usize + x]));
-                        let offset =
-                            (c.y_offset as usize + y) * stride + (c.x_offset as usize + x) * 4;
-                        let dst: &mut [u16; 4] =
-                            (&mut self.canvas[offset..offset + 4]).try_into().unwrap();
-                        if c.blend == BlendOp::Source {
-                            *dst = src;
-                        } else {
-                            over::<false>(dst, src);
-                        }
-                    }
-                }
-            }
+            render_indexed_rows(self.png, &mut self.canvas, stride, c, samples);
         } else {
             let offset = c.y_offset as usize * stride + c.x_offset as usize * 4;
             let canvas = &mut self.canvas[offset..];
