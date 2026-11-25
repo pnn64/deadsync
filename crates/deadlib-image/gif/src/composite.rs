@@ -239,37 +239,66 @@ impl Compositor {
             }
         }
         if reuse_saved || self.prepare(r, frame.control)? {
-            let binary_colors = match local {
-                Some(&[a, b]) => Some([a, b].map(|[r, g, b]| [r, g, b, 255])),
-                None if self.palette_len == Some(2) => Some([self.palette[0], self.palette[1]]),
-                _ => None,
-            };
-            let canvas = (self.pixels.as_mut_slice(), self.width as usize);
-            if let Some(colors) = binary_colors {
-                draw_binary_indices::<false>(
-                    canvas,
-                    r,
-                    &frame.indices,
-                    frame.width as usize,
-                    colors,
-                    transparent,
-                );
-            } else {
-                let local_table;
-                let table = if let Some(p) = local {
-                    local_table = expand_palette(p);
-                    &local_table
+            let stride = self.width as usize;
+            let width = frame.width as usize;
+            let visible = r.w * r.h;
+            // Wide rows already use bulk fills. Probe them only to skip transparent spans.
+            let solid = if (width < 32 || transparent.is_some())
+                && r.w == stride
+                && width == stride
+                && visible >= 256
+            {
+                let indices = &frame.indices[..visible];
+                let first = indices[0];
+                if (width < 32 || transparent == Some(first))
+                    && first == indices[visible - 1]
+                    && first == indices[visible / 2]
+                {
+                    crate::lzw::repeated_index(indices)
                 } else {
-                    &self.palette
+                    None
+                }
+            } else {
+                None
+            };
+            if let Some(index) = solid {
+                if transparent != Some(index) {
+                    let index = usize::from(index);
+                    let color = if let Some(palette) = local {
+                        let [red, green, blue] = palette[index];
+                        [red, green, blue, 255]
+                    } else {
+                        self.palette[index]
+                    };
+                    let start = r.y * stride;
+                    self.pixels[start..start + visible].fill(color);
+                }
+            } else {
+                let binary_colors = match local {
+                    Some(&[a, b]) => Some([a, b].map(|[r, g, b]| [r, g, b, 255])),
+                    None if self.palette_len == Some(2) => Some([self.palette[0], self.palette[1]]),
+                    _ => None,
                 };
-                draw_indices(
-                    canvas,
-                    r,
-                    &frame.indices,
-                    frame.width as usize,
-                    table,
-                    transparent,
-                );
+                let canvas = (self.pixels.as_mut_slice(), stride);
+                if let Some(colors) = binary_colors {
+                    draw_binary_indices::<false>(
+                        canvas,
+                        r,
+                        &frame.indices,
+                        width,
+                        colors,
+                        transparent,
+                    );
+                } else {
+                    let local_table;
+                    let table = if let Some(p) = local {
+                        local_table = expand_palette(p);
+                        &local_table
+                    } else {
+                        &self.palette
+                    };
+                    draw_indices(canvas, r, &frame.indices, width, table, transparent);
+                }
             }
         }
         Ok(RenderedFrame {
