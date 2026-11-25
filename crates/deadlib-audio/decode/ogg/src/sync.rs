@@ -118,7 +118,14 @@ impl SyncBuffer {
     /// Append bytes, compacting consumed storage when needed. A rejected append
     /// leaves bytes, position, hole state and the last page unchanged.
     pub fn push(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        self.prepare(bytes.len())?;
+        let spare = self
+            .data
+            .capacity()
+            .min(self.limit)
+            .saturating_sub(self.filled);
+        if bytes.len() > spare {
+            self.prepare(bytes.len())?;
+        }
         self.data.truncate(self.filled);
         self.data.extend_from_slice(bytes);
         self.filled = self.data.len();
