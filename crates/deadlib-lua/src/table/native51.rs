@@ -289,6 +289,23 @@ impl Table {
         self.native_resize(array, total - array_used)
     }
 
+    fn native_reinsert(&mut self, key: Key, value: Value, hash: u32) -> Result<(), Error> {
+        if let Some(index) = array_index(key.value()).filter(|&i| i < self.array.len()) {
+            self.array[index] = value;
+            return Ok(());
+        }
+        // Resize visits each live key once, so probe directly for a vacant slot.
+        let identity_hash = key.hash();
+        let vacant = self.slots.len().checked_sub(1).map(|mask| {
+            let mut slot = identity_hash & mask;
+            while self.slots[slot] != 0 {
+                slot = (slot + 1) & mask;
+            }
+            slot
+        });
+        self.native_insert(key, value, hash, identity_hash, vacant)
+    }
+
     pub(super) fn native_resize(&mut self, array: usize, records: usize) -> Result<(), Error> {
         if array > MAX_ARRAY || records > MAX_ARRAY {
             return Err(Error::new(ErrorKind::Runtime, 0, "table overflow"));
@@ -325,17 +342,17 @@ impl Table {
             .map_err(|_| Error::memory())?;
         replacement.slots.resize(slots, 0);
         replacement.last_free = records as u32;
-        for index in array..self.array.len() {
-            if self.array[index] != Value::Nil {
-                replacement.native_set(
-                    Key::Number(((index + 1) as f64).to_bits()),
-                    self.array[index],
-                    |_| unreachable!("numeric keys do not use a string hash"),
-                )?;
+        for (index, &value) in self.array.iter().enumerate().skip(array) {
+            if value != Value::Nil {
+                let key = Key::Number(((index + 1) as f64).to_bits());
+                let hash = hash(key, |_| {
+                    unreachable!("numeric keys do not use a string hash")
+                });
+                replacement.native_reinsert(key, value, hash)?;
             }
         }
         for entry in self.entries.iter().rev().filter(|e| e.value != Value::Nil) {
-            replacement.native_set(entry.key, entry.value, |_| entry.native_hash)?;
+            replacement.native_reinsert(entry.key, entry.value, entry.native_hash)?;
         }
         self.array = replacement.array;
         self.entries = replacement.entries;
