@@ -1380,6 +1380,27 @@ const fn canonical_codes<const N: usize>(lengths: [u8; N]) -> [(u16, u8); N] {
 
 const RLE_LENGTHS: [u8; 286] = rle_lengths();
 const RLE_CODES: [(u16, u8); 286] = canonical_codes(RLE_LENGTHS);
+const RLE_ZERO_BITS: u8 = {
+    assert!(RLE_CODES[0].0 == 0);
+    RLE_CODES[0].1
+};
+/// The remaining zeros after the seed literal and any full-length matches.
+const RLE_ZERO_TAIL: [(u16, u8); 259] = {
+    let mut tokens = [(0, 0); 259];
+    let mut length = 1;
+    while length < tokens.len() {
+        tokens[length] = if length < 5 {
+            (0, length as u8 * RLE_ZERO_BITS)
+        } else {
+            let index = length_code(length);
+            let (code, bits) = RLE_CODES[257 + index];
+            let extra = (length - LENGTH_BASE[index]) as u16;
+            (code | extra << bits, bits + LENGTH_EXTRA[index] + 1)
+        };
+        length += 1;
+    }
+    tokens
+};
 const FIXED_CODES: [(u16, u8); 288] = canonical_codes(fixed_lengths());
 /// Each match length's fixed code followed by its extra bits, at `length - 3`.
 const FIXED_LENGTH_TOKENS: [(u16, u8); 256] = {
@@ -1628,8 +1649,9 @@ impl Writer {
                 checksum_start = pos;
             }
             // Seed each run with a literal, so distance one never refers to
-            // data before this block and no retained dictionary is needed.
-            self.write(RLE_CODES[0].0 as u32, RLE_CODES[0].1);
+            // data before this block. Its code only advances the bit count.
+            let mut word = self.word;
+            let mut bits = self.count + RLE_ZERO_BITS;
             let mut remaining = pos - start - 1;
             const MAX_LENGTH: usize = LENGTH_BASE[28];
             const TOKEN: u32 = RLE_CODES[285].0 as u32;
@@ -1641,23 +1663,19 @@ impl Writer {
                 PAIR | (PAIR << (2 * BITS))
             };
             while remaining >= 4 * MAX_LENGTH {
-                self.write(FOUR, 4 * BITS);
+                self.put(word | (u64::from(FOUR) << bits), bits + 4 * BITS);
+                word = self.word;
+                bits = self.count;
                 remaining -= 4 * MAX_LENGTH;
             }
-            // A short match costs at least nine bits; up to four two-bit zeros
-            // are cheaper as literals, including after a 258-byte match.
-            while remaining >= 5 {
-                let length = remaining.min(MAX_LENGTH);
-                let index = length_code(length);
-                let (code, bits) = RLE_CODES[257 + index];
-                let value = u32::from(code) | (((length - LENGTH_BASE[index]) as u32) << bits);
-                // The high zero bit is the sole distance code.
-                self.write(value, bits + LENGTH_EXTRA[index] + 1);
-                remaining -= length;
+            // At most three full matches remain before the final token.
+            while remaining > MAX_LENGTH {
+                word |= u64::from(TOKEN) << bits;
+                bits += BITS;
+                remaining -= MAX_LENGTH;
             }
-            if remaining != 0 {
-                self.rle_literals(&input[pos - remaining..pos]);
-            }
+            let (tail, tail_bits) = RLE_ZERO_TAIL[remaining];
+            self.put(word | (u64::from(tail) << bits), bits + tail_bits);
         }
         // Short runs stay in these spans so bulk checksum code handles noise.
         checksum.update(&input[checksum_start..]);
