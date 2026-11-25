@@ -442,7 +442,7 @@ fn fill(table: &mut [u32], code: u16, n: usize, entry: u32) {
 }
 
 impl Huffman<32> {
-    /// Pack code length, extra-bit count and distance base in a single lookup.
+    /// Pack total bits, code length, and distance base in a single lookup.
     /// Longer primary misses retain the canonical decoder. Reserved codes have
     /// a zero base, which no valid distance uses. Repeat the shortest prefix to
     /// avoid translating all 512 entries for common small distance trees.
@@ -452,14 +452,14 @@ impl Huffman<32> {
         for (index, value) in distance_fast[..prefix].iter_mut().enumerate() {
             let entry = self.fast[index];
             let symbol = usize::from(entry >> 4);
+            let code_bits = u32::from(entry & 15);
             *value = if entry == 0 {
                 0
             } else if symbol >= 30 {
-                u32::from(entry & 15)
+                code_bits
             } else {
-                ((DIST_BASE[symbol] as u32) << 8)
-                    | (u32::from(DIST_EXTRA[symbol]) << 4)
-                    | u32::from(entry & 15)
+                let total_bits = code_bits + u32::from(DIST_EXTRA[symbol]);
+                ((DIST_BASE[symbol] as u32) << 9) | (code_bits << 5) | total_bits
             };
         }
         let mut initialized = prefix;
@@ -758,17 +758,17 @@ fn inflate_sized_fast<E: Entry, const PARTIAL_OUTPUT: bool>(
                 break 'decode;
             }
             let entry = distance_fast[(word & 511) as usize];
-            let n = (entry & 15) as u8;
-            let distance = if n != 0 {
-                let extra = ((entry >> 4) & 15) as u8;
-                let distance =
-                    (entry >> 8) as usize + ((word >> n) & ((1u64 << extra) - 1)) as usize;
-                word >>= n + extra;
-                count -= n + extra;
-                if entry >> 8 == 0 {
+            let total = (entry & 31) as u8;
+            let distance = if total != 0 {
+                let base = (entry >> 9) as usize;
+                if base == 0 {
                     return Err(Error::Invalid("reserved distance symbol"));
                 }
-                distance
+                let code_bits = (entry >> 5) & 15;
+                let extra = (word & ((1u64 << total) - 1)) >> code_bits;
+                word >>= total;
+                count -= total;
+                base + extra as usize
             } else {
                 // The accumulator already holds every possible distance field.
                 bits.word = word;
