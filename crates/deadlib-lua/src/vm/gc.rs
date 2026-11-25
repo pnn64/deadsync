@@ -179,7 +179,7 @@ pub(super) struct Collector {
     stopped: bool,
     pause: i32,
     stepmul: i32,
-    // One past every table slot that has held a metatable.
+    // One past the highest slot that can retain a metatable.
     pub(super) metatable_table_end: u32,
     last_live: usize,
     threshold: usize,
@@ -1537,7 +1537,7 @@ impl Vm {
                 .map(|id| Trace::Value(Value::Userdata(id))),
         );
         self.trace_graph(work)?;
-        self.clear_weak_tables();
+        let metatable_end = self.clear_weak_tables();
         if self.threads.has_unmarked() {
             for (i, t) in self.threads.entries() {
                 if !self.threads.slot_marked(i) {
@@ -1549,13 +1549,17 @@ impl Vm {
                 }
             }
         }
+        // Existing unmarked tables cannot survive sweep. Attaching a
+        // metatable to a new table extends the bound at the point of the write.
+        self.gc.metatable_table_end = metatable_end;
         self.protect_new_allocations(true);
         self.gc.phase = Phase::Sweep;
         self.gc.sweep_arena = 0;
         self.gc.sweep_cursor = self.tables.len() as u32;
         Ok(())
     }
-    fn clear_weak_tables(&mut self) {
+    fn clear_weak_tables(&mut self) -> u32 {
+        let mut metatable_end = 0;
         // A string __mode survives weak cleanup. Clearing a non-string mode
         // leaves the same strong-table flags.
         let mut cached = (None, (false, false));
@@ -1567,6 +1571,7 @@ impl Vm {
                 let Some(mt) = self.tables[index].metatable() else {
                     continue;
                 };
+                metatable_end = index as u32 + 1;
                 if cached.0 != Some(mt) {
                     cached = (Some(mt), self.metatable_mode(mt));
                 }
@@ -1606,6 +1611,7 @@ impl Vm {
                 }
             }
         }
+        metatable_end
     }
     fn protect_new_allocations(&mut self, enabled: bool) {
         self.tables.protect_new(enabled);
