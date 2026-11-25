@@ -184,8 +184,10 @@ theme to describe an input or store a setting:
   these preferences. The shell supplies them to `deadsync-lights` for driver
   startup, device I/O, and gameplay light updates. It translates virtual actions
   into cabinet pad and menu light events and routes the operator button.
-- Cabinet chart lighting borrows notes and timestamps from the shell and
-  receives the song clock and columns per player. The shell supplies
+- The shell selects and loads cabinet charts and prepares their timestamped
+  lighting events. The cabinet driver schedules those events and receives
+  gameplay notes, the song clock, and columns per player for pad lights.
+  The shell supplies
   StepManiaX lane input and judgment snapshots and resolves result grades to
   GIF suffixes. The SMX driver tracks lane events and drives panel animations.
 - Config and profiles read INI files with `deadlib-platform::ini`.

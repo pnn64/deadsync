@@ -4983,11 +4983,12 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
 }
 
 #[test]
-fn lighting_consumes_chart_data_and_grade_suffixes_without_runtime_dependencies() {
+fn lighting_consumes_prepared_inputs_without_gameplay_or_chart_catalog_dependencies() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for (name, forbidden_crate, forbidden_import) in [
         ("deadsync-lights", "deadsync-gameplay", "deadsync_gameplay"),
         ("deadsync-lights", "deadsync-input", "deadsync_input"),
+        ("deadsync-lights", "deadsync-chart", "deadsync_chart"),
         ("deadsync-smx", "deadsync-gameplay", "deadsync_gameplay"),
         ("deadsync-smx", "deadsync-score", "deadsync_score"),
     ] {

@@ -198,7 +198,7 @@ use deadsync_gameplay::{GameplaySession, GameplayViewport, LeadInTiming};
 use deadsync_input as logical_input;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_input_fsr as fsr_input;
-use deadsync_lights::cabinet_chart::{
+use crate::lighting::cabinet_chart::{
     cabinet_light_chart_from_loaded, cabinet_light_key, cabinet_light_plan,
 };
 use deadsync_lights::{self as lights, HideFlags};

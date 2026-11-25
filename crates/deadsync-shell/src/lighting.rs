@@ -1,15 +1,16 @@
 //! Shell policy and adapters for cabinet and `StepManiaX` lighting.
 
+pub(crate) mod cabinet_chart;
+
 use std::sync::Arc;
 
+use self::cabinet_chart::{CabinetLightPlan, cabinet_light_chart_from_loaded};
 use crate::smx_config::smx_options_light_preview_active;
 use crate::song_loading;
 use deadsync_config::options::SmxPackName;
 use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState, active_hold_is_engaged};
 use deadsync_input::VirtualAction;
-use deadsync_lights::cabinet_chart::{
-    CabinetLightEvent, CabinetLightPlan, GameplayLightChartKey, cabinet_light_chart_from_loaded,
-};
+use deadsync_lights::cabinet_chart::{CabinetLightEvent, GameplayLightChartKey};
 use deadsync_lights::{
     ButtonLight, CabinetLight, DriverKind, HideFlags, Mode, Player, ScreenLightContext,
     State as LightState,
