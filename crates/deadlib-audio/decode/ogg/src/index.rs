@@ -524,8 +524,13 @@ impl OggIndex {
                 return Some(page);
             }
         }
-        let end = pages.partition_point(|page| page.first_packet <= number);
-        let (page, earlier) = pages[..end].split_last()?;
+        let (last, earlier) = pages.split_last()?;
+        let (page, earlier) = if last.first_packet <= number {
+            (last, earlier)
+        } else {
+            let end = earlier.partition_point(|page| page.first_packet <= number);
+            earlier[..end].split_last()?
+        };
         let offset = page.first_packet_offset;
         if number != page.first_packet || offset == page.offset {
             return Some(page);
