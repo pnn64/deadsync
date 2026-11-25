@@ -114,6 +114,7 @@ fn unfilter_paeth_pair(row: &mut [u8], next: &mut [u8], prev: &[u8], bpp: usize)
     #[cfg(target_arch = "x86_64")]
     {
         match bpp {
+            1 => x86::unfilter::<1, true>(row, prev, Some(next)),
             2 => x86::unfilter::<2, true>(row, prev, Some(next)),
             3 => x86::unfilter::<3, true>(row, prev, Some(next)),
             4 => x86::unfilter::<4, true>(row, prev, Some(next)),
