@@ -533,7 +533,9 @@ fn frequent_transparency_changes(sample: [u8; 8], transparent: u8) -> bool {
     let different = u64::from_le_bytes(sample) ^ u64::from_le_bytes([transparent; 8]);
     // A byte's high bit stays clear only when all of its bits were zero.
     let matches = !(((different & !HIGH_BITS).wrapping_add(!HIGH_BITS)) | different) & HIGH_BITS;
-    (matches ^ (matches << 8)).count_ones() >= 3
+    let changes = matches ^ (matches << 8);
+    let after_first = changes & changes.wrapping_sub(1);
+    after_first & after_first.wrapping_sub(1) != 0
 }
 
 #[inline(never)]
