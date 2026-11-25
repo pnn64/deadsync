@@ -216,25 +216,42 @@ impl ImageRows {
         }
         Ok((progress.consumed, false))
     }
-    pub(super) fn reader_copies_raw(&self) -> bool {
-        self.header.depth == 16 || (self.header.depth < 8 && self.native8.is_empty())
-    }
-    pub(super) fn copy_raw_into(&self, image: &mut Image) -> Result<(), Error> {
+    pub(super) fn copy_into(&self, image: &mut Image) -> Result<(), Error> {
         if let Samples::U8(out) = &mut image.samples {
-            debug_assert!(self.header.depth < 8 && self.native8.is_empty());
-            let width = self.header.width as usize;
+            let depth = self.header.depth;
+            debug_assert!(depth <= 8);
+            let packed = depth < 8 && self.native8.is_empty();
+            let row = if depth == 8 || packed {
+                &self.row[1..]
+            } else {
+                &self.native8
+            };
+            if !self.header.interlaced && !packed {
+                out.extend_from_slice(row);
+                return Ok(());
+            }
+            let channels = self.header.color.channels();
+            let stride = self.header.width as usize * channels;
             let y = self.y as usize + self.row_index * self.dy as usize;
-            let start = y * width + self.x as usize;
-            let end = (y + 1) * width;
+            let start = y * stride + self.x as usize * channels;
+            let end = (y + 1) * stride;
             if !self.header.interlaced {
                 out.resize(end, 0);
             }
-            unpack_row(
-                self.header.depth,
-                &self.row[1..],
-                &mut out[start..end],
-                self.dx as usize,
-            );
+            let dst = &mut out[start..end];
+            let step = self.dx as usize;
+            if packed {
+                unpack_row(depth, row, dst, step);
+            } else if step == 1 {
+                dst.copy_from_slice(row);
+            } else {
+                match channels {
+                    1 => scanline::scatter::<_, 1>(row, dst, step),
+                    2 => scanline::scatter::<_, 2>(row, dst, step),
+                    3 => scanline::scatter::<_, 3>(row, dst, step),
+                    _ => scanline::scatter::<_, 4>(row, dst, step),
+                }
+            }
             return Ok(());
         }
         let Samples::U16(out) = &mut image.samples else {

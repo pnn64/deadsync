@@ -1,4 +1,4 @@
-use super::{DecodeEvent, DecodeStatus, ImageInfo, ImageKind, Row, RowSamples, StreamDecoder};
+use super::{DecodeEvent, DecodeStatus, ImageInfo, ImageKind, StreamDecoder};
 use crate::{Animation, DecodeOptions, Error, Frame, Image, Png, Samples, reserve};
 use std::io::Read;
 
@@ -31,31 +31,6 @@ fn allocate(info: ImageInfo) -> Result<Image, Error> {
     })
 }
 
-fn scatter(image: &mut Image, row: Row<'_>) -> Result<(), Error> {
-    let (Samples::U8(dest), RowSamples::U8(src)) = (&mut image.samples, row.samples) else {
-        return Err(Error::Invalid("row sample representation"));
-    };
-    if row.pass == 0 {
-        dest.extend_from_slice(src);
-        return Ok(());
-    }
-    let channels = image.color_type.channels();
-    let start = (row.y as usize * image.width as usize + row.x as usize) * channels;
-    if row.x_step == 1 {
-        dest[start..start + src.len()].copy_from_slice(src);
-    } else {
-        let out = &mut dest[start..];
-        let step = row.x_step as usize;
-        match channels {
-            1 => crate::scanline::scatter::<_, 1>(src, out, step),
-            2 => crate::scanline::scatter::<_, 2>(src, out, step),
-            3 => crate::scanline::scatter::<_, 3>(src, out, step),
-            _ => crate::scanline::scatter::<_, 4>(src, out, step),
-        }
-    }
-    Ok(())
-}
-
 fn row_image(png: &mut Png, kind: ImageKind) -> Result<&mut Image, Error> {
     match kind {
         ImageKind::Default => Ok(&mut png.image),
@@ -69,9 +44,9 @@ fn row_image(png: &mut Png, kind: ImageKind) -> Result<&mut Image, Error> {
 }
 
 fn collect(png: &mut Option<Png>, decoder: &mut StreamDecoder) -> Result<(), Error> {
-    if let Some((kind, row)) = decoder.ready_raw_row() {
+    if let Some((kind, row)) = decoder.ready_row() {
         let png = png.as_mut().ok_or(Error::Invalid("missing IHDR"))?;
-        return row.copy_raw_into(row_image(png, kind)?);
+        return row.copy_into(row_image(png, kind)?);
     }
     let event = decoder
         .event()
@@ -132,9 +107,7 @@ fn collect(png: &mut Option<Png>, decoder: &mut StreamDecoder) -> Result<(), Err
             reserve(&mut animation.frames, 1)?;
             animation.frames.push(Frame { control, image });
         }
-        DecodeEvent::Row(row) => {
-            scatter(row_image(png, row.image)?, row)?;
-        }
+        DecodeEvent::Row(_) => return Err(Error::Invalid("missing image decoder")),
         DecodeEvent::Palette(_) | DecodeEvent::Transparency(_) | DecodeEvent::ImageEnd(_) => (),
     }
     Ok(())
