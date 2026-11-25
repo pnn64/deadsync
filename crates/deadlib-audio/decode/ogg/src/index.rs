@@ -1,5 +1,6 @@
+use crate::demux::{Assembly, Demux};
 use crate::{
-    CompatibilityStats, Demuxer, Error, Limits, Packet, Page, PageHeader, PageReader,
+    CompatibilityStats, Error, Limits, Packet, Page, PageHeader, PageReader,
     UNKNOWN_GRANULE_POSITION, ValidationOptions, reserve,
 };
 use core::ops::Range;
@@ -260,7 +261,7 @@ pub enum IndexEvent<'a> {
 
 impl OggIndex {
     pub fn read(reader: impl Read, options: IndexOptions) -> Result<Self, Error> {
-        Self::read_inner::<false, Error>(reader, options, |_| Ok(()))
+        Self::read_inner::<usize, Error>(reader, options, |_| Ok(()))
     }
     /// Build the same validated index while observing its existing packet
     /// assembly and pages in physical order. This allows a codec to build its
@@ -271,15 +272,15 @@ impl OggIndex {
         options: IndexOptions,
         observe: impl FnMut(IndexEvent<'_>) -> Result<(), E>,
     ) -> Result<Self, E> {
-        Self::read_inner::<true, E>(reader, options, observe)
+        Self::read_inner::<Vec<u8>, E>(reader, options, observe)
     }
-    fn read_inner<const OBSERVE: bool, E: From<Error>>(
+    fn read_inner<P: Assembly, E: From<Error>>(
         reader: impl Read,
         options: IndexOptions,
         mut observe: impl FnMut(IndexEvent<'_>) -> Result<(), E>,
     ) -> Result<Self, E> {
         let mut reader = PageReader::new(reader);
-        let mut demux = Demuxer::with_validation(options.container_limits, options.validation);
+        let mut demux = Demux::<P>::with_validation(options.container_limits, options.validation);
         let mut index = Self {
             streams: Vec::new(),
             pages: Vec::new(),
@@ -290,7 +291,7 @@ impl OggIndex {
             let page = located.page;
             let header = page.header();
             let mut failure = None;
-            let state = demux.push_indexed_page::<OBSERVE>(page, located.offset, |packet| {
+            let state = demux.push_indexed_page(page, located.offset, |packet| {
                 if failure.is_none() {
                     failure = observe(IndexEvent::Packet { page, packet }).err();
                 }

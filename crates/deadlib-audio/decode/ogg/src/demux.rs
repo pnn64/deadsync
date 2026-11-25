@@ -44,47 +44,33 @@ pub struct Packet<'a> {
     pub info: PacketInfo,
 }
 
-enum PartialPacket {
-    Bytes(Vec<u8>),
-    Length(usize),
-}
-
-impl PartialPacket {
-    fn len(&self) -> usize {
-        match self {
-            Self::Bytes(bytes) => bytes.len(),
-            Self::Length(length) => *length,
-        }
-    }
-}
-
-struct Stream {
+struct Stream<P> {
     serial: u32,
     chain: u32,
     next_sequence: u32,
     ended: bool,
     continuing: bool,
-    partial: PartialPacket,
+    partial: P,
     packet_offset: u64,
     packets: u64,
     granule: u64,
 }
 
 // Keep the first stream inline and retain the heap storage once it is needed.
-enum Streams {
-    Single(Option<Stream>),
-    Many(Vec<Stream>),
+enum Streams<P> {
+    Single(Option<Stream<P>>),
+    Many(Vec<Stream<P>>),
 }
 
-impl Streams {
-    fn as_slice(&self) -> &[Stream] {
+impl<P> Streams<P> {
+    fn as_slice(&self) -> &[Stream<P>] {
         match self {
             Self::Single(stream) => stream.as_slice(),
             Self::Many(streams) => streams,
         }
     }
 
-    fn find_mut(&mut self, serial: u32) -> Option<(usize, &mut Stream)> {
+    fn find_mut(&mut self, serial: u32) -> Option<(usize, &mut Stream<P>)> {
         match self {
             Self::Single(stream) => stream
                 .as_mut()
@@ -98,7 +84,7 @@ impl Streams {
         }
     }
 
-    fn get_mut(&mut self, index: usize) -> &mut Stream {
+    fn get_mut(&mut self, index: usize) -> &mut Stream<P> {
         match self {
             Self::Single(stream) => {
                 debug_assert_eq!(index, 0);
@@ -115,7 +101,7 @@ impl Streams {
         }
     }
 
-    fn push(&mut self, stream: Stream) -> Result<usize, Error> {
+    fn push(&mut self, stream: Stream<P>) -> Result<usize, Error> {
         match self {
             Self::Single(first) if first.is_none() => {
                 *first = Some(stream);
@@ -150,8 +136,52 @@ pub(crate) struct PageState {
 /// compatibility exceptions require with_validation. Errors are terminal
 /// until reset. Codec-specific header ordering and time interpretation belong
 /// to the codec mapping, not this container.
-pub struct Demuxer {
-    streams: Streams,
+pub struct Demuxer(Demux<Vec<u8>>);
+
+impl Default for Demuxer {
+    fn default() -> Self {
+        Self::new(Limits::default())
+    }
+}
+
+impl Demuxer {
+    pub fn new(limits: Limits) -> Self {
+        Self::with_validation(limits, ValidationOptions::default())
+    }
+    pub fn with_validation(limits: Limits, validation: ValidationOptions) -> Self {
+        Self(Demux::with_validation(limits, validation))
+    }
+    /// Discard logical streams and terminal state, retaining stream-list capacity.
+    pub fn reset(&mut self) {
+        self.0.reset();
+    }
+    pub fn compatibility(&self) -> CompatibilityStats {
+        self.0.compatibility()
+    }
+    pub fn chain(&self) -> u32 {
+        self.0.chain()
+    }
+    pub fn active_streams(&self) -> usize {
+        self.0.active
+    }
+    pub fn pending_bytes(&self) -> usize {
+        self.0.pending
+    }
+    pub fn finish(&mut self) -> Result<(), Error> {
+        self.0.finish()
+    }
+    pub fn push_page(
+        &mut self,
+        page: Page<'_>,
+        offset: u64,
+        emit: impl FnMut(Packet<'_>),
+    ) -> Result<(), Error> {
+        self.0.push_indexed_page(page, offset, emit).map(|_| ())
+    }
+}
+
+pub(crate) struct Demux<P> {
+    streams: Streams<P>,
     limits: Limits,
     active: usize,
     chain: u32,
@@ -161,16 +191,9 @@ pub struct Demuxer {
     validation: ValidationOptions,
     compatibility: CompatibilityStats,
 }
-impl Default for Demuxer {
-    fn default() -> Self {
-        Self::new(Limits::default())
-    }
-}
-impl Demuxer {
-    pub fn new(limits: Limits) -> Self {
-        Self::with_validation(limits, ValidationOptions::default())
-    }
-    pub fn with_validation(limits: Limits, validation: ValidationOptions) -> Self {
+
+impl<P: Assembly> Demux<P> {
+    pub(crate) fn with_validation(limits: Limits, validation: ValidationOptions) -> Self {
         Self {
             streams: Streams::Single(None),
             limits,
@@ -183,8 +206,7 @@ impl Demuxer {
             compatibility: CompatibilityStats::default(),
         }
     }
-    /// Discard logical streams and terminal state, retaining stream-list capacity.
-    pub fn reset(&mut self) {
+    fn reset(&mut self) {
         self.streams.clear();
         self.active = 0;
         self.chain = 0;
@@ -193,19 +215,13 @@ impl Demuxer {
         self.failed = false;
         self.compatibility = CompatibilityStats::default();
     }
-    pub fn compatibility(&self) -> CompatibilityStats {
+    pub(crate) fn compatibility(&self) -> CompatibilityStats {
         self.compatibility
     }
-    pub fn chain(&self) -> u32 {
+    pub(crate) fn chain(&self) -> u32 {
         self.chain
     }
-    pub fn active_streams(&self) -> usize {
-        self.active
-    }
-    pub fn pending_bytes(&self) -> usize {
-        self.pending
-    }
-    pub fn finish(&mut self) -> Result<(), Error> {
+    pub(crate) fn finish(&mut self) -> Result<(), Error> {
         if self.failed {
             return Err(Error::Failed);
         }
@@ -215,16 +231,7 @@ impl Demuxer {
         }
         Ok(())
     }
-    pub fn push_page(
-        &mut self,
-        page: Page<'_>,
-        offset: u64,
-        emit: impl FnMut(Packet<'_>),
-    ) -> Result<(), Error> {
-        self.push_indexed_page::<true>(page, offset, emit)
-            .map(|_| ())
-    }
-    pub(crate) fn push_indexed_page<const OBSERVE: bool>(
+    pub(crate) fn push_indexed_page(
         &mut self,
         page: Page<'_>,
         offset: u64,
@@ -233,7 +240,7 @@ impl Demuxer {
         if self.failed {
             return Err(Error::Failed);
         }
-        let result = self.push_inner::<OBSERVE>(page, offset, emit);
+        let result = self.push_inner(page, offset, emit);
         if result.is_err() {
             self.failed = true;
         }
@@ -241,7 +248,7 @@ impl Demuxer {
     }
     #[cold]
     #[inline(never)]
-    fn start_stream<const OBSERVE: bool>(
+    fn start_stream(
         &mut self,
         page: Page<'_>,
         header: crate::PageHeader,
@@ -283,11 +290,7 @@ impl Demuxer {
             next_sequence: 0,
             ended: false,
             continuing: false,
-            partial: if OBSERVE {
-                PartialPacket::Bytes(Vec::new())
-            } else {
-                PartialPacket::Length(0)
-            },
+            partial: P::default(),
             packet_offset: offset,
             packets: 0,
             granule: UNKNOWN_GRANULE_POSITION,
@@ -295,7 +298,7 @@ impl Demuxer {
         self.active += 1;
         Ok(index)
     }
-    fn push_inner<const OBSERVE: bool>(
+    fn push_inner(
         &mut self,
         page: Page<'_>,
         offset: u64,
@@ -324,7 +327,7 @@ impl Demuxer {
                 (index, stream)
             }
             None => {
-                let index = self.start_stream::<OBSERVE>(page, header, offset, complete)?;
+                let index = self.start_stream(page, header, offset, complete)?;
                 (index, self.streams.get_mut(index))
             }
         };
@@ -340,7 +343,7 @@ impl Demuxer {
         } else {
             offset
         };
-        let carried = stream.partial.len();
+        let carried = stream.partial.pending();
         let mut length = carried;
         let mut pending = self.pending - length;
         let body = page.body().len();
@@ -399,10 +402,7 @@ impl Demuxer {
             return Err(Error::Invalid("unfinished packet at EOS"));
         }
         let first_packet = stream.packets;
-        if OBSERVE {
-            let PartialPacket::Bytes(partial) = &mut stream.partial else {
-                unreachable!("observers require packet bytes");
-            };
+        if let Some(partial) = stream.partial.buffer() {
             let mut remaining = complete;
             for fragment in page.fragments() {
                 if !fragment.starts_packet || !fragment.ends_packet {
@@ -456,9 +456,6 @@ impl Demuxer {
             if let Some(&last) = lacing.last() {
                 let continuing = last == 255;
                 if continuing || stream.continuing {
-                    let PartialPacket::Length(length) = &mut stream.partial else {
-                        unreachable!("an index without observers only needs lengths");
-                    };
                     next_length = if !continuing {
                         0
                     } else if complete == 0 {
@@ -466,7 +463,7 @@ impl Demuxer {
                     } else {
                         lacing.iter().rev().take_while(|&&lace| lace == 255).count() * 255
                     };
-                    *length = next_length;
+                    stream.partial.set_len(next_length);
                     stream.continuing = continuing;
                 }
                 // Only the leading continuation started on an earlier page.
@@ -484,7 +481,7 @@ impl Demuxer {
         stream.next_sequence = header.sequence.wrapping_add(1);
         if header.is_eos() {
             stream.ended = true;
-            if let PartialPacket::Bytes(partial) = &mut stream.partial {
+            if let Some(partial) = stream.partial.buffer() {
                 *partial = Vec::new();
             }
             self.active -= 1;
@@ -499,5 +496,39 @@ impl Demuxer {
             first_packet,
             completed_packets: complete as u16,
         })
+    }
+}
+
+// Indexing without callbacks keeps only a length. Both representations
+// share the same stream and packet validation.
+pub(crate) trait Assembly: Default {
+    fn pending(&self) -> usize;
+
+    fn buffer(&mut self) -> Option<&mut Vec<u8>>;
+
+    fn set_len(&mut self, _length: usize) {}
+}
+
+impl Assembly for Vec<u8> {
+    fn pending(&self) -> usize {
+        self.len()
+    }
+
+    fn buffer(&mut self) -> Option<&mut Vec<u8>> {
+        Some(self)
+    }
+}
+
+impl Assembly for usize {
+    fn pending(&self) -> usize {
+        *self
+    }
+
+    fn buffer(&mut self) -> Option<&mut Vec<u8>> {
+        None
+    }
+
+    fn set_len(&mut self, length: usize) {
+        *self = length;
     }
 }
