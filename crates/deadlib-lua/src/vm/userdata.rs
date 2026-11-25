@@ -87,11 +87,22 @@ impl Vm {
         }
         let mut candidates = std::mem::take(&mut self.gc.candidates);
         candidates.clear();
-        for i in 0..self.userdata.len() {
-            let Some(key) = self.userdata.key(i) else {
-                continue;
-            };
-            if !self.userdata[i].finalized && (all || !self.userdata.marked(key)) {
+        let len = self.userdata.len();
+        for (word, base) in (0..len).step_by(64).enumerate() {
+            let width = (len - base).min(64);
+            let mut slots = u64::MAX >> (64 - width);
+            if !all {
+                slots &= !self.userdata.marked_word(word);
+            }
+            while slots != 0 {
+                let i = base + slots.trailing_zeros() as usize;
+                slots &= slots - 1;
+                let Some(key) = self.userdata.key(i) else {
+                    continue;
+                };
+                if self.userdata[i].finalized {
+                    continue;
+                }
                 let finalizer = self.metafield(Value::Userdata(UserdataId(key)), Meta::Gc);
                 self.userdata[i].finalized = true;
                 if finalizer != Value::Nil {

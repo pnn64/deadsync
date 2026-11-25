@@ -221,6 +221,9 @@ impl<T> Arena<T> {
             .get(slot / 64)
             .is_some_and(|bits| bits & (1u64 << (slot % 64)) != 0)
     }
+    pub(crate) fn marked_word(&self, word: usize) -> u64 {
+        self.marks[word]
+    }
     pub(crate) fn next_marked_slot(&self, start: usize) -> Option<usize> {
         let word = start / 64;
         let (first, rest) = self.marks.get(word..)?.split_first()?;
