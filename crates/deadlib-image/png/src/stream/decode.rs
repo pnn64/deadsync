@@ -1,10 +1,11 @@
 use super::{
     DecodeEvent, DecodeProgress, DecodeStatus, ImageInfo, ImageKind,
+    read::row_image,
     rows::{ImageRows, RowBuffers},
 };
 use crate::{
     AncillaryChunk, AnimationPolicy, ChunkPosition, ColorType, DecodeOptions, Error, FrameControl,
-    Metadata, MetadataPolicy, Transparency,
+    Metadata, MetadataPolicy, Png, Transparency,
     checksum::Crc32,
     codec::{Header, SIGNATURE, be16, be32, chunk_type_valid},
     metadata::Validator,
@@ -241,13 +242,6 @@ impl StreamDecoder {
             Event::ImageEnd(kind) => DecodeEvent::ImageEnd(kind),
         })
     }
-    pub(super) fn ready_row(&self) -> Option<(ImageKind, &ImageRows)> {
-        if matches!(self.event, Some(Event::Row)) {
-            Some((self.image_kind?, self.rows.as_ref()?))
-        } else {
-            None
-        }
-    }
     pub(super) fn owned_ancillary(&mut self) -> Option<AncillaryChunk> {
         let chunk = self.ancillary.as_ref()?;
         if chunk.data.capacity() == chunk.data.len() {
@@ -260,6 +254,13 @@ impl StreamDecoder {
         (core::mem::take(&mut self.palette), self.transparency.take())
     }
     pub fn process(&mut self, input: &[u8]) -> Result<DecodeProgress, Error> {
+        self.process_into(input, None)
+    }
+    pub(super) fn process_into(
+        &mut self,
+        input: &[u8],
+        mut png: Option<&mut Png>,
+    ) -> Result<DecodeProgress, Error> {
         if let Some(error) = &self.failure {
             return Err(error.clone());
         }
@@ -274,7 +275,7 @@ impl StreamDecoder {
         loop {
             self.animation_fault = None;
             let consumed = self.total_in() - initial;
-            match self.run(&input[consumed..]) {
+            match self.run(&input[consumed..], png.as_deref_mut()) {
                 Ok(mut progress) => {
                     progress.consumed += consumed;
                     return Ok(progress);
@@ -640,7 +641,7 @@ impl StreamDecoder {
         };
         Ok(event)
     }
-    fn run(&mut self, input: &[u8]) -> Result<DecodeProgress, Error> {
+    fn run(&mut self, input: &[u8], mut png: Option<&mut Png>) -> Result<DecodeProgress, Error> {
         let mut pos = 0;
         if self.animation.is_some()
             && let Some(control) = self.pre_control.take()
@@ -770,9 +771,18 @@ impl StreamDecoder {
                                 pos += used;
                             }
                             if buffers_can_grow {
-                                self.update_memory();
+                                self.peak_image_buffers =
+                                    self.peak_image_buffers.max(rows.memory_bytes());
                             }
                             if event {
+                                if let Some(png) = png.as_deref_mut() {
+                                    let kind = self
+                                        .image_kind
+                                        .ok_or(Error::Invalid("missing image decoder"))?;
+                                    rows.copy_into(row_image(png, kind)?)?;
+                                    rows.advance()?;
+                                    continue;
+                                }
                                 return Ok(self.emit(Event::Row, pos));
                             }
                         }

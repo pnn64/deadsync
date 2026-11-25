@@ -31,7 +31,7 @@ fn allocate(info: ImageInfo) -> Result<Image, Error> {
     })
 }
 
-fn row_image(png: &mut Png, kind: ImageKind) -> Result<&mut Image, Error> {
+pub(super) fn row_image(png: &mut Png, kind: ImageKind) -> Result<&mut Image, Error> {
     match kind {
         ImageKind::Default => Ok(&mut png.image),
         ImageKind::AnimationFrame(index) => png
@@ -44,10 +44,6 @@ fn row_image(png: &mut Png, kind: ImageKind) -> Result<&mut Image, Error> {
 }
 
 fn collect(png: &mut Option<Png>, decoder: &mut StreamDecoder) -> Result<(), Error> {
-    if let Some((kind, row)) = decoder.ready_row() {
-        let png = png.as_mut().ok_or(Error::Invalid("missing IHDR"))?;
-        return row.copy_into(row_image(png, kind)?);
-    }
     let event = decoder
         .event()
         .ok_or(Error::Invalid("missing decode event"))?;
@@ -135,7 +131,7 @@ pub fn decode_reader(mut reader: impl Read, options: &DecodeOptions) -> Result<P
     let mut input = [0; 8192];
     let (mut pos, mut end) = (0, 0);
     loop {
-        let progress = decoder.process(&input[pos..end])?;
+        let progress = decoder.process_into(&input[pos..end], png.as_mut())?;
         pos += progress.consumed;
         match progress.status {
             DecodeStatus::Event => collect(&mut png, &mut decoder)?,

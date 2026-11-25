@@ -203,6 +203,36 @@ fn image_data_tail_counts_toward_stream_progress_and_crc() {
 }
 
 #[test]
+fn reader_recovers_after_a_good_row_in_the_same_fdat() {
+    let fixture = Fixture::new(deadlib_image_png::ColorType::Rgba, 8, false, false);
+    let mut sections = fixture.chunks.clone();
+    let control = sections.iter_mut().find(|c| &c.kind == b"fcTL").unwrap();
+    control.data[8..12].copy_from_slice(&2u32.to_be_bytes());
+    let fdat = sections.iter_mut().find(|c| &c.kind == b"fdAT").unwrap();
+    fdat.data.truncate(4);
+    // One valid RGBA row, then a row whose filter byte is out of range.
+    fdat.data
+        .extend(chunks::stored(&[0, 1, 2, 3, 4, 5, 9, 8, 7, 6]));
+    let wire = fixtures::file(&sections);
+    let expected = decode_with_options(&wire, &recovery()).unwrap();
+    assert_eq!(
+        expected.animation_error,
+        Some(Error::Invalid("scanline filter"))
+    );
+    assert_static(&expected, &fixture);
+    for fragment in [1, 7, wire.len()] {
+        assert_eq!(
+            decode_reader(Fragments(&wire, fragment), &recovery()).unwrap(),
+            expected
+        );
+        assert_eq!(
+            decode_reader(Fragments(&wire, fragment), &DecodeOptions::default()),
+            Err(Error::Invalid("scanline filter"))
+        );
+    }
+}
+
+#[test]
 fn independent_valid_animation_and_recovered_static_samples_all_formats() {
     let mut count = 0;
     for (color, depth) in fixtures::formats() {
