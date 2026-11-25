@@ -119,9 +119,13 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     let append = match width {
                         4 => append_reversed_index_blocks::<4>,
                         8 => append_reversed_index_blocks::<8>,
+                        12 => append_reversed_index_blocks::<12>,
                         16 => append_reversed_index_blocks::<16>,
+                        24 => append_reversed_index_blocks::<24>,
                         32 => append_reversed_index_blocks::<32>,
+                        48 => append_reversed_index_blocks::<48>,
                         64 => append_reversed_index_blocks::<64>,
+                        96 => append_reversed_index_blocks::<96>,
                         128 => append_reversed_index_blocks::<128>,
                         256 => append_reversed_index_blocks::<256>,
                         _ => append_reversed_index_blocks::<0>,

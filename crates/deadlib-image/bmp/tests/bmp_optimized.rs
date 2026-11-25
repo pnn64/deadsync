@@ -402,9 +402,13 @@ fn aligned_bottom_up_byte_indices_include_partial_block() {
     for (width, height) in [
         (4, 2051),
         (8, 1027),
+        (12, 685),
         (16, 515),
+        (24, 344),
         (32, 257),
+        (48, 173),
         (64, 129),
+        (96, 88),
         (128, 65),
         (256, 33),
     ] {
