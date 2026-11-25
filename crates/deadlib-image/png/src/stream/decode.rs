@@ -488,8 +488,7 @@ impl StreamDecoder {
         }
         self.left = self.length;
         self.have = 0;
-        self.crc = Crc32::new();
-        self.crc.update(&self.kind);
+        self.crc = Crc32::with_type(self.kind);
         self.data.clear();
         if !matches!(&self.kind, b"IHDR" | b"PLTE" | b"IDAT" | b"fdAT")
             && !self.discarded_animation_chunk()
@@ -543,7 +542,6 @@ impl StreamDecoder {
                 });
                 Some(Event::Transparency)
             }
-            b"IDAT" | b"fdAT" => None,
             b"acTL" => {
                 let frames = be32(d);
                 let plays = be32(&d[4..]);
@@ -700,12 +698,19 @@ impl StreamDecoder {
                     if self.chunks > self.options.limits.max_chunks {
                         return Err(Error::LimitExceeded);
                     }
-                    self.state = State::ChunkStart;
-                    let close_default =
-                        self.seen_data && !self.idat_closed && &self.kind != b"IDAT";
+                    let close_default = self.seen_data && !self.idat_closed;
                     if close_default {
+                        if &self.kind == b"IDAT" {
+                            // The open IDAT stream already has a validated image.
+                            self.left = self.length;
+                            self.have = 0;
+                            self.crc = const { Crc32::with_type(*b"IDAT") };
+                            self.state = State::ChunkBody;
+                            continue;
+                        }
                         self.idat_closed = true;
                     }
+                    self.state = State::ChunkStart;
                     let close_frame = matches!(self.image_kind, Some(ImageKind::AnimationFrame(_)))
                         && matches!(&self.kind, b"fcTL" | b"IEND");
                     if close_default || close_frame {
@@ -843,6 +848,11 @@ impl StreamDecoder {
                             self.animation_fault = Some(AnimationFault::Complete);
                         }
                         return Err(Error::Checksum);
+                    }
+                    if matches!(&self.kind, b"IDAT" | b"fdAT") {
+                        self.have = 0;
+                        self.state = State::ChunkHeader;
+                        continue;
                     }
                     let result = self.complete_chunk();
                     let event = if animation_chunk(&self.kind) {

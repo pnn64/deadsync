@@ -48,6 +48,15 @@ fn crc_word<const OFFSET: usize>(value: u64) -> u32 {
         ^ CRC_SLICES[OFFSET][(value >> 56) as usize]
 }
 
+#[inline]
+const fn crc_word32(value: u32) -> u32 {
+    let [a, b, c, d] = value.to_le_bytes();
+    CRC_SLICES[3][a as usize]
+        ^ CRC_SLICES[2][b as usize]
+        ^ CRC_SLICES[1][c as usize]
+        ^ CRC_SLICES[0][d as usize]
+}
+
 pub(crate) fn crc32(parts: &[&[u8]]) -> u32 {
     let mut checksum = Crc32::new();
     for part in parts {
@@ -62,6 +71,11 @@ pub(crate) struct Crc32 {
 impl Crc32 {
     pub(crate) fn new() -> Self {
         Self { state: !0 }
+    }
+    pub(crate) const fn with_type(kind: [u8; 4]) -> Self {
+        Self {
+            state: crc_word32(u32::from_le_bytes(kind) ^ !0),
+        }
     }
     pub(crate) fn update(&mut self, bytes: &[u8]) {
         #[cfg(target_arch = "x86_64")]
@@ -90,11 +104,7 @@ fn update_scalar(mut crc: u32, bytes: &[u8]) -> u32 {
         tail
     };
     let tail = if let Some((bytes, tail)) = tail.split_first_chunk::<4>() {
-        let word = (u32::from_le_bytes(*bytes) ^ crc).to_le_bytes();
-        crc = CRC_SLICES[3][usize::from(word[0])]
-            ^ CRC_SLICES[2][usize::from(word[1])]
-            ^ CRC_SLICES[1][usize::from(word[2])]
-            ^ CRC_SLICES[0][usize::from(word[3])];
+        crc = crc_word32(u32::from_le_bytes(*bytes) ^ crc);
         tail
     } else {
         tail
