@@ -100,7 +100,7 @@ impl ImageRows {
             bpp: (header.color.channels() * header.depth as usize).div_ceil(8) as u8,
             strict_palette,
             materialize_samples: header.depth != 8 && (full_events || strict_palette.is_some()),
-            allow_window: !full_events && !header.interlaced && expected >= 32 * 1024,
+            allow_window: !full_events && expected >= 32 * 1024,
             ready: false,
             complete: false,
         };
@@ -174,7 +174,21 @@ impl ImageRows {
             && self.inflater.prefer_contiguous_output()
         {
             self.allow_window = false;
-            self.window = Some(InflateWindow::new(&mut self.inflater, row_bytes)?);
+            // Later Adam7 passes can have a wider scanline than this pass.
+            let max_row = if self.header.interlaced {
+                let width = scanline::passes(true)
+                    .iter()
+                    .filter(|pass| pass.1 < self.header.height)
+                    .map(|&(x, _, dx, _)| scanline::extent(self.header.width, x, dx))
+                    .max()
+                    .unwrap_or(self.width);
+                scanline::row_bytes(width, self.header.color.channels(), self.header.depth)?
+                    .checked_add(1)
+                    .ok_or(Error::LimitExceeded)?
+            } else {
+                row_bytes
+            };
+            self.window = Some(InflateWindow::new(&mut self.inflater, max_row)?);
         }
         let progress = if let Some(window) = &mut self.window {
             window.process(&mut self.inflater, input, output)?
@@ -382,6 +396,75 @@ mod tests {
         ColorType,
         zlib::{Compression, compress},
     };
+
+    #[test]
+    fn adam7_window_keeps_history_across_passes_with_wider_rows() {
+        use std::io::Write;
+
+        let header = Header {
+            width: 3073,
+            height: 17,
+            color: ColorType::Rgb,
+            depth: 16,
+            interlaced: true,
+        };
+        let width = header.width as usize;
+        let height = header.height as usize;
+        let mut samples = vec![0u16; width * height * 3];
+        let mut filtered = Vec::new();
+        let mut random = 0x452f_75a3u32;
+        for &(x, y, dx, dy) in scanline::passes(true) {
+            for row in (y as usize..height).step_by(dy as usize) {
+                filtered.push(0);
+                for col in (x as usize..width).step_by(dx as usize) {
+                    for channel in 0..3 {
+                        random ^= random << 13;
+                        random ^= random >> 17;
+                        random ^= random << 5;
+                        let word = (random as u16) & 0x0f0f;
+                        filtered.extend_from_slice(&word.to_be_bytes());
+                        samples[(row * width + col) * 3 + channel] = word;
+                    }
+                }
+            }
+        }
+        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(6));
+        encoder.write_all(&filtered).unwrap();
+        let compressed = encoder.finish().unwrap();
+        let mut rows = ImageRows::new(
+            header,
+            ImageKind::Default,
+            filtered.len(),
+            RowBuffers::default(),
+            false,
+            None,
+        )
+        .unwrap();
+        let mut image = Image {
+            width: header.width,
+            height: header.height,
+            color_type: header.color,
+            bit_depth: header.depth,
+            samples: Samples::U16(vec![0; samples.len()]),
+        };
+        let mut offset = 0;
+        let mut used_window_in_first_pass = false;
+        while !rows.is_done() {
+            let end = compressed.len().min(offset + 8192);
+            let (used, ready) = rows.feed(&compressed[offset..end]).unwrap();
+            assert!(used != 0 || ready || rows.is_done());
+            offset += used;
+            used_window_in_first_pass |= rows.pass == 0 && rows.window.is_some();
+            if ready {
+                rows.copy_into(&mut image).unwrap();
+                rows.advance().unwrap();
+            }
+        }
+        assert!(used_window_in_first_pass);
+        assert_eq!(offset, compressed.len());
+        assert_eq!(image.samples, Samples::U16(samples));
+        rows.finish().unwrap();
+    }
 
     #[test]
     fn reused_row_storage_matches_fresh_rows_and_capacities() {
