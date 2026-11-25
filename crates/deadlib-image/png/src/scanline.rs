@@ -396,6 +396,43 @@ fn decode_one_pixel_words<const N: usize>(
     Ok(())
 }
 
+fn decode_plain_words(
+    raw: &mut [u8],
+    stride: usize,
+    height: usize,
+    bpp: usize,
+    out: &mut Vec<u16>,
+) -> Result<(), Error> {
+    let mut rows = raw.chunks_exact_mut(stride + 1);
+    let mut previous = None;
+    for _ in 0..height {
+        let (filter, row) = rows
+            .next()
+            .ok_or(Error::Truncated)?
+            .split_first_mut()
+            .unwrap();
+        if *filter != 0 {
+            if let Some(previous) = previous {
+                unfilter(row, previous, bpp, *filter)?;
+            } else {
+                unfilter_first(row, bpp, *filter)?;
+            }
+        }
+        out.extend(
+            row.as_chunks::<2>()
+                .0
+                .iter()
+                .copied()
+                .map(u16::from_be_bytes),
+        );
+        previous = Some(&*row);
+    }
+    if rows.next().is_some() || !rows.into_remainder().is_empty() {
+        return Err(Error::Invalid("extra image data"));
+    }
+    Ok(())
+}
+
 fn compact_plain_bytes(
     raw: &mut [u8],
     stride: usize,
@@ -492,15 +529,20 @@ pub(crate) fn decode(
     let mut samples = if depth == 16 {
         let mut v = Vec::new();
         reserve(&mut v, count)?;
-        if width == 1 && !interlaced {
+        if !interlaced {
             let rows = height as usize;
-            match channels {
-                1 => decode_one_pixel_words::<2>(&raw, rows, &mut v),
-                2 => decode_one_pixel_words::<4>(&raw, rows, &mut v),
-                3 => decode_one_pixel_words::<6>(&raw, rows, &mut v),
-                4 => decode_one_pixel_words::<8>(&raw, rows, &mut v),
-                _ => unreachable!("validated 16-bit PNG pixel stride"),
-            }?;
+            let stride = row_bytes(width as usize, channels, depth)?;
+            if width == 1 {
+                match channels {
+                    1 => decode_one_pixel_words::<2>(&raw, rows, &mut v),
+                    2 => decode_one_pixel_words::<4>(&raw, rows, &mut v),
+                    3 => decode_one_pixel_words::<6>(&raw, rows, &mut v),
+                    4 => decode_one_pixel_words::<8>(&raw, rows, &mut v),
+                    _ => unreachable!("validated 16-bit PNG pixel stride"),
+                }?;
+            } else {
+                decode_plain_words(&mut raw, stride, rows, bpp, &mut v)?;
+            }
             return Ok(Image {
                 width,
                 height,
@@ -509,9 +551,7 @@ pub(crate) fn decode(
                 samples: Samples::U16(v),
             });
         }
-        if interlaced {
-            v.resize(count, 0u16);
-        }
+        v.resize(count, 0u16);
         Samples::U16(v)
     } else {
         let mut v = Vec::new();
@@ -560,9 +600,7 @@ pub(crate) fn decode(
                 }
                 Samples::U16(v) => {
                     let row = row.as_chunks::<2>().0;
-                    if !interlaced {
-                        v.extend(row.iter().map(|&bytes| u16::from_be_bytes(bytes)));
-                    } else if step == 1 {
+                    if step == 1 {
                         for (out, &bytes) in v[dst..end].iter_mut().zip(row) {
                             *out = u16::from_be_bytes(bytes);
                         }
