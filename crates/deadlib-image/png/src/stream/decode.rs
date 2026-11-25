@@ -442,7 +442,6 @@ impl StreamDecoder {
         self.data.clear();
         if !matches!(&self.kind, b"IHDR" | b"IDAT" | b"fdAT") && !self.discarded_animation_chunk() {
             reserve(&mut self.data, self.length)?;
-            self.data.resize(self.length, 0);
         }
         self.state = State::ChunkBody;
         Ok(())
@@ -737,16 +736,16 @@ impl StreamDecoder {
                         }
                     } else {
                         let n = self.left.min(input.len() - pos).min(self.input_left);
-                        let start = self.length - self.left;
+                        let bytes = &input[pos..pos + n];
                         if !self.discarded_animation_chunk() {
-                            let data = if &self.kind == b"IHDR" {
-                                &mut self.fixed[..]
+                            if &self.kind == b"IHDR" {
+                                let start = self.length - self.left;
+                                self.fixed[start..start + n].copy_from_slice(bytes);
                             } else {
-                                self.data.as_mut_slice()
-                            };
-                            data[start..start + n].copy_from_slice(&input[pos..pos + n]);
+                                self.data.extend_from_slice(bytes);
+                            }
                         }
-                        self.crc.update(&input[pos..pos + n]);
+                        self.crc.update(bytes);
                         self.left -= n;
                         self.input_left -= n;
                         pos += n;
