@@ -361,7 +361,7 @@ fn failed_pending_finalizer_root_reservation_retains_every_callback_for_retry() 
         assert!(vm.gc.work.capacity() < userdata.len());
         let start = attempts.get();
         reject.set(start + 1);
-        let error = vm.finish_gc_marking().unwrap_err();
+        let error = vm.finish_gc_marking(false).unwrap_err();
         memory(vm, error);
         assert_eq!(attempts.get(), start + 1);
         assert_eq!(vm.gc.phase, Phase::Propagate);
@@ -373,7 +373,7 @@ fn failed_pending_finalizer_root_reservation_retains_every_callback_for_retry() 
         );
         assert!(log.lock().unwrap().is_empty());
         reject.set(0);
-        vm.finish_gc_marking().unwrap();
+        vm.finish_gc_marking(false).unwrap();
         vm.sweep_gc_some(usize::MAX);
         assert!(userdata.iter().all(|id| vm.userdata.contains(id.0)));
         vm.finish_gc_cycle();

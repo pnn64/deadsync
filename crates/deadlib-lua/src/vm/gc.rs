@@ -1586,16 +1586,16 @@ impl Vm {
                 .map(|p| Trace::Value(Value::Function(p.entry))),
         );
     }
-    fn finish_gc_marking(&mut self) -> Result<(), Error> {
+    fn finish_gc_marking(&mut self, fresh_cycle: bool) -> Result<(), Error> {
         let mut work = std::mem::take(&mut self.gc.work);
-        let result = self.finish_gc_marking_work(&mut work);
+        let result = self.finish_gc_marking_work(&mut work, fresh_cycle);
         self.gc.work = work;
         if result.is_err() {
             self.defer_gc_until_allocation();
         }
         result
     }
-    fn finish_gc_marking_work(&mut self, work: &mut Work) -> Result<(), Error> {
+    fn finish_gc_marking_work(&mut self, work: &mut Work, fresh_cycle: bool) -> Result<(), Error> {
         self.transfer_closed_work(work)?;
         self.trace_graph(work)?;
         // Snapshot the already reached containers before refreshing roots;
@@ -1633,7 +1633,13 @@ impl Vm {
         let roots = self.seed_gc_root_count(available);
         self.reserve_trace_work(work, refresh.saturating_add(roots))?;
         for key in self.threads.marked_keys() {
-            work.push(Trace::ThreadAgain(ThreadId(key)));
+            let id = ThreadId(key);
+            // A synchronous collection traced these roots after restarting
+            // the mark phase. A dormant stack has no slots left to clear or
+            // shrink, and its roots cannot change between the two passes.
+            if !fresh_cycle || self.dormant_thread_roots(id).is_none() {
+                work.push(Trace::ThreadAgain(id));
+            }
         }
         for index in self.tables.marked_slots_in_words(0..metatable_words) {
             if self.tables[index].metatable().is_some() {
@@ -1866,7 +1872,7 @@ impl Vm {
             }
             budget -= result?;
             if self.gc.work.is_empty() {
-                self.finish_gc_marking()?;
+                self.finish_gc_marking(false)?;
             }
         }
         if self.gc.phase == Phase::Sweep {
@@ -1905,7 +1911,7 @@ impl Vm {
     }
     pub(super) fn prepare_gc_finalizers(&mut self) -> Result<(), Error> {
         if self.gc.phase == Phase::Propagate {
-            self.finish_gc_marking()?;
+            self.finish_gc_marking(false)?;
         }
         self.finish_pending_sweep();
         Ok(())
@@ -1913,7 +1919,7 @@ impl Vm {
     pub(super) fn collect_cycle(&mut self) -> Result<(), Error> {
         self.finish_pending_sweep();
         self.begin_gc_cycle()?;
-        self.finish_gc_marking()?;
+        self.finish_gc_marking(true)?;
         self.sweep_gc_some(usize::MAX);
         Ok(())
     }
@@ -2076,7 +2082,7 @@ mod tests {
         assert!(!vm.marked_value(dead));
         assert!(!vm.marked_value(live));
         let root = vm.pin(live).unwrap();
-        vm.finish_gc_marking().unwrap();
+        vm.finish_gc_marking(false).unwrap();
         let Value::Userdata(dead) = dead else {
             unreachable!()
         };
@@ -2436,7 +2442,7 @@ mod tests {
     }
 
     fn finish_marked_cycle(vm: &mut Vm) {
-        vm.finish_gc_marking().unwrap();
+        vm.finish_gc_marking(false).unwrap();
         vm.sweep_gc_some(usize::MAX);
         vm.finish_gc_cycle();
     }
@@ -2973,7 +2979,7 @@ mod tests {
         let stale = Value::Table(vm.new_table());
         let old_string = vm.intern(b"revived-during-sweep");
         vm.begin_gc_cycle().unwrap();
-        vm.finish_gc_marking().unwrap();
+        vm.finish_gc_marking(false).unwrap();
         assert_eq!(vm.gc.phase, Phase::Sweep);
         assert!(vm.pin(stale).is_err());
         assert!(vm.pin(old_string).is_err());
@@ -3058,7 +3064,7 @@ mod tests {
             .map(|&value| vm.pin(value).unwrap_or_else(|e| panic!("{value:?}: {e}")))
             .collect();
         vm.begin_gc_cycle().unwrap();
-        vm.finish_gc_marking().unwrap();
+        vm.finish_gc_marking(false).unwrap();
         for (&value, &root) in values.iter().zip(&roots) {
             assert_eq!(vm.rooted(root).unwrap(), value);
         }
