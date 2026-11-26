@@ -69,13 +69,13 @@ pub fn boxed_request_error(
     Box::new(error)
 }
 
-impl From<deadsync_net::NetworkError> for OnlineRequestError {
-    fn from(error: deadsync_net::NetworkError) -> Self {
+impl From<deadlib_net::NetworkError> for OnlineRequestError {
+    fn from(error: deadlib_net::NetworkError) -> Self {
         match error {
-            deadsync_net::NetworkError::Timeout => Self::Timeout,
-            deadsync_net::NetworkError::HttpStatus(status) => Self::HttpStatus(status),
-            deadsync_net::NetworkError::Request(message) => Self::Request(message),
-            deadsync_net::NetworkError::Decode(message) => Self::Decode(message),
+            deadlib_net::NetworkError::Timeout => Self::Timeout,
+            deadlib_net::NetworkError::HttpStatus(status) => Self::HttpStatus(status),
+            deadlib_net::NetworkError::Request(message) => Self::Request(message),
+            deadlib_net::NetworkError::Decode(message) => Self::Decode(message),
         }
     }
 }

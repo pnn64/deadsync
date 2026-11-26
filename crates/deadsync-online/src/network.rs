@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 use std::time::Duration;
 
-pub(crate) use deadsync_net::{
+pub(crate) use deadlib_net::{
     AgentConfig, HttpAgent, NetworkError, error_from_ureq, get_json_with, is_timeout_message,
     log_body_snippet, post_json_with, read_bytes_body_bounded, read_json_body, read_text_body_bounded,
     read_text_body_or_empty,
@@ -24,7 +24,7 @@ static GROOVESTATS_AGENT: LazyLock<HttpAgent> = LazyLock::new(|| {
 
 // Large downloads share a pool with a deadline only for connection setup.
 static STREAMING_AGENT: LazyLock<HttpAgent> = LazyLock::new(|| {
-    deadsync_net::build_streaming_agent(
+    deadlib_net::build_streaming_agent(
         STREAM_CONNECT_TIMEOUT,
         STREAM_RESOLVE_TIMEOUT,
         deadsync_version::user_agent(),
@@ -32,15 +32,15 @@ static STREAMING_AGENT: LazyLock<HttpAgent> = LazyLock::new(|| {
 });
 
 pub(crate) fn build_agent(config: AgentConfig) -> HttpAgent {
-    deadsync_net::build_agent(config, deadsync_version::user_agent())
+    deadlib_net::build_agent(config, deadsync_version::user_agent())
 }
 
 pub(crate) fn build_agent_with_connect(config: AgentConfig, connect: Duration) -> HttpAgent {
-    deadsync_net::build_agent_with_connect(config, connect, deadsync_version::user_agent())
+    deadlib_net::build_agent_with_connect(config, connect, deadsync_version::user_agent())
 }
 
 pub(crate) fn build_agent_with_pool(config: AgentConfig, per_host: usize) -> HttpAgent {
-    deadsync_net::build_agent_with_pool(config, per_host, deadsync_version::user_agent())
+    deadlib_net::build_agent_with_pool(config, per_host, deadsync_version::user_agent())
 }
 
 pub(crate) fn get_agent() -> HttpAgent {

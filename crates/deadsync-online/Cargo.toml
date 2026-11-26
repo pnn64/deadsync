@@ -5,12 +5,12 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-net = { path = "../deadlib-net" }
 deadsync-config = { path = "../deadsync-config" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-input = { path = "../deadsync-input" }
-deadsync-net = { path = "../deadsync-net" }
 deadsync-profile = { path = "../deadsync-profile" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }

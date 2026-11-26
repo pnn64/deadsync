@@ -249,7 +249,7 @@ theme to describe an input or store a setting:
   duration probe using the same audio timeline as playback. `deadsync-simfile`
   owns the catalog, parsing, cache refresh, and sync analysis load policy.
 - `deadsync-online` owns DeadSync's HTTP User-Agent and shared connection
-  pools. `deadsync-net` builds clients with caller-supplied settings and
+  pools. `deadlib-net` builds clients with caller-supplied settings and
   handles HTTP errors, body size limits, and response decoding.
 - The shell calls the profile gameplay adapter for local and ITL score work
   and supplies the resulting ITL score to GrooveStats on demand. The profile

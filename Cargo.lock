@@ -1286,6 +1286,15 @@ name = "deadlib-lua"
 version = "0.1.0"
 
 [[package]]
+name = "deadlib-net"
+version = "0.1.0"
+dependencies = [
+ "memchr",
+ "serde",
+ "ureq",
+]
+
+[[package]]
 name = "deadlib-platform"
 version = "0.1.0"
 dependencies = [
@@ -1651,15 +1660,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadsync-net"
-version = "0.1.0"
-dependencies = [
- "memchr",
- "serde",
- "ureq",
-]
-
-[[package]]
 name = "deadsync-notefield"
 version = "0.1.0"
 dependencies = [
@@ -1696,12 +1696,12 @@ name = "deadsync-online"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "deadlib-net",
  "deadsync-chart",
  "deadsync-config",
  "deadsync-core",
  "deadsync-gameplay",
  "deadsync-input",
- "deadsync-net",
  "deadsync-profile",
  "deadsync-profile-gameplay",
  "deadsync-rules",

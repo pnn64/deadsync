@@ -2379,7 +2379,7 @@ const NET_RESPONSE_BODY_SCAN_DIRS: &[&str] = &[
     "tests",
 ];
 
-const GAME_TRANSPORT_CRATES: &[&str] = &["deadsync_net", "tungstenite", "ureq::"];
+const GAME_TRANSPORT_CRATES: &[&str] = &["deadlib_net", "tungstenite", "ureq::"];
 
 const NOTESKIN_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadlib_platform",
@@ -10915,13 +10915,13 @@ fn simply_love_receives_version_strings_from_the_shell() {
 #[test]
 fn net_takes_application_identity_from_its_callers() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let net = root.join("crates/deadsync-net");
+    let net = root.join("crates/deadlib-net");
     let manifest = read_source(net.join("Cargo.toml")).expect("net manifest");
-    assert!(!manifest.contains("deadsync-version"));
+    assert!(!manifest.contains("deadsync-"));
     for file in production_rust_files(&net.join("src")) {
         assert!(
-            !production_source(&file).contains("deadsync_version"),
-            "{} uses application versioning",
+            !production_source(&file).contains("deadsync_"),
+            "{} references DeadSync code",
             file.display(),
         );
     }
@@ -10954,7 +10954,7 @@ fn transport_error_mapping_stays_in_net_crate() {
 
     assert!(
         failures.is_empty(),
-        "transport error classification should use deadsync_net helpers:\n{}",
+        "transport error classification should use deadlib_net helpers:\n{}",
         failures.join("\n")
     );
 }
@@ -10987,7 +10987,7 @@ fn response_body_decoding_stays_in_net_crate() {
 
     assert!(
         failures.is_empty(),
-        "ureq response body decoding should use deadsync_net helpers:\n{}",
+        "ureq response body decoding should use deadlib_net helpers:\n{}",
         failures.join("\n")
     );
 }

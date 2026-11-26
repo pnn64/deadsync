@@ -546,9 +546,8 @@ pub const fn apply_supported_for_host() -> bool {
 
 /// Fetch the latest release from GitHub.
 ///
-/// `agent` is taken by reference so callers can plug in a configured ureq
-/// agent (we use the shared one from `deadsync-net` in production but
-/// tests can construct a no-network agent if needed).
+/// Callers can pass the updater's shared check agent or supply a configured
+/// ureq agent for tests.
 ///
 /// Pass `etag = Some(prev)` to enable conditional requests; the server
 /// returns 304 when the release hasn't changed and we avoid re-parsing.

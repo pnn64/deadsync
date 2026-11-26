@@ -42,7 +42,7 @@ members = [
     "crates/deadlib-input-native",
     "crates/deadsync-assets",
     "crates/deadsync-lights",
-    "crates/deadsync-net",
+    "crates/deadlib-net",
     "crates/deadsync-notefield",
     "crates/deadsync-noteskin",
     "crates/deadsync-online",

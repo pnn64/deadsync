@@ -1,4 +1,4 @@
-use deadsync_net::is_timeout_message;
+use deadlib_net::is_timeout_message;
 
 
 #[test]
