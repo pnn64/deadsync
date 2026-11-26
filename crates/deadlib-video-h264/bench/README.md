@@ -386,3 +386,20 @@ The combined surface and P-skip build matched FFmpeg on both 1080p clips, tempor
 ## Motion-compensation candidates
 
 Both prototypes matched the two bundled clips and the progressive, MBAFF, constrained CAVLC and resolution-change references. Relative to `37a17faed`, delaying motion window calculations until a reference needed more published rows changed paired median cycles by +1.21% and ?0.43%. Blending fractional B-skip luma predictions directly into the destination changed them by +1.85% and ?1.59%. [Ten rotating paired rounds on logical CPU 2](results/windows-x86_64-20261126/motion-sample-paired.csv)
+
+## Pooled surface feature
+
+`53aa12147` adds display-ordered surfaces and automatically reclaims the planes and motion storage when the last reference releases them. The measured surface consumer uses the SPS reorder depth and drops each output in the callback. The packed modes are built separately with the default crate features. This run used logical CPU 14 and matched both 150-frame output hashes in all four Rust modes. [Raw samples and summaries](results/windows-x86_64-20261126/surface-feature)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Deadlib packed | 38.19 | 26.19 | 11.71 | 3.272 |
+| SRPG9 | FFmpeg packed | 37.74 | 26.49 | 18.91 | 3.255 |
+| SRPG9 | Deadlib surface | 34.63 | 28.88 | 7.39 | 0.284 |
+| SRPG9 | FFmpeg native | 34.09 | 29.33 | 17.91 | 0.289 |
+| SRPG10 | Deadlib packed | 26.73 | 37.42 | 9.33 | 3.158 |
+| SRPG10 | FFmpeg packed | 27.62 | 36.21 | 18.63 | 3.151 |
+| SRPG10 | Deadlib surface | 22.49 | 44.46 | 5.43 | 0.169 |
+| SRPG10 | FFmpeg native | 24.03 | 41.61 | 17.63 | 0.184 |
+
+Across ten rotating rounds the paired packed cycle medians were ?0.16% and ?4.79% relative to FFmpeg. The paired native medians were +1.46% and ?5.37%. Native throughput per billion cycles changed ?1.43% and +5.67% at the paired medians. Native allocation calls fell 58.73% and 69.18%, and requested bytes fell 1.75% and 8.29%. The 97.85% cycle intervals for SRPG9 still extend above the 1% threshold for both output modes. [Paired summary](results/windows-x86_64-20261126/surface-feature/paired-summary.csv)
