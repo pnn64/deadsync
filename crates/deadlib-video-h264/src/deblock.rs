@@ -283,6 +283,11 @@ fn filter_frame_inner_px<P: Pixel>(
         let (mb_col, mb_row) = (mb_idx % mb_width, mb_idx / mb_width);
         let (mb_x, mb_y) = (mb_col * 16, mb_row * 16);
         let mb_q = &mb_info[mb_idx];
+        let edges = if mb_q.uniform_motion && !is_intra(mb_q) && !mb_q.nnz.contains(&true) {
+            1
+        } else {
+            4
+        };
 
         // This MB's edges are filtered as its own slice's header says
         let slice_id = mb_slice_id.get(mb_idx).copied().unwrap_or(0);
@@ -303,7 +308,7 @@ fn filter_frame_inner_px<P: Pixel>(
         };
 
         // -- Vertical edges (left to right) --
-        for edge in 0..4 {
+        for edge in 0..edges {
             let edge_x = mb_x + edge * 4;
             if edge == 0 && mb_col == 0 {
                 continue;
@@ -323,23 +328,8 @@ fn filter_frame_inner_px<P: Pixel>(
                 continue;
             }
             let mb_p = &mb_info[left_mb_idx];
-            // Compute bS for all 4 segments first
-            let mut seg_bs = [0i32; 4];
-            for seg in 0..4 {
-                let blk_q = blk_idx(edge, seg);
-                let blk_p = if is_mb_edge {
-                    blk_idx(3, seg)
-                } else {
-                    blk_idx(edge - 1, seg)
-                };
-                let intra_bs = if is_mb_edge { 4 } else { 3 };
-                seg_bs[seg] = if !is_mb_edge && mb_q.uniform_motion {
-                    // Inside an MB with one motion: only intra and coefficients
-                    derive_bs_same_motion(mb_q, blk_p, blk_q, intra_bs)
-                } else {
-                    derive_bs(mb_p, mb_q, blk_p, blk_q, intra_bs, mvy_limit)
-                };
-            }
+            let intra_bs = if is_mb_edge { 4 } else { 3 };
+            let seg_bs = derive_edge_bs::<true>(mb_p, mb_q, edge, intra_bs, mvy_limit);
             if seg_bs == [0; 4] {
                 continue;
             }
@@ -407,7 +397,7 @@ fn filter_frame_inner_px<P: Pixel>(
         }
 
         // -- Horizontal edges (top to bottom) --
-        for edge in 0..4 {
+        for edge in 0..edges {
             let edge_y = mb_y + edge * 4;
 
             let is_mb_edge = edge == 0;
@@ -434,27 +424,12 @@ fn filter_frame_inner_px<P: Pixel>(
                 continue;
             }
             let mb_p = &mb_info[above_mb_idx];
-            // Compute bS for all 4 segments first
-            let mut seg_bs = [0i32; 4];
-            for seg in 0..4 {
-                let blk_q = blk_idx(seg, edge);
-                let blk_p = if is_mb_edge {
-                    blk_idx(seg, 3)
-                } else {
-                    blk_idx(seg, edge - 1)
-                };
-                let intra_bs = if is_mb_edge && !interlace.field_pic {
-                    4
-                } else {
-                    3
-                };
-                seg_bs[seg] = if !is_mb_edge && mb_q.uniform_motion {
-                    // Inside an MB with one motion: only intra and coefficients
-                    derive_bs_same_motion(mb_q, blk_p, blk_q, intra_bs)
-                } else {
-                    derive_bs(mb_p, mb_q, blk_p, blk_q, intra_bs, mvy_limit)
-                };
-            }
+            let intra_bs = if is_mb_edge && !interlace.field_pic {
+                4
+            } else {
+                3
+            };
+            let seg_bs = derive_edge_bs::<false>(mb_p, mb_q, edge, intra_bs, mvy_limit);
 
             if seg_bs == [0; 4] {
                 continue;
@@ -1070,17 +1045,36 @@ fn derive_bs(
     0
 }
 
-/// bS of an internal edge of `mb`, whose blocks all share one motion: the
-/// motion test can't give 1, leaving intra (`intra_bs`) and coefficients.
+/// Strength of each segment of a frame or field edge. When both MBs have
+/// uniform motion, only coefficient presence can vary along the edge.
 #[inline]
-fn derive_bs_same_motion(mb: &MbInfo, blk_p: usize, blk_q: usize, intra_bs: i32) -> i32 {
-    if is_intra(mb) {
-        intra_bs
-    } else if mb.nnz[blk_p] || mb.nnz[blk_q] {
-        2
-    } else {
-        0
+fn derive_edge_bs<const VERTICAL: bool>(
+    p: &MbInfo,
+    q: &MbInfo,
+    edge: usize,
+    intra_bs: i32,
+    mvy_limit: i32,
+) -> [i32; 4] {
+    if is_intra(p) || is_intra(q) {
+        return [intra_bs; 4];
     }
+    let uniform = p.uniform_motion && q.uniform_motion;
+    let different = uniform && edge == 0 && check_mv_diff(p, q, 0, 0, mvy_limit);
+    let p_edge = if edge == 0 { 3 } else { edge - 1 };
+    core::array::from_fn(|seg| {
+        let (p_idx, q_idx) = if VERTICAL {
+            (blk_idx(p_edge, seg), blk_idx(edge, seg))
+        } else {
+            (blk_idx(seg, p_edge), blk_idx(seg, edge))
+        };
+        if p.nnz[p_idx] || q.nnz[q_idx] {
+            2
+        } else if uniform {
+            i32::from(different)
+        } else {
+            i32::from(check_mv_diff(p, q, p_idx, q_idx, mvy_limit))
+        }
+    })
 }
 
 /// Check if two 4x4 blocks have different motion (spec 8.7.2.1 conditions for bS=1).
@@ -1650,6 +1644,45 @@ fn strong_filter<P: Pixel>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn batched_edge_strengths_match_segment_derivation() {
+        for bidirectional in [false, true] {
+            for uniform in [false, true] {
+                let mut first = MbInfo::default();
+                let mut second = MbInfo::default();
+                for (mb, poc) in [(&mut first, 3), (&mut second, 7)] {
+                    mb.list_count = if bidirectional { 2 } else { 1 };
+                    mb.uniform_motion = uniform;
+                    mb.ref_idx_l0.fill(0);
+                    mb.ref_poc_l0.fill(poc);
+                    if bidirectional {
+                        mb.ref_idx_l1.fill(0);
+                        mb.ref_poc_l1.fill(10 - poc);
+                    }
+                    mb.nnz[9] = true;
+                    if !uniform {
+                        mb.mv_l0[4] = [4, 3];
+                        mb.mv_l1[10] = [0, -4];
+                    }
+                }
+                for edge in 0..4 {
+                    let p_edge = if edge == 0 { 3 } else { edge - 1 };
+                    let p = if edge == 0 { &first } else { &second };
+                    for limit in [2, 4] {
+                        let v = core::array::from_fn(|s| {
+                            derive_bs(p, &second, blk_idx(p_edge, s), blk_idx(edge, s), 4, limit)
+                        });
+                        let h = core::array::from_fn(|s| {
+                            derive_bs(p, &second, blk_idx(s, p_edge), blk_idx(s, edge), 3, limit)
+                        });
+                        assert_eq!(derive_edge_bs::<true>(p, &second, edge, 4, limit), v);
+                        assert_eq!(derive_edge_bs::<false>(p, &second, edge, 3, limit), h);
+                    }
+                }
+            }
+        }
+    }
 
     /// The 16-line edge kernels match the per-sample scalar filters on
     /// random lines of every bS, including samples near the thresholds.
