@@ -105,6 +105,15 @@ impl ArrayReduction {
         self.entry = Some(Cached::Branch(branch));
     }
 
+    pub(super) fn branch_blocks(&mut self) -> Option<(&mut CachedBranch, &mut Buffer<Exact>)> {
+        match &mut self.entry {
+            Some(Cached::Branch(branch)) if self.blocks.memory().uses_global_allocator() => {
+                Some((branch, &mut self.blocks))
+            }
+            _ => None,
+        }
+    }
+
     pub(super) fn evaluate(
         &mut self,
         table: &mut Table,

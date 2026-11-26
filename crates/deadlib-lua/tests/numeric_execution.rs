@@ -46,19 +46,23 @@ fn inline_array_dispatch_rechecks_identities_and_preserves_lua_equality() {
         local tally, entries, choices = setup()
         local before = tally(1, 192, 1, 4, 0)
         assert(tally(192, 1, -1, 4, 0) == before)
+        assert(tally(1, 192, 1, 4, 0) == before)
         entries[37] = choices[2]
         local changed = tally(1, 192, 1, 4, 0)
         assert(changed == before - 16)
+        entries[68] = choices[3]
+        local changed_again = tally(1, 192, 1, 4, 0)
+        assert(changed_again == changed + 297)
         choices[1] = choices[3]
         local rebound = tally(1, 192, 1, 4, 0)
-        assert(rebound ~= changed)
+        assert(rebound ~= changed_again)
         local rounded = tally(1, 192, 1, 4, 9007199254740992)
 
         local one, two, hits = equality_pair()
         entries[1], choices[1] = one, two
         local with_equality = tally(1, 192, 1, 3, 0)
         assert(hits() == 3)
-        return before, changed, rebound, rounded, with_equality
+        return before, changed, changed_again, rebound, rounded, with_equality
         "#,
     )
     .unwrap();
@@ -67,6 +71,33 @@ fn inline_array_dispatch_rechecks_identities_and_preserves_lua_equality() {
         vm.set_instruction_limit(Some(500_000));
         assert_eq!(vm.execute(&program).unwrap(), optimized);
     }
+}
+
+#[test]
+fn inline_dispatch_does_not_reuse_blocks_for_data_dependent_keys() {
+    check(
+        br#"
+        local function setup()
+            local keys, values = {}, {}
+            for i = 1, 128 do keys[i], values[i] = 96, 1 end
+            return function()
+                local total = 0
+                for round = 1, 2 do
+                    for i = 1, 128 do
+                        local v = values[keys[i]]
+                        if v == 0 then total = total + 2
+                        else total = total + v end
+                    end
+                end
+                return total
+            end, values
+        end
+        local tally, values = setup()
+        assert(tally() == 256)
+        values[96] = 3
+        return tally() == 768
+        "#,
+    );
 }
 
 #[test]

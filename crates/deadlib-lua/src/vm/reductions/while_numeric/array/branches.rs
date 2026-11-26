@@ -1,13 +1,15 @@
 //! Replay side-effect-free branches and numeric calls over dense arrays.
 use super::super::super::{Reduction, integer};
-use super::exact::{Exact, MIN_LENGTH};
+use super::exact::{ArrayReduction, Exact, MIN_LENGTH, repair_blocks};
+use crate::arena::Arena;
 use crate::bytecode::{COMPARE_BRANCH, Instruction, Op, Prototype, RK};
-use crate::table::{ArrayChange, array_index};
+use crate::table::{ArrayChange, Table, array_index};
 use crate::vm::{
     Cell, FrameKind, FunctionId, TableId, Value, Vm,
     forwarding::{MAX_VALUES, numeric},
     slot_index,
 };
+use std::ops::Range;
 
 const MAX_REGISTERS: usize = 32;
 const MAX_INSTRUCTIONS: usize = 48;
@@ -38,13 +40,17 @@ pub(super) struct CachedBranch {
 struct Plan<'a> {
     key: Key,
     code: &'a [Instruction],
-    constants: &'a [Value],
     tables: [TableId; MAX_CAPTURES],
     table_count: usize,
     callee: Option<FunctionId>,
     calls: [Option<numeric::Plan>; MAX_VALUES + 1],
     control: usize,
     sum: usize,
+}
+
+struct Inputs<'a> {
+    arrays: [&'a [Value]; MAX_CAPTURES],
+    constants: &'a [Value],
 }
 
 #[derive(Clone, Copy)]
@@ -73,7 +79,7 @@ impl Slot {
 
 impl<'a> Plan<'a> {
     fn decode(
-        vm: &'a Vm,
+        vm: &Vm,
         prototype: &'a Prototype,
         head: usize,
         edge: usize,
@@ -85,7 +91,6 @@ impl<'a> Plan<'a> {
             return None;
         };
         let closure = &vm.functions[slot_index(caller.0)];
-        let constants = vm.programs[closure.program].bound_constants(closure.prototype);
         let code = prototype.code.get(head..edge)?;
         let update = code.iter().rfind(|i| i.op != Op::Close)?;
         if update.op != Op::Add || usize::from(prototype.registers) > MAX_REGISTERS {
@@ -206,7 +211,6 @@ impl<'a> Plan<'a> {
                 tail_targets,
             },
             code,
-            constants,
             tables,
             table_count,
             callee,
@@ -218,7 +222,7 @@ impl<'a> Plan<'a> {
 
     fn row(
         &self,
-        arrays: &[&[Value]; MAX_CAPTURES],
+        inputs: &Inputs<'_>,
         index: usize,
         sum: f64,
         exact: &mut Option<Exact>,
@@ -237,7 +241,7 @@ impl<'a> Plan<'a> {
                 if key < RK {
                     slots[key as usize]
                 } else {
-                    Slot::Scalar(self.constants[(key - RK) as usize])
+                    Slot::Scalar(inputs.constants[(key - RK) as usize])
                 }
             };
             let value = match op {
@@ -275,9 +279,9 @@ impl<'a> Plan<'a> {
                         Slot::Index => index,
                         key => array_index(key.value()?)?,
                     };
-                    Slot::Scalar(*arrays[array].get(offset)?)
+                    Slot::Scalar(*inputs.arrays[array].get(offset)?)
                 }
-                Op::Load => Slot::Scalar(self.constants[c as usize]),
+                Op::Load => Slot::Scalar(inputs.constants[c as usize]),
                 Op::Move => operand(u32::from(b)),
                 Op::Eq | Op::Ne => {
                     let left = operand(u32::from(b)).value()?;
@@ -344,26 +348,148 @@ impl<'a> Plan<'a> {
         Some(sum)
     }
 
-    fn scan(&self, vm: &Vm, mut sum: f64, remember: bool) -> Option<(f64, Option<Exact>)> {
+    fn inputs<'vm>(&self, tables: &'vm Arena<Table>, constants: &'vm [Value]) -> Inputs<'vm> {
         let mut arrays = [&[][..]; MAX_CAPTURES];
         for (array, id) in arrays.iter_mut().zip(&self.tables[..self.table_count]) {
-            *array = vm.tables[slot_index(id.0)].array_values();
+            *array = tables[slot_index(id.0)].array_values();
         }
-        let first = usize::try_from(self.key.bounds.0).ok()?.checked_sub(1)?;
-        let last = usize::try_from(self.key.bounds.1).ok()?.checked_sub(1)?;
+        Inputs { arrays, constants }
+    }
+
+    fn prefix_and_last(&self) -> (Range<usize>, usize) {
+        // The plan is only built for positive u32 bounds.
+        let first = self.key.bounds.0 as usize - 1;
+        let last = self.key.bounds.1 as usize - 1;
+        if self.key.ascending {
+            (first..last, last)
+        } else {
+            (first + 1..last + 1, first)
+        }
+    }
+
+    fn scan_rows(
+        &self,
+        inputs: &Inputs<'_>,
+        range: Range<usize>,
+        mut sum: f64,
+        proof: &mut Option<Exact>,
+        terms: &mut usize,
+    ) -> Option<f64> {
+        for offset in 0..range.len() {
+            let index = if self.key.ascending {
+                range.start + offset
+            } else {
+                range.end - 1 - offset
+            };
+            sum = self.row(inputs, index, sum, proof, terms)?;
+        }
+        Some(sum)
+    }
+
+    fn scan(&self, inputs: &Inputs<'_>, sum: f64, remember: bool) -> Option<(f64, Option<Exact>)> {
+        let (prefix, last) = self.prefix_and_last();
         let mut proof = remember.then_some(Exact::ZERO);
         let mut terms = 0;
-        for offset in 0..last - first {
-            let index = if self.key.ascending {
-                first + offset
-            } else {
-                last - offset
-            };
-            sum = self.row(&arrays, index, sum, &mut proof, &mut terms)?;
-        }
-        let final_index = if self.key.ascending { last } else { first };
-        self.row(&arrays, final_index, sum, &mut None, &mut 0)?;
+        let sum = self.scan_rows(inputs, prefix, sum, &mut proof, &mut terms)?;
+        self.row(inputs, last, sum, &mut None, &mut 0)?;
         Some((sum, proof.and_then(|proof| proof.check_count(terms, 1))))
+    }
+
+    fn constant_read_tables(&self) -> Option<u8> {
+        let mut destinations = 0u64;
+        for instruction in self.code {
+            if matches!(instruction.op, Op::Jump | Op::JumpTrue | Op::JumpFalse) {
+                destinations |= 1 << (instruction.c as usize - self.key.head);
+            }
+        }
+        let mut tables = 0;
+        for (position, read) in self.code.iter().enumerate() {
+            if read.op != Op::GetTable || read.c as usize == self.control + 3 {
+                continue;
+            }
+            // A fixed lookup can depend on a row outside the changed block.
+            // Prove its table is loaded unconditionally immediately before it.
+            if read.c < RK || destinations & (1 << position) != 0 {
+                return None;
+            }
+            let load = self.code.get(position.checked_sub(1)?)?;
+            if load.op != Op::GetUpvalue || u16::from(load.a) != read.b {
+                return None;
+            }
+            let &(_, Capture::Table(id)) = self
+                .key
+                .captures
+                .iter()
+                .flatten()
+                .find(|(capture, _)| *capture == load.c)?
+            else {
+                return None;
+            };
+            tables |= 1
+                << self.tables[..self.table_count]
+                    .iter()
+                    .position(|&table| table == id)?;
+        }
+        Some(tables)
+    }
+
+    fn repair(
+        &self,
+        tables: &Arena<Table>,
+        inputs: &Inputs<'_>,
+        cache: &mut ArrayReduction,
+        initial: f64,
+    ) -> Option<f64> {
+        let constant_reads = self.constant_read_tables()?;
+        let mut dirty = [0; MAX_CAPTURES];
+        let mut count = 0;
+        for (index, id) in self.tables[..self.table_count].iter().enumerate() {
+            match tables[slot_index(id.0)].array_change() {
+                ArrayChange::Clean => {}
+                ArrayChange::Block(block) if constant_reads & (1 << index) == 0 => {
+                    if !dirty[..count].contains(&block) {
+                        dirty[count] = block;
+                        count += 1;
+                    }
+                }
+                _ => return None,
+            }
+        }
+        if count == 0 {
+            return None;
+        }
+        let (prefix, last) = self.prefix_and_last();
+        let (cached, blocks) = cache.branch_blocks()?;
+        // Each instruction can contribute at most one term per row.
+        let exact = repair_blocks(
+            blocks,
+            prefix.start,
+            prefix.len(),
+            &dirty[..count],
+            self.code.len(),
+            |range| {
+                let mut proof = Some(Exact::ZERO);
+                let start = prefix.start;
+                self.scan_rows(
+                    inputs,
+                    start + range.start..start + range.end,
+                    0.0,
+                    &mut proof,
+                    &mut 0,
+                )?;
+                proof
+            },
+        );
+        let result = exact.and_then(|exact| {
+            let sum = exact.apply(initial)?;
+            self.row(inputs, last, sum, &mut None, &mut 0)?;
+            cached.exact = exact;
+            Some(sum)
+        });
+        if result.is_none() {
+            blocks.clear();
+        }
+        result
     }
 }
 
@@ -424,25 +550,48 @@ impl Vm {
             return Some(Reduction::Retry);
         }
         let watched = &plan.tables[..plan.table_count];
-        let cached = self.array_reduction.cached_branch().filter(|cached| {
-            cached.key == plan.key
-                && watched
-                    .iter()
-                    .all(|id| self.tables[slot_index(id.0)].array_change() == ArrayChange::Clean)
+        let cached = self
+            .array_reduction
+            .cached_branch()
+            .filter(|cached| cached.key == plan.key);
+        let clean_sum = cached.and_then(|entry| {
+            watched
+                .iter()
+                .all(|id| self.tables[slot_index(id.0)].array_change() == ArrayChange::Clean)
+                .then(|| entry.exact.apply(initial))?
         });
-        let (sum, exact) = if let Some(sum) = cached.and_then(|entry| entry.exact.apply(initial)) {
-            (sum, None)
+        let (sum, exact, repaired) = if let Some(sum) = clean_sum {
+            (sum, None, false)
         } else {
-            plan.scan(self, initial, upper - lower + 1 >= i128::from(MIN_LENGTH))?
+            let closure = &self.functions[slot_index(plan.key.caller.0)];
+            let constants = self.programs[closure.program].bound_constants(closure.prototype);
+            let inputs = plan.inputs(&self.tables, constants);
+            let repaired = cached
+                .is_some()
+                .then(|| plan.repair(&self.tables, &inputs, &mut self.array_reduction, initial))
+                .flatten();
+            if let Some(sum) = repaired {
+                (sum, None, true)
+            } else {
+                let (sum, exact) = plan.scan(
+                    &inputs,
+                    initial,
+                    upper - lower + 1 >= i128::from(MIN_LENGTH),
+                )?;
+                (sum, exact, false)
+            }
         };
         let sum_slot = plan.sum;
         let tables = plan.tables;
         let table_count = plan.table_count;
+        let watch = exact.is_some() || repaired;
         if let Some(exact) = exact {
             self.array_reduction.cache_branch(CachedBranch {
                 key: plan.key,
                 exact,
             });
+        }
+        if watch {
             for id in &tables[..table_count] {
                 self.tables[slot_index(id.0)].watch_array();
             }
