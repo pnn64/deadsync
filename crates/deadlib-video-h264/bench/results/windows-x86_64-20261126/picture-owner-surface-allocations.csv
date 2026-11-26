@@ -1,0 +1,13 @@
+stream,mode,run,frames,luma_pixels,cycles,allocations,reallocations,requested_bytes
+srpg9,deadlib-surface-isolated,1,150,311040000,0,911,277,44616453
+srpg9,deadlib-surface-picture-owner,1,150,311040000,0,831,278,44616493
+srpg9,ffmpeg-surface,1,150,311040000,0,2684,3,45410751
+srpg9,deadlib-surface-picture-owner,2,150,311040000,0,831,278,44616493
+srpg9,ffmpeg-surface,2,150,311040000,0,2684,3,45410751
+srpg9,deadlib-surface-isolated,2,150,311040000,0,911,277,44616453
+srpg10,deadlib-surface-picture-owner,1,150,311040000,0,806,9,26595780
+srpg10,ffmpeg-surface,1,150,311040000,0,2640,4,29000083
+srpg10,deadlib-surface-isolated,1,150,311040000,0,904,9,29243116
+srpg10,ffmpeg-surface,2,150,311040000,0,2640,4,29000083
+srpg10,deadlib-surface-isolated,2,150,311040000,0,904,9,29243116
+srpg10,deadlib-surface-picture-owner,2,150,311040000,0,806,9,26595780
