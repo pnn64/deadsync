@@ -1,6 +1,6 @@
 use super::encode_rows::Rows;
 use crate::{
-    ChunkPosition, EncodeOptions, Error, Png,
+    ChunkPosition, EncodeOptions, Error, Filter, Png,
     checksum::Crc32,
     codec::{SIGNATURE, ancillary_writable, validate_encoding, write_transparency},
     reserve,
@@ -78,6 +78,7 @@ impl<'a, W: Write> Compressed<'a, W> {
         writer: &'a mut Count<W>,
         sequence: Option<&'a mut u32>,
         options: &EncodeOptions,
+        depth: u8,
         output: &'a mut Vec<u8>,
         encoder: &'a mut Option<Deflater>,
     ) -> Result<Self, Error> {
@@ -91,7 +92,11 @@ impl<'a, W: Write> Compressed<'a, W> {
                 encoder.reset();
                 encoder
             }
-            None => encoder.insert(Deflater::new(options.compression)?),
+            None => encoder.insert(Deflater::for_png(
+                options.compression,
+                options.filter == Filter::Adaptive,
+                depth,
+            )?),
         };
         Ok(Self {
             writer,
@@ -172,7 +177,8 @@ fn image<W: Write>(
     output: &mut Vec<u8>,
     encoder: &mut Option<Deflater>,
 ) -> Result<usize, Error> {
-    let mut compressed = Compressed::new(writer, sequence, options, output, encoder)?;
+    let mut compressed =
+        Compressed::new(writer, sequence, options, rows.bit_depth(), output, encoder)?;
     while let Some(row) = rows.next_row()? {
         if row.zero {
             let prefix = usize::from(row.bytes[0] != 0);

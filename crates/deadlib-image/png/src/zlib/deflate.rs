@@ -1,4 +1,4 @@
-use super::{Compression, StreamStatus, Writer, fast_block, matcher};
+use super::{Compression, StreamStatus, Writer, fast_block, matcher, png_compression};
 use crate::{Error, checksum::Adler32, reserve};
 
 const BLOCK: usize = 32768;
@@ -19,6 +19,7 @@ pub struct DeflateProgress {
 /// and the compressor never retains more than one block plus its history.
 pub struct Deflater {
     mode: Compression,
+    block_size: usize,
     writer: Writer,
     pending: usize,
     /// The previous Fast block (`history` bytes) followed by the current block,
@@ -36,20 +37,30 @@ pub struct Deflater {
 }
 impl Deflater {
     pub fn new(mode: Compression) -> Result<Self, Error> {
+        Self::with_block_size(mode, BLOCK)
+    }
+
+    pub(crate) fn for_png(mode: Compression, adaptive: bool, depth: u8) -> Result<Self, Error> {
+        let (mode, block_size) = png_compression(mode, adaptive, depth);
+        Self::with_block_size(mode, block_size)
+    }
+
+    fn with_block_size(mode: Compression, block_size: usize) -> Result<Self, Error> {
         let mut bytes = Vec::new();
         let bits = if mode == Compression::Rle { 10 } else { 9 };
-        reserve(&mut bytes, BLOCK * bits / 8 + 64)?;
+        reserve(&mut bytes, (block_size * bits).div_ceil(8) + 64)?;
         bytes.extend_from_slice(&[0x78, 0x01]);
         let mut window = Vec::new();
         let mut matcher = None;
         if mode == Compression::Fast {
-            reserve(&mut window, BLOCK * 2)?;
+            reserve(&mut window, block_size * 2)?;
             matcher = Some(matcher::Matcher::new()?);
         } else {
-            reserve(&mut window, BLOCK)?;
+            reserve(&mut window, block_size)?;
         }
         Ok(Self {
             mode,
+            block_size,
             writer: Writer {
                 bytes,
                 word: 0,
@@ -174,7 +185,7 @@ impl Deflater {
                     status: StreamStatus::Done,
                 });
             }
-            let n = (self.history + BLOCK - self.window.len()).min(len - consumed);
+            let n = (self.history + self.block_size - self.window.len()).min(len - consumed);
             self.total_in = self.total_in.checked_add(n).ok_or(Error::LimitExceeded)?;
             if let Some(input) = input {
                 let bytes = &input[consumed..consumed + n];
@@ -190,7 +201,7 @@ impl Deflater {
             }
             consumed += n;
             let final_block = finish && consumed == len;
-            if self.window.len() == self.history + BLOCK || final_block {
+            if self.window.len() == self.history + self.block_size || final_block {
                 self.encode_block(final_block);
             } else {
                 return Ok(DeflateProgress {

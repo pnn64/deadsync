@@ -1697,7 +1697,7 @@ impl Writer {
     }
 
     fn rle_block(&mut self, input: &[u8], final_block: bool, checksum: &mut Adler32) {
-        debug_assert!(input.len() <= matcher::WINDOW);
+        debug_assert!(input.len() <= STORED_BLOCK_SIZE);
         // A stored header consumes up to 42 bits, including alignment. A
         // nonempty RLE block needs its header, end code, and one literal.
         const STORED_OVERHEAD: usize = 3 + 7 + 32;
@@ -1895,6 +1895,16 @@ fn fast_block(
 
 const STORED_BLOCK_SIZE: usize = u16::MAX as usize;
 
+fn png_compression(mode: Compression, adaptive: bool, depth: u8) -> (Compression, usize) {
+    if mode == Compression::Fast && adaptive && depth == 8 {
+        // Adaptive byte predictors leave long runs of zero residuals. Use
+        // the analytic tree and the largest block with a stored fallback.
+        (Compression::Rle, STORED_BLOCK_SIZE)
+    } else {
+        (mode, matcher::WINDOW)
+    }
+}
+
 /// A zlib header with room for the worst-case encoding of `len` bytes.
 fn zlib_output(bytes: &mut Vec<u8>, len: usize, mode: Compression) -> Result<(), Error> {
     let bound = len
@@ -1973,6 +1983,7 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
 /// their sizes and the last block are known before input arrives.
 pub(crate) struct Compressor {
     mode: Compression,
+    block_size: usize,
     w: Writer,
     matcher: Option<matcher::Matcher>,
     /// Fast history, then the pending block and up to three lookahead bytes.
@@ -1987,9 +1998,20 @@ pub(crate) struct Compressor {
 impl Compressor {
     const LOOKAHEAD: usize = 3;
 
-    pub(crate) fn new(mode: Compression) -> Self {
+    pub(crate) fn for_png(mode: Compression, adaptive: bool, depth: u8) -> Self {
+        let (mode, block_size) = png_compression(mode, adaptive, depth);
+        Self::with_block_size(mode, block_size)
+    }
+
+    #[cfg(test)]
+    fn new(mode: Compression) -> Self {
+        Self::with_block_size(mode, matcher::WINDOW)
+    }
+
+    fn with_block_size(mode: Compression, block_size: usize) -> Self {
         Self {
             mode,
+            block_size,
             w: Writer {
                 bytes: Vec::new(),
                 word: 0,
@@ -2016,7 +2038,7 @@ impl Compressor {
             } else {
                 0
             };
-            let maximum = history + matcher::WINDOW + Self::LOOKAHEAD;
+            let maximum = history + self.block_size + Self::LOOKAHEAD;
             reserve(&mut self.window, len.min(maximum))?;
         }
         if self.mode == Compression::Fast && self.matcher.is_none() {
@@ -2044,7 +2066,7 @@ impl Compressor {
             return;
         }
         while len != 0 {
-            let full = self.history + matcher::WINDOW + Self::LOOKAHEAD;
+            let full = self.history + self.block_size + Self::LOOKAHEAD;
             let n = (full - self.window.len()).min(len);
             match &mut input {
                 Some(bytes) => {
@@ -2063,7 +2085,7 @@ impl Compressor {
             }
             len -= n;
             if self.window.len() == full {
-                self.encode(matcher::WINDOW, false);
+                self.encode(self.block_size, false);
             }
         }
     }
@@ -2204,8 +2226,8 @@ impl Compressor {
             }
         } else {
             // One full block and part of its lookahead can remain.
-            if self.window.len() - self.history > matcher::WINDOW {
-                self.encode(matcher::WINDOW, false);
+            if self.window.len() - self.history > self.block_size {
+                self.encode(self.block_size, false);
             }
             self.encode(self.window.len() - self.history, true);
             self.w.align();

@@ -118,6 +118,10 @@ fn filter_pixel(row: &[u8], previous: &[u8], output: &mut [u8]) -> u8 {
 }
 
 impl<'a> Rows<'a> {
+    pub(super) fn bit_depth(&self) -> u8 {
+        self.image.bit_depth
+    }
+
     pub(crate) fn new(image: &'a Image, interlaced: bool, filter: Filter) -> Result<Self, Error> {
         scanline::filtered_size(
             image.width,

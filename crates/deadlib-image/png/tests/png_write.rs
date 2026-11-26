@@ -43,6 +43,55 @@ fn sixteen_bit_gradient_compression_regression() {
         );
     }
 }
+
+#[test]
+fn fast_adaptive_eight_bit_block_boundary() {
+    // Three rows, including their filter bytes, fill a 65,535-byte block.
+    let width = 21_844;
+    for height in [3, 4] {
+        let mut state = 0x3245_f1a9_u32;
+        let samples = (0..width * height)
+            .map(|i| {
+                if i < width {
+                    24
+                } else {
+                    state ^= state << 13;
+                    state ^= state >> 17;
+                    state ^= state << 5;
+                    state as u8
+                }
+            })
+            .collect::<Vec<_>>();
+        let image = Png::new(Image {
+            width,
+            height,
+            color_type: ColorType::Grayscale,
+            bit_depth: 8,
+            samples: Samples::U8(samples.clone()),
+        });
+        let options = EncodeOptions {
+            idat_chunk_size: 113,
+            ..Default::default()
+        };
+        let mut streamed = Vec::new();
+        encode_writer(&image, &options, &mut streamed).unwrap();
+        for bytes in [
+            deadlib_image_png::encode(&image, &options).unwrap(),
+            streamed,
+        ] {
+            let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
+                .read_info()
+                .unwrap();
+            let mut actual = vec![0; reader.output_buffer_size().unwrap()];
+            assert_eq!(
+                reader.next_frame(&mut actual).unwrap().buffer_size(),
+                samples.len()
+            );
+            reader.finish().unwrap();
+            assert_eq!(actual, samples);
+        }
+    }
+}
 struct Fragmented {
     bytes: Vec<u8>,
     size: usize,

@@ -54,7 +54,10 @@ fn write_png(
 matches and an analytic Huffman tree. It keeps no match dictionary and selects
 stored blocks when smaller. The same options work with `encode`.
 `EncodeOptions::default()` remains `Compression::Fast`, `Filter::Adaptive`,
-noninterlaced output and a 64 KiB IDAT chunk size. All compression modes preserve
+noninterlaced output and a 64 KiB IDAT chunk size. Fast/Adaptive uses zero-run
+coding with a stored fallback for 8-bit PNG and APNG samples. Other depths and
+explicit fixed filters use the fixed-Huffman LZ77 encoder under Fast.
+All compression modes preserve
 the supplied samples; their encoded sizes and CPU costs depend on the input.
 
 For reference color samples with 1–16 significant bits per channel, use

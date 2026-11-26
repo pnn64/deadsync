@@ -91,6 +91,8 @@ pub enum Filter {
 pub struct EncodeOptions {
     pub interlaced: bool,
     pub filter: Filter,
+    /// PNG compression policy. Fast with Adaptive filtering uses zero-run
+    /// coding for 8-bit samples and LZ77 for other depths.
     pub compression: zlib::Compression,
     pub idat_chunk_size: usize,
 }
@@ -615,7 +617,11 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     write_transparency(png, |data| write_chunk(&mut out, b"tRNS", [data]))?;
     write_ancillary(&mut out, png, ChunkPosition::BeforeData)?;
     crate::apng::write_control(&mut out, png)?;
-    let mut compressor = crate::zlib::Compressor::new(options.compression);
+    let mut compressor = crate::zlib::Compressor::for_png(
+        options.compression,
+        options.filter == Filter::Adaptive,
+        png.image.bit_depth,
+    );
     let mut rows = crate::stream::Rows::new(&png.image, options.interlaced, options.filter)?;
     let compressed =
         crate::stream::compress_image(&png.image, options, &mut compressor, &mut rows)?;
