@@ -172,3 +172,41 @@ fn forwarded_calls_follow_upvalue_changes_and_pad_results() {
         "#,
     );
 }
+
+#[test]
+fn forwarded_numeric_loops_check_nil_guards_and_live_targets() {
+    check(
+        br#"
+        local target = function(first, ...) return ..., first end
+        local function forward(...) return target(8, ...) end
+        local total = 0
+        for i = 1, 120 do
+            local a, b, c = forward(i, 6, 7)
+            if c ~= nil then error("extra result") end
+            total = total + a + b
+        end
+        assert(total == 8220)
+
+        target = function(first, ...) return first, ... end
+        total = 0
+        local extra = 0
+        for i = 120, 1, -1 do
+            local a, b, c = forward(i, 6)
+            if c ~= nil then extra = extra + c end
+            total = total + a + b
+        end
+        assert(total == 8220 and extra == 720)
+
+        target = function(first, ...) return ..., first end
+        local replacement = function(first, ...) return ..., 17 end
+        total = 0
+        for i = 1, 120 do
+            target = replacement
+            local a, b, c = forward(i)
+            if c ~= nil then error("extra result") end
+            total = total + a + b
+        end
+        return total == 9300
+        "#,
+    );
+}

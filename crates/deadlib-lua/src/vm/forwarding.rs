@@ -4,12 +4,12 @@ use super::{FunctionId, Value, Vm, slot_index};
 use crate::bytecode::{OPEN, OPEN_ARGS, Op};
 use std::ops::Range;
 
-const MAX_VALUES: usize = 8;
+pub(super) const MAX_VALUES: usize = 8;
 const MAX_REGISTERS: usize = 32;
 const MAX_INSTRUCTIONS: usize = 12;
 
 #[derive(Clone, Copy)]
-enum Source {
+pub(super) enum Source {
     Argument(usize),
     Constant(Value),
     Capture(usize),
@@ -131,7 +131,7 @@ pub(super) struct Plan {
 }
 
 impl Plan {
-    fn build(vm: &Vm, function: FunctionId, count: usize) -> Option<Self> {
+    pub(super) fn build(vm: &Vm, function: FunctionId, count: usize) -> Option<Self> {
         let arguments: [Source; MAX_VALUES] = std::array::from_fn(Source::Argument);
         let mut registers = [NIL; MAX_REGISTERS];
         let outer = decode(vm, function, arguments.get(..count)?, &mut registers)?;
@@ -187,7 +187,11 @@ impl Plan {
             .is_none_or(|(cell, target)| vm.cell_value(cell) == Value::Function(target))
     }
 
-    fn has_stack_space(&self, vm: &Vm) -> bool {
+    pub(super) fn sources(&self, wanted: usize) -> &[Source] {
+        &self.values[..wanted]
+    }
+
+    pub(super) fn has_stack_space(&self, vm: &Vm) -> bool {
         let depth = vm.frames.len() + usize::from(self.tail.is_some());
         depth < vm.frames.capacity()
             && depth + 1 < usize::from(vm.call_slots)

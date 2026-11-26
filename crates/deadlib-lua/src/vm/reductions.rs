@@ -1,13 +1,13 @@
-//! Exact reductions of straight-line numeric loop bodies.
+//! Exact reductions of numeric loops with a proven instruction path.
 
 use super::{
-    TableId, Value, Vm,
+    FunctionId, TableId, Value, Vm, forwarding,
     math::{MATH_MAX, MATH_MIN},
     numeric_leaf::{Expression, Input},
     slot_index,
     threads::{CO_RESUME, inline_resume::ParkedIndex},
 };
-use crate::bytecode::{Instruction, OPEN_ARGS, Op, Prototype, RK};
+use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN_ARGS, Op, Prototype, RK};
 
 pub(super) mod while_numeric;
 
@@ -96,6 +96,7 @@ struct Body<'a> {
     read_initial: [bool; 256],
     invariant: [bool; 256],
     call_registers: Option<usize>,
+    forwarded_calls_fit: Option<bool>,
     segment_limit: Option<i128>,
     parked: Option<(ParkedIndex, f64)>,
     wait_for_yield: bool,
@@ -274,17 +275,19 @@ impl Body<'_> {
 
     fn call(&mut self, call: usize, count: usize, wanted: u32) -> Option<Operand> {
         if self.vm.budget.is_some()
-            || (wanted == 2 && (self.control..self.control + 3).contains(&(call + 1)))
+            || (1..=forwarding::MAX_VALUES as u32).contains(&wanted)
+                && (call + 1..call + wanted as usize)
+                    .any(|output| (self.control..self.control + 3).contains(&output))
         {
             return None;
         }
         let operand = self.read(call)?;
-        let function = match self.literal(operand)? {
-            Value::Function(function) if matches!(wanted, 1 | 2) => function,
+        match self.literal(operand)? {
+            Value::Function(function) => self.lua_call(function, call, count, wanted as usize),
             Value::Native(id @ (MATH_MIN | MATH_MAX)) if wanted == 1 => {
-                return self.extremum(call, count, id == MATH_MIN);
+                self.extremum(call, count, id == MATH_MIN)
             }
-            Value::Native(CO_RESUME) if count == 1 && wanted == 2 => return self.resume(call),
+            Value::Native(CO_RESUME) if count == 1 && wanted == 2 => self.resume(call),
             Value::Native(0) if count == 1 && wanted <= 1 => {
                 let value = self.read(call + 1)?;
                 let value = self.literal(value)?;
@@ -292,11 +295,25 @@ impl Body<'_> {
                     return None;
                 }
                 self.assertion = true;
-                return Some(Operand::Constant(value));
+                Some(Operand::Constant(value))
             }
-            _ => return None,
+            _ => None,
+        }
+    }
+
+    fn lua_call(
+        &mut self,
+        function: FunctionId,
+        call: usize,
+        count: usize,
+        wanted: usize,
+    ) -> Option<Operand> {
+        if !matches!(wanted, 1 | 2) {
+            return self.forwarded_call(function, call, count, wanted);
+        }
+        let Some(leaf) = self.vm.numeric_leaf(function) else {
+            return self.forwarded_call(function, call, count, wanted);
         };
-        let leaf = self.vm.numeric_leaf(function)?;
         let first = self.call_expression(leaf.first, call, count)?;
         let second = if let Some(expression) = leaf.second {
             Operand::Series(self.call_expression(expression, call, count)?)
@@ -308,6 +325,51 @@ impl Body<'_> {
         }
         self.call_registers = Some(self.call_registers.unwrap_or(0).max(leaf.registers));
         Some(Operand::Series(first))
+    }
+
+    fn forwarded_call(
+        &mut self,
+        function: FunctionId,
+        call: usize,
+        count: usize,
+        wanted: usize,
+    ) -> Option<Operand> {
+        if !(1..=forwarding::MAX_VALUES).contains(&wanted) {
+            return None;
+        }
+        let plan = forwarding::Plan::build(self.vm, function, count)?;
+        let fits = plan.has_stack_space(self.vm);
+        self.forwarded_calls_fit = Some(self.forwarded_calls_fit.unwrap_or(true) && fits);
+        let nil = Operand::Constant(Value::Nil);
+        let mut results = [nil; forwarding::MAX_VALUES];
+        for (result, &source) in results.iter_mut().zip(plan.sources(wanted)) {
+            *result = match source {
+                forwarding::Source::Argument(index) => self.read(call + 1 + index)?,
+                forwarding::Source::Constant(value) => Operand::Constant(value),
+                forwarding::Source::Capture(_) => return None,
+            };
+        }
+        for (index, &value) in results[1..wanted].iter().enumerate() {
+            self.write(call + 1 + index, value)?;
+        }
+        Some(results[0])
+    }
+
+    fn is_nil(&mut self, operand: Operand) -> Option<bool> {
+        match operand {
+            Operand::Series(_) => Some(false),
+            _ => self.literal(operand).map(|value| value == Value::Nil),
+        }
+    }
+
+    fn nil_comparison(&mut self, i: Instruction) -> Option<Operand> {
+        let left = self.operand(u32::from(i.b))?;
+        let right = self.operand(i.c)?;
+        let left = self.is_nil(left)?;
+        let right = self.is_nil(right)?;
+        // A comparison with nil is independent of the other value's type
+        // and cannot invoke an equality metamethod.
+        (left || right).then_some(Operand::Constant(Value::Boolean((left == right) == (i.op == Op::Eq))))
     }
 
     fn call_expression(
@@ -369,6 +431,7 @@ impl Body<'_> {
     fn accumulator(
         &mut self,
         code: &[Instruction],
+        start_pc: usize,
         writes: bool,
     ) -> Option<Option<(usize, Series)>> {
         let mut result_slots = [false; 256];
@@ -385,7 +448,27 @@ impl Body<'_> {
                 }
             }
         }
-        for i in code {
+        let mut offset = 0;
+        while let Some(i) = code.get(offset) {
+            offset += 1;
+            if matches!(i.op, Op::JumpFalse | Op::JumpTrue) {
+                let comparison = code.get(offset.checked_sub(2)?)?;
+                if i.b != COMPARE_BRANCH
+                    || !matches!(comparison.op, Op::Eq | Op::Ne)
+                    || comparison.a != i.a
+                {
+                    return None;
+                }
+                let target = (i.c as usize).checked_sub(start_pc)?;
+                if !(offset..=code.len()).contains(&target) {
+                    return None;
+                }
+                let guard = self.read(usize::from(i.a))?;
+                if self.literal(guard)?.is_truthy() == (i.op == Op::JumpTrue) {
+                    offset = target;
+                }
+                continue;
+            }
             // There is no open upvalue in this frame, and the accepted
             // instructions cannot create one.
             if i.op == Op::Close {
@@ -417,6 +500,7 @@ impl Body<'_> {
                     let operand = self.read(usize::from(i.b))?;
                     Operand::Series(self.series(operand)?.negate())
                 }
+                Op::Eq | Op::Ne => self.nil_comparison(*i)?,
                 Op::Call if i.b != OPEN_ARGS => self.call(destination, usize::from(i.b), i.c)?,
                 Op::GetTable => self.field_read(*i)?,
                 Op::GetGlobal => self.global(i.c as usize)?,
@@ -475,7 +559,8 @@ impl Vm {
         if loop_instruction.op != Op::ForLoop || usize::from(loop_instruction.a) != control {
             return None;
         }
-        let body = code.get(loop_instruction.c as usize..loop_pc)?;
+        let start_pc = loop_instruction.c as usize;
+        let body = code.get(start_pc..loop_pc)?;
         if body.len() <= BODY_LIMIT
             && body.iter().any(|i| i.op == Op::GetTable)
             && let Some(skipped) =
@@ -501,7 +586,13 @@ impl Vm {
                         | Op::GetTable
                         | Op::GetGlobal
                         | Op::SetTable
+                        | Op::Eq
+                        | Op::Ne
+                        | Op::JumpFalse
+                        | Op::JumpTrue
                 ) || (writes && matches!(i.op, Op::GetTable | Op::GetGlobal | Op::Call))
+                    || (matches!(i.op, Op::JumpFalse | Op::JumpTrue)
+                        && (writes || self.budget.is_some()))
             })
         {
             return None;
@@ -543,6 +634,7 @@ impl Vm {
         let mut segmented = false;
         let mut attempts = BODY_LIMIT * 2;
         let mut call_registers = None;
+        let mut forwarded_calls_fit = None;
         let (sum_update, parked, assertion, field_writes, write_count) = loop {
             attempts = attempts.checked_sub(1)?;
             let segment_last = segment_first + (segment_count - 1) * step;
@@ -559,6 +651,7 @@ impl Vm {
                 read_initial: [false; 256],
                 invariant: [false; 256],
                 call_registers: None,
+                forwarded_calls_fit: None,
                 segment_limit: None,
                 parked: None,
                 wait_for_yield: false,
@@ -573,7 +666,7 @@ impl Vm {
                     last: segment_last,
                 }),
             )?;
-            let Some(accumulator) = analysis.accumulator(body, writes) else {
+            let Some(accumulator) = analysis.accumulator(body, start_pc, writes) else {
                 if let Some(boundary) = analysis.segment_limit {
                     if !(1..segment_count).contains(&boundary) {
                         return None;
@@ -586,6 +679,12 @@ impl Vm {
             };
             if segmented && (writes || analysis.parked.is_some() || analysis.assertion) {
                 return None;
+            }
+            if let Some(fits) = analysis.forwarded_calls_fit {
+                if analysis.parked.is_some() {
+                    return None;
+                }
+                forwarded_calls_fit = Some(forwarded_calls_fit.unwrap_or(true) && fits);
             }
             // A skipped instruction cannot change a captured register or close
             // an open upvalue. Unrelated captures remain live across the loop.
@@ -646,6 +745,14 @@ impl Vm {
         }
         if call_registers.is_some_and(|registers| !self.numeric_call_ready(registers)) {
             return self.sort_fast_context().then_some(Reduction::Retry);
+        }
+        if let Some(fits) = forwarded_calls_fit {
+            if !self.sort_fast_context() {
+                return None;
+            }
+            if !fits || !self.sort_gc_ready() {
+                return Some(Reduction::Retry);
+            }
         }
         if (parked.is_some() || assertion)
             && !(self.sort_fast_context() && self.resume_has_spare_stack() && self.sort_gc_ready())
