@@ -113,3 +113,13 @@ The `deadlib-recycled-sps` mode also uses `OrderedDecoder::with_max_depth` with 
 | SRPG10 | FFmpeg packed | 18.63 | 3.15 |
 
 Allocation counts matched in two runs of each mode. Across five cycle runs, the default decoder reached 57.59 and 46.47 Mcycles/frame on SRPG9 and SRPG10. Recycling with the declared reorder depth reached 54.23 and 44.58. Packed FFmpeg measured 39.75 and 28.17, and native FFmpeg measured 35.65 and 24.82. [Complete reserve samples](results/windows-x86_64-20261126/reference-reserve) · [Preceding motion revision samples](results/windows-x86_64-20261126/motion-combined)
+
+## Slice reference lists and weighted prediction
+
+`78b0cdc5d` builds the two B-slice reference lists from a single sorted short-term list for frames. It materializes the complete short-term reference list for list modification only when the slice contains modification commands. Allocation calls with the default output API fell from 33.89 to 23.34 per frame on SRPG9 and from 23.45 to 18.08 on SRPG10. An initial paired batch showed a 2.8% cycle increase on both clips. A repeat showed changes of +0.35% and −0.25%. [Reference-list allocation samples](results/windows-x86_64-20261126/reference-list-allocations.csv) · [Initial paired samples](results/windows-x86_64-20261126/entropy-paired.csv)
+
+`cd0fb3edc` stores implicit prediction weights in contiguous tables and uses bitmasks for long-term reference flags. In isolation, this cut default allocation calls by 5.61 and 2.69 per frame. FFmpeg keeps its implicit weights in an inline slice-context table. [Compact-weight allocation samples](results/windows-x86_64-20261126/compact-weights-allocations.csv) · [FFmpeg weight-table initialization](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_slice.c)
+
+`37e4e52ab` uses SSE2 to weight 8-bit uni-prediction and implicit bi-prediction. Identity weights and equal averaging use simpler paths. FFmpeg also uses packed SIMD for weighted prediction. Median paired cycle ratios for the SIMD change alone were 0.921 and 0.897 relative to `64dca4237`. With both slice allocation changes included, the ratios were 0.919 and 0.907. All three candidates matched FFmpeg on the bundled clips, MBAFF and constrained-intra CABAC samples. The combined revision also matched on the temporal-direct multislice and High 10 samples. [Weighted prediction cycle samples](results/windows-x86_64-20261126/weights-paired.csv) · [FFmpeg x86 weighted prediction](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/x86/h264_weight.asm)
+
+The paired CABAC refill and sparse 8×8 inverse-quantization prototypes showed no reproducible cycle reduction and were left out of this revision.
