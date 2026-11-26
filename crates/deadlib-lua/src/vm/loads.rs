@@ -1249,7 +1249,19 @@ impl Vm {
     }
 
     fn call_load_reader(&mut self, index: usize, frame: Frame) -> Result<Option<usize>, Error> {
-        self.check_c_call()?;
+        let frames = self.frames.len();
+        let thread = &self.threads[slot_index(self.thread.0)];
+        let inherited = usize::from(thread.depth) + usize::from(thread.native_bias) + 1;
+        // Each frame contributes at most one native boundary, and each
+        // adjacent pair at most one iterator boundary. Count exact depth
+        // only when this bound cannot prove room for the reader call.
+        let entered = frames
+            .saturating_mul(2)
+            .saturating_add(self.parser_nesting_for(self.thread, frames))
+            .saturating_add(inherited);
+        if entered >= usize::from(limits::MAX_C_CALL_DEPTH) {
+            self.check_c_call()?;
+        }
         self.loads[index].awaiting = true;
         let call = frame.base + frame.argc();
         self.reserve_registers(call + 1)?;
