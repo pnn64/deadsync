@@ -27,7 +27,7 @@ use crate::song::{
 };
 
 // Rebuild cached measure times and song bounds with the corrected clock origin.
-pub const SONG_CACHE_VERSION: u8 = 79;
+pub const SONG_CACHE_VERSION: u8 = 80;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -965,6 +965,7 @@ pub struct SerializableSongData {
     pub precise_note_first_second_seconds: Option<f32>,
     pub precise_note_last_second_seconds: Option<f32>,
     pub last_second_hint: f32,
+    pub native_steps: Vec<crate::song::NativeStep>,
     pub charts: Vec<SerializableChartData>,
 }
 
@@ -1117,6 +1118,7 @@ pub struct CachedSongMeta {
     pub precise_note_first_second_seconds: Option<f32>,
     pub precise_note_last_second_seconds: Option<f32>,
     pub last_second_hint: f32,
+    pub native_steps: Vec<crate::song::NativeStep>,
     pub charts: Vec<CachedChartMeta>,
 }
 
@@ -1225,6 +1227,7 @@ struct BorrowedCachedSongMeta<'a> {
     precise_note_first_second_seconds: Option<f32>,
     precise_note_last_second_seconds: Option<f32>,
     last_second_hint: f32,
+    native_steps: &'a [crate::song::NativeStep],
     charts: BorrowedCachedCharts<'a>,
 }
 
@@ -1905,6 +1908,7 @@ pub fn build_cached_song_meta(
         precise_note_first_second_seconds: song.precise_note_first_second_seconds,
         precise_note_last_second_seconds: song.precise_note_last_second_seconds,
         last_second_hint: song.last_second_hint,
+        native_steps: song.native_steps.clone(),
         charts: song
             .charts
             .iter()
@@ -1949,6 +1953,7 @@ impl<'a> BorrowedCachedSongMeta<'a> {
             precise_note_first_second_seconds: song.precise_note_first_second_seconds,
             precise_note_last_second_seconds: song.precise_note_last_second_seconds,
             last_second_hint: song.last_second_hint,
+            native_steps: &song.native_steps,
             charts: BorrowedCachedCharts {
                 charts: &song.charts,
                 global_offset_seconds,
@@ -2577,6 +2582,19 @@ pub fn load_chart_timing_and_notes(
     options: &GameplayChartLoadOptions<'_>,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<Vec<(TimingData, Vec<u8>, Vec<f32>)>, String> {
+    Ok(load_song_lua_chart_data(song, options, music_len)?.charts)
+}
+
+pub struct SongLuaChartData {
+    pub charts: Vec<(TimingData, Vec<u8>, Vec<f32>)>,
+    pub native_steps: Vec<crate::song::NativeStep>,
+}
+
+pub fn load_song_lua_chart_data(
+    song: &SongData,
+    options: &GameplayChartLoadOptions<'_>,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SongLuaChartData, String> {
     if options.allow_cache_read {
         let cached = (|| {
             let cache_path = song_cache_path(options.cache_dir, &song.simfile_path).ok()?;
@@ -2586,7 +2604,7 @@ pub fn load_chart_timing_and_notes(
             if cached_song.chart_payloads.len() != song.charts.len() {
                 return None;
             }
-            cached_song
+            let charts = cached_song
                 .chart_payloads
                 .into_iter()
                 .map(|entry| {
@@ -2602,7 +2620,8 @@ pub fn load_chart_timing_and_notes(
                         payload.row_to_beat,
                     ))
                 })
-                .collect::<Option<Vec<_>>>()
+                .collect::<Option<Vec<_>>>()?;
+            Some(SongLuaChartData { charts, native_steps: cached_song.data.native_steps })
         })();
         if let Some(timings) = cached {
             return Ok(timings);
@@ -2614,7 +2633,7 @@ pub fn load_chart_timing_and_notes(
     if data.charts.len() != song.charts.len() {
         return Err("song charts changed before loading Lua timing".into());
     }
-    Ok(data
+    let charts = data
         .charts
         .into_iter()
         .map(|chart| {
@@ -2629,7 +2648,8 @@ pub fn load_chart_timing_and_notes(
                 chart.row_to_beat,
             )
         })
-        .collect())
+        .collect();
+    Ok(SongLuaChartData { charts, native_steps: data.native_steps })
 }
 
 pub fn load_gameplay_charts_with_options<F>(
@@ -3507,6 +3527,7 @@ mod tests {
             precise_note_first_second_seconds: None,
             precise_note_last_second_seconds: Some(2.0),
             last_second_hint: 0.0,
+            native_steps: Vec::new(),
             charts: vec![
                 test_serializable_chart("dance-single", "Edit", 1, None),
                 test_serializable_chart("lights-cabinet", "Challenge", 12, None),
@@ -3864,6 +3885,58 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_reads_authored_steps_with_cached_timing() {
+        use crate::song::NativeStep;
+
+        let root = test_dir("song-lua-catalog");
+        let cache_dir = root.join("cache");
+        let simfile = root.join("song.sm");
+        fs::write(
+            &simfile,
+            b"#TITLE:Catalog;\n#BPMS:0=120;\n\
+              #NOTES:dance-single:First:Hard:9::\n1000\n0001\n;\n\
+              #NOTES:dance-solo:Middle:Edit:7::\n100000\n000001\n;\n\
+              #NOTES:pump-single:Last:Easy:3::\n01000\n00100\n;\n",
+        )
+        .unwrap();
+        let parse_options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let options = GameplayChartLoadOptions {
+            cache_dir: &cache_dir,
+            parse_options: &parse_options,
+            allow_cache_read: true,
+            allow_cache_write: false,
+            verify_cache_freshness: false,
+            global_offset_seconds: 0.0,
+        };
+        let data = parse_song_data_file(&simfile, &parse_options, 0.0, |_| 0.0).unwrap();
+        let cache_path = song_cache_path(&cache_dir, &simfile).unwrap();
+        let song = build_song_meta(data.clone(), 0.0);
+        let fresh = load_song_lua_chart_data(&song, &options, |_| 0.0).unwrap();
+        let [NativeStep::Playable(0), NativeStep::Unplayed(step), NativeStep::Playable(1)] =
+            fresh.native_steps.as_slice()
+        else {
+            panic!("unexpected Steps catalog: {:?}", fresh.native_steps);
+        };
+        assert_eq!(step.chart_type, "dance-solo");
+        assert_eq!(step.description, "Middle");
+        assert_eq!(step.meter, 7);
+        write_song_cache_file(&cache_path, &data, 0.0).unwrap();
+        fs::write(&simfile, b"#TITLE:Replaced;").unwrap();
+
+        let cached = load_song_lua_chart_data(&song, &options, |_| {
+            panic!("cache hit should not parse the simfile")
+        })
+        .unwrap();
+        assert_eq!(cached.native_steps, fresh.native_steps);
+        assert_eq!(cached.charts.len(), fresh.charts.len());
+        for ((_, notes, beats), (_, fresh_notes, fresh_beats)) in cached.charts.iter().zip(&fresh.charts) {
+            assert_eq!(notes, fresh_notes);
+            assert_eq!(beats, fresh_beats);
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn gameplay_chart_load_uses_cache_without_parse_fallback() {
         let root = test_dir("gameplay-load-cache-hit");
         let cache_dir = root.join("cache");
@@ -3986,6 +4059,7 @@ mod tests {
             precise_note_first_second_seconds: None,
             precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
+            native_steps: Vec::new(),
             charts: Vec::new(),
         }
     }

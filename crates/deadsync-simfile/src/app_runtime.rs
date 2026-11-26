@@ -310,6 +310,14 @@ pub fn load_chart_timing_and_notes(
     config: RuntimeSongConfig,
     group_is_never_cached: impl FnMut(&str) -> bool,
 ) -> Result<Vec<(deadsync_rules::timing::TimingData, Vec<u8>, Vec<f32>)>, String> {
+    Ok(load_song_lua_chart_data(song, config, group_is_never_cached)?.charts)
+}
+
+pub fn load_song_lua_chart_data(
+    song: &SongData,
+    config: RuntimeSongConfig,
+    group_is_never_cached: impl FnMut(&str) -> bool,
+) -> Result<crate::cache::SongLuaChartData, String> {
     let parse_options = parse_song_options();
     let options = crate::runtime::gameplay_chart_load_options(
         song,
@@ -319,15 +327,15 @@ pub fn load_chart_timing_and_notes(
         group_is_never_cached,
     );
     let started = std::time::Instant::now();
-    let timings =
-        crate::cache::load_chart_timing_and_notes(song, &options, |_| song.music_length_seconds)?;
+    let data =
+        crate::cache::load_song_lua_chart_data(song, &options, |_| song.music_length_seconds)?;
     debug!(
         "Song Lua chart timing: song='{}' charts={} elapsed_ms={:.3}",
         song.title,
-        timings.len(),
+        data.charts.len(),
         started.elapsed().as_secs_f64() * 1000.0
     );
-    Ok(timings)
+    Ok(data)
 }
 
 fn log_gameplay_chart_load(song: &SongData, report: &GameplayChartLoadReport) {

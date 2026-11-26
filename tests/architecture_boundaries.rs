@@ -629,11 +629,11 @@ fn chart_lua_playback_has_no_theme_dependency() {
     let entry = production_source(&root.join("crates/deadsync-shell/src/gameplay_entry/song_lua.rs"));
     for loader in [
         "pub fn prepare_song_lua(",
-        "deadsync_simfile::app_runtime::load_chart_timing_and_notes(",
-        "deadsync_simfile::song::load_native_step_metadata(",
+        "deadsync_simfile::app_runtime::load_song_lua_chart_data(",
     ] {
         assert!(entry.contains(loader), "the shell should contain {loader}");
     }
+    assert!(!entry.contains("load_native_step_metadata("));
     let manifest = read_source(root.join("crates/deadsync-song-lua/Cargo.toml"))
         .expect("shared playback manifest");
     let manifest = manifest.split("[dev-dependencies]").next().unwrap();

@@ -129,6 +129,7 @@ struct SongBuildInput<'a> {
     music_length_seconds: f32,
     options: &'a ParseSongOptions,
     parsed_notes: &'a mut Vec<Vec<CachedParsedNote>>,
+    native_steps: Vec<NativeStep>,
 }
 
 /// One simfile's bytes and where they claim to live.
@@ -349,6 +350,7 @@ fn parse_song_source(
     let song_music_path = media_dir.and_then(|dir| resolve_music_path(dir, &summary.music_path));
     let music_length_seconds = final_music_len(&summary, music_len(song_music_path.as_deref()));
     let additional_bounds = unplayed_chart_note_bounds(&parsed, &source.extension);
+    let native_steps = native_step_catalog(&parsed, source.extension, summary.charts.len())?;
     let mut song = build_song_data(
         summary,
         SongBuildInput {
@@ -359,6 +361,7 @@ fn parse_song_source(
             music_length_seconds,
             options,
             parsed_notes,
+            native_steps,
         },
     );
     update_precise_song_bounds(&mut song);
@@ -378,6 +381,7 @@ fn parse_song_source(
 
 /// Authored Steps retain their Song::GetAllSteps order even when their style
 /// cannot be selected for gameplay in DeadSync.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
 pub struct NativeStepMetadata {
     pub chart_type: String,
     pub difficulty: String,
@@ -389,10 +393,51 @@ pub struct NativeStepMetadata {
     pub playable_index: Option<usize>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
+pub enum NativeStep {
+    Playable(usize),
+    Unplayed(NativeStepMetadata),
+}
+
+impl NativeStep {
+    pub fn playable_index(&self) -> Option<usize> {
+        match self {
+            Self::Playable(index) => Some(*index),
+            Self::Unplayed(_) => None,
+        }
+    }
+}
+
 pub fn load_native_step_metadata(song: &deadsync_chart::SongData) -> Result<Vec<NativeStepMetadata>, String> {
     let data = std::fs::read(&song.simfile_path).map_err(|error| error.to_string())?;
     let extension = song.simfile_path.extension().and_then(|value| value.to_str()).unwrap_or("sm");
     let parsed = rssp::parse::extract_sections(&data, extension).map_err(|error| error.to_string())?;
+    Ok(native_step_catalog(&parsed, extension, song.charts.len())?
+        .into_iter()
+        .map(|step| match step {
+            NativeStep::Playable(index) => {
+                let chart = &song.charts[index];
+                NativeStepMetadata {
+                    chart_type: chart.chart_type.clone(),
+                    difficulty: chart.difficulty.clone(),
+                    description: chart.description.clone(),
+                    chart_name: chart.chart_name.clone(),
+                    credit: chart.step_artist.clone(),
+                    meter: chart.meter,
+                    music_file: chart.music_file.clone(),
+                    playable_index: Some(index),
+                }
+            }
+            NativeStep::Unplayed(metadata) => metadata,
+        })
+        .collect())
+}
+
+fn native_step_catalog(
+    parsed: &rssp::parse::ParsedSimfileData<'_>,
+    extension: &str,
+    chart_count: usize,
+) -> Result<Vec<NativeStep>, String> {
     let ssc = extension.eq_ignore_ascii_case("ssc");
     let format = if ssc { rssp::timing::TimingFormat::Ssc } else { rssp::timing::TimingFormat::Sm };
     let version = rssp::parse::parse_version(parsed.version, format);
@@ -404,18 +449,12 @@ pub fn load_native_step_metadata(song: &deadsync_chart::SongData) -> Result<Vec<
         if entry.field_count < 5 { continue; }
         let kind = text(entry.fields[0]).to_ascii_lowercase();
         if crate::partner_charts::playable(entry.fields[0]) {
-            let chart = song.charts.get(playable).ok_or("native Steps catalog exceeds playable charts")?;
-            steps.push(NativeStepMetadata {
-                chart_type: chart.chart_type.clone(), difficulty: chart.difficulty.clone(),
-                description: chart.description.clone(), chart_name: chart.chart_name.clone(),
-                credit: chart.step_artist.clone(), meter: chart.meter,
-                music_file: chart.music_file.clone(), playable_index: Some(playable),
-            });
+            steps.push(NativeStep::Playable(playable));
             playable += 1;
         } else if native_unplayed_step_lanes(&kind).is_some() || kind == "lights-cabinet" {
             let legacy_name = ssc && version < rssp::parse::SSC_VERSION_CHART_NAME_TAG;
             let description = text(entry.fields[1]);
-            steps.push(NativeStepMetadata {
+            steps.push(NativeStep::Unplayed(NativeStepMetadata {
                 chart_type: kind, difficulty: text(entry.fields[2]),
                 chart_name: if !ssc || legacy_name { description.clone() }
                     else { text(entry.chart_name.unwrap_or_default()) },
@@ -424,10 +463,12 @@ pub fn load_native_step_metadata(song: &deadsync_chart::SongData) -> Result<Vec<
                 meter: text(entry.fields[3]).parse().unwrap_or(1),
                 music_file: entry.chart_music.as_deref().map(&text).unwrap_or_default(),
                 playable_index: None,
-            });
+            }));
         }
     }
-    if playable != song.charts.len() { return Err("native Steps catalog is missing playable charts".into()); }
+    if playable != chart_count {
+        return Err("native Steps catalog does not match playable charts".into());
+    }
     Ok(steps)
 }
 
@@ -616,6 +657,7 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
         music_length_seconds,
         options,
         parsed_notes,
+        native_steps,
     } = input;
     let charts = build_charts(
         &mut summary,
@@ -687,6 +729,7 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
         precise_note_first_second_seconds: None,
         precise_note_last_second_seconds: Some(summary.total_length.max(0) as f32),
         last_second_hint,
+        native_steps,
         charts,
     }
 }

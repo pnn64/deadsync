@@ -8,6 +8,7 @@ use deadsync_assets::song_lua::{
 use deadsync_chart::{ChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile_gameplay::gameplay_pack_data;
+use deadsync_simfile::song::NativeStep;
 use deadsync_song_lua::SongLuaMediaProbes;
 use log::warn;
 use std::sync::Arc;
@@ -67,7 +68,7 @@ pub fn song_lua_context(
     context.defer_initial_live_update = live;
     context.screen_loading = live;
     let cfg = deadsync_config::runtime::get();
-    let inputs = deadsync_simfile::app_runtime::load_chart_timing_and_notes(
+    let inputs = deadsync_simfile::app_runtime::load_song_lua_chart_data(
         song,
         deadsync_simfile::runtime::RuntimeSongConfig::new(
             cfg.fastload,
@@ -84,18 +85,18 @@ pub fn song_lua_context(
     } else {
         0.0
     };
-    for (mut timing, notes, row_beats) in inputs {
+    for (mut timing, notes, row_beats) in inputs.charts {
         timing.shift_group_offset_seconds(sync_offset);
         context.song_step_timing.push(timing);
         context.song_step_notes.push(notes.into());
         context.song_step_row_beats.push(row_beats.into());
     }
-    let catalog = deadsync_simfile::song::load_native_step_metadata(song)?;
+    let catalog = inputs.native_steps;
     let playable_steps = std::mem::take(&mut context.song_steps);
     let playable_timing = std::mem::take(&mut context.song_step_timing);
     let playable_notes = std::mem::take(&mut context.song_step_notes);
     let playable_rows = std::mem::take(&mut context.song_step_row_beats);
-    context.song_step_chart_indices = catalog.iter().map(|step| step.playable_index).collect();
+    context.song_step_chart_indices = catalog.iter().map(NativeStep::playable_index).collect();
     context.player_step_indices = context.player_step_indices.map(|selected| {
         selected.and_then(|index| {
             context
@@ -105,7 +106,7 @@ pub fn song_lua_context(
         })
     });
     for step in catalog {
-        if let Some(index) = step.playable_index {
+        if let NativeStep::Playable(index) = step {
             context.song_steps.push(playable_steps[index].clone());
             context
                 .song_step_timing
@@ -114,7 +115,7 @@ pub fn song_lua_context(
             context
                 .song_step_row_beats
                 .push(playable_rows[index].clone());
-        } else {
+        } else if let NativeStep::Unplayed(step) = step {
             use deadsync_song_lua::SongLuaDifficulty as Difficulty;
             let difficulty = match step.difficulty.to_ascii_lowercase().as_str() {
                 "beginner" => Difficulty::Beginner,
