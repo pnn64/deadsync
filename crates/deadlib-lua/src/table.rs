@@ -187,13 +187,17 @@ const TAGGED_SLOTS: usize = 1 << INDEX_BITS;
 
 pub(crate) const ARRAY_WATCH_BLOCK: usize = 32;
 pub(crate) const ARRAY_WATCH_LIMIT: usize = (u8::MAX as usize - 1) * ARRAY_WATCH_BLOCK;
+pub(crate) const ARRAY_WATCH_BLOCKS: usize = 2;
 pub(crate) const LUA51_MAX_ARRAY: usize = 1 << 26;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ArrayChange {
     Unwatched,
     Clean,
-    Block(usize),
+    Dirty {
+        blocks: [usize; ARRAY_WATCH_BLOCKS],
+        len: usize,
+    },
 }
 
 #[derive(Debug)]
@@ -331,9 +335,9 @@ pub(crate) struct Table {
     host_state: u64,
     // Counts changes to keyed entries; see `fields_version`.
     fields_version: u32,
-    // Zero invalidates the watch, one is clean, and higher values identify a
-    // single changed block. This occupies the same byte as a validity flag.
-    array_watch: u8,
+    // Zero invalidates the watch, one is clean. Each nonzero byte of a
+    // dirty watch encodes a block number plus two.
+    array_watch: u16,
     pub trace: TableTrace,
 }
 
@@ -473,7 +477,16 @@ impl Table {
         match self.array_watch {
             0 => ArrayChange::Unwatched,
             1 => ArrayChange::Clean,
-            block => ArrayChange::Block(usize::from(block - 2)),
+            watch => {
+                let [first, second] = watch.to_le_bytes();
+                ArrayChange::Dirty {
+                    blocks: [
+                        usize::from(first - 2),
+                        usize::from(second.saturating_sub(2)),
+                    ],
+                    len: 1 + usize::from(second != 0),
+                }
+            }
         }
     }
     pub(crate) fn watch_array(&mut self) {
@@ -486,14 +499,20 @@ impl Table {
     #[inline]
     fn touch_array_at(&mut self, index: usize) {
         if self.array_watch != 0 {
-            let block = index / ARRAY_WATCH_BLOCK + 2;
-            self.array_watch = if block <= u8::MAX as usize
-                && (self.array_watch == 1 || usize::from(self.array_watch) == block)
-            {
-                block as u8
-            } else {
-                0
+            let Ok(block) = u8::try_from(index / ARRAY_WATCH_BLOCK + 2) else {
+                self.touch_array();
+                return;
             };
+            let [first, second] = self.array_watch.to_le_bytes();
+            if first == 1 {
+                self.array_watch = u16::from(block);
+            } else if first != block && second != block {
+                self.array_watch = if second == 0 {
+                    u16::from_le_bytes([first, block])
+                } else {
+                    0
+                };
+            }
         }
     }
     pub fn heap_bytes(&self) -> usize {
@@ -1439,6 +1458,37 @@ mod allocation_tests {
     use crate::allocation_probe::probe;
     fn hash_key(n: i32) -> Value {
         Value::Number(-f64::from(n))
+    }
+    #[test]
+    fn array_watch_tracks_two_distinct_blocks_before_invalidating() {
+        let mut table = Table::default();
+        table.watch_array();
+        table.touch_array_at(ARRAY_WATCH_BLOCK);
+        table.touch_array_at(0);
+        table.touch_array_at(ARRAY_WATCH_BLOCK + 1);
+        assert_eq!(
+            table.array_change(),
+            ArrayChange::Dirty {
+                blocks: [1, 0],
+                len: 2
+            }
+        );
+
+        table.touch_array_at(2 * ARRAY_WATCH_BLOCK);
+        table.touch_array_at(0);
+        assert_eq!(table.array_change(), ArrayChange::Unwatched);
+
+        table.watch_array();
+        table.touch_array_at(ARRAY_WATCH_LIMIT - 1);
+        assert_eq!(
+            table.array_change(),
+            ArrayChange::Dirty {
+                blocks: [ARRAY_WATCH_LIMIT / ARRAY_WATCH_BLOCK - 1, 0],
+                len: 1,
+            }
+        );
+        table.touch_array_at(ARRAY_WATCH_LIMIT);
+        assert_eq!(table.array_change(), ArrayChange::Unwatched);
     }
     #[test]
     fn max_numeric_key_keeps_live_values_across_block_edges() {

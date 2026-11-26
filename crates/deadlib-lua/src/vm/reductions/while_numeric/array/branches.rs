@@ -3,7 +3,7 @@ use super::super::super::{Reduction, integer};
 use super::exact::{ArrayReduction, Exact, MIN_LENGTH, repair_blocks};
 use crate::arena::Arena;
 use crate::bytecode::{COMPARE_BRANCH, Instruction, Op, Prototype, RK};
-use crate::table::{ArrayChange, Table, array_index};
+use crate::table::{ARRAY_WATCH_BLOCKS, ArrayChange, Table, array_index};
 use crate::vm::{
     Cell, FrameKind, FunctionId, TableId, Value, Vm,
     forwarding::{MAX_VALUES, numeric},
@@ -441,15 +441,17 @@ impl<'a> Plan<'a> {
         initial: f64,
     ) -> Option<f64> {
         let constant_reads = self.constant_read_tables()?;
-        let mut dirty = [0; MAX_CAPTURES];
+        let mut dirty = [0; MAX_CAPTURES * ARRAY_WATCH_BLOCKS];
         let mut count = 0;
         for (index, id) in self.tables[..self.table_count].iter().enumerate() {
             match tables[slot_index(id.0)].array_change() {
                 ArrayChange::Clean => {}
-                ArrayChange::Block(block) if constant_reads & (1 << index) == 0 => {
-                    if !dirty[..count].contains(&block) {
-                        dirty[count] = block;
-                        count += 1;
+                ArrayChange::Dirty { blocks, len } if constant_reads & (1 << index) == 0 => {
+                    for &block in &blocks[..len] {
+                        if !dirty[..count].contains(&block) {
+                            dirty[count] = block;
+                            count += 1;
+                        }
                     }
                 }
                 _ => return None,

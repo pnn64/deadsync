@@ -141,7 +141,7 @@ impl ArrayReduction {
         let matches = match change {
             ArrayChange::Unwatched => false,
             ArrayChange::Clean => true,
-            ArrayChange::Block(_) => {
+            ArrayChange::Dirty { .. } => {
                 bounds.1 <= ARRAY_WATCH_LIMIT as i64 && self.blocks.memory().uses_global_allocator()
             }
         };
@@ -158,7 +158,7 @@ impl ArrayReduction {
             return None;
         };
         match change {
-            ArrayChange::Block(block) => {
+            ArrayChange::Dirty { blocks, len } => {
                 if matches!(entry.state, State::Computed(None) | State::WaitForClean) {
                     // A rejected proof can be retried once the array stops changing.
                     entry.state = State::WaitForClean;
@@ -170,7 +170,7 @@ impl ArrayReduction {
                             &mut self.blocks,
                             start,
                             prefix.len(),
-                            &[block],
+                            &blocks[..len],
                             terms.len(),
                             |range| Exact::terms(&prefix[range], terms),
                         )
@@ -387,6 +387,7 @@ mod tests {
                 elseif mode == 3 then rawset(values, 1, '10')
                 elseif mode == 4 then values[1], values[33] = 3, 5
                 elseif mode == 5 then values[1] = 3
+                elseif mode == 6 then values[33], values[1] = 2, 7
                 end
                 for i = 1, 64 do
                     local value = values[i]
@@ -439,8 +440,12 @@ mod tests {
         run(&mut vm, 0., 0., 1., 199.);
         assert!(warmed(&vm));
         run(&mut vm, 4., 0., 1., 203.);
-        assert!(!warmed(&vm));
+        assert!(warmed(&vm));
+        assert!(!vm.array_reduction.blocks.is_empty());
         run(&mut vm, 0., 0., 1., 203.);
+        run(&mut vm, 6., 0., 1., 204.);
+        assert!(warmed(&vm));
+        run(&mut vm, 4., 0., 1., 203.);
         assert!(warmed(&vm));
         run(&mut vm, 3., 0., 1., 210.);
         run(&mut vm, 0., 0., 1., 210.);

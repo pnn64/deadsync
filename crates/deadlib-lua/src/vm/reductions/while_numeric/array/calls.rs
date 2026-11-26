@@ -4,7 +4,7 @@ use super::super::super::{Reduction, integer};
 use super::exact::{Exact, MIN_LENGTH, repair_blocks};
 use crate::arena::Arena;
 use crate::bytecode::{Instruction, Op, RK};
-use crate::table::{ArrayChange, Table};
+use crate::table::{ARRAY_WATCH_BLOCKS, ArrayChange, Table};
 use crate::vm::{
     Cell, FrameKind, FunctionId, TableId, Value, Vm,
     numeric_leaf::{Expression, Input},
@@ -606,15 +606,17 @@ impl Vm {
     fn repair_array_call(&mut self, key: &Key) -> Option<()> {
         let plan = &key.plan;
         let watched = &plan.tables[..plan.table_count];
-        let mut dirty = [0; MAX_ARRAYS];
+        let mut dirty = [0; MAX_ARRAYS * ARRAY_WATCH_BLOCKS];
         let mut count = 0;
         for id in watched {
             match self.tables[slot_index(id.0)].array_change() {
                 ArrayChange::Clean => {}
-                ArrayChange::Block(block) => {
-                    if !dirty[..count].contains(&block) {
-                        dirty[count] = block;
-                        count += 1;
+                ArrayChange::Dirty { blocks, len } => {
+                    for &block in &blocks[..len] {
+                        if !dirty[..count].contains(&block) {
+                            dirty[count] = block;
+                            count += 1;
+                        }
                     }
                 }
                 ArrayChange::Unwatched => return None,
