@@ -81,6 +81,7 @@ pub struct Decoder {
     picture: Option<Picture>,
     older: Option<Arc<Frame>>,
     newest: Option<Arc<Frame>>,
+    spare: Option<Frame>,
 }
 
 impl Decoder {
@@ -198,7 +199,10 @@ impl Decoder {
         };
         let frame = picture
             .frame
-            .get_or_insert_with(|| Frame::new(sequence, &picture.header));
+            .get_or_insert_with(|| match self.spare.take() {
+                Some(frame) => frame.reuse(sequence, &picture.header),
+                None => Frame::new(sequence, &picture.header),
+            });
         let slice = Slice {
             sequence,
             coding,
@@ -224,9 +228,11 @@ impl Decoder {
         }
         let frame = Arc::new(picture.frame.ok_or(Error::Truncated)?);
         if frame.picture_kind() == PictureKind::B {
-            output(frame);
+            output(Arc::clone(&frame));
+            self.spare = Arc::try_unwrap(frame).ok();
         } else {
-            self.older = self.newest.replace(frame);
+            let retired = core::mem::replace(&mut self.older, self.newest.replace(frame));
+            self.spare = retired.and_then(|old| Arc::try_unwrap(old).ok());
             if let Some(previous) = &self.older {
                 output(Arc::clone(previous));
             }
@@ -239,6 +245,7 @@ impl Decoder {
             output(last);
         }
         self.older = None;
+        self.spare = None;
     }
 }
 

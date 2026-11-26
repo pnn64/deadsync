@@ -134,6 +134,17 @@ impl Frame {
         }
     }
 
+    pub(crate) fn reuse(mut self, sequence: &Sequence, picture: &PictureHeader) -> Self {
+        if !self.matches(sequence) {
+            return Self::new(sequence, picture);
+        }
+        // Complete picture coverage ensures every sample is overwritten.
+        self.frame_rate = sequence.frame_rate;
+        self.temporal_reference = picture.temporal_reference;
+        self.kind = picture.kind;
+        self
+    }
+
     pub fn width(&self) -> usize {
         self.planes[0].width
     }

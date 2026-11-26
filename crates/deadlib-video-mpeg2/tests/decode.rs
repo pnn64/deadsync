@@ -27,8 +27,12 @@ fn collect(frames: &mut Vec<(u16, deadlib_video_mpeg2::PictureKind, u64)>, frame
 
 #[test]
 fn decodes_elementary_stream_in_display_order() {
+    let mut retained = Vec::new();
+    decode_elementary_stream(VIDEO, |frame| retained.push(frame)).unwrap();
     let mut frames = Vec::new();
-    decode_elementary_stream(VIDEO, |frame| collect(&mut frames, frame)).unwrap();
+    for frame in retained {
+        collect(&mut frames, frame);
+    }
     // FNV-1a of each visible YCbCr frame from FFmpeg 7.1 with -idct simple.
     assert_eq!(
         frames,
