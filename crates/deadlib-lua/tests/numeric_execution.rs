@@ -499,3 +499,30 @@ fn periodic_substring_lengths_preserve_signed_remainders_and_the_last_iteration(
         "#,
     );
 }
+
+#[test]
+fn periodic_substring_lengths_follow_clipping_and_combined_remainders() {
+    check(
+        br#"
+        local function setup()
+            local source = string.rep("abc", 100)
+            local sub = string.sub
+            return function()
+                local clipped, combined = 0, 0
+                for i = 1, 146 do
+                    local start = (i - 1) * 2 + 1
+                    clipped = clipped + #sub(source, start, start + i % 10 + 15)
+                end
+                for i = 123, 1, -1 do
+                    local start = (i - 1) * 2 + 1
+                    combined = combined + #sub(source, start, start + i % 12 + i % 5)
+                end
+                return clipped, combined
+            end
+        end
+        local sum = setup()
+        local clipped, combined = sum()
+        return clipped == 2956 and combined == 1035
+        "#,
+    );
+}
