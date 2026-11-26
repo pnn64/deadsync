@@ -1113,18 +1113,27 @@ fn derive_edge_bs<const VERTICAL: bool>(
         return [i32::from(different); 4];
     }
     let p_edge = if edge == 0 { 3 } else { edge - 1 };
-    core::array::from_fn(|seg| {
-        let (p_idx, q_idx) = if VERTICAL {
-            (blk_idx(p_edge, seg), blk_idx(edge, seg))
-        } else {
-            (blk_idx(seg, p_edge), blk_idx(seg, edge))
-        };
-        if p.has_coeff(p_idx) || q.has_coeff(q_idx) {
+    // The four block indices on an edge share these offsets from its
+    // first block, even when the edge crosses a macroblock boundary.
+    let (p_first, q_first, segments) = if VERTICAL {
+        (blk_idx(p_edge, 0), blk_idx(edge, 0), [0, 2, 8, 10])
+    } else {
+        (blk_idx(0, p_edge), blk_idx(0, edge), [0, 1, 4, 5])
+    };
+    let coefficients = (p.nnz >> p_first) | (q.nnz >> q_first);
+    segments.map(|segment| {
+        if coefficients & (1 << segment) != 0 {
             2
         } else if uniform {
             i32::from(different)
         } else {
-            i32::from(check_mv_diff(p, q, p_idx, q_idx, mvy_limit))
+            i32::from(check_mv_diff(
+                p,
+                q,
+                p_first + segment,
+                q_first + segment,
+                mvy_limit,
+            ))
         }
     })
 }
