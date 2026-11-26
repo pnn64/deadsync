@@ -9,7 +9,7 @@ use crate::dpb::{
     DecodedPicture, Dpb, Motion, PictureMeta, PictureStructure, PictureWriter, ReferenceStatus,
 };
 use crate::error::DecodeError;
-use crate::mv_pred::WeightContext;
+use crate::mv_pred::{is_long_term, ImplicitWeights, WeightContext};
 use crate::nal::{NalUnit, NalUnitType};
 use crate::pixel::Pixel;
 use crate::pps::{parse_pps, Pps};
@@ -555,13 +555,13 @@ pub(crate) struct SlicePlan {
     pub(crate) ref_pic_list_l0: Vec<Arc<DecodedPicture>>,
     pub(crate) ref_pic_list_l1: Vec<Arc<DecodedPicture>>,
     /// Which entries of the B-slice lists are long-term references
-    pub(crate) long_term_l0: Vec<bool>,
-    pub(crate) long_term_l1: Vec<bool>,
+    pub(crate) long_term_l0: u32,
+    pub(crate) long_term_l1: u32,
     pub(crate) use_weight: u8,
-    pub(crate) implicit_weights: Vec<Vec<i32>>,
+    pub(crate) implicit_weights: ImplicitWeights,
     /// MBAFF implicit weights for field MBs, per MB parity (0 = top), indexed
     /// by field ref_idx: `[parity][l0][l1]` = L0 weight
-    pub(crate) implicit_weights_field: [Vec<Vec<i32>>; 2],
+    pub(crate) implicit_weights_field: [ImplicitWeights; 2],
     /// Top and bottom field POCs of the current picture
     pub(crate) field_poc: [i32; 2],
     pub(crate) slice_qp: i32,
@@ -751,13 +751,18 @@ pub(crate) fn prepare_slice(
         );
     }
 
-    let is_long_term = |list: &[Arc<DecodedPicture>]| -> Vec<bool> {
-        list.iter()
-            .map(|p| long_term.iter().any(|(q, _)| Arc::ptr_eq(p, q)))
-            .collect()
+    // Slice header validation limits each active list to 32 entries.
+    let long_term_mask = |list: &[Arc<DecodedPicture>]| {
+        let mut mask = 0u32;
+        for (i, p) in list.iter().enumerate() {
+            if long_term.iter().any(|(q, _)| Arc::ptr_eq(p, q)) {
+                mask |= 1 << i;
+            }
+        }
+        mask
     };
-    let long_term_l0 = is_long_term(&_ref_pic_list_l0);
-    let long_term_l1 = is_long_term(&_ref_pic_list_l1);
+    let long_term_l0 = long_term_mask(&_ref_pic_list_l0);
+    let long_term_l1 = long_term_mask(&_ref_pic_list_l1);
 
     // Weighted prediction mode:
     // 0 = no weighting (default)
@@ -789,55 +794,47 @@ pub(crate) fn prepare_slice(
             }
         }
     };
-    let implicit_weights: Vec<Vec<i32>> = if use_weight == 2 {
+    let implicit_weights = if use_weight == 2 {
         // A long-term reference gets the default weight (spec 8.4.2.3.1)
-        _ref_pic_list_l0
-            .iter()
-            .zip(&long_term_l0)
-            .map(|(ref_l0, &lt0)| {
-                _ref_pic_list_l1
-                    .iter()
-                    .zip(&long_term_l1)
-                    .map(|(ref_l1, &lt1)| {
-                        if lt0 || lt1 {
-                            32
-                        } else {
-                            implicit_weight(current_poc, ref_l0.pic_order_cnt, ref_l1.pic_order_cnt)
-                        }
-                    })
-                    .collect()
-            })
-            .collect()
+        ImplicitWeights::new(_ref_pic_list_l0.len(), _ref_pic_list_l1.len(), |k0, k1| {
+            if is_long_term(long_term_l0, k0) || is_long_term(long_term_l1, k1) {
+                32
+            } else {
+                implicit_weight(
+                    current_poc,
+                    _ref_pic_list_l0[k0].pic_order_cnt,
+                    _ref_pic_list_l1[k1].pic_order_cnt,
+                )
+            }
+        })
     } else {
-        vec![]
+        ImplicitWeights::default()
     };
     let field_poc = Dpb::frame_field_pocs(sps, &header, current_poc);
     // MBAFF field MBs predict from fields: field ref_idx k of an MB of parity
     // p is the field of parity p ^ (k & 1) of frame entry k / 2, and the
     // implicit weights use field POCs (spec 8.4.2.3.1).
-    let implicit_weights_field: [Vec<Vec<i32>>; 2] = if use_weight == 2 && header.mbaff_frame_flag {
+    let implicit_weights_field = if use_weight == 2 && header.mbaff_frame_flag {
         let field_ref_poc =
             |list: &[Arc<DecodedPicture>], p: usize, k: usize| list[k / 2].field_poc[p ^ (k & 1)];
         [0, 1].map(|p| {
-            (0.._ref_pic_list_l0.len() * 2)
-                .map(|k0| {
-                    (0.._ref_pic_list_l1.len() * 2)
-                        .map(|k1| {
-                            if long_term_l0[k0 / 2] || long_term_l1[k1 / 2] {
-                                return 32;
-                            }
-                            implicit_weight(
-                                field_poc[p],
-                                field_ref_poc(&_ref_pic_list_l0, p, k0),
-                                field_ref_poc(&_ref_pic_list_l1, p, k1),
-                            )
-                        })
-                        .collect()
-                })
-                .collect()
+            ImplicitWeights::new(
+                _ref_pic_list_l0.len() * 2,
+                _ref_pic_list_l1.len() * 2,
+                |k0, k1| {
+                    if is_long_term(long_term_l0, k0 / 2) || is_long_term(long_term_l1, k1 / 2) {
+                        return 32;
+                    }
+                    implicit_weight(
+                        field_poc[p],
+                        field_ref_poc(&_ref_pic_list_l0, p, k0),
+                        field_ref_poc(&_ref_pic_list_l1, p, k1),
+                    )
+                },
+            )
         })
     } else {
-        [vec![], vec![]]
+        Default::default()
     };
 
     // The coded size comes from the SPS macroblock counts (spec 7.4.2.1.1);
@@ -1166,8 +1163,8 @@ fn run_slice_px<P: Pixel>(
         ref_pic_list,
         ref_pic_list_l0: _ref_pic_list_l0,
         ref_pic_list_l1: _ref_pic_list_l1,
-        long_term_l0: &plan.long_term_l0,
-        long_term_l1: &plan.long_term_l1,
+        long_term_l0: plan.long_term_l0,
+        long_term_l1: plan.long_term_l1,
         num_ref_idx_l0_active: header.num_ref_idx_l0_active,
         num_ref_idx_l1_active: header.num_ref_idx_l1_active,
         wctx: &wctx,

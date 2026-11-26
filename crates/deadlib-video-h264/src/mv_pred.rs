@@ -137,13 +137,51 @@ pub(crate) fn ref_pic_safe(list: &[Arc<DecodedPicture>], idx: i8) -> Option<&Arc
     Some(&list[(idx.max(0) as usize).min(list.len() - 1)])
 }
 
+/// Implicit bi-prediction weights stored densely by L0 and L1 reference index.
+#[derive(Default)]
+pub(crate) struct ImplicitWeights {
+    columns: usize,
+    values: Vec<i16>,
+}
+
+impl ImplicitWeights {
+    pub(crate) fn new(
+        rows: usize,
+        columns: usize,
+        mut weight: impl FnMut(usize, usize) -> i32,
+    ) -> Self {
+        let mut values = Vec::with_capacity(rows * columns);
+        for row in 0..rows {
+            for column in 0..columns {
+                values.push(weight(row, column) as i16);
+            }
+        }
+        Self { columns, values }
+    }
+
+    fn get(&self, l0: usize, l1: usize) -> Option<i32> {
+        if l1 >= self.columns {
+            return None;
+        }
+        self.values
+            .get(l0 * self.columns + l1)
+            .map(|&w| i32::from(w))
+    }
+}
+
+/// Check one active reference in a bitmask indexed by its list position.
+#[inline]
+pub(crate) fn is_long_term(mask: u32, index: usize) -> bool {
+    index < u32::BITS as usize && mask & (1 << index) != 0
+}
+
 /// Bundles weighted prediction parameters for a slice, avoiding long argument lists.
 pub(crate) struct WeightContext<'a> {
     pub(crate) use_weight: u8,
     pub(crate) wt: Option<&'a PredWeightTable>,
-    pub(crate) implicit_weights: &'a [Vec<i32>],
+    pub(crate) implicit_weights: &'a ImplicitWeights,
     /// MBAFF field MBs: implicit weights per MB parity over field ref_idx
-    pub(crate) implicit_weights_field: &'a [Vec<Vec<i32>>; 2],
+    pub(crate) implicit_weights_field: &'a [ImplicitWeights; 2],
 }
 
 /// Weighted prediction for one macroblock: `field` is the MB's parity
@@ -206,11 +244,9 @@ impl MbWeights<'_> {
     ) {
         match (self.ctx.use_weight, self.field) {
             (2, Some(p)) => {
-                let w0 = self.ctx.implicit_weights_field[p]
-                    .get(ref_idx_l0)
-                    .and_then(|row| row.get(ref_idx_l1));
+                let w0 = self.ctx.implicit_weights_field[p].get(ref_idx_l0, ref_idx_l1);
                 match w0 {
-                    Some(&w0) => P::weighted_bi_implicit(pred_l0, pred_l1, output, w0, 64 - w0),
+                    Some(w0) => P::weighted_bi_implicit(pred_l0, pred_l1, output, w0, 64 - w0),
                     None => P::bi_pred_avg(pred_l0, pred_l1, output),
                 }
             }
@@ -316,10 +352,7 @@ impl WeightContext<'_> {
                 }
             }
             2 => {
-                if ref_idx_l0 < self.implicit_weights.len()
-                    && ref_idx_l1 < self.implicit_weights[ref_idx_l0].len()
-                {
-                    let w0 = self.implicit_weights[ref_idx_l0][ref_idx_l1];
+                if let Some(w0) = self.implicit_weights.get(ref_idx_l0, ref_idx_l1) {
                     P::weighted_bi_implicit(pred_l0, pred_l1, output, w0, 64 - w0);
                 } else {
                     P::bi_pred_avg(pred_l0, pred_l1, output);
@@ -862,7 +895,7 @@ pub(crate) fn apply_spatial_direct_col_zero(
 pub(crate) fn derive_temporal_direct_blk(
     col_pic: &DecodedPicture,
     ref_pic_list_l0: &[Arc<DecodedPicture>],
-    long_term_l0: &[bool],
+    long_term_l0: u32,
     (current_poc, current_field_poc): (i32, [i32; 2]),
     mb_idx: usize,
     blk: usize,
@@ -1018,7 +1051,7 @@ pub(crate) fn derive_temporal_direct_blk(
     } else {
         ref0
     };
-    let long_term = long_term_l0.get(list_idx).copied().unwrap_or(false);
+    let long_term = is_long_term(long_term_l0, list_idx);
     let scale = if td == 0 || long_term {
         256
     } else {

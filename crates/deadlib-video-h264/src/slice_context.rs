@@ -37,8 +37,8 @@ pub(crate) struct SliceParams<'a> {
     pub ref_pic_list_l0: &'a [Arc<DecodedPicture>],
     pub ref_pic_list_l1: &'a [Arc<DecodedPicture>],
     /// Which entries of `ref_pic_list_l0` / `ref_pic_list_l1` are long-term
-    pub long_term_l0: &'a [bool],
-    pub long_term_l1: &'a [bool],
+    pub long_term_l0: u32,
+    pub long_term_l1: u32,
     pub num_ref_idx_l0_active: u32,
     pub num_ref_idx_l1_active: u32,
     pub wctx: &'a WeightContext<'a>,
@@ -53,8 +53,8 @@ use crate::intra_pred::{
 };
 use crate::mv_pred::{
     apply_spatial_direct_col_zero, derive_spatial_direct_base, derive_spatial_direct_blk,
-    derive_temporal_direct_blk, predict_mv_skip, ref_pic_safe, spatial_direct_needs_colocated,
-    MbaffCtx, WeightContext,
+    derive_temporal_direct_blk, is_long_term, predict_mv_skip, ref_pic_safe,
+    spatial_direct_needs_colocated, MbaffCtx, WeightContext,
 };
 use crate::pixel::Pixel;
 use crate::residual::BLOCK_INDEX_TO_OFFSET;
@@ -655,7 +655,7 @@ impl<P: Pixel> SliceContext<'_, P> {
         let col_pic_spatial = sp
             .ref_pic_list_l1
             .first()
-            .filter(|_| !sp.long_term_l1.first().copied().unwrap_or(false))
+            .filter(|_| !is_long_term(sp.long_term_l1, 0))
             .map(|p| p.as_ref());
         let direct_8x8_inference_flag = sp.direct_8x8_inference_flag;
         let current_poc = sp.current_poc;
