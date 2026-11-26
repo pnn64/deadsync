@@ -1,5 +1,6 @@
 use super::DialogError;
-use std::{ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf};
+use crate::windows_shell_path::{ComTaskAllocator, ShellPath};
+use std::path::PathBuf;
 use windows::{
     Win32::{
         Foundation::ERROR_CANCELLED,
@@ -12,29 +13,8 @@ use windows::{
             IFileOpenDialog, SIGDN_FILESYSPATH,
         },
     },
-    core::{HRESULT, PCWSTR, PWSTR},
+    core::{HRESULT, PCWSTR},
 };
-
-// Bind this allocation's destructor explicitly to ole32.dll. The generated
-// binding imports combase.dll, which prevents startup on Windows 7. A normal
-// import-library link can also resolve to the wrong DLL when both are linked.
-#[cfg_attr(
-    target_arch = "x86",
-    link(
-        name = "ole32.dll",
-        kind = "raw-dylib",
-        modifiers = "+verbatim",
-        import_name_type = "undecorated"
-    )
-)]
-#[cfg_attr(
-    not(target_arch = "x86"),
-    link(name = "ole32.dll", kind = "raw-dylib", modifiers = "+verbatim")
-)]
-unsafe extern "system" {
-    #[link_name = "CoTaskMemFree"]
-    fn free_com_task_mem(ptr: *const std::ffi::c_void);
-}
 
 struct Apartment;
 
@@ -43,15 +23,6 @@ impl Drop for Apartment {
         // SAFETY: created only after successful initialization on this thread,
         // and dropped after all of this dialog's COM interfaces.
         unsafe { CoUninitialize() };
-    }
-}
-
-struct ShellPath(PWSTR);
-
-impl Drop for ShellPath {
-    fn drop(&mut self) {
-        // SAFETY: GetDisplayName allocated this pointer with the COM allocator.
-        unsafe { free_com_task_mem(self.0.0.cast()) };
     }
 }
 
@@ -85,17 +56,15 @@ pub(super) fn pick_folder(title: &str) -> Result<Option<PathBuf>, DialogError> {
             };
         }
         let item = dialog.GetResult().map_err(DialogError::new)?;
-        let path = ShellPath(
+        let allocator = ComTaskAllocator::new().map_err(DialogError::new)?;
+        // GetDisplayName transfers a NUL-terminated COM-allocated path.
+        let path = ShellPath::from_raw(
             item.GetDisplayName(SIGDN_FILESYSPATH)
                 .map_err(DialogError::new)?,
+            &allocator,
         );
-        if path.0.is_null() {
-            return Err(DialogError::new(
-                "Folder dialog returned no filesystem path",
-            ));
-        }
-        // GetDisplayName supplies a NUL-terminated UTF-16 buffer. OsString
-        // preserves unpaired surrogates, unlike a lossy conversion to String.
-        Ok(Some(PathBuf::from(OsString::from_wide(path.0.as_wide()))))
+        path.into_path_buf()
+            .map(Some)
+            .ok_or_else(|| DialogError::new("Folder dialog returned no filesystem path"))
     }
 }

@@ -18,3 +18,5 @@ pub mod runtime_dir;
 pub mod window_focus;
 #[cfg(windows)]
 pub mod windows_rt;
+#[cfg(windows)]
+mod windows_shell_path;

@@ -19,6 +19,7 @@ pub struct NativeDirs {
 }
 
 /// Discover native roots for the supplied application identity.
+#[cfg(not(windows))]
 pub fn native_dirs(identity: AppIdentity<'_>) -> Option<NativeDirs> {
     let dirs = directories::ProjectDirs::from(
         identity.qualifier,
@@ -30,6 +31,49 @@ pub fn native_dirs(identity: AppIdentity<'_>) -> Option<NativeDirs> {
         cache_dir: dirs.cache_dir().to_path_buf(),
         config_dir: dirs.config_dir().to_path_buf(),
     })
+}
+
+/// Discover native roots for the supplied application identity.
+#[cfg(windows)]
+pub fn native_dirs(identity: AppIdentity<'_>) -> Option<NativeDirs> {
+    use crate::windows_shell_path::ComTaskAllocator;
+    use windows::Win32::UI::Shell::{FOLDERID_LocalAppData, FOLDERID_RoamingAppData};
+
+    let allocator = ComTaskAllocator::new().ok()?;
+    let project_path = PathBuf::from_iter([identity.organization, identity.application]);
+    let local = known_folder(&FOLDERID_LocalAppData, &allocator)?.join(&project_path);
+    let roaming = known_folder(&FOLDERID_RoamingAppData, &allocator)?.join(&project_path);
+    Some(NativeDirs {
+        data_dir: roaming.join("data"),
+        cache_dir: local.join("cache"),
+        config_dir: roaming.join("config"),
+    })
+}
+
+#[cfg(windows)]
+fn known_folder(
+    id: &windows::core::GUID,
+    allocator: &crate::windows_shell_path::ComTaskAllocator,
+) -> Option<PathBuf> {
+    use crate::windows_shell_path::ShellPath;
+    use windows::Win32::Foundation::{HANDLE, S_OK};
+    use windows::core::{GUID, HRESULT, PWSTR};
+
+    // Keep the out pointer on failure so it can still be freed.
+    windows::core::link!("shell32.dll" "system" fn SHGetKnownFolderPath(
+        id: *const GUID, flags: u32, token: HANDLE, path: *mut PWSTR
+    ) -> HRESULT);
+    let mut path = PWSTR::null();
+    // SAFETY: the ID and out pointer are valid. A null token selects the
+    // current user and zero flags request the current known-folder location.
+    let result = unsafe { SHGetKnownFolderPath(id, 0, HANDLE::default(), &mut path) };
+    if result != S_OK {
+        // SAFETY: the API requires freeing its out pointer even on failure.
+        unsafe { allocator.free(path) };
+        return None;
+    }
+    // SAFETY: success transfers a NUL-terminated COM-allocated path.
+    unsafe { ShellPath::from_raw(path, allocator) }.into_path_buf()
 }
 
 /// Returns a host-friendly shorthand for an absolute path when a stable home
@@ -76,6 +120,38 @@ fn replace_path_prefix(path: &Path, prefix: &std::ffi::OsStr, label: &str) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_native_roots_preserve_app_data_layout() {
+        use crate::windows_shell_path::ComTaskAllocator;
+        use windows::Win32::UI::Shell::{FOLDERID_LocalAppData, FOLDERID_RoamingAppData};
+
+        let allocator = ComTaskAllocator::new().expect("the COM task allocator is available");
+        let local =
+            known_folder(&FOLDERID_LocalAppData, &allocator).expect("Local AppData is available");
+        let roaming = known_folder(&FOLDERID_RoamingAppData, &allocator)
+            .expect("Roaming AppData is available");
+        for organization in ["", "Example Org"] {
+            let roots = native_dirs(AppIdentity {
+                qualifier: "org",
+                organization,
+                application: "App With Spaces",
+            })
+            .expect("native roots are available");
+            let roaming = roaming.join(organization).join("App With Spaces");
+            assert_eq!(roots.data_dir, roaming.join("data"));
+            assert_eq!(roots.config_dir, roaming.join("config"));
+            assert_eq!(
+                roots.cache_dir,
+                local
+                    .join(organization)
+                    .join("App With Spaces")
+                    .join("cache")
+            );
+        }
+    }
+
     #[test]
     fn native_roots_follow_the_supplied_identity() {
         let roots = |application| {
