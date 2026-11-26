@@ -253,6 +253,65 @@ unsafe fn hv_vertical(h: &[__m128i; 6]) -> __m128i {
     )
 }
 
+/// Diagonal half-pel and its quarter-pel neighbors. `src` starts two rows
+/// above and two columns to the left of the first interpolated sample.
+#[inline(never)]
+pub(crate) fn block_qpel_diagonal(
+    src: &[u8],
+    stride: usize,
+    w: usize,
+    h: usize,
+    frac_x: i32,
+    frac_y: i32,
+    out: &mut [u8],
+) -> bool {
+    if !matches!(w, 4 | 8 | 16) || h > 16 || level() == SimdLevel::Scalar {
+        return false;
+    }
+    assert!(src.len() >= (h + 4) * stride + w + 5 && out.len() >= w * h);
+
+    // SAFETY: each load is within the (w + 5) by (h + 5) sample window
+    // checked above. Four-wide partitions use exact four-byte accesses.
+    unsafe {
+        let load = |row: &[u8], col: usize| {
+            if w == 4 {
+                let word = row.as_ptr().add(col).cast::<i32>().read_unaligned();
+                _mm_cvtsi32_si128(word)
+            } else {
+                load8(row, col)
+            }
+        };
+        for col in (0..w).step_by(8) {
+            let mut horizontal = [_mm_setzero_si128(); 21];
+            for (r, acc) in horizontal[..h + 5].iter_mut().enumerate() {
+                let row = &src[r * stride..];
+                *acc = fir6_acc_w(core::array::from_fn(|tap| widen8(load(row, col + tap))));
+            }
+            for (r, rows) in horizontal[..h + 5].windows(6).enumerate() {
+                let mut result = hv_vertical(rows.try_into().unwrap());
+                if frac_x != 2 {
+                    let x = col + if frac_x == 3 { 3 } else { 2 };
+                    let samples =
+                        core::array::from_fn(|i| widen8(load(&src[(r + i) * stride..], x)));
+                    result = _mm_avg_epu8(result, round_pack5(fir6_acc_w(samples)));
+                } else if frac_y != 2 {
+                    let y = if frac_y == 3 { 3 } else { 2 };
+                    result = _mm_avg_epu8(result, round_pack5(rows[y]));
+                }
+                if w == 4 {
+                    out.as_mut_ptr()
+                        .add(r * w)
+                        .cast::<i32>()
+                        .write_unaligned(_mm_cvtsi128_si32(result));
+                } else {
+                    store8(out, r * w + col, result);
+                }
+            }
+        }
+    }
+    true
+}
+
 // ---------------------------------------------------------------------------
 // Kernels. Each dispatches on `level()`; SSE2 paths need no feature check.
 // ---------------------------------------------------------------------------
@@ -723,6 +782,40 @@ mod tests {
                 out
             });
             cmp("row_half_pel_hv", w, &a, &b);
+        }
+    }
+
+    #[test]
+    fn diagonal_block_matches_scalar_rows() {
+        let mut rng = Rng(0x5eed_7654);
+        let _guard = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        for w in [4, 8, 16] {
+            for h in [4, 8, 16] {
+                for stride in [w + 5, 48] {
+                    let src = rng.bytes((h + 4) * stride + w + 5);
+                    for (fx, fy) in [(2, 2), (2, 1), (2, 3), (1, 2), (3, 2)] {
+                        let mut out = [0u8; 16 * 16];
+                        assert!(block_qpel_diagonal(&src, stride, w, h, fx, fy, &mut out));
+                        let mut expected = [0u8; 16 * 16];
+                        for (r, out_row) in expected[..w * h].chunks_exact_mut(w).enumerate() {
+                            let rows = core::array::from_fn(|i| &src[(r + i) * stride..]);
+                            match (fx, fy) {
+                                (2, 2) => scalar::row_half_pel_hv(rows, out_row, w),
+                                (2, 1) => scalar::row_avg_h_hv(rows[2], rows, out_row, w),
+                                (2, 3) => scalar::row_avg_h_hv(rows[3], rows, out_row, w),
+                                (1, 2) => {
+                                    scalar::row_avg_v_hv(rows.map(|r| &r[2..]), rows, out_row, w)
+                                }
+                                (3, 2) => {
+                                    scalar::row_avg_v_hv(rows.map(|r| &r[3..]), rows, out_row, w)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        assert_eq!(out, expected, "{w}x{h} frac ({fx},{fy})");
+                    }
+                }
+            }
         }
     }
 

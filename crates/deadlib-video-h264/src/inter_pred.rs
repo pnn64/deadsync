@@ -313,6 +313,21 @@ fn luma_mc_inner(
     frac_y: i32,
     output: &mut [u8],
 ) {
+    #[cfg(target_arch = "x86_64")]
+    if matches!((frac_x, frac_y), (1, 2) | (2, 1..=3) | (3, 2))
+        && crate::simd::block_qpel_diagonal(
+            &ref_y[(y - 2) * stride + x - 2..],
+            stride,
+            w,
+            h,
+            frac_x,
+            frac_y,
+            output,
+        )
+    {
+        return;
+    }
+
     // Helper: get a row slice starting at (x + dx, y + dy) with length len
     let row = |dy: isize, dx: isize, len: usize| -> &[u8] {
         let off = (y as isize + dy) as usize * stride + (x as isize + dx) as usize;
