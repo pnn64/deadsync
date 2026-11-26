@@ -6,21 +6,21 @@
 use crate::dpb::{ChromaRef, DecodedPicture};
 use crate::pixel::Pixel;
 
-/// Luma samples available to the clamped (per-pixel) interpolation paths:
-/// the published rows of a reference picture, or a temporary field copy.
+/// View of the published luma rows of a frame or field.
 struct LumaView<'a> {
     y: &'a [u8],
-    width: u32,
-    height: u32,
+    stride: usize,
+    width: i32,
+    height: i32,
 }
 
 /// Fetch a luma sample from the reference picture with boundary clipping.
 /// Out-of-bounds coordinates are clamped to the picture edge (spec 8.4.2.2.1).
 #[inline]
 fn ref_luma(pic: &LumaView<'_>, x: i32, y: i32) -> i32 {
-    let cx = x.clamp(0, pic.width as i32 - 1) as usize;
-    let cy = y.clamp(0, pic.height as i32 - 1) as usize;
-    pic.y[cy * pic.width as usize + cx] as i32
+    let cx = x.clamp(0, pic.width - 1) as usize;
+    let cy = y.clamp(0, pic.height - 1) as usize;
+    pic.y[cy * pic.stride + cx] as i32
 }
 
 /// Fetch a chroma sample with boundary clipping.
@@ -189,12 +189,7 @@ pub fn luma_mc_stride(
     // offsets; one more row of margin). Complete pictures return at once.
     let last_row = (y_int + bh + 4).clamp(0, (pic_h - 1).max(0)) as usize;
     ref_pic.wait_luma(ref_y_offset + (last_row + 1) * ref_stride);
-    let view = LumaView {
-        y: ref_pic.luma(),
-        width: ref_pic.width,
-        height: ref_pic.height,
-    };
-    let ref_y = &view.y[ref_y_offset..];
+    let ref_y = &ref_pic.luma()[ref_y_offset..];
 
     // Determine margins needed for the filter type
     // Half-pel filters need 2 pixels before and 3 after the block
@@ -241,54 +236,66 @@ pub fn luma_mc_stride(
             frac_y,
             output,
         );
-    } else if ref_y_offset > 0 || stride != ref_pic.width as usize {
-        // Field-coded boundary fallback: extract field lines into a temporary
-        // DecodedPicture and use the standard interpolation on it.
-        // This copies the whole field, so it needs the whole picture.
-        ref_pic.wait_complete();
-        let full = ref_pic.luma();
-        let field_h = pic_h as usize;
-        let field_w = pic_w as usize;
-        let mut field_buf = vec![0u8; field_w * field_h];
-        for r in 0..field_h {
-            let src_off = ref_y_offset + r * stride;
-            let dst_off = r * field_w;
-            for c in 0..field_w {
-                if src_off + c < full.len() {
-                    field_buf[dst_off + c] = full[src_off + c];
-                }
-            }
-        }
-        let field_pic = LumaView {
-            y: &field_buf,
-            width: field_w as u32,
-            height: field_h as u32,
-        };
-        for row in 0..block_h {
-            for col in 0..block_w {
-                output[row * block_w + col] = luma_interp(
-                    &field_pic,
-                    x_int + col as i32,
-                    y_int + row as i32,
-                    frac_x,
-                    frac_y,
-                );
-            }
-        }
     } else {
-        // Boundary fallback: per-pixel with clamping
-        for row in 0..block_h {
-            for col in 0..block_w {
-                output[row * block_w + col] = luma_interp(
-                    &view,
-                    x_int + col as i32,
-                    y_int + row as i32,
-                    frac_x,
-                    frac_y,
-                );
+        let view = LumaView {
+            y: ref_y,
+            stride,
+            width: pic_w,
+            height: pic_h,
+        };
+        luma_mc_edge(
+            &view, x_int, y_int, block_w, block_h, frac_x, frac_y, output,
+        );
+    }
+}
+
+/// Extend the reference edge into a macroblock-sized tile with a filter halo,
+/// then run the same interpolation as for an in-bounds block.
+#[allow(clippy::too_many_arguments)]
+#[inline(never)]
+fn luma_mc_edge(
+    pic: &LumaView<'_>,
+    x: i32,
+    y: i32,
+    w: usize,
+    h: usize,
+    frac_x: i32,
+    frac_y: i32,
+    output: &mut [u8],
+) {
+    if w > 16 || h > 16 {
+        for row in 0..h {
+            for col in 0..w {
+                output[row * w + col] =
+                    luma_interp(pic, x + col as i32, y + row as i32, frac_x, frac_y);
             }
         }
+        return;
     }
+
+    let left = 2 * usize::from(frac_x != 0);
+    let top = 2 * usize::from(frac_y != 0);
+    let tile_w = w + 5 * usize::from(frac_x != 0);
+    let tile_h = h + 5 * usize::from(frac_y != 0);
+    let tile_x = x - left as i32;
+    let tile_y = y - top as i32;
+    let begin = (-tile_x).clamp(0, tile_w as i32) as usize;
+    let end = (pic.width - tile_x).clamp(0, tile_w as i32) as usize;
+    let mut tile = [0u8; 21 * 21];
+
+    for (dy, dst) in tile[..tile_w * tile_h].chunks_exact_mut(tile_w).enumerate() {
+        let sy = (tile_y + dy as i32).clamp(0, pic.height - 1) as usize;
+        let row_start = sy * pic.stride;
+        let src = &pic.y[row_start..row_start + pic.width as usize];
+        dst[..begin].fill(src[0]);
+        if begin < end {
+            let sx = (tile_x + begin as i32) as usize;
+            dst[begin..end].copy_from_slice(&src[sx..sx + end - begin]);
+        }
+        dst[end..].fill(src[src.len() - 1]);
+    }
+
+    luma_mc_inner(&tile, tile_w, left, top, w, h, frac_x, frac_y, output);
 }
 
 /// Inner loop for in-bounds luma MC. All reference accesses are unchecked
@@ -1059,6 +1066,65 @@ mod tests {
         let mut out = [0u8; 1];
         luma_mc_stride(&pic, 0, 0, -4, -4, 1, 1, &mut out, pic.width as usize, 0);
         assert_eq!(out[0], 0); // clamped to (0,0)
+    }
+
+    #[test]
+    fn edge_tiles_match_scalar_for_frames_and_fields() {
+        let width = 32;
+        let height = 32;
+        let mut seed = 7u32;
+        let samples: Vec<_> = (0..width * height)
+            .map(|_| {
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                (seed >> 24) as u8
+            })
+            .collect();
+        let pic = make_ref_pic(width as u32, height as u32, samples.clone());
+        for (first_row, step) in [(0, 1), (0, 2), (1, 2)] {
+            let packed: Vec<_> = samples
+                .chunks_exact(width)
+                .skip(first_row)
+                .step_by(step)
+                .flatten()
+                .copied()
+                .collect();
+            let oracle = LumaView {
+                y: &packed,
+                stride: width,
+                width: width as i32,
+                height: (height / step) as i32,
+            };
+            for (w, h) in [(4, 4), (8, 4), (16, 8), (16, 16)] {
+                for x in [-20, -1, 0, 4, 31, 44] {
+                    for y in [-20, -1, 0, 4, oracle.height - 1, oracle.height + 12] {
+                        for fy in 0..4 {
+                            for fx in 0..4 {
+                                let mut actual = [0u8; 16 * 16];
+                                luma_mc_stride(
+                                    &pic,
+                                    x,
+                                    y,
+                                    fx,
+                                    fy,
+                                    w,
+                                    h,
+                                    &mut actual,
+                                    width * step,
+                                    width * first_row,
+                                );
+                                for (i, &sample) in actual[..w * h].iter().enumerate() {
+                                    let sx = x + (i % w) as i32;
+                                    let sy = y + (i / w) as i32;
+                                    assert_eq!(sample, luma_interp(&oracle, sx, sy, fx, fy));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]
