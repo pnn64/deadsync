@@ -90,8 +90,21 @@ impl<'a> Bits<'a> {
     }
 
     pub(crate) fn vlc<const N: usize>(&mut self, table: &[u16; N]) -> Result<usize> {
+        self.vlc_with_prefix(table, 0)
+    }
+
+    pub(crate) fn inverted_vlc<const N: usize>(&mut self, table: &[u16; N]) -> Result<usize> {
+        self.vlc_with_prefix(table, N - 1)
+    }
+
+    #[inline]
+    fn vlc_with_prefix<const N: usize>(
+        &mut self,
+        table: &[u16; N],
+        invert: usize,
+    ) -> Result<usize> {
         let width = N.trailing_zeros() as u8;
-        let entry = table[self.peek(width) as usize];
+        let entry = table[self.peek(width) as usize ^ invert];
         let length = (entry & 31) as u8;
         if length == 0 {
             return Err(Error::Invalid("variable-length code"));

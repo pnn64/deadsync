@@ -35,7 +35,7 @@ impl Default for Predictor {
     }
 }
 
-pub(crate) fn intra(
+pub(crate) fn intra<const MP42: bool>(
     bits: &mut Bits<'_>,
     coded: bool,
     separate_dc: bool,
@@ -44,22 +44,25 @@ pub(crate) fn intra(
     plane: usize,
     [left, diagonal, above]: [Predictor; 3],
 ) -> Result<([i16; 64], Predictor)> {
-    let top = (left.dc - diagonal.dc).abs() < (diagonal.dc - above.dc).abs();
+    let left_gradient = (left.dc - diagonal.dc).abs();
+    let top_gradient = (diagonal.dc - above.dc).abs();
+    // MP42 chooses the top block when the two DC gradients are equal.
+    let top = left_gradient < top_gradient || (MP42 && left_gradient == top_gradient);
     let neighbor = if top { above } else { left };
     let scan = match (predict_ac, top) {
         (false, _) => &ZIGZAG,
         (true, true) => &HORIZONTAL,
         (true, false) => &VERTICAL,
     };
-    let scale = dc_scale(quantizer, plane);
+    let scale = if MP42 { 8 } else { dc_scale(quantizer, plane) };
     let mut coeff = [0; 64];
     if separate_dc {
-        coeff[0] = dc_difference(bits, plane)?;
+        coeff[0] = dc_difference::<MP42>(bits, plane)?;
     }
     if coded {
-        texture(
+        texture::<MP42, _>(
             bits,
-            true,
+            !MP42 || plane == 0,
             scan,
             usize::from(separate_dc),
             |position, level| {
@@ -67,7 +70,12 @@ pub(crate) fn intra(
             },
         )?;
     }
-    let dc = ((neighbor.dc + scale / 2) / scale + coeff[0]) * scale;
+    let predictor = if MP42 {
+        neighbor.dc / 8
+    } else {
+        (neighbor.dc + scale / 2) / scale
+    };
+    let dc = (predictor + coeff[0]) * scale;
     if predict_ac {
         for i in 1..8 {
             let (index, value) = if top {
@@ -76,25 +84,37 @@ pub(crate) fn intra(
                 (8 * i, neighbor.vertical[i - 1])
             };
             let scaled = value.abs() * neighbor.quantizer;
-            coeff[index] = (coeff[index] + value.signum() * ((scaled + quantizer / 2) / quantizer))
-                .clamp(-2048, 2047);
+            let predicted = coeff[index] + value.signum() * ((scaled + quantizer / 2) / quantizer);
+            coeff[index] = if MP42 {
+                i32::from(predicted as i16)
+            } else {
+                predicted.clamp(-2048, 2047)
+            };
         }
     }
     let state = Predictor {
-        dc: dc.clamp(0, 2047),
+        dc: if MP42 {
+            i32::from(dc as i16)
+        } else {
+            dc.clamp(0, 2047)
+        },
         vertical: core::array::from_fn(|i| coeff[8 * (i + 1)]),
         horizontal: core::array::from_fn(|i| coeff[i + 1]),
         quantizer,
     };
-    let mut scaled = coeff.map(|level| inverse_quantize(level, quantizer));
-    scaled[0] = dc.clamp(-2048, 2047) as i16;
+    let mut scaled = coeff.map(|level| inverse_quantize::<MP42>(level, quantizer));
+    scaled[0] = if MP42 {
+        state.dc
+    } else {
+        dc.clamp(-2048, 2047)
+    } as i16;
     Ok((transform::inverse(&scaled), state))
 }
 
-pub(crate) fn inter(bits: &mut Bits<'_>, quantizer: i32) -> Result<[i16; 64]> {
+pub(crate) fn inter<const MP42: bool>(bits: &mut Bits<'_>, quantizer: i32) -> Result<[i16; 64]> {
     let mut coeff = [0; 64];
-    texture(bits, false, &ZIGZAG, 0, |position, level| {
-        coeff[position] = inverse_quantize(level, quantizer);
+    texture::<MP42, _>(bits, false, &ZIGZAG, 0, |position, level| {
+        coeff[position] = inverse_quantize::<MP42>(level, quantizer);
     })?;
     Ok(transform::inverse(&coeff))
 }
@@ -115,11 +135,12 @@ fn dc_scale(q: i32, plane: usize) -> i32 {
     }
 }
 
-fn dc_difference(bits: &mut Bits<'_>, plane: usize) -> Result<i32> {
-    let size = if plane == 0 {
-        bits.vlc(&tables::DC_LUMA)?
-    } else {
-        bits.vlc(&tables::DC_CHROMA)?
+fn dc_difference<const MP42: bool>(bits: &mut Bits<'_>, plane: usize) -> Result<i32> {
+    let size = match (MP42, plane == 0) {
+        (false, true) => bits.vlc(&tables::DC_LUMA)?,
+        (false, false) => bits.vlc(&tables::DC_CHROMA)?,
+        (true, true) => bits.inverted_vlc(&tables::DC_LUMA)?,
+        (true, false) => bits.inverted_vlc(&tables::DC_CHROMA)?,
     } as u8;
     if size == 0 {
         return Ok(0);
@@ -128,16 +149,25 @@ fn dc_difference(bits: &mut Bits<'_>, plane: usize) -> Result<i32> {
     if size > 8 {
         bits.marker()?;
     }
-    Ok(if value < (1 << (size - 1)) {
+    let difference = if value < (1 << (size - 1)) {
         value + 1 - (1 << size)
     } else {
         value
-    })
+    };
+    if MP42 && !(-256..=255).contains(&difference) {
+        return Err(Error::Invalid("MP42 DC difference"));
+    }
+    Ok(difference)
 }
 
-fn inverse_quantize(level: i32, q: i32) -> i16 {
+fn inverse_quantize<const MP42: bool>(level: i32, q: i32) -> i16 {
     let magnitude = 2 * level.abs() * q + ((q - 1) | 1);
-    (level.signum() * magnitude).clamp(-2048, 2047) as i16
+    let scaled = level.signum() * magnitude;
+    if MP42 {
+        scaled as i16
+    } else {
+        scaled.clamp(-2048, 2047) as i16
+    }
 }
 
 type Event = (usize, i32, bool);
@@ -200,12 +230,12 @@ const fn short_events(codes: &[u16; 4096], events: &[Event; ESCAPE]) -> [u32; SH
 }
 
 #[inline]
-fn texture(
+fn texture<const MP42: bool, F: FnMut(usize, i32)>(
     bits: &mut Bits<'_>,
     intra: bool,
     scan: &[usize; 64],
     mut next: usize,
-    mut write: impl FnMut(usize, i32),
+    mut write: F,
 ) -> Result<()> {
     let (short, codes, values, limits) = if intra {
         (
@@ -232,7 +262,7 @@ fn texture(
                 entry & 1024 != 0,
             )
         } else {
-            read_long(bits, codes, values, limits)?
+            read_long::<MP42>(bits, codes, values, limits)?
         };
         let position = *scan
             .get(next + run)
@@ -246,7 +276,7 @@ fn texture(
 }
 
 #[cold]
-fn read_long(
+fn read_long<const MP42: bool>(
     bits: &mut Bits<'_>,
     codes: &[u16; 4096],
     values: &[Event; ESCAPE],
@@ -254,23 +284,31 @@ fn read_long(
 ) -> Result<Event> {
     let symbol = bits.vlc(codes)?;
     if symbol == ESCAPE {
-        read_escape(bits, codes, values, limits)
+        read_escape::<MP42>(bits, codes, values, limits)
     } else {
         let (run, level, last) = values[symbol];
         Ok((run, if bits.flag()? { -level } else { level }, last))
     }
 }
 
-fn read_escape(
+fn read_escape<const MP42: bool>(
     bits: &mut Bits<'_>,
     codes: &[u16; 4096],
     values: &[Event; ESCAPE],
     limits: &EscapeLimits,
 ) -> Result<Event> {
-    let extended_run = bits.flag()?;
-    if extended_run && bits.flag()? {
+    // MP42 reverses both escape selector bits and uses an 8-bit literal.
+    let extended = bits.flag()? ^ MP42;
+    if extended && (bits.flag()? ^ MP42) {
         let last = bits.flag()?;
         let run = bits.read(6)? as usize;
+        if MP42 {
+            let level = i32::from(bits.read(8)? as i8);
+            if level == 0 {
+                return Err(Error::Invalid("escaped MP42 coefficient level"));
+            }
+            return Ok((run, level, last));
+        }
         bits.marker()?;
         let raw = bits.read(12)? as i32;
         bits.marker()?;
@@ -283,8 +321,8 @@ fn read_escape(
     let (mut run, mut level, last) = *values
         .get(bits.vlc(codes)?)
         .ok_or(Error::Invalid("nested coefficient escape"))?;
-    if extended_run {
-        run += 1 + limits.run[usize::from(last)][level as usize];
+    if extended {
+        run += usize::from(!MP42) + limits.run[usize::from(last)][level as usize];
     } else {
         level += limits.level[usize::from(last)][run];
     }

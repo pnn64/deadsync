@@ -1,4 +1,6 @@
-use deadlib_video_mpeg4::{decode_avi, decode_elementary_stream, Error, Frame, PictureKind};
+use deadlib_video_mpeg4::{
+    decode_avi, decode_elementary_stream, Error, Frame, MsMpeg4v2Decoder, PictureKind,
+};
 use PictureKind::{I, P};
 
 const STREAM: &[u8] = include_bytes!("fixtures/progressive.m4v");
@@ -16,11 +18,15 @@ const EXPECTED: [(PictureKind, u64); 10] = [
     (P, 0x8259f712e7d4da93),
 ];
 
-fn fingerprint(frame: &Frame) -> (PictureKind, u64) {
-    assert_eq!((frame.width(), frame.height()), (160, 90));
+fn fingerprint(frame: &Frame, [width, height]: [usize; 2]) -> (PictureKind, u64) {
+    assert_eq!((frame.width(), frame.height()), (width, height));
     let mut hash = 0xcbf29ce484222325u64;
     for (index, plane) in frame.planes().iter().enumerate() {
-        let dimensions = if index == 0 { (160, 90) } else { (80, 45) };
+        let dimensions = if index == 0 {
+            (width, height)
+        } else {
+            (width.div_ceil(2), height.div_ceil(2))
+        };
         assert_eq!((plane.width(), plane.height()), dimensions);
         assert_eq!(plane.rows().len(), dimensions.1);
         for row in plane.rows() {
@@ -36,7 +42,7 @@ fn fingerprint(frame: &Frame) -> (PictureKind, u64) {
 #[test]
 fn decodes_intra_and_predicted_pictures_with_video_packets() {
     let mut frames = Vec::new();
-    decode_elementary_stream(STREAM, |frame| frames.push(fingerprint(&frame))).unwrap();
+    decode_elementary_stream(STREAM, |frame| frames.push(fingerprint(&frame, [160, 90]))).unwrap();
     assert_eq!(frames, EXPECTED);
 }
 
@@ -71,7 +77,7 @@ fn decodes_avi_with_layer_header_in_stream_format() {
     assert_eq!(
         frames
             .iter()
-            .map(|frame| fingerprint(frame))
+            .map(|frame| fingerprint(frame, [160, 90]))
             .collect::<Vec<_>>(),
         EXPECTED
     );
@@ -80,6 +86,62 @@ fn decodes_avi_with_layer_header_in_stream_format() {
         decode_avi(&avi[..avi.len() - 1], |_| unreachable!()),
         Err(Error::Truncated)
     );
+}
+
+#[test]
+fn decodes_mp42_avi_with_partial_macroblocks() {
+    let mut frames = Vec::new();
+    decode_avi(include_bytes!("fixtures/mp42.avi"), |frame| {
+        frames.push(fingerprint(&frame, [144, 82]));
+    })
+    .unwrap();
+    // Hashes of visible YCbCr samples from FFmpeg 7.1 with -idct simple.
+    assert_eq!(
+        frames,
+        [
+            (I, 0xd1b5b3bcc1903cb3),
+            (P, 0xe02431eb1c905a64),
+            (P, 0x0c93a236fe88a06c),
+            (P, 0x48fcadcc27cc850e),
+            (P, 0x1b49548242ac1461),
+            (I, 0x9ea23631fbf9d302),
+            (P, 0xe32ba4e2ece21a51),
+            (P, 0x10bb4ff1aff248f7),
+            (P, 0x2e3e6ffe020262a4),
+            (P, 0xcfe7a1ea4d4a4f98),
+        ]
+    );
+}
+
+#[test]
+fn decodes_mp42_packets_and_keeps_reference_after_truncation() {
+    // Two one-row slices. Each starts with an independent DC predictor.
+    let intra = [0x03, 0x88, 0xfe, 0x81, 0x24, 0x08, 0xe4, 0x90, 0x00];
+    let skip = [0x43, 0xc0];
+    let zero_motion = [0x42, 0xff, 0xc0];
+    let mut decoder = MsMpeg4v2Decoder::new(16, 32).unwrap();
+    assert!(matches!(
+        decoder.push_packet(&skip),
+        Err(Error::MissingReference)
+    ));
+
+    let reference = decoder.push_packet(&intra).unwrap();
+    assert_eq!(reference.picture_kind(), I);
+    for (y, row) in reference.planes()[0].rows().enumerate() {
+        assert_eq!(row, &[if y < 16 { 192 } else { 128 }; 16]);
+    }
+    assert!(matches!(
+        decoder.push_packet(&intra[..1]),
+        Err(Error::Truncated)
+    ));
+
+    for packet in [&skip[..], &zero_motion] {
+        let frame = decoder.push_packet(packet).unwrap();
+        assert_eq!(frame.picture_kind(), P);
+        for (plane, expected) in frame.planes().iter().zip(reference.planes()) {
+            assert!(plane.rows().eq(expected.rows()));
+        }
+    }
 }
 
 fn chunk(id: &[u8; 4], data: &[u8]) -> Vec<u8> {

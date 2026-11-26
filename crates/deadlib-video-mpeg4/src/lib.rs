@@ -1,7 +1,8 @@
-//! Dependency-free MPEG-4 Part 2 decoding for progressive 4:2:0 I and P pictures.
+//! Dependency-free MPEG-4 Visual and Microsoft MPEG-4 v2 decoding for progressive 4:2:0 pictures.
 //!
 //! Feed an elementary stream to [`decode_elementary_stream`] or an AVI file to
-//! [`decode_avi`]. [`Decoder`] also accepts individual start-code units.
+//! [`decode_avi`]. [`Decoder`] accepts MPEG-4 Visual start-code units and
+//! [`MsMpeg4v2Decoder`] accepts individual MP42 picture packets.
 
 #![no_std]
 #![deny(unsafe_code)]
@@ -14,6 +15,7 @@ mod block;
 mod frame;
 mod headers;
 mod motion;
+mod msmpeg4v2;
 mod picture;
 mod tables;
 mod transform;
@@ -21,6 +23,7 @@ mod transform;
 pub use avi::decode_avi;
 pub use bitstream::{units, Unit};
 pub use frame::{Frame, Plane};
+pub use msmpeg4v2::MsMpeg4v2Decoder;
 
 use alloc::sync::Arc;
 use bitstream::Bits;

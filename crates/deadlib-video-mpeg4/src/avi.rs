@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 
-use crate::{units, Decoder, Error, Frame, Result};
+use crate::{units, Decoder, Error, Frame, MsMpeg4v2Decoder, Result};
 
 struct Chunk<'a> {
     id: &'a [u8; 4],
@@ -29,12 +29,34 @@ impl<'a> Chunk<'a> {
     }
 }
 
-struct Stream<'a> {
-    number: u8,
-    configuration: &'a [u8],
+enum Codec {
+    Visual,
+    Mp42,
 }
 
-/// Decodes the first MPEG-4 Visual video track in a RIFF AVI file.
+enum AviDecoder {
+    Visual(Decoder),
+    Mp42(MsMpeg4v2Decoder),
+}
+
+impl AviDecoder {
+    fn decode_packet(&mut self, bytes: &[u8], output: &mut impl FnMut(Arc<Frame>)) -> Result<()> {
+        match self {
+            Self::Visual(decoder) => {
+                for unit in units(bytes) {
+                    if let Some(frame) = decoder.push(unit)? {
+                        output(frame);
+                    }
+                }
+            }
+            Self::Mp42(decoder) if !bytes.is_empty() => output(decoder.push_packet(bytes)?),
+            Self::Mp42(_) => {}
+        }
+        Ok(())
+    }
+}
+
+/// Decodes the first supported MPEG-4 Visual or MP42 video track in a RIFF AVI file.
 pub fn decode_avi(bytes: &[u8], mut output: impl FnMut(Arc<Frame>)) -> Result<()> {
     let mut file = Chunks(bytes);
     let first = file.next()?.ok_or(Error::Truncated)?;
@@ -43,7 +65,6 @@ pub fn decode_avi(bytes: &[u8], mut output: impl FnMut(Arc<Frame>)) -> Result<()
         .filter(|_| first.id == b"RIFF")
         .ok_or(Error::Invalid("AVI RIFF header"))?;
     let mut stream = None;
-    let mut decoder = Decoder::new();
     let mut found = false;
     let mut emit = |frame| {
         output(frame);
@@ -56,23 +77,21 @@ pub fn decode_avi(bytes: &[u8], mut output: impl FnMut(Arc<Frame>)) -> Result<()
         }
         if let Some(header) = chunk.group(b"hdrl") {
             if stream.is_none() {
-                let info = find_stream(header)?;
-                decode_packet(&mut decoder, info.configuration, &mut emit)?;
-                stream = Some(info);
+                stream = Some(find_stream(header, &mut emit)?);
             }
         } else if let Some(movie) = chunk.group(b"movi") {
-            let info = stream.as_ref().ok_or(Error::Invalid("AVI stream list"))?;
-            decode_movie(movie, info.number, &mut decoder, &mut emit)?;
+            let (number, decoder) = stream.as_mut().ok_or(Error::Invalid("AVI stream list"))?;
+            decode_movie(movie, *number, decoder, &mut emit)?;
         }
     }
     while let Some(chunk) = file.next()? {
         if chunk.id == b"RIFF" {
-            if let (Some(body), Some(info)) = (chunk.group(b"AVIX"), &stream) {
+            if let (Some(body), Some((number, decoder))) = (chunk.group(b"AVIX"), &mut stream) {
                 let mut children = Chunks(body);
                 while let Some(child) = children.next()? {
                     if child.id == b"LIST" {
                         if let Some(movie) = child.group(b"movi") {
-                            decode_movie(movie, info.number, &mut decoder, &mut emit)?;
+                            decode_movie(movie, *number, decoder, &mut emit)?;
                         }
                     }
                 }
@@ -85,7 +104,7 @@ pub fn decode_avi(bytes: &[u8], mut output: impl FnMut(Arc<Frame>)) -> Result<()
     Ok(())
 }
 
-fn find_stream(header: &[u8]) -> Result<Stream<'_>> {
+fn find_stream(header: &[u8], output: &mut impl FnMut(Arc<Frame>)) -> Result<(u8, AviDecoder)> {
     let mut lists = Chunks(header);
     let mut number = 0;
     while let Some(chunk) = lists.next()? {
@@ -101,19 +120,31 @@ fn find_stream(header: &[u8]) -> Result<Stream<'_>> {
                 _ => {}
             }
         }
-        if stream.starts_with(b"vids")
-            && (mpeg4_tag(stream.get(4..8)) || mpeg4_tag(format.get(16..20)))
-        {
-            let size =
-                u32::from_le_bytes(*format.first_chunk::<4>().ok_or(Error::Truncated)?) as usize;
-            if size < 40 {
-                return Err(Error::Invalid("AVI bitmap header size"));
+        if stream.starts_with(b"vids") {
+            if let Some(codec) =
+                codec_tag(format.get(16..20)).or_else(|| codec_tag(stream.get(4..8)))
+            {
+                let size = u32::from_le_bytes(*format.first_chunk::<4>().ok_or(Error::Truncated)?)
+                    as usize;
+                if size < 40 {
+                    return Err(Error::Invalid("AVI bitmap header size"));
+                }
+                let configuration = format.get(size..).ok_or(Error::Truncated)?;
+                let decoder = match codec {
+                    Codec::Visual => {
+                        let mut decoder = AviDecoder::Visual(Decoder::new());
+                        decoder.decode_packet(configuration, output)?;
+                        decoder
+                    }
+                    Codec::Mp42 => {
+                        let width = usize::try_from(bitmap_dimension(format, 4)?)
+                            .map_err(|_| Error::Invalid("AVI bitmap width"))?;
+                        let height = bitmap_dimension(format, 8)?.unsigned_abs() as usize;
+                        AviDecoder::Mp42(MsMpeg4v2Decoder::new(width, height)?)
+                    }
+                };
+                return Ok((number, decoder));
             }
-            let configuration = format.get(size..).ok_or(Error::Truncated)?;
-            return Ok(Stream {
-                number,
-                configuration,
-            });
         }
         if number == 99 {
             break;
@@ -123,20 +154,26 @@ fn find_stream(header: &[u8]) -> Result<Stream<'_>> {
     Err(Error::Unsupported("AVI video codec"))
 }
 
-fn mpeg4_tag(tag: Option<&[u8]>) -> bool {
-    let Some(tag) = tag.and_then(|tag| tag.first_chunk::<4>()) else {
-        return false;
-    };
-    matches!(
-        &tag.map(|byte| byte.to_ascii_uppercase()),
-        b"XVID" | b"DIVX" | b"DX50" | b"FMP4" | b"MP4V" | b"M4S2"
-    )
+fn bitmap_dimension(format: &[u8], offset: usize) -> Result<i32> {
+    let value = format
+        .get(offset..offset + 4)
+        .and_then(|field| field.first_chunk::<4>());
+    Ok(i32::from_le_bytes(*value.ok_or(Error::Truncated)?))
+}
+
+fn codec_tag(tag: Option<&[u8]>) -> Option<Codec> {
+    let tag = tag?.first_chunk::<4>()?;
+    match &tag.map(|byte| byte.to_ascii_uppercase()) {
+        b"XVID" | b"DIVX" | b"DX50" | b"FMP4" | b"MP4V" | b"M4S2" => Some(Codec::Visual),
+        b"MP42" | b"DIV2" => Some(Codec::Mp42),
+        _ => None,
+    }
 }
 
 fn decode_movie(
     movie: &[u8],
     number: u8,
-    decoder: &mut Decoder,
+    decoder: &mut AviDecoder,
     output: &mut impl FnMut(Arc<Frame>),
 ) -> Result<()> {
     let id = [b'0' + number / 10, b'0' + number % 10];
@@ -159,24 +196,11 @@ fn decode_movie(
 fn decode_video_chunk(
     chunk: &Chunk<'_>,
     track: [u8; 2],
-    decoder: &mut Decoder,
+    decoder: &mut AviDecoder,
     output: &mut impl FnMut(Arc<Frame>),
 ) -> Result<()> {
     if chunk.id[..2] == track && matches!(&chunk.id[2..], b"dc" | b"db") {
-        decode_packet(decoder, chunk.data, output)?;
-    }
-    Ok(())
-}
-
-fn decode_packet(
-    decoder: &mut Decoder,
-    bytes: &[u8],
-    output: &mut impl FnMut(Arc<Frame>),
-) -> Result<()> {
-    for unit in units(bytes) {
-        if let Some(frame) = decoder.push(unit)? {
-            output(frame);
-        }
+        decoder.decode_packet(chunk.data, output)?;
     }
     Ok(())
 }

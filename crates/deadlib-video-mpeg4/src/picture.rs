@@ -7,10 +7,10 @@ use crate::{
     tables, Error, Frame, PictureKind, Result,
 };
 
-type Vector = [i32; 2];
+pub(crate) type Vector = [i32; 2];
 
 #[derive(Default)]
-struct Grid<T> {
+pub(crate) struct Grid<T> {
     width: usize,
     height: usize,
     cells: Vec<T>,
@@ -19,7 +19,7 @@ struct Grid<T> {
 }
 
 impl<T: Copy + Default> Grid<T> {
-    fn reset(&mut self, columns: usize, rows: usize, shift: u8) {
+    pub(crate) fn reset(&mut self, columns: usize, rows: usize, shift: u8) {
         self.width = columns << shift;
         self.height = rows << shift;
         self.shift = shift;
@@ -28,7 +28,11 @@ impl<T: Copy + Default> Grid<T> {
         self.cells.resize(self.width * self.height, T::default());
     }
 
-    fn get(&self, x: i32, y: i32) -> T {
+    pub(crate) fn start_packet(&mut self, x: usize, y: usize) {
+        self.packet = (y, x);
+    }
+
+    pub(crate) fn get(&self, x: i32, y: i32) -> T {
         let (x, y) = (x as usize, y as usize);
         if x < self.width && y < self.height && (y >> self.shift, x >> self.shift) >= self.packet {
             self.cells[y * self.width + x]
@@ -37,8 +41,17 @@ impl<T: Copy + Default> Grid<T> {
         }
     }
 
-    fn set(&mut self, x: usize, y: usize, value: T) {
+    pub(crate) fn set(&mut self, x: usize, y: usize, value: T) {
         self.cells[y * self.width + x] = value;
+    }
+
+    pub(crate) fn left_diagonal_above(&self, x: usize, y: usize) -> [T; 3] {
+        let (x, y) = (x as i32, y as i32);
+        [
+            self.get(x - 1, y),
+            self.get(x - 1, y - 1),
+            self.get(x, y - 1),
+        ]
     }
 }
 
@@ -133,9 +146,9 @@ pub(crate) fn decode(
                 && address != 0
                 && picture.packet(bits, layer, address, columns * rows)?
             {
-                motion.packet = (y, x);
+                motion.start_packet(x, y);
                 for grid in predictors.iter_mut() {
-                    grid.packet = (y, x);
+                    grid.start_packet(x, y);
                 }
             }
             let mb = Macroblock::parse(bits, &mut picture)?;
@@ -151,43 +164,40 @@ pub(crate) fn decode(
                     picture.truncate,
                 );
             }
-            let positions = [
-                (0, 2 * x, 2 * y),
-                (0, 2 * x + 1, 2 * y),
-                (0, 2 * x, 2 * y + 1),
-                (0, 2 * x + 1, 2 * y + 1),
-                (1, x, y),
-                (2, x, y),
-            ];
-            for (i, (plane, bx, by)) in positions.into_iter().enumerate() {
+            for (i, (plane, bx, by)) in block_positions(x, y).into_iter().enumerate() {
                 let coded = mb.pattern & (32 >> i) != 0;
                 if mb.intra {
                     let grid = &mut predictors[plane];
-                    let [sx, sy] = [bx as i32, by as i32];
-                    let neighbors = [
-                        grid.get(sx - 1, sy),
-                        grid.get(sx - 1, sy - 1),
-                        grid.get(sx, sy - 1),
-                    ];
-                    let (samples, prediction) = block::intra(
+                    let (samples, prediction) = block::intra::<false>(
                         bits,
                         coded,
                         mb.separate_dc,
                         mb.predict_ac,
                         picture.quantizer,
                         plane,
-                        neighbors,
+                        grid.left_diagonal_above(bx, by),
                     )?;
                     grid.set(bx, by, prediction);
                     frame.planes[plane].write([8 * bx, 8 * by], &samples, true);
                 } else if coded {
-                    let samples = block::inter(bits, picture.quantizer)?;
+                    let samples = block::inter::<false>(bits, picture.quantizer)?;
                     frame.planes[plane].write([8 * bx, 8 * by], &samples, false);
                 }
             }
         }
     }
     Ok(frame)
+}
+
+pub(crate) fn block_positions(x: usize, y: usize) -> [(usize, usize, usize); 6] {
+    [
+        (0, 2 * x, 2 * y),
+        (0, 2 * x + 1, 2 * y),
+        (0, 2 * x, 2 * y + 1),
+        (0, 2 * x + 1, 2 * y + 1),
+        (1, x, y),
+        (2, x, y),
+    ]
 }
 
 fn motion_vectors(
@@ -231,23 +241,35 @@ fn median_vector(grid: &Grid<Vector>, x: i32, y: i32, index: usize) -> Vector {
             return diagonal;
         }
     }
+    median(left, top, diagonal)
+}
+
+pub(crate) fn median(left: Vector, top: Vector, diagonal: Vector) -> Vector {
     core::array::from_fn(|i| left[i].clamp(top[i].min(diagonal[i]), top[i].max(diagonal[i])))
 }
 
-fn motion_component(bits: &mut Bits<'_>, predictor: i32, code: u8) -> Result<i32> {
+pub(crate) fn motion_delta(bits: &mut Bits<'_>, shift: u8) -> Result<i32> {
     let magnitude = bits.vlc(&tables::MOTION)? as i32;
     if magnitude == 0 {
-        return Ok(predictor);
+        return Ok(0);
     }
     let negative = bits.flag()?;
-    let shift = code - 1;
     let delta = ((magnitude - 1) << shift) + bits.read(shift)? as i32 + 1;
+    Ok(if negative { -delta } else { delta })
+}
+
+fn motion_component(bits: &mut Bits<'_>, predictor: i32, code: u8) -> Result<i32> {
+    let shift = code - 1;
+    let delta = motion_delta(bits, shift)?;
+    if delta == 0 {
+        return Ok(predictor);
+    }
     let limit = 32 << shift;
-    let vector = predictor + if negative { -delta } else { delta };
+    let vector = predictor + delta;
     Ok((vector + limit).rem_euclid(2 * limit) - limit)
 }
 
-fn predict(
+pub(crate) fn predict(
     frame: &mut Frame,
     reference: &Frame,
     [x, y]: [usize; 2],

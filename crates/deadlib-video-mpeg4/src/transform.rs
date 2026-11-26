@@ -25,14 +25,14 @@ pub(crate) fn inverse(coefficients: &[i16; 64]) -> [i16; 64] {
 #[cfg(any(test, not(all(target_arch = "x86_64", target_feature = "sse2"))))]
 fn scalar(coefficients: &[i16; 64]) -> [i16; 64] {
     if coefficients[1..].iter().all(|&coeff| coeff == 0) {
-        let dc = i32::from(coefficients[0]) * 8 + i32::from(COLUMN_BIAS);
+        let dc = i32::from(coefficients[0].wrapping_mul(8).wrapping_add(COLUMN_BIAS));
         return [((dc * BASIS[0][0]) >> COLUMN_SHIFT) as i16; 64];
     }
 
     let mut horizontal = [[0i16; 8]; 8];
     for (row, transformed) in coefficients.as_chunks::<8>().0.iter().zip(&mut horizontal) {
         if row[1..].iter().all(|&coeff| coeff == 0) {
-            *transformed = [row[0] * 8; 8];
+            *transformed = [row[0].wrapping_mul(8); 8];
             continue;
         }
         for (output, basis) in transformed.iter_mut().zip(BASIS) {
@@ -40,8 +40,8 @@ fn scalar(coefficients: &[i16; 64]) -> [i16; 64] {
                 .iter()
                 .zip(basis)
                 .map(|(&coeff, weight)| i32::from(coeff) * weight)
-                .sum::<i32>();
-            let value = (product + ROW_BIAS) >> ROW_SHIFT;
+                .fold(ROW_BIAS, i32::wrapping_add);
+            let value = product >> ROW_SHIFT;
             *output = value.clamp(i16::MIN.into(), i16::MAX.into()) as i16;
         }
     }
@@ -126,7 +126,7 @@ mod x86 {
     unsafe fn horizontal(values: __m128i) -> __m128i {
         unsafe {
             if empty(_mm_srli_si128::<2>(values)) {
-                _mm_set1_epi16(_mm_extract_epi16::<0>(values) as i16 * 8)
+                _mm_set1_epi16((_mm_extract_epi16::<0>(values) as i16).wrapping_mul(8))
             } else {
                 line::<ROW_SHIFT>(values, _mm_set1_epi32(ROW_BIAS))
             }
@@ -252,6 +252,12 @@ mod tests {
             block[..8].copy_from_slice(&[1231, 221, -192, 4, 0, 0, 0, 0]);
             block[63] = last;
             assert_eq!(inverse(&block), scalar(&block));
+        }
+        for level in [i16::MIN, -4097, 4096, i16::MAX] {
+            let mut block = [0; 64];
+            block[0] = level;
+            assert_eq!(inverse(&block), scalar(&block));
+            assert_eq!(inverse(&[level; 64]), scalar(&[level; 64]));
         }
     }
 }
