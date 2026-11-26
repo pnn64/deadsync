@@ -1,5 +1,5 @@
-//! Adapt partner charts to RSSP's double-field analyzer without losing native
-//! chart types or Routine ownership. Runtime uses the authored chart identity.
+//! Adapt Routine charts to RSSP's double-field analyzer without losing player
+//! ownership. Runtime uses the authored chart identity.
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
@@ -39,25 +39,26 @@ pub(crate) fn project<'a>(
             continue;
         }
         let width = lanes(entry.fields[0]);
-        if width.is_none() && rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_none() {
+        let rssp_lanes = rssp::supported_stepstype_lanes_bytes(entry.fields[0]);
+        if width.is_none() && rssp_lanes.is_none() {
             continue;
         }
-        if let Some(width) = width {
+        if let Some(width) = width && rssp_lanes.is_none() {
             let offset = entry.fields[0].as_ptr() as usize - data.as_ptr() as usize;
-            let replacement = if width == 8 {
-                b"dance-double".as_slice()
-            } else {
-                b"pump-double".as_slice()
+            let kind = std::str::from_utf8(entry.fields[0]).unwrap_or_default().trim();
+            let routine = kind.eq_ignore_ascii_case("dance-routine")
+                || kind.eq_ignore_ascii_case("pump-routine");
+            let replacement: &[u8] = match (width, routine) {
+                (8, true) => b"dance-double",
+                (_, true) => b"pump-double",
+                (8, false) => b"dance-couple",
+                (_, false) => b"pump-couple",
             };
             replacements.push((
                 offset..offset + entry.fields[0].len(),
                 Cow::Borrowed(replacement),
             ));
-            let kind = entry.fields[0].trim_ascii();
-            if kind
-                .get(kind.len().saturating_sub(8)..)
-                .is_some_and(|suffix| suffix.eq_ignore_ascii_case(b"-routine"))
-            {
+            if routine {
                 let (notes, ownership) = merge_routine(entry.note_data, width);
                 let mut composite = Vec::new();
                 let mut part = notes.clone();
@@ -209,18 +210,7 @@ fn load_participant(part: &[u8], width: usize, owner: u8) -> (Vec<Track>, usize)
         let line_count = lines.clone().count();
         for (index, line) in lines.enumerate() {
             let row = note_row(measure, index, line_count);
-            let mut cursor = 0;
-            for track in tracks.iter_mut() {
-                let Some(&symbol) = line.get(cursor) else {
-                    break;
-                };
-                cursor += 1;
-                if line.get(cursor) == Some(&b'[') {
-                    while cursor < line.len() && line[cursor] != b']' {
-                        cursor += 1;
-                    }
-                    cursor = (cursor + 1).min(line.len());
-                }
+            for (track, (symbol, _)) in tracks.iter_mut().zip(rssp::parse::note_cells(line)) {
                 let duration = match symbol {
                     b'1' | b'M' | b'K' | b'L' | b'F' => 0,
                     b'2' | b'4' => OPEN_HOLD,

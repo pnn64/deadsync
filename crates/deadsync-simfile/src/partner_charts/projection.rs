@@ -1,5 +1,6 @@
 use super::super::project;
 use super::{chart, simfile};
+use std::borrow::Cow;
 
 fn mixed_file() -> Vec<u8> {
     let mut data = Vec::new();
@@ -27,4 +28,13 @@ fn partner_dispatch_preserves_mixed_ordinals_and_field_count_boundaries() {
             .keys()
             .all(|&(chart, _, _)| (8..12).contains(&chart))
     );
+}
+
+#[test]
+fn couple_uses_original_sections() {
+    for (kind, width) in [("dance-couple", 8), ("pump-couple", 10)] {
+        let data = simfile(kind, &chart(width, 2, 16, 2), 4, "sm");
+        let sections = rssp::parse::extract_sections(&data, "sm").unwrap();
+        assert!(matches!(project(&data, &sections.notes_list).bytes, Cow::Borrowed(_)));
+    }
 }

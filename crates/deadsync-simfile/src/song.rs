@@ -16,7 +16,7 @@ use deadsync_chart::{STANDARD_DIFFICULTY_NAMES, SongData, song::standard_difficu
 use deadsync_core::note::NoteType;
 use rssp::{
     AnalysisOptions, AnalysisScratch, ChartNoteType, ParsedChartNote, PreparedAnalysis,
-    SimfileSummary, analyze_prepared_in_with_notes,
+    SimfileSummary, analyze_sections_with_notes,
 };
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -234,59 +234,6 @@ pub fn parse_song_bytes(
     )
 }
 
-/// Project native note-column syntax into RSSP's unannotated note input.
-fn note_analysis_bytes<'a>(
-    data: &'a [u8],
-    entries: &[rssp::parse::ParsedChartEntry<'a>],
-) -> Cow<'a, [u8]> {
-    // Copy only changed note spans. Full-width rows retain the borrowed input.
-    let mut notes = Vec::new();
-    let mut copied = 0;
-    for entry in entries {
-        let Some(lanes) = rssp::supported_stepstype_lanes_bytes(entry.fields[0]) else { continue };
-        for line in entry.note_data.split_inclusive(|byte| *byte == b'\n') {
-            // Commas in comments are not measure separators. Keep the original
-            // whitespace, comments and delimiters outside each changed span.
-            let content_end = line.windows(2).position(|bytes| bytes == b"//")
-                .unwrap_or(line.len());
-            for row in line[..content_end].split(|byte| *byte == b',') {
-                let mut end = row.len();
-                while end > 0 && matches!(row[end - 1], b'\r' | b'\n' | b'\t' | b' ') { end -= 1; }
-                let mut cursor = 0;
-                while cursor < end && matches!(row[cursor], b'\r' | b'\n' | b'\t' | b' ') { cursor += 1; }
-                let offset = row.as_ptr() as usize - data.as_ptr() as usize;
-                let mut columns = 0;
-                // Native consumes a column before its optional keysound index;
-                // invalid ordinary symbols still occupy a column.
-                while columns < lanes && cursor < end {
-                    columns += 1;
-                    cursor += 1;
-                    if cursor < end && row[cursor] == b'[' {
-                        let start = cursor;
-                        cursor += 1;
-                        while cursor < end && row[cursor] != b']' { cursor += 1; }
-                        if cursor < end { cursor += 1; }
-                        if notes.capacity() == 0 { notes.reserve_exact(data.len()); }
-                        notes.extend_from_slice(&data[copied..offset + start]);
-                        copied = offset + cursor;
-                    }
-                }
-                // A native nonempty short row still subdivides its measure;
-                // only its absent trailing lanes are empty. RSSP needs those
-                // zero cells to retain the row instead of dropping it.
-                if columns > 0 && columns < lanes {
-                    if notes.capacity() == 0 { notes.reserve_exact(data.len()); }
-                    notes.extend_from_slice(&data[copied..offset + end]);
-                    notes.resize(notes.len() + lanes - columns, b'0');
-                    copied = offset + end;
-                }
-            }
-        }
-    }
-    if copied == 0 { return Cow::Borrowed(data); }
-    notes.extend_from_slice(&data[copied..]);
-    Cow::Owned(notes)
-}
 /// The parse both entry points share once the bytes are in hand.
 fn parse_song_source(
     source: SimfileSource<'_>,
@@ -299,11 +246,17 @@ fn parse_song_source(
     let parsed = rssp::parse::extract_sections(source.data, source.extension)
         .map_err(|error| error.to_string())?;
     let projection = crate::partner_charts::project(source.data, &parsed.notes_list);
-    let projected = rssp::parse::extract_sections(&projection.bytes, source.extension)
-        .map_err(|error| error.to_string())?;
-    let analysis_bytes = note_analysis_bytes(&projection.bytes, &projected.notes_list);
-    let mut summary = analyze_prepared_in_with_notes(
-        &analysis_bytes,
+    let projected;
+    let chart_sections = match &projection.bytes {
+        Cow::Borrowed(_) => &parsed,
+        Cow::Owned(bytes) => {
+            projected = rssp::parse::extract_sections(bytes, source.extension)
+                .map_err(|error| error.to_string())?;
+            &projected
+        }
+    };
+    let mut summary = analyze_sections_with_notes(
+        chart_sections,
         source.extension,
         &analyzer.prepared,
         analysis,
@@ -558,15 +511,7 @@ fn native_note_row_bounds(data: &[u8], lanes: usize) -> Option<[i32; 2]> {
             for (index, line) in rows.iter().enumerate() {
                 let beat = (measure as f32 + index as f32 / rows.len() as f32) * 4.0;
                 let row = (beat * 48.0).round() as i32;
-                let mut cursor = 0;
-                for track in &mut tracks {
-                    let Some(&cell) = line.get(cursor) else { break; };
-                    cursor += 1;
-                    if line.get(cursor) == Some(&b'[') {
-                        cursor += 1;
-                        while cursor < line.len() && line[cursor] != b']' { cursor += 1; }
-                        cursor += usize::from(cursor < line.len());
-                    }
+                for (track, (cell, _)) in tracks.iter_mut().zip(rssp::parse::note_cells(line)) {
                     match cell {
                         b'2' | b'4' => { track.insert(row, None); }
                         b'3' => {
@@ -1045,6 +990,7 @@ mod tests {
         let root = test_dir("keysound-index-columns");
         let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
         let notes = "1[24]000\n02[13]00\n0300\n004[23]0\n0030\n0001[4]\n0000\n0000\n";
+        let plain = "1000\n0200\n0300\n0040\n0030\n0001\n0000\n0000\n";
         for (extension, chart) in [
             ("sm", format!("#NOTES2:dance-single:[12] Author:Challenge:1:0,0,0,0,0:\n{notes};")),
             ("ssc", format!("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:[12] Author;\n\
@@ -1052,12 +998,15 @@ mod tests {
         ] {
             let source = format!("#VERSION:0.83;\n#TITLE:[24] Keysounds;\n#BPMS:0=120;\n{chart}");
             let path = root.join(format!("song.{extension}"));
+            let control = source.replace(notes, plain);
+            let control = parse_song_bytes(control.as_bytes(), extension, &path, &options, |_| 4.0).unwrap();
             fs::write(&path, &source).unwrap();
             for song in [parse_song_file(&path, &options, |_| 4.0).unwrap(),
                 parse_song_bytes(source.as_bytes(), extension, &path, &options, |_| 4.0).unwrap()] {
                 assert_eq!(song.title, "[24] Keysounds");
                 let chart = &song.charts[0];
                 assert_eq!(chart.description, "[12] Author");
+                assert_eq!(chart.short_hash, control.charts[0].short_hash);
                 assert_eq!((chart.stats.total_steps, chart.stats.holds, chart.stats.rolls), (4, 1, 1),
                     "keysound index digits are metadata, not additional hold or roll notes");
                 assert_eq!(chart.parsed_notes.len(), 4,
@@ -1116,30 +1065,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn native_short_note_row_projection_keeps_unrelated_bytes() {
-        for (notes, expected) in [
-            ("001[36]", "0010"),
-            ("00", "0000"),
-            ("0x1", "0x10"),
-            ("001[36", "0010"),
-            (" \t001[36] \r\n// [12], ignored\n01,1[9]", " \t0010 \r\n// [12], ignored\n0100,1000"),
-            ("1000\n00010001\n \t\r\n// [12], ignored", "1000\n00010001\n \t\r\n// [12], ignored"),
-        ] {
-            let wrap = |rows| format!("#TITLE:[36] Metadata;\n#NOTES:dance-single:[12] Author:Challenge:1:0,0,0,0,0:\n{rows}\n;");
-            let source = wrap(notes);
-            let expected = wrap(expected);
-            let parsed = rssp::parse::extract_sections(source.as_bytes(), "sm").unwrap();
-            let projected = note_analysis_bytes(source.as_bytes(), &parsed.notes_list);
-            assert_eq!(projected.as_ref(), expected.as_bytes());
-            if source == expected { assert!(matches!(projected, Cow::Borrowed(_))); }
-        }
-        // Do not add support or reinterpret note syntax for unsupported types.
-        let source = b"#NOTES:dance-solo::Challenge:1:0,0,0,0,0:\n001[36]\n;";
-        let parsed = rssp::parse::extract_sections(source, "sm").unwrap();
-        assert!(matches!(note_analysis_bytes(source, &parsed.notes_list), Cow::Borrowed(_)));
     }
 
     #[test]
