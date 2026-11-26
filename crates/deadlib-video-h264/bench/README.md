@@ -167,3 +167,9 @@ The full benchmark at `e021087c8` matched FFmpeg on both clips in every output m
 | SRPG10 | Deadlib recycled, SPS depth | 32.90 | 30.39 | 12.07 | 0.39 |
 | SRPG10 | FFmpeg native | 23.63 | 42.31 | 17.63 | 0.18 |
 | SRPG10 | FFmpeg packed | 26.90 | 37.18 | 18.63 | 3.15 |
+
+## Full-pel chroma bi-prediction
+
+`b4110122d` blends the two full-pel chroma predictions directly into the Cb and Cr planes for eligible 8-bit frame macroblocks. The isolated candidate matched FFmpeg on both bundled clips, MBAFF, the resolution change, High 4:2:2 and High 10. [Paired cycles](results/windows-x86_64-20261126/integer-chroma-paired.csv)
+
+Median paired cycles fell 6.46% on SRPG9 and 11.91% on SRPG10 when chroma was added to the full-pel luma build. The candidate used 11.85% and 13.47% more cycles than packed FFmpeg. A reference retirement prototype in the same batch freed DPB storage before copying the current picture. Its median paired cycle changes were +0.38% and −0.39% relative to the pre-luma baseline.
