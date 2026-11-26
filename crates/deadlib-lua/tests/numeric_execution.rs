@@ -13,6 +13,63 @@ fn check_with_limit(source: &[u8], limit: u64) {
 }
 
 #[test]
+fn inline_array_dispatch_rechecks_identities_and_preserves_lua_equality() {
+    let program = compile(
+        br#"
+        local function setup()
+            local first, second, third = function() end, function() end, function() end
+            local choices = {first, second, third}
+            local entries, left, right = {}, {}, {}
+            for i = 1, 192 do
+                entries[i] = choices[(i-1)%3 + 1]
+                left[i], right[i] = i + 0.25, i%5
+            end
+            local function tally(start, stop, step, rounds, sum)
+                for r = 1, rounds do
+                    for i = start, stop, step do
+                        local f, x, y = entries[i], left[i], right[i]
+                        if f == choices[1] then sum = sum + (x+y)
+                        elseif f == choices[2] then sum = sum + (x-y)
+                        else sum = sum + (2*x+y) end
+                    end
+                end
+                return sum
+            end
+            return tally, entries, choices
+        end
+        local function equality_pair()
+            local hits = 0
+            local meta = {__eq = function() hits = hits+1; return true end}
+            return setmetatable({}, meta), setmetatable({}, meta), function() return hits end
+        end
+
+        local tally, entries, choices = setup()
+        local before = tally(1, 192, 1, 4, 0)
+        assert(tally(192, 1, -1, 4, 0) == before)
+        entries[37] = choices[2]
+        local changed = tally(1, 192, 1, 4, 0)
+        assert(changed == before - 16)
+        choices[1] = choices[3]
+        local rebound = tally(1, 192, 1, 4, 0)
+        assert(rebound ~= changed)
+        local rounded = tally(1, 192, 1, 4, 9007199254740992)
+
+        local one, two, hits = equality_pair()
+        entries[1], choices[1] = one, two
+        local with_equality = tally(1, 192, 1, 3, 0)
+        assert(hits() == 3)
+        return before, changed, rebound, rounded, with_equality
+        "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        let optimized = vm.execute(&program).unwrap().to_vec();
+        vm.set_instruction_limit(Some(500_000));
+        assert_eq!(vm.execute(&program).unwrap(), optimized);
+    }
+}
+
+#[test]
 fn dense_overwrites_preserve_native_array_extent_and_order() {
     let program = compile(
         br#"

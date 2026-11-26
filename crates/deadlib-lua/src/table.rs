@@ -147,7 +147,7 @@ impl Key {
     }
 }
 
-fn array_index(value: Value) -> Option<usize> {
+pub(crate) fn array_index(value: Value) -> Option<usize> {
     let Value::Number(n) = value else {
         return None;
     };

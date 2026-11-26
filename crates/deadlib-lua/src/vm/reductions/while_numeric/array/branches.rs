@@ -2,7 +2,7 @@
 use super::super::super::{Reduction, integer};
 use super::exact::{Exact, MIN_LENGTH};
 use crate::bytecode::{COMPARE_BRANCH, Instruction, Op, Prototype, RK};
-use crate::table::ArrayChange;
+use crate::table::{ArrayChange, array_index};
 use crate::vm::{
     Cell, FrameKind, FunctionId, TableId, Value, Vm,
     forwarding::{MAX_VALUES, numeric},
@@ -41,7 +41,7 @@ struct Plan<'a> {
     constants: &'a [Value],
     tables: [TableId; MAX_CAPTURES],
     table_count: usize,
-    callee: FunctionId,
+    callee: Option<FunctionId>,
     calls: [Option<numeric::Plan>; MAX_VALUES + 1],
     control: usize,
     sum: usize,
@@ -96,7 +96,6 @@ impl<'a> Plan<'a> {
         let mut captures = [None; MAX_CAPTURES];
         let mut tables = [TableId(0); MAX_CAPTURES];
         let mut table_count = 0;
-        let mut callee = None;
         let mut arities = 0u16;
         let mut scratch = 0u64;
         for (offset, instruction) in code.iter().enumerate() {
@@ -132,10 +131,7 @@ impl<'a> Plan<'a> {
                             }
                             Capture::Table(id)
                         }
-                        Cell::Closed(Value::Function(id)) if callee.is_none_or(|old| old == id) => {
-                            callee = Some(id);
-                            Capture::Function(id)
-                        }
+                        Cell::Closed(Value::Function(id)) => Capture::Function(id),
                         _ => return None,
                     };
                     let binding = captures.iter_mut().find(|binding| {
@@ -171,16 +167,31 @@ impl<'a> Plan<'a> {
                         .is_some_and(|bits| bits & 1 != 0)
             })
             || table_count == 0
-            || arities == 0
         {
             return None;
         }
-        let callee = callee?;
+        let callee = if arities == 0 {
+            None
+        } else {
+            let mut functions =
+                captures
+                    .iter()
+                    .flatten()
+                    .filter_map(|(_, capture)| match *capture {
+                        Capture::Function(id) => Some(id),
+                        Capture::Table(_) => None,
+                    });
+            let callee = functions.next()?;
+            if functions.any(|id| id != callee) {
+                return None;
+            }
+            Some(callee)
+        };
         let mut calls = std::array::from_fn(|_| None);
         let mut tail_targets = [None; MAX_VALUES + 1];
         for (arity, plan) in calls.iter_mut().enumerate() {
             if arities & (1 << arity) != 0 {
-                let decoded = numeric::Plan::build(vm, callee, arity)?;
+                let decoded = numeric::Plan::build(vm, callee?, arity)?;
                 tail_targets[arity] = decoded.tail_target();
                 *plan = Some(decoded);
             }
@@ -254,28 +265,39 @@ impl<'a> Plan<'a> {
                     })
                 }
                 Op::GetTable => {
-                    let (Slot::Scalar(Value::Table(id)), Slot::Index) =
-                        (operand(u32::from(b)), operand(c))
-                    else {
+                    let Value::Table(id) = operand(u32::from(b)).value()? else {
                         return None;
                     };
                     let array = self.tables[..self.table_count]
                         .iter()
                         .position(|&table| table == id)?;
-                    let Value::Number(number) = arrays[array][index] else {
-                        return None;
+                    let offset = match operand(c) {
+                        Slot::Index => index,
+                        key => array_index(key.value()?)?,
                     };
-                    Slot::Scalar(Value::Number(number))
+                    Slot::Scalar(*arrays[array].get(offset)?)
                 }
                 Op::Load => Slot::Scalar(self.constants[c as usize]),
                 Op::Move => operand(u32::from(b)),
                 Op::Eq | Op::Ne => {
-                    let equal = operand(u32::from(b)).number()? == operand(c).number()?;
+                    let left = operand(u32::from(b)).value()?;
+                    let right = operand(c).value()?;
+                    let equal = left == right;
+                    if !equal
+                        && matches!(
+                            (left, right),
+                            (Value::Table(_), Value::Table(_))
+                                | (Value::Userdata(_), Value::Userdata(_))
+                        )
+                    {
+                        // Distinct table and userdata values may share __eq.
+                        return None;
+                    }
                     Slot::Scalar(Value::Boolean(equal == (op == Op::Eq)))
                 }
                 Op::Call => {
                     let count = usize::from(b);
-                    if called || slots[a].value()? != Value::Function(self.callee) {
+                    if called || slots[a].value()? != Value::Function(self.callee?) {
                         return None;
                     }
                     let mut arguments = [0.0; MAX_VALUES];
@@ -315,7 +337,7 @@ impl<'a> Plan<'a> {
         let Slot::Sum(sum, version) = slots[self.sum] else {
             return None;
         };
-        if !called || version == 0 || version != additions {
+        if (self.callee.is_some() && !called) || version == 0 || version != additions {
             return None;
         }
         *term_count = term_count.checked_add(additions)?;
@@ -325,28 +347,28 @@ impl<'a> Plan<'a> {
     fn scan(&self, vm: &Vm, mut sum: f64, remember: bool) -> Option<(f64, Option<Exact>)> {
         let mut arrays = [&[][..]; MAX_CAPTURES];
         for (array, id) in arrays.iter_mut().zip(&self.tables[..self.table_count]) {
-            *array =
-                vm.tables[slot_index(id.0)].array_slice(self.key.bounds.0, self.key.bounds.1)?;
+            *array = vm.tables[slot_index(id.0)].array_values();
         }
-        let last = arrays[0].len() - 1;
+        let first = usize::try_from(self.key.bounds.0).ok()?.checked_sub(1)?;
+        let last = usize::try_from(self.key.bounds.1).ok()?.checked_sub(1)?;
         let mut proof = remember.then_some(Exact::ZERO);
         let mut terms = 0;
-        for offset in 0..last {
+        for offset in 0..last - first {
             let index = if self.key.ascending {
-                offset
+                first + offset
             } else {
                 last - offset
             };
             sum = self.row(&arrays, index, sum, &mut proof, &mut terms)?;
         }
-        let final_index = if self.key.ascending { last } else { 0 };
+        let final_index = if self.key.ascending { last } else { first };
         self.row(&arrays, final_index, sum, &mut None, &mut 0)?;
         Some((sum, proof.and_then(|proof| proof.check_count(terms, 1))))
     }
 }
 
 impl Vm {
-    pub(in crate::vm) fn reduce_branched_array_calls(
+    pub(in crate::vm) fn reduce_branched_array_loop(
         &mut self,
         base: usize,
         control: usize,
@@ -359,7 +381,6 @@ impl Vm {
             || !body
                 .iter()
                 .any(|i| i.op == Op::JumpFalse || i.op == Op::JumpTrue)
-            || !body.iter().any(|i| i.op == Op::Call)
             || !body.iter().any(|i| i.op == Op::GetTable)
             || !self.sort_fast_context()
             || !self.open_upvalues.is_empty()

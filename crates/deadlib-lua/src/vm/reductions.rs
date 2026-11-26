@@ -651,7 +651,7 @@ impl Vm {
             return Some(reduction);
         }
         if let Some(reduction) =
-            self.reduce_branched_array_calls(base, control, start_pc, loop_pc, prototype)
+            self.reduce_branched_array_loop(base, control, start_pc, loop_pc, prototype)
         {
             return Some(reduction);
         }
