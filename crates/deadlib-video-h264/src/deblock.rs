@@ -43,8 +43,8 @@ pub struct MbInfo {
     pub ref_poc_l0: [i32; 16],
     /// Per-4x4-block reference picture POC for L1.
     pub ref_poc_l1: [i32; 16],
-    /// Per-4x4-block non-zero coefficient count. True if any coefficients were coded.
-    pub nnz: [bool; 16],
+    /// Nonzero coefficient flags in 4x4 block order.
+    nnz: u16,
     /// Number of reference lists used (1 for P-slice, 2 for B-slice, 0 for I-slice).
     pub list_count: u8,
     /// True if this MB uses 8x8 transform (High profile transform_size_8x8_flag).
@@ -60,9 +60,43 @@ impl MbInfo {
         self.qp_y = qp_y;
     }
 
+    pub(crate) fn set_nonzero(&mut self, coefficients: &[u8; 16]) {
+        #[cfg(target_arch = "x86_64")]
+        let mask = {
+            use core::arch::x86_64::*;
+            // SAFETY: SSE2 is available on x86-64 and the input holds
+            // sixteen initialized coefficient counts.
+            unsafe {
+                let counts = _mm_loadu_si128(coefficients.as_ptr().cast());
+                !(_mm_movemask_epi8(_mm_cmpeq_epi8(counts, _mm_setzero_si128())) as u16)
+            }
+        };
+        #[cfg(not(target_arch = "x86_64"))]
+        let mask = coefficients
+            .iter()
+            .enumerate()
+            .fold(0, |mask, (block, &count)| {
+                mask | (u16::from(count != 0) << block)
+            });
+
+        self.nnz = if self.is_8x8dct {
+            // Each 8x8 transform contributes the same flag to all four
+            // of its 4x4 blocks, including CAVLC's interleaved parts.
+            let groups = (mask | (mask >> 1) | (mask >> 2) | (mask >> 3)) & 0x1111;
+            groups * 15
+        } else {
+            mask
+        };
+    }
+
+    #[inline]
+    fn has_coeff(&self, block: usize) -> bool {
+        self.nnz & (1 << block) != 0
+    }
+
     pub(crate) fn reset_metadata(&mut self) {
         self.set_type_qp(MbType::Intra, 0);
-        self.nnz = [false; 16];
+        self.nnz = 0;
         self.list_count = 0;
         self.is_8x8dct = false;
         self.uniform_motion = false;
@@ -298,7 +332,7 @@ fn filter_frame_inner_px<P: Pixel>(
         let (mb_col, mb_row) = (mb_idx % mb_width, mb_idx / mb_width);
         let (mb_x, mb_y) = (mb_col * 16, mb_row * 16);
         let mb_q = &mb_info[mb_idx];
-        let edges = if mb_q.uniform_motion && !is_intra(mb_q) && !mb_q.nnz.contains(&true) {
+        let edges = if mb_q.uniform_motion && !is_intra(mb_q) && mb_q.nnz == 0 {
             1
         } else {
             4
@@ -735,7 +769,7 @@ fn edge_bs(
     }
     core::array::from_fn(|seg| {
         let (bp, bq) = (blk_p(seg), blk_q(seg));
-        if p.nnz[bp] || q.nnz[bq] {
+        if p.has_coeff(bp) || q.has_coeff(bq) {
             2
         } else if mixed || check_mv_diff(p, q, bp, bq, mvy_limit) {
             1
@@ -864,7 +898,7 @@ fn filter_mb_mbaff<P: Pixel>(
                     [3; 4]
                 } else {
                     core::array::from_fn(|s| {
-                        1 + (q.nnz[blk_idx(s, 0)] || p.nnz[blk_idx(s, 3)]) as i32
+                        1 + (q.has_coeff(blk_idx(s, 0)) || p.has_coeff(blk_idx(s, 3))) as i32
                     })
                 };
                 let gj = MbGeom {
@@ -966,7 +1000,7 @@ fn filter_mixed_left_edge<P: Pixel>(
         } else {
             (i >> 2) + if bottom { 2 } else { 0 }
         };
-        1 + (q.nnz[blk_idx(0, i >> 1)] || l.nnz[blk_idx(3, l_row)]) as i32
+        1 + (q.has_coeff(blk_idx(0, i >> 1)) || l.has_coeff(blk_idx(3, l_row))) as i32
     });
     let qps = left.map(|l| EdgeQp::new::<P>(l.qp_y, q.qp_y, off_a, off_b, cqp_offset));
     for r in 0..16 {
@@ -1048,7 +1082,7 @@ fn derive_bs(
     }
 
     // bS=2: either side has non-zero coded coefficients
-    if mb_p.nnz[blk_p] || mb_q.nnz[blk_q] {
+    if mb_p.has_coeff(blk_p) || mb_q.has_coeff(blk_q) {
         return 2;
     }
 
@@ -1075,6 +1109,9 @@ fn derive_edge_bs<const VERTICAL: bool>(
     }
     let uniform = p.uniform_motion && q.uniform_motion;
     let different = uniform && edge == 0 && check_mv_diff(p, q, 0, 0, mvy_limit);
+    if uniform && (p.nnz | q.nnz) == 0 {
+        return [i32::from(different); 4];
+    }
     let p_edge = if edge == 0 { 3 } else { edge - 1 };
     core::array::from_fn(|seg| {
         let (p_idx, q_idx) = if VERTICAL {
@@ -1082,7 +1119,7 @@ fn derive_edge_bs<const VERTICAL: bool>(
         } else {
             (blk_idx(seg, p_edge), blk_idx(seg, edge))
         };
-        if p.nnz[p_idx] || q.nnz[q_idx] {
+        if p.has_coeff(p_idx) || q.has_coeff(q_idx) {
             2
         } else if uniform {
             i32::from(different)
@@ -1695,6 +1732,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn coefficient_mask_follows_the_transform_size() {
+        for block in 0..16 {
+            let mut counts = [0; 16];
+            counts[block] = u8::MAX;
+            let mut mb = MbInfo::default();
+
+            mb.set_nonzero(&counts);
+            assert_eq!(mb.nnz, 1 << block);
+
+            mb.is_8x8dct = true;
+            mb.set_nonzero(&counts);
+            assert_eq!(mb.nnz, 15 << (4 * (block / 4)));
+        }
+    }
+
+    #[test]
     fn a_mixed_edge_uses_block_zero_for_its_uniform_side() {
         let mut p = MbInfo {
             mb_type: MbType::Inter,
@@ -1731,7 +1784,7 @@ mod tests {
                         mb.ref_idx_l1.fill(0);
                         mb.ref_poc_l1.fill(10 - poc);
                     }
-                    mb.nnz[9] = true;
+                    mb.nnz |= 1 << 9;
                     if !uniform {
                         mb.mv_l0[4] = [4, 3];
                         mb.mv_l1[10] = [0, -4];

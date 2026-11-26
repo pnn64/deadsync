@@ -1611,15 +1611,7 @@ impl<P: Pixel, const MBAFF: bool> SliceContext<'_, P, MBAFF> {
             let info = &mut self.mb_info[mi];
             info.list_count = list_count;
             info.is_8x8dct = self.mb_is_8x8dct[mi];
-            info.nnz = nc_luma[mi].map(|count| count > 0);
-            // An 8x8 transform block has coefficients if any of its 4x4
-            // blocks does (CAVLC codes it as four interleaved 4x4 parts).
-            if info.is_8x8dct {
-                for q in info.nnz.as_chunks_mut::<4>().0 {
-                    let any = q.iter().any(|&n| n);
-                    q.fill(any);
-                }
-            }
+            info.set_nonzero(&nc_luma[mi]);
             if info.mb_type != MbType::Inter {
                 info.uniform_motion = false;
                 continue;
