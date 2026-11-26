@@ -561,12 +561,17 @@ impl Vm {
         }
         let start_pc = loop_instruction.c as usize;
         let body = code.get(start_pc..loop_pc)?;
-        if body.len() <= BODY_LIMIT
-            && body.iter().any(|i| i.op == Op::GetTable)
-            && let Some(skipped) =
+        if body.len() <= BODY_LIMIT && body.iter().any(|i| i.op == Op::GetTable) {
+            if let Some(skipped) =
                 self.reduce_array_loop(base, control, body, program, prototype_index)
-        {
-            return Some(Reduction::Applied(skipped));
+            {
+                return Some(Reduction::Applied(skipped));
+            }
+            if let Some(reduction) =
+                self.reduce_array_calls(base, control, body, program, prototype_index)
+            {
+                return Some(reduction);
+            }
         }
         let writes = body.iter().any(|i| i.op == Op::SetTable);
         if body.len() > BODY_LIMIT

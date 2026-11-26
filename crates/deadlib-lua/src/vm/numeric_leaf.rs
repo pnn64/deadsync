@@ -18,13 +18,19 @@ pub(super) enum Expression {
 
 impl Expression {
     fn evaluate(self, arguments: &[Value]) -> Option<f64> {
-        let operand = |input| match input {
+        self.evaluate_with(|input| match input {
             Input::Constant(value) => Some(value),
             Input::Argument(index) => match *arguments.get(index)? {
                 Value::Number(value) => Some(value),
                 _ => None,
             },
-        };
+        })
+    }
+
+    pub(super) fn evaluate_with(
+        self,
+        mut operand: impl FnMut(Input) -> Option<f64>,
+    ) -> Option<f64> {
         match self {
             Self::Value(input) => operand(input),
             Self::Negate(input) => Some(-operand(input)?),
@@ -146,7 +152,7 @@ impl Vm {
         })
     }
 
-    fn has_numeric_call_space(&self, registers: usize) -> bool {
+    pub(super) fn has_numeric_call_space(&self, registers: usize) -> bool {
         self.frames.len() < self.frames.capacity()
             && self.frames.len() + 1 < usize::from(self.call_slots)
             && registers <= self.registers.capacity() - self.registers.len()

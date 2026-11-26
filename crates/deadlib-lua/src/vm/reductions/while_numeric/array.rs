@@ -4,6 +4,7 @@ use super::{Input, Registers, Sum, Symbol, Term, Value, Vm, ordered_extremum};
 use crate::bytecode::{Instruction, Op};
 use crate::vm::{Cell, FrameKind, TableId, slot_index};
 
+mod calls;
 mod exact;
 pub(in crate::vm) use exact::ArrayReduction;
 

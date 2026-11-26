@@ -210,3 +210,41 @@ fn forwarded_numeric_loops_check_nil_guards_and_live_targets() {
         "#,
     );
 }
+
+#[test]
+fn dense_array_calls_preserve_callees_rounding_and_loop_carried_arguments() {
+    check(
+        br#"
+        local plus = function(x, y) return x + y end
+        local multi = function(x, y) return 2 * x - y end
+        local functions, x, y = {}, {}, {}
+        for i = 1, 32 do
+            functions[i] = i % 2 == 0 and plus or multi
+            x[i], y[i] = i, 0.25
+        end
+        local result = 9007199254740992
+        local expected = result
+        for i = 32, 1, -1 do
+            local term = i % 2 == 0 and i + 0.25 or 2 * i - 0.25
+            expected = expected + term
+        end
+        for i = 32, 1, -1 do result = result + functions[i](x[i], y[i]) end
+        assert(result == expected)
+
+        local visits = 0
+        functions[7] = function(a, b)
+            visits = visits + 1
+            return a + b
+        end
+        result = 0
+        for i = 1, 8 do result = result + functions[i](x[i], result) end
+        assert(visits == 1)
+        functions[7] = multi
+        expected = 0
+        for i = 1, 8 do expected = expected + (i % 2 == 0 and i + expected or 2 * i - expected) end
+        result = 0
+        for i = 1, 8 do result = result + functions[i](x[i], result) end
+        return result == expected
+        "#,
+    );
+}
