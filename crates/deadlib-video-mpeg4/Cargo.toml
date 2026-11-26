@@ -1,0 +1,12 @@
+[package]
+name = "deadlib-video-mpeg4"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+description = "Dependency-free MPEG-4 Part 2 video decoder"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/pnn64/deadsync"
+keywords = ["mpeg4", "xvid", "video", "decoder"]
+categories = ["multimedia::video"]
+
+[workspace]
