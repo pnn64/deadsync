@@ -140,3 +140,35 @@ fn two_result_numeric_reduction_preserves_both_values_and_rounding() {
         "#,
     );
 }
+
+#[test]
+fn forwarded_calls_follow_upvalue_changes_and_pad_results() {
+    check(
+        br#"
+        local target = function(first, ...) return ..., first end
+        local function forward(...) return target("prefix", ...) end
+        for i = 1, 24 do
+            if i == 12 then
+                target = function(first, ...) return first, ... end
+            end
+            local a, b, c, d = forward(i, nil, "suffix")
+            if i < 12 then
+                assert(a == i and b == "prefix" and c == nil and d == nil)
+            else
+                assert(a == "prefix" and b == i and c == nil and d == "suffix")
+            end
+        end
+        local a, b = forward()
+        assert(a == "prefix" and b == nil)
+        assert(select('#', forward(nil, nil)) == 3)
+
+        local calls = 0
+        debug.sethook(function()
+            if debug.getinfo(2, "f").func == forward then calls = calls + 1 end
+        end, "c")
+        a, b = forward(42)
+        debug.sethook()
+        return a == "prefix" and b == 42 and calls == 1
+        "#,
+    );
+}

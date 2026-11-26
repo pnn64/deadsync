@@ -12,6 +12,7 @@ mod binding_tests;
 mod console;
 mod debug;
 mod errors;
+mod forwarding;
 mod gc;
 mod hooks;
 mod host;
@@ -1944,6 +1945,7 @@ impl Vm {
         // atomic reference count.
         let mut held: Option<crate::memory::Shared<ProgramData>> = None;
         let mut numeric_call_cache = numeric_leaf::Cache::default();
+        let mut forwarding_cache = forwarding::Cache::default();
         let mut field_hints = [[0; 2]; simple::FIELD_HINTS];
         let mut reduction_retry: Option<reductions::Retry> = None;
         'frames: loop {
@@ -2567,6 +2569,20 @@ impl Vm {
                             };
                             if completed {
                                 numeric_checkpoint_ready = true;
+                                continue;
+                            }
+                            if let Value::Function(function) = self.registers[a]
+                                && i.c != OPEN
+                                && !forwarding_cache.rejects(function, usize::from(i.b))
+                                && self.try_forwarded_call(
+                                    &mut forwarding_cache,
+                                    function,
+                                    a,
+                                    usize::from(i.b),
+                                    c,
+                                    error_line,
+                                )
+                            {
                                 continue;
                             }
                         }
