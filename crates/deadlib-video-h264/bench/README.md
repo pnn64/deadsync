@@ -112,4 +112,4 @@ The `deadlib-recycled-sps` mode also uses `OrderedDecoder::with_max_depth` with 
 | SRPG10 | FFmpeg native | 17.63 | 0.18 |
 | SRPG10 | FFmpeg packed | 18.63 | 3.15 |
 
-Allocation counts for the four existing modes matched across the reserve prototype and the combined revision. The SPS-depth mode has one allocation run per clip. The preceding motion-compensation revision measured 60.29 and 51.73 Mcycles/frame on the default Rust API, compared with 39.79 and 30.77 for packed FFmpeg on SRPG9 and SRPG10. [Reserve allocation samples](results/windows-x86_64-20261126/reference-reserve-allocations.csv) · [Combined motion samples](results/windows-x86_64-20261126/motion-combined)
+Allocation counts matched in two runs of each mode. Across five cycle runs, the default decoder reached 57.59 and 46.47 Mcycles/frame on SRPG9 and SRPG10. Recycling with the declared reorder depth reached 54.23 and 44.58. Packed FFmpeg measured 39.75 and 28.17, and native FFmpeg measured 35.65 and 24.82. [Complete reserve samples](results/windows-x86_64-20261126/reference-reserve) · [Preceding motion revision samples](results/windows-x86_64-20261126/motion-combined)
