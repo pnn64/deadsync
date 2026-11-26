@@ -49,16 +49,35 @@ pub(crate) fn intra<const MP42: bool>(
     // MP42 chooses the top block when the two DC gradients are equal.
     let top = left_gradient < top_gradient || (MP42 && left_gradient == top_gradient);
     let neighbor = if top { above } else { left };
+    let scale = if MP42 { 8 } else { dc_scale(quantizer, plane) };
+    let predictor = if MP42 {
+        neighbor.dc / 8
+    } else {
+        (neighbor.dc + scale / 2) / scale
+    };
+    let difference = if separate_dc {
+        dc_difference::<MP42>(bits, plane)?
+    } else {
+        0
+    };
+    if MP42 && !coded && !predict_ac {
+        let dc = ((predictor + difference) * scale) as i16;
+        return Ok((
+            [transform::inverse_dc(dc); 64],
+            Predictor {
+                dc: i32::from(dc),
+                quantizer,
+                ..Predictor::default()
+            },
+        ));
+    }
     let scan = match (predict_ac, top) {
         (false, _) => &ZIGZAG,
         (true, true) => &HORIZONTAL,
         (true, false) => &VERTICAL,
     };
-    let scale = if MP42 { 8 } else { dc_scale(quantizer, plane) };
     let mut coeff = [0; 64];
-    if separate_dc {
-        coeff[0] = dc_difference::<MP42>(bits, plane)?;
-    }
+    coeff[0] = difference;
     if coded {
         texture::<MP42, _>(
             bits,
@@ -70,11 +89,6 @@ pub(crate) fn intra<const MP42: bool>(
             },
         )?;
     }
-    let predictor = if MP42 {
-        neighbor.dc / 8
-    } else {
-        (neighbor.dc + scale / 2) / scale
-    };
     let dc = (predictor + coeff[0]) * scale;
     if predict_ac {
         for i in 1..8 {
@@ -136,6 +150,18 @@ fn dc_scale(q: i32, plane: usize) -> i32 {
 }
 
 fn dc_difference<const MP42: bool>(bits: &mut Bits<'_>, plane: usize) -> Result<i32> {
+    if MP42 {
+        let short = if plane == 0 {
+            &MP42_DC_LUMA
+        } else {
+            &MP42_DC_CHROMA
+        };
+        let entry = short[bits.peek(DC_BITS) as usize];
+        if entry != 0 {
+            bits.skip((entry & 31) as u8)?;
+            return Ok(i32::from((entry as i16) >> 5));
+        }
+    }
     let size = match (MP42, plane == 0) {
         (false, true) => bits.vlc(&tables::DC_LUMA)?,
         (false, false) => bits.vlc(&tables::DC_CHROMA)?,
@@ -149,15 +175,42 @@ fn dc_difference<const MP42: bool>(bits: &mut Bits<'_>, plane: usize) -> Result<
     if size > 8 {
         bits.marker()?;
     }
-    let difference = if value < (1 << (size - 1)) {
-        value + 1 - (1 << size)
-    } else {
-        value
-    };
+    let difference = signed_dc(value, size);
     if MP42 && !(-256..=255).contains(&difference) {
         return Err(Error::Invalid("MP42 DC difference"));
     }
     Ok(difference)
+}
+
+const fn signed_dc(value: i32, size: u8) -> i32 {
+    if size != 0 && value < (1 << (size - 1)) {
+        value + 1 - (1 << size)
+    } else {
+        value
+    }
+}
+
+const DC_BITS: u8 = 10;
+const DC_ENTRIES: usize = 1 << DC_BITS;
+static MP42_DC_LUMA: [u16; DC_ENTRIES] = mp42_short_dc(&tables::DC_LUMA);
+static MP42_DC_CHROMA: [u16; DC_ENTRIES] = mp42_short_dc(&tables::DC_CHROMA);
+
+// Decode the inverted size prefix together with its signed DC difference.
+const fn mp42_short_dc<const N: usize>(codes: &[u16; N]) -> [u16; DC_ENTRIES] {
+    let mut short = [0; DC_ENTRIES];
+    let mut prefix = 0;
+    while prefix < DC_ENTRIES {
+        let inverted = (DC_ENTRIES - 1) ^ prefix;
+        let entry = codes[inverted << (N.trailing_zeros() - DC_BITS as u32)];
+        let size = (entry >> 5) as u8;
+        let bits = (entry & 31) as u8 + size;
+        if entry != 0 && bits <= DC_BITS {
+            let value = (prefix >> (DC_BITS - bits)) & ((1 << size) - 1);
+            short[prefix] = (signed_dc(value as i32, size) as u16) << 5 | bits as u16;
+        }
+        prefix += 1;
+    }
+    short
 }
 
 fn inverse_quantize<const MP42: bool>(level: i32, q: i32) -> i16 {

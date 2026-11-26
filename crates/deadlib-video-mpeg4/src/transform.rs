@@ -22,11 +22,15 @@ pub(crate) fn inverse(coefficients: &[i16; 64]) -> [i16; 64] {
     scalar(coefficients)
 }
 
+pub(crate) fn inverse_dc(coefficient: i16) -> i16 {
+    let dc = i32::from(coefficient.wrapping_mul(8).wrapping_add(COLUMN_BIAS));
+    ((dc * BASIS[0][0]) >> COLUMN_SHIFT) as i16
+}
+
 #[cfg(any(test, not(all(target_arch = "x86_64", target_feature = "sse2"))))]
 fn scalar(coefficients: &[i16; 64]) -> [i16; 64] {
     if coefficients[1..].iter().all(|&coeff| coeff == 0) {
-        let dc = i32::from(coefficients[0].wrapping_mul(8).wrapping_add(COLUMN_BIAS));
-        return [((dc * BASIS[0][0]) >> COLUMN_SHIFT) as i16; 64];
+        return [inverse_dc(coefficients[0]); 64];
     }
 
     let mut horizontal = [[0i16; 8]; 8];
