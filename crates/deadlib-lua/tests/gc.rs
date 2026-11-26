@@ -28,6 +28,40 @@ fn dormant_threads_keep_their_entry_and_environment_through_full_collections() {
     assert_eq!(Vm::new().execute(&program).unwrap(), [Value::Number(42.0)]);
 }
 
+#[test]
+fn parked_stack_maps_keep_live_locals_and_varargs_and_release_dead_slots() {
+    let program = compile(
+        br#"
+        local weak = setmetatable({}, {__mode = 'v'})
+        local function entry(...)
+            local kept = {answer = 42}
+            weak[1] = kept
+            do
+                local discarded = {}
+                weak[2] = discarded
+            end
+            coroutine.yield(19)
+            return kept.answer, ...
+        end
+        local thread = coroutine.create(entry)
+        local extra = {marker = 23}
+        weak[3] = extra
+        local ok, yielded = coroutine.resume(thread, extra)
+        assert(ok and yielded == 19)
+        extra = nil
+        for i = 1, 4 do collectgarbage('collect') end
+        local name, kept = debug.getlocal(thread, 1, 2)
+        assert(name == 'kept' and kept == weak[1])
+        assert(weak[2] == nil and weak[3].marker == 23)
+        local done, answer, argument = coroutine.resume(thread)
+        assert(done and argument == weak[3])
+        return answer
+        "#,
+    )
+    .unwrap();
+    assert_eq!(Vm::new().execute(&program).unwrap(), [Value::Number(42.0)]);
+}
+
 #[derive(Debug, PartialEq)]
 enum Scalar {
     Nil,

@@ -3,6 +3,7 @@ use super::*;
 use crate::table::TableTrace;
 use std::sync::atomic::{AtomicU64, Ordering};
 mod finalizers;
+mod parked;
 mod storage;
 mod work;
 use work::Work;
@@ -1284,19 +1285,11 @@ impl Vm {
     }
 
     #[inline]
-    fn dormant_thread_roots(&self, id: ThreadId) -> Option<(TableId, FunctionId)> {
-        if id == self.thread {
-            return None;
-        }
-        let thread = self.threads.get(id.0)?;
+    fn dormant_thread_roots(thread: &threads::Thread) -> Option<(TableId, FunctionId)> {
         let [Value::Function(entry)] = &*thread.registers else {
             return None;
         };
-        if thread.top != 1
-            || thread.api_stack != (0..1)
-            || !thread.frames.is_empty()
-            || !Self::quiet_suspension(thread)
-        {
+        if thread.top != 1 || thread.api_stack != (0..1) || !thread.frames.is_empty() {
             return None;
         }
         Some((thread.globals, *entry))
@@ -1306,6 +1299,7 @@ impl Vm {
         let mut visited = 0;
         // No mutator runs within this trace batch.
         let mut modes = TableModeCache::default();
+        let mut layouts = parked::Layouts::default();
         while visited < budget {
             let Some(item) = work.last().copied() else {
                 break;
@@ -1328,26 +1322,37 @@ impl Vm {
             if let Trace::Value(Value::Thread(id))
             | Trace::MarkedValue(Value::Thread(id))
             | Trace::ThreadAgain(id) = item
-                && let Some((env, entry)) = self.dormant_thread_roots(id)
+                && id != self.thread
+                && let Some(thread) = self.threads.get(id.0)
+                && Self::quiet_suspension(thread)
             {
-                // There are no frames or extra roots to size. In an
-                // unbounded pass, skip edges that were already marked.
-                // Bounded steps still charge the original queue visits.
-                let env_needed = budget != usize::MAX || !self.tables.marked(env.0);
-                let entry_needed = budget != usize::MAX || !self.functions.marked(entry.0);
-                if env_needed && entry_needed {
-                    self.reserve_trace_work(work, 1)?;
+                if let Some((env, entry)) = Self::dormant_thread_roots(thread) {
+                    // There are no frames or extra roots to size. In an
+                    // unbounded pass, skip edges that were already marked.
+                    // Bounded steps still charge the original queue visits.
+                    let env_needed = budget != usize::MAX || !self.tables.marked(env.0);
+                    let entry_needed = budget != usize::MAX || !self.functions.marked(entry.0);
+                    if env_needed && entry_needed {
+                        self.reserve_trace_work(work, 1)?;
+                    }
+                    work.pop();
+                    self.threads.mark(id.0);
+                    if env_needed {
+                        work.push(Trace::Value(Value::Table(env)));
+                    }
+                    if entry_needed {
+                        work.push(Trace::Value(Value::Function(entry)));
+                    }
+                    visited += 1;
+                    continue;
                 }
-                work.pop();
-                self.threads.mark(id.0);
-                if env_needed {
-                    work.push(Trace::Value(Value::Table(env)));
+                if budget == usize::MAX
+                    && let Some(stack) = parked::Stack::capture(thread)
+                {
+                    self.trace_parked_stack(id, stack, &mut layouts, work)?;
+                    visited += 1;
+                    continue;
                 }
-                if entry_needed {
-                    work.push(Trace::Value(Value::Function(entry)));
-                }
-                visited += 1;
-                continue;
             }
             if let Trace::Value(Value::Table(id)) | Trace::MarkedValue(Value::Table(id)) = item
                 && self
