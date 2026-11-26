@@ -73,6 +73,49 @@ fn copied_scalar_list_prefixes_keep_later_fields_and_tables_independent() {
 }
 
 #[test]
+fn fully_overwritten_literals_preserve_shape_and_copy_on_write() {
+    let fields = (1..=128)
+        .map(|index| if index % 2 == 0 { "false" } else { "17" })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = format!(
+        r#"
+        local function forward()
+            local array = {{ {fields} }}
+            for i = 1, 128 do array[i] = i end
+            return array
+        end
+        local function reverse()
+            local array = {{ {fields} }}
+            for i = 128, 1, -1 do array[i] = i end
+            return array
+        end
+        local first, second, third = forward(), forward(), reverse()
+        local expected = 1
+        for key, value in pairs(third) do
+            assert(key == expected and value == expected)
+            expected = expected + 1
+        end
+        assert(expected == 129)
+        local object = {{ value = 42 }}
+        rawset(first, 1, object)
+        rawset(first, 128, nil)
+        table.insert(first, 17)
+        collectgarbage('collect')
+        assert(first[1] == object and first[1].value == 42 and first[128] == 17)
+        assert(second[1] == 1 and second[128] == 128)
+        return #first == 128 and #second == 128 and #third == 128
+        "#,
+    );
+    let program = compile(source.as_bytes()).unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
+        vm.set_instruction_limit(Some(100_000));
+        assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
+    }
+}
+
+#[test]
 fn numeric_sums_preserve_loop_carried_values_and_rounding() {
     check(
         br#"

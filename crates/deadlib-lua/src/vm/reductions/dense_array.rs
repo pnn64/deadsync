@@ -1,6 +1,20 @@
 use super::{Instruction, Op, Prototype, RK, Reduction, Value, Vm, integer, slot_index};
 use crate::bytecode::Constant;
 
+pub(in crate::vm) fn dense_loop_store(control: usize, body: &[Instruction]) -> Option<Instruction> {
+    let [store, rest @ ..] = body else {
+        return None;
+    };
+    let index = control + 3;
+    (store.op == Op::SetTable
+        && index < RK as usize
+        && usize::from(store.b) == index
+        && usize::from(store.a) < control
+        && (rest.is_empty()
+            || matches!(rest, [close] if close.op == Op::Close && usize::from(close.a) == index)))
+    .then_some(*store)
+}
+
 impl Vm {
     pub(super) fn reduce_dense_array_write(
         &mut self,
@@ -9,17 +23,9 @@ impl Vm {
         body: &[Instruction],
         prototype: &Prototype,
     ) -> Option<Reduction> {
-        let [store, rest @ ..] = body else {
-            return None;
-        };
+        let store = dense_loop_store(control, body)?;
         let index = control + 3;
-        if store.op != Op::SetTable
-            || index >= RK as usize
-            || usize::from(store.b) != index
-            || usize::from(store.a) >= control
-            || !(rest.is_empty()
-                || matches!(rest, [close] if close.op == Op::Close && usize::from(close.a) == index))
-            || !self.sort_fast_context()
+        if !self.sort_fast_context()
             || !self.open_upvalues.is_empty()
             || !self.registers.memory().uses_global_allocator()
         {

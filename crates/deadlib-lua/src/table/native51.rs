@@ -191,6 +191,7 @@ impl Table {
         string_hash: impl FnOnce(StringId) -> u32,
     ) -> Result<(), Error> {
         if let Some(index) = array_index(key.value()).filter(|&i| i < self.array.len()) {
+            self.array.try_make_writable(index + 1)?;
             self.array[index] = value;
             self.touch_array_at(index);
             return Ok(());

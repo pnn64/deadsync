@@ -396,6 +396,17 @@ impl Table {
         table.fields_version = u32::from(native51);
         Ok(table)
     }
+    pub(crate) fn with_dense_sequence(len: usize, native51: bool, memory: Memory) -> Option<Self> {
+        Some(Self {
+            array: ArrayStorage::SharedSequence {
+                memory,
+                values: ARRAY_SEQUENCE.get(..len)?,
+            },
+            native51,
+            fields_version: u32::from(native51),
+            ..Self::default()
+        })
+    }
     #[inline]
     fn hash_part(&self) -> &HashPart {
         self.hash.as_deref().unwrap_or(&EMPTY_HASH)
