@@ -1567,12 +1567,36 @@ impl<P: Pixel> SliceContext<'_, P> {
         };
         let ref_pic_list_l1 = sp.ref_pic_list_l1;
 
-        #[allow(clippy::needless_range_loop)]
+        let mv_l0 = self.mv_store_l0.as_chunks::<16>().0;
+        let mv_l1 = self.mv_store_l1.as_chunks::<16>().0;
+        let ref_idx_l0 = self.ref_idx_store_l0.as_chunks::<16>().0;
+        let ref_idx_l1 = self.ref_idx_store_l1.as_chunks::<16>().0;
+        let nc_luma = self.nc_luma.as_chunks::<16>().0;
+
+        fn uniform<T: PartialEq>(a: &[T; 16]) -> bool {
+            a[1..].iter().all(|x| *x == a[0])
+        }
+
         for mi in first_mb..last_mb {
             let info = &mut self.mb_info[mi];
-            let base = mi * 16;
             info.list_count = list_count;
             info.is_8x8dct = self.mb_is_8x8dct[mi];
+            info.nnz = nc_luma[mi].map(|count| count > 0);
+            // An 8x8 transform block has coefficients if any of its 4x4
+            // blocks does (CAVLC codes it as four interleaved 4x4 parts).
+            if info.is_8x8dct {
+                for q in info.nnz.as_chunks_mut::<4>().0 {
+                    let any = q.iter().any(|&n| n);
+                    q.fill(any);
+                }
+            }
+            if info.mb_type != MbType::Inter {
+                info.uniform_motion = false;
+                continue;
+            }
+            let (mv0, mv1, idx0, idx1) = (&mv_l0[mi], &mv_l1[mi], &ref_idx_l0[mi], &ref_idx_l1[mi]);
+            info.uniform_motion = uniform(mv0) && uniform(mv1) && uniform(idx0) && uniform(idx1);
+
             // Identity of the referenced picture for the deblocking bS. An
             // MBAFF field MB references fields: ref_idx k is the field of
             // parity (MB parity) ^ (k & 1) of frame entry k / 2, told apart
@@ -1597,6 +1621,20 @@ impl<P: Pixel> SliceContext<'_, P> {
                     None => list.get(ri).map_or(-1, |pic| pic.pic_order_cnt),
                 }
             };
+            if info.uniform_motion {
+                info.mv_l0[0] = mv0[0];
+                info.mv_l1[0] = mv1[0];
+                info.ref_idx_l0[0] = idx0[0];
+                info.ref_idx_l1[0] = idx1[0];
+                info.ref_poc_l0[0] = ref_id(l0_list, idx0[0]);
+                info.ref_poc_l1[0] = ref_id(ref_pic_list_l1, idx1[0]);
+                continue;
+            }
+            info.mv_l0 = *mv0;
+            info.mv_l1 = *mv1;
+            info.ref_idx_l0 = *idx0;
+            info.ref_idx_l1 = *idx1;
+
             // Blocks mostly share a reference: look each ref_idx up once
             let mut last = [(i8::MIN, 0i32); 2];
             let mut cached_id = |l: usize, list: &[Arc<DecodedPicture>], ri: i8| {
@@ -1606,31 +1644,8 @@ impl<P: Pixel> SliceContext<'_, P> {
                 last[l].1
             };
             for blk in 0..16 {
-                info.mv_l0[blk] = self.mv_store_l0[base + blk];
-                info.ref_idx_l0[blk] = self.ref_idx_store_l0[base + blk];
-                info.mv_l1[blk] = self.mv_store_l1[base + blk];
-                info.ref_idx_l1[blk] = self.ref_idx_store_l1[base + blk];
-                info.nnz[blk] = self.nc_luma[base + blk] > 0;
-                info.ref_poc_l0[blk] = cached_id(0, l0_list, self.ref_idx_store_l0[base + blk]);
-                info.ref_poc_l1[blk] =
-                    cached_id(1, ref_pic_list_l1, self.ref_idx_store_l1[base + blk]);
-            }
-            fn uniform<T: PartialEq + Copy>(a: &[T; 16]) -> bool {
-                a.iter().all(|&x| x == a[0])
-            }
-            info.uniform_motion = uniform(&info.mv_l0)
-                && uniform(&info.ref_poc_l0)
-                && uniform(&info.mv_l1)
-                && uniform(&info.ref_poc_l1)
-                && uniform(&info.ref_idx_l0)
-                && uniform(&info.ref_idx_l1);
-            // An 8x8 transform block has coefficients if any of its 4x4
-            // blocks does (CAVLC codes it as four interleaved 4x4 parts).
-            if info.is_8x8dct {
-                for q in info.nnz.as_chunks_mut::<4>().0 {
-                    let any = q.iter().any(|&n| n);
-                    q.fill(any);
-                }
+                info.ref_poc_l0[blk] = cached_id(0, l0_list, idx0[blk]);
+                info.ref_poc_l1[blk] = cached_id(1, ref_pic_list_l1, idx1[blk]);
             }
         }
     }

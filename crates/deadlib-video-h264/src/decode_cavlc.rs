@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use crate::bitstream::BitstreamReader;
 use crate::cavlc::parse_residual_block_cavlc;
-use crate::deblock::{MbInfo, MbType};
+use crate::deblock::MbType;
 use crate::error::DecodeError;
 use crate::mv_pred::{predict_mv, predict_mv_sub, ref_pic_safe, MbaffCtx};
 use crate::neighbor::{compute_nc, dequant_4x4_ac_raster};
@@ -1036,11 +1036,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             }
             self.decode_chroma_residual_cavlc(reader, mb_idx, mb_x, cbp_chroma, qp_y, false, sp)?;
 
-            self.mb_info[mb_idx] = MbInfo {
-                mb_type: MbType::Inter,
-                qp_y,
-                ..Default::default()
-            };
+            self.mb_info[mb_idx].set_type_qp(MbType::Inter, qp_y);
             // mb_idx handled by caller
             return Ok(());
         } else if is_inter {
@@ -1400,11 +1396,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             }
             self.decode_chroma_residual_cavlc(reader, mb_idx, mb_x, cbp_chroma, qp_y, false, sp)?;
 
-            self.mb_info[mb_idx] = MbInfo {
-                mb_type: MbType::Inter,
-                qp_y,
-                ..Default::default()
-            };
+            self.mb_info[mb_idx].set_type_qp(MbType::Inter, qp_y);
             // mb_idx handled by caller
             return Ok(());
         }
@@ -1716,11 +1708,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                 self.nc_cb[mb_idx * 8 + blk] = 16;
                 self.nc_cr[mb_idx * 8 + blk] = 16;
             }
-            self.mb_info[mb_idx] = MbInfo {
-                mb_type: MbType::Ipcm,
-                qp_y: 0,
-                ..Default::default()
-            };
+            self.mb_info[mb_idx].set_type_qp(MbType::Ipcm, 0);
             // mb_qp_delta is absent: QP_Y (and the next MB's prediction) is
             // unchanged; deblocking uses QP 0 for I_PCM (mb_info.qp_y)
             return Ok(());
@@ -1728,11 +1716,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             return Err(DecodeError::from("unsupported mb_type for I slice"));
         }
 
-        self.mb_info[mb_idx] = MbInfo {
-            mb_type: MbType::Intra,
-            qp_y,
-            ..Default::default()
-        };
+        self.mb_info[mb_idx].set_type_qp(MbType::Intra, qp_y);
 
         // Intra MBs keep ref_idx=-1 (default) and mv=(0,0) (default).
         // The -1 ref_idx ensures predict_mv's match_count logic correctly

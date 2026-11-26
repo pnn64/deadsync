@@ -223,7 +223,11 @@ impl PictureScratch {
         reset(&mut self.ref_idx_store_l1, blocks, -1);
         reset(&mut self.mvd_store, blocks, [0; 2]);
         reset(&mut self.mvd_store_l1, blocks, [0; 2]);
-        reset(&mut self.mb_info, total_mbs, deblock::MbInfo::default());
+        self.mb_info
+            .resize_with(total_mbs, deblock::MbInfo::default);
+        for info in &mut self.mb_info {
+            info.reset_metadata();
+        }
         reset(&mut self.i4x4_modes, blocks, 2);
         reset(&mut self.mb_cbp, total_mbs, 0);
         reset(&mut self.mb_chroma_pred, total_mbs, 0);
@@ -1299,11 +1303,7 @@ fn run_slice_px<P: Pixel>(
                     // B_Skip: spatial/temporal direct MV + MC, no residual
                     ctx.decode_b_skip_mb(mb_idx, mb_x, mb_y, &params);
                 }
-                ctx.mb_info[mb_idx] = MbInfo {
-                    mb_type: MbType::Inter,
-                    qp_y: ctx.prev_mb_qp,
-                    ..Default::default()
-                };
+                ctx.mb_info[mb_idx].set_type_qp(MbType::Inter, ctx.prev_mb_qp);
                 mb_idx += 1;
                 continue;
             }

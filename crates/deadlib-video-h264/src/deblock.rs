@@ -49,9 +49,24 @@ pub struct MbInfo {
     pub list_count: u8,
     /// True if this MB uses 8x8 transform (High profile transform_size_8x8_flag).
     pub is_8x8dct: bool,
-    /// All 16 4x4 blocks have the same references and motion vectors (a
-    /// 16x16 or skipped MB): its internal edges never get bS 1
+    /// Block 0 stores the motion for all 16 blocks. Interior edges can only
+    /// get bS 2 from residual coefficients.
     pub uniform_motion: bool,
+}
+
+impl MbInfo {
+    pub(crate) fn set_type_qp(&mut self, mb_type: MbType, qp_y: i32) {
+        self.mb_type = mb_type;
+        self.qp_y = qp_y;
+    }
+
+    pub(crate) fn reset_metadata(&mut self) {
+        self.set_type_qp(MbType::Intra, 0);
+        self.nnz = [false; 16];
+        self.list_count = 0;
+        self.is_8x8dct = false;
+        self.uniform_motion = false;
+    }
 }
 
 // H.264 Table 8-16a: alpha threshold indexed by indexA = clamp(0..51, QPavg + offset_a)
@@ -1081,6 +1096,8 @@ fn derive_edge_bs<const VERTICAL: bool>(
 /// Returns true if reference pictures differ or the MVs differ by 4 or more
 /// horizontally or `mvy_limit` or more vertically.
 fn check_mv_diff(mb_p: &MbInfo, mb_q: &MbInfo, blk_p: usize, blk_q: usize, mvy_limit: i32) -> bool {
+    let blk_p = if mb_p.uniform_motion { 0 } else { blk_p };
+    let blk_q = if mb_q.uniform_motion { 0 } else { blk_q };
     let list_count = mb_p.list_count.max(mb_q.list_count);
 
     if list_count <= 1 {
@@ -1644,6 +1661,28 @@ fn strong_filter<P: Pixel>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_mixed_edge_uses_block_zero_for_its_uniform_side() {
+        let mut p = MbInfo {
+            mb_type: MbType::Inter,
+            uniform_motion: true,
+            list_count: 1,
+            ref_idx_l0: [-1; 16],
+            ..MbInfo::default()
+        };
+        p.ref_idx_l0[0] = 0;
+        p.ref_poc_l0[0] = 7;
+        let mut q = MbInfo {
+            mb_type: MbType::Inter,
+            list_count: 1,
+            ref_poc_l0: [7; 16],
+            ..MbInfo::default()
+        };
+        assert_eq!(derive_edge_bs::<true>(&p, &q, 0, 4, 4), [0; 4]);
+        q.mv_l0[blk_idx(0, 2)] = [4, 0];
+        assert_eq!(derive_edge_bs::<true>(&p, &q, 0, 4, 4), [0, 0, 1, 0]);
+    }
 
     #[test]
     fn batched_edge_strengths_match_segment_derivation() {

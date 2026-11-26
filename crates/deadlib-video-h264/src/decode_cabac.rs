@@ -2,7 +2,7 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::cabac::CabacReader;
-use crate::deblock::{MbInfo, MbType};
+use crate::deblock::MbType;
 use crate::error::DecodeError;
 use crate::mv_pred::{predict_mv, predict_mv_sub, ref_pic_safe, MbaffCtx};
 use crate::neighbor::{
@@ -177,11 +177,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     self.mvd_store[mb_idx * 16 + blk] = [0, 0];
                     self.mvd_store_l1[mb_idx * 16 + blk] = [0, 0];
                 }
-                self.mb_info[mb_idx] = MbInfo {
-                    mb_type: MbType::Inter,
-                    qp_y: self.prev_mb_qp,
-                    ..Default::default()
-                };
+                self.mb_info[mb_idx].set_type_qp(MbType::Inter, self.prev_mb_qp);
                 self.last_qp_delta_nonzero = false;
                 return Ok(CabacMbResult::Decoded);
             }
@@ -434,11 +430,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     self.decode_chroma_residual_cabac(
                         cr, st, mb_idx, mb_x, cbp_chroma, qp_y, true, sp,
                     );
-                    self.mb_info[mb_idx] = MbInfo {
-                        mb_type: MbType::Intra,
-                        qp_y,
-                        ..Default::default()
-                    };
+                    self.mb_info[mb_idx].set_type_qp(MbType::Intra, qp_y);
                 } else if i_mb_type <= 24 {
                     // I16x16 in P/B
                     self.is_i16x16[mb_idx] = true;
@@ -601,11 +593,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     );
                     self.mb_cbp[mb_idx] |= (cbp_luma as u16) | ((cbp_chroma as u16) << 4);
 
-                    self.mb_info[mb_idx] = MbInfo {
-                        mb_type: MbType::Intra,
-                        qp_y,
-                        ..Default::default()
-                    };
+                    self.mb_info[mb_idx].set_type_qp(MbType::Intra, qp_y);
                 } else {
                     // I_PCM in P/B via CABAC
                     let pcm_pos = cr.pcm_byte_position();
@@ -642,11 +630,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     self.last_qp_delta_nonzero = false;
                     self.is_i16x16[mb_idx] = true; // I_PCM treated as I16x16 for CABAC context
                     self.mb_cbp[mb_idx] = 0x7EF; // all blocks coded, chroma 2 (CABAC contexts)
-                    self.mb_info[mb_idx] = MbInfo {
-                        mb_type: MbType::Ipcm,
-                        qp_y: 0,
-                        ..Default::default()
-                    };
+                    self.mb_info[mb_idx].set_type_qp(MbType::Ipcm, 0);
                 }
                 return Ok(CabacMbResult::Decoded);
             }
@@ -1155,11 +1139,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     cr, st, mb_idx, mb_x, cbp_chroma, qp_y, false, sp,
                 );
 
-                self.mb_info[mb_idx] = MbInfo {
-                    mb_type: MbType::Inter,
-                    qp_y,
-                    ..Default::default()
-                };
+                self.mb_info[mb_idx].set_type_qp(MbType::Inter, qp_y);
                 return Ok(CabacMbResult::Decoded);
             } else {
                 // B-slice inter with CABAC
@@ -2476,11 +2456,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                     cr, st, mb_idx, mb_x, cbp_chroma, qp_y, false, sp,
                 );
 
-                self.mb_info[mb_idx] = MbInfo {
-                    mb_type: MbType::Inter,
-                    qp_y,
-                    ..Default::default()
-                };
+                self.mb_info[mb_idx].set_type_qp(MbType::Inter, qp_y);
                 return Ok(CabacMbResult::Decoded);
             }
         }
@@ -2541,11 +2517,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             self.last_qp_delta_nonzero = false;
             self.is_i16x16[mb_idx] = true; // I_PCM treated as I16x16 for CABAC context
             self.mb_cbp[mb_idx] = 0x7EF; // all blocks coded, chroma 2 (CABAC contexts)
-            self.mb_info[mb_idx] = MbInfo {
-                mb_type: MbType::Ipcm,
-                qp_y: 0,
-                ..Default::default()
-            };
+            self.mb_info[mb_idx].set_type_qp(MbType::Ipcm, 0);
             return Ok(CabacMbResult::Decoded);
         }
 
@@ -2761,11 +2733,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             );
             self.decode_chroma_residual_cabac(cr, st, mb_idx, mb_x, cbp_chroma, qp_y, true, sp);
 
-            self.mb_info[mb_idx] = MbInfo {
-                mb_type: MbType::Intra,
-                qp_y,
-                ..Default::default()
-            };
+            self.mb_info[mb_idx].set_type_qp(MbType::Intra, qp_y);
             // I4x4/I8x8 is NOT I16x16 for CABAC context
         } else if mb_type <= 24 {
             // I16x16 via CABAC
@@ -2923,11 +2891,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             );
             self.decode_chroma_residual_cabac(cr, st, mb_idx, mb_x, cbp_chroma, qp_y, true, sp);
 
-            self.mb_info[mb_idx] = MbInfo {
-                mb_type: MbType::Intra,
-                qp_y,
-                ..Default::default()
-            };
+            self.mb_info[mb_idx].set_type_qp(MbType::Intra, qp_y);
             // CBP already partially set during DC/AC decode (bits 6-7)
             self.mb_cbp[mb_idx] |= (cbp_luma as u16) | ((cbp_chroma as u16) << 4);
         } else {
@@ -2966,11 +2930,7 @@ impl<P: Pixel> SliceContext<'_, P> {
             self.last_qp_delta_nonzero = false;
             self.is_i16x16[mb_idx] = true; // I_PCM treated as I16x16 for CABAC context
             self.mb_cbp[mb_idx] = 0x7EF; // all blocks coded, chroma 2 (CABAC contexts)
-            self.mb_info[mb_idx] = MbInfo {
-                mb_type: MbType::Ipcm,
-                qp_y: 0,
-                ..Default::default()
-            };
+            self.mb_info[mb_idx].set_type_qp(MbType::Ipcm, 0);
         }
 
         Ok(CabacMbResult::Decoded)
