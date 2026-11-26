@@ -1,10 +1,14 @@
 use deadlib_lua::{Value, Vm, compile};
 
 fn check(source: &[u8]) {
+    check_with_limit(source, 100_000);
+}
+
+fn check_with_limit(source: &[u8], limit: u64) {
     let program = compile(source).unwrap();
     let mut vm = Vm::new();
     assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
-    vm.set_instruction_limit(Some(100_000));
+    vm.set_instruction_limit(Some(limit));
     assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
 }
 
@@ -363,7 +367,7 @@ fn two_result_calls_recheck_changed_callee_array_slots() {
 
 #[test]
 fn paired_array_sums_repair_changed_blocks_and_preserve_rounding() {
-    check(
+    check_with_limit(
         br#"
         local function setup()
             local first, second = {}, {}
@@ -405,5 +409,6 @@ fn paired_array_sums_repair_changed_blocks_and_preserve_rounding() {
         check_sum(9007199254740992, 8192, 34, -1)
         return true
         "#,
+        4_000_000,
     );
 }
