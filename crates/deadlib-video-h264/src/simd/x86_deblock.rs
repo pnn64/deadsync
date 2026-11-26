@@ -73,6 +73,106 @@ pub fn store_edge_lines_v(plane: &mut [u8], base: usize, stride: usize, columns:
     }
 }
 
+/// Filter eight 8-bit chroma lanes at once. The window starts at p1 and
+/// contains the four samples p1, p0, q0 and q1 in each lane.
+pub(crate) fn filter_chroma_edge_8<const VERTICAL: bool>(
+    plane: &mut [u8],
+    p1_start: usize,
+    stride: usize,
+    bs: &[i8; 16],
+    tc0: &[i8; 16],
+    alpha: i32,
+    beta: i32,
+) {
+    let bytes = if VERTICAL {
+        7 * stride + 4
+    } else {
+        3 * stride + 8
+    };
+    let plane = &mut plane[p1_start..p1_start + bytes];
+    let base = plane.as_mut_ptr();
+    // SAFETY: SSE2 is available on x86-64. Each load and store remains in
+    // the checked window and stores update only samples at p0 and q0.
+    unsafe {
+        let zero = _mm_setzero_si128();
+        let widen = |v| _mm_unpacklo_epi8(v, zero);
+        let [p1, p0, q0, q1] = if VERTICAL {
+            let rows = core::array::from_fn(|r| {
+                _mm_cvtsi32_si128(base.add(r * stride).cast::<i32>().read_unaligned())
+            });
+            let [p, q, ..] = transpose8(rows);
+            [
+                widen(p),
+                widen(_mm_srli_si128::<8>(p)),
+                widen(q),
+                widen(_mm_srli_si128::<8>(q)),
+            ]
+        } else {
+            core::array::from_fn(|r| widen(_mm_loadl_epi64(base.add(r * stride).cast())))
+        };
+        let bs = _mm_srai_epi16::<8>(_mm_unpacklo_epi8(zero, _mm_loadl_epi64(bs.as_ptr().cast())));
+        let alpha = _mm_set1_epi16(alpha as i16);
+        let beta = _mm_set1_epi16(beta as i16);
+        let below = |a, b, threshold| {
+            let d = _mm_sub_epi16(a, b);
+            _mm_cmpgt_epi16(threshold, _mm_max_epi16(d, _mm_sub_epi16(zero, d)))
+        };
+        let mask = _mm_and_si128(
+            _mm_and_si128(_mm_cmpgt_epi16(bs, zero), below(p0, q0, alpha)),
+            _mm_and_si128(below(p1, p0, beta), below(q1, q0, beta)),
+        );
+        if _mm_movemask_epi8(mask) == 0 {
+            return;
+        }
+
+        let tc = _mm_add_epi16(
+            widen(_mm_loadl_epi64(tc0.as_ptr().cast())),
+            _mm_set1_epi16(1),
+        );
+        let diff = _mm_add_epi16(
+            _mm_slli_epi16::<2>(_mm_sub_epi16(q0, p0)),
+            _mm_sub_epi16(p1, q1),
+        );
+        let delta = _mm_srai_epi16::<3>(_mm_add_epi16(diff, _mm_set1_epi16(4)));
+        let delta = _mm_min_epi16(_mm_max_epi16(delta, _mm_sub_epi16(zero, tc)), tc);
+        let delta = _mm_and_si128(delta, mask);
+        let mut p = _mm_add_epi16(p0, delta);
+        let mut q = _mm_sub_epi16(q0, delta);
+
+        let strong = _mm_and_si128(mask, _mm_cmpeq_epi16(bs, _mm_set1_epi16(4)));
+        if _mm_movemask_epi8(strong) != 0 {
+            let strong_sample = |p0, p1, q1| {
+                _mm_srli_epi16::<2>(_mm_add_epi16(
+                    _mm_add_epi16(_mm_slli_epi16::<1>(p1), p0),
+                    _mm_add_epi16(q1, _mm_set1_epi16(2)),
+                ))
+            };
+            let select = |strong_value, normal| {
+                _mm_or_si128(
+                    _mm_and_si128(strong, strong_value),
+                    _mm_andnot_si128(strong, normal),
+                )
+            };
+            p = select(strong_sample(p0, p1, q1), p);
+            q = select(strong_sample(q0, q1, p1), q);
+        }
+
+        let pq = _mm_packus_epi16(p, q);
+        let q = _mm_srli_si128::<8>(pq);
+        if VERTICAL {
+            let rows: [u16; 8] = core::mem::transmute(_mm_unpacklo_epi8(pq, q));
+            for (r, samples) in rows.into_iter().enumerate() {
+                base.add(r * stride + 1)
+                    .cast::<u16>()
+                    .write_unaligned(samples);
+            }
+        } else {
+            _mm_storel_epi64(base.add(stride).cast(), pq);
+            _mm_storel_epi64(base.add(2 * stride).cast(), q);
+        }
+    }
+}
+
 pub fn deblock_luma_lines(
     lines: &mut [[u8; 16]; 8],
     bs: &[i8; 16],
@@ -190,6 +290,53 @@ mod tests {
     use super::*;
     use crate::simd::scalar;
     use alloc::vec::Vec;
+
+    #[test]
+    fn eight_chroma_lanes_match_the_scalar_filter() {
+        fn check<const VERTICAL: bool>() {
+            let (base, stride) = (3, 19);
+            let mut seed = 26u32;
+            for i in 0..128 {
+                let original: Vec<u8> = (0..base + 8 * stride)
+                    .map(|_| {
+                        seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                        match i % 3 {
+                            0 => (seed >> 24) as u8,
+                            1 => (seed >> 28) as u8,
+                            _ => 255 - (seed >> 28) as u8,
+                        }
+                    })
+                    .collect();
+                let mut actual = original.clone();
+                let mut expected = original;
+                let mut samples = [[0; 16]; 8];
+                let bs = core::array::from_fn(|k| ((i + k) % 6) as i8 - 1);
+                let tc0 = core::array::from_fn(|k| ((i + k * 3) % 26) as i8);
+                let (alpha, beta) = ([0, 25, 255][i % 3], [0, 18, 7, 18][i % 4]);
+                let offset = |line, sample| {
+                    base + if VERTICAL {
+                        line * stride + sample
+                    } else {
+                        sample * stride + line
+                    }
+                };
+                for line in 0..8 {
+                    for sample in 0..4 {
+                        samples[2 + sample][line] = expected[offset(line, sample)];
+                    }
+                }
+                scalar::deblock_chroma_lines(&mut samples, &bs, &tc0, alpha, beta);
+                for line in 0..8 {
+                    expected[offset(line, 1)] = samples[3][line];
+                    expected[offset(line, 2)] = samples[4][line];
+                }
+                filter_chroma_edge_8::<VERTICAL>(&mut actual, base, stride, &bs, &tc0, alpha, beta);
+                assert_eq!(expected, actual, "iteration {i}, vertical={VERTICAL}");
+            }
+        }
+        check::<true>();
+        check::<false>();
+    }
 
     #[test]
     fn strided_edge_transpose_matches_scalar() {

@@ -39,6 +39,7 @@ mod deblock;
 #[path = "x86_weight.rs"]
 mod weight;
 pub use super::scalar::weighted_bi;
+pub(crate) use deblock::filter_chroma_edge_8;
 pub use deblock::{
     deblock_chroma_lines, deblock_luma_lines, load_edge_lines_v, store_edge_lines_v,
 };

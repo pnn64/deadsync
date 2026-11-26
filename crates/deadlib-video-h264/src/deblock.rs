@@ -1487,6 +1487,9 @@ fn filter_h_lines<P: Pixel>(
     (alpha, beta): (i32, i32),
     luma: bool,
 ) {
+    if alpha == 0 || beta == 0 {
+        return;
+    }
     let (first, last) = if luma { (0, 8) } else { (2, 6) };
     // Rows p3 (k = 0) .. q3 (k = 7); a malformed stream may put them out
     // of the plane
@@ -1494,6 +1497,19 @@ fn filter_h_lines<P: Pixel>(
         return;
     };
     if top + 7 * stride + n > plane.len() / P::BYTES {
+        return;
+    }
+    #[cfg(target_arch = "x86_64")]
+    if P::BYTES == 1 && !luma && n == 8 {
+        crate::simd::filter_chroma_edge_8::<false>(
+            plane,
+            top + 2 * stride,
+            stride,
+            &lp.bs,
+            &lp.tc0,
+            alpha,
+            beta,
+        );
         return;
     }
     let mut s: EdgeLines<P> = [[P::default(); 16]; 8];
@@ -1527,8 +1543,24 @@ fn filter_v_lines<P: Pixel>(
     (alpha, beta): (i32, i32),
     luma: bool,
 ) {
+    if alpha == 0 || beta == 0 {
+        return;
+    }
     let (reach, first, last) = if luma { (4, 0, 8) } else { (2, 2, 6) };
     if x < reach || (y + n - 1) * stride + x + reach > plane.len() / P::BYTES {
+        return;
+    }
+    #[cfg(target_arch = "x86_64")]
+    if P::BYTES == 1 && !luma && n == 8 {
+        crate::simd::filter_chroma_edge_8::<true>(
+            plane,
+            y * stride + x - 2,
+            stride,
+            &lp.bs,
+            &lp.tc0,
+            alpha,
+            beta,
+        );
         return;
     }
     if n == 16 && x >= 4 && (y + 15) * stride + x + 4 <= plane.len() / P::BYTES {
