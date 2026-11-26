@@ -55,9 +55,10 @@ matches and an analytic Huffman tree. It keeps no match dictionary and selects
 stored blocks when smaller. The same options work with `encode`.
 `EncodeOptions::default()` remains `Compression::Fast`, `Filter::Adaptive`,
 noninterlaced output and a 64 KiB IDAT chunk size. Fast/Adaptive uses zero-run
-coding with a stored fallback for 8-bit PNG and APNG samples. Other depths and
-explicit fixed filters use the fixed-Huffman LZ77 encoder under Fast.
-All compression modes preserve
+coding with a stored fallback for PNG and APNG samples up to 8 bits. At 16
+bits it keeps fixed-Huffman LZ77 and tries only the most recent match. Fast
+with an explicit fixed filter uses the chained LZ77 search. All compression
+modes preserve
 the supplied samples; their encoded sizes and CPU costs depend on the input.
 
 For reference color samples with 1–16 significant bits per channel, use

@@ -4,7 +4,7 @@ use crate::{
     checksum::Crc32,
     codec::{SIGNATURE, ancillary_writable, validate_encoding, write_transparency},
     reserve,
-    zlib::{Deflater, StreamStatus},
+    zlib::{Deflater, StreamStatus, png_zero_run},
 };
 use std::io::{self, Write};
 
@@ -78,25 +78,32 @@ impl<'a, W: Write> Compressed<'a, W> {
         writer: &'a mut Count<W>,
         sequence: Option<&'a mut u32>,
         options: &EncodeOptions,
-        depth: u8,
+        rows: &Rows<'_>,
         output: &'a mut Vec<u8>,
         encoder: &'a mut Option<Deflater>,
     ) -> Result<Self, Error> {
-        if output.is_empty() {
-            let capacity = options.idat_chunk_size.min(65536);
-            reserve(output, capacity)?;
-            output.resize(capacity, 0);
-        }
         let encoder = match encoder {
             Some(encoder) => {
                 encoder.reset();
                 encoder
             }
-            None => encoder.insert(Deflater::for_png(
-                options.compression,
-                options.filter == Filter::Adaptive,
-                depth,
-            )?),
+            None => {
+                let adaptive = options.filter == Filter::Adaptive;
+                let depth = rows.bit_depth();
+                let filtered_bytes = rows.filtered_size()?;
+                let mut capacity = options.idat_chunk_size.min(65536);
+                if png_zero_run(options.compression, adaptive, depth) {
+                    capacity = capacity.min(filtered_bytes.saturating_add(64));
+                }
+                reserve(output, capacity)?;
+                output.resize(capacity, 0);
+                encoder.insert(Deflater::for_png(
+                    options.compression,
+                    adaptive,
+                    depth,
+                    filtered_bytes,
+                )?)
+            }
         };
         Ok(Self {
             writer,
@@ -177,8 +184,7 @@ fn image<W: Write>(
     output: &mut Vec<u8>,
     encoder: &mut Option<Deflater>,
 ) -> Result<usize, Error> {
-    let mut compressed =
-        Compressed::new(writer, sequence, options, rows.bit_depth(), output, encoder)?;
+    let mut compressed = Compressed::new(writer, sequence, options, rows, output, encoder)?;
     while let Some(row) = rows.next_row()? {
         if row.zero {
             let prefix = usize::from(row.bytes[0] != 0);

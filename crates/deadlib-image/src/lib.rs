@@ -101,11 +101,19 @@ impl Image {
         match &self.samples {
             Samples::U16(_) if self.bit_depth == 16 => Ok(()),
             Samples::U8(v) if self.bit_depth <= 8 => {
-                if self.bit_depth < 8 && v.iter().any(|&s| u16::from(s) >= 1 << self.bit_depth) {
-                    Err(InvalidImage)
-                } else {
-                    Ok(())
+                if self.bit_depth < 8 {
+                    let invalid = u8::MAX << self.bit_depth;
+                    let lanes = u128::from_ne_bytes([invalid; 16]);
+                    let (groups, tail) = v.as_chunks::<16>();
+                    if groups
+                        .iter()
+                        .any(|&group| u128::from_ne_bytes(group) & lanes != 0)
+                        || tail.iter().any(|&sample| sample & invalid != 0)
+                    {
+                        return Err(InvalidImage);
+                    }
                 }
+                Ok(())
             }
             _ => Err(InvalidImage),
         }

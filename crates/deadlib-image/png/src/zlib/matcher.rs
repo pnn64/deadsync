@@ -20,14 +20,23 @@ pub(super) fn searches(bits: usize, consumed: usize) -> usize {
 /// Fixed table sizes let the hash and ring masks bound every index.
 pub(super) struct Matcher {
     heads: Box<[u32; HASHES]>,
-    previous: Box<[u16; WINDOW]>,
+    previous: Option<Box<[u16; WINDOW]>>,
 }
 impl Matcher {
     pub(super) fn new() -> Result<Self, Error> {
+        Self::with_chains(true)
+    }
+
+    pub(super) fn with_chains(chained: bool) -> Result<Self, Error> {
         Ok(Self {
             heads: table(u32::MAX)?,
-            previous: table(0)?,
+            previous: chained.then(|| table(0)).transpose()?,
         })
+    }
+
+    #[inline]
+    pub(super) fn chained(&self) -> bool {
+        self.previous.is_some()
     }
     pub(super) fn reset(&mut self, data: &[u8], processed: usize) {
         // Only links reachable from a current head are read. Inserting a
@@ -44,7 +53,7 @@ impl Matcher {
         }
     }
     pub(super) fn memory(&self) -> usize {
-        HASHES * 4 + WINDOW * 2
+        HASHES * 4 + usize::from(self.chained()) * WINDOW * 2
     }
     #[inline]
     pub(super) fn insert(&mut self, bytes: &[u8], position: usize) -> Option<usize> {
@@ -62,11 +71,13 @@ impl Matcher {
         } else {
             None
         };
-        self.previous[position & (WINDOW - 1)] = if candidate.is_some() {
-            distance as u16
-        } else {
-            0
-        };
+        if let Some(previous) = &mut self.previous {
+            previous[position & (WINDOW - 1)] = if candidate.is_some() {
+                distance as u16
+            } else {
+                0
+            };
+        }
         candidate
     }
     /// Hash a match's interior: every fourth position, then each of the last
@@ -82,6 +93,9 @@ impl Matcher {
         length: usize,
         distance: usize,
     ) {
+        if !self.chained() {
+            return;
+        }
         let end = start + length;
         debug_assert!(length >= 3 && end <= data.len());
         let stop = end.min(data.len().saturating_sub(3));
@@ -106,13 +120,14 @@ impl Matcher {
             } else {
                 prefix(&bytes[4..], &bytes[..bytes.len() - 4]) / 4
             };
+            let previous = self.previous.as_mut().unwrap();
             for n in 1..=run {
-                self.previous[(first_position + 4 * n) & (WINDOW - 1)] = 4;
+                previous[(first_position + 4 * n) & (WINDOW - 1)] = 4;
             }
             // A link to a position whose low bits read as an empty head is zero.
             let empty = u32::MAX.wrapping_sub(first_position as u32) as usize;
             if empty.is_multiple_of(4) && empty / 4 < run {
-                self.previous[(first_position + empty + 4) & (WINDOW - 1)] = 0;
+                previous[(first_position + empty + 4) & (WINDOW - 1)] = 0;
             }
             self.heads[hash(u32::from_le_bytes(*first))] = (first_position + 4 * run) as u32;
             k = 1 + run;
@@ -126,7 +141,7 @@ impl Matcher {
     }
     #[inline]
     pub(super) fn next(&self, candidate: usize, position: usize) -> Option<usize> {
-        let distance = self.previous[candidate & (WINDOW - 1)] as usize;
+        let distance = self.previous.as_ref()?[candidate & (WINDOW - 1)] as usize;
         if distance == 0 {
             return None;
         }

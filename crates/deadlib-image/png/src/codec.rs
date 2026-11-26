@@ -92,7 +92,8 @@ pub struct EncodeOptions {
     pub interlaced: bool,
     pub filter: Filter,
     /// PNG compression policy. Fast with Adaptive filtering uses zero-run
-    /// coding for 8-bit samples and LZ77 for other depths.
+    /// coding at depths up to 8 bits, and a single-candidate LZ77 search
+    /// for 16-bit samples.
     pub compression: zlib::Compression,
     pub idat_chunk_size: usize,
 }

@@ -1,4 +1,6 @@
-use super::{Compression, StreamStatus, Writer, fast_block, matcher, png_compression};
+use super::{
+    Compression, StreamStatus, Writer, fast_block, matcher, png_compression, png_match_chains,
+};
 use crate::{Error, checksum::Adler32, reserve};
 
 const BLOCK: usize = 32768;
@@ -37,26 +39,46 @@ pub struct Deflater {
 }
 impl Deflater {
     pub fn new(mode: Compression) -> Result<Self, Error> {
-        Self::with_block_size(mode, BLOCK)
+        Self::with_block_size(mode, BLOCK, BLOCK, true)
     }
 
-    pub(crate) fn for_png(mode: Compression, adaptive: bool, depth: u8) -> Result<Self, Error> {
-        let (mode, block_size) = png_compression(mode, adaptive, depth);
-        Self::with_block_size(mode, block_size)
+    pub(crate) fn for_png(
+        requested: Compression,
+        adaptive: bool,
+        depth: u8,
+        filtered_bytes: usize,
+    ) -> Result<Self, Error> {
+        let (mode, block_size) = png_compression(requested, adaptive, depth);
+        let capacity = if mode != requested {
+            filtered_bytes.min(block_size)
+        } else {
+            block_size
+        };
+        Self::with_block_size(
+            mode,
+            block_size,
+            capacity,
+            png_match_chains(adaptive, depth),
+        )
     }
 
-    fn with_block_size(mode: Compression, block_size: usize) -> Result<Self, Error> {
+    fn with_block_size(
+        mode: Compression,
+        block_size: usize,
+        capacity: usize,
+        match_chains: bool,
+    ) -> Result<Self, Error> {
         let mut bytes = Vec::new();
         let bits = if mode == Compression::Rle { 10 } else { 9 };
-        reserve(&mut bytes, (block_size * bits).div_ceil(8) + 64)?;
+        reserve(&mut bytes, (capacity * bits).div_ceil(8) + 64)?;
         bytes.extend_from_slice(&[0x78, 0x01]);
         let mut window = Vec::new();
         let mut matcher = None;
         if mode == Compression::Fast {
-            reserve(&mut window, block_size * 2)?;
-            matcher = Some(matcher::Matcher::new()?);
+            reserve(&mut window, capacity * 2)?;
+            matcher = Some(matcher::Matcher::with_chains(match_chains)?);
         } else {
-            reserve(&mut window, block_size)?;
+            reserve(&mut window, capacity)?;
         }
         Ok(Self {
             mode,

@@ -122,6 +122,16 @@ impl<'a> Rows<'a> {
         self.image.bit_depth
     }
 
+    pub(super) fn filtered_size(&self) -> Result<usize, Error> {
+        scanline::filtered_size(
+            self.image.width,
+            self.image.height,
+            self.image.color_type,
+            self.image.bit_depth,
+            self.interlaced,
+        )
+    }
+
     pub(crate) fn new(image: &'a Image, interlaced: bool, filter: Filter) -> Result<Self, Error> {
         scanline::filtered_size(
             image.width,

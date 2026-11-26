@@ -1836,9 +1836,13 @@ fn fast_block(
         if pos + 3 < data.len() {
             let mut candidate = matcher.insert(&data[pos..], base + pos);
             let current = &data[pos..end.min(pos + 258)];
-            let bits = (w.bytes.len() - checkpoint.bytes) * 8 + w.count as usize
-                - checkpoint.count as usize;
-            let mut searches = matcher::searches(bits, pos - start);
+            let mut searches = if matcher.chained() {
+                let bits = (w.bytes.len() - checkpoint.bytes) * 8 + w.count as usize
+                    - checkpoint.count as usize;
+                matcher::searches(bits, pos - start)
+            } else {
+                1
+            };
             // Measure every candidate instead of pre-testing single bytes; only
             // a strictly longer match replaces the earliest longest one.
             while let Some(absolute) = candidate {
@@ -1895,14 +1899,24 @@ fn fast_block(
 
 const STORED_BLOCK_SIZE: usize = u16::MAX as usize;
 
+pub(crate) fn png_zero_run(mode: Compression, adaptive: bool, depth: u8) -> bool {
+    mode == Compression::Fast && adaptive && depth <= 8
+}
+
 fn png_compression(mode: Compression, adaptive: bool, depth: u8) -> (Compression, usize) {
-    if mode == Compression::Fast && adaptive && depth == 8 {
+    if png_zero_run(mode, adaptive, depth) {
         // Adaptive byte predictors leave long runs of zero residuals. Use
         // the analytic tree and the largest block with a stored fallback.
         (Compression::Rle, STORED_BLOCK_SIZE)
     } else {
         (mode, matcher::WINDOW)
     }
+}
+
+fn png_match_chains(adaptive: bool, depth: u8) -> bool {
+    // Sixteen-bit residuals often repeat nonzero words. Keep LZ77 for those
+    // rows, but use the latest hit without building a chain at every byte.
+    !(adaptive && depth == 16)
 }
 
 /// A zlib header with room for the worst-case encoding of `len` bytes.
@@ -1984,6 +1998,7 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
 pub(crate) struct Compressor {
     mode: Compression,
     block_size: usize,
+    match_chains: bool,
     w: Writer,
     matcher: Option<matcher::Matcher>,
     /// Fast history, then the pending block and up to three lookahead bytes.
@@ -2000,18 +2015,19 @@ impl Compressor {
 
     pub(crate) fn for_png(mode: Compression, adaptive: bool, depth: u8) -> Self {
         let (mode, block_size) = png_compression(mode, adaptive, depth);
-        Self::with_block_size(mode, block_size)
+        Self::with_block_size(mode, block_size, png_match_chains(adaptive, depth))
     }
 
     #[cfg(test)]
     fn new(mode: Compression) -> Self {
-        Self::with_block_size(mode, matcher::WINDOW)
+        Self::with_block_size(mode, matcher::WINDOW, true)
     }
 
-    fn with_block_size(mode: Compression, block_size: usize) -> Self {
+    fn with_block_size(mode: Compression, block_size: usize, match_chains: bool) -> Self {
         Self {
             mode,
             block_size,
+            match_chains,
             w: Writer {
                 bytes: Vec::new(),
                 word: 0,
@@ -2042,7 +2058,7 @@ impl Compressor {
             reserve(&mut self.window, len.min(maximum))?;
         }
         if self.mode == Compression::Fast && self.matcher.is_none() {
-            self.matcher = Some(matcher::Matcher::new()?);
+            self.matcher = Some(matcher::Matcher::with_chains(self.match_chains)?);
         }
         self.history = 0;
         self.position = 0;
