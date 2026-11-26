@@ -2,7 +2,8 @@
 use crate::decode::{parse_huffman, parse_quant};
 use crate::fast::{self, Reader};
 use crate::reconstruct::{
-    CHUNK, ColorHints, cmyk_chunk, emit_chunk, ycbcr_chunk, ycbcr_row, ycbcr420_row, ycck_chunk,
+    CHUNK, ColorHints, cmyk_chunk, emit_chunk, ycbcr_chunk, ycbcr_row, ycbcr420_window_row,
+    ycck_chunk,
 };
 use crate::simd::Kernel;
 use crate::transform::{FloatQuant, idct8_auto, idct8_dc};
@@ -499,7 +500,7 @@ impl Window {
                 *sampler = Row::new(cache, self.layouts[i], y, self.max_h, self.max_v, method);
             }
             if self.color == ColorSpace::YCbCr && half && method == Upsampling::Linear {
-                ycbcr420_row(
+                ycbcr420_window_row(
                     samplers[0].top,
                     [samplers[1].top, samplers[1].bottom],
                     [samplers[2].top, samplers[2].bottom],

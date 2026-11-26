@@ -89,6 +89,37 @@ fn find_ff_word(bytes: &[u8]) -> usize {
     words.len() * 8 + tail.iter().position(|&v| v == 0xff).unwrap_or(tail.len())
 }
 
+/// Emit complete groups of 32 pixels from one half-width chroma row pair.
+#[inline(always)]
+pub(crate) fn ycbcr420(
+    luma: &[u8],
+    cb: [&[u8]; 2],
+    cr: [&[u8]; 2],
+    weights: [i32; 2],
+    out: &mut Vec<u8>,
+) -> usize {
+    #[cfg(all(target_arch = "x86_64", not(deadlib_image_jpeg_portable)))]
+    if luma.len() >= 32 && !portable_forced() && std::is_x86_feature_detected!("avx2") {
+        let width = luma.len() / 32 * 32;
+        assert!(cb.iter().chain(&cr).all(|row| row.len() >= width / 2));
+        let bytes = width * 3;
+        let old_len = out.len();
+        out.reserve(bytes);
+        let dest = out.spare_capacity_mut()[..bytes].as_mut_ptr().cast();
+        // SAFETY: AVX2 is available and every complete group reads 32 luma
+        // and 16 chroma samples per row, with clamped chroma neighbors.
+        // The kernel initializes exactly `bytes` bytes of spare capacity.
+        #[allow(unsafe_code)]
+        unsafe {
+            x86::ycbcr420(&luma[..width], cb, cr, weights, dest);
+            out.set_len(old_len + bytes);
+        }
+        return width;
+    }
+    let _ = (luma, cb, cr, weights, out);
+    0
+}
+
 /// The 8-bit float IDCT with explicit AVX2 operations, when available.
 /// Returns `false` (writing nothing) without AVX2. `out` holds 8 rows of 8
 /// bytes, `stride` apart.
@@ -119,6 +150,147 @@ pub(crate) fn idct8(block: &[i16; 64], quant: &[f32; 64], out: &mut [u8], stride
 mod x86 {
     use crate::transform::{C2, C2_MINUS_C6, C2_PLUS_C6, R2};
     use std::arch::x86_64::*;
+
+    const RGB_SHUFFLES: [[[i8; 16]; 3]; 3] = {
+        let mut masks = [[[-128; 16]; 3]; 3];
+        let mut i = 0;
+        while i < 48 {
+            masks[i / 16][i % 3][i % 16] = (i / 3) as i8;
+            i += 1;
+        }
+        masks
+    };
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    unsafe fn neighbors(row: &[u8], x: usize) -> [__m128i; 3] {
+        // SAFETY: the caller checks that x..x+16 is inside all chroma rows.
+        // The end lanes clamp when an adjacent load would cross an edge.
+        unsafe {
+            let p = row.as_ptr().add(x);
+            let center = _mm_loadu_si128(p.cast());
+            let left = if x == 0 {
+                _mm_shuffle_epi8(
+                    center,
+                    _mm_setr_epi8(0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14),
+                )
+            } else {
+                _mm_loadu_si128(p.sub(1).cast())
+            };
+            let right = if x + 16 == row.len() {
+                _mm_shuffle_epi8(
+                    center,
+                    _mm_setr_epi8(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 15),
+                )
+            } else {
+                _mm_loadu_si128(p.add(1).cast())
+            };
+            [left, center, right]
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    unsafe fn upsample(rows: [&[u8]; 2], x: usize, weights: __m256i) -> [__m256i; 2] {
+        // SAFETY: the group bounds are checked before running the kernel.
+        let [top, bottom] = unsafe { [neighbors(rows[0], x), neighbors(rows[1], x)] };
+        let [left, center, right] = core::array::from_fn(|i| {
+            let low = _mm_unpacklo_epi8(top[i], bottom[i]);
+            let high = _mm_unpackhi_epi8(top[i], bottom[i]);
+            _mm256_maddubs_epi16(_mm256_set_m128i(high, low), weights)
+        });
+        // Keep the same one-rounding rule as the scalar bilinear path.
+        let middle = _mm256_add_epi16(
+            _mm256_add_epi16(center, _mm256_slli_epi16::<1>(center)),
+            _mm256_set1_epi16(8),
+        );
+        let even = _mm256_srli_epi16::<4>(_mm256_add_epi16(left, middle));
+        let odd = _mm256_srli_epi16::<4>(_mm256_add_epi16(middle, right));
+        let lower = _mm256_unpacklo_epi16(even, odd);
+        let upper = _mm256_unpackhi_epi16(even, odd);
+        [
+            _mm256_permute2x128_si256::<0x20>(lower, upper),
+            _mm256_permute2x128_si256::<0x31>(lower, upper),
+        ]
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    fn pack_channel(samples: __m256i) -> __m128i {
+        _mm_packus_epi16(
+            _mm256_castsi256_si128(samples),
+            _mm256_extracti128_si256::<1>(samples),
+        )
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    unsafe fn write_rgb(y: __m128i, cb: __m256i, cr: __m256i, dest: *mut u8) {
+        let y = _mm256_cvtepu8_epi16(y);
+        let center = _mm256_set1_epi16(128);
+        let one = _mm256_set1_epi16(1);
+        let cb = _mm256_sub_epi16(cb, center);
+        let cr = _mm256_sub_epi16(cr, center);
+        let cb2 = _mm256_slli_epi16::<1>(cb);
+        let cr2 = _mm256_slli_epi16::<1>(cr);
+        let red = _mm256_add_epi16(
+            _mm256_add_epi16(y, cr),
+            _mm256_srai_epi16::<1>(_mm256_add_epi16(
+                _mm256_mulhi_epi16(cr2, _mm256_set1_epi16(26345)),
+                one,
+            )),
+        );
+        let blue = _mm256_add_epi16(
+            _mm256_add_epi16(y, cb2),
+            _mm256_srai_epi16::<1>(_mm256_add_epi16(
+                _mm256_mulhi_epi16(cb2, _mm256_set1_epi16(-14942)),
+                one,
+            )),
+        );
+        let green_matrix = _mm256_set1_epi32((18734i32 << 16) | ((-22554i16) as u16 as i32));
+        let bias = _mm256_set1_epi32(32768);
+        let low = _mm256_madd_epi16(_mm256_unpacklo_epi16(cb, cr), green_matrix);
+        let high = _mm256_madd_epi16(_mm256_unpackhi_epi16(cb, cr), green_matrix);
+        let g = _mm256_packs_epi32(
+            _mm256_srai_epi32::<16>(_mm256_add_epi32(low, bias)),
+            _mm256_srai_epi32::<16>(_mm256_add_epi32(high, bias)),
+        );
+        let green = _mm256_add_epi16(_mm256_sub_epi16(y, cr), g);
+        let (red, green, blue) = (pack_channel(red), pack_channel(green), pack_channel(blue));
+        for (i, masks) in RGB_SHUFFLES.iter().enumerate() {
+            // SAFETY: each mask is 16 bytes and dest holds 48 output bytes.
+            unsafe {
+                let red = _mm_shuffle_epi8(red, _mm_loadu_si128(masks[0].as_ptr().cast()));
+                let green = _mm_shuffle_epi8(green, _mm_loadu_si128(masks[1].as_ptr().cast()));
+                let blue = _mm_shuffle_epi8(blue, _mm_loadu_si128(masks[2].as_ptr().cast()));
+                let packed = _mm_or_si128(_mm_or_si128(red, green), blue);
+                _mm_storeu_si128(dest.add(i * 16).cast(), packed);
+            }
+        }
+    }
+
+    #[target_feature(enable = "avx2")]
+    pub(super) unsafe fn ycbcr420(
+        luma: &[u8],
+        cb: [&[u8]; 2],
+        cr: [&[u8]; 2],
+        weights: [i32; 2],
+        dest: *mut u8,
+    ) {
+        let weights = _mm256_set1_epi16((weights[0] | weights[1] << 8) as i16);
+        for (i, mono) in luma.as_chunks::<32>().0.iter().enumerate() {
+            // SAFETY: the wrapper supplies complete luma groups and enough
+            // chroma and destination storage for each of those groups.
+            unsafe {
+                let [cb_low, cb_high] = upsample(cb, i * 16, weights);
+                let [cr_low, cr_high] = upsample(cr, i * 16, weights);
+                let y_low = _mm_loadu_si128(mono.as_ptr().cast());
+                let y_high = _mm_loadu_si128(mono.as_ptr().add(16).cast());
+                write_rgb(y_low, cb_low, cr_low, dest.add(i * 96));
+                write_rgb(y_high, cb_high, cr_high, dest.add(i * 96 + 48));
+            }
+        }
+    }
 
     #[target_feature(enable = "avx2")]
     pub(super) unsafe fn find_ff(bytes: &[u8]) -> usize {

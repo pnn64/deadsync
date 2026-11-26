@@ -99,9 +99,42 @@ The two candidate full-corpus runs were 0.986× and 1.006× across the 157
 paired rasters. Deadlib used 3.7% fewer raw cycles across those pairs.
 The common-image measurements varied from 1.026× to 1.050×. All 412
 verification rows agreed across the four runs. All 1,641 exact snapshots
-matched and all 189 release tests passed. An explicit AVX2 RGB conversion trial increased the common-image
-ratio and was reverted.
+matched and all 189 release tests passed. An explicit AVX2 RGB conversion
+trial increased the common-image ratio and was reverted.
 
 - [Full-corpus cycle summary](direct-summary.json)
 - [Before run 1](direct-qualify-quarter1.tsv.gz) and [before run 2](direct-qualify-quarter2.tsv.gz)
 - [Candidate run 1](direct-qualify-direct1.tsv.gz) and [candidate run 2](direct-qualify-direct2.tsv.gz)
+
+## Fused chroma interpolation and RGB output
+
+The AVX2 row kernel interpolates half-width chroma and writes packed RGB
+directly to the output vector. It reuses the native integer formulas and
+single-rounding rule for bilinear interpolation. The existing scalar row
+kernel covers the final partial group and portable dispatch.
+
+| Input set | Paired files | Deadlib / Turbo before | Deadlib / Turbo after |
+| --- | ---: | ---: | ---: |
+| Common images | 53 | 1.035× | **0.985×** |
+| Kodak baseline 4:2:0 | 24 | 1.073× | 0.970× |
+| Kodak progressive 4:2:0 | 24 | 0.989× | 0.977× |
+| Shipped game assets | 5 | 1.118× | 1.024× |
+| All comparable rasters | 157 | — | **0.934×** |
+
+The two common-image runs were 0.9848× and 0.9856×. The two full-corpus
+runs were 0.9357× and 0.9332× on the 157 paired rasters. Each file and
+codec used five batches of at least 12 ms with each benchmark process pinned
+to CPU 2. The common-image cycle ratio uses the same input and Turbo build in every
+run. Deadlib used 4.8% fewer raw cycles than its parent on the common set.
+The common-image and full-corpus aggregates both passed the 1% cycle target.
+
+All 1,641 native snapshots matched exactly. Decode acceptance, output shape
+and pixel agreement matched the previous milestone across all 412 full-corpus
+verification rows. All 190 release tests, 50 forced-portable tests and strict
+Clippy checks passed. The boundary test covers packed-group edges and scalar
+tails.
+
+- [Cycle summary and binary hashes](fused-summary.json)
+- [Before common run 1](fused-trial-common-direct1.tsv.gz) and [before common run 2](fused-trial-common-direct2.tsv.gz)
+- [Fused common run 1](fused-trial-common-fused1.tsv.gz) and [fused common run 2](fused-trial-common-fused2.tsv.gz)
+- [Fused full run 1](fused-trial-inputs-fused1.tsv.gz) and [fused full run 2](fused-trial-inputs-fused2.tsv.gz)

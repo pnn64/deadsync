@@ -775,11 +775,35 @@ pub(crate) fn ycbcr420_row<T: Copy + Into<i32>>(
     weights: [i32; 2],
     out: &mut Vec<u8>,
 ) {
+    ycbcr420_tail(luma, cb, cr, weights, 0, out);
+}
+
+#[inline(always)]
+pub(crate) fn ycbcr420_window_row(
+    luma: &[u8],
+    cb: [&[u8]; 2],
+    cr: [&[u8]; 2],
+    weights: [i32; 2],
+    out: &mut Vec<u8>,
+) {
+    let written = crate::simd::ycbcr420(luma, cb, cr, weights, out);
+    ycbcr420_tail(luma, cb, cr, weights, written, out);
+}
+
+#[inline(always)]
+fn ycbcr420_tail<T: Copy + Into<i32>>(
+    luma: &[T],
+    cb: [&[T]; 2],
+    cr: [&[T]; 2],
+    weights: [i32; 2],
+    start: usize,
+    out: &mut Vec<u8>,
+) {
     let width = luma.len();
     let chroma = cb[0].len();
     let [top, bottom] = weights.map(|w| w as i16);
     let mut rgb = [0; CHUNK * 3];
-    for start in (0..width).step_by(CHUNK) {
+    for start in (start..width).step_by(CHUNK) {
         let end = (start + CHUNK).min(width);
         let first = start / 2;
         // blend[j] is chroma index first - 1 + j, clamped to the row.
@@ -868,6 +892,29 @@ fn sample(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dispatched_chroma_rows_match_at_group_edges() {
+        for width in [1usize, 31, 32, 33, 47, 63, 64, 65, 127, 128, 129] {
+            let luma: Vec<u8> = (0..width).map(|x| (x * 119 + 171) as u8).collect();
+            let chroma = |seed| {
+                (0..width.div_ceil(2))
+                    .map(|x| (x * seed + seed) as u8)
+                    .collect::<Vec<_>>()
+            };
+            let (cb_top, cb_bottom, cr_top, cr_bottom) =
+                (chroma(53), chroma(17), chroma(93), chroma(87));
+            for weights in [[1, 3], [3, 1], [4, 0]] {
+                let cb = [cb_top.as_slice(), cb_bottom.as_slice()];
+                let cr = [cr_top.as_slice(), cr_bottom.as_slice()];
+                let mut expected = vec![1, 2, 3];
+                let mut actual = expected.clone();
+                ycbcr420_row(&luma, cb, cr, weights, &mut expected);
+                ycbcr420_window_row(&luma, cb, cr, weights, &mut actual);
+                assert_eq!(actual, expected, "width {width}, weights {weights:?}");
+            }
+        }
+    }
 
     #[test]
     fn chunked_subtractive_conversion_matches_native_rounding() {

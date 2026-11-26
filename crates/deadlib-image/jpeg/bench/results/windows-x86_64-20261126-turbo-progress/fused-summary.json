@@ -1,0 +1,112 @@
+{
+  "common": {
+    "all": {
+      "direct": {
+        "files": 53,
+        "ratio": 1.035238895678438,
+        "deadlib_cycles": 699781393.5,
+        "turbo_cycles": 675961265.0,
+        "runs": [
+          1.041235186979258,
+          1.0292575070423298
+        ]
+      },
+      "fused": {
+        "files": 53,
+        "ratio": 0.9852423311179416,
+        "deadlib_cycles": 666218915.0,
+        "turbo_cycles": 676198021.5,
+        "runs": [
+          0.9848472761272686,
+          0.9856379709046517
+        ]
+      }
+    },
+    "kodak-baseline-420": {
+      "direct": {
+        "files": 24,
+        "ratio": 1.0729797537762948,
+        "deadlib_cycles": 160481836.0,
+        "turbo_cycles": 149566509.0,
+        "runs": [
+          1.0859972500200628,
+          1.0599705406125834
+        ]
+      },
+      "fused": {
+        "files": 24,
+        "ratio": 0.9695960514609684,
+        "deadlib_cycles": 144071537.0,
+        "turbo_cycles": 148589236.5,
+        "runs": [
+          0.9707166798079536,
+          0.9684636391382282
+        ]
+      }
+    },
+    "kodak-progressive-420": {
+      "direct": {
+        "files": 24,
+        "ratio": 0.9892865901002169,
+        "deadlib_cycles": 378028021.0,
+        "turbo_cycles": 382121849.0,
+        "runs": [
+          0.9911488550918178,
+          0.9874421689542419
+        ]
+      },
+      "fused": {
+        "files": 24,
+        "ratio": 0.9765277689628749,
+        "deadlib_cycles": 372979616.5,
+        "turbo_cycles": 381944711.0,
+        "runs": [
+          0.9754456542308798,
+          0.9776059809691442
+        ]
+      }
+    },
+    "deadsync-assets": {
+      "direct": {
+        "files": 5,
+        "ratio": 1.1178227420065778,
+        "deadlib_cycles": 161271536.5,
+        "turbo_cycles": 144272907.0,
+        "runs": [
+          1.126249346317385,
+          1.109273046765962
+        ]
+      },
+      "fused": {
+        "files": 5,
+        "ratio": 1.0240532027135256,
+        "deadlib_cycles": 149167761.5,
+        "turbo_cycles": 145664074.0,
+        "runs": [
+          1.0238338910904328,
+          1.0242737613608333
+        ]
+      }
+    }
+  },
+  "full": {
+    "files": 157,
+    "ratio": 0.9344176986111024,
+    "deadlib_cycles": 850019162.5,
+    "turbo_cycles": 909677935.0,
+    "runs": [
+      0.9356900424691325,
+      0.933206830960772
+    ]
+  },
+  "build_sha256": {
+    "compare-direct.exe": "2514737c579fcbb457d0f4302a4292810a7385766737159eda3cf617e19e59de",
+    "rust-build/release/compare.exe": "bfd69f2bab0fa1612aea30288b14f85509b709ada22a71906603b19f7e637b78",
+    "bridges/Release/bench_turbo.dll": "e36c5c381670383b09ef67cc79b7de435207b598a92975b45bf7952dc8b2d984"
+  },
+  "environment": {
+    "JPEG_BENCH_MS": 12,
+    "JPEG_BENCH_CPU": 2,
+    "RAYON_NUM_THREADS": 1
+  }
+}
