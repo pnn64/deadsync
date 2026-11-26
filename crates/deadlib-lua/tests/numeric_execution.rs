@@ -290,3 +290,73 @@ fn dense_array_call_cache_rechecks_arguments_and_callees_after_writes() {
         "#,
     );
 }
+
+#[test]
+fn dense_array_pair_calls_preserve_order_and_recheck_cached_inputs() {
+    check(
+        br#"
+        local function setup()
+            local first, second = {}, {}
+            local adjust = function(a, b) return a + 1, b + 2 end
+            for i = 1, 96 do first[i], second[i] = i, i * 2 end
+            return function(total)
+                for i = 96, 1, -1 do
+                    local a, b = adjust(first[i], second[i])
+                    total = total + b + a
+                end
+                return total
+            end, function(f) adjust = f end, first, second
+        end
+        local sum, replace, first, second = setup()
+        local function expected(total, left, right)
+            for i = 96, 1, -1 do
+                total = total + (second[i] + right) + (first[i] + left)
+            end
+            return total
+        end
+        assert(sum(0) == 14256 and sum(0) == 14256)
+        assert(sum(9007199254740992) == expected(9007199254740992, 1, 2))
+        first[31], second[77] = 106, 171
+        assert(sum(0) == expected(0, 1, 2) and sum(0) == 14348)
+
+        replace(function(a, b) return a + 4, b - 3 end)
+        assert(sum(0) == expected(0, 4, -3) and sum(0) == 14156)
+        local visits = 0
+        replace(function(a, b)
+            visits = visits + 1
+            return a + 4, b - 3
+        end)
+        assert(sum(0) == 14156 and visits == 96)
+
+        replace(function(a, b) return a + 1, b + 2 end)
+        first[31] = nil
+        setmetatable(first, {__index = function(_, i) return i end})
+        return sum(0) == 14273
+        "#,
+    );
+}
+
+#[test]
+fn two_result_calls_recheck_changed_callee_array_slots() {
+    check(
+        br#"
+        local function setup()
+            local targets, first, second = {}, {}, {}
+            local identity = function(a, b) return a, b end
+            for i = 1, 96 do targets[i], first[i], second[i] = identity, i, i * 2 end
+            return function()
+                local total = 0
+                for i = 1, 96 do
+                    local a, b = targets[i](first[i], second[i])
+                    total = total + a + b
+                end
+                return total
+            end, targets
+        end
+        local sum, targets = setup()
+        assert(sum() == 13968 and sum() == 13968)
+        targets[9] = function(a, b) return b + 3, a - 2 end
+        return sum() == 13969 and sum() == 13969
+        "#,
+    );
+}

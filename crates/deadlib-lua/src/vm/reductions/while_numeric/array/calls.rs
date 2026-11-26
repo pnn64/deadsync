@@ -12,6 +12,7 @@ use crate::vm::{
 
 const MAX_ARGUMENTS: usize = 2;
 const MAX_ARRAYS: usize = MAX_ARGUMENTS + 1;
+const MAX_RESULTS: usize = 2;
 const MAX_TARGETS: usize = 4;
 const MAX_OPS: usize = 4;
 
@@ -22,8 +23,8 @@ enum Slot {
     Index,
     Control,
     Array(usize),
-    Result,
-    Total(usize),
+    Result(u8),
+    Total { register: usize, terms: usize },
 }
 
 struct Registers<'a> {
@@ -65,10 +66,17 @@ enum Argument {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Target {
+    Array(usize),
+    Fixed(FunctionId),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Call {
-    target: usize,
+    target: Target,
     arguments: [Argument; MAX_ARGUMENTS],
     arity: usize,
+    results: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -77,6 +85,7 @@ struct Plan {
     table_count: usize,
     call: Call,
     sum: usize,
+    addends: [u8; MAX_RESULTS],
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -124,6 +133,8 @@ impl Plan {
         let mut table_count = 0;
         let mut call = None;
         let mut sum = None;
+        let mut terms = 0;
+        let mut addends = [0; MAX_RESULTS];
         for instruction in body {
             let a = usize::from(instruction.a);
             let b = u32::from(instruction.b);
@@ -163,9 +174,16 @@ impl Plan {
                     };
                     Slot::Array(index)
                 }
-                Op::Call if call.is_none() && b <= MAX_ARGUMENTS as u32 && c == 1 => {
-                    let Slot::Array(target) = r.read(a as u32) else {
-                        return None;
+                Op::Call if call.is_none() && b <= MAX_ARGUMENTS as u32 && matches!(c, 1 | 2) => {
+                    let target = match r.read(a as u32) {
+                        Slot::Array(array) => Target::Array(array),
+                        slot if c == 2 => {
+                            let Value::Function(function) = r.fixed(slot)? else {
+                                return None;
+                            };
+                            Target::Fixed(function)
+                        }
+                        _ => return None,
                     };
                     let arity = b as usize;
                     let mut arguments = [Argument::Number(0); MAX_ARGUMENTS];
@@ -184,23 +202,43 @@ impl Plan {
                         target,
                         arguments,
                         arity,
+                        results: c as usize,
                     });
-                    Slot::Result
+                    if c == 2 {
+                        if (control..control + 4).contains(&(a + 1)) {
+                            return None;
+                        }
+                        *r.slots.get_mut(a + 1)? = Some(Slot::Result(1));
+                    }
+                    Slot::Result(0)
                 }
-                Op::Add if sum.is_none() => {
-                    let (Slot::Initial(slot), Slot::Result) = (r.read(b), r.read(c)) else {
+                Op::Add => {
+                    let (total, Slot::Result(result)) = (r.read(b), r.read(c)) else {
                         return None;
                     };
-                    sum = Some(slot);
-                    Slot::Total(slot)
+                    let register = match total {
+                        Slot::Initial(register) if sum.is_none() => register,
+                        Slot::Total {
+                            register,
+                            terms: depth,
+                        } if sum == Some(register) && depth == terms => register,
+                        _ => return None,
+                    };
+                    *addends.get_mut(terms)? = result;
+                    terms += 1;
+                    sum = Some(register);
+                    Slot::Total { register, terms }
                 }
                 _ => return None,
             });
         }
         let sum = sum?;
         let call = call?;
-        if r.invariant[sum]
-            || !matches!(r.slots[sum], Some(Slot::Total(slot)) if slot == sum)
+        if table_count == 0
+            || terms != call.results
+            || r.invariant[sum]
+            || !matches!(r.slots[sum], Some(Slot::Total { register, terms: depth })
+                if register == sum && depth == terms)
             || r.read_initial
                 .iter()
                 .enumerate()
@@ -210,7 +248,10 @@ impl Plan {
         }
         // Check all array reads, including reads whose destination was later
         // overwritten. An unchecked nil could invoke an index metamethod.
-        let mut used = 1 << call.target;
+        let mut used = match call.target {
+            Target::Array(array) => 1 << array,
+            Target::Fixed(_) => 0,
+        };
         for argument in &call.arguments[..call.arity] {
             if let Argument::Array(index) = *argument {
                 used |= 1 << index;
@@ -221,6 +262,7 @@ impl Plan {
             table_count,
             call,
             sum,
+            addends,
         })
     }
 
@@ -236,16 +278,30 @@ impl Plan {
         for (slice, id) in arrays.iter_mut().zip(&self.tables[..self.table_count]) {
             *slice = vm.tables[slot_index(id.0)].array_slice(bounds.0, bounds.1)?;
         }
-        let len = arrays[self.call.target].len();
+        let len = arrays[0].len();
+        let fixed = match self.call.target {
+            Target::Fixed(function) => Some(Recipe::decode(
+                vm,
+                function,
+                self.call.arity,
+                self.call.results,
+            )?),
+            Target::Array(_) => None,
+        };
         let mut targets = Targets::new();
         let mut exact = measure_exactness.then_some(Exact::ZERO);
         let mut accumulate = |index| {
-            let value = self.call.value(vm, &arrays, index, &mut targets)?;
-            sum += value;
-            if let Some(proof) = &mut exact
-                && proof.push(value).is_none()
-            {
-                exact = None;
+            let values = self
+                .call
+                .values(vm, &arrays, index, fixed.as_ref(), &mut targets)?;
+            for &addend in &self.addends[..self.call.results] {
+                let value = values[usize::from(addend)];
+                sum += value;
+                if let Some(proof) = &mut exact
+                    && proof.push(value).is_none()
+                {
+                    exact = None;
+                }
             }
             Some(())
         };
@@ -259,25 +315,35 @@ impl Plan {
             }
         }
         let last = if ascending { len - 1 } else { 0 };
-        self.call.value(vm, &arrays, last, &mut targets)?;
+        self.call
+            .values(vm, &arrays, last, fixed.as_ref(), &mut targets)?;
         Some(Scan {
             sum,
-            exact: exact.and_then(|proof| proof.check_count(len - 1, 1)),
-            registers: targets.registers,
+            exact: exact.and_then(|proof| proof.check_count(len - 1, self.call.results)),
+            registers: fixed.map_or(targets.registers, |recipe| recipe.registers),
         })
     }
 }
 
 impl Call {
-    fn value(
+    fn values(
         &self,
         vm: &Vm,
         arrays: &[&[Value]; MAX_ARRAYS],
         index: usize,
+        fixed: Option<&Recipe>,
         targets: &mut Targets,
-    ) -> Option<f64> {
-        let Value::Function(function) = arrays[self.target][index] else {
-            return None;
+    ) -> Option<[f64; MAX_RESULTS]> {
+        let recipe = if let Some(fixed) = fixed {
+            fixed
+        } else {
+            let Target::Array(target) = self.target else {
+                return None;
+            };
+            let Value::Function(function) = arrays[target][index] else {
+                return None;
+            };
+            targets.recipe(vm, function, self.arity, self.results)?
         };
         let mut numbers = [0.0; MAX_ARGUMENTS + MAX_OPS];
         for (number, argument) in numbers.iter_mut().zip(&self.arguments[..self.arity]) {
@@ -291,11 +357,7 @@ impl Call {
                 }
             };
         }
-        Some(
-            targets
-                .recipe(vm, function, self.arity)?
-                .value(&mut numbers),
-        )
+        Some(recipe.values(&mut numbers))
     }
 }
 
@@ -303,12 +365,12 @@ impl Call {
 struct Recipe {
     operations: [Expression; MAX_OPS],
     count: usize,
-    result: Input,
+    results: [Input; MAX_RESULTS],
     registers: usize,
 }
 
 impl Recipe {
-    fn decode(vm: &Vm, function: FunctionId, arity: usize) -> Option<Self> {
+    fn decode(vm: &Vm, function: FunctionId, arity: usize, results: usize) -> Option<Self> {
         let closure = &vm.functions[slot_index(function.0)];
         let program = &vm.programs[closure.program];
         let prototype = &program.data.prototypes[closure.prototype];
@@ -325,7 +387,7 @@ impl Recipe {
         let mut recipe = Self {
             operations: [zero; MAX_OPS],
             count: 0,
-            result: Input::Constant(0.0),
+            results: [Input::Constant(0.0); MAX_RESULTS],
             registers: size,
         };
         let constants = program.bound_constants(closure.prototype);
@@ -357,8 +419,13 @@ impl Recipe {
                 op @ (Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow) => {
                     Expression::Binary(op, operand(b)?, operand(c)?)
                 }
-                Op::Return if c == 1 => {
-                    recipe.result = slots[a]?;
+                Op::Return if c as usize == results => {
+                    for (output, &slot) in recipe.results[..results]
+                        .iter_mut()
+                        .zip(slots.get(a..a + results)?)
+                    {
+                        *output = slot?;
+                    }
                     return Some(recipe);
                 }
                 _ => return None,
@@ -371,7 +438,7 @@ impl Recipe {
     }
 
     #[inline]
-    fn value(&self, numbers: &mut [f64; MAX_ARGUMENTS + MAX_OPS]) -> f64 {
+    fn values(&self, numbers: &mut [f64; MAX_ARGUMENTS + MAX_OPS]) -> [f64; MAX_RESULTS] {
         let read = |numbers: &[f64; MAX_ARGUMENTS + MAX_OPS], operand| match operand {
             Input::Argument(index) => numbers[index],
             Input::Constant(number) => number,
@@ -381,7 +448,7 @@ impl Recipe {
                 .evaluate_with(|operand| Some(read(numbers, operand)))
                 .expect("verified numeric operation");
         }
-        read(numbers, self.result)
+        self.results.map(|input| read(numbers, input))
     }
 }
 
@@ -398,13 +465,19 @@ impl Targets {
         }
     }
 
-    fn recipe<'a>(&'a mut self, vm: &Vm, function: FunctionId, arity: usize) -> Option<&'a Recipe> {
+    fn recipe<'a>(
+        &'a mut self,
+        vm: &Vm,
+        function: FunctionId,
+        arity: usize,
+        results: usize,
+    ) -> Option<&'a Recipe> {
         let slot = self
             .recipes
             .iter()
             .position(|entry| entry.as_ref().is_none_or(|(id, _)| *id == function))?;
         if self.recipes[slot].is_none() {
-            let recipe = Recipe::decode(vm, function, arity)?;
+            let recipe = Recipe::decode(vm, function, arity, results)?;
             self.registers = self.registers.max(recipe.registers);
             self.recipes[slot] = Some((function, recipe));
         }
@@ -424,7 +497,9 @@ impl Vm {
         if control + 3 >= 256
             || !self.sort_fast_context()
             || !self.open_upvalues.is_empty()
-            || !body.iter().any(|i| i.op == Op::Call && i.c == 1)
+            || !body
+                .iter()
+                .any(|i| i.op == Op::Call && matches!(i.c, 1 | 2))
         {
             return None;
         }
