@@ -333,3 +333,16 @@ In five rotating cycle rounds, early delivery used 35.19 and 24.68 Mcycles/frame
 An SSSE3 prototype used overlapping row loads and aligned byte shifts to filter a horizontal quarter-pel block. FFmpeg also uses aligned byte shifts to reuse the input window for its horizontal six-tap filter. The prototype matched FFmpeg on both bundled clips, temporal-direct progressive and MBAFF multislice, constrained CAVLC and the resolution change. [FFmpeg horizontal quarter-pel filter](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/x86/h264_qpel_8bit.asm)
 
 Across 12 rotating paired rounds its median cycle changes relative to `c270f4779` were +0.08% and ?0.78%, with mixed results across runs. The existing decoder's median gaps against packed FFmpeg were +0.58% and +0.08%. Distribution-free median intervals with 96.1% coverage span ?1.51% to +1.93% and ?2.84% to +3.29%, respectively. The intervals assume independent rounds. The prototype stays out of the decoder. [Paired cycle samples](results/windows-x86_64-20261126/horizontal-qpel-paired.csv)
+
+With the full-pel B-skip change applied to early delivery, the median paired gaps were +4.06% and +0.91% against native FFmpeg over eight rounds. The prototype delivered 28.34 and 39.85 frames per billion cycles. Native FFmpeg delivered 29.33 and 39.94. Both runs matched the reference pixel hashes. [Early delivery with full-pel B-skip](results/windows-x86_64-20261126/surface-early-bskip-cycles.csv)
+
+## Deblocking metadata and skip motion
+
+The compact metadata candidate stored block-zero motion alongside the deblocking flags and appended per-block detail for nonuniform macroblocks to reusable storage. The skip-motion candidate reused the result of the B-skip uniform-motion check during deblocking setup. Both candidates matched the reference on the bundled clips, temporal-direct progressive and MBAFF multislice, constrained CAVLC and the resolution change. The compact metadata candidate also matched the High 10, High 4:2:2 and cropped fixtures.
+
+| Candidate versus `c270f4779` | SRPG9 median paired cycle change | SRPG10 median paired cycle change |
+|---|---:|---:|
+| Compact deblocking metadata | +1.66% | +1.56% |
+| Reused B-skip uniform-motion check | +1.23% | ?0.41% |
+
+The eight-round cycle comparison showed a regression on SRPG9 for both candidates. [Paired cycle samples](results/windows-x86_64-20261126/deblock-and-skip-paired.csv)
