@@ -1241,6 +1241,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadlib-ble"
+version = "0.1.0"
+dependencies = [
+ "btleplug",
+ "futures-util",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "deadlib-image"
 version = "0.1.0"
 
@@ -1599,9 +1609,7 @@ dependencies = [
 name = "deadsync-heart-rate"
 version = "0.1.0"
 dependencies = [
- "btleplug",
- "futures-util",
- "tokio",
+ "deadlib-ble",
 ]
 
 [[package]]

@@ -195,6 +195,11 @@ theme to describe an input or store a setting:
   device UUID generation, and the bounded UUID-to-slot table. Config reads and
   writes the pad-order INI keys, and the shell provides slot lookup to native
   drivers through their host callback.
+- `deadlib-ble` owns Bluetooth Low Energy discovery, connection setup,
+  characteristic notifications, and the unsupported-platform backend.
+  `deadsync-heart-rate` supplies the service and characteristic UUIDs and
+  decodes notifications into lock-free player readings. The shell supplies
+  device IDs from the active profiles and controls when discovery runs.
 - `deadsync-input::devices` owns the StepManiaX and RE:Flex provider identities.
   The shell tags OS, StepManiaX, and RE:Flex connection events with the game's
   provider type and moves their existing payload. Native backends use the

@@ -1,0 +1,17 @@
+[package]
+name = "deadlib-ble"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+uuid = "1.29.2"
+
+# The Windows backend uses WinRT. Keep its imports out of Windows 7 binaries.
+[target.'cfg(any(all(target_os = "windows", not(target_vendor = "win7")), target_os = "linux", target_os = "macos"))'.dependencies]
+btleplug = "0.13.5"
+futures-util = "0.3.34"
+tokio = { version = "1.54.1", features = ["rt", "sync", "time"] }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }

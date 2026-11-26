@@ -8998,6 +8998,34 @@ fn audio_analysis_and_replaygain_persistence_have_separate_owners() {
 }
 
 #[test]
+fn ble_transport_stays_separate_from_heart_rate_policy() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ble = root.join("crates/deadlib-ble");
+    let heart_rate = root.join("crates/deadsync-heart-rate");
+    let manifest = read_source(ble.join("Cargo.toml")).expect("BLE manifest");
+    assert!(manifest.contains("btleplug"));
+    assert!(manifest.contains("not(target_vendor = \"win7\")"));
+    assert!(!manifest.contains("deadsync-"));
+
+    let backend = production_source(&ble.join("src/platform.rs"));
+    assert!(backend.contains("peripheral.id().to_string()"));
+    assert!(backend.contains("Event::Notification"));
+    for token in ["PlayerReading", "parse_heart_rate_measurement", "HEART_RATE_SERVICE"] {
+        assert!(!backend.contains(token), "BLE backend owns heart-rate policy {token}");
+    }
+
+    let manifest = read_source(heart_rate.join("Cargo.toml")).expect("heart-rate manifest");
+    assert!(manifest.contains("deadlib-ble"));
+    for token in ["btleplug", "tokio", "futures-util"] {
+        assert!(!manifest.contains(token), "heart-rate crate depends on BLE backend {token}");
+    }
+    let runtime = production_source(&heart_rate.join("src/runtime.rs"));
+    assert!(runtime.contains("Monitor::start(SUBSCRIPTION"));
+    assert!(runtime.contains("parse_heart_rate_measurement(value)"));
+    assert!(runtime.contains("static PLAYER_READINGS: [AtomicU32; 2]"));
+}
+
+#[test]
 fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let raw = read_source(root.join("crates/deadlib-platform/src/input.rs"))

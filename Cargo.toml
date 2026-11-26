@@ -34,6 +34,7 @@ members = [
     "crates/deadsync-config",
     "crates/deadsync-core",
     "crates/deadsync-gameplay",
+    "crates/deadlib-ble",
     "crates/deadsync-heart-rate",
     "crates/deadsync-import",
     "crates/deadsync-input",

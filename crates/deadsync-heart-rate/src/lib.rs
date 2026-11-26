@@ -1,13 +1,9 @@
 //! Background Bluetooth Heart Rate Service integration.
 //!
-//! The worker thread owns every Bluetooth object and all connection work. The
-//! game thread only updates desired device IDs and reads bounded snapshots.
+//! The BLE worker supplies device events. This crate interprets heart-rate
+//! notifications and publishes readings for the selected players.
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Device {
-    pub id: String,
-    pub label: String,
-}
+pub use deadlib_ble::{Device, DiscoverySnapshot};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PlayerReading {
@@ -16,26 +12,9 @@ pub struct PlayerReading {
     pub bpm: Option<u16>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DiscoverySnapshot {
-    pub supported: bool,
-    pub scanning: bool,
-    pub devices: Vec<Device>,
-    pub error: Option<String>,
-}
+mod runtime;
 
-// Keep the backend selection in sync with the target dependencies in Cargo.toml.
-#[cfg_attr(
-    not(any(
-        all(target_os = "windows", not(target_vendor = "win7")),
-        target_os = "linux",
-        target_os = "macos"
-    )),
-    path = "unsupported.rs"
-)]
-mod platform;
-
-pub use platform::{
+pub use runtime::{
     configure, discovery_generation, discovery_snapshot, player_readings,
     player_readings_generation,
 };

@@ -10,7 +10,7 @@ use deadsync_theme_simply_love::screens::select_music;
 ///
 /// Lifetime: process. Warmup: first owning-screen frame. Capacity: one fixed
 /// configuration key and two fixed view keys. Unchanged Player Options and
-/// Select Music frames perform at most two atomic generation loads and no
+/// Select Music frames perform at most two generation reads and no
 /// locks, allocations, discovery clones, eviction, or destruction. A miss
 /// rebuilds at most two device choices/readings on a menu frame. Configuration
 /// work occurs only after a machine setting, profile device, or screen-mode
