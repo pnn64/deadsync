@@ -350,3 +350,15 @@ The compact metadata candidate stored block-zero motion alongside the deblocking
 The eight-round cycle comparison showed a regression on SRPG9 for both candidates. [Paired cycle samples](results/windows-x86_64-20261126/deblock-and-skip-paired.csv)
 
 A third candidate used the representatives of the four 8x8 groups to check uniform B-skip motion where inference gives all four blocks in a group the same result. Median paired changes were ?0.20% on SRPG9 and +0.65% on SRPG10. It matched the six reference fixtures and stayed out of the decoder. [Grouped B-skip samples](results/windows-x86_64-20261126/grouped-b-skip-paired.csv)
+
+## Deblocking schedule and threshold trials
+
+FFmpeg filters completed macroblock rows and uses a quantization-parameter bound to skip filtering when all relevant alpha or beta thresholds are zero. The row-local Rust prototype filtered the first slice as each successor row completed. The threshold prototype checked the current, left and top macroblocks before deriving strengths. Both matched the bundled clips and the additional progressive, MBAFF, constrained CAVLC, High 10 and High 4:2:2 fixtures. [FFmpeg slice filtering and thresholds](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_slice.c)
+
+| Candidate versus `c270f4779` | SRPG9 median paired cycle change | SRPG10 median paired cycle change |
+|---|---:|---:|
+| Row-local filtering, logical CPU 2 | +1.00% | +0.15% |
+| Low-QP filter skip, logical CPU 14 | +0.55% | ?0.59% |
+| Packed output from the separate-surface build, logical CPU 2 | ?0.38% | +0.40% |
+
+The low-QP prototype also matched a 48-frame fixture with explicit deblocking and chroma QP offsets. Its median paired cycle change on that fixture was +1.59%. Each comparison used eight rotating rounds. [Row and packed-output samples](results/windows-x86_64-20261126/row-local-deblock-paired.csv) ? [Low-QP samples](results/windows-x86_64-20261126/low-qp-deblock-paired.csv)
