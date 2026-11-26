@@ -452,3 +452,16 @@ The later excerpts with both changes still matched FFmpeg. Sixteen paired rounds
 A separate native-only run alternated the codecs for 24 rounds on each SRPG9 excerpt. Median paired cycle gaps were +1.87% for the opening excerpt and +0.32% for the later excerpt. Individual gaps reached +44.75% and +26.32%. These samples leave the 1% cycle margin unresolved. [SRPG9 native-only samples](results/windows-x86_64-20261126/srpg9-native-confirmation.csv)
 
 Two other candidates used already-published co-located motion or specialized the CABAC macroblock decoder by slice type. Both matched the reference fixtures. Their eight-round medians relative to `53aa12147` were ?0.96% and ?1.70% on SRPG9, and +1.78% and +3.42% on SRPG10, with large outliers. [CABAC and co-located motion samples](results/windows-x86_64-20261126/cabac-and-colocated-motion-paired.csv)
+
+## Spatial direct and boundary strengths
+
+The next comparison ran serially on logical CPU 42, with twelve rotating rounds per SRPG9 excerpt. Each candidate was built separately from `2b7748a9f`. All candidates matched the opening and later SRPG9 frames and the additional reference fixtures. [Serialized candidate samples](results/windows-x86_64-20261126/srpg9-serialized-candidates.csv)
+
+| Native candidate | Opening excerpt paired cycle change | Later excerpt paired cycle change |
+|---|---:|---:|
+| Shared spatial direct neighbor positions | ?3.31% | ?3.28% |
+| Coefficient flags combined once per edge | ?1.40% | ?1.88% |
+| Already-published co-located motion | ?0.78% | ?1.15% |
+| One release code generation unit | ?1.71% | ?0.14% |
+
+`bf9b2479d` computes frame macroblock neighbor positions once for both reference lists and calculates the component median with min and max. `7d979d2d3` combines the coefficient flags from both sides of a deblocking edge before examining its four segments. The spatial candidate's paired median gaps against native FFmpeg were ?3.27% and ?1.10%. Its 96.14% interval upper bounds were ?1.11% and +0.96%.
