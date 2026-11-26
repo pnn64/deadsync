@@ -2,6 +2,8 @@ use std::{arch::x86_64::*, mem::MaybeUninit};
 
 use super::{Error, Header, display_rows, reserve};
 
+const STREAMING_PIXELS: usize = 1 << 20;
+
 pub(super) fn bgr_rgba<const INPUT: usize>(
     source: &[u8],
     header: &Header,
@@ -10,12 +12,12 @@ pub(super) fn bgr_rgba<const INPUT: usize>(
     if header.pixel_count < 512 || !std::arch::is_x86_feature_detected!("ssse3") {
         return None;
     }
-    let swizzle: unsafe fn(&[u8], &mut [MaybeUninit<[u8; 4]>]) =
-        if std::arch::is_x86_feature_detected!("avx2") {
-            swizzle_avx2::<INPUT>
-        } else {
-            swizzle_ssse3::<INPUT>
-        };
+    let avx2 = std::arch::is_x86_feature_detected!("avx2");
+    let swizzle: unsafe fn(&[u8], &mut [MaybeUninit<[u8; 4]>]) = if avx2 {
+        swizzle_avx2::<INPUT, false>
+    } else {
+        swizzle_ssse3::<INPUT>
+    };
     let mut samples = Vec::<[u8; 4]>::new();
     if let Err(error) = reserve(&mut samples, header.pixel_count) {
         return Some(Err(error));
@@ -26,9 +28,18 @@ pub(super) fn bgr_rgba<const INPUT: usize>(
     assert_eq!(source.len(), header.source_bytes);
     assert!(row_bytes <= header.row_pitch);
     if header.info.top_down && header.row_pitch == row_bytes {
-        // SAFETY: The selected CPU feature was detected above. The validated
-        // raster contains exactly INPUT bytes for every output pixel.
-        unsafe { swizzle(source, output) };
+        let lead = output.as_mut_ptr().align_offset(64);
+        if avx2 && output.len() >= STREAMING_PIXELS && lead <= 15 {
+            let (head, body) = output.split_at_mut(lead);
+            swizzle_tail::<INPUT>(&source[..lead * INPUT], head);
+            // SAFETY: AVX2 and SSSE3 were detected above. The streaming
+            // output starts on a cache line and receives exactly one raster.
+            unsafe { swizzle_avx2::<INPUT, true>(&source[lead * INPUT..], body) };
+        } else {
+            // SAFETY: The selected CPU feature was detected above. The
+            // decoded raster has exactly INPUT bytes per output pixel.
+            unsafe { swizzle(source, output) };
+        }
     } else {
         let rows = display_rows(source, header.row_pitch, header.info.top_down);
         for (row, out) in rows.zip(output.chunks_exact_mut(width)) {
@@ -78,13 +89,18 @@ unsafe fn swizzle_ssse3<const INPUT: usize>(input: &[u8], output: &mut [MaybeUni
 }
 
 #[target_feature(enable = "avx2,ssse3")]
-unsafe fn swizzle_avx2<const INPUT: usize>(input: &[u8], output: &mut [MaybeUninit<[u8; 4]>]) {
+unsafe fn swizzle_avx2<const INPUT: usize, const STREAM: bool>(
+    input: &[u8],
+    output: &mut [MaybeUninit<[u8; 4]>],
+) {
     debug_assert_eq!(input.len(), output.len() * INPUT);
     let shuffle = _mm256_broadcastsi128_si256(shuffle_mask::<INPUT>());
     let alpha = _mm256_set1_epi32(0xff00_0000u32 as i32);
     let block_bytes = 8 * INPUT;
     // For BGR, the last 16-byte load begins 12 bytes into the block.
     let groups = input.len().saturating_sub(if INPUT == 3 { 4 } else { 0 }) / block_bytes;
+    // Stream complete cache lines so the scalar tail uses a different line.
+    let groups = if STREAM { groups & !1 } else { groups };
     for group in 0..groups {
         // SAFETY: The full loads fit the input extent, including the four
         // extra readable bytes for BGR. Each store initializes eight pixels.
@@ -103,10 +119,67 @@ unsafe fn swizzle_avx2<const INPUT: usize>(input: &[u8], output: &mut [MaybeUnin
             } else {
                 lanes
             };
-            _mm256_storeu_si256(output.as_mut_ptr().add(group * 8).cast(), rgba);
+            let dst = output.as_mut_ptr().add(group * 8).cast();
+            if STREAM {
+                _mm256_stream_si256(dst, rgba);
+            } else {
+                _mm256_storeu_si256(dst, rgba);
+            }
         }
     }
+    if STREAM {
+        _mm_sfence();
+    }
     swizzle_tail::<INPUT>(&input[groups * block_bytes..], &mut output[groups * 8..]);
+}
+
+pub(super) fn expand_large_palette(
+    source: &[u8],
+    colors: &[[u8; 4]; 256],
+    output: &mut [MaybeUninit<[u8; 4]>],
+) -> bool {
+    let lead = output.as_mut_ptr().align_offset(64);
+    if output.len() < STREAMING_PIXELS || lead > 15 || !std::arch::is_x86_feature_detected!("avx2")
+    {
+        return false;
+    }
+    assert_eq!(source.len(), output.len());
+    let end = lead + (source.len() - lead) / 16 * 16;
+    for (&index, pixel) in source[..lead].iter().zip(&mut output[..lead]) {
+        pixel.write(colors[usize::from(index)]);
+    }
+    // SAFETY: AVX2 was detected, the start is aligned to 64 bytes, and
+    // the input and output slices contain the same number of pixels.
+    unsafe { stream_palette(&source[lead..end], colors, &mut output[lead..end]) };
+    for (&index, pixel) in source[end..].iter().zip(&mut output[end..]) {
+        pixel.write(colors[usize::from(index)]);
+    }
+    true
+}
+
+#[target_feature(enable = "avx2")]
+unsafe fn stream_palette(
+    source: &[u8],
+    colors: &[[u8; 4]; 256],
+    output: &mut [MaybeUninit<[u8; 4]>],
+) {
+    let table = colors.map(i32::from_le_bytes);
+    for (indices, pixels) in source
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .zip(output.as_chunks_mut::<8>().0)
+    {
+        let packed = _mm_cvtsi64_si128(i64::from_le_bytes(*indices));
+        let offsets = _mm256_cvtepu8_epi32(packed);
+        // SAFETY: Every offset indexes the full 256-entry table. Each
+        // output block is 32-byte aligned and fits the destination.
+        unsafe {
+            let rgba = _mm256_i32gather_epi32::<4>(table.as_ptr(), offsets);
+            _mm256_stream_si256(pixels.as_mut_ptr().cast(), rgba);
+        }
+    }
+    _mm_sfence();
 }
 
 fn swizzle_tail<const INPUT: usize>(input: &[u8], output: &mut [MaybeUninit<[u8; 4]>]) {
@@ -239,8 +312,8 @@ mod tests {
             check_rows::<3>(swizzle_ssse3::<3>);
             check_rows::<4>(swizzle_ssse3::<4>);
             if std::arch::is_x86_feature_detected!("avx2") {
-                check_rows::<3>(swizzle_avx2::<3>);
-                check_rows::<4>(swizzle_avx2::<4>);
+                check_rows::<3>(swizzle_avx2::<3, false>);
+                check_rows::<4>(swizzle_avx2::<4, false>);
             }
         }
     }

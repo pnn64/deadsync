@@ -84,6 +84,14 @@ fn expand_rgba8(
         return result;
     }
     let width = header.info.width as usize;
+    #[cfg(target_arch = "x86_64")]
+    if palette_len == 256
+        && header.info.top_down
+        && header.row_pitch == width
+        && super::x86::expand_large_palette(source, colors, output)
+    {
+        return Ok(());
+    }
     let expand = |indices: &[u8], output: &mut [MaybeUninit<[u8; 4]>]| {
         // Check only used bytes before expanding, and skip the scan for full palettes.
         if palette_len < colors.len()

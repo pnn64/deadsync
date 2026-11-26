@@ -68,3 +68,17 @@ the 1% target on 152. The only remaining cases were top-down 1920×1080 RGB24,
 RGBA32, and full-palette indexed8 at 1.0252×, 1.0257×, and 1.0235× Wuffs cycles.
 Both Deadlib entry points agreed byte for byte on all 174 accepted inputs and
 returned the same errors on the other 29. [Raw palette passes](direct-palettes.tsv.gz).
+
+## Large tightly packed output
+
+For top-down, tightly packed inputs that produce at least 4 MiB of RGBA,
+the AVX2 path can stream complete cache lines into the newly allocated
+raster. It handles alignment and trailing pixels separately, and completes
+the streaming stores before returning the buffer. The three remaining
+1080p cases used median paired ratios of 0.873× for indexed8, 0.806× for
+RGB24, and 0.770× for RGBA32 across five focused passes with 20 ms samples.
+[Raw focused large-image passes](direct-streaming-large.tsv.gz).
+
+The five full passes put all three 1080p cases below the target and met it
+on 154 of 155 exact pairs. The remaining 511×257 top-down full-palette
+indexed8 input had a median ratio of 1.0113×. [Raw full streaming passes](direct-streaming.tsv.gz).
