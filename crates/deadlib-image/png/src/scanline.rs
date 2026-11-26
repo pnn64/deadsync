@@ -765,30 +765,45 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
     let (upper, upper_tail) = upper.as_chunks::<32>();
     let (upper_left, corner_tail) = upper_left.as_chunks::<32>();
     let (output, output_tail) = out[split..].as_chunks_mut::<32>();
+    #[cfg(target_arch = "x86_64")]
+    let vector_score = if SCORE {
+        x86::filter_score::<FILTER>(values, left, upper, upper_left, output, score, limit)
+    } else {
+        None
+    };
+    #[cfg(not(target_arch = "x86_64"))]
+    let vector_score = None;
     // Score each 256-byte segment after filtering it. Once the partial score
     // reaches `limit`, the candidate cannot win and the rest is skipped.
-    for ((((values, left), upper), upper_left), output) in values
-        .chunks(8)
-        .zip(left.chunks(8))
-        .zip(upper.chunks(8))
-        .zip(upper_left.chunks(8))
-        .zip(output.chunks_mut(8))
-    {
-        for ((((values, left), upper), upper_left), output) in values
-            .iter()
-            .zip(left)
-            .zip(upper)
-            .zip(upper_left)
-            .zip(output.iter_mut())
-        {
-            filter_chunk::<FILTER>(values, left, upper, upper_left, output);
+    if let Some(vector_score) = vector_score {
+        score = vector_score;
+        if score >= limit {
+            return score;
         }
-        if SCORE {
-            for chunk in output.iter() {
-                score += u64::from(score_chunk(chunk));
+    } else {
+        for ((((values, left), upper), upper_left), output) in values
+            .chunks(8)
+            .zip(left.chunks(8))
+            .zip(upper.chunks(8))
+            .zip(upper_left.chunks(8))
+            .zip(output.chunks_mut(8))
+        {
+            for ((((values, left), upper), upper_left), output) in values
+                .iter()
+                .zip(left)
+                .zip(upper)
+                .zip(upper_left)
+                .zip(output.iter_mut())
+            {
+                filter_chunk::<FILTER>(values, left, upper, upper_left, output);
             }
-            if score >= limit {
-                return score;
+            if SCORE {
+                for chunk in output.iter() {
+                    score += u64::from(score_chunk(chunk));
+                }
+                if score >= limit {
+                    return score;
+                }
             }
         }
     }
@@ -1293,7 +1308,18 @@ mod tests {
         for bpp in [1, 2, 3, 4, 6, 8] {
             for len in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 127]
                 .into_iter()
-                .chain([bpp + 31, bpp + 32, bpp + 33, bpp + 63, bpp + 64, bpp + 65])
+                .chain([
+                    bpp + 31,
+                    bpp + 32,
+                    bpp + 33,
+                    bpp + 63,
+                    bpp + 64,
+                    bpp + 65,
+                    bpp + 255,
+                    bpp + 256,
+                    bpp + 257,
+                    bpp + 513,
+                ])
             {
                 for pattern in 0..5 {
                     let row: Vec<u8> = (0..len)

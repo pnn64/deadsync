@@ -1,5 +1,104 @@
 use std::arch::x86_64::*;
 
+#[inline]
+pub(super) fn filter_score<const FILTER: u8>(
+    row: &[[u8; 32]],
+    left: &[[u8; 32]],
+    upper: &[[u8; 32]],
+    upper_left: &[[u8; 32]],
+    out: &mut [[u8; 32]],
+    sum: u64,
+    limit: u64,
+) -> Option<u64> {
+    if row.len() < 8 || !std::is_x86_feature_detected!("avx2") {
+        return None;
+    }
+    // SAFETY: AVX2 is available and loads/stores access complete arrays.
+    Some(unsafe { filter_score_avx2::<FILTER>(row, left, upper, upper_left, out, sum, limit) })
+}
+
+#[target_feature(enable = "avx2")]
+fn load32(bytes: &[u8; 32]) -> __m256i {
+    // SAFETY: the unaligned load fits the array.
+    unsafe { _mm256_loadu_si256(bytes.as_ptr().cast()) }
+}
+
+#[target_feature(enable = "avx2")]
+fn half_byte(value: __m256i) -> __m256i {
+    _mm256_and_si256(_mm256_srli_epi16::<1>(value), _mm256_set1_epi8(0x7f))
+}
+
+#[target_feature(enable = "avx2")]
+fn filter_paeth(left: __m256i, upper: __m256i, corner: __m256i) -> __m256i {
+    let low = _mm256_min_epu8(left, upper);
+    let high = _mm256_max_epu8(left, upper);
+    let to_low = _mm256_subs_epu8(corner, low);
+    let to_high = _mm256_subs_epu8(high, corner);
+    let half_low = half_byte(to_low);
+    let half_high = half_byte(to_high);
+    let choose_low = _mm256_cmpeq_epi8(_mm256_min_epu8(to_high, half_low), to_high);
+    let choose_high = _mm256_cmpeq_epi8(_mm256_min_epu8(to_low, half_high), to_low);
+    _mm256_blendv_epi8(
+        _mm256_blendv_epi8(corner, low, choose_low),
+        high,
+        choose_high,
+    )
+}
+
+#[target_feature(enable = "avx2")]
+fn filter_score_avx2<const FILTER: u8>(
+    row: &[[u8; 32]],
+    left: &[[u8; 32]],
+    upper: &[[u8; 32]],
+    upper_left: &[[u8; 32]],
+    out: &mut [[u8; 32]],
+    mut sum: u64,
+    limit: u64,
+) -> u64 {
+    let zero = _mm256_setzero_si256();
+    let one = _mm256_set1_epi8(1);
+    for ((((row, left), upper), corner), out) in row
+        .chunks(8)
+        .zip(left.chunks(8))
+        .zip(upper.chunks(8))
+        .zip(upper_left.chunks(8))
+        .zip(out.chunks_mut(8))
+    {
+        let mut sums = zero;
+        for ((((row, left), upper), corner), out) in
+            row.iter().zip(left).zip(upper).zip(corner).zip(out)
+        {
+            let predictor = match FILTER {
+                0 => zero,
+                1 => load32(left),
+                2 => load32(upper),
+                3 => {
+                    let a = load32(left);
+                    let b = load32(upper);
+                    // The byte average rounds up when the inputs differ in parity.
+                    let odd = _mm256_and_si256(_mm256_xor_si256(a, b), one);
+                    _mm256_sub_epi8(_mm256_avg_epu8(a, b), odd)
+                }
+                4 => filter_paeth(load32(left), load32(upper), load32(corner)),
+                _ => half_byte(load32(left)),
+            };
+            let residual = _mm256_sub_epi8(load32(row), predictor);
+            sums = _mm256_add_epi64(sums, _mm256_sad_epu8(_mm256_abs_epi8(residual), zero));
+            // SAFETY: the unaligned store writes exactly one output array.
+            unsafe { _mm256_storeu_si256(out.as_mut_ptr().cast(), residual) };
+        }
+        let pair = _mm_add_epi64(
+            _mm256_castsi256_si128(sums),
+            _mm256_extracti128_si256::<1>(sums),
+        );
+        sum += _mm_cvtsi128_si64(pair) as u64 + _mm_extract_epi64::<1>(pair) as u64;
+        if sum >= limit {
+            break;
+        }
+    }
+    sum
+}
+
 /// Unfilter `row`, then `next` when given: the following row, also Paeth,
 /// with pixels of at most four bytes.
 pub(super) fn unfilter<const N: usize, const PAETH: bool>(
