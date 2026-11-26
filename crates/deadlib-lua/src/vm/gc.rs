@@ -1268,6 +1268,22 @@ impl Vm {
                 || !matches!(value, Value::Userdata(id) if self.userdata[slot_index(id.0)].finalized))
     }
     #[inline]
+    fn quiet_suspension(thread: &threads::Thread) -> bool {
+        thread.status == threads::Status::Suspended
+            && thread.open_upvalues.is_empty()
+            && thread.call_slots <= 16
+            && !matches!(thread.hooks.callback, hooks::Callback::Host(_))
+            && thread.hooks.host_running.is_none()
+            && thread.hooks.hidden.is_empty()
+            && thread.hooks.popped.is_empty()
+            && thread.host_states.is_empty()
+            && thread.resumer.is_none()
+            && thread.substitutions.is_empty()
+            && thread.sorts.is_empty()
+            && thread.loads.is_empty()
+    }
+
+    #[inline]
     fn dormant_thread_roots(&self, id: ThreadId) -> Option<(TableId, FunctionId)> {
         if id == self.thread {
             return None;
@@ -1276,21 +1292,10 @@ impl Vm {
         let [Value::Function(entry)] = &*thread.registers else {
             return None;
         };
-        if thread.status != threads::Status::Suspended
-            || thread.top != 1
+        if thread.top != 1
             || thread.api_stack != (0..1)
             || !thread.frames.is_empty()
-            || !thread.open_upvalues.is_empty()
-            || thread.call_slots > 16
-            || matches!(thread.hooks.callback, hooks::Callback::Host(_))
-            || thread.hooks.host_running.is_some()
-            || !thread.hooks.hidden.is_empty()
-            || !thread.hooks.popped.is_empty()
-            || !thread.host_states.is_empty()
-            || thread.resumer.is_some()
-            || !thread.substitutions.is_empty()
-            || !thread.sorts.is_empty()
-            || !thread.loads.is_empty()
+            || !Self::quiet_suspension(thread)
         {
             return None;
         }
@@ -1674,10 +1679,13 @@ impl Vm {
         self.reserve_trace_work(work, refresh.saturating_add(roots))?;
         for key in self.threads.marked_keys() {
             let id = ThreadId(key);
-            // A synchronous collection traced these roots after restarting
-            // the mark phase. A dormant stack has no slots left to clear or
-            // shrink, and its roots cannot change between the two passes.
-            if !fresh_cycle || self.dormant_thread_roots(id).is_none() {
+            // A synchronous collection traced and cleaned these parked
+            // stacks during the first pass. Their roots cannot change
+            // before the refresh, and their call limits need no shrink.
+            if !fresh_cycle
+                || id == self.thread
+                || !Self::quiet_suspension(&self.threads[slot_index(key)])
+            {
                 work.push(Trace::ThreadAgain(id));
             }
         }
