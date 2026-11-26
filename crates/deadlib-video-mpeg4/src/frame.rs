@@ -37,11 +37,14 @@ impl Plane {
             .map(|row| &row[..self.width])
     }
 
-    pub(crate) fn write(&mut self, [x, y]: [usize; 2], block: &[i16; 64], intra: bool) {
+    pub(crate) fn write<const INTRA: bool>(&mut self, [x, y]: [usize; 2], block: &[i16; 64]) {
+        #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+        x86::write::<INTRA>(&mut self.samples[y * self.stride + x..], self.stride, block);
+        #[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
         for (row, values) in block.as_chunks::<8>().0.iter().enumerate() {
             let start = (y + row) * self.stride + x;
             for (pixel, &value) in self.samples[start..start + 8].iter_mut().zip(values) {
-                let base = if intra { 0 } else { i32::from(*pixel) };
+                let base = if INTRA { 0 } else { i32::from(*pixel) };
                 *pixel = (base + i32::from(value)).clamp(0, 255) as u8;
             }
         }
@@ -83,6 +86,30 @@ impl Plane {
             for (column, sample) in dst.iter_mut().enumerate() {
                 let sx = (x + column as i32).clamp(0, self.width as i32 - 1) as usize;
                 *sample = src[sx];
+            }
+        }
+    }
+}
+
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[allow(unsafe_code)]
+mod x86 {
+    use core::arch::x86_64::*;
+
+    #[inline]
+    pub(super) fn write<const INTRA: bool>(dst: &mut [u8], stride: usize, block: &[i16; 64]) {
+        assert!(dst.len() >= 8 && (dst.len() - 8) / 7 >= stride);
+        // Each source row contains eight i16s. The destination check covers
+        // eight bytes in every output row, including the last.
+        unsafe {
+            for (y, row) in block.as_chunks::<8>().0.iter().enumerate() {
+                let pixels = dst.as_mut_ptr().add(y * stride).cast();
+                let mut samples = _mm_loadu_si128(row.as_ptr().cast());
+                if !INTRA {
+                    let predicted = _mm_unpacklo_epi8(_mm_loadl_epi64(pixels), _mm_setzero_si128());
+                    samples = _mm_adds_epi16(samples, predicted);
+                }
+                _mm_storel_epi64(pixels, _mm_packus_epi16(samples, samples));
             }
         }
     }

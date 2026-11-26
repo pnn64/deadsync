@@ -109,10 +109,10 @@ impl MsMpeg4v2Decoder {
                             grid.left_diagonal_above(bx, by),
                         )?;
                         grid.set(bx, by, prediction);
-                        frame.planes[plane].write([8 * bx, 8 * by], &samples, true);
+                        frame.planes[plane].write::<true>([8 * bx, 8 * by], &samples);
                     } else if coded {
                         let samples = block::inter::<true>(&mut bits, header.quantizer)?;
-                        frame.planes[plane].write([8 * bx, 8 * by], &samples, false);
+                        frame.planes[plane].write::<false>([8 * bx, 8 * by], &samples);
                     }
                 }
             }
