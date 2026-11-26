@@ -172,6 +172,7 @@ pub trait ThemeEvaluation: ThemeTransitions {
         state: &mut Self::EvaluationState,
         failed: bool,
         visual_policy: Self::EvaluationVisualPolicy,
+        custom_sounds_enabled: bool,
     ) -> (impl Iterator<Item = &Path>, Option<PathBuf>);
     fn evaluation_color_index(state: &Self::EvaluationState) -> i32;
     fn evaluation_elapsed_times(state: &Self::EvaluationState) -> (f32, f32);

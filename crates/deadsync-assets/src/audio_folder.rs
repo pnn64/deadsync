@@ -18,18 +18,9 @@ use std::{
     time::SystemTime,
 };
 
-/// Returns true when the folder feature is enabled in config.
-#[inline(always)]
-fn enabled() -> bool {
-    deadsync_config::runtime::get().custom_sounds_enabled
-}
-
-/// Resolves an enabled custom sound from eligible, non-underscore `.ogg` files.
+/// Resolves a custom sound from eligible, non-underscore `.ogg` files.
 #[must_use]
 pub fn random_sfx(rel_dir: &str) -> Option<PathBuf> {
-    if !enabled() {
-        return None;
-    }
     let path = pick_random_in(&crate::paths().resolve_asset_path(rel_dir));
     if path.is_none() {
         debug!("No custom SFX picked for {rel_dir}");
@@ -37,12 +28,9 @@ pub fn random_sfx(rel_dir: &str) -> Option<PathBuf> {
     path
 }
 
-/// Resolves an enabled `{index}.ogg` sound, using `fallback_name` when absent.
+/// Resolves an `{index}.ogg` sound, using `fallback_name` when absent.
 #[must_use]
 pub fn indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) -> Option<PathBuf> {
-    if !enabled() {
-        return None;
-    }
     let path = pick_indexed_in(
         &crate::paths().resolve_asset_path(rel_dir),
         index,
@@ -57,9 +45,7 @@ pub fn indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) -> Option<Pat
 /// Resolves a music path from a folder (or single file). If `rel_path` points
 /// to a directory containing one or more eligible `.ogg` files, a random one
 /// is returned; if it points to a file, that file is returned as-is;
-/// otherwise returns `None`. Independent of `custom_sounds_enabled` because
-/// it powers the per-visual-style menu music selection, not the SFX folder
-/// feature.
+/// otherwise returns `None`. Used for per-visual-style menu music selection.
 #[must_use]
 pub fn random_music_path(rel_path: &str) -> Option<PathBuf> {
     pick_music_path(&crate::paths().resolve_asset_path(rel_path))

@@ -86,12 +86,14 @@ impl ThemeEvaluation for crate::SimplyLoveTheme {
         state: &mut State,
         failed: bool,
         visual_policy: Self::EvaluationVisualPolicy,
+        custom_sounds_enabled: bool,
     ) -> (impl Iterator<Item = &Path>, Option<PathBuf>) {
-        state.sfx_paths = SfxPaths::choose();
+        state.sfx_paths = SfxPaths::choose(custom_sounds_enabled);
         let entry = entry_sfx_for_style(
             failed,
             visual_policy.srpg10_tint,
             visual_policy.background == VisualBackgroundView::Ecs15,
+            custom_sounds_enabled,
         );
         (state.sfx_paths.iter(), entry)
     }

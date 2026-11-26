@@ -2198,15 +2198,15 @@ mod tests {
         use deadsync_config::theme::{SrpgVariant, VisualStyle};
         use deadsync_theme::evaluation::ThemeEvaluation;
         assert_eq!(
-            entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Ecs15, false),
             Some(visual_styles::ECS15_EVAL_PASSED_SFX.into())
         );
         assert_eq!(
-            entry_sfx(true, VisualStyle::Srpg9, SrpgVariant::Ecs15),
+            entry_sfx(true, VisualStyle::Srpg9, SrpgVariant::Ecs15, false),
             Some(visual_styles::ECS15_EVAL_FAILED_SFX.into())
         );
         assert_eq!(
-            entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Srpg10),
+            entry_sfx(false, VisualStyle::Srpg9, SrpgVariant::Srpg10, false),
             Some(visual_styles::SRPG10_EVAL_PASSED_SFX.into())
         );
 
@@ -2217,15 +2217,20 @@ mod tests {
             background: VisualBackgroundView::Ecs15,
             ..Default::default()
         };
-        let (_, cue) = SimplyLoveTheme::prepare_evaluation_audio(&mut state, true, ecs15);
+        let (_, cue) = SimplyLoveTheme::prepare_evaluation_audio(&mut state, true, ecs15, false);
         assert_eq!(cue, Some(visual_styles::ECS15_EVAL_FAILED_SFX.into()));
 
         let srpg10 = SimplyLoveVisualPolicyView {
             srpg10_tint: true,
             ..Default::default()
         };
-        let (_, cue) = SimplyLoveTheme::prepare_evaluation_audio(&mut state, false, srpg10);
+        let (_, cue) = SimplyLoveTheme::prepare_evaluation_audio(&mut state, false, srpg10, false);
         assert_eq!(cue, Some(visual_styles::SRPG10_EVAL_PASSED_SFX.into()));
+
+        let (deferred, cue) =
+            SimplyLoveTheme::prepare_evaluation_audio(&mut state, false, Default::default(), false);
+        assert!(cue.is_none());
+        assert_eq!(deferred.count(), 0);
     }
 }
 
@@ -3838,7 +3843,11 @@ pub struct SfxPaths {
 impl SfxPaths {
     /// Chooses the optional content cues for the upcoming evaluation visit.
     #[must_use]
-    pub fn choose() -> Self {
+    pub fn choose(custom_sounds_enabled: bool) -> Self {
+        if !custom_sounds_enabled {
+            return Self::default();
+        }
+
         Self {
             personal_best: deadsync_assets::audio_folder::random_sfx("assets/sounds/evaluation_pb"),
             world_record: deadsync_assets::audio_folder::random_sfx("assets/sounds/evaluation_wr"),
@@ -3864,15 +3873,22 @@ pub fn entry_sfx(
     failed: bool,
     visual_style: deadsync_config::theme::VisualStyle,
     srpg_variant: deadsync_config::theme::SrpgVariant,
+    custom_sounds_enabled: bool,
 ) -> Option<std::path::PathBuf> {
     entry_sfx_for_style(
         failed,
         visual_styles::srpg10_active(visual_style, srpg_variant),
         visual_styles::ecs15_active(visual_style, srpg_variant),
+        custom_sounds_enabled,
     )
 }
 
-fn entry_sfx_for_style(failed: bool, srpg10: bool, ecs15: bool) -> Option<std::path::PathBuf> {
+fn entry_sfx_for_style(
+    failed: bool,
+    srpg10: bool,
+    ecs15: bool,
+    custom_sounds_enabled: bool,
+) -> Option<std::path::PathBuf> {
     if srpg10 {
         Some(
             if failed {
@@ -3891,12 +3907,14 @@ fn entry_sfx_for_style(failed: bool, srpg10: bool, ecs15: bool) -> Option<std::p
             }
             .into(),
         )
-    } else {
+    } else if custom_sounds_enabled {
         deadsync_assets::audio_folder::random_sfx(if failed {
             "assets/sounds/evaluation_fail"
         } else {
             "assets/sounds/evaluation_pass"
         })
+    } else {
+        None
     }
 }
 

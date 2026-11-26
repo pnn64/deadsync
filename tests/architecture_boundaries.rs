@@ -14071,6 +14071,13 @@ fn evaluation_lifecycle_uses_the_installed_theme() {
     assert!(!legacy.contains("EvaluationOverviewPresentation"));
     let shared = production_source(&root.join("crates/deadsync-theme/src/evaluation.rs"));
     assert!(shared.contains("scores: Arc::clone(scores)"));
+    let sounds = production_source(&root.join("crates/deadsync-assets/src/audio_folder.rs"));
+    assert!(!sounds.contains("deadsync_config::runtime"));
+    assert!(legacy.contains("SfxPaths::choose(custom_sounds_enabled)"));
+    assert!(contains_rust(
+        &app,
+        "ActiveTheme::prepare_evaluation_audio(&mut self.state.screens.evaluation_state, failed, SimplyLoveVisualPolicyView::from_config(config), config.custom_sounds_enabled,"
+    ));
     assert!(runtime.contains("view: EvaluationState"));
     for call in [
         "init_evaluation",

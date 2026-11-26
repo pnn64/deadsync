@@ -71,6 +71,9 @@ adapter prepares the recorded edges and beat-zero offset for stage playback.
 The shell prepares the visible song or course banner through the same cache
 when a result page opens. The mounted stage chooses its results music and
 which cues the fallback panes may play during the visit.
+The shell supplies the custom-sounds setting at gameplay and Evaluation
+entry. Simply Love chooses its Evaluation cues from that setting and the
+active visual style.
 
 All Player Options layouts consume the same editor and submit
 `deadsync-profile-gameplay::stage_options::StageOptions`. The mounted layout

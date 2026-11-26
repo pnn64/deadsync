@@ -3266,7 +3266,9 @@ impl App {
         // Reconcile chart timing and any video fallback once after the deferred
         // command installs the initial media.
         gs.presentation.background_mut().background_path_dirty = true;
-        let song_start_sfx = if finish.lua_reload { None } else {
+        let song_start_sfx = if finish.lua_reload || !config::runtime::get().custom_sounds_enabled {
+            None
+        } else {
             deadsync_assets::gameplay_presentation::start_sfx(self.state.session.gameplay_restart_count)
         }
             .and_then(|path| {
@@ -7380,6 +7382,7 @@ impl App {
                 &mut self.state.screens.evaluation_state,
                 failed,
                 SimplyLoveVisualPolicyView::from_config(config),
+                config.custom_sounds_enabled,
             );
             self.ui_sfx.prepare_screen(&mut self.audio, deferred_sfx);
             if audio.fallback_sounds == EvaluationFallbackSounds::All
