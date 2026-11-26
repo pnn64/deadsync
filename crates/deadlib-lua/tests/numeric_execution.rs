@@ -13,6 +13,35 @@ fn check_with_limit(source: &[u8], limit: u64) {
 }
 
 #[test]
+fn dense_overwrites_preserve_native_array_extent_and_order() {
+    let program = compile(
+        br#"
+        local array = {false, nil, false, nil, true, true, nil, nil}
+        for i = 2, 7 do array[i] = i end
+        for i = 4, 6 do array[i] = false end
+        local keys = {}
+        for key in pairs(array) do keys[#keys + 1] = key end
+        assert(table.concat(keys, ',') == '1,2,3,4,5,6,7')
+        assert(array[1] == false and array[2] == 2 and array[3] == 3)
+        assert(array[4] == false and array[5] == false and array[6] == false)
+        assert(array[7] == 7 and array[8] == nil)
+
+        -- Writing beyond the reserved array can move keys between parts.
+        for i = 8, 12 do array[i] = i end
+        local order = 0
+        for key in pairs(array) do order = order * 13 + key end
+        return order, #array
+        "#,
+    )
+    .unwrap();
+    let mut vm = Vm::try_new_with_lua51_table_order().unwrap();
+    let actual = vm.execute(&program).unwrap().to_vec();
+    vm.set_instruction_limit(Some(100_000));
+    assert_eq!(vm.execute(&program).unwrap(), actual);
+    assert_eq!(actual[1], Value::Number(12.0));
+}
+
+#[test]
 fn numeric_sums_preserve_loop_carried_values_and_rounding() {
     check(
         br#"

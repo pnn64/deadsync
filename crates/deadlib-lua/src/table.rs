@@ -878,8 +878,7 @@ impl Table {
         end: usize,
         growth_bytes: usize,
     ) -> Option<(usize, usize)> {
-        if self.native51
-            || self.metatable != 0
+        if self.metatable != 0
             || !self.hash_part().slots.is_empty()
             || matches!(self.array, ArrayStorage::SharedSequence { .. })
             || start > self.array.len()
@@ -887,6 +886,13 @@ impl Table {
             return None;
         }
         let capacity = self.array.allocated_capacity();
+        if end <= self.array.len() {
+            return Some((end, capacity));
+        }
+        // Lua 5.1 may rehash when an integer key exceeds the array extent.
+        if self.native51 {
+            return None;
+        }
         let max_capacity = capacity.saturating_add(growth_bytes / size_of::<Value>());
         let mut reserved = capacity;
         while reserved < end {
@@ -905,6 +911,13 @@ impl Table {
         capacity: usize,
         value_at: impl Fn(usize) -> Value,
     ) -> Result<(), Error> {
+        if let Some(slots) = self.array.get_mut(start..end) {
+            for (offset, slot) in slots.iter_mut().enumerate() {
+                *slot = value_at(start + offset);
+            }
+            self.touch_array();
+            return Ok(());
+        }
         let array = self.array.heap_mut();
         array.try_reserve_exact(capacity - array.len())?;
         let overwrite_end = array.len().min(end);
