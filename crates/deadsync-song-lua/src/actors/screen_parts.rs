@@ -65,7 +65,7 @@ pub(super) fn ensure_helpers(vm: &mut Vm, helpers: TableId) -> Result<(), Error>
     ] {
         let value = vm.try_intern(key.as_bytes())?;
         if vm.raw_table_get(helpers, value)? == Value::Nil {
-            let code = compile_named(source, name)?;
+            let code = vm.compile_source(source, name)?;
             let function = vm.execute(&code)?[0];
             super::super::put(vm, helpers, key, function)?;
         }

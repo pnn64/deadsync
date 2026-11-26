@@ -8,6 +8,34 @@ enum Scalar {
 }
 
 #[test]
+fn host_source_compilation_keeps_programs_alive_across_workspace_reuse() {
+    let mut compiler = Vm::new();
+    let first = compiler
+        .compile_source(
+            b"local x = 40; return function() return x + 1 end",
+            b"=first",
+        )
+        .unwrap();
+    let error = compiler
+        .compile_source(b"local = 2", b"=invalid")
+        .unwrap_err();
+    assert_eq!(error.kind(), deadlib_lua::ErrorKind::Syntax);
+    let second = compiler
+        .compile_source(
+            b"local x = 40; return function() return x + 2 end",
+            b"=second",
+        )
+        .unwrap();
+    drop(compiler);
+
+    let mut vm = Vm::new();
+    for (program, expected) in [(first, 41.0), (second, 42.0)] {
+        let callback = vm.execute(&program).unwrap()[0];
+        assert_eq!(vm.call(callback, &[]).unwrap(), [Value::Number(expected)]);
+    }
+}
+
+#[test]
 fn repeated_leaf_bodies_preserve_lines_captures_and_token_boundaries() {
     let program = compile(
         br#"

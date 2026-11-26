@@ -17,7 +17,8 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), Error> {
             b"@theme:/Scripts/06 SL-Utilities.lua".as_slice(),
         ),
     ] {
-        vm.execute(&deadlib_lua::compile_named(source, name)?)?;
+        let code = vm.compile_source(source, name)?;
+        vm.execute(&code)?;
     }
     Ok(())
 }

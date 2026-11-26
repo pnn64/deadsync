@@ -113,6 +113,18 @@ impl std::fmt::Debug for Spare {
 const SPARE_SOURCE_LIMIT: usize = 64 * 1024;
 
 impl Vm {
+    /// Compile source or a native Lua chunk using this VM's compiler workspace.
+    ///
+    /// The returned program is verified and independent of the VM. Subsequent
+    /// calls can reuse temporary parser and emitter buffers for small sources.
+    ///
+    /// # Errors
+    /// Returns a syntax, bytecode, compilation-limit or memory error.
+    pub fn compile_source(&mut self, source: &[u8], name: &[u8]) -> Result<Program, Error> {
+        Workspace::new(self.registers.memory())?
+            .run(|| compile(source, name, 0, &mut self.compile_spare))
+    }
+
     pub(super) fn bind_constant_string(&mut self, bytes: &[u8]) -> Result<Value, Error> {
         let Some(key) = ShortConstant::new(bytes) else {
             return self.try_intern(bytes);

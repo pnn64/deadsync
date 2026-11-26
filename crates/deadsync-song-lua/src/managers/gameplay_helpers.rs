@@ -80,7 +80,7 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), Error> {
             "@theme:/Scripts/SL-Helpers.lua:IsSpooky",
         ),
     ] {
-        let code = deadlib_lua::compile_named(source, chunk.as_bytes())?;
+        let code = vm.compile_source(source, chunk.as_bytes())?;
         let function = vm.execute(&code)?[0];
         vm.set_global(name.as_bytes(), function)?;
     }

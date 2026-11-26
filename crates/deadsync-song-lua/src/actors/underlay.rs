@@ -36,7 +36,7 @@ pub(super) fn ensure_helpers(vm: &mut Vm, helpers: TableId) -> Result<(), Error>
         let key_value = vm.try_intern(key.as_bytes())?;
         if vm.raw_table_get(helpers, key_value)? == Value::Nil {
             let name = format!("@theme:/BGAnimations/ScreenGameplay underlay/{name}");
-            let code = compile_named(source, name.as_bytes())?;
+            let code = vm.compile_source(source, name.as_bytes())?;
             let function = Value::Function(vm.try_load_program(&code)?);
             let root = vm.pin(function)?;
             let result = super::super::put(vm, helpers, key, function);
