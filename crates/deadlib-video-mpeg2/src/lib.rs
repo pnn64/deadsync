@@ -16,6 +16,7 @@ mod motion;
 mod program_stream;
 mod slice;
 mod tables;
+mod transform;
 
 pub use bitstream::{units, Unit};
 pub use frame::{Frame, Plane};
