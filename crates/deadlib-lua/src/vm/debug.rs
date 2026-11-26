@@ -100,7 +100,7 @@ impl Vm {
         if call.kind.bytes().is_empty() {
             return None;
         }
-        Some((c_bytes(proto.debug.name(&call.name)), call.kind.bytes()))
+        Some((c_bytes(proto.call_name(call)), call.kind.bytes()))
     }
     pub(super) fn debug_nups(&self, id: u64) -> usize {
         match id {

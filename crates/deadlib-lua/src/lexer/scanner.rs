@@ -41,7 +41,7 @@ enum State {
     Emit,
 }
 
-fn keyword(text: &[u8]) -> Kind {
+pub(crate) fn keyword(text: &[u8]) -> Kind {
     match text {
         b"and" => Kind::And,
         b"break" => Kind::Break,

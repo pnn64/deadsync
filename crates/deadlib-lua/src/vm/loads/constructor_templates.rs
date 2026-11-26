@@ -4,7 +4,7 @@
 use super::*;
 use crate::{
     bytecode::{Constant, Prototype},
-    lexer::{Kind, Lexeme, Scanner, Token, short_decimal_integer},
+    lexer::{Kind, Lexeme, Scanner, Token, keyword, short_decimal_integer},
     memory::Shared,
     parser::{Ast, Expr, ExprId, Stmt},
 };
@@ -12,7 +12,7 @@ use crate::{
 const MAX_PROTOTYPES: usize = 128;
 const MAX_CONSTANTS: usize = 2048;
 const MAX_TEXT: usize = 96;
-const MAX_TEMPLATES: usize = 4;
+const MAX_TEMPLATES: usize = 12;
 const MAX_BYTES: usize = 1024 * 1024;
 const RECENT_SHAPES: usize = 16;
 
@@ -132,6 +132,7 @@ fn plain_text(bytes: &[u8]) -> bool {
 #[derive(Clone, Copy)]
 enum LiteralKind {
     Text(u8),
+    Field,
     Number { negative: bool },
 }
 
@@ -160,6 +161,16 @@ impl Replacement {
             (Self::Number(a), Self::Number(b)) => a == b,
             (Self::Text { start, end }, Self::Text { start: b, end: e }) => {
                 source[start..end] == source[b..e]
+            }
+            _ => false,
+        }
+    }
+
+    fn same_constant(self, original: &Constant, source: &[u8], strings: &[u8]) -> bool {
+        match (self, original) {
+            (Self::Number(a), Constant::Number(b)) => a == *b,
+            (Self::Text { start, end }, constant) => {
+                constant.string(strings) == Some(&source[start..end])
             }
             _ => false,
         }
@@ -204,26 +215,9 @@ fn syntax_hint(ast: &Ast, source: &[u8], name: &[u8], depth: usize, locale: u64)
     let mut hint =
         hash_bytes(name) ^ locale ^ (depth as u64).rotate_left(17) ^ ast.exprs.len() as u64;
     for (expr, _) in &ast.exprs {
-        let text = match expr {
-            Expr::Name(name) | Expr::Method(_, name, _, _) => name,
-            Expr::Index(_, key) => {
-                let Expr::String(key) = &ast.exprs[*key].0 else {
-                    continue;
-                };
-                key
-            }
-            Expr::String(name) => {
-                if let Lexeme::Source { start, .. } = *name
-                    && start != 0
-                    && matches!(source[start as usize - 1], b'\'' | b'"')
-                {
-                    continue;
-                }
-                name
-            }
-            _ => continue,
-        };
-        hint = hint.rotate_left(5) ^ hash_bytes(text.bytes(source));
+        if let Expr::Name(name) | Expr::Method(_, name, _, _) = expr {
+            hint = hint.rotate_left(5) ^ hash_bytes(name.bytes(source));
+        }
     }
     hint
 }
@@ -285,12 +279,12 @@ impl Template {
             return None;
         }
         let mut fixed = fallible::repeat(false, total).ok()?;
-        // A lookup key can also name a call in the debug metadata.
-        for (expr, _) in &ast.exprs {
-            if let Expr::Index(_, id) = *expr
-                && let Expr::String(key) = &ast.exprs[id].0
+        // A name stored separately in debug metadata cannot follow a pool
+        // substitution. References to constants resolve in the new chunk.
+        for call in root.debug.calls.iter() {
+            if call.name.constant_index().is_none()
                 && let Some(slot) = root.constants().iter().position(|value| {
-                    value.string(&root.constant_strings) == Some(key.bytes(source))
+                    value.string(&root.constant_strings) == Some(root.call_name(call))
                 })
             {
                 fixed[offsets[entry] + slot] = true;
@@ -326,21 +320,43 @@ impl Template {
                         .position(|value| value.string(&root.constant_strings) == Some(bytes));
                     if let Some(key) = key {
                         let slot = offsets[entry] + key;
-                        if token.kind == Kind::String
-                            && let Lexeme::Source { start, end, .. } = token.text
-                            && let Some(quote @ (b'\'' | b'"')) = start
-                                .checked_sub(1)
-                                .and_then(|pos| source.get(pos as usize))
-                                .copied()
-                            && source.get(end as usize) == Some(&quote)
-                            && plain_text(bytes)
+                        let kind = match token.kind {
+                            Kind::String if plain_text(bytes) => match token.text {
+                                Lexeme::Source { start, end, .. } => {
+                                    let quote = start.checked_sub(1).map(|i| source[i as usize]);
+                                    match quote {
+                                        Some(quote @ (b'\'' | b'"'))
+                                            if source[end as usize] == quote =>
+                                        {
+                                            Some(LiteralKind::Text(quote))
+                                        }
+                                        _ => None,
+                                    }
+                                }
+                                _ => None,
+                            },
+                            // The accepted root grammar has no assignments.
+                            // A name followed by '=' therefore names a field.
+                            Kind::Name
+                                if bytes.len() <= MAX_TEXT
+                                    && source[end..]
+                                        .iter()
+                                        .copied()
+                                        .find(|&byte| !crate::locale::ascii_space(byte))
+                                        == Some(b'=') =>
+                            {
+                                Some(LiteralKind::Field)
+                            }
+                            _ => None,
+                        };
+                        if let (Some(kind), Lexeme::Source { start, end, .. }) = (kind, &token.text)
                         {
                             literals
                                 .try_push(Literal {
-                                    start: start as usize,
-                                    end: end as usize,
+                                    start: *start as usize,
+                                    end: *end as usize,
                                     slot,
-                                    kind: LiteralKind::Text(quote),
+                                    kind,
                                 })
                                 .ok()?;
                         } else {
@@ -348,19 +364,19 @@ impl Template {
                         }
                     }
                 }
-                (Some(callback), Kind::Number) => {
+                (scope, Kind::Number) => {
                     let negative = previous == Kind::Minus;
                     let number = if negative {
                         -token.number
                     } else {
                         token.number
                     };
-                    let p = &base.prototypes[callback.prototype];
-                    let key = p
+                    let id = scope.map_or(entry, |callback| callback.prototype);
+                    let key = base.prototypes[id]
                         .constants()
                         .iter()
                         .position(|value| matches!(value, Constant::Number(n) if *n == number))?;
-                    let slot = offsets[callback.prototype] + key;
+                    let slot = offsets[id] + key;
                     let start = before
                         + source[before..end]
                             .iter()
@@ -445,6 +461,27 @@ impl Template {
                         },
                     )
                 }
+                LiteralKind::Field => {
+                    let first = *tail.first()?;
+                    if !first.is_ascii_alphabetic() && first != b'_' {
+                        return None;
+                    }
+                    let length = tail
+                        .iter()
+                        .take(MAX_TEXT + 1)
+                        .take_while(|&&byte| byte.is_ascii_alphanumeric() || byte == b'_')
+                        .count();
+                    if length > MAX_TEXT || keyword(&tail[..length]) != Kind::Name {
+                        return None;
+                    }
+                    (
+                        length,
+                        Replacement::Text {
+                            start: at,
+                            end: at + length,
+                        },
+                    )
+                }
             };
             let old = &mut self.replacements[slot];
             if matches!(old, Replacement::Original) {
@@ -459,26 +496,27 @@ impl Template {
         self.distinct_constants(source).then_some(())
     }
 
-    fn distinct_constants(&self, source: &[u8]) -> bool {
+    fn distinct_constants(&mut self, source: &[u8]) -> bool {
         for (id, p) in self.program.prototypes.iter().enumerate() {
             let original = p.constants();
-            let pool = &self.replacements[self.offsets[id]..self.offsets[id] + original.len()];
+            let pool = &mut self.replacements[self.offsets[id]..self.offsets[id] + original.len()];
+            // Every use has been checked for agreement. Only changed slots
+            // can introduce a new collision, or need a replacement pool.
+            for (replacement, value) in pool.iter_mut().zip(original) {
+                if replacement.same_constant(value, source, &p.constant_strings) {
+                    *replacement = Replacement::Original;
+                }
+            }
             for (slot, &value) in pool.iter().enumerate() {
                 if matches!(value, Replacement::Original) {
                     continue;
                 }
                 for (other, &replacement) in pool.iter().enumerate() {
-                    if slot == other {
-                        continue;
-                    }
-                    let equal = match (value, replacement, &original[other]) {
-                        (Replacement::Number(a), Replacement::Original, Constant::Number(b)) => {
-                            a == *b
+                    let equal = match replacement {
+                        Replacement::Original => {
+                            value.same_constant(&original[other], source, &p.constant_strings)
                         }
-                        (Replacement::Text { start, end }, Replacement::Original, constant) => {
-                            constant.string(&p.constant_strings) == Some(&source[start..end])
-                        }
-                        _ => value.equal(replacement, source),
+                        _ => other > slot && value.equal(replacement, source),
                     };
                     if equal {
                         return false;
@@ -504,10 +542,7 @@ impl Template {
                     Replacement::Original => {}
                     Replacement::Number(value) => *constant = Constant::Number(value),
                     Replacement::Text { start, end } => {
-                        let bytes = &source[start..end];
-                        if constant.string(&p.constant_strings) != Some(bytes) {
-                            *constant = Constant::String(bytes.try_boxed()?);
-                        }
+                        *constant = Constant::String(source[start..end].try_boxed()?);
                     }
                 }
             }
@@ -524,12 +559,35 @@ impl Templates {
         depth: usize,
         locale: u64,
     ) -> Option<Result<Program, Error>> {
-        let index = self.entries.iter_mut().rposition(|template| {
+        let eligible = |template: &Template| {
             template.depth == depth
                 && template.locale == locale
                 && template.program.name.as_ref() == name
-                && template.match_source(source).is_some()
-        })?;
+        };
+        // Related layouts often have different numbers of table fields. Try
+        // the closest length first to avoid comparing every shared prefix.
+        let first = self
+            .entries
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|(_, template)| eligible(template))
+            .min_by_key(|(_, template)| template.source.len().abs_diff(source.len()))?
+            .0;
+        let index = if self.entries[first].match_source(source).is_some() {
+            first
+        } else {
+            self.entries
+                .iter_mut()
+                .enumerate()
+                .rev()
+                .find_map(|(index, template)| {
+                    (index != first
+                        && eligible(template)
+                        && template.match_source(source).is_some())
+                    .then_some(index)
+                })?
+        };
         self.entries[index..].rotate_left(1);
         let template = self.entries.last().expect("matched constructor template");
         Some(template.program(source))
@@ -582,9 +640,10 @@ mod tests {
 
     fn source(group: &str, label: &str, first: u32, second: u32) -> String {
         let pad = "x".repeat(2300);
+        let extra = if group == "Two" { "Priority=42," } else { "" };
         format!(
             "return Actor['{group}'] {{\n\
-             Name='{label}', Caption='{label}',\n\
+             Name='{label}', {extra} Caption='{label}',\n\
              On=function(self) self:set({first},{second},4.0) end, After=function(self) self:go(-{second}) end\n\
              }} --{pad}"
         )
@@ -638,5 +697,45 @@ mod tests {
                 .find(|value| matches!(value, Constant::Number(_))),
             Some(Constant::Number(1.0))
         ));
+    }
+
+    #[test]
+    fn constructor_variants_resolve_changed_field_names_in_debug_calls() {
+        let mut vm = Vm::new();
+        let setup = crate::compile(
+            br#"
+            Actor = setmetatable({}, {__index = function(_, key)
+                return function(object)
+                    local info = debug.getinfo(1, "n")
+                    assert(info.name == key and info.namewhat == "field")
+                    return object
+                end
+            end})
+            "#,
+        )
+        .unwrap();
+        vm.execute(&setup).unwrap();
+        let source = |constructor: &str, field: &str, n: u32| {
+            let padding = "x".repeat(2300);
+            format!(
+                "return {{Actor['{constructor}'] {{ {field}={n}, Init=function(self) self:go({n}) end }}}} --{padding}"
+            )
+        };
+        compile(&mut vm, &source("Early", "Width", 19));
+        let template = compile(&mut vm, &source("Middle", "Height", 28));
+        let variant = compile(&mut vm, &source("Later", "Depth", 137));
+        assert_eq!(code(&template), code(&variant));
+        let root = &variant.data.prototypes[variant.data.entry as usize];
+        assert_eq!(root.call_name(&root.debug.calls[0]), b"Later");
+        assert!(matches!(vm.execute(&variant).unwrap(), [Value::Table(_)]));
+
+        let collision = compile(&mut vm, &source("Last", "Init", 42));
+        assert_ne!(code(&variant), code(&collision));
+        let keyword = source("Last", "end", 42);
+        let err = vm
+            .compile_source(keyword.as_bytes(), b"@constructor.lua")
+            .unwrap_err();
+        let reference = crate::compile_named(keyword.as_bytes(), b"@constructor.lua").unwrap_err();
+        assert_eq!(err.message_bytes(), reference.message_bytes());
     }
 }

@@ -203,6 +203,10 @@ impl Constants {
         self.source_ids.get(slot).and_then(|id| id.checked_sub(1))
     }
 
+    pub(super) fn emitted_string(&self, spelling: &Lexeme) -> Option<u32> {
+        self.source_id(spelling.string_slot()?)
+    }
+
     fn remember_source(&mut self, slot: usize, id: Option<u32>) -> Result<(), Error> {
         if let Some(encoded) = id.and_then(|id| id.checked_add(1)) {
             if slot >= self.source_ids.len() {

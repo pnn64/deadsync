@@ -418,7 +418,7 @@ impl NativeStack<'_, '_> {
                 info.name = Some(Some(
                     self.call
                         .vm
-                        .native_debug_string(p, debug.name(&call.name))?,
+                        .native_debug_string(p, data.prototypes[proto].call_name(call))?,
                 ));
                 info.name_what = Some(match kind {
                     b"global" => b"global\0",

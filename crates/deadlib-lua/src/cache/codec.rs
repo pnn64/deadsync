@@ -219,7 +219,7 @@ impl Writer {
         })?;
         self.list(&d.calls, |w, call| {
             w.u32(call.pc)?;
-            w.bytes(d.name(&call.name))?;
+            w.bytes(p.call_name(call))?;
             w.u8(match call.kind {
                 NameKind::Unknown => 0,
                 NameKind::Local => 1,

@@ -272,7 +272,7 @@ impl Vm {
             {
                 let call = &proto.debug.calls[index];
                 if matches!(call.kind, NameKind::Method) {
-                    return Some((proto.debug.name(&call.name), call.kind));
+                    return Some((proto.call_name(call), call.kind));
                 }
             }
             object_name(proto, pc, register as u8)

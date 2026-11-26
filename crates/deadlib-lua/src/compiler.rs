@@ -917,6 +917,7 @@ impl<'a> Compiler<'a> {
         method: Option<&[u8]>,
         base: u8,
     ) -> Result<(), Error> {
+        let mut constant = None;
         let (name, kind) = if let Some(name) = method {
             (name, NameKind::Method)
         } else {
@@ -950,6 +951,7 @@ impl<'a> Compiler<'a> {
                 }
                 Expr::Index(_, key) => {
                     let name = if let Expr::String(name) = &self.ast.exprs[*key].0 {
+                        constant = self.function.constants.emitted_string(name);
                         name.bytes(self.source)
                     } else {
                         b"?"
@@ -979,9 +981,14 @@ impl<'a> Compiler<'a> {
         }
         let end = u32::try_from(self.function.debug_temporaries.len())
             .map_err(|_| self.error(ErrorKind::Limit, "too many debug temporaries"))?;
+        let name = if let Some(constant) = constant {
+            DebugName::constant(constant)
+        } else {
+            DebugName::store(&mut self.function.debug_names, name)?
+        };
         self.function.debug_calls.try_push(DebugCall {
             pc: self.function.code.len() as u32,
-            name: DebugName::store(&mut self.function.debug_names, name)?,
+            name,
             kind,
             temporaries: start..end,
         })?;

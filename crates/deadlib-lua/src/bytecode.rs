@@ -197,7 +197,17 @@ pub(crate) struct NativeDebug {
 #[derive(Clone, Debug)]
 pub(crate) enum DebugName {
     Owned(Box<[u8]>),
-    Pooled { start: u32, end: u32 },
+    Reference(DebugNameRef),
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum DebugNameRef {
+    // Bias the end by one to keep both reference forms in eight bytes.
+    Pool {
+        start: u32,
+        end: std::num::NonZeroU32,
+    },
+    Constant(u32),
 }
 
 impl DebugName {
@@ -205,29 +215,46 @@ impl DebugName {
         let start = pool.len();
         if let Some(end) = start
             .checked_add(bytes.len())
+            .and_then(|end| end.checked_add(1))
             .and_then(|end| u32::try_from(end).ok())
+            .and_then(std::num::NonZeroU32::new)
         {
             pool.try_extend_from_slice(bytes)?;
-            Ok(Self::Pooled {
+            Ok(Self::Reference(DebugNameRef::Pool {
                 start: start as u32,
                 end,
-            })
+            }))
         } else {
             Ok(Self::Owned(bytes.try_boxed()?))
+        }
+    }
+
+    pub(crate) fn constant(index: u32) -> Self {
+        Self::Reference(DebugNameRef::Constant(index))
+    }
+
+    pub(crate) fn constant_index(&self) -> Option<u32> {
+        if let Self::Reference(DebugNameRef::Constant(index)) = self {
+            Some(*index)
+        } else {
+            None
         }
     }
 
     fn bytes<'a>(&'a self, pool: &'a [u8]) -> Option<&'a [u8]> {
         match self {
             Self::Owned(bytes) => Some(bytes),
-            Self::Pooled { start, end } => pool.get(*start as usize..*end as usize),
+            Self::Reference(DebugNameRef::Pool { start, end }) => {
+                pool.get(*start as usize..(end.get() - 1) as usize)
+            }
+            Self::Reference(DebugNameRef::Constant(_)) => None,
         }
     }
 
     fn heap_bytes(&self) -> usize {
         match self {
             Self::Owned(bytes) => bytes.len(),
-            Self::Pooled { .. } => 0,
+            Self::Reference(_) => 0,
         }
     }
 }
@@ -554,6 +581,20 @@ impl Prototype {
             } => constants,
             _ => &self.original_constants,
         }
+    }
+
+    fn call_name_bytes<'a>(&'a self, call: &'a DebugCall) -> Option<&'a [u8]> {
+        if let Some(index) = call.name.constant_index() {
+            self.constants()
+                .get(index as usize)?
+                .string(&self.constant_strings)
+        } else {
+            call.name.bytes(&self.debug.names)
+        }
+    }
+
+    pub(crate) fn call_name<'a>(&'a self, call: &'a DebugCall) -> &'a [u8] {
+        self.call_name_bytes(call).expect("verified call name")
     }
 
     pub(crate) fn copy_constants(&self) -> Result<Vec<Constant>, Error> {
@@ -1001,7 +1042,7 @@ impl Prototype {
                     return true;
                 };
                 !matches!(i.op, Op::Call | Op::TailCall | Op::CallIter)
-                    || c.name.bytes(&self.debug.names).is_none()
+                    || self.call_name_bytes(c).is_none()
                     || c.temporaries.start > c.temporaries.end
                     || c.temporaries.end as usize > self.debug.temporaries.len()
                     || self.debug.temporaries
@@ -1497,12 +1538,14 @@ mod tests {
                         Box::new([proto.code[proto.debug.calls[0].pc as usize].a]);
                     proto.debug.calls[0].temporaries = 0..1;
                 }
-                10 => proto.debug.locals[0].name = DebugName::Pooled { start: 2, end: 1 },
+                10 => {
+                    proto.debug.locals[0].name = DebugName::Reference(DebugNameRef::Pool {
+                        start: 2,
+                        end: std::num::NonZeroU32::new(2).unwrap(),
+                    })
+                }
                 _ => {
-                    proto.debug.calls[0].name = DebugName::Pooled {
-                        start: 0,
-                        end: u32::MAX,
-                    }
+                    proto.debug.calls[0].name = DebugName::constant(u32::MAX);
                 }
             }
             assert_eq!(
