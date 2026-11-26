@@ -41,8 +41,13 @@ mod slice;
 mod slice_context;
 #[allow(dead_code)]
 mod sps;
+#[cfg(feature = "surface")]
+mod surface;
 #[cfg(feature = "std")]
 pub mod threading;
 
 pub use decoder::{ChromaFormat, Decoder, Frame, OrderedDecoder};
 pub use error::DecodeError;
+
+#[cfg(feature = "surface")]
+pub use surface::{SurfaceDecoder, SurfaceFrame, SurfacePlane};

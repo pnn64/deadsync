@@ -12,5 +12,6 @@ categories = ["multimedia::video"]
 [features]
 default = ["std"]
 std = []
+surface = ["std"]
 
 [workspace]

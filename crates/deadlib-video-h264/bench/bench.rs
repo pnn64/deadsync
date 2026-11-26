@@ -1,5 +1,9 @@
-use deadlib_video_h264::{nal::parse_annex_b, ChromaFormat, Frame, OrderedDecoder};
+use deadlib_video_h264::{
+    nal::{parse_annex_b, parse_sps_info, NalUnitType},
+    ChromaFormat, Frame, OrderedDecoder,
+};
 use std::{env, ffi::c_void, hint::black_box, io::Write, path::PathBuf};
+use surface_codec::{ChromaFormat as SurfaceChromaFormat, SurfaceDecoder, SurfaceFrame};
 
 #[repr(C)]
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -131,22 +135,22 @@ impl Drop for Sha {
     }
 }
 
+fn reorder_depth(maxima: impl Iterator<Item = Option<u32>>) -> usize {
+    maxima.map(|depth| depth.unwrap_or(16)).max().unwrap_or(16) as usize
+}
+
 fn rust_decode(bytes: &[u8], sha: Option<&mut Sha>, reuse: bool, stream_depth: bool) -> Output {
     let nals = parse_annex_b(bytes);
     let mut decoder = if stream_depth {
-        use deadlib_video_h264::nal::{parse_sps_info, NalUnitType};
-        let depth = nals
+        let maxima = nals
             .iter()
             .filter(|nal| nal.nal_unit_type == NalUnitType::Sps)
             .map(|nal| {
                 parse_sps_info(nal)
                     .ok()
                     .and_then(|sps| sps.max_reorder_frames)
-                    .unwrap_or(16)
-            })
-            .max()
-            .unwrap_or(16);
-        OrderedDecoder::with_max_depth(depth as usize)
+            });
+        OrderedDecoder::with_max_depth(reorder_depth(maxima))
     } else {
         OrderedDecoder::new()
     };
@@ -181,20 +185,59 @@ fn rust_decode(bytes: &[u8], sha: Option<&mut Sha>, reuse: bool, stream_depth: b
     out
 }
 
+fn rust_decode_surfaces(bytes: &[u8], sha: Option<&mut Sha>) -> Output {
+    use surface_codec::nal::{parse_annex_b, parse_sps_info, NalUnitType};
+    let nals = parse_annex_b(bytes);
+    let maxima = nals
+        .iter()
+        .filter(|nal| nal.nal_unit_type == NalUnitType::Sps)
+        .map(|nal| {
+            parse_sps_info(nal)
+                .ok()
+                .and_then(|sps| sps.max_reorder_frames)
+        });
+    let mut decoder = SurfaceDecoder::with_max_depth(reorder_depth(maxima));
+    let mut out = Output::default();
+    let mut consume = |frame: SurfaceFrame| {
+        assert_eq!(frame.chroma_format(), SurfaceChromaFormat::Yuv420);
+        assert_eq!(frame.bit_depth(), 8);
+        let (width, height) = frame.size();
+        out.frames += 1;
+        out.luma_pixels += u64::from(width) * u64::from(height);
+        for index in 0..3 {
+            let plane = frame.plane(index).unwrap();
+            if let Some(sha) = sha.as_ref() {
+                for row in plane.rows() {
+                    unsafe { av_sha_update(sha.0, row.as_ptr(), row.len()) };
+                }
+            } else {
+                black_box(plane);
+            }
+        }
+    };
+    for nal in nals {
+        decoder.decode_nal(&nal, &mut consume).unwrap();
+    }
+    decoder.flush(consume);
+    out
+}
+
 #[derive(Clone, Copy)]
 enum Mode {
     Rust,
     RustRecycled,
     RustRecycledSps,
+    RustSurface,
     FfmpegSurface,
     FfmpegPacked,
 }
 
 impl Mode {
-    const ALL: [Self; 5] = [
+    const ALL: [Self; 6] = [
         Self::Rust,
         Self::RustRecycled,
         Self::RustRecycledSps,
+        Self::RustSurface,
         Self::FfmpegSurface,
         Self::FfmpegPacked,
     ];
@@ -204,6 +247,7 @@ impl Mode {
             Self::Rust => "deadlib",
             Self::RustRecycled => "deadlib-recycled",
             Self::RustRecycledSps => "deadlib-recycled-sps",
+            Self::RustSurface => "deadlib-surface",
             Self::FfmpegSurface => "ffmpeg-surface",
             Self::FfmpegPacked => "ffmpeg-packed",
         }
@@ -211,6 +255,9 @@ impl Mode {
 
     fn decode(self, padded: &[u8], sha: Option<&mut Sha>) -> Output {
         let size = padded.len() - 64;
+        if matches!(self, Self::RustSurface) {
+            return rust_decode_surfaces(&padded[..size], sha);
+        }
         if matches!(
             self,
             Self::Rust | Self::RustRecycled | Self::RustRecycledSps
@@ -293,7 +340,12 @@ fn main() {
             let mut ff_sha = Sha::new();
             let ff = Mode::FfmpegSurface.decode(&bytes, Some(&mut ff_sha));
             let hash = ff_sha.finish();
-            for mode in [Mode::Rust, Mode::RustRecycled, Mode::RustRecycledSps] {
+            for mode in [
+                Mode::Rust,
+                Mode::RustRecycled,
+                Mode::RustRecycledSps,
+                Mode::RustSurface,
+            ] {
                 let mut rust_sha = Sha::new();
                 let rust = mode.decode(&bytes, Some(&mut rust_sha));
                 assert_eq!(rust, ff);

@@ -32,7 +32,8 @@ modes = {mode for _, mode in cycle_runs}
 baseline_modes = {"deadlib", "ffmpeg-surface", "ffmpeg-packed"}
 recycle_modes = baseline_modes | {"deadlib-recycled"}
 assert len(streams) == 2
-assert modes in (baseline_modes, recycle_modes, recycle_modes | {"deadlib-recycled-sps"})
+sps_modes = recycle_modes | {"deadlib-recycled-sps"}
+assert modes in (baseline_modes, recycle_modes, sps_modes, sps_modes | {"deadlib-surface"})
 assert len(cycle_runs) == len(streams) * len(modes)
 records = []
 for key in cycle_runs:

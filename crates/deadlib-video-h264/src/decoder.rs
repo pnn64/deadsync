@@ -5,6 +5,8 @@ use alloc::vec::Vec;
 use crate::bitstream::BitstreamReader;
 use crate::deblock::{self, MbInfo, MbType};
 use crate::decode_cabac::CabacMbResult;
+#[cfg(feature = "surface")]
+use crate::dpb::SurfacePool;
 use crate::dpb::{
     DecodedPicture, Dpb, Motion, PictureMeta, PictureStructure, PictureWriter, ReferenceKeys,
     ReferenceStatus,
@@ -17,6 +19,8 @@ use crate::pps::{parse_pps, Pps};
 use crate::slice::{parse_slice_header, SliceHeader, SliceType, MMCO_DIFF_BITS};
 use crate::slice_context::{SliceContext, SliceParams};
 use crate::sps::{parse_sps, Sps};
+#[cfg(feature = "surface")]
+use crate::surface::SurfaceStorage;
 
 /// Chroma sampling of a [`Frame`]'s U and V planes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -279,6 +283,8 @@ pub struct Decoder {
     pending: Option<PictureState>,
     scratch: PictureScratch,
     recycled_frame: Option<Frame>,
+    #[cfg(feature = "surface")]
+    surface_pool: Option<Arc<SurfacePool>>,
     /// First field of a field-picture pair awaiting its complement for output.
     pending_field: Option<Frame>,
     /// The last frame returned came from a picture with MMCO 5, which starts
@@ -302,6 +308,8 @@ impl Decoder {
             pending: None,
             scratch: PictureScratch::default(),
             recycled_frame: None,
+            #[cfg(feature = "surface")]
+            surface_pool: None,
             pending_field: None,
             period_start: false,
         }
@@ -329,6 +337,14 @@ impl Decoder {
     /// Call [`flush`](Self::flush) after the last NAL to retrieve any
     /// remaining buffered frame.
     pub fn decode_nal(&mut self, nal: &NalUnit) -> Result<Option<Frame>, DecodeError> {
+        self.decode_nal_as(nal, Self::finalize_pending)
+    }
+
+    pub(crate) fn decode_nal_as<T>(
+        &mut self,
+        nal: &NalUnit,
+        finalize: impl FnOnce(&mut Self) -> Option<T>,
+    ) -> Result<Option<T>, DecodeError> {
         match nal.nal_unit_type {
             NalUnitType::Sps | NalUnitType::Pps => {
                 store_parameter_set(&mut self.sps_table, &mut self.pps_table, &mut self.dpb, nal)?;
@@ -349,11 +365,7 @@ impl Decoder {
                 let is_new_picture = first_mb == 0;
 
                 // Finalize pending frame if a new picture starts
-                let prev_frame = if is_new_picture {
-                    self.finalize_pending()
-                } else {
-                    None
-                };
+                let prev_frame = if is_new_picture { finalize(self) } else { None };
 
                 // Decode this slice (creates or continues PictureState).
                 // For CAVLC multi-slice, end-of-slice detection may fail,
@@ -449,6 +461,77 @@ impl Decoder {
         frame
     }
 
+    #[cfg(feature = "surface")]
+    pub(crate) fn finalize_surface(&mut self) -> Option<SurfaceStorage> {
+        let pending = self.pending.as_ref()?;
+        if pending.field_pic_flag
+            || (pending.nal_ref_idc == 0 && pending.nal_unit_type != NalUnitType::SliceIdr)
+        {
+            return self.finalize_pending().map(SurfaceStorage::Owned);
+        }
+        let mut ps = self.pending.take().unwrap();
+        deblock_picture(&mut ps);
+        let meta = picture_meta(&ps);
+        let motion = take_motion(&mut ps);
+        let pic = Arc::new(DecodedPicture::pooled(
+            meta,
+            [
+                core::mem::take(&mut ps.frame.y),
+                core::mem::take(&mut ps.frame.u),
+                core::mem::take(&mut ps.frame.v),
+            ],
+            motion,
+            Arc::downgrade(self.surface_pool()),
+        ));
+        apply_reference_marking(
+            &mut self.dpb,
+            pic.clone(),
+            ps.nal_unit_type,
+            ps.nal_ref_idc,
+            ps.frame_num,
+            ps.max_frame_num,
+            ps.field_pic_flag,
+            &ps.mmco_ops,
+            ps.adaptive_ref_pic_marking,
+            ps.long_term_reference_flag,
+        );
+        self.scratch = core::mem::take(&mut ps.scratch);
+        let mmco5 = has_mmco5(&ps.mmco_ops);
+        if mmco5 {
+            ps.frame.pic_order_cnt = 0;
+        }
+        let visible =
+            ps.crop_x + ps.frame.width <= meta.width && ps.crop_y + ps.frame.height <= meta.height;
+        self.period_start = mmco5 && visible;
+        visible.then_some(SurfaceStorage::Reference {
+            display: ps.frame,
+            picture: pic,
+            coded_width: meta.width as usize,
+            origin: (ps.crop_x, ps.crop_y),
+        })
+    }
+
+    #[cfg(feature = "surface")]
+    pub(crate) fn flush_surface(&mut self) -> Option<SurfaceStorage> {
+        self.finalize_surface()
+            .or_else(|| self.pending_field.take().map(SurfaceStorage::Owned))
+    }
+
+    #[cfg(feature = "surface")]
+    pub(crate) fn with_surface_pool() -> Self {
+        Self {
+            surface_pool: Some(Arc::new(SurfacePool::default())),
+            ..Self::new()
+        }
+    }
+
+    #[cfg(feature = "surface")]
+    pub(crate) fn surface_pool(&self) -> &Arc<SurfacePool> {
+        self.surface_pool
+            .as_ref()
+            .expect("surface decoder has a pool")
+    }
+
     /// Whether the frame just returned starts a new output period (its
     /// picture had MMCO 5), clearing the flag.
     pub(crate) fn take_period_start(&mut self) -> bool {
@@ -462,8 +545,37 @@ impl Decoder {
             && self.scratch.mb_info.len() == plan.total_mbs
             && self.scratch.mv_store_l0.capacity() == 0
         {
-            if let Some(motion) = self.dpb.take_spare_motion(plan.total_mbs * 16) {
+            let motion = self.dpb.take_spare_motion(plan.total_mbs * 16);
+            #[cfg(feature = "surface")]
+            let motion =
+                motion.or_else(|| self.surface_pool.as_ref()?.take_motion(plan.total_mbs * 16));
+            if let Some(motion) = motion {
                 self.scratch.use_motion(motion);
+            }
+        }
+        #[cfg(feature = "surface")]
+        if let Some(pool) = self
+            .surface_pool
+            .as_ref()
+            .filter(|_| pending.is_none() && self.recycled_frame.is_none())
+        {
+            let bit_depth = 8 + plan.sps.bit_depth_luma_minus8 as u8;
+            let bps = if bit_depth > 8 { 2 } else { 1 };
+            let chroma_format = ChromaFormat::from_idc(plan.sps.chroma_format_idc);
+            let y_len = (plan.coded_width * plan.coded_height) as usize * bps;
+            let c_len = y_len >> (1 + chroma_format.shift_y());
+            let lengths = [y_len, c_len, c_len];
+            if let Some([y, u, v]) = pool.take_picture(lengths) {
+                self.recycled_frame = Some(Frame {
+                    width: plan.width,
+                    height: plan.height,
+                    y,
+                    u,
+                    v,
+                    pic_order_cnt: plan.current_poc,
+                    chroma_format,
+                    bit_depth,
+                });
             }
         }
         let ps = run_slice(
@@ -1830,67 +1942,11 @@ pub(crate) fn finish_output(
         ps.frame.pic_order_cnt = 0;
     }
 
-    // Crop the coded (MB-aligned) planes to the display window, which starts
-    // at (crop_x, crop_y) (spec 7.4.2.1.1, frame_crop_*_offset).
-    let coded_w = (ps.mb_width * 16) as usize;
-    if coded_w == 0 {
-        return None;
-    }
-    let bps = ps.frame.bytes_per_sample();
-    let coded_h = ps.frame.y.len() / (coded_w * bps);
-    let display_w = ps.frame.width as usize;
-    let display_h = ps.frame.height as usize;
-    let (x0, y0) = (ps.crop_x as usize, ps.crop_y as usize);
-    if coded_w != display_w || coded_h != display_h || x0 != 0 || y0 != 0 {
-        // The window must lie inside the coded picture and the frame buffer
-        if x0 + display_w > coded_w
-            || y0 + display_h > coded_h
-            || coded_w * coded_h * bps > ps.frame.y.len()
-        {
-            return None;
-        }
-        let sy = ps.frame.chroma_format.shift_y();
-        let chroma_coded_w = coded_w / 2;
-        let chroma_w = display_w / 2;
-        let chroma_h = display_h >> sy;
-        let (cx0, cy0) = (x0 / 2, y0 >> sy);
-
-        if x0 == 0 && y0 == 0 && coded_w == display_w {
-            // Bottom crop only: the display rows are a prefix of the planes
-            ps.frame.y.truncate(display_w * display_h * bps);
-            ps.frame.u.truncate(chroma_w * chroma_h * bps);
-            ps.frame.v.truncate(chroma_w * chroma_h * bps);
-        } else {
-            // Compact forward. Each destination row ends before the
-            // source of the next row.
-            let crop =
-                |plane: &mut Vec<u8>, stride: usize, x: usize, y: usize, w: usize, h: usize| {
-                    let (stride, x, w) = (stride * bps, x * bps, w * bps);
-                    for r in 0..h {
-                        let src = (y + r) * stride + x;
-                        plane.copy_within(src..src + w, r * w);
-                    }
-                    plane.truncate(w * h);
-                };
-            crop(&mut ps.frame.y, coded_w, x0, y0, display_w, display_h);
-            crop(
-                &mut ps.frame.u,
-                chroma_coded_w,
-                cx0,
-                cy0,
-                chroma_w,
-                chroma_h,
-            );
-            crop(
-                &mut ps.frame.v,
-                chroma_coded_w,
-                cx0,
-                cy0,
-                chroma_w,
-                chroma_h,
-            );
-        }
-    }
+    crop_display(
+        &mut ps.frame,
+        (ps.mb_width * 16) as usize,
+        (ps.crop_x, ps.crop_y),
+    )?;
 
     // For field pictures, combine two fields into one frame for output
     if ps.field_pic_flag {
@@ -1969,6 +2025,56 @@ pub(crate) fn finish_output(
     }
 
     Some(ps.frame)
+}
+
+fn crop_display(frame: &mut Frame, coded_w: usize, origin: (u32, u32)) -> Option<()> {
+    // Crop the coded (MB-aligned) planes to the display window, which starts
+    // at (crop_x, crop_y) (spec 7.4.2.1.1, frame_crop_*_offset).
+    if coded_w == 0 {
+        return None;
+    }
+    let bps = frame.bytes_per_sample();
+    let coded_h = frame.y.len() / (coded_w * bps);
+    let display_w = frame.width as usize;
+    let display_h = frame.height as usize;
+    let (x0, y0) = (origin.0 as usize, origin.1 as usize);
+    if coded_w != display_w || coded_h != display_h || x0 != 0 || y0 != 0 {
+        // The window must lie inside the coded picture and the frame buffer
+        if x0 + display_w > coded_w
+            || y0 + display_h > coded_h
+            || coded_w * coded_h * bps > frame.y.len()
+        {
+            return None;
+        }
+        let sy = frame.chroma_format.shift_y();
+        let chroma_coded_w = coded_w / 2;
+        let chroma_w = display_w / 2;
+        let chroma_h = display_h >> sy;
+        let (cx0, cy0) = (x0 / 2, y0 >> sy);
+
+        if x0 == 0 && y0 == 0 && coded_w == display_w {
+            // Bottom crop only: the display rows are a prefix of the planes
+            frame.y.truncate(display_w * display_h * bps);
+            frame.u.truncate(chroma_w * chroma_h * bps);
+            frame.v.truncate(chroma_w * chroma_h * bps);
+        } else {
+            // In bytes: stride, x and w scaled by the sample size
+            let crop =
+                |plane: &mut Vec<u8>, stride: usize, x: usize, y: usize, w: usize, h: usize| {
+                    let (stride, x, w) = (stride * bps, x * bps, w * bps);
+                    for r in 0..h {
+                        let src = (y + r) * stride + x;
+                        plane.copy_within(src..src + w, r * w);
+                    }
+                    plane.truncate(w * h);
+                };
+            crop(&mut frame.y, coded_w, x0, y0, display_w, display_h);
+            crop(&mut frame.u, chroma_coded_w, cx0, cy0, chroma_w, chroma_h);
+            crop(&mut frame.v, chroma_coded_w, cx0, cy0, chroma_w, chroma_h);
+        }
+    }
+
+    Some(())
 }
 
 /// H.264 decoder with built-in display-order reordering.
@@ -2359,6 +2465,38 @@ mod tests {
             frames.extend(threaded.flush());
             assert_eq!(frames.len(), 1);
             assert!(frames[0].y.iter().all(|&v| v == 0x80));
+        }
+    }
+
+    #[cfg(feature = "surface")]
+    #[test]
+    fn retained_surfaces_keep_their_pixels_after_decoder_drop() {
+        let mut frames = Vec::new();
+        {
+            let mut decoder = crate::SurfaceDecoder::with_max_depth(0);
+            for sample in [0x80, 0x20] {
+                let stream = redundant_picture_stream(sample, 0x40);
+                for nal in parse_annex_b(&stream) {
+                    decoder
+                        .decode_nal(&nal, |surface| frames.push(surface))
+                        .unwrap();
+                }
+            }
+            decoder.flush(|surface| frames.push(surface));
+        }
+        assert_eq!(frames.len(), 2);
+        for (surface, sample) in frames.iter().zip([0x80, 0x20]) {
+            assert_eq!(surface.size(), (16, 16));
+            assert_eq!(surface.bit_depth(), 8);
+            assert_eq!(surface.chroma_format(), ChromaFormat::Yuv420);
+            for (index, side) in [16, 8, 8].into_iter().enumerate() {
+                let plane = surface.plane(index).unwrap();
+                let rows = plane.rows().collect::<Vec<_>>();
+                assert_eq!(rows.len(), side);
+                assert!(rows
+                    .iter()
+                    .all(|row| row.len() == side && row.iter().all(|&v| v == sample)));
+            }
         }
     }
 

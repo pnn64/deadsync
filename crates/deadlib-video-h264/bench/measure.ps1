@@ -25,18 +25,22 @@ Push-Location $repo
 try {
     $out = (New-Item -ItemType Directory -Force -Path $Results).FullName
     $build = Join-Path $out 'build'
+    $surfaceBuild = Join-Path $out 'surface-build'
     $object = Join-Path $out 'ffmpeg.obj'
     $cyclesExe = Join-Path $out 'cycles.exe'
     $allocExe = Join-Path $out 'allocations.exe'
     $codec = Join-Path $build 'release\libdeadlib_video_h264.rlib'
+    $surfaceCodec = Join-Path $surfaceBuild 'release\libdeadlib_video_h264.rlib'
 
     cargo build --release --locked --offline --manifest-path crates/deadlib-video-h264/Cargo.toml --target-dir $build
     Assert-Exit 'Building deadlib-video-h264'
+    cargo build --release --locked --offline --features surface --manifest-path crates/deadlib-video-h264/Cargo.toml --target-dir $surfaceBuild
+    Assert-Exit 'Building deadlib-video-h264 with the surface feature'
     cl.exe /nologo /c /O2 /MT /std:c11 "/I$ffInclude" "/Fo$object" (Join-Path $PSScriptRoot 'ffmpeg.c')
     Assert-Exit 'Compiling the FFmpeg harness'
     $common = @('--edition', '2021', '--crate-name', 'h264_bench', '-C', 'opt-level=3',
         '-C', 'target-feature=+crt-static', '--extern', "deadlib_video_h264=$codec",
-        "-Lnative=$ffLib", '-lavcodec', '-lavutil', "-Clink-arg=$object")
+        '--extern', "surface_codec=$surfaceCodec", "-Lnative=$ffLib", '-lavcodec', '-lavutil', "-Clink-arg=$object")
     $bench = Join-Path $PSScriptRoot 'bench.rs'
     rustc @common -o $cyclesExe $bench
     Assert-Exit 'Building the cycle harness'

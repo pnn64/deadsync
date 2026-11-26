@@ -5,6 +5,8 @@
 
 use alloc::collections::BTreeSet;
 use alloc::sync::Arc;
+#[cfg(feature = "surface")]
+use alloc::sync::Weak;
 use alloc::vec::Vec;
 
 use crate::nal::NalUnitType;
@@ -102,6 +104,65 @@ impl Motion {
     }
 }
 
+/// Coded planes and co-located motion storage released by finished pictures.
+#[cfg(feature = "surface")]
+#[derive(Default)]
+pub(crate) struct SurfacePool {
+    storage: std::sync::Mutex<SurfacePoolStorage>,
+}
+
+#[cfg(feature = "surface")]
+#[derive(Default)]
+struct SurfacePoolStorage {
+    pictures: Vec<[Vec<u8>; 3]>,
+    motion: Vec<Motion>,
+}
+
+#[cfg(feature = "surface")]
+impl SurfacePool {
+    const DEPTH: usize = 8;
+
+    fn storage(&self) -> std::sync::MutexGuard<'_, SurfacePoolStorage> {
+        self.storage
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+    }
+
+    pub(crate) fn take_picture(&self, lengths: [usize; 3]) -> Option<[Vec<u8>; 3]> {
+        let mut storage = self.storage();
+        let i = storage.pictures.iter().rposition(|planes| {
+            planes
+                .iter()
+                .zip(lengths)
+                .all(|(p, len)| p.capacity() >= len)
+        })?;
+        Some(storage.pictures.swap_remove(i))
+    }
+
+    pub(crate) fn take_motion(&self, blocks: usize) -> Option<Motion> {
+        let mut storage = self.storage();
+        let i = storage
+            .motion
+            .iter()
+            .rposition(|motion| motion.mv_l0.len() == blocks)?;
+        Some(storage.motion.swap_remove(i))
+    }
+
+    pub(crate) fn put_picture(&self, planes: [Vec<u8>; 3], motion: Option<Motion>) {
+        let mut storage = self.storage();
+        if storage.pictures.len() == Self::DEPTH {
+            storage.pictures.remove(0);
+        }
+        storage.pictures.push(planes);
+        if let Some(motion) = motion {
+            if storage.motion.len() == Self::DEPTH {
+                storage.motion.remove(0);
+            }
+            storage.motion.push(motion);
+        }
+    }
+}
+
 /// Picture metadata fixed when a picture is created.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PictureMeta {
@@ -150,6 +211,8 @@ pub struct DecodedPicture {
     /// Y, Cb, Cr planes in coded layout (stride = width, width / 2, in
     /// samples).
     planes: [SharedPlane; 3],
+    #[cfg(feature = "surface")]
+    surface_pool: Option<Weak<SurfacePool>>,
     /// Final macroblock rows of the planes.
     progress: RowProgress,
     /// Set before the last row is published.
@@ -157,6 +220,17 @@ pub struct DecodedPicture {
     /// For a PAFF view (see `field_view`, `pair_frame`), the picture(s) it
     /// was made from; direct mode reads the co-located motion there
     pub(crate) view_source: Option<ViewSource>,
+}
+
+#[cfg(feature = "surface")]
+impl Drop for DecodedPicture {
+    fn drop(&mut self) {
+        if let Some(pool) = self.surface_pool.take().and_then(|pool| pool.upgrade()) {
+            let planes = core::mem::take(&mut self.planes).map(SharedPlane::into_vec);
+            let motion = self.motion.get_mut().map(core::mem::take);
+            pool.put_picture(planes, motion);
+        }
+    }
 }
 
 /// The decoded picture(s) behind a PAFF view.
@@ -194,6 +268,8 @@ impl DecodedPicture {
             chroma_422: meta.chroma_422,
             sample_bytes: meta.sample_bytes,
             planes,
+            #[cfg(feature = "surface")]
+            surface_pool: None,
             progress,
             motion: OnceLock::new(),
             view_source: None,
@@ -319,6 +395,18 @@ impl DecodedPicture {
         pic
     }
 
+    #[cfg(feature = "surface")]
+    pub(crate) fn pooled(
+        meta: PictureMeta,
+        [y, u, v]: [Vec<u8>; 3],
+        motion: Motion,
+        pool: Weak<SurfacePool>,
+    ) -> Self {
+        let mut picture = Self::new_complete(meta, y, u, v, motion);
+        picture.surface_pool = Some(pool);
+        picture
+    }
+
     /// Replace a retired picture in the same allocation when its planes fit.
     pub(crate) fn reuse_complete(
         &mut self,
@@ -389,7 +477,7 @@ impl DecodedPicture {
 
     /// Published part of plane `p` (the whole plane once complete).
     #[inline]
-    fn plane(&self, p: usize) -> &[u8] {
+    pub(crate) fn plane(&self, p: usize) -> &[u8] {
         let len = self.plane_bytes(p, self.progress.rows());
         // SAFETY: `len` covers only published rows, which are never written
         // again (see `picture_sync`).
@@ -1569,6 +1657,12 @@ impl Dpb {
         } = entry;
         drop(field_views);
         drop(frame_view);
+        // A pooled picture returns its storage when the display consumer
+        // drops its last reference.
+        #[cfg(feature = "surface")]
+        if pic.surface_pool.is_some() {
+            return;
+        }
         // A field or paired-frame view can still keep a reference alive.
         if Arc::get_mut(&mut pic).is_some() {
             if spares.len() == MAX_SPARE_PICTURES {

@@ -10,9 +10,9 @@ Run from a Visual Studio x64 developer shell with Cargo, FFmpeg and Python on th
 
 Both codecs read the first 150 coded pictures of each bundled SRPG9 and SRPG10 video from identical in-memory Annex B payloads. These inputs are 1920 × 1080, 8-bit 4:2:0 High-profile streams with B-pictures. The benchmark checks plane bytes in display order against FFmpeg before collecting samples. The measured region includes input parsing, context initialization, decode, frame ordering, drain, and output destruction.
 
-The cycle executable runs serially on a pinned logical CPU. It records Windows `QueryThreadCycleTime` over five runs with rotating decoder order, then reports the median, minimum and maximum. The allocation executable runs separately and counts successful heap allocation and reallocation requests and their requested bytes. It calibrates FFmpeg's CRT hooks before decoding. The requested-byte metric is allocation traffic. Cycle-normalized throughput is frames or megapixels per billion CPU cycles.
+The cycle executable runs serially on a pinned logical CPU. It records Windows `QueryThreadCycleTime` over five runs by default, with rotating decoder order, then reports the median, minimum and maximum. The allocation executable runs separately and counts successful heap allocation and reallocation requests and their requested bytes. It calibrates FFmpeg's CRT hooks before decoding. The requested-byte metric is allocation traffic. Cycle-normalized throughput is frames or megapixels per billion CPU cycles.
 
-FFmpeg's native mode consumes its refcounted AVFrame directly. Its packed mode copies the visible planes to one fresh contiguous YUV buffer per picture. The Rust API returns three owned, packed planes. Both FFmpeg modes are reported so the cost of packing is visible.
+FFmpeg's native mode consumes its refcounted AVFrame directly. Its packed mode copies the visible planes to one fresh contiguous YUV buffer per picture. The default Rust build returns three owned, packed planes. The separate `surface` build emits decoded surfaces with the SPS reorder depth and releases each surface inside the output callback. The benchmark reports both output models for each decoder.
 
 ## Reference implementation
 

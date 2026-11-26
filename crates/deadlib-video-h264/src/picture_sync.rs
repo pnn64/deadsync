@@ -48,6 +48,14 @@ impl SharedPlane {
         Self { data }
     }
 
+    #[cfg(feature = "surface")]
+    pub(crate) fn into_vec(self) -> Vec<u8> {
+        let raw = Box::into_raw(self.data) as *mut [u8];
+        // SAFETY: The allocation is uniquely owned and was created from
+        // an initialized boxed byte slice in `from_vec`.
+        Vec::from(unsafe { Box::from_raw(raw) })
+    }
+
     #[inline]
     pub(crate) fn len(&self) -> usize {
         self.data.get().len()
