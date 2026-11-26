@@ -1,5 +1,9 @@
 # BMP codec measurements
 
+The [Windows contender benchmark](results/windows-x86_64-20261126-contenders/README.md)
+compares Deadlib with ten decoders and eight encoders. Its reproducible harness
+and pinned dependency setup are in [`contenders`](contenders/README.md).
+
 This independent Cargo workspace compares the dependency-free native BMP codec
 with `image 0.25.10` using its BMP feature only. It adds no dependencies to the
 production crate. Build both timing and allocation binaries before changing the

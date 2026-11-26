@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 3.24)
+project(bmp_contenders LANGUAGES C CXX)
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${WORK}/bridges")
+set(SDL "${WORK}/upstream/sdl/SDL3-3.4.20")
+set(NSBMP "${WORK}/upstream/nsbmp-source")
+add_library(bench_bmp SHARED bridge.cpp "${NSBMP}/src/libnsbmp.c")
+target_compile_features(bench_bmp PRIVATE cxx_std_17)
+target_compile_options(bench_bmp PRIVATE /arch:AVX2)
+target_compile_definitions(bench_bmp PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+target_include_directories(bench_bmp PRIVATE "${PINS}/wuffs/release/c" "${PINS}/stb" "${NSBMP}/include" "${NSBMP}/src" "${SDL}/include")
+target_link_libraries(bench_bmp PRIVATE windowscodecs ole32 shlwapi "${SDL}/lib/x64/SDL3.lib")
+add_custom_command(TARGET bench_bmp POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${SDL}/lib/x64/SDL3.dll" "$<TARGET_FILE_DIR:bench_bmp>")
+
+if(FFMPEG)
+    add_library(bench_bmp_ffmpeg SHARED ffmpeg.cpp)
+    target_compile_features(bench_bmp_ffmpeg PRIVATE cxx_std_17)
+    target_include_directories(bench_bmp_ffmpeg PRIVATE "${FFMPEG}/include")
+    target_link_libraries(bench_bmp_ffmpeg PRIVATE "${FFMPEG}/lib/avcodec.lib" "${FFMPEG}/lib/avutil.lib" "${FFMPEG}/lib/swscale.lib")
+    file(GLOB FFMPEG_RUNTIME "${FFMPEG}/bin/*.dll")
+    add_custom_command(TARGET bench_bmp_ffmpeg POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${FFMPEG_RUNTIME} "$<TARGET_FILE_DIR:bench_bmp_ffmpeg>")
+endif()

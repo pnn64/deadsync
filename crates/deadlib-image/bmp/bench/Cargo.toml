@@ -8,10 +8,18 @@ publish = false
 
 [features]
 allocations = []
+comparison = ["dep:libloading", "dep:oxideav-bmp"]
+
+[[bin]]
+name = "compare"
+path = "src/bin/compare/main.rs"
+required-features = ["comparison"]
 
 [dependencies]
 deadlib-image-bmp = { path = ".." }
 image = { version = "=0.25.10", default-features = false, features = ["bmp"] }
+libloading = { version = "=0.8.9", optional = true }
+oxideav-bmp = { version = "=0.1.9", default-features = false, optional = true }
 
 [profile.release]
 opt-level = 3
