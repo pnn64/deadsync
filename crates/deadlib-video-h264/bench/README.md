@@ -418,3 +418,16 @@ A second workload sought to 10 seconds in both original assets and remuxed 150 p
 The one-reference B-skip candidate changed median paired cycles by +1.09% on SRPG9 and ?2.12% on SRPG10 relative to `53aa12147` with surfaces enabled. Reusing the slice's picture-identity table for deblocking changed cycles by +2.04% and ?1.71%. Both candidates matched FFmpeg on the bundled clips and the four additional 8-bit reference streams. [Paired samples](results/windows-x86_64-20261126/native-skip-and-keys-paired.csv)
 
 In a diagnostic run with one sampled macroblock per 32, direct full-pel YUV prediction was recorded for 20,772 of 38,250 sampled SRPG9 macroblocks and 28,680 of 38,250 sampled SRPG10 macroblocks. Partitioned B-skip was recorded 112 and 15 times. [Surface decoder profile](results/windows-x86_64-20261126/surface-hot-path-profile.csv)
+
+## Slice geometry and deblocking coefficients
+
+`073acd6e7` checks coded reference dimensions, sample layout and P-skip identity weights at slice entry. Eligible motion compensation checks only the macroblock's vector and position, with a direct coordinate path for zero motion. The coefficient-mask candidate stores coded-coefficient flags in 16 bits and derives one shared strength for an edge between uniform macroblocks with no coded coefficients. The candidates matched the two bundled clips and the progressive, MBAFF, constrained CAVLC and resolution-change fixtures.
+
+| Native candidate versus `53aa12147` | SRPG9 median paired cycle change | SRPG10 median paired cycle change |
+|---|---:|---:|
+| Full-pel skip eligibility checked per slice | ?2.48% | ?2.28% |
+| Deblocking coefficient flags stored as a mask | ?0.77% | ?1.12% |
+| Fused U and V full-pel B-skip blending | +0.93% | +1.86% |
+| Compact B-skip partition iteration | ?0.58% | +1.21% |
+
+Each comparison used ten rotating rounds. The geometry and coefficient-mask candidates ran on logical CPU 14. The two B-skip candidates ran on logical CPU 2. [Geometry and coefficient samples](results/windows-x86_64-20261126/deblock-and-fullpel-paired.csv) ? [B-skip samples](results/windows-x86_64-20261126/b-skip-chroma-paired.csv)
