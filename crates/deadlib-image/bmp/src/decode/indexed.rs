@@ -3,17 +3,26 @@ use std::mem::MaybeUninit;
 use super::{Error, Header, display_rows, reserve};
 
 fn rgba_palette<const N: usize>(palette: &[u8], entry_bytes: usize) -> [[u8; 4]; N] {
-    let mut colors = [[0; 4]; N];
     if entry_bytes == 3 {
-        for (color, &[b, g, r]) in colors.iter_mut().zip(palette.as_chunks::<3>().0) {
-            *color = [r, g, b, 255];
-        }
+        palette_colors(palette.as_chunks::<3>().0, |[b, g, r]| [r, g, b, 255])
     } else {
-        for (color, &[b, g, r, _]) in colors.iter_mut().zip(palette.as_chunks::<4>().0) {
-            *color = [r, g, b, 255];
-        }
+        palette_colors(palette.as_chunks::<4>().0, |[b, g, r, _]| [r, g, b, 255])
     }
-    colors
+}
+
+fn palette_colors<const ENTRY: usize, const N: usize>(
+    entries: &[[u8; ENTRY]],
+    rgba: impl Fn([u8; ENTRY]) -> [u8; 4],
+) -> [[u8; 4]; N] {
+    if let Ok(full) = <&[[u8; ENTRY]; N]>::try_from(entries) {
+        full.map(rgba)
+    } else {
+        let mut colors = [[0; 4]; N];
+        for (color, &entry) in colors.iter_mut().zip(entries) {
+            *color = rgba(entry);
+        }
+        colors
+    }
 }
 
 pub(super) fn rgba_packed<const BITS: usize, const PER_BYTE: usize>(
@@ -92,34 +101,52 @@ fn expand_rgba8(
     {
         return Ok(());
     }
-    let expand = |indices: &[u8], output: &mut [MaybeUninit<[u8; 4]>]| {
-        // Check only used bytes before expanding, and skip the scan for full palettes.
-        if palette_len < colors.len()
-            && indices
+    // Pixel order does not affect validity. A full palette covers every byte.
+    if palette_len < colors.len() {
+        let invalid = |indices: &[u8]| {
+            indices
                 .iter()
                 .copied()
                 .max()
                 .is_some_and(|i| usize::from(i) >= palette_len)
-        {
+        };
+        let bad_index = if header.row_pitch == width {
+            invalid(source)
+        } else {
+            source
+                .chunks_exact(header.row_pitch)
+                .any(|row| invalid(&row[..width]))
+        };
+        if bad_index {
             return Err(Error::Invalid("pixel index exceeds the palette"));
         }
-        let (quads, tail) = indices.as_chunks::<4>();
-        let (blocks, remaining) = output.as_chunks_mut::<4>();
-        for (&indices, out) in quads.iter().zip(blocks) {
-            *out = indices.map(|i| MaybeUninit::new(colors[usize::from(i)]));
-        }
-        for (&index, out) in tail.iter().zip(remaining) {
-            out.write(colors[usize::from(index)]);
-        }
-        Ok(())
-    };
+    }
     if header.info.top_down && header.row_pitch == width {
-        expand(source, output)?;
+        expand_index_row(source, colors, output);
     } else {
-        let rows = display_rows(source, header.row_pitch, header.info.top_down);
-        for (row, out) in rows.zip(output.chunks_exact_mut(width)) {
-            expand(&row[..width], out)?;
+        let source_rows = source.chunks_exact(header.row_pitch);
+        let dest_rows = output.chunks_exact_mut(width);
+        if header.info.top_down {
+            for (row, out) in source_rows.zip(dest_rows) {
+                expand_index_row(&row[..width], colors, out);
+            }
+        } else {
+            for (row, out) in source_rows.rev().zip(dest_rows) {
+                expand_index_row(&row[..width], colors, out);
+            }
         }
     }
     Ok(())
+}
+
+#[inline(always)]
+fn expand_index_row(indices: &[u8], colors: &[[u8; 4]; 256], output: &mut [MaybeUninit<[u8; 4]>]) {
+    let (quads, tail) = indices.as_chunks::<4>();
+    let (blocks, remaining) = output.as_chunks_mut::<4>();
+    for (&indices, out) in quads.iter().zip(blocks) {
+        *out = indices.map(|i| MaybeUninit::new(colors[usize::from(i)]));
+    }
+    for (&index, out) in tail.iter().zip(remaining) {
+        out.write(colors[usize::from(index)]);
+    }
 }

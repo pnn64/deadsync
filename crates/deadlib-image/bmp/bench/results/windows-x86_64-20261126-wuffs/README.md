@@ -1,5 +1,10 @@
 # Wuffs decode parity measurements
 
+The final `decode_rgba8` build met the 1% cycle target on **all 155 original
+byte-exact Wuffs pairs** on the Windows x64 Xeon E5-2696 v4. Its highest
+median paired ratio was **0.9898×** Wuffs cycles. See the final section for
+the five full passes and reproducible validation.
+
 Wuffs writes into the requested pixel format during decoding. Its BGR24 path
 uses an SSE byte shuffle for four pixels at a time on this build. Indexed
 8-bit pixels are expanded directly through a prepared four-byte palette, with
@@ -82,3 +87,28 @@ RGB24, and 0.770× for RGBA32 across five focused passes with 20 ms samples.
 The five full passes put all three 1080p cases below the target and met it
 on 154 of 155 exact pairs. The remaining 511×257 top-down full-palette
 indexed8 input had a median ratio of 1.0113×. [Raw full streaming passes](direct-streaming.tsv.gz).
+
+## Final full-palette row loop
+
+The final decoder constructs full palette tables directly, checks short
+palettes before the scalar expansion loop, and selects row direction once
+per raster. The last indexed8 case moved from 1.0113× to 0.9860× Wuffs cycles.
+
+| Input | Median Deadlib cycles / Wuffs cycles |
+| --- | ---: |
+| OS/2 CORE indexed8 511×257 bottom-up, highest ratio in the final corpus | 0.9898× |
+| Indexed8 511×257 top-down | 0.9860× |
+| Indexed8 1920×1080 top-down | 0.8800× |
+| RGB24 1920×1080 top-down | 0.8273× |
+| RGBA32 1920×1080 top-down | 0.7665× |
+
+The final comparison used five full passes over 203 files with at least 8 ms
+per sample. It retained exactly the original 155 matching pairs. The direct
+and staged Deadlib APIs agreed on every decoded byte and every error in the
+corpus. The performance gate uses the median of the five paired cycle ratios
+for each file. Individual pass ratios fluctuate. Windows x64 and x86 crate
+tests passed, including explicit AVX2 and SSSE3 tail checks on x64. RLE and
+other files without a byte-exact pair are recorded in the data with their
+verification outcomes.
+
+[Raw final passes](direct-final.tsv.gz) · [Reproduction and parity checker](../../contenders/README.md)
