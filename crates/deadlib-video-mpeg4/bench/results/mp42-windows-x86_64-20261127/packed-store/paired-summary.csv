@@ -1,0 +1,4 @@
+clip,rounds,median_cycle_ratio,min_cycle_ratio,max_cycle_ratio,median_throughput_ratio
+A-Short_People_Got_No_Reason_To_Live,9,0.849612,0.825661,0.876021,1.177008
+banner,9,1.021899,0.898227,1.034294,0.97857
+mp42,9,0.711225,0.684984,0.765619,1.406025

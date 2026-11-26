@@ -2,11 +2,11 @@ param(
     [Parameter(Mandatory = $true)] [string] $ItgmaniaRoot,
     [ValidateSet('mpeg1', 'mpeg2', 'mpeg4', 'mp42')] [string] $Codec = 'mpeg2',
     [string] $OpenItgRoot = '../openitg-master',
-    [string] $SongsRoot = 'C:/Games/ITGmania/Songs',
     [string] $Results,
     [ValidateRange(0, 63)] [int] $Cpu = 2,
     [ValidateRange(1, 100)] [int] $CycleRuns = 9,
-    [ValidateRange(1, 100)] [int] $AllocationRuns = 3
+    [ValidateRange(1, 100)] [int] $AllocationRuns = 3,
+    [string] $SongsRoot = 'C:/Games/ITGmania/Songs'
 )
 
 $ErrorActionPreference = 'Stop'
