@@ -177,6 +177,10 @@ impl Plan {
             .is_none_or(|(cell, target)| vm.cell_value(cell) == Value::Function(target))
     }
 
+    pub(in crate::vm) fn tail_target(&self) -> Option<FunctionId> {
+        self.tail.map(|(_, function)| function)
+    }
+
     pub(in crate::vm) fn has_stack_space(&self, vm: &Vm) -> bool {
         has_stack_space(vm, self.tail.is_some(), self.registers)
     }

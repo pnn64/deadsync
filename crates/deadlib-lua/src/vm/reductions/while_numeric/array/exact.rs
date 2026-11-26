@@ -1,4 +1,5 @@
 //! Reuse an extrema sum when every intermediate addition is exact.
+use super::branches::CachedBranch;
 use super::calls::CachedCall;
 use super::{Plan, TableId, Term, Value, array_extremum};
 use crate::memory::{Buffer, Memory};
@@ -47,6 +48,7 @@ struct Entry {
 enum Cached {
     Extrema(Entry),
     Call(CachedCall),
+    Branch(CachedBranch),
 }
 
 // A table watch belongs to the single cache entry that armed it. Replacing
@@ -79,6 +81,18 @@ impl ArrayReduction {
     pub(super) fn cache_call(&mut self, call: CachedCall) {
         self.blocks.clear();
         self.entry = Some(Cached::Call(call));
+    }
+
+    pub(super) fn cached_branch(&self) -> Option<&CachedBranch> {
+        match &self.entry {
+            Some(Cached::Branch(branch)) => Some(branch),
+            _ => None,
+        }
+    }
+
+    pub(super) fn cache_branch(&mut self, branch: CachedBranch) {
+        self.blocks.clear();
+        self.entry = Some(Cached::Branch(branch));
     }
 
     pub(super) fn evaluate(

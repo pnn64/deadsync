@@ -42,6 +42,70 @@ fn numeric_vararg_relays_keep_defaults_results_and_dispatch_guards() {
 }
 
 #[test]
+fn branched_vararg_sums_recheck_arrays_targets_and_rounding() {
+    let program = compile(
+        br#"
+        local function setup(values, selectors)
+            local function target(a, ...)
+                local b, c = ...
+                return a + (b or 0) * 2, (c or 0) * -3
+            end
+            local function relay(...) return target(...) end
+            local function scan(first, last, step, total)
+                for i = first, last, step do
+                    local x, selected = values[i], selectors[i]
+                    local a, b
+                    if selected == 1 then
+                        a, b = relay(x, x - 4)
+                    elseif selected == 2 then
+                        a, b = relay(x, x + 5, x * 2)
+                    else
+                        a, b = relay(x)
+                    end
+                    total = total + a + b
+                end
+                return total
+            end
+            return scan, function(new) target = new end
+        end
+        local values, selectors = {}, {}
+        for i = 1, 192 do
+            values[i] = (i % 19 - 10) / 4
+            selectors[i] = i % 3
+        end
+        local scan, retarget = setup(values, selectors)
+        local a = scan(1, 192, 1, 0)
+        local b = scan(1, 192, 1, 21)
+        values[81] = 11
+        local c = scan(1, 192, 1, 0)
+        selectors[149] = 2
+        local d = scan(1, 192, 1, 0)
+        local e = scan(192, 1, -1, 1e16)
+        retarget(function(a, ...)
+            local b = ...
+            return a - (b or 0), 3
+        end)
+        local f = scan(1, 192, 1, 0)
+        local hits = 0
+        values[5] = nil
+        setmetatable(values, {__index = function(_, key)
+            assert(key == 5)
+            hits = hits + 1
+            return 15
+        end})
+        local g = scan(1, 192, 1, 0)
+        assert(hits == 1)
+        return a, b, c, d, e, f, g
+        "#,
+    )
+    .unwrap();
+    let mut vm = Vm::new();
+    let optimized = vm.execute(&program).unwrap().to_vec();
+    vm.set_instruction_limit(Some(u64::MAX));
+    assert_eq!(vm.execute(&program).unwrap(), optimized);
+}
+
+#[test]
 fn fast_table_lengths_match_observed_execution_and_ignore_table_len_metamethods() {
     let program = compile(
         br#"

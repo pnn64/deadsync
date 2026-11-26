@@ -561,6 +561,11 @@ impl Vm {
         }
         let start_pc = loop_instruction.c as usize;
         let body = code.get(start_pc..loop_pc)?;
+        if let Some(reduction) =
+            self.reduce_branched_array_calls(base, control, start_pc, loop_pc, prototype)
+        {
+            return Some(reduction);
+        }
         if body.len() <= BODY_LIMIT && body.iter().any(|i| i.op == Op::GetTable) {
             if let Some(skipped) =
                 self.reduce_array_loop(base, control, body, program, prototype_index)
