@@ -446,3 +446,9 @@ Each comparison used ten rotating rounds. The geometry and coefficient-mask cand
 | SRPG10 | FFmpeg native | 24.98 | 40.04 | 17.63 | 0.184 |
 
 Fourteen rotating cycle rounds on logical CPU 2 put the paired cycle medians below FFmpeg in all four comparisons. The 98.71% interval for SRPG9 native output was ?2.08% to +1.06%. The other three intervals fit below the 1% upper margin. Both independent allocation rounds on logical CPU 6 agreed. [Paired summary](results/windows-x86_64-20261126/fullpel-and-coefficients/paired-summary.csv)
+
+The later excerpts with both changes still matched FFmpeg. Sixteen paired rounds gave SRPG9 cycle gaps of ?0.44% packed and +0.81% native. Their 97.87% interval upper bounds were +2.46% and +3.00%. SRPG10's gaps were ?4.56% packed and ?5.01% native. Requested bytes on these excerpts were within 0.50% of packed FFmpeg and 2.25% and 4.39% below native FFmpeg. [Later-excerpt results](results/windows-x86_64-20261126/fullpel-and-coefficients-later)
+
+A separate native-only run alternated the codecs for 24 rounds on each SRPG9 excerpt. Median paired cycle gaps were +1.87% for the opening excerpt and +0.32% for the later excerpt. Individual gaps reached +44.75% and +26.32%. These samples leave the 1% cycle margin unresolved. [SRPG9 native-only samples](results/windows-x86_64-20261126/srpg9-native-confirmation.csv)
+
+Two other candidates used already-published co-located motion or specialized the CABAC macroblock decoder by slice type. Both matched the reference fixtures. Their eight-round medians relative to `53aa12147` were ?0.96% and ?1.70% on SRPG9, and +1.78% and +3.42% on SRPG10, with large outliers. [CABAC and co-located motion samples](results/windows-x86_64-20261126/cabac-and-colocated-motion-paired.csv)
