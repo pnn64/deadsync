@@ -930,6 +930,7 @@ pub(crate) fn decode_with_tables<'a>(
                         interval,
                         conditioning,
                         strict,
+                        None,
                     )?,
                     HierarchicalData::Lossless { components, coding } => crate::lossless::scan(
                         scan_header,

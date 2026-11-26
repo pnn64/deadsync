@@ -69,29 +69,32 @@ impl ProgressiveScan {
             return Ok(());
         }
         if self.ah == 0 {
-            self.ac_initial(
+            self.ac_initial::<false>(
                 block,
                 bits,
                 ac.unwrap(),
                 eob,
                 precision + u8::from(differential),
+                0,
             )
+            .map(|_| ())
         } else {
             self.ac_refine(block, bits, ac.unwrap(), eob)
         }
     }
 
-    fn ac_initial(
+    pub(crate) fn ac_initial<const TRACK: bool>(
         self,
         block: &mut [i16; 64],
         bits: &mut Bits<'_>,
         table: &Huffman,
         eob: &mut u32,
         precision: u8,
-    ) -> Result<()> {
+        mut occupied: u64,
+    ) -> Result<u64> {
         if *eob > 0 {
             *eob -= 1;
-            return Ok(());
+            return Ok(occupied);
         }
         let mut k = self.ss;
         while k <= self.se {
@@ -108,6 +111,9 @@ impl ProgressiveScan {
                     // DCT frame precision is always eight or twelve.
                     block[ZIGZAG[k]] = i16::try_from(i32::from(fast >> 8) << self.al)
                         .map_err(|_| Error::Invalid("progressive AC range"))?;
+                    if TRACK {
+                        occupied |= 1 << k;
+                    }
                     k += 1;
                     continue;
                 }
@@ -132,10 +138,13 @@ impl ProgressiveScan {
                 }
                 block[ZIGZAG[k]] = i16::try_from(bits.receive(size)? << self.al)
                     .map_err(|_| Error::Invalid("progressive AC range"))?;
+                if TRACK {
+                    occupied |= 1 << k;
+                }
                 k += 1;
             }
         }
-        Ok(())
+        Ok(occupied)
     }
 
     fn correction(self, value: &mut i16, bits: &mut Bits<'_>) -> Result<()> {
@@ -148,6 +157,72 @@ impl ProgressiveScan {
             }
             *value = i16::try_from(old + if old > 0 { bit } else { -bit })
                 .map_err(|_| Error::Invalid("refined AC range"))?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn ac_refine_occupied(
+        self,
+        block: &mut [i16; 64],
+        bits: &mut Bits<'_>,
+        table: &Huffman,
+        eob: &mut u32,
+        occupied: &mut u64,
+        band: u64,
+    ) -> Result<()> {
+        let mut old = *occupied & band;
+        if *eob == 0 {
+            let mut zeros = band & !old;
+            while old | zeros != 0 {
+                let rs = table.decode(bits)?;
+                let run = rs >> 4;
+                let size = rs & 15;
+                let new = match size {
+                    0 if run != 15 => {
+                        *eob = (1 << run) + bits.read(run)?;
+                        break;
+                    }
+                    0 => 0,
+                    1 => bits.receive(1)? as i16 * (1 << self.al),
+                    _ => return Err(Error::Invalid("AC refinement magnitude")),
+                };
+                for _ in 0..run {
+                    zeros &= zeros.wrapping_sub(1);
+                }
+                let target = zeros & zeros.wrapping_neg();
+                // With no target left, visit all remaining corrections
+                // before reporting the bad run, in the original wire order.
+                self.correct_occupied(block, bits, old & target.wrapping_sub(1))?;
+                if target == 0 {
+                    return Err(Error::Invalid("AC refinement run exceeds band"));
+                }
+                old &= !(target - 1);
+                zeros ^= target;
+                if new != 0 {
+                    block[ZIGZAG[target.trailing_zeros() as usize]] = new;
+                    *occupied |= target;
+                }
+            }
+        }
+        if *eob > 0 {
+            self.correct_occupied(block, bits, old)?;
+            *eob -= 1;
+        }
+        Ok(())
+    }
+
+    fn correct_occupied(
+        self,
+        block: &mut [i16; 64],
+        bits: &mut Bits<'_>,
+        mut positions: u64,
+    ) -> Result<()> {
+        while positions != 0 {
+            self.correction(
+                &mut block[ZIGZAG[positions.trailing_zeros() as usize]],
+                bits,
+            )?;
+            positions &= positions - 1;
         }
         Ok(())
     }
@@ -216,5 +291,27 @@ impl ProgressiveScan {
             *eob -= 1;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Limits, decode_coefficients};
+
+    #[test]
+    fn refinement_matches_under_a_tight_coefficient_budget() {
+        let input = include_bytes!("../tests/fixtures/progressive/12-420.jpg");
+        let normal = decode_coefficients(input, Limits::default()).unwrap();
+        let tight = decode_coefficients(
+            input,
+            Limits {
+                max_memory_bytes: normal.memory_bytes,
+                ..Limits::default()
+            },
+        )
+        .unwrap();
+        for (a, b) in normal.components.iter().zip(&tight.components) {
+            assert_eq!(a.blocks, b.blocks);
+        }
     }
 }

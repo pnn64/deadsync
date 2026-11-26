@@ -7,6 +7,8 @@ bridges use statically linked upstream release builds inside separate DLLs so
 that the different libjpeg implementations can coexist in one process.
 The [Windows x86-64 results](../results/windows-x86_64-20261126-contenders/README.md)
 include per-file measurements for both runs.
+The [decoder optimization results](../results/windows-x86_64-20261126-turbo-progress/README.md)
+track changes against the same libjpeg-turbo build.
 
 ## Reproduce the measurements
 

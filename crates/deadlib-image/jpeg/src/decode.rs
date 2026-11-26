@@ -190,6 +190,7 @@ pub(crate) fn decode_with_tables<'a>(
     let mut conditioning = Conditioning::default();
     let mut frame = None;
     let mut components = Vec::new();
+    let mut occupied: Option<Vec<u64>> = None;
     // At most 255 frame components; a stack array avoids an allocation.
     let mut seen = [false; 256];
     let mut memory_bytes = 0usize;
@@ -240,6 +241,15 @@ pub(crate) fn decode_with_tables<'a>(
                     .is_none_or(|n| n > limits.max_memory_bytes)
                 {
                     return Err(Error::LimitExceeded("metadata and coefficients"));
+                }
+                // Late metadata can need the space used by the refinement scratch.
+                // The coefficient arrays can still be refined directly.
+                if occupied.as_ref().is_some_and(|m| {
+                    m.capacity()
+                        > (limits.max_memory_bytes - memory_bytes - metadata_bytes)
+                            / core::mem::size_of::<u64>()
+                }) {
+                    occupied = None;
                 }
                 // Pixel output keeps only the color hints, with identical limits.
                 if let Some(hints) = hints.as_deref_mut() {
@@ -292,6 +302,19 @@ pub(crate) fn decode_with_tables<'a>(
                             ..limits
                         },
                     )?;
+                    if frame.process == Process::Progressive {
+                        let count = components.iter().map(|c| c.blocks.len()).sum::<usize>();
+                        let capacity = (remaining - memory_bytes) / core::mem::size_of::<u64>();
+                        if count <= capacity {
+                            let mut masks = Vec::new();
+                            if masks.try_reserve_exact(count).is_ok()
+                                && masks.capacity() <= capacity
+                            {
+                                masks.resize(count, 0);
+                                occupied = Some(masks);
+                            }
+                        }
+                    }
                 }
                 decode_scan(
                     header,
@@ -304,6 +327,7 @@ pub(crate) fn decode_with_tables<'a>(
                     interval,
                     conditioning,
                     strict,
+                    occupied.as_deref_mut(),
                 )?;
             }
             Event::Segment { marker: 0xdc, .. } => {
@@ -419,6 +443,7 @@ pub(crate) fn decode_scan(
     interval: usize,
     conditioning: Conditioning,
     strict: bool,
+    occupied: Option<&mut [u64]>,
 ) -> Result<()> {
     if header.len() < 4 {
         return Err(Error::Invalid("SOS length"));
@@ -523,7 +548,47 @@ pub(crate) fn decode_scan(
     let mut predictors = [0i32; 4];
     let mut restart = 0;
     let mut eob_run = 0;
-    if let Some(scan) = progression.filter(|_| n == 1 && arithmetic.is_none()) {
+    let ac_scan = progression.filter(|s| s.ss != 0 && arithmetic.is_none());
+    if let (Some(scan), Some(occupied)) = (ac_scan, occupied) {
+        let (i, _, ac) = selected[0];
+        let offset: usize = components[..i].iter().map(|c| c.blocks.len()).sum();
+        let c = &mut components[i];
+        // Match each visible block with its zigzag occupancy in the padded grid.
+        let masks = &mut occupied[offset..offset + c.blocks.len()];
+        let table = tables[ac].as_ref().unwrap();
+        let precision = frame.precision + u8::from(frame.process.is_differential());
+        let band = (u64::MAX >> (63 - scan.se)) & (u64::MAX << scan.ss);
+        let mut mcu = 0;
+        for (row, mask_row) in c
+            .blocks
+            .chunks_exact_mut(c.blocks_wide)
+            .zip(masks.chunks_exact_mut(c.blocks_wide))
+            .take(rows)
+        {
+            for (block, mask) in row[..cols].iter_mut().zip(&mut mask_row[..cols]) {
+                if interval > 0 && mcu > 0 && mcu % interval == 0 {
+                    if eob_run != 0 {
+                        return Err(Error::Invalid("EOB run crosses restart"));
+                    }
+                    bits.restart(restart)?;
+                    restart = (restart + 1) & 7;
+                }
+                if scan.ah == 0 {
+                    *mask = scan.ac_initial::<true>(
+                        block,
+                        &mut bits,
+                        table,
+                        &mut eob_run,
+                        precision,
+                        *mask,
+                    )?;
+                } else {
+                    scan.ac_refine_occupied(block, &mut bits, table, &mut eob_run, mask, band)?;
+                }
+                mcu += 1;
+            }
+        }
+    } else if let Some(scan) = progression.filter(|_| n == 1 && arithmetic.is_none()) {
         let (i, dc, ac) = selected[0];
         let c = &mut components[i];
         let (dc, ac) = (tables[dc].as_ref(), tables[ac].as_ref());
