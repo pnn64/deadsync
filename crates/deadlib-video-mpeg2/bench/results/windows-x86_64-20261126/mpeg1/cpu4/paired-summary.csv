@@ -1,0 +1,4 @@
+clip,rounds,median_cycle_ratio,min_cycle_ratio,max_cycle_ratio,median_throughput_ratio
+company,11,0.779751,0.752526,0.801353,1.282461
+intro,11,0.795734,0.777912,0.811602,1.256701
+nexuswave,11,0.799009,0.763994,0.827701,1.251551

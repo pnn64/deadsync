@@ -25,10 +25,14 @@ def write_rows(path, rows):
 
 def main():
     out = Path(sys.argv[1])
-    cycle_runs, allocation_runs = map(int, sys.argv[2:])
+    cycle_runs, allocation_runs = map(int, sys.argv[2:4])
+    codec = sys.argv[4].lower() if len(sys.argv) > 4 else "mpeg2"
     cycles = read_samples(out / "cycles.csv")
     allocations = read_samples(out / "allocations.csv")
-    expected_frames = {"dix": 865, "lights": 1553}
+    expected_frames = {
+        "mpeg1": {"company": 181, "intro": 941, "nexuswave": 299},
+        "mpeg2": {"dix": 865, "lights": 1553},
+    }[codec]
     expected_keys = {(clip, engine) for clip in expected_frames for engine in ("deadlib", "ffmpeg")}
     assert cycles.keys() == allocations.keys() == expected_keys
 

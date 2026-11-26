@@ -1,4 +1,4 @@
-# MPEG-2 decoder benchmark
+# MPEG-1 and MPEG-2 decoder benchmark
 
 Run from a Visual Studio x64 developer shell with Rust, FFmpeg and Python on
 the path. Point the script at an ITGmania checkout with its bundled x64
@@ -6,11 +6,14 @@ libavcodec 62 headers, import libraries and DLLs.
 
 ```powershell
 .\crates\deadlib-video-mpeg2\bench\measure.ps1 -ItgmaniaRoot ..\itgmania
+.\crates\deadlib-video-mpeg2\bench\measure.ps1 -ItgmaniaRoot ..\itgmania -Codec mpeg1 -OpenItgRoot ..\openitg-master
 ```
 
-The harness extracts the MPEG-2 elementary stream from each full ITGmania
-fixture, `dix.mpg` and `lights.mpg`. A SHA-256 check covers the visible Y, Cb and
-Cr bytes of every frame in display order. FFmpeg uses its native MPEG-2 decoder
+The MPEG-2 run extracts the elementary streams from `dix.mpg` and `lights.mpg`.
+The MPEG-1 run reads raw video from `company.mpg` and `intro.mpg` in
+`assets/media/openitg` and `nexuswave.mpg` in the OpenITG checkout. Each run uses
+the full clips. A SHA-256 check covers the visible Y, Cb and Cr bytes of every
+frame in display order. FFmpeg uses the native decoder for the selected codec
 and the 8-bit Simple IDCT.
 
 Both decoders parse identical in-memory bytes on one pinned Windows thread.
@@ -38,7 +41,7 @@ rounding and uses a separate path when only the first and last frequency rows
 contain nonzero coefficients. That case covered 82% of coded blocks on
 `dix.mpg` and 77% on `lights.mpg`. [FFmpeg coefficient decode](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/mpeg12dec.c) · [FFmpeg x86 Simple IDCT](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/x86/simple_idct10.asm)
 
-## Verification
+## MPEG-2 verification
 
 The measurements used an Intel Xeon E5-2696 v4, Rust 1.100.0 and ITGmania FFmpeg
 `1041abd` with libavcodec 62.28.103. The original decoder used 7.21 and 7.42
@@ -56,3 +59,24 @@ The table uses the eleven-pair run on logical CPU 4. The run on logical CPU 2
 used nine pairs. Across both runs the maximum paired Deadlib/FFmpeg cycle ratio
 was 0.866 on `dix.mpg` and 0.893 on `lights.mpg`. All six allocation repetitions
 had the same counts and requested bytes on each clip. [CPU 4 measurements](results/windows-x86_64-20261126/cpu4/) · [CPU 2 measurements](results/windows-x86_64-20261126/cpu2/)
+
+## MPEG-1 verification
+
+The MPEG-1 implementation at `a4e01fd8c` shares the optimized motion
+compensation, inverse transform, coefficient lookup and frame recycling with
+MPEG-2. It cleared the one-percent performance target using the same system
+and FFmpeg build as above. All 1,421 frames matched FFmpeg in display order.
+
+| Clip | Decoder | Million cycles/frame | Frames/billion cycles | Heap calls/frame | Requested KiB/frame |
+|---|---|---:|---:|---:|---:|
+| `company.mpg` | Deadlib | 0.376 | 2656.6 | 1.050 | 2.037 |
+| `company.mpg` | FFmpeg | 0.481 | 2080.6 | 18.923 | 7.344 |
+| `intro.mpg` | Deadlib | 0.632 | 1582.3 | 1.010 | 0.531 |
+| `intro.mpg` | FFmpeg | 0.794 | 1258.9 | 18.675 | 13.188 |
+| `nexuswave.mpg` | Deadlib | 0.329 | 3037.0 | 1.030 | 0.544 |
+| `nexuswave.mpg` | FFmpeg | 0.415 | 2412.5 | 18.863 | 5.759 |
+
+The table uses the eleven-pair run on logical CPU 4. Logical CPU 2 supplied
+nine additional pairs. Across all three clips and both CPUs, the highest paired
+Deadlib/FFmpeg cycle ratio was 0.828. All six allocation repetitions per clip
+agreed. [CPU 4 measurements](results/windows-x86_64-20261126/mpeg1/cpu4/) · [CPU 2 measurements](results/windows-x86_64-20261126/mpeg1/cpu2/)
