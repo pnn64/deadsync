@@ -8,6 +8,12 @@ Decoder measurements and remaining performance gaps are in [RESULTS.md](RESULTS.
 Encoder measurements and their recorded baseline are in
 [ENCODE_RESULTS.md](ENCODE_RESULTS.md).
 
+The expanded cross-codec comparison is in
+[results/windows-x86_64-20261126-contenders](results/windows-x86_64-20261126-contenders/README.md).
+It adds the `compare` binary, C/C++ contenders, native-format encoding and
+whole-animation APNG workloads. It uses a separate build from the existing commands
+below.
+
 ## Decoder workload
 
 ```powershell

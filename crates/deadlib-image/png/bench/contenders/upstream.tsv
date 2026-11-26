@@ -1,0 +1,8 @@
+name	url	commit
+wuffs	https://github.com/google/wuffs.git	a87f0bb85b9406d29f48a1c03b6f42c4585145f6
+libspng	https://github.com/randy408/libspng.git	8dc9b966b52f08236bc678e3f1e8236e53c59240
+libpng	https://github.com/pnggroup/libpng.git	e4468e18a0f2ed2a9031cd78faea6e50eca2b518
+zlibng	https://github.com/zlib-ng/zlib-ng.git	05699bcdb8da6be213933610d70a3c99eb57e418
+stb	https://github.com/nothings/stb.git	6b5799bae8a1fe3792691ef4b72ae26434c3e799
+fpng	https://github.com/richgel999/fpng.git	925796543b9d26b8edfcdcecd94c1dac280f29fc
+fpnge	https://github.com/veluca93/fpnge.git	097ebccf3d3db443d9a8f238b1deed010a82f961

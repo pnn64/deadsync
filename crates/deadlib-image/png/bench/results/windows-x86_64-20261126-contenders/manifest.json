@@ -1,0 +1,110 @@
+{
+  "date": "2026-11-26",
+  "repository_head": "6916baa363a86d552f170062bccd641b367c184e",
+  "deadlib_png_src_tree": "85e2f5d11b7bd983c68aab9e41425bc723be90fb",
+  "os": "Windows 11 Pro 10.0.26100",
+  "cpu": "Intel Xeon E5-2696 v4 @ 2.20 GHz, 22 cores / 44 logical CPUs, AVX2",
+  "logical_cpu": 2,
+  "rustc": "1.100.0 (0ef1bc386 2026-11-09)",
+  "llvm": "23.1.5",
+  "msvc": "19.44.35230",
+  "python": "3.13.14",
+  "pillow": "12.3.0",
+  "python_zlib": "1.3.1",
+  "zlib_ng": "2.3.90",
+  "rust_profile": {
+    "opt_level": 3,
+    "lto": true,
+    "codegen_units": 1,
+    "target_feature": "+crt-static",
+    "panic": "abort"
+  },
+  "static": {
+    "minimum_batch_ms": 8,
+    "batches": 5,
+    "executable_sha256": "310e98b2b2c0a45c788161da3fcecbb34916d42549a7f9acecea65e59261f1776",
+    "run_order": [
+      [
+        "decode",
+        "encode",
+        "fpng"
+      ],
+      [
+        "fpng",
+        "encode",
+        "decode"
+      ]
+    ],
+    "notes": "The two static runs retained the verified output buffer during the encode timing loop. The later harness releases it before timing; the screenshot confirmation uses that harness."
+  },
+  "animation": {
+    "minimum_batch_ms": 20,
+    "batches": 5,
+    "executable_sha256": "f16798eed70bb2792061efb91f6c73a5db413d186e15e189b34baea36a341abf"
+  },
+  "contender_dll_sha256": "4ced303dbb39d026d737892ec0c87b8e22d68546cc657c6c60f00bf832839bcb",
+  "evidence_uncompressed": {
+    "animation-run1.tsv": {
+      "bytes": 7459,
+      "sha256": "bff2136948fa348626c039b62d42ab3de590411513919e244573fd2f8a151649"
+    },
+    "animation-run2.tsv": {
+      "bytes": 7458,
+      "sha256": "d07897edeb981fb1b85f7b9201c5a0c3ef5405283329002f8a67d2da650d9232"
+    },
+    "decode-run1.tsv": {
+      "bytes": 330295,
+      "sha256": "0c8029c4a1054a087d2e3300f82a354b38345e738d8703c8e05e5462bef40807"
+    },
+    "decode-run2.tsv": {
+      "bytes": 330293,
+      "sha256": "5297be796db3a9cb6cab18eab9542ae32653976fd68ef4120ffa5249ebb182b7"
+    },
+    "encode-run1.tsv": {
+      "bytes": 200642,
+      "sha256": "b91d1d42657e4baac6a04557cdcc23ba9a3266980e44e25e4a6426c6e929b135"
+    },
+    "encode-run2.tsv": {
+      "bytes": 200631,
+      "sha256": "5374efb351d96817e48f29bd5614dafe410444ae0fb8f1375aa8e261b794a935"
+    },
+    "fpng-run1.tsv": {
+      "bytes": 40940,
+      "sha256": "971e7f530a87a06358c3423b3a338acd0c4c949c22b51d56bd7d6bb047d78cd7"
+    },
+    "fpng-run2.tsv": {
+      "bytes": 40934,
+      "sha256": "52fa310cb387a5001cb46f5f64e770c96c88d9be77a6528a43701cb79527c642"
+    },
+    "inputs.json": {
+      "bytes": 76411,
+      "sha256": "3df64b4d008865e094e8e0ed2704b232d359224b54120c4f720585bcac4f7218"
+    },
+    "summary.json": {
+      "bytes": 1117325,
+      "sha256": "782d716d9771970b8adc8a3a1c04bd8c1e0b6e126dec278cc39dfc23ea307c67"
+    },
+    "screenshot-confirm.tsv": {
+      "bytes": 18854,
+      "sha256": "1e873d05d268da2176d808b030e948c753b4fd158e72c9a57a3f7246b0ee552b"
+    },
+    "decode-final-check.tsv": {
+      "bytes": 307416,
+      "sha256": "2e7dea5c4b14aad19a42fa28f94a56276a9811c6d57cc65e0977b6a6c9c228a5"
+    }
+  },
+  "screenshot_confirmation": {
+    "minimum_batch_ms": 12,
+    "batches": 5,
+    "uses_animation_build": true,
+    "file_winners": {
+      "fpnge-1": 1,
+      "deadlib-rle-up": 7
+    }
+  },
+  "verification": {
+    "same_static_decode_status_and_output_sizes": 2484,
+    "same_screenshot_encode_status_and_output_sizes": 120,
+    "legacy_harness_verified_files": 84
+  }
+}

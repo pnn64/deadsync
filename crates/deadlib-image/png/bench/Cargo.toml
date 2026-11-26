@@ -8,11 +8,20 @@ publish = false
 
 [features]
 allocations = []
+comparison = ["dep:blazediff-png", "dep:zune-core", "dep:zune-png"]
+
+[[bin]]
+name = "compare"
+path = "src/bin/compare/main.rs"
+required-features = ["comparison"]
 
 [dependencies]
 deadlib-image-png = { path = ".." }
 png = "=0.18.1"
 image = { version = "=0.25.10", default-features = false, features = ["png"] }
+blazediff-png = { version = "=6.1.2", optional = true }
+zune-core = { version = "=0.5.1", optional = true }
+zune-png = { version = "=0.5.2", optional = true }
 
 [dev-dependencies]
 flate2 = "=1.1.11"
