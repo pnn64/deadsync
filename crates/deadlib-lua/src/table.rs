@@ -258,12 +258,22 @@ impl ArrayStorage {
     }
 
     fn try_make_writable(&mut self, capacity: usize) -> Result<(), Error> {
-        if let Self::SharedSequence { memory, values } = self {
-            let mut copy = Buffer::new_in(memory.clone());
-            copy.try_reserve_exact(values.len().max(capacity))?;
-            copy.extend_from_slice(values);
-            *self = Self::Heap(copy);
+        if matches!(self, Self::SharedSequence { .. }) {
+            return self.copy_shared_sequence(capacity);
         }
+        Ok(())
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn copy_shared_sequence(&mut self, capacity: usize) -> Result<(), Error> {
+        let Self::SharedSequence { memory, values } = self else {
+            unreachable!("only shared arrays require a copy");
+        };
+        let mut copy = Buffer::new_in(memory.clone());
+        copy.try_reserve_exact(values.len().max(capacity))?;
+        copy.extend_from_slice(values);
+        *self = Self::Heap(copy);
         Ok(())
     }
 }

@@ -120,6 +120,8 @@ impl Overwrite {
 }
 
 impl Template {
+    #[cold]
+    #[inline(never)]
     fn decode(
         code: &[Instruction],
         constants: &[Value],
@@ -164,6 +166,7 @@ impl Template {
 }
 
 impl Vm {
+    #[inline(never)]
     pub(super) fn copy_table_literal(
         &mut self,
         cache: &mut Cache,
