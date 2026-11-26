@@ -359,7 +359,7 @@ impl Decoder {
     fn finalize_pending(&mut self) -> Option<Frame> {
         let mut ps = self.pending.take()?;
         deblock_picture(&mut ps);
-        {
+        if ps.nal_ref_idc != 0 || ps.nal_unit_type == NalUnitType::SliceIdr {
             let pic = Arc::new(make_decoded_picture(&mut ps));
             apply_reference_marking(
                 &mut self.dpb,

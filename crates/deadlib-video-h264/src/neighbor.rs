@@ -638,7 +638,7 @@ pub(crate) fn predict_i4x4_mode(
     blk_idx: usize,
     mb_slice_id: &[u16],
     cur_slice_id: u16,
-    intra_avail: &[bool],
+    intra_avail: impl Fn(usize) -> bool,
     mbaff: bool,
     mb_field_decoding: &[bool],
 ) -> u8 {
@@ -652,7 +652,7 @@ pub(crate) fn predict_i4x4_mode(
         true,
         mb_slice_id,
         cur_slice_id,
-        intra_avail,
+        &intra_avail,
         mbaff,
         mb_field_decoding,
     );
@@ -664,7 +664,7 @@ pub(crate) fn predict_i4x4_mode(
         false,
         mb_slice_id,
         cur_slice_id,
-        intra_avail,
+        &intra_avail,
         mbaff,
         mb_field_decoding,
     );
@@ -674,10 +674,10 @@ pub(crate) fn predict_i4x4_mode(
     }
 }
 
-/// `intra_avail`: per-MB flag, true if the MB is available for intra prediction
+/// `intra_avail`: tests whether the neighboring MB is available for intra prediction
 /// (always true unless constrained_intra_pred_flag is set and the neighbor is inter).
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn get_neighbor_i4x4_mode(
+fn get_neighbor_i4x4_mode(
     modes: &[u8],
     mb_idx: usize,
     mb_width: usize,
@@ -685,7 +685,7 @@ pub(crate) fn get_neighbor_i4x4_mode(
     is_left: bool,
     mb_slice_id: &[u16],
     cur_slice_id: u16,
-    intra_avail: &[bool],
+    intra_avail: &impl Fn(usize) -> bool,
     mbaff: bool,
     _mb_field_decoding: &[bool],
 ) -> Option<u8> {
@@ -711,7 +711,7 @@ pub(crate) fn get_neighbor_i4x4_mode(
                 mb_slice_id,
                 cur_slice_id,
             )
-            .filter(|&(n, _)| intra_avail[n])
+            .filter(|&(n, _)| intra_avail(n))
             .map(|(n, b)| modes[n * 16 + b]),
             0 | 2 | 8 | 10 => {
                 // Left edge of MB
@@ -727,7 +727,7 @@ pub(crate) fn get_neighbor_i4x4_mode(
                 } else {
                     (mb_idx / 2 - 1) * 2 + (mb_idx % 2)
                 };
-                if has_left && mb_slice_id[left_mb] == cur_slice_id && intra_avail[left_mb] {
+                if has_left && mb_slice_id[left_mb] == cur_slice_id && intra_avail(left_mb) {
                     let left_blk = match blk_idx {
                         0 => 5,
                         2 => 7,
@@ -759,7 +759,7 @@ pub(crate) fn get_neighbor_i4x4_mode(
                 mb_slice_id,
                 cur_slice_id,
             )
-            .filter(|&(n, _)| intra_avail[n])
+            .filter(|&(n, _)| intra_avail(n))
             .map(|(n, b)| modes[n * 16 + b]),
             0 | 1 | 4 | 5 => {
                 // Top edge of MB
@@ -779,7 +779,7 @@ pub(crate) fn get_neighbor_i4x4_mode(
                 } else {
                     ((mb_idx / 2) - mb_width) * 2 + 1
                 };
-                if has_above && mb_slice_id[above_mb] == cur_slice_id && intra_avail[above_mb] {
+                if has_above && mb_slice_id[above_mb] == cur_slice_id && intra_avail(above_mb) {
                     let above_blk = match blk_idx {
                         0 => 10,
                         1 => 11,

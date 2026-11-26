@@ -7,7 +7,6 @@ use crate::error::DecodeError;
 use crate::mv_pred::{predict_mv, predict_mv_sub, ref_pic_safe, MbaffCtx};
 use crate::neighbor::{
     cabac_amvd, cabac_neighbor_nz_luma, cabac_neighbor_ref, dequant_4x4_ac_raster,
-    predict_i4x4_mode,
 };
 use crate::pixel::Pixel;
 use crate::residual::{
@@ -227,8 +226,6 @@ impl<P: Pixel> SliceContext<'_, P> {
                 let above_left_mb_avail = self.intra_corner_avail(mb_idx, -1, -1, sp);
                 let above_right_mb_avail = self.intra_corner_avail(mb_idx, 16, -1, sp);
 
-                let intra_avail = self.intra_avail_map(sp);
-
                 if i_mb_type == 0 {
                     // I4x4/I8x8 in P/B
                     let nts = {
@@ -256,17 +253,7 @@ impl<P: Pixel> SliceContext<'_, P> {
                         } else {
                             blk_idx
                         };
-                        let predicted = predict_i4x4_mode(
-                            self.i4x4_modes,
-                            mb_idx,
-                            self.mb_width as usize,
-                            blk,
-                            self.mb_slice_id,
-                            self.this_slice_id,
-                            &intra_avail,
-                            self.mbaff,
-                            self.mb_field_decoding,
-                        );
+                        let predicted = self.predict_i4x4_mode(mb_idx, blk, sp);
                         let mode = cr.decode_intra4x4_pred_mode(st, predicted);
                         if use_8x8_intra_pb {
                             for sub in 0..4 {
@@ -2580,24 +2567,12 @@ impl<P: Pixel> SliceContext<'_, P> {
             let use_8x8_intra = sp.transform_8x8_mode_flag && cr.get_cabac(&mut st[399 + nts]) != 0;
             self.mb_is_8x8dct[mb_idx] = use_8x8_intra;
 
-            let intra_avail = self.intra_avail_map(sp);
-
             // Parse prediction modes: 4 for I8x8, 16 for I4x4
             let num_modes = if use_8x8_intra { 4 } else { 16 };
             let mut pred_modes = [2u8; 16];
             for blk_idx in 0..num_modes {
                 let blk = if use_8x8_intra { blk_idx * 4 } else { blk_idx };
-                let predicted = predict_i4x4_mode(
-                    self.i4x4_modes,
-                    mb_idx,
-                    self.mb_width as usize,
-                    blk,
-                    self.mb_slice_id,
-                    self.this_slice_id,
-                    &intra_avail,
-                    self.mbaff,
-                    self.mb_field_decoding,
-                );
+                let predicted = self.predict_i4x4_mode(mb_idx, blk, sp);
                 let mode = cr.decode_intra4x4_pred_mode(st, predicted);
                 if use_8x8_intra {
                     for sub in 0..4 {

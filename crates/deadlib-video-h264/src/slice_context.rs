@@ -5,7 +5,6 @@
 //! from `decode_slice` enables splitting MB decode logic into methods.
 
 use alloc::sync::Arc;
-use alloc::vec::Vec;
 
 use crate::decoder::Frame;
 
@@ -557,17 +556,20 @@ impl<P: Pixel> SliceContext<'_, P> {
         })
     }
 
-    /// Build per-MB intra availability array for predict_i4x4_mode.
-    /// When constrained_intra_pred_flag is off or in I-slices, all MBs are available.
-    pub(crate) fn intra_avail_map(&self, sp: &SliceParams) -> Vec<bool> {
-        if !sp.constrained_intra_pred_flag || !(sp.is_p_slice || sp.is_b_slice) {
-            vec![true; self.mb_info.len()]
-        } else {
-            self.mb_info
-                .iter()
-                .map(|info| info.mb_type == MbType::Intra || info.mb_type == MbType::Ipcm)
-                .collect()
-        }
+    /// Predict the current block's mode with availability checks at its two neighbors.
+    #[inline]
+    pub(crate) fn predict_i4x4_mode(&self, mb_idx: usize, blk: usize, sp: &SliceParams) -> u8 {
+        crate::neighbor::predict_i4x4_mode(
+            self.i4x4_modes,
+            mb_idx,
+            self.mb_width as usize,
+            blk,
+            self.mb_slice_id,
+            self.this_slice_id,
+            |neighbor| self.is_intra_neighbor_avail(neighbor, sp),
+            self.mbaff,
+            self.mb_field_decoding,
+        )
     }
 
     /// Decode a P-slice skip macroblock: median MV prediction, MC, no residual.

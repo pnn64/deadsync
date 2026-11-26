@@ -7,7 +7,7 @@ use crate::cavlc::parse_residual_block_cavlc;
 use crate::deblock::{MbInfo, MbType};
 use crate::error::DecodeError;
 use crate::mv_pred::{predict_mv, predict_mv_sub, ref_pic_safe, MbaffCtx};
-use crate::neighbor::{compute_nc, dequant_4x4_ac_raster, predict_i4x4_mode};
+use crate::neighbor::{compute_nc, dequant_4x4_ac_raster};
 use crate::pixel::Pixel;
 use crate::residual::{
     dequant_4x4_full, dequant_8x8, dequant_luma_dc_i16x16, inverse_dct_4x4, inverse_dct_8x8,
@@ -1433,25 +1433,13 @@ impl<P: Pixel> SliceContext<'_, P> {
             // Deblocking skips the internal 4x4 edges of 8x8-transform MBs
             self.mb_is_8x8dct[mb_idx] = use_8x8_intra;
 
-            let intra_avail = self.intra_avail_map(sp);
-
             // Parse prediction modes: 4 for I8x8, 16 for I4x4
             let num_modes = if use_8x8_intra { 4 } else { 16 };
             let mut pred_modes = [2u8; 16];
             for blk_idx in 0..num_modes {
                 let blk = if use_8x8_intra { blk_idx * 4 } else { blk_idx };
                 let prev_flag = reader.read_bit()?;
-                let predicted = predict_i4x4_mode(
-                    self.i4x4_modes,
-                    mb_idx,
-                    self.mb_width as usize,
-                    blk,
-                    self.mb_slice_id,
-                    self.this_slice_id,
-                    &intra_avail,
-                    self.mbaff,
-                    self.mb_field_decoding,
-                );
+                let predicted = self.predict_i4x4_mode(mb_idx, blk, sp);
                 let mode = if prev_flag != 0 {
                     predicted
                 } else {
