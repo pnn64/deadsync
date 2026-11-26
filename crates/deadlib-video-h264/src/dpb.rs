@@ -450,7 +450,13 @@ impl DecodedPicture {
 
     #[inline]
     fn wait_plane_bytes(&self, stride: usize, lines_per_row: usize, end: usize) {
-        if stride == 0 || end == 0 {
+        let published = self.progress.rows();
+        // Serial references are already complete. For a frame worker,
+        // consult the published prefix before computing a row to wait for.
+        if published == self.progress.total()
+            || stride == 0
+            || end <= (published as usize * lines_per_row).saturating_mul(stride)
+        {
             return;
         }
         let lines = end.div_ceil(stride);
