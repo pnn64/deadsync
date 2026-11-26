@@ -1,0 +1,11 @@
+stream,mode,run,frames,luma_pixels,cycles,allocations,reallocations,requested_bytes
+srpg9,deadlib,1,150,311040000,0,2096,413,525801089
+srpg9,deadlib-recycled,1,150,311040000,0,1700,413,112187009
+srpg9,deadlib-recycled-sps,1,150,311040000,0,1673,424,68321269
+srpg9,ffmpeg-surface,1,150,311040000,0,2684,3,45410751
+srpg9,ffmpeg-packed,1,150,311040000,0,2834,3,511970751
+srpg10,deadlib-recycled,1,150,311040000,0,1739,119,192890745
+srpg10,deadlib-recycled-sps,1,150,311040000,0,1658,152,61291202
+srpg10,ffmpeg-surface,1,150,311040000,0,2640,4,29000083
+srpg10,ffmpeg-packed,1,150,311040000,0,2790,4,495560083
+srpg10,deadlib,1,150,311040000,0,2039,119,506234745
