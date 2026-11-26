@@ -1,0 +1,9 @@
+stream,mode,revision,frames,allocations,reallocations,requested_bytes
+srpg9,deadlib,b4110122d,150,2096,413,525801089
+srpg9,deadlib-recycled-sps,b4110122d,150,1673,424,68321269
+srpg10,deadlib,b4110122d,150,2039,119,506234745
+srpg10,deadlib-recycled-sps,b4110122d,150,1658,152,61291202
+srpg9,deadlib,a75c0e03c,150,1343,413,514713517
+srpg9,deadlib-recycled-sps,a75c0e03c,150,919,424,57233541
+srpg10,deadlib,a75c0e03c,150,1280,119,496687172
+srpg10,deadlib-recycled-sps,a75c0e03c,150,896,152,51743164

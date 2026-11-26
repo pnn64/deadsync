@@ -186,3 +186,9 @@ The full benchmark of `b4110122d` matched FFmpeg on every output mode and reprod
 | SRPG10 | Deadlib recycled, SPS depth | 29.23 | 34.22 | 12.07 | 0.39 |
 | SRPG10 | FFmpeg native | 24.33 | 41.10 | 17.63 | 0.18 |
 | SRPG10 | FFmpeg packed | 27.54 | 36.31 | 18.63 | 3.15 |
+
+## Borrowed bit reader
+
+`a75c0e03c` reads the existing RBSP slice and supplies virtual zero padding to the bit reader. This removes separate padded copies during header parsing and slice decoding. The committed code matched FFmpeg on both bundled clips, the temporal-direct progressive and MBAFF multislice samples, and constrained-intra CABAC and CAVLC. The default and no-default-features tests passed. [Allocation probe](results/windows-x86_64-20261126/bit-reader-allocations.csv)
+
+The probe reproduced the prior default allocation totals before the change. With the borrowed reader, default allocation calls per frame fell from 16.73 to 11.71 on SRPG9 and from 14.39 to 9.33 on SRPG10. Requested bytes fell from 3.343 to 3.272 MiB per frame and from 3.219 to 3.158. These totals are 0.54% and 0.23% above the packed FFmpeg totals. The recycled decoder with SPS reorder depth requested 0.364 and 0.329 MiB per frame. The comparison with native FFmpeg still shows a gap in requested bytes.
