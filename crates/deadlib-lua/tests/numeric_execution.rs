@@ -108,3 +108,35 @@ fn two_result_numeric_leaf_preserves_discarded_operations_and_hooks() {
         "#,
     );
 }
+
+#[test]
+fn two_result_numeric_reduction_preserves_both_values_and_rounding() {
+    check(
+        br#"
+        local function offsets(a, b) return a + 1, b + 2 end
+        local total = 0
+        for i = 1, 120 do
+            local a, b = offsets(i, 6)
+            total = total + a + b
+        end
+        assert(total == 8340)
+
+        local function identity(a, b) return a, b end
+        total = 0
+        for i = 120, 1, -1 do
+            local a, b = identity(i, 2 * i)
+            total = total + a + b
+        end
+        assert(total == 21780)
+
+        local large = 9007199254740992
+        total = 0
+        for i = 1, 4 do
+            local a, b = offsets(large, i)
+            total = total + (a - large) + b
+        end
+        assert(total == 18)
+        return true
+        "#,
+    );
+}

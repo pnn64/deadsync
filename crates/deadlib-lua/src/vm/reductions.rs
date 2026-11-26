@@ -117,10 +117,15 @@ impl Body<'_> {
         Some(Operand::Initial(register))
     }
 
-    fn write(&mut self, register: usize, value: Operand) {
-        self.written += 1;
-        self.bindings[register] = self.written;
-        self.values[usize::from(self.written)] = value;
+    fn write(&mut self, register: usize, value: Operand) -> Option<()> {
+        let binding = &mut self.bindings[register];
+        if *binding == 0 {
+            // The analysis only needs the latest value of each register.
+            self.written += 1;
+            *binding = self.written;
+        }
+        *self.values.get_mut(usize::from(*binding))? = value;
+        Some(())
     }
 
     fn operand(&mut self, index: u32) -> Option<Operand> {
@@ -229,7 +234,7 @@ impl Body<'_> {
         }
         let values = Series { first, last }.checked()?;
         self.parked = Some((parked, (last - step) as f64));
-        self.write(call + 1, Operand::Series(values));
+        self.write(call + 1, Operand::Series(values))?;
         Some(Operand::Constant(Value::Boolean(true)))
     }
 
@@ -268,12 +273,14 @@ impl Body<'_> {
     }
 
     fn call(&mut self, call: usize, count: usize, wanted: u32) -> Option<Operand> {
-        if self.vm.budget.is_some() {
+        if self.vm.budget.is_some()
+            || (wanted == 2 && (self.control..self.control + 3).contains(&(call + 1)))
+        {
             return None;
         }
         let operand = self.read(call)?;
         let function = match self.literal(operand)? {
-            Value::Function(function) if wanted == 1 => function,
+            Value::Function(function) if matches!(wanted, 1 | 2) => function,
             Value::Native(id @ (MATH_MIN | MATH_MAX)) if wanted == 1 => {
                 return self.extremum(call, count, id == MATH_MIN);
             }
@@ -290,9 +297,25 @@ impl Body<'_> {
             _ => return None,
         };
         let leaf = self.vm.numeric_leaf(function)?;
-        if leaf.second.is_some() {
-            return None;
+        let first = self.call_expression(leaf.first, call, count)?;
+        let second = if let Some(expression) = leaf.second {
+            Operand::Series(self.call_expression(expression, call, count)?)
+        } else {
+            Operand::Constant(Value::Nil)
+        };
+        if wanted == 2 {
+            self.write(call + 1, second)?;
         }
+        self.call_registers = Some(self.call_registers.unwrap_or(0).max(leaf.registers));
+        Some(Operand::Series(first))
+    }
+
+    fn call_expression(
+        &mut self,
+        expression: Expression,
+        call: usize,
+        count: usize,
+    ) -> Option<Series> {
         let mut argument = |input| match input {
             Input::Constant(number) => Series::constant(Value::Number(number)),
             Input::Argument(index) if index < count => {
@@ -301,15 +324,11 @@ impl Body<'_> {
             }
             Input::Argument(_) => None,
         };
-        let result = match leaf.first {
-            Expression::Value(input) => argument(input)?,
-            Expression::Negate(index) => argument(index)?.negate(),
-            Expression::Binary(op, left, right) => {
-                argument(left)?.arithmetic(op, argument(right)?)?
-            }
-        };
-        self.call_registers = Some(self.call_registers.unwrap_or(0).max(leaf.registers));
-        Some(Operand::Series(result))
+        match expression {
+            Expression::Value(input) => argument(input),
+            Expression::Negate(index) => Some(argument(index)?.negate()),
+            Expression::Binary(op, left, right) => argument(left)?.arithmetic(op, argument(right)?),
+        }
     }
 
     fn add(
@@ -403,7 +422,7 @@ impl Body<'_> {
                 Op::GetGlobal => self.global(i.c as usize)?,
                 _ => return None,
             };
-            self.write(destination, value);
+            self.write(destination, value)?;
         }
 
         let sum =
@@ -553,7 +572,7 @@ impl Vm {
                     first: segment_first,
                     last: segment_last,
                 }),
-            );
+            )?;
             let Some(accumulator) = analysis.accumulator(body, writes) else {
                 if let Some(boundary) = analysis.segment_limit {
                     if !(1..segment_count).contains(&boundary) {
