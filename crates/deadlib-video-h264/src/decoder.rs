@@ -6,7 +6,8 @@ use crate::bitstream::BitstreamReader;
 use crate::deblock::{self, MbInfo, MbType};
 use crate::decode_cabac::CabacMbResult;
 use crate::dpb::{
-    DecodedPicture, Dpb, Motion, PictureMeta, PictureStructure, PictureWriter, ReferenceStatus,
+    DecodedPicture, Dpb, Motion, PictureMeta, PictureStructure, PictureWriter, ReferenceKeys,
+    ReferenceStatus,
 };
 use crate::error::DecodeError;
 use crate::mv_pred::{is_long_term, ImplicitWeights, WeightContext};
@@ -167,8 +168,7 @@ pub(crate) struct PictureScratch {
     mv_store_l0: Vec<[i16; 2]>,
     mv_store_l1: Vec<[i16; 2]>,
     ref_idx_store_l0: Vec<i8>,
-    ref_poc_store_l0: Vec<i32>,
-    ref_poc_store_l1: Vec<i32>,
+    reference_keys: Vec<ReferenceKeys>,
     ref_idx_store_l1: Vec<i8>,
     mvd_store: Vec<[i16; 2]>,
     mvd_store_l1: Vec<[i16; 2]>,
@@ -198,8 +198,8 @@ impl PictureScratch {
         self.mv_store_l1 = motion.mv_l1;
         self.ref_idx_store_l0 = motion.ref_idx_l0;
         self.ref_idx_store_l1 = motion.ref_idx_l1;
-        self.ref_poc_store_l0 = motion.ref_poc_l0;
-        self.ref_poc_store_l1 = motion.ref_poc_l1;
+        self.mb_slice_id = motion.slice_ids;
+        self.reference_keys = motion.reference_keys;
     }
 
     fn reset(&mut self, total_mbs: usize) {
@@ -219,8 +219,7 @@ impl PictureScratch {
         reset(&mut self.mv_store_l0, blocks, [0; 2]);
         reset(&mut self.mv_store_l1, blocks, [0; 2]);
         reset(&mut self.ref_idx_store_l0, blocks, -1);
-        reset(&mut self.ref_poc_store_l0, blocks, -1);
-        reset(&mut self.ref_poc_store_l1, blocks, -1);
+        self.reference_keys.clear();
         reset(&mut self.ref_idx_store_l1, blocks, -1);
         reset(&mut self.mvd_store, blocks, [0; 2]);
         reset(&mut self.mvd_store_l1, blocks, [0; 2]);
@@ -1022,8 +1021,7 @@ fn run_slice_px<P: Pixel>(
                 mut mv_store_l0,
                 mut mv_store_l1,
                 mut ref_idx_store_l0,
-                mut ref_poc_store_l0,
-                mut ref_poc_store_l1,
+                mut reference_keys,
                 mut ref_idx_store_l1,
                 mut mvd_store,
                 mut mvd_store_l1,
@@ -1116,8 +1114,6 @@ fn run_slice_px<P: Pixel>(
         mv_store_l0: &mut mv_store_l0,
         mv_store_l1: &mut mv_store_l1,
         ref_idx_store_l0: &mut ref_idx_store_l0,
-        ref_poc_store_l0: &mut ref_poc_store_l0,
-        ref_poc_store_l1: &mut ref_poc_store_l1,
         ref_idx_store_l1: &mut ref_idx_store_l1,
         mvd_store: &mut mvd_store,
         mvd_store_l1: &mut mvd_store_l1,
@@ -1186,7 +1182,6 @@ fn run_slice_px<P: Pixel>(
     // MBs of this slice from `fin_from` on still need their deblocking info
     // filled in (finalize_mb_info_range).
     let mut fin_from = mb_idx;
-    let slice_first_mb = mb_idx;
     let unit_len = deblock_unit_len(mb_width as usize, mbaff);
     while mb_idx < total_mbs {
         // Frame threading: deblock and publish rows as they become final.
@@ -1346,11 +1341,17 @@ fn run_slice_px<P: Pixel>(
         }
     }
 
-    // Post-loop: fill deblock info (for the MBs not already done by the
-    // row hook) and the ref POC table.
+    // Post-loop: fill deblock info for the MBs not done by the row hook.
     let end_mb = mb_idx.min(total_mbs);
     ctx.finalize_mb_info_range(fin_from, end_mb, &params);
-    ctx.fill_ref_poc_table(slice_first_mb, end_mb, &params);
+    let l0 = if is_p_slice {
+        ref_pic_list
+    } else {
+        _ref_pic_list_l0
+    };
+    let keys = ReferenceKeys::new([l0, _ref_pic_list_l1], header.field_pic_flag);
+    reference_keys.resize_with(usize::from(this_slice_id), || keys.clone());
+    reference_keys.push(keys);
     if let Some(sync) = sync.as_mut() {
         let ready = sync.ready_mb(end_mb, unit_len);
         sync.advance(
@@ -1388,8 +1389,7 @@ fn run_slice_px<P: Pixel>(
             mv_store_l0,
             mv_store_l1,
             ref_idx_store_l0,
-            ref_poc_store_l0,
-            ref_poc_store_l1,
+            reference_keys,
             ref_idx_store_l1,
             mvd_store,
             mvd_store_l1,
@@ -1515,8 +1515,8 @@ pub(crate) fn take_motion(ps: &mut PictureState) -> Motion {
     Motion {
         mv_l0: core::mem::take(&mut ps.scratch.mv_store_l0),
         ref_idx_l0: core::mem::take(&mut ps.scratch.ref_idx_store_l0),
-        ref_poc_l0: core::mem::take(&mut ps.scratch.ref_poc_store_l0),
-        ref_poc_l1: core::mem::take(&mut ps.scratch.ref_poc_store_l1),
+        slice_ids: core::mem::take(&mut ps.scratch.mb_slice_id),
+        reference_keys: core::mem::take(&mut ps.scratch.reference_keys),
         mv_l1: core::mem::take(&mut ps.scratch.mv_store_l1),
         ref_idx_l1: core::mem::take(&mut ps.scratch.ref_idx_store_l1),
         mb_field: if ps.mbaff_frame_flag {

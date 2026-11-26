@@ -40,11 +40,9 @@ pub struct Motion {
     pub mv_l0: Vec<[i16; 2]>,
     /// Per-4x4-block L0 reference indices.
     pub ref_idx_l0: Vec<i8>,
-    /// Per-4x4-block POC of the L0 reference picture used (for temporal direct mode mapping).
-    pub ref_poc_l0: Vec<i32>,
-    /// Per-4x4-block POC of the L1 reference frame used (temporal direct
-    /// mode maps it into the current L0 list when L0 is unused).
-    pub ref_poc_l1: Vec<i32>,
+    /// Slice identifier for each macroblock, selecting its reference lists.
+    pub(crate) slice_ids: Vec<u16>,
+    pub(crate) reference_keys: Vec<ReferenceKeys>,
     /// Per-4x4-block L1 motion vectors (for spatial direct co-located L1 check).
     pub mv_l1: Vec<[i16; 2]>,
     /// Per-4x4-block L1 reference indices (for spatial direct co-located L1 check).
@@ -55,15 +53,48 @@ pub struct Motion {
     pub mb_field: Vec<bool>,
 }
 
+/// Reference picture identifiers in this slice's two initialised lists.
+#[derive(Clone, Debug)]
+pub(crate) struct ReferenceKeys([[i32; 32]; 2]);
+
+impl ReferenceKeys {
+    pub(crate) fn new(lists: [&[Arc<DecodedPicture>]; 2], field_pic: bool) -> Self {
+        let mut keys = [[-1; 32]; 2];
+        for (keys, list) in keys.iter_mut().zip(lists) {
+            for (key, picture) in keys.iter_mut().zip(list) {
+                *key = if field_pic {
+                    crate::mv_pred::field_ref_key(picture)
+                } else {
+                    picture.pic_order_cnt
+                };
+            }
+        }
+        Self(keys)
+    }
+}
+
 impl Motion {
+    /// Return the POC (or parity-tagged field POC) for a co-located block.
+    pub(crate) fn reference_key(&self, list: usize, block: usize, index: i8) -> i32 {
+        let mb = block / 16;
+        let slice = usize::from(self.slice_ids.get(mb).copied().unwrap_or(0));
+        let field = self.mb_field.get(mb / 2).copied().unwrap_or(false);
+        let index = (index >> u32::from(field)) as usize;
+        self.reference_keys
+            .get(slice)
+            .and_then(|keys| keys.0[list].get(index))
+            .copied()
+            .unwrap_or(-1)
+    }
+
     /// Motion data for a picture whose content is unknown (all blocks intra).
     fn unavailable(total_mbs: usize) -> Self {
         let n = total_mbs * 16;
         Self {
             mv_l0: vec![[0; 2]; n],
             ref_idx_l0: vec![-1; n],
-            ref_poc_l0: vec![-1; n],
-            ref_poc_l1: vec![-1; n],
+            slice_ids: Vec::new(),
+            reference_keys: Vec::new(),
             mv_l1: vec![[0; 2]; n],
             ref_idx_l1: vec![-1; n],
             mb_field: Vec::new(),
@@ -1545,6 +1576,26 @@ impl Dpb {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reference_keys_follow_the_colocated_macroblocks_slice_and_field() {
+        let first = [make_pic(0, 35), make_pic(1, 47)];
+        let second = [make_pic(2, 51), make_pic(3, 69)];
+        let motion = Motion {
+            slice_ids: vec![0, 0, 1, 1],
+            mb_field: vec![false, true],
+            reference_keys: vec![
+                ReferenceKeys::new([&first, &second], false),
+                ReferenceKeys::new([&second, &first], false),
+            ],
+            ..Motion::default()
+        };
+        assert_eq!(motion.reference_key(0, 0, 1), 47);
+        assert_eq!(motion.reference_key(1, 39, 3), 47);
+        assert_eq!(motion.reference_key(0, 50, 1), 51);
+        assert_eq!(motion.reference_key(0, 50, -1), -1);
+        assert_eq!(motion.reference_key(0, 50, 4), -1);
+    }
 
     #[test]
     fn clearing_the_dpb_keeps_a_bounded_reserve() {

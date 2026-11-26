@@ -89,8 +89,6 @@ pub(crate) struct SliceContext<'a, P: Pixel = u8> {
     pub mv_store_l0: &'a mut [[i16; 2]],
     pub mv_store_l1: &'a mut [[i16; 2]],
     pub ref_idx_store_l0: &'a mut [i8],
-    pub ref_poc_store_l0: &'a mut [i32],
-    pub ref_poc_store_l1: &'a mut [i32],
     pub ref_idx_store_l1: &'a mut [i8],
 
     // Per-4x4-block MVD (for CABAC amvd context)
@@ -1607,41 +1605,6 @@ impl<P: Pixel> SliceContext<'_, P> {
                     let any = q.iter().any(|&n| n);
                     q.fill(any);
                 }
-            }
-        }
-    }
-
-    /// Build the per-block reference POC table for temporal direct mode
-    /// (spec 8.4.1.2.3) from this slice's L0 list.
-    /// Fill the per-block reference frame POCs of MBs `from..to` (this
-    /// slice). A field MB's ref_idx addresses fields, two per frame entry.
-    pub(crate) fn fill_ref_poc_table(&mut self, from: usize, to: usize, sp: &SliceParams) {
-        let l0_list = if sp.is_p_slice {
-            sp.ref_pic_list
-        } else {
-            sp.ref_pic_list_l0
-        };
-        let to = to.min(self.ref_poc_store_l0.len() / 16);
-        for mb in from..to {
-            let shift = (self.mbaff && self.mb_field_decoding[mb / 2]) as usize;
-            for i in mb * 16..mb * 16 + 16 {
-                // A field picture's references are fields, told apart by
-                // parity as well as POC (both fields may share a POC)
-                let field_pic = self.field_pic_flag;
-                let frame_poc = |list: &[Arc<DecodedPicture>], ri: i8| {
-                    (ri >= 0)
-                        .then(|| list.get(ri as usize >> shift))
-                        .flatten()
-                        .map_or(-1, |p| {
-                            if field_pic {
-                                crate::mv_pred::field_ref_key(p)
-                            } else {
-                                p.pic_order_cnt
-                            }
-                        })
-                };
-                self.ref_poc_store_l0[i] = frame_poc(l0_list, self.ref_idx_store_l0[i]);
-                self.ref_poc_store_l1[i] = frame_poc(sp.ref_pic_list_l1, self.ref_idx_store_l1[i]);
             }
         }
     }

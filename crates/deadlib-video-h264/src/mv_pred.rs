@@ -922,13 +922,13 @@ pub(crate) fn derive_temporal_direct_blk(
         (
             col_motion.mv_l0[col_pos],
             col_motion.ref_idx_l0[col_pos],
-            col_motion.ref_poc_l0[col_pos],
+            col_motion.reference_key(0, col_pos, col_motion.ref_idx_l0[col_pos]),
         )
-    } else if col_motion.ref_idx_l1.get(col_pos).is_some_and(|&r| r >= 0) {
+    } else if let Some(&col_ref_l1) = col_motion.ref_idx_l1.get(col_pos).filter(|&&r| r >= 0) {
         (
             col_motion.mv_l1[col_pos],
-            col_motion.ref_idx_l1[col_pos],
-            col_motion.ref_poc_l1.get(col_pos).copied().unwrap_or(-1),
+            col_ref_l1,
+            col_motion.reference_key(1, col_pos, col_ref_l1),
         )
     } else {
         return INTRA;
