@@ -50,7 +50,21 @@ pub fn decode_rgba8_with_limits(input: &[u8], limits: Limits) -> Result<(Info, V
     let header = parse_header(input, limits, Output::Rgba)?;
     let source = pixel_source(input, &header)?;
     let samples = match header.format {
+        Format::Indexed {
+            palette_start,
+            palette_len,
+            entry_bytes,
+        } if header.info.bit_depth == 8 => {
+            let palette = &input[palette_start..palette_start + palette_len * entry_bytes];
+            indexed8_rgba(source, &header, palette, palette_len, entry_bytes)?
+        }
         Format::Rgb24 => rgb24_rgba(source, &header)?,
+        Format::Masked {
+            red,
+            green,
+            blue,
+            alpha: None,
+        } if header.info.bit_depth == 32 => rgbx32_rgba(source, &header, [red, green, blue])?,
         _ => bitmap(header.info, decode_pixels(input, &header, source)?)
             .into_rgba8_with_limits(limits)?,
     };
@@ -725,22 +739,62 @@ fn decode_rgb24_quads(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> 
     Ok(samples.into_flattened())
 }
 
+fn indexed8_rgba(
+    source: &[u8],
+    header: &Header,
+    palette: &[u8],
+    palette_len: usize,
+    entry_bytes: usize,
+) -> Result<Vec<u8>, Error> {
+    let mut colors = [[0; 4]; 256];
+    for (color, entry) in colors.iter_mut().zip(palette.chunks_exact(entry_bytes)) {
+        *color = [entry[2], entry[1], entry[0], 255];
+    }
+    let mut samples = Vec::new();
+    reserve(&mut samples, header.pixel_count)?;
+    let mut append = |indices: &[u8]| -> Result<(), Error> {
+        // Check only used bytes before expanding, and skip the scan for full palettes.
+        if palette_len < colors.len()
+            && indices
+                .iter()
+                .copied()
+                .max()
+                .is_some_and(|i| usize::from(i) >= palette_len)
+        {
+            return Err(Error::Invalid("pixel index exceeds the palette"));
+        }
+        samples.extend(indices.iter().map(|&i| colors[usize::from(i)]));
+        Ok(())
+    };
+    let width = header.info.width as usize;
+    if header.info.top_down && header.row_pitch == width {
+        append(source)?;
+    } else {
+        for row in display_rows(source, header.row_pitch, header.info.top_down) {
+            append(&row[..width])?;
+        }
+    }
+    Ok(samples.into_flattened())
+}
+
 fn rgb24_rgba(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> {
     let width = header.info.width as usize;
     let mut samples = Vec::new();
     reserve(&mut samples, header.pixel_count)?;
     let mut append = |row: &[u8]| {
         let (quads, tail) = row.as_chunks::<12>();
-        samples.extend(quads.iter().flat_map(
-            |&[b0, g0, r0, b1, g1, r1, b2, g2, r2, b3, g3, r3]| {
-                [
-                    [r0, g0, b0, 255],
-                    [r1, g1, b1, 255],
-                    [r2, g2, b2, 255],
-                    [r3, g3, b3, 255],
-                ]
-            },
-        ));
+        samples.extend(quads.iter().flat_map(|quad| {
+            // Four BGR triples span three words. Align each triple in the low
+            // bytes, then reverse the channels and fill the alpha byte.
+            let [a, b, c] = quad
+                .as_chunks::<4>()
+                .0
+                .first_chunk::<3>()
+                .unwrap()
+                .map(u32::from_le_bytes);
+            [a, (a >> 24) | (b << 8), (b >> 16) | (c << 16), c >> 8]
+                .map(|bgr| ((bgr.swap_bytes() >> 8) | 0xff00_0000).to_le_bytes())
+        }));
         samples.extend(
             tail.as_chunks::<3>()
                 .0
@@ -756,6 +810,18 @@ fn rgb24_rgba(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> {
         }
     }
     Ok(samples.into_flattened())
+}
+
+fn rgbx32_rgba(source: &[u8], header: &Header, rgb: [Channel; 3]) -> Result<Vec<u8>, Error> {
+    match rgb.map(|channel| channel.mask) {
+        [0xff0000, 0xff00, 0xff] => map_rows(source, header, |[b, g, r, _]| [r, g, b, 255]),
+        [0xff, 0xff00, 0xff0000] => map_rows(source, header, |[r, g, b, _]| [r, g, b, 255]),
+        _ => map_rows(source, header, |packed| {
+            let word = u32::from_le_bytes(packed);
+            let [r, g, b] = rgb.map(|channel| channel.sample_wide(word));
+            [r, g, b, 255]
+        }),
+    }
 }
 
 fn bgra_alpha_is_zero(source: &[u8], reverse: bool) -> bool {

@@ -1,4 +1,4 @@
-use deadlib_image_bmp::{Bitmap, Error, Limits, Pixels, decode};
+use deadlib_image_bmp::{Bitmap, Error, Limits, Pixels, decode, decode_rgba8};
 
 #[derive(Clone, Copy)]
 struct Format {
@@ -398,15 +398,13 @@ fn byte_indices_validate_short_palettes_without_including_padding() {
                     let last = (height - 1) * pitch + width - 1;
                     let original = rows[last];
                     rows[last] = size as u8;
+                    let invalid = wire(Format::rgb(8), width, height, top_down, &colors, &rows);
                     assert_eq!(
-                        decode(&wire(
-                            Format::rgb(8),
-                            width,
-                            height,
-                            top_down,
-                            &colors,
-                            &rows
-                        )),
+                        decode(&invalid),
+                        Err(Error::Invalid("pixel index exceeds the palette"))
+                    );
+                    assert_eq!(
+                        decode_rgba8(&invalid),
                         Err(Error::Invalid("pixel index exceeds the palette"))
                     );
                     rows[last] = original;
@@ -477,6 +475,7 @@ fn common_and_unusual_32_bit_masks_preserve_channel_order_and_bit_replication() 
         [(16, 8), (8, 8), (0, 8), (24, 8)],
         [(16, 8), (8, 8), (0, 8), (0, 0)],
         [(0, 8), (8, 8), (16, 8), (24, 8)],
+        [(0, 8), (8, 8), (16, 8), (0, 0)],
         [(8, 8), (0, 8), (24, 8), (16, 8)],
         [(0, 3), (3, 5), (8, 7), (15, 8)],
         [(1, 2), (6, 6), (17, 4), (27, 1)],
@@ -504,8 +503,10 @@ fn common_and_unusual_32_bit_masks_preserve_channel_order_and_bit_replication() 
                 }
             }
             for top_down in [false, true] {
-                let bitmap = decode(&wire(format, width, 3, top_down, &[], &rows)).unwrap();
+                let bytes = wire(format, width, 3, top_down, &[], &rows);
+                let bitmap = decode(&bytes).unwrap();
                 assert_eq!(bitmap.to_rgba8().unwrap(), expected);
+                assert_eq!(decode_rgba8(&bytes).unwrap().1, expected);
             }
         }
     }
