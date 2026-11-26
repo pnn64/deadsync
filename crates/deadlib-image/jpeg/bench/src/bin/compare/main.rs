@@ -186,14 +186,17 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let mode = args
         .next()
-        .expect("compare decode|encode INPUTS.tsv BRIDGE_DIR [--verify-only]");
+        .expect("compare decode|encode INPUTS.tsv BRIDGE_DIR [--verify-only] [--turbo-only]");
     let inputs = args.next().expect("input manifest");
     let bridges = Bridges::load(Path::new(&args.next().expect("bridge directory")));
-    let verify = args.next().is_some_and(|arg| {
-        assert_eq!(arg, "--verify-only");
-        true
-    });
-    assert!(args.next().is_none());
+    let (mut verify, mut turbo_only) = (false, false);
+    for arg in args {
+        match arg.as_str() {
+            "--verify-only" => verify = true,
+            "--turbo-only" if mode == "decode" => turbo_only = true,
+            _ => panic!("unknown argument for {mode}: {arg}"),
+        }
+    }
     let ms: u64 = std::env::var("JPEG_BENCH_MS").map_or(8, |s| s.parse().unwrap());
     let sample = Duration::from_millis(if verify { 0 } else { ms });
     if !verify {
@@ -211,7 +214,7 @@ fn main() {
         let line = line.unwrap();
         let fields: Vec<_> = line.split('\t').collect();
         if mode == "decode" {
-            decode::bench(&fields, index, sample, &bridges, &mut out);
+            decode::bench(&fields, index, sample, turbo_only, &bridges, &mut out);
         } else {
             assert_eq!(mode, "encode");
             encode::bench(&fields, index, sample, &bridges, &mut out);

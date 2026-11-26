@@ -160,20 +160,8 @@ impl<'a> MarkerReader<'a> {
         }
         let start = self.position;
         loop {
-            // Skip eight non-0xFF bytes at a time. In a little-endian load the
-            // lowest flagged byte is always a true match: borrows only carry up.
-            while let Some(bytes) = self.input.get(self.position..self.position + 8) {
-                let inverted = !u64::from_le_bytes(bytes.try_into().unwrap());
-                let found = inverted.wrapping_sub(0x0101_0101_0101_0101)
-                    & !inverted
-                    & 0x8080_8080_8080_8080;
-                if found != 0 {
-                    self.position += (found.trailing_zeros() / 8) as usize;
-                    break;
-                }
-                self.position += 8;
-            }
-            let Some(&byte) = self.input.get(self.position) else {
+            self.position += crate::simd::find_ff(&self.input[self.position..]);
+            if self.position == self.input.len() {
                 if self.strict {
                     return Err(Error::Truncated);
                 }
@@ -182,10 +170,6 @@ impl<'a> MarkerReader<'a> {
                     entropy: &self.input[start..],
                     offset,
                 });
-            };
-            if byte != 0xff {
-                self.position += 1;
-                continue;
             }
             let prefix = self.position;
             self.position += 1;

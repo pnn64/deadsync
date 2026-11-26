@@ -15,7 +15,8 @@ const FAST: u32 = LOOK_BITS as u32;
 pub(crate) struct Reader<'a> {
     input: &'a [u8],
     position: usize,
-    /// Valid bits are left-aligned; every bit below them is zero.
+    /// Valid bits are left-aligned. The unused suffix may contain the high
+    /// bits of the next unread byte after a word refill.
     buffer: u64,
     count: u32,
     /// Trailing virtual zero bits included in `count`.
@@ -67,7 +68,9 @@ impl<'a> Reader<'a> {
             let word = u64::from_be_bytes(bytes.try_into().unwrap());
             if !has_ff(word) {
                 let n = (64 - self.count) / 8;
-                self.buffer |= (word >> (64 - 8 * n)) << (64 - self.count - 8 * n);
+                // Any bits below the new count belong to the same next
+                // byte that a later word or byte refill will merge here.
+                self.buffer |= word >> self.count;
                 self.position += n as usize;
                 self.count += 8 * n;
                 return;

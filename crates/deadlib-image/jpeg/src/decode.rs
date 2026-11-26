@@ -306,6 +306,8 @@ pub(crate) fn decode_with_tables<'a>(
                         let count = components.iter().map(|c| c.blocks.len()).sum::<usize>();
                         let capacity = (remaining - memory_bytes) / core::mem::size_of::<u64>();
                         if count <= capacity {
+                            // The scratch can be omitted if allocation fails.
+                            #[allow(clippy::slow_vector_initialization)]
                             let mut masks = Vec::new();
                             if masks.try_reserve_exact(count).is_ok()
                                 && masks.capacity() <= capacity

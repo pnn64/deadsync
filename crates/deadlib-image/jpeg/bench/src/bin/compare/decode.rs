@@ -191,6 +191,7 @@ pub fn bench(
     fields: &[&str],
     index: usize,
     sample: Duration,
+    turbo_only: bool,
     libs: &Bridges,
     out: &mut impl Write,
 ) {
@@ -211,7 +212,7 @@ pub fn bench(
     };
     let shape = expected.as_ref().map_or(desc.shape, |p| p.shape);
     let mut checked = Vec::new();
-    let count = CODECS.len() + 1;
+    let count = if turbo_only { 2 } else { CODECS.len() + 1 };
     for position in 0..count {
         let id = (position + index) % count;
         let check = run(id, &bytes, desc, libs).and_then(|actual| {

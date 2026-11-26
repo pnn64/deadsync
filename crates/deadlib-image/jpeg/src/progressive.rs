@@ -148,16 +148,22 @@ impl ProgressiveScan {
     }
 
     fn correction(self, value: &mut i16, bits: &mut Bits<'_>) -> Result<()> {
-        let bit = 1i32 << self.al;
         if bits.read(1)? != 0 {
-            let old = i32::from(*value);
-            // A coefficient has exactly one correction at this bit position.
-            if old.abs() & bit != 0 {
-                return Err(Error::Invalid("duplicate AC correction"));
-            }
-            *value = i16::try_from(old + if old > 0 { bit } else { -bit })
-                .map_err(|_| Error::Invalid("refined AC range"))?;
+            self.increment(value)?;
         }
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn increment(self, value: &mut i16) -> Result<()> {
+        let bit = 1i32 << self.al;
+        let old = i32::from(*value);
+        // A coefficient has exactly one correction at this bit position.
+        if old.abs() & bit != 0 {
+            return Err(Error::Invalid("duplicate AC correction"));
+        }
+        *value = i16::try_from(old + if old > 0 { bit } else { -bit })
+            .map_err(|_| Error::Invalid("refined AC range"))?;
         Ok(())
     }
 
@@ -189,7 +195,7 @@ impl ProgressiveScan {
                 for _ in 0..run {
                     zeros &= zeros.wrapping_sub(1);
                 }
-                let target = zeros & zeros.wrapping_neg();
+                let target = zeros.isolate_lowest_one();
                 // With no target left, visit all remaining corrections
                 // before reporting the bad run, in the original wire order.
                 self.correct_occupied(block, bits, old & target.wrapping_sub(1))?;
@@ -217,6 +223,28 @@ impl ProgressiveScan {
         bits: &mut Bits<'_>,
         mut positions: u64,
     ) -> Result<()> {
+        if positions == 0 {
+            return Ok(());
+        }
+        let count = positions.count_ones() as u8;
+        if count <= 32
+            && let Ok(Some(corrections)) = bits.peek(count)
+        {
+            bits.drop(count);
+            let mut pending = corrections << (32 - count);
+            while pending != 0 {
+                let zeros = pending.leading_zeros();
+                for _ in 0..zeros {
+                    positions &= positions - 1;
+                }
+                self.increment(&mut block[ZIGZAG[positions.trailing_zeros() as usize]])?;
+                positions &= positions - 1;
+                pending = (pending << zeros) << 1;
+            }
+            return Ok(());
+        }
+        // On incomplete data, consume corrections in order so an earlier
+        // coefficient error still takes precedence over later truncation.
         while positions != 0 {
             self.correction(
                 &mut block[ZIGZAG[positions.trailing_zeros() as usize]],

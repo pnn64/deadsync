@@ -41,7 +41,8 @@ python $summary encode --output "$base/encode-summary.json" "$base/encode-run1.t
 ```
 
 Appending `--verify-only` to the runner arguments checks output without collecting
-timings. The aggregate ratios use the sums of per-file CPU cycles on each pair's
+timings. The decode mode's `--turbo-only` runs Deadlib and default libjpeg-turbo.
+The aggregate ratios use the sums of per-file CPU cycles on each pair's
 shared set. Each per-file time is the median of five batches. The summarizer
 takes the median across process runs and accepts supplementary runs over a
 subset with `--repeat-subset`. JPEG and raw pixel buffers are in memory. Timings include
