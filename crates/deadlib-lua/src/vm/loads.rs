@@ -5,6 +5,7 @@ use crate::memory::compilation::Workspace;
 use crate::memory::fallible::{self, SliceExt, VecExt};
 
 mod eof;
+mod reader;
 
 /// A genuine, non-callable collector object for an unfinished/retained prototype.
 #[derive(Debug)]
@@ -367,6 +368,9 @@ pub(super) fn message(name: &[u8], error: &Error, binary: bool) -> Result<Vec<u8
     Ok(message)
 }
 impl Loading {
+    pub(super) fn source(&self) -> &[u8] {
+        &self.source
+    }
     pub(super) fn shift_native_depth(&mut self, change: u16) {
         self.native_depth = (self.native_depth as u16).wrapping_add(change) as usize;
         self.parser.shift_native_depth(change);
@@ -973,6 +977,14 @@ impl Vm {
                         self.truncate_registers(base + frame.argc());
                         return self.finish_reader(index, frame, compiled, false);
                     }
+                    if first
+                        && self.strings.bytes[slot_index(id.0)]
+                            .first()
+                            .is_some_and(|&first| first != 27)
+                        && self.reader_can_omit_roots(index, self.registers[base])
+                    {
+                        self.loads[index].parser.disable_native_roots();
+                    }
                     let bytes = &self.strings.bytes[slot_index(id.0)];
                     let job = &mut self.loads[index];
                     if first {
@@ -999,9 +1011,12 @@ impl Vm {
         let before = job.arena_bytes();
         let parsed = job.resume(&mut self.compile_spare);
         let growth = job.arena_bytes().saturating_sub(before);
+        let has_parser_roots = job.binary_mode || job.parser.native_roots_enabled();
         self.gc_note_control(growth);
         let mut top = frame.argc();
-        self.apply_native_load_roots(index, base, &mut top, base)?;
+        if has_parser_roots {
+            self.apply_native_load_roots(index, base, &mut top, base)?;
+        }
         frame.vararg_count = top as u32;
         self.frames[owner] = frame;
         let compiled = match parsed {
@@ -1010,7 +1025,7 @@ impl Vm {
             Ok(None) => None,
         };
         if let Some(compiled) = compiled {
-            return self.finish_reader(index, frame, compiled, true);
+            return self.finish_reader(index, frame, compiled, has_parser_roots);
         }
         self.check_c_call()?;
         self.loads[index].awaiting = true;
@@ -1023,6 +1038,25 @@ impl Vm {
         }
         Ok(None)
     }
+    fn reader_can_omit_roots(&self, index: usize, reader: Value) -> bool {
+        let job = &self.loads[index];
+        job.parser.reusable()
+            && self.reader_context_allows_root_elision()
+            && reader::cannot_inspect_stack(self, reader)
+            && !self.load_has_inherited_error_handler(job.owner)
+            && !self.reader_gc_may_call_out()
+    }
+
+    fn reader_context_allows_root_elision(&self) -> bool {
+        self.hooks.mask == 0
+            && self.budget.is_none()
+            && !self.native_protected
+            && self.native_bodies.is_empty()
+            && self.gc.running == 0
+            && !self.gc.closing
+            && self.gc.finalizers.is_empty()
+    }
+
     fn try_complete_reader(
         &mut self,
         index: usize,
@@ -1037,13 +1071,7 @@ impl Vm {
             || bytes.is_empty()
             || bytes.len() > SPARE_SOURCE_LIMIT
             || bytes[0] == 27
-            || self.hooks.mask != 0
-            || self.budget.is_some()
-            || self.native_protected
-            || !self.native_bodies.is_empty()
-            || self.gc.running != 0
-            || self.gc.closing
-            || !self.gc.finalizers.is_empty()
+            || !self.reader_context_allows_root_elision()
             || !eof::returns_nil(self, self.registers[base])
             || self.reader_gc_may_call_out()
         {

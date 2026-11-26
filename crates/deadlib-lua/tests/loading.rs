@@ -162,6 +162,157 @@ fn readers_keep_parser_tables_that_cross_a_chunk_boundary() {
 }
 
 #[test]
+fn reader_roots_keep_source_and_escaped_text_through_reentry() {
+    let program = compile(
+        br#"
+        local pieces = {
+            "local long_reader_identifier = 'prefix\\000suffix';\n",
+            "local result = long_reader_identifier;\nreturn result\n",
+        }
+        local cooked = "prefix\000suffix"
+        local call, root = 0
+        local compiled = assert(load(function()
+            call = call + 1
+            if call == 2 then
+                local _, constants = debug.getlocal(2, 4)
+                root = constants
+                assert(root.long_reader_identifier == true and root[cooked] == 0)
+                root.long_reader_identifier = nil
+                root[cooked] = 97
+                local nested_source = "return 42"
+                local nested = assert(load(function()
+                    local block = nested_source
+                    nested_source = nil
+                    return block
+                end))
+                assert(nested() == 42)
+                collectgarbage()
+            elseif call == 3 then
+                local _, constants = debug.getlocal(2, 4)
+                assert(constants == root and root.long_reader_identifier == true)
+                assert(root[cooked] == 97)
+            end
+            return pieces[call]
+        end))
+        return call == 3 and compiled() == cooked
+"#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Boolean(true)]);
+    }
+}
+
+#[test]
+fn fragmented_scalar_readers_call_every_chunk_without_publishing_roots() {
+    let program = compile(
+        br#"
+        local payload = "return 7, 11, 'result'"
+        local offset = 1
+        local first = assert(load(function()
+            if offset > #payload then return nil end
+            local block = payload:sub(offset, offset + 3)
+            offset = offset + 4
+            return block
+        end))
+        assert(offset == 1 + 4 * math.ceil(#payload / 4))
+        local a, b, c = first()
+        assert(a == 7 and b == 11 and c == "result")
+
+        local chunks = {"return ", "42"}
+        local index = 0
+        local second = assert(load(function()
+            index = index + 1
+            return chunks[index]
+        end))
+        assert(index == 3)
+        return second()
+"#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+        assert_eq!(vm.heap_stats().parser_prototypes, 0);
+    }
+}
+
+#[test]
+fn later_reader_branches_and_replaced_string_methods_can_observe_roots() {
+    let program = compile(
+        br#"
+        local chunks = { "local kept = 20; ", "return kept + 22" }
+        local index = 0
+        local function observe(level)
+            local _, constants = debug.getlocal(level, 4)
+            assert(type(constants) == "table" and constants.kept == true)
+        end
+        local first = assert(load(function()
+            index = index + 1
+            if index == 2 then observe(3) end
+            return chunks[index]
+        end))
+        assert(first() == 42 and index == 3)
+
+        local sub = string.sub
+        string.sub = function(s, a, b)
+            if a > 1 then observe(4) end
+            return sub(s, a, b)
+        end
+        local payload = "local kept = 20; return kept + 22"
+        local offset = 1
+        local second = assert(load(function()
+            if offset > #payload then return nil end
+            local block = payload:sub(offset, offset + 18)
+            offset = offset + 19
+            return block
+        end))
+        string.sub = sub
+        return second()
+"#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Number(42.0)]);
+        assert!(vm.heap_stats().parser_prototypes > 0);
+    }
+}
+
+#[test]
+fn inherited_error_handler_can_observe_roots_after_a_bad_read() {
+    let program = compile(
+        br#"
+        local observed = false
+        local chunks = {"local kept = 20; ", true}
+        local index = 0
+        local function read()
+            index = index + 1
+            return chunks[index]
+        end
+        local ok, result, message = xpcall(function()
+            local f, err = load(read)
+            return f, err
+        end, function()
+            for level = 2, 8 do
+                local info = debug.getinfo(level, "f")
+                if not info then break end
+                if info.func == load then
+                    local _, constants = debug.getlocal(level, 4)
+                    observed = type(constants) == "table" and constants.kept == true
+                    break
+                end
+            end
+            return "reader error"
+        end)
+        return ok and result == nil and message == "reader error" and observed and index == 2
+"#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Boolean(true)]);
+    }
+}
+
+#[test]
 fn one_chunk_reader_can_finish_without_publishing_parser_roots() {
     let program = compile(
         br#"

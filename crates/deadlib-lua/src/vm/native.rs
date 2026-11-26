@@ -324,6 +324,30 @@ impl Vm {
     fn protection_active(&self, index: usize) -> bool {
         self.thread_protection_active(self.thread, index)
     }
+    fn inherited_load_protection(&self, loader: usize) -> Option<usize> {
+        // A host call outside the unwind floor can still supply the error
+        // function. Handler-free protection stops inheritance.
+        (0..loader).rfind(|&i| {
+            self.protection_active(i)
+                && (!loads::protected(self.body_kind(i, self.frames[i].function))
+                    || self.frames[i].pc == 3)
+        })
+    }
+    fn has_error_handler(frame: Frame) -> bool {
+        matches!(frame.function, FrameKind::Native(XPCALL))
+            || (matches!(frame.function, FrameKind::Native(CONT_HOST_PCALL)) && frame.argc() != 0)
+            || (matches!(frame.function, FrameKind::Native(CONT_STANDALONE)) && frame.pc != 7)
+    }
+    fn protected_error_handler(&self, index: usize) -> bool {
+        Self::has_error_handler(Frame {
+            function: self.body_kind(index, self.frames[index].function),
+            ..self.frames[index]
+        })
+    }
+    pub(super) fn load_has_inherited_error_handler(&self, loader: usize) -> bool {
+        self.inherited_load_protection(loader)
+            .is_some_and(|index| self.protected_error_handler(index))
+    }
     fn thread_protection_active(&self, thread: ThreadId, index: usize) -> bool {
         let frames = if thread == self.thread {
             &self.frames
@@ -407,32 +431,14 @@ impl Vm {
             // function. An enclosing xpcall transforms reader runtime errors even
             // though the loader subsequently returns nil plus that transformed value.
             let inherited = if loads::protected(frame.function) {
-                // An unprotected host call keeps its Rust boundary outside
-                // this search's unwind floor, but lua_load still inherits the
-                // enclosing error function. A protected host boundary stops
-                // inheritance just like any other handler-free protection.
-                (0..index).rfind(|&i| {
-                    self.protection_active(i)
-                        && (!loads::protected(self.body_kind(i, self.frames[i].function))
-                            || self.frames[i].pc == 3)
-                })
+                self.inherited_load_protection(index)
             } else {
                 None
             };
-            let has_handler = |f: Frame| {
-                matches!(f.function, FrameKind::Native(XPCALL))
-                    || (matches!(f.function, FrameKind::Native(CONT_HOST_PCALL)) && f.argc() != 0)
-                    || (matches!(f.function, FrameKind::Native(CONT_STANDALONE)) && f.pc != 7)
-            };
-            let handler_index = if has_handler(frame) {
+            let handler_index = if Self::has_error_handler(frame) {
                 Some(index)
             } else {
-                inherited.filter(|&i| {
-                    has_handler(Frame {
-                        function: self.body_kind(i, self.frames[i].function),
-                        ..self.frames[i]
-                    })
-                })
+                inherited.filter(|&i| self.protected_error_handler(i))
             };
             if let Some(handler_index) = handler_index {
                 self.frames[index].pc = 3;
@@ -477,7 +483,7 @@ impl Vm {
                 }
             }
             let handler_failed = frame.pc() == 3
-                || has_handler(frame)
+                || Self::has_error_handler(frame)
                 || handler_index.is_some()
                 || inherited.is_some_and(|i| self.frames[i].pc == 3);
             let value = if handler_failed {

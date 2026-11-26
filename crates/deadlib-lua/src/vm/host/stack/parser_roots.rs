@@ -1,6 +1,9 @@
 //! Native-reader roots follow incremental parser/decoder events.
 use super::*;
-use crate::memory::fallible::SliceExt;
+use crate::{
+    memory::fallible::SliceExt,
+    parser::{NativeRootEvent, RootText},
+};
 
 impl NativeStack<'_, '_> {
     pub(super) fn apply_load_roots(&mut self, index: usize) -> Result<usize, Error> {
@@ -23,15 +26,16 @@ impl Vm {
         top: &mut usize,
         limit_base: usize,
     ) -> Result<(), Error> {
-        use crate::parser::NativeRootEvent;
         let storage_before = self.loads[index].native.as_ref().unwrap().storage_bytes();
         let job = &mut self.loads[index];
         let binary = job.binary_mode;
+        let text_started = !binary && job.native.as_ref().is_some_and(|roots| roots.started);
+        let recycle = text_started && job.parser.reusable();
         let mut events = if binary {
             job.decoder
                 .as_mut()
                 .map_or_else(Vec::new, |decoder| decoder.take_native_events())
-        } else if job.native.as_ref().is_some_and(|r| r.started) {
+        } else if text_started {
             job.parser.take_native_events()
         } else {
             Vec::new()
@@ -52,7 +56,7 @@ impl Vm {
             }
         }
         let result = (|| -> Result<(), Error> {
-            for event in events {
+            for event in events.drain(..) {
                 if matches!(
                     event,
                     NativeRootEvent::Open | NativeRootEvent::OpenWithoutTable
@@ -120,7 +124,13 @@ impl Vm {
                     .active
                     .last()
                     .expect("active parser prototype");
-                if table.is_none() && matches!(event, NativeRootEvent::Anchor(_)) {
+                if let NativeRootEvent::Anchor(text) = event {
+                    if let Some(table) = table {
+                        let key = self.intern_parser_text(index, &text)?;
+                        if self.tables[slot_index(table.0)].get_string(key) == Value::Nil {
+                            self.raw_set(table, Value::String(key), Value::Boolean(true))?;
+                        }
+                    }
                     continue;
                 }
                 let before = self.parser_prototypes[slot_index(id.0)].heap_bytes();
@@ -165,22 +175,22 @@ impl Vm {
                                 );
                             }
                         }
-                        NativeRootEvent::Anchor(bytes) => {
-                            let key = self.try_intern(&bytes)?;
-                            let table = table.expect("text parser constants table");
-                            if self.tables[slot_index(table.0)].get(key) == Value::Nil {
-                                self.raw_set(table, key, Value::Boolean(true))?;
-                            }
-                        }
-                        NativeRootEvent::Constant(constant) => {
-                            let value = match constant {
-                                Constant::Nil => Value::Nil,
-                                Constant::Boolean(value) => Value::Boolean(value),
-                                Constant::Number(value) => Value::Number(value),
-                                Constant::String(bytes) => self.try_intern(&bytes)?,
-                                Constant::PooledString { .. } => {
-                                    unreachable!("parser roots own their bytes")
+                        NativeRootEvent::Constant(_) | NativeRootEvent::ConstantText(_) => {
+                            let value = match event {
+                                NativeRootEvent::Constant(Constant::Nil) => Value::Nil,
+                                NativeRootEvent::Constant(Constant::Boolean(value)) => {
+                                    Value::Boolean(value)
                                 }
+                                NativeRootEvent::Constant(Constant::Number(value)) => {
+                                    Value::Number(value)
+                                }
+                                NativeRootEvent::Constant(Constant::String(bytes)) => {
+                                    self.try_intern(&bytes)?
+                                }
+                                NativeRootEvent::ConstantText(text) => {
+                                    Value::String(self.intern_parser_text(index, &text)?)
+                                }
+                                _ => unreachable!("parser roots own their string constants"),
                             };
                             self.reserve_gc_barrier(Value::ParserPrototype(id), value)?;
                             let p = &mut self.parser_prototypes[slot_index(id.0)];
@@ -210,7 +220,9 @@ impl Vm {
                                 .try_push(value)?;
                             self.gc_barrier(Value::ParserPrototype(id), value);
                         }
-                        NativeRootEvent::Open | NativeRootEvent::OpenWithoutTable => unreachable!(),
+                        NativeRootEvent::Open
+                        | NativeRootEvent::OpenWithoutTable
+                        | NativeRootEvent::Anchor(_) => unreachable!(),
                     }
                     Ok(())
                 })();
@@ -223,10 +235,20 @@ impl Vm {
             }
             Ok(())
         })();
+        if recycle {
+            self.loads[index].parser.recycle_native_events(events);
+        }
         let storage_after = self.loads[index].native.as_ref().unwrap().storage_bytes();
         self.gc_note_control(storage_after.saturating_sub(storage_before));
         result
     }
+    fn intern_parser_text(&mut self, index: usize, text: &RootText) -> Result<StringId, Error> {
+        let bytes = text.bytes(self.loads[index].source());
+        self.strings
+            .try_intern(bytes)
+            .map_err(|_| self.memory_failure())
+    }
+
     fn native_load_push(
         &mut self,
         base: usize,

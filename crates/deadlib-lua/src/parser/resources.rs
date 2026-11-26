@@ -4,14 +4,14 @@
 //! lists. Checks run at parser continuations, before the next reader request
 //! whenever the reference would already reject the source. No code is emitted.
 use super::{
-    Ast, ConstantOperand, Expr, ExprId, NativeRootEvent,
+    Ast, ConstantOperand, Expr, ExprId, NativeRootEvent, RootText,
     bindings::{Bindings, Reference},
     hash,
 };
 use crate::lexer::{Kind, Lexeme};
 use crate::{
     Error, ErrorKind,
-    memory::fallible::{self, SliceExt, VecExt},
+    memory::fallible::{self, VecExt},
 };
 
 type Check<T = ()> = Result<T, Error>;
@@ -91,15 +91,33 @@ pub(super) struct Context<'a> {
 }
 
 impl Key {
-    fn constant(self, cx: &Context<'_>) -> Result<crate::bytecode::Constant, Error> {
+    fn native_event(self, cx: &Context<'_>, negative_zero: bool) -> Result<NativeRootEvent, Error> {
         use crate::bytecode::Constant;
-        Ok(match self.kind {
-            0 => Constant::Number(f64::from_bits(self.data)),
+        let constant = match self.kind {
+            0 => Constant::Number(if negative_zero && self.data == 0 {
+                -0.0
+            } else {
+                f64::from_bits(self.data)
+            }),
             1 => Constant::Nil,
             2 | 3 => Constant::Boolean(self.kind == 3),
-            4 | 5 => Constant::String(self.bytes(cx).try_boxed()?),
+            4 => {
+                let text = RootText::from_lexeme(self.string(cx.ast))?;
+                return Ok(NativeRootEvent::ConstantText(text));
+            }
+            5 => {
+                let text = cx.bindings.root_text(cx.input, self.data as u32)?;
+                return Ok(NativeRootEvent::ConstantText(text));
+            }
             _ => unreachable!(),
-        })
+        };
+        Ok(NativeRootEvent::Constant(constant))
+    }
+    fn string(self, ast: &Ast) -> &Lexeme {
+        let Expr::String(bytes) = &ast.exprs[self.data as usize].0 else {
+            unreachable!()
+        };
+        bytes
     }
     fn scalar(kind: u8, data: u64) -> Self {
         Self {
@@ -115,10 +133,7 @@ impl Key {
         if self.kind == 5 {
             cx.bindings.bytes(cx.input, self.data as u32)
         } else {
-            let Expr::String(bytes) = &cx.ast.exprs[self.data as usize].0 else {
-                unreachable!()
-            };
-            bytes.bytes(cx.input)
+            self.string(cx.ast).bytes(cx.input)
         }
     }
 }
@@ -241,21 +256,15 @@ impl Resources {
         }
         fallible::reserve(events, entries.len())?;
         let before = events.len();
+        let negative_zero = self.function.zero_sign == Some(true);
         for key in entries {
-            let mut constant = match key.constant(cx) {
-                Ok(constant) => constant,
+            match key.native_event(cx, negative_zero) {
+                Ok(event) => events.push(event),
                 Err(error) => {
                     events.truncate(before);
                     return Err(error);
                 }
-            };
-            if let crate::bytecode::Constant::Number(n) = &mut constant
-                && *n == 0.0
-                && self.function.zero_sign == Some(true)
-            {
-                *n = -0.0;
             }
-            events.push(NativeRootEvent::Constant(constant));
         }
         Ok(())
     }

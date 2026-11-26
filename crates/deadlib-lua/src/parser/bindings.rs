@@ -1,5 +1,5 @@
 //! Lexical capture limits while parsing, including unfinished reader input.
-use super::{NameBinding, hash};
+use super::{NameBinding, RootText, Text, hash};
 use crate::lexer::Lexeme;
 use crate::{
     Error, ErrorKind,
@@ -183,6 +183,24 @@ impl Bindings {
                 &input[n.start..n.start + n.len]
             }
         }
+    }
+    pub(super) fn root_text(&self, input: &[u8], symbol: u32) -> Result<RootText, Error> {
+        Ok(match symbol {
+            0 => RootText::Static(b"arg"),
+            1 => RootText::Static(b"self"),
+            _ => {
+                let name = &self.names[symbol as usize - 2];
+                let end = name.start + name.len;
+                if let Ok(end) = u32::try_from(end) {
+                    RootText::Source {
+                        start: name.start as u32,
+                        end,
+                    }
+                } else {
+                    RootText::Owned(Text::new(&input[name.start..end])?)
+                }
+            }
+        })
     }
     pub(super) fn symbol_hash(&self, symbol: u32) -> u64 {
         match symbol {

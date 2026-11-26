@@ -33,6 +33,33 @@ impl Span {
     }
 }
 
+/// Text waiting to be published at a reader boundary. The source prefix
+/// remains available while the loader consumes the pending events.
+#[derive(Debug)]
+pub(crate) enum RootText {
+    Source { start: u32, end: u32 },
+    Static(&'static [u8]),
+    Owned(Text),
+}
+impl RootText {
+    fn from_lexeme(text: &Lexeme) -> Result<Self, Error> {
+        Ok(match text {
+            Lexeme::Source { start, end, .. } => Self::Source {
+                start: *start,
+                end: *end,
+            },
+            Lexeme::Owned(text) => Self::Owned(Text::new(text)?),
+        })
+    }
+    pub(crate) fn bytes<'a>(&'a self, input: &'a [u8]) -> &'a [u8] {
+        match self {
+            Self::Source { start, end } => &input[*start as usize..*end as usize],
+            Self::Static(bytes) => bytes,
+            Self::Owned(text) => text,
+        }
+    }
+}
+
 /// Observable collector roots created by the incremental reference grammar.
 /// Events are enabled only for native readers; ordinary compilation owns its AST.
 #[derive(Debug)]
@@ -40,8 +67,9 @@ pub(crate) enum NativeRootEvent {
     Open,
     OpenWithoutTable,
     Close,
-    Anchor(Text),
+    Anchor(RootText),
     Constant(crate::bytecode::Constant),
+    ConstantText(RootText),
     Source(Box<[u8]>),
     DebugString(Text),
 }
@@ -51,7 +79,9 @@ pub(crate) fn native_root_bytes(events: &Option<Vec<NativeRootEvent>>) -> usize 
             + events
                 .iter()
                 .map(|event| match event {
-                    NativeRootEvent::Anchor(s) | NativeRootEvent::DebugString(s) => s.heap_bytes(),
+                    NativeRootEvent::Anchor(RootText::Owned(s))
+                    | NativeRootEvent::ConstantText(RootText::Owned(s))
+                    | NativeRootEvent::DebugString(s) => s.heap_bytes(),
                     NativeRootEvent::Source(s)
                     | NativeRootEvent::Constant(crate::bytecode::Constant::String(s)) => s.len(),
                     _ => 0,

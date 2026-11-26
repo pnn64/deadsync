@@ -391,8 +391,8 @@ impl Vm {
         }
         user.file.map(NonZeroU64::get)
     }
-    // During an elided EOF call, an automatic collection must not be able
-    // to invoke Lua or host code that can observe the parser stack.
+    // A reader can omit parser roots only when automatic collection
+    // cannot invoke code that observes the parser stack.
     pub(super) fn reader_gc_may_call_out(&self) -> bool {
         if self.userdata.len() > 64 {
             return true;

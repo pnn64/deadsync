@@ -288,16 +288,32 @@ fn precedence(kind: Kind) -> Option<(u8, u8)> {
     })
 }
 
+// Retain storage for ordinary batches without holding on to large reads.
+const MAX_SPARE_ROOT_EVENTS: usize = (64 * 1024) / size_of::<NativeRootEvent>();
+
 impl Parser {
     pub(crate) fn enable_native_roots(&mut self) -> Result<(), Error> {
         self.native_events = Some(fallible::vec([NativeRootEvent::Open])?);
         Ok(())
+    }
+    pub(crate) fn disable_native_roots(&mut self) {
+        debug_assert!(!self.started);
+        self.native_events = None;
+    }
+    pub(crate) fn native_roots_enabled(&self) -> bool {
+        self.native_events.is_some()
     }
     pub(crate) fn take_native_events(&mut self) -> Vec<NativeRootEvent> {
         self.native_events
             .as_mut()
             .map(std::mem::take)
             .unwrap_or_default()
+    }
+    pub(crate) fn recycle_native_events(&mut self, events: Vec<NativeRootEvent>) {
+        debug_assert!(events.is_empty());
+        if events.capacity() <= MAX_SPARE_ROOT_EVENTS {
+            self.native_events = Some(events);
+        }
     }
     pub(crate) fn with_native_depth(depth: usize) -> Result<Self, Error> {
         Ok(Self {
@@ -719,7 +735,7 @@ impl Parser {
             && let Some(events) = &mut self.native_events
         {
             let text = match token.kind {
-                Kind::Name | Kind::String => Some(Text::new(token.text.bytes(input))?),
+                Kind::Name | Kind::String => Some(RootText::from_lexeme(&token.text)?),
                 Kind::And
                 | Kind::Break
                 | Kind::Do
@@ -740,9 +756,9 @@ impl Parser {
                 | Kind::Then
                 | Kind::True
                 | Kind::Until
-                | Kind::While => Some(Text::new(
+                | Kind::While => Some(RootText::Static(
                     token.kind.static_label().expect("keyword label"),
-                )?),
+                )),
                 _ => None,
             };
             if let Some(text) = text {
@@ -1082,7 +1098,7 @@ impl Parser {
                     if self.kind() == Kind::Assign {
                         if let Some(events) = &mut self.native_events {
                             for name in [b"(for index)".as_slice(), b"(for limit)", b"(for step)"] {
-                                events.try_push(NativeRootEvent::Anchor(Text::new(name)?))?;
+                                events.try_push(NativeRootEvent::Anchor(RootText::Static(name)))?;
                             }
                         }
                         self.check_local_count(usize::from(self.locals) + 4)?;
@@ -1096,7 +1112,7 @@ impl Parser {
                                 b"(for state)",
                                 b"(for control)",
                             ] {
-                                events.try_push(NativeRootEvent::Anchor(Text::new(name)?))?;
+                                events.try_push(NativeRootEvent::Anchor(RootText::Static(name)))?;
                             }
                         }
                         let names = self.scratch.names.len();
@@ -1296,7 +1312,7 @@ impl Parser {
                         && self.scratch.names.len() > params
                         && let Some(events) = &mut self.native_events
                     {
-                        events.try_push(NativeRootEvent::Anchor(Text::new(b"self")?))?;
+                        events.try_push(NativeRootEvent::Anchor(RootText::Static(b"self")))?;
                     }
                     if self.kind() == Kind::Dots {
                         self.take();
@@ -1323,7 +1339,7 @@ impl Parser {
                 }
                 Task::ParamsEnd(line, params, vararg) => {
                     if vararg && let Some(events) = &mut self.native_events {
-                        events.try_push(NativeRootEvent::Anchor(Text::new(b"arg")?))?;
+                        events.try_push(NativeRootEvent::Anchor(RootText::Static(b"arg")))?;
                     }
                     self.start_function_body(input, line, params, vararg)?
                 }
@@ -1363,8 +1379,8 @@ impl Parser {
                         if let Some(token) = &self.token
                             && matches!(token.kind, Kind::Name | Kind::String)
                         {
-                            events.try_push(NativeRootEvent::Anchor(Text::new(
-                                token.text.bytes(input),
+                            events.try_push(NativeRootEvent::Anchor(RootText::from_lexeme(
+                                &token.text,
                             )?))?;
                         }
                     }
