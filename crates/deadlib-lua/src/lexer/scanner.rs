@@ -1,4 +1,4 @@
-//! Resumable lexical state over append-only input, with no token replay.
+//! Resumable lexical state over append-only input.
 use super::{Kind, Lexeme, Token, parse_number};
 use crate::memory::fallible::{self, SliceExt, VecExt};
 use crate::pattern::{ascii_alphanumeric_lanes, byte_run, scan_boundary};
@@ -160,7 +160,11 @@ pub(crate) struct Scanner {
     token: Token,
     text: Vec<u8>,
     buffer: Buffer,
+    closed: ClosedTokens,
 }
+
+mod replay;
+pub(crate) use replay::ClosedTokens;
 
 impl Default for Scanner {
     fn default() -> Self {
@@ -172,11 +176,33 @@ impl Default for Scanner {
             token: empty(1),
             text: Vec::new(),
             buffer: Buffer::Empty,
+            closed: ClosedTokens::default(),
         }
     }
 }
 
 impl Scanner {
+    pub(crate) fn with_closed_tokens(state: ClosedTokens) -> Self {
+        Self {
+            closed: state,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn into_closed_tokens(mut self) -> ClosedTokens {
+        self.closed.end();
+        self.closed
+    }
+
+    pub(crate) fn restart(&mut self) {
+        self.closed.end();
+        *self = Self::with_closed_tokens(std::mem::take(&mut self.closed));
+    }
+
+    pub(crate) fn begin_closed(&mut self, input: &[u8]) {
+        self.closed.begin(input);
+    }
+
     pub(crate) fn position(&self) -> usize {
         self.pos
     }
@@ -249,7 +275,7 @@ impl Scanner {
         build().unwrap_or_else(|error| error)
     }
     pub(crate) fn heap_bytes(&self) -> usize {
-        self.text.capacity() + self.token.text.heap_bytes()
+        self.text.capacity() + self.token.text.heap_bytes() + self.closed.heap_bytes()
     }
     fn skip_horizontal_space(&mut self, input: &[u8]) {
         let tail = &input[self.pos + 1..];
@@ -496,8 +522,18 @@ impl Scanner {
 
     /// Scan complete input for the parser that restarts on a syntax error.
     pub(crate) fn next_closed(&mut self, input: &[u8], out: &mut Token) -> Result<(), Error> {
-        if matches!(self.state, State::Skip) && self.fast::<true, false>(input, out)? {
-            return Ok(());
+        if matches!(self.state, State::Skip) {
+            if self.closed.next(&mut self.pos, &mut self.line, out) {
+                return Ok(());
+            }
+            let before = self.pos;
+            let line = self.line;
+            if self.fast::<true, false>(input, out)? {
+                if self.closed.recording() && out.kind != Kind::Eof {
+                    self.closed.record(before, self.pos, self.line - line, out);
+                }
+                return Ok(());
+            }
         }
         *out = self
             .slow(input, true)?

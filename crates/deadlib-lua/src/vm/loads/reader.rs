@@ -7,6 +7,25 @@ use crate::bytecode::RK;
 const REGISTERS: usize = 16;
 const STEPS: usize = 72;
 
+pub(super) fn captured_source(vm: &Vm, reader: Value, fragment: &[u8]) -> Option<StringId> {
+    let Value::Function(id) = reader else {
+        return None;
+    };
+    let closure = &vm.functions[slot_index(id.0)];
+    closure.upvalues.iter().find_map(|&cell| {
+        let Value::String(source) = vm.cell_value(cell as usize) else {
+            return None;
+        };
+        let bytes = &vm.strings.bytes[slot_index(source.0)];
+        // ASCII source keeps the same lexer classifications across locale changes.
+        (bytes.len() > fragment.len()
+            && bytes.len() <= SPARE_SOURCE_LIMIT
+            && bytes.starts_with(fragment)
+            && bytes.is_ascii())
+        .then_some(source)
+    })
+}
+
 #[derive(Clone, Copy)]
 enum ReaderValue {
     Known(Value),

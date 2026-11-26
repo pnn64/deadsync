@@ -16,6 +16,7 @@ use crate::{
 mod boolean;
 mod constants;
 mod expressions;
+mod numeric_templates;
 mod statements;
 mod tasks;
 mod templates;
@@ -173,6 +174,7 @@ struct Compiler<'a> {
     names: Vec<u8>,
     prototypes: Vec<Prototype>,
     templates: templates::Templates,
+    numeric_templates: numeric_templates::NumericTemplates,
     template_locale: Option<u64>,
     folded: Vec<Option<f64>>,
     tasks: Vec<Task<'a>>,
@@ -193,6 +195,13 @@ pub(crate) struct Spare {
     tasks: Vec<Task<'static>>,
     assignment_targets: Vec<Target>,
     templates: templates::Templates,
+    numeric_templates: numeric_templates::NumericTemplates,
+}
+
+impl Spare {
+    pub(crate) fn folded_literals(&self) -> &[Option<f64>] {
+        &self.folded
+    }
 }
 
 /// Reuse an empty continuation stack for a borrow of a different syntax tree.
@@ -248,6 +257,8 @@ fn compile_with_templates(
 ) -> Result<Program, Error> {
     let mut templates = std::mem::take(&mut spare.templates);
     templates.begin(template_locale);
+    let mut numeric_templates = std::mem::take(&mut spare.numeric_templates);
+    numeric_templates.begin(template_locale);
     let mut functions = std::mem::take(&mut spare.functions);
     let mut function = match functions.pop() {
         Some(function) => function,
@@ -282,6 +293,7 @@ fn compile_with_templates(
         names,
         prototypes,
         templates,
+        numeric_templates,
         template_locale,
         folded,
         tasks,
@@ -306,6 +318,7 @@ fn compile_with_templates(
     let p = Program::try_new(c.prototypes, entry, name)?;
     p.verify()?;
     spare.templates = c.templates;
+    spare.numeric_templates = c.numeric_templates;
     Ok(p)
 }
 
@@ -446,7 +459,7 @@ impl<'a> Compiler<'a> {
                 } else {
                     RegisterMaps::Owned(f.gc_maps.try_boxed()?)
                 },
-                constants: constants.values,
+                original_constants: constants.values,
                 constant_strings: constants.strings,
                 registers: f.max.max(f.debug_stack).max(2),
                 params: f.params,

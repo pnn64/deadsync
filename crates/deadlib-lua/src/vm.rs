@@ -1323,8 +1323,8 @@ impl Vm {
                 .shared_owner()
                 .is_some_and(|owner| owner as usize != index)
             {
-                values.try_reserve_exact(prototype.constants.len())?;
-                for k in &prototype.constants {
+                values.try_reserve_exact(prototype.constants().len())?;
+                for k in prototype.constants() {
                     values.push(match k {
                         Constant::Nil => Value::Nil,
                         Constant::Boolean(v) => Value::Boolean(*v),

@@ -48,6 +48,9 @@ impl Parser {
 
     /// Parse complete `input` from the parser's initial state.
     pub(super) fn recursive(&mut self, input: &[u8]) -> Result<Ast, Error> {
+        if self.keep && !crate::memory::compilation::active() {
+            self.scanner.begin_closed(input);
+        }
         self.token = Some(self.rtoken(input)?);
         let body = self.rblock(input)?;
         self.ast.end_line = self.previous_line;
@@ -61,7 +64,7 @@ impl Parser {
 
     /// Return to the initial state after an abandoned attempt.
     pub(super) fn restart(&mut self) -> Result<(), Error> {
-        self.scanner = Scanner::default();
+        self.scanner.restart();
         self.parsed_leaves.clear();
         self.token = None;
         self.lookahead = None;

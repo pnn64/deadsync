@@ -138,7 +138,7 @@ fn serialize(data: &ProgramData, entry: usize, blocks: bool) -> Result<Output, E
                     Body::Source(lowered) => (
                         lowered.stack,
                         (u8::from(p.vararg) * 2) | (u8::from(p.compat_arg) * 5),
-                        p.constants.len(),
+                        p.constants().len(),
                     ),
                 };
                 for flag in [p.upvalues.len() as u8, p.params as u8, vararg, stack] {
@@ -146,7 +146,7 @@ fn serialize(data: &ProgramData, entry: usize, blocks: bool) -> Result<Output, E
                 }
                 output.words(body.code())?;
                 output.integer(constants)?;
-                for k in &p.constants[..constants] {
+                for k in &p.constants()[..constants] {
                     match k {
                         Constant::Nil => output.block(&[0])?,
                         Constant::Boolean(b) => {

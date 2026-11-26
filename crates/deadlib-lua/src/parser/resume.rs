@@ -115,6 +115,7 @@ pub(crate) struct Spare {
     bindings: Option<Bindings>,
     resources: Resources,
     parsed_leaves: Vec<Option<recursive::ParsedLeaf>>,
+    closed_tokens: crate::lexer::ClosedTokens,
     ast: Ast,
 }
 impl Spare {
@@ -235,7 +236,7 @@ impl Parser {
         scratch.fields.clear();
         scratch.arms.clear();
         Ok(Self {
-            scanner: Scanner::default(),
+            scanner: Scanner::with_closed_tokens(std::mem::take(&mut spare.closed_tokens)),
             token: None,
             lookahead: None,
             previous_line: 1,
@@ -266,6 +267,13 @@ impl Parser {
     pub(crate) fn reusable(&self) -> bool {
         self.keep
     }
+
+    pub(crate) fn initializer_numbers(
+        &self,
+        first: f64,
+    ) -> Option<impl Iterator<Item = f64> + '_> {
+        self.resources.initializer_numbers(first)
+    }
     /// Return storage to `spare` for the next `try_new_in`. A parser that
     /// failed still holds its partial syntax tree, whose storage is kept too.
     pub(crate) fn recycle(self, spare: &mut Spare) {
@@ -280,6 +288,7 @@ impl Parser {
         spare.bindings = Some(self.bindings);
         spare.resources = self.resources;
         spare.parsed_leaves = self.parsed_leaves;
+        spare.closed_tokens = self.scanner.into_closed_tokens();
     }
 }
 
@@ -674,6 +683,25 @@ impl Parser {
         let ast = self.try_recursive(input)?;
         self.started = ast.is_some();
         Ok(ast)
+    }
+
+    pub(crate) fn prepare_reader_input(&mut self, input: &[u8]) -> Result<bool, Error> {
+        let Some(ast) = self.try_complete_reader(input)? else {
+            return Ok(false);
+        };
+        self.ast = ast;
+        Ok(true)
+    }
+
+    pub(crate) fn take_reader_input(&mut self) -> Ast {
+        debug_assert!(self.finished);
+        std::mem::take(&mut self.ast)
+    }
+
+    pub(crate) fn discard_reader_input(&mut self) -> Result<(), Error> {
+        self.started = false;
+        self.finished = false;
+        self.restart()
     }
 
     fn try_recursive(&mut self, input: &[u8]) -> Result<Option<Ast>, Error> {

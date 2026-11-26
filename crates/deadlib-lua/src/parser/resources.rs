@@ -83,6 +83,7 @@ struct Key {
 struct Pool {
     entries: Vec<Key>,
     buckets: Vec<u32>,
+    first_number_reused: bool,
 }
 pub(super) struct Context<'a> {
     pub ast: &'a Ast,
@@ -141,6 +142,7 @@ impl Pool {
     fn clear(&mut self) {
         self.entries.clear();
         self.buckets.clear();
+        self.first_number_reused = false;
     }
 
     fn insert(&mut self, key: Key, cx: &Context<'_>) -> Result<u32, Error> {
@@ -158,6 +160,9 @@ impl Pool {
                         old.kind == key.kind && old.data == key.data
                     })
                 {
+                    if index == 0 && key.kind == 0 {
+                        self.first_number_reused = true;
+                    }
                     return Ok(index);
                 }
                 slot = (slot + 1) & mask;
@@ -214,6 +219,19 @@ pub(super) struct Resources {
     constants: Vec<(ExprId, ConstantOperand)>,
 }
 impl Resources {
+    pub(super) fn initializer_numbers(
+        &self,
+        first: f64,
+    ) -> Option<impl Iterator<Item = f64> + '_> {
+        let pool = &self.function.pool;
+        let (initializer, rest) = pool.entries.split_first()?;
+        if pool.first_number_reused || initializer.kind != 0 || initializer.data != first.to_bits()
+        {
+            return None;
+        }
+        Some(rest.iter().filter(|key| key.kind == 0).map(|key| f64::from_bits(key.data)))
+    }
+
     /// Return to the default state, keeping storage.
     pub(super) fn clear(&mut self) {
         // A recursive parse can stop inside a function before the streaming

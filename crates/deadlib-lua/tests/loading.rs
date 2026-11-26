@@ -237,6 +237,44 @@ fn fragmented_scalar_readers_call_every_chunk_without_publishing_roots() {
 }
 
 #[test]
+fn sliced_readers_accept_the_actual_source_at_eof() {
+    let program = compile(
+        br#"
+        local function read(source, chunks)
+            local calls = 0
+            local fn, err = load(function()
+                calls = calls + 1
+                if calls == 1 then return source:sub(1, 8) end
+                return chunks[calls]
+            end, "=fragment")
+            return fn, err, calls
+        end
+
+        local fn, err, calls = read("return (42)", {[2] = "42)"})
+        assert(fn and not err and calls == 3 and fn() == 42)
+        fn, err, calls = read("return (42)", {[2] = "51)"})
+        assert(fn and not err and calls == 3 and fn() == 51)
+        fn, err, calls = read("return (42)", {[2] = "42)", [3] = " + 1"})
+        assert(fn and not err and calls == 4 and fn() == 43)
+        fn, err, calls = read("return (bad !!!", {[2] = "42)"})
+        assert(fn and not err and calls == 3 and fn() == 42)
+        fn, err, calls = read("return (42)", {[2] = "!  ", [3] = "42)"})
+        assert(not fn and type(err) == "string" and calls == 2, tostring(err))
+        fn, err, calls = read("return (42)", {})
+        assert(not fn and type(err) == "string" and calls == 2)
+        fn, err, calls = read("return (42)", {[2] = "", [3] = "42)"})
+        assert(not fn and type(err) == "string" and calls == 2)
+        return true
+"#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Boolean(true)]);
+        assert_eq!(vm.heap_stats().parser_prototypes, 0);
+    }
+}
+
+#[test]
 fn later_reader_branches_and_replaced_string_methods_can_observe_roots() {
     let program = compile(
         br#"

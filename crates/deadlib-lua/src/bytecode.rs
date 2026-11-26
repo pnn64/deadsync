@@ -393,7 +393,8 @@ pub(crate) struct PrototypeBody {
     pub metadata: Box<[InstructionMetadata]>,
     pub active_lines: Box<[u32]>,
     pub gc_maps: RegisterMaps,
-    pub constants: Box<[Constant]>,
+    /// The pool of the original body. Use `Prototype::constants` for an instance.
+    pub original_constants: Box<[Constant]>,
     pub constant_strings: Box<[u8]>,
     pub registers: u16,
     pub params: u16,
@@ -410,6 +411,12 @@ enum PrototypeStorage {
     Shared {
         body: Shared<PrototypeBody>,
         owner: u32,
+    },
+    Substituted {
+        body: Shared<PrototypeBody>,
+        // First use of the body in this program, for allocation accounting.
+        owner: u32,
+        constants: Option<Box<[Constant]>>,
     },
 }
 
@@ -429,7 +436,9 @@ impl std::ops::Deref for Prototype {
     fn deref(&self) -> &PrototypeBody {
         match &self.storage {
             PrototypeStorage::Owned(body) => body,
-            PrototypeStorage::Shared { body, .. } => body,
+            PrototypeStorage::Shared { body, .. } | PrototypeStorage::Substituted { body, .. } => {
+                body
+            }
         }
     }
 }
@@ -437,8 +446,13 @@ impl std::ops::Deref for Prototype {
 #[cfg(test)]
 impl std::ops::DerefMut for Prototype {
     fn deref_mut(&mut self) -> &mut PrototypeBody {
-        if let PrototypeStorage::Shared { body, .. } = &self.storage {
-            let mut body = (**body).clone();
+        if !matches!(&self.storage, PrototypeStorage::Owned(_)) {
+            let mut body = (**self).clone();
+            if let PrototypeStorage::Substituted { constants, .. } = &mut self.storage
+                && let Some(constants) = constants.take()
+            {
+                body.original_constants = constants;
+            }
             Self::shift_metadata(&mut body, self.line_bias);
             self.line_bias = 0;
             self.storage = PrototypeStorage::Owned(body);
@@ -527,8 +541,40 @@ impl Prototype {
 
     pub(crate) fn shared_owner(&self) -> Option<u32> {
         match self.storage {
-            PrototypeStorage::Owned(_) => None,
             PrototypeStorage::Shared { owner, .. } => Some(owner),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn constants(&self) -> &[Constant] {
+        match &self.storage {
+            PrototypeStorage::Substituted {
+                constants: Some(constants),
+                ..
+            } => constants,
+            _ => &self.original_constants,
+        }
+    }
+
+    pub(crate) fn substitute_leaf_constants(
+        &self,
+        owner: u32,
+        line: u32,
+        constants: Box<[Constant]>,
+    ) -> Self {
+        let PrototypeStorage::Shared { body, .. } = &self.storage else {
+            unreachable!("substitution into shared code");
+        };
+        Self {
+            storage: PrototypeStorage::Substituted {
+                body: body.clone(),
+                owner,
+                constants: Some(constants),
+            },
+            defined: [line; 2],
+            line_bias: self
+                .line_bias
+                .wrapping_add(line.wrapping_sub(self.defined[1])),
         }
     }
 
@@ -592,11 +638,28 @@ impl ProgramData {
                 .sum::<usize>()
             + std::mem::size_of_val(self.prototypes.as_ref());
         for (id, prototype) in self.prototypes.iter().enumerate() {
-            if let PrototypeStorage::Shared { body, owner } = &prototype.storage {
-                if *owner as usize != id {
-                    continue;
+            match &prototype.storage {
+                PrototypeStorage::Shared { body, owner } => {
+                    if *owner as usize != id {
+                        continue;
+                    }
+                    bytes += body.heap_bytes();
                 }
-                bytes += body.heap_bytes();
+                PrototypeStorage::Substituted {
+                    body,
+                    owner,
+                    constants,
+                } => {
+                    if let Some(constants) = constants {
+                        bytes += std::mem::size_of_val(constants.as_ref())
+                            + constants.iter().map(Constant::owned_bytes).sum::<usize>();
+                    }
+                    if *owner as usize != id {
+                        continue;
+                    }
+                    bytes += body.heap_bytes();
+                }
+                PrototypeStorage::Owned(_) => {}
             }
             bytes += std::mem::size_of_val(prototype.code.as_ref())
                 + std::mem::size_of_val(prototype.metadata.as_ref())
@@ -610,10 +673,10 @@ impl ProgramData {
                     .iter()
                     .map(|binding| std::mem::size_of_val(binding.upvalues.as_ref()))
                     .sum::<usize>()
-                + std::mem::size_of_val(prototype.constants.as_ref())
+                + std::mem::size_of_val(prototype.original_constants.as_ref())
                 + prototype.constant_strings.len()
                 + prototype
-                    .constants
+                    .original_constants
                     .iter()
                     .map(Constant::owned_bytes)
                     .sum::<usize>();
@@ -693,6 +756,76 @@ impl Program {
             data: Shared::try_new_in(data, Memory::default())?,
             lifetime: Shared::try_new_in(AtomicUsize::new(1), Memory::default())?,
         })
+    }
+
+    /// Publish the same verified instructions and metadata with one numeric
+    /// constant replaced. The source loader checks that the source change
+    /// affects only this constant and that no same-program alias uses it.
+    pub(crate) fn with_number(
+        base: &Shared<ProgramData>,
+        prototype: usize,
+        constant: usize,
+        value: f64,
+    ) -> Result<Self, Error> {
+        fn copy_constants(values: &[Constant]) -> Result<Vec<Constant>, Error> {
+            let mut constants = crate::memory::fallible::with_capacity(values.len())?;
+            for value in values {
+                constants.push(match value {
+                    Constant::String(bytes) => Constant::String(bytes.try_boxed()?),
+                    _ => value.clone(),
+                });
+            }
+            Ok(constants)
+        }
+
+        let mut prototypes = crate::memory::fallible::with_capacity(base.prototypes.len())?;
+        for (id, p) in base.prototypes.iter().enumerate() {
+            let storage = if id == prototype {
+                let mut constants = copy_constants(p.constants())?;
+                debug_assert!(matches!(constants[constant], Constant::Number(_)));
+                constants[constant] = Constant::Number(value);
+                PrototypeStorage::Substituted {
+                    body: base.clone().project(|data| &*data.prototypes[id]),
+                    owner: id as u32,
+                    constants: Some(constants.try_into_boxed_slice()?),
+                }
+            } else {
+                match &p.storage {
+                    PrototypeStorage::Owned(_) => PrototypeStorage::Substituted {
+                        body: base.clone().project(|data| &*data.prototypes[id]),
+                        owner: id as u32,
+                        constants: None,
+                    },
+                    PrototypeStorage::Shared { body, owner } => PrototypeStorage::Shared {
+                        body: body.clone(),
+                        owner: *owner,
+                    },
+                    PrototypeStorage::Substituted {
+                        body,
+                        owner,
+                        constants,
+                    } => {
+                        let constants = constants
+                            .as_deref()
+                            .map(|values| copy_constants(values)?.try_into_boxed_slice())
+                            .transpose()?;
+                        PrototypeStorage::Substituted {
+                            body: body.clone(),
+                            owner: *owner,
+                            constants,
+                        }
+                    }
+                }
+            };
+            prototypes.push(Prototype {
+                storage,
+                defined: p.defined,
+                line_bias: p.line_bias,
+            });
+        }
+        let program = Self::try_new(prototypes, base.entry, &base.name)?;
+        program.verify()?;
+        Ok(program)
     }
 
     /// Verify operands, register ranges, constants, and control flow targets.
@@ -812,7 +945,7 @@ impl Prototype {
                 })
             })
             || self.code.is_empty()
-            || self.constants.iter().any(|constant| {
+            || self.constants().iter().any(|constant| {
                 matches!(constant, Constant::PooledString { start, end }
                     if start > end || *end as usize > self.constant_strings.len())
             })
@@ -882,7 +1015,7 @@ impl Prototype {
                 Op::Load | Op::GetGlobal | Op::SetGlobal => {
                     reg(u32::from(i.a))?;
                     let k = self
-                        .constants
+                        .constants()
                         .get(i.c as usize)
                         .ok_or_else(|| fail(pc, "constant out of bounds"))?;
                     if i.op != Op::Load
@@ -987,7 +1120,7 @@ impl Prototype {
                     let operand = |value: u32| {
                         if value < RK {
                             reg(value)
-                        } else if (value - RK) as usize >= self.constants.len() {
+                        } else if (value - RK) as usize >= self.constants().len() {
                             Err(fail(pc, "constant operand out of bounds"))
                         } else {
                             Ok(())
@@ -1037,11 +1170,11 @@ impl Prototype {
                                     && next.op == Op::Load
                                     && previous.a == next.a
                                     && matches!(
-                                        self.constants.get(previous.c as usize),
+                                        self.constants().get(previous.c as usize),
                                         Some(Constant::Boolean(false))
                                     )
                                     && matches!(
-                                        self.constants.get(next.c as usize),
+                                        self.constants().get(next.c as usize),
                                         Some(Constant::Boolean(true))
                                     )
                             }))
@@ -1265,14 +1398,14 @@ mod tests {
             let mut bad = good.clone();
             let data = Shared::make_mut(&mut bad.data);
             let p = &mut data.prototypes[data.entry as usize];
-            let count = p.constants.len() as u32;
+            let count = p.constants().len() as u32;
             match corrupt {
                 0 => p.code.iter_mut().find(|i| i.op.rk_b()).unwrap().b = (RK + count) as u16,
                 1 => p.code.iter_mut().find(|i| i.op.rk_c()).unwrap().c = RK + count,
                 2 => p.code.iter_mut().find(|i| i.op == Op::GetTable).unwrap().b = RK as u16,
                 3 => {
                     let constant = p
-                        .constants
+                        .original_constants
                         .iter_mut()
                         .find(|constant| matches!(constant, Constant::PooledString { .. }))
                         .unwrap();

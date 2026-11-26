@@ -186,7 +186,7 @@ impl Writer {
             }
             Some(())
         })?;
-        self.list(&p.constants, |w, k| match k {
+        self.list(p.constants(), |w, k| match k {
             Constant::Nil => w.u8(0),
             Constant::Boolean(value) => {
                 w.u8(1)?;
@@ -439,7 +439,7 @@ impl<'a> Reader<'a> {
                 upvalues,
                 code,
                 gc_maps: RegisterMaps::Owned(gc_maps),
-                constants,
+                original_constants: constants,
                 constant_strings: Box::default(),
                 bindings,
                 debug: DebugInfo {
@@ -473,7 +473,7 @@ fn decoded_bytes(data: &ProgramData) -> usize {
             // Cache decoding materializes the full map array.
             + size_of_val(&*p.gc_maps)
             + size_of_val(p.upvalues.as_ref())
-            + size_of_val(p.constants.as_ref())
+            + size_of_val(p.constants())
             + p.constant_strings.len()
             + size_of_val(p.bindings.as_ref())
             // Each pooled debug name occupies its own range. Decoding these
@@ -484,7 +484,7 @@ fn decoded_bytes(data: &ProgramData) -> usize {
                 .iter()
                 .map(|b| size_of_val(b.upvalues.as_ref()))
                 .sum::<usize>()
-            + p.constants.iter().map(Constant::owned_bytes).sum::<usize>();
+            + p.constants().iter().map(Constant::owned_bytes).sum::<usize>();
     }
     if data.prototypes.iter().any(|p| p.debug.native.is_some()) {
         bytes += data.prototypes.len();
@@ -573,7 +573,7 @@ pub(super) fn decode(
         for (index, p) in prototypes.iter().enumerate() {
             let n = p.debug.native.as_ref()?;
             let w = &n.wire;
-            if w.constants > p.constants.len()
+            if w.constants > p.constants().len()
                 || w.names > p.debug.upvalues.len()
                 || w.locals.len() != p.debug.locals.len()
                 || w.vararg & !7 != 0

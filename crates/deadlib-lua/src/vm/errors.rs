@@ -68,7 +68,7 @@ fn object_name(proto: &Prototype, pc: usize, mut register: u8) -> Option<(&[u8],
         match instruction.op {
             Op::GetGlobal => {
                 let name =
-                    proto.constants[instruction.c as usize].string(&proto.constant_strings)?;
+                    proto.constants()[instruction.c as usize].string(&proto.constant_strings)?;
                 return Some((name, NameKind::Global));
             }
             Op::GetUpvalue => {
@@ -82,14 +82,14 @@ fn object_name(proto: &Prototype, pc: usize, mut register: u8) -> Option<(&[u8],
             Op::GetTable => {
                 let key = instruction.c as u8;
                 let name = if instruction.c >= crate::bytecode::RK {
-                    proto.constants[(instruction.c - crate::bytecode::RK) as usize]
+                    proto.constants()[(instruction.c - crate::bytecode::RK) as usize]
                         .string(&proto.constant_strings)
                         .unwrap_or(b"?")
                 } else if local_name(proto, producer, key).is_none()
                     && let Some((_, load)) = definition(proto, producer, key)
                     && load.op == Op::Load
                     && let Some(name) =
-                        proto.constants[load.c as usize].string(&proto.constant_strings)
+                        proto.constants()[load.c as usize].string(&proto.constant_strings)
                 {
                     name
                 } else {

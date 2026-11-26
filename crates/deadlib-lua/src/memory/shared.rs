@@ -89,7 +89,7 @@ impl<T: ?Sized + Send + Sync + 'static> Shared<T> {
     /// The function's borrowed result cannot outlive its input independently.
     pub(crate) fn project<U: ?Sized + Send + Sync + 'static>(
         self,
-        projection: fn(&T) -> &U,
+        projection: impl FnOnce(&T) -> &U,
     ) -> Shared<U> {
         let value = NonNull::from(projection(&self));
         let header = self.header;

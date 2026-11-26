@@ -66,6 +66,49 @@ fn results(program: &Program) -> Vec<Vec<u8>> {
 }
 
 #[test]
+fn numeric_callback_templates_keep_per_function_constants_and_lines() {
+    let source = format!(
+        "--{}\n{}",
+        "padding".repeat(350),
+        r#"
+        local seen = {}
+        local receiver = {}
+        function receiver:set(x,y)
+            seen[#seen + 1] = x
+            seen[#seen + 1] = y
+            return self
+        end
+        local function first(a) a:set(7,7):set(2,17) end
+        local function second(a) a:set(9,9):set(3,19) end
+        local function different(a) a:set(11,12):set(4,23) end
+        first(receiver)
+        second(receiver)
+        different(receiver)
+        return unpack(seen)
+"#
+    );
+    let source = source.as_bytes();
+    let name = b"@callbacks.lua";
+    let mut vm = Vm::new();
+    let program = vm.compile_source(source, name).unwrap();
+    let [_, first, second, different, _] = &*program.data.prototypes else {
+        panic!("four functions and the entry chunk");
+    };
+    assert!(std::ptr::eq(first.code.as_ref(), second.code.as_ref()));
+    assert!(!std::ptr::eq(first.code.as_ref(), different.code.as_ref()));
+    assert_eq!(second.debug_line(0), first.debug_line(0) + 1);
+
+    let baseline = crate::compile_named(source, name).unwrap();
+    let cached = decode(&encode(&program, source, name), source, name).unwrap();
+    let dump = |p: &Program| crate::chunk51::dump(&p.data, p.data.entry as usize).unwrap();
+    let expected = dump(&baseline);
+    assert_eq!(dump(&program), expected);
+    assert_eq!(dump(&cached), expected);
+    assert_eq!(results(&program), results(&baseline));
+    assert_eq!(results(&cached), results(&baseline));
+}
+
+#[test]
 fn source_cache_round_trips_complete_metadata_and_number_bits() {
     for source in [
         b"return -0,0,'a\\000b\\255c',true,false,nil".as_slice(),
@@ -79,9 +122,9 @@ fn source_cache_round_trips_complete_metadata_and_number_bits() {
         let entry=data.entry as usize;
         for bits in [0x8000_0000_0000_0000,0x7ff8_0000_0000_1234,0xfff0_0000_0000_0000,1] {
             let p=&mut data.prototypes[entry];
-            let mut constants=p.constants.to_vec();
+            let mut constants=p.constants().to_vec();
             constants.push(Constant::Number(f64::from_bits(bits)));
-            p.constants=constants.into_boxed_slice();
+            p.original_constants=constants.into_boxed_slice();
         }
         let bytes=encode(&program,source,b"@cache-source.lua");
         let loaded=decode(&bytes,source,b"@cache-source.lua").unwrap();
@@ -153,7 +196,7 @@ fn retained_native_export_ranges_and_tree_edges_are_checked() {
         let mut bad = good.clone();
         let data = Shared::make_mut(&mut bad.data);
         let p = &mut data.prototypes[0];
-        let constants = p.constants.len();
+        let constants = p.constants().len();
         let names = p.debug.upvalues.len();
         let n = p.debug.native.as_mut().unwrap();
         match change {

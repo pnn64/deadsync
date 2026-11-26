@@ -194,6 +194,19 @@ impl<'a> Compiler<'a> {
                     self.emit(Op::Closure, dst, 0, child)?;
                     return Ok(());
                 }
+                let stack = self
+                    .ast
+                    .stacks
+                    .binary_search_by_key(&id, |&(id, _)| id)
+                    .map(|i| self.ast.stacks[i].1)
+                    .unwrap();
+                if template.is_some()
+                    && let Some(child) = self.reuse_numeric_template(id, stack, *end_line)?
+                {
+                    self.line = *end_line;
+                    self.emit(Op::Closure, dst, 0, child)?;
+                    return Ok(());
+                }
                 let mut child = self.fresh_function()?;
                 child.vararg = *vararg;
                 child.compat_arg = *vararg;
@@ -202,12 +215,7 @@ impl<'a> Compiler<'a> {
                 } else {
                     [*template_line, *template_line + (*end_line - span.start)]
                 };
-                child.debug_stack = self
-                    .ast
-                    .stacks
-                    .binary_search_by_key(&id, |&(id, _)| id)
-                    .map(|i| self.ast.stacks[i].1)
-                    .unwrap();
+                child.debug_stack = stack;
                 child.zero_sign = self
                     .ast
                     .zero_signs
@@ -578,15 +586,34 @@ impl<'a> Compiler<'a> {
                             continue;
                         }
                     }
+                    if self.emits_immediately(value) {
+                        self.operand(value, reg)?;
+                        self.finish_constant_field(&mut state, reg, constant)?;
+                        continue;
+                    }
                     self.tasks
                         .try_push(Task::TableConstant(state, reg, constant))?;
                     return self.operand(value, reg);
                 }
                 let regs = self.alloc(1)?;
+                if self.emits_immediately(key) && self.emits_immediately(value) {
+                    self.operand(key, regs)?;
+                    let key = self.result;
+                    let value_reg = self.right_register(value, key, regs, false)?;
+                    self.operand(value, value_reg)?;
+                    self.finish_record_field(&mut state, regs, key)?;
+                    continue;
+                }
                 self.tasks.try_push(Task::TableKey(state, regs))?;
                 return self.operand(key, regs);
             }
             let reg = self.alloc(1)?;
+            if self.emits_immediately(value) {
+                // This field has one result and leaves no continuation.
+                self.expr(value, reg)?;
+                self.finish_list_field(&mut state, false)?;
+                continue;
+            }
             let open = state.index + 1 == fields.len() && self.multiple(value);
             self.tasks.try_push(Task::TableList(state, open))?;
             return self.expr_results(value, reg, if open { OPEN } else { 1 });
@@ -600,6 +627,81 @@ impl<'a> Compiler<'a> {
         }
         Ok(())
     }
+    pub(super) fn finish_record_field(
+        &mut self,
+        state: &mut TableState,
+        regs: u8,
+        key: u8,
+    ) -> Result<(), Error> {
+        self.emit(
+            Op::SetTable,
+            state.table,
+            u16::from(key),
+            u32::from(self.result),
+        )?;
+        self.reset(u16::from(regs));
+        state.index += 1;
+        Ok(())
+    }
+
+    pub(super) fn finish_constant_field(
+        &mut self,
+        state: &mut TableState,
+        scratch: u8,
+        constant: u32,
+    ) -> Result<(), Error> {
+        let value = self.result;
+        let key = if value == scratch {
+            self.alloc(1)?
+        } else {
+            scratch
+        };
+        let key = if constant <= u32::from(u16::MAX) - RK {
+            // SetTable can encode this key directly. A temporary load
+            // would be removed by emit's operand folding.
+            (RK + constant) as u16
+        } else {
+            let line = self.line;
+            let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
+                unreachable!()
+            };
+            let fields = self.ast.fields(*fields);
+            self.line = self.ast.exprs[fields[state.index].0.expect("constant key")]
+                .1
+                .discharge;
+            self.emit(Op::Load, key, 0, constant)?;
+            self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
+            self.debug_line(0);
+            self.line = line;
+            u16::from(key)
+        };
+        self.emit(Op::SetTable, state.table, key, u32::from(value))?;
+        self.reset(u16::from(scratch));
+        state.index += 1;
+        Ok(())
+    }
+
+    pub(super) fn finish_list_field(
+        &mut self,
+        state: &mut TableState,
+        open: bool,
+    ) -> Result<(), Error> {
+        state.pending += 1;
+        if open || state.pending == 50 {
+            self.emit(
+                Op::SetList,
+                state.table,
+                if open { OPEN_ARGS } else { state.pending },
+                state.flushed + 1,
+            )?;
+            state.flushed += u32::from(state.pending);
+            state.pending = 0;
+            self.reset(u16::from(state.table) + 1);
+        }
+        state.index += 1;
+        Ok(())
+    }
+
     pub(super) fn constant_operand(&mut self, id: ExprId) -> Result<Option<u32>, Error> {
         self.ast
             .constant_operand(id)

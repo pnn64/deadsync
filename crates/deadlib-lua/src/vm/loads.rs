@@ -6,6 +6,7 @@ use crate::memory::fallible::{self, SliceExt, VecExt};
 
 mod eof;
 mod reader;
+mod source_templates;
 
 /// A genuine, non-callable collector object for an unfinished/retained prototype.
 #[derive(Debug)]
@@ -53,6 +54,7 @@ impl NativeRoots {
 pub(super) struct Spare {
     parser: crate::parser::Spare,
     compiler: crate::compiler::Spare,
+    source_templates: source_templates::Templates,
     recent_sources: [Option<(SourceKey, u64)>; 8],
     next_source: usize,
     constant_strings: [Option<(ShortConstant, StringId)>; 32],
@@ -110,6 +112,33 @@ impl ShortConstant {
 impl std::fmt::Debug for Spare {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.debug_struct("Spare").finish_non_exhaustive()
+    }
+}
+impl Spare {
+    fn finish_text(
+        &mut self,
+        mut ast: crate::parser::Ast,
+        source: &[u8],
+        name: &[u8],
+        depth: usize,
+        locale: u64,
+        candidate: Option<source_templates::Candidate>,
+    ) -> Result<Program, Error> {
+        let result =
+            crate::compiler::compile_in(&mut ast, source, name, &mut self.compiler, locale);
+        if let (Some(candidate), Ok(program)) = (candidate, &result) {
+            self.source_templates.remember(
+                source,
+                depth,
+                locale,
+                candidate,
+                program,
+                &ast,
+                self.compiler.folded_literals(),
+            );
+        }
+        self.parser.keep_ast(ast);
+        result
     }
 }
 /// Sources above this size release their storage instead of retaining it.
@@ -236,14 +265,25 @@ pub(super) fn compile(
             .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), source, name));
     }
     let parse_locale = crate::locale::revision();
+    let preamble = source_templates::Preamble::scan(source);
+    if let Some(preamble) = &preamble
+        && let Some(variant) =
+            spare
+                .source_templates
+                .find(source, name, depth, parse_locale, preamble)
+    {
+        return variant.publish();
+    }
     let mut parser = crate::parser::Parser::try_new_in(&mut spare.parser, depth)?;
     let parsed = parser.resume(source, true);
+    let candidate = if parsed.is_ok() {
+        preamble.and_then(|preamble| preamble.check_resources(&parser))
+    } else {
+        None
+    };
     parser.recycle(&mut spare.parser);
-    let mut ast = parsed?.expect("closed source");
-    let program =
-        crate::compiler::compile_in(&mut ast, source, name, &mut spare.compiler, parse_locale);
-    spare.parser.keep_ast(ast);
-    program
+    let ast = parsed?.expect("closed source");
+    spare.finish_text(ast, source, name, depth, parse_locale, candidate)
 }
 
 pub(super) fn protected(function: FrameKind) -> bool {
@@ -320,6 +360,13 @@ impl FileReader {
 }
 
 #[derive(Debug)]
+struct CapturedInput {
+    source: StringId,
+    read: usize,
+    variant: Option<source_templates::Variant>,
+}
+
+#[derive(Debug)]
 pub(super) struct Loading {
     pub owner: usize,
     workspace: Workspace,
@@ -329,6 +376,7 @@ pub(super) struct Loading {
     parse_locale: u64,
     pub(super) binary_mode: bool,
     source: Buffer<u8>,
+    captured: Option<CapturedInput>,
     pub(super) name: Box<[u8]>,
     awaiting: bool,
     closed: bool,
@@ -391,6 +439,11 @@ impl Loading {
                     .into_iter()
                     .chain(std::iter::once(Value::ParserPrototype(prototype)))
             })
+            .chain(
+                self.captured
+                    .iter()
+                    .map(|input| Value::String(input.source)),
+            )
     }
     fn arena_bytes(&self) -> usize {
         self.parser.arena_bytes()
@@ -505,6 +558,7 @@ impl Vm {
                     parse_locale: crate::locale::revision(),
                     binary_mode: false,
                     source: self.try_take_buffer(0)?,
+                    captured: None,
                     name: name.try_boxed()?,
                     awaiting: false,
                     closed: false,
@@ -813,6 +867,7 @@ impl Vm {
                     parse_locale: crate::locale::revision(),
                     binary_mode: false,
                     source: self.try_take_buffer(0)?,
+                    captured: None,
                     name: name.try_into_boxed_slice()?,
                     awaiting: false,
                     closed: false,
@@ -994,6 +1049,19 @@ impl Vm {
                         && self.reader_can_omit_roots(index, self.registers[base])
                     {
                         self.loads[index].parser.disable_native_roots();
+                        if self.prepare_captured_input(index, self.registers[base], id)? {
+                            self.truncate_registers(base + frame.argc());
+                            return self.call_load_reader(index, frame);
+                        }
+                    }
+                    if self.loads[index].captured.is_some()
+                        && !self.strings.bytes[slot_index(id.0)].is_empty()
+                    {
+                        if self.match_captured_fragment(index, id) {
+                            self.truncate_registers(base + frame.argc());
+                            return self.call_load_reader(index, frame);
+                        }
+                        self.replay_captured_prefix(index)?;
                     }
                     let bytes = &self.strings.bytes[slot_index(id.0)];
                     let job = &mut self.loads[index];
@@ -1017,6 +1085,31 @@ impl Vm {
             }
             self.truncate_registers(base + frame.argc());
         }
+        if let Some(input) = &self.loads[index].captured {
+            debug_assert!(self.loads[index].closed);
+            let bytes = &self.strings.bytes[slot_index(input.source.0)];
+            if input.read == bytes.len() {
+                // Wait for the reader's actual EOF before publishing code.
+                let compiled = if let Some(variant) = &input.variant {
+                    variant.publish()
+                } else {
+                    let job = &mut self.loads[index];
+                    let candidate = source_templates::Preamble::scan(bytes)
+                        .and_then(|preamble| preamble.check_resources(&job.parser));
+                    self.compile_spare.finish_text(
+                        job.parser.take_reader_input(),
+                        bytes,
+                        &job.name,
+                        job.native_depth,
+                        job.parse_locale,
+                        candidate,
+                    )
+                };
+                self.frames[owner] = frame;
+                return self.finish_reader(index, frame, compiled, false);
+            }
+            self.replay_captured_prefix(index)?;
+        }
         let job = &mut self.loads[index];
         let before = job.arena_bytes();
         let parsed = job.resume(&mut self.compile_spare);
@@ -1037,16 +1130,99 @@ impl Vm {
         if let Some(compiled) = compiled {
             return self.finish_reader(index, frame, compiled, has_parser_roots);
         }
+        self.call_load_reader(index, frame)
+    }
+
+    fn call_load_reader(&mut self, index: usize, frame: Frame) -> Result<Option<usize>, Error> {
         self.check_c_call()?;
         self.loads[index].awaiting = true;
-        let call = base + frame.argc();
+        let call = frame.base + frame.argc();
         self.reserve_registers(call + 1)?;
         self.resize_registers(self.registers.len().max(call + 1));
-        self.registers[call] = self.registers[base];
+        self.registers[call] = self.registers[frame.base];
         if let Some(actual) = self.start_call(call, 0, 1, false)? {
             self.finish_call(call, actual, 1);
         }
         Ok(None)
+    }
+
+    #[cold]
+    fn prepare_captured_input(
+        &mut self,
+        index: usize,
+        reader: Value,
+        fragment: StringId,
+    ) -> Result<bool, Error> {
+        // A parked streaming parser can contribute to the reader's C depth.
+        // Leave headroom for the grammar and the reader's own built-in calls.
+        if self.loads[index].native_depth + 2 * usize::from(crate::parser::MAX_RECURSIVE_DEPTH) + 4
+            >= usize::from(limits::MAX_C_CALL_DEPTH)
+        {
+            return Ok(false);
+        }
+        let fragment = &self.strings.bytes[slot_index(fragment.0)];
+        let Some(source) = reader::captured_source(self, reader, fragment) else {
+            return Ok(false);
+        };
+        let read = fragment.len();
+        let bytes = &self.strings.bytes[slot_index(source.0)];
+        let job = &mut self.loads[index];
+        let before = job.arena_bytes();
+        let variant = source_templates::Preamble::scan(bytes).and_then(|preamble| {
+            self.compile_spare.source_templates.find(
+                bytes,
+                &job.name,
+                job.native_depth,
+                job.parse_locale,
+                &preamble,
+            )
+        });
+        // A valid complete parse lets us defer parsing the matching prefix.
+        // Each reader call still runs and must independently supply its bytes.
+        let prepared = variant.is_some() || job.parser.prepare_reader_input(bytes)?;
+        let growth = job.arena_bytes().saturating_sub(before);
+        self.gc_note_control(growth);
+        if prepared {
+            let value = Value::String(source);
+            self.reserve_gc_value(value)?;
+            self.loads[index].captured = Some(CapturedInput {
+                source,
+                read,
+                variant,
+            });
+            self.gc_new_value(value);
+        }
+        Ok(prepared)
+    }
+
+    fn match_captured_fragment(&mut self, index: usize, fragment: StringId) -> bool {
+        let input = self.loads[index].captured.as_mut().expect("prepared input");
+        let source = &self.strings.bytes[slot_index(input.source.0)];
+        let bytes = &self.strings.bytes[slot_index(fragment.0)];
+        if source[input.read..].starts_with(bytes) {
+            input.read += bytes.len();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[cold]
+    fn replay_captured_prefix(&mut self, index: usize) -> Result<(), Error> {
+        let job = &mut self.loads[index];
+        let input = job.captured.take().expect("prepared input");
+        // The bytes preceding the mismatch were checked at each reader boundary.
+        let bytes = &self.strings.bytes[slot_index(input.source.0)][..input.read];
+        let capacity = job.source.capacity();
+        job.workspace.run(|| {
+            job.source.try_extend_from_slice(bytes)?;
+            if input.variant.is_none() {
+                job.parser.discard_reader_input()?;
+            }
+            Ok(())
+        })?;
+        self.gc_note_control(self.loads[index].source.capacity() - capacity);
+        Ok(())
     }
     fn reader_can_omit_roots(&self, index: usize, reader: Value) -> bool {
         let job = &self.loads[index];
@@ -1091,17 +1267,30 @@ impl Vm {
         // The EOF path cannot call out or change Lua state. A valid complete
         // parse can consume this borrowed block without publishing parser roots.
         let job = &mut self.loads[index];
-        let Some(mut ast) = job.parser.try_complete_reader(bytes)? else {
+        let preamble = source_templates::Preamble::scan(bytes);
+        if let Some(preamble) = &preamble
+            && let Some(variant) = self.compile_spare.source_templates.find(
+                bytes,
+                &job.name,
+                job.native_depth,
+                job.parse_locale,
+                preamble,
+            )
+        {
+            return Ok(Some(variant.publish()));
+        }
+        let Some(ast) = job.parser.try_complete_reader(bytes)? else {
             return Ok(None);
         };
-        let result = crate::compiler::compile_in(
-            &mut ast,
+        let candidate = preamble.and_then(|preamble| preamble.check_resources(&job.parser));
+        let result = self.compile_spare.finish_text(
+            ast,
             bytes,
             &job.name,
-            &mut self.compile_spare.compiler,
+            job.native_depth,
             job.parse_locale,
+            candidate,
         );
-        self.compile_spare.parser.keep_ast(ast);
         Ok(Some(result))
     }
 

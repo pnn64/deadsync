@@ -488,61 +488,15 @@ impl<'a> Compiler<'a> {
                     self.operand(value, value_reg)?;
                 }
                 Task::TableValue(mut state, regs, key) => {
-                    self.emit(
-                        Op::SetTable,
-                        state.table,
-                        u16::from(key),
-                        u32::from(self.result),
-                    )?;
-                    self.reset(u16::from(regs));
-                    state.index += 1;
+                    self.finish_record_field(&mut state, regs, key)?;
                     self.table_next(state)?;
                 }
                 Task::TableConstant(mut state, scratch, constant) => {
-                    let value = self.result;
-                    let key = if value == scratch {
-                        self.alloc(1)?
-                    } else {
-                        scratch
-                    };
-                    let key = if constant <= u32::from(u16::MAX) - RK {
-                        // SetTable can encode this key directly. A temporary
-                        // load would be removed by emit's operand folding.
-                        (RK + constant) as u16
-                    } else {
-                        let line = self.line;
-                        let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
-                            unreachable!()
-                        };
-                        let fields = self.ast.fields(*fields);
-                        self.line = self.ast.exprs[fields[state.index].0.expect("constant key")]
-                            .1
-                            .discharge;
-                        self.emit(Op::Load, key, 0, constant)?;
-                        self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
-                        self.debug_line(0);
-                        self.line = line;
-                        u16::from(key)
-                    };
-                    self.emit(Op::SetTable, state.table, key, u32::from(value))?;
-                    self.reset(u16::from(scratch));
-                    state.index += 1;
+                    self.finish_constant_field(&mut state, scratch, constant)?;
                     self.table_next(state)?;
                 }
                 Task::TableList(mut state, open) => {
-                    state.pending += 1;
-                    if open || state.pending == 50 {
-                        self.emit(
-                            Op::SetList,
-                            state.table,
-                            if open { OPEN_ARGS } else { state.pending },
-                            state.flushed + 1,
-                        )?;
-                        state.flushed += u32::from(state.pending);
-                        state.pending = 0;
-                        self.reset(u16::from(state.table) + 1);
-                    }
-                    state.index += 1;
+                    self.finish_list_field(&mut state, open)?;
                     self.table_next(state)?;
                 }
                 Task::Call(id, dst, wanted) => self.call(id, dst, wanted)?,
@@ -568,6 +522,7 @@ impl<'a> Compiler<'a> {
                             self.source,
                             self.template_locale,
                         )?;
+                        self.remember_numeric_template(child)?;
                     }
                     let parent = self.parents.pop().expect("child has a parent");
                     self.spare

@@ -451,7 +451,7 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Err
         PrototypeBody {
             gc_maps: RegisterMaps::Owned(masks.try_into_boxed_slice()?),
             code: out.code.try_into_boxed_slice()?,
-            constants: out.constants.try_into_boxed_slice()?,
+            original_constants: out.constants.try_into_boxed_slice()?,
             constant_strings: Box::default(),
             registers,
             params: u16::from(p.params),
