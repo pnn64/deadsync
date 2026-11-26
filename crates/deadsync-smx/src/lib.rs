@@ -25,6 +25,16 @@ pub mod panels;
 #[path = "lighting_performance.rs"]
 mod lighting_performance;
 
+#[cfg(all(test, windows))]
+#[test]
+fn sdk_enumerates_through_the_shared_hid_adapter() {
+    use rustmaniax_sdk::{HidEnumerator, HidapiEnumerator};
+
+    let api = hidapi::HidApi::new().expect("HID discovery");
+    let enumerator = HidapiEnumerator::from_shared(Arc::new(Mutex::new(api)));
+    let _ = enumerator.enumerate(SMX_USB_VENDOR_ID, SMX_USB_PRODUCT_ID);
+}
+
 /// Number of panels per SMX pad (from the SDK's hardware-shape constants).
 pub const PANEL_COUNT: usize = NUM_PANELS;
 /// Center panel index (the non-playable middle panel in the 3x3 grid).

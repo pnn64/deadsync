@@ -1,5 +1,5 @@
 use super::{ButtonLight, CabinetLight, Player, State};
-use hidapi::{HidApi, HidDevice};
+use deadlib_hid::{HidApi, HidDevice};
 use log::{debug, warn};
 use std::time::{Duration, Instant};
 

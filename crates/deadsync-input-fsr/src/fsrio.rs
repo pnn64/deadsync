@@ -11,11 +11,11 @@ mod imp {
         ConfigReport, Configuration, SENSOR_COUNT, Transport, parse_config_report,
     };
     use arrayvec::ArrayVec;
+    use deadlib_hid::{DeviceInfo, HidApi, HidDevice};
     use deadsync_input::fsr::{
         BackendKind, ButtonLabel, ButtonView, ButtonViews, PadDeviceId, PadView, SensorView,
         SensorViews, ValueCurve,
     };
-    use hidapi::{DeviceInfo, HidApi, HidDevice};
     use std::cmp::min;
     use std::ffi::CString;
     use std::fmt::Write as _;
@@ -518,7 +518,7 @@ mod imp {
     }
 
     fn dump_report_descriptor(out: &mut String, device: &HidDevice) {
-        let mut buf = [0u8; hidapi::MAX_REPORT_DESCRIPTOR_SIZE];
+        let mut buf = [0u8; deadlib_hid::MAX_REPORT_DESCRIPTOR_SIZE];
         match device.get_report_descriptor(&mut buf) {
             Ok(len) => dump_bytes(out, "report_descriptor", &buf[..len]),
             Err(e) => {

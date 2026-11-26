@@ -1,0 +1,16 @@
+[package]
+name = "hidapi"
+version = "2.6.7"
+edition = "2024"
+license = "GPL-3.0"
+publish = false
+
+[dependencies]
+deadlib-hid = { path = ".." }
+
+# Feature names requested by rustmaniax-sdk. deadlib-hid selects the platform
+# backend, and shared opens on macOS still require an explicit opt-in.
+[features]
+linux-static-hidraw = []
+macos-shared-device = ["deadlib-hid/macos-shared-device"]
+windows-native = []

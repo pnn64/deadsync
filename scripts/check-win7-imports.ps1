@@ -42,6 +42,9 @@ $imports = @(
         if ($line -match 'Section contains the following delay load imports') {
             break
         }
+        if ($line -match '\bGetOverlappedResultEx\s*$') {
+            throw "Windows 7 cannot load ${Path}: unsupported import GetOverlappedResultEx"
+        }
         if ($line -match '^\s+(\S+\.dll)\s*$') {
             $Matches[1].ToLowerInvariant()
         }
@@ -73,4 +76,4 @@ if ($unsupported.Count -ne 0) {
     throw "Windows 7 cannot load ${Path}: unsupported DLL imports: $($unsupported -join ', ')"
 }
 
-Write-Host "Windows 7 WinRT import check passed: $Path ($($imports.Count) DLL imports)"
+Write-Host "Windows 7 startup import check passed: $Path ($($imports.Count) DLL imports)"

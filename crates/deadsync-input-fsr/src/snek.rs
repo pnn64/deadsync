@@ -1,7 +1,7 @@
 use super::{
     SNEK_PANEL_DOWN, SNEK_PANEL_LEFT, SNEK_PANEL_RIGHT, SNEK_PANEL_UP, SnekSensorSnapshot,
 };
-use hidapi::{HidApi, HidDevice};
+use deadlib_hid::{HidApi, HidDevice};
 use log::{debug, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -98,7 +98,7 @@ fn worker_main(stop: &AtomicBool, shared: &Mutex<SnekSensorSnapshot>) {
                         && info.product_id() == PRODUCT_ID
                         && info.interface_number() == CONFIG_INTERFACE
                 })
-                .ok_or_else(|| hidapi::HidError::HidApiError {
+                .ok_or_else(|| deadlib_hid::HidError::HidApiError {
                     message: "Snekboard config interface not found".into(),
                 })?;
             info.open_device(&api)
@@ -176,7 +176,7 @@ fn send_disconnect() {
                     && info.product_id() == PRODUCT_ID
                     && info.interface_number() == CONFIG_INTERFACE
             })
-            .ok_or_else(|| hidapi::HidError::HidApiError {
+            .ok_or_else(|| deadlib_hid::HidError::HidApiError {
                 message: "Snekboard config interface not found".into(),
             })?;
         info.open_device(&api)

@@ -1251,6 +1251,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadlib-hid"
+version = "0.1.0"
+dependencies = [
+ "hidapi 2.6.7 (git+https://github.com/ruabmbua/hidapi-rs?rev=8729463f8a96b6d4671b7ef114b5ead65ccd7469)",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "deadlib-image"
 version = "0.1.0"
 
@@ -1643,11 +1651,11 @@ name = "deadsync-input-fsr"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
+ "deadlib-hid",
  "deadlib-platform",
  "deadsync-input",
  "deadsync-reflex",
  "deadsync-smx",
- "hidapi",
  "log",
  "serde",
  "serde_json",
@@ -1659,8 +1667,8 @@ dependencies = [
 name = "deadsync-lights"
 version = "0.1.0"
 dependencies = [
+ "deadlib-hid",
  "deadsync-core",
- "hidapi",
  "libc",
  "log",
  "windows-sys 0.61.2",
@@ -1760,9 +1768,9 @@ dependencies = [
 name = "deadsync-reflex"
 version = "0.1.0"
 dependencies = [
+ "deadlib-hid",
  "deadlib-platform",
  "deadsync-input",
- "hidapi",
  "log",
  "serde",
  "serde_json",
@@ -1887,6 +1895,7 @@ dependencies = [
  "deadlib-platform",
  "deadsync-core",
  "hashbrown 0.17.1",
+ "hidapi 2.6.7",
  "image",
  "log",
  "rustmaniax-sdk",
@@ -2720,6 +2729,14 @@ checksum = "e17592d60ebacc7d5e169f4663c5f84f9161cc90328abcfe8456f41e4dfcb284"
 [[package]]
 name = "hidapi"
 version = "2.6.7"
+dependencies = [
+ "deadlib-hid",
+]
+
+[[package]]
+name = "hidapi"
+version = "2.6.7"
+source = "git+https://github.com/ruabmbua/hidapi-rs?rev=8729463f8a96b6d4671b7ef114b5ead65ccd7469#8729463f8a96b6d4671b7ef114b5ead65ccd7469"
 dependencies = [
  "cc",
  "cfg-if",
@@ -4833,7 +4850,7 @@ checksum = "bd9a39764dfdaf9155648cf9d4edbc401a6f2be24bfb3c63159a7cbe9e9d4be7"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
- "hidapi",
+ "hidapi 2.6.7",
  "image",
  "log",
 ]

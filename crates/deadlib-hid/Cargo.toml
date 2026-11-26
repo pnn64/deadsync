@@ -1,0 +1,31 @@
+[package]
+name = "deadlib-hid"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[features]
+macos-shared-device = ["upstream-hidapi/macos-shared-device"]
+
+# The workspace patches the registry package for the StepManiaX SDK. Use the
+# upstream revision corresponding to 2.6.7 for the non-Windows backends.
+[target.'cfg(not(windows))'.dependencies]
+upstream-hidapi = { package = "hidapi", git = "https://github.com/ruabmbua/hidapi-rs", rev = "8729463f8a96b6d4671b7ef114b5ead65ccd7469", default-features = false }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+upstream-hidapi = { package = "hidapi", git = "https://github.com/ruabmbua/hidapi-rs", rev = "8729463f8a96b6d4671b7ef114b5ead65ccd7469", default-features = false, features = ["linux-static-hidraw"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Devices_HumanInterfaceDevice",
+    "Win32_Devices_Properties",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_System_Pipes"] }

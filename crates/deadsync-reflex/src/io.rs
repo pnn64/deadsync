@@ -1,10 +1,10 @@
 use super::*;
 use config::{DeviceConfig, LightMode};
+use deadlib_hid::{DeviceInfo, HidApi, HidDevice};
 use deadlib_platform::{
     host_time,
     input::{PadCode, PadId, uuid_from_bytes},
 };
-use hidapi::{DeviceInfo, HidApi, HidDevice};
 use protocol::{PID, VID, decode, light_packet};
 use std::{
     collections::{BTreeMap, BTreeSet},

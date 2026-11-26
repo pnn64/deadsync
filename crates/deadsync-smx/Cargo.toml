@@ -8,6 +8,8 @@ license = "GPL-3.0"
 deadsync-core = { path = "../deadsync-core" }
 deadlib-platform = { path = "../deadlib-platform" }
 hashbrown = "0.17.1"
+# Keep Cargo updates on the workspace's HID adapter for the SDK.
+hidapi = { version = "=2.6.7", default-features = false }
 image = { version = "0.25.10", default-features = false, features = ["gif"] }
 log = "0.4.35"
 rustmaniax-sdk = "2.1.1"

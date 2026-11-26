@@ -35,6 +35,8 @@ members = [
     "crates/deadsync-core",
     "crates/deadsync-gameplay",
     "crates/deadlib-ble",
+    "crates/deadlib-hid",
+    "crates/deadlib-hid/hidapi-compat",
     "crates/deadsync-heart-rate",
     "crates/deadsync-import",
     "crates/deadsync-input",
@@ -145,10 +147,9 @@ tempfile = "3.27.0"
 zstd = "0.14.4"
 
 [patch.crates-io]
-# hidapi's windows-native backend imports GetOverlappedResultEx, which is
-# unavailable on Windows 7. The local patch keeps the same backend but uses the
-# Win7-compatible overlapped wait sequence.
-hidapi = { path = "vendor/hidapi-win7" }
+# StepManiaX's SDK depends on hidapi directly. Route it through the same HID
+# transport as our other devices until the SDK can omit its built-in backend.
+hidapi = { path = "crates/deadlib-hid/hidapi-compat" }
 # Opus must honor Rust's static MSVC runtime; its CMake default selects /MD.
 opusic-sys = { path = "vendor/opusic-sys" }
 
