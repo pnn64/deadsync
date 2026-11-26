@@ -465,3 +465,20 @@ The next comparison ran serially on logical CPU 42, with twelve rotating rounds 
 | One release code generation unit | ?1.71% | ?0.14% |
 
 `bf9b2479d` computes frame macroblock neighbor positions once for both reference lists and calculates the component median with min and max. `7d979d2d3` combines the coefficient flags from both sides of a deblocking edge before examining its four segments. The spatial candidate's paired median gaps against native FFmpeg were ?3.27% and ?1.10%. Its 96.14% interval upper bounds were ?1.11% and +0.96%.
+
+## Release verification
+
+The verification rebuilt revision `7d979d2d3` with Cargo's default release settings. Packed output used the default features. Native output used the optional `surface` feature, the SPS reorder depth, and a consumer that drops each surface in the callback. ITGmania's FFmpeg `1041abd` used one decode thread. Each 150-frame excerpt had sixteen rotating cycle rounds and two separate allocation rounds on logical CPU 42 of an Intel Xeon E5-2696 v4. [Opening results](results/windows-x86_64-20261126/spatial-and-edges/opening) ? [Later-segment results](results/windows-x86_64-20261126/spatial-and-edges/later)
+
+| Excerpt | Output mode | Paired cycle change | Paired throughput change | Allocation call change | Requested byte change |
+|---|---|---:|---:|---:|---:|
+| SRPG10 opening | Packed | ?9.04% | +9.93% | ?49.93% | +0.21% |
+| SRPG10 opening | Native | ?9.85% | +10.93% | ?69.18% | ?8.63% |
+| SRPG9 opening | Packed | ?3.27% | +3.38% | ?38.10% | +0.52% |
+| SRPG9 opening | Native | ?3.59% | +3.72% | ?58.73% | ?1.96% |
+| SRPG10 later | Packed | ?7.55% | +8.16% | ?50.14% | +0.46% |
+| SRPG10 later | Native | ?8.02% | +8.73% | ?69.69% | ?4.39% |
+| SRPG9 later | Packed | ?2.65% | +2.72% | ?38.69% | +0.49% |
+| SRPG9 later | Native | ?2.56% | +2.63% | ?59.59% | ?2.25% |
+
+The 97.87% median cycle intervals stayed below the 1% upper margin in all eight comparisons. The largest upper bound was ?1.33%. All four excerpts matched FFmpeg's display-ordered plane bytes. The combined build also matched the temporal-direct progressive and MBAFF multislice, constrained CAVLC, resolution-change, low-QP, High 10, High 4:2:2 and crop fixtures. Three-worker threaded decoding matched FFmpeg on the opening excerpts, progressive and MBAFF multislice, and the resolution change.
