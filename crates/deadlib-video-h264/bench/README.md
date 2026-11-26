@@ -267,3 +267,18 @@ The full benchmark reproduced the preceding allocation totals. The default cycle
 The isolated specialization saved 4.41% and 1.48% of median paired cycles relative to `2ae41f6d4`. With the chroma filter included, the linked reference-check executable grew by 355 KiB. The combined build matched FFmpeg on the bundled clips, temporal-direct progressive and MBAFF multislice, constrained-intra CAVLC, resolution changes, High 10 and High 4:2:2. [Slice and storage comparisons](results/windows-x86_64-20261126/slice-storage-paired.csv)
 
 Earlier DPB retirement with inline sliding-window counts lowered requested bytes in the allocation probe by about 3.14 MB per 150-frame clip. Its paired cycle changes were +1.65% and −0.12%, so it remains a prototype. A separate batch against `d27eb742b` measured −0.29% and +0.02% for a direct horizontal luma edge kernel, and +3.87% and +2.36% for compilation with the host CPU's target features. [Luma and code-generation comparisons](results/windows-x86_64-20261126/luma-codegen-paired.csv)
+
+The full run of `9f6f62795` matched FFmpeg on both clips and reproduced the prior allocation totals. The default medians were 3.04% and 0.51% above packed FFmpeg and 12.54% and 16.26% above native FFmpeg. The five default runs on SRPG9 spanned 6.4% of their median. [Full run](results/windows-x86_64-20261126/slice-specialization)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Deadlib | 37.27 | 26.83 | 11.71 | 3.272 |
+| SRPG9 | Deadlib recycled, SPS depth | 35.34 | 28.30 | 8.95 | 0.364 |
+| SRPG9 | FFmpeg native | 33.12 | 30.19 | 17.91 | 0.289 |
+| SRPG9 | FFmpeg packed | 36.17 | 27.64 | 18.91 | 3.255 |
+| SRPG10 | Deadlib | 27.14 | 36.84 | 9.33 | 3.158 |
+| SRPG10 | Deadlib recycled, SPS depth | 25.23 | 39.64 | 6.99 | 0.329 |
+| SRPG10 | FFmpeg native | 23.35 | 42.83 | 17.63 | 0.184 |
+| SRPG10 | FFmpeg packed | 27.00 | 37.03 | 18.63 | 3.151 |
+
+Adding a direct vertical luma kernel to the horizontal prototype changed median paired cycles by +2.12% on SRPG9 and −0.46% on SRPG10 relative to `d27eb742b`. The combined kernel stayed out of the decoder. [Direct luma edge comparisons](results/windows-x86_64-20261126/direct-luma-edges-paired.csv)
