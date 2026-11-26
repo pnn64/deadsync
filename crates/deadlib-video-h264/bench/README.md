@@ -282,3 +282,27 @@ The full run of `9f6f62795` matched FFmpeg on both clips and reproduced the prio
 | SRPG10 | FFmpeg packed | 27.00 | 37.03 | 18.63 | 3.151 |
 
 Adding a direct vertical luma kernel to the horizontal prototype changed median paired cycles by +2.12% on SRPG9 and −0.46% on SRPG10 relative to `d27eb742b`. The combined kernel stayed out of the decoder. [Direct luma edge comparisons](results/windows-x86_64-20261126/direct-luma-edges-paired.csv)
+
+## Cropped output
+
+`083cb9f9a` compacts visible rows in the coded buffers before truncating the planes. Returned frames retain coded capacity for the next picture. In the 150-frame 720p-input crop fixture, default allocation calls fell from 1,868 to 1,418 and requested bytes from 421.8 MB to 219.8 MB. With recycling and SPS reorder depth, requested bytes fell from 421.8 MB to 23.5 MB. Median paired cycles for the crop-only build fell 1.72% on the cropped clip. The cropped 4:2:0, High 10, and High 4:2:2 fixtures matched FFmpeg. [Allocation probe](results/windows-x86_64-20261126/crop-allocations.csv) · [Paired cycles](results/windows-x86_64-20261126/crop-bskip-paired.csv)
+
+```powershell
+ffmpeg -nostdin -v error -f lavfi -i 'testsrc2=size=1280x720:rate=24' -frames:v 150 -c:v libx264 -threads 2 -preset fast -bf 3 -g 72 -bsf:v 'h264_metadata=crop_left=4:crop_top=4:crop_right=8:crop_bottom=8' -f h264 cropped-720.h264
+ffmpeg -nostdin -v error -i cropped-720.h264 -fps_mode passthrough -pix_fmt yuv420p -f rawvideo cropped-720.ffmpeg.yuv
+```
+
+## Shared surface experiments
+
+FFmpeg hands the caller a reference to the decoded picture and returns the buffers to its pool when the last owner releases them. The Rust prototype shares completed planes between the reference buffer and display queue. Its pooled variant lets the display caller return consumed surfaces. It matched decoded bytes on the two bundled clips, temporal-direct multislice and MBAFF, constrained CAVLC and the resolution change. [FFmpeg frame output](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264dec.c) · [FFmpeg frame buffer pool](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/get_buffer.c) · [Cycle and allocation samples](results/windows-x86_64-20261126/surface-return-prototype)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Prototype, surfaces returned | 37.22 | 26.87 | 8.91 | 0.304 |
+| SRPG9 | FFmpeg native | 35.89 | 27.86 | 17.91 | 0.289 |
+| SRPG10 | Prototype, surfaces returned | 25.56 | 39.12 | 7.09 | 0.246 |
+| SRPG10 | FFmpeg native | 24.71 | 40.47 | 17.63 | 0.184 |
+
+Median per-round cycle gaps for the returned surface were 5.03% and 4.25%. Dropping prototype surfaces without returning them increased requested traffic to 267.2 MB and 229.8 MB per clip. The earlier deferred packing prototype increased allocation traffic in recycled mode. Emitting packed output directly into the result vector cut about one allocation call per frame and raised median paired cycles 0.73% and 1.41% on the bundled clips. [Owned-output candidate comparisons](results/windows-x86_64-20261126/owned-output-paired.csv)
+
+The diagnostic profile after slice specialization attributed about 7.6% and 11.5% of measured ticks to skip macroblock overhead outside the motion and prediction kernels. [Specialized decoder profile](results/windows-x86_64-20261126/specialized-decoder-profile.csv)
