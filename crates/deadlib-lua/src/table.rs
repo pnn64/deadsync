@@ -335,10 +335,12 @@ pub(crate) struct Table {
     host_state: u64,
     // Counts changes to keyed entries; see `fields_version`.
     fields_version: u32,
-    // Zero invalidates the watch, one is clean. Each nonzero byte of a
-    // dirty watch encodes a block number plus two.
-    array_watch: u16,
+    // Zero invalidates the watch, one is clean, and higher values identify
+    // the first dirty block plus two.
+    array_watch: u8,
     pub trace: TableTrace,
+    // The second block is meaningful only while the first block is dirty.
+    array_watch_second: u8,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -360,6 +362,7 @@ impl Table {
             fields_version: 0,
             array_watch: 0,
             trace: TableTrace::Idle,
+            array_watch_second: 0,
         }
     }
     #[cfg(test)]
@@ -477,8 +480,8 @@ impl Table {
         match self.array_watch {
             0 => ArrayChange::Unwatched,
             1 => ArrayChange::Clean,
-            watch => {
-                let [first, second] = watch.to_le_bytes();
+            first => {
+                let second = self.array_watch_second;
                 ArrayChange::Dirty {
                     blocks: [
                         usize::from(first - 2),
@@ -491,6 +494,7 @@ impl Table {
     }
     pub(crate) fn watch_array(&mut self) {
         self.array_watch = 1;
+        self.array_watch_second = 0;
     }
     #[inline]
     fn touch_array(&mut self) {
@@ -498,20 +502,21 @@ impl Table {
     }
     #[inline]
     fn touch_array_at(&mut self, index: usize) {
-        if self.array_watch != 0 {
+        let first = self.array_watch;
+        if first != 0 {
             let Ok(block) = u8::try_from(index / ARRAY_WATCH_BLOCK + 2) else {
                 self.touch_array();
                 return;
             };
-            let [first, second] = self.array_watch.to_le_bytes();
             if first == 1 {
-                self.array_watch = u16::from(block);
-            } else if first != block && second != block {
-                self.array_watch = if second == 0 {
-                    u16::from_le_bytes([first, block])
-                } else {
-                    0
-                };
+                self.array_watch = block;
+            } else if first != block {
+                let second = self.array_watch_second;
+                if second == 0 {
+                    self.array_watch_second = block;
+                } else if second != block {
+                    self.touch_array();
+                }
             }
         }
     }
