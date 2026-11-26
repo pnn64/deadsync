@@ -53,8 +53,14 @@ impl Series {
     }
 
     fn constant(value: Value) -> Option<Self> {
-        let n = integer(value)?;
-        Some(Self { first: n, last: n })
+        Some(Self::splat(integer(value)?))
+    }
+
+    fn splat(value: i128) -> Self {
+        Self {
+            first: value,
+            last: value,
+        }
     }
 
     fn arithmetic(self, op: Op, right: Self) -> Option<Self> {
@@ -254,6 +260,23 @@ impl Body<'_> {
         Some(Operand::Constant(Value::Boolean(true)))
     }
 
+    fn le_throughout(&mut self, left: Series, right: Series) -> Option<bool> {
+        let first = left.first - right.first;
+        let last = left.last - right.last;
+        if (first <= 0) == (last <= 0) {
+            return Some(first <= 0);
+        }
+        // A change in the ordering of affine inputs starts a new segment.
+        let slope = (last - first) / (self.iterations - 1);
+        let boundary = if first <= 0 {
+            -first / slope + 1
+        } else {
+            (first - 1) / -slope + 1
+        };
+        self.segment_limit = Some(boundary);
+        None
+    }
+
     fn extremum(&mut self, call: usize, count: usize, minimum: bool) -> Option<Operand> {
         if count == 0 {
             return None;
@@ -263,24 +286,12 @@ impl Body<'_> {
         for index in call + 2..=call + count {
             let operand = self.read(index)?;
             let other = self.series(operand)?;
-            let (first, last) = if minimum {
-                (selected.first - other.first, selected.last - other.last)
+            let keep = if minimum {
+                self.le_throughout(selected, other)?
             } else {
-                (other.first - selected.first, other.last - selected.last)
+                self.le_throughout(other, selected)?
             };
-            if (first <= 0) != (last <= 0) {
-                // Both inputs are affine in the iteration number. Split just
-                // before their ordering changes so each segment is affine too.
-                let slope = (last - first) / (self.iterations - 1);
-                let boundary = if first <= 0 {
-                    -first / slope + 1
-                } else {
-                    (first - 1) / -slope + 1
-                };
-                self.segment_limit = Some(boundary);
-                return None;
-            }
-            if first > 0 {
+            if !keep {
                 selected = other;
             }
         }
@@ -302,7 +313,9 @@ impl Body<'_> {
             Value::Native(id @ (MATH_MIN | MATH_MAX)) if wanted == 1 => {
                 self.extremum(call, count, id == MATH_MIN)
             }
-            Value::Native(STR_SUB) if count == 3 && wanted == 1 => self.substring(call),
+            Value::Native(STR_SUB) if matches!(count, 2 | 3) && wanted == 1 => {
+                self.substring(call, count)
+            }
             Value::Native(CO_RESUME) if count == 1 && wanted == 2 => self.resume(call),
             Value::Native(0) if count == 1 && wanted <= 1 => {
                 let value = self.read(call + 1)?;

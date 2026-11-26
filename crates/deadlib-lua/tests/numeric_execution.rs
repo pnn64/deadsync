@@ -440,3 +440,32 @@ fn substring_length_reduction_preserves_bytes_and_rebound_calls() {
         "#,
     );
 }
+
+#[test]
+fn substring_lengths_follow_clipping_relative_indices_and_default_ends() {
+    check(
+        br#"
+        local function setup()
+            local source = "abcdef"
+            local sub = string.sub
+            return function()
+                local clipped, omitted, explicit = 0, 0, 0
+                for i = 1, 8 do
+                    local piece = sub(source, i - 10, i + 2)
+                    clipped = clipped + #piece
+                end
+                for i = 1, 6 do
+                    omitted = omitted + #sub(source, i)
+                end
+                for i = 6, 1, -1 do
+                    explicit = explicit + #sub(source, -i, nil)
+                end
+                return clipped, omitted, explicit
+            end
+        end
+        local sum = setup()
+        local clipped, omitted, explicit = sum()
+        return clipped == 32 and omitted == 21 and explicit == 21
+        "#,
+    );
+}
