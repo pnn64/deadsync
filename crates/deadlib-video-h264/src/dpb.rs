@@ -944,93 +944,51 @@ impl Dpb {
             .collect()
     }
 
-    /// Build ref_pic_list_0 for B slices (spec 8.2.4.2.3 / 8.2.4.2.5).
-    /// Short-term refs with POC < current sorted by descending POC,
-    /// then refs with POC > current sorted by ascending POC.
-    /// For field pictures, additionally group by frame_num with same-parity first.
-    pub fn ref_list_l0_b(
+    /// Build both initial B-slice lists (spec 8.2.4.2.3 through 8.2.4.2.5).
+    /// List 0 starts with short-term references at or before the current POC,
+    /// in descending POC order. The remaining references follow in ascending
+    /// POC order. List 1 visits the same two groups in reverse order.
+    pub(crate) fn b_ref_lists(
         &self,
         current_poc: i32,
         is_field_pic: bool,
         bottom_field_flag: bool,
-    ) -> Vec<Arc<DecodedPicture>> {
-        if is_field_pic {
-            return self.b_field_list(current_poc, bottom_field_flag, false);
-        }
-        let short_term: Vec<_> = self.short_term_refs(false);
-
-        let mut before: Vec<_> = short_term
-            .iter()
-            .filter(|p| p.pic_order_cnt <= current_poc)
-            .cloned()
-            .collect();
-        before.sort_by_key(|a| core::cmp::Reverse(a.pic_order_cnt)); // descending
-
-        let mut after: Vec<_> = short_term
-            .iter()
-            .filter(|p| p.pic_order_cnt > current_poc)
-            .cloned()
-            .collect();
-        after.sort_by_key(|a| a.pic_order_cnt); // ascending
-
-        before.extend(after);
-
-        // Append long-term refs (spec 8.2.4.2.3)
-        before.extend(self.long_term_ref_list());
-        before
-    }
-
-    /// Build ref_pic_list_1 for B slices (spec 8.2.4.2.4 / 8.2.4.2.5).
-    /// Short-term refs with POC > current sorted by ascending POC,
-    /// then refs with POC <= current sorted by descending POC.
-    /// If L1 == L0 and has more than one entry, swap the first two.
-    pub fn ref_list_l1_b(
-        &self,
-        current_poc: i32,
-        is_field_pic: bool,
-        bottom_field_flag: bool,
-    ) -> Vec<Arc<DecodedPicture>> {
-        let mut after = if is_field_pic {
-            self.b_field_list(current_poc, bottom_field_flag, true)
+    ) -> [Vec<Arc<DecodedPicture>>; 2] {
+        let [list0, mut list1] = if is_field_pic {
+            [
+                self.b_field_list(current_poc, bottom_field_flag, false),
+                self.b_field_list(current_poc, bottom_field_flag, true),
+            ]
         } else {
-            self.frame_list_l1_b(current_poc)
+            let mut list0 = self.short_term_refs(false);
+            list0.sort_by_key(|picture| {
+                let poc = i64::from(picture.pic_order_cnt);
+                if picture.pic_order_cnt <= current_poc {
+                    (false, -poc)
+                } else {
+                    (true, poc)
+                }
+            });
+            let split = list0.partition_point(|picture| picture.pic_order_cnt <= current_poc);
+            let long_term = self.long_term_ref_list();
+            let list1 = list0[split..]
+                .iter()
+                .chain(&list0[..split])
+                .chain(&long_term)
+                .cloned()
+                .collect();
+            list0.extend(long_term);
+            [list0, list1]
         };
 
-        // Spec 8.2.4.2.4: if L1 == L0 and has more than one entry, swap first two
-        let l0 = self.ref_list_l0_b(current_poc, is_field_pic, bottom_field_flag);
-        if after.len() > 1
-            && after.len() == l0.len()
-            && after.iter().zip(l0.iter()).all(|(a, b)| Arc::ptr_eq(a, b))
+        // Spec 8.2.4.2.4: distinguish otherwise identical reference lists.
+        if list1.len() > 1
+            && list1.len() == list0.len()
+            && list1.iter().zip(&list0).all(|(a, b)| Arc::ptr_eq(a, b))
         {
-            after.swap(0, 1);
+            list1.swap(0, 1);
         }
-
-        after
-    }
-
-    /// Frame-picture list 1 before the L0 comparison (spec 8.2.4.2.3).
-    fn frame_list_l1_b(&self, current_poc: i32) -> Vec<Arc<DecodedPicture>> {
-        let short_term: Vec<_> = self.short_term_refs(false);
-
-        let mut after: Vec<_> = short_term
-            .iter()
-            .filter(|p| p.pic_order_cnt > current_poc)
-            .cloned()
-            .collect();
-        after.sort_by_key(|a| a.pic_order_cnt); // ascending
-
-        let mut before: Vec<_> = short_term
-            .iter()
-            .filter(|p| p.pic_order_cnt <= current_poc)
-            .cloned()
-            .collect();
-        before.sort_by_key(|a| core::cmp::Reverse(a.pic_order_cnt)); // descending
-
-        after.extend(before);
-
-        // Append long-term refs (spec 8.2.4.2.4)
-        after.extend(self.long_term_ref_list());
-        after
+        [list0, list1]
     }
 
     /// Apply ref_pic_list_modification to reorder a reference list (spec 8.2.4.3).
@@ -1889,7 +1847,7 @@ mod tests {
         dpb.insert(make_pic(3, 6), ReferenceStatus::ShortTerm);
         dpb.insert(make_pic(4, 8), ReferenceStatus::ShortTerm);
 
-        let l0 = dpb.ref_list_l0_b(5, false, false);
+        let [l0, _] = dpb.b_ref_lists(5, false, false);
         // Before (POC <= 5): 4, 2, 0 (descending POC)
         // After (POC > 5): 6, 8 (ascending POC)
         assert_eq!(l0.len(), 5);
@@ -1909,7 +1867,7 @@ mod tests {
         dpb.insert(make_pic(3, 6), ReferenceStatus::ShortTerm);
         dpb.insert(make_pic(4, 8), ReferenceStatus::ShortTerm);
 
-        let l1 = dpb.ref_list_l1_b(5, false, false);
+        let [_, l1] = dpb.b_ref_lists(5, false, false);
         // After (POC > 5): 6, 8 (ascending POC)
         // Before (POC <= 5): 4, 2, 0 (descending POC)
         assert_eq!(l1.len(), 5);

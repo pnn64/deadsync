@@ -682,27 +682,20 @@ pub(crate) fn prepare_slice(
     } else {
         vec![]
     };
-    let mut _ref_pic_list_l0 = if is_b_slice {
-        let mut refs = dpb.ref_list_l0_b(current_poc, is_field_pic, header.bottom_field_flag);
-        if !refs.is_empty() {
-            while refs.len() < header.num_ref_idx_l0_active as usize {
-                refs.push(refs.last().unwrap().clone());
+    let [mut _ref_pic_list_l0, mut _ref_pic_list_l1] = if is_b_slice {
+        let mut lists = dpb.b_ref_lists(current_poc, is_field_pic, header.bottom_field_flag);
+        let active = [header.num_ref_idx_l0_active, header.num_ref_idx_l1_active];
+        for (refs, active) in lists.iter_mut().zip(active) {
+            if let Some(last) = refs.last() {
+                let active = active as usize;
+                if refs.len() < active {
+                    refs.resize(active, Arc::clone(last));
+                }
             }
         }
-        refs
+        lists
     } else {
-        vec![]
-    };
-    let mut _ref_pic_list_l1 = if is_b_slice {
-        let mut refs = dpb.ref_list_l1_b(current_poc, is_field_pic, header.bottom_field_flag);
-        if !refs.is_empty() {
-            while refs.len() < header.num_ref_idx_l1_active as usize {
-                refs.push(refs.last().unwrap().clone());
-            }
-        }
-        refs
-    } else {
-        vec![]
+        [Vec::new(), Vec::new()]
     };
 
     // The initial lists keep only their first num_ref_idx_lX_active entries
@@ -713,7 +706,13 @@ pub(crate) fn prepare_slice(
 
     // Apply ref_pic_list_modification (spec 8.2.4.3)
     // A command may name any short-term reference, not only one in the list.
-    let short_term = dpb.short_term_refs(is_field_pic);
+    let has_modifications = ((is_p_slice || is_b_slice) && !header.ref_list_mod_l0.is_empty())
+        || (is_b_slice && !header.ref_list_mod_l1.is_empty());
+    let short_term = if has_modifications {
+        dpb.short_term_refs(is_field_pic)
+    } else {
+        Vec::new()
+    };
     let long_term = dpb.long_term_refs(is_field_pic);
     if is_p_slice && !header.ref_list_mod_l0.is_empty() {
         Dpb::apply_ref_list_modification(
