@@ -1,4 +1,4 @@
-//! Dependency-free MPEG-2 (H.262) video decoding for progressive 4:2:0 frames.
+//! Dependency-free MPEG-1 and MPEG-2 video decoding for progressive 4:2:0 frames.
 //!
 //! Use [`decode_elementary_stream`] for raw video, [`decode_program_stream`] for
 //! MPEG Program Streams, or [`Decoder`] to feed individual [`Unit`]s.
@@ -47,8 +47,8 @@ impl fmt::Display for Error {
             Self::Truncated => f.write_str("truncated MPEG data"),
             Self::Invalid(field) => write!(f, "invalid MPEG syntax ({field})"),
             Self::Unsupported(feature) => write!(f, "unsupported MPEG feature ({feature})"),
-            Self::MissingReference => f.write_str("missing MPEG-2 prediction reference"),
-            Self::NoVideo => f.write_str("no MPEG-2 video pictures found"),
+            Self::MissingReference => f.write_str("missing MPEG prediction reference"),
+            Self::NoVideo => f.write_str("no MPEG video pictures found"),
         }
     }
 }
@@ -98,14 +98,22 @@ impl Decoder {
                     .sequence
                     .as_ref()
                     .ok_or(Error::Invalid("missing sequence header"))?;
-                if !sequence.extended {
-                    return Err(Error::Unsupported("MPEG-1 video"));
+                let mpeg2 = sequence.extended;
+                if !mpeg2 {
+                    sequence.check_dimensions()?;
+                    if self
+                        .newest
+                        .as_ref()
+                        .is_some_and(|frame| !frame.matches(sequence))
+                    {
+                        self.drain_references(&mut output);
+                    }
                 }
-                let header = PictureHeader::parse(unit.payload)?;
+                let (header, coding) = PictureHeader::parse(unit.payload, mpeg2)?;
                 let discard = header.kind == PictureKind::B && self.older.is_none();
                 self.picture = Some(Picture {
                     header,
-                    coding: None,
+                    coding,
                     frame: None,
                     next_macroblock: 0,
                     discard,
@@ -138,6 +146,9 @@ impl Decoder {
         let mut bits = Bits::new(bytes);
         match bits.read(4)? {
             1 => {
+                if self.picture.is_some() {
+                    return Err(Error::Invalid("sequence extension inside picture"));
+                }
                 let sequence = self
                     .sequence
                     .as_mut()
@@ -209,7 +220,11 @@ impl Decoder {
             coding,
             references,
         };
-        slice.decode(unit, frame, &mut picture.next_macroblock)
+        if sequence.extended {
+            slice.decode::<true>(unit, frame, &mut picture.next_macroblock)
+        } else {
+            slice.decode::<false>(unit, frame, &mut picture.next_macroblock)
+        }
     }
 
     fn finish_picture(&mut self, output: &mut impl FnMut(Arc<Frame>)) -> Result<()> {
@@ -250,7 +265,7 @@ impl Decoder {
     }
 }
 
-/// Decodes a complete MPEG-2 video elementary stream.
+/// Decodes a complete MPEG-1 or MPEG-2 video elementary stream.
 pub fn decode_elementary_stream(bytes: &[u8], mut output: impl FnMut(Arc<Frame>)) -> Result<()> {
     let mut decoder = Decoder::new();
     let mut found = false;

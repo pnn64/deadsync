@@ -113,6 +113,7 @@ pub struct Frame {
     frame_rate: (u32, u32),
     temporal_reference: u16,
     kind: PictureKind,
+    mpeg2: bool,
 }
 
 impl Frame {
@@ -131,6 +132,7 @@ impl Frame {
             frame_rate: sequence.frame_rate,
             temporal_reference: picture.temporal_reference,
             kind: picture.kind,
+            mpeg2: sequence.extended,
         }
     }
 
@@ -188,7 +190,8 @@ impl Frame {
     }
 
     pub(crate) fn matches(&self, sequence: &Sequence) -> bool {
-        self.width() == sequence.width
+        self.mpeg2 == sequence.extended
+            && self.width() == sequence.width
             && self.height() == sequence.height
             && self.planes[0].samples.len()
                 == self.planes[0].stride * 16 * sequence.macroblock_rows()

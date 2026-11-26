@@ -62,7 +62,7 @@ struct Predictors {
 }
 
 impl Slice<'_> {
-    pub(crate) fn decode(
+    pub(crate) fn decode<const MPEG2: bool>(
         &self,
         unit: Unit<'_>,
         frame: &mut Frame,
@@ -97,7 +97,7 @@ impl Slice<'_> {
             if address >= count {
                 return Err(Error::Invalid("macroblock address exceeds picture"));
             }
-            self.macroblock(
+            self.macroblock::<MPEG2>(
                 &mut bits,
                 frame,
                 (address % columns * 16, address / columns * 16),
@@ -125,7 +125,7 @@ impl Slice<'_> {
                 };
                 predictors.dc = self.initial_dc();
                 for skipped in address..target {
-                    self.predict(
+                    self.predict::<MPEG2>(
                         frame,
                         skipped % columns * 16,
                         skipped / columns * 16,
@@ -142,7 +142,7 @@ impl Slice<'_> {
         [128 << self.coding.dc_precision; 3]
     }
 
-    fn macroblock(
+    fn macroblock<const MPEG2: bool>(
         &self,
         bits: &mut Bits<'_>,
         frame: &mut Frame,
@@ -178,7 +178,7 @@ impl Slice<'_> {
                     }
                 }
             }
-            self.predict(frame, x, y, mode, predictors.motion)?;
+            self.predict::<MPEG2>(frame, x, y, mode, predictors.motion)?;
         }
         predictors.last_mode = mode;
 
@@ -203,7 +203,7 @@ impl Slice<'_> {
         ];
         for (index, (plane, x, y)) in positions.into_iter().enumerate() {
             if pattern & (32 >> index) != 0 {
-                let samples = block::decode(
+                let samples = block::decode::<MPEG2>(
                     bits,
                     self.coding,
                     self.sequence,
@@ -241,7 +241,7 @@ impl Slice<'_> {
         Ok(())
     }
 
-    fn predict(
+    fn predict<const MPEG2: bool>(
         &self,
         frame: &mut Frame,
         x: usize,
@@ -253,12 +253,17 @@ impl Slice<'_> {
         for (direction, flag) in [FORWARD, BACKWARD].into_iter().enumerate() {
             if mode & flag != 0 {
                 let reference = self.references[direction].ok_or(Error::MissingReference)?;
+                // MPEG-1 keeps the predictor in its coded units.
+                let mut motion = motion[direction];
+                if !MPEG2 && self.coding.full_pel[direction] {
+                    motion = motion.map(|component| component * 2);
+                }
                 frame.predict(
                     x,
                     y,
                     Prediction {
                         frame: reference,
-                        motion: motion[direction],
+                        motion,
                         average,
                     },
                 );

@@ -3,10 +3,10 @@ name = "deadlib-video-mpeg2"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.89"
-description = "Dependency-free MPEG-2 (H.262) video decoder"
+description = "Dependency-free MPEG-1 and MPEG-2 video decoder"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/pnn64/deadsync"
-keywords = ["mpeg2", "h262", "video", "decoder"]
+keywords = ["mpeg1", "mpeg2", "h262", "video", "decoder"]
 categories = ["multimedia::video"]
 
 [workspace]

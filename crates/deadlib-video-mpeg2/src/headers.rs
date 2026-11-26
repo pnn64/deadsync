@@ -26,6 +26,7 @@ pub(crate) struct Sequence {
     pub(crate) matrices: [[u8; 64]; 4],
     pub(crate) progressive: bool,
     pub(crate) extended: bool,
+    aspect: u32,
 }
 
 impl Sequence {
@@ -34,7 +35,7 @@ impl Sequence {
         let width = bits.read(12)? as usize;
         let height = bits.read(12)? as usize;
         let aspect = bits.read(4)?;
-        if !(1..=4).contains(&aspect) {
+        if !(1..=14).contains(&aspect) {
             return Err(Error::Invalid("aspect ratio code"));
         }
         let frame_rate = match bits.read(4)? {
@@ -58,14 +59,18 @@ impl Sequence {
             height,
             frame_rate,
             matrices: [intra, inter, intra, inter],
-            progressive: false,
+            progressive: true,
             extended: false,
+            aspect,
         })
     }
 
     pub(crate) fn extend(&mut self, bits: &mut Bits<'_>) -> Result<()> {
         if self.extended {
             return Err(Error::Invalid("duplicate sequence extension"));
+        }
+        if self.aspect > 4 {
+            return Err(Error::Invalid("MPEG-2 aspect ratio code"));
         }
         bits.skip(8)?; // Profile and level.
         self.progressive = bits.flag()?;
@@ -74,18 +79,23 @@ impl Sequence {
         }
         self.width |= (bits.read(2)? as usize) << 12;
         self.height |= (bits.read(2)? as usize) << 12;
-        if self.width == 0 || self.height == 0 {
-            return Err(Error::Invalid("zero picture dimension"));
-        }
-        if self.width > 4096 || self.height > 2800 {
-            return Err(Error::Unsupported("picture dimensions above 4096 × 2800"));
-        }
+        self.check_dimensions()?;
         bits.skip(12)?;
         bits.marker()?;
         bits.skip(9)?; // VBV extension and low-delay flag.
         self.frame_rate.0 *= bits.read(2)? + 1;
         self.frame_rate.1 *= bits.read(5)? + 1;
         self.extended = true;
+        Ok(())
+    }
+
+    pub(crate) fn check_dimensions(&self) -> Result<()> {
+        if self.width == 0 || self.height == 0 {
+            return Err(Error::Invalid("zero picture dimension"));
+        }
+        if self.width > 4096 || self.height > 2800 {
+            return Err(Error::Unsupported("picture dimensions above 4096 × 2800"));
+        }
         Ok(())
     }
 
@@ -143,7 +153,7 @@ pub(crate) struct PictureHeader {
 }
 
 impl PictureHeader {
-    pub(crate) fn parse(bytes: &[u8]) -> Result<Self> {
+    pub(crate) fn parse(bytes: &[u8], mpeg2: bool) -> Result<(Self, Option<Coding>)> {
         let mut bits = Bits::new(bytes);
         let temporal_reference = bits.read(10)? as u16;
         let kind = match bits.read(3)? {
@@ -153,24 +163,31 @@ impl PictureHeader {
             _ => return Err(Error::Invalid("picture coding type")),
         };
         bits.skip(16)?;
-        if kind != PictureKind::I {
-            bits.skip(4)?;
-        }
-        if kind == PictureKind::B {
-            bits.skip(4)?;
-        }
+        let directions = match kind {
+            PictureKind::I => 0,
+            PictureKind::P => 1,
+            PictureKind::B => 2,
+        };
+        let coding = if mpeg2 {
+            bits.skip(4 * directions)?;
+            None
+        } else {
+            Some(Coding::mpeg1(&mut bits, usize::from(directions))?)
+        };
         while bits.flag()? {
             bits.skip(8)?;
         }
-        Ok(Self {
+        let picture = Self {
             temporal_reference,
             kind,
-        })
+        };
+        Ok((picture, coding))
     }
 }
 
 pub(crate) struct Coding {
     pub(crate) f_code: [[u8; 2]; 2],
+    pub(crate) full_pel: [bool; 2],
     pub(crate) dc_precision: u8,
     pub(crate) concealment_vectors: bool,
     pub(crate) nonlinear_scale: bool,
@@ -179,6 +196,28 @@ pub(crate) struct Coding {
 }
 
 impl Coding {
+    fn mpeg1(bits: &mut Bits<'_>, directions: usize) -> Result<Self> {
+        let mut f_code = [[0; 2]; 2];
+        let mut full_pel = [false; 2];
+        for direction in 0..directions {
+            full_pel[direction] = bits.flag()?;
+            let code = bits.read(3)? as u8;
+            if code == 0 {
+                return Err(Error::Invalid("motion vector f_code"));
+            }
+            f_code[direction] = [code; 2];
+        }
+        Ok(Self {
+            f_code,
+            full_pel,
+            dc_precision: 0,
+            concealment_vectors: false,
+            nonlinear_scale: false,
+            intra_vlc: false,
+            alternate_scan: false,
+        })
+    }
+
     pub(crate) fn parse(bits: &mut Bits<'_>) -> Result<Self> {
         let f_code = [
             [bits.read(4)? as u8, bits.read(4)? as u8],
@@ -194,6 +233,7 @@ impl Coding {
         }
         let coding = Self {
             f_code,
+            full_pel: [false; 2],
             dc_precision,
             concealment_vectors: bits.flag()?,
             nonlinear_scale: bits.flag()?,

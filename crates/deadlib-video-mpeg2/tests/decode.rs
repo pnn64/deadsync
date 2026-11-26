@@ -6,6 +6,7 @@ use deadlib_video_mpeg2::{
 };
 
 const VIDEO: &[u8] = include_bytes!("fixtures/progressive.m2v");
+const MPEG1_VIDEO: &[u8] = include_bytes!("fixtures/progressive.m1v");
 
 fn collect(frames: &mut Vec<(u16, deadlib_video_mpeg2::PictureKind, u64)>, frame: Arc<Frame>) {
     assert_eq!((frame.width(), frame.height()), (48, 34));
@@ -47,6 +48,51 @@ fn decodes_elementary_stream_in_display_order() {
             (7, P, 0x9f4a343166f3144d),
         ]
     );
+}
+
+#[test]
+fn decodes_mpeg1_elementary_and_program_streams() {
+    let mut frames = Vec::new();
+    decode_elementary_stream(MPEG1_VIDEO, |frame| collect(&mut frames, frame)).unwrap();
+    // FNV-1a of each visible YCbCr frame from FFmpeg 7.1 with -idct simple.
+    assert_eq!(
+        frames,
+        [
+            (0, I, 0x731b54b4ec9ec448),
+            (1, B, 0xfd98501361171573),
+            (2, B, 0xfd98501361171573),
+            (3, P, 0xa5179c9ee4f551bb),
+            (4, B, 0xbfdb13a387708457),
+            (5, B, 0xbfdb13a387708457),
+            (6, P, 0xc881a2af12c25e65),
+            (7, P, 0xbfdb13a387708457),
+        ]
+    );
+
+    let mut program = vec![0, 0, 1, 0xba, 0x21, 0, 1, 0, 1, 0x80, 0, 1];
+    packet(&mut program, 0xe0, &[0x0f], MPEG1_VIDEO);
+    program.extend_from_slice(&[0, 0, 1, 0xb9]);
+    let mut unpacked = Vec::new();
+    decode_program_stream(&program, |frame| collect(&mut unpacked, frame)).unwrap();
+    assert_eq!(unpacked, frames);
+}
+
+#[test]
+fn mpeg1_full_pel_motion_keeps_the_predictor_in_coded_units() {
+    // Two 16x16 macroblocks. The I picture has a luma boundary at x=16.
+    // The P picture codes a full-pel vector of +1 followed by a delta of -1.
+    let stream = include_bytes!("fixtures/full-pel.m1v");
+    let mut count = 0;
+    decode_elementary_stream(stream, |frame| {
+        let boundary = if count == 0 { 16 } else { 15 };
+        for row in frame.planes()[0].rows() {
+            assert!(row[..boundary].iter().all(|&pixel| pixel == 64));
+            assert!(row[boundary..].iter().all(|&pixel| pixel == 192));
+        }
+        count += 1;
+    })
+    .unwrap();
+    assert_eq!(count, 2);
 }
 
 #[test]
