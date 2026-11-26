@@ -1,7 +1,9 @@
 //! Guarded numeric calls through dense arrays inside exact-index loops.
 
 use super::super::super::{Reduction, integer};
+use super::exact::{Exact, MIN_LENGTH};
 use crate::bytecode::{Instruction, Op, RK};
+use crate::table::ArrayChange;
 use crate::vm::{
     Cell, FrameKind, FunctionId, TableId, Value, Vm,
     numeric_leaf::{Expression, Input},
@@ -56,23 +58,45 @@ impl Registers<'_> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Argument {
     Array(usize),
-    Number(f64),
+    Number(u64),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Call {
     target: usize,
     arguments: [Argument; MAX_ARGUMENTS],
     arity: usize,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Plan {
     tables: [TableId; MAX_ARRAYS],
     table_count: usize,
     call: Call,
     sum: usize,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct Key {
+    plan: Plan,
+    bounds: (i64, i64),
+    ascending: bool,
+}
+
+#[derive(Debug)]
+pub(super) struct CachedCall {
+    key: Key,
+    exact: Option<Exact>,
+    registers: usize,
+}
+
+struct Scan {
+    sum: f64,
+    exact: Option<Exact>,
+    registers: usize,
 }
 
 impl Plan {
@@ -144,7 +168,7 @@ impl Plan {
                         return None;
                     };
                     let arity = b as usize;
-                    let mut arguments = [Argument::Number(0.0); MAX_ARGUMENTS];
+                    let mut arguments = [Argument::Number(0); MAX_ARGUMENTS];
                     for (offset, output) in arguments[..arity].iter_mut().enumerate() {
                         let slot = r.read((a + 1 + offset) as u32);
                         *output = if let Slot::Array(index) = slot {
@@ -153,7 +177,7 @@ impl Plan {
                             let Value::Number(number) = r.fixed(slot)? else {
                                 return None;
                             };
-                            Argument::Number(number)
+                            Argument::Number(number.to_bits())
                         };
                     }
                     call = Some(Call {
@@ -206,26 +230,41 @@ impl Plan {
         bounds: (i64, i64),
         ascending: bool,
         mut sum: f64,
-    ) -> Option<(f64, usize)> {
+        measure_exactness: bool,
+    ) -> Option<Scan> {
         let mut arrays = [&[][..]; MAX_ARRAYS];
         for (slice, id) in arrays.iter_mut().zip(&self.tables[..self.table_count]) {
             *slice = vm.tables[slot_index(id.0)].array_slice(bounds.0, bounds.1)?;
         }
         let len = arrays[self.call.target].len();
         let mut targets = Targets::new();
-        let mut term = |index| self.call.value(vm, &arrays, index, &mut targets);
+        let mut exact = measure_exactness.then_some(Exact::ZERO);
+        let mut accumulate = |index| {
+            let value = self.call.value(vm, &arrays, index, &mut targets)?;
+            sum += value;
+            if let Some(proof) = &mut exact
+                && proof.push(value).is_none()
+            {
+                exact = None;
+            }
+            Some(())
+        };
         if ascending {
             for index in 0..len - 1 {
-                sum += term(index)?;
+                accumulate(index)?;
             }
-            term(len - 1)?;
         } else {
             for index in (1..len).rev() {
-                sum += term(index)?;
+                accumulate(index)?;
             }
-            term(0)?;
         }
-        Some((sum, targets.registers))
+        let last = if ascending { len - 1 } else { 0 };
+        self.call.value(vm, &arrays, last, &mut targets)?;
+        Some(Scan {
+            sum,
+            exact: exact.and_then(|proof| proof.check_count(len - 1, 1)),
+            registers: targets.registers,
+        })
     }
 }
 
@@ -243,7 +282,7 @@ impl Call {
         let mut numbers = [0.0; MAX_ARGUMENTS + MAX_OPS];
         for (number, argument) in numbers.iter_mut().zip(&self.arguments[..self.arity]) {
             *number = match *argument {
-                Argument::Number(value) => value,
+                Argument::Number(bits) => f64::from_bits(bits),
                 Argument::Array(array) => {
                     let Value::Number(value) = arrays[array][index] else {
                         return None;
@@ -425,7 +464,39 @@ impl Vm {
         if !self.numeric_sort_gc_ready() {
             return Some(Reduction::Retry);
         }
-        let (sum, registers) = plan.scan(self, (lower as i64, upper as i64), step > 0, initial)?;
+        let bounds = (lower as i64, upper as i64);
+        let key = Key {
+            plan,
+            bounds,
+            ascending: step > 0,
+        };
+        let watched = &plan.tables[..plan.table_count];
+        let cacheable = bounds.1 - bounds.0 + 1 >= MIN_LENGTH;
+        let cached = self.array_reduction.cached_call().filter(|cached| {
+            cached.key == key
+                && watched
+                    .iter()
+                    .all(|id| self.tables[slot_index(id.0)].array_change() == ArrayChange::Clean)
+        });
+        let hit = cached
+            .and_then(|cached| Some((cached.exact.as_ref()?.apply(initial)?, cached.registers)));
+        let (sum, registers) = if let Some(hit) = hit {
+            hit
+        } else {
+            let remember = cacheable && cached.is_none();
+            let scan = plan.scan(self, bounds, step > 0, initial, remember)?;
+            if remember {
+                self.array_reduction.cache_call(CachedCall {
+                    key,
+                    exact: scan.exact,
+                    registers: scan.registers,
+                });
+                for id in watched {
+                    self.tables[slot_index(id.0)].watch_array();
+                }
+            }
+            (scan.sum, scan.registers)
+        };
         if !self.has_numeric_call_space(registers) {
             return Some(Reduction::Retry);
         }

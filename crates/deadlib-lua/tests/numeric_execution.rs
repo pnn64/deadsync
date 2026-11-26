@@ -248,3 +248,45 @@ fn dense_array_calls_preserve_callees_rounding_and_loop_carried_arguments() {
         "#,
     );
 }
+
+#[test]
+fn dense_array_call_cache_rechecks_arguments_and_callees_after_writes() {
+    check(
+        br#"
+        local function setup()
+            local functions, x, y = {}, {}, {}
+            local plus = function(a, b) return a + b end
+            local minus = function(a, b) return a - b end
+            local min = math.min
+            for i = 1, 96 do
+                functions[i] = i % 2 == 0 and minus or plus
+                x[i], y[i] = i, 0.5
+            end
+            return function(total)
+                for i = 1, 96 do total = total + functions[i](x[i], y[i]) end
+                return total
+            end, function()
+                local total = 0
+                for i = 1, 96 do total = total + min(x[i], 1000) end
+                return total
+            end, x, functions
+        end
+        local sum, clamp, x, functions = setup()
+        assert(sum(0) == 4656 and sum(0) == 4656)
+        x[9] = 33
+        assert(clamp() == 4680 and clamp() == 4680)
+        assert(sum(0) == 4680 and sum(0) == 4680)
+        functions[1] = function(a, b) return 2 * a + b end
+        assert(sum(0) == 4681 and sum(0) == 4681)
+
+        local large = 9007199254740992
+        local expected = large
+        for i = 1, 96 do
+            local term = x[i] + (i % 2 == 0 and -0.5 or 0.5)
+            if i == 1 then term = term + 1 end
+            expected = expected + term
+        end
+        return sum(large) == expected
+        "#,
+    );
+}

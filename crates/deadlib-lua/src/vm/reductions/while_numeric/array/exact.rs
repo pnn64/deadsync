@@ -1,9 +1,10 @@
 //! Reuse an extrema sum when every intermediate addition is exact.
+use super::calls::CachedCall;
 use super::{Plan, TableId, Term, Value, array_extremum};
 use crate::memory::{Buffer, Memory};
 use crate::table::{ARRAY_WATCH_BLOCK, ARRAY_WATCH_LIMIT, ArrayChange, Table};
 
-const MIN_LENGTH: i64 = 64;
+pub(super) const MIN_LENGTH: i64 = 64;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Clamp {
@@ -42,11 +43,17 @@ struct Entry {
     state: State,
 }
 
-// There is one entry per VM. A table's watch describes writes since that
-// entry was checked, and the blocks belong only to its exact scan bounds.
+#[derive(Debug)]
+enum Cached {
+    Extrema(Entry),
+    Call(CachedCall),
+}
+
+// A table watch belongs to the single cache entry that armed it. Replacing
+// that entry discards its proof before the new owner can rearm any watches.
 #[derive(Debug)]
 pub(in crate::vm) struct ArrayReduction {
-    entry: Option<Entry>,
+    entry: Option<Cached>,
     blocks: Buffer<Exact>,
 }
 
@@ -60,6 +67,18 @@ impl ArrayReduction {
 
     pub(in crate::vm) fn storage_bytes(&self) -> usize {
         self.blocks.capacity() * size_of::<Exact>()
+    }
+
+    pub(super) fn cached_call(&self) -> Option<&CachedCall> {
+        match &self.entry {
+            Some(Cached::Call(call)) => Some(call),
+            _ => None,
+        }
+    }
+
+    pub(super) fn cache_call(&mut self, call: CachedCall) {
+        self.blocks.clear();
+        self.entry = Some(Cached::Call(call));
     }
 
     pub(super) fn evaluate(
@@ -93,17 +112,16 @@ impl ArrayReduction {
                 bounds.1 <= ARRAY_WATCH_LIMIT as i64 && self.blocks.memory().uses_global_allocator()
             }
         };
-        let Some(entry) = self
-            .entry
-            .as_mut()
-            .filter(|entry| matches && entry.key == key)
-        else {
+        let Some(entry) = self.entry.as_mut().and_then(|entry| match entry {
+            Cached::Extrema(entry) if matches && entry.key == key => Some(entry),
+            _ => None,
+        }) else {
             table.watch_array();
             self.blocks.clear();
-            self.entry = Some(Entry {
+            self.entry = Some(Cached::Extrema(Entry {
                 key,
                 state: State::Seen,
-            });
+            }));
             return None;
         };
         match change {
@@ -214,13 +232,13 @@ impl Precision {
 }
 
 #[derive(Debug)]
-struct Exact {
+pub(super) struct Exact {
     delta: f64,
     precision: Precision,
 }
 
 impl Exact {
-    const ZERO: Self = Self {
+    pub(super) const ZERO: Self = Self {
         delta: 0.0,
         precision: Precision::ZERO,
     };
@@ -246,15 +264,19 @@ impl Exact {
                 return None;
             };
             for &term in terms {
-                let value = term.value(current);
-                exact.precision = exact.precision.join(Precision::of(value)?);
-                exact.delta += value;
+                exact.push(term.value(current))?;
             }
         }
         Some(exact)
     }
 
-    fn check_count(mut self, values: usize, terms: usize) -> Option<Self> {
+    pub(super) fn push(&mut self, value: f64) -> Option<()> {
+        self.precision = self.precision.join(Precision::of(value)?);
+        self.delta += value;
+        Some(())
+    }
+
+    pub(super) fn check_count(mut self, values: usize, terms: usize) -> Option<Self> {
         // The triangle inequality bounds all partial sums, including the
         // regrouped sums of blocks and the original sequence of additions.
         let count = values.checked_mul(terms)?;
@@ -265,7 +287,7 @@ impl Exact {
         self.precision.fits().then_some(self)
     }
 
-    fn apply(&self, initial: f64) -> Option<f64> {
+    pub(super) fn apply(&self, initial: f64) -> Option<f64> {
         if initial == 0.0 {
             // Starting at -0 can preserve its sign when all terms are -0.
             return (!initial.is_sign_negative()).then_some(self.delta);
@@ -342,8 +364,11 @@ mod tests {
         };
         let warmed = |vm: &Vm| {
             matches!(
-                vm.array_reduction.entry.as_ref().map(|entry| &entry.state),
-                Some(State::Computed(Some(_)))
+                vm.array_reduction.entry.as_ref(),
+                Some(Cached::Extrema(Entry {
+                    state: State::Computed(Some(_)),
+                    ..
+                }))
             )
         };
         run(&mut vm, 0., 0., 3., 256.);
