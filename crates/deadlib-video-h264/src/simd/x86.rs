@@ -34,9 +34,11 @@ use crate::once::OnceLock;
 
 use super::scalar::{self, hv_sample, v_sample};
 
-pub use super::scalar::{
-    deblock_chroma_lines, deblock_luma_lines, load_edge_lines_v, store_edge_lines_v, weighted_bi,
-    weighted_bi_implicit, weighted_uni,
+#[path = "x86_deblock.rs"]
+mod deblock;
+pub use super::scalar::{weighted_bi, weighted_bi_implicit, weighted_uni};
+pub use deblock::{
+    deblock_chroma_lines, deblock_luma_lines, load_edge_lines_v, store_edge_lines_v,
 };
 
 /// Detected CPU capability level, in ascending order. `Scalar` is only
