@@ -49,6 +49,64 @@ fn strip_msd_comments(data: &[u8]) -> Cow<'_, [u8]> {
     }
 }
 
+#[derive(Default)]
+struct MediaChangeValues<'a> {
+    background: [Vec<&'a [u8]>; 2],
+    foreground: Vec<&'a [u8]>,
+}
+
+impl<'a> MediaChangeValues<'a> {
+    fn read(data: &'a [u8]) -> Self {
+        let mut values = Self::default();
+        let mut tags = named_tag_values(data, &[
+            b"#BGCHANGES:", b"#BGCHANGES1:", b"#ANIMATIONS:", b"#BGCHANGES2:", b"#FGCHANGES:",
+        ]);
+        while let Some((tag, value)) = tags.next_with_tag() {
+            match tag {
+                0..=2 => values.background[0].push(value),
+                3 => values.background[1].push(value),
+                _ => values.foreground.push(value),
+            }
+        }
+        values
+    }
+}
+
+pub(crate) struct SongChanges {
+    pub background: [Vec<SongBackgroundChange>; 2],
+    pub background_lua: BackgroundLuaChangeSet,
+    pub foreground: ForegroundChangeSets,
+}
+
+pub(crate) fn resolve_song_changes(
+    song_dir: &Path,
+    simfile_data: &[u8],
+    background_tag: &str,
+    options: &crate::song::ParseSongOptions,
+) -> SongChanges {
+    let clean = strip_msd_comments(simfile_data);
+    let values = MediaChangeValues::read(&clean);
+    let entries = list_song_dir_rel_entries(song_dir);
+    let background_lua = background_lua_from_values(
+        song_dir, background_tag, &entries, &values.background,
+    );
+    let foreground = foreground_from_values(
+        song_dir, values.foreground.into_iter(), &entries, true, true,
+    );
+    let background = std::array::from_fn(|layer| {
+        resolve_background_changes_from_values(
+            song_dir,
+            values.background[layer].iter().copied(),
+            &entries,
+            &options.song_movie_roots,
+            &options.random_movie_roots,
+            &options.bg_animation_roots,
+            layer == 1,
+        )
+    });
+    SongChanges { background, background_lua, foreground }
+}
+
 #[must_use]
 pub fn simfile_uses_lua(song_dir: &Path, simfile_data: &[u8], background_tag: &str) -> bool {
     if resolve_song_path_like_itg(song_dir, background_tag)
@@ -104,13 +162,26 @@ fn extract_foreground_change_sets_with(
     let clean = strip_msd_comments(simfile_data);
     let simfile_data = clean.as_ref();
     let entries = list_song_dir_rel_entries(song_dir);
+    foreground_from_values(
+        song_dir, named_tag_values(simfile_data, &[b"#FGCHANGES:"]), &entries,
+        include_media, include_lua,
+    )
+}
+
+fn foreground_from_values<'a>(
+    song_dir: &Path,
+    values: impl IntoIterator<Item = &'a [u8]>,
+    entries: &[String],
+    include_media: bool,
+    include_lua: bool,
+) -> ForegroundChangeSets {
     let mut media = Vec::new();
     let mut lua = Vec::new();
     let mut uses_lua = false;
-    for raw in named_tag_values(simfile_data, &[b"#FGCHANGES:"]) {
+    for raw in values {
         let decoded = decode_bytes(raw);
         let text = unescape_tag(decoded.as_ref());
-        for fields in bgchange_sets(text.as_ref(), &entries) {
+        for fields in bgchange_sets(text.as_ref(), entries) {
             let Some(target) = fields.get(1) else {
                 continue;
             };
@@ -186,8 +257,17 @@ pub fn extract_background_lua_change_set(
     background_tag: &str,
 ) -> BackgroundLuaChangeSet {
     let clean = strip_msd_comments(simfile_data);
-    let simfile_data = clean.as_ref();
+    let values = MediaChangeValues::read(&clean);
     let entries = list_song_dir_rel_entries(song_dir);
+    background_lua_from_values(song_dir, background_tag, &entries, &values.background)
+}
+
+fn background_lua_from_values(
+    song_dir: &Path,
+    background_tag: &str,
+    entries: &[String],
+    layers: &[Vec<&[u8]>; 2],
+) -> BackgroundLuaChangeSet {
     let mut layer_1 = Vec::new();
     let mut uses_lua = false;
     let mut push_change = |start_beat: f32, path: PathBuf| {
@@ -214,8 +294,8 @@ pub fn extract_background_lua_change_set(
 
     uses_lua |= append_background_lua_changes(
         song_dir,
-        bgchanges_values(simfile_data),
-        &entries,
+        layers[0].iter().copied(),
+        entries,
         &mut layer_1,
     );
     let mut layer_1 = cache_background_lua_owners(layer_1, 0);
@@ -223,8 +303,8 @@ pub fn extract_background_lua_change_set(
     let mut layer_2 = Vec::new();
     uses_lua |= append_background_lua_changes(
         song_dir,
-        named_tag_values(simfile_data, &[b"#BGCHANGES2:"]),
-        &entries,
+        layers[1].iter().copied(),
+        entries,
         &mut layer_2,
     );
     let layer_2 = cache_background_lua_owners(layer_2, 1);
@@ -357,11 +437,11 @@ pub fn resolve_background_changes_from_roots(
     resolve_background_changes_from_values(
         song_dir,
         bgchanges_values(clean.as_ref()),
+        &list_song_dir_rel_entries(song_dir),
         song_movie_roots,
         random_movie_roots,
         &[],
         false,
-        true,
     )
 }
 
@@ -377,38 +457,37 @@ pub fn resolve_background_layer2_changes_from_roots(
     resolve_background_changes_from_values(
         song_dir,
         named_tag_values(clean.as_ref(), &[b"#BGCHANGES2:"]),
+        &list_song_dir_rel_entries(song_dir),
         song_movie_roots,
         random_movie_roots,
         bg_animation_roots,
         true,
-        false,
     )
 }
 
 fn resolve_background_changes_from_values<'a>(
     song_dir: &Path,
     values: impl IntoIterator<Item = &'a [u8]>,
+    entries: &[String],
     song_movie_roots: &[PathBuf],
     random_movie_roots: &[PathBuf],
     bg_animation_roots: &[PathBuf],
-    allow_bg_animation: bool,
-    apply_song_movie_fallback: bool,
+    layer2: bool,
 ) -> Vec<SongBackgroundChange> {
-    let entries = list_song_dir_rel_entries(song_dir);
     let mut out: Vec<SongBackgroundChange> = Vec::new();
     let mut beat_indices = None;
     let mut saw_no_song_bg = false;
     for raw in values {
         let decoded = decode_bytes(raw);
         let text = unescape_tag(decoded.as_ref());
-        for fields in bgchange_sets(text.as_ref(), &entries) {
+        for fields in bgchange_sets(text.as_ref(), entries) {
             let Some(change) = parse_background_change_set(
                 song_dir,
                 &fields,
                 song_movie_roots,
                 random_movie_roots,
                 bg_animation_roots,
-                allow_bg_animation,
+                layer2,
             ) else {
                 continue;
             };
@@ -420,7 +499,7 @@ fn resolve_background_changes_from_values<'a>(
         }
     }
 
-    if !apply_song_movie_fallback {
+    if layer2 {
         out.sort_by(|a, b| a.start_beat.total_cmp(&b.start_beat));
         return out;
     }
@@ -749,6 +828,21 @@ mod tests {
     use deadsync_chart::SongBackgroundChangeTarget;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn media_pass_preserves_background_aliases_and_layer_order() {
+        let source = br"
+#ANIMATIONS:0=first.lua;
+#BGCHANGES2:0=layer2.lua;
+#bgchanges1:0=second.png;
+#BGCHANGES:0=last.png;
+#FGCHANGES:1=foreground.lua;
+";
+        let values = MediaChangeValues::read(source);
+        assert_eq!(values.background[0], bgchanges_values(source).collect::<Vec<_>>());
+        assert_eq!(values.background[1], [b"0=layer2.lua".as_slice()]);
+        assert_eq!(values.foreground, [b"1=foreground.lua".as_slice()]);
+    }
 
     #[test]
     fn msd_comments_keep_escapes_and_newlines() {

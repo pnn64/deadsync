@@ -5,10 +5,7 @@ use crate::cache::{
     SerializableSongForegroundChange, SerializableSongForegroundLuaChange, build_song_meta,
     cache_background_changes, parse_chart_display_bpm, update_precise_song_bounds,
 };
-use crate::changes::{
-    extract_background_lua_change_set, extract_foreground_change_sets,
-    resolve_background_changes_from_roots, resolve_background_layer2_changes_from_roots,
-};
+use crate::changes::resolve_song_changes;
 use crate::media::resolve_song_asset_path_like_itg;
 use crate::stats::build_stamina_counts;
 use crate::timing::{parse_cached_combos, parse_cached_tickcounts, parse_cached_time_signatures};
@@ -593,28 +590,15 @@ impl SongFolderMedia {
             &summary.cdtitle_path,
             &summary.jacket_path,
         );
-        let background_lua_changes =
-            extract_background_lua_change_set(simfile_dir, simfile_data, &summary.background_path);
-        let foreground_changes = extract_foreground_change_sets(simfile_dir, simfile_data);
+        let changes = resolve_song_changes(simfile_dir, simfile_data, &summary.background_path, options);
+        let [background, background_layer2] = changes.background;
+        let foreground_changes = changes.foreground;
+        let background_lua_changes = changes.background_lua;
         let has_lua = background_lua_changes.uses_lua || foreground_changes.uses_lua;
-        let background_changes = cache_background_changes(resolve_background_changes_from_roots(
-            simfile_dir,
-            simfile_data,
-            &options.song_movie_roots,
-            &options.random_movie_roots,
-        ));
-        let background_layer2_changes =
-            cache_background_changes(resolve_background_layer2_changes_from_roots(
-                simfile_dir,
-                simfile_data,
-                &options.song_movie_roots,
-                &options.random_movie_roots,
-                &options.bg_animation_roots,
-            ));
         Self {
             artwork,
-            background_changes,
-            background_layer2_changes,
+            background_changes: cache_background_changes(background),
+            background_layer2_changes: cache_background_changes(background_layer2),
             foreground_changes: foreground_changes.media,
             background_lua_changes: background_lua_changes.changes,
             foreground_lua_changes: foreground_changes.lua,

@@ -80,21 +80,26 @@ impl<'data> Iterator for NamedTagValues<'data, '_> {
     type Item = &'data [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.next_with_tag().map(|(_, value)| value)
+    }
+}
+
+impl<'data> NamedTagValues<'data, '_> {
+    pub(crate) fn next_with_tag(&mut self) -> Option<(usize, &'data [u8])> {
         while !self.remaining.is_empty() {
             let pos = find_byte(self.remaining, b'#')?;
             self.remaining = &self.remaining[pos..];
-            let Some(tag) = self
+            let Some(index) = self
                 .tags
                 .iter()
-                .copied()
-                .find(|tag| starts_with_ci(self.remaining, tag))
+                .position(|tag| starts_with_ci(self.remaining, tag))
             else {
                 self.remaining = &self.remaining[1..];
                 continue;
             };
-            if let Some((value, advance)) = parse_tag_val(self.remaining, tag.len(), true) {
+            if let Some((value, advance)) = parse_tag_val(self.remaining, self.tags[index].len(), true) {
                 self.remaining = &self.remaining[advance..];
-                return Some(value);
+                return Some((index, value));
             }
             self.remaining = &self.remaining[1..];
         }
