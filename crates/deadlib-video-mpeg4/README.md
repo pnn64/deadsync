@@ -22,3 +22,6 @@ The AVI file and its extracted elementary stream matched FFmpeg 7.1 with
 `-idct simple` on all 900 frames of `logo.mpg`. The offline test fixture uses
 FFmpeg's `testsrc2=size=160x90:rate=25:duration=0.4` with
 `-c:v mpeg4 -threads 1 -flags +mv4 -ps 160 -g 5 -bf 0 -q:v 5 -f m4v`.
+
+See the [decoder benchmark](bench/README.md) for cycles, throughput and
+allocation comparisons with ITGmania's FFmpeg build.

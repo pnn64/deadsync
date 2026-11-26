@@ -1,0 +1,9 @@
+clip,round,engine,frames,luma_pixels,input_bytes,allocations,reallocations,requested_bytes
+logo,0,deadlib,900,69120000,5555094,910,0,506400
+logo,0,ffmpeg,900,69120000,5555094,9099,0,6553986
+logo,1,ffmpeg,900,69120000,5555094,9099,0,6553986
+logo,1,deadlib,900,69120000,5555094,910,0,506400
+progressive,0,ffmpeg,10,144000,19018,197,0,238595
+progressive,0,deadlib,10,144000,19018,20,0,72720
+progressive,1,deadlib,10,144000,19018,20,0,72720
+progressive,1,ffmpeg,10,144000,19018,197,0,238595

@@ -16,6 +16,10 @@ the full clips. A SHA-256 check covers the visible Y, Cb and Cr bytes of every
 frame in display order. FFmpeg uses the native decoder for the selected codec
 and the 8-bit Simple IDCT.
 
+The shared runner also accepts `-Codec mpeg4`. See the
+[MPEG-4 Visual benchmark](../../deadlib-video-mpeg4/bench/README.md) for its
+fixtures and measurements.
+
 Both decoders parse identical in-memory bytes on one pinned Windows thread.
 The measured region includes decoder setup, parsing, reconstruction, drain and
 destruction of the native output. `QueryThreadCycleTime` supplies the cycle

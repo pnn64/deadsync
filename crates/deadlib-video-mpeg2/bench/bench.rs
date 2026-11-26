@@ -1,4 +1,7 @@
+#[cfg(not(mpeg4))]
 use deadlib_video_mpeg2::decode_elementary_stream;
+#[cfg(mpeg4)]
+use deadlib_video_mpeg4::decode_elementary_stream;
 use std::{env, ffi::c_void, hint::black_box, io::Write, path::Path};
 
 #[repr(C)]

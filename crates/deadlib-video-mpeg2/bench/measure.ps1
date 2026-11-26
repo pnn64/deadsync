@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)] [string] $ItgmaniaRoot,
-    [ValidateSet('mpeg1', 'mpeg2')] [string] $Codec = 'mpeg2',
+    [ValidateSet('mpeg1', 'mpeg2', 'mpeg4')] [string] $Codec = 'mpeg2',
     [string] $OpenItgRoot = '../openitg-master',
     [string] $Results,
     [ValidateRange(0, 63)] [int] $Cpu = 2,
@@ -30,17 +30,21 @@ try {
     $object = Join-Path $out 'ffmpeg.obj'
     $cyclesExe = Join-Path $out 'cycles.exe'
     $allocExe = Join-Path $out 'allocations.exe'
-    $rlib = Join-Path $build 'release\libdeadlib_video_mpeg2.rlib'
+    $crate = if ($Codec -eq 'mpeg4') { 'deadlib-video-mpeg4' } else { 'deadlib-video-mpeg2' }
+    $module = $crate.Replace('-', '_')
+    $rlib = Join-Path $build "release\lib$module.rlib"
 
-    cargo build --release --locked --offline --manifest-path crates/deadlib-video-mpeg2/Cargo.toml --target-dir $build
-    Assert-Exit 'Building deadlib-video-mpeg2'
+    cargo build --release --locked --offline --manifest-path "crates/$crate/Cargo.toml" --target-dir $build
+    Assert-Exit "Building $crate"
     $defines = @()
     if ($Codec -eq 'mpeg1') { $defines = @('/DBENCH_MPEG1') }
+    if ($Codec -eq 'mpeg4') { $defines = @('/DBENCH_MPEG4') }
     cl.exe /nologo /c /O2 /MT /std:c11 @defines "/I$ffInclude" "/Fo$object" (Join-Path $PSScriptRoot 'ffmpeg.c')
     Assert-Exit 'Compiling the FFmpeg harness'
-    $common = @('--edition', '2021', '--crate-name', 'mpeg2_bench', '-C', 'opt-level=3',
-        '-C', 'target-feature=+crt-static', '--extern', "deadlib_video_mpeg2=$rlib",
+    $common = @('--edition', '2021', '--crate-name', 'mpeg_bench', '-C', 'opt-level=3',
+        '-C', 'target-feature=+crt-static', '--extern', "$module=$rlib",
         "-Lnative=$ffLib", '-lavcodec', '-lavutil', "-Clink-arg=$object")
+    if ($Codec -eq 'mpeg4') { $common += @('--cfg', 'mpeg4') }
     $bench = Join-Path $PSScriptRoot 'bench.rs'
     rustc @common -o $cyclesExe $bench
     Assert-Exit 'Building the cycle harness'
@@ -52,6 +56,11 @@ try {
         $samples = (Resolve-Path -LiteralPath @(
             'assets/media/openitg/company.mpg', 'assets/media/openitg/intro.mpg', $nexus
         )).Path
+    } elseif ($Codec -eq 'mpeg4') {
+        $sample = Join-Path $out 'logo.m4v'
+        ffmpeg -nostdin -v error -y -i assets/media/openitg/logo.mpg -map 0:v:0 -c:v copy -f m4v $sample
+        Assert-Exit 'Extracting logo'
+        $samples = @($sample, 'crates/deadlib-video-mpeg4/tests/fixtures/progressive.m4v')
     } else {
         $fixtureRoot = 'tests/fixtures/itgmania-song-lua-micro/eros-and-apollo/inputs'
         $samples = foreach ($relative in 'turn/dix.mpg', 'how/lights.mpg') {

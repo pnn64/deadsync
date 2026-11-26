@@ -1,4 +1,6 @@
-#ifdef BENCH_MPEG1
+#if defined(BENCH_MPEG4)
+#define BENCH_DECODER_NAME "mpeg4"
+#elif defined(BENCH_MPEG1)
 #define BENCH_DECODER_NAME "mpeg1video"
 #else
 #define BENCH_DECODER_NAME "mpeg2video"
