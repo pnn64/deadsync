@@ -1050,9 +1050,9 @@ impl Vm {
         }
         Ok(())
     }
-    // Numbers carry no collector edges, so their permutation is safe in any
-    // phase when the next ordinary checkpoint would have no work to perform.
-    pub(super) fn numeric_sort_gc_ready(&self) -> bool {
+    // Mutations that add no collector edges can skip this checkpoint in any
+    // phase when the next poll would have no work to perform.
+    pub(super) fn gc_checkpoint_idle(&self) -> bool {
         self.gc.running == 0
             && !self.gc.closing
             && (self.gc.stopped
@@ -1087,9 +1087,7 @@ impl Vm {
     }
 
     pub(super) fn can_skip_gc_checkpoint(&self) -> bool {
-        self.can_reuse_loaded_program()
-            && (self.gc.stopped
-                || self.gc.last_live.saturating_add(self.gc_debt()) < self.gc.threshold)
+        self.gc.phase == Phase::Pause && self.gc_checkpoint_idle()
     }
 
     // Runs at every frame entry: the test stays inline and the work does not.

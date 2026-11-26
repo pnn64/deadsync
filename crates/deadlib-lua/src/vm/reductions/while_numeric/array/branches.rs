@@ -540,7 +540,7 @@ impl Vm {
         let Value::Number(initial) = self.registers[base + plan.sum] else {
             return None;
         };
-        if !self.numeric_sort_gc_ready()
+        if !self.gc_checkpoint_idle()
             || plan
                 .calls
                 .iter()

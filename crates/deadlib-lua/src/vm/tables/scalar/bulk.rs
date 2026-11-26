@@ -166,7 +166,7 @@ impl Vm {
         comparator: Value,
         error_line: &mut Option<u32>,
     ) -> Result<bool, Error> {
-        if !self.sort_fast_context() || !self.numeric_sort_gc_ready() {
+        if !self.sort_fast_context() || !self.gc_checkpoint_idle() {
             return Ok(false);
         }
         let Some(mut plan) = self.bulk_sort_plan(comparator) else {
@@ -190,7 +190,7 @@ impl Vm {
                 self.check_c_call()?;
             }
             self.check_calls()?;
-            if !self.numeric_sort_gc_ready() {
+            if !self.gc_checkpoint_idle() {
                 return Ok(false);
             }
         }

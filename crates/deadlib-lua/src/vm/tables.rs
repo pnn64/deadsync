@@ -413,7 +413,7 @@ impl Vm {
             // C-stack validation and every observer/GC-work boundary.
             if comparator == Value::Nil
                 && self.sort_fast_context()
-                && self.numeric_sort_gc_ready()
+                && self.gc_checkpoint_idle()
                 && self.tables[slot_index(table.0)].sort_finite_numbers(len as usize)
             {
                 return self.return_frame(frame, base, 0);

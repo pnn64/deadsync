@@ -1116,11 +1116,12 @@ impl Vm {
             let (source, pattern, cursor) = (state.source, state.pattern, state.cursor);
             let room = io::LINE_BUFFER - state.output.len();
             // Text replacements can scan the next buffer with earlier chunks
-            // already on the stack. Flushes still use the native stack path.
+            // already on the stack. Scanning adds no Lua references, and
+            // flushes still use the native stack path.
             let scan = if batch
                 && state.actions.is_empty()
                 && room > 0
-                && (state.level == 0 || direct_text.is_some() && self.can_skip_gc_checkpoint())
+                && (state.level == 0 || direct_text.is_some() && self.gc_checkpoint_idle())
             {
                 self.substitution_scan(index, direct_text)?
             } else {

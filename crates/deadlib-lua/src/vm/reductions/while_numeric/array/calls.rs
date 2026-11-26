@@ -702,7 +702,7 @@ impl Vm {
         {
             return None;
         }
-        if !self.numeric_sort_gc_ready() {
+        if !self.gc_checkpoint_idle() {
             return Some(Reduction::Retry);
         }
         let bounds = (lower as i64, upper as i64);
@@ -728,7 +728,7 @@ impl Vm {
             let growth = self.array_reduction.storage_bytes() - before;
             if growth != 0 {
                 self.gc_note_control(growth);
-                if !self.numeric_sort_gc_ready() {
+                if !self.gc_checkpoint_idle() {
                     return Some(Reduction::Retry);
                 }
             }

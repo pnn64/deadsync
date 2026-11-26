@@ -274,7 +274,7 @@ impl Vm {
         }
         self.check_calls()?;
         let ready = if update.is_some() {
-            self.numeric_sort_gc_ready()
+            self.gc_checkpoint_idle()
         } else {
             self.sort_gc_ready()
         };

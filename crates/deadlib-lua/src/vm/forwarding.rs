@@ -324,7 +324,7 @@ impl Vm {
                 plan.line
             }
             CallPlan::Numeric(plan) => {
-                if !plan.has_stack_space(self) || !self.numeric_sort_gc_ready() {
+                if !plan.has_stack_space(self) || !self.gc_checkpoint_idle() {
                     return false;
                 }
                 let Some(numbers) =
