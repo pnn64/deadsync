@@ -94,6 +94,10 @@ impl Layouts {
 impl Vm {
     #[inline]
     fn queue_unmarked_stack_value(&self, value: Value, work: &mut Work) {
+        // The parked frame itself supplies this root.
+        if matches!(value, Value::Native(threads::CO_YIELD)) {
+            return;
+        }
         let Some(trace) = edge(value) else {
             return;
         };
@@ -114,18 +118,27 @@ impl Vm {
         work: &mut Work,
     ) -> Result<(), Error> {
         let Masks { mut live, mut dead } = layouts.get(self, stack);
-        self.reserve_trace_work(work, live.count_ones() as usize + 2)?;
+        let additional = live.count_ones() as usize + 2;
+        if additional > work.capacity() - work.len() {
+            self.reserve_trace_work(work, additional)?;
+        }
         work.pop();
         self.threads.mark(id.0);
         let thread = &self.threads[slot_index(id.0)];
-        self.queue_unmarked_stack_value(Value::Table(thread.globals), work);
-        self.queue_unmarked_stack_value(Value::Function(stack.function), work);
+        if !self.tables.marked(thread.globals.0) {
+            work.push(Trace::Value(Value::Table(thread.globals)));
+        }
+        if !self.functions.marked(stack.function.0) {
+            work.push(Trace::Value(Value::Function(stack.function)));
+        }
         while live != 0 {
             let slot = live.trailing_zeros() as usize;
             live &= live - 1;
             self.queue_unmarked_stack_value(thread.registers[slot], work);
         }
-        self.queue_unmarked_stack_value(Value::Native(threads::CO_YIELD), work);
+        if !self.marked_value(Value::Native(threads::CO_YIELD)) {
+            work.push(Trace::Value(Value::Native(threads::CO_YIELD)));
+        }
         let registers = &mut self.threads[slot_index(id.0)].registers;
         while dead != 0 {
             let slot = dead.trailing_zeros() as usize;

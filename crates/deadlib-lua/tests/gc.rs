@@ -33,6 +33,11 @@ fn parked_stack_maps_keep_live_locals_and_varargs_and_release_dead_slots() {
     let program = compile(
         br#"
         local weak = setmetatable({}, {__mode = 'v'})
+        do
+            local environment = {marker = 17}
+            debug.setfenv(coroutine.yield, environment)
+            weak[4] = environment
+        end
         local function entry(...)
             local kept = {answer = 42}
             weak[1] = kept
@@ -49,10 +54,12 @@ fn parked_stack_maps_keep_live_locals_and_varargs_and_release_dead_slots() {
         local ok, yielded = coroutine.resume(thread, extra)
         assert(ok and yielded == 19)
         extra = nil
+        coroutine.yield = nil
         for i = 1, 4 do collectgarbage('collect') end
         local name, kept = debug.getlocal(thread, 1, 2)
         assert(name == 'kept' and kept == weak[1])
         assert(weak[2] == nil and weak[3].marker == 23)
+        assert(weak[4].marker == 17)
         local done, answer, argument = coroutine.resume(thread)
         assert(done and argument == weak[3])
         return answer
