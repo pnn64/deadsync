@@ -154,3 +154,16 @@ The default output requested 3.36 and 3.23 MiB/frame, down from 3.42 and 3.26. T
 `e021087c8` uses SSE2 to load and blend integer-position luma predictions directly into an 8-bit frame for uniform B-skip macroblocks. FFmpeg's unweighted path likewise averages into the destination when applying the second prediction. With the Rust luma change isolated, median paired cycle counts fell 5.85% on SRPG9 and 6.19% on SRPG10. It used 1.21× and 1.27× the cycles of packed FFmpeg. The isolated build matched FFmpeg on both bundled clips and the temporal-direct, constrained-intra and resolution-change fixtures. [Paired samples](results/windows-x86_64-20261126/integer-prediction-paired.csv) · [FFmpeg motion compensation](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_mb.c)
 
 On the preceding revision, a diagnostic build sampled one in 32 CABAC macroblocks using the timestamp counter. Motion compensation for luma and chroma together accounted for about 36% and 29% of sampled macroblock ticks. These estimates guide optimization. The cycle comparisons use `QueryThreadCycleTime` on uninstrumented builds. [Macroblock profile](results/windows-x86_64-20261126/macroblock-profile.csv)
+
+The full benchmark at `e021087c8` matched FFmpeg on both clips in every output mode. The five-run cycle spreads were 2.7–3.4% for default Deadlib and packed FFmpeg. The two allocation runs agreed for every mode. Default Deadlib used 20.7% and 29.5% more cycles than packed FFmpeg and requested 2.7% and 2.2% more bytes per frame. [Full cycle and allocation samples](results/windows-x86_64-20261126/serial-payload-and-luma)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Deadlib | 45.02 | 22.21 | 16.73 | 3.34 |
+| SRPG9 | Deadlib recycled, SPS depth | 43.20 | 23.15 | 13.98 | 0.43 |
+| SRPG9 | FFmpeg native | 34.08 | 29.35 | 17.91 | 0.29 |
+| SRPG9 | FFmpeg packed | 37.30 | 26.81 | 18.91 | 3.26 |
+| SRPG10 | Deadlib | 34.84 | 28.70 | 14.39 | 3.22 |
+| SRPG10 | Deadlib recycled, SPS depth | 32.90 | 30.39 | 12.07 | 0.39 |
+| SRPG10 | FFmpeg native | 23.63 | 42.31 | 17.63 | 0.18 |
+| SRPG10 | FFmpeg packed | 26.90 | 37.18 | 18.63 | 3.15 |
