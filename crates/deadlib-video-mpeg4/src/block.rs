@@ -57,7 +57,15 @@ pub(crate) fn intra(
         coeff[0] = dc_difference(bits, plane)?;
     }
     if coded {
-        texture(bits, true, &mut coeff, scan, usize::from(separate_dc))?;
+        texture(
+            bits,
+            true,
+            scan,
+            usize::from(separate_dc),
+            |position, level| {
+                coeff[position] = level;
+            },
+        )?;
     }
     let dc = ((neighbor.dc + scale / 2) / scale + coeff[0]) * scale;
     if predict_ac {
@@ -85,10 +93,10 @@ pub(crate) fn intra(
 
 pub(crate) fn inter(bits: &mut Bits<'_>, quantizer: i32) -> Result<[i16; 64]> {
     let mut coeff = [0; 64];
-    texture(bits, false, &mut coeff, &ZIGZAG, 0)?;
-    Ok(transform::inverse(
-        &coeff.map(|level| inverse_quantize(level, quantizer)),
-    ))
+    texture(bits, false, &ZIGZAG, 0, |position, level| {
+        coeff[position] = inverse_quantize(level, quantizer);
+    })?;
+    Ok(transform::inverse(&coeff))
 }
 
 fn dc_scale(q: i32, plane: usize) -> i32 {
@@ -163,34 +171,93 @@ const fn escape_limits(events: &[Event; ESCAPE]) -> EscapeLimits {
 static INTRA_LIMITS: EscapeLimits = escape_limits(&tables::INTRA_VALUES);
 static INTER_LIMITS: EscapeLimits = escape_limits(&tables::INTER_VALUES);
 
+const SHORT_BITS: u8 = 9;
+const SHORT_SIZE: usize = 1 << SHORT_BITS;
+
+static SHORT_INTRA: [u32; SHORT_SIZE] = short_events(&tables::INTRA, &tables::INTRA_VALUES);
+static SHORT_INTER: [u32; SHORT_SIZE] = short_events(&tables::INTER, &tables::INTER_VALUES);
+
+// The short table includes the sign bit along with the length, run and last flag.
+const fn short_events(codes: &[u16; 4096], events: &[Event; ESCAPE]) -> [u32; SHORT_SIZE] {
+    let mut short = [0; SHORT_SIZE];
+    let mut prefix = 0;
+    while prefix < SHORT_SIZE {
+        let entry = codes[prefix << (12 - SHORT_BITS)];
+        let length = entry & 31;
+        let symbol = (entry >> 5) as usize;
+        if length > 0 && length < SHORT_BITS as u16 && symbol < ESCAPE {
+            let (run, level, last) = events[symbol];
+            let sign = (prefix >> (SHORT_BITS as u16 - 1 - length)) & 1;
+            let level = if sign == 0 { level } else { -level };
+            short[prefix] = (length as u32 + 1)
+                | ((run as u32) << 4)
+                | ((last as u32) << 10)
+                | ((level as u32) << 11);
+        }
+        prefix += 1;
+    }
+    short
+}
+
+#[inline]
 fn texture(
     bits: &mut Bits<'_>,
     intra: bool,
-    coeff: &mut [i32; 64],
     scan: &[usize; 64],
     mut next: usize,
+    mut write: impl FnMut(usize, i32),
 ) -> Result<()> {
-    let (codes, values, limits) = if intra {
-        (&tables::INTRA, &tables::INTRA_VALUES, &INTRA_LIMITS)
+    let (short, codes, values, limits) = if intra {
+        (
+            &SHORT_INTRA,
+            &tables::INTRA,
+            &tables::INTRA_VALUES,
+            &INTRA_LIMITS,
+        )
     } else {
-        (&tables::INTER, &tables::INTER_VALUES, &INTER_LIMITS)
+        (
+            &SHORT_INTER,
+            &tables::INTER,
+            &tables::INTER_VALUES,
+            &INTER_LIMITS,
+        )
     };
     loop {
-        let symbol = bits.vlc(codes)?;
-        let (run, level, last) = if symbol == ESCAPE {
-            read_escape(bits, codes, values, limits)?
+        let entry = short[bits.peek(SHORT_BITS) as usize];
+        let (run, level, last) = if entry != 0 {
+            bits.skip((entry & 15) as u8)?;
+            (
+                ((entry >> 4) & 63) as usize,
+                (entry as i32) >> 11,
+                entry & 1024 != 0,
+            )
         } else {
-            let (run, level, last) = values[symbol];
-            (run, if bits.flag()? { -level } else { level }, last)
+            read_long(bits, codes, values, limits)?
         };
         let position = *scan
             .get(next + run)
             .ok_or(Error::Invalid("coefficient run exceeds block"))?;
-        coeff[position] = level;
+        write(position, level);
         if last {
             return Ok(());
         }
         next += run + 1;
+    }
+}
+
+#[cold]
+fn read_long(
+    bits: &mut Bits<'_>,
+    codes: &[u16; 4096],
+    values: &[Event; ESCAPE],
+    limits: &EscapeLimits,
+) -> Result<Event> {
+    let symbol = bits.vlc(codes)?;
+    if symbol == ESCAPE {
+        read_escape(bits, codes, values, limits)
+    } else {
+        let (run, level, last) = values[symbol];
+        Ok((run, if bits.flag()? { -level } else { level }, last))
     }
 }
 
