@@ -76,6 +76,75 @@ fn loop_carried_values_and_index_edits_remain_observable() {
 }
 
 #[test]
+fn dense_writes_match_dispatch_across_growth_and_gc_checkpoints() {
+    let program = compile(
+        br#"
+        local function build(t, first, last)
+            for i = first, last do t[i] = i end
+        end
+        local function fill(t, first, last, value)
+            for i = first, last do t[i] = value end
+        end
+        local sum = 0
+        for round = 1, 80 do
+            local t = {}
+            local last = 311 + round
+            build(t, 1, last)
+            assert(#t == last)
+            for i = 1, last do assert(t[i] == i) end
+            fill(t, 3, last + 2, false)
+            assert(#t == last + 2 and t[1] == 1 and t[2] == 2)
+            for i = 3, last + 2 do assert(t[i] == false) end
+            sum = sum + #t
+        end
+        return sum
+        "#,
+    )
+    .unwrap();
+
+    let mut fast = Vm::new();
+    let mut ordinary = Vm::new();
+    ordinary.set_instruction_limit(Some(2_000_000));
+    assert_eq!(
+        fast.execute(&program).unwrap(),
+        ordinary.execute(&program).unwrap()
+    );
+    let fast_heap = fast.heap_stats();
+    let ordinary_heap = ordinary.heap_stats();
+    assert!(fast_heap.collections > 0);
+    assert_eq!(fast_heap.collections, ordinary_heap.collections);
+    assert_eq!(fast_heap.reclaimed_objects, ordinary_heap.reclaimed_objects);
+}
+
+#[test]
+fn dense_writes_preserve_metatable_and_hash_stores() {
+    assert_eq!(
+        numbers(
+            br#"
+            local function write(t, first, last)
+                for i = first, last do t[i] = i end
+            end
+            local seen = 0
+            local proxy = setmetatable({}, {__newindex = function(_, key, value)
+                assert(key == value)
+                seen = seen + value
+            end})
+            write(proxy, 1, 25)
+            assert(next(proxy) == nil)
+
+            local t = {[10] = 99, label = true}
+            write(t, 1, 9)
+            assert(t[10] == 99 and t.label)
+            write(t, 10, 12)
+            assert(t[10] == 10 and t[11] == 11 and t[12] == 12)
+            return #t, seen
+            "#
+        ),
+        [12.0, 325.0]
+    );
+}
+
+#[test]
 fn array_extrema_preserve_float_order_and_fall_back_for_observable_reads() {
     let program = compile(
         br#"

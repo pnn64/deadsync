@@ -9,6 +9,7 @@ use super::{
 };
 use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN_ARGS, Op, Prototype, RK};
 
+mod dense_array;
 pub(super) mod while_numeric;
 
 const EXACT_INTEGER: i128 = 1 << 53;
@@ -561,6 +562,9 @@ impl Vm {
         }
         let start_pc = loop_instruction.c as usize;
         let body = code.get(start_pc..loop_pc)?;
+        if let Some(reduction) = self.reduce_dense_array_write(base, control, body, prototype) {
+            return Some(reduction);
+        }
         if let Some(reduction) =
             self.reduce_branched_array_calls(base, control, start_pc, loop_pc, prototype)
         {

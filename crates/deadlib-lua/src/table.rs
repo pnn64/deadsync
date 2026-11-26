@@ -811,6 +811,50 @@ impl Table {
         self.touch_array_at(index);
         true
     }
+    /// Plan a contiguous write using the same capacities as successive pushes.
+    /// End the run before the first allocation that would start a GC step.
+    pub(crate) fn dense_write_span(
+        &self,
+        start: usize,
+        end: usize,
+        growth_bytes: usize,
+    ) -> Option<(usize, usize)> {
+        if self.native51
+            || self.metatable != 0
+            || !self.hash_part().slots.is_empty()
+            || start > self.array.len()
+        {
+            return None;
+        }
+        let capacity = self.array.allocated_capacity();
+        let max_capacity = capacity.saturating_add(growth_bytes / size_of::<Value>());
+        let mut reserved = capacity;
+        while reserved < end {
+            let next = reserved.saturating_mul(2).max(4);
+            if next > max_capacity {
+                break;
+            }
+            reserved = next;
+        }
+        Some((end.min(reserved), reserved))
+    }
+    pub(crate) fn write_dense_span(
+        &mut self,
+        start: usize,
+        end: usize,
+        capacity: usize,
+        value_at: impl Fn(usize) -> Value,
+    ) -> Result<(), Error> {
+        let array = self.array.heap_mut();
+        array.try_reserve_exact(capacity - array.len())?;
+        let overwrite_end = array.len().min(end);
+        for (offset, slot) in array[start..overwrite_end].iter_mut().enumerate() {
+            *slot = value_at(start + offset);
+        }
+        array.extend_with(end, value_at);
+        self.touch_array();
+        Ok(())
+    }
     /// A live string-keyed hash entry already owns its key. Replacing its
     /// scalar value cannot allocate, add a GC edge or change traversal order.
     #[inline]

@@ -1054,6 +1054,19 @@ impl Vm {
             && (self.gc.stopped
                 || self.gc.last_live.saturating_add(self.gc_debt()) < self.gc.threshold)
     }
+    // Leave the store at the next GC threshold to ordinary dispatch.
+    pub(super) fn dense_array_gc_growth(&self) -> Option<usize> {
+        if self.gc.running != 0 || self.gc.closing {
+            return None;
+        }
+        if self.gc.stopped {
+            return Some(usize::MAX);
+        }
+        self.gc
+            .threshold
+            .checked_sub(self.gc.last_live.saturating_add(self.gc_debt()))?
+            .checked_sub(1)
+    }
     // Scalar callbacks and batched continuations can skip only a checkpoint
     // with no collector work. Keep pending-state behavior identical to maybe_gc.
     pub(super) fn sort_gc_ready(&mut self) -> bool {

@@ -207,6 +207,19 @@ impl<T> Buffer<T> {
         }
     }
     #[inline]
+    pub(crate) fn extend_with(&mut self, end: usize, mut value_at: impl FnMut(usize) -> T)
+    where
+        T: Copy,
+    {
+        assert!(end <= self.capacity());
+        for index in self.len..end {
+            // SAFETY: the slot is within the reserved tail and is uninitialized.
+            // If value_at panics, initialized tail elements have no destructor.
+            unsafe { self.raw.pointer.as_ptr().add(index).write(value_at(index)) };
+        }
+        self.len = end.max(self.len);
+    }
+    #[inline]
     pub(crate) fn extend_from_slice(&mut self, values: &[T])
     where
         T: Copy,
