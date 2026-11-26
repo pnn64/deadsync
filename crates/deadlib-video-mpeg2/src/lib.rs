@@ -4,7 +4,7 @@
 //! MPEG Program Streams, or [`Decoder`] to feed individual [`Unit`]s.
 
 #![no_std]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 extern crate alloc;
 
@@ -12,6 +12,7 @@ mod bitstream;
 mod block;
 mod frame;
 mod headers;
+mod motion;
 mod program_stream;
 mod slice;
 mod tables;

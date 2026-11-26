@@ -48,45 +48,52 @@ impl Plane {
         }
     }
 
-    fn sample(&self, x: i32, y: i32) -> i32 {
-        let x = x.clamp(0, self.stride as i32 - 1) as usize;
-        let y = y.clamp(0, (self.samples.len() / self.stride) as i32 - 1) as usize;
-        i32::from(self.samples[y * self.stride + x])
-    }
-
-    fn predict(&mut self, x: usize, y: usize, reference: Prediction<'_>, plane: usize) {
-        let source = &reference.frame.planes[plane];
-        let (size, motion) = if plane == 0 {
-            (16, reference.motion)
-        } else {
-            (8, [reference.motion[0] / 2, reference.motion[1] / 2])
-        };
+    fn predict<const W: usize>(
+        &mut self,
+        x: usize,
+        y: usize,
+        source: &Self,
+        motion: [i32; 2],
+        average: bool,
+    ) {
         let source_x = x as i32 + (motion[0] >> 1);
         let source_y = y as i32 + (motion[1] >> 1);
-        let subpixel = (motion[0] & 1, motion[1] & 1);
-        for row in 0..size {
-            let start = (y + row) * self.stride + x;
-            let sy = source_y + row as i32;
-            for (col, pixel) in self.samples[start..start + size].iter_mut().enumerate() {
-                let sx = source_x + col as i32;
-                let a = source.sample(sx, sy);
-                let prediction = match subpixel {
-                    (0, 0) => a,
-                    (1, 0) => (a + source.sample(sx + 1, sy) + 1) >> 1,
-                    (0, 1) => (a + source.sample(sx, sy + 1) + 1) >> 1,
-                    _ => {
-                        (a + source.sample(sx + 1, sy)
-                            + source.sample(sx, sy + 1)
-                            + source.sample(sx + 1, sy + 1)
-                            + 2)
-                            >> 2
-                    }
-                } as u8;
-                *pixel = if reference.average {
-                    (u16::from(prediction) + u16::from(*pixel)).div_ceil(2) as u8
-                } else {
-                    prediction
-                };
+        let fraction = ((motion[1] & 1) << 1 | (motion[0] & 1)) as usize;
+        let dst = &mut self.samples[y * self.stride + x..];
+        let height = source.samples.len() / source.stride;
+        let span = W + (fraction & 1);
+        let rows = W + (fraction >> 1);
+        if source_x >= 0
+            && source_y >= 0
+            && source_x as usize + span <= source.stride
+            && source_y as usize + rows <= height
+        {
+            let src = &source.samples[source_y as usize * source.stride + source_x as usize..];
+            crate::motion::predict::<W>(dst, self.stride, src, source.stride, fraction, average);
+        } else {
+            let mut tile = [0; 17 * 17];
+            source.extend_edge(source_x, source_y, span, rows, height, &mut tile);
+            crate::motion::predict::<W>(dst, self.stride, &tile, span, fraction, average);
+        }
+    }
+
+    #[cold]
+    fn extend_edge(
+        &self,
+        x: i32,
+        y: i32,
+        span: usize,
+        rows: usize,
+        height: usize,
+        tile: &mut [u8],
+    ) {
+        for row in 0..rows {
+            let source_y = (y + row as i32).clamp(0, height as i32 - 1) as usize;
+            let source_row = &self.samples[source_y * self.stride..][..self.stride];
+            let target_row = &mut tile[row * span..][..span];
+            for (col, sample) in target_row.iter_mut().enumerate() {
+                let source_x = (x + col as i32).clamp(0, self.stride as i32 - 1) as usize;
+                *sample = source_row[source_x];
             }
         }
     }
@@ -155,9 +162,18 @@ impl Frame {
     }
 
     pub(crate) fn predict(&mut self, x: usize, y: usize, reference: Prediction<'_>) {
-        self.planes[0].predict(x, y, reference, 0);
-        self.planes[1].predict(x / 2, y / 2, reference, 1);
-        self.planes[2].predict(x / 2, y / 2, reference, 2);
+        let [dx, dy] = reference.motion;
+        let source = &reference.frame.planes;
+        self.planes[0].predict::<16>(x, y, &source[0], [dx, dy], reference.average);
+        for plane in 1..=2 {
+            self.planes[plane].predict::<8>(
+                x / 2,
+                y / 2,
+                &source[plane],
+                [dx / 2, dy / 2],
+                reference.average,
+            );
+        }
     }
 
     pub(crate) fn matches(&self, sequence: &Sequence) -> bool {
