@@ -1,6 +1,31 @@
-//! Non-allocating builtin results when no frame observer is active.
+//! Builtin results when no frame observer is active.
 use super::*;
 impl Vm {
+    #[inline(never)]
+    pub(super) fn try_inline_allocating_substring(&mut self, call: usize) -> Result<bool, Error> {
+        let [_, Value::String(source), Value::Number(first), Value::Number(last)] =
+            self.registers[call..call + 4]
+        else {
+            return Ok(false);
+        };
+        if self.frames.len() == self.frames.capacity()
+            || self.frames.len() + 1 >= usize::from(self.call_slots)
+            || !self.registers.memory().uses_global_allocator()
+            || !self.sort_fast_context()
+        {
+            return Ok(false);
+        }
+        let len = self.strings.bytes[slot_index(source.0)].len();
+        let first = strings::relative(lua_integer(first), len);
+        let last = strings::relative(lua_integer(last), len);
+        let result = self.string_slice(source, strings::slice_range(first, last, len))?;
+        self.registers[call] = result;
+        self.top = call + 1;
+        // Match the native return checkpoint, with the result already rooted.
+        self.maybe_gc()?;
+        Ok(true)
+    }
+
     #[inline(never)]
     pub(super) fn try_inline_substring(&mut self, call: usize, checkpoint_ready: bool) -> bool {
         let [_, Value::String(source), Value::Number(first), Value::Number(last)] =

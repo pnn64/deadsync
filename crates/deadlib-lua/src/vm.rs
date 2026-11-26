@@ -2613,11 +2613,16 @@ impl Vm {
                                         false
                                     }
                                 }
-                                // Readers often revisit the same byte ranges across loads.
-                                Value::Native(strings::STR_SUB)
-                                    if i.b == 3 && i.c == 1 && !self.loads.is_empty() =>
-                                {
-                                    self.try_inline_substring(a, checkpoint_ready)
+                                Value::Native(strings::STR_SUB) if i.b == 3 && i.c == 1 => {
+                                    if !self.loads.is_empty() {
+                                        self.try_inline_substring(a, checkpoint_ready)
+                                    } else {
+                                        let completed = self.try_inline_allocating_substring(a)?;
+                                        if completed && self.frames.len() != frame_index + 1 {
+                                            continue 'frames;
+                                        }
+                                        completed
+                                    }
                                 }
                                 Value::Function(_) if i.c <= 2 => self.try_numeric_leaf_call(
                                     &mut numeric_call_cache,
