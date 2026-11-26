@@ -418,6 +418,21 @@ fn main() {
         };
         let real_len = data.len();
         data.resize(real_len + 64, 0); // FFmpeg may read its required padding.
+        if verify && mode == "decode-wuffs" {
+            let staged = decode(&lib, Codec::Deadlib, &data, real_len);
+            let direct = decode(&lib, Codec::DeadlibRgba, &data, real_len);
+            match (staged, direct) {
+                (Ok((staged_shape, staged)), Ok((direct_shape, direct))) => {
+                    assert_eq!(staged_shape, direct_shape, "{name}");
+                    assert!(
+                        staged.bytes() == direct.bytes(),
+                        "Deadlib pixels differ for {name}"
+                    );
+                }
+                (Err(staged), Err(direct)) => assert_eq!(staged, direct, "{name}"),
+                _ => panic!("Deadlib paths disagree about accepting {name}"),
+            }
+        }
         let codecs: &[Codec] = match mode.as_str() {
             "encode" => &ENCODE,
             "decode-wuffs" => &[Codec::Deadlib, Codec::DeadlibRgba, Codec::Foreign(1)],

@@ -66,4 +66,29 @@ non-timing fields across both passes.
 `compare.exe decode-wuffs MANIFEST DLL_DIRECTORY` compares the staged native
 API, the direct `decode_rgba8` API, and Wuffs in the same process. Its TSV
 labels are `deadlib`, `deadlib-rgba`, and `wuffs`. Use the full decode manifest
-for coverage or a filtered copy for shorter experiments.
+for coverage or a filtered copy for shorter experiments. The verification pass
+also compares the two Deadlib APIs byte for byte on accepted BMPs, including
+files where the independent reference uses a different pixel policy.
+
+```powershell
+$bmpExe = "$bmpWork/rust-build/release/compare.exe"
+$bmpDll = "$bmpWork/bridges/Release"
+$env:Path = "$bmpDll;$env:Path"
+$env:BMP_BENCH_CPU = '10'
+$env:BMP_BENCH_MS = '8'
+& $bmpExe decode-wuffs "$bmpWork/corpus/decode.tsv" $bmpDll --verify-only
+if ($LASTEXITCODE -ne 0) { throw 'BMP verification failed' }
+$bmpRuns = foreach ($pass in 1..5) {
+    if ($pass % 2 -eq 0) { $env:BMP_BENCH_REVERSE = '1' }
+    else { Remove-Item Env:BMP_BENCH_REVERSE -ErrorAction SilentlyContinue }
+    $bmpRun = "$bmpWork/wuffs-$pass.tsv"
+    & $bmpExe decode-wuffs "$bmpWork/corpus/decode.tsv" $bmpDll | Set-Content -Encoding UTF8 $bmpRun
+    if ($LASTEXITCODE -ne 0) { throw "BMP pass $pass failed" }
+    $bmpRun
+}
+python "$bmpTools/wuffs_parity.py" @bmpRuns
+```
+
+The parity check uses the median of each file's paired cycle ratios and
+reports each ratio above 1.01. It checks that verification agrees across the
+passes. Saved gzip results with a `round` column can be supplied directly.

@@ -54,3 +54,17 @@ fixed-width palette reads. On two full passes, 150 of 155 shared exact cases
 met the 1% target using the median paired ratio. The largest remaining gap was
 6.2%, on the suite's OS/2 v2 40-byte indexed file. Three other indexed cases
 and top-down 1920×1080 RGB24 also exceeded 1%. [Raw AVX2 passes](direct-avx2.tsv.gz).
+
+## Direct packed and small-palette expansion
+
+The 8-bit scalar path fills the final raster in place. Full 1-bit and 4-bit
+palettes expand packed source bytes through a lookup table. AVX2 expands
+8-bit index streams with palettes of up to 16 colors by shuffling each color
+plane and interleaving the four output bytes. It validates the index range
+while processing the raster.
+
+Five 8 ms passes preserved all 155 original exact-output Wuffs pairs and met
+the 1% target on 152. The only remaining cases were top-down 1920×1080 RGB24,
+RGBA32, and full-palette indexed8 at 1.0252×, 1.0257×, and 1.0235× Wuffs cycles.
+Both Deadlib entry points agreed byte for byte on all 174 accepted inputs and
+returned the same errors on the other 29. [Raw palette passes](direct-palettes.tsv.gz).

@@ -395,19 +395,21 @@ fn byte_indices_validate_short_palettes_without_including_padding() {
                     }
                 );
                 if size < 256 {
-                    let last = (height - 1) * pitch + width - 1;
-                    let original = rows[last];
-                    rows[last] = size as u8;
-                    let invalid = wire(Format::rgb(8), width, height, top_down, &colors, &rows);
-                    assert_eq!(
-                        decode(&invalid),
-                        Err(Error::Invalid("pixel index exceeds the palette"))
-                    );
-                    assert_eq!(
-                        decode_rgba8(&invalid),
-                        Err(Error::Invalid("pixel index exceeds the palette"))
-                    );
-                    rows[last] = original;
+                    for x in [0, width - 1] {
+                        let offset = (height - 1) * pitch + x;
+                        let original = rows[offset];
+                        rows[offset] = size as u8;
+                        let invalid = wire(Format::rgb(8), width, height, top_down, &colors, &rows);
+                        assert_eq!(
+                            decode(&invalid),
+                            Err(Error::Invalid("pixel index exceeds the palette"))
+                        );
+                        assert_eq!(
+                            decode_rgba8(&invalid),
+                            Err(Error::Invalid("pixel index exceeds the palette"))
+                        );
+                        rows[offset] = original;
+                    }
                 }
             }
         }

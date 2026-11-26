@@ -1,5 +1,8 @@
 use crate::{Bitmap, Error, Limits, Pixels, model::pixel_count, reserve};
 
+#[allow(unsafe_code)]
+mod indexed;
+
 #[cfg(target_arch = "x86_64")]
 #[allow(unsafe_code)]
 mod x86;
@@ -58,9 +61,15 @@ pub fn decode_rgba8_with_limits(input: &[u8], limits: Limits) -> Result<(Info, V
             palette_start,
             palette_len,
             entry_bytes,
-        } if header.info.bit_depth == 8 => {
+        } if header.info.bit_depth == 8
+            || (header.pixel_count >= 4096 && palette_len == 1 << header.info.bit_depth) =>
+        {
             let palette = &input[palette_start..palette_start + palette_len * entry_bytes];
-            indexed8_rgba(source, &header, palette, palette_len, entry_bytes)?
+            match header.info.bit_depth {
+                1 => indexed::rgba_packed::<1, 8>(source, &header, palette, entry_bytes)?,
+                4 => indexed::rgba_packed::<4, 2>(source, &header, palette, entry_bytes)?,
+                _ => indexed::rgba8(source, &header, palette, palette_len, entry_bytes)?,
+            }
         }
         Format::Rgb24 => rgb24_rgba(source, &header)?,
         Format::Masked {
@@ -738,56 +747,6 @@ fn decode_rgb24_quads(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> 
     } else {
         for row in source.rchunks_exact(header.row_pitch) {
             samples.extend(row.as_chunks::<12>().0.iter().map(swap));
-        }
-    }
-    Ok(samples.into_flattened())
-}
-
-fn indexed8_rgba(
-    source: &[u8],
-    header: &Header,
-    palette: &[u8],
-    palette_len: usize,
-    entry_bytes: usize,
-) -> Result<Vec<u8>, Error> {
-    let mut colors = [[0; 4]; 256];
-    if entry_bytes == 3 {
-        for (color, &[b, g, r]) in colors.iter_mut().zip(palette.as_chunks::<3>().0) {
-            *color = [r, g, b, 255];
-        }
-    } else {
-        for (color, &[b, g, r, _]) in colors.iter_mut().zip(palette.as_chunks::<4>().0) {
-            *color = [r, g, b, 255];
-        }
-    }
-    let mut samples = Vec::new();
-    reserve(&mut samples, header.pixel_count)?;
-    let mut append = |indices: &[u8]| -> Result<(), Error> {
-        // Check only used bytes before expanding, and skip the scan for full palettes.
-        if palette_len < colors.len()
-            && indices
-                .iter()
-                .copied()
-                .max()
-                .is_some_and(|i| usize::from(i) >= palette_len)
-        {
-            return Err(Error::Invalid("pixel index exceeds the palette"));
-        }
-        let (quads, tail) = indices.as_chunks::<4>();
-        samples.extend(
-            quads
-                .iter()
-                .flat_map(|&quad| quad.map(|i| colors[usize::from(i)])),
-        );
-        samples.extend(tail.iter().map(|&i| colors[usize::from(i)]));
-        Ok(())
-    };
-    let width = header.info.width as usize;
-    if header.info.top_down && header.row_pitch == width {
-        append(source)?;
-    } else {
-        for row in display_rows(source, header.row_pitch, header.info.top_down) {
-            append(&row[..width])?;
         }
     }
     Ok(samples.into_flattened())

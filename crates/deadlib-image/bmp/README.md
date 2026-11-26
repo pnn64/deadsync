@@ -83,9 +83,9 @@ Both variants validate public models and apply the same pixel/output limits;
 consuming RGBA preserves the buffer's existing spare capacity.
 
 `decode_rgba8` / `decode_rgba8_with_limits` return the source `Info` and owned,
-packed RGBA samples in top-down order. RGB24, opaque 32-bit bitfields, and
-8-bit palettes expand directly to RGBA in one output traversal. The decoded
-byte limit applies to the RGBA raster.
+packed RGBA samples in top-down order. RGB24, opaque 32-bit bitfields, 8-bit
+palettes, and larger 1-bit or 4-bit images with full palettes expand directly
+to RGBA. The decoded byte limit applies to the RGBA raster.
 
 `probe` / `probe_with_limits` inspect dimensions, source depth, and orientation
 without allocating or requiring palette/pixel bytes. They require a complete

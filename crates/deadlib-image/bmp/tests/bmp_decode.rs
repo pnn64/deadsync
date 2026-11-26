@@ -113,8 +113,12 @@ fn assert_rgba(image: &Bitmap, expected: &[u8]) {
 fn indexed_headers_preserve_indices_palettes_orientation_and_packed_tails() {
     for size in [12, 40, 52, 56, 108, 124] {
         for bits in [1u16, 4, 8] {
-            let colors = palette(if bits == 1 { 2 } else { 7 });
-            for width in [1usize, 2, 3, 7, 8, 9, 17, 33, 1025] {
+            for width in [1usize, 2, 3, 7, 8, 9, 17, 33, 1025, 2049] {
+                let colors = palette(match bits {
+                    1 => 2,
+                    4 if width == 2049 => 16,
+                    _ => 7,
+                });
                 for top_down in [false, true] {
                     if size == 12 && top_down {
                         continue;
