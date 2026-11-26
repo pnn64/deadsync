@@ -234,3 +234,15 @@ The full run of `2ae41f6d4` reproduced the borrowed reader's allocation totals i
 | SRPG10 | Deadlib recycled, SPS depth | 28.23 | 35.42 | 6.99 | 0.329 |
 | SRPG10 | FFmpeg native | 24.43 | 40.93 | 17.63 | 0.184 |
 | SRPG10 | FFmpeg packed | 28.27 | 35.38 | 18.63 | 3.151 |
+
+## Eight-lane chroma deblocking
+
+`d27eb742b` uses SSE2 to load and filter eight 8-bit chroma samples directly at a horizontal or vertical edge. The vertical path transposes the four input columns and stores only the two columns that can change. An edge whose alpha or beta threshold is zero returns before loading pixels. FFmpeg likewise tests the thresholds before dispatching to its x86 chroma filters. [FFmpeg edge dispatch](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_loopfilter.c) · [FFmpeg x86 chroma filters](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/x86/h264_deblock.asm)
+
+| Candidate versus `2ae41f6d4` | SRPG9 median paired cycle change | SRPG10 median paired cycle change |
+|---|---:|---:|
+| Eight-lane chroma deblocking and zero thresholds | −1.98% | −3.34% |
+| Per-segment threshold expansion | +1.28% | −0.35% |
+| Chroma geometry fast path | +0.43% | +0.31% |
+
+The chroma filter build used 5.22% and 4.96% more cycles than packed FFmpeg in the same batch. Its decoded frames matched FFmpeg on the bundled clips, temporal-direct progressive and MBAFF multislice, constrained-intra CAVLC and the resolution change. The other candidates remained prototypes. [Paired samples](results/windows-x86_64-20261126/chroma-edge-paired.csv)
