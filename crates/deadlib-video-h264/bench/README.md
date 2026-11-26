@@ -259,3 +259,11 @@ The full benchmark reproduced the preceding allocation totals. The default cycle
 | SRPG10 | Deadlib recycled, SPS depth | 27.45 | 36.43 | 6.99 | 0.329 |
 | SRPG10 | FFmpeg native | 24.61 | 40.63 | 17.63 | 0.184 |
 | SRPG10 | FFmpeg packed | 27.90 | 35.84 | 18.63 | 3.151 |
+
+## Slice layout specialization
+
+`9f6f62795` selects a slice implementation by sample depth and MBAFF layout before the macroblock loop. This lets the compiler remove layout checks inside the selected path. FFmpeg similarly dispatches macroblock reconstruction to implementations for common layouts, higher bit depths and complex cases. [FFmpeg macroblock dispatch](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/h264_mb.c)
+
+The isolated specialization saved 4.41% and 1.48% of median paired cycles relative to `2ae41f6d4`. With the chroma filter included, the linked reference-check executable grew by 355 KiB. The combined build matched FFmpeg on the bundled clips, temporal-direct progressive and MBAFF multislice, constrained-intra CAVLC, resolution changes, High 10 and High 4:2:2. [Slice and storage comparisons](results/windows-x86_64-20261126/slice-storage-paired.csv)
+
+Earlier DPB retirement with inline sliding-window counts lowered requested bytes in the allocation probe by about 3.14 MB per 150-frame clip. Its paired cycle changes were +1.65% and −0.12%, so it remains a prototype. A separate batch against `d27eb742b` measured −0.29% and +0.02% for a direct horizontal luma edge kernel, and +3.87% and +2.36% for compilation with the host CPU's target features. [Luma and code-generation comparisons](results/windows-x86_64-20261126/luma-codegen-paired.csv)
