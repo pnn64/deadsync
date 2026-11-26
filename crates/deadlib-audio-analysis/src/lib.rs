@@ -1,16 +1,6 @@
-pub mod cache;
-
 use deadlib_audio_decode as decode;
 use ebur128::{EbuR128, Mode};
 use std::path::Path;
-
-pub use cache::{
-    CONTENT_HASH_UNKNOWN, CacheFreshness, ReplayGainCacheEntry, ReplayGainCacheFile,
-    ReplayGainEntryMap, decode_replaygain_cache, encode_replaygain_cache,
-    read_replaygain_cache_file, replaygain_cache_check, replaygain_cache_entry_for_path,
-    replaygain_cache_info_if_fresh, replaygain_content_hash, replaygain_path_hash,
-    replaygain_source_mtime_unix_nanos, write_replaygain_cache_file,
-};
 
 /// EBU R 128 / `ReplayGain` 2.0 reference loudness.
 const TARGET_LUFS: f32 = -18.0;
@@ -47,16 +37,12 @@ pub fn gain_linear_from_info(info: ReplayGainInfo) -> f32 {
     raw_linear.min(peak_limited).clamp(0.0, MAX_GAIN_LINEAR)
 }
 
-pub fn compute_loudness(path: &Path) -> Result<ReplayGainInfo, String> {
-    // Match gameplay: ITG chart time includes MP3 delay, padding and Info silence.
-    let opened = decode::open_file(
-        path,
-        decode::DecodeOptions {
-            mp3_gapless: false,
-            mp3_info_silence: true,
-        },
-    )
-    .map_err(|e| e.to_string())?;
+/// Measures integrated loudness and true peak using the caller's decode options.
+pub fn compute_loudness(
+    path: &Path,
+    options: decode::DecodeOptions,
+) -> Result<ReplayGainInfo, String> {
+    let opened = decode::open_file(path, options).map_err(|e| e.to_string())?;
     let channels = opened.channels.max(1);
     let sample_rate = opened.sample_rate_hz.max(1);
     if channels > 8 {
@@ -227,19 +213,21 @@ mod tests {
     }
 
     #[test]
-    fn computes_loudness_for_credits_ogg() {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/music/credits.ogg");
-        assert!(
-            path.is_file(),
-            "missing bundled fixture: {}",
-            path.display()
-        );
-        let info = compute_loudness(&path).expect("loudness");
-        assert!(info.lufs.is_finite(), "lufs={}", info.lufs);
-        assert!(
-            info.true_peak_linear >= 0.0,
-            "peak={}",
-            info.true_peak_linear
-        );
+    fn computes_loudness_using_requested_mp3_timeline() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadlib-audio-decode/tests/fixtures/timeline.mp3");
+        let gapless =
+            compute_loudness(&path, decode::DecodeOptions::default()).expect("analyze gapless MP3");
+        let untrimmed = compute_loudness(
+            &path,
+            decode::DecodeOptions {
+                mp3_gapless: false,
+                mp3_info_silence: true,
+            },
+        )
+        .expect("analyze untrimmed MP3");
+        assert!(gapless.lufs.is_finite());
+        assert!(untrimmed.lufs.is_finite());
+        assert_ne!(gapless, untrimmed);
     }
 }

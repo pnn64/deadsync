@@ -1,5 +1,5 @@
-use crate::ReplayGainInfo;
 use bincode::{Decode, Encode};
+use deadlib_audio_analysis::ReplayGainInfo;
 use rustc_hash::FxHashMap;
 use std::fs;
 use std::hash::Hasher;
@@ -299,7 +299,8 @@ pub fn replaygain_cache_check(entry: ReplayGainCacheEntry, path: &Path) -> Cache
 /// Convenience wrapper over [`replaygain_cache_check`] that collapses the
 /// freshness result to the gain info (discarding the "needs persist" signal).
 #[must_use]
-pub fn replaygain_cache_info_if_fresh(
+#[cfg(test)]
+fn replaygain_cache_info_if_fresh(
     entry: ReplayGainCacheEntry,
     path: &Path,
 ) -> Option<ReplayGainInfo> {

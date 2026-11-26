@@ -17,7 +17,7 @@
 //! Behavior summary:
 //! - A pool of [`WORKER_THREADS`] threads pulls jobs off two queues
 //!   (foreground previews ahead of background prewarm) and uses
-//!   `deadsync-audio-analysis` to compute integrated loudness (LUFS)
+//!   `deadlib-audio-analysis` to compute integrated loudness (LUFS)
 //!   and true peak.
 //! - Computed values are persisted in a single file at
 //!   `cache_dir/replaygain.bin` (an in-memory map keyed by
@@ -35,11 +35,15 @@
 //! worker reports the result through the callback passed to [`init`], so the
 //! shell can apply it retroactively to the currently playing stream.
 
-use deadsync_audio_analysis::{
-    CacheFreshness, ReplayGainCacheFile, ReplayGainEntryMap, ReplayGainInfo, UNITY_GAIN,
-    compute_loudness, gain_linear_from_info, read_replaygain_cache_file, replaygain_cache_check,
-    replaygain_cache_entry_for_path, replaygain_path_hash, write_replaygain_cache_file,
+mod cache;
+
+use cache::{
+    CacheFreshness, ReplayGainCacheFile, ReplayGainEntryMap, read_replaygain_cache_file,
+    replaygain_cache_check, replaygain_cache_entry_for_path, replaygain_path_hash,
+    write_replaygain_cache_file,
 };
+use deadlib_audio_analysis::{ReplayGainInfo, UNITY_GAIN, compute_loudness, gain_linear_from_info};
+use deadlib_audio_decode::DecodeOptions;
 use log::{debug, info, warn};
 use rustc_hash::FxHashMap;
 use std::collections::{VecDeque, hash_map::Entry};
@@ -70,6 +74,8 @@ const FLUSH_DEBOUNCE: Duration = Duration::from_millis(250);
 pub struct InitConfig {
     pub cache_file: PathBuf,
     pub legacy_cache_dir: PathBuf,
+    /// Source timeline used for analysis and shared with playback.
+    pub decode_options: DecodeOptions,
     pub result_callback: fn(u64, f32),
 }
 
@@ -446,7 +452,7 @@ fn ensure_gain_linear(canonical: &Path) -> f32 {
         return gain_linear_from_info(info);
     }
 
-    match compute_loudness(canonical) {
+    match compute_loudness(canonical, init_config().decode_options) {
         Ok(info) => {
             write_disk_cache(canonical, info);
             in_memory()
@@ -751,6 +757,23 @@ fn flush_now_with_timeout(timeout: Duration) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn computes_loudness_for_credits_ogg() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/music/credits.ogg");
+        assert!(
+            path.is_file(),
+            "missing bundled fixture: {}",
+            path.display()
+        );
+        let info = compute_loudness(&path, DecodeOptions::default()).expect("loudness");
+        assert!(info.lufs.is_finite(), "lufs={}", info.lufs);
+        assert!(
+            info.true_peak_linear >= 0.0,
+            "peak={}",
+            info.true_peak_linear
+        );
+    }
 
     #[test]
     fn blocking_analysis_respects_cancellation_before_start() {

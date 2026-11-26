@@ -12,7 +12,7 @@ Before a release:
 cargo test -p deadlib-bincode-derive
 cargo test -p deadlib-bincode --all-targets
 cargo test -p deadlib-bincode --doc
-cargo check -p deadsync-audio-analysis -p deadsync-noteskin
+cargo check -p deadsync-audio-replaygain -p deadsync-noteskin
 cargo check -p deadsync-profile -p deadsync-score -p deadsync-simfile
 ```
 

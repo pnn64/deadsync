@@ -1791,6 +1791,8 @@ const AUDIO_ANALYSIS_FORBIDDEN_TOKENS: &[&str] = &[
     "deadlib_platform",
     "deadlib_present",
     "deadlib_render",
+    "bincode",
+    "ReplayGainCacheFile",
     "std::sync::mpsc",
     "Mutex",
     "log::",
@@ -8885,20 +8887,30 @@ fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
 }
 
 #[test]
-fn audio_analysis_cache_lives_in_analysis_crate() {
+fn audio_analysis_and_replaygain_persistence_have_separate_owners() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let analysis = root.join("crates/deadlib-audio-analysis");
+    let replaygain = root.join("crates/deadsync-audio-replaygain");
     let mut failures = Vec::new();
 
     for file in [
-        root.join("crates/deadsync-audio-analysis/src/lib.rs"),
-        root.join("crates/deadsync-audio-analysis/src/cache.rs"),
-        root.join("crates/deadsync-audio-replaygain/Cargo.toml"),
-        root.join("crates/deadsync-audio-replaygain/src/lib.rs"),
+        analysis.join("src/lib.rs"),
+        replaygain.join("Cargo.toml"),
+        replaygain.join("src/lib.rs"),
+        replaygain.join("src/cache.rs"),
     ] {
         if !file.exists() {
             failures.push(format!("{} is missing", rel_path(&root, &file)));
         }
     }
+
+    let manifest = read_source(analysis.join("Cargo.toml")).expect("audio analysis manifest");
+    assert!(!manifest.contains("deadsync-"));
+    assert!(!manifest.contains("deadlib-bincode"));
+    assert!(!analysis.join("src/cache.rs").exists());
+    let cache = production_source(&replaygain.join("src/cache.rs"));
+    assert!(cache.contains("const CACHE_MAGIC"));
+    assert!(cache.contains("fn decode_replaygain_cache"));
 
     let engine_replaygain = root.join("src/engine/audio/replaygain.rs");
     if engine_replaygain.exists() {
@@ -8908,8 +8920,9 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
         ));
     }
 
-    let replaygain_runtime = root.join("crates/deadsync-audio-replaygain/src/lib.rs");
+    let replaygain_runtime = replaygain.join("src/lib.rs");
     if let Ok(text) = read_source(&replaygain_runtime) {
+        assert!(text.contains("mod cache;"));
         for token in [
             "struct PersistedEntry",
             "struct PersistedCacheV1",
@@ -8936,7 +8949,7 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
         }
     }
 
-    let analysis_src = root.join("crates/deadsync-audio-analysis/src");
+    let analysis_src = analysis.join("src");
     if analysis_src.exists() {
         for file in rust_files(&analysis_src) {
             let text = read_source(&file).expect("source file should be readable");
@@ -8952,7 +8965,7 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
         }
     }
 
-    let replaygain_src = root.join("crates/deadsync-audio-replaygain/src");
+    let replaygain_src = replaygain.join("src");
     if replaygain_src.exists() {
         for file in rust_files(&replaygain_src) {
             let text = read_source(&file).expect("source file should be readable");
@@ -8979,7 +8992,7 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
 
     assert!(
         failures.is_empty(),
-        "ReplayGain cache data and worker runtime should live in audio crates:\n{}",
+        "audio analysis and ReplayGain persistence should use their own crates:\n{}",
         failures.join("\n")
     );
 }
@@ -14880,7 +14893,6 @@ fn mp3_timeline_policy_is_selected_by_the_game() {
     assert!(stream.contains("decode::open_file(path, options)"));
     for relative in [
         "crates/deadsync-audio-stream/src/lib.rs",
-        "crates/deadsync-audio-analysis/src/lib.rs",
         "crates/deadsync-shell/src/sync_analysis.rs",
     ] {
         // sync_analysis keeps production functions after its test module.
@@ -14898,6 +14910,15 @@ fn mp3_timeline_policy_is_selected_by_the_game() {
     }
     let playback = production_source(&root.join("crates/deadsync-audio-stream/src/lib.rs"));
     assert!(playback.contains("file_length_seconds(path, DECODE_OPTIONS)"));
+    let analysis = production_source(&root.join("crates/deadlib-audio-analysis/src/lib.rs"));
+    assert!(analysis.contains("decode::open_file(path, options)"));
+    for forbidden in ["ITG", "mp3_gapless", "mp3_info_silence"] {
+        assert!(!analysis.contains(forbidden), "engine analysis selects game policy: {forbidden}");
+    }
+    let replaygain = production_source(&root.join("crates/deadsync-audio-replaygain/src/lib.rs"));
+    assert!(replaygain.contains("compute_loudness(canonical, init_config().decode_options)"));
+    let executable = production_source(&root.join("src/main.rs"));
+    assert!(executable.contains("decode_options: deadsync_audio_stream::DECODE_OPTIONS"));
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).expect("shell startup");
     assert!(shell.contains("deadsync_audio_stream::music_length_seconds"));
 }

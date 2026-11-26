@@ -279,6 +279,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let audio = deadsync_audio_replaygain::init(deadsync_audio_replaygain::InitConfig {
         cache_file: dirs.replaygain_cache_file(),
         legacy_cache_dir: dirs.replaygain_cache_dir(),
+        decode_options: deadsync_audio_stream::DECODE_OPTIONS,
         result_callback: deadsync_audio_stream::set_music_replaygain_if_matches,
     })
     .map_err(str::to_owned)

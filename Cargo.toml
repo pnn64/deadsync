@@ -17,7 +17,7 @@ members = [
     "crates/deadlib-audio-backend-coreaudio",
     "crates/deadlib-audio-backend-freebsd-pcm",
     "crates/deadlib-audio-backend-jack",
-    "crates/deadsync-audio-analysis",
+    "crates/deadlib-audio-analysis",
     "crates/deadlib-audio",
     "crates/deadlib-audio/decode/ogg",
     "crates/deadlib-audio/decode/flac",
@@ -106,7 +106,6 @@ harness = false
 deadlib-audio = { path = "crates/deadlib-audio" }
 deadlib-audio-decode = { path = "crates/deadlib-audio-decode" }
 deadlib-platform = { path = "crates/deadlib-platform" }
-deadsync-audio-analysis = { path = "crates/deadsync-audio-analysis" }
 deadsync-audio-replaygain = { path = "crates/deadsync-audio-replaygain" }
 deadsync-audio-stream = { path = "crates/deadsync-audio-stream" }
 deadsync-assets = { path = "crates/deadsync-assets" }

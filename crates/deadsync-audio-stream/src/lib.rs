@@ -24,12 +24,13 @@ pub use sfx_cache::SfxId;
 #[cfg(test)]
 static PLAYBACK_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-// ITG charts include encoder delay/padding and one silent Info header frame.
-// Keep this source timeline for music, previews and effects alike.
-const DECODE_OPTIONS: deadlib_audio_decode::DecodeOptions = deadlib_audio_decode::DecodeOptions {
-    mp3_gapless: false,
-    mp3_info_silence: true,
-};
+/// ITG charts include encoder delay, padding, and one silent Info header frame.
+/// Use this source timeline for music, previews, effects, and loudness analysis.
+pub const DECODE_OPTIONS: deadlib_audio_decode::DecodeOptions =
+    deadlib_audio_decode::DecodeOptions {
+        mp3_gapless: false,
+        mp3_info_silence: true,
+    };
 
 /// Measures a song on the same source timeline as gameplay playback.
 pub fn music_length_seconds(path: &std::path::Path) -> Result<f32, String> {
