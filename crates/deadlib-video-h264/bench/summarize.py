@@ -30,8 +30,9 @@ assert cycle_runs.keys() == allocation_runs.keys()
 streams = {stream for stream, _ in cycle_runs}
 modes = {mode for _, mode in cycle_runs}
 baseline_modes = {"deadlib", "ffmpeg-surface", "ffmpeg-packed"}
+recycle_modes = baseline_modes | {"deadlib-recycled"}
 assert len(streams) == 2
-assert modes in (baseline_modes, baseline_modes | {"deadlib-recycled"})
+assert modes in (baseline_modes, recycle_modes, recycle_modes | {"deadlib-recycled-sps"})
 assert len(cycle_runs) == len(streams) * len(modes)
 records = []
 for key in cycle_runs:

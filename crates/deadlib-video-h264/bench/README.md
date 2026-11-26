@@ -92,3 +92,24 @@ Median paired cycle changes relative to `46aadb9cf` are from five rotating round
 | Borrowed slice bytes and cached reference keys prototype | −1.9% | +2.1% |
 
 The slice prototype was left out of the measured combined revision. [Paired progressive cycle samples](results/windows-x86_64-20261126/motion-paired.csv)
+
+## Retired-reference reserve and reorder depth
+
+`64dca4237` retains up to four exclusively owned retired references for reuse. Reference marking and IDR pictures can retire several references together. The reserve lets subsequent pictures reuse the released planes and motion storage.
+
+The `deadlib-recycled-sps` mode also uses `OrderedDecoder::with_max_depth` with the largest reorder depth declared in the input SPS units. It uses the default depth of 16 when an SPS lacks that declaration. Both bundled inputs matched FFmpeg's display-order output in this mode. All Deadlib modes return packed planes.
+
+| Clip | Output mode | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|
+| SRPG9 | Deadlib | 33.89 | 3.42 |
+| SRPG9 | Deadlib recycled | 31.25 | 0.79 |
+| SRPG9 | Deadlib recycled, SPS depth | 31.15 | 0.51 |
+| SRPG9 | FFmpeg native | 17.91 | 0.29 |
+| SRPG9 | FFmpeg packed | 18.91 | 3.26 |
+| SRPG10 | Deadlib | 23.45 | 3.26 |
+| SRPG10 | Deadlib recycled | 21.45 | 1.27 |
+| SRPG10 | Deadlib recycled, SPS depth | 21.13 | 0.43 |
+| SRPG10 | FFmpeg native | 17.63 | 0.18 |
+| SRPG10 | FFmpeg packed | 18.63 | 3.15 |
+
+Allocation counts for the four existing modes matched across the reserve prototype and the combined revision. The SPS-depth mode has one allocation run per clip. The preceding motion-compensation revision measured 60.29 and 51.73 Mcycles/frame on the default Rust API, compared with 39.79 and 30.77 for packed FFmpeg on SRPG9 and SRPG10. [Reserve allocation samples](results/windows-x86_64-20261126/reference-reserve-allocations.csv) · [Combined motion samples](results/windows-x86_64-20261126/motion-combined)
