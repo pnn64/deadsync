@@ -159,6 +159,37 @@ pub(super) enum Trace {
 }
 const TABLE_TRACE_SLOTS: usize = 64;
 
+// A full collection usually has only the active stack to refresh. Keep a
+// short list during marking and use the arena scan for larger refresh sets.
+struct ThreadRefresh {
+    ids: [ThreadId; 8],
+    count: usize,
+}
+
+impl ThreadRefresh {
+    fn new() -> Self {
+        Self {
+            ids: [ThreadId(0); 8],
+            count: 0,
+        }
+    }
+
+    fn record(&mut self, id: ThreadId) {
+        if self.count <= self.ids.len() && !self.ids[..self.count].contains(&id) {
+            if let Some(slot) = self.ids.get_mut(self.count) {
+                *slot = id;
+            }
+            self.count += 1;
+        }
+    }
+
+    fn ordered(&mut self) -> Option<&[ThreadId]> {
+        let ids = self.ids.get_mut(..self.count)?;
+        ids.sort_unstable_by_key(|id| slot_index(id.0));
+        Some(ids)
+    }
+}
+
 fn edge(value: Value) -> Option<Trace> {
     match value {
         Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_) => None,
@@ -1296,6 +1327,15 @@ impl Vm {
     }
 
     fn trace_some(&mut self, work: &mut Work, budget: usize) -> Result<usize, Error> {
+        self.trace_some_with_refresh(work, budget, None)
+    }
+
+    fn trace_some_with_refresh(
+        &mut self,
+        work: &mut Work,
+        budget: usize,
+        mut refresh: Option<&mut ThreadRefresh>,
+    ) -> Result<usize, Error> {
         let mut visited = 0;
         // No mutator runs within this trace batch.
         let mut modes = TableModeCache::default();
@@ -1418,6 +1458,12 @@ impl Vm {
                 Trace::Value(Value::Thread(id)) => {
                     if self.threads.mark(id.0) || forced {
                         self.trace_thread(id, work);
+                        if let Some(refresh) = refresh.as_deref_mut()
+                            && (id == self.thread
+                                || !Self::quiet_suspension(&self.threads[slot_index(id.0)]))
+                        {
+                            refresh.record(id);
+                        }
                     }
                 }
                 Trace::Value(Value::Native(id)) => {
@@ -1647,10 +1693,16 @@ impl Vm {
     }
     fn finish_gc_marking_work(&mut self, work: &mut Work, fresh_cycle: bool) -> Result<(), Error> {
         self.transfer_closed_work(work)?;
-        self.trace_graph(work)?;
+        let mut refresh_threads = ThreadRefresh::new();
+        if fresh_cycle {
+            self.trace_some_with_refresh(work, usize::MAX, Some(&mut refresh_threads))?;
+        } else {
+            self.trace_graph(work)?;
+        }
         // Snapshot the already reached containers before refreshing roots;
         // newly reached threads/cells still receive their ordinary first scan.
-        let threads = self.threads.marked_count();
+        let small_refresh = fresh_cycle.then(|| refresh_threads.ordered()).flatten();
+        let threads = small_refresh.map_or_else(|| self.threads.marked_count(), <[_]>::len);
         let metatable_words = (self.gc.metatable_table_end as usize).div_ceil(64);
         let tables = self
             .tables
@@ -1682,16 +1734,19 @@ impl Vm {
         let available = (work.capacity() - work.len()).saturating_sub(refresh);
         let roots = self.seed_gc_root_count(available);
         self.reserve_trace_work(work, refresh.saturating_add(roots))?;
-        for key in self.threads.marked_keys() {
-            let id = ThreadId(key);
-            // A synchronous collection traced and cleaned these parked
-            // stacks during the first pass. Their roots cannot change
-            // before the refresh, and their call limits need no shrink.
-            if !fresh_cycle
-                || id == self.thread
-                || !Self::quiet_suspension(&self.threads[slot_index(key)])
-            {
-                work.push(Trace::ThreadAgain(id));
+        if let Some(ids) = small_refresh {
+            work.extend(ids.iter().copied().map(Trace::ThreadAgain));
+        } else {
+            for key in self.threads.marked_keys() {
+                let id = ThreadId(key);
+                // During synchronous collection the first pass traced and
+                // cleaned quiet parked stacks, and their roots stay fixed.
+                if !fresh_cycle
+                    || id == self.thread
+                    || !Self::quiet_suspension(&self.threads[slot_index(key)])
+                {
+                    work.push(Trace::ThreadAgain(id));
+                }
             }
         }
         for index in self.tables.marked_slots_in_words(0..metatable_words) {
@@ -2086,6 +2141,21 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thread_refresh_orders_slots_and_falls_back_when_full() {
+        let mut refresh = ThreadRefresh::new();
+        let first = ThreadId((2 << 32) | 1);
+        let second = ThreadId((1 << 32) | 2);
+        refresh.record(second);
+        refresh.record(first);
+        refresh.record(second);
+        assert_eq!(refresh.ordered(), Some(&[first, second][..]));
+        for slot in 3..=9 {
+            refresh.record(ThreadId((1 << 32) | slot));
+        }
+        assert!(refresh.ordered().is_none());
+    }
 
     #[test]
     fn full_collection_accounts_for_freed_coroutine_stacks() {
