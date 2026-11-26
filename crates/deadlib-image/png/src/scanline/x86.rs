@@ -23,6 +23,33 @@ fn load32(bytes: &[u8; 32]) -> __m256i {
     unsafe { _mm256_loadu_si256(bytes.as_ptr().cast()) }
 }
 
+/// Pack complete 32-sample groups. The caller handles the remaining samples.
+pub(super) fn pack_four_bits(samples: &[u8], row: &mut [u8]) -> usize {
+    if samples.len() < 64 || !std::is_x86_feature_detected!("avx2") {
+        return 0;
+    }
+    let groups = samples.as_chunks::<32>().0;
+    let written = groups.len() * 16;
+    // SAFETY: AVX2 is available and each output group is complete.
+    unsafe { pack_four_bit_groups(groups, &mut row[..written]) };
+    written
+}
+
+#[target_feature(enable = "avx2")]
+fn pack_four_bit_groups(groups: &[[u8; 32]], output: &mut [u8]) {
+    for (samples, out) in groups.iter().zip(output.as_chunks_mut::<16>().0) {
+        let pixels = load32(samples);
+        let pairs = _mm256_maddubs_epi16(pixels, _mm256_set1_epi16(0x0110));
+        let lanes = _mm256_packus_epi16(pairs, _mm256_setzero_si256());
+        let bytes = _mm_unpacklo_epi64(
+            _mm256_castsi256_si128(lanes),
+            _mm256_extracti128_si256::<1>(lanes),
+        );
+        // SAFETY: the store writes exactly one output array.
+        unsafe { _mm_storeu_si128(out.as_mut_ptr().cast(), bytes) };
+    }
+}
+
 #[target_feature(enable = "avx2")]
 fn half_byte(value: __m256i) -> __m256i {
     _mm256_and_si256(_mm256_srli_epi16::<1>(value), _mm256_set1_epi8(0x7f))

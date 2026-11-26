@@ -851,6 +851,13 @@ pub(crate) fn filter_first<const SCORE: bool>(
 
 fn pack_bits<const DEPTH: u8>(samples: &[u8], row: &mut [u8]) {
     let group = 8 / DEPTH as usize;
+    #[cfg(target_arch = "x86_64")]
+    let (samples, row) = if DEPTH == 4 {
+        let written = x86::pack_four_bits(samples, row);
+        (&samples[written * group..], &mut row[written..])
+    } else {
+        (samples, row)
+    };
     let full = samples.len() / group;
     let (words, tail) = row.split_at_mut(full);
     // Validated low sample bits are gathered into the high word byte in PNG
@@ -1212,6 +1219,32 @@ mod tests {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn wide_packed_rows_match_sample_by_sample_packing() {
+        for depth in [1, 2, 4] {
+            let group = 8 / depth as usize;
+            for width in 60usize..=273 {
+                let samples: Vec<_> = (0..width)
+                    .map(|n| ((n * 219 + n / 9 + n * n * 23) % (1 << depth)) as u8)
+                    .collect();
+                let mut expected = vec![0; width.div_ceil(group)];
+                for (n, &sample) in samples.iter().enumerate() {
+                    expected[n / group] |= sample << (8 - depth as usize * (n % group + 1));
+                }
+                let image = Image {
+                    width: width as u32,
+                    height: 1,
+                    color_type: ColorType::Grayscale,
+                    bit_depth: depth,
+                    samples: Samples::U8(samples),
+                };
+                let mut packed = vec![0xa5; expected.len()];
+                pack_row(&image, 0, 0, 1, width, &mut packed);
+                assert_eq!(packed, expected, "{width} samples at depth {depth}");
             }
         }
     }
