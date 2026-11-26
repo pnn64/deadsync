@@ -221,3 +221,16 @@ A diagnostic run sampled one in 32 CABAC macroblocks and instrumented the full d
 | Direct strided luma for unweighted skip partitions | −2.06% | −0.68% |
 
 The two committed changes matched FFmpeg in isolation on the bundled clips and temporal-direct progressive and MBAFF multislice clips. The uniform deblock motion build also matched the constrained-intra CAVLC and resolution-change samples. The strided luma path remained a prototype. [Paired samples](results/windows-x86_64-20261126/decode-paths-paired.csv)
+
+The full run of `2ae41f6d4` reproduced the borrowed reader's allocation totals in both passes. The cycle medians for the default decoder were 9.4% and 7.6% above packed FFmpeg. Both bundled clips matched in all five output modes. The same revision also matched FFmpeg on the High 10 and High 4:2:2 fixtures, and with three frame workers on the two bundled clips, the temporal-direct multislice fixtures and the resolution change. [Full run](results/windows-x86_64-20261126/decode-paths)
+
+| Clip | Output mode | Mcycles/frame | Frames/billion cycles | Allocation calls/frame | Requested MiB/frame |
+|---|---|---:|---:|---:|---:|
+| SRPG9 | Deadlib | 40.72 | 24.56 | 11.71 | 3.272 |
+| SRPG9 | Deadlib recycled, SPS depth | 39.07 | 25.59 | 8.95 | 0.364 |
+| SRPG9 | FFmpeg native | 34.05 | 29.37 | 17.91 | 0.289 |
+| SRPG9 | FFmpeg packed | 37.22 | 26.86 | 18.91 | 3.255 |
+| SRPG10 | Deadlib | 30.42 | 32.87 | 9.33 | 3.158 |
+| SRPG10 | Deadlib recycled, SPS depth | 28.23 | 35.42 | 6.99 | 0.329 |
+| SRPG10 | FFmpeg native | 24.43 | 40.93 | 17.63 | 0.184 |
+| SRPG10 | FFmpeg packed | 28.27 | 35.38 | 18.63 | 3.151 |
