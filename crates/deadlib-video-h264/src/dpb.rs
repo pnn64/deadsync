@@ -550,7 +550,7 @@ pub struct Dpb {
     max_ref_frames: usize,
     entries: Vec<DpbEntry>,
     recycle_pictures: bool,
-    spare_picture: Option<Arc<DecodedPicture>>,
+    spare_pictures: Vec<Arc<DecodedPicture>>,
     // POC type 0 state
     prev_poc_msb: i32,
     prev_poc_lsb: u32,
@@ -569,7 +569,7 @@ impl Dpb {
             max_ref_frames,
             entries: Vec::new(),
             recycle_pictures: false,
-            spare_picture: None,
+            spare_pictures: Vec::new(),
             prev_poc_msb: 0,
             prev_poc_lsb: 0,
             prev_frame_num: 0,
@@ -584,13 +584,14 @@ impl Dpb {
     }
 
     pub(crate) fn take_spare_picture(&mut self) -> Option<Arc<DecodedPicture>> {
-        self.spare_picture.take()
+        self.spare_pictures.pop()
     }
 
     pub(crate) fn take_spare_motion(&mut self, blocks: usize) -> Option<Motion> {
-        let pic = Arc::get_mut(self.spare_picture.as_mut()?)?;
-        let motion = pic.motion.get_mut()?;
-        (motion.mv_l0.len() == blocks).then(|| core::mem::take(motion))
+        self.spare_pictures.iter_mut().rev().find_map(|pic| {
+            let motion = Arc::get_mut(pic)?.motion.get_mut()?;
+            (motion.mv_l0.len() == blocks).then(|| core::mem::take(motion))
+        })
     }
 
     /// Update capacity when a new SPS is parsed.
@@ -602,7 +603,7 @@ impl Dpb {
     pub fn clear(&mut self) {
         if self.recycle_pictures {
             for entry in self.entries.drain(..) {
-                Self::save_spare(&mut self.spare_picture, entry);
+                Self::save_spare(&mut self.spare_pictures, entry);
             }
         } else {
             self.entries.clear();
@@ -1553,7 +1554,7 @@ impl Dpb {
                 .entries
                 .extract_if(.., |e| e.reference == ReferenceStatus::Unused)
             {
-                Self::save_spare(&mut self.spare_picture, entry);
+                Self::save_spare(&mut self.spare_pictures, entry);
             }
         } else {
             self.entries
@@ -1561,7 +1562,10 @@ impl Dpb {
         }
     }
 
-    fn save_spare(spare: &mut Option<Arc<DecodedPicture>>, entry: DpbEntry) {
+    fn save_spare(spares: &mut Vec<Arc<DecodedPicture>>, entry: DpbEntry) {
+        // MMCO and IDR marking can retire several references at once.
+        // Cap retained pictures independently of the bitstream's DPB size.
+        const MAX_SPARE_PICTURES: usize = 4;
         let DpbEntry {
             mut pic,
             field_views,
@@ -1572,7 +1576,10 @@ impl Dpb {
         drop(frame_view);
         // A field or paired-frame view can still keep a reference alive.
         if Arc::get_mut(&mut pic).is_some() {
-            *spare = Some(pic);
+            if spares.len() == MAX_SPARE_PICTURES {
+                spares.remove(0);
+            }
+            spares.push(pic);
         }
     }
 }
@@ -1580,6 +1587,22 @@ impl Dpb {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clearing_the_dpb_keeps_a_bounded_reserve() {
+        let mut dpb = Dpb::new(8).recycle_pictures();
+        for frame_num in 0..8 {
+            dpb.insert(
+                make_pic(frame_num, frame_num as i32 * 2),
+                ReferenceStatus::ShortTerm,
+            );
+        }
+        dpb.clear();
+        for expected in (4..8).rev() {
+            assert_eq!(dpb.take_spare_picture().unwrap().frame_num, expected);
+        }
+        assert!(dpb.take_spare_picture().is_none());
+    }
 
     fn make_pic(frame_num: u32, poc: i32) -> Arc<DecodedPicture> {
         Arc::new(DecodedPicture::new_complete(
