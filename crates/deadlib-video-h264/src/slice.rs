@@ -125,13 +125,13 @@ fn read_long_term_idx(r: &mut BitstreamReader) -> Result<u32, &'static str> {
 
 /// Parse a slice header from RBSP data. Returns the header and a reader
 /// positioned at the start of slice data (macroblock layer).
-pub fn parse_slice_header(
-    rbsp: &[u8],
+pub fn parse_slice_header<'a>(
+    rbsp: &'a [u8],
     sps: &Sps,
     pps: &Pps,
     nal_unit_type: NalUnitType,
     nal_ref_idc: u8,
-) -> Result<(SliceHeader, BitstreamReader), &'static str> {
+) -> Result<(SliceHeader, BitstreamReader<'a>), &'static str> {
     let mut r = BitstreamReader::new(rbsp);
 
     let first_mb_in_slice = r.read_ue()?;
