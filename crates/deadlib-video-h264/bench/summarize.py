@@ -3,6 +3,7 @@
 import argparse
 import csv
 from collections import defaultdict
+from math import comb
 from pathlib import Path
 from statistics import median
 
@@ -78,6 +79,62 @@ with (root / "summary.csv").open("w", newline="") as output:
     writer.writeheader()
     writer.writerows(records)
 
+def median_interval(samples):
+    """Return a binomial interval for the median and its attainable coverage."""
+    values = sorted(samples)
+    n = len(values)
+    possibilities = 2**n
+    tail = 1  # At least the two sample extremes.
+    drop = 0
+    for k in range(1, n // 2):
+        next_tail = tail + comb(n, k)
+        if 40 * next_tail > possibilities:
+            break
+        tail = next_tail
+        drop = k
+    return values[drop], values[-1 - drop], 100 * (1 - 2 * tail / possibilities)
+
+
+pairs = [("deadlib", "ffmpeg-packed")]
+if "deadlib-surface" in modes:
+    pairs.append(("deadlib-surface", "ffmpeg-surface"))
+comparisons = []
+for stream in sorted(streams):
+    for deadlib_mode, ffmpeg_mode in pairs:
+        deadlib_key = (stream, deadlib_mode)
+        ffmpeg_key = (stream, ffmpeg_mode)
+        samples = [
+            (a["cycles"], b["cycles"])
+            for a, b in zip(cycle_runs[deadlib_key], cycle_runs[ffmpeg_key])
+        ]
+        cycle_changes = [100 * (a / b - 1) for a, b in samples]
+        throughput_changes = [100 * (b / a - 1) for a, b in samples]
+        low, high, coverage = median_interval(cycle_changes)
+        a = allocation_runs[deadlib_key][0]
+        b = allocation_runs[ffmpeg_key][0]
+        calls_a = a["allocations"] + a["reallocations"]
+        calls_b = b["allocations"] + b["reallocations"]
+        comparisons.append(
+            {
+                "stream": stream,
+                "deadlib_mode": deadlib_mode,
+                "ffmpeg_mode": ffmpeg_mode,
+                "cycle_rounds": len(samples),
+                "median_cycle_delta_pct": median(cycle_changes),
+                "median_throughput_delta_pct": median(throughput_changes),
+                "cycle_interval_low_pct": low,
+                "cycle_interval_high_pct": high,
+                "interval_coverage_pct": coverage,
+                "allocation_call_delta_pct": 100 * (calls_a / calls_b - 1),
+                "requested_byte_delta_pct": 100 * (a["requested_bytes"] / b["requested_bytes"] - 1),
+            }
+        )
+
+with (root / "paired-summary.csv").open("w", newline="") as output:
+    writer = csv.DictWriter(output, fieldnames=list(comparisons[0]))
+    writer.writeheader()
+    writer.writerows(comparisons)
+
 for r in records:
     spread = (r["cycle_max"] - r["cycle_min"]) / r["cycle_median"] * 100
     print(
@@ -89,4 +146,15 @@ for r in records:
         f'{r["allocation_calls_per_frame"]:6.2f} calls/frame, '
         f'{r["requested_mib_per_frame"]:5.2f} MiB/frame, '
         f'{spread:4.1f}% sampled spread'
+    )
+
+for r in comparisons:
+    print(
+        f'{r["stream"]:6} {r["deadlib_mode"]:15} vs {r["ffmpeg_mode"]:14} '
+        f'{r["median_cycle_delta_pct"]:+5.2f}% paired cycles, '
+        f'{r["median_throughput_delta_pct"]:+5.2f}% paired throughput, '
+        f'{r["allocation_call_delta_pct"]:+5.2f}% allocation calls, '
+        f'{r["requested_byte_delta_pct"]:+5.2f}% requested bytes, '
+        f'{r["interval_coverage_pct"]:.2f}% median cycle interval '
+        f'[{r["cycle_interval_low_pct"]:+.2f}%, {r["cycle_interval_high_pct"]:+.2f}%]'
     )

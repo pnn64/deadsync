@@ -14,6 +14,8 @@ The cycle executable runs serially on a pinned logical CPU. It records Windows `
 
 FFmpeg's native mode consumes its refcounted AVFrame directly. Its packed mode copies the visible planes to one fresh contiguous YUV buffer per picture. The default Rust build returns three owned, packed planes. The separate `surface` build emits decoded surfaces with the SPS reorder depth and releases each surface inside the output callback. The benchmark reports both output models for each decoder.
 
+`summary.csv` reports the per-mode medians. `paired-summary.csv` compares the two codecs within each rotating round and reports the median cycle and throughput changes, allocation deltas, and a binomial interval for the median cycle change. The coverage assumes independent rounds and can fall below 95% with fewer than six rounds.
+
 ## Reference implementation
 
 At ITGmania's FFmpeg revision `1041abd`, the H.264 decoder takes frame planes and picture tables from pools and carries its macroblock work tables across pictures. The intra predictor uses cached modes from the top and left neighbors. On x86, FFmpeg's deblock path transposes vertical edges and dispatches vector filters. The CABAC hot path uses an inlined, mask-based binary decoder and SSE2/AVX reconstruction kernels handle inverse transforms. [Picture allocation](https://ffmpeg.org/doxygen/trunk/h264__slice_8c_source.html) · [Frame pools](https://ffmpeg.org/doxygen/trunk/get__buffer_8c_source.html) · [Intra mode prediction](https://ffmpeg.org/doxygen/trunk/h264__mvpred_8h_source.html) · [x86 deblocking](https://github.com/FFmpeg/FFmpeg/blob/master/libavcodec/x86/h264_deblock.asm) · [CABAC](https://ffmpeg.org/doxygen/trunk/cabac__functions_8h_source.html) · [x86 H.264 DSP dispatch](https://ffmpeg.org/doxygen/trunk/h264dsp__init_8c_source.html)
@@ -376,3 +378,11 @@ The low-QP prototype also matched a 48-frame fixture with explicit deblocking an
 | Row-based filter coordinates | +0.08% | +0.13% |
 
 The P-skip build used 36.68 and 27.28 Mcycles/frame, yielding 27.26 and 36.66 frames per billion cycles. Packed FFmpeg used 36.69 and 28.71 Mcycles/frame. Median paired gaps were ?0.24% and ?4.48% across 10 rotating rounds on logical CPU 14. The SRPG10 samples varied substantially across rounds. [Paired cycle samples](results/windows-x86_64-20261126/p-skip-and-row-paired.csv)
+
+## Native output with P-skip
+
+The combined surface and P-skip build matched FFmpeg on both 1080p clips, temporal-direct progressive and MBAFF multislice, constrained CAVLC, the resolution change, low-QP, High 10, High 4:2:2 and cropped fixtures. Across 12 rounds on logical CPU 14, the median paired cycle gaps against native FFmpeg were +1.71% and ?3.91%. The 96.1% intervals were +0.66% to +2.95% and ?6.32% to +4.13%. Allocation totals matched the preceding picture-owned prototype. The packed mode in the combined build was 1.07% and 0.10% above the default packed build at the paired medians, so the release exposes native output through the separate `surface` feature. [Paired cycle samples](results/windows-x86_64-20261126/native-and-p-skip-paired.csv) ? [Allocation samples](results/windows-x86_64-20261126/native-and-p-skip-allocations.csv)
+
+## Motion-compensation candidates
+
+Both prototypes matched the two bundled clips and the progressive, MBAFF, constrained CAVLC and resolution-change references. Relative to `37a17faed`, delaying motion window calculations until a reference needed more published rows changed paired median cycles by +1.21% and ?0.43%. Blending fractional B-skip luma predictions directly into the destination changed them by +1.85% and ?1.59%. [Ten rotating paired rounds on logical CPU 2](results/windows-x86_64-20261126/motion-sample-paired.csv)
