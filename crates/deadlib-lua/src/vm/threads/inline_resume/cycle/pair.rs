@@ -6,8 +6,20 @@ const LOOP_LIMIT: usize = 48;
 #[derive(Clone, Copy)]
 enum ComparisonConsumer {
     None,
-    Bool { dst: usize, invert: bool },
-    Branch { target: usize, on: bool },
+    Bool {
+        dst: usize,
+        invert: bool,
+    },
+    BoolBranch {
+        dst: usize,
+        invert: bool,
+        target: usize,
+        on: bool,
+    },
+    Branch {
+        target: usize,
+        on: bool,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -16,6 +28,12 @@ enum Step {
     Move {
         dst: usize,
         src: usize,
+    },
+    MoveBranch {
+        dst: usize,
+        src: usize,
+        target: usize,
+        on: bool,
     },
     Load {
         dst: usize,
@@ -42,6 +60,11 @@ enum Step {
         slot: usize,
         wanted: usize,
     },
+    LookupAssert {
+        slot: usize,
+        source: usize,
+        wanted: usize,
+    },
     Resume(usize),
     PrepareResume {
         slot: usize,
@@ -56,6 +79,18 @@ fn builtin_assert(cx: &Context<'_, '_>, constant: u32) -> Option<Value> {
     };
     let value = cx.tables[slot_index(cx.env.0)].get_string(name);
     (value == Value::Native(0)).then_some(value)
+}
+
+fn branch_after(code: &[Instruction], pc: usize, register: u8) -> Option<(usize, bool)> {
+    let branch = code.get(pc)?;
+    if branch.a != register || branch.b != 0 {
+        return None;
+    }
+    match branch.op {
+        Op::JumpFalse => Some((branch.c as usize, false)),
+        Op::JumpTrue => Some((branch.c as usize, true)),
+        _ => None,
+    }
 }
 
 impl Step {
@@ -79,6 +114,13 @@ impl Step {
                         callee: src,
                         thread: cx.base + usize::from(argument.b),
                     }
+                } else if let Some((target, on)) = branch_after(cx.code, pc + 1, i.a) {
+                    Self::MoveBranch {
+                        dst,
+                        src,
+                        target,
+                        on,
+                    }
                 } else {
                     Self::Move { dst, src }
                 }
@@ -88,18 +130,44 @@ impl Step {
                 value: cx.constants[i.c as usize],
             },
             Op::Load => Self::Nop,
-            Op::GetGlobal => Self::Load {
-                dst,
-                value: builtin_assert(cx, i.c)?,
-            },
+            Op::GetGlobal => {
+                let value = builtin_assert(cx, i.c)?;
+                if let Some([argument, call]) = cx.code.get(pc + 1..pc + 3)
+                    && argument.op == Op::Move
+                    && argument.c != OPEN
+                    && usize::from(argument.a) == usize::from(i.a) + 1
+                    && call.op == Op::Call
+                    && call.a == i.a
+                    && call.b == 1
+                    && call.c <= 1
+                {
+                    Self::LookupAssert {
+                        slot: dst,
+                        source: cx.base + usize::from(argument.b),
+                        wanted: call.c as usize,
+                    }
+                } else {
+                    Self::Load { dst, value }
+                }
+            }
             Op::Add | Op::Sub => Self::Arithmetic(Numeric::decode(cx, i)?),
             Op::Neg => Self::Neg { dst, src },
             Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge => {
                 let following = match cx.code.get(pc + 1) {
-                    Some(next) if next.op == Op::Bool => ComparisonConsumer::Bool {
-                        dst: cx.base + usize::from(next.a),
-                        invert: next.c != 0,
-                    },
+                    Some(next) if next.op == Op::Bool => {
+                        let dst = cx.base + usize::from(next.a);
+                        let invert = next.c != 0;
+                        if let Some((target, on)) = branch_after(cx.code, pc + 2, next.a) {
+                            ComparisonConsumer::BoolBranch {
+                                dst,
+                                invert,
+                                target,
+                                on,
+                            }
+                        } else {
+                            ComparisonConsumer::Bool { dst, invert }
+                        }
+                    }
                     Some(next)
                         if matches!(next.op, Op::JumpFalse | Op::JumpTrue)
                             && next.b == COMPARE_BRANCH =>
@@ -195,6 +263,20 @@ pub(in crate::vm::threads::inline_resume) fn run(
         match step {
             Step::Nop => {}
             Step::Move { dst, src } => cx.registers[dst] = cx.registers[src],
+            Step::MoveBranch {
+                dst,
+                src,
+                target,
+                on,
+            } => {
+                let value = cx.registers[src];
+                cx.registers[dst] = value;
+                next = if value.is_truthy() == on {
+                    target
+                } else {
+                    pc + 2
+                };
+            }
             Step::Load { dst, value } => cx.registers[dst] = value,
             Step::Arithmetic(op) => {
                 if op.arithmetic(cx.registers).is_none() {
@@ -226,6 +308,16 @@ pub(in crate::vm::threads::inline_resume) fn run(
                         cx.registers[dst] = Value::Boolean(result ^ invert);
                         next += 1;
                     }
+                    ComparisonConsumer::BoolBranch {
+                        dst,
+                        invert,
+                        target,
+                        on,
+                    } => {
+                        let value = result ^ invert;
+                        cx.registers[dst] = Value::Boolean(value);
+                        next = if value == on { target } else { pc + 3 };
+                    }
                     ComparisonConsumer::Branch { target, on } => {
                         next = if result == on { target } else { next + 1 };
                     }
@@ -252,6 +344,25 @@ pub(in crate::vm::threads::inline_resume) fn run(
                 }
                 cx.registers[slot] = value;
                 *top = slot + wanted;
+            }
+            Step::LookupAssert {
+                slot,
+                source,
+                wanted,
+            } => {
+                let callee = Value::Native(0);
+                cx.registers[slot] = callee;
+                let value = cx.registers[source];
+                cx.registers[slot + 1] = value;
+                if !value.is_truthy() {
+                    // Lookup and argument setup already ran. The interpreter
+                    // still owns assert's error and its source location.
+                    pc += 2;
+                    break;
+                }
+                cx.registers[slot] = value;
+                *top = slot + wanted;
+                next += 2;
             }
             Step::PrepareResume {
                 slot,

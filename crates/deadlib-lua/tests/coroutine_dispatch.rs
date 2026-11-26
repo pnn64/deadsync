@@ -151,6 +151,52 @@ fn interleaved_resumes_sync_both_threads_on_loop_exit_and_fallback() {
 }
 
 #[test]
+fn interleaved_resumes_publish_each_thread_before_an_assertion_error() {
+    let program = compile(
+        br#"
+        local yield, resume = coroutine.yield, coroutine.resume
+        local function producer(first, last, step)
+            return coroutine.create(function()
+                for i = first, last, step do yield(i) end
+            end)
+        end
+        local left, right = producer(1, 30, 1), producer(-1, -30, -1)
+        parked_left, parked_right = left, right
+        local count, sum = 0, 0
+        while count < 30 do
+            count = count + 1
+            local ok, x = resume(left)
+            assert(ok)
+            local allowed = count < 18
+            assert(allowed)
+            local ok, y = resume(right)
+            assert(ok and x == count and y == -count)
+            sum = sum + x - y
+        end
+        return sum
+    "#,
+    )
+    .unwrap();
+    let inspect = compile(
+        b"local _, x = debug.getlocal(parked_left, 1, 4)
+          local _, y = debug.getlocal(parked_right, 1, 4)
+          return x, y",
+    )
+    .unwrap();
+    let run = |limit| {
+        let mut vm = Vm::new();
+        vm.set_instruction_limit(limit);
+        let error = vm.execute(&program).unwrap_err();
+        assert_eq!(
+            vm.execute(&inspect).unwrap(),
+            [Value::Number(18.0), Value::Number(-17.0)]
+        );
+        (error.kind(), error.line(), error.message_bytes().to_vec())
+    };
+    assert_eq!(run(None), run(Some(10_000)));
+}
+
+#[test]
 fn repeating_payload_resumes_update_the_frame_at_a_different_yield_site() {
     let program = compile(
         br#"
