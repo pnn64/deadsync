@@ -328,13 +328,15 @@ The early-delivery surface prototype emits a ready surface before reserving spac
 
 In five rotating cycle rounds, early delivery used 35.19 and 24.68 Mcycles/frame, equivalent to 28.41 and 40.52 frames per billion cycles. Native FFmpeg used 33.85 and 24.13 Mcycles/frame. The median of the per-round cycle gaps was 4.82% on SRPG9 and 1.97% on SRPG10. [Early-delivery cycle samples](results/windows-x86_64-20261126/surface-early-cycles.csv)
 
+With the full-pel B-skip change applied to early delivery, the median paired gaps were +4.06% and +0.91% against native FFmpeg over eight rounds. The prototype delivered 28.34 and 39.85 frames per billion cycles. Native FFmpeg delivered 29.33 and 39.94. Both runs matched the reference pixel hashes. [Early delivery with full-pel B-skip](results/windows-x86_64-20261126/surface-early-bskip-cycles.csv)
+
+A separate surface decoder with its own reorder queue produced 38.93 and 24.15 Mcycles/frame, or 25.69 and 41.41 frames per billion cycles. Its median paired cycle gaps against native FFmpeg were +6.17% and ?0.47%, with a wide range on SRPG9. The prototype requested 44.62 MB and 29.24 MB across the 150 frames, using 1,188 and 913 allocation or reallocation calls. Native FFmpeg used 45.41 MB and 29.00 MB with 2,687 and 2,644 calls. Pixel hashes matched across the two bundled clips, temporal-direct progressive and MBAFF multislice, constrained CAVLC and the resolution change. [Separate surface cycle samples](results/windows-x86_64-20261126/surface-isolated-cycles.csv) ? [Allocation samples](results/windows-x86_64-20261126/surface-isolated-allocations.csv)
+
 ## Horizontal quarter-pel interpolation
 
 An SSSE3 prototype used overlapping row loads and aligned byte shifts to filter a horizontal quarter-pel block. FFmpeg also uses aligned byte shifts to reuse the input window for its horizontal six-tap filter. The prototype matched FFmpeg on both bundled clips, temporal-direct progressive and MBAFF multislice, constrained CAVLC and the resolution change. [FFmpeg horizontal quarter-pel filter](https://github.com/FFmpeg/FFmpeg/blob/1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7/libavcodec/x86/h264_qpel_8bit.asm)
 
 Across 12 rotating paired rounds its median cycle changes relative to `c270f4779` were +0.08% and ?0.78%, with mixed results across runs. The existing decoder's median gaps against packed FFmpeg were +0.58% and +0.08%. Distribution-free median intervals with 96.1% coverage span ?1.51% to +1.93% and ?2.84% to +3.29%, respectively. The intervals assume independent rounds. The prototype stays out of the decoder. [Paired cycle samples](results/windows-x86_64-20261126/horizontal-qpel-paired.csv)
-
-With the full-pel B-skip change applied to early delivery, the median paired gaps were +4.06% and +0.91% against native FFmpeg over eight rounds. The prototype delivered 28.34 and 39.85 frames per billion cycles. Native FFmpeg delivered 29.33 and 39.94. Both runs matched the reference pixel hashes. [Early delivery with full-pel B-skip](results/windows-x86_64-20261126/surface-early-bskip-cycles.csv)
 
 ## Deblocking metadata and skip motion
 
@@ -346,3 +348,5 @@ The compact metadata candidate stored block-zero motion alongside the deblocking
 | Reused B-skip uniform-motion check | +1.23% | ?0.41% |
 
 The eight-round cycle comparison showed a regression on SRPG9 for both candidates. [Paired cycle samples](results/windows-x86_64-20261126/deblock-and-skip-paired.csv)
+
+A third candidate used the representatives of the four 8x8 groups to check uniform B-skip motion where inference gives all four blocks in a group the same result. Median paired changes were ?0.20% on SRPG9 and +0.65% on SRPG10. It matched the six reference fixtures and stayed out of the decoder. [Grouped B-skip samples](results/windows-x86_64-20261126/grouped-b-skip-paired.csv)
