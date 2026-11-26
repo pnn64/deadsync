@@ -751,8 +751,14 @@ fn indexed8_rgba(
     entry_bytes: usize,
 ) -> Result<Vec<u8>, Error> {
     let mut colors = [[0; 4]; 256];
-    for (color, entry) in colors.iter_mut().zip(palette.chunks_exact(entry_bytes)) {
-        *color = [entry[2], entry[1], entry[0], 255];
+    if entry_bytes == 3 {
+        for (color, &[b, g, r]) in colors.iter_mut().zip(palette.as_chunks::<3>().0) {
+            *color = [r, g, b, 255];
+        }
+    } else {
+        for (color, &[b, g, r, _]) in colors.iter_mut().zip(palette.as_chunks::<4>().0) {
+            *color = [r, g, b, 255];
+        }
     }
     let mut samples = Vec::new();
     reserve(&mut samples, header.pixel_count)?;
@@ -767,7 +773,13 @@ fn indexed8_rgba(
         {
             return Err(Error::Invalid("pixel index exceeds the palette"));
         }
-        samples.extend(indices.iter().map(|&i| colors[usize::from(i)]));
+        let (quads, tail) = indices.as_chunks::<4>();
+        samples.extend(
+            quads
+                .iter()
+                .flat_map(|&quad| quad.map(|i| colors[usize::from(i)])),
+        );
+        samples.extend(tail.iter().map(|&i| colors[usize::from(i)]));
         Ok(())
     };
     let width = header.info.width as usize;
@@ -783,9 +795,7 @@ fn indexed8_rgba(
 
 fn rgb24_rgba(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> {
     #[cfg(target_arch = "x86_64")]
-    if header.pixel_count >= 512
-        && let Some(samples) = x86::rgb24_rgba(source, header)
-    {
+    if let Some(samples) = x86::bgr_rgba::<3>(source, header) {
         return samples;
     }
     let width = header.info.width as usize;
@@ -832,6 +842,14 @@ fn rgbx32_rgba(source: &[u8], header: &Header, rgb: [Channel; 3]) -> Result<Vec<
             [r, g, b, 255]
         }),
     }
+}
+
+fn bgra32_rgba(source: &[u8], header: &Header) -> Result<Vec<u8>, Error> {
+    #[cfg(target_arch = "x86_64")]
+    if let Some(samples) = x86::bgr_rgba::<4>(source, header) {
+        return samples;
+    }
+    map_rows(source, header, |[b, g, r, a]| [r, g, b, a])
 }
 
 fn bgra_alpha_is_zero(source: &[u8], reverse: bool) -> bool {
@@ -946,9 +964,7 @@ fn masked_samples(
             }),
         },
         (32, Some(alpha)) => match [red.mask, green.mask, blue.mask, alpha.mask] {
-            [0xff0000, 0xff00, 0xff, 0xff000000] => {
-                map_rows::<4, 4>(source, header, |bgra| [bgra[2], bgra[1], bgra[0], bgra[3]])
-            }
+            [0xff0000, 0xff00, 0xff, 0xff000000] => bgra32_rgba(source, header),
             [0xff, 0xff00, 0xff0000, 0xff000000] => {
                 map_rows::<4, 4>(source, header, std::convert::identity)
             }

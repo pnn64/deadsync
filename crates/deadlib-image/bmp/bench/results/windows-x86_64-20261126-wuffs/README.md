@@ -44,3 +44,13 @@ on two focused repetitions. For all 26 matched RGB24 cases, 25 were within
 varied between 3.016× and 0.957× across the passes. The complete-pixel and
 padding checks also exercised the scalar path and the SIMD tail.
 [Raw RGB24 passes](direct-ssse3-rgb24.tsv.gz).
+
+## Eight-pixel shuffle and grouped palette lookups
+
+AVX2 processes eight BGR or BGRA pixels per shuffle. SSSE3 and portable Rust
+paths remain available. The ordinary `decode` API also uses the new kernel for
+standard explicit BGRA masks. Indexed input uses a four-pixel lookup group and
+fixed-width palette reads. On two full passes, 150 of 155 shared exact cases
+met the 1% target using the median paired ratio. The largest remaining gap was
+6.2%, on the suite's OS/2 v2 40-byte indexed file. Three other indexed cases
+and top-down 1920×1080 RGB24 also exceeded 1%. [Raw AVX2 passes](direct-avx2.tsv.gz).

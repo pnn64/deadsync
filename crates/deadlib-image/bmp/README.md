@@ -2,8 +2,8 @@
 
 A pure Rust BMP decoder and encoder with **zero Cargo dependencies**, including
 development dependencies. It owns its pixel model so it can be used independently
-of `deadlib-image` or the application. The x86-64 RGB24 shuffle uses a CPU-checked
-SIMD kernel with a portable Rust fallback.
+of `deadlib-image` or the application. The x86-64 BGR24 and BGRA32 shuffles use
+CPU-checked SIMD kernels with portable Rust fallbacks.
 
 ```rust
 use deadlib_image_bmp::{decode, encode};
