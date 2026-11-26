@@ -19,13 +19,13 @@ pub(crate) fn predict<const W: usize>(
     }
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 use x86::rows;
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
 use scalar_rows as rows;
 
-#[cfg(any(test, not(target_arch = "x86_64")))]
+#[cfg(any(test, not(all(target_arch = "x86_64", target_feature = "sse2"))))]
 fn scalar_rows<const W: usize, const X: usize, const Y: usize, const AVG: bool>(
     dst: &mut [u8],
     dst_stride: usize,
@@ -62,7 +62,7 @@ fn scalar_rows<const W: usize, const X: usize, const Y: usize, const AVG: bool>(
     }
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[allow(unsafe_code)]
 mod x86 {
     use core::arch::x86_64::*;
@@ -142,7 +142,7 @@ mod x86 {
     }
 }
 
-#[cfg(all(test, target_arch = "x86_64"))]
+#[cfg(all(test, target_arch = "x86_64", target_feature = "sse2"))]
 mod tests {
     use super::*;
 

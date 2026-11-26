@@ -16,19 +16,19 @@ const COLUMN_SHIFT: i32 = 20;
 const COLUMN_BIAS: i16 = 32;
 
 pub(crate) fn inverse(coefficients: &[i16; 64]) -> [i16; 64] {
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+    return x86::inverse(coefficients);
+    #[cfg(not(all(target_arch = "x86_64", target_feature = "sse2")))]
+    scalar(coefficients)
+}
+
+#[cfg(any(test, not(all(target_arch = "x86_64", target_feature = "sse2"))))]
+fn scalar(coefficients: &[i16; 64]) -> [i16; 64] {
     if coefficients[1..].iter().all(|&coeff| coeff == 0) {
         let dc = i32::from(coefficients[0]) * 8 + i32::from(COLUMN_BIAS);
         return [((dc * BASIS[0][0]) >> COLUMN_SHIFT) as i16; 64];
     }
 
-    #[cfg(target_arch = "x86_64")]
-    return x86::inverse(coefficients);
-    #[cfg(not(target_arch = "x86_64"))]
-    scalar(coefficients)
-}
-
-#[cfg(any(test, not(target_arch = "x86_64")))]
-fn scalar(coefficients: &[i16; 64]) -> [i16; 64] {
     let mut horizontal = [[0i16; 8]; 8];
     for (row, transformed) in coefficients.as_chunks::<8>().0.iter().zip(&mut horizontal) {
         if row[1..].iter().all(|&coeff| coeff == 0) {
@@ -63,7 +63,7 @@ fn scalar(coefficients: &[i16; 64]) -> [i16; 64] {
     samples
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 #[allow(unsafe_code)]
 mod x86 {
     use super::{BASIS, COLUMN_BIAS, COLUMN_SHIFT, ROW_BIAS, ROW_SHIFT};
@@ -86,15 +86,17 @@ mod x86 {
         // SSE2 is baseline on x86_64. Loads and stores touch eight elements
         // of a complete 8x8 block at a time.
         unsafe {
-            let rows = core::array::from_fn(|y| {
-                let row = &coefficients.as_chunks::<8>().0[y];
-                if row[1..].iter().all(|&coeff| coeff == 0) {
-                    return _mm_set1_epi16(row[0] * 8);
-                }
-                let values = _mm_loadu_si128(row.as_ptr().cast());
-                line::<ROW_SHIFT>(values, _mm_set1_epi32(ROW_BIAS))
-            });
+            let rows: [__m128i; 8] =
+                core::array::from_fn(|y| _mm_loadu_si128(coefficients.as_ptr().add(y * 8).cast()));
+            let middle = rows[1..7]
+                .iter()
+                .copied()
+                .fold(_mm_setzero_si128(), |a, b| _mm_or_si128(a, b));
+            if empty(middle) {
+                return outer_rows(rows[0], rows[7]);
+            }
 
+            let rows = rows.map(|values| horizontal(values));
             let columns = transpose(rows);
             let dc_bias = _mm_cvtsi32_si128(i32::from(COLUMN_BIAS));
             let columns = columns.map(|column| {
@@ -110,6 +112,42 @@ mod x86 {
                 .zip(transpose(columns))
             {
                 _mm_storeu_si128(row.as_mut_ptr().cast(), values);
+            }
+            output
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn empty(values: __m128i) -> bool {
+        unsafe { _mm_movemask_epi8(_mm_cmpeq_epi16(values, _mm_setzero_si128())) == 0xffff }
+    }
+
+    #[inline(always)]
+    unsafe fn horizontal(values: __m128i) -> __m128i {
+        unsafe {
+            if empty(_mm_srli_si128::<2>(values)) {
+                _mm_set1_epi16(_mm_extract_epi16::<0>(values) as i16 * 8)
+            } else {
+                line::<ROW_SHIFT>(values, _mm_set1_epi32(ROW_BIAS))
+            }
+        }
+    }
+
+    #[inline]
+    unsafe fn outer_rows(first: __m128i, last: __m128i) -> [i16; 64] {
+        unsafe {
+            let first = _mm_add_epi16(horizontal(first), _mm_set1_epi16(COLUMN_BIAS));
+            let last = horizontal(last);
+            let low = _mm_unpacklo_epi16(first, last);
+            let high = _mm_unpackhi_epi16(first, last);
+            let mut output = [0; 64];
+            // Mismatch control often leaves a single extra coefficient
+            // in the last row. Only these two vertical frequencies contribute.
+            for (row, basis) in output.as_chunks_mut::<8>().0.iter_mut().zip(BASIS) {
+                let weights = _mm_set1_epi32(BASIS[0][0] | (basis[7] << 16));
+                let a = _mm_srai_epi32::<COLUMN_SHIFT>(_mm_madd_epi16(low, weights));
+                let b = _mm_srai_epi32::<COLUMN_SHIFT>(_mm_madd_epi16(high, weights));
+                _mm_storeu_si128(row.as_mut_ptr().cast(), _mm_packs_epi32(a, b));
             }
             output
         }
@@ -179,7 +217,7 @@ mod x86 {
     }
 }
 
-#[cfg(all(test, target_arch = "x86_64"))]
+#[cfg(all(test, target_arch = "x86_64", target_feature = "sse2"))]
 mod tests {
     use super::*;
 
@@ -195,6 +233,12 @@ mod tests {
                 }
                 assert_eq!(inverse(&block), scalar(&block));
             }
+        }
+        for last in [-2048, -1, 0, 1, 2047] {
+            let mut block = [0; 64];
+            block[..8].copy_from_slice(&[1231, 221, -192, 4, 0, 0, 0, 0]);
+            block[63] = last;
+            assert_eq!(inverse(&block), scalar(&block));
         }
     }
 }
