@@ -1861,19 +1861,34 @@ pub(crate) fn finish_output(
             ps.frame.u.truncate(chroma_w * chroma_h * bps);
             ps.frame.v.truncate(chroma_w * chroma_h * bps);
         } else {
-            // In bytes: stride, x and w scaled by the sample size
-            let crop = |plane: &[u8], stride: usize, x: usize, y: usize, w: usize, h: usize| {
-                let (stride, x, w) = (stride * bps, x * bps, w * bps);
-                let mut out = vec![0u8; w * h];
-                for r in 0..h {
-                    let src = (y + r) * stride + x;
-                    out[r * w..(r + 1) * w].copy_from_slice(&plane[src..src + w]);
-                }
-                out
-            };
-            ps.frame.y = crop(&ps.frame.y, coded_w, x0, y0, display_w, display_h);
-            ps.frame.u = crop(&ps.frame.u, chroma_coded_w, cx0, cy0, chroma_w, chroma_h);
-            ps.frame.v = crop(&ps.frame.v, chroma_coded_w, cx0, cy0, chroma_w, chroma_h);
+            // Compact forward. Each destination row ends before the
+            // source of the next row.
+            let crop =
+                |plane: &mut Vec<u8>, stride: usize, x: usize, y: usize, w: usize, h: usize| {
+                    let (stride, x, w) = (stride * bps, x * bps, w * bps);
+                    for r in 0..h {
+                        let src = (y + r) * stride + x;
+                        plane.copy_within(src..src + w, r * w);
+                    }
+                    plane.truncate(w * h);
+                };
+            crop(&mut ps.frame.y, coded_w, x0, y0, display_w, display_h);
+            crop(
+                &mut ps.frame.u,
+                chroma_coded_w,
+                cx0,
+                cy0,
+                chroma_w,
+                chroma_h,
+            );
+            crop(
+                &mut ps.frame.v,
+                chroma_coded_w,
+                cx0,
+                cy0,
+                chroma_w,
+                chroma_h,
+            );
         }
     }
 
