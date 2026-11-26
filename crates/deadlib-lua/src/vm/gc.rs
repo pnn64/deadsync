@@ -1086,6 +1086,10 @@ impl Vm {
         self.gc.phase == Phase::Pause && self.gc.running == 0 && !self.gc.closing
     }
 
+    pub(super) fn gc_stopped_at_pause(&self) -> bool {
+        self.gc.stopped && self.can_reuse_loaded_program()
+    }
+
     pub(super) fn can_skip_gc_checkpoint(&self) -> bool {
         self.gc.phase == Phase::Pause && self.gc_checkpoint_idle()
     }

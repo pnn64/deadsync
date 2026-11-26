@@ -1,12 +1,11 @@
 use super::{
-    BODY_LIMIT, Body, Instruction, Op, Operand, Reduction, STR_SUB, Series, Value, Vm, integer,
-    slot_index,
+    BODY_LIMIT, Body, Cell, EXACT_INTEGER, FrameKind, Instruction, Op, Operand, Reduction, STR_SUB,
+    Series, Value, Vm, integer, slot_index,
 };
 use crate::{StringId, TableId};
 
 struct SliceSpan {
     source: StringId,
-    table: TableId,
     first: i64,
     last: i64,
     first_step: i64,
@@ -15,7 +14,7 @@ struct SliceSpan {
 
 impl Vm {
     #[inline(never)]
-    pub(super) fn reduce_substring_array_loop(
+    pub(super) fn reduce_substring_loop(
         &mut self,
         base: usize,
         control: usize,
@@ -31,12 +30,10 @@ impl Vm {
         let [prefix @ .., call, store] = body else {
             return None;
         };
-        if store.op != Op::SetTable
+        if !matches!(store.op, Op::SetTable | Op::SetUpvalue)
             || call.op != Op::Call
             || call.b != 3
             || call.c != 1
-            || store.c != u32::from(call.a)
-            || usize::from(store.b) != control + 3
             || usize::from(call.a) <= control + 3
             || body.len() > BODY_LIMIT
             || !self.sort_fast_context()
@@ -47,12 +44,32 @@ impl Vm {
             return None;
         }
         let internal = base + control;
-        if self.registers[internal + 2] != Value::Number(1.0) {
+        let step = integer(self.registers[internal + 2])?;
+        let upvalue = match store.op {
+            Op::SetTable
+                if step == 1
+                    && store.c == u32::from(call.a)
+                    && usize::from(store.b) == control + 3 =>
+            {
+                None
+            }
+            Op::SetUpvalue if store.a == call.a && self.gc_stopped_at_pause() => {
+                Some(self.substring_result_cell(prefix, store.c as usize)?)
+            }
+            _ => return None,
+        };
+        let previous = integer(self.registers[internal])?;
+        let limit = integer(self.registers[internal + 1])?;
+        let first = previous + step;
+        if !(step > 0 && first <= limit || step < 0 && first >= limit) {
             return None;
         }
-        let start = u32::try_from(integer(self.registers[internal])?).ok()? as usize;
-        let end = u32::try_from(integer(self.registers[internal + 1])?).ok()? as usize;
-        if end.saturating_sub(start) < 2 {
+        let iterations = (limit - first) / step + 1;
+        if iterations < 2 {
+            return None;
+        }
+        let last = first + (iterations - 1) * step;
+        if (last + step).abs() > EXACT_INTEGER {
             return None;
         }
         if self.frames.len() == self.frames.capacity()
@@ -62,42 +79,90 @@ impl Vm {
             return Some(Reduction::Retry);
         }
 
-        let indices = Series {
-            first: start as i128 + 1,
-            last: end as i128,
-        };
         let mut analysis = Body::new(
             self,
             &self.registers[base..],
             self.programs[program].bound_constants(prototype),
             control,
             None,
-            indices,
-            indices.last - indices.first + 1,
+            Series { first, last }.checked()?,
+            iterations,
         )?;
-        let mut span = analysis.substring_store(prefix, *call, *store)?;
+        let mut span = analysis.substring_span(prefix, *call)?;
+        let count = usize::try_from(iterations - 1).ok()?;
 
         // Leave the last iteration to dispatch to materialize its scratch
         // registers and stack top. At a GC checkpoint, resume ordinary calls
         // before a boundary where allocation or a collector callback can run.
-        let stop = self.write_substring_spans(start, end - 1, &mut span);
-        if stop != start {
-            let index = Value::Number(stop as f64);
+        let written = if let Some(cell) = upvalue {
+            self.write_substring_upvalue(cell, count, &mut span)
+        } else {
+            let table = analysis.table(usize::from(store.a))?;
+            let start = u32::try_from(previous).ok()? as usize;
+            let end = u32::try_from(last).ok()? as usize - 1;
+            self.write_substring_spans(table, start, end, &mut span) - start
+        };
+        if written != 0 {
+            let index = Value::Number((previous + (written as i128) * step) as f64);
             self.registers[internal] = index;
             self.registers[internal + 3] = index;
             self.gc.pending = false;
         }
-        if stop == end - 1 {
-            Some(Reduction::Applied(
-                (stop - start) as u64 * (code.len() + 1) as u64,
-            ))
+        if written == count || upvalue.is_some() {
+            Some(Reduction::Applied(written as u64 * (code.len() + 1) as u64))
         } else {
             Some(Reduction::Retry)
         }
     }
 
-    fn write_substring_spans(&mut self, start: usize, end: usize, span: &mut SliceSpan) -> usize {
-        let table = slot_index(span.table.0);
+    fn substring_result_cell(&self, prefix: &[Instruction], index: usize) -> Option<usize> {
+        let FrameKind::Lua(function) = self.frames.last()?.function else {
+            return None;
+        };
+        let cells = &self.functions[slot_index(function.0)].upvalues;
+        let cell = cells[index] as usize;
+        if !matches!(self.upvalues[cell], Cell::Closed(_))
+            || prefix
+                .iter()
+                .any(|i| i.op == Op::GetUpvalue && cells[i.c as usize] as usize == cell)
+        {
+            return None;
+        }
+        Some(cell)
+    }
+
+    fn write_substring_upvalue(
+        &mut self,
+        cell: usize,
+        count: usize,
+        span: &mut SliceSpan,
+    ) -> usize {
+        let mut values = [Value::Nil; 128];
+        let mut written = 0;
+        while written < count {
+            let batch = (count - written).min(values.len());
+            let actual = self.intern_substring_span(span, &mut values[..batch], usize::MAX);
+            if actual != 0 {
+                // The closed cell has no readers in this loop and no collector
+                // or callback can run. Publish the latest completed assignment.
+                self.upvalues[cell] = Cell::Closed(values[actual - 1]);
+                written += actual;
+            }
+            if actual < batch {
+                break;
+            }
+        }
+        written
+    }
+
+    fn write_substring_spans(
+        &mut self,
+        table: TableId,
+        start: usize,
+        end: usize,
+        span: &mut SliceSpan,
+    ) -> usize {
+        let table = slot_index(table.0);
         let mut values = [Value::Nil; 128];
         let mut written = start;
         while written < end {
@@ -114,44 +179,7 @@ impl Vm {
             };
             let before = target.heap_bytes();
             let growth = growth - target.dense_write_growth(capacity);
-            let initial_debt = self.strings.bytes.allocated;
-            let width = (span.last - span.first + 1) as usize;
-            let block = if (16..=64).contains(&width)
-                && span.first_step == span.last_step
-                && span.first_step.unsigned_abs() >= width as u64
-                && stop - written >= 16
-            {
-                self.strings.pack_substrings(
-                    span.source,
-                    span.first - 1,
-                    span.first_step,
-                    width,
-                    stop - written,
-                    growth,
-                )
-            } else {
-                None
-            };
-            let mut count = 0;
-            for value in &mut values[..stop - written] {
-                let result = if let Some(block) = &block {
-                    self.strings
-                        .intern_packed(block, count * (width + 1), width)
-                } else {
-                    let range = (span.first - 1) as usize..span.last as usize;
-                    self.strings.substring(span.source, range)
-                };
-                let Ok(id) = result else {
-                    break;
-                };
-                if self.strings.bytes.allocated - initial_debt > growth {
-                    break;
-                }
-                *value = Value::String(id);
-                span.first += span.first_step;
-                span.last += span.last_step;
-                count += 1;
-            }
+            let count = self.intern_substring_span(span, &mut values[..stop - written], growth);
             if count == 0 {
                 break;
             }
@@ -182,15 +210,57 @@ impl Vm {
         }
         written
     }
+
+    fn intern_substring_span(
+        &mut self,
+        span: &mut SliceSpan,
+        values: &mut [Value],
+        growth: usize,
+    ) -> usize {
+        let initial_debt = self.strings.bytes.allocated;
+        let width = (span.last - span.first + 1) as usize;
+        let block = if (16..=64).contains(&width)
+            && span.first_step == span.last_step
+            && span.first_step.unsigned_abs() >= width as u64
+            && values.len() >= 16
+        {
+            self.strings.pack_substrings(
+                span.source,
+                span.first - 1,
+                span.first_step,
+                width,
+                values.len(),
+                growth,
+            )
+        } else {
+            None
+        };
+        let mut count = 0;
+        for value in values {
+            let result = if let Some(block) = &block {
+                self.strings
+                    .intern_packed(block, count * (width + 1), width)
+            } else {
+                let range = (span.first - 1) as usize..span.last as usize;
+                self.strings.substring(span.source, range)
+            };
+            let Ok(id) = result else {
+                break;
+            };
+            if self.strings.bytes.allocated - initial_debt > growth {
+                break;
+            }
+            *value = Value::String(id);
+            span.first += span.first_step;
+            span.last += span.last_step;
+            count += 1;
+        }
+        count
+    }
 }
 
 impl Body<'_> {
-    fn substring_store(
-        &mut self,
-        prefix: &[Instruction],
-        call: Instruction,
-        store: Instruction,
-    ) -> Option<SliceSpan> {
+    fn substring_span(&mut self, prefix: &[Instruction], call: Instruction) -> Option<SliceSpan> {
         for i in prefix {
             let destination = usize::from(i.a);
             if destination <= self.control + 3 {
@@ -222,7 +292,6 @@ impl Body<'_> {
         let last = self.read(call + 3)?;
         let first = self.series(first)?;
         let last = self.series(last)?;
-        let table = self.table(usize::from(store.a))?;
         let bytes = self.vm.strings.bytes[slot_index(source.0)].len() as i128;
         if self.read_initial[call]
             || self
@@ -241,7 +310,6 @@ impl Body<'_> {
         let intervals = self.iterations - 1;
         Some(SliceSpan {
             source,
-            table,
             first: first.first as i64,
             last: last.first as i64,
             first_step: ((first.last - first.first) / intervals) as i64,
@@ -314,6 +382,69 @@ impl Body<'_> {
             })
         } else {
             Some(index)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stopped_gc_preserves_every_interned_slice_and_loop_carried_upvalue_reads() {
+        let program = crate::compile(
+            br#"
+            collectgarbage('collect')
+            collectgarbage('stop')
+            local source, sub, last = input, string.sub, nil
+            local function work(first, limit, step)
+                for offset = first, limit, step do
+                    last = sub(source, offset, offset + 23)
+                end
+                return last
+            end
+            local function shorten()
+                last = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                for offset = 1, 4 do
+                    last = sub(last, offset, offset + 4)
+                end
+                return last
+            end
+            return work, shorten
+            "#,
+        )
+        .unwrap();
+        let source: Vec<_> = (0..64u32)
+            .flat_map(|index| format!("{index:024x}").into_bytes())
+            .collect();
+        for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+            let input = vm.try_intern(&source).unwrap();
+            vm.set_global(b"input", input).unwrap();
+            let [work, shorten] = *vm.execute(&program).unwrap() else {
+                panic!("expected two closures");
+            };
+            let call = [1.0, source.len() as f64, 24.0].map(Value::Number);
+            let [Value::String(result)] = *vm.call(work, &call).unwrap() else {
+                panic!("expected last substring");
+            };
+            assert_eq!(
+                vm.string_bytes(result),
+                source.last_chunk::<24>().map(|b| &b[..])
+            );
+            assert!(!vm.strings.packed.is_empty());
+            for chunk in source.chunks_exact(24) {
+                assert!(vm.strings.find(chunk).is_some());
+            }
+
+            let call = [(source.len() - 23) as f64, 1.0, -24.0].map(Value::Number);
+            let [Value::String(first)] = *vm.call(work, &call).unwrap() else {
+                panic!("expected first substring");
+            };
+            assert_eq!(vm.string_bytes(first), Some(&source[..24]));
+            let [Value::String(shortened)] = *vm.call(shorten, &[]).unwrap() else {
+                panic!("expected shortened string");
+            };
+            assert_eq!(vm.string_bytes(shortened), Some(&b""[..]));
         }
     }
 }

@@ -652,7 +652,7 @@ impl Vm {
             return Some(reduction);
         }
         if let Some(reduction) =
-            self.reduce_substring_array_loop(base, control, body, program, prototype_index)
+            self.reduce_substring_loop(base, control, body, program, prototype_index)
         {
             return Some(reduction);
         }
