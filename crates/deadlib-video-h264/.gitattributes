@@ -1,0 +1,4 @@
+tests/fixtures/*.h264 binary
+tests/fixtures/*.avcc binary
+tests/fixtures/*.avcc-config binary
+tests/fixtures/*.yuv binary

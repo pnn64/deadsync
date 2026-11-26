@@ -1,0 +1,16 @@
+[package]
+name = "deadlib-video-h264"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+description = "Dependency-free H.264/AVC video decoder"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/pnn64/deadsync"
+keywords = ["h264", "avc", "video", "decoder"]
+categories = ["multimedia::video"]
+
+[features]
+default = ["std"]
+std = []
+
+[workspace]
