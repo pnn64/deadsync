@@ -5,8 +5,6 @@
 //! local profiles or mutate global game state; root import orchestration owns
 //! that boundary.
 
-mod ini;
-
 pub mod app_runtime;
 pub mod detect;
 pub mod itg;

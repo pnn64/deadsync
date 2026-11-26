@@ -208,7 +208,8 @@ theme to describe an input or store a setting:
   The shell supplies StepManiaX lane input, translates judgments into panel
   effects, and resolves result grades to GIF suffixes. The SMX driver tracks
   lane events and drives panel animations.
-- Config and profiles read INI files with `deadlib-platform::ini`.
+- Config, profiles, and profile import share `deadlib-platform::ini`.
+  Import opts into legacy INI files with empty property names.
   `deadsync-core::session_flow` defines the game, preferred play style, and
   preferred play mode shared by both crates. The shell supplies machine defaults
   and the callback for saving default profile IDs. Profiles resolve session

@@ -1600,6 +1600,7 @@ dependencies = [
 name = "deadsync-import"
 version = "0.1.0"
 dependencies = [
+ "deadlib-platform",
  "deadsync-chart",
  "deadsync-profile",
  "deadsync-rules",

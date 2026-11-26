@@ -11,11 +11,11 @@ use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use deadlib_platform::ini::SimpleIni;
 use deadsync_score::ImportedHighScore;
 use rustc_hash::FxBuildHasher;
 
 use super::xml::{self, XmlNode};
-use crate::ini::SimpleIni;
 
 /// Editable profile metadata from `Editable.ini`.
 #[derive(Debug, Clone, Default)]
@@ -261,7 +261,7 @@ pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
 
 fn read_editable(path: &Path) -> ItgEditable {
     let mut ini = SimpleIni::new();
-    if ini.load(path).is_err() {
+    if ini.load_allowing_empty_keys(path).is_err() {
         return ItgEditable::default();
     }
     let get = |k: &str| ini.get("Editable", k).map(str::trim);
@@ -285,7 +285,7 @@ fn read_online_keys(dir: &Path) -> ItgOnlineKeys {
 
     if let Some(path) = find_case_insensitive(dir, "GrooveStats.ini") {
         let mut ini = SimpleIni::new();
-        if ini.load(&path).is_ok() {
+        if ini.load_allowing_empty_keys(&path).is_ok() {
             keys.groovestats_api_key = ini
                 .get("GrooveStats", "ApiKey")
                 .unwrap_or_default()
@@ -305,7 +305,7 @@ fn read_online_keys(dir: &Path) -> ItgOnlineKeys {
 
     if let Some(path) = find_case_insensitive(dir, "ArrowCloud.ini") {
         let mut ini = SimpleIni::new();
-        if ini.load(&path).is_ok() {
+        if ini.load_allowing_empty_keys(&path).is_ok() {
             keys.arrowcloud_api_key = ini
                 .get("ArrowCloud", "ApiKey")
                 .unwrap_or_default()
@@ -323,8 +323,8 @@ fn read_online_keys(dir: &Path) -> ItgOnlineKeys {
 fn read_simply_love(dir: &Path) -> HashMap<String, String> {
     let mut ini = SimpleIni::new();
     if let Some(path) = find_case_insensitive(dir, "Simply Love UserPrefs.ini")
-        && ini.load(&path).is_ok()
-        && let Some(section) = ini.take_section("Simply Love")
+        && ini.load_allowing_empty_keys(&path).is_ok()
+        && let Some(section) = ini.into_sections().remove("Simply Love")
     {
         return section.into_iter().collect();
     }

@@ -794,8 +794,8 @@ mod tests {
                 "PlayerOptionsSingles",
                 &out,
             );
-            let mut ini = crate::ini::SimpleIni::new();
-            ini.load_from_str(&content);
+            let mut ini = deadlib_platform::ini::SimpleIni::new();
+            ini.load_str(&content);
             let reloaded = deadsync_profile::load_player_options_section(
                 true,
                 |key| ini.get("PlayerOptionsSingles", key).map(str::to_owned),
