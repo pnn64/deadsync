@@ -652,6 +652,11 @@ impl Vm {
             return Some(reduction);
         }
         if let Some(reduction) =
+            self.reduce_substring_array_loop(base, control, body, program, prototype_index)
+        {
+            return Some(reduction);
+        }
+        if let Some(reduction) =
             self.reduce_branched_array_loop(base, control, start_pc, loop_pc, prototype)
         {
             return Some(reduction);

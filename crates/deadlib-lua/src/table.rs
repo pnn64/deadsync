@@ -989,6 +989,9 @@ impl Table {
         self.touch_array();
         Ok(())
     }
+    pub(crate) fn dense_write_growth(&self, capacity: usize) -> usize {
+        capacity.saturating_sub(self.array.allocated_capacity()) * size_of::<Value>()
+    }
     /// A live string-keyed hash entry already owns its key. Replacing its
     /// scalar value cannot allocate, add a GC edge or change traversal order.
     #[inline]

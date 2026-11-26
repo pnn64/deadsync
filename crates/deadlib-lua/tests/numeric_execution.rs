@@ -682,6 +682,57 @@ fn paired_array_sums_repair_changed_blocks_and_preserve_rounding() {
 }
 
 #[test]
+fn dense_substring_stores_preserve_bytes_and_observable_fallbacks() {
+    let program = compile(
+        br#"
+        local function setup(source)
+            local sub, slices = string.sub, {}
+            local function fill(lower, upper)
+                for i = lower, upper do
+                    local first = 6000 - 3 * i
+                    slices[i] = sub(source, first, first + i)
+                end
+            end
+            return fill, slices, function(replacement) sub = replacement end
+        end
+        local parts = {}
+        for i = 1, 1100 do parts[i] = string.format("%04d\000\255", i) end
+        local source = table.concat(parts)
+        local fill, slices, replace = setup(source)
+        parts = nil
+        collectgarbage("collect")
+        fill(1, 650)
+        fill(300, 800)
+        collectgarbage("collect")
+        assert(#slices == 800)
+        for i = 1, 800 do
+            local first = 6000 - 3 * i
+            assert(slices[i] == string.sub(source, first, first + i))
+        end
+        local calls = 0
+        replace(function() calls = calls + 1; return "replacement" end)
+        fill(1, 50)
+        assert(calls == 50 and slices[50] == "replacement")
+        replace(string.sub)
+        local keys = 0
+        setmetatable(slices, {__newindex = function(_, key, value)
+            local first = 6000 - 3 * key
+            assert(value == string.sub(source, first, first + key))
+            keys = keys + key
+        end})
+        fill(801, 810)
+        return calls == 50 and keys == 8055 and #slices == 800
+        "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
+        vm.set_instruction_limit(Some(500_000));
+        assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
+    }
+}
+
+#[test]
 fn substring_length_reduction_preserves_bytes_and_rebound_calls() {
     check(
         br#"
