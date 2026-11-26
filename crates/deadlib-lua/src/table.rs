@@ -198,12 +198,30 @@ pub(crate) enum ArrayChange {
 #[derive(Debug)]
 pub(crate) struct InvalidNextKey;
 
-// A dense native triplet has the same indexing, length and traversal as an
-// ordinary array, without a separate allocation for its three values.
 enum ArrayStorage {
     Heap(Buffer<Value>),
-    Triplet { memory: Memory, values: [Value; 3] },
+    // A dense native triplet needs no separate allocation for its values.
+    Triplet {
+        memory: Memory,
+        values: [Value; 3],
+    },
+    SharedSequence {
+        memory: Memory,
+        values: &'static [Value],
+    },
 }
+
+// Bound the process-wide backing to 64 KiB.
+const SEQUENCE_LIMIT: usize = 64 * 1024 / size_of::<Value>();
+static ARRAY_SEQUENCE: [Value; SEQUENCE_LIMIT] = {
+    let mut values = [Value::Nil; SEQUENCE_LIMIT];
+    let mut index = 0;
+    while index < values.len() {
+        values[index] = Value::Number((index + 1) as f64);
+        index += 1;
+    }
+    values
+};
 
 impl std::fmt::Debug for ArrayStorage {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -221,13 +239,13 @@ impl ArrayStorage {
     fn memory(&self) -> &Memory {
         match self {
             Self::Heap(values) => values.memory(),
-            Self::Triplet { memory, .. } => memory,
+            Self::Triplet { memory, .. } | Self::SharedSequence { memory, .. } => memory,
         }
     }
 
     fn heap_mut(&mut self) -> &mut Buffer<Value> {
         let Self::Heap(values) = self else {
-            unreachable!("native arrays grow by replacing their storage");
+            unreachable!("array must have writable heap storage");
         };
         values
     }
@@ -235,8 +253,18 @@ impl ArrayStorage {
     fn allocated_capacity(&self) -> usize {
         match self {
             Self::Heap(values) => values.capacity(),
-            Self::Triplet { .. } => 0,
+            Self::Triplet { .. } | Self::SharedSequence { .. } => 0,
         }
+    }
+
+    fn try_make_writable(&mut self, capacity: usize) -> Result<(), Error> {
+        if let Self::SharedSequence { memory, values } = self {
+            let mut copy = Buffer::new_in(memory.clone());
+            copy.try_reserve_exact(values.len().max(capacity))?;
+            copy.extend_from_slice(values);
+            *self = Self::Heap(copy);
+        }
+        Ok(())
     }
 }
 
@@ -247,6 +275,7 @@ impl std::ops::Deref for ArrayStorage {
         match self {
             Self::Heap(values) => values,
             Self::Triplet { values, .. } => values,
+            Self::SharedSequence { values, .. } => values,
         }
     }
 }
@@ -256,6 +285,7 @@ impl std::ops::DerefMut for ArrayStorage {
         match self {
             Self::Heap(values) => values,
             Self::Triplet { values, .. } => values,
+            Self::SharedSequence { .. } => unreachable!("array must be made writable first"),
         }
     }
 }
@@ -569,12 +599,12 @@ impl Table {
             part.slots[slot] = index | Self::slot_tag(slots, hash).0;
         }
     }
-    pub(crate) fn is_small_scalar_array(&self) -> bool {
+    pub(crate) fn is_edge_free_array(&self) -> bool {
         self.metatable == 0
             && self.host_state == 0
             && self.hash_part().entries.is_empty()
-            && self.array.len() <= 4
-            && self.array.iter().copied().all(array_scalar)
+            && (matches!(self.array, ArrayStorage::SharedSequence { .. })
+                || (self.array.len() <= 4 && self.array.iter().copied().all(array_scalar)))
     }
 
     pub(crate) fn array_values(&self) -> &[Value] {
@@ -603,7 +633,7 @@ impl Table {
     // Equal finite numbers have identical bits after excluding negative zero,
     // so an unstable numeric sort cannot expose a changed tie permutation.
     pub(crate) fn scalar_sort_values(&mut self, len: usize, numbers: bool) -> Option<&mut [Value]> {
-        if self.metatable().is_some() {
+        if self.metatable().is_some() || matches!(self.array, ArrayStorage::SharedSequence { .. }) {
             return None;
         }
         let values = self.array.get(..len)?;
@@ -618,6 +648,9 @@ impl Table {
         Some(&mut self.array[..len])
     }
     pub(crate) fn sort_finite_numbers(&mut self, len: usize) -> bool {
+        if matches!(self.array, ArrayStorage::SharedSequence { .. }) {
+            return len <= self.array.len();
+        }
         let Some(values) = self.array.get(..len) else {
             return false;
         };
@@ -683,6 +716,9 @@ impl Table {
         last: i64,
         insert: Option<Value>,
     ) -> Option<Value> {
+        if matches!(self.array, ArrayStorage::SharedSequence { .. }) {
+            return None;
+        }
         let array = self.array.get_mut(array_range(first, last)?)?;
         let previous = *array.first()?;
         if insert.is_some_and(|value| !array_scalar(value))
@@ -804,11 +840,34 @@ impl Table {
     }
     #[inline]
     pub(crate) fn replace_array_value(&mut self, index: usize, value: Value) -> bool {
+        if matches!(self.array, ArrayStorage::SharedSequence { .. }) {
+            return self.array.get(index).is_some_and(|&old| old == value);
+        }
         let Some(slot) = self.array.get_mut(index) else {
             return false;
         };
         *slot = value;
         self.touch_array_at(index);
+        true
+    }
+    /// Give a fresh array its own table identity and immutable scalar storage.
+    pub(crate) fn share_dense_sequence(&mut self, end: usize) -> bool {
+        let Some(values) = ARRAY_SEQUENCE.get(..end) else {
+            return false;
+        };
+        if self.native51
+            || self.metatable != 0
+            || self.hash.is_some()
+            || self.array.allocated_capacity() != 0
+            || !self.array.is_empty()
+        {
+            return false;
+        }
+        self.array = ArrayStorage::SharedSequence {
+            memory: self.array.memory().clone(),
+            values,
+        };
+        self.touch_array();
         true
     }
     /// Plan a contiguous write using the same capacities as successive pushes.
@@ -822,6 +881,7 @@ impl Table {
         if self.native51
             || self.metatable != 0
             || !self.hash_part().slots.is_empty()
+            || matches!(self.array, ArrayStorage::SharedSequence { .. })
             || start > self.array.len()
         {
             return None;
@@ -961,6 +1021,9 @@ impl Table {
             return self.native_set(k, value, string_hash);
         }
         if let Some(i) = array_index(key) {
+            if i < self.array.len() || (i == self.array.len() && value != Value::Nil) {
+                self.array.try_make_writable(i + 1)?;
+            }
             if i < self.array.len() {
                 self.array[i] = value;
                 self.touch_array_at(i);
@@ -1073,6 +1136,9 @@ impl Table {
     // in SETLIST order. A same-size copy leaves the array's shape intact.
     #[inline]
     pub(crate) fn set_scalar_list_in_place(&mut self, start: usize, values: &[Value]) -> bool {
+        if matches!(self.array, ArrayStorage::SharedSequence { .. }) {
+            return false;
+        }
         let Some(slots) = self.array.get_mut(start..start + values.len()) else {
             return false;
         };
@@ -1086,6 +1152,7 @@ impl Table {
         true
     }
     pub fn grow_list_array(&mut self, end: usize) -> Result<(), Error> {
+        self.array.try_make_writable(end)?;
         let first = self.array.len();
         if end <= first {
             return Ok(());

@@ -1411,7 +1411,7 @@ impl Vm {
                 && self
                     .tables
                     .get(id.0)
-                    .is_some_and(Table::is_small_scalar_array)
+                    .is_some_and(Table::is_edge_free_array)
             {
                 // This still consumes one trace visit. Without any edges,
                 // metadata or hash nodes, the complete table fits in this step.

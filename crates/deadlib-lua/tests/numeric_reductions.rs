@@ -87,9 +87,9 @@ fn dense_writes_match_dispatch_across_growth_and_gc_checkpoints() {
         end
         local sum = 0
         for round = 1, 80 do
-            local t = {}
+            local t = {1}
             local last = 311 + round
-            build(t, 1, last)
+            build(t, 2, last)
             assert(#t == last)
             for i = 1, last do assert(t[i] == i) end
             fill(t, 3, last + 2, false)
@@ -114,6 +114,44 @@ fn dense_writes_match_dispatch_across_growth_and_gc_checkpoints() {
     assert!(fast_heap.collections > 0);
     assert_eq!(fast_heap.collections, ordinary_heap.collections);
     assert_eq!(fast_heap.reclaimed_objects, ordinary_heap.reclaimed_objects);
+}
+
+#[test]
+fn dense_sequences_keep_independent_tables_when_mutated() {
+    assert_eq!(
+        numbers(
+            br#"
+            local function sequence(last)
+                local t = {}
+                for i = 1, last do t[i] = i end
+                return t
+            end
+            local a, b = sequence(157), sequence(157)
+            assert(a ~= b)
+            local c = sequence(157)
+            assert(table.remove(c, 3) == 3 and c[3] == 4)
+            table.insert(c, 3, 3)
+            table.sort(c, function(x, y) return x > y end)
+            assert(c[1] == 157 and c[157] == 1)
+
+            a[80] = {value = 42}
+            a[159] = 159
+            a[158] = 158
+            setmetatable(b, {__mode = 'v'})
+            b.label = {}
+            collectgarbage('collect')
+            assert(a[80].value == 42 and a[159] == 159)
+            assert(b.label == nil and b[80] == 80 and b[158] == nil)
+            local visited = 0
+            for key, value in pairs(b) do
+                assert(key == value)
+                visited = visited + 1
+            end
+            return #a, #b, visited
+            "#
+        ),
+        [159.0, 157.0, 157.0]
+    );
 }
 
 #[test]

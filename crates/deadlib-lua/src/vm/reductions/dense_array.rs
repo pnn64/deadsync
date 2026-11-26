@@ -30,11 +30,10 @@ impl Vm {
         if self.registers[internal + 2] != Value::Number(1.0) {
             return None;
         }
-        // start is a zero-based slot; end leaves the last iteration to the VM.
+        // The current internal index is the zero-based slot for the next write.
         let start = u32::try_from(integer(self.registers[internal])?).ok()? as usize;
-        let limit = u32::try_from(integer(self.registers[internal + 1])?).ok()? as usize;
-        let end = limit.checked_sub(1)?;
-        if start >= end {
+        let end = u32::try_from(integer(self.registers[internal + 1])?).ok()? as usize;
+        if end.saturating_sub(start) < 2 {
             return None;
         }
         let Value::Table(id) = self.registers[base + usize::from(store.a)] else {
@@ -67,21 +66,34 @@ impl Vm {
             return Some(Reduction::Retry);
         };
         let table = &mut self.tables[slot_index(id.0)];
-        let (stop, capacity) = table.dense_write_span(start, end, growth)?;
-        if stop <= start {
-            return Some(Reduction::Retry);
-        }
-        let before = table.heap_bytes();
-        // A failed reservation leaves the array unchanged. Dispatch then
-        // tries the ordinary writes, preserving their allocation error point.
-        table
-            .write_dense_span(start, stop, capacity, |slot| {
-                repeated.unwrap_or(Value::Number(slot as f64 + 1.0))
-            })
+        let stop = if start == 0 && repeated.is_none() && table.share_dense_sequence(end) {
+            end
+        } else {
+            let (stop, capacity) = table.dense_write_span(start, end, growth)?;
+            if stop <= start {
+                return Some(Reduction::Retry);
+            }
+            let before = table.heap_bytes();
+            // A failed reservation leaves the array unchanged. Dispatch then
+            // tries the ordinary writes, preserving their allocation error point.
+            if let Some(value) = repeated {
+                table.write_dense_span(start, stop, capacity, |_| value)
+            } else {
+                table.write_dense_span(start, stop, capacity, |slot| {
+                    // The span is bounded by an exact u32 array index.
+                    Value::Number((slot as i64 + 1) as f64)
+                })
+            }
             .ok()?;
-        let after = table.heap_bytes();
-        self.note_table_resize(before, after);
-        self.registers[internal] = Value::Number(stop as f64);
+            let after = table.heap_bytes();
+            self.note_table_resize(before, after);
+            stop
+        };
+        // Planning proved that every skipped checkpoint is below threshold.
+        self.gc.pending = false;
+        let index = Value::Number(stop as f64);
+        self.registers[internal] = index;
+        self.registers[internal + 3] = index;
         if stop < end {
             Some(Reduction::Retry)
         } else {

@@ -540,9 +540,8 @@ impl Body<'_> {
 }
 
 impl Vm {
-    /// Advance complete iterations before the last one. The ordinary
-    /// interpreter runs the final body and exit test, publishing the final
-    /// scratch registers, visible index, stack top and error location.
+    /// Advance complete iterations with proven effects. Reductions with
+    /// observable scratch registers leave the last body to ordinary dispatch.
     pub(super) fn reduce_numeric_loop(
         &mut self,
         base: usize,
